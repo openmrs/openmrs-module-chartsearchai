@@ -76,8 +76,10 @@ import org.springframework.stereotype.Service;
  * which arrived with issue #173.
  *
  * <p><b>The group LIST is the same shape; one group's PREFIXES are not, and the two must not be read
- * as one fact.</b> {@link #getCrossReactivityGroups()} is written once by its own lazy guard and
- * otherwise only by test seams, so it does not reload either. But
+ * as one fact.</b> The field behind {@link #getCrossReactivityGroups()} is written once by
+ * {@code ensureGroupsLoaded()} when it is null and otherwise only by test seams, so it does not reload
+ * either — and since issue #266 that one write also publishes the load's own outcome
+ * ({@link CrossReactivityGroupsLoad}), which is why they are ONE holder rather than two fields. But
  * {@link CrossReactivityGroup#setAtcPrefixes} is public API Jackson writes through, and it has to stay
  * authoritative after a membership question has been asked — so
  * {@link CrossReactivityGroup#containsAnyCode} keeps the reason stated in its own javadoc, not this

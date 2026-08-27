@@ -216,6 +216,69 @@ public class CrossReactivityStatusContextTest extends BaseModuleContextSensitive
 	}
 
 	/**
+	 * F1's parallel on the groups side: the status describes the load that is IN FORCE, and that load is
+	 * cached for the life of the bean. Editing the global property afterwards must NOT make the status
+	 * describe a file nothing read — which is the whole reason a status exists rather than a live read
+	 * (issues #149 and #154), and the property this publishes that nothing pinned before it was
+	 * published. The entry dataset's own version of this is
+	 * {@code DrugReferenceLoadContextTest.loadStatusDoesNotDriftFromTheCachedEntriesWhenTheGlobalPropertiesChange}.
+	 */
+	@Test
+	public void theGroupsStatusDoesNotDriftFromTheCachedGroupsWhenTheGlobalPropertyChanges()
+			throws IOException {
+		String first = writeToAppData("h266-groups-first.json",
+				"{\"groups\":[{\"name\":\"H266FIRST\",\"atcPrefixes\":[\"J01CA\"]}]}");
+		configureGroupsFile(first);
+
+		DrugReferenceService service = new DrugReferenceService();
+		CrossReactivityGroupsLoad before = service.getCrossReactivityLoadStatus();
+		assertEquals(ReferenceDataFiles.APPDATA_ORIGIN_PREFIX + first, before.getOrigin(),
+				"precondition: the first file is what the load read");
+
+		String second = writeToAppData("h266-groups-second.json",
+				"{\"groups\":[{\"name\":\"H266SECOND\",\"atcPrefixes\":[\"J01CA\"]},"
+						+ "{\"name\":\"H266THIRD\",\"atcPrefixes\":[\"J01GB\"]}]}");
+		configureGroupsFile(second);
+
+		CrossReactivityGroupsLoad after = service.getCrossReactivityLoadStatus();
+
+		assertEquals(before.getOrigin(), after.getOrigin(),
+				"the load is cached for the bean's life, so the status must keep describing the file it "
+						+ "actually read. Reporting the newly-configured one would be the drift issue "
+						+ "#149 records being fooled by");
+		assertEquals(before.getConfiguredFilePath(), after.getConfiguredFilePath(),
+				"and the configured path it reports is the one that produced this load, not a later "
+						+ "edit — the two are compared against each other, so a live read of one beside "
+						+ "a cached read of the other is the one pairing that cannot be diagnosed");
+		assertEquals(1, after.getGroupCount(),
+				"the groups in force are still the first file's, which is what makes the status honest");
+	}
+
+	/**
+	 * F2's parallel: the groups and the outcome describing them are published as ONE reference (issue
+	 * #158), so a reader that can see the groups cannot see a status saying nothing was loaded. Like the
+	 * entry dataset's {@code DrugReferenceLoadConcurrencyTest} case, this pins the CONSTRUCTION error
+	 * rather than the race — no test can demonstrate the absence of a race one volatile write wide, and
+	 * pairing a populated cache with the wrong outcome is deterministic. Verified by mutation: publishing
+	 * the holder with {@link CrossReactivityGroupsLoad#notLoaded()} reddens this.
+	 */
+	@Test
+	public void groupsAreNeverPublishedWithAStatusThatSaysNothingWasLoaded() {
+		enable();
+		DrugReferenceService service = new DrugReferenceService();
+
+		List<CrossReactivityGroup> loaded = service.getCrossReactivityGroups();
+		CrossReactivityGroupsLoad status = service.getCrossReactivityLoadStatus();
+
+		assertFalse(loaded.isEmpty(), "precondition: the bundled seed carries groups");
+		assertTrue(status.isLoaded(),
+				"a reader that can see the groups must see a status describing them, not one saying "
+						+ "nothing was loaded — that state is what one holder exists to rule out");
+		assertEquals(loaded.size(), status.getGroupCount(),
+				"and it must describe THOSE groups, not a different load's");
+	}
+
+	/**
 	 * The feature being switched off is a legitimate state. Polling a status endpoint must not be what
 	 * triggers the groups parse on an install that does not use the feature — the same rule
 	 * {@link DrugReferenceService#getLoadStatus()} follows for the entry dataset.

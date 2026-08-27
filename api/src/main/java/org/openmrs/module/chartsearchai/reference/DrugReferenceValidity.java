@@ -63,8 +63,9 @@ import org.slf4j.Logger;
  * That distinction is what keeps the channel usable. An untouched default must stay silent:
  * {@code dataFilePath} and {@code crossReactivityGroupsFilePath} both default to paths inside the
  * application data directory that the module never creates, so every install that has configured nothing
- * falls back, and a rule that warned on every fallback would fire on every install and be filtered within
- * a week — worse than silence, because it trains people to ignore the channel. So
+ * falls back — or, under {@code sourceFormat=atc}, which bundles no fallback, reads nothing at all — and a
+ * rule that warned on either would fire on every such install and be filtered within a week, worse than
+ * silence because it trains people to ignore the channel. So
  * {@link #configuredDataFileNotRead} returns without reporting anything there. What it does NOT do is
  * report a finding and then keep it out of a channel: a finding that exists is one somebody needs, and
  * "visible on the status but absent from the log" is the confusion issues #149 and #154 settled — see

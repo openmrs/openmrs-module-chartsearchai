@@ -1045,6 +1045,13 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 		// boilerplate, so it would pass on a finding that named the wrong table.
 		assertTrue(found.getDetail().contains("[entries]"),
 				"named for what THIS parser requires. Detail was: " + found.getDetail());
+		// And the ITEM noun, which is a parameter since issue #266 gave the cross-reactivity groups file
+		// this same rule: a groups document that produced nothing produced no GROUPS. The two call sites
+		// pass different literals, so this is what stops them being crossed — nothing else in the suite
+		// reads this clause on the entry side, and a finding telling an operator their drug-reference
+		// document "parsed to no groups at all" names the wrong dataset in citable evidence.
+		assertTrue(found.getDetail().contains("parsed to no entries at all"),
+				"an ENTRY dataset produced no entries. Detail was: " + found.getDetail());
 	}
 
 	/**

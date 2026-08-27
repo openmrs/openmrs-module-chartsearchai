@@ -201,6 +201,33 @@ public class AtcLoadValidityChannelTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
+	 * The untouched install, on the newly-reachable path — and the one case that would turn this channel
+	 * into noise if it were got wrong. {@code dataFilePath} defaults to a file the module never creates,
+	 * so an install that selects {@code atc} and configures no path of its own falls straight through the
+	 * resolution; a rule keyed on "a path is configured and nothing was read" would then fire on every
+	 * such install and be filtered within a week, which is what {@code CLAUDE.md}'s loader bullet is
+	 * written against. Both spellings of "untouched" are silent — this one, the DECLARED DEFAULT, and the
+	 * blank that a context without that row reads, which
+	 * {@code DrugReferenceLoadContextTest.atcFormatWithNoConfiguredPathIsInertAndNamesNoOrigin} covers.
+	 *
+	 * <p>Asserted as the absence of that ONE rule rather than of every finding, deliberately: should a
+	 * file happen to sit at the default path, it would be READ, and whatever the ATC parser then made of
+	 * it is a different rule's business. The claim here is only that a default nobody chose is never
+	 * reported as a choice.
+	 */
+	@Test
+	public void anUntouchedDataFilePathIsNotReportedAsAFileTheOperatorNamed() {
+		configure(ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_DATA_FILE_PATH);
+
+		DrugReferenceLoad status = new DrugReferenceService().getLoadStatus();
+
+		assertFalse(rulesOf(status).contains(DrugReferenceValidity.CONFIGURED_DATA_FILE_NOT_READ),
+				"the global property's own declared default is not a file anybody chose, so routing atc "
+						+ "through the shared resolution must not start reporting it as one. Findings "
+						+ "were: " + status.getFindings());
+	}
+
+	/**
 	 * A healthy operator-named ATC export raises nothing.
 	 *
 	 * <p>What this alone pins is not that the new rule can be quiet — the empty-document case above

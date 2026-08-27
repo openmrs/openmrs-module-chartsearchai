@@ -75,8 +75,12 @@ public final class CrossReactivityGroupsLoad {
 	 *         install that does not use the feature, which is the same reason
 	 *         {@link DrugReferenceLoad#notLoaded()} exists, and the same reason the entry-side test seams
 	 *         pair injected data with it.
+	 *
+	 *         <p>Package-private, like {@link DrugReferenceLoad#notLoaded()}: the only caller is
+	 *         {@link DrugReferenceService}, and this state is something the service DECIDES rather than
+	 *         something a consumer of the status constructs.
 	 */
-	public static CrossReactivityGroupsLoad notLoaded() {
+	static CrossReactivityGroupsLoad notLoaded() {
 		return new CrossReactivityGroupsLoad();
 	}
 

@@ -53,6 +53,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 45: A two-class ENDED/CURRENT prompt clause cannot classify an unmarked drug order](#decision-45-a-two-class-endedcurrent-prompt-clause-cannot-classify-an-unmarked-drug-order)
 - [Decision 46: A drug-order record says whether the prescription is in force](#decision-46-a-drug-order-record-says-whether-the-prescription-is-in-force)
 - [Decision 47: An answer naming a drug from an ended order says so](#decision-47-an-answer-naming-a-drug-from-an-ended-order-says-so)
+- [Decision 48: A second dataset gets a second section, not a shared findings list](#decision-48-a-second-dataset-gets-a-second-section-not-a-shared-findings-list)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 

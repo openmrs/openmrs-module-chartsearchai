@@ -179,15 +179,21 @@ final class ReferenceDataFiles {
 				String resolved = ChartSearchAiUtils.resolveModelPath(configuredPath, pathGlobalProperty);
 				// One collector spans this attempt and the fallback below, and a parser now writes to it,
 				// so a finding raised against the operator's file could in principle be carried into a
-				// classpath-origin load. Both parsers report strictly after their single read and then
-				// return, so parse() itself cannot report-then-throw. What is left is the close() of the
-				// stream below throwing after a reported parse — remote for a local file, and it would
-				// misattribute rather than duplicate. Since ADR Decision 36 misattribution also costs the
-				// LEVEL, because DrugReferenceValidity.logTo picks it from the origin this method finally
-				// returns: such a finding describes the operator's file and would be logged at INFO as
-				// though it described the dataset the module ships. Still not guarded, and for the
-				// unchanged reason — a fresh collector per attempt would cost configuredDataFileNotRead
-				// its place in the same load's findings, which is a certainty against a remote maybe.
+				// classpath-origin load. Every parser reaching here reports strictly after its single
+				// read and then returns — the curated one, the DDInter one, and since issue #266 the
+				// cross-reactivity groups one — so parse() itself cannot report-then-throw. Do not read
+				// that as a list to check off: what it rests on is the SHAPE, so a parser added here has
+				// to keep it. What is left is the close() of the stream below throwing after a reported
+				// parse — remote for a local file, and it would misattribute rather than duplicate.
+				// Since ADR Decision 36 misattribution also costs the LEVEL, because
+				// DrugReferenceValidity.logTo picks it from the origin this method finally returns: such
+				// a finding describes the operator's file and would be logged at INFO as though it
+				// described the dataset the module ships. That last cost does not arise for the groups
+				// dataset, whose caller reports through the one-argument logTo and so is loud whatever
+				// the origin (ADR Decision 48); the misattribution itself still would. Still not
+				// guarded, and for the unchanged reason — a fresh collector per attempt would cost
+				// configuredDataFileNotRead its place in the same load's findings, which is a certainty
+				// against a remote maybe.
 				try (InputStream in = new FileInputStream(new File(resolved))) {
 					List<T> loaded = parser.parse(in, validity);
 					log.info("Loaded {} {} from {}", loaded.size(), datasetLabel, resolved);
@@ -240,8 +246,13 @@ final class ReferenceDataFiles {
 	 * required to reach. The origin passed to the rule is {@link #ORIGIN_NONE} rather than a fallback's
 	 * name, because there is no fallback — see that rule for why the detail differs between the two.
 	 *
-	 * <p>One read attempt, so unlike {@link #loadWithClasspathFallback} there is no second one for a
-	 * reported finding to be misattributed to.
+	 * <p>One read attempt, so the sibling's misattribution window is narrower here rather than absent —
+	 * stated as what remains rather than as "none", because it is not none. There is no second dataset a
+	 * reported finding could be attributed to; what is left is that a {@code close()} throwing after a
+	 * reported parse falls to the {@link Loaded#nothing} return below, so the parser's finding would
+	 * arrive with an origin of {@link #ORIGIN_NONE} beside a file that was in fact read. Remote for a
+	 * local file, and unguarded for the sibling's reason: a fresh collector per attempt would cost
+	 * {@code configuredDataFileNotRead} its place in the same load's findings.
 	 *
 	 * @param pathGlobalProperty GP holding the operator path (relative to the app data directory)
 	 * @param declaredDefaultPath the value {@code config.xml} declares as that GP's default, which is what

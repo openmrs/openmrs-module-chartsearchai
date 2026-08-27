@@ -207,15 +207,17 @@ public class EndedOrderAnswerRuleTest extends BaseModuleContextSensitiveTest {
 						+ "the FIRST thing after the constant rather than a distant one, because a canary "
 						+ "further down leaves a window of lines a widening could take silently");
 
-		// Normalised before the negative assertion, because every shape that defeated an earlier
-		// version of this case lives in what normalisation removes, and there have been three. A
+		// Normalised before the negative assertion. FOUR shapes have defeated a version of this case,
+		// closed by two mechanisms: the slice bound above caught the first (a window running past the
+		// constant), and normalisation here catches the other three. A
 		// comment inside the initializer can carry the constant's dotted name while the prompt
 		// hardcodes the text beside it (this file's convention is a comment paragraph above every
 		// prompt rule, so that is not exotic); a hardcoded copy can be split across the file's own
 		// line-wrap — "... not in " + "force" — which a contiguous search cannot see; and the split
 		// can be held apart by a BLOCK comment, which survives stripping line comments alone. Strip
-		// both comment forms, then join adjacent literals. Each of the three was found by mutation
-		// rather than by reasoning, so add the mutation before trusting a fourth to be impossible.
+		// both comment forms, then join adjacent literals. Every one of the four was found by MUTATION
+		// rather than by reasoning about the regex, so add the mutation before trusting a fifth to be
+		// impossible.
 		String normalised = initializer
 				.replaceAll("(?s)/\\*.*?\\*/", "")
 				.replaceAll("(?m)//.*$", "")
@@ -226,10 +228,9 @@ public class EndedOrderAnswerRuleTest extends BaseModuleContextSensitiveTest {
 						+ "tracking the constant the moment the mark is renamed, which is the whole "
 						+ "failure this case exists for");
 
-		// TWO assertions, because either alone is satisfiable by the defect. The name can appear in a
-		// comment inside the initializer while the prompt hardcodes the text beside it — which is the
-		// same fail-open one bound wider already allowed, one scope in. So the mark's text must ALSO
-		// not appear here as a Java string literal: the clause has to reach it through the constant.
+		// The positive half. Neither assertion is sufficient alone: this one passes on a hardcoded copy
+		// that merely names the constant nearby, and the one above passes on a clause that reaches the
+		// constant but never mentions the mark's text — which is why both are here.
 		assertTrue(initializer.contains("PatientChartSerializer.INACTIVE_ORDER_LABEL"),
 				"the prompt's order-status clause must be BUILT from "
 						+ "PatientChartSerializer.INACTIVE_ORDER_LABEL rather than carrying a copy of its "

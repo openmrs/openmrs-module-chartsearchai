@@ -112,6 +112,29 @@ public class CrossReactivityStatusContextTest extends BaseModuleContextSensitive
 						+ "points at a field that does not exist — the same defect the sibling rule's "
 						+ "item noun exists to prevent, in the rule #266 makes readable first. Detail "
 						+ "was: " + notRead.getDetail());
+
+		// The path the operator NAMED, reported beside what was read. Asserted on THIS branch and not
+		// only on the operator-file one because this is the branch the field exists for: the whole
+		// diagnosis config.xml tells them to perform is that these two disagree, and a blank
+		// configuredFilePath beside a classpath origin reads as an install that configured nothing —
+		// the wrong conclusion, drawn quietly. Mutation-checked: it survived the whole suite before
+		// this line.
+		assertEquals("chartsearchai/h266-no-such-groups.json", status.getConfiguredFilePath(),
+				"the file the operator named is reported as configured even though it was not read");
+
+		// And the WIRE, not only the retained object. Every api case here reads getFindings(); the one
+		// case that reads this section's toMap() drives the DISABLED state, where every value is empty,
+		// so a toMap() that always returned the disabled shape passed. Measured: replacing the findings
+		// serialization with an empty list left the whole suite green. README promises a caller "the
+		// same remedy/occurrences/detail shape" as the entries section, and this is what checks it.
+		String serialized = String.valueOf(status.toMap().get("findings"));
+		assertTrue(serialized.contains(DrugReferenceValidity.CONFIGURED_DATA_FILE_NOT_READ)
+				&& serialized.contains("h266-no-such-groups.json"),
+				"the finding has to reach the endpoint's own crossReactivity.findings, carrying its "
+						+ "rule and its detail. Serialized: " + serialized);
+		assertTrue(serialized.contains(
+				DrugReferenceValidity.Remedy.REPORTED.name().toLowerCase(java.util.Locale.ROOT)),
+				"with its remedy in the wire spelling. Serialized: " + serialized);
 	}
 
 	/**

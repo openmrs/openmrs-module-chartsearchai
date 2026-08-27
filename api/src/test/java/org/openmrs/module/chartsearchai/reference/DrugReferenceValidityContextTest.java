@@ -1125,7 +1125,10 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 			}
 		}
 
-		// The third parser's corpus, which lives in its own directory and takes no collector.
+		// The third parser's corpus, which lives in its own directory. It takes the SINGLE-argument parse
+		// form — it has had a collector form since issue #266, but the one rule that form can report
+		// (no-line-yielded-an-entry) fires exactly when the parse emits nothing, so for this leg the
+		// emptiness below is the whole check and a collector would add no assertion.
 		File atc = new File(getClass().getClassLoader()
 				.getResource(DrugReferenceTestSupport.ATC_SAMPLE).toURI()).getParentFile();
 		File[] atcFixtures = atc.listFiles();

@@ -1991,7 +1991,7 @@ Three additive, data-driven extensions:
   measured decision: ~2 ms/query at 500 obs on a real MariaDB (threshold 50 ms), so the
   `mostRecentN=1` DB-side variant was rejected as unmeasurable win for real API risk.
 - **+** Cross-branch cross-reactivity with zero per-drug curation — one group line covers a
-  family, for both source formats, and the aspirin/ibuprofen case ships working out of the box.
+  family, for every source format, and the aspirin/ibuprofen case ships working out of the box.
 - **+** All three are data: operators extend the JSON files, no rebuild.
 - **−** Weight is assumed to be recorded in kilograms on the configured concept; a
   pounds-valued concept would need a kg concept (or the `none` sentinel in the GP to

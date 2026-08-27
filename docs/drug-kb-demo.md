@@ -385,7 +385,7 @@ Reference for authoring a custom KB (the `json` source format). The top-level fi
 ## Cross-reactivity groups file schema
 
 A second, independent data file (`chartsearchai.drugReference.crossReactivityGroupsFilePath`,
-bundled fallback `cross-reactivity-groups.json`) loaded alongside **any** source format (json, atc and ddinter alike). It
+bundled fallback `cross-reactivity-groups.json`) loaded alongside **any** source format (`json`, `atc` and `ddinter` alike). It
 carries the cross-*branch* family knowledge ATC's tree cannot express (ADR Decision 27). The
 top-level file is `{ "version": ..., "description": ..., "groups": [ ... ] }`.
 

@@ -278,10 +278,12 @@ final class PatientClinicalContextBuilder {
 	 * that concept's name could be read it was not NAMELESS — it arrived carrying the WRONG name, which
 	 * is a state issue #290's code-only rung is not about.
 	 * {@code OrderServiceImpl.ensureConceptIsSet} assigns such an order
-	 * {@code OrderService.getNonCodedDrugConcept()}, the concept the {@code drugOrder.drugOther} global
-	 * property names ("the concept which represents drug other non coded"), and
-	 * {@code DrugOrderValidator} treats exactly that concept as the non-coded shape. So the concept of a
-	 * free-text order is the platform's own placeholder by construction, while
+	 * {@code OrderService.getNonCodedDrugConcept()} — the concept the {@code drugOrder.drugOther} global
+	 * property names ("the concept which represents drug other non coded") — whenever it reaches
+	 * {@code saveOrder} with no concept of its own, and {@code DrugOrderValidator} treats exactly that
+	 * concept as the non-coded shape. So the concept of a free-text order is the platform's own
+	 * placeholder wherever the client supplied none; a client MAY supply one and keep it, which is the
+	 * shape the cost paragraphs below turn on. Either way it is not the drug, while
 	 * {@code getDrugNonCoded()} holds what the clinician actually typed — and that field had no
 	 * production caller in this module at all. The asymmetry is the tell: {@code build} above already
 	 * reads the free-text half of the two other records it collects, {@code getNonCodedAllergen()} and
@@ -338,6 +340,25 @@ final class PatientClinicalContextBuilder {
 	 * here. Pinned AS WRONG by
 	 * {@code NonCodedDrugOrderNameTest.freeTextNamingADrugTheSameSentenceSaysWasStoppedStillRaisesAChip},
 	 * so a change that closes it reddens a test.
+	 *
+	 * <p><b>And prose reaching the DISPLAY costs a legible sentence, which this module has already
+	 * decided is worth fixing for the sibling field and does not fix here.</b> The display is printed
+	 * unquoted into a chip detail whose own delimiters are em dashes
+	 * ({@code … as active order <display> — possible duplicate therapy}) and thence, through
+	 * {@code DrugReferenceInjector.renderFinding}, into a citable {@code safety_finding}. Measured
+	 * through the real pipeline, a free text of {@code "Naproxen 500mg — hold from 1 Jan. Restart
+	 * later"} renders as one sentence carrying two em-dashed clauses and a full stop inside the order
+	 * name, with nothing telling a reader which punctuation is the chart's. That is verbatim the hazard
+	 * {@code DrugSafetyValidator.quotedToken()} records for {@code nonCodedAllergen} and closes by
+	 * quoting the value. It is NOT closed here, and the reason is scope rather than disagreement:
+	 * quoting every order display would move what every existing chip naming a coded order says, and
+	 * quoting only a free-text one needs {@code ActiveDrugOrder} to carry which source its display came
+	 * from — a second flag on that value object, which ADR Decision 40 governs the write path of. If we
+	 * ship without it, a clinician reads a chip whose sentence boundaries are partly the chart's and the
+	 * model reads the same string as evidence; nothing is asserted falsely, and legibility is what is
+	 * lost. Pinned by
+	 * {@code NonCodedDrugOrderNameTest.aFreeTextDisplayIsPrintedIntoTheChipUnquoted}, so whoever closes
+	 * it reddens a test.
 	 *
 	 * <p>The same divergence reaches the CLASS arm, and there it costs a true sentence rather than an
 	 * extra one: that arm labels a co-medication from the order's display while citing a subgroup taken

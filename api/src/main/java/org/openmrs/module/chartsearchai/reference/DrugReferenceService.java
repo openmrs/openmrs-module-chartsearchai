@@ -985,9 +985,14 @@ public class DrugReferenceService {
 	 * is absent the name resolution does. The ATC path is dormant on that instance, not dead.
 	 *
 	 * <p>The name leg is the recorded-name matcher rather than {@link #findByQuery} since issue #147: an
-	 * order's display name is a localized drug name, not prose, so resolving it with the prose rule
-	 * left {@code Aspirine Co 81mg} and {@code Clarithromycine Co 500mg} matching no entry at all —
+	 * order's display name is a localized drug name, so resolving it with the prose rule left
+	 * {@code Aspirine Co 81mg} and {@code Clarithromycine Co 500mg} matching no entry at all —
 	 * measured, 117 (order name, entry) pairs gained and 0 lost over the 3.7.1 dictionary's 2533 names.
+	 * That argument used to add "not prose", and issue #293 retired that half: this set now also holds
+	 * the free text a clinician typed, which can be a whole sentence. The choice of matcher is
+	 * unchanged — the recorded-name rule is still what a localized display name needs, and the prose
+	 * rule would still lose the 117 — but what it is applied to is no longer all one shape, and the
+	 * cost of that is recorded on {@code PatientClinicalContextBuilder.addDrugName}.
 	 *
 	 * <p>And it is {@link #findImpliedByDrugName} rather than the bare {@link #findByDrugName} since issue
 	 * #209: a match is the join for the ATC leg above, where the code either belongs to the order or does

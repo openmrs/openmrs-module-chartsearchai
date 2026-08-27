@@ -263,7 +263,10 @@ public class PatientClinicalContext {
 	 *         <p><b>The order-name arm</b> goes through {@link DrugReference#matchesOrderName} — not
 	 *         bare containment, which reported drugs the patient had never taken because drug names
 	 *         nest ("tiotropium" contains "opium"; issue #86), and not the prose rule either, because
-	 *         an order's display name is localized and inflected rather than prose (see there).
+	 *         an order's display name is localized and inflected (see there). Since issue #293 this set
+	 *         also holds the free text a clinician typed for a non-coded order, which CAN be prose; the
+	 *         matcher is unchanged and the cost of applying it to prose is recorded on
+	 *         {@code PatientClinicalContextBuilder.addDrugName}.
 	 *
 	 *         <p><b>The reference-name arm</b> (issue #136) exists because a rule carries ONE token for
 	 *         its partner while the reference data knows that drug by several names, and the chart may

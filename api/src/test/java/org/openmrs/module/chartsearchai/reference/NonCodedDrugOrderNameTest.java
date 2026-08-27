@@ -484,6 +484,41 @@ public class NonCodedDrugOrderNameTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
+	 * The legibility cost of prose reaching the DISPLAY, pinned so that closing it reddens a test.
+	 *
+	 * <p>The chip's own delimiters are em dashes and the display goes in unquoted, so a free text
+	 * carrying an em dash and a full stop produces one sentence whose boundaries are partly the chart's.
+	 * The same string reaches the model through {@code DrugReferenceInjector.renderFinding} as a citable
+	 * {@code safety_finding}.
+	 *
+	 * <p>{@code DrugSafetyValidator.quotedToken()} records exactly this hazard for the sibling free-text
+	 * field, {@code nonCodedAllergen}, and closes it by quoting the value. That remedy is not applied to
+	 * the order display here — quoting every display would move what every chip naming a coded order
+	 * says, and quoting only a free-text one needs {@code ActiveDrugOrder} to carry its display's source.
+	 * Nothing is asserted falsely; legibility is what is lost, and the assertion below states the
+	 * unquoted string so that a change adding the quotes is visible rather than silent.
+	 */
+	@Test
+	public void aFreeTextDisplayIsPrintedIntoTheChipUnquoted() {
+		nameTheConcept(PLACEHOLDER_CONCEPT_NAME);
+		DrugReferenceTestSupport.mapConceptToAtc(ORDERED_CONCEPT, NAPROXEN_ATC);
+		recordTheOrderAsFreeText("Naproxen 500mg - hold from 1 Jan. Restart later");
+		DrugSafetyValidator validator =
+				DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService());
+
+		PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
+		List<String> details = DrugReferenceTestSupport.details(validator.validate("", QUESTION, context));
+
+		assertEquals(java.util.Arrays.asList("Ibuprofen is in the same ATC class (M01AE) as active order"
+				+ " Naproxen 500mg - hold from 1 Jan. Restart later — possible duplicate therapy"),
+				details,
+				"the recorded text goes into the sentence as it was typed, its own punctuation beside the"
+						+ " chip's — quoting it is the remedy this module already applies to a recorded"
+						+ " allergen and does not apply here, so a change that adds the quotes must"
+						+ " redden this, was: " + details);
+	}
+
+	/**
 	 * The largest cost of this change, pinned AS WRONG so that closing it reddens a test: the name set
 	 * now contains PROSE.
 	 *

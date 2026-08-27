@@ -105,7 +105,8 @@ public class LlmProvider {
 			//    renders one — and where it does, the answer states it without being asked to.
 			//  - NO completeness half ("without dropping anything else you would have reported" / "Keep
 			//    every other detail ... about that record"). It stops the rule firing at all on a
-			//    single-record chart — both of EndedOrderAnswerRuleTest's answer cases go red; add the
+			//    single-record chart — both of EndedOrderAnswerRuleTest's ENDED-direction answer cases
+			//    go red; add the
 			//    half back and re-run them rather than trusting a tally here. The rider that rescues that
 			//    turns the model to enumerating dose, route and frequency on every medication list: on the
 			//    #319 gate cell every one of its citations went from a mix of supported and unsupported to
@@ -118,7 +119,12 @@ public class LlmProvider {
 			//    two-clause change taught this file a false rule once already, and the mutation that
 			//    refutes it takes one targeted test run.
 			//  - ONE BRANCH — and this one is NOT in the ledger above; it is an argument, and the
-			//    positive half it declines has no arm of its own. Nothing about a record carrying NO mark: the mark is silent wherever the
+			//    positive half it declines has no arm of its own. What KEEPS it one branch is
+			//    EndedOrderAnswerRuleTest.theSystemPromptStatesTheRuleForAnOrderThatIsNotInForce,
+			//    which asks this rule's whole SPAN — between the "Drug reference" sentence and the
+			//    "Safety finding" one — to be exactly these two sentences, and asks the prompt to
+			//    name a "drug-order record" exactly once. Adding a half here reddens it; that method's
+			//    javadoc says which shapes it does and does not see. Nothing about a record carrying NO mark: the mark is silent wherever the
 			//    module could not establish the answer (SerializedRecord.getOrderActive() owns that
 			//    list), so a clause speaking for the silent case would assert exactly what the silence
 			//    exists to withhold. That is a property of the CLAUSE, not a guarantee about the answer:
@@ -128,12 +134,34 @@ public class LlmProvider {
 			//    that a positive currency sentence makes the model re-state a live order in prose instead
 			//    of copying a field list, and prose loses fields and can invent them.
 			//
-			// TWO costs, stated rather than hidden, and the second was missing from this list until a
-			// review round measured it.
+			// THE COSTS. NOT a closed list, and it must not be re-labelled into one: ADR Decision 47's
+			// ledger and trade-offs are canonical for what this wording pays, and what is here is the
+			// three a re-wording has to re-run FIRST, worst first. Earlier forms of this comment said
+			// "TWO costs, stated rather than hidden" and left the first bullet out — that bullet was
+			// measured a commit BEFORE the second was written, so re-labelling the list around the two
+			// that happened to be adjacent closed an enumeration that had never contained the worst of
+			// them. If you add a cost, do not restate the count.
+			//  - A FABRICATED STOP DATE — the worst thing the clause does, and the reason to re-run
+			//    cell H before any other cell. On a chart carrying SEVERAL records of ONE drug where
+			//    some carry ". Stopped: <date>" and one (lapsed by auto_expire_date) does not, asked
+			//    "has his Triomune-30 been stopped?", the answer states that record's ORDER date as a
+			//    stop date and CITES it — 3/3, where the base arm never names that record at all. It is
+			//    a false clinical fact carrying a citation, and it violates this prompt's own "Never
+			//    infer, assume, or add information not explicitly stated in the records". FIVE further
+			//    wordings failed to remove it (a prohibition on dating the ending; a prohibition on
+			//    re-using the record's other dates; a sentence stating what the field does and does not
+			//    say; dropping the word "ended"; a status-only clause naming no ending at all — all
+			//    five fabricate, 3/3 each), which is what makes it a property of the CLAUSE rather than
+			//    of its phrasing. It ships because its precondition is narrow — several ended records
+			//    of one drug disagreeing about whether their text carries an end date — and every
+			//    realistic chart measured stays clean; Decision 47 carries that trade and the cells.
 			//  - On the renewal chart (an ended order beside a live one for the same drug) the answer
 			//    loses the dose it used to carry — "He is taking Nevirapine 400 Milligram" becomes "He is
 			//    taking Nevirapine". Of the wordings measured, every one that keeps that dose pays one of
-			//    the two prices above. It is the lesser loss here because the base arm's own grounding
+			//    the two prices in the DECLINED list above — cell B2's lab-measurement falsehood, or the
+			//    fixture answer cases going red. (That phrase used to read "the two prices above", which
+			//    stopped being unambiguous the moment a third cost was added between the two lists.)
+			//    It is the lesser loss here because the base arm's own grounding
 			//    verifier already marked that dose claim UNSUPPORTED, and the answer that replaces it is
 			//    verified: that citation moves unsupported -> supported.
 			//  - On a chart of ONE ended order, asked "what medications is he taking?", the answer stops
@@ -143,7 +171,8 @@ public class LlmProvider {
 			//    ended status and the stop date the ticket's title asks for all leave the answer. Four of
 			//    the eight measured wordings keep it naming the drug AND its status; each is excluded by
 			//    another cell (the ticket's own cell unfixed, cell B2's lab-measurement falsehood, or both
-			//    of this file's fixture answer cases red). Decision 47's A3 note carries which, and the
+			//    of EndedOrderAnswerRuleTest's ENDED-direction answer cases red). Decision 47's A3 note
+			//    carries which, and the
 			//    base on that cell is NOT settled — four runs, three different base answers.
 			+ "A drug-order record carrying \"" + PatientChartSerializer.INACTIVE_ORDER_LABEL
 			+ "\" is a record of an order that has ended. Whenever your answer names a drug from such "

@@ -2206,8 +2206,11 @@ public class DrugSafetyValidator {
 	 *         row's name, which commonly carries a strength ({@code Aspirin 81mg}), the free text a
 	 *         clinician typed for a non-coded order (issue #293, which commonly carries a strength
 	 *         too), and its CONCEPT's own name, which commonly does not
-	 *         ({@code Botulinum toxin type A}) — and a coded order contributes the first and the last,
-	 *         a non-coded one the last two. So a row whose display name IS that concept name reaches
+	 *         ({@code Botulinum toxin type A}). Which of the three an order contributes is not a
+	 *         coded/non-coded dichotomy: {@code DrugOrder.isNonCodedDrug()} is only
+	 *         {@code isNotBlank(drugNonCoded)}, so an order carrying a coded {@code Drug} AND free text
+	 *         contributes all three, and that row is savable wherever {@code drugOrder.requireDrug} is
+	 *         false, which is the default. So a row whose display name IS that concept name reaches
 	 *         {@link DrugReference#NAME_IS_THE_DISPLAY_NAME} and wins, which is what moves the COVID pair
 	 *         in {@code OrderedSubjectRowTest.theOrderNamedRowIsNamedWhereTheFoldCannotReachIt}. This
 	 *         sentence used to name the botulinum case here, and that is the one family issue #250's
@@ -2799,10 +2802,9 @@ public class DrugSafetyValidator {
 	 *         {@link #foldedPartnerLabel} needs before it lets a name an ORDER supplied stand in the rule
 	 *         sentence.
 	 *
-	 *         <p>Through {@link DrugReference#matchesOrderName} over that order's own
-	 *         {@link PatientClinicalContext.ActiveDrugOrder#getNames()}, which is exactly the predicate
+	 *         <p>Through {@link DrugReference#matchesOrderName}, which is exactly the predicate
 	 *         {@link PatientClinicalContext#hasActiveDrug} applied to admit this rule in the first place.
-	 *         So this asks no new question about the pair — it asks that SAME question of one order
+	 *         So this asks no new question about the pair — it asks that SAME question of one string
 	 *         instead of the patient's flattened name list, and the narrowing is the whole of it: a rule
 	 *         admitted because some OTHER prescription carries its token must not be printed under this
 	 *         one's name, which is the {@code Naproxen}-renamed-after-{@code Esomeprazole} shape
@@ -2810,12 +2812,28 @@ public class DrugSafetyValidator {
 	 *         flattened set is a superset of any one order's names: whatever this admits, the rule match
 	 *         already admitted of that order.
 	 *
-	 *         <p><b>Asked of the ORDER whose display is about to be handed out</b>, which is the one
-	 *         {@link OrderPartner#namingOrder} carries — not of every order that merged into the partner.
-	 *         A partner can be reached by several orders ({@link #ordersCarrying}) and
-	 *         {@link OrderPartner#nameByOrder} is monotone, so the first carrier that can name itself is
-	 *         both the one the label came from and the one this validates. Asking the whole carrier set
-	 *         would prove a fact about one prescription and print another's name.
+	 *         <p><b>Asked of the NAME that is about to be printed</b> — {@code order.getDisplay()}, the
+	 *         very string {@link OrderPartner#nameByOrder} handed to the label and the one this method's
+	 *         answer licenses into the rule sentence. Two narrowings, and they are the same argument
+	 *         applied twice. It is asked of the ORDER {@link OrderPartner#namingOrder} carries, not of
+	 *         every order that merged into the partner: a partner can be reached by several orders
+	 *         ({@link #ordersCarrying}) and {@link OrderPartner#nameByOrder} is monotone, so the first
+	 *         carrier that can name itself is both the one the label came from and the one this
+	 *         validates, and asking the whole carrier set would prove a fact about one prescription and
+	 *         print another's name. And it is asked of that order's DISPLAY, not of every name that
+	 *         order carries, because since issue #293 one order's names need no longer be one drug's:
+	 *         {@code drugNonCoded} is a name source that can disagree with the coded drug's name or with
+	 *         the concept's, and either arrangement is savable on a stock install
+	 *         ({@code drugOrder.requireDrug} defaults to false). Scanning them all would prove a fact
+	 *         about one NAME and print another — measured before this narrowing, a coded {@code ASPIRIN}
+	 *         order carrying the free text {@code Warfarin 5mg} printed the seed's rated warfarin
+	 *         interaction as {@code Ibuprofen interacts with active order ASPIRIN}, with warfarin
+	 *         nowhere in the detail, and thence into the prompt as a citable {@code safety_finding}
+	 *         carrying {@code STRENGTH_WITHHOLD}. What the narrowing gives up is a partner whose token
+	 *         names one of the order's OTHER names but not its display — a brand display over a generic
+	 *         concept name — which falls back to the rule's own token and so names one order two ways
+	 *         across the folded chip's two sentences, issue #136's pre-existing shape. A confusing chip
+	 *         is the better failure than a false one.
 	 *
 	 *         <p>Two shapes have nothing to compare, and both refuse rather than count as agreement. A
 	 *         rule with no token carries no name for its partner at all ({@link #partnerLabel} falls back
@@ -2838,12 +2856,7 @@ public class DrugSafetyValidator {
 			return false;
 		}
 		String token = rule.getToken().trim();
-		for (String name : order.getNames()) {
-			if (DrugReference.matchesOrderName(name, token)) {
-				return true;
-			}
-		}
-		return false;
+		return DrugReference.matchesOrderName(order.getDisplay(), token);
 	}
 
 	/**
@@ -5498,8 +5511,9 @@ public class DrugSafetyValidator {
 			// one direction (`as active order M01AE03` becoming `as active order Omeprazole` under an
 			// M01AE class). But the shape is PRODUCTION-UNREACHABLE, and that is said here rather than
 			// only in the ADR: PatientClinicalContextBuilder takes an order's display from a recorded
-			// name addRaw has already trimmed and dropped if blank, and routes the nameless case through
-			// namedByCodesOnly, so no order it builds answers hasKnownName() with a blank display. Only
+			// name addRaw has already trimmed, whitespace-collapsed and dropped if blank, and routes
+			// the nameless case through namedByCodesOnly, so no order it builds answers
+			// hasKnownName() with a blank display. Only
 			// the public constructor's latitude reaches the difference, which is the latitude
 			// FoldedChipOnePartnerNameTest.aBlankDisplayNeverDisplacesTheDatasetName uses.
 			label = order.getDisplay();
@@ -6016,7 +6030,7 @@ public class DrugSafetyValidator {
 		}
 		// A LinkedHashSet, then the shared grouping — not a grouping written out here. The dedup is
 		// identity (DrugReference defines no equals, and every row comes from the service's shared
-		// getAll() cache), which is what makes the set the right collector: an order's two names
+		// getAll() cache), which is what makes the set the right collector: an order's several names
 		// resolve overlapping row sets, and a row is one row.
 		Set<DrugReference> matched = new LinkedHashSet<DrugReference>();
 		for (String name : order.getNames()) {

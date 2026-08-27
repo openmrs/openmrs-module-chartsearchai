@@ -302,7 +302,8 @@ public class DrugReferenceInjector {
 		// The resolved context, which is what every other consumer in this method is handed. It is the
 		// SAME answer rawContext would give for this particular reader, and that is worth stating rather
 		// than leaving to be discovered: which row this response names a substance by is ranked off
-		// getActiveDrugNames() — the orders' own display names — while withReferenceNames adds only
+		// getActiveDrugNames() — every name the orders carry, not the displays alone (issue #293) —
+		// while withReferenceNames adds only
 		// getActiveDrugReferenceNames() and copies the rest through. So passing rawContext here is
 		// currently indistinguishable (measured by mutation, 2026-08-14: the whole suite stays green),
 		// and the reason to pass this one is that a later change to what the ranking reads must not have

@@ -460,8 +460,11 @@ public class FoldedChipOnePartnerNameTest {
 	 * order names {@code {aspirin}}) — so a blanket refusal also declined the ticket's second named shape,
 	 * the ordinary formulation ({@code naproxen} / {@code Naproxen 500mg}). The gate is now
 	 * {@code DrugSafetyValidator.namesNamingOrder}: {@code DrugReference.matchesOrderName} over the naming
-	 * order's own names, the same predicate {@code PatientClinicalContext.hasActiveDrug} used to admit the
-	 * rule, narrowed from the patient's flattened name list to that one prescription. Both refusals above
+	 * order's DISPLAY, the same predicate {@code PatientClinicalContext.hasActiveDrug} used to admit the
+	 * rule, narrowed from the patient's flattened name list to the one name about to be printed. It read
+	 * that order's whole name set until issue #293 made one order's names no longer provably one drug's;
+	 * this case is unaffected either way, because the token {@code naproxen} names the display
+	 * {@code Naproxen 500mg} itself. Both refusals above
 	 * stay green and redden when the predicate is mutated to always permit.
 	 *
 	 * <p>The SAME fixture as that first refusal and the same rung — a partner keyed on {@code Naproxen}

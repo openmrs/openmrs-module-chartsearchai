@@ -185,8 +185,7 @@ public class CrossReactivityStatusContextTest extends BaseModuleContextSensitive
 		assertTrue(status.isLoaded(), "precondition: the groups load happened");
 		assertTrue(status.getGroupCount() > 0, "precondition: the bundled seed carries groups");
 		assertEquals("[]", rulesOf(status).toString(),
-				"an install that configured nothing must be silent. Findings were: "
-						+ status.getFindings());
+				"an install that configured nothing must be silent. The load was: " + status);
 		assertEquals(ReferenceDataFiles.CLASSPATH_ORIGIN_PREFIX
 				+ CrossReactivityGroupsLoader.CLASSPATH_DEFAULT, status.getOrigin());
 	}

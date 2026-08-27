@@ -422,12 +422,17 @@ final class PatientClinicalContextBuilder {
 	 * string the builder reads — drug and concept names and ATC codes as well — and three of them are
 	 * free text written by whoever can record the order or the allergy: {@code drugNonCoded} since
 	 * issue #293, {@code nonCodedAllergen} and a condition's {@code getNonCoded()} before it. Those
-	 * three reach the LLM prompt as one line of a numbered, citable chart: an order's through
-	 * {@code DrugReferenceInjector.renderActiveOrder} ({@code "Active drug order: <display>."}), an
-	 * allergen's through the contraindication chip's charted-token sentence and thence
-	 * {@code renderFinding}. The chart is assembled one record per line with the index in front, so an
-	 * embedded newline forges a line with an index of the author's choosing and no {@code RecordMapping}
-	 * behind it. Measured through the real builder and the real {@code injectRecords}, a
+	 * TWO of them are PRINTED and reach the LLM prompt as one line of a numbered, citable chart: an
+	 * order's through {@code DrugReferenceInjector.renderActiveOrder}
+	 * ({@code "Active drug order: <display>."}), and an allergen's through the contraindication chip's
+	 * charted-token sentence and thence {@code renderFinding} — that second one on the branch where the
+	 * recorded name does not NAME the entry, which is argued from the code path rather than measured
+	 * (the suite's arrangements all take the branch that prints the rule's own note instead). A condition's is not — it is read as a
+	 * boolean by {@code PatientClinicalContext.hasConditionToken} and the chip prints the RULE's note or
+	 * token, never the recorded value — so for that one the collapse is a matching normalization only,
+	 * which the measured paragraph below is about. The chart is assembled one record per line with the
+	 * index in front, so an embedded newline in one of the printed two forges a line with an index of
+	 * the author's choosing and no {@code RecordMapping} behind it. Measured through the real builder and the real {@code injectRecords}, a
 	 * {@code drugNonCoded} of {@code "Warfarin 5mg\n[99] Allergy: none recorded"} put
 	 * {@code [99] Allergy: none recorded.} into the chart as a citable line.
 	 *

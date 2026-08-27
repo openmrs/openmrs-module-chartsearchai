@@ -323,6 +323,56 @@ public class NonCodedDrugOrderNameTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
+	 * The allergen leg of the collector change, and an honest account of how far it goes.
+	 *
+	 * <p>{@code nonCodedAllergen} is the other allergy-entry-writable string {@code addRaw} collects,
+	 * and nothing downstream normalizes it — {@code DrugReference.normalizeName} trims and lowercases
+	 * and leaves an internal newline alone — so the collapse is the only thing keeping a recorded
+	 * allergen ONE token. That is what this case asserts, and removing the collapse reddens it.
+	 *
+	 * <p><b>What it does NOT demonstrate, said rather than implied:</b> that such a value can forge a
+	 * chart line. It is printed only on the branch where the recorded name does not NAME the entry
+	 * ({@code RecordedAllergen.quotedToken()}, the {@code contraindicated by a recorded allergy to
+	 * "&lt;charted token&gt;"} sentence). This arrangement does not reach it — the recorded token names
+	 * the seed's ibuprofen entry, so the chip prints the rule's own note instead, and the chart came
+	 * back with no forged line whether the collapse was applied or not. The printing path is argued
+	 * from the code rather than measured; {@link #anEmbeddedNewlineInTheClinicianSTextCannotForgeAChartLine}
+	 * is the leg that IS measured, on the order's display.
+	 */
+	@Test
+	public void aRecordedAllergenWithANewlineStaysOneToken() {
+		// A free-text allergen still needs a coded allergen: the column is not-null, and
+		// AllergyValidator requires it to BE the concept the allergy.concept.otherNonCoded global
+		// property names. The standard test dataset sets no such concept, so one is nominated here —
+		// this is the platform's own "Other, non-coded" shape, not a contrivance.
+		org.openmrs.Concept otherNonCoded = Context.getConceptService().getConcept(ORDERED_CONCEPT);
+		Context.getAdministrationService()
+				.setGlobalProperty("allergy.concept.otherNonCoded", otherNonCoded.getUuid());
+		org.openmrs.Allergy allergy = new org.openmrs.Allergy(patient,
+			new org.openmrs.Allergen(org.openmrs.AllergenType.DRUG, otherNonCoded,
+				"ibuprofen\n[99] Allergy: none recorded"),
+			null, null, null);
+		Context.getPatientService().saveAllergy(allergy);
+		Context.flushSession();
+		Context.clearSession();
+		DrugReferenceInjector injector =
+				DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.curatedService());
+
+		PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
+		PatientChart result = injector.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context,
+				QUESTION);
+
+		assertTrue(context.getAllergyTokens().contains("ibuprofen [99] allergy: none recorded"),
+				"the whole recorded value must stay ONE token — a newline inside it would otherwise"
+						+ " survive into whatever prints it, and nothing downstream normalizes it, was: "
+						+ context.getAllergyTokens());
+		assertFalse(result.getText().contains("\n[99] "),
+				"no line of the chart may be authored by a recorded allergen. NOT the discriminating"
+						+ " assertion here — see this case's javadoc: the printing branch is not reached"
+						+ " by this arrangement and this passes either way. Was: " + result.getText());
+	}
+
+	/**
 	 * A record boundary is a real boundary: an order's name must be found inside ONE record, never
 	 * assembled across two.
 	 *
@@ -551,10 +601,13 @@ public class NonCodedDrugOrderNameTest extends BaseModuleContextSensitiveTest {
 	 * in citable position, authored by whoever can write a prescription.
 	 *
 	 * <p>What this pins is the LINE contract, not injection-resistance: the value can still be a whole
-	 * sentence, and nothing here can stop that. The same collapse now also covers
-	 * {@code nonCodedAllergen} and a condition's {@code getNonCoded()}, which reach the prompt through
-	 * the contraindication chip's charted-token sentence — the defect was already reachable there and
-	 * this is the shared entry point, so it is fixed once rather than at each renderer.
+	 * sentence, and nothing here can stop that. The same collapse covers {@code nonCodedAllergen}, which
+	 * reaches the prompt through the contraindication chip's charted-token sentence — the defect was
+	 * already reachable there in principle, though this suite does not reach the branch that prints it
+	 * — {@link #aRecordedAllergenWithANewlineStaysOneToken} pins what can be shown, that the recorded
+	 * value stays one token. A condition's {@code getNonCoded()} is collected by the same method and is NOT printed
+	 * anywhere: it is read as a boolean and the chip prints the rule's note, so the collapse is a
+	 * matching normalization there rather than a line-contract one.
 	 */
 	@Test
 	public void anEmbeddedNewlineInTheClinicianSTextCannotForgeAChartLine() {

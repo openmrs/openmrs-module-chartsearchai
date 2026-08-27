@@ -2809,9 +2809,10 @@ public class DrugSafetyValidator {
 	 *         instead of the patient's flattened name list, and the narrowing is the whole of it: a rule
 	 *         admitted because some OTHER prescription carries its token must not be printed under this
 	 *         one's name, which is the {@code Naproxen}-renamed-after-{@code Esomeprazole} shape
-	 *         {@link #foldedPartnerLabel} records. It cannot widen anything by accident either, since the
-	 *         flattened set is a superset of any one order's names: whatever this admits, the rule match
-	 *         already admitted of that order.
+	 *         {@link #foldedPartnerLabel} records. Whether it can WIDEN anything is answered below, and
+	 *         not by the superset argument that used to stand here: the flattened set contains every
+	 *         name of every order, but the operand is now the order's DISPLAY, which a caller can supply
+	 *         without putting it among that order's names at all.
 	 *
 	 *         <p><b>Asked of the NAME that is about to be printed</b> — {@code order.getDisplay()}, the
 	 *         very string {@link OrderPartner#nameByOrder} handed to the label and the one this method's

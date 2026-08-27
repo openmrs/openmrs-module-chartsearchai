@@ -67,8 +67,10 @@ public class LlmProvider {
 			// further wordings are counted there and TWO of them are described, so seven are unrecorded
 			// — do not re-run the two it names)
 			// and then asserted the lapsed drug as current in a clinical answer. #317 (Decision 46)
-			// removed that gap: every attributable drug_order record now carries PatientChartSerializer's
-			// own mark, and the model demonstrably reads it — #315's re-measurement records an answer
+			// removed that gap: a drug_order record carries PatientChartSerializer's own mark wherever the
+			// module could establish the answer — not everywhere, and deliberately so; see
+			// SerializedRecord.getOrderActive() for the cases it stays silent on. The model demonstrably
+			// reads it — #315's re-measurement records an answer
 			// quoting "the order status is not in force" back unprompted. So this clause asks the model
 			// to decide nothing. It names the token the record STATES and says what an answer naming that
 			// record's drug owes the reader.

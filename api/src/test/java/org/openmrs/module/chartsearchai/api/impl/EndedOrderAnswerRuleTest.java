@@ -44,7 +44,9 @@ import org.slf4j.LoggerFactory;
  * <p><strong>Why this is a prompt rule and not another structural change.</strong> Issue #317
  * (Decision 46) already put the discriminator in the record: {@link PatientChartSerializer} appends
  * {@link PatientChartSerializer#ACTIVE_ORDER_LABEL} / {@link PatientChartSerializer#INACTIVE_ORDER_LABEL}
- * to every attributable {@code drug_order} record body, and the model demonstrably READS it — issue
+ * to a {@code drug_order} record body wherever the module could establish the answer — and nothing
+ * where it could not, which {@code SerializedRecord.getOrderActive()} enumerates. The model
+ * demonstrably READS it — issue
  * #315's own re-measurement records an answer quoting <em>"the order status is not in force"</em>
  * back unprompted. What was missing is any instruction that the field MATTERS, which is ADR Decision
  * 45's own diagnosis in as many words: <em>"The reported defect is not that the model cannot read the

@@ -149,6 +149,12 @@ public class ArchitectureGuardTest {
 				"precondition: the test source directory was not found under " + SRC_ROOT + ", so this "
 						+ "rule would scan nothing and report no violations — it fails instead");
 		List<String> violations = new ArrayList<>();
+		// The right-tree canary, matching the second precondition in getSourceCache(). Existence alone
+		// is NOT equivalent to it: the sibling omod module carries the same package path, so a root
+		// pointed there passes the existence check and this rule scans the wrong tree and reports no
+		// violations — measured, that mutation reddens the four cache-reading rules and left this one
+		// green.
+		final List<String> scanned = new ArrayList<>();
 		Files.walkFileTree(testDir, new SimpleFileVisitor<Path>() {
 			@Override
 			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
@@ -157,6 +163,7 @@ public class ArchitectureGuardTest {
 					return FileVisitResult.CONTINUE;
 				}
 				String name = file.getFileName().toString();
+				scanned.add(name);
 				if ("TestDatasetHelper.java".equals(name)
 						|| "ArchitectureGuardTest.java".equals(name)) {
 					return FileVisitResult.CONTINUE;
@@ -181,6 +188,10 @@ public class ArchitectureGuardTest {
 				return FileVisitResult.CONTINUE;
 			}
 		});
+		org.junit.jupiter.api.Assertions.assertTrue(scanned.contains("TestDatasetHelper.java"),
+				"precondition: the scan under " + testDir + " did not see TestDatasetHelper.java, so it "
+						+ "is reading the wrong tree — a wrong root that happens to carry this package "
+						+ "path scans SOMETHING and this rule then reports no violations");
 		assertNoViolations(violations);
 	}
 
@@ -197,8 +208,10 @@ public class ArchitectureGuardTest {
 	 * any rule reads it, and the same mutation now reddens the rules that read it.
 	 *
 	 * <p>The exception is {@code noDuplicatedDatasetArrays}, which walks the TEST tree itself rather
-	 * than this cache — it carries the equivalent precondition inline, because these assertions
-	 * cannot reach it. A new rule that walks its own directory owes itself the same check.
+	 * than this cache, so these assertions cannot reach it — it carries both of them inline, and it
+	 * needs both: existence alone is not enough, because the sibling {@code omod} module has the
+	 * same package path, so a root pointed there exists and scans the wrong tree. A new rule that
+	 * walks its own directory owes itself the same pair.
 	 */
 	private static java.util.Map<String, List<String>> getSourceCache()
 			throws IOException {

@@ -92,13 +92,19 @@ public class NamelessActiveOrderPartnerTest extends BaseModuleContextSensitiveTe
 	}
 
 	/**
-	 * Makes order 111 unnameable: its drug reference is cleared and every name of its concept is
-	 * voided, which is exactly the state {@code addDrugName} finds nothing in — it reads
-	 * {@code getDrug().getName()} and then {@code getConcept().getName()}, and nothing else.
+	 * Makes order 111 unnameable: its drug reference is cleared, the free text a clinician would have
+	 * typed for a non-coded order is cleared, and every name of its concept is voided — which is exactly
+	 * the state {@code addDrugName} finds nothing in, since those three are every source it reads.
+	 *
+	 * <p>The {@code drug_non_coded} clear is not redundant even though the standard test dataset leaves
+	 * that column null on order 111: since issue #293 that column is a name source, so leaving it to the
+	 * dataset would make this arrangement CONTINGENT on data this file does not control — a later
+	 * dataset carrying free text there would retire the whole arrangement silently, the same way this
+	 * file's own javadoc records the concept-name synonym fallback nearly doing.
 	 */
 	private void makeTheOrderNameless() {
-		Context.getAdministrationService()
-				.executeSQL("update drug_order set drug_inventory_id = null where order_id = 111", false);
+		Context.getAdministrationService().executeSQL("update drug_order set drug_inventory_id = null,"
+				+ " drug_non_coded = null where order_id = 111", false);
 		Context.getAdministrationService()
 				.executeSQL("update concept_name set voided = 1 where concept_id = " + ORDERED_CONCEPT,
 					false);

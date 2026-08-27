@@ -460,8 +460,11 @@ public class FoldedChipOnePartnerNameTest {
 	 * order names {@code {aspirin}}) — so a blanket refusal also declined the ticket's second named shape,
 	 * the ordinary formulation ({@code naproxen} / {@code Naproxen 500mg}). The gate is now
 	 * {@code DrugSafetyValidator.namesNamingOrder}: {@code DrugReference.matchesOrderName} over the naming
-	 * order's own names, the same predicate {@code PatientClinicalContext.hasActiveDrug} used to admit the
-	 * rule, narrowed from the patient's flattened name list to that one prescription. Both refusals above
+	 * order's DISPLAY, the same predicate {@code PatientClinicalContext.hasActiveDrug} used to admit the
+	 * rule, narrowed from the patient's flattened name list to the one name about to be printed. It read
+	 * that order's whole name set until issue #293 made one order's names no longer provably one drug's;
+	 * this case is unaffected either way, because the token {@code naproxen} names the display
+	 * {@code Naproxen 500mg} itself. Both refusals above
 	 * stay green and redden when the predicate is mutated to always permit.
 	 *
 	 * <p>The SAME fixture as that first refusal and the same rung — a partner keyed on {@code Naproxen}
@@ -703,10 +706,12 @@ public class FoldedChipOnePartnerNameTest {
 	 *
 	 * <p>An order on the ladder's ORDER rung — the curated seed carries none of its three codes — whose
 	 * display is BLANK but whose names are not. Its label is therefore a bare ATC code (the blank display
-	 * resolves to the code), and unlike {@code namedByCodesOnly} it has names for
-	 * {@code namesNamingOrder} to match, so it is the one shape in which the order-named branch could say
-	 * YES about a partner whose label is not a name. It does not get the chance: {@code namesADrug} is
-	 * false for a blank display, {@code foldedPartnerLabel} asks that first, and the rule's own token goes
+	 * resolves to the code). Before issue #293 this was the one shape in which the order-named branch
+	 * could have said YES about a partner whose label is not a name — unlike {@code namedByCodesOnly} it
+	 * had names for {@code namesNamingOrder} to scan — and it did not get the chance because
+	 * {@code namesADrug} is false for a blank display and {@code foldedPartnerLabel} asks that first.
+	 * Since #293 the gate reads the DISPLAY instead, which is blank here, so both guards refuse
+	 * independently; what this case still pins is unchanged, that the rule's own token goes
 	 * to both sentences — exactly as for the nameless order in
 	 * {@link #theTicketsLiveCaseNamesTheOrderOnce}.
 	 *
@@ -728,7 +733,7 @@ public class FoldedChipOnePartnerNameTest {
 	 *
 	 * <p>Builder-unreachable, like {@link #aBlankDisplayNeverDisplacesTheDatasetName}, and for the same
 	 * reason — {@code PatientClinicalContextBuilder} takes a display from a name {@code addRaw} has
-	 * already trimmed and dropped if blank. It needs the public constructor's latitude, which is what
+	 * already trimmed, whitespace-collapsed and dropped if blank. It needs the public constructor's latitude, which is what
 	 * makes it a statement about the code path rather than about production data.
 	 */
 	@Test
@@ -755,9 +760,53 @@ public class FoldedChipOnePartnerNameTest {
 					+ detail);
 	}
 
-	/** An order on the ladder's ORDER rung whose display is blank and whose names are not — the one shape
-	 *  where {@code namesNamingOrder} could answer yes for a partner whose label is a bare code, if the
-	 *  {@code !namesADrug} branch did not come first. Shared with
+	/**
+	 * The PERMITTING leg of {@code namesNamingOrder}, which issue #293's narrowing to
+	 * {@code getDisplay()} opened and which nothing pinned before this case.
+	 *
+	 * <p>That gate read the order's whole name SET until #293 moved it to the one name it is about to
+	 * print. Wherever the display is one of the names — which is every order the builder names — the old
+	 * reading is a superset and the move only refuses more. It WIDENS where the display is NOT among the
+	 * names: an order carrying a real display and no match tokens at all, which
+	 * the public constructor admits and which
+	 * {@code NamelessActiveOrderPartnerTest.aRealDisplayWithNoMatchTokensStillOutranksTheDatasetName}
+	 * is the neighbouring file's name for. Under the old reading the gate refused for a reason that was an
+	 * artefact of the proxy {@code hasKnownName()} exists to replace — the order offered no name to put
+	 * the token to — and the folded chip then carried the rule's token beside the order's display, two
+	 * names for one prescription. Under the new reading the token is put to the display, names it, and
+	 * one name is handed to both sentences.
+	 *
+	 * <p>Behaviourally this is the same reconciliation
+	 * {@link #anOrderSuppliedNameTheRulesTokenNamesIsHandedToBothSentences} pins, reached on the shape
+	 * that used to be excluded; it is here as its own case because the whole api suite is green under
+	 * either reading of this shape, so without it the widening is invisible.
+	 */
+	@Test
+	public void anOrderWithNoMatchTokensIsStillJudgedOnTheNameItIsAboutToPrint() {
+		Set<String> noTokens = java.util.Collections.emptySet();
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null, null,
+			ASPIRIN_ORDER_CODES, null, null,
+			Arrays.asList(new PatientClinicalContext.ActiveDrugOrder("order-uuid-no-tokens",
+				"Aspirin 81mg", noTokens, ASPIRIN_ORDER_CODES)));
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport
+				.validator(DrugReferenceTestSupport.curatedService()).validate("", QUESTION, context);
+
+		assertEquals(1, warnings.size(), "one order, one folded chip, was: " + warnings);
+		String detail = warnings.get(0).getDetail();
+		assertEquals(1, orderNamesIn(detail).size(),
+			"the token names the display, so one prescription is named once — before issue #293 the"
+					+ " gate asked the empty name set and refused, leaving the rule's own token beside"
+					+ " the display, was: " + detail);
+		assertTrue(detail.startsWith("Ibuprofen interacts with active order Aspirin 81mg"),
+			"and the name both sentences take is the order's display, was: " + detail);
+	}
+
+	/** An order on the ladder's ORDER rung whose display is blank and whose names are not. Before issue
+	 *  #293 this was the one shape where {@code namesNamingOrder} could have answered yes for a partner
+	 *  whose label is a bare code, had the {@code !namesADrug} branch not come first — it had names for
+	 *  that gate to scan. It no longer can at all: the gate reads the DISPLAY, which is blank here, so
+	 *  the two guards now agree rather than one standing in front of the other. Shared with
 	 *  {@link #noFoldedChipNamesOneActiveOrderTwoWays} so the sweep covers it too. */
 	private static PatientClinicalContext blankDisplayWithNames() {
 		Set<String> names = DrugReferenceTestSupport.set("aspirin 81mg");

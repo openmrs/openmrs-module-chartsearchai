@@ -186,7 +186,10 @@ public class PatientClinicalContext {
 		return weightKg;
 	}
 
-	/** @return lowercased display names of the patient's active drug orders. */
+	/** @return lowercased names the patient's active drug orders carry — the flattened union of each
+	 *          order's {@link ActiveDrugOrder#getNames()}, not their displays alone: a coded drug's
+	 *          name, the free text a clinician typed for a non-coded one (issue #293), and a concept's
+	 *          name all reach it. */
 	public Set<String> getActiveDrugNames() {
 		return activeDrugNames;
 	}
@@ -255,7 +258,10 @@ public class PatientClinicalContext {
 	 *         <p><b>The order-name arm</b> goes through {@link DrugReference#matchesOrderName} — not
 	 *         bare containment, which reported drugs the patient had never taken because drug names
 	 *         nest ("tiotropium" contains "opium"; issue #86), and not the prose rule either, because
-	 *         an order's display name is localized and inflected rather than prose (see there).
+	 *         an order's display name is localized and inflected (see there). Since issue #293 this set
+	 *         also holds the free text a clinician typed for a non-coded order, which CAN be prose; the
+	 *         matcher is unchanged and the cost of applying it to prose is recorded on
+	 *         {@code PatientClinicalContextBuilder.addDrugName}.
 	 *
 	 *         <p><b>The reference-name arm</b> (issue #136) exists because a rule carries ONE token for
 	 *         its partner while the reference data knows that drug by several names, and the chart may
@@ -560,7 +566,16 @@ public class PatientClinicalContext {
 			return nameKnown;
 		}
 
-		/** @return lowercased names identifying this order (drug name and/or concept name). */
+		/** @return lowercased names identifying this order — the coded {@code Drug}'s name, the free
+		 *          text a clinician typed for a non-coded order ({@code drugNonCoded}, issue #293),
+		 *          and the order concept's name, in that rank; {@link #getDisplay()} is the first of
+		 *          them for an order the builder names — a caller may supply a display that is not among
+		 *          them at all. Empty on the code-only rung {@link #namedByCodesOnly} builds, and possibly
+		 *          empty on a caller-built order carrying a real display and no match tokens — ask
+		 *          {@link #hasKnownName()} to tell the two apart, never {@code getNames().isEmpty()},
+		 *          which is the proxy
+		 *          {@code NamelessActiveOrderPartnerTest.aRealDisplayWithNoMatchTokensStillOutranksTheDatasetName}
+		 *          exists to rule out. */
 		public Set<String> getNames() {
 			return names;
 		}
@@ -591,13 +606,29 @@ public class PatientClinicalContext {
 		 *         suppresses the repair and the WARN together, so the stricter rule is the safe
 		 *         direction. See {@code matchesOrderName}'s javadoc for why one matcher cannot serve
 		 *         both.
+		 *
+		 *         <p><b>Both sides in ONE normal form (issue #293).</b> These names had their whitespace
+		 *         runs collapsed on the way in ({@code PatientClinicalContextBuilder.addRaw}), and the
+		 *         haystack is querystore's verbatim record prose, which renders a recorded value as it
+		 *         was typed — so a name a clinician spaced irregularly would otherwise fail to be found
+		 *         inside the record that renders that very value, and the order would be reported
+		 *         unrepresented against a chart that plainly carries it. Measured: the name
+		 *         {@code "warfarin  5mg"} collapses to {@code "warfarin 5mg"} and is not found in
+		 *         {@code "drug order: warfarin  5mg, 1 tablet daily"} without this. Collapsed here rather
+		 *         than inside {@link DrugReference#containsWord}, which several arms share and whose
+		 *         haystacks are not all prose. Through {@link DrugReference#collapseWhitespace}, which is
+		 *         the ONE definition of that form — the needle side goes through the same method — so the
+		 *         two sides cannot come apart the way two local copies of it could. One pass over the
+		 *         drug-order text per active order; the operation is idempotent, so a caller that has
+		 *         already normalized loses nothing.
 		 */
 		boolean namedIn(String lowercasedText) {
 			if (lowercasedText == null || lowercasedText.isEmpty()) {
 				return false;
 			}
+			String haystack = DrugReference.collapseWhitespace(lowercasedText);
 			for (String name : names) {
-				if (DrugReference.containsWord(lowercasedText, name)) {
+				if (DrugReference.containsWord(haystack, name)) {
 					return true;
 				}
 			}

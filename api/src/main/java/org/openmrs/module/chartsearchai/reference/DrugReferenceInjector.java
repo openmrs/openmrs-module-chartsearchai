@@ -78,7 +78,8 @@ import org.springframework.stereotype.Service;
  *   <li><b>Question-driven</b> — an alias hit against the query text.</li>
  *   <li><b>Patient-driven</b> — the reference entries the patient's active orders resolve to, which
  *       since issue #151 is whatever {@code DrugReferenceService.findForActiveOrders} answers (an ATC
- *       code hit OR the order's own display name) rather than the ATC hit alone, so this layer and
+ *       code hit OR any name the order carries — its coded drug's, the free text a clinician typed,
+ *       or its concept's) rather than the ATC hit alone, so this layer and
  *       {@link DrugSafetyValidator} cannot disagree about which orders the patient has.</li>
  * </ul>
  * Numeric dosing is rendered only when an age band matches the patient's age, so
@@ -302,7 +303,8 @@ public class DrugReferenceInjector {
 		// The resolved context, which is what every other consumer in this method is handed. It is the
 		// SAME answer rawContext would give for this particular reader, and that is worth stating rather
 		// than leaving to be discovered: which row this response names a substance by is ranked off
-		// getActiveDrugNames() — the orders' own display names — while withReferenceNames adds only
+		// getActiveDrugNames() — every name the orders carry, not the displays alone (issue #293) —
+		// while withReferenceNames adds only
 		// getActiveDrugReferenceNames() and copies the rest through. So passing rawContext here is
 		// currently indistinguishable (measured by mutation, 2026-08-14: the whole suite stays green),
 		// and the reason to pass this one is that a later change to what the ranking reads must not have
@@ -468,7 +470,15 @@ public class DrugReferenceInjector {
 		}
 
 		Set<String> chartResourceUuids = new HashSet<String>();
-		StringBuilder drugOrderText = new StringBuilder();
+		// One entry per admitted drug-order record, NOT one concatenated buffer. A record boundary is a
+		// real boundary: an order name must be found inside ONE record that names it, never spanning
+		// two. That distinction became load-bearing when ActiveDrugOrder.namedIn began collapsing
+		// whitespace runs in its haystack (issue #293) — the separator this used to append was a
+		// newline, which the collapse turns into a space, so a multi-word name could match across the
+		// join and substantiate an order neither record names. Fail-OPEN, since substantiated means the
+		// WARN and the injected record are both suppressed. Measured: one order named "Warfarin 5mg"
+		// against records "Drug order: Warfarin" and "5mg tablet, 1 daily" was reported substantiated.
+		List<String> liveDrugOrderTexts = new ArrayList<String>();
 		List<RecordMapping> mappings = chart.getMappings();
 		for (RecordMapping mapping : mappings == null ? Collections.<RecordMapping>emptyList() : mappings) {
 			// Uuid matching is type-agnostic: a resource uuid is globally unique, so a record
@@ -497,17 +507,16 @@ public class DrugReferenceInjector {
 				// what leaves the name fallback intact for the drifted-uuid record it was added for.
 				String lower = mapping.getText().toLowerCase(Locale.ROOT);
 				if (!describesEndedOrder(lower) && !Boolean.FALSE.equals(mapping.getOrderActive())) {
-					drugOrderText.append(lower).append('\n');
+					liveDrugOrderTexts.add(lower);
 				}
 			}
 		}
-		String drugOrderTextLower = drugOrderText.toString();
 
 		List<PatientClinicalContext.ActiveDrugOrder> unrepresented =
 				new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
 		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
 			boolean substantiated = (order.getUuid() != null && chartResourceUuids.contains(order.getUuid()))
-					|| order.namedIn(drugOrderTextLower);
+					|| namedInAny(order, liveDrugOrderTexts);
 			if (!substantiated) {
 				unrepresented.add(order);
 			}
@@ -525,6 +534,20 @@ public class DrugReferenceInjector {
 					unrepresented.size(), context.getActiveDrugOrders().size(), unrepresented);
 		}
 		return unrepresented;
+	}
+
+	/** @return true when {@code order} is named inside ONE of {@code recordTexts} — asked per record so
+	 *          that a name cannot be assembled across a record boundary. See the comment in
+	 *          {@link #unrepresentedActiveOrders} for why the boundary has to be structural rather than
+	 *          a separator character. */
+	private static boolean namedInAny(PatientClinicalContext.ActiveDrugOrder order,
+			List<String> recordTexts) {
+		for (String text : recordTexts) {
+			if (order.namedIn(text)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** Lowercased marker querystore renders a drug order's END date under. It emits

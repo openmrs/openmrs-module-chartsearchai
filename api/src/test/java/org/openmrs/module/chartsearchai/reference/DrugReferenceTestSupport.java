@@ -476,7 +476,7 @@ public final class DrugReferenceTestSupport {
 
 	/** One active drug order whose concept carries no ATC map — the majority shape, and what
 	 *  {@link PatientClinicalContextBuilder} builds for such an order: the Order uuid, the display name,
-	 *  and the names that identify it in record text (drug and/or concept name). For a mapped concept
+	 *  and the names that identify it in record text (a coded drug's name, a clinician's free text, and/or a concept name). For a mapped concept
 	 *  the builder also attaches the order's own codes — use the four-argument overload below. */
 	static PatientClinicalContext.ActiveDrugOrder activeOrder(String uuid, String display, String... names) {
 		Set<String> all = new LinkedHashSet<String>();

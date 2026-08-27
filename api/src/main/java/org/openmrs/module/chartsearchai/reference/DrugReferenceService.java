@@ -355,8 +355,9 @@ public class DrugReferenceService {
 
 	/**
 	 * As {@link #findImpliedByDrugName(String)}, sharing one resolution cache with the other names of the
-	 * same call — which is {@link #findForActiveOrders}, where a patient's orders contribute two names
-	 * each (the drug's and its concept's) and several orders of one family carry the same aliases, and
+	 * same call — which is {@link #findForActiveOrders}, where a patient's orders contribute several
+	 * names each (the coded drug's, the free text a clinician typed for a non-coded one, and the
+	 * concept's) and several orders of one family carry the same aliases, and
 	 * since issue #228 {@code DrugSafetyValidator.substanceRowsNamedBy}, which asks the same question of
 	 * the same names once per in-play substance. What the cache saves is not the match scan but the
 	 * WITNESS resolution behind it: each alias a matched row carries costs a {@link #findImpliedSubstances},
@@ -958,8 +959,10 @@ public class DrugReferenceService {
 	 * condition records, the candidate set {@code DrugReferenceInjector.matchingEntries} scopes
 	 * order-driven injection over (issue #151), and the source of the names {@link #withReferenceNames}
 	 * attaches. The union of the documented order-driven matcher ({@link #findByActiveOrders}, which
-	 * keys on ATC codes) and a name resolution of each active order's own display name
-	 * ({@link #findImpliedByDrugName}). One definition, so those consumers cannot come to disagree
+	 * keys on ATC codes) and a name resolution of every name the patient's active orders carry
+	 * ({@link #findImpliedByDrugName} over {@link PatientClinicalContext#getActiveDrugNames()}, the
+	 * flattened union of each order's {@code ActiveDrugOrder.getNames()} — since issue #293 a display
+	 * name, the free text a clinician typed, and a concept name, not the display alone). One definition, so those consumers cannot come to disagree
 	 * about which of the patient's prescriptions the reference data covers.
 	 *
 	 * <p>That last consumer joined late and at a cost, which is why this list is worth keeping literal:
@@ -982,9 +985,14 @@ public class DrugReferenceService {
 	 * is absent the name resolution does. The ATC path is dormant on that instance, not dead.
 	 *
 	 * <p>The name leg is the recorded-name matcher rather than {@link #findByQuery} since issue #147: an
-	 * order's display name is a localized drug name, not prose, so resolving it with the prose rule
-	 * left {@code Aspirine Co 81mg} and {@code Clarithromycine Co 500mg} matching no entry at all —
+	 * order's display name is a localized drug name, so resolving it with the prose rule left
+	 * {@code Aspirine Co 81mg} and {@code Clarithromycine Co 500mg} matching no entry at all —
 	 * measured, 117 (order name, entry) pairs gained and 0 lost over the 3.7.1 dictionary's 2533 names.
+	 * That argument used to add "not prose", and issue #293 retired that half: this set now also holds
+	 * the free text a clinician typed, which can be a whole sentence. The choice of matcher is
+	 * unchanged — the recorded-name rule is still what a localized display name needs, and the prose
+	 * rule would still lose the 117 — but what it is applied to is no longer all one shape, and the
+	 * cost of that is recorded on {@code PatientClinicalContextBuilder.addDrugName}.
 	 *
 	 * <p>And it is {@link #findImpliedByDrugName} rather than the bare {@link #findByDrugName} since issue
 	 * #209: a match is the join for the ATC leg above, where the code either belongs to the order or does

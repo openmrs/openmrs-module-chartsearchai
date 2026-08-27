@@ -100,7 +100,7 @@ import org.springframework.stereotype.Service;
  * level-4 chemical subgroup ({@link DrugReference#ATC_SUBGROUP_PREFIX_LENGTH}), e.g. ibuprofen {@code M01AE01}
  * and naproxen {@code M01AE02} both {@code M01AE}. ATC's tree does not capture cross-branch
  * pharmacological cross-reactivity (aspirin {@code N02BA01} vs ibuprofen {@code M01AE01}); that
- * linkage is carried as curated data — {@link CrossReactivityGroup}s loaded alongside either
+ * linkage is carried as curated data — {@link CrossReactivityGroup}s loaded alongside any
  * source — and both class checks fall back to it when no ATC subgroup is shared, so the family
  * reasoning stays data-driven end to end. A shared subgroup is necessary but not sufficient since
  * issue #167: one that classifies neither the substances nor a therapy is skipped, and the pair falls

@@ -122,8 +122,8 @@ public class LlmProvider {
 			//
 			// The cost, stated rather than hidden: on the renewal chart (an ended order beside a live one
 			// for the same drug) the answer loses the dose it used to carry — "He is taking Nevirapine 400
-			// Milligram" becomes "He is taking Nevirapine". Every wording that keeps that dose pays
-			// one of the two prices above. It is the lesser loss here because the base arm's own grounding
+			// Milligram" becomes "He is taking Nevirapine". Of the wordings measured, every one that
+			// keeps that dose pays one of the two prices above. It is the lesser loss here because the base arm's own grounding
 			// verifier already marked that dose claim UNSUPPORTED, and the answer that replaces it is
 			// verified: that citation moves unsupported -> supported.
 			+ "A drug-order record carrying \"" + PatientChartSerializer.INACTIVE_ORDER_LABEL

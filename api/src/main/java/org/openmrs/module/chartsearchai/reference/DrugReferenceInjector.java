@@ -609,8 +609,9 @@ public class DrugReferenceInjector {
 	 * this line cannot carry one, because it stands in for an order the chart has no record of. The
 	 * #118 reconciliation means it routinely sits BESIDE an ended record naming the same drug — that
 	 * is what {@code AuthoritativeEndedOrderSubstantiationTest} arranges — and #315's prompt rule
-	 * fires on the ended record's field, so the field's absence here is the only thing keeping that
-	 * rule off the live order. Measured on exactly that chart, both question shapes, the #315 prompt
+	 * fires on the ended record's field, and this line has no field for it to fire on. That is not
+	 * the only difference between the two lines — the record-type prefix differs too — but it is
+	 * the one the rule reads. Measured on exactly that chart, both question shapes, the #315 prompt
 	 * and the base alike: the answer cites THIS line and calls the drug current, and neither arm
 	 * attaches "no longer in force" to it (n=2 per cell, one arrangement, one local model — enough to
 	 * refute the failure mode, not enough to call it impossible). Recorded because the next person to

@@ -147,10 +147,32 @@ public class ChartSearchAiDrugReferenceStatusTest {
 						+ "non-zero count alone cannot distinguish the two. Origin was: "
 						+ enabledBody.get("origin"));
 
+		// The crossReactivity subsection in its LOADED shape, and this is the only case that reads it
+		// that way. The case below drives the DISABLED state, where every value in that map equals
+		// false/0/""/none — so a toMap() that always returned the disabled shape passed, measured: four
+		// of its five keys hardcoded to those values left the whole suite green.
+		Map<?, ?> enabledGroups = (Map<?, ?>) enabledBody.get("crossReactivity");
+		assertEquals(Boolean.TRUE, enabledGroups.get("loaded"),
+				"reading the status performs the groups load too, and reports that it happened");
+		assertTrue(((Integer) enabledGroups.get("groupCount")).intValue() > 0,
+				"the bundled seed carries groups, and this count is the groups' own — not the entry "
+						+ "dataset's, which is the crossing a shared serializer could make silently");
+		assertTrue(String.valueOf(enabledGroups.get("origin")).contains("cross-reactivity-groups"),
+				"and the origin names the GROUPS file, which is what config.xml tells an operator to "
+						+ "compare against their own path. Origin was: " + enabledGroups.get("origin"));
+
 		globalProperties.put(ChartSearchAiConstants.GP_DRUG_REFERENCE_ENABLED, "false");
 		Map<?, ?> switchedOffBody = statusBody(controller);
 
 		assertEquals(Boolean.FALSE, switchedOffBody.get("enabled"), "the switch is read live");
+		// The same for the groups section, whose accessor documents that clause as "every clause of
+		// getLoadStatus()'s contract for the entry dataset, deliberately" — and until this line the
+		// entry side was pinned and the groups side was not: deleting its already-loaded early return
+		// left the whole suite green.
+		assertEquals(Boolean.TRUE,
+				((Map<?, ?>) switchedOffBody.get("crossReactivity")).get("loaded"),
+				"the groups in memory are still the ones the safety layer would use, so the section "
+						+ "describing them must not start saying nothing was loaded");
 		assertEquals(Boolean.TRUE, switchedOffBody.get("loaded"),
 				"the load that happened is still reported after the switch is turned off — the "
 						+ "entries are still in memory");

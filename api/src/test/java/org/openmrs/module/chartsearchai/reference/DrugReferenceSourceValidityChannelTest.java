@@ -61,8 +61,8 @@ import org.openmrs.module.chartsearchai.ModuleSourceRoot;
  * by not writing anything at all; {@code CLAUDE.md}'s loader bullet carries the rule that closes it
  * (resolve through {@link ReferenceDataFiles}, never open your own stream). Nor does it reach a source
  * declared OUTSIDE this package, or the groups loader, which is not a {@link DrugReferenceSource} — its
- * two accessors are ordinary public methods {@link DrugReferenceService} calls, so removing one breaks
- * the build.
+ * accessors are ordinary public methods {@link DrugReferenceService} calls, so removing one breaks the
+ * build.
  *
  * <p>The scan asserts its own findings are non-empty, which the walking caller of
  * {@link ModuleSourceRoot#apiRoot()} owes itself: that method falls back to the working directory rather

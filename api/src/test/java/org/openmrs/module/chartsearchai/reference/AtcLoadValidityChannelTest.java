@@ -18,10 +18,12 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceValidity.Finding;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
@@ -111,6 +113,30 @@ public class AtcLoadValidityChannelTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
+	 * The log line the shared resolution writes for a format that bundles NOTHING says so. The two entry
+	 * points hand {@code readOperatorFile} their own tail for that sentence, and swapping the two
+	 * literals left the whole suite green — so this format could have told an operator the module was
+	 * "using bundled default" for a dataset it does not ship, which is the opposite of the diagnosis and
+	 * would send them looking for a file that does not exist.
+	 */
+	@Test
+	public void theLogForAFormatThatBundlesNothingDoesNotOfferABundledDefault() {
+		configure("chartsearchai/h266-no-such-atc-export.tsv");
+
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
+			DrugReferenceLoad status = new DrugReferenceService().getLoadStatus();
+
+			assertEquals(0, status.getEntryCount(), "precondition: nothing loaded");
+			String logged = capture.describeAll().toString();
+			assertTrue(logged.contains("running empty"),
+					"the atc format has no fallback, so the line says what actually follows. Captured: "
+							+ logged);
+			assertFalse(logged.contains("using bundled default"),
+					"and never offers one it does not ship. Captured: " + logged);
+		}
+	}
+
+	/**
 	 * The same finding, read for what it SAYS. Issue #156's detail was written for the two formats that
 	 * have a bundled fallback and ends <em>"The entry count is therefore a count of a dataset nobody
 	 * configured, and looks healthy"</em>. On a format with no fallback that clause is false: the count
@@ -160,10 +186,39 @@ public class AtcLoadValidityChannelTest extends BaseModuleContextSensitiveTest {
 						+ "say. Findings were: " + status.getFindings());
 		assertEquals(0, status.getEntryCount());
 		assertTrue(status.isInert(), "precondition: this is the state the diagnosis is about");
-		assertEquals(DrugReferenceValidity.Remedy.REPORTED,
-				finding(status, DrugReferenceValidity.NO_LINE_YIELDED_AN_ENTRY).getRemedy(),
+		Finding discarded = finding(status, DrugReferenceValidity.NO_LINE_YIELDED_AN_ENTRY);
+		assertEquals(DrugReferenceValidity.Remedy.REPORTED, discarded.getRemedy(),
 				"nothing can be repaired here: a line this parser cannot read is not a line it can "
 						+ "guess at, and no rule in this loader refuses a file");
+		assertEquals(1, discarded.getOccurrences(),
+				"one document, one verdict — the line count belongs in the detail, which is the shape "
+						+ "the table rule's rowsCarried already takes. Mutating this to 7 survived the "
+						+ "whole suite before this line");
+	}
+
+	/**
+	 * What the number in that detail MEANS, which the rule's guard does not pin. The parser counts
+	 * CONTENT lines — non-blank, non-comment — and it counts them before deciding whether a line splits
+	 * into a code and a name, because a line it cannot split is still a line it read and discarded.
+	 * Moving the increment below that split guard survived the whole suite, so the figure an operator
+	 * reads could silently have become a count of SPLITTABLE lines instead.
+	 *
+	 * <p>Three content lines, one of them a bare token with no name, none of them an ATC substance code:
+	 * the detail must say three.
+	 */
+	@Test
+	public void theDiscardedCountIsOfContentLinesAndNotOfSplittableOnes() throws IOException {
+		String path = writeToAppData("h266-atc-unsplittable.tsv",
+				"# a comment, which is not a content line\n\nNOTACODE a name\nBARETOKEN\nZZZZ another\n");
+		configure(path);
+
+		DrugReferenceLoad status = new DrugReferenceService().getLoadStatus();
+
+		assertEquals(0, status.getEntryCount(), "precondition: no line is an ATC substance code");
+		String detail = finding(status, DrugReferenceValidity.NO_LINE_YIELDED_AN_ENTRY).getDetail();
+		assertTrue(detail.contains("3 content line(s)"),
+				"the comment and the blank line are not content; the bare token IS, because the parser "
+						+ "read it and discarded it. Detail was: " + detail);
 	}
 
 	/**

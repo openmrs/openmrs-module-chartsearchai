@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.api.context.Context;
@@ -201,6 +202,37 @@ public class CrossReactivityStatusContextTest extends BaseModuleContextSensitive
 				"an install that configured nothing must be silent. The load was: " + status);
 		assertEquals(ReferenceDataFiles.CLASSPATH_ORIGIN_PREFIX
 				+ CrossReactivityGroupsLoader.CLASSPATH_DEFAULT, status.getOrigin());
+	}
+
+	/**
+	 * The OTHER channel, which is half of what {@code CLAUDE.md} requires and was pinned nowhere: every
+	 * finding reaches the log at the moment it happens AND {@code toMap()} afterwards. The cases above
+	 * pin the second; this pins the first, and at the LEVEL, because ADR Decision 48 records the groups
+	 * loader's register as a decision rather than an accident — it reports through the one-argument
+	 * {@code logTo}, so it is loud whatever the origin, and the softening ADR Decision 36 gives the
+	 * entries dataset deliberately does not apply here.
+	 *
+	 * <p>Measured before this case existed: deleting {@code logTo(log)} from
+	 * {@link CrossReactivityGroupsLoader#load()} left the whole suite green, so the channel this ticket
+	 * exists to ADD a second of could have silently dropped back to one. The asymmetry was sharp —
+	 * {@link #anInstallThatConfiguredNoGroupsFileLogsNothingAboutOne} pinned this channel's SILENCE and
+	 * nothing pinned its sound.
+	 */
+	@Test
+	public void aGroupsFindingReachesTheLogAndNotOnlyTheStatus() {
+		configureGroupsFile("chartsearchai/h266-no-such-groups-for-the-log.json");
+
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
+			CrossReactivityGroupsLoad status = new DrugReferenceService().getCrossReactivityLoadStatus();
+
+			assertTrue(rulesOf(status).contains(DrugReferenceValidity.CONFIGURED_DATA_FILE_NOT_READ),
+					"precondition: the finding was raised. Findings were: " + status.getFindings());
+			assertTrue(capture.messagesAt(Level.WARN).toString()
+					.contains(DrugReferenceValidity.CONFIGURED_DATA_FILE_NOT_READ),
+					"the operator named a groups file and a different dataset is in force; that is a "
+							+ "CONFIGURATION finding, which is loud wherever the dataset came from. "
+							+ "Captured: " + capture.describeAll());
+		}
 	}
 
 	/**

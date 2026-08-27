@@ -1275,9 +1275,16 @@ public class DrugReference {
 
 	/**
 	 * @return true when this entry names the drug in {@code drugName} — a single clinician-entered
-	 *         drug NAME rather than prose: an active order's display name, an allergen as recorded.
+	 *         drug NAME: an active order's display name, an allergen as recorded.
 	 *         Case- and diacritic-insensitive; a null name never matches. Not restricted to
 	 *         lowercased input, unlike {@link #matchesText}.
+	 *
+	 *         <p>This used to read "a drug NAME rather than prose", and issue #293 retired that half:
+	 *         an order's names now include the free text a clinician typed, and an allergen "as
+	 *         recorded" was always free text. The matcher choice is unchanged — see the tail-allowance
+	 *         argument on {@link #matchesOrderName} — but what it is applied to is no longer all one
+	 *         shape, and the cost of that is recorded on
+	 *         {@code PatientClinicalContextBuilder.addDrugName}.
 	 *
 	 *         <p><b>Why this exists (issue #147).</b> Such a string reached {@link #matchesText}
 	 *         by default, and the prose rule's symmetric boundary is wrong for it: a localized
@@ -1506,8 +1513,10 @@ public class DrugReference {
 	 * {@code cipr|ofloxacin}.
 	 *
 	 * <p>The right-hand side is where this deliberately differs from {@link #containsWord}, because
-	 * the two kinds of string differ: prose is words, an order name is one localized, inflected
-	 * display name with a dose appended. Measured over the 3.7.1 demo dictionary (2531 drug and
+	 * the two kinds of string differ: prose is words, an order name is typically one localized,
+	 * inflected display name with a dose appended. Typically, not always — since issue #293 an order's
+	 * names include the free text a clinician typed, which can be a sentence; the allowance is still
+	 * right for the display-name shape it was measured on, and what it is applied to is now wider. Measured over the 3.7.1 demo dictionary (2531 drug and
 	 * drug-concept names x the full KB's 2093 rule tokens), by tolerated trailing letters:
 	 *
 	 * <pre>

@@ -61,9 +61,9 @@ public class NonCodedDrugOrderNameTest extends BaseModuleContextSensitiveTest {
 	/** What a non-coded order's concept is named when it is the platform's own {@code drugOrder.drugOther}
 	 *  placeholder: a generic label, and not the drug. Measured through the production accessor
 	 *  {@code DrugReferenceService.findImpliedByDrugName} over the shipped 2283-row knowledge base
-	 *  ({@code DrugReferenceTestSupport.shippedEntries()}), eighteen placeholder spellings of this shape
-	 *  — "Other", "Other non-coded", "Drug other non coded", "Unknown drug", "Medication" and the rest —
-	 *  put ZERO reference entries in play. The name is inert, which is why keeping it beside the
+	 *  ({@code DrugReferenceTestSupport.shippedEntries()}), generic spellings of this shape — "Other",
+	 *  "Other non-coded", "Drug other non coded", "Unknown drug", "Medication" among those tried — each
+	 *  put NO reference entries in play. The name is inert, which is why keeping it beside the
 	 *  clinician's text costs nothing; it is the ABSENCE of the drug's name that this issue is about. */
 	private static final String PLACEHOLDER_CONCEPT_NAME = "Other non-coded drug";
 
@@ -241,5 +241,81 @@ public class NonCodedDrugOrderNameTest extends BaseModuleContextSensitiveTest {
 				"and the concept name must survive beside it — this change adds a name, it never removes"
 						+ " one, was: " + order.getNames());
 		assertFalse(order.getNames().isEmpty(), "sanity: the order is not on the nameless rung");
+	}
+
+	/**
+	 * The rank's other end, which nothing else in the suite reaches: a CODED drug's name still leads.
+	 *
+	 * <p>{@code DrugOrderValidator} rejects a row carrying both a coded {@code Drug} and free text
+	 * ({@code DrugOrder.error.onlyOneOfDrugOrNonCodedShouldBeSet}) — but only inside
+	 * {@code validateForRequireDrug}, which returns immediately unless the {@code drugOrder.requireDrug}
+	 * global property is true. That property is false on a stock install — read off the 3.7.1
+	 * reference-application demo database, where it is the string {@code false} — so on a default
+	 * deployment nothing in that validator refuses this row, and it is not merely a legacy shape.
+	 * Nothing else in the suite can observe that
+	 * {@code drugNonCoded} was ranked BELOW the coded name rather than above it. Written by SQL like
+	 * the free-text arrangements above, because what is under test is the builder's read rather than
+	 * the platform's write path.
+	 */
+	@Test
+	public void aCodedDrugsNameStillLeadsWhenARowCarriesFreeTextBesideIt() {
+		Context.getAdministrationService().executeSQL(
+			"update drug_order set drug_non_coded = 'Warfarin 5mg' where order_id = 111", false);
+		Context.flushSession();
+		Context.clearSession();
+
+		PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
+
+		assertEquals(1, context.getActiveDrugOrders().size(),
+				"precondition: patient 7's one active drug order must reach the per-order list, was: "
+						+ context.getActiveDrugOrders());
+		PatientClinicalContext.ActiveDrugOrder order = context.getActiveDrugOrders().get(0);
+		assertEquals("ASPIRIN", order.getDisplay(),
+				"a coded identity outranks free text, so a coded order's display is untouched by this"
+						+ " change, was: " + order.getDisplay());
+		assertTrue(order.getNames().contains("warfarin 5mg"),
+				"the text is still collected as a match token — the rank decides the display, not"
+						+ " whether the name is read at all, was: " + order.getNames());
+	}
+
+	/**
+	 * What being additive COSTS, pinned rather than argued: an order whose concept and whose recorded
+	 * text name different drugs now reports both.
+	 *
+	 * <p>Every name of an order is resolved on its own — the drug-in-play arm screens the flattened
+	 * name set through {@code PatientClinicalContext.hasActiveDrug}, and the class arm's
+	 * {@code DrugSafetyValidator.substanceRowsNamedBy} raises one co-medication per distinct substance
+	 * over {@code getNames()} — so one prescription here yields two findings where before it yielded
+	 * the one the concept named. Both rows are real: Methotrexate x Warfarin is Minor and
+	 * Methotrexate x Acetylsalicylic acid is Major in the bundled excerpt.
+	 *
+	 * <p>That is the right answer rather than a defect to tune away. The record itself says two things
+	 * — a concept naming one drug, free text naming another — which is a shape
+	 * {@code DrugOrderValidator} permits only under the default {@code drugOrder.requireDrug=false},
+	 * and choosing between them would be guessing. Dropping the concept name whenever
+	 * {@code drugNonCoded} is set is the alternative, and it loses a real match on an order whose text
+	 * is unusable and whose concept is not — a silent fail-CLOSED, which is the failure mode issues
+	 * #193 and #195 exist to prevent.
+	 */
+	@Test
+	public void anOrderWhoseConceptAndTextNameDifferentDrugsReportsBoth() {
+		recordTheOrderAsFreeText("Warfarin");
+		DrugSafetyValidator validator =
+				DrugReferenceTestSupport.validator(DrugReferenceTestSupport.ddinterService());
+
+		PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
+		List<SafetyWarning> warnings = validator.validate("", "Can I give methotrexate?", context);
+
+		List<String> leads = new ArrayList<String>();
+		for (String detail : details(warnings)) {
+			leads.add(detail.substring(0, detail.indexOf('.') + 1));
+		}
+		assertEquals(2, leads.size(),
+				"one prescription naming two drugs must report both — before this change only the"
+						+ " concept's was reachable, was: " + leads);
+		assertTrue(leads.contains("Methotrexate interacts with active order warfarin — Minor."),
+				"the recorded text's row, which is the one this change adds, was: " + leads);
+		assertTrue(leads.contains("Methotrexate interacts with active order aspirin — Major."),
+				"and the concept's row, which this change must not remove, was: " + leads);
 	}
 }

@@ -2202,10 +2202,12 @@ public class DrugSafetyValidator {
 	 *         rather than a second definition of "how strongly does this row claim that name".
 	 *
 	 *         <p>What it does NOT do is manufacture a preference where the record supports none. An
-	 *         order contributes two names ({@link PatientClinicalContextBuilder}): its drug row's name,
-	 *         which commonly carries a strength ({@code Aspirin 81mg}), and its CONCEPT's own name, which
-	 *         commonly does not ({@code Botulinum toxin type A}) — and an order with no drug row
-	 *         contributes only the second. So a row whose display name IS that concept name reaches
+	 *         order contributes up to three names ({@link PatientClinicalContextBuilder}): its drug
+	 *         row's name, which commonly carries a strength ({@code Aspirin 81mg}), the free text a
+	 *         clinician typed for a non-coded order (issue #293, which commonly carries a strength
+	 *         too), and its CONCEPT's own name, which commonly does not
+	 *         ({@code Botulinum toxin type A}) — and a coded order contributes the first and the last,
+	 *         a non-coded one the last two. So a row whose display name IS that concept name reaches
 	 *         {@link DrugReference#NAME_IS_THE_DISPLAY_NAME} and wins, which is what moves the COVID pair
 	 *         in {@code OrderedSubjectRowTest.theOrderNamedRowIsNamedWhereTheFoldCannotReachIt}. This
 	 *         sentence used to name the botulinum case here, and that is the one family issue #250's

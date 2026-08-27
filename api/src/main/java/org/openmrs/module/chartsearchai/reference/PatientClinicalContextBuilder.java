@@ -278,15 +278,46 @@ final class PatientClinicalContextBuilder {
 	 * {@code DrugOrderValidator} treats exactly that concept as the non-coded shape. So the concept of a
 	 * free-text order is the platform's own placeholder by construction, while
 	 * {@code getDrugNonCoded()} holds what the clinician actually typed — and that field had no
-	 * production caller in this module at all.
+	 * production caller in this module at all. The asymmetry is the tell: {@code build} above already
+	 * reads the free-text half of the two other records it collects, {@code getNonCodedAllergen()} and
+	 * a condition's {@code getNonCoded()}, through this same {@code addRaw}. Orders were the one
+	 * record type read coded-only.
 	 *
 	 * <p><b>Additive, and ranked between the two existing sources.</b> Nothing is removed: the concept
-	 * name stays, so every match that worked before still works, and the set can only gain the one name
-	 * that is definitionally the drug. It leads the concept name because for a non-coded order the
-	 * concept is not the drug, so the display must be the recorded text. It follows the coded drug's
-	 * name because a coded identity outranks free text; core forbids both being set
-	 * ({@code DrugOrder.error.onlyOneOfDrugOrNonCodedShouldBeSet}), so that ordering binds only a legacy
-	 * row, and a coded order's display is untouched either way.
+	 * name stays, so every match that worked before still works, and the set gains the name the record
+	 * itself gives for the drug the clinician recorded. It leads the concept name because for a
+	 * non-coded order the concept is not the drug, so the display must be the recorded text. It follows
+	 * the coded drug's name because a coded identity outranks free text — and that rank is REACHABLE
+	 * rather than a legacy concern: {@code DrugOrderValidator} rejects a row carrying both
+	 * ({@code DrugOrder.error.onlyOneOfDrugOrNonCodedShouldBeSet}) only inside
+	 * {@code validateForRequireDrug}, which returns immediately unless the {@code drugOrder.requireDrug}
+	 * global property is true — and that property is {@code false} on a stock install (read off the
+	 * 3.7.1 reference-application demo database). So a coded order's display is untouched by this
+	 * change under either setting, and
+	 * {@code NonCodedDrugOrderNameTest.aCodedDrugsNameStillLeadsWhenARowCarriesFreeTextBesideIt}
+	 * pins that.
+	 *
+	 * <p><b>What being additive costs, pinned rather than argued.</b> Every name of an order is
+	 * resolved on its own, so where a client supplies a concept naming one drug and the clinician
+	 * types another, one prescription now reports both instead of only the concept's —
+	 * {@code NonCodedDrugOrderNameTest.anOrderWhoseConceptAndTextNameDifferentDrugsReportsBoth} is
+	 * that case, and it is the right answer rather than something to tune away: the record itself
+	 * says two things, and choosing between them would be guessing. The alternative — dropping the
+	 * concept name whenever {@code drugNonCoded} is set — loses a real match on an order whose text is
+	 * unusable and whose concept is not, a silent fail-CLOSED, which is the failure mode issues #193
+	 * and #195 exist to prevent. On the placeholder shape it costs nothing, and that was measured
+	 * rather than reasoned: driven through the production accessor
+	 * {@code DrugReferenceService.findImpliedByDrugName} over
+	 * {@code DrugReferenceTestSupport.shippedEntries()}, generic {@code drugOrder.drugOther} spellings
+	 * — {@code Other}, {@code Other non-coded}, {@code Drug other non coded}, {@code Unknown drug},
+	 * {@code Medication} among those tried — each put NO entries in play. Try another spelling the same
+	 * way rather than trusting that list.
+	 *
+	 * <p>A second cost has no test because its subject is chart prose this module does not author:
+	 * these names are also matched against that prose by {@code ActiveDrugOrder.namedIn}, so free text
+	 * that is a common word rather than a drug name can substantiate an order against unrelated text
+	 * and suppress the issue #118 WARN. Nothing here can tell a drug name from junk, and refusing free
+	 * text on suspicion would cost the fix.
 	 *
 	 * <p>Read through {@code addRaw} rather than behind an {@code isNonCodedDrug()} gate: that method IS
 	 * {@code StringUtils.isNotBlank(drugNonCoded)}, and {@code addRaw} already drops null, blank and

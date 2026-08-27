@@ -139,26 +139,41 @@ public class ChartSearchAiModuleActivator extends BaseModuleActivator implements
 	 * carries — and the built-in prompt is iterated on with the pipeline. Logged once per startup
 	 * when the property is set.
 	 *
-	 * <p><strong>This exists because the property's own description cannot reach the deployments that
-	 * have the problem.</strong> OpenMRS writes a module's {@code config.xml} description onto an
-	 * existing {@code global_property} row only when the stored description is NULL
-	 * ({@code Context.checkCoreDataset}), and a site that has SET this property already has the row —
-	 * so an upgrade leaves the old description in place and the admin UI never shows the new one. The
-	 * population the warning is for is exactly the population the description misses. That is the same
-	 * argument issue #154 made for its status endpoint, one channel along: an operator cannot be
-	 * expected to poll for a rule they do not know they lost.
+	 * <p><strong>Why a log line and not the property's own description.</strong> OpenMRS writes a
+	 * module's {@code config.xml} description onto a {@code global_property} row only when that row
+	 * is being CREATED, or when it exists with a NULL description ({@code Context.checkCoreDataset}).
+	 * The row is created by this module's own first startup, from {@code config.xml}, description
+	 * included — so every install that has ever run chartsearchai already has a non-null description
+	 * and will never receive a revised one. That is broader than "sites that set the property": it is
+	 * every upgraded install, whether or not anyone touched this GP.
+	 *
+	 * <p>Asked of {@link LlmProvider#isCustomSystemPrompt(String)} rather than re-derived, so the
+	 * warning cannot come to disagree with what the pipeline actually sends.
+	 *
+	 * <p>In its own catch, for the reason {@code setDaemonToken} gives above: this is best-effort and
+	 * buys nothing but a log line, so it must never be the thing that stops the module starting.
+	 * openmrs-core catches only {@code Error} around {@code started()}, so an unchecked exception
+	 * here would escape and cost the audit-purge registration below it.
+	 *
+	 * <p>What it does NOT cover: the property is read fresh on every generation, so a prompt set
+	 * through the admin UI takes effect immediately and is not warned about until the next restart.
 	 */
 	private void warnIfCustomSystemPrompt() {
-		String custom = Context.getAdministrationService()
-				.getGlobalProperty(ChartSearchAiConstants.GP_SYSTEM_PROMPT);
-		if (custom != null && !custom.trim().isEmpty()) {
-			log.warn("Chart Search AI: '{}' is set, so this deployment uses a custom system prompt and "
-					+ "NOT the module's built-in one. A custom prompt replaces the built-in prompt "
-					+ "wholesale rather than adding to it, so it does not carry rules added since it was "
-					+ "written — including the rule that an answer naming a drug from an ended drug "
-					+ "order must say the order is no longer in force (issue #315). Re-derive the custom "
-					+ "prompt from the built-in one, or clear the property to use the built-in prompt.",
-					ChartSearchAiConstants.GP_SYSTEM_PROMPT);
+		try {
+			String custom = Context.getAdministrationService()
+					.getGlobalProperty(ChartSearchAiConstants.GP_SYSTEM_PROMPT);
+			if (LlmProvider.isCustomSystemPrompt(custom)) {
+				log.warn("Chart Search AI: '{}' is set, so this deployment uses a custom system prompt "
+						+ "and NOT the module's built-in one. A custom prompt replaces the built-in "
+						+ "prompt wholesale rather than adding to it, so it does not carry rules added "
+						+ "since it was written — including the rule that an answer naming a drug from "
+						+ "an ended drug order must say the order is no longer in force (issue #315). "
+						+ "Re-derive the custom prompt from the built-in one, or clear the property to "
+						+ "use the built-in prompt.", ChartSearchAiConstants.GP_SYSTEM_PROMPT);
+			}
+		}
+		catch (Exception e) {
+			log.warn("Could not check whether a custom system prompt is configured", e);
 		}
 	}
 

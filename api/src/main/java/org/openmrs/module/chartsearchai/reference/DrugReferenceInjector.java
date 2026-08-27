@@ -605,8 +605,11 @@ public class DrugReferenceInjector {
 	 * operator looks for it, rather than by prose in front of a clinician.
 	 *
 	 * <p><strong>Since #317 the resemblance is no longer exact, and since #315 that matters.</strong>
-	 * A real {@code drug_order} record ends with {@code PatientChartSerializer}'s order-status field;
-	 * this line cannot carry one, because it stands in for an order the chart has no record of. The
+	 * A real {@code drug_order} record carries {@code PatientChartSerializer}'s order-status field
+	 * WHERE THE MODULE COULD ESTABLISH IT — the field is absent on every null case that accessor
+	 * enumerates, including a failed order read, which drops it from every record on the chart. So
+	 * the two line shapes are not reliably distinguished by the field; this line simply never
+	 * carries one, because it stands in for an order the chart has no record of. The
 	 * #118 reconciliation means it routinely sits BESIDE an ended record naming the same drug — that
 	 * is what {@code AuthoritativeEndedOrderSubstantiationTest} arranges — and #315's prompt rule
 	 * fires on the ended record's field, and this line has no field for it to fire on. That is not

@@ -207,13 +207,19 @@ public class EndedOrderAnswerRuleTest extends BaseModuleContextSensitiveTest {
 						+ "the FIRST thing after the constant rather than a distant one, because a canary "
 						+ "further down leaves a window of lines a widening could take silently");
 
-		// Normalised before the negative assertion, because BOTH of the shapes that defeated earlier
-		// versions of this case live in what normalisation removes. A comment inside the initializer
-		// can carry the constant's dotted name while the prompt hardcodes the text beside it (this
-		// file's convention is a comment paragraph above every prompt rule, so that is not exotic);
-		// and a hardcoded copy can be split across the file's own line-wrap — "... not in " + "force"
-		// — which a contiguous search cannot see. Strip line comments, then join adjacent literals.
-		String normalised = initializer.replaceAll("(?m)//.*$", "").replaceAll("\"\\s*\\+\\s*\"", "");
+		// Normalised before the negative assertion, because every shape that defeated an earlier
+		// version of this case lives in what normalisation removes, and there have been three. A
+		// comment inside the initializer can carry the constant's dotted name while the prompt
+		// hardcodes the text beside it (this file's convention is a comment paragraph above every
+		// prompt rule, so that is not exotic); a hardcoded copy can be split across the file's own
+		// line-wrap — "... not in " + "force" — which a contiguous search cannot see; and the split
+		// can be held apart by a BLOCK comment, which survives stripping line comments alone. Strip
+		// both comment forms, then join adjacent literals. Each of the three was found by mutation
+		// rather than by reasoning, so add the mutation before trusting a fourth to be impossible.
+		String normalised = initializer
+				.replaceAll("(?s)/\\*.*?\\*/", "")
+				.replaceAll("(?m)//.*$", "")
+				.replaceAll("\"\\s*\\+\\s*\"", "");
 		assertFalse(normalised.contains(PatientChartSerializer.INACTIVE_ORDER_LABEL),
 				"the prompt must not carry the mark's text as a literal, however it is split or "
 						+ "commented around — it reads identically to a composed clause today and stops "

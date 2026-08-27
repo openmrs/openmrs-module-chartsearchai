@@ -139,11 +139,15 @@ public class ArchitectureGuardTest {
 		// (lines starting with /* [ and containing "Clinical observation:"
 		// or similar). A file defining 10+ such lines is duplicating the
 		// dataset.
+		// This rule walks its own directory instead of getSourceCache(), so the preconditions there do
+		// not cover it — and a silent `return` on a missing directory is the same fail-open one rule
+		// along: a wrong or moved source root leaves it reporting no violations forever. Measured
+		// under a forced-wrong apiRoot(), this was the ONE rule of the five that stayed green.
 		Path testDir = SRC_ROOT.resolve(
 				"src/test/java/org/openmrs/module/chartsearchai");
-		if (!Files.exists(testDir)) {
-			return;
-		}
+		org.junit.jupiter.api.Assertions.assertTrue(Files.exists(testDir),
+				"precondition: the test source directory was not found under " + SRC_ROOT + ", so this "
+						+ "rule would scan nothing and report no violations — it fails instead");
 		List<String> violations = new ArrayList<>();
 		Files.walkFileTree(testDir, new SimpleFileVisitor<Path>() {
 			@Override
@@ -186,13 +190,15 @@ public class ArchitectureGuardTest {
 	private static java.util.Map<String, List<String>> sourceCache;
 
 	/**
-	 * Every rule in this class scans this map, so an EMPTY or WRONG map makes all of them pass
-	 * vacuously — a structural guard that reads nothing reports no violations. That is not
-	 * hypothetical: forcing {@link ModuleSourceRoot#apiRoot()} to an unrelated directory leaves this
-	 * class 5/5 green (measured; the two sibling classes that resolve a NAMED file under the same
-	 * root go red instead, because they assert the file exists and this one had nothing to assert).
-	 * The walk's fallback to the working directory cannot be relied on to fail loudly here, so the
-	 * cache asserts its own sanity before any rule reads it.
+	 * Every rule in this class but one scans this map, so an EMPTY or WRONG map made all of those
+	 * pass vacuously — a structural guard that reads nothing reports no violations. That was not
+	 * hypothetical: forcing {@link ModuleSourceRoot#apiRoot()} to an unrelated directory USED TO
+	 * leave this class entirely green. It no longer does; the cache asserts its own sanity before
+	 * any rule reads it, and the same mutation now reddens the rules that read it.
+	 *
+	 * <p>The exception is {@code noDuplicatedDatasetArrays}, which walks the TEST tree itself rather
+	 * than this cache — it carries the equivalent precondition inline, because these assertions
+	 * cannot reach it. A new rule that walks its own directory owes itself the same check.
 	 */
 	private static java.util.Map<String, List<String>> getSourceCache()
 			throws IOException {

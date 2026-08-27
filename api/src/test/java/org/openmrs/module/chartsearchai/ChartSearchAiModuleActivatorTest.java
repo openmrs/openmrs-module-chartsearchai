@@ -35,11 +35,12 @@ public class ChartSearchAiModuleActivatorTest extends BaseModuleContextSensitive
 	 * property before this rule existed silently keeps the defect the rule fixes.
 	 *
 	 * <p>The reason this is a LOG line and not left to the property's own description: OpenMRS writes
-	 * a module's {@code config.xml} description onto an existing {@code global_property} row only when
-	 * the stored description is NULL ({@code Context.checkCoreDataset}), and having SET the property is
-	 * exactly what makes that row exist — so on an upgraded install the new description is never
-	 * written and never shown. The population the warning is for is the population the description
-	 * cannot reach.
+	 * a module's {@code config.xml} description onto a {@code global_property} row only when creating
+	 * it, or when it exists with a NULL description ({@code Context.checkCoreDataset}). The row is
+	 * created by this module's own first startup with the description from {@code config.xml}, so
+	 * every install that has ever run chartsearchai has a non-null description and never receives a
+	 * revised one. The description reaches only installs that have never run the module, which cannot
+	 * have the problem.
 	 */
 	@Test
 	public void aCustomSystemPromptIsWarnedAboutAtStartupBecauseItDropsTheBuiltInRules() {

@@ -86,7 +86,8 @@ public class LlmProvider {
 			// wordings as full
 			// arms against the unchanged base, plus two single-clause mutation probes against the two
 			// answer cases; the arms ran on one binary, GP-swapped through chartsearchai.llm.systemPrompt,
-			// interleaved with a decoy on another patient between every sample, over Decision 45's own two
+			// interleaved with a decoy between every sample — on another patient for the standalone cells,
+			// on the same chart with another question for the fixture ones — over Decision 45's own two
 			// decisive charts, the two residue charts it records, the #319 yes/no medications gate cell and
 			// the two fixture charts EndedOrderAnswerRuleTest builds. ADR Decision 47 carries the ledger
 			// cell by cell; what is here is why the sentence has no second half.
@@ -1001,10 +1002,24 @@ public class LlmProvider {
 		remoteEngine.shutdown();
 	}
 
+	/**
+	 * Whether {@code value} overrides {@link #DEFAULT_SYSTEM_PROMPT} — the ONE definition of what
+	 * counts as a custom system prompt.
+	 *
+	 * <p>Public because {@code ChartSearchAiModuleActivator} warns an operator that a custom prompt
+	 * drops the built-in rules (issue #315), and that warning has to be true of what this class
+	 * actually sends. A second copy of the condition there agreed on the day it was written and
+	 * nothing kept it agreeing; a warning that disagrees with the pipeline is worse than none,
+	 * because it names a specific rule as dropped or kept on stale logic.
+	 */
+	public static boolean isCustomSystemPrompt(String value) {
+		return value != null && !value.trim().isEmpty();
+	}
+
 	protected String getSystemPrompt() {
 		String value = Context.getAdministrationService()
 				.getGlobalProperty(ChartSearchAiConstants.GP_SYSTEM_PROMPT);
-		if (value != null && !value.trim().isEmpty()) {
+		if (isCustomSystemPrompt(value)) {
 			return value.trim();
 		}
 		return DEFAULT_SYSTEM_PROMPT;

@@ -17,6 +17,8 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 
+import org.junit.jupiter.api.Assumptions;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -24,10 +26,10 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
  * The one OpenAI-compatible-endpoint client for the opt-in LLM test suites — resolving the endpoint,
- * probing it, and posting one completion. Shared by {@link LlmAnswerQualityTest},
- * {@link PromptInjectionEvalTest} and {@link AbsentDataEvalTest} so the request shape cannot drift
- * between them, which is the rule CLAUDE.md states for {@code TestDatasetHelper} and
- * {@code DrugReferenceTestSupport}.
+ * probing it, deciding whether the suite was opted into, and posting one completion. Shared by
+ * {@link LlmAnswerQualityTest}, {@link PromptInjectionEvalTest}, {@link AbsentDataEvalTest} and
+ * {@link EndedOrderAnswerRuleTest} so the request shape cannot drift between them, which is the
+ * rule CLAUDE.md states for {@code TestDatasetHelper} and {@code DrugReferenceTestSupport}.
  *
  * <p>Extracted when {@link AbsentDataEvalTest} became the third suite to need it (issue #203); the
  * first two had a copy each. It matters more here than the line count suggests, because all three
@@ -58,6 +60,19 @@ final class LlmEndpointTestSupport {
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
 	private LlmEndpointTestSupport() {
+	}
+
+	/**
+	 * Skips the calling suite unless {@code enableProperty} is set to {@code true}.
+	 *
+	 * <p>Here rather than copied per suite for the reason the class javadoc gives about the request
+	 * shape, and it binds harder for this one: every suite that uses it is SKIPPED in CI, so a suite
+	 * whose gate has drifted — a different spelling, a laxer truth test — stops running and looks
+	 * exactly like a suite that ran and passed. Nothing turns red either way.
+	 */
+	static void assumeOptedIn(String enableProperty) {
+		Assumptions.assumeTrue("true".equalsIgnoreCase(System.getProperty(enableProperty)),
+				"Skipping: set -D" + enableProperty + "=true to run");
 	}
 
 	/** The endpoint {@code endpointProperty} names, or {@link #DEFAULT_ENDPOINT} when it is unset. */

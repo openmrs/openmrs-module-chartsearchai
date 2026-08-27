@@ -15,7 +15,6 @@ import java.io.IOException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
@@ -23,6 +22,7 @@ import java.util.List;
 import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.Test;
+import org.openmrs.module.chartsearchai.ModuleSourceRoot;
 
 /**
  * Build-time guard that fails if someone reintroduces pipeline logic
@@ -38,7 +38,7 @@ import org.junit.jupiter.api.Test;
  */
 public class ArchitectureGuardTest {
 
-	private static final Path SRC_ROOT = findSourceRoot();
+	private static final Path SRC_ROOT = ModuleSourceRoot.apiRoot();
 
 	// --- Rules ---
 
@@ -139,12 +139,22 @@ public class ArchitectureGuardTest {
 		// (lines starting with /* [ and containing "Clinical observation:"
 		// or similar). A file defining 10+ such lines is duplicating the
 		// dataset.
+		// This rule walks its own directory instead of getSourceCache(), so the preconditions there do
+		// not cover it — and a silent `return` on a missing directory is the same fail-open one rule
+		// along: a wrong or moved source root leaves it reporting no violations forever. Measured
+		// under a forced-wrong apiRoot(), this was the ONE rule of the five that stayed green.
 		Path testDir = SRC_ROOT.resolve(
 				"src/test/java/org/openmrs/module/chartsearchai");
-		if (!Files.exists(testDir)) {
-			return;
-		}
+		org.junit.jupiter.api.Assertions.assertTrue(Files.exists(testDir),
+				"precondition: the test source directory was not found under " + SRC_ROOT + ", so this "
+						+ "rule would scan nothing and report no violations — it fails instead");
 		List<String> violations = new ArrayList<>();
+		// The right-tree canary, matching the second precondition in getSourceCache(). Existence alone
+		// is NOT equivalent to it: the sibling omod module carries the same package path, so a root
+		// pointed there passes the existence check and this rule scans the wrong tree and reports no
+		// violations — measured, that mutation reddens the four cache-reading rules and left this one
+		// green.
+		final List<String> scanned = new ArrayList<>();
 		Files.walkFileTree(testDir, new SimpleFileVisitor<Path>() {
 			@Override
 			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
@@ -153,6 +163,7 @@ public class ArchitectureGuardTest {
 					return FileVisitResult.CONTINUE;
 				}
 				String name = file.getFileName().toString();
+				scanned.add(name);
 				if ("TestDatasetHelper.java".equals(name)
 						|| "ArchitectureGuardTest.java".equals(name)) {
 					return FileVisitResult.CONTINUE;
@@ -177,6 +188,10 @@ public class ArchitectureGuardTest {
 				return FileVisitResult.CONTINUE;
 			}
 		});
+		org.junit.jupiter.api.Assertions.assertTrue(scanned.contains("TestDatasetHelper.java"),
+				"precondition: the scan under " + testDir + " did not see TestDatasetHelper.java, so it "
+						+ "is reading the wrong tree — a wrong root that happens to carry this package "
+						+ "path scans SOMETHING and this rule then reports no violations");
 		assertNoViolations(violations);
 	}
 
@@ -185,6 +200,19 @@ public class ArchitectureGuardTest {
 	/** Cache of file name → lines, populated once by {@link #loadAllSources}. */
 	private static java.util.Map<String, List<String>> sourceCache;
 
+	/**
+	 * Every rule in this class but one scans this map, so an EMPTY or WRONG map made all of those
+	 * pass vacuously — a structural guard that reads nothing reports no violations. That was not
+	 * hypothetical: forcing {@link ModuleSourceRoot#apiRoot()} to an unrelated directory USED TO
+	 * leave this class entirely green. It no longer does; the cache asserts its own sanity before
+	 * any rule reads it, and the same mutation now reddens the rules that read it.
+	 *
+	 * <p>The exception is {@code noDuplicatedDatasetArrays}, which walks the TEST tree itself rather
+	 * than this cache, so these assertions cannot reach it — it carries both of them inline, and it
+	 * needs both: existence alone is not enough, because the sibling {@code omod} module has the
+	 * same package path, so a root pointed there exists and scans the wrong tree. A new rule that
+	 * walks its own directory owes itself the same pair.
+	 */
 	private static java.util.Map<String, List<String>> getSourceCache()
 			throws IOException {
 		if (sourceCache == null) {
@@ -201,6 +229,14 @@ public class ArchitectureGuardTest {
 				}
 			});
 		}
+		org.junit.jupiter.api.Assertions.assertFalse(sourceCache.isEmpty(),
+				"precondition: the source scan found no .java files under " + SRC_ROOT + " — every rule "
+						+ "in this class would pass vacuously, so this fails instead of reporting no "
+						+ "violations");
+		org.junit.jupiter.api.Assertions.assertTrue(sourceCache.containsKey("LlmProvider.java"),
+				"precondition: the source scan did not find LlmProvider.java under " + SRC_ROOT + ", so "
+						+ "it is reading the wrong tree — a wrong root scans SOMETHING and every rule "
+						+ "then passes on files these rules were never written about");
 		return sourceCache;
 	}
 
@@ -246,23 +282,4 @@ public class ArchitectureGuardTest {
 		}
 	}
 
-	private static Path findSourceRoot() {
-		// Walk up from the compiled test class to find the api/ module root.
-		// Maven sets CWD to the module directory, so check CWD first.
-		Path current = Paths.get("").toAbsolutePath();
-		while (current != null) {
-			if (Files.exists(current.resolve("src/main/java"))
-					&& Files.exists(current.resolve("src/test/java"))) {
-				return current;
-			}
-			// Try api/ subdirectory (for when CWD is the project root)
-			Path api = current.resolve("api");
-			if (Files.exists(api.resolve("src/main/java"))) {
-				return api;
-			}
-			current = current.getParent();
-		}
-		// Last resort: assume CWD is the module directory
-		return Paths.get("").toAbsolutePath();
-	}
 }

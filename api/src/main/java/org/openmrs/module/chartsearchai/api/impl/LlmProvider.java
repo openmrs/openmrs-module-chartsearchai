@@ -23,6 +23,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -57,6 +58,125 @@ public class LlmProvider {
 			+ "Records beginning with \"Drug reference\" are clinical reference data, not this "
 			+ "patient's data; cite them the same way, but never present reference dosing as a value "
 			+ "already recorded for the patient. "
+			// ISSUE #315, and it is a REPORTING rule rather than a CLASSIFICATION one — which is the
+			// whole reason it can exist at all. ADR Decision 45 measured four CLAUSE wordings of an
+			// ENDED/CURRENT clause over querystore's TEXT markers and reverted every one: an order
+			// lapsed by auto_expire_date renders no end marker, so the model was being asked to sort
+			// records into two classes with no discriminator for one of them — it misfiled that record
+			// (four is its W1-W4; its own "five wordings" counts the clause-less control as a row. Nine
+			// further wordings are counted there and TWO of them are described, so seven are unrecorded
+			// — do not re-run the two it names)
+			// and then asserted the lapsed drug as current in a clinical answer. #317 (Decision 46)
+			// removed that gap: a drug_order record carries PatientChartSerializer's own mark wherever the
+			// module could establish the answer — not everywhere, and deliberately so; see
+			// SerializedRecord.getOrderActive() for the cases it stays silent on. The model demonstrably
+			// reads it — #315's re-measurement records an answer
+			// quoting "the order status is not in force" back unprompted. So this clause asks the model
+			// to decide nothing. It names the token the record STATES and says what an answer naming that
+			// record's drug owes the reader.
+			//
+			// The trigger is the serializer's CONSTANT and not a copy of its text, for the reason
+			// FINDING_PREFIX is used in the few-shot below — a copy would go on teaching a token no record
+			// carries the moment the mark's wording changed, which Decision 46's javadoc explicitly
+			// anticipates ("A change to either string is a change to what every chart says to the model").
+			// javac inlines the constant, so no behavioural assertion can tell a copy from a reference;
+			// EndedOrderAnswerRuleTest.thePromptsTriggerTokenIsTheSerializersConstantAndNotACopy reads
+			// this source instead.
+			//
+			// ONE SENTENCE. THE FIRST TWO BULLETS ARE ADDITIONS THAT WERE MEASURED AND REJECTED; THE
+			// THIRD RECORDS A MUTATION THAT PASSED, AND THE FOURTH IS AN ARGUMENT AND SAYS SO. Seven
+			// wordings as full
+			// arms against the unchanged base, plus two single-clause mutation probes against the two
+			// answer cases; the arms ran on one binary, GP-swapped through chartsearchai.llm.systemPrompt,
+			// interleaved with a decoy between every sample — on another patient for the standalone cells,
+			// on the same chart with another question for the fixture ones — over Decision 45's own two
+			// decisive charts, the two residue charts it records, the #319 yes/no medications gate cell and
+			// the two fixture charts EndedOrderAnswerRuleTest builds. ADR Decision 47 carries the ledger
+			// cell by cell; what is here is why the sentence has no second half.
+			//  - NO date instruction, though the ticket's title asks for the stop date. Restrictively
+			//    ("give the date it was stopped only when that record states one") it left the ticket's own
+			//    cell UNFIXED and dropped the activation date that cell used to carry. Positively
+			//    ("together with the date it was stopped where that record carries one") it DOES fix that
+			//    cell with the date in it — and on Decision 45's cell-B chart, asked what the patient is
+			//    taking, replaces BOTH live drug names with a lab measurement: "The patient is
+			//    currently taking: 1 Serum magnesium measurement (mg/dL) Every twelve hours [3] and ...".
+			//    That is a clinical falsehood on the chart this approach was previously reverted over. The
+			//    date is left to the record's own text, which already carries it wherever querystore
+			//    renders one — and where it does, the answer states it without being asked to.
+			//  - NO completeness half ("without dropping anything else you would have reported" / "Keep
+			//    every other detail ... about that record"). It stops the rule firing at all on a
+			//    single-record chart — both of EndedOrderAnswerRuleTest's ENDED-direction answer cases
+			//    go red; add the
+			//    half back and re-run them rather than trusting a tally here. The rider that rescues that
+			//    turns the model to enumerating dose, route and frequency on every medication list: on the
+			//    #319 gate cell every one of its citations went from a mix of supported and unsupported to
+			//    unsupported throughout. Trading a
+			//    correct answer's citations into red is the #201/#302 failure class.
+			//  - The completeness half breaks the rule with EITHER verb, which is worth stating because
+			//    the obvious reading is that the verb is what matters. It is not: swap "say in the same
+			//    sentence" for "add to the sentence naming it" and leave the half out, and both answer
+			//    cases still pass. Mutate one thing at a time here — a two-word change measured against a
+			//    two-clause change taught this file a false rule once already, and the mutation that
+			//    refutes it takes one targeted test run.
+			//  - ONE BRANCH — and this one is NOT in the ledger above; it is an argument, and the
+			//    positive half it declines has no arm of its own. What KEEPS it one branch is
+			//    EndedOrderAnswerRuleTest.theSystemPromptStatesTheRuleForAnOrderThatIsNotInForce,
+			//    which asks this rule's whole SPAN — between the "Drug reference" sentence and the
+			//    "Safety finding" one — to be exactly these two sentences, and asks the prompt to
+			//    name a "drug-order record" exactly once. Adding a half here reddens it; that method's
+			//    javadoc says which shapes it does and does not see. Nothing about a record carrying NO mark: the mark is silent wherever the
+			//    module could not establish the answer (SerializedRecord.getOrderActive() owns that
+			//    list), so a clause speaking for the silent case would assert exactly what the silence
+			//    exists to withhold. That is a property of the CLAUSE, not a guarantee about the answer:
+			//    measured on a chart carrying an unevaluable order beside marked ones, the model still
+			//    grouped the unmarked record in with "no longer in force". The clause does not say it;
+			//    nothing here stops the model saying it. And nothing about a record marked IN FORCE: Decision 45's residue is
+			//    that a positive currency sentence makes the model re-state a live order in prose instead
+			//    of copying a field list, and prose loses fields and can invent them.
+			//
+			// THE COSTS. NOT a closed list, and it must not be re-labelled into one: ADR Decision 47's
+			// ledger and trade-offs are canonical for what this wording pays, and what is here is the
+			// three a re-wording has to re-run FIRST, worst first. Earlier forms of this comment said
+			// "TWO costs, stated rather than hidden" and left the first bullet out — that bullet was
+			// measured a commit BEFORE the second was written, so re-labelling the list around the two
+			// that happened to be adjacent closed an enumeration that had never contained the worst of
+			// them. If you add a cost, do not restate the count.
+			//  - A FABRICATED STOP DATE — the worst thing the clause does, and the reason to re-run
+			//    cell H before any other cell. On a chart carrying SEVERAL records of ONE drug where
+			//    some carry ". Stopped: <date>" and one (lapsed by auto_expire_date) does not, asked
+			//    "has his Triomune-30 been stopped?", the answer states that record's ORDER date as a
+			//    stop date and CITES it — 3/3, where the base arm never names that record at all. It is
+			//    a false clinical fact carrying a citation, and it violates this prompt's own "Never
+			//    infer, assume, or add information not explicitly stated in the records". FIVE further
+			//    wordings failed to remove it (a prohibition on dating the ending; a prohibition on
+			//    re-using the record's other dates; a sentence stating what the field does and does not
+			//    say; dropping the word "ended"; a status-only clause naming no ending at all — all
+			//    five fabricate, 3/3 each), which is what makes it a property of the CLAUSE rather than
+			//    of its phrasing. It ships because its precondition is narrow — several ended records
+			//    of one drug disagreeing about whether their text carries an end date — and every
+			//    realistic chart measured stays clean; Decision 47 carries that trade and the cells.
+			//  - On the renewal chart (an ended order beside a live one for the same drug) the answer
+			//    loses the dose it used to carry — "He is taking Nevirapine 400 Milligram" becomes "He is
+			//    taking Nevirapine". Of the wordings measured, every one that keeps that dose pays one of
+			//    the two prices in the DECLINED list above — cell B2's lab-measurement falsehood, or the
+			//    fixture answer cases going red. (That phrase used to read "the two prices above", which
+			//    stopped being unambiguous the moment a third cost was added between the two lists.)
+			//    It is the lesser loss here because the base arm's own grounding
+			//    verifier already marked that dose claim UNSUPPORTED, and the answer that replaces it is
+			//    verified: that citation moves unsupported -> supported.
+			//  - On a chart of ONE ended order, asked "what medications is he taking?", the answer stops
+			//    naming the drug at all: "Nevirapine was ordered on 2026-07-26 [1]." becomes "No current
+			//    medications are recorded.", 3/3, with NO citation. True of that patient, and it satisfies
+			//    this clause vacuously — nothing is named, so nothing owes a status — but the drug, the
+			//    ended status and the stop date the ticket's title asks for all leave the answer. Four of
+			//    the eight measured wordings keep it naming the drug AND its status; each is excluded by
+			//    another cell (the ticket's own cell unfixed, cell B2's lab-measurement falsehood, or both
+			//    of EndedOrderAnswerRuleTest's ENDED-direction answer cases red). Decision 47's A3 note
+			//    carries which, and the
+			//    base on that cell is NOT settled — four runs, three different base answers.
+			+ "A drug-order record carrying \"" + PatientChartSerializer.INACTIVE_ORDER_LABEL
+			+ "\" is a record of an order that has ended. Whenever your answer names a drug from such "
+			+ "a record, say in the same sentence that its order is no longer in force. "
 			// SAFETY GUIDANCE LIVES IN TWO PLACES: this record-type sentence (#110, #112) and the
 			// safety/suitability paragraph below (#107, #112). They are one rule split across the
 			// prompt's two natural sections — what a record type means here, and how to answer a
@@ -924,10 +1044,24 @@ public class LlmProvider {
 		remoteEngine.shutdown();
 	}
 
+	/**
+	 * Whether {@code value} overrides {@link #DEFAULT_SYSTEM_PROMPT} — the ONE definition of what
+	 * counts as a custom system prompt.
+	 *
+	 * <p>Public because {@code ChartSearchAiModuleActivator} warns an operator that a custom prompt
+	 * drops the built-in rules (issue #315), and that warning has to be true of what this class
+	 * actually sends. A second copy of the condition there agreed on the day it was written and
+	 * nothing kept it agreeing; a warning that disagrees with the pipeline is worse than none,
+	 * because it names a specific rule as dropped or kept on stale logic.
+	 */
+	public static boolean isCustomSystemPrompt(String value) {
+		return value != null && !value.trim().isEmpty();
+	}
+
 	protected String getSystemPrompt() {
 		String value = Context.getAdministrationService()
 				.getGlobalProperty(ChartSearchAiConstants.GP_SYSTEM_PROMPT);
-		if (value != null && !value.trim().isEmpty()) {
+		if (isCustomSystemPrompt(value)) {
 			return value.trim();
 		}
 		return DEFAULT_SYSTEM_PROMPT;

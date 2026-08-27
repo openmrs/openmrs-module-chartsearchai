@@ -81,7 +81,7 @@
 	<globalProperty>
 		<property>chartsearchai.llm.systemPrompt</property>
 		<defaultValue></defaultValue>
-		<description>Custom system prompt sent to the LLM before patient records and the question. If empty (the default), the module uses its built-in prompt — which is iterated on alongside the rest of the pipeline and is what the eval suite tests against. Set this only to override the built-in default for this deployment (e.g. to adjust tone, citation format, or add site-specific guidance).</description>
+		<description>Custom system prompt sent to the LLM before patient records and the question. If empty (the default), the module uses its built-in prompt — which is iterated on alongside the rest of the pipeline and is what the eval suite tests against. Set this only to override the built-in default for this deployment (e.g. to adjust tone or citation format). It REPLACES the built-in prompt wholesale rather than adding to it, so a custom value drops every rule the built-in prompt carries — including the one that makes an answer naming a drug from an ended drug order say the order is no longer in force (issue #315). Re-derive a custom prompt from the built-in one after upgrading rather than carrying an older copy forward.</description>
 	</globalProperty>
 
 	<globalProperty>

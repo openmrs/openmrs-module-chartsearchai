@@ -18,7 +18,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -34,6 +33,7 @@ import org.openmrs.Patient;
 import org.openmrs.TestOrder;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.LogCapture;
+import org.openmrs.module.chartsearchai.ModuleSourceRoot;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
@@ -584,7 +584,7 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 		// stops it proving that about a call the module does not make. The scan is the shape
 		// theFailedReadPathReturnsTheNotReadState uses, and the same limits apply — it sees this
 		// spelling and nothing else.
-		Path contextBuilder = findApiSourceRoot().resolve(
+		Path contextBuilder = ModuleSourceRoot.apiRoot().resolve(
 				"src/main/java/org/openmrs/module/chartsearchai/reference/PatientClinicalContextBuilder.java");
 		assertTrue(Files.exists(contextBuilder), "cannot find the context builder at " + contextBuilder);
 		String contextBuilderText = new String(Files.readAllBytes(contextBuilder), StandardCharsets.UTF_8);
@@ -612,7 +612,7 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 		// this too rather than passing a scan that only looks at the catch it left untouched. Since
 		// review round 2 it reads the SEAM's body as well, for the swallow one method further in;
 		// see the block at the end, which says why nothing behavioural can see that one.
-		Path source = findApiSourceRoot().resolve(
+		Path source = ModuleSourceRoot.apiRoot().resolve(
 				"src/main/java/org/openmrs/module/chartsearchai/api/impl/QueryStoreChartBuilder.java");
 		assertTrue(Files.exists(source), "cannot find the builder's source at " + source);
 		String text = new String(Files.readAllBytes(source), StandardCharsets.UTF_8);
@@ -669,23 +669,6 @@ public class DrugOrderCurrencyMarkTest extends BaseModuleContextSensitiveTest {
 			count++;
 		}
 		return count;
-	}
-
-	/** The api module root, located the way {@code ArchitectureGuardTest} locates it. */
-	private static Path findApiSourceRoot() {
-		Path current = Paths.get("").toAbsolutePath();
-		while (current != null) {
-			if (Files.exists(current.resolve("src/main/java"))
-					&& Files.exists(current.resolve("src/test/java"))) {
-				return current;
-			}
-			Path api = current.resolve("api");
-			if (Files.exists(api.resolve("src/main/java"))) {
-				return api;
-			}
-			current = current.getParent();
-		}
-		return Paths.get("").toAbsolutePath();
 	}
 
 	/**

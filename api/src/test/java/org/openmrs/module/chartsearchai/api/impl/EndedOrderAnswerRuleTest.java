@@ -16,7 +16,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Locale;
@@ -28,6 +27,7 @@ import org.openmrs.DrugOrder;
 import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.ModuleSourceRoot;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.querystore.api.QueryStoreService;
@@ -95,8 +95,12 @@ public class EndedOrderAnswerRuleTest extends BaseModuleContextSensitiveTest {
 	private static final int SAMPLES = 3;
 
 	/** {@code DrugOrderCurrencyTestData.xml}: patient 6's only drug order, lapsed by its DURATION —
-	 *  {@code auto_expire_date} 2008-01-08, {@code date_stopped} NULL. querystore renders NO end
-	 *  marker for it, so the mark is the ONLY evidence in the chart that the prescription ended. */
+	 *  {@code auto_expire_date} 2008-01-09, {@code date_stopped} NULL. querystore renders NO end
+	 *  marker for it, so the mark is the ONLY evidence in the chart that the prescription ended.
+	 *  Not to be confused with order 9317, the OTHER lapsed row (patient 2, {@code auto_expire_date}
+	 *  2008-01-08), which {@code DrugOrderCurrencyMarkTest} calls {@code LAPSED_ORDER_ID}. This one
+	 *  is that class's {@code ONLY_ORDER_OF_A_PATIENT_WITH_NONE_ACTIVE}, and it is the row wanted
+	 *  here because #315's arrangement is one ended prescription and nothing active. */
 	private static final int LAPSED_ORDER_ID = 9318;
 
 	/** Standard test dataset order 2: patient 2, {@code date_stopped} 2007-12-10 — the ticket's own
@@ -175,16 +179,30 @@ public class EndedOrderAnswerRuleTest extends BaseModuleContextSensitiveTest {
 	 */
 	@Test
 	public void thePromptsTriggerTokenIsTheSerializersConstantAndNotACopy() throws Exception {
-		Path source = findApiSourceRoot().resolve(
+		Path source = ModuleSourceRoot.apiRoot().resolve(
 				"src/main/java/org/openmrs/module/chartsearchai/api/impl/LlmProvider.java");
 		assertTrue(Files.exists(source), "precondition: LlmProvider.java must be readable at " + source);
 		String text = new String(Files.readAllBytes(source), StandardCharsets.UTF_8);
 
 		int start = text.indexOf("static final String DEFAULT_SYSTEM_PROMPT");
 		assertTrue(start > 0, "precondition: the prompt constant's declaration must be findable");
-		int end = text.indexOf("\n\tstatic ", start + 1);
-		assertTrue(end > start, "precondition: the end of the prompt constant must be findable");
-		String initializer = text.substring(start, end);
+		// The initializer ends at its terminating quote-semicolon. Found by scanning rather than by
+		// anchoring on whatever member happens to follow, which is how the first version of this case
+		// was FAIL-OPEN: it ended the slice at the next "\n\tstatic ", 125 lines past the constant, so
+		// a hardcoded copy in the prompt passed as long as the constant's name appeared anywhere in
+		// those lines — demonstrated by mutation, green. An escaped quote inside the prompt text is
+		// skipped, because the prompt really does contain \" sequences.
+		int end = start;
+		do {
+			end = text.indexOf("\";", end + 1);
+		} while (end > 0 && text.charAt(end - 1) == '\\');
+		assertTrue(end > start, "precondition: the prompt constant's terminating quote-semicolon must "
+				+ "be findable, or the slice below silently widens to the rest of the file");
+		String initializer = text.substring(start, end + 2);
+		assertFalse(initializer.contains("AnswerExtractingConsumer"),
+				"precondition: the slice must stop at the constant, not run on into the rest of the "
+						+ "class — that over-wide window is exactly what made this guard fail open, and "
+						+ "this assertion is what stops it silently widening again");
 
 		assertTrue(initializer.contains("PatientChartSerializer.INACTIVE_ORDER_LABEL"),
 				"the prompt's order-status clause must be BUILT from "
@@ -328,23 +346,6 @@ public class EndedOrderAnswerRuleTest extends BaseModuleContextSensitiveTest {
 			return order.getDrug().getName();
 		}
 		return order.getConcept().getName().getName();
-	}
-
-	/** The api module root, located the way {@code ArchitectureGuardTest} locates it. */
-	private static Path findApiSourceRoot() {
-		Path current = Paths.get("").toAbsolutePath();
-		while (current != null) {
-			if (Files.exists(current.resolve("src/main/java"))
-					&& Files.exists(current.resolve("src/test/java"))) {
-				return current;
-			}
-			Path api = current.resolve("api");
-			if (Files.exists(api.resolve("src/main/java"))) {
-				return api;
-			}
-			current = current.getParent();
-		}
-		return Paths.get("").toAbsolutePath();
 	}
 
 	/**

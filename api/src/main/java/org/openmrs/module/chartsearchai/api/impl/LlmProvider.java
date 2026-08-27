@@ -59,10 +59,12 @@ public class LlmProvider {
 			+ "patient's data; cite them the same way, but never present reference dosing as a value "
 			+ "already recorded for the patient. "
 			// ISSUE #315, and it is a REPORTING rule rather than a CLASSIFICATION one — which is the
-			// whole reason it can exist at all. ADR Decision 45 measured four wordings of an
+			// whole reason it can exist at all. ADR Decision 45 measured four CLAUSE wordings of an
 			// ENDED/CURRENT clause over querystore's TEXT markers and reverted every one: an order
 			// lapsed by auto_expire_date renders no end marker, so the model was being asked to sort
 			// records into two classes with no discriminator for one of them — it misfiled that record
+			// (four is its W1-W4; its own "five wordings" counts the clause-less control as a row, and
+			// nine further wordings are counted there but not recorded)
 			// and then asserted the lapsed drug as current in a clinical answer. #317 (Decision 46)
 			// removed that gap: every attributable drug_order record now carries PatientChartSerializer's
 			// own mark, and the model demonstrably reads it — #315's re-measurement records an answer
@@ -78,7 +80,8 @@ public class LlmProvider {
 			// EndedOrderAnswerRuleTest.thePromptsTriggerTokenIsTheSerializersConstantAndNotACopy reads
 			// this source instead.
 			//
-			// ONE SENTENCE, AND EVERY ADDITION TO IT WAS MEASURED AND REJECTED. Seven wordings as full
+			// ONE SENTENCE. THE THREE ADDITIONS BELOW WERE MEASURED AND REJECTED; THE FOURTH BULLET IS
+			// AN ARGUMENT AND SAYS SO. Seven wordings as full
 			// arms against the unchanged base, plus two single-clause mutation probes against the two
 			// answer cases; the arms ran on one binary, GP-swapped through chartsearchai.llm.systemPrompt,
 			// interleaved with a decoy on another patient between every sample, over Decision 45's own two
@@ -87,10 +90,10 @@ public class LlmProvider {
 			// cell by cell; what is here is why the sentence has no second half.
 			//  - NO date instruction, though the ticket's title asks for the stop date. Restrictively
 			//    ("give the date it was stopped only when that record states one") it left the ticket's own
-			//    cell UNFIXED and dropped the activation date that cell used to carry, 3/3. Positively
+			//    cell UNFIXED and dropped the activation date that cell used to carry. Positively
 			//    ("together with the date it was stopped where that record carries one") it DOES fix that
 			//    cell with the date in it — and on Decision 45's cell-B chart, asked what the patient is
-			//    taking, replaces BOTH live drug names with a lab measurement, 4/4: "The patient is
+			//    taking, replaces BOTH live drug names with a lab measurement: "The patient is
 			//    currently taking: 1 Serum magnesium measurement (mg/dL) Every twelve hours [3] and ...".
 			//    That is a clinical falsehood on the chart this approach was previously reverted over. The
 			//    date is left to the record's own text, which already carries it wherever querystore
@@ -100,7 +103,8 @@ public class LlmProvider {
 			//    single-record chart — both of EndedOrderAnswerRuleTest's answer cases go red; add the
 			//    half back and re-run them rather than trusting a tally here. The rider that rescues that
 			//    turns the model to enumerating dose, route and frequency on every medication list: on the
-			//    #319 gate cell all 8 citations went from 2 supported / 6 unsupported to 0 / 8. Trading a
+			//    #319 gate cell every one of its citations went from a mix of supported and unsupported to
+			//    unsupported throughout. Trading a
 			//    correct answer's citations into red is the #201/#302 failure class.
 			//  - The completeness half breaks the rule with EITHER verb, which is worth stating because
 			//    the obvious reading is that the verb is what matters. It is not: swap "say in the same
@@ -108,7 +112,8 @@ public class LlmProvider {
 			//    cases still pass. Mutate one thing at a time here — a two-word change measured against a
 			//    two-clause change taught this file a false rule once already, and the mutation that
 			//    refutes it takes one targeted test run.
-			//  - ONE BRANCH. Nothing about a record carrying NO mark: the mark is silent wherever the
+			//  - ONE BRANCH — and this one is NOT in the ledger above; it is an argument, and the
+			//    positive half it declines has no arm of its own. Nothing about a record carrying NO mark: the mark is silent wherever the
 			//    module could not establish the answer (SerializedRecord.getOrderActive() owns that
 			//    list), so a clause speaking for the silent case would assert exactly what the silence
 			//    exists to withhold. And nothing about a record marked IN FORCE: Decision 45's residue is
@@ -117,7 +122,7 @@ public class LlmProvider {
 			//
 			// The cost, stated rather than hidden: on the renewal chart (an ended order beside a live one
 			// for the same drug) the answer loses the dose it used to carry — "He is taking Nevirapine 400
-			// Milligram" becomes "He is taking Nevirapine", 3/3. Every wording that keeps that dose pays
+			// Milligram" becomes "He is taking Nevirapine". Every wording that keeps that dose pays
 			// one of the two prices above. It is the lesser loss here because the base arm's own grounding
 			// verifier already marked that dose claim UNSUPPORTED, and the answer that replaces it is
 			// verified: that citation moves unsupported -> supported.

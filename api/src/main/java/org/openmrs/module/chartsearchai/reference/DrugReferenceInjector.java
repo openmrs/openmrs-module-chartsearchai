@@ -603,6 +603,19 @@ public class DrugReferenceInjector {
 	 * is the shape that made the model put an abstention clause in front of its own evidence in
 	 * #110. The provenance is carried by the record's resource type and the WARN above, where an
 	 * operator looks for it, rather than by prose in front of a clinician.
+	 *
+	 * <p><strong>Since #317 the resemblance is no longer exact, and since #315 that matters.</strong>
+	 * A real {@code drug_order} record ends with {@code PatientChartSerializer}'s order-status field;
+	 * this line cannot carry one, because it stands in for an order the chart has no record of. The
+	 * #118 reconciliation means it routinely sits BESIDE an ended record naming the same drug — that
+	 * is what {@code AuthoritativeEndedOrderSubstantiationTest} arranges — and #315's prompt rule
+	 * fires on the ended record's field, so the field's absence here is the only thing keeping that
+	 * rule off the live order. Measured on exactly that chart, both question shapes, the #315 prompt
+	 * and the base alike: the answer cites THIS line and calls the drug current, and neither arm
+	 * attaches "no longer in force" to it (n=2 per cell, one arrangement, one local model — enough to
+	 * refute the failure mode, not enough to call it impossible). Recorded because the next person to
+	 * change either the field or this line's shape needs to know they are load-bearing together; ADR
+	 * Decision 47 carries it as a residue rather than a guarantee.
 	 */
 	static String renderActiveOrder(PatientClinicalContext.ActiveDrugOrder order) {
 		return "Active drug order: " + order.getDisplay() + ".";

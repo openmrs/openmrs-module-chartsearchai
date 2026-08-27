@@ -15,7 +15,6 @@ import java.io.IOException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
@@ -23,6 +22,7 @@ import java.util.List;
 import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.Test;
+import org.openmrs.module.chartsearchai.ModuleSourceRoot;
 
 /**
  * Build-time guard that fails if someone reintroduces pipeline logic
@@ -38,7 +38,7 @@ import org.junit.jupiter.api.Test;
  */
 public class ArchitectureGuardTest {
 
-	private static final Path SRC_ROOT = findSourceRoot();
+	private static final Path SRC_ROOT = ModuleSourceRoot.apiRoot();
 
 	// --- Rules ---
 
@@ -246,23 +246,4 @@ public class ArchitectureGuardTest {
 		}
 	}
 
-	private static Path findSourceRoot() {
-		// Walk up from the compiled test class to find the api/ module root.
-		// Maven sets CWD to the module directory, so check CWD first.
-		Path current = Paths.get("").toAbsolutePath();
-		while (current != null) {
-			if (Files.exists(current.resolve("src/main/java"))
-					&& Files.exists(current.resolve("src/test/java"))) {
-				return current;
-			}
-			// Try api/ subdirectory (for when CWD is the project root)
-			Path api = current.resolve("api");
-			if (Files.exists(api.resolve("src/main/java"))) {
-				return api;
-			}
-			current = current.getParent();
-		}
-		// Last resort: assume CWD is the module directory
-		return Paths.get("").toAbsolutePath();
-	}
 }

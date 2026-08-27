@@ -98,9 +98,10 @@ public class ClassChipPartnerLabelTest {
 		// is the defect the ticket opens with. The ladder's name came from the ORDER here — the seed
 		// carries none of the order's three codes — and an order is not a substance, so
 		// DrugSafetyValidator.foldedPartnerLabel hands that name to the rule sentence only where the
-		// RULE's own token names that very order. It does: token `aspirin` against an order whose names
-		// are {aspirin 81mg}, the same predicate PatientClinicalContext.hasActiveDrug used to admit the
-		// rule. Where it does not — a partner renamed after a DIFFERENT order, or one order carrying two
+		// RULE's own token names that very order. It does: token `aspirin` against the order's DISPLAY
+		// `Aspirin 81mg`, which is the string the gate reads since issue #293 — it read the order's
+		// whole name set before that, and both readings agree here — and the same predicate
+		// PatientClinicalContext.hasActiveDrug used to admit the rule. Where it does not — a partner renamed after a DIFFERENT order, or one order carrying two
 		// substances' codes — the two names stay, and FoldedChipOnePartnerNameTest pins both.
 		assertEquals("Ibuprofen interacts with active order Aspirin 81mg — additive GI and bleeding"
 				+ " risk. Ibuprofen is in the same cross-reactivity group (NSAID) as active order"

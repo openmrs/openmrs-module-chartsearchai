@@ -2826,10 +2826,23 @@ public class DrugSafetyValidator {
 	 *         the concept's, and either arrangement is savable on a stock install
 	 *         ({@code drugOrder.requireDrug} defaults to false). Scanning them all would prove a fact
 	 *         about one NAME and print another — measured before this narrowing, a coded {@code ASPIRIN}
-	 *         order carrying the free text {@code Warfarin 5mg} printed the seed's rated warfarin
-	 *         interaction as {@code Ibuprofen interacts with active order ASPIRIN}, with warfarin
+	 *         order carrying the free text {@code Warfarin 5mg} printed the seed's UNRATED warfarin
+	 *         rule as {@code Ibuprofen interacts with active order ASPIRIN}, with warfarin
 	 *         nowhere in the detail, and thence into the prompt as a citable {@code safety_finding}
-	 *         carrying {@code STRENGTH_WITHHOLD}. What the narrowing gives up is a partner whose token
+	 *         carrying {@code STRENGTH_WITHHOLD}.
+	 *
+	 *         <p><b>It is not only a narrowing, and calling it one would be false.</b> On the one shape
+	 *         where the name set is SMALLER than the display — a caller-built order with a real display
+	 *         and no match tokens, which the public constructor admits and
+	 *         {@link PatientClinicalContext.ActiveDrugOrder#hasKnownName()} exists to tell apart from
+	 *         the code-only rung — the old reading refused because the order offered no name to put the
+	 *         token to, which is an artefact of the very names-empty PROXY that flag replaces, and the
+	 *         chip then carried the rule's token beside the display. The new reading puts the token to
+	 *         the display, which names it, and hands one name to both sentences.
+	 *         {@code FoldedChipOnePartnerNameTest.anOrderWithNoMatchTokensIsStillJudgedOnTheNameItIsAboutToPrint}
+	 *         pins that leg, because the whole api suite is green under either reading of it.
+	 *
+	 *         <p>What the narrowing gives up is a partner whose token
 	 *         names one of the order's OTHER names but not its display — a brand display over a generic
 	 *         concept name — which falls back to the rule's own token and so names one order two ways
 	 *         across the folded chip's two sentences, issue #136's pre-existing shape. A confusing chip
@@ -5473,6 +5486,24 @@ public class DrugSafetyValidator {
 		 * right-finding-wrong-reason failure issue #161 fixed on the allergy arm. The order's own
 		 * display name is true of everything the order contains, which is what a partner holding an
 		 * unnameable code needs.
+		 *
+		 * <p><b>That last premise is no longer unconditional, and issue #293 is what weakened it.</b>
+		 * An order's display is now the free text a clinician typed wherever there is any, and the
+		 * codes are still the concept's — so where those two disagree, this hands the class sentence a
+		 * name the cited subgroup does not classify. Measured through the real builder and the real
+		 * {@code validate} over the curated seed: an order whose concept is {@code Naproxen} mapped to
+		 * {@code M01AE02} and whose free text reads {@code Warfarin 5mg} yields "Ibuprofen is in the
+		 * same ATC class (M01AE) as active order Warfarin 5mg", and warfarin is {@code B01AA03}. That
+		 * is issue #161's shape, which ADR Decision 38 already accepts for a partly-covered NAMELESS
+		 * order and which now also reaches a NAMED one. Not closable here for the reason that decision
+		 * gives: the branch is entered because no code resolved an entry, so asking whether the display
+		 * and the codes name one substance is undecidable on it — and refusing the display would put
+		 * back the bare code this ladder exists to replace. Pinned AS WRONG by
+		 * {@code NonCodedDrugOrderNameTest.aClassChipCanNameAnOrderAfterTextTheCitedSubgroupDoesNotClassify},
+		 * so a change that closes it reddens a test rather than leaving this paragraph the only record.
+		 * The rule sentence of a FOLDED chip does not have this fault — {@link #namesNamingOrder}
+		 * validates the display against the rule's own token before it is handed over — which is why
+		 * the two sentences are guarded differently.
 		 */
 		private void nameByOrder(PatientClinicalContext.ActiveDrugOrder order) {
 			// The guard is asked HERE rather than at the call site, so that "the display is a name" and

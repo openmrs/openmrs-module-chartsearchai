@@ -78,7 +78,8 @@ import org.springframework.stereotype.Service;
  *   <li><b>Question-driven</b> — an alias hit against the query text.</li>
  *   <li><b>Patient-driven</b> — the reference entries the patient's active orders resolve to, which
  *       since issue #151 is whatever {@code DrugReferenceService.findForActiveOrders} answers (an ATC
- *       code hit OR the order's own display name) rather than the ATC hit alone, so this layer and
+ *       code hit OR any name the order carries — its coded drug's, the free text a clinician typed,
+ *       or its concept's) rather than the ATC hit alone, so this layer and
  *       {@link DrugSafetyValidator} cannot disagree about which orders the patient has.</li>
  * </ul>
  * Numeric dosing is rendered only when an age band matches the patient's age, so

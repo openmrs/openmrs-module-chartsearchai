@@ -53,6 +53,12 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * whole change. Patient 7's single active drug order (order 111, drug "ASPIRIN", concept 88) is the
  * arrangement, made non-coded the way the platform records one — the coded drug cleared and
  * {@code drug_non_coded} carrying the clinician's text.
+ *
+ * <p>Two cases here are about the COLLECTOR rather than about orders: reading free text made
+ * {@code PatientClinicalContextBuilder.addRaw} the entry point for a string an order-entry user
+ * authors, so it now collapses whitespace runs, and that binds every recorded string the builder
+ * reads — an allergen's and a condition's included. They live here because the collapse is this
+ * issue's change.
  */
 public class NonCodedDrugOrderNameTest extends BaseModuleContextSensitiveTest {
 
@@ -282,6 +288,121 @@ public class NonCodedDrugOrderNameTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
+	 * The other half of the whitespace collapse: the NEEDLE and the HAYSTACK are in one normal form, so
+	 * an order whose recorded text is spaced irregularly is still found in the record that renders it.
+	 *
+	 * <p>{@code ActiveDrugOrder.namedIn} searches these names inside querystore's rendered
+	 * {@code drug_order} prose, which prints the recorded value as it was typed. Collapsing only the
+	 * name would make a name like {@code "Warfarin  5mg"} unfindable in the very record carrying it, so
+	 * the issue #118 reconciliation would report the order unrepresented against a chart that plainly
+	 * holds it — a WARN plus a second citable record for one prescription. {@code namedIn} therefore
+	 * collapses its haystack on the same terms.
+	 *
+	 * <p>What this pins is the PAIR, not either collapse alone, and that is worth saying because it
+	 * changes how to read a failure here: with neither side collapsing, both keep the double space and
+	 * match, so this case is green on {@code main} too. It reddens on the ASYMMETRIC state — the name
+	 * collapsed and the haystack not — which is the state this change would have created.
+	 */
+	@Test
+	public void anOrderWhoseTextIsSpacedIrregularlyIsStillFoundInTheRecordThatRendersIt() {
+		nameTheConcept(PLACEHOLDER_CONCEPT_NAME);
+		recordTheOrderAsFreeText("Warfarin  5mg");
+		DrugReferenceInjector injector =
+				DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.ddinterService());
+
+		PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
+		PatientChart chart = DrugReferenceTestSupport.chartOf(DrugReferenceTestSupport
+				.drugOrderRecord(1, "some-other-uuid", "Warfarin  5mg, 1 tablet daily"));
+		PatientChart result = injector.injectRecords(chart, context,
+				"what are her active medications?");
+
+		assertTrue(activeOrderRecordTexts(result).isEmpty(),
+				"the chart already carries this order, so nothing may be injected for it — the uuids do"
+						+ " not line up, so the NAME leg is the only thing that can substantiate it, was: "
+						+ activeOrderRecordTexts(result));
+	}
+
+	/**
+	 * The collapse reaches every recorded string the builder collects, not only an order's, and on a
+	 * CONDITION it changes what a clinician is shown.
+	 *
+	 * <p>A condition recorded as {@code "Peptic  ulcer disease"} now matches the shipped curated seed's
+	 * {@code peptic ulcer} contraindication token, which it did not before: that match is plain
+	 * containment against the recorded value, so an irregular space inside it defeated a multi-word
+	 * curated token. This is the arm working rather than a side effect — but it is a behaviour change on
+	 * a value carrying no newline at all, which is not what the collapse was added for, so it is pinned
+	 * rather than left to be discovered.
+	 */
+	@Test
+	public void aConditionSpacedIrregularlyStillMatchesAMultiWordCuratedToken() {
+		org.openmrs.Condition condition = new org.openmrs.Condition();
+		org.openmrs.CodedOrFreeText value = new org.openmrs.CodedOrFreeText();
+		value.setNonCoded("Peptic  ulcer disease");
+		condition.setCondition(value);
+		condition.setPatient(patient);
+		condition.setClinicalStatus(org.openmrs.ConditionClinicalStatus.ACTIVE);
+		Context.getConditionService().saveCondition(condition);
+		Context.flushSession();
+		Context.clearSession();
+		DrugSafetyValidator validator =
+				DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService());
+
+		PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
+		List<String> details = DrugReferenceTestSupport.details(validator.validate("", QUESTION, context));
+
+		assertTrue(details.contains("Ibuprofen is contraindicated by an active condition: active peptic"
+				+ " ulcer disease"),
+				"the curated seed's multi-word `peptic ulcer` token must reach a condition the clinician"
+						+ " spaced irregularly — without the collapse the recorded value keeps its double"
+						+ " space and plain containment misses it, was: " + details);
+	}
+
+	/**
+	 * A cost of this change, pinned AS WRONG so that closing it reddens a test.
+	 *
+	 * <p>The class arm labels a co-medication from the order's DISPLAY wherever the loaded dataset
+	 * cannot name its codes, while the subgroup it cites comes from the order's CONCEPT. Since this
+	 * change the display is the clinician's free text wherever there is any, so an order whose concept
+	 * and whose text name different drugs produces a chip stating a class relationship about a drug the
+	 * cited subgroup does not classify: here concept {@code Naproxen} on {@code M01AE02} beside the text
+	 * {@code Warfarin 5mg}, and warfarin is {@code B01AA03}, not an M01AE propionic-acid NSAID.
+	 *
+	 * <p>This is issue #161's right-finding-wrong-reason shape, which ADR Decision 38 already accepts
+	 * for a partly-covered NAMELESS order; what this change does is let it reach a NAMED one. It is not
+	 * closable on this branch for the reason that decision gives — the branch is entered because no
+	 * code resolved an entry, so asking whether the display and the codes name one substance is
+	 * undecidable there, and refusing the display puts back the bare code the issue #155/#290 ladder
+	 * exists to replace. The FOLDED chip's rule sentence is guarded, by
+	 * {@code DrugSafetyValidator.namesNamingOrder}; this sentence has no gate available.
+	 *
+	 * <p>Asserted rather than lamented: the chip below is WRONG and the assertion says so, exactly as
+	 * {@code FoldedChipOnePartnerNameTest.aNamelessOrderCarryingTwoSubstancesCodesNamesTheClassSentenceAfterTheRulesDrug}
+	 * does for ADR Decision 39's equivalent.
+	 */
+	@Test
+	public void aClassChipCanNameAnOrderAfterTextTheCitedSubgroupDoesNotClassify() {
+		nameTheConcept("Naproxen");
+		DrugReferenceTestSupport.mapConceptToAtc(ORDERED_CONCEPT, NAPROXEN_ATC);
+		recordTheOrderAsFreeText("Warfarin 5mg");
+		DrugSafetyValidator validator =
+				DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService());
+
+		PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
+		List<String> details = DrugReferenceTestSupport.details(validator.validate("", QUESTION, context));
+
+		assertEquals(java.util.Arrays.asList(
+			"Ibuprofen interacts with active order warfarin — increased risk of GI bleeding",
+			"Ibuprofen is in the same ATC class (M01AE) as active order Warfarin 5mg"
+					+ " — possible duplicate therapy"), details,
+				"the SECOND chip is pinned AS WRONG: its class comes from the concept's M01AE02 and its"
+						+ " name from the free text, so the sentence classifies warfarin (B01AA03) as an"
+						+ " M01AE NSAID. A change that closes it must redden here rather than leave the"
+						+ " javadoc on DrugSafetyValidator.nameByOrder the only record. The first chip is"
+						+ " correct and is the already-pinned both-drugs-reported residue — the free text"
+						+ " really does name warfarin. Was: " + details);
+	}
+
+	/**
 	 * The regression this change would otherwise have introduced, and the reason
 	 * {@code DrugSafetyValidator.namesNamingOrder} now asks its question of the order's DISPLAY rather
 	 * than of every name the order carries.
@@ -292,10 +413,12 @@ public class NonCodedDrugOrderNameTest extends BaseModuleContextSensitiveTest {
 	 * read, because free text can name a different drug from the display and that row is savable
 	 * wherever {@code drugOrder.requireDrug} is false. Scanning them all then proves a fact about one
 	 * name and prints another: measured on this exact arrangement before the narrowing, the seed's
-	 * rated WARFARIN interaction rendered as {@code Ibuprofen interacts with active order ASPIRIN},
+	 * WARFARIN rule rendered as {@code Ibuprofen interacts with active order ASPIRIN},
 	 * with warfarin nowhere in the detail — and {@code DrugReferenceInjector.renderFinding} copies that
 	 * detail verbatim into the prompt as a citable {@code safety_finding} carrying
-	 * {@code STRENGTH_WITHHOLD}.
+	 * {@code STRENGTH_WITHHOLD}. The move is not purely a narrowing —
+	 * {@code FoldedChipOnePartnerNameTest.anOrderWithNoMatchTokensIsStillJudgedOnTheNameItIsAboutToPrint}
+	 * pins the one shape it PERMITS — and this case is the refusing leg.
 	 *
 	 * <p>The arrangement is the one {@code FoldedChipOnePartnerNameTest} reasons about, reached through
 	 * the REAL builder instead of a hand-built context: order 111 keeps its coded {@code ASPIRIN} drug,
@@ -331,11 +454,12 @@ public class NonCodedDrugOrderNameTest extends BaseModuleContextSensitiveTest {
 		assertEquals("Ibuprofen interacts with active order warfarin — increased risk of GI bleeding."
 				+ " Ibuprofen is in the same cross-reactivity group (NSAID) as active order ASPIRIN —"
 				+ " possible additive or duplicate-class therapy", folded,
-				"the rule the fold picked is the seed's WARFARIN rule, so its finding must stay under"
-						+ " that name — the free text names warfarin but the DISPLAY does not, and the"
+				"the rule the fold picked is the seed's WARFARIN rule — unrated, which is why it clears"
+						+ " the severity floor at all — so its finding must stay under that name: the"
+						+ " free text names warfarin but the DISPLAY does not, and the"
 						+ " display is what the gate would hand to this sentence. Two names for one"
 						+ " prescription is issue #136's shape and the cost the narrowing accepts;"
-						+ " one substance's rated mechanism under another's name is not. All chips: "
+						+ " one substance's mechanism under another's name is not. All chips: "
 						+ details);
 	}
 

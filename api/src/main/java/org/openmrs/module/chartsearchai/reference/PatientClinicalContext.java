@@ -167,6 +167,11 @@ public class PatientClinicalContext {
 		return Collections.unmodifiableSet(out);
 	}
 
+	/** Any run of whitespace, matching the collapse {@code PatientClinicalContextBuilder.addRaw}
+	 *  applies to every name this class holds. */
+	private static final java.util.regex.Pattern COLLAPSE_WHITESPACE =
+			java.util.regex.Pattern.compile("\\s+");
+
 	private static Set<String> upper(Set<String> in) {
 		// The active-order side of every ATC comparison must normalize by the same shared rule as
 		// the reference side (entry codes / group prefixes), or matching silently drifts apart.
@@ -186,7 +191,10 @@ public class PatientClinicalContext {
 		return weightKg;
 	}
 
-	/** @return lowercased display names of the patient's active drug orders. */
+	/** @return lowercased names the patient's active drug orders carry — the flattened union of each
+	 *          order's {@link ActiveDrugOrder#getNames()}, not their displays alone: a coded drug's
+	 *          name, the free text a clinician typed for a non-coded one (issue #293), and a concept's
+	 *          name all reach it. */
 	public Set<String> getActiveDrugNames() {
 		return activeDrugNames;
 	}
@@ -563,7 +571,12 @@ public class PatientClinicalContext {
 		/** @return lowercased names identifying this order — the coded {@code Drug}'s name, the free
 		 *          text a clinician typed for a non-coded order ({@code drugNonCoded}, issue #293),
 		 *          and the order concept's name, in that rank; {@link #getDisplay()} is the first of
-		 *          them. Empty only on the code-only rung {@link #namedByCodesOnly} builds. */
+		 *          them. Empty on the code-only rung {@link #namedByCodesOnly} builds, and possibly
+		 *          empty on a caller-built order carrying a real display and no match tokens — ask
+		 *          {@link #hasKnownName()} to tell the two apart, never {@code getNames().isEmpty()},
+		 *          which is the proxy
+		 *          {@code NamelessActiveOrderPartnerTest.aRealDisplayWithNoMatchTokensStillOutranksTheDatasetName}
+		 *          exists to rule out. */
 		public Set<String> getNames() {
 			return names;
 		}
@@ -599,8 +612,18 @@ public class PatientClinicalContext {
 			if (lowercasedText == null || lowercasedText.isEmpty()) {
 				return false;
 			}
+			// Both sides in ONE normal form. These names had their whitespace runs collapsed on the way
+			// in (PatientClinicalContextBuilder.addRaw, issue #293), and the haystack is querystore's
+			// verbatim record prose, which renders the recorded value as it was typed — so a name a
+			// clinician spaced irregularly would otherwise fail to be found inside the record that
+			// renders that very value, and the order would be reported unrepresented against a chart
+			// that plainly carries it. Measured: the name "warfarin  5mg" collapses to "warfarin 5mg"
+			// and is not found in "drug order: warfarin  5mg, 1 tablet daily" without this. Collapsed
+			// here rather than in DrugReference.containsWord, which several arms share and whose
+			// haystacks are not all prose.
+			String haystack = COLLAPSE_WHITESPACE.matcher(lowercasedText).replaceAll(" ");
 			for (String name : names) {
-				if (DrugReference.containsWord(lowercasedText, name)) {
+				if (DrugReference.containsWord(haystack, name)) {
 					return true;
 				}
 			}

@@ -318,6 +318,17 @@ final class PatientClinicalContextBuilder {
 	 * {@code Medication} among those tried — each put NO entries in play. Try another spelling the same
 	 * way rather than trusting that list.
 	 *
+	 * <p>The same divergence reaches the CLASS arm, and there it costs a true sentence rather than an
+	 * extra one: that arm labels a co-medication from the order's display while citing a subgroup taken
+	 * from the order's CONCEPT, so where the two disagree the chip states a class relationship about a
+	 * drug the cited subgroup does not classify. Recorded on {@code DrugSafetyValidator.nameByOrder},
+	 * whose premise it weakens, and on ADR Decision 38, which already accepts the same shape for a
+	 * nameless order; pinned AS WRONG by
+	 * {@code NonCodedDrugOrderNameTest.aClassChipCanNameAnOrderAfterTextTheCitedSubgroupDoesNotClassify}.
+	 * The folded chip's RULE sentence is guarded against it by
+	 * {@code DrugSafetyValidator.namesNamingOrder}; the class sentence has no such gate available,
+	 * because the branch is entered precisely when no code resolved an entry.
+	 *
 	 * <p><b>It also moves orders OFF issue #290's code-only rung</b>, which is a rung migration and not
 	 * merely a relabel: that rung takes an order no name could be READ for (the block in {@code build}
 	 * above enumerates the shapes), and free text is now enough to keep such an order on the named rung
@@ -421,10 +432,22 @@ final class PatientClinicalContextBuilder {
 	 * <p>Collapsing rather than rejecting, because the string is still the best name the record has and
 	 * refusing it would fail closed. It is done HERE rather than at the renderers because there are
 	 * several of those and one of this — the same reason the loader's validity rules are not per call
-	 * site — and because a token with a newline in it never matched anything sensible on the match
-	 * paths either. It does not make the prompt injection-proof: the value can still be a whole
-	 * sentence. What it restores is that the line/index structure of the chart is the renderer's
-	 * property rather than the data's.
+	 * site. It does not make the prompt injection-proof: the value can still be a whole sentence. What
+	 * it restores is that the line/index structure of the chart is the renderer's property rather than
+	 * the data's.
+	 *
+	 * <p><b>It also moves the match paths, on values carrying no newline at all</b>, and that is stated
+	 * rather than waved past — an earlier wording of this javadoc claimed a collapsed token "never
+	 * matched anything sensible", which is refused by the second consequence below. Both were measured
+	 * through the real builder. It ADMITS a multi-word curated token against a recorded value that was
+	 * spaced irregularly: a condition recorded as {@code "Peptic  ulcer disease"} now matches the
+	 * shipped seed's {@code peptic ulcer} contraindication token and raises a chip {@code main} does
+	 * not raise, which is the arm working rather than a side effect. And it would have LOST a
+	 * {@code ActiveDrugOrder.namedIn} match, because that predicate searches these names inside
+	 * querystore's verbatim record prose, which renders the value as it was typed — so
+	 * {@code namedIn} collapses its haystack on the same terms, and the two sides stay in one normal
+	 * form. That symmetry is the fix; without it an order the chart plainly carries is reported
+	 * unrepresented.
 	 */
 	private static void addRaw(Set<String> set, String value) {
 		if (value == null) {

@@ -762,6 +762,47 @@ public class FoldedChipOnePartnerNameTest {
 	 *  where {@code namesNamingOrder} could answer yes for a partner whose label is a bare code, if the
 	 *  {@code !namesADrug} branch did not come first. Shared with
 	 *  {@link #noFoldedChipNamesOneActiveOrderTwoWays} so the sweep covers it too. */
+	/**
+	 * The PERMITTING leg of {@code namesNamingOrder}, which issue #293's narrowing to
+	 * {@code getDisplay()} opened and which nothing pinned before this case.
+	 *
+	 * <p>That gate read the order's whole name SET until #293 moved it to the one name it is about to
+	 * print. The move is a narrowing wherever the set is bigger than the display, and a WIDENING on the
+	 * one shape where it is smaller: an order carrying a real display and no match tokens at all, which
+	 * the public constructor admits and which
+	 * {@code NamelessActiveOrderPartnerTest.aRealDisplayWithNoMatchTokensStillOutranksTheDatasetName}
+	 * is the neighbouring file's name for. Under the old reading the gate refused for a reason that was an
+	 * artefact of the proxy {@code hasKnownName()} exists to replace — the order offered no name to put
+	 * the token to — and the folded chip then carried the rule's token beside the order's display, two
+	 * names for one prescription. Under the new reading the token is put to the display, names it, and
+	 * one name is handed to both sentences.
+	 *
+	 * <p>Behaviourally this is the same reconciliation
+	 * {@link #anOrderSuppliedNameTheRulesTokenNamesIsHandedToBothSentences} pins, reached on the shape
+	 * that used to be excluded; it is here as its own case because the whole api suite is green under
+	 * either reading of this shape, so without it the widening is invisible.
+	 */
+	@Test
+	public void anOrderWithNoMatchTokensIsStillJudgedOnTheNameItIsAboutToPrint() {
+		Set<String> noTokens = java.util.Collections.emptySet();
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null, null,
+			ASPIRIN_ORDER_CODES, null, null,
+			Arrays.asList(new PatientClinicalContext.ActiveDrugOrder("order-uuid-no-tokens",
+				"Aspirin 81mg", noTokens, ASPIRIN_ORDER_CODES)));
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport
+				.validator(DrugReferenceTestSupport.curatedService()).validate("", QUESTION, context);
+
+		assertEquals(1, warnings.size(), "one order, one folded chip, was: " + warnings);
+		String detail = warnings.get(0).getDetail();
+		assertEquals(1, orderNamesIn(detail).size(),
+			"the token names the display, so one prescription is named once — before issue #293 the"
+					+ " gate asked the empty name set and refused, leaving the rule's own token beside"
+					+ " the display, was: " + detail);
+		assertTrue(detail.startsWith("Ibuprofen interacts with active order Aspirin 81mg"),
+			"and the name both sentences take is the order's display, was: " + detail);
+	}
+
 	private static PatientClinicalContext blankDisplayWithNames() {
 		Set<String> names = DrugReferenceTestSupport.set("aspirin 81mg");
 		return DrugReferenceTestSupport.ctx(60, null, names, ASPIRIN_ORDER_CODES, null, null,

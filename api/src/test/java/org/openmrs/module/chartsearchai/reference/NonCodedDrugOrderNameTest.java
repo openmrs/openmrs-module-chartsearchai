@@ -500,7 +500,8 @@ public class NonCodedDrugOrderNameTest extends BaseModuleContextSensitiveTest {
 	 * <p>{@code DrugSafetyValidator.quotedToken()} records exactly this hazard for the sibling free-text
 	 * field, {@code nonCodedAllergen}, and closes it by quoting the value. That remedy is not applied to
 	 * the order display here — quoting every display would move what every chip naming a coded order
-	 * says, and quoting only a free-text one needs {@code ActiveDrugOrder} to carry its display's source.
+	 * says, and quoting only a free-text one needs {@code ActiveDrugOrder} to carry its display's source —
+	 * a scope choice, not something a standing decision forbids.
 	 * Nothing is asserted falsely; legibility is what is lost, and the assertion below states the
 	 * unquoted string so that a change adding the quotes is visible rather than silent.
 	 */

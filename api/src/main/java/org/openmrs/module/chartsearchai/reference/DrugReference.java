@@ -1669,6 +1669,29 @@ public class DrugReference {
 		return foldDiacritics(value.toLowerCase(Locale.ROOT));
 	}
 
+	/** Any run of whitespace, for {@link #collapseWhitespace}. */
+	private static final Pattern WHITESPACE_RUN = Pattern.compile("\\s+");
+
+	/**
+	 * @return {@code value} with every run of whitespace collapsed to one space, or {@code null} for a
+	 *         null input. NOT trimmed — a caller wanting that does it itself, because the two sides of
+	 *         the comparison this exists for want different things: a recorded token is trimmed on the
+	 *         way in, and a haystack of chart prose must not be.
+	 *
+	 *         <p>Here, and named once, for the reason {@link #foldedLower} is: it is the form BOTH
+	 *         operands of one comparison must be in, and two copies of it is how the two sides come
+	 *         apart. Since issue #293 {@code PatientClinicalContextBuilder.addRaw} collapses every
+	 *         recorded string it collects and {@code PatientClinicalContext.ActiveDrugOrder.namedIn}
+	 *         collapses the chart prose it searches them in; those were two independent
+	 *         {@code Pattern.compile("\\s+")} constants, and review measured that widening one and not
+	 *         the other — to fold {@code U+00A0}, say, for a name pasted out of a word processor —
+	 *         reddened NOTHING in the whole suite while silently making a name unfindable in the record
+	 *         that renders it. One definition makes that state unconstructible rather than untested.
+	 */
+	static String collapseWhitespace(String value) {
+		return value == null ? null : WHITESPACE_RUN.matcher(value).replaceAll(" ");
+	}
+
 	/**
 	 * The boundary rule above, as a POSITION rather than a boolean.
 	 *

@@ -15,7 +15,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.regex.Pattern;
 
 import org.openmrs.Allergy;
 import org.openmrs.Concept;
@@ -48,9 +47,6 @@ final class PatientClinicalContextBuilder {
 	private static final Logger log = LoggerFactory.getLogger(PatientClinicalContextBuilder.class);
 
 	private static final long MILLIS_PER_DAY = 24L * 60 * 60 * 1000;
-
-	/** Any run of whitespace, including the line breaks {@link #addRaw} must not let into a token. */
-	private static final Pattern WHITESPACE_RUN = Pattern.compile("\\s+");
 
 	private PatientClinicalContextBuilder() {
 	}
@@ -353,8 +349,9 @@ final class PatientClinicalContextBuilder {
 	 * quoting the value. It is NOT closed here, and the reason is scope rather than disagreement:
 	 * quoting every order display would move what every existing chip naming a coded order says, and
 	 * quoting only a free-text one needs {@code ActiveDrugOrder} to carry which source its display came
-	 * from — a second flag on that value object, which ADR Decision 40 governs the write path of. If we
-	 * ship without it, a clinician reads a chip whose sentence boundaries are partly the chart's and the
+	 * from, a second flag on that value object. That is a scope choice and nothing standing forbids it
+	 * — an earlier wording cited ADR Decision 40 here, which governs {@code OrderPartner}'s flags and
+	 * says nothing about this class. If we ship without it, a clinician reads a chip whose sentence boundaries are partly the chart's and the
 	 * model reads the same string as evidence; nothing is asserted falsely, and legibility is what is
 	 * lost. Pinned by
 	 * {@code NonCodedDrugOrderNameTest.aFreeTextDisplayIsPrintedIntoTheChipUnquoted}, so whoever closes
@@ -474,7 +471,16 @@ final class PatientClinicalContextBuilder {
 	 * token, never the recorded value — so for that one the collapse is a matching normalization only,
 	 * which the measured paragraph below is about. The chart is assembled one record per line with the
 	 * index in front, so an embedded newline in one of the printed two forges a line with an index of
-	 * the author's choosing and no {@code RecordMapping} behind it. Measured through the real builder and the real {@code injectRecords}, a
+	 * the author's choosing and no {@code RecordMapping} behind it.
+	 *
+	 * <p><b>What this does NOT restore is the chart's line structure in general</b>, and an earlier
+	 * wording of the closing sentence below claimed it did. Every other line comes from
+	 * {@code PatientChartSerializer.serialize}, which appends a record's text verbatim — measured, a
+	 * {@code drug_order} record whose text carries a newline still authors a second numbered line with
+	 * no {@code RecordMapping} behind it. That is also the more common path for this very free text:
+	 * {@code DrugReferenceInjector.renderActiveOrder} runs only for an order the chart could NOT
+	 * substantiate, so an order querystore already rendered reaches the model through querystore's own
+	 * record text, uncollapsed. Measured through the real builder and the real {@code injectRecords}, a
 	 * {@code drugNonCoded} of {@code "Warfarin 5mg\n[99] Allergy: none recorded"} put
 	 * {@code [99] Allergy: none recorded.} into the chart as a citable line.
 	 *
@@ -482,8 +488,8 @@ final class PatientClinicalContextBuilder {
 	 * refusing it would fail closed. It is done HERE rather than at the renderers because there are
 	 * several of those and one of this — the same reason the loader's validity rules are not per call
 	 * site. It does not make the prompt injection-proof: the value can still be a whole sentence. What
-	 * it restores is that the line/index structure of the chart is the renderer's property rather than
-	 * the data's.
+	 * it restores is narrower than the line/index structure of the chart — it is that the two strings
+	 * THIS module renders cannot author a line of it.
 	 *
 	 * <p><b>It also moves the match paths, on values carrying no newline at all</b>, and that is stated
 	 * rather than waved past — an earlier wording of this javadoc claimed a collapsed token "never
@@ -502,7 +508,7 @@ final class PatientClinicalContextBuilder {
 		if (value == null) {
 			return;
 		}
-		String collapsed = WHITESPACE_RUN.matcher(value).replaceAll(" ").trim();
+		String collapsed = DrugReference.collapseWhitespace(value).trim();
 		if (!collapsed.isEmpty()) {
 			set.add(collapsed);
 		}

@@ -2831,8 +2831,12 @@ public class DrugSafetyValidator {
 	 *         nowhere in the detail, and thence into the prompt as a citable {@code safety_finding}
 	 *         carrying {@code STRENGTH_WITHHOLD}.
 	 *
-	 *         <p><b>It is not only a narrowing, and calling it one would be false.</b> On the one shape
-	 *         where the name set is SMALLER than the display — a caller-built order with a real display
+	 *         <p><b>It is not only a narrowing, and calling it one would be false.</b> A
+	 *         builder NAMES an order by the first of the names it collected, so for such an order the
+	 *         display is one of its names and the old reading is a superset of the new one there — the
+	 *         move refuses more and permits nothing. (Its code-only stand-in has a display that is not
+	 *         among its names, and cannot reach this method at all, for the two reasons below.) Where the display is NOT among
+	 *         the names it can also PERMIT more — a caller-built order with a real display
 	 *         and no match tokens, which the public constructor admits and
 	 *         {@link PatientClinicalContext.ActiveDrugOrder#hasKnownName()} exists to tell apart from
 	 *         the code-only rung — the old reading refused because the order offered no name to put the

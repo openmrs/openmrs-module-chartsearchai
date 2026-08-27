@@ -16,6 +16,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * The slice of a patient's clinical state the drug-reference feature needs:
@@ -169,8 +170,7 @@ public class PatientClinicalContext {
 
 	/** Any run of whitespace, matching the collapse {@code PatientClinicalContextBuilder.addRaw}
 	 *  applies to every name this class holds. */
-	private static final java.util.regex.Pattern COLLAPSE_WHITESPACE =
-			java.util.regex.Pattern.compile("\\s+");
+	private static final Pattern COLLAPSE_WHITESPACE = Pattern.compile("\\s+");
 
 	private static Set<String> upper(Set<String> in) {
 		// The active-order side of every ATC comparison must normalize by the same shared rule as
@@ -607,20 +607,23 @@ public class PatientClinicalContext {
 		 *         suppresses the repair and the WARN together, so the stricter rule is the safe
 		 *         direction. See {@code matchesOrderName}'s javadoc for why one matcher cannot serve
 		 *         both.
+		 *
+		 *         <p><b>Both sides in ONE normal form (issue #293).</b> These names had their whitespace
+		 *         runs collapsed on the way in ({@code PatientClinicalContextBuilder.addRaw}), and the
+		 *         haystack is querystore's verbatim record prose, which renders a recorded value as it
+		 *         was typed — so a name a clinician spaced irregularly would otherwise fail to be found
+		 *         inside the record that renders that very value, and the order would be reported
+		 *         unrepresented against a chart that plainly carries it. Measured: the name
+		 *         {@code "warfarin  5mg"} collapses to {@code "warfarin 5mg"} and is not found in
+		 *         {@code "drug order: warfarin  5mg, 1 tablet daily"} without this. Collapsed here rather
+		 *         than inside {@link DrugReference#containsWord}, which several arms share and whose
+		 *         haystacks are not all prose. One pass over the drug-order text per active order; the
+		 *         operation is idempotent, so a caller that has already normalized loses nothing.
 		 */
 		boolean namedIn(String lowercasedText) {
 			if (lowercasedText == null || lowercasedText.isEmpty()) {
 				return false;
 			}
-			// Both sides in ONE normal form. These names had their whitespace runs collapsed on the way
-			// in (PatientClinicalContextBuilder.addRaw, issue #293), and the haystack is querystore's
-			// verbatim record prose, which renders the recorded value as it was typed — so a name a
-			// clinician spaced irregularly would otherwise fail to be found inside the record that
-			// renders that very value, and the order would be reported unrepresented against a chart
-			// that plainly carries it. Measured: the name "warfarin  5mg" collapses to "warfarin 5mg"
-			// and is not found in "drug order: warfarin  5mg, 1 tablet daily" without this. Collapsed
-			// here rather than in DrugReference.containsWord, which several arms share and whose
-			// haystacks are not all prose.
 			String haystack = COLLAPSE_WHITESPACE.matcher(lowercasedText).replaceAll(" ");
 			for (String name : names) {
 				if (DrugReference.containsWord(haystack, name)) {

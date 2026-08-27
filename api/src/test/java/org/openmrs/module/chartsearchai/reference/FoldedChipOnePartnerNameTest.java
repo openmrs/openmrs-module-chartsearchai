@@ -731,7 +731,7 @@ public class FoldedChipOnePartnerNameTest {
 	 *
 	 * <p>Builder-unreachable, like {@link #aBlankDisplayNeverDisplacesTheDatasetName}, and for the same
 	 * reason — {@code PatientClinicalContextBuilder} takes a display from a name {@code addRaw} has
-	 * already trimmed and dropped if blank. It needs the public constructor's latitude, which is what
+	 * already trimmed, whitespace-collapsed and dropped if blank. It needs the public constructor's latitude, which is what
 	 * makes it a statement about the code path rather than about production data.
 	 */
 	@Test

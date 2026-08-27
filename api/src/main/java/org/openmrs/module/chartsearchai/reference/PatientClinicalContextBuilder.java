@@ -274,9 +274,9 @@ final class PatientClinicalContextBuilder {
 	 * their rank, because the caller takes the FIRST of them as the order's display.
 	 *
 	 * <p>Three sources since issue #293, and the middle one is that issue. A drug order the clinician
-	 * recorded as free text normally carries no coded {@code Drug} but does carry a concept, so it was
-	 * not NAMELESS — it arrived carrying the WRONG name, which is why issue #290's code-only rung never
-	 * caught it.
+	 * recorded as free text normally carries no coded {@code Drug} but does carry a concept, so wherever
+	 * that concept's name could be read it was not NAMELESS — it arrived carrying the WRONG name, which
+	 * is a state issue #290's code-only rung is not about.
 	 * {@code OrderServiceImpl.ensureConceptIsSet} assigns such an order
 	 * {@code OrderService.getNonCodedDrugConcept()}, the concept the {@code drugOrder.drugOther} global
 	 * property names ("the concept which represents drug other non coded"), and
@@ -289,8 +289,10 @@ final class PatientClinicalContextBuilder {
 	 * record type read coded-only.
 	 *
 	 * <p><b>Additive, and ranked between the two existing sources.</b> Nothing is removed: the concept
-	 * name stays, so every match that worked before still works, and the set gains the name the record
-	 * itself gives for the drug the clinician recorded. It leads the concept name because for a
+	 * name stays, so the set of names an order carries only GROWS, and what it grows by is the name the
+	 * record itself gives for the drug the clinician recorded. (That is a statement about this method
+	 * alone. The whitespace collapse on {@link #addRaw} is a separate change and does move matches in
+	 * both directions — its own javadoc has the two measured cases.) It leads the concept name because for a
 	 * non-coded order the concept is not the drug, so the display must be the recorded text. It follows
 	 * the coded drug's name because a coded identity outranks free text — and that rank is REACHABLE
 	 * rather than a legacy concern: {@code DrugOrderValidator} rejects a row carrying both

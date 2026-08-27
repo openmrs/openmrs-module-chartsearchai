@@ -575,13 +575,14 @@ public final class DrugReferenceValidity {
 	 * installed module reads the declared default from its {@code config.xml} while a context without
 	 * that row reads blank, and neither is a misconfiguration.
 	 *
-	 * <p><b>What it says depends on what was read INSTEAD</b>, and since issue #266 both cases are
+	 * <p><b>What it says depends on what was reached for INSTEAD</b>, and since issue #266 both cases are
 	 * reachable. Where a fallback was reached for, the harm is a count nobody configured, and the detail
-	 * says so about ANY non-zero count rather than asserting the fallback load succeeded — because this
-	 * rule is raised BEFORE that read happens (see {@link ReferenceDataFiles#loadWithClasspathFallback},
-	 * where it is deliberately asked once for every reason the operator's file was not read), so a
-	 * bundled resource that is itself missing or unparseable would leave a finding claiming a healthy
-	 * count beside a load of zero. Where nothing was reached for at all
+	 * says so about ANY non-zero count — and says "reached for" rather than "read", because this rule is
+	 * raised BEFORE that read happens (see {@link ReferenceDataFiles#loadWithClasspathFallback}, where it
+	 * is deliberately asked once for every reason the operator's file was not read). Both halves of that
+	 * are needed and the first version of this reword only did the count: a bundled resource that is
+	 * itself missing or unparseable returns {@link ReferenceDataFiles#ORIGIN_NONE}, so a detail asserting
+	 * the classpath dataset "was read" would name a file that was not, beside a count of zero. Where nothing was reached for at all
 	 * ({@link ReferenceDataFiles#ORIGIN_NONE}, which {@link ReferenceDataFiles#loadOperatorFile} passes
 	 * because the {@code atc} format bundles nothing) that whole clause would be false, so it takes its
 	 * own branch. A finding that misdescribes the load is the channel carrying a wrong answer, which is
@@ -607,9 +608,9 @@ public final class DrugReferenceValidity {
 				? "and nothing was read in its place, so no dataset is in force at all. A count of 0 here "
 						+ "is a file that was named and not found, which is not the same state as a "
 						+ "deployment that configured nothing."
-				: "so '" + origin + "' was read in its place. Whatever count you see is therefore a count "
-						+ "of a dataset nobody configured rather than of your file, however healthy it "
-						+ "looks.";
+				: "so '" + origin + "' was reached for in its place. Whatever count you see is therefore "
+						+ "a count of a dataset nobody configured rather than of your file, however "
+						+ "healthy it looks.";
 		report(CONFIGURED_DATA_FILE_NOT_READ, Remedy.REPORTED, 1,
 				globalProperty + " names '" + configured + "', which could not be read, " + consequence);
 	}

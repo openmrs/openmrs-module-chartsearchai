@@ -307,14 +307,24 @@ final class ReferenceDataFiles {
 	 *
 	 * <p><b>A blank path is skipped SILENTLY</b>, and the guard lives here rather than at each call site
 	 * for the reason review found the hard way: extracting this helper first put the guard at one of the
-	 * two callers and not the other, so an untouched install — where both path properties read their
-	 * declared default or blank — logged {@code file '' not available (Model path is not configured: …)}
-	 * once per dataset. That is INFO, but README and ONBOARDING both tell an operator to raise this
-	 * logger to INFO in order to read the {@code Loaded N …} lines, so it is a line on every install of
-	 * every deployment about datasets nobody configured: the noise {@link DrugReferenceValidity}'s whole
-	 * design is written against, arriving through the log instead of through a finding. A caller that
-	 * wants to SAY something about a blank path (as {@link #loadOperatorFile} does, since for it a blank
-	 * path is the end of the road) keeps its own branch.
+	 * two callers and not the other, so a BLANK path reached the resolution and logged
+	 * {@code file '' not available (Model path is not configured: …)} per dataset — a line about a file
+	 * nobody named, at a level README and ONBOARDING both tell an operator to raise in order to read the
+	 * {@code Loaded N …} lines beside it.
+	 *
+	 * <p><b>Two states, and only one of them was ever noisy — stated because the first version of this
+	 * paragraph said "every untouched install" and that is measurably false.</b> An INSTALLED module
+	 * reads the non-blank {@code config.xml} defaults for both path properties, so the resolution is
+	 * entered with that path and logs {@code file 'chartsearchai/…' not available}, which
+	 * {@link #loadWithClasspathFallback} logged before this helper existed too — unchanged, not new
+	 * noise. Blank is what a context carrying no row for the property produces, and what an
+	 * administrator who clears the value produces; that is the state this guard is for, and it is the
+	 * state {@code CrossReactivityStatusContextTest} drives. The guard is worth keeping on the narrower
+	 * claim rather than defended by the broader one, because a rule defended by a false reason is one
+	 * measurement away from being deleted along with it.
+	 *
+	 * <p>A caller that wants to SAY something about a blank path (as {@link #loadOperatorFile} does,
+	 * since for it a blank path is the end of the road) keeps its own branch.
 	 *
 	 * @param whatFollows what the log line should say happens instead when the file cannot be read, in
 	 *        the caller's own vocabulary ({@code "using bundled default"} / {@code "running empty"})

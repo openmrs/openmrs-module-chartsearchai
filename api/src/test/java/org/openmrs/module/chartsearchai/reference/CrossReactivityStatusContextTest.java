@@ -236,16 +236,23 @@ public class CrossReactivityStatusContextTest extends BaseModuleContextSensitive
 	}
 
 	/**
-	 * An untouched install says NOTHING about the file it never had.
+	 * A context carrying no row for the groups path says NOTHING about the file it never had.
 	 *
 	 * <p>The regression this pins was introduced while hardening this very change and caught by a fresh
 	 * reviewer: extracting the shared operator-file read attempt dropped the blank-path skip at one of
-	 * its two callers, so a deployment that had configured neither path logged
-	 * {@code file '' not available (Model path is not configured: …)} once per dataset. INFO, and
-	 * therefore invisible on a stock install — but README and ONBOARDING both instruct an operator to
-	 * raise this logger to INFO in order to read the {@code Loaded N …} lines, so it is a line on every
-	 * install of every deployment about a dataset nobody configured. That is the noise this module's
-	 * whole validity design is written against, arriving through the log rather than through a finding.
+	 * its two callers, so a BLANK path reached the resolution and logged
+	 * {@code file '' not available (Model path is not configured: …)} per dataset — a line about a file
+	 * nobody named, at a level README and ONBOARDING both instruct an operator to raise in order to read
+	 * the {@code Loaded N …} lines beside it. That is the noise this module's whole validity design is
+	 * written against, arriving through the log rather than through a finding.
+	 *
+	 * <p><b>Blank, not "untouched" — and the difference was measured after a first version of this
+	 * javadoc claimed "every install of every deployment".</b> An INSTALLED module reads the non-blank
+	 * {@code config.xml} default for this property, so the resolution logs
+	 * {@code file 'chartsearchai/cross-reactivity-groups.json' not available}, which it did before the
+	 * extraction too. Blank is what a context with no row produces — which is this case — and what an
+	 * administrator clearing the value produces. The guard is real on the narrower claim; see
+	 * {@code ReferenceDataFiles.readOperatorFile} for why it is stated that way round.
 	 *
 	 * <p>Asserted on the message rather than on the LEVEL, deliberately: the healthy load legitimately
 	 * logs at INFO ({@code Loaded 1 cross-reactivity groups from …}), so "no INFO" would be false and

@@ -51,8 +51,15 @@ import org.openmrs.module.chartsearchai.ModuleSourceRoot;
  * probe class declaring {@code implements Serializable, DrugReferenceSource} — never enumerated, no
  * override, and the guard still green because the floor below was met by the three real sources. A
  * declaration can also be wrapped across a line, or reach the interface through a superclass. So the
- * source tree answers only "which classes live in this package", which is a question about file names
- * that no syntax can hide, and {@link Class#isAssignableFrom} answers membership.
+ * source tree answers only which classes live in this package, and {@link Class#isAssignableFrom}
+ * answers membership.
+ *
+ * <p><b>A file name is not the whole of "which classes live here", and the first version of this scan
+ * said it was.</b> A NESTED type is a class in this package that a file-name walk does not see, and a
+ * review agent demonstrated it: a {@code public static class} implementing the interface, declared
+ * inside an existing file with neither accessor overridden, was never enumerated and the guard stayed
+ * green. So each loaded class is asked for its own declared classes too. That is one more mechanism
+ * closed, not the last one — a class in another package still escapes, which the residue below names.
  *
  * <p><b>What it does NOT cover</b>, stated rather than left to be discovered. A source that declares
  * both methods and returns a constant empty list from them passes here — declaring the channel is not
@@ -60,9 +67,10 @@ import org.openmrs.module.chartsearchai.ModuleSourceRoot;
  * someone has to make deliberately, in a method whose javadoc says what it is for, rather than one made
  * by not writing anything at all; {@code CLAUDE.md}'s loader bullet carries the rule that closes it
  * (resolve through {@link ReferenceDataFiles}, never open your own stream). Nor does it reach a source
- * declared OUTSIDE this package, or the groups loader, which is not a {@link DrugReferenceSource} — its
- * accessors are ordinary public methods {@link DrugReferenceService} calls, so removing one breaks the
- * build.
+ * declared OUTSIDE this package — the scan reads this package's own source directory, so a source
+ * anywhere else is invisible to it whatever its shape. Nor the groups loader, which is not a
+ * {@link DrugReferenceSource} — its accessors are ordinary public methods
+ * {@link DrugReferenceService} calls, so removing one breaks the build.
  *
  * <p>The scan asserts its own findings are non-empty, which the walking caller of
  * {@link ModuleSourceRoot#apiRoot()} owes itself: that method falls back to the working directory rather
@@ -128,11 +136,24 @@ public class DrugReferenceSourceValidityChannelTest {
 				String name = file.getFileName().toString();
 				Class<?> type = Class.forName(pkg + "."
 						+ name.substring(0, name.length() - ".java".length()));
-				if (DrugReferenceSource.class.isAssignableFrom(type) && !type.isInterface()) {
-					found.add(type);
-				}
+				collectSources(type, found);
 			}
 		}
 		return found;
+	}
+
+	/**
+	 * Adds {@code type} and every type nested inside it, at any depth, that is a concrete
+	 * {@link DrugReferenceSource}. The nesting walk is what stops a source declared inside another
+	 * class from escaping a scan keyed on file names — see this class's javadoc for the probe that
+	 * found that hole.
+	 */
+	private static void collectSources(Class<?> type, List<Class<?>> found) {
+		if (DrugReferenceSource.class.isAssignableFrom(type) && !type.isInterface()) {
+			found.add(type);
+		}
+		for (Class<?> nested : type.getDeclaredClasses()) {
+			collectSources(nested, found);
+		}
 	}
 }

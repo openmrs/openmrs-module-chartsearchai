@@ -706,10 +706,12 @@ public class FoldedChipOnePartnerNameTest {
 	 *
 	 * <p>An order on the ladder's ORDER rung — the curated seed carries none of its three codes — whose
 	 * display is BLANK but whose names are not. Its label is therefore a bare ATC code (the blank display
-	 * resolves to the code), and unlike {@code namedByCodesOnly} it has names for
-	 * {@code namesNamingOrder} to match, so it is the one shape in which the order-named branch could say
-	 * YES about a partner whose label is not a name. It does not get the chance: {@code namesADrug} is
-	 * false for a blank display, {@code foldedPartnerLabel} asks that first, and the rule's own token goes
+	 * resolves to the code). Before issue #293 this was the one shape in which the order-named branch
+	 * could have said YES about a partner whose label is not a name — unlike {@code namedByCodesOnly} it
+	 * had names for {@code namesNamingOrder} to scan — and it did not get the chance because
+	 * {@code namesADrug} is false for a blank display and {@code foldedPartnerLabel} asks that first.
+	 * Since #293 the gate reads the DISPLAY instead, which is blank here, so both guards refuse
+	 * independently; what this case still pins is unchanged, that the rule's own token goes
 	 * to both sentences — exactly as for the nameless order in
 	 * {@link #theTicketsLiveCaseNamesTheOrderOnce}.
 	 *
@@ -758,17 +760,14 @@ public class FoldedChipOnePartnerNameTest {
 					+ detail);
 	}
 
-	/** An order on the ladder's ORDER rung whose display is blank and whose names are not — the one shape
-	 *  where {@code namesNamingOrder} could answer yes for a partner whose label is a bare code, if the
-	 *  {@code !namesADrug} branch did not come first. Shared with
-	 *  {@link #noFoldedChipNamesOneActiveOrderTwoWays} so the sweep covers it too. */
 	/**
 	 * The PERMITTING leg of {@code namesNamingOrder}, which issue #293's narrowing to
 	 * {@code getDisplay()} opened and which nothing pinned before this case.
 	 *
 	 * <p>That gate read the order's whole name SET until #293 moved it to the one name it is about to
-	 * print. The move is a narrowing wherever the set is bigger than the display, and a WIDENING on the
-	 * one shape where it is smaller: an order carrying a real display and no match tokens at all, which
+	 * print. Wherever the display is one of the names — which is every order the builder names — the old
+	 * reading is a superset and the move only refuses more. It WIDENS where the display is NOT among the
+	 * names: an order carrying a real display and no match tokens at all, which
 	 * the public constructor admits and which
 	 * {@code NamelessActiveOrderPartnerTest.aRealDisplayWithNoMatchTokensStillOutranksTheDatasetName}
 	 * is the neighbouring file's name for. Under the old reading the gate refused for a reason that was an
@@ -803,6 +802,12 @@ public class FoldedChipOnePartnerNameTest {
 			"and the name both sentences take is the order's display, was: " + detail);
 	}
 
+	/** An order on the ladder's ORDER rung whose display is blank and whose names are not. Before issue
+	 *  #293 this was the one shape where {@code namesNamingOrder} could have answered yes for a partner
+	 *  whose label is a bare code, had the {@code !namesADrug} branch not come first — it had names for
+	 *  that gate to scan. It no longer can at all: the gate reads the DISPLAY, which is blank here, so
+	 *  the two guards now agree rather than one standing in front of the other. Shared with
+	 *  {@link #noFoldedChipNamesOneActiveOrderTwoWays} so the sweep covers it too. */
 	private static PatientClinicalContext blankDisplayWithNames() {
 		Set<String> names = DrugReferenceTestSupport.set("aspirin 81mg");
 		return DrugReferenceTestSupport.ctx(60, null, names, ASPIRIN_ORDER_CODES, null, null,

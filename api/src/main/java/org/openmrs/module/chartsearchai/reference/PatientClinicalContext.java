@@ -571,7 +571,8 @@ public class PatientClinicalContext {
 		/** @return lowercased names identifying this order — the coded {@code Drug}'s name, the free
 		 *          text a clinician typed for a non-coded order ({@code drugNonCoded}, issue #293),
 		 *          and the order concept's name, in that rank; {@link #getDisplay()} is the first of
-		 *          them. Empty on the code-only rung {@link #namedByCodesOnly} builds, and possibly
+		 *          them for an order the builder names — a caller may supply a display that is not among
+		 *          them at all. Empty on the code-only rung {@link #namedByCodesOnly} builds, and possibly
 		 *          empty on a caller-built order carrying a real display and no match tokens — ask
 		 *          {@link #hasKnownName()} to tell the two apart, never {@code getNames().isEmpty()},
 		 *          which is the proxy

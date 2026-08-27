@@ -323,6 +323,82 @@ public class NonCodedDrugOrderNameTest extends BaseModuleContextSensitiveTest {
 	}
 
 	/**
+	 * A record boundary is a real boundary: an order's name must be found inside ONE record, never
+	 * assembled across two.
+	 *
+	 * <p>The reconciliation used to concatenate the admitted drug-order records with a newline and ask
+	 * {@code namedIn} once. Once {@code namedIn} collapses whitespace runs in its haystack, that
+	 * newline becomes a space and a multi-word name can match across the join — so an order neither
+	 * record names is reported substantiated, and the issue #118 WARN and the injected record are both
+	 * suppressed. Fail-OPEN, which is the direction that hides a discrepancy rather than showing it.
+	 * {@code DrugReferenceInjector} therefore asks per record.
+	 */
+	@Test
+	public void anOrderNameSplitAcrossTwoRecordsIsNotSubstantiatedByEither() {
+		nameTheConcept(PLACEHOLDER_CONCEPT_NAME);
+		recordTheOrderAsFreeText("Warfarin 5mg");
+		DrugReferenceInjector injector =
+				DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.ddinterService());
+
+		PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
+		// Built directly rather than through DrugReferenceTestSupport.drugOrderRecord, which prefixes
+		// each record with "Drug order: ". The two texts have to ABUT for the defect to exist at all —
+		// the first must end with the name's first word and the second begin with its second — and with
+		// the prefix in place they never do, so a case using the helper passes whether the reconciliation
+		// asks per record or over a concatenation.
+		PatientChart chart = DrugReferenceTestSupport.chartOf(
+			new RecordMapping(1, "drug_order", "some-other-uuid", null, "Drug order: Warfarin"),
+			new RecordMapping(2, "drug_order", "a-third-uuid", null, "5mg tablet, 1 daily"));
+		PatientChart result = injector.injectRecords(chart, context,
+				"what are her active medications?");
+
+		assertEquals(java.util.Arrays.asList("Active drug order: Warfarin 5mg."),
+				activeOrderRecordTexts(result),
+				"neither record names this order, so it must still be injected — a name assembled from"
+						+ " the tail of one record and the head of the next is not evidence the chart"
+						+ " carries the order, was: " + activeOrderRecordTexts(result));
+	}
+
+	/**
+	 * The issue #290 rung migration, which the change claims and nothing pinned: free text alone keeps
+	 * an order OFF the code-only rung.
+	 *
+	 * <p>That rung takes an order the module can read no name for. With the coded drug cleared and every
+	 * name of its concept voided — {@code NamelessActiveOrderPartnerTest.makeTheOrderNameless}'s
+	 * arrangement exactly — the order used to be labelled by its ATC codes ({@code [ATC M01AE02]}), with
+	 * a WARN, and could not be matched against chart text at all. The clinician's text is now enough to
+	 * keep it named, so {@code hasKnownName()} is true and the chip carries a drug name.
+	 */
+	@Test
+	public void freeTextAloneKeepsAnOrderOffTheCodeOnlyRungWhenItsConceptCannotBeNamed() {
+		DrugReferenceTestSupport.mapConceptToAtc(ORDERED_CONCEPT, NAPROXEN_ATC);
+		recordTheOrderAsFreeText("Naproxen 500mg");
+		Context.getAdministrationService().executeSQL(
+			"update concept_name set voided = 1 where concept_id = " + ORDERED_CONCEPT, false);
+		Context.flushSession();
+		Context.clearSession();
+		DrugSafetyValidator validator =
+				DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService());
+
+		PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
+
+		assertEquals(1, context.getActiveDrugOrders().size(),
+				"precondition: the order must reach the per-order list, was: "
+						+ context.getActiveDrugOrders());
+		PatientClinicalContext.ActiveDrugOrder order = context.getActiveDrugOrders().get(0);
+		assertTrue(order.hasKnownName(),
+				"the clinician's text is a name, so this order is not on the code-only rung, was: "
+						+ order.getDisplay());
+		assertEquals("Naproxen 500mg", order.getDisplay(),
+				"and its display is that text rather than the [ATC ...] stand-in, was: "
+						+ order.getDisplay());
+		assertEquals(java.util.Arrays.asList("Ibuprofen is in the same ATC class (M01AE) as active order"
+				+ " Naproxen 500mg — possible duplicate therapy"),
+				DrugReferenceTestSupport.details(validator.validate("", QUESTION, context)),
+				"so the chip names a drug instead of a code list");
+	}
+
+	/**
 	 * The collapse reaches every recorded string the builder collects, not only an order's, and on a
 	 * CONDITION it changes what a clinician is shown.
 	 *

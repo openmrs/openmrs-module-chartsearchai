@@ -2746,7 +2746,8 @@ public class DrugSafetyValidator {
 	 *        ({@link OrderPartner#namesADrug}), the ORDER that supplied the label where one did —
 	 *        non-null only where that label is a name, which since issue #298 is a property of
 	 *        {@link OrderPartner} as well as of this method's statement order — two independent guards,
-	 *        so do not reverse the branches below on the strength of either
+	 *        so do not reverse the branches below on the strength of either (issue #293 changed what the
+	 *        reversal would COST, not the answer; {@link OrderPartner#namingOrder} has the re-measurement)
 	 *        ({@link OrderPartner#namingOrder}, {@link OrderPartner#recordNameSource}) — and the entry it
 	 *        was resolved from ({@link OrderPartner#labelEntry})
 	 * @param rule the matched rule the class sentence is folding onto. Its {@link SubjectRule} wrapper is
@@ -2779,8 +2780,8 @@ public class DrugSafetyValidator {
 			// where displacing printed an NSAID duplicate-therapy finding under the PPI order's name with
 			// the word naproxen nowhere in the chip; and on one order carrying codes of two substances,
 			// where ruleAbout picks a rule by whichever code sorts first, so a WARFARIN rule was printed
-			// under Aspirin 81mg. Both still refuse, and for the reason they always did — neither naming
-			// order's names carry the rule's token. labelEntry is deliberately not the operand:
+			// under Aspirin 81mg. Both still refuse, though since issue #293 for a narrower reason than
+			// they used to: neither naming order's DISPLAY carries the rule's token. labelEntry is deliberately not the operand:
 			// nameByOrder does not update it, so on a renamed partner it identifies a different drug from
 			// the label being handed out, which is why this branch cannot use unambiguouslyNames.
 			return namesNamingOrder(rule, partner.namingOrder) ? partner.label : null;
@@ -2852,20 +2853,18 @@ public class DrugSafetyValidator {
 	 *         across the folded chip's two sentences, issue #136's pre-existing shape. A confusing chip
 	 *         is the better failure than a false one.
 	 *
-	 *         <p>Two shapes have nothing to compare, and both refuse rather than count as agreement. A
+	 *         <p>ONE shape has nothing to compare, and it refuses rather than counting as agreement: a
 	 *         rule with no token carries no name for its partner at all ({@link #partnerLabel} falls back
 	 *         to the ATC code), so nothing about the order can license one — which is why a token-less
-	 *         rule keeps naming its partner by that code. And an order with no names offers no name to
-	 *         put the token to. The {@code namedByCodesOnly} stand-in of issue #290 is the shape with no
-	 *         names at all and it cannot reach here, now for TWO independent reasons:
+	 *         rule keeps naming its partner by that code. Until issue #293 there were TWO, the second
+	 *         being an order with no names to put the token to; that shape is now judged on its display
+	 *         like any other, which is the permitting leg above. The {@code namedByCodesOnly} stand-in of
+	 *         issue #290 is excluded not by having no names but for TWO independent reasons:
 	 *         {@link #displayNamesADrug} answers false for it, so {@link #foldedPartnerLabel}'s
 	 *         {@code !namesADrug} branch returns first, and since issue #298
 	 *         {@link OrderPartner#recordNameSource} also leaves its {@link OrderPartner#namingOrder}
 	 *         null, so the branch that calls this would not be entered either. The second was added
-	 *         without retiring the first, deliberately — ADR Decision 40. But a caller may
-	 *         hand a real display over with no match tokens
-	 *         ({@code NamelessActiveOrderPartnerTest.aRealDisplayWithNoMatchTokensStillOutranksTheDatasetName}'s
-	 *         latitude), and the empty answer is the honest one there too.
+	 *         without retiring the first, deliberately — ADR Decision 40.
 	 */
 	private static boolean namesNamingOrder(DrugReference.Interaction rule,
 			PatientClinicalContext.ActiveDrugOrder order) {
@@ -5246,13 +5245,20 @@ public class DrugSafetyValidator {
 		 *
 		 * <p><b>That branch order is still what {@code foldedPartnerLabel} uses, and is deliberately kept.</b>
 		 * Reversing it — so that this field is read first — was implemented and reverted in review of issue
-		 * #298: it would make the invariant above the ONLY thing between an inconsistent pair and a bare ATC
-		 * code reaching BOTH sentences of a folded chip (and, through
-		 * {@code DrugReferenceInjector.renderFinding}, the prompt as citable {@code safety_finding} text),
-		 * whereas with {@code !namesADrug} asked first such a pair falls to the token path and is harmless.
-		 * So the two guards are independent and additive: do not read a non-null value here as licence to
-		 * hand out {@link #label} without asking {@link #namesADrug}, and do not reverse the branches to
-		 * make this field load-bearing. ADR Decision 40 records the reasoning; what pins the single write
+		 * #298, on the measurement that it would make the invariant above the ONLY thing between an
+		 * inconsistent pair and a bare ATC code reaching BOTH sentences of a folded chip (and, through
+		 * {@code DrugReferenceInjector.renderFinding}, the prompt as citable {@code safety_finding} text).
+		 * <b>Issue #293 retired that measurement and the branch order stays anyway</b>, which is worth
+		 * separating rather than quietly leaving the old sentence to rot: since
+		 * {@link DrugSafetyValidator#namesNamingOrder} reads the naming order's DISPLAY, a bare code or an
+		 * {@code [ATC …]} stand-in fails {@code matchesOrderName} and the fold refuses, so the reversed
+		 * state now costs a code in the CLASS sentence alone — where the ladder's label already was —
+		 * rather than in both. Re-measured under the reversal: the pre-#298 write path plus reversed
+		 * branches prints the code once, and printing it twice needs the pre-#293 predicate as well. What
+		 * survives is the ordinary defence-in-depth reason — the guards are independent, so a future rung
+		 * that reaches this field cannot spend one of them by accident — and the residual cost above. So:
+		 * do not read a non-null value here as licence to hand out {@link #label} without asking
+		 * {@link #namesADrug}, and do not reverse the branches to make this field load-bearing. ADR Decision 40 records the reasoning; what pins the single write
 		 * path is {@code OrderPartnerNameSourceWritePathTest}, structurally, because a behaviour-neutral
 		 * rule has nothing a behavioural assertion can see.
 		 *

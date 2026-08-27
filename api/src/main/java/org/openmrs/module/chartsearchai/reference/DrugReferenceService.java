@@ -355,8 +355,9 @@ public class DrugReferenceService {
 
 	/**
 	 * As {@link #findImpliedByDrugName(String)}, sharing one resolution cache with the other names of the
-	 * same call — which is {@link #findForActiveOrders}, where a patient's orders contribute two names
-	 * each (the drug's and its concept's) and several orders of one family carry the same aliases, and
+	 * same call — which is {@link #findForActiveOrders}, where a patient's orders contribute several
+	 * names each (the coded drug's, the free text a clinician typed for a non-coded one, and the
+	 * concept's) and several orders of one family carry the same aliases, and
 	 * since issue #228 {@code DrugSafetyValidator.substanceRowsNamedBy}, which asks the same question of
 	 * the same names once per in-play substance. What the cache saves is not the match scan but the
 	 * WITNESS resolution behind it: each alias a matched row carries costs a {@link #findImpliedSubstances},

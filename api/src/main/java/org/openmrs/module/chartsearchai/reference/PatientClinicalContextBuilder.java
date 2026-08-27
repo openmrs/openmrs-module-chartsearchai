@@ -92,7 +92,7 @@ final class PatientClinicalContextBuilder {
 				DrugOrder drugOrder = (DrugOrder) order;
 				// Per-order names, collected BEFORE they are folded into the flattened set: the
 				// reconciliation must be able to tell one order's names from another's, which the
-				// flattened set (drug name AND concept name, all orders together) cannot.
+				// flattened set (every name of every order together) cannot.
 				Set<String> orderNames = new LinkedHashSet<String>();
 				addDrugName(orderNames, drugOrder);
 				drugNames.addAll(orderNames);
@@ -265,10 +265,41 @@ final class PatientClinicalContextBuilder {
 		return parsed > 0 ? parsed : ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_WEIGHT_MAX_AGE_DAYS;
 	}
 
+	/**
+	 * The names one active drug order is identified by, in the order they are collected — which is also
+	 * their rank, because the caller takes the FIRST of them as the order's display.
+	 *
+	 * <p>Three sources since issue #293, and the middle one is that issue. A drug order the clinician
+	 * recorded as free text carries no coded {@code Drug}; it does carry a concept, so it is never
+	 * nameless and never reaches issue #290's code-only rung — it arrives carrying the wrong name.
+	 * {@code OrderServiceImpl.ensureConceptIsSet} assigns such an order
+	 * {@code OrderService.getNonCodedDrugConcept()}, the concept the {@code drugOrder.drugOther} global
+	 * property names ("the concept which represents drug other non coded"), and
+	 * {@code DrugOrderValidator} treats exactly that concept as the non-coded shape. So the concept of a
+	 * free-text order is the platform's own placeholder by construction, while
+	 * {@code getDrugNonCoded()} holds what the clinician actually typed — and that field had no
+	 * production caller in this module at all.
+	 *
+	 * <p><b>Additive, and ranked between the two existing sources.</b> Nothing is removed: the concept
+	 * name stays, so every match that worked before still works, and the set can only gain the one name
+	 * that is definitionally the drug. It leads the concept name because for a non-coded order the
+	 * concept is not the drug, so the display must be the recorded text. It follows the coded drug's
+	 * name because a coded identity outranks free text; core forbids both being set
+	 * ({@code DrugOrder.error.onlyOneOfDrugOrNonCodedShouldBeSet}), so that ordering binds only a legacy
+	 * row, and a coded order's display is untouched either way.
+	 *
+	 * <p>Read through {@code addRaw} rather than behind an {@code isNonCodedDrug()} gate: that method IS
+	 * {@code StringUtils.isNotBlank(drugNonCoded)}, and {@code addRaw} already drops null, blank and
+	 * whitespace-only values, so the gate would be a second spelling of the same test — two places to
+	 * keep in step for no answer either could give alone. Unguarded for the same reason
+	 * {@code getDrug()} beside it is: it is a plain String column on a {@code DrugOrder} the caller has
+	 * already materialized, not a lazy association like the concept {@code addConceptName} wraps.
+	 */
 	private static void addDrugName(Set<String> names, DrugOrder drugOrder) {
 		if (drugOrder.getDrug() != null && drugOrder.getDrug().getName() != null) {
 			addRaw(names, drugOrder.getDrug().getName());
 		}
+		addRaw(names, drugOrder.getDrugNonCoded());
 		addConceptName(names, drugOrder.getConcept());
 	}
 

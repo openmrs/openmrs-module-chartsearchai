@@ -177,9 +177,16 @@ public class EndedOrderAnswerRuleTest extends BaseModuleContextSensitiveTest {
 	 * <p>Read the SOURCE the way {@code ArchitectureGuardTest},
 	 * {@code OrderPartnerNameSourceWritePathTest} and
 	 * {@code DrugOrderCurrencyMarkTest.theFailedReadPathReturnsTheNotReadState} already do here.
-	 * Scoped to the constant's initializer rather than the whole file, for the reason that last case
-	 * slices a method body before asserting: this file's convention is a paragraph of comment above
-	 * every prompt rule, and such a comment quoting the mark is not a defect.
+	 *
+	 * <p>The two halves are asked of DIFFERENT windows, and which window each gets is the whole
+	 * substance of this case. The NEGATIVE half — no hardcoded copy of the mark's text — is asked of
+	 * the whole file, because a copy does not have to live inside the prompt to be a copy: a sibling
+	 * {@code private static final} declared beside the constant reads identically at the call site
+	 * and sits outside any slice of the initializer. The POSITIVE half — the clause reaches the
+	 * serializer's constant — is asked of the initializer, because a dotted name elsewhere in the
+	 * file says nothing about how the clause is built. Both are asked of the COMMENT-STRIPPED text,
+	 * which is what lets the negative half widen safely: this file's convention is a paragraph of
+	 * comment above every prompt rule, and such a comment quoting the mark is not a defect.
 	 */
 	@Test
 	public void thePromptsTriggerTokenIsTheSerializersConstantAndNotACopy() throws Exception {
@@ -209,36 +216,68 @@ public class EndedOrderAnswerRuleTest extends BaseModuleContextSensitiveTest {
 						+ "the FIRST thing after the constant rather than a distant one, because a canary "
 						+ "further down leaves a window of lines a widening could take silently");
 
-		// Normalised before the negative assertion. FOUR shapes have defeated a version of this case,
-		// closed by two mechanisms: the slice bound above caught the first (a window running past the
-		// constant), and normalisation here catches the other three. A
-		// comment inside the initializer can carry the constant's dotted name while the prompt
-		// hardcodes the text beside it (this file's convention is a comment paragraph above every
-		// prompt rule, so that is not exotic); a hardcoded copy can be split across the file's own
-		// line-wrap — "... not in " + "force" — which a contiguous search cannot see; and the split
-		// can be held apart by a BLOCK comment, which survives stripping line comments alone. Strip
-		// both comment forms, then join adjacent literals. Every one of the four was found by MUTATION
-		// rather than by reasoning about the regex, so add the mutation before trusting a fifth to be
-		// impossible.
-		String normalised = initializer
-				.replaceAll("(?s)/\\*.*?\\*/", "")
-				.replaceAll("(?m)//.*$", "")
-				.replaceAll("\"\\s*\\+\\s*\"", "");
-		assertFalse(normalised.contains(PatientChartSerializer.INACTIVE_ORDER_LABEL),
-				"the prompt must not carry the mark's text as a literal, however it is split or "
-						+ "commented around — it reads identically to a composed clause today and stops "
+		// FIVE shapes have defeated a version of this case, closed by three mechanisms. Every one was
+		// found by MUTATION rather than by reasoning about the regex, so add the mutation before
+		// trusting a sixth to be impossible.
+		//
+		// The slice bound above closes the first: a window running past the constant.
+		//
+		// Normalisation closes three, and the third of them is why it is applied to BOTH assertions
+		// rather than only to the negative one. A hardcoded copy can be split across the file's own
+		// line-wrap — "... not in " + "force" — which a contiguous search cannot see; the split can be
+		// held apart by a BLOCK comment, which survives stripping line comments alone; and a comment
+		// can carry the constant's dotted name, which satisfies the positive half while the prompt
+		// hardcodes the text beside it.
+		//
+		// The WINDOW of the negative half closes the fifth: a copy held in a sibling private static
+		// final declared beside the prompt constant, outside any slice of the initializer, used from
+		// the clause. That one and the comment above are a PAIR, which is the part worth keeping —
+		// each alone is caught (a copy inside the prompt is seen by the negative half wherever the
+		// positive half was satisfied; a sibling copy leaves no dotted name for the positive half to
+		// find), and together they passed green: a hand-kept constant plus the "keep in sync with X"
+		// comment people write when they make one. So the negative half reads the whole FILE and the
+		// positive half reads the comment-stripped initializer. Both were re-demonstrated by mutation
+		// on this head: the pair above reddens the negative half, and a sibling constant assigned
+		// PatientChartSerializer.INACTIVE_ORDER_LABEL with the dotted name left only in a comment
+		// reddens the positive half. That second arrangement TRACKS the constant and is harmless —
+		// say so rather than claiming it as a caught defect. What it demonstrates is only that the
+		// positive half now reads code and not prose; the price is that it insists the clause be
+		// composed at THIS site rather than one indirection away.
+		String normalisedFile = stripCommentsAndJoinLiterals(text);
+		assertFalse(normalisedFile.contains(PatientChartSerializer.INACTIVE_ORDER_LABEL),
+				"LlmProvider must not carry the mark's text as a literal ANYWHERE — not in the prompt "
+						+ "and not in a sibling constant the prompt uses, however it is split or "
+						+ "commented around. It reads identically to a composed clause today and stops "
 						+ "tracking the constant the moment the mark is renamed, which is the whole "
 						+ "failure this case exists for");
 
-		// The positive half. Neither assertion is sufficient alone: this one passes on a hardcoded copy
-		// that merely names the constant nearby, and the one above passes on a clause that reaches the
-		// constant but never mentions the mark's text — which is why both are here.
-		assertTrue(initializer.contains("PatientChartSerializer.INACTIVE_ORDER_LABEL"),
+		String normalisedInitializer = stripCommentsAndJoinLiterals(initializer);
+		assertTrue(normalisedInitializer.contains("PatientChartSerializer.INACTIVE_ORDER_LABEL"),
 				"the prompt's order-status clause must be BUILT from "
-						+ "PatientChartSerializer.INACTIVE_ORDER_LABEL rather than carrying a copy of its "
-						+ "text: javac inlines the constant, so a copy is invisible to every behavioural "
-						+ "assertion in this file and would go on teaching the old token after the mark "
-						+ "was renamed");
+						+ "PatientChartSerializer.INACTIVE_ORDER_LABEL in CODE rather than carrying a "
+						+ "copy of its text with the constant named in a comment beside it: javac inlines "
+						+ "the constant, so a copy is invisible to every behavioural assertion in this "
+						+ "file and would go on teaching the old token after the mark was renamed");
+	}
+
+	/**
+	 * Java source with both comment forms removed and adjacent string literals joined, so a copy of
+	 * the mark cannot hide in a comment, behind a line-wrap, or behind a block comment holding a
+	 * line-wrap apart.
+	 *
+	 * <p>One helper because the two assertions above must normalise IDENTICALLY over two different
+	 * windows; two expressions would let the windows drift apart in what they can see, which is the
+	 * class of defect this whole case is about. Not exact, and the inexactness has a direction:
+	 * {@code //} inside a string literal truncates the rest of that line, which removes text rather
+	 * than adding it — so it costs RECALL (a copy sharing a line with a URL literal, after it, would
+	 * be missed) and cannot manufacture one. Do not read that as a proof of soundness; it is an
+	 * argument about one substitution, and the way to check a sixth shape is still to write it.
+	 */
+	private static String stripCommentsAndJoinLiterals(String javaSource) {
+		return javaSource
+				.replaceAll("(?s)/\\*.*?\\*/", "")
+				.replaceAll("(?m)//.*$", "")
+				.replaceAll("\"\\s*\\+\\s*\"", "");
 	}
 
 	/**

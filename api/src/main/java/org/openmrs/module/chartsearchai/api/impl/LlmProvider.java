@@ -128,12 +128,23 @@ public class LlmProvider {
 			//    that a positive currency sentence makes the model re-state a live order in prose instead
 			//    of copying a field list, and prose loses fields and can invent them.
 			//
-			// The cost, stated rather than hidden: on the renewal chart (an ended order beside a live one
-			// for the same drug) the answer loses the dose it used to carry — "He is taking Nevirapine 400
-			// Milligram" becomes "He is taking Nevirapine". Of the wordings measured, every one that
-			// keeps that dose pays one of the two prices above. It is the lesser loss here because the base arm's own grounding
-			// verifier already marked that dose claim UNSUPPORTED, and the answer that replaces it is
-			// verified: that citation moves unsupported -> supported.
+			// TWO costs, stated rather than hidden, and the second was missing from this list until a
+			// review round measured it.
+			//  - On the renewal chart (an ended order beside a live one for the same drug) the answer
+			//    loses the dose it used to carry — "He is taking Nevirapine 400 Milligram" becomes "He is
+			//    taking Nevirapine". Of the wordings measured, every one that keeps that dose pays one of
+			//    the two prices above. It is the lesser loss here because the base arm's own grounding
+			//    verifier already marked that dose claim UNSUPPORTED, and the answer that replaces it is
+			//    verified: that citation moves unsupported -> supported.
+			//  - On a chart of ONE ended order, asked "what medications is he taking?", the answer stops
+			//    naming the drug at all: "Nevirapine was ordered on 2026-07-26 [1]." becomes "No current
+			//    medications are recorded.", 3/3, with NO citation. True of that patient, and it satisfies
+			//    this clause vacuously — nothing is named, so nothing owes a status — but the drug, the
+			//    ended status and the stop date the ticket's title asks for all leave the answer. Four of
+			//    the eight measured wordings keep it naming the drug AND its status; each is excluded by
+			//    another cell (the ticket's own cell unfixed, cell B2's lab-measurement falsehood, or both
+			//    of this file's fixture answer cases red). Decision 47's A3 note carries which, and the
+			//    base on that cell is NOT settled — four runs, three different base answers.
 			+ "A drug-order record carrying \"" + PatientChartSerializer.INACTIVE_ORDER_LABEL
 			+ "\" is a record of an order that has ended. Whenever your answer names a drug from such "
 			+ "a record, say in the same sentence that its order is no longer in force. "

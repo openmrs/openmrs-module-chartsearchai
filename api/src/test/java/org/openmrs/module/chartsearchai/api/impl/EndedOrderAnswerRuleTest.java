@@ -204,6 +204,14 @@ public class EndedOrderAnswerRuleTest extends BaseModuleContextSensitiveTest {
 						+ "class — that over-wide window is exactly what made this guard fail open, and "
 						+ "this assertion is what stops it silently widening again");
 
+		// TWO assertions, because either alone is satisfiable by the defect. The name can appear in a
+		// comment inside the initializer while the prompt hardcodes the text beside it — which is the
+		// same fail-open one bound wider already allowed, one scope in. So the mark's text must ALSO
+		// not appear here as a Java string literal: the clause has to reach it through the constant.
+		assertFalse(initializer.contains("\"" + PatientChartSerializer.INACTIVE_ORDER_LABEL + "\""),
+				"the prompt must not carry the mark's text as a literal — it reads identically to a "
+						+ "composed clause today and stops tracking the constant the moment the mark is "
+						+ "renamed, which is the whole failure this case exists for");
 		assertTrue(initializer.contains("PatientChartSerializer.INACTIVE_ORDER_LABEL"),
 				"the prompt's order-status clause must be BUILT from "
 						+ "PatientChartSerializer.INACTIVE_ORDER_LABEL rather than carrying a copy of its "

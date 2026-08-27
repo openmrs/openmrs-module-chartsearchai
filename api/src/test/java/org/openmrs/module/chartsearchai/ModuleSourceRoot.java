@@ -20,8 +20,8 @@ import java.nio.file.Paths;
  * <p>Extracted when {@code EndedOrderAnswerRuleTest} became the THIRD class to need this walk, the
  * threshold {@link org.openmrs.module.chartsearchai.api.impl.LlmEndpointTestSupport}'s own javadoc
  * records for the same move ("Extracted when AbsentDataEvalTest became the third suite to need it";
- * the first two had a copy each). {@code ArchitectureGuardTest} and {@code DrugOrderCurrencyMarkTest}
- * carried byte-identical copies before this.
+ * the first two had a copy each). {@code DrugOrderCurrencyMarkTest} carried a byte-identical copy;
+ * {@code ArchitectureGuardTest}'s was the same walk with its own comments.
  *
  * <p>It matters more than the line count suggests, for the reason that javadoc gives: these are
  * guards whose whole value is reading the right file, and three copies of the walk can disagree

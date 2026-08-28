@@ -2836,11 +2836,16 @@ public class DrugSafetyValidator {
 		// Coalesced with the rule's own token, and that is not defensive. partnerLabel can never be blank
 		// — it trims a firstNonBlank of two fields — while getName() has no such guard on this path: the
 		// ddinter parser refuses a row whose name isEmpty() but not one that is whitespace, and
-		// setName does not trim. A blank here does not reach isBlank(rendered) in
-		// DrugReferenceInjector.orderedInteractionNotes either, because the assembled piece still carries
-		// the parens and the mechanism prose — so the note would name NO partner at all, which is
-		// strictly worse than the token it replaced and breaks that method's own rule that an
-		// operator-editable dataset must degrade rather than disappear.
+		// setName does not trim. A blank here costs the note its partner's name in one of two ways, and
+		// which one depends on whether the rule carries mechanism prose — measured by mutation on both
+		// shapes. WITH a note, the assembled piece is still non-blank, so
+		// DrugReferenceInjector.orderedInteractionNotes' isBlank(rendered) guard does not fire and the
+		// record reads "Interactions: (Major. ...)", naming no partner at all. WITHOUT one, the piece IS
+		// the blank label, that guard fires, and the partner leaves the record entirely — which is the
+		// worse of the two and is the disappearance that method's own rule forbids, an operator-editable
+		// dataset having to degrade rather than vanish. No shipped parser produces both together today
+		// (ddinter synthesises a note for every row, json refuses a blank name, atc emits no
+		// interactions at all), which is why the fixture reaches only the first.
 		if (partner.labelEntry == null || !unambiguouslyNames(rule, partner.labelEntry)) {
 			return null;
 		}

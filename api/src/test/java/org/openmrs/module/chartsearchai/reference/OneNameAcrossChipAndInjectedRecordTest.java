@@ -173,11 +173,14 @@ public class OneNameAcrossChipAndInjectedRecordTest {
 	 * <p>The ENTRY rung is the one place a string not produced by {@code partnerLabel} reaches this
 	 * note, and it is the one place that string can be blank: {@code partnerLabel} trims a
 	 * {@code firstNonBlank} of two fields and so never is, while {@code DdiDrugReferenceSource} refuses a
-	 * row whose name {@code isEmpty()} and admits one that is whitespace. A blank name does not reach
-	 * {@code orderedInteractionNotes}' own {@code isBlank(rendered)} guard either, because the assembled
-	 * piece still carries the parens and the mechanism prose — so before the coalesce the record read
-	 * {@code Interactions: (Major. Probe mechanism text.)}, naming no partner at all, which is strictly
-	 * worse than the token it replaced.
+	 * row whose name {@code isEmpty()} and admits one that is whitespace. What a blank then costs depends
+	 * on whether the rule carries mechanism prose, and THIS fixture reaches the first of the two: with a
+	 * note the assembled piece is still non-blank, so {@code orderedInteractionNotes}' own
+	 * {@code isBlank(rendered)} guard does not fire and the record read
+	 * {@code Interactions: (Major. Probe mechanism text.)}, naming no partner at all. Without one the
+	 * piece IS the blank label, that guard fires, and the partner leaves the record entirely — the worse
+	 * of the two, reachable only by nulling the note, since no shipped parser produces a blank name and a
+	 * blank note together.
 	 *
 	 * <p>Operator-data only: measured through the real {@code DdiDrugReferenceSource.load}, no row of the
 	 * shipped knowledge base publishes a blank name. A hand-authored file reaches it at once, which is

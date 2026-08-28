@@ -1451,6 +1451,16 @@ public class DrugReferenceInjector {
 	 *         not. Issue #228 already made the ORDER-carrying shape key-symmetric, which is why the gate
 	 *         costs production nothing.
 	 *
+	 *         <p><b>The fallback below and the fold's own answer for its non-entry rungs are one method,
+	 *         not two spellings.</b> {@code DrugSafetyValidator.foldedPartnerLabel} hands the note
+	 *         {@code partnerLabel(rule)} on the rungs where the dataset has no name of its own, which is
+	 *         verbatim what this method returns when it finds nothing — so a rule reconciled on those
+	 *         rungs and a rule not reconciled at all print the same string BECAUSE both call
+	 *         {@code partnerLabel}, which is what that method exists to be. Keep it that way: if this
+	 *         fallback ever became something else, those rungs would keep the old string while every
+	 *         unfolded partner took the new one, and one prescription would be named two ways inside one
+	 *         interaction list — issue #297 reopened a rung along.
+	 *
 	 *         <p>A linear scan of a list bounded by the chips this response raised, and deliberately not
 	 *         a map: the accessor above will not hand out a name without being shown the rule it was
 	 *         decided on, and a map keyed here would have to read the rule back out to build itself.

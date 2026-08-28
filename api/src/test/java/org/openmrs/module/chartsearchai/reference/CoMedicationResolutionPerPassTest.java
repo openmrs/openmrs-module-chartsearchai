@@ -123,6 +123,9 @@ public class CoMedicationResolutionPerPassTest {
 			"interaction | Major | Clarithromycin interacts with active order amiodarone",
 			"interaction | Major | Simvastatin interacts with Clarithromycin, also named in the question");
 
+	/** A question naming nothing the excerpt classifies, so no arm asks for a co-medication. */
+	private static final String NAMES_NO_DRUG = "How old is she?";
+
 	private static SweepCountingService service() {
 		SweepCountingService service = new SweepCountingService();
 		service.setEntries(DrugReferenceTestSupport.ddinterEntries());
@@ -191,6 +194,50 @@ public class CoMedicationResolutionPerPassTest {
 	}
 
 	/**
+	 * A question that puts no substance in play resolves the chart NOT AT ALL — the laziness the memo
+	 * exists to keep, and the reason the resolution is not simply hoisted to the top of
+	 * {@code validate}.
+	 *
+	 * <p>Without this, an eager hoist passes every other case here: the sweep invariant stays flat
+	 * because the resolution still happens once, and the source scan still finds one construction
+	 * inside {@code validate}. What it would cost is the commonest question of all, which reaches no
+	 * arm that needs a co-medication and today pays for none.
+	 *
+	 * <p>Stated as a comparison rather than as "zero", because a chart with orders costs sweeps that
+	 * have nothing to do with this memo — {@code findForActiveOrders} and {@code withReferenceNames}
+	 * run for every pass — so zero is the wrong bar and would never be met.
+	 */
+	@Test
+	public void aQuestionPuttingNoSubstanceInPlayDoesNotResolveTheChartAtAll() {
+		SweepCountingService service = service();
+		DrugSafetyValidator validator = DrugReferenceTestSupport.validator(service);
+		PatientClinicalContext withOrders = chartWithOrders();
+		PatientClinicalContext noOrders = DrugReferenceTestSupport.ctx(60, 70.0, null, null, null, null);
+
+		assertEquals(0, validator.validate("", NAMES_NO_DRUG, withOrders).size(),
+			"the arrangement must put no substance in play, or this case is about something else");
+		int unasked = attributableToOrders(validator, service, withOrders, noOrders, NAMES_NO_DRUG);
+		int asked = attributableToOrders(validator, service, withOrders, noOrders, questionNaming(1));
+		assertTrue(unasked < asked,
+			"a question naming no drug the dataset knows cost the same " + unasked + " order-attributable "
+					+ "dataset sweeps as one naming a drug, so the chart was resolved for a pass that "
+					+ "never asked for it. CoMedications must resolve on first USE, not on construction "
+					+ "(issue #256).");
+	}
+
+	/** The dataset sweeps the patient's ORDERS cost this question — the with-chart pass less the
+	 *  chart-less one, which is what isolates them from the rest of a pass's work. */
+	private static int attributableToOrders(DrugSafetyValidator validator, SweepCountingService service,
+			PatientClinicalContext withOrders, PatientClinicalContext noOrders, String question) {
+		service.sweeps = 0;
+		validator.validate("", question, withOrders);
+		int withOrdersSweeps = service.sweeps;
+		service.sweeps = 0;
+		validator.validate("", question, noOrders);
+		return withOrdersSweeps - service.sweeps;
+	}
+
+	/**
 	 * The chips a question raises do not depend on whether each subject resolved its own copy of the
 	 * co-medications or read one the pass holds — the correctness condition the whole change rests on,
 	 * and the one a sweep count cannot see.
@@ -242,6 +289,12 @@ public class CoMedicationResolutionPerPassTest {
 	 * shape neither counting case can see, because a field reassigned once per pass sweeps exactly as
 	 * often as a local does. Anchored to a single leading tab, which is this file's indentation for a
 	 * member of the outer class; the pass's own local sits two tabs in, inside {@code validate}.
+	 *
+	 * <p>What it does NOT see is named rather than left to be discovered: a declaration this needle's
+	 * shape does not fit — split across lines, carrying an annotation or a generic, indented some other
+	 * way. The construction-statement check beside it is the second net, since a field has to be
+	 * ASSIGNED to be a memo and that assignment is not the local declaration the needle there demands;
+	 * a shape that evades both is a new needle here, not a looser one.
 	 */
 	private static final Pattern MEMO_FIELD =
 			Pattern.compile("(?m)^\\t[\\w ]*\\bCoMedications\\s+\\w+\\s*[;=]");

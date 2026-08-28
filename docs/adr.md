@@ -3388,7 +3388,7 @@ Read out of the source rather than assumed. Every write to an `OrderPartner` —
 
 ### Effect
 
-Same measurement, alternated runs, 43 active orders: ten drugs in play 482–488 ms → 130–173 ms; per extra drug in play 39–40 ms → 3.4–4.4 ms, and no longer a function of the order count (2.51 / 2.64 / 2.88 / 3.76 ms at 0 / 5 / 20 / 43 orders). One drug in play is indistinguishable, 95–130 ms against 96–134 ms, which is expected: one resolution either way.
+Same measurement, alternated runs, 43 active orders: ten drugs in play 482–488 ms → 130–173 ms; per extra drug in play 39–40 ms → 3.4–4.4 ms, and nearly flat in the order count where it used to be linear in it: 2.51 / 2.64 / 2.88 / 3.76 ms per extra drug at 0 / 5 / 20 / 43 orders, against 2.15 / 5.12 / 17.70 / 35.04 before. The residue — about 1.3 ms per extra drug across 43 orders — is real and is not attributed here. One drug in play is indistinguishable, 95–130 ms against 96–134 ms, which is expected: one resolution either way.
 
 Behaviour-neutral, verified rather than argued: the full rendered chip list — type, severity and detail in full, for questions naming one to five drugs against an eight-order chart, 89 chips — is byte-identical across the two heads, order included.
 

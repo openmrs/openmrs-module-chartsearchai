@@ -2728,9 +2728,11 @@ public class DrugSafetyValidator {
 	 * {@link DrugReference#displayLabel()}. Which name the RECORD takes is decided per outcome above and
 	 * moves on ONE of them: outcomes 1 and 2 hand it the rule's own token, which is what it already
 	 * printed, and outcome 3 hands it {@link OrderPartner#labelEntry}'s {@code getName()} coalesced with
-	 * that same token, for the reason stated at the branch itself — the ENTRY rung
-	 * being the one place the dataset has a name of its own to offer. The record's own vocabulary, not the
-	 * chip's; the two name one SUBSTANCE rather than sharing one string.
+	 * that same token, for the reason stated at the branch itself — the ENTRY rung being the one place
+	 * the fold has PROVED the dataset's name is this rule's ({@link #unambiguouslyNames}). Not the one
+	 * place a dataset name exists: outcome 2's {@code labelEntry} is a real entry with a real name too,
+	 * and it is unvalidated, which is the whole of why the note does not take it. The record's own
+	 * vocabulary, not the chip's; the two name one SUBSTANCE rather than sharing one string.
 	 *
 	 * <p><b>Issue #121's invariant is SCOPED by this method, not preserved by it.</b> On the branch where
 	 * the dataset identifies no partner entry the grouping key is {@code partnerLabel} case-folded, and
@@ -2809,14 +2811,21 @@ public class DrugSafetyValidator {
 			// nameByOrder does not update it, so on a renamed partner it identifies a different drug from
 			// the label being handed out, which is why this branch cannot use unambiguouslyNames.
 			//
-			// The RECORD keeps the rule's own TOKEN on this rung (issue #297), and that is the one rule
-			// stated below rather than an exception to it: this note names the partner by the DATASET's
-			// name for it, and the ladder reached an ORDER precisely because the dataset could not name
-			// the codes — so there is no dataset name to take. What the gate has just proved is that the
-			// token names that very order, so the two surfaces still name one drug, the note's being a
-			// word of the chip's rather than a second name. Handing the note a prescription DISPLAY
-			// instead would put a strength and a formulation the knowledge base knows nothing about into
-			// a list of that knowledge base's own partners, and that list is quotable by construction
+			// The RECORD keeps the rule's own TOKEN on this rung (issue #297), and NOT because the dataset
+			// has no name here. It can have one: this rung is reached after soleSubstanceOf resolved an
+			// entry for the order (issue #186) and nameByOrder then overwrote only the LABEL, so
+			// labelEntry can be a real entry with a real getName() — printing it through
+			// OneNameAcrossChipAndInjectedRecordTest.anOrderRungFoldStillLeavesTheNoteOnTheRulesOwnToken
+			// reads "Naproxen". The reason is that this name is UNVALIDATED, exactly as the paragraph
+			// above says for the chip's half: this branch deliberately does not ask unambiguouslyNames of
+			// labelEntry, since on a renamed partner that field identifies one drug while the label names
+			// another. Handing the note labelEntry.getName() would print a dataset name the fold has
+			// proved nothing about — outcome 3's mis-attribution, one surface along. What the gate HAS
+			// proved is that the rule's token names the very display the chip is about to print, so the
+			// two surfaces still name one drug, the note's name being a word of the chip's rather than a
+			// second name. Handing the note the prescription DISPLAY instead would put a strength and a
+			// formulation the knowledge base knows nothing about into a list of that knowledge base's own
+			// partners, and that list is quotable by construction
 			// (DrugReferenceInjector.RenderedReference).
 			return namesNamingOrder(rule, partner.namingOrder)
 					? new ReconciledPartner(partner.label, partnerLabel(rule)) : null;
@@ -2829,16 +2838,24 @@ public class DrugSafetyValidator {
 		// The labelEntry null test is defensive and unreachable as written: namesADrug with no naming
 		// order is the entry rung, whose constructor always supplies one. Kept because a future rung could
 		// answer namesADrug true without an entry, and this way it refuses rather than dereferences.
-		// The ENTRY rung is the one place the dataset has a name of its own for this partner, so it is
-		// the one rung where the RECORD's name moves (issue #297): getName(), the vocabulary that record
-		// already uses for its own subject, against the chip's synonym-augmented displayLabel().
+		// The ENTRY rung is the one rung where the fold has PROVED the dataset's name for this partner is
+		// this rule's — unambiguouslyNames, just below — so it is the one rung where the RECORD's name
+		// moves (issue #297): getName(), the vocabulary that record already uses for its own subject,
+		// against the chip's synonym-augmented displayLabel(). Not the one rung where a dataset name
+		// EXISTS: the ORDER rung's labelEntry is a real entry with a real name too, and unvalidated,
+		// which is what its own branch above says instead.
 		//
-		// Coalesced with the rule's own token, and that is not defensive. partnerLabel can never be blank
-		// — it trims a firstNonBlank of two fields — while getName() has no such guard on this path: the
-		// ddinter parser refuses a row whose name isEmpty() but not one that is whitespace, and
-		// setName does not trim. A blank here costs the note its partner's name in one of two ways, and
-		// which one depends on whether the rule carries mechanism prose — measured by mutation on both
-		// shapes. WITH a note, the assembled piece is still non-blank, so
+		// Coalesced with the rule's own token, and that is not defensive. It guards a hazard THIS change
+		// introduces and is not the module's position on a blank entry name — that belongs at the loader,
+		// where DrugReferenceValidity already rules on the neighbouring shape (BLANK_ALIAS, issue #150),
+		// and a rule there would reach the CHIP's label on such a row as well — displayLabel() is blank
+		// too wherever the row publishes no diverging generic — which this line cannot. Until then it is
+		// only this note: partnerLabel can never be blank — it trims a firstNonBlank of two fields, which
+		// is why the note could not carry a blank before issue #297 — while getName() has no such guard
+		// on the path this change opens: the ddinter parser refuses a row whose name isEmpty() but not
+		// one that is whitespace, and setName does not trim. A blank here costs the note its partner's
+		// name in one of two ways, and which one depends on whether the rule carries mechanism prose —
+		// measured by mutation on both shapes. WITH a note, the assembled piece is still non-blank, so
 		// DrugReferenceInjector.orderedInteractionNotes' isBlank(rendered) guard does not fire and the
 		// record reads "Interactions: (Major. ...)", naming no partner at all. WITHOUT one, the piece IS
 		// the blank label, that guard fires, and the partner leaves the record entirely — the worse of the

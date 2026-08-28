@@ -113,6 +113,34 @@ public class OneNameAcrossChipAndInjectedRecordTest {
 	}
 
 	/**
+	 * The same arrangement read from the OTHER partner: a reconciled name may reach only the note it was
+	 * decided for.
+	 *
+	 * <p>{@code DrugReferenceInjector.reconciledPartnerNoteName} is a linear scan of this response's
+	 * findings and asks each of them for a name, so the whole of the scoping is the rule-identity
+	 * conjunct inside {@code SafetyWarning.reconciledPartnerNoteName}. Mutate that conjunct to
+	 * {@code rule != null} and the first reconciled name in the list answers for every note in the
+	 * record: this case then reads {@code Acetylsalicylic acid (Major. …); Acetylsalicylic acid
+	 * (Moderate).}, lisinopril's own Moderate interaction printed under aspirin's name, in text the
+	 * prompt carries as a citable record. Nothing throws and no count changes.
+	 *
+	 * <p>The case above cannot see that: it reads the FOLDED partner's note, which the mutation leaves
+	 * correct. Mutate the conjunct and read which cases redden rather than trusting this list.
+	 */
+	@Test
+	public void aReconciledNameReachesOnlyTheNoteItWasDecidedFor() {
+		String record = recordFor(inject(
+			oneOrder("Aspirin 81mg", DrugReferenceTestSupport.set("N02BA01")), QUESTION), "Ibuprofen");
+
+		assertTrue(record.contains("Acetylsalicylic acid (Major"),
+			"precondition: the fold must have reconciled aspirin's note, or there is no name for a"
+					+ " second partner's note to take by mistake, was: " + record);
+		assertTrue(record.contains("lisinopril (Moderate)"),
+			"a partner the fold said nothing about keeps the rule's own token — the reconciled name is"
+					+ " scoped to the rule it was decided on, was: " + record);
+	}
+
+	/**
 	 * The change is scoped to a fold that RECONCILED. Where the class arm says nothing about the
 	 * partner there is no fold, the chip's rule sentence is {@code partnerLabel} and the note must
 	 * agree with THAT — moving it would create the divergence in the other direction.
@@ -249,12 +277,16 @@ public class OneNameAcrossChipAndInjectedRecordTest {
 	 * two surfaces are deliberately NOT handed the same string, pinned so the decision is visible rather
 	 * than latent.
 	 *
-	 * <p>The record names a partner by the DATASET's name for it, and this rung was reached precisely
-	 * because the dataset could not name the order's codes, so it has none to offer. What
-	 * {@code namesNamingOrder} has just proved is that the rule's token names that display, so the note's
-	 * name is a WORD of the chip's rather than a second name — and handing the note the prescription
-	 * display would put a strength and a formulation the knowledge base knows nothing about into a list
-	 * of that knowledge base's own partners.
+	 * <p>The record names a partner by the DATASET's name for it, but only where the fold has PROVED
+	 * that name is this rule's. It has not here: this branch deliberately does not ask
+	 * {@code unambiguouslyNames} of {@code OrderPartner.labelEntry}, because {@code nameByOrder} does not
+	 * update that field and on a renamed partner it identifies one drug while the label names another.
+	 * That the dataset HAS a name here is easy to miss — the arrangement below reaches this rung through
+	 * {@code soleSubstanceOf}, so {@code labelEntry} is the real {@code Naproxen} entry (print it from
+	 * the branch and read the marker). What {@code namesNamingOrder} has just proved is that the rule's
+	 * token names the display, so the note's name is a WORD of the chip's rather than a second name —
+	 * and handing the note the prescription display would put a strength and a formulation the knowledge
+	 * base knows nothing about into a list of that knowledge base's own partners.
 	 *
 	 * <p>The arrangement is {@code DrugReferenceTestSupport.renamedByItsOwnNaproxenOrder()}, shared with
 	 * the chip-side case rather than copied: one order carrying a code the fixture covers
@@ -276,8 +308,8 @@ public class OneNameAcrossChipAndInjectedRecordTest {
 
 		String record = recordFor(chart, "Ibuprofen");
 		assertTrue(record.contains("naproxen ("),
-			"the note keeps the rule's own token: the dataset has no name of its own for this partner,"
-					+ " and the token names the very display the chip prints, was: " + record);
+			"the note keeps the rule's own token: this rung never proved the dataset's name to be this"
+					+ " rule's, and the token names the very display the chip prints, was: " + record);
 		assertFalse(record.contains("Naproxen 500mg"),
 			"a prescription display must not enter a list of the knowledge base's own partners, was: "
 					+ record);

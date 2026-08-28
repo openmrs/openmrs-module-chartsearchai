@@ -349,7 +349,7 @@ public class SafetyWarning {
 	 * forbids, and its failure mode is silent and one-directional.
 	 *
 	 * <p><b>It is the RECORD's own vocabulary</b> — the dataset's {@code getName()} where the dataset has
-	 * a name for the partner, the rule's own token everywhere else — and never
+	 * a name for the partner it has PROVED is the rule's, the rule's own token everywhere else — and never
 	 * {@link DrugReference#displayLabel()}. On the rung where the ladder found no name the two surfaces
 	 * do end up on one string, which is not a counterexample: they agree there because both take the
 	 * rule's token, not because this one took the chip's. The chip's name can be
@@ -369,14 +369,24 @@ public class SafetyWarning {
 	 * caller for the reason issue #298 gives of {@code OrderPartner.recordNameSource}: a reader that
 	 * had to remember the check is a reader that can forget it.
 	 *
-	 * <p><b>Nothing in the suite pins that condition, and this says so rather than letting it look
-	 * defended.</b> Weaken it to {@code rule != null} and run the api suite: it stays entirely green,
-	 * because no fixture puts a partner's winning rule on a SIBLING row of the substance while the
-	 * rendered row carries one too. It is a fail-safe for a shape the bundled data
-	 * does not reach ({@code ddinter} writes every rule's token and ATC from one partner row, so a
-	 * label group's rows do not differ on either field — the same premise
+	 * <p><b>It does TWO jobs and only the second is a fail-safe.</b> Its first is to scope the name to
+	 * the note it was decided for at all: {@code DrugReferenceInjector.reconciledPartnerNoteName} is a
+	 * linear scan that asks every finding of this response, so weakened to {@code rule != null} the
+	 * FIRST reconciled name in that list answers for every note in the record. The ticket's own
+	 * reproducer then renders lisinopril's Moderate interaction as
+	 * {@code Acetylsalicylic acid (Moderate)} — one partner's interaction under another's name, in text
+	 * the prompt carries as a citable record, with nothing thrown and no count changed.
+	 * {@code OneNameAcrossChipAndInjectedRecordTest.aReconciledNameReachesOnlyTheNoteItWasDecidedFor}
+	 * pins it, and was the one api case to redden on that weakening when it was made — mutate the
+	 * conjunct and read the failures rather than trusting this sentence.
+	 *
+	 * <p>Its second job is the fail-safe, and THAT is what nothing pins: the record collapses over ONE
+	 * row while the chip chose across every row of the substance, so where the two elect different
+	 * rules for one partner this answers null and the note stays where it was. No fixture reaches that
+	 * shape ({@code ddinter} writes every rule's token and ATC from one partner row, so a label group's
+	 * rows do not differ on either field — the same premise
 	 * {@code DrugReferenceInjector.onePerPartner} records) and a hand-authored {@code json} dataset
-	 * reaches immediately. Whoever fixtures that shape should assert this condition, not assume it.
+	 * reaches it immediately. Whoever fixtures it should assert this condition, not assume it.
 	 *
 	 * <p>Not serialized — the wire shape is the three keys
 	 * {@code ChartSearchAiRestController.serializeSafetyWarnings} writes, and the chip's own detail is

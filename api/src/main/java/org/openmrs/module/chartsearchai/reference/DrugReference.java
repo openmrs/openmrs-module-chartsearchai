@@ -14,8 +14,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -355,9 +357,19 @@ public class DrugReference {
 	 * @return whether this entry's display name names the substance with NO trailing route/formulation
 	 *         qualifier — {@code Dexamethasone} rather than {@code Dexamethasone (nasal)}. At most one
 	 *         row of a substance normally answers true, and it is the row a question naming the bare
-	 *         substance is about: nothing on a {@code DrugOrder} or in a question tells this module
-	 *         which route is in play (every variant publishes the same aliases and the same ATC list —
-	 *         the data-side gap issue #115 records), so the only route it can honestly assert is none.
+	 *         substance is about: nothing in a QUESTION tells this module which route is in play, and
+	 *         the data cannot help either, since every variant publishes the same aliases and the same
+	 *         ATC list — the data-side gap issue #115 records — so the only route this predicate can
+	 *         honestly assert is none.
+	 *
+	 *         <p><b>An ORDER can now say, and it makes no difference here</b> (issue #234). The
+	 *         builder reads a {@code DrugOrder}'s route and dose form, so the sentence above no longer
+	 *         holds of an order; what still holds is why that cannot move THIS choice. Every row of a
+	 *         substance publishes the same ATC list — measured over the shipped KB, all 129 of its
+	 *         multi-row substances and none differing — so preferring the row whose qualifier matches a
+	 *         recorded route would change which name a chip prints and nothing about what it claims.
+	 *         That is why {@link #codesForRecordedAdministration} narrows the CODES instead, and why
+	 *         issue #234 left this predicate alone.
 	 *
 	 *         <p>Consumed by {@link #canonicalRow}, which is where the collapses that need it agree
 	 *         on one answer. Measured over the shipped 19 MB KB (2026-08-07; re-measured 2026-08-13 for
@@ -417,8 +429,8 @@ public class DrugReference {
 
 	/**
 	 * Which of two rows of ONE substance should represent it — the row a collapsed chip is named after
-	 * ({@code DrugSafetyValidator.interactionSubject}, issue #162, and since issue #206 every chip arm
-	 * through {@code DrugSafetyValidator.SubstanceSubjects}), the row a collapsed reference
+	 * ({@code DrugSafetyValidator.interactionSubject}, issue #162, and since issues #206/#236 every chip
+	 * arm through {@code DrugSafetyValidator.SubstanceSubjects}), the row a collapsed reference
 	 * record is rendered from ({@link DrugReferenceInjector#matchingEntries}, issue #163), and the row a
 	 * class chip names its PARTNER by ({@code DrugSafetyValidator.entryForAtcCode}, issue #174 site 1 —
 	 * where the ambiguity is not two rows a question resolved but the several rows that all publish the
@@ -559,7 +571,8 @@ public class DrugReference {
 	 *         all: every surface that must describe one substance to one clinician chooses its
 	 *         representative row here, and a fold written once per surface is one chance per surface for
 	 *         them to iterate in an order the others do not. Grep the callers rather than trusting a count
-	 *         here — every issue that finds another surface adds one. Since #206 the CHIP subjects share
+	 *         here — every issue that finds another surface adds one. Since #206 for three arms and #236
+	 *         for the last two, the CHIP subjects share
 	 *         one per-{@code validate} lookup ({@code DrugSafetyValidator.SubstanceSubjects}) that ranks the
 	 *         patient's recorded names before folding; a caller with no recorded name to rank by asks this
 	 *         directly.
@@ -848,6 +861,28 @@ public class DrugReference {
 			.unmodifiableList(Arrays.asList("A01", "A07A", "A07E", "B02BC", "B05C", "C05A", "C05B",
 					"D", "G01", "G02CC", "M02", "P03A", "R01", "R02", "R03A", "R03B", "S"));
 
+	/** The administration sites {@link #ATC_GROUPS_BY_SITE} and {@link #SITE_TERMS} are both keyed on —
+	 *  named constants so the two halves cannot drift apart on a typo. */
+	static final String SITE_SKIN = "skin";
+
+	static final String SITE_EYE = "eye";
+
+	static final String SITE_EAR = "ear";
+
+	static final String SITE_NOSE = "nose";
+
+	static final String SITE_THROAT = "throat";
+
+	static final String SITE_AIRWAY = "airway";
+
+	static final String SITE_VAGINA = "vagina";
+
+	static final String SITE_MOUTH = "mouth";
+
+	static final String SITE_GUT = "gut";
+
+	static final String SITE_ANORECTAL = "anorectal";
+
 	/**
 	 * The groups nested INSIDE {@link #LOCALLY_APPLIED_ATC_GROUPS} that ATC itself names "for systemic
 	 * use" — {@code D01B} antifungals, {@code D02BB} UV-radiation protectives, {@code D05B}
@@ -888,14 +923,404 @@ public class DrugReference {
 	 *         the SUBSTANCE from the codes that classify a locally applied presentation of it. Null and
 	 *         blank are not locally applied, like every other ATC comparison here treats them: nothing
 	 *         is known about them at all.
-	 *         <p>Package-private with one caller ({@code DrugSafetyValidator.sharedClass}) on purpose:
-	 *         it is a rule about ATC's own group names, not a fact about a substance, so nothing
-	 *         outside this package should be asking it.
+	 *         <p>Package-private on purpose: it is a rule about ATC's own group names, not a fact about
+	 *         a substance, so nothing outside this package should be asking it. TWO callers since issue
+	 *         #234, and they ask it for different claims — which is the thing to keep straight before
+	 *         adding a third. {@code DrugSafetyValidator.sharedClass} PREFERS among candidate subgroups
+	 *         and can still return a locally applied one when that is all a pair shares;
+	 *         {@link #codesAtSites} can DROP a code outright, so that a {@code D01B} systemic
+	 *         antifungal is not read as a skin presentation however plainly it sits under {@code D}.
+	 *         The difference is not a change of mind about the predicate: the second caller holds
+	 *         independent evidence about the presentation the patient was actually given, which the
+	 *         first has none of, and the dropping is decided by {@link #ATC_GROUPS_BY_SITE} against
+	 *         that evidence with this predicate only refusing the {@link #SYSTEMIC_USE_EXCEPTIONS}
+	 *         nested inside a matched site. A caller with no such evidence gets the preference and
+	 *         never the veto.
 	 */
 	static boolean isLocallyAppliedAtcCode(String code) {
 		String normalized = normalizeAtcToken(code);
 		return normalized != null && !fallsUnderAnyGroup(normalized, SYSTEMIC_USE_EXCEPTIONS)
 				&& fallsUnderAnyGroup(normalized, LOCALLY_APPLIED_ATC_GROUPS);
+	}
+
+	/**
+	 * The application SITE each {@link #LOCALLY_APPLIED_ATC_GROUPS} member is named for, and the whole
+	 * of that list — this map together with {@link #LOCALLY_APPLIED_GROUPS_NAMING_NO_SITE} is a
+	 * PARTITION of it, deliberately, so that it cannot go stale relative to the list it partitions
+	 * (issue #234). Written as a partition rather than freehand because the first draft of it was
+	 * freehand and dropped {@code S03}: the shipped KB files neomycin's ear codes as
+	 * {@code {S02AA07, S03AA01}}, so an order recorded at the ear would have had one of its own site's
+	 * codes discarded by a rule whose whole purpose is to keep them. That is the failure mode
+	 * {@link #LOCALLY_APPLIED_ATC_GROUPS}'s own javadoc records for issue #161's hand-picked list.
+	 *
+	 * <p><b>The criterion is the same one that list uses, read the other way round</b>: a group is
+	 * locally applied when its own published name says WHERE it is applied, so this map records WHAT
+	 * that name says. {@code A01} "Stomatological preparations" -&gt; mouth; {@code A07A} "Intestinal
+	 * antiinfectives" and {@code A07E} "Intestinal antiinflammatory agents" -&gt; gut; {@code C05A}
+	 * "Antihemorrhoidals for topical use" -&gt; anorectal — spelled as
+	 * {@link #LOCALLY_APPLIED_ATC_GROUPS}'s javadoc spells it, because three other texts cite that one
+	 * as this module's record of ATC's published name and two records of one name is one too many;
+	 * {@code D} "Dermatologicals", {@code M02} "Topical products for joint and muscular pain" and
+	 * {@code P03A} "Ectoparasiticides, incl. scabicides" -&gt; skin; {@code G01} "Gynecological
+	 * antiinfectives and antiseptics" and {@code G02CC} "Antiinflammatory products for vaginal
+	 * administration" -&gt; vagina; {@code R01} "Nasal preparations" -&gt; nose; {@code R02} "Throat
+	 * preparations" -&gt; throat; {@code R03A} / {@code R03B}, both "inhalants" -&gt; airway.
+	 *
+	 * <p><b>{@code S} is expanded here and nowhere else.</b> That list writes it at main-group
+	 * granularity ("Sensory organs"), which names two sites at once, so it is taken apart into ATC's
+	 * own three level-2 children: {@code S01} "Ophthalmologicals" -&gt; eye, {@code S02}
+	 * "Otologicals" -&gt; ear, and {@code S03} "Ophthalmological and otological preparations" -&gt;
+	 * BOTH. Those three are the whole of main group S in the WHO index, and measured over the shipped
+	 * 19 MB KB every {@code S} code it publishes falls under one of them ({@code S01A}-{@code S01X},
+	 * {@code S02A}/{@code S02B}/{@code S02D}, {@code S03A}/{@code S03B}).
+	 *
+	 * <p>Do not add a member without re-deriving it from the group's published name and recording the
+	 * measured KB impact, which is the rule {@code CLAUDE.md} states for
+	 * {@link #LOCALLY_APPLIED_ATC_GROUPS} and binds this map for the same reason. Measured 2026-08-28
+	 * through {@link DdiDrugReferenceSource#parse}, {@link #substanceGroupKey()},
+	 * {@link #normalizedAtcCodes()} and {@link #isLocallyAppliedAtcCode} over the shipped KB — per
+	 * site, the substances filed there / of those, the ones this map narrows / the ones already filed
+	 * only there: skin 139/106/33, eye 134/101/33, ear 20/20/0, nose 24/24/0, airway 24/19/5, vagina
+	 * 22/20/2, throat 12/12/0.
+	 */
+	private static final Map<String, List<String>> ATC_GROUPS_BY_SITE;
+
+	/**
+	 * The three {@link #LOCALLY_APPLIED_ATC_GROUPS} members whose published name states a PROPERTY
+	 * rather than a place, so no recorded route or dose form can select them: {@code B02BC} "Local
+	 * hemostatics" (the name says "local", never where), {@code B05C} "Irrigating solutions", and
+	 * {@code C05B} "Antivaricose therapy", whose name is the condition — the same {@code C05B} that
+	 * {@link #LOCALLY_APPLIED_ATC_GROUPS}'s javadoc already carries as its one named exception to
+	 * "identified by the route or site of application in the group's own published name".
+	 *
+	 * <p>The other half of the partition. A code under one of these is never kept by a site and never
+	 * counts as unaccounted for — {@link #namesNoAdministrationSite} is how a caller tells those two
+	 * apart, and {@code UnmappedOrderAdministrationSiteTest} is what fails if a fourth group appears
+	 * in neither half.
+	 */
+	private static final List<String> LOCALLY_APPLIED_GROUPS_NAMING_NO_SITE = unmodifiable("B02BC",
+			"B05C", "C05B");
+
+	/**
+	 * Recorded words that name a route of ENTRY rather than a site of action, and so refuse the site
+	 * walk outright — whatever site word the same recorded string may also contain.
+	 *
+	 * <p>The criterion is {@link #SITE_TERMS}' own, applied to the other half of the vocabulary: a term
+	 * names a site when it says where the drug ACTS, and it names a route of entry when it says how the
+	 * drug gets in. {@code transdermal}, {@code sublingual} and {@code buccal} name a surface and
+	 * deliver through it; {@code subcutaneous}, {@code intradermal}, {@code intravenous},
+	 * {@code intramuscular}, {@code intraosseous}, {@code intrathecal}, {@code epidural} and
+	 * {@code parenteral} name a compartment; {@code oral}, {@code rectal} and {@code nasogastric} name
+	 * a way in that serves locally-acting and systemic preparations alike, which is the same reason
+	 * mouth, gut and anorectal have no term in {@link #SITE_TERMS}.
+	 *
+	 * <p><b>Why a refusal and not merely an absence.</b> Absence is not enough where a systemic route's
+	 * recorded name CONTAINS a site word: measured, {@code "transdermal skin patch"} matched
+	 * {@code skin} and narrowed a systemic presentation to the skin, silencing a real chip. Refusing
+	 * first makes the site walk unreachable for such a string. Refusing narrows nothing, which is the
+	 * fail-safe direction, so a term wrongly listed here costs a correction and never a false silence.
+	 *
+	 * <p><b>The refusal is of the whole recorded SET, not of the string it fired on.</b> An order
+	 * records a route and a dose form, and this refuses on either — so {@code "Oral administration"}
+	 * beside {@code "Cutaneous cream"} narrows nothing, though the second names the skin. That is
+	 * deliberate rather than incidental: a record naming a route of entry AND a site of action
+	 * contradicts itself, and narrowing on the half one prefers would silence a chip on the strength
+	 * of a record the module cannot reconcile. Declining keeps the answer the arm already had. It does
+	 * cost the two-source design its one contradictory case — the dose form is otherwise the only leg
+	 * that reaches the skin, see {@code PatientClinicalContextBuilder.addAdministration} — and
+	 * {@code UnmappedOrderAdministrationSiteTest.aRouteOfEntryRefusesTheSiteADoseFormNames} is what
+	 * pins it, so a reader who thinks the other reading is right has a case to move rather than a
+	 * silence to interpret.
+	 *
+	 * <p><b>Two residues, named rather than claimed away.</b> This is word matching after the hyphen
+	 * strip, so it reaches {@code sub-cutaneous} but not {@code sub cutaneous} spaced — that spelling
+	 * still matches {@code cutaneous} and narrows to the skin. And {@code "Oral inhalation solution"}
+	 * is a real dose form that names the airway in the same breath as a route of entry, so it declines
+	 * by the paragraph above. Both cost a narrowing rather than causing a false one.
+	 */
+	private static final List<String> ROUTES_OF_ENTRY = unmodifiable("transdermal", "sublingual",
+			"buccal", "subcutaneous", "intradermal", "intravenous", "intramuscular", "intraosseous",
+			"intrathecal", "epidural", "parenteral", "oral", "rectal", "nasogastric");
+
+	/**
+	 * The recorded route and dose-form words that NAME each site — matched against what the chart
+	 * records for an order ({@code PatientClinicalContext.ActiveDrugOrder.getAdministrationTerms()}),
+	 * never against the drug's name.
+	 *
+	 * <p><b>A term must name the SITE, not the form.</b> {@code cream}, {@code ointment} and
+	 * {@code lotion} were in the first draft and are deliberately absent: a cream is made for the
+	 * skin, the vagina or the anorectum alike, so reading one as "skin" asserts something the record
+	 * did not say — and reading it as all three is worse rather than more cautious, because
+	 * hydrocortisone's {@code C05AA01} then survives and a chip that said {@code H02AB} says
+	 * {@code C05AA} instead, which is a haemorrhoid preparation and no more true. A form word is
+	 * admitted only where the form serves ONE site and no other, which is why {@code inhaler} is here
+	 * and those three are not.
+	 *
+	 * <p><b>Mouth, gut and anorectal have no term, deliberately</b>, and neither do
+	 * {@code transdermal}, {@code sublingual} and {@code buccal}. {@code Oral administration} and
+	 * {@code Rectal administration} are the systemic routes in the reference dictionary AND the way an
+	 * {@code A01}/{@code A07}/{@code C05A} presentation is given, so the recorded term cannot separate
+	 * the two readings; the other three name a surface and deliver through it. All five are members of
+	 * {@link #ROUTES_OF_ENTRY}, so none of them merely fails to match here — each refuses the whole
+	 * record, which is that constant's own distinction and applies to every word in this sentence.
+	 *
+	 * <p><b>A prefixed or suffixed spelling needs its own entry.</b> Matching is
+	 * {@link #containsWord}, whose prose boundary is symmetric, so {@code nasal} does not reach
+	 * {@code intranasal} and {@code inhaled} does not reach {@code inhaler}; each such spelling is
+	 * listed in its own right rather than the boundary being loosened, because loosening it is what
+	 * would let {@code cutaneous} reach {@code subcutaneous}. Everything this list fails to recognise
+	 * narrows nothing, which is the fail-safe direction.
+	 *
+	 * <p><b>An INFLECTION of a term already here is one of those spellings.</b> {@code eyes},
+	 * {@code ears} and {@code vaginally} are the words carried by the names the 3.7.1 reference
+	 * dictionary ELECTS for its bilateral eye route (874, {@code In both eyes}), its bilateral ear
+	 * route (877, {@code In both ears}) and the only vaginal route it publishes (872,
+	 * {@code Vaginally}), and {@code containsWord} takes no trailing letters, so the singular
+	 * {@code eye} does not reach {@code In both eyes}. They are carried BESIDE
+	 * {@code PatientClinicalContextBuilder.addConceptNames} reading every name a concept publishes,
+	 * not instead of it: on that dictionary either mechanism alone reaches those three routes, and a
+	 * dictionary that publishes only one of the two spellings still narrows. Neither makes this list
+	 * complete, and it does not claim to be — the same dictionary also elects {@code OU}, {@code OD}
+	 * and {@code OS} for its three eye routes, which no vocabulary of site WORDS carries and which
+	 * reach a site here only through another name of the same concept.
+	 */
+	private static final Map<String, List<String>> SITE_TERMS;
+
+	static {
+		Map<String, List<String>> groups = new LinkedHashMap<String, List<String>>();
+		groups.put(SITE_SKIN, unmodifiable("D", "M02", "P03A"));
+		groups.put(SITE_EYE, unmodifiable("S01", "S03"));
+		groups.put(SITE_EAR, unmodifiable("S02", "S03"));
+		groups.put(SITE_NOSE, unmodifiable("R01"));
+		groups.put(SITE_THROAT, unmodifiable("R02"));
+		groups.put(SITE_AIRWAY, unmodifiable("R03A", "R03B"));
+		groups.put(SITE_VAGINA, unmodifiable("G01", "G02CC"));
+		groups.put(SITE_MOUTH, unmodifiable("A01"));
+		groups.put(SITE_GUT, unmodifiable("A07A", "A07E"));
+		groups.put(SITE_ANORECTAL, unmodifiable("C05A"));
+		ATC_GROUPS_BY_SITE = Collections.unmodifiableMap(groups);
+
+		Map<String, List<String>> terms = new LinkedHashMap<String, List<String>>();
+		terms.put(SITE_SKIN, unmodifiable("cutaneous", "skin"));
+		terms.put(SITE_EYE, unmodifiable("eye", "eyes", "ophthalmic", "ocular", "intraocular",
+				"conjunctival", "subconjunctival"));
+		terms.put(SITE_EAR, unmodifiable("ear", "ears", "otic", "aural", "auricular"));
+		terms.put(SITE_NOSE, unmodifiable("nasal", "intranasal", "nose"));
+		terms.put(SITE_THROAT, unmodifiable("throat", "oropharyngeal"));
+		terms.put(SITE_AIRWAY, unmodifiable("inhaled", "inhalation", "inhaler", "nebulised",
+				"nebulized", "nebuliser", "nebulizer"));
+		terms.put(SITE_VAGINA, unmodifiable("vaginal", "vaginally", "intravaginal"));
+		terms.put(SITE_MOUTH, Collections.<String> emptyList());
+		terms.put(SITE_GUT, Collections.<String> emptyList());
+		terms.put(SITE_ANORECTAL, Collections.<String> emptyList());
+		SITE_TERMS = Collections.unmodifiableMap(terms);
+	}
+
+	/**
+	 * @return {@code codes} narrowed to the ones that classify a presentation given at the site
+	 *         {@code recordedTerms} names — the entry point for reading a chart-recorded route or dose
+	 *         form against an ATC code list (issue #234). {@link #narrowsAnyCode} is the only other
+	 *         thing that reads them, answering whether narrowing is possible at all, and the two are
+	 *         built from the same pair of primitives so they cannot disagree about what a record can
+	 *         express. {@code DrugSafetyValidator.codesForThisSubstancesPresentations} is the single
+	 *         production caller of both.
+	 *
+	 *         <p><b>What it is for.</b> An active order the concept dictionary did not classify is
+	 *         compared on every code the reference dataset files its SUBSTANCE under, which covers
+	 *         every presentation that substance is marketed as; a dictionary-MAPPED order is compared
+	 *         on the one code the dictionary published. So an unmapped {@code Hydrocortisone cream 1%}
+	 *         was named in a systemic {@code H02AB} duplicate-therapy chip that the same order, mapped
+	 *         to {@code D07AA02}, correctly does not raise — mapping an order more correctly made the
+	 *         module quieter. This narrows the first to the second wherever the chart says where the
+	 *         drug is applied.
+	 *
+	 *         <p><b>Two ways it declines, and both return {@code codes} untouched.</b> No recorded
+	 *         term names a site this module can attribute — which is every order built before issue
+	 *         #234 and, measured on the 3.7.1 demo, all 46 of its active drug orders. Or the substance
+	 *         publishes no code at that site at all, in which case its classification is the only one
+	 *         there is and narrowing would silence the arm rather than correct it (an inhaled
+	 *         aminoglycoside filed only under {@code J01GB} is the shape). Declining is not the same
+	 *         as suppressing the co-medication: this method can only ever remove CODES, never the
+	 *         partner, so the arm keeps whatever answer it has today.
+	 *
+	 *         <p><b>{@link #isLocallyAppliedAtcCode} is asked here as well as the site groups</b>, so
+	 *         {@link #SYSTEMIC_USE_EXCEPTIONS} are honoured without a second copy of them: a
+	 *         {@code D01B} systemic antifungal is not a skin presentation however plainly it sits
+	 *         under {@code D}. That is a stricter use than {@code DrugSafetyValidator.sharedClass}
+	 *         makes of the same predicate — there it prefers among candidates, here it can drop one —
+	 *         and the difference is that this method holds independent evidence about the presentation
+	 *         the patient was actually given, which that arm has none of.
+	 */
+	static Set<String> codesForRecordedAdministration(Set<String> codes, Set<String> recordedTerms) {
+		if (codes == null || codes.isEmpty() || recordedTerms == null || recordedTerms.isEmpty()) {
+			return codes;
+		}
+		// No emptiness guard on the SITES: codesAtSites keeps nothing for an empty site set, and the
+		// tail below already returns codes for that. The two isEmpty() disjuncts above are cost
+		// short-circuits and not a second decline rule — the tail returns codes for either of them
+		// anyway. The two NULL disjuncts are a different thing and are load-bearing: recordedSites
+		// reads recordedTerms.size() and codesAtSites iterates codes, so removing either turns a null
+		// argument from a returned value into an NPE. That is the asymmetry narrowsAnyCode's javadoc
+		// states from its own side, where a null code set throws because that method has no such guard.
+		//
+		// The tail is UNREACHABLE from the one production caller today, and stays because it is this
+		// method's contract rather than that caller's convenience: since the caller admits an order
+		// only where narrowsAnyCode is true of it, the union it passes keeps at least that order's
+		// codes. A CASE discriminates it even so —
+		// ActiveOrderAdministrationTermsTest.aRouteThatNamesNoSiteIsCarriedAndSelectsNothing, whose
+		// recorded term is the standard dataset's own route "unknown" against a non-empty code set, so
+		// returning kept unguarded is the one failure that mutation produces. The method must never
+		// hand back an empty classification, and a second caller would need that whether or not it
+		// asked narrowsAnyCode first.
+		Set<String> kept = codesAtSites(codes, recordedSites(recordedTerms));
+		return kept.isEmpty() ? codes : kept;
+	}
+
+	/**
+	 * @return the sites {@code recordedTerms} names, in {@link #ATC_GROUPS_BY_SITE} order; empty when
+	 *         they name none.
+	 *
+	 *         <p>Hyphens are removed from the recorded term before matching, which is what stops
+	 *         {@code sub-cutaneous} being read as the skin: {@link #containsWord}'s left boundary
+	 *         accepts any non-alphanumeric, so a hyphen would open one where the unhyphenated
+	 *         {@code subcutaneous} correctly has none. The same removal costs {@code eye-drops} its
+	 *         match, which is the fail-safe direction and the reason it is done here rather than by
+	 *         widening the boundary rule several arms share.
+	 */
+	private static Set<String> recordedSites(Set<String> recordedTerms) {
+		// De-hyphenated once, before the site walk: the transformation depends only on the recorded
+		// term, and inside the two loops it was recomputed once per (site term x recorded term) pair.
+		// The null filter comes with it, so the hot test does not repeat that either.
+		List<String> matchable = new ArrayList<String>(recordedTerms.size());
+		for (String recorded : recordedTerms) {
+			if (recorded != null) {
+				matchable.add(recorded.replace("-", ""));
+			}
+		}
+		for (String recorded : matchable) {
+			for (String entry : ROUTES_OF_ENTRY) {
+				if (containsWord(recorded, entry)) {
+					return Collections.emptySet();
+				}
+			}
+		}
+		Set<String> sites = new LinkedHashSet<String>();
+		for (Map.Entry<String, List<String>> site : SITE_TERMS.entrySet()) {
+			for (String term : site.getValue()) {
+				for (String recorded : matchable) {
+					if (containsWord(recorded, term)) {
+						sites.add(site.getKey());
+					}
+				}
+			}
+		}
+		return sites;
+	}
+
+	/**
+	 * @return whether {@code recordedTerms} narrows {@code codes} at all — the question a caller asks
+	 *         when it must decide about SEVERAL orders of one substance together
+	 *         ({@code DrugSafetyValidator.codesForThisSubstancesPresentations}).
+	 *
+	 *         <p><b>Narrows, not "names a site", and the difference is a defect that shipped between
+	 *         two passes of this change.</b> The two answers come apart for an order this module CAN
+	 *         place at a site the substance is filed under no code for — a nasal hydrocortisone, say,
+	 *         where the KB publishes no {@code R01}. Asked the weaker question that order passes, and
+	 *         its own decline then depends on {@link #codesForRecordedAdministration}'s empty-set
+	 *         fallback, which is evaluated once over the UNION of every order's terms — so a sibling
+	 *         order that DOES narrow rescues the union from emptiness and the nasal order's codes are
+	 *         dropped with it. Measured through the real {@code validate}: that patient's systemic chip
+	 *         stood for the nasal order alone and vanished when a cutaneous cream was prescribed
+	 *         beside it, which is the direction the whole-substance decline exists to prevent.
+	 *
+	 *         <p>Built from the same two primitives the narrowing itself uses, so the decline and the
+	 *         narrowing cannot come to disagree about what this RECORD can express. That is a claim
+	 *         about the site walk and about nothing else: the two do not share
+	 *         {@link #codesForRecordedAdministration}'s guard on {@code codes}, so a null code set
+	 *         returns unchanged there and throws here. Deliberately not guarded to match — the single
+	 *         production caller passes {@code DrugReference.normalizedAtcCodes()}, which is never null,
+	 *         and an unreachable branch here would be one no case can pin, stated the way
+	 *         {@code CLAUDE.md} states it for {@code describesEndedOrder}'s unreachable null checks. A
+	 *         second caller holding a nullable code set guards at its own site or asks for the guard
+	 *         here; what it must not do is read the sentence above as covering it.
+	 */
+	static boolean narrowsAnyCode(Set<String> codes, Set<String> recordedTerms) {
+		return recordedTerms != null && !codesAtSites(codes, recordedSites(recordedTerms)).isEmpty();
+	}
+
+	/**
+	 * @return the members of {@code codes} that classify a presentation given at one of {@code sites}.
+	 *         UNGUARDED — it does not fall back to {@code codes} when nothing survives, which is what
+	 *         makes it the right thing for the partition guard to drive and the wrong thing for the
+	 *         class arm to call. {@link #codesForRecordedAdministration} is the guarded entry point.
+	 */
+	static Set<String> codesAtSites(Set<String> codes, Set<String> sites) {
+		Set<String> kept = new LinkedHashSet<String>();
+		for (String code : codes) {
+			String normalized = normalizeAtcToken(code);
+			if (normalized == null || !isLocallyAppliedAtcCode(normalized)) {
+				continue;
+			}
+			for (String site : sites) {
+				List<String> groups = ATC_GROUPS_BY_SITE.get(site);
+				if (groups != null && fallsUnderAnyGroup(normalized, groups)) {
+					kept.add(code);
+					break;
+				}
+			}
+		}
+		return kept;
+	}
+
+	/**
+	 * @return whether {@code code}'s locally-applied group is one whose published name states a
+	 *         property rather than a place, so that no site can claim it — see
+	 *         {@link #LOCALLY_APPLIED_GROUPS_NAMING_NO_SITE}. The other half of the partition, and the
+	 *         thing that tells "this group deliberately has no site" from "this group was left out".
+	 */
+	static boolean namesNoAdministrationSite(String code) {
+		String normalized = normalizeAtcToken(code);
+		return normalized != null && fallsUnderAnyGroup(normalized, LOCALLY_APPLIED_GROUPS_NAMING_NO_SITE);
+	}
+
+	/** @return the locally-applied ATC groups {@link #ATC_GROUPS_BY_SITE} and
+	 *          {@link #LOCALLY_APPLIED_GROUPS_NAMING_NO_SITE} partition — for the guard that checks
+	 *          they still do, which is the only thing that can see a member left out of BOTH halves.
+	 *          The data guard beside it cannot: it walks the shipped KB's codes, so a group that KB
+	 *          publishes nothing under escapes it, which a mutation adding {@code V07AY} to this list
+	 *          demonstrated on a green build. */
+	static List<String> locallyAppliedGroups() {
+		return LOCALLY_APPLIED_ATC_GROUPS;
+	}
+
+	/** @return the group prefixes {@code site} claims — for that same guard, which has to relate the
+	 *          two halves prefix-wise in EITHER direction: {@code S} is covered by {@code S01} /
+	 *          {@code S02} / {@code S03}, which are longer than it, while a longer member would be
+	 *          covered by a shorter site prefix the other way round. */
+	static List<String> groupsForSite(String site) {
+		List<String> groups = ATC_GROUPS_BY_SITE.get(site);
+		return groups != null ? groups : Collections.<String> emptyList();
+	}
+
+	/** @return the administration sites this module can attribute a code to, in a stable order —
+	 *          for the partition guard, which has to drive every one of them. */
+	static Set<String> administrationSites() {
+		return ATC_GROUPS_BY_SITE.keySet();
+	}
+
+	/** @return the recorded route and dose-form words that name {@code site}; empty for the three
+	 *          sites no recorded term can select — see {@link #SITE_TERMS}. */
+	static List<String> termsForSite(String site) {
+		List<String> terms = SITE_TERMS.get(site);
+		return terms != null ? terms : Collections.<String> emptyList();
+	}
+
+	/** {@code Arrays.asList} is fixed-size but its elements are still settable, and both maps above are
+	 *  handed out — {@link #termsForSite} returns one of these lists directly. Wrapped for the same
+	 *  reason {@link #LOCALLY_APPLIED_ATC_GROUPS} is, so the two constants cannot be immutable in
+	 *  different degrees. */
+	private static List<String> unmodifiable(String... values) {
+		return Collections.unmodifiableList(Arrays.asList(values));
 	}
 
 	/**

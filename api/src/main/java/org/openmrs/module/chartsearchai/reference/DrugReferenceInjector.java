@@ -1134,11 +1134,16 @@ public class DrugReferenceInjector {
 
 	/**
 	 * One deterministic finding as a chart line. The detail text is reused verbatim — it is the same
-	 * string the clinician already sees on the chip, so the prose and the chip cannot describe the
-	 * same finding differently — and the finding then states what it licenses, so the answer's opening
+	 * string the chip carries, so the prose and the chip cannot describe the same finding differently —
+	 * and the finding then states what it licenses, so the answer's opening
 	 * call rests on what the deterministic layer decided rather than on the model's reading of a
 	 * severity word inside the prose (#283). Every finding states one; see {@link #strengthClause} for
 	 * why silence is not a third answer.
+	 *
+	 * <p><b>Of the chip THIS pass raised</b> — so the sentence above is about a pass and not about a
+	 * request. Since issue #236 the two can differ for
+	 * one arm; {@code DrugSafetyValidator.SubstanceSubjects} and ADR Decision 49 state which and why, and
+	 * that is deliberately not restated here.
 	 *
 	 * <p>"Verbatim" is of the detail, not of the whole line: a detail that does not already end a
 	 * sentence gains a full stop, so the clause after it reads as its own sentence rather than running
@@ -1282,7 +1287,13 @@ public class DrugReferenceInjector {
 	 * injected as its own numbered, citable record, carrying the chip's detail verbatim and the
 	 * strength clause after it ({@code preAnswerFindings} → {@link #renderFinding}, #283), so a pair
 	 * finding is grounded by that record rather than by these notes, and the promoted-note budget is
-	 * untouched by it.
+	 * untouched by it. Verbatim WITHIN one {@code validate} pass: {@link #renderFinding} renders the chip
+	 * the PRE-ANSWER pass raised, and since issue #236 the question-pair arm's subject is folded over a
+	 * group the answer widens, so that record and the chip beside the answer can name one substance two
+	 * ways — {@code DrugSafetyValidator.SubstanceSubjects} and ADR Decision 49 are where that residue and
+	 * its measurement live. Said here as well as in the paragraph this one is paired with
+	 * ({@link DrugSafetyValidator#addQuestionPairInteractions}), because the two came apart once already
+	 * when only one of them was reworded.
 	 *
 	 * <p>That correspondence is per PARTNER, and since issue #174 site 2 this method renders one note
 	 * per partner rather than one per ROW — the same collapse

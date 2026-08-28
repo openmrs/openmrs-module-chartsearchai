@@ -847,13 +847,11 @@ public final class DrugReferenceValidity {
 			// and would otherwise now raise nothing.
 			String own = DrugReference.normalizeName(entry.getName());
 			if (own != null && !namesAnything(own)) {
-				// Reported and not repaired. The repair is what the operator loses here, so the report is
-				// what replaces it: measured on a curated file, an entry named "---" with a healthy alias
-				// list used to raise this rule REPAIRED and now raises nothing at all unless its own
-				// aliases happened to carry a names-nothing string too, which is the separate rule above.
-				// Its own NAME then reaches no name-driven arm — the entry is findable by whatever other
-				// aliases it carries and by nothing at all where it carries none, which is the marks-only
-				// case above. Worth a line either way, and the two differ enough that the line says so.
+				// What the two shapes cost differs, which is why the finding's text says both: measured
+				// through the real service, an entry named "---" whose other aliases are healthy is found
+				// by those (`findByDrugName("warfarin sodium")` returns it) and by nothing under its own
+				// name, while one whose whole alias list named nothing is left with none and is found by
+				// nothing at all.
 				unnameable++;
 				unnameableIn.add(entry.getName());
 			}

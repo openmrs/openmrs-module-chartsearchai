@@ -368,9 +368,11 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	 * fold empties the needle rather than the stored value, and reaching a caller that gates on the
 	 * first predicate and ranks with the second ({@code DrugSafetyValidator.unambiguouslyNames}).
 	 *
-	 * <p>The right answer for a display name that names nothing is no alias at all, and the operator has
-	 * already been told: the {@code blank-alias} finding fires either way. What must not stand is a
-	 * loaded entry carrying an alias this pass reported as naming nothing.
+	 * <p>The right answer for a display name that names nothing is no alias at all. Dropping the repair
+	 * drops the only line the operator got for that shape, though — {@code blank-alias} fires on the
+	 * ALIAS list, so an entry named {@code ---} with healthy aliases would otherwise go silent — so it is
+	 * REPORTED instead. What must not stand is a loaded entry carrying an alias this pass reported as
+	 * naming nothing.
 	 */
 	@Test
 	public void aNameThatNamesNothingIsNotPutBackAsAnAlias() throws IOException {
@@ -395,6 +397,25 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 
 		assertTrue(rulesOf(status).contains(DrugReferenceValidity.BLANK_ALIAS),
 				"the operator is still told the file is wrong. Rules were: " + rulesOf(status));
+		DrugReferenceValidity.Finding unnameable = finding(status,
+				DrugReferenceValidity.ENTRY_NOT_NAMED_BY_ITS_OWN_ALIASES);
+		assertEquals(DrugReferenceValidity.Remedy.REPORTED, unnameable.getRemedy(),
+				"and told the narrower thing too: this entry was left unnamed rather than repaired, which "
+						+ "is the line that replaces the repair the operator used to get");
+		// TWO entries, and the second is why the report is needed at all: its alias list is healthy, so
+		// blank-alias never fires for it and this is the ONLY line it raises. Without it the report would
+		// look redundant beside blank-alias, which fires on the alias list rather than on the name.
+		assertEquals(2, unnameable.getOccurrences(),
+				"both the marks-only name and the punctuation-only one, was: " + unnameable.getDetail());
+		DrugReference punctuation = null;
+		for (DrugReference entry : service.getAll()) {
+			if ("punctuation-name".equals(entry.getId())) {
+				punctuation = entry;
+			}
+		}
+		assertNotNull(punctuation, "precondition: the silent-shape entry must have loaded");
+		assertEquals("[warfarin sodium]", punctuation.getAliases().toString(),
+				"its authored aliases are untouched — what it does NOT get is its own unnameable name");
 		DrugReference control = DrugReferenceTestSupport.row(service.getAll(), "Gentamicin");
 		assertEquals("[gentamicin]", control.getAliases().toString(),
 				"and the control in the same file is untouched");

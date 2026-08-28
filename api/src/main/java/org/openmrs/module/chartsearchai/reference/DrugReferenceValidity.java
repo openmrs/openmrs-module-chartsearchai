@@ -803,8 +803,10 @@ public final class DrugReferenceValidity {
 	private void sanitizeAliases(List<DrugReference> entries) {
 		int blanks = 0;
 		int unnamed = 0;
+		int unnameable = 0;
 		Set<String> blankIn = new LinkedHashSet<String>();
 		Set<String> unnamedIn = new LinkedHashSet<String>();
+		Set<String> unnameableIn = new LinkedHashSet<String>();
 		for (DrugReference entry : entries) {
 			List<String> usable = new ArrayList<String>(entry.getAliases().size() + 1);
 			for (String alias : entry.getAliases()) {
@@ -834,9 +836,21 @@ public final class DrugReferenceValidity {
 			// rests a rank derivation on it: DrugReference.setAliases stores the list trimmed so that
 			// isNamed implies matchesDrugName, and an alias that folds to an empty needle is the one
 			// survivor of that trim. Leaving such an entry with no alias at all is the right answer for a
-			// display name that names nothing, and the blank-alias finding has already told the operator.
+			// display name that names nothing — and the branch below reports it, because dropping the
+			// repair dropped the only line the operator got for that shape: blank-alias fires on the
+			// ALIAS list, so an entry named "---" with healthy aliases used to raise this rule REPAIRED
+			// and would otherwise now raise nothing.
 			String own = DrugReference.normalizeName(entry.getName());
-			if (own != null && namesAnything(own) && !entry.isNamed(own)) {
+			if (own != null && !namesAnything(own)) {
+				// Reported and not repaired. The repair is what the operator loses here, so the report is
+				// what replaces it: measured on a curated file, an entry named "---" with a healthy alias
+				// list used to raise this rule REPAIRED and now raises nothing at all unless its own
+				// aliases happened to carry a names-nothing string too, which is the separate rule above.
+				// Such an entry loads unreachable by every name-driven arm, which is worth a line.
+				unnameable++;
+				unnameableIn.add(entry.getName());
+			}
+			else if (own != null && !entry.isNamed(own)) {
 				unnamed++;
 				unnamedIn.add(entry.getName());
 				usable.add(own);
@@ -855,6 +869,16 @@ public final class DrugReferenceValidity {
 					unnamed + " entr(ies) whose aliases omitted their own name were given it, so the "
 							+ "strongest claimant on a name is always among the entries that name "
 							+ "matches. Entries: " + sample(unnamedIn));
+		}
+		if (unnameable > 0) {
+			report(ENTRY_NOT_NAMED_BY_ITS_OWN_ALIASES, Remedy.REPORTED, unnameable,
+					unnameable + " entr(ies) whose display NAME names nothing (blank once folded, or "
+							+ "nothing but combining marks or punctuation) were left unnamed rather than "
+							+ "repaired: giving such an entry its own name as an alias would put back "
+							+ "exactly what the blank-alias rule drops, and would leave it answering "
+							+ "isNamed for a string nothing can match. It loads unreachable by every "
+							+ "name-driven arm; fix the name in the file. Entries: "
+							+ sample(unnameableIn));
 		}
 	}
 

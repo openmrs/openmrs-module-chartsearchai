@@ -1,20 +1,39 @@
 {
   "version": "1.0",
   "source": "hand-authored fixture for issue #296 — not shipped data",
-  "description": "A curated entry whose display NAME and only alias are a combining acute accent and nothing else. It is the one string DrugReferenceValidity's two alias rules used to disagree about: the drop rung asks namesAnything, which folds diacritics away and finds no letter or digit, so the alias goes; the repair rung asked only whether normalizeName(name) is non-blank, which a combining mark is, so it put the same string straight back as an alias. The loaded entry then answered isNamed true and matchesDrugName false for that string — the disagreement DrugReference.setAliases' trim exists to make impossible, surviving the trim because folding empties the needle rather than the stored value. The second entry is the control: same file, an ordinary name, must be untouched.",
+  "description": "A curated entry whose display NAME and only alias are a combining acute accent and nothing else. It is the one string DrugReferenceValidity's two alias rules used to disagree about: the drop rung asks namesAnything, which folds diacritics away and finds no letter or digit, so the alias goes; the repair rung asked only whether normalizeName(name) is non-blank, which a combining mark is, so it put the same string straight back as an alias. The loaded entry then answered isNamed true and matchesDrugName false for that string — the disagreement DrugReference.setAliases' trim exists to make impossible, surviving the trim because folding empties the needle rather than the stored value. The second entry is the shape that would otherwise go SILENT: its alias list is healthy, so the blank-alias rule never fires for it, and before the repair was gated the only line the operator got was that repair. The third is the control: same file, an ordinary name, must be untouched.",
   "entries": [
     {
       "id": "marks-only",
       "name": "́",
-      "aliases": ["́"],
-      "atcCodes": ["B01AA03"],
+      "aliases": [
+        "́"
+      ],
+      "atcCodes": [
+        "B01AA03"
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "punctuation-name",
+      "name": "---",
+      "aliases": [
+        "warfarin sodium"
+      ],
+      "atcCodes": [
+        "B01AA03"
+      ],
       "source": "hand-authored fixture"
     },
     {
       "id": "gentamicin-control",
       "name": "Gentamicin",
-      "aliases": ["gentamicin"],
-      "atcCodes": ["J01GB03"],
+      "aliases": [
+        "gentamicin"
+      ],
+      "atcCodes": [
+        "J01GB03"
+      ],
       "source": "hand-authored fixture"
     }
   ]

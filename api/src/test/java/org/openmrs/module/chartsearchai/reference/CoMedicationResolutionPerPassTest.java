@@ -42,13 +42,18 @@ import org.openmrs.module.chartsearchai.ModuleSourceRoot;
  * together — came to 30 ms of that 490, which is the upper bound on the arms the issue blamed.
  *
  * <p><b>What these cases count, and why that is the honest unit.</b> A timing assertion would be flaky
- * and machine-shaped. The repeat's own cost is full sweeps of the loaded dataset — what
- * {@code orderPartners}' javadoc calls "the repeated full scans" — and the NUMBER of those sweeps is a
- * deterministic integer, independent of how big the dataset is or how fast the box is. So the
- * behavioural cases run on the small DDInter excerpt and count {@code DrugReferenceService.getAll()}
- * through a subclass that increments and delegates to {@code super.getAll()}: the real service, the
- * real parser, the real {@code validate}. An instrument, not a mock — nothing of the pipeline is
- * re-expressed.
+ * and machine-shaped. The repeat's own cost is full walks of the loaded dataset — what
+ * {@code orderPartners}' javadoc calls "the repeated full scans" — and a walk begins with a call to
+ * {@code DrugReferenceService.getAll()}, which is a deterministic integer count: independent of how
+ * big the dataset is and of how fast the box is. So the behavioural cases run on the small DDInter
+ * excerpt and count that call, through a subclass that increments and delegates to
+ * {@code super.getAll()}: the real service, the real parser, the real {@code validate}. An instrument,
+ * not a mock — nothing of the pipeline is re-expressed.
+ *
+ * <p>What is counted is therefore CALLS and not walks, and the two are not the same: {@code validate}
+ * takes the list once for its own use without walking it. That inflates the absolute numbers and
+ * cannot reach the invariant below, which is a DIFFERENCE between two passes over the same question —
+ * every call a pass makes regardless of the chart appears on both sides and cancels.
  *
  * <p><b>The invariant is stated as a DIFFERENCE, so that no tally is published and none can go
  * stale.</b> The same question is validated twice, once against a chart carrying active orders and
@@ -77,7 +82,7 @@ import org.openmrs.module.chartsearchai.ModuleSourceRoot;
  */
 public class CoMedicationResolutionPerPassTest {
 
-	/** The real service over the pinned excerpt, counting full dataset sweeps. */
+	/** The real service over the pinned excerpt, counting the calls that begin a dataset walk. */
 	private static final class SweepCountingService extends DrugReferenceService {
 
 		private int sweeps;

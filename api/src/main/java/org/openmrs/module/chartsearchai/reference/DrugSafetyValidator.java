@@ -5905,7 +5905,7 @@ public class DrugSafetyValidator {
 	 * list and that {@link DrugSafetyValidator#ruleAbout} needs afterwards, per class hit, from the
 	 * arm's own loop. Memoising the list alone would leave {@code ruleAbout} sweeping the dataset per
 	 * (subject, partner, code) — measured SMALL, 0, 0, 3 and 5 sweeps at one, two, five and ten drugs
-	 * in play against 93 to 433 sweeps in total, over a chart built so that every active order shares a
+	 * in play against 93 to 433 dataset-walk CALLS in total, over a chart built so that every active order shares a
 	 * subgroup with an in-play drug, because that method returns before resolving anything when the
 	 * subject has no rule about an active order and that is the ordinary outcome — but real, and a
 	 * second copy of the defect this class removes.

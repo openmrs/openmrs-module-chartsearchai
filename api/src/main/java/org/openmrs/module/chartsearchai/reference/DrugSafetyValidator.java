@@ -2939,15 +2939,15 @@ public class DrugSafetyValidator {
 
 	/**
 	 * @return true when {@code rule}'s own match TOKEN names {@code entry} and names no OTHER substance
-	 *         in the loaded dataset — the test {@link #foldedPartnerLabel} needs before it lets the class
-	 *         arm's label displace that token.
+	 *         in the loaded dataset as strongly — the test {@link #foldedPartnerLabel} needs before it
+	 *         lets the class arm's label displace that token.
 	 *
-	 *         <p><b>Both halves, and the second one is why this method exists at all.</b> The first is
+	 *         <p><b>Two halves, and the second one is why this method exists at all.</b> The first is
 	 *         {@link DrugReference#isNamed} through {@link #namesEntry}, name identity between two
 	 *         reference strings, which is what CLAUDE.md names that accessor for. On its own it is
 	 *         NOT ENOUGH, and the reason is a property of this knowledge base rather than a hypothetical:
 	 *         the {@code ddinter} parser writes every entry's aliases from its name AND its
-	 *         {@code rxnorm_name} ({@code DdiDrugReferenceSource}), and rows exist whose
+	 *         {@code rxnorm_name} ({@link DdiDrugReferenceSource}), and rows exist whose
 	 *         {@code rxnorm_name} is ANOTHER substance's name. The shipped KB's row named
 	 *         {@code Omeprazole} carries {@code rxnorm_name: esomeprazole} — the same row CLAUDE.md and
 	 *         {@link #classRelationships} already cite for publishing only esomeprazole's
@@ -2956,37 +2956,65 @@ public class DrugSafetyValidator {
 	 *         Measured through the real {@link DdiDrugReferenceSource#parse} over the pinned excerpt:
 	 *         that row is {@code name=Omeprazole, rxnorm_name=esomeprazole}.
 	 *
-	 *         <p>So the token must be UNAMBIGUOUS: one substance, not merely this one among others. A
-	 *         token naming two substances cannot tell the fold which of them the rule is about, and the
-	 *         displacement would render one substance's rated mechanism under the other's name — the
-	 *         #161/#187/#194 failure, silently, in a clinician-facing sentence and in the citable
-	 *         {@code safety_finding} record that carries it verbatim.
+	 *         <p><b>The second half is a RANKING, not an existence test (issue #296).</b> It asks
+	 *         {@link DrugReferenceService#uniqueStrongestClaimant}, the repo's one definition of "this
+	 *         row claims the name and strictly outranks every rival", over {@code entry} plus every row
+	 *         of a DIFFERENT substance the token names. Existence — "does the token name anything else?"
+	 *         — cannot separate the two arrangements that matter, and they are opposites: the token is
+	 *         the LADDER's substance's own display name and merely the rival's {@code rxnorm_name} alias,
+	 *         where displacing is a spelling normalisation of one substance's name; or the token is the
+	 *         RIVAL's display name and merely the ladder's alias, where displacing prints one substance's
+	 *         rated mechanism under another's — the #161/#187/#194 failure, silently, in a
+	 *         clinician-facing sentence and in the citable {@code safety_finding} record that carries it
+	 *         verbatim. {@link DrugReference#nameMatchStrength} is what tells those apart, and the
+	 *         comparison is not spelled out here for the reason its own javadoc gives.
+	 *
+	 *         <p>Issue #292 shipped the existence form and ADR Decision 39 recorded its cost. A tie still
+	 *         refuses: two substances claiming the token equally cannot say which of them the rule is
+	 *         about, which is the answer the existence form gave to every contested token.
+	 *
+	 *         <p><b>{@code entry}'s OWN claim, never its substance's strongest.</b> The label about to be
+	 *         printed is this row's display, so a sibling presentation's stronger claim on the token says
+	 *         nothing about this row — and the rungs differ on which row arrives here:
+	 *         {@link #entryForAtcCode} hands over {@link DrugReference#canonicalRow}'s pick, while
+	 *         {@link #addPartnersForUnmappedOrders} hands over the row the patient's own chart claims
+	 *         most strongly, deliberately the route-qualified one where the chart named it that way. Over
+	 *         the shipped KB, {@code Atropine} claims the token {@code atropine} outright while its
+	 *         {@code Atropine (ophthalmic)} presentation and the separate {@code Hyoscyamine} substance
+	 *         each claim it only as an alias — so reading the substance's strongest row would let
+	 *         {@code Atropine}'s claim carry a displacement onto the label
+	 *         {@code Atropine (ophthalmic)}, for a rule that may be {@code Hyoscyamine}'s. Rows of
+	 *         {@code entry}'s own substance are excluded from the contest instead of contesting it, or an
+	 *         uncontested token would start refusing wherever a substance is filed as several rows.
+	 *         {@code FoldedChipOnePartnerNameTest.aRuleTokenNoSubstanceOutranksKeepsItsOwnToken} is that
+	 *         pair, and reddens if either choice is reversed.
 	 *
 	 *         <p>Not exotic, and not a shape a curated fixture can stand in for: over the shipped KB,
 	 *         25 of its 2093 distinct rule tokens are named by more than one substance
 	 *         ({@code esomeprazole}, {@code hydrocortisone}, {@code trastuzumab}, {@code gabapentin},
 	 *         {@code ketoconazole} …). A hand-written JSON fixture gives each row one self-name and so
 	 *         refuses the displacement for a reason the default dataset does not share, which is why
-	 *         {@code FoldedChipOnePartnerNameTest} pins this in DDINTER shape, through the real parser.
+	 *         {@code FoldedChipOnePartnerNameTest} pins both directions in DDINTER shape, through the
+	 *         real parser.
 	 *
 	 *         <p><b>What "substance" means here depends on the source.</b> {@link DrugReference#substanceGroupKey()}
 	 *         falls back to the ENTRY where a source publishes no substance name — the curated {@code json}
-	 *         and {@code atc} adapters — so on those this reads as "no other ROW names it", which is
-	 *         strictly stricter and refuses more. Identity is the right comparison for that fallback
+	 *         and {@code atc} adapters — so on those every other ROW is a rival, which is strictly
+	 *         stricter and refuses more. Identity is the right comparison for that fallback
 	 *         because every {@code labelEntry} comes from {@code getAll()}'s own cached objects and
 	 *         {@link DrugReference} defines no {@code equals}.
 	 *
-	 *         <p><b>The over-refusal is live on the shipped KB and is not closed here.</b> Measured through
-	 *         the real parser and the real {@code validate}: 72 above-floor rules carry an ambiguous token
-	 *         whose subject shares an ATC subgroup with an entry that token names, so a patient on
-	 *         ketoconazole asked about osilodrostat still reads
-	 *         {@code … interacts with active order ketoconazole — Major. … is in the same ATC class (H02CA)
-	 *         as active order Ketoconazole — possible duplicate therapy} — issue #292's own defect,
-	 *         refused only because {@code ketoconazole} is also an alias of the separate
-	 *         {@code Levoketoconazole} row, which the patient is not on. No clean narrowing is available:
-	 *         {@code Levoketoconazole} publishes the same four codes, so a code-scoped test refuses too.
-	 *         Whether an ambiguity the patient's own orders resolve should still refuse is a decision on
-	 *         its own evidence, not a tightening of this one.
+	 *         <p><b>What the ranking does NOT decide.</b> That the token denotes the ladder's substance
+	 *         is a fact about NAMES; the DDInter row a rule was authored on is a separate fact, and
+	 *         {@code ddinter} derives a rule's token from the partner row's {@code rxnorm_name}, so a
+	 *         rule authored on {@code Levoketoconazole} carries the token {@code ketoconazole} too. The
+	 *         reconciled chip therefore prints that rule's prose under {@code Ketoconazole} — the same
+	 *         substance the token already named, so nothing NEW is asserted, but the prose can name the
+	 *         other row. Measured over the shipped KB: subjects carrying two above-floor rules under the
+	 *         one token {@code ketoconazole} are common, and {@code Osilodrostat} is one of them. That is
+	 *         {@link #partnerLabel}'s pre-existing property — the unfolded chip prints the same token —
+	 *         and closing it means choosing between two rules, which is {@link #bestRulePerPartner}'s
+	 *         question, not this one.
 	 *
 	 *         <p>A sweep of {@code getAll()} per folded chip whose ladder resolved an entry, deliberately
 	 *         uncached: the immediately preceding {@link #ruleAbout} in the same iteration already calls
@@ -3001,12 +3029,16 @@ public class DrugSafetyValidator {
 			return false;
 		}
 		Object substance = entry.substanceGroupKey();
+		List<DrugReference> contenders = new ArrayList<DrugReference>();
+		contenders.add(entry);
 		for (DrugReference candidate : drugReferenceService.getAll()) {
 			if (namesEntry(token, candidate) && !substance.equals(candidate.substanceGroupKey())) {
-				return false;
+				contenders.add(candidate);
 			}
 		}
-		return true;
+		// entry's OWN claim, never its substance's strongest: the label about to be printed is this row's
+		// display, and a sibling presentation's stronger claim on the token says nothing about this row.
+		return DrugReferenceService.uniqueStrongestClaimant(token, entry, contenders);
 	}
 
 	/**

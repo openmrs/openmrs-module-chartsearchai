@@ -90,6 +90,17 @@ public class FoldedChipOnePartnerNameTest {
 	private static final String AMBIGUOUS_TOKEN_FIXTURE =
 			"chartsearchai-test/ddi-fold-ambiguous-token.json";
 
+	/** The ticket's own arrangement (issue #296), verbatim from the shipped KB: two substances the data
+	 *  files under ONE {@code rxnorm_name} and one {@code rxcui}, publishing the same four ATC codes, so
+	 *  the token names both — but it is one of them's own display NAME and only the other's alias. */
+	private static final String OUTRANKED_TOKEN_FIXTURE =
+			"chartsearchai-test/ddi-fold-outranked-token.json";
+
+	/** The BOUNDARY of that ranking (issue #296): the ladder's own row merely TIES the rival substance,
+	 *  while a sibling presentation of its own substance outranks both. */
+	private static final String TIED_TOKEN_FIXTURE =
+			"chartsearchai-test/ddi-fold-tied-token.json";
+
 	/** A rule filed under an ATC code with no match token at all. */
 	private static final String TOKENLESS_RULE_FIXTURE =
 			"chartsearchai-test/drug-reference-fold-tokenless-rule.json";
@@ -308,6 +319,94 @@ public class FoldedChipOnePartnerNameTest {
 		assertEquals(2, orderNamesIn(detail).size(),
 			"two partners, two names — collapsing them would print one substance's rated mechanism"
 					+ " under the other's name, was: " + detail);
+	}
+
+	/**
+	 * Issue #296: a rule whose token names two substances IS reconciled where the token names the
+	 * ladder's substance more strongly than it names the other one.
+	 *
+	 * <p>The ticket's own arrangement, verbatim from the shipped knowledge base:
+	 * {@code Ketoconazole} and {@code Levoketoconazole} are two substances the data files under one
+	 * {@code rxnorm_name} ({@code ketoconazole}) and one {@code rxcui}, publishing the same four ATC
+	 * codes. Neither an identity test nor a code-scoped one separates them — the ticket rules both out
+	 * by name. What separates them is that {@code ketoconazole} is {@code Ketoconazole}'s own display
+	 * name and only {@code Levoketoconazole}'s {@code rxnorm_name} alias, which is
+	 * {@code DrugReference.nameMatchStrength}'s top rank against its middle one.
+	 *
+	 * <p>Before the fix this detail read the ticket's observed output — {@code interacts with active
+	 * order ketoconazole} beside {@code is in the same ATC class (H02CA) as active order Ketoconazole},
+	 * one prescription under two spellings. The patient is not on {@code Levoketoconazole}, and the
+	 * gate never asks whether they are: the comparison is between reference rows only, which is what
+	 * keeps it clear of the narrowing the ticket rules out.
+	 */
+	@Test
+	public void aRuleTokenTheLaddersSubstanceOutranksIsHandedToBothSentences() throws IOException {
+		DrugSafetyValidator validator = DrugReferenceTestSupport
+				.validator(DrugReferenceTestSupport.serviceWith(
+					DrugReferenceTestSupport.ddiFixtureEntries(OUTRANKED_TOKEN_FIXTURE)));
+
+		List<SafetyWarning> warnings = validator.validate("", "Can she be given osilodrostat?",
+			DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("ketoconazole"),
+				DrugReferenceTestSupport.set("H02CA03"), null, null));
+
+		List<String> details = DrugReferenceTestSupport.classChipDetails(warnings);
+		assertEquals(1, details.size(), "one class-arm chip, was: " + warnings);
+		String detail = details.get(0);
+		assertTrue(detail.contains("interacts with active order") && detail.contains("is in the same"),
+			"precondition: the two arms must have folded, or there is nothing to reconcile, was: "
+					+ detail);
+		assertEquals(DrugReferenceTestSupport.set("Ketoconazole"), orderNamesIn(detail),
+			"one prescription, one name in both sentences — the token names Ketoconazole outright and"
+					+ " Levoketoconazole only as an alias, so it says which substance the rule is about,"
+					+ " was: " + detail);
+	}
+
+	/**
+	 * The boundary of issue #296's ranking, and the only arrangement that separates its two choices from
+	 * the ones next to them.
+	 *
+	 * <p>Verbatim from the shipped knowledge base: {@code atropine} is {@code Atropine}'s own display
+	 * name, and only an alias of BOTH its {@code Atropine (ophthalmic)} presentation and the separate
+	 * {@code Hyoscyamine} substance. The order here is one the dictionary did not map, recorded as
+	 * {@code Atropine (ophthalmic)}, so it reaches the ladder through
+	 * {@code DrugSafetyValidator.addPartnersForUnmappedOrders} and the {@code labelEntry} is that
+	 * PRESENTATION row rather than {@code canonicalRow}'s pick — which is what makes the two choices
+	 * visible at all, since the coded rung always hands over the row that claims its name most strongly.
+	 *
+	 * <p>The presentation row's own claim merely ties {@code Hyoscyamine}'s, so neither says which
+	 * substance the rule is about and the two sentences keep their own names. Homatropine carries an
+	 * above-floor rule against each of them under that one token, so the rule this chip renders really
+	 * may be Hyoscyamine's.
+	 *
+	 * <p><b>It reddens under either relaxation, and deliberately does not say which.</b> Reading the
+	 * SUBSTANCE's strongest row rather than {@code entry}'s own would let {@code Atropine}'s rank-2 claim
+	 * carry the displacement onto the label {@code Atropine (ophthalmic)}; letting a TIE through would
+	 * admit it directly. Both print one name where this asserts two. A guard, not a discriminator: it
+	 * passes before issue #296 as well, because the existence form refused every contested token.
+	 */
+	@Test
+	public void aRuleTokenNoSubstanceOutranksKeepsItsOwnToken() throws IOException {
+		Set<String> names = DrugReferenceTestSupport.set("Atropine (ophthalmic)");
+		DrugSafetyValidator validator = DrugReferenceTestSupport
+				.validator(DrugReferenceTestSupport.serviceWith(
+					DrugReferenceTestSupport.ddiFixtureEntries(TIED_TOKEN_FIXTURE)));
+
+		List<SafetyWarning> warnings = validator.validate("", "Is homatropine safe here?",
+			DrugReferenceTestSupport.ctx(60, null, names, null, null, null,
+				Arrays.asList(new PatientClinicalContext.ActiveDrugOrder("order-atropine-ophthalmic",
+					"Atropine (ophthalmic) 1% drops", names, DrugReferenceTestSupport.set()))));
+
+		List<String> details = DrugReferenceTestSupport.classChipDetails(warnings);
+		assertEquals(1, details.size(), "one class-arm chip, was: " + warnings);
+		String detail = details.get(0);
+		assertTrue(detail.contains("interacts with active order") && detail.contains("is in the same"),
+			"precondition: the two arms must have folded, or there is no displacement to refuse, was: "
+					+ detail);
+		assertEquals(DrugReferenceTestSupport.set("atropine", "Atropine (ophthalmic)"),
+			orderNamesIn(detail),
+			"the rule's mechanism must stay under the name the RULE names: this row's claim on the token"
+					+ " only TIES Hyoscyamine's, so it cannot tell the fold which substance the rule is"
+					+ " about, and its sibling's stronger claim is not this row's, was: " + detail);
 	}
 
 	/**
@@ -826,11 +925,10 @@ public class FoldedChipOnePartnerNameTest {
 	 *
 	 * <p>The REFUSAL arrangements are deliberately not swept here: a folded chip about two different
 	 * co-medications, or about a rule with no name of its own, is MEANT to carry two names, so including
-	 * them would make this assertion false for the right reason. There are FIVE of them, not the three an
-	 * earlier form of this javadoc counted — the shared code, the ambiguous token, the token-less rule,
-	 * and the two shapes on the ORDER rung where the rule's token does not name the naming order. Each
-	 * has its own case above, and the count below is what stops a missing arrangement from passing as a
-	 * clean sweep.
+	 * them would make this assertion false for the right reason. There are SIX of them — the shared code,
+	 * the ambiguous token, the tied token, the token-less rule, and the two shapes on the ORDER rung
+	 * where the rule's token does not name the naming order. Each has its own case above, and the count
+	 * below is what stops a missing arrangement from passing as a clean sweep.
 	 *
 	 * <p>The fifth SWEPT arrangement is the ORDER rung's reconciling half
 	 * ({@link #anOrderSuppliedNameTheRulesTokenNamesIsHandedToBothSentences}), which the first version of
@@ -842,6 +940,11 @@ public class FoldedChipOnePartnerNameTest {
 	 * <p>The sixth is the blank-display order of
 	 * {@link #aBlankDisplayWithNamesNeverHandsItsCodeToBothSentences}, whose label is a bare ATC code and
 	 * whose single name therefore comes from the rule's token.
+	 *
+	 * <p>The seventh is issue #296's
+	 * {@link #aRuleTokenTheLaddersSubstanceOutranksIsHandedToBothSentences}, the entry rung's other
+	 * reconciling half: a token two substances name, handed to both sentences because one of them is the
+	 * substance it names outright.
 	 *
 	 * <p><b>Adding it required a second assertion to be worth anything.</b> The one-name property alone
 	 * does not see the failure that arrangement is about: substituting the CODE for the name leaves
@@ -881,6 +984,12 @@ public class FoldedChipOnePartnerNameTest {
 				.validate("", QUESTION, renamedByItsOwnNaproxenOrder()));
 		runs.add(DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService())
 				.validate("", QUESTION, blankDisplayWithNames()));
+		runs.add(DrugReferenceTestSupport
+				.validator(DrugReferenceTestSupport.serviceWith(
+					DrugReferenceTestSupport.ddiFixtureEntries(OUTRANKED_TOKEN_FIXTURE)))
+				.validate("", "Can she be given osilodrostat?", DrugReferenceTestSupport.ctx(60, null,
+					DrugReferenceTestSupport.set("ketoconazole"),
+					DrugReferenceTestSupport.set("H02CA03"), null, null)));
 
 		int foldedSeen = 0;
 		for (List<SafetyWarning> warnings : runs) {
@@ -899,10 +1008,11 @@ public class FoldedChipOnePartnerNameTest {
 							+ detail);
 			}
 		}
-		assertEquals(6, foldedSeen,
-			"precondition: all six folded chips must have been reached, or this invariant passed by"
+		assertEquals(7, foldedSeen,
+			"precondition: all seven folded chips must have been reached, or this invariant passed by"
 					+ " vacuity — the nameless order, the DDInter formulation, both subjects of the"
-					+ " note-less same-class fixture, the order-named partner the rule's token names, and"
-					+ " the blank display whose label is a bare code");
+					+ " note-less same-class fixture, the order-named partner the rule's token names, the"
+					+ " blank display whose label is a bare code, and the token whose two substances one"
+					+ " of them outranks");
 	}
 }

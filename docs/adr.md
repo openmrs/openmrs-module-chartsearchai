@@ -54,7 +54,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 46: A drug-order record says whether the prescription is in force](#decision-46-a-drug-order-record-says-whether-the-prescription-is-in-force)
 - [Decision 47: An answer naming a drug from an ended order says so](#decision-47-an-answer-naming-a-drug-from-an-ended-order-says-so)
 - [Decision 48: A second dataset gets a second section, not a shared findings list](#decision-48-a-second-dataset-gets-a-second-section-not-a-shared-findings-list)
-- [Decision 49: A substance is named once per REQUEST, by invariance rather than by a carrier](#decision-49-a-substance-is-named-once-per-request-by-invariance-rather-than-by-a-carrier)
+- [Decision 49: The ANSWER no longer decides what a substance is called, so the two safety passes stop disagreeing](#decision-49-the-answer-no-longer-decides-what-a-substance-is-called-so-the-two-safety-passes-stop-disagreeing)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 
@@ -3130,7 +3130,7 @@ Two further alternatives were weighed and are not this.
 - **−** **`DrugReferenceLoad` and `CrossReactivityGroupsLoad` are two classes answering one shape of question**, and neither is derived from the other. They will drift if a field is added to one and not the other. Accepted rather than unified because the shapes genuinely differ (there is no `sourceFormat` for the groups file and no `inert` verdict, and `arms` is meaningless for a group, which either matches a pair's codes or does not), and a common supertype carrying only what both have would carry almost nothing.
 - **−** **A fourth dataset would need a third section**, and this decision does not generalise the pattern into one. What it does leave behind is the guard: `DrugReferenceSourceValidityChannelTest` fails the build for a `DrugReferenceSource` that inherits `lastLoadFindings()`'s default instead of declaring it, which is the specific way `sourceFormat=atc` came to have no channel — a DEFAULTED interface method, so the omission compiled, loaded, answered questions, and reported an empty list with nothing erroring. That guard does not reach the groups loader, which is not a `DrugReferenceSource`; its accessors are ordinary methods the service calls, so removing one breaks the build.
 
-## Decision 49: A substance is named once per REQUEST, by invariance rather than by a carrier
+## Decision 49: The ANSWER no longer decides what a substance is called, so the two safety passes stop disagreeing
 
 **Status: Accepted** (August 2026) — implemented, issue [#238](https://github.com/openmrs/openmrs-module-chartsearchai/issues/238) item 1. Changes which reference ROW a chip and an injected finding name a substance by, and — as a consequence the ticket did not name — which of a substance's published dose ceilings a dose chip quotes. Raises and suppresses no chip; the wire shape is unchanged.
 
@@ -3144,7 +3144,7 @@ So the subject was decided per PASS. Where the answer resolved a row of an in-pl
 
 ### Decision
 
-Name from the pass-invariant rows; rule from all of them. `validate` builds a second group map, `namingRows = resolvedSubstanceRows(questionDrugs, orderEntries)` — the rows the question resolved and the rows the patient's own active orders resolved — and `SubstanceSubjects` folds THAT, falling back to the full group for a substance no pass-invariant row reaches. Every arm still reaches its rules and its bands over `resolvedRows`, unchanged.
+Name from the rows the ANSWER cannot move; rule from all of them. `validate` builds a second group map, `namingRows = resolvedSubstanceRows(questionDrugs, orderEntries)` — the rows the question resolved and the rows the patient's own active orders resolved — and `SubstanceSubjects` folds THAT, falling back to the full group for a substance no pass-invariant row reaches. Every arm still reaches its rules and its bands over `resolvedRows`, unchanged.
 
 **Both halves of the rejection above are wrong, and each for its own reason.**
 

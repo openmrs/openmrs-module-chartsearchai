@@ -205,7 +205,7 @@ public class PerRequestSubstanceSubjectTest {
 	}
 
 	/**
-	 * The one shape the pass-invariant group cannot cover, and what the fallback does with it: a substance
+	 * The one shape the naming group cannot cover, and what the fallback does with it: a substance
 	 * in play ONLY because the answer names it — the question does not name it and the patient is not on
 	 * it. The pre-answer pass validates with an empty answer, so it never saw this substance and there is
 	 * nothing for the chips pass to disagree with; what still has to hold is issue #206's own property

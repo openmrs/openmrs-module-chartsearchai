@@ -1047,8 +1047,9 @@ public class DrugSafetyValidator {
 	 */
 	private static final class SubstanceSubjects {
 
-		/** The rows the naming decision folds — the question's and the patient's own orders' (issue
-		 *  #238). Pass-invariant, which is the whole property. */
+		/** The rows the naming decision folds — the question's and the patient's own orders' (issue #238),
+		 *  never the ANSWER's, which was the input that moved this answer between the two
+		 *  {@code validate} passes. */
 		private final Map<Object, List<DrugReference>> namingGroups;
 
 		/** Every row this pass resolved, including the ones only the ANSWER put in play — the fallback
@@ -1106,8 +1107,8 @@ public class DrugSafetyValidator {
 		}
 
 		/**
-		 * @return the rows this response NAMES {@code substance} by: the pass-invariant group, else every
-		 *         row this pass resolved for it, else {@code null} for a substance neither map groups.
+		 * @return the rows this response NAMES {@code substance} by: the naming group, else every row this
+		 *         pass resolved for it, else {@code null} for a substance neither map groups.
 		 *
 		 *         <p>The fallback is reached by exactly one shape — a substance in play only because the
 		 *         ANSWER named it, which the question did not resolve and the patient is not on — and it

@@ -138,10 +138,15 @@ public class SafetyWarning {
 	 * neither of these two facts is part of it — public here would offer an outside caller a way to
 	 * govern the injected record's strength, and the name of a partner in it, with no way to observe
 	 * either assertion from where it was made. The one caller is
-	 * {@code DrugSafetyValidator.interactionWarning}, which is itself the one place either interaction
-	 * arm builds a chip. It replaced a five-argument package-private CONSTRUCTOR that carried
-	 * {@code unratedRelationship} alone; that constructor is gone rather than left unreachable beside
-	 * this, because a second way in is a second way for the two facts to be set apart.
+	 * {@code DrugSafetyValidator.interactionWarning} — which is <b>not</b> the only place an interaction
+	 * chip is built, and saying so would be false: the class-only chip inside
+	 * {@code addInteractionWarnings} itself and {@code addQuestionPairInteractions} both build one from a
+	 * public constructor. Neither can fold, so neither has either of these facts to carry, and both
+	 * answer false/null by construction rather than by remembering to — the same argument
+	 * {@link #contraindication} makes for the allergen arm's three sentences. This factory replaced a
+	 * five-argument package-private CONSTRUCTOR that carried {@code unratedRelationship} alone; that
+	 * constructor is gone rather than left unreachable beside this, because a second way in is a second
+	 * way for the two facts to be set apart.
 	 *
 	 * @param unratedRelationship whether this warning also asserts a relationship the source rates
 	 *        nothing for — see {@link #carriesUnratedRelationship()}
@@ -359,9 +364,9 @@ public class SafetyWarning {
 	 * had to remember the check is a reader that can forget it.
 	 *
 	 * <p><b>Nothing in the suite pins that condition, and this says so rather than letting it look
-	 * defended.</b> Measured by mutation: dropping it — returning the name for any rule — leaves all
-	 * 1514 api tests green, because no fixture puts a partner's winning rule on a SIBLING row of the
-	 * substance while the rendered row carries one too. It is a fail-safe for a shape the bundled data
+	 * defended.</b> Weaken it to {@code rule != null} and run the api suite: it stays entirely green,
+	 * because no fixture puts a partner's winning rule on a SIBLING row of the substance while the
+	 * rendered row carries one too. It is a fail-safe for a shape the bundled data
 	 * does not reach ({@code ddinter} writes every rule's token and ATC from one partner row, so a
 	 * label group's rows do not differ on either field — the same premise
 	 * {@code DrugReferenceInjector.onePerPartner} records) and a hand-authored {@code json} dataset

@@ -1266,7 +1266,7 @@ public class DrugReferenceInjector {
 	 * folded chip name the partner by the class arm's ladder while the note below kept
 	 * {@code DrugSafetyValidator.partnerLabel}, so for such a partner the chip and this record called one
 	 * active order two things — the trade ADR Decision 39 recorded and deferred because this text is
-	 * PROMPT text. It is closed by {@link #reconciledPartnerName}, which takes the name off the chip that
+	 * PROMPT text. It is closed by {@link #reconciledPartnerNoteName}, which takes the name off the chip that
 	 * decided it rather than re-deriving it: the two surfaces name one SUBSTANCE, each in its own
 	 * vocabulary, since this record's prose may not carry {@code DrugReference.displayLabel()}. Where the
 	 * fold refuses, and for every unfolded chip, this note is {@code partnerLabel} again exactly as
@@ -1331,7 +1331,7 @@ public class DrugReferenceInjector {
 	 * @param orderEntries the reference entries the patient's active orders resolve to, which
 	 *        {@link #onePerPartner} keys a promoted partner on (issue #190 item 2); an empty list falls
 	 *        the grouping back to the label alone, as it was before that issue
-	 * @param findings this injection's pre-answer chips, from which {@link #reconciledPartnerName} takes
+	 * @param findings this injection's pre-answer chips, from which {@link #reconciledPartnerNoteName} takes
 	 *        the name a folded chip gave a partner (issue #297); null or empty leaves every note on
 	 *        {@code DrugSafetyValidator.partnerLabel}, which is what the {@code drugSafety} toggles being
 	 *        off produces and what every note-text case in the suite runs on
@@ -1350,7 +1350,7 @@ public class DrugReferenceInjector {
 		// dataset position, exactly as before promotion existed.
 		int floor = DrugSafetyValidator.configuredSeverityFloor();
 		for (DrugReference.Interaction i : onePerPartner(ref, context, floor, orderEntries)) {
-			String label = reconciledPartnerName(findings, context, i);
+			String label = reconciledPartnerNoteName(findings, context, i);
 			String note = ChartSearchAiUtils.firstNonBlank(i.getNote());
 			// Kept identical to the previous rendering: a labelless rule still contributes its bare
 			// note, and a null/blank pair contributes nothing (addIfPresent drops it) — the dataset
@@ -1460,7 +1460,7 @@ public class DrugReferenceInjector {
 	 *        which is the same gating {@code preAnswerFindings} already applies to the record's
 	 *        contraindication reading (issue #208 item 2)
 	 */
-	private static String reconciledPartnerName(List<SafetyWarning> findings,
+	private static String reconciledPartnerNoteName(List<SafetyWarning> findings,
 			PatientClinicalContext context, DrugReference.Interaction rule) {
 		if (findings != null && context != null && !context.getActiveDrugOrders().isEmpty()) {
 			for (SafetyWarning finding : findings) {
@@ -1890,8 +1890,10 @@ public class DrugReferenceInjector {
 	 *
 	 * <p>Private because {@code injectRecords} is the only caller. That is the whole reason: a
 	 * package-private signature would let a caller outside this class pass a null reading — measured,
-	 * {@code render(null, null, null, null)} compiles the moment the modifier is dropped, since four
-	 * nulls name no private type — and it would NPE on {@code reading.context()}.
+	 * a call passing a null for every parameter compiles the moment the modifier is dropped, since none
+	 * of the five names a private type — and it would NPE on {@code reading.context()}. Re-measure by
+	 * dropping the modifier rather than by counting the nulls here: the arity was four until issue #297
+	 * added {@code findings}, and the count went stale in that change before review caught it.
 	 *
 	 * <p>{@code substance} is what this row's own fields cannot say: the rows of its substance the pass
 	 * resolved, and which of them THIS RESPONSE names the substance by — the caller's
@@ -1904,7 +1906,7 @@ public class DrugReferenceInjector {
 	 * <p>{@code findings} is this injection's pre-answer chips, threaded through to
 	 * {@link #orderedInteractionNotes} so a promoted interaction note can name its partner the way the
 	 * folded chip about that same rule named it (issue #297). It is the caller's own list rather than a
-	 * second validation, which is the point — see {@link #reconciledPartnerName}.
+	 * second validation, which is the point — see {@link #reconciledPartnerNoteName}.
 	 */
 	private static RenderedReference render(DrugReference ref, List<DrugReference> orderEntries,
 			ContraindicationReading reading, SubstanceRendering substance,

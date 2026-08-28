@@ -1,0 +1,19 @@
+{
+  "metadata": { "source": "test fixture — issue #297: a DDInter-shaped partner row whose display name is WHITESPACE, which the parser's own isEmpty() guard admits. Both rows are M01AE, so the class arm speaks and the rule arm matches, and the fold takes its ENTRY rung — where a blank getName() would render an interaction note naming no partner at all." },
+  "mechanisms": {
+    "1": { "text": "Probe mechanism text.", "categories": [] }
+  },
+  "drugs": [
+    {
+      "id": "DDInterB1", "name": "Ibuprofen", "rxcui": "5640", "rxnorm_name": "ibuprofen",
+      "drugbank_id": "DB01050", "atc": ["M01AE01"], "ciel": []
+    },
+    {
+      "id": "DDInterB2", "name": " ", "rxcui": "7258", "rxnorm_name": "naproxen",
+      "drugbank_id": "DB00788", "atc": ["M01AE02"], "ciel": []
+    }
+  ],
+  "interactions": [
+    ["DDInterB1", "DDInterB2", "Major", "1"]
+  ]
+}

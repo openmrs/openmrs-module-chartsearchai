@@ -2789,8 +2789,11 @@ public class DrugSafetyValidator {
 			//
 			// The RECORD's name here is that same token, which is what it already printed: the ladder
 			// holds no name, so the dataset has none to offer this note (issue #297).
-			return ChartSearchAiUtils.isBlank(rule.getToken()) ? null
-					: new ReconciledPartner(partnerLabel(rule), partnerLabel(rule));
+			if (ChartSearchAiUtils.isBlank(rule.getToken())) {
+				return null;
+			}
+			String token = partnerLabel(rule);
+			return new ReconciledPartner(token, token);
 		}
 		if (partner.namingOrder != null) {
 			// The label names an ORDER, and an order is not a substance — so it goes to the rule sentence
@@ -2828,8 +2831,21 @@ public class DrugSafetyValidator {
 		// The ENTRY rung is the one place the dataset has a name of its own for this partner, so it is
 		// the one rung where the RECORD's name moves (issue #297): getName(), the vocabulary that record
 		// already uses for its own subject, against the chip's synonym-augmented displayLabel().
-		return partner.labelEntry != null && unambiguouslyNames(rule, partner.labelEntry)
-				? new ReconciledPartner(partner.label, partner.labelEntry.getName()) : null;
+		//
+		// Coalesced with the rule's own token, and that is not defensive. partnerLabel can never be blank
+		// — it trims a firstNonBlank of two fields — while getName() has no such guard on this path: the
+		// ddinter parser refuses a row whose name isEmpty() but not one that is whitespace, and
+		// setName does not trim. A blank here does not reach isBlank(rendered) in
+		// DrugReferenceInjector.orderedInteractionNotes either, because the assembled piece still carries
+		// the parens and the mechanism prose — so the note would name NO partner at all, which is
+		// strictly worse than the token it replaced and breaks that method's own rule that an
+		// operator-editable dataset must degrade rather than disappear.
+		if (partner.labelEntry == null || !unambiguouslyNames(rule, partner.labelEntry)) {
+			return null;
+		}
+		String datasetName = ChartSearchAiUtils.firstNonBlank(partner.labelEntry.getName());
+		return new ReconciledPartner(partner.label,
+			datasetName != null ? datasetName.trim() : partnerLabel(rule));
 	}
 
 	/**
@@ -5866,7 +5882,6 @@ public class DrugSafetyValidator {
 		addPartnersForUnmappedOrders(byIdentity, context, rowsByOrderName, impliedByName);
 		return new ArrayList<OrderPartner>(byIdentity.values());
 	}
-
 
 	/**
 	 * @return whether {@code order}'s display is a drug NAME — the one question both

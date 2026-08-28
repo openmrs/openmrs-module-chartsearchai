@@ -935,6 +935,48 @@ public final class DrugReferenceTestSupport {
 		return injector;
 	}
 
+	/** The three {@code WHOATC} codes the 3.7.1 demo dictionary maps an aspirin order's concept to, and
+	 *  the ones issue #292's live run carried. The curated seed carries none of them, which is what
+	 *  leaves the class arm's ladder with no name at all. */
+	static final Set<String> ASPIRIN_ORDER_CODES = set("A01AD05", "B01AC06", "N02BA01");
+
+	/** What {@code PatientClinicalContextBuilder.codeOnlyDisplay} builds for an order no name could be
+	 *  read for: the codes it carries, labelled as codes, sorted. */
+	static final String CODE_ONLY_DISPLAY = "[ATC A01AD05, B01AC06, N02BA01]";
+
+	/** A partner keyed on one substance and then renamed after a DIFFERENT order — see the fixture. */
+	static final String RENAMED_PARTNER_FIXTURE =
+			"chartsearchai-test/drug-reference-fold-order-renamed-partner.json";
+
+	/**
+	 * Issue #292's own arrangement: a NAMELESS order the class arm can only call by its codes, beside a
+	 * curated rule that names the same prescription {@code aspirin} — so the ladder finds no name at all
+	 * and {@code foldedPartnerLabel}'s first rung hands the rule's token to both chip sentences.
+	 *
+	 * <p>Here rather than in a test file because two now read it — the chip side
+	 * ({@code FoldedChipOnePartnerNameTest}) and the record side
+	 * ({@code OneNameAcrossChipAndInjectedRecordTest}) — and issue #297's whole claim is that those two
+	 * surfaces are ONE arrangement seen twice. A copy per file lets an edit to one leave both green while
+	 * they silently stop describing the same prescription.
+	 */
+	static PatientClinicalContext namelessAspirinOrder() {
+		return ctx(60, null, null, ASPIRIN_ORDER_CODES, null, null,
+			Arrays.asList(PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly("order-nameless",
+				CODE_ONLY_DISPLAY, ASPIRIN_ORDER_CODES)));
+	}
+
+	/**
+	 * One order carrying a code {@link #RENAMED_PARTNER_FIXTURE} covers ({@code M01AE02}, resolving
+	 * {@code Naproxen}) and one it cannot name ({@code A02BC05}), so the partner is keyed on that
+	 * substance and then renamed after this order — the issue #186 rung, reached by the prescription the
+	 * rule is actually about. Shared for the reason {@link #namelessAspirinOrder} is.
+	 */
+	static PatientClinicalContext renamedByItsOwnNaproxenOrder() {
+		Set<String> codes = set("M01AE02", "A02BC05");
+		return ctx(60, null, set("naproxen 500mg"), codes, null, null,
+			Arrays.asList(activeOrder("order-naproxen", "Naproxen 500mg", set("naproxen 500mg"), codes)));
+	}
+
 	/** A one-record chart to inject into; the injected reference must append as record [2]. */
 	static PatientChart oneRecordChart() {
 		return chartOf(new RecordMapping(1, ChartSearchAiConstants.RESOURCE_TYPE_OBS,

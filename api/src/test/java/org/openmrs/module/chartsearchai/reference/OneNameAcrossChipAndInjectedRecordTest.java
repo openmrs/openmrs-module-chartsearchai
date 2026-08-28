@@ -42,6 +42,10 @@ public class OneNameAcrossChipAndInjectedRecordTest {
 	/** The DDInter-shaped fixture whose rule token {@code esomeprazole} is named by TWO substances, so
 	 *  {@code unambiguouslyNames} refuses the fold — {@code FoldedChipOnePartnerNameTest} owns the
 	 *  chip-side case over the same file. */
+	/** A DDInter-shaped partner row whose display name is WHITESPACE — see the case that reads it. */
+	private static final String BLANK_PARTNER_NAME_FIXTURE =
+			"chartsearchai-test/ddi-fold-blank-partner-name.json";
+
 	private static final String AMBIGUOUS_TOKEN_FIXTURE =
 			"chartsearchai-test/ddi-fold-ambiguous-token.json";
 
@@ -100,12 +104,20 @@ public class OneNameAcrossChipAndInjectedRecordTest {
 					+ " names, was: " + record);
 		assertFalse(record.contains("aspirin (Major"),
 			"the rule's own token is the second name this ticket removes, was: " + record);
+		assertFalse(record.contains("Acetylsalicylic acid (aspirin)"),
+			"and it takes the RECORD's vocabulary: the synonym-augmented label is chip-display only and"
+					+ " must not enter this record's text, was: " + record);
 	}
 
 	/**
 	 * The change is scoped to a fold that RECONCILED. Where the class arm says nothing about the
 	 * partner there is no fold, the chip's rule sentence is {@code partnerLabel} and the note must
 	 * agree with THAT — moving it would create the divergence in the other direction.
+	 *
+	 * <p><b>What it pins is narrower than it reads</b>, said rather than left to look better defended:
+	 * it reddens only on breaking the shared {@code partnerLabel} fallback, which many existing
+	 * note-text cases already catch. Its value is the ARRANGEMENT — a real chip that did not fold, read
+	 * from the record side — not a guard nothing else holds.
 	 */
 	@Test
 	public void anUnfoldedChipsPartnerKeepsTheRulesOwnTokenInTheNote() {
@@ -128,6 +140,12 @@ public class OneNameAcrossChipAndInjectedRecordTest {
 	 * Where the fold REFUSED, the note keeps the rule's token — the chip's rule sentence does too, so
 	 * the two still agree. Over the DDInter-shaped fixture whose token names two substances, which is
 	 * the shape a hand-written json cannot stand in for.
+	 *
+	 * <p><b>Only its PRECONDITION is falsifiable</b>, and that is worth saying: a refused fold carries no
+	 * name to hand out, so the record assertion below cannot fail while the precondition holds. Break
+	 * {@code unambiguouslyNames} and the precondition reddens, together with three pre-existing
+	 * {@code FoldedChipOnePartnerNameTest} cases. The arrangement is what this case adds — the refusal
+	 * read from the record side — not a guard of its own.
 	 */
 	@Test
 	public void aRefusedFoldLeavesTheNoteOnTheRulesOwnToken() throws IOException {
@@ -148,22 +166,38 @@ public class OneNameAcrossChipAndInjectedRecordTest {
 	}
 
 	/**
-	 * The record's vocabulary, not the chip's. {@code getName()} and never
-	 * {@code DrugReference.displayLabel()} — asserted on the arrangement where this record now carries
-	 * the partner's name at all, which the existing pin (over a question naming aspirin itself) does not
-	 * reach.
+	 * A KB row whose display name is WHITESPACE still leaves the note naming its partner.
+	 *
+	 * <p>The ENTRY rung is the one place a string not produced by {@code partnerLabel} reaches this
+	 * note, and it is the one place that string can be blank: {@code partnerLabel} trims a
+	 * {@code firstNonBlank} of two fields and so never is, while {@code DdiDrugReferenceSource} refuses a
+	 * row whose name {@code isEmpty()} and admits one that is whitespace. A blank name does not reach
+	 * {@code orderedInteractionNotes}' own {@code isBlank(rendered)} guard either, because the assembled
+	 * piece still carries the parens and the mechanism prose — so before the coalesce the record read
+	 * {@code Interactions: (Major. Probe mechanism text.)}, naming no partner at all, which is strictly
+	 * worse than the token it replaced.
+	 *
+	 * <p>Operator-data only: measured through the real {@code DdiDrugReferenceSource.load}, no row of the
+	 * shipped knowledge base publishes a blank name. A hand-authored file reaches it at once, which is
+	 * the latency this fixture exists to remove.
 	 */
 	@Test
-	public void theSynonymAugmentedLabelNeverEntersTheNoteEither() {
-		PatientChart chart = inject(
-			oneOrder("Aspirin 81mg", DrugReferenceTestSupport.set("N02BA01")), QUESTION);
+	public void aPartnerRowPublishingABlankNameStillNamesItselfInTheNote() throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
+			DrugReferenceTestSupport.ddiFixtureEntries(BLANK_PARTNER_NAME_FIXTURE));
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service).injectRecords(
+			DrugReferenceTestSupport.oneRecordChart(),
+			oneOrder("Naproxen 500mg", DrugReferenceTestSupport.set("M01AE02")), QUESTION);
+
+		String finding = DrugReferenceTestSupport.safetyFindingIn(chart).getText();
+		assertTrue(finding.contains("interacts with active order") && finding.contains("is in the same"),
+			"precondition: the ENTRY rung must have folded, or the blank name never reaches the note,"
+					+ " was: " + finding);
 
 		String record = recordFor(chart, "Ibuprofen");
-		assertTrue(record.contains("Acetylsalicylic acid"),
-			"precondition: the note names the substance, was: " + record);
-		assertFalse(record.contains("Acetylsalicylic acid (aspirin)"),
-			"the synonym-augmented label is chip-display only and must not enter THIS record's text,"
-					+ " was: " + record);
+		assertTrue(record.contains("naproxen (Major"),
+			"a row publishing no usable name of its own leaves the note on the rule's token rather than"
+					+ " naming nobody, was: " + record);
 	}
 
 	/**
@@ -172,25 +206,23 @@ public class OneNameAcrossChipAndInjectedRecordTest {
 	 *
 	 * <p>Behaviour-neutral against the state before issue #297, which is why it is pinned: the fold's
 	 * answer for this rung is {@code partnerLabel} in both vocabularies, so nothing moves. What the case
-	 * guards is the direction a later change would move it in — measured by mutation, handing this rung's
-	 * note {@code OrderPartner.label} instead leaves all 1515 api tests green while putting the
-	 * {@code [ATC …]} stand-in into the record's prose, and thence into the prompt as citable text. A code
+	 * guards is the direction a later change would move it in — before this case existed, handing this
+	 * rung's note {@code OrderPartner.label} instead left the whole api suite green while putting the
+	 * {@code [ATC …]} stand-in into the record's prose, and thence into the prompt as citable text.
+	 * Re-derive that by making the substitution and running the suite, rather than from a tally here. A code
 	 * list is the ABSENCE of a name (issue #290) and ADR Decision 38 already measured that direction on
 	 * the chip.
 	 *
-	 * <p>The arrangement is {@code FoldedChipOnePartnerNameTest}'s own for that rung: the curated seed
-	 * carries none of the order's three codes, and the order itself carries no readable name.
+	 * <p>The arrangement is {@code DrugReferenceTestSupport.namelessAspirinOrder()}, shared with the
+	 * chip-side case rather than copied: the curated seed carries none of the order's three codes, and
+	 * the order itself carries no readable name.
 	 */
 	@Test
 	public void aNamelessOrdersNoteKeepsTheRulesTokenAndNeverItsCodeList() {
-		Set<String> codes = DrugReferenceTestSupport.set("A01AD05", "B01AC06", "N02BA01");
 		PatientChart chart = DrugReferenceTestSupport
 				.injectorWithSafety(DrugReferenceTestSupport.curatedService())
 				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
-					DrugReferenceTestSupport.ctx(60, null, null, codes, null, null,
-						Arrays.asList(PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly(
-							"order-nameless", "[ATC A01AD05, B01AC06, N02BA01]", codes))),
-					QUESTION);
+					DrugReferenceTestSupport.namelessAspirinOrder(), QUESTION);
 
 		String finding = DrugReferenceTestSupport.safetyFindingIn(chart).getText();
 		assertTrue(finding.contains("interacts with active order aspirin")
@@ -218,23 +250,18 @@ public class OneNameAcrossChipAndInjectedRecordTest {
 	 * display would put a strength and a formulation the knowledge base knows nothing about into a list
 	 * of that knowledge base's own partners.
 	 *
-	 * <p>The arrangement is {@code FoldedChipOnePartnerNameTest}'s own for that rung: one order carrying
-	 * a code the fixture covers ({@code M01AE02}, resolving {@code Naproxen}) and one it cannot name
-	 * ({@code A02BC05}), so the partner is keyed on that substance and renamed after this order.
+	 * <p>The arrangement is {@code DrugReferenceTestSupport.renamedByItsOwnNaproxenOrder()}, shared with
+	 * the chip-side case rather than copied: one order carrying a code the fixture covers
+	 * ({@code M01AE02}, resolving {@code Naproxen}) and one it cannot name ({@code A02BC05}), so the
+	 * partner is keyed on that substance and renamed after this order.
 	 */
 	@Test
 	public void anOrderRungFoldStillLeavesTheNoteOnTheRulesOwnToken() throws IOException {
 		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
-			DrugReferenceTestSupport.fixtureEntries(
-				"chartsearchai-test/drug-reference-fold-order-renamed-partner.json"));
-		Set<String> codes = DrugReferenceTestSupport.set("M01AE02", "A02BC05");
+			DrugReferenceTestSupport.fixtureEntries(DrugReferenceTestSupport.RENAMED_PARTNER_FIXTURE));
 		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service).injectRecords(
 			DrugReferenceTestSupport.oneRecordChart(),
-			DrugReferenceTestSupport.ctx(60, null,
-				DrugReferenceTestSupport.set("naproxen 500mg"), codes, null, null,
-				Arrays.asList(DrugReferenceTestSupport.activeOrder("order-naproxen", "Naproxen 500mg",
-					DrugReferenceTestSupport.set("naproxen 500mg"), codes))),
-			QUESTION);
+			DrugReferenceTestSupport.renamedByItsOwnNaproxenOrder(), QUESTION);
 
 		String finding = DrugReferenceTestSupport.safetyFindingIn(chart).getText();
 		assertTrue(finding.contains("interacts with active order Naproxen 500mg")

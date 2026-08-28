@@ -1531,9 +1531,11 @@ public class DrugReferenceInjector {
 	 *               the key is still {@code partnerLabel} case-folded and an unfolded partner's note is
 	 *               still that same string, while a partner a folded chip reconciled can now RENDER the
 	 *               fold's name here too. The grouping is unaffected, running before the note is worded
-	 *               and on that key. (On the other branch
-	 *               {@link #onePerPartner} keys on the ENTRY while still rendering
-	 *               {@code partnerLabel}, which is the residue the next paragraph is about.) The chip half of that
+	 *               and on that key. (On the other branch {@link #onePerPartner} keys on the ENTRY, and
+	 *               that is the branch the fold's entry rung reconciles on — so it rendered
+	 *               {@code partnerLabel} beside an entry key until issue #297, and now renders the
+	 *               reconciled name there. Which is issue #190 item 2's residue seen from the other side,
+	 *               the paragraph below it.) The chip half of that
 	 *               invariant is scoped since issue #292 (see
 	 *               {@code DrugSafetyValidator.foldedPartnerLabel}); this key is not, and does not
 	 *               follow the chip's rendered name — the KEY does not, though since issue #297 the

@@ -941,8 +941,7 @@ public class DrugSafetyValidator {
 	 * arguments, and it is a narrowed row set at one site that this class's own history says to expect
 	 * (issues #162, #174, #175 are all "this arm was handed fewer rows than that one"). For every arm
 	 * that reads this — three at #206, all five since #236 — the group is looked up rather than passed,
-	 * so a caller cannot supply a different one, and that is the property
-	 * {@code ChipSubjectOneResolutionTest} now enforces.
+	 * so a caller cannot supply a different one.
 	 *
 	 * <p><b>All five arms read it, since issue #236.</b> The two pairwise arms
 	 * ({@link #addQuestionPairInteractions}, {@link #addActiveOrderPairInteractions}) resolved their own
@@ -983,8 +982,12 @@ public class DrugSafetyValidator {
 	 * from the question first; the interaction and dose arms have had this since #175/#194.
 	 *
 	 * <p><b>And the question-pair arm since issue #236</b>, which is what that change COSTS and is
-	 * recorded here rather than sold as free. Folding this arm's own rows made it pass-stable by
-	 * construction — {@code questionDrugs} is a function of the question, which both passes share.
+	 * recorded here rather than sold as free. Folding this arm's own rows made it invariant to the
+	 * ANSWER — {@code questionDrugs} is a function of the question, which both passes share — and that
+	 * is the only sense of "pass-stable" this paragraph and the one below claim, for either arm. Not
+	 * byte-identical across the passes, which nothing here ever established: the two passes build two
+	 * {@link PatientClinicalContext}s, so the recorded names this fold ranks by could already move
+	 * between them for reasons that have nothing to do with #236.
 	 * Measured on the shipped KB through the real {@code validate}, one question
 	 * ({@code Does Daxibotulinumtoxina interact with kanamycin?}) driven with the two passes' own answer
 	 * arguments: the pre-answer pass ({@code answer} empty, the shape
@@ -3271,8 +3274,7 @@ public class DrugSafetyValidator {
 	 * question-pair finding is an INTERACTION, so it states one like every other), so a pair
 	 * finding's grounding comes from that record rather than from the promoted notes, and the
 	 * promoted-note budget is untouched. <b>Verbatim WITHIN one {@code validate} pass since issue
-	 * #236</b> — before it this arm's chip was byte-identical across the two passes, which is the
-	 * pass-stability ADR Decision 49 records losing: {@code renderFinding} copies the chip the
+	 * #236</b>, which is what ADR Decision 49 records that change costing: {@code renderFinding} copies the chip the
 	 * PRE-ANSWER pass raised, and this arm's subject is now folded over a group the answer widens, so the
 	 * record the model reads and the chip the clinician sees can name one substance two ways — see
 	 * {@link SubstanceSubjects}, which is where that residue and its measurement live. What the two

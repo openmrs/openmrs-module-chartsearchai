@@ -1140,8 +1140,8 @@ public class DrugReferenceInjector {
 	 * severity word inside the prose (#283). Every finding states one; see {@link #strengthClause} for
 	 * why silence is not a third answer.
 	 *
-	 * <p><b>Of the chip THIS pass raised, and only {@code preAnswerFindings} calls this</b> — so the
-	 * sentence above is about a pass and not about a request. Since issue #236 the two can differ for
+	 * <p><b>Of the chip THIS pass raised</b> — so the sentence above is about a pass and not about a
+	 * request. Since issue #236 the two can differ for
 	 * one arm; {@code DrugSafetyValidator.SubstanceSubjects} and ADR Decision 49 state which and why, and
 	 * that is deliberately not restated here.
 	 *

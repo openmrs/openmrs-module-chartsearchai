@@ -2841,9 +2841,10 @@ public class DrugSafetyValidator {
 		// shapes. WITH a note, the assembled piece is still non-blank, so
 		// DrugReferenceInjector.orderedInteractionNotes' isBlank(rendered) guard does not fire and the
 		// record reads "Interactions: (Major. ...)", naming no partner at all. WITHOUT one, the piece IS
-		// the blank label, that guard fires, and the partner leaves the record entirely — which is the
-		// worse of the two and is the disappearance that method's own rule forbids, an operator-editable
-		// dataset having to degrade rather than vanish. No shipped parser produces both together today
+		// the blank label, that guard fires, and the partner leaves the record entirely — the worse of the
+		// two, and what THIS coalesce exists to prevent. Not something orderedInteractionNotes guards
+		// against: its isBlank drop is deliberate for a rule with nothing to say, and here that drop is
+		// the mechanism by which the partner vanishes. No shipped parser produces both together today
 		// (ddinter synthesises a note for every row, json refuses a blank name, atc emits no
 		// interactions at all), which is why the fixture reaches only the first.
 		if (partner.labelEntry == null || !unambiguouslyNames(rule, partner.labelEntry)) {

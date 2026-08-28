@@ -50,12 +50,13 @@ public class OneNameAcrossChipAndInjectedRecordTest {
 			"chartsearchai-test/ddi-fold-ambiguous-token.json";
 
 	/**
-	 * A context of ONE active drug order, carrying the per-order structure
-	 * {@link PatientClinicalContextBuilder} always attaches for a real patient — the shape the record's
-	 * adoption of the fold's name is gated on. {@code PatientClinicalContextBuilder} attaches that list
-	 * for every patient whose orders it can read; the one shape it builds without it is its null-patient
-	 * early return, which carries no drug names or codes either and so folds nothing. The flattened sets
-	 * carry the same name and codes, exactly as that builder writes them.
+	 * A context of ONE active drug order, carrying the per-order structure the record's adoption of the
+	 * fold's name is gated on. {@link PatientClinicalContextBuilder} attaches that list for every patient
+	 * whose orders it can READ — which is the whole of the hedge, and is two shapes rather than one: its
+	 * null-patient early return, and a patient whose order read threw, since the loop that appends the
+	 * orders and the loop that fills the flattened sets share one {@code catch}. Neither carries drug
+	 * names or codes either, so neither folds anything. The flattened sets below carry the same name and
+	 * codes, exactly as that builder writes them.
 	 */
 	private static PatientClinicalContext oneOrder(String display, Set<String> codes) {
 		return DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set(display), codes,
@@ -179,8 +180,8 @@ public class OneNameAcrossChipAndInjectedRecordTest {
 	 * {@code isBlank(rendered)} guard does not fire and the record read
 	 * {@code Interactions: (Major. Probe mechanism text.)}, naming no partner at all. Without one the
 	 * piece IS the blank label, that guard fires, and the partner leaves the record entirely — the worse
-	 * of the two, reachable only by nulling the note, since no shipped parser produces a blank name and a
-	 * blank note together.
+	 * of the two, and what the coalesce exists to prevent. Reachable only by nulling the note, since no
+	 * shipped parser produces a blank name and a blank note together.
 	 *
 	 * <p>Operator-data only: measured through the real {@code DdiDrugReferenceSource.load}, no row of the
 	 * shipped knowledge base publishes a blank name. A hand-authored file reaches it at once, which is

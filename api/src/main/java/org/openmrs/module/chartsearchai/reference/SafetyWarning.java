@@ -73,6 +73,12 @@ public class SafetyWarning {
 
 	private final boolean uncorroboratedChartMatch;
 
+	/** The rule {@link #reconciledPartnerNoteName} was decided on — see that accessor. Null for every
+	 *  warning no fold reconciled, which is every warning but a folded interaction chip's. */
+	private final DrugReference.Interaction reconciledRule;
+
+	private final String reconciledNoteName;
+
 	/** A warning raised from something the reference data assigns no severity to — see
 	 *  {@link #getSeverity()} for which joins those are. */
 	public SafetyWarning(String type, String drug, String detail) {
@@ -95,7 +101,7 @@ public class SafetyWarning {
 	 */
 	SafetyWarning(String type, String drug, String detail, String severity,
 			boolean unratedRelationship) {
-		this(type, drug, detail, severity, unratedRelationship, false);
+		this(type, drug, detail, severity, unratedRelationship, false, null, null);
 	}
 
 	/**
@@ -119,17 +125,42 @@ public class SafetyWarning {
 	static SafetyWarning contraindication(String drug, String detail,
 			boolean uncorroboratedChartMatch) {
 		return new SafetyWarning(TYPE_CONTRAINDICATION, drug, detail, null, false,
-				uncorroboratedChartMatch);
+				uncorroboratedChartMatch, null, null);
 	}
 
 	private SafetyWarning(String type, String drug, String detail, String severity,
-			boolean unratedRelationship, boolean uncorroboratedChartMatch) {
+			boolean unratedRelationship, boolean uncorroboratedChartMatch,
+			DrugReference.Interaction reconciledRule, String reconciledNoteName) {
 		this.type = type;
 		this.drug = drug;
 		this.detail = detail;
 		this.severity = severity;
 		this.unratedRelationship = unratedRelationship;
 		this.uncorroboratedChartMatch = uncorroboratedChartMatch;
+		this.reconciledRule = reconciledRule;
+		this.reconciledNoteName = reconciledNoteName;
+	}
+
+	/**
+	 * An INTERACTION chip's warning, and the only shape that can carry
+	 * {@link #reconciledPartnerNoteName} (issue #297). A FACTORY rather than a seventh constructor
+	 * argument, for the reason {@link #contraindication} states of its own flag: only the drug-in-play
+	 * arm folds, so only its chips have a reconciled name at all, and a constructor offering the pair
+	 * beside {@code uncorroboratedChartMatch} would offer a caller a combination that has no meaning.
+	 *
+	 * <p>Package-private, matching the accessor: a caller may set only what it may read back. The one
+	 * caller is {@code DrugSafetyValidator.interactionWarning}, which is itself the one place either
+	 * interaction arm builds a chip.
+	 *
+	 * @param reconciledRule the rule this chip's detail was folded on, or null when nothing folded
+	 * @param reconciledNoteName see {@link #reconciledPartnerNoteName} — null when the fold refused, so
+	 *        that a refusal and an absent fold are one answer here, as they are for the chip
+	 */
+	static SafetyWarning interaction(String drug, String detail, String severity,
+			boolean unratedRelationship, DrugReference.Interaction reconciledRule,
+			String reconciledNoteName) {
+		return new SafetyWarning(TYPE_INTERACTION, drug, detail, severity, unratedRelationship, false,
+				reconciledRule, reconciledNoteName);
 	}
 
 	/** One of {@link #TYPE_OVERDOSE}, {@link #TYPE_INTERACTION}, {@link #TYPE_CONTRAINDICATION}. */
@@ -300,6 +331,55 @@ public class SafetyWarning {
 	 */
 	boolean restsOnAnUncorroboratedChartMatch() {
 		return uncorroboratedChartMatch;
+	}
+
+	/**
+	 * The one name the injected {@code drug_reference} record's interaction-note list must call this
+	 * chip's partner by, when the note in hand is about {@code rule} — else null, meaning "keep
+	 * {@link DrugSafetyValidator#partnerLabel}", which is what that list has always printed.
+	 *
+	 * <p><b>Issue #297.</b> Issue #292's fold reconciles a folded chip's two sentences, and the chip
+	 * reaches the prompt verbatim as a citable {@code safety_finding}
+	 * ({@code DrugReferenceInjector.renderFinding}) — while the {@code drug_reference} note kept
+	 * {@code partnerLabel}. So the prompt carried one prescription under two names, which is the
+	 * property {@code CLAUDE.md} states {@code partnerLabel} exists to hold. The name travels HERE, on
+	 * the chip that decided it, rather than being re-derived by the injector, because
+	 * {@code DrugReferenceInjector.injectRecords} already runs the whole fold once through
+	 * {@code preAnswerFindings}: a second walk is the two-resolutions-that-agree shape issue #151
+	 * forbids, and its failure mode is silent and one-directional.
+	 *
+	 * <p><b>It is the RECORD's vocabulary and never the chip's.</b> The chip's name can be
+	 * {@link DrugReference#displayLabel()}, which may not enter this record's prose
+	 * ({@code DrugSafetyChipLabelTest.displayLabelNeverLeaksIntoTheRenderedRecordText}), so the two
+	 * surfaces name one SUBSTANCE in each one's own vocabulary rather than sharing one string —
+	 * {@code Acetylsalicylic acid} in the note beside {@code Acetylsalicylic acid (aspirin)} in the
+	 * chip. Which name that is, per fold outcome, is stated on
+	 * {@code DrugSafetyValidator.foldedPartnerLabel}.
+	 *
+	 * <p><b>The rule is an argument and not a convenience.</b> A note may take this name only where it
+	 * is about the very rule the fold was decided on: the record collapses its notes to one per partner
+	 * over ONE row ({@code DrugReferenceInjector.onePerPartner}) while the chip chose its rule across
+	 * every row of the substance ({@code DrugSafetyValidator.bestRulePerPartner}), so the two can elect
+	 * different rules for one partner. Answering null there leaves the note exactly where it was, so
+	 * this can only REMOVE a divergence and never create one. Asked here rather than left to the
+	 * caller for the reason issue #298 gives of {@code OrderPartner.recordNameSource}: a reader that
+	 * had to remember the check is a reader that can forget it.
+	 *
+	 * <p><b>Nothing in the suite pins that condition, and this says so rather than letting it look
+	 * defended.</b> Measured by mutation: dropping it — returning the name for any rule — leaves all
+	 * 1514 api tests green, because no fixture puts a partner's winning rule on a SIBLING row of the
+	 * substance while the rendered row carries one too. It is a fail-safe for a shape the bundled data
+	 * does not reach ({@code ddinter} writes every rule's token and ATC from one partner row, so a
+	 * label group's rows do not differ on either field — the same premise
+	 * {@code DrugReferenceInjector.onePerPartner} records) and a hand-authored {@code json} dataset
+	 * reaches immediately. Whoever fixtures that shape should assert this condition, not assume it.
+	 *
+	 * <p>Not serialized — the wire shape is the three keys
+	 * {@code ChartSearchAiRestController.serializeSafetyWarnings} writes, and the chip's own detail is
+	 * unchanged by this.
+	 */
+	String reconciledPartnerNoteName(DrugReference.Interaction rule) {
+		return rule != null && rule == reconciledRule ? reconciledNoteName : null;
 	}
 
 	@Override

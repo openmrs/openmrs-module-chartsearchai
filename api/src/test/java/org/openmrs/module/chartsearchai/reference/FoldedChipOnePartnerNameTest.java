@@ -37,8 +37,10 @@ import org.junit.jupiter.api.Test;
  * ladder: a folded chip names the partner by the class arm's label where that ladder found a NAME and
  * the two arms are provably about one prescription — the rule's own token naming the ladder's ENTRY
  * unambiguously, or naming the very ORDER the label came from — and each arm keeps its own name where
- * they are not. Unfolded rule chips, class-only chips, the grouping keys and the injected
- * {@code drug_reference} note list are untouched — see {@code foldedPartnerLabel}.
+ * they are not. Unfolded rule chips, class-only chips and the grouping keys are untouched — see
+ * {@code foldedPartnerLabel}. The injected {@code drug_reference} note list was untouched too, which is
+ * the deviation issue #297 closed: it now takes that same reconciled name in its own vocabulary, and
+ * {@code OneNameAcrossChipAndInjectedRecordTest} is where that half is pinned.
  *
  * <p>Driven through the real {@link DrugSafetyValidator#validate} over datasets read by the real
  * parsers, because the defect is in what the two arms make of a real context: the bundled curated seed

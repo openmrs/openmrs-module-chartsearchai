@@ -36,8 +36,8 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
  * the record disagree with itself between the two {@code validate} passes of one request (the pre-answer
  * pass and the chips pass see different rows IN PLAY — the answer widens that set deliberately, issue
  * #175; see {@code DrugSafetyValidator.resolvedSubstanceRows}, and not
- * {@code DrugSafetyValidator.SubstanceSubjects}, whose own answer stopped varying between the two passes
- * at issue #238),
+ * {@code DrugSafetyValidator.SubstanceSubjects}, whose own answer stopped being moved by the ANSWER at
+ * issue #238),
  * and would delete the operator-authored clinical prose that {@code InjectedContraindicationClauseTest}
  * exists to preserve. So the list is unchanged and the record states the patient-specific reading of it.
  *

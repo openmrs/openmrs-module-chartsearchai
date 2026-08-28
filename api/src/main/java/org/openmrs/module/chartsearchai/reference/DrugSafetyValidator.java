@@ -939,7 +939,7 @@ public class DrugSafetyValidator {
 	 * What one RESPONSE calls each substance a {@code validate} pass resolved: {@link #interactionSubject}
 	 * over the rows the question and the patient's own orders resolved for that substance, asked once and
 	 * remembered. Not over the rows the ANSWER put in play — those decide what the arms RULE on and not
-	 * what they call it, which is issue #238 and the paragraph on invariance below.
+	 * what they call it, which is issue #238 — see the paragraph beginning "And it is per REQUEST".
 	 *
 	 * <p><b>Issue #206.</b> Five arms of this class name a subject. Three read this — the drug-in-play
 	 * interaction chip (issue #162), the dose warning (#174 site 4) and the contraindication chip — and
@@ -1037,9 +1037,8 @@ public class DrugSafetyValidator {
 	 * no count over the shipped KB is published here — the property is that the two passes stop disagreeing
 	 * over {@code answer}, which does not depend on how often they would otherwise have differed.
 	 *
-	 * <p>Memoised for the pass and not beyond it, which #238 does not change: the two passes now compute
-	 * the same ANSWER, but they compute it from their own resolution of the rows and the recorded names,
-	 * so the memo still may not outlive the pass that built it. The memo below IS a field, of an object
+	 * <p>Memoised for the pass and not beyond it, which #238 does not change: each pass resolves the rows
+	 * and the recorded names for itself, so the memo may not outlive the pass that built it. The memo below IS a field, of an object
 	 * {@code validate} constructs per pass — which is the shape issue #172's rule asks for, and the rule
 	 * binds the step
 	 * this must never take: hoisting it onto the VALIDATOR, where {@link DrugReferenceService}'s class
@@ -1112,8 +1111,8 @@ public class DrugSafetyValidator {
 		 *
 		 *         <p>The fallback is reached by exactly one shape — a substance in play only because the
 		 *         ANSWER named it, which the question did not resolve and the patient is not on — and it
-		 *         cannot make the two passes disagree, because the pre-answer pass validates with an
-		 *         empty answer and so never sees such a substance at all. It folds that substance's
+		 *         cannot make the two passes disagree over the ANSWER, because the pre-answer pass
+		 *         validates with an empty answer and so never reaches this branch at all. It folds that substance's
 		 *         answer-only rows rather than falling through to {@code subjectOf}'s positional
 		 *         {@code row}, because within ONE pass those rows still have to be named alike, which is
 		 *         issue #206's own property.
@@ -1220,7 +1219,7 @@ public class DrugSafetyValidator {
 	 * #206).</b> It is {@link SubstanceSubjects} — {@link #interactionSubject} over the substance's rows,
 	 * the same answer the interaction chip (issue #162) and the dose warning (#174 site 4) get, resolved
 	 * once for the pass and — since issue #238, the naming rows being a function of the question and the
-	 * orders alone — the same answer in the pre-answer pass and the chips pass of one request. This arm
+	 * orders alone — no longer moved between the pre-answer pass and the chips pass by the ANSWER. This arm
 	 * used to name the chip after whichever row reached it first, which
 	 * disagreed with those two for the shipped families whose route-unspecified row is not the dataset's
 	 * first, and — once issue #194 anchored them on the chart — wherever the chart names some other row,

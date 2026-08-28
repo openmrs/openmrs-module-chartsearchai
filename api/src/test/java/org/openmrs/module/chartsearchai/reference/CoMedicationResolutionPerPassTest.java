@@ -11,22 +11,16 @@ package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.Test;
-import org.openmrs.module.chartsearchai.ModuleSourceRoot;
 
 /**
  * The patient's co-medications are resolved ONCE per {@code validate} pass, however many drugs the
@@ -76,9 +70,11 @@ import org.openmrs.module.chartsearchai.ModuleSourceRoot;
  * do not exercise would reintroduce the defect invisibly: {@code ruleAbout} was the second such caller
  * and this arrangement never reaches it, since that method returns before resolving anything when the
  * subject has no rule about an active order, which is the ordinary outcome. The mechanism mirrors
- * {@code ChipSubjectOneResolutionTest}'s and {@code OrderPartnerNameSourceWritePathTest}'s; a third
- * copy rather than an extraction, because the first of those records that keeping them independent is
- * deliberate, and unifying all three is a change of its own.
+ * {@code ChipSubjectOneResolutionTest}'s and {@code OrderPartnerNameSourceWritePathTest}'s, and this
+ * being the THIRD class to need the walk is what extracted it into {@link SourceScan} — the threshold
+ * {@code ModuleSourceRoot}'s own javadoc records for itself. Those two are deliberately not migrated:
+ * they are outside this change, and the second of them keeps its file locator apart from
+ * {@code ModuleSourceRoot} for a reason its own javadoc states.
  */
 public class CoMedicationResolutionPerPassTest {
 
@@ -132,10 +128,8 @@ public class CoMedicationResolutionPerPassTest {
 	private static final String NAMES_NO_DRUG = "How old is she?";
 
 	private static SweepCountingService service() {
-		SweepCountingService service = new SweepCountingService();
-		service.setEntries(DrugReferenceTestSupport.ddinterEntries());
-		service.setCrossReactivityGroups(DrugReferenceTestSupport.bundledGroups());
-		return service;
+		return DrugReferenceTestSupport.withEntriesAndGroups(new SweepCountingService(),
+				DrugReferenceTestSupport.ddinterEntries());
 	}
 
 	private static PatientClinicalContext chartWithOrders() {
@@ -283,9 +277,14 @@ public class CoMedicationResolutionPerPassTest {
 	/** The memo's own accessor, which is the only body permitted to call {@code orderPartners}. */
 	private static final String RESOLVED = "List<OrderPartner> resolved() {";
 
+	private static final String RESOLUTION_DECLARATION = "private List<OrderPartner> orderPartners(";
+
 	/** The memoising overload, which is the only body permitted to call the uncached sweep. */
 	private static final String CACHING_LOOKUP =
 			"private DrugReference entryForAtcCode(String upperCode, Map<String, DrugReference> cache) {";
+
+	private static final String UNCACHED_LOOKUP_DECLARATION =
+			"private DrugReference entryForAtcCode(String upperCode) {";
 
 	private static final Pattern RESOLUTION_CALL = Pattern.compile("\\borderPartners\\s*\\(");
 
@@ -304,249 +303,125 @@ public class CoMedicationResolutionPerPassTest {
 	private static final Pattern MEMO_FIELD =
 			Pattern.compile("(?m)^\\t[\\w ]*\\bCoMedications\\s+\\w+\\s*[;=]");
 
-	/** A call to the UNCACHED lookup: one bare identifier between the parentheses. The declaration
-	 *  ({@code entryForAtcCode(String upperCode)}) carries two tokens and so cannot match, and neither
-	 *  does the memoising overload's two-argument call. {@code CoMedications} names its own accessor
-	 *  {@code entryForCode} precisely so that a qualified call to the memo cannot be mistaken for a
-	 *  bare call to the sweep by a text scan. */
-	private static final Pattern UNCACHED_LOOKUP_CALL =
-			Pattern.compile("\\bentryForAtcCode\\s*\\(\\s*[A-Za-z0-9_]+\\s*\\)");
+	/**
+	 * The two bodies that may build a co-medication, and so the only two that may WRITE to an
+	 * {@code OrderPartner}.
+	 */
+	private static final String[] PARTNER_BUILDERS = { RESOLUTION_DECLARATION,
+		"private void addPartnersForUnmappedOrders(" };
+
+	/**
+	 * A write to a co-medication's own state through a reference to it — the invariant that makes ONE
+	 * partner list safe to share across a pass's subjects.
+	 *
+	 * <p>It was already true before issue #256 and nothing pinned it, because until then it cost
+	 * little: each in-play substance got a freshly built list, so a stray write reached that subject
+	 * and no other. Sharing the list is what makes it load-bearing — one write now reaches every later
+	 * subject of the pass and the citable findings the injector renders from them.
+	 *
+	 * <p>Qualified writes only, and which fields that leaves is worth stating because the answer is
+	 * not "all of them". {@code namingOrder} and {@code namesADrug} are covered file-wide by
+	 * {@code OrderPartnerNameSourceWritePathTest}, which asserts they are assigned in exactly one body;
+	 * {@code codes}, {@code substances} and {@code labelEntry} are final, so only their CONTENTS can
+	 * move, which is what the collection alternatives below forbid. {@code label} is neither — a
+	 * mutable field of a nested class, assignable from anywhere in the outer class — so it gets its own
+	 * alternative here. Reads are untouched: {@code partner.codes}, {@code partner.substances} and
+	 * {@code partner.label} are read by four arms and must stay readable.
+	 *
+	 * <p>A {@code this.}-qualified write is excluded, which is what makes the {@code label}
+	 * alternative usable at all: {@code OrderPartner} sets its own label in both constructors and in
+	 * {@code nameByOrder}, and a sibling nested class has a {@code label} of its own that this needle
+	 * cannot tell apart. What is left is the shape the guard is FOR — a caller reaching into a partner
+	 * it did not build. The residue is a self-write dressed as one ({@code partner.label} where
+	 * {@code partner} happens to be {@code this}), which no code here writes.
+	 */
+	private static final Pattern PARTNER_WRITE = Pattern.compile(
+		"(?<!\\bthis)\\.(?:nameByOrder\\s*\\(|(?:codesFromDataset|label)\\s*=[^=]"
+				+ "|(?:codes|substances)\\s*\\.(?:add|addAll|remove|removeAll|retainAll|clear)\\s*\\()");
 
 	@Test
 	public void theResolutionIsBuiltOncePerPassAndNothingElseResolvesTheChart() throws IOException {
-		String source = strippedSource();
-		Region memo = bodyOf(source, uniqueOffsetOf(source, MEMO_DECLARATION), MEMO_DECLARATION);
-		Region resolved = bodyOf(source, uniqueOffsetOf(source, RESOLVED), RESOLVED);
-		Region cachingLookup = bodyOf(source, uniqueOffsetOf(source, CACHING_LOOKUP), CACHING_LOOKUP);
-		Region validate = bodyOf(source, uniqueOffsetOf(source, VALIDATE), VALIDATE);
+		SourceScan scan = new SourceScan(RELATIVE_SOURCE);
+		SourceScan.Region memo = scan.body(MEMO_DECLARATION);
+		SourceScan.Region resolved = scan.body(RESOLVED);
+		SourceScan.Region cachingLookup = scan.body(CACHING_LOOKUP);
+		SourceScan.Region validate = scan.body(VALIDATE);
 		assertTrue(memo.contains(resolved.start()),
 			"the accessor matched by \"" + RESOLVED + "\" is not inside CoMedications, so this guard has "
 					+ "delimited the wrong body and everything below it is meaningless (issue #256)");
 
-		List<Integer> constructions = offsetsOfLiteral(source, CONSTRUCTION);
+		List<Integer> constructions = scan.literalOffsets(CONSTRUCTION);
 		assertEquals(1, constructions.size(),
 			"expected " + RELATIVE_SOURCE + " to construct CoMedications exactly once — in validate, for "
 					+ "the whole pass — and found " + constructions.size() + " at lines "
-					+ linesOf(source, constructions) + ". A second construction is one chart resolved "
-					+ "twice (issue #256).");
+					+ scan.linesOf(constructions) + ". A second construction is one chart resolved twice "
+					+ "(issue #256).");
 		assertTrue(validate.contains(constructions.get(0)),
-			"CoMedications is constructed at line " + lineOf(source, constructions.get(0)) + ", outside "
-					+ "the body of validate(String, String, PatientClinicalContext, List). Built anywhere "
-					+ "per-subject it memoises nothing; held in a FIELD it is issue #172's trap, which no "
-					+ "behavioural case here can see because a field reassigned once per pass counts the "
-					+ "same sweeps.");
+			"CoMedications is constructed at line " + scan.lineOf(constructions.get(0)) + ", outside the "
+					+ "body of validate(String, String, PatientClinicalContext, List). Built anywhere "
+					+ "per-subject it memoises nothing; held in a FIELD it is issue #172's trap, which the "
+					+ "counting cases here cannot see for a field REASSIGNED once per pass — that sweeps "
+					+ "exactly as often as a local does.");
+		assertEquals(CONSTRUCTION_STATEMENT, scan.statementAt(constructions.get(0)),
+			"the construction of CoMedications at line " + scan.lineOf(constructions.get(0)) + " is no "
+					+ "longer the local declaration this guard reads, so it can no longer tell a pass "
+					+ "local from an assignment to something outliving the pass (issues #172, #256). If "
+					+ "the statement changed shape for a good reason, move this needle with it.");
+		List<Integer> fields = scan.matches(MEMO_FIELD);
+		assertTrue(fields.isEmpty(), "DrugSafetyValidator declares CoMedications as a member at line "
+				+ (fields.isEmpty() ? 0 : scan.lineOf(fields.get(0))) + ": \""
+				+ (fields.isEmpty() ? "" : scan.statementAt(fields.get(0))) + "\". This bean is a Spring "
+				+ "singleton, so a memo held on it is one unsynchronized structure shared by every "
+				+ "concurrent request, and the partner list is keyed on nothing at all — a field answers "
+				+ "for whoever asked first (issue #172).");
 
-		assertTrue(CONSTRUCTION_STATEMENT.equals(statementAt(source, constructions.get(0))),
-			"the construction of CoMedications at line " + lineOf(source, constructions.get(0)) + " reads "
-					+ "\"" + statementAt(source, constructions.get(0)) + "\" rather than \""
-					+ CONSTRUCTION_STATEMENT + "\", so this guard can no longer tell a pass LOCAL from an "
-					+ "assignment to something outliving the pass (issue #172, issue #256). If the "
-					+ "statement changed shape for a good reason, move this needle with it.");
-		Matcher field = MEMO_FIELD.matcher(source);
-		if (field.find()) {
-			fail("DrugSafetyValidator declares CoMedications as a member at line "
-					+ lineOf(source, field.start()) + ": \"" + field.group().trim() + "\". This bean is a "
-					+ "Spring singleton, so a memo held on it is one unsynchronized structure shared by "
-					+ "every concurrent request, and both of its memos are keyed on one patient's chart — "
-					+ "a field answers for whoever asked first (issue #172). It must be a local of the "
-					+ "pass, which is the one shape neither counting case above can tell apart: a field "
-					+ "reassigned once per pass sweeps exactly as often as a local does.");
-		}
-
-		List<Integer> resolutionCalls = callsOutsideDeclarations(source, RESOLUTION_CALL,
-				"private List<OrderPartner> orderPartners(");
+		List<Integer> resolutionCalls =
+				scan.callsOutsideDeclaration(RESOLUTION_CALL, RESOLUTION_DECLARATION);
 		assertEquals(1, resolutionCalls.size(),
 			"expected exactly one call to orderPartners in " + RELATIVE_SOURCE + " — the pass's own, "
-					+ "inside CoMedications.resolved() — and found " + resolutionCalls.size()
-					+ " at lines " + linesOf(source, resolutionCalls) + " (issue #256).");
+					+ "inside CoMedications.resolved() — and found " + resolutionCalls.size() + " at lines "
+					+ scan.linesOf(resolutionCalls) + " (issue #256).");
 		assertTrue(resolved.contains(resolutionCalls.get(0)),
-			"orderPartners is called at line " + lineOf(source, resolutionCalls.get(0)) + ", outside "
+			"orderPartners is called at line " + scan.lineOf(resolutionCalls.get(0)) + ", outside "
 					+ "CoMedications.resolved(). That resolution is a function of the pass's context "
-					+ "alone; calling it from an arm resolves the whole active-order list again, once "
-					+ "per in-play substance, which is issue #256. Read CoMedications instead.");
+					+ "alone; calling it from an arm resolves the whole active-order list again, once per "
+					+ "in-play substance, which is issue #256. Read CoMedications instead.");
 
-		List<Integer> uncachedCalls = callsOutsideDeclarations(source, UNCACHED_LOOKUP_CALL,
-				"private DrugReference entryForAtcCode(String upperCode) {");
+		List<Integer> uncachedCalls =
+				scan.singleArgumentCallsTo("entryForAtcCode", UNCACHED_LOOKUP_DECLARATION);
 		assertEquals(1, uncachedCalls.size(),
 			"expected exactly one call to the uncached entryForAtcCode(String) in " + RELATIVE_SOURCE
 					+ " — the one inside its memoising overload — and found " + uncachedCalls.size()
-					+ " at lines " + linesOf(source, uncachedCalls) + " (issue #256).");
+					+ " at lines " + scan.linesOf(uncachedCalls) + " (issue #256).");
 		assertTrue(cachingLookup.contains(uncachedCalls.get(0)),
-			"the uncached entryForAtcCode(String) is called at line " + lineOf(source, uncachedCalls.get(0))
-					+ ", outside its memoising overload. It is a full sweep of the dataset per code; "
-					+ "ruleAbout called it that way and swept once per (subject, partner, code) as a "
-					+ "result. Go through CoMedications, which holds the cache for the pass (issue #256).");
+			"the uncached entryForAtcCode(String) is called at line " + scan.lineOf(uncachedCalls.get(0))
+					+ ", outside its memoising overload. It is a full sweep of the dataset per code, and "
+					+ "ruleAbout called it that way until issue #256 — one sweep per (subject, partner, "
+					+ "code). Go through CoMedications, which holds the cache for the pass.");
 	}
 
-	/** @return the offsets of every match of {@code call} that is not the declaration located by
-	 *          {@code declaration}, which is asserted to be present and unique first — so a renamed
-	 *          method fails this guard loudly rather than leaving it forbidding nothing. */
-	private static List<Integer> callsOutsideDeclarations(String source, Pattern call,
-			String declaration) {
-		int declared = uniqueOffsetOf(source, declaration);
-		Matcher matcher = call.matcher(source);
-		List<Integer> found = new ArrayList<Integer>();
-		while (matcher.find()) {
-			if (matcher.start() < declared || matcher.start() > declared + declaration.length()) {
-				found.add(matcher.start());
-			}
+	@Test
+	public void onlyTheTwoBuildersWriteToACoMedication() throws IOException {
+		SourceScan scan = new SourceScan(RELATIVE_SOURCE);
+		List<SourceScan.Region> builders = new ArrayList<SourceScan.Region>();
+		for (String builder : PARTNER_BUILDERS) {
+			builders.add(scan.body(builder));
 		}
-		return found;
-	}
-
-	private static List<Integer> offsetsOfLiteral(String source, String needle) {
-		List<Integer> found = new ArrayList<Integer>();
-		int at = source.indexOf(needle);
-		while (at >= 0) {
-			found.add(at);
-			at = source.indexOf(needle, at + 1);
-		}
-		return found;
-	}
-
-	/** @return the ONE offset of {@code needle}. Absent and ambiguous are both hard failures rather
-	 *          than a best guess: a needle that finds nothing leaves the guard forbidding nothing, and
-	 *          one that finds two cannot say which body it delimited. */
-	private static int uniqueOffsetOf(String source, String needle) {
-		int at = source.indexOf(needle);
-		assertTrue(at >= 0, "\"" + needle + "\" was not found in " + RELATIVE_SOURCE + ", so this guard "
-				+ "has nothing to compare against and everything below it would be vacuous. Update the "
-				+ "needle along with the code it names (issue #256).");
-		assertTrue(source.indexOf(needle, at + 1) < 0, "\"" + needle + "\" matched more than once, so "
-				+ "this guard cannot say which body it delimited. Narrow it (issue #256).");
-		return at;
-	}
-
-	/** The brace-delimited body FOLLOWING {@code from}. Comments and string literals are blanked
-	 *  first, which is what makes counting braces sound. */
-	private static Region bodyOf(String source, int from, String what) {
-		int open = source.indexOf('{', from);
-		assertTrue(open >= 0, "no opening brace after \"" + what + "\"");
-		int depth = 0;
-		for (int i = open; i < source.length(); i++) {
-			char c = source.charAt(i);
-			if (c == '{') {
-				depth++;
+		List<Integer> writes = scan.matches(PARTNER_WRITE);
+		assertTrue(!writes.isEmpty(), "this guard found NO write to an OrderPartner in " + RELATIVE_SOURCE
+				+ ", so it is forbidding nothing — the needle has gone stale against the code it reads "
+				+ "(issue #256)");
+		for (int at : writes) {
+			boolean permitted = false;
+			for (SourceScan.Region builder : builders) {
+				permitted = permitted || builder.contains(at);
 			}
-			else if (c == '}') {
-				depth--;
-				if (depth == 0) {
-					return new Region(open, i);
-				}
-			}
+			assertTrue(permitted, "line " + scan.lineOf(at) + " writes to a co-medication outside the two "
+					+ "bodies that BUILD one: " + scan.statementAt(at) + ". Since issue #256 one partner "
+					+ "list is shared by every subject of a validate pass, so a write here no longer "
+					+ "reaches one subject's copy — it reaches every later subject and the citable "
+					+ "findings the injector renders from them. Nothing behavioural in the suite can see "
+					+ "that, which is why it is asserted here.");
 		}
-		throw new AssertionError("braces never balanced while reading " + what + "; the scan cannot say "
-				+ "where anything lives, so it must fail rather than guess");
-	}
-
-	private static String statementAt(String source, int at) {
-		int from = source.lastIndexOf('\n', at) + 1;
-		int to = source.indexOf('\n', at);
-		return source.substring(from, to < 0 ? source.length() : to).trim();
-	}
-
-	private static List<Integer> linesOf(String source, List<Integer> offsets) {
-		List<Integer> lines = new ArrayList<Integer>();
-		for (int at : offsets) {
-			lines.add(lineOf(source, at));
-		}
-		return lines;
-	}
-
-	private static int lineOf(String source, int at) {
-		int line = 1;
-		for (int i = 0; i < at; i++) {
-			if (source.charAt(i) == '\n') {
-				line++;
-			}
-		}
-		return line;
-	}
-
-	private static final class Region {
-
-		private final int start;
-
-		private final int end;
-
-		Region(int start, int end) {
-			this.start = start;
-			this.end = end;
-		}
-
-		int start() {
-			return start;
-		}
-
-		boolean contains(int at) {
-			return at >= start && at <= end;
-		}
-	}
-
-	/** {@code DrugSafetyValidator.java} with every comment and string literal blanked to spaces, so
-	 *  offsets and line numbers still line up with the file on disk — blanked and not deleted because
-	 *  the failure messages report line numbers, and because a call written inside a javadoc is prose
-	 *  and not a call. */
-	private static String strippedSource() throws IOException {
-		Path file = ModuleSourceRoot.apiRoot().resolve(RELATIVE_SOURCE);
-		assertTrue(Files.exists(file), "no " + RELATIVE_SOURCE + " under " + ModuleSourceRoot.apiRoot()
-				+ "; a guard that reads nothing satisfies every \"is not called here\" assertion by "
-				+ "containing nothing");
-		char[] text = new String(Files.readAllBytes(file), StandardCharsets.UTF_8).toCharArray();
-		assertTrue(text.length > 10000,
-			"only " + text.length + " chars were read from " + file + "; a truncated read forbids nothing");
-		int i = 0;
-		while (i < text.length) {
-			char c = text[i];
-			if (c == '/' && i + 1 < text.length && text[i + 1] == '/') {
-				while (i < text.length && text[i] != '\n') {
-					text[i++] = ' ';
-				}
-			}
-			else if (c == '/' && i + 1 < text.length && text[i + 1] == '*') {
-				text[i++] = ' ';
-				text[i++] = ' ';
-				while (i < text.length && !(text[i] == '*' && i + 1 < text.length && text[i + 1] == '/')) {
-					if (text[i] != '\n') {
-						text[i] = ' ';
-					}
-					i++;
-				}
-				if (i < text.length) {
-					text[i++] = ' ';
-				}
-				if (i < text.length) {
-					text[i++] = ' ';
-				}
-			}
-			else if (c == '"') {
-				text[i++] = ' ';
-				while (i < text.length && text[i] != '"') {
-					if (text[i] == '\\' && i + 1 < text.length) {
-						text[i++] = ' ';
-					}
-					text[i++] = ' ';
-				}
-				if (i < text.length) {
-					text[i++] = ' ';
-				}
-			}
-			else if (c == '\'') {
-				text[i++] = ' ';
-				while (i < text.length && text[i] != '\'') {
-					if (text[i] == '\\' && i + 1 < text.length) {
-						text[i++] = ' ';
-					}
-					text[i++] = ' ';
-				}
-				if (i < text.length) {
-					text[i++] = ' ';
-				}
-			}
-			else {
-				i++;
-			}
-		}
-		return new String(text);
 	}
 }

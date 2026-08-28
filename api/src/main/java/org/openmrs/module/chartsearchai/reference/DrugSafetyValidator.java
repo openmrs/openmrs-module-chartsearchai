@@ -2087,8 +2087,8 @@ public class DrugSafetyValidator {
 		Map<SubjectRule, FoldedClassSentence> folded =
 				new LinkedHashMap<SubjectRule, FoldedClassSentence>();
 		List<String> classOnly = new ArrayList<String>();
-		for (Map.Entry<OrderPartner, ClassRelationship> hit : classRelationships(ref, context,
-				coMedications).entrySet()) {
+		for (Map.Entry<OrderPartner, ClassRelationship> hit : classRelationships(ref, coMedications)
+				.entrySet()) {
 			SubjectRule rule = ruleAbout(hit.getKey().codes, rules, coMedications);
 			if (rule == null) {
 				// No rule to reconcile with, so the ladder's own name is the only one there is.
@@ -5362,11 +5362,8 @@ public class DrugSafetyValidator {
 	 *         previous promise here and is no longer one that can be kept.
 	 */
 	private Map<OrderPartner, ClassRelationship> classRelationships(DrugReference ref,
-			PatientClinicalContext context, CoMedications coMedications) {
+			CoMedications coMedications) {
 		Map<OrderPartner, ClassRelationship> out = new LinkedHashMap<OrderPartner, ClassRelationship>();
-		if (context == null) {
-			return out;
-		}
 		Set<String> refClasses = ref.atcSubgroups();
 		List<CrossReactivityGroup> refGroups = CrossReactivityGroup.groupsOf(ref,
 				drugReferenceService.getCrossReactivityGroups());
@@ -5911,10 +5908,14 @@ public class DrugSafetyValidator {
 	 * second copy of the defect this class removes.
 	 *
 	 * <p><b>A per-call LOCAL and never a field</b> — issue #172's rule, for the reasons
-	 * {@link DrugReferenceService}'s class javadoc gives. Both reasons bite: this bean is a Spring
-	 * singleton, so a field would be one unsynchronized structure shared by every concurrent request,
-	 * and both memos are keyed on this patient's own chart, so a field would answer for whoever asked
-	 * first. {@code CoMedicationResolutionPerPassTest} pins the sweep invariant and the chips it must
+	 * {@link DrugReferenceService}'s class javadoc gives — and which reason applies is asked per memo
+	 * rather than reciting both, because they do not both bind. The SINGLETON reason binds each: a
+	 * field on this bean would be one unsynchronized structure shared by every concurrent request. The
+	 * second binds only {@link #resolved()}, which has no key at all — it is this patient's chart, so a
+	 * field would answer for whoever asked first. {@link #entryForCode(String)}'s cache is bounded by
+	 * the ATC code space and its values are a function of the loaded dataset rather than of any chart,
+	 * so it takes the singleton reason alone.
+	 * {@code CoMedicationResolutionPerPassTest} pins the sweep invariant and the chips it must
 	 * not move behaviourally, and pins the single construction site structurally — the second because a
 	 * field reassigned once per pass sweeps exactly as often as a local does, which is the limit
 	 * CLAUDE.md records for the analogous {@code recordedAllergens} memo.
@@ -5943,10 +5944,23 @@ public class DrugSafetyValidator {
 			this.context = context;
 		}
 
-		/** The pass's co-medications, resolved on first use. */
+		/**
+		 * The pass's co-medications, resolved on first use — empty where the module could read no
+		 * chart at all.
+		 *
+		 * <p>The null-context answer lives HERE rather than at the caller, and that is the point of it:
+		 * before, {@link DrugSafetyValidator#classRelationships} took the context beside the memo and
+		 * used it for nothing but that test, so two parameters carried one fact and a caller could
+		 * supply them disagreeing — null-checking one chart while resolving another. Unreachable today
+		 * ({@link DrugSafetyValidator#addInteractionWarnings} returns first), which is why this is a
+		 * hazard removed rather than a defect fixed. The empty list is immutable and its one consumer
+		 * only iterates.
+		 */
 		List<OrderPartner> resolved() {
 			if (partners == null) {
-				partners = orderPartners(context, entryByCode);
+				partners = context == null
+						? Collections.<OrderPartner> emptyList()
+						: orderPartners(context, entryByCode);
 			}
 			return partners;
 		}
@@ -5958,8 +5972,11 @@ public class DrugSafetyValidator {
 		 * <p>Named apart from {@link DrugSafetyValidator#entryForAtcCode(String)} deliberately: that
 		 * one is the uncached full sweep, and the source guard in
 		 * {@code CoMedicationResolutionPerPassTest} reads the two names apart to say that nothing but
-		 * the memoising overload calls the sweep. Sharing the name would make a qualified call to this
-		 * memo indistinguishable, in a text scan, from a bare call to that sweep.
+		 * the memoising overload calls the sweep. Sharing the name would not make the two
+		 * indistinguishable — a needle that refuses a preceding dot separates them — but it would force
+		 * the needle to refuse one, and it would then also miss a {@code this.}-qualified call to the
+		 * sweep from inside the outer class. Two names let the guard stay dot-BLIND, which is the
+		 * property that costs it nothing.
 		 */
 		DrugReference entryForCode(String upperCode) {
 			return entryForAtcCode(upperCode, entryByCode);
@@ -6068,16 +6085,15 @@ public class DrugSafetyValidator {
 	 *
 	 * <p>Issue #228 gave that resolution a second caller, and it is the one that raises the bound:
 	 * {@link #addPartnersForUnmappedOrders} asks it once per DICTIONARY-UNMAPPED order rather than once
-	 * per unnameable code, through the same per-call memo, so the work is one dataset sweep per NAME of
-	 * each such order, per call — and this method is called once per in-play substance, while
-	 * {@code validate} itself runs twice per query (pre-answer through
-	 * {@link DrugReferenceInjector#preAnswerFindings}, post-answer through {@code LlmInferenceService}).
-	 * That is a repeat the pre-change code did not make at all for an order carrying no codes, and on
-	 * the 3.7.1 standalone it is 27 of 43 orders' worth of names for every substance a question puts in
-	 * play. What that per-order memo cannot save is a name REPEATED across orders, which is a separate
-	 * cache and is threaded as one. Since issue #256 this method runs ONCE per pass, so "per call" and
-	 * "per pass" have become the same thing for the three memos below and the repeat that paragraph
-	 * describes is now one resolution per pass rather than one per in-play substance.
+	 * per unnameable code, through the same memo, so the work is one dataset sweep per NAME of each
+	 * such order — on the 3.7.1 standalone, 27 of 43 orders' worth of names. That is work the
+	 * pre-change code did not do at all for an order carrying no codes. It is paid once per
+	 * {@code validate} PASS since issue #256, and was once per in-play SUBSTANCE until then; the pass
+	 * itself still runs twice per query (pre-answer through
+	 * {@link DrugReferenceInjector#preAnswerFindings}, post-answer through {@code LlmInferenceService}),
+	 * so a query pays it twice. What that per-order memo cannot save is a name REPEATED across orders,
+	 * which is a separate cache and is threaded as one. And because this method now runs once per pass,
+	 * "per call" and "per pass" are the same scope for the three memos below.
 	 */
 	private List<OrderPartner> orderPartners(PatientClinicalContext context,
 			Map<String, DrugReference> entryByCode) {
@@ -6650,10 +6666,13 @@ public class DrugSafetyValidator {
 	 *  not cover this code") and is cached as one, so an uncovered code does not rescan the dataset on
 	 *  every visit — hence {@code containsKey} rather than a null check.
 	 *
-	 *  <p>This is the ONLY caller of the uncached sweep, and
-	 *  {@code CoMedicationResolutionPerPassTest} fails the build if a second one appears: that sweep is
-	 *  a full walk of {@code getAll()} per code, and {@code ruleAbout} calling it directly cost one
-	 *  walk per (subject, partner, code). */
+	 *  <p>This is the only caller of the uncached sweep, and
+	 *  {@code CoMedicationResolutionPerPassTest} reddens on a second one it can SEE — a single-argument
+	 *  call anywhere outside this body, its parentheses matched rather than its argument's shape
+	 *  guessed at. That sweep is a full walk of {@code getAll()} per code, and {@code ruleAbout} calling
+	 *  it directly cost one walk per (subject, partner, code). What the guard reads is source text, so
+	 *  it can be evaded; that test names the shapes it does not see rather than claiming there are
+	 *  none. */
 	private DrugReference entryForAtcCode(String upperCode, Map<String, DrugReference> cache) {
 		if (cache.containsKey(upperCode)) {
 			return cache.get(upperCode);

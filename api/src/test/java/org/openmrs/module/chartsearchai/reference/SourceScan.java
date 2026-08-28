@@ -116,6 +116,17 @@ final class SourceScan {
 		return found;
 	}
 
+	/** @return every match of {@code pattern}, whitespace-normalised — for a guard that asserts WHAT it
+	 *          found rather than only how many, which a wrapped declaration makes different questions. */
+	List<String> matchTexts(Pattern pattern) {
+		List<String> found = new ArrayList<String>();
+		Matcher matcher = pattern.matcher(source);
+		while (matcher.find()) {
+			found.add(matcher.group().trim().replaceAll("\\s+", " "));
+		}
+		return found;
+	}
+
 	/**
 	 * @return every match of {@code call} that is not the one occurrence of {@code declaration}, which
 	 *         is asserted present and unique first — so renaming the method reddens the guard reading

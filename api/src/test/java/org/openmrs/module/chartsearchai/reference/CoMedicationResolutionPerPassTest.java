@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -305,26 +306,36 @@ public class CoMedicationResolutionPerPassTest {
 	 * all 1556 tests green. Naming a type is what let that through; naming the class's own field budget
 	 * does not.
 	 *
-	 * <p>Anchored to a single leading tab, which is this file's indentation for a member of the outer
-	 * class, and it admits a {@code static final} constant, of which the class has many. A METHOD
-	 * declaration cannot match it without any exclusion for one, because the run before the declarator
-	 * may not cross a {@code (} and a method's name is followed by one — which is worth stating,
-	 * because an earlier version DID exclude every line holding a {@code (} and a reviewer walked
-	 * through the hole that left: {@code private List<OrderPartner> sneaky = new ArrayList<…>();} has a
-	 * paren in its INITIALISER, and with the memo's state moved onto it the whole suite stayed green.
+	 * <p><b>What it matches, stated positively</b>, because stating what it excludes is how three
+	 * successive versions of it came to be wrong: a member of the outer class (one leading tab), any
+	 * number of leading annotations with or without arguments, then a run up to a declarator ending in
+	 * {@code ;} or {@code =}. That run may not cross a {@code (}, which is what keeps a METHOD out
+	 * without needing an exclusion for one — a method's name is followed by a paren — and the whole
+	 * line is exempted where it says {@code static final}, of which the class has many.
 	 *
-	 * <p>The residue that is left is a declaration split across lines. The construction-statement check
-	 * beside this one does NOT cover it — that check pins the text of the one {@code new
-	 * CoMedications(context)} statement and can see nothing inside the memo's own bodies — so this
-	 * needle is the whole of the field net, and a shape that evades it is a new needle here rather than
-	 * a looser one.
+	 * <p><b>It has been defeated three times in review, each fix opening the next</b>, so treat no list
+	 * of evasions as closed. A version keyed on the memo's TYPE was beaten by moving the state to an
+	 * outer {@code List<OrderPartner>}; the field-budget version by giving that field a parenthesised
+	 * INITIALISER, which met an exclusion meant for methods; and that fix by prefixing the declaration
+	 * with {@code @SuppressWarnings("…")}, whose own paren the match-start could not cross. All three
+	 * were green across the whole suite. Two things follow. This needle is the WHOLE of the field net —
+	 * the construction-statement check beside it pins the text of the one {@code new
+	 * CoMedications(context)} statement and can see nothing inside the memo's own bodies. And a shape
+	 * that evades it is a new needle here, not a looser one.
+	 *
+	 * <p>A declaration split across lines is NOT a residue, though an earlier version of this comment
+	 * said it was: the {@code \s+} before the declarator spans a newline, so the wrapped form matches
+	 * as one field. That is why the assertion beside this reads the matched TEXT normalised rather than
+	 * the line the match starts on.
 	 */
 	private static final Pattern MUTABLE_FIELD = Pattern.compile(
 		"(?m)^\\t(?!.*\\bstatic\\s+final\\b)(?!.*\\bclass\\b)(?!.*\\benum\\b)(?!.*\\binterface\\b)"
-				+ "[A-Za-z_@][^\\n;=(]*\\s+\\w+\\s*[;=]");
+				+ "(?:@\\w+(?:\\([^)\\n]*\\))?\\s*)*[A-Za-z_][^\\n;=(]*\\s+\\w+\\s*[;=]");
 
-	/** The one such field the class is allowed: what Spring injects. */
-	private static final String INJECTED_SERVICE = "private DrugReferenceService drugReferenceService;";
+	/** The one such field the class is allowed: what Spring injects, with the annotation that injects
+	 *  it, whitespace-normalised as {@link SourceScan#matchTexts} reports it. */
+	private static final String INJECTED_SERVICE =
+			"@Autowired private DrugReferenceService drugReferenceService;";
 
 	/**
 	 * The two bodies that may build a co-medication, and so the only two that may WRITE to an
@@ -390,17 +401,14 @@ public class CoMedicationResolutionPerPassTest {
 					+ "longer the local declaration this guard reads, so it can no longer tell a pass "
 					+ "local from an assignment to something outliving the pass (issues #172, #256). If "
 					+ "the statement changed shape for a good reason, move this needle with it.");
-		List<Integer> fields = scan.matches(MUTABLE_FIELD);
-		assertEquals(1, fields.size(), "expected DrugSafetyValidator to declare exactly one mutable "
-				+ "field — " + INJECTED_SERVICE + " — and found " + fields.size() + " at lines "
-				+ scan.linesOf(fields) + ". This bean is a Spring singleton, so state held on it is one "
-				+ "unsynchronized structure shared by every concurrent request, and the pass's own memos "
-				+ "are keyed on one patient's chart: a field answers for whoever asked first (issue "
-				+ "#172). A pass memo belongs in a local.");
-		assertEquals(INJECTED_SERVICE, scan.statementAt(fields.get(0)),
-			"the one mutable field of DrugSafetyValidator is now \"" + scan.statementAt(fields.get(0))
-					+ "\" rather than the injected service, so this guard is counting something else and "
-					+ "forbids nothing (issue #172).");
+		assertEquals(Collections.singletonList(INJECTED_SERVICE), scan.matchTexts(MUTABLE_FIELD),
+			"DrugSafetyValidator must declare exactly one mutable field, the injected service, and it "
+					+ "declares these (lines " + scan.linesOf(scan.matches(MUTABLE_FIELD)) + "). This bean "
+					+ "is a Spring singleton, so state held on it is one unsynchronized structure shared "
+					+ "by every concurrent request, and the pass's own memos are keyed on one patient's "
+					+ "chart: a field answers for whoever asked first (issue #172). A pass memo belongs "
+					+ "in a local. Asserting WHAT was found and not only how many is deliberate — a "
+					+ "needle counting one thing it cannot name forbids nothing.");
 
 		List<Integer> resolutionCalls =
 				scan.callsOutsideDeclaration(RESOLUTION_CALL, RESOLUTION_DECLARATION);

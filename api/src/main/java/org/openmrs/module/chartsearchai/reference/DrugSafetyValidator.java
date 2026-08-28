@@ -6019,10 +6019,14 @@ public class DrugSafetyValidator {
 	 *         names no site. Failing the other way would let a topical cream silence the tablet beside
 	 *         it.
 	 *
-	 *         <p>Scoped to the orders THIS leg governs — dictionary-unmapped, by the same disjointness
-	 *         test the caller applies. An order the code walk reached is not here: it produced a partner
-	 *         of its own, and {@link #alreadyACoMedication} then keeps this leg away from that substance
-	 *         entirely, so its presentation is already the dictionary's business.
+	 *         <p>Scoped to the orders THIS leg governs — dictionary-unmapped, through the same
+	 *         {@link #governedByTheNameLeg} the caller applies. <b>Nothing pins that conjunct and
+	 *         nothing can today</b>: an order the code walk reached produced a partner of its own, and
+	 *         {@link #alreadyACoMedication} then keeps this leg away from that substance entirely, so
+	 *         the conjunct cannot change an answer. It is defence in depth against a future rung that
+	 *         reaches this leg for a mapped order — stated the way {@code CLAUDE.md} states it for
+	 *         {@code describesEndedOrder}'s unreachable null checks, so a later reader neither deletes
+	 *         it expecting a test to object nor keeps it believing one would.
 	 *
 	 *         <p><b>What the re-walk costs, measured rather than argued.</b> The WALK is quadratic in
 	 *         the orders this leg governs — a {@link Collections#disjoint} and a map lookup per pair —

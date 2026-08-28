@@ -347,7 +347,9 @@ public class UnmappedOrderAdministrationSiteTest {
 		// too, or an arm silenced altogether would satisfy the equality.
 		//
 		// The patient IS on systemic hydrocortisone in both runs; the cream must not speak for the
-		// tablet.
+		// tablet. Note what this case does NOT pin: its tablet records "Oral administration", which
+		// ROUTES_OF_ENTRY refuses before the whole-substance decline is reached, so the decline itself
+		// is pinned by aPresentationTheModuleCannotPlaceDeclinesForTheWholeSubstance instead.
 		List<String> creamFirst = DrugReferenceTestSupport.details(chips(DEXAMETHASONE_QUESTION,
 				twoPresentations(true)));
 		List<String> tabletFirst = DrugReferenceTestSupport.details(chips(DEXAMETHASONE_QUESTION,
@@ -357,6 +359,36 @@ public class UnmappedOrderAdministrationSiteTest {
 				"a systemic presentation the chart records must still be named");
 		assertEquals(tabletFirst, creamFirst,
 				"and which order OrderService returned first must not decide it");
+	}
+
+	@Test
+	public void aPresentationTheModuleCannotPlaceDeclinesForTheWholeSubstance() throws IOException {
+		// The case above passes for a reason that is NOT this guard: its tablet records "Oral
+		// administration", which ROUTES_OF_ENTRY refuses inside recordedSites before the decline is ever
+		// reached. What pins the decline is a second presentation whose terms name no site AND are not a
+		// route of entry — a bare dose form, or nothing at all, which is the shape 14 of the 3.7.1
+		// demo's 46 active orders are in.
+		//
+		// Without the decline the cream speaks for the tablet and the systemic chip disappears for a
+		// patient who is on systemic hydrocortisone. Both shapes, because "records a form that names no
+		// site" and "records nothing" reach it by different roads.
+		for (Set<String> tabletTerms : Arrays.asList(DrugReferenceTestSupport.set("Tablet"),
+				Collections.<String> emptySet())) {
+			Set<String> creamNames = DrugReferenceTestSupport.set(CREAM);
+			Set<String> tabletNames = DrugReferenceTestSupport.set("Hydrocortisone 20mg tablet");
+			PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null,
+					DrugReferenceTestSupport.set(CREAM, "Hydrocortisone 20mg tablet"), null, null, null,
+					Arrays.asList(
+							DrugReferenceTestSupport.activeOrder("order-234-cream", CREAM, creamNames,
+									null, DrugReferenceTestSupport.set(CUTANEOUS)),
+							DrugReferenceTestSupport.activeOrder("order-234-tablet",
+									"Hydrocortisone 20mg tablet", tabletNames, null, tabletTerms)));
+
+			assertEquals(Collections.singletonList(SYSTEMIC_CHIP),
+					DrugReferenceTestSupport.details(chips(DEXAMETHASONE_QUESTION, context)),
+					"a presentation the module cannot place must not be narrowed away by one it can,"
+							+ " recorded as: " + tabletTerms);
+		}
 	}
 
 	@Test

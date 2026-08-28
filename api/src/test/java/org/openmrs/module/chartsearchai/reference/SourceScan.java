@@ -61,8 +61,9 @@ final class SourceScan {
 		this.source = blanked(text);
 	}
 
-	/** @return the ONE offset of {@code needle}; absent and ambiguous are both hard failures. */
-	int uniqueOffset(String needle) {
+	/** @return the ONE offset of {@code needle}; absent and ambiguous are both hard failures. Private
+	 *          because a caller wanting a body should ask {@link #body}, which fails the same way. */
+	private int uniqueOffset(String needle) {
 		int at = source.indexOf(needle);
 		assertTrue(at >= 0, "\"" + needle + "\" was not found in " + relativePath + ", so the guard "
 				+ "reading it has nothing to compare against and everything below it would be vacuous. "
@@ -112,17 +113,6 @@ final class SourceScan {
 		Matcher matcher = pattern.matcher(source);
 		while (matcher.find()) {
 			found.add(matcher.start());
-		}
-		return found;
-	}
-
-	/** @return every match of {@code pattern}, whitespace-normalised — for a guard that asserts WHAT it
-	 *          found rather than only how many, which a wrapped declaration makes different questions. */
-	List<String> matchTexts(Pattern pattern) {
-		List<String> found = new ArrayList<String>();
-		Matcher matcher = pattern.matcher(source);
-		while (matcher.find()) {
-			found.add(matcher.group().trim().replaceAll("\\s+", " "));
 		}
 		return found;
 	}

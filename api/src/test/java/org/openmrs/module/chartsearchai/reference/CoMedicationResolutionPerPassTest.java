@@ -13,6 +13,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -67,9 +69,9 @@ import org.junit.jupiter.api.Test;
  * cannot see. A memo held in a FIELD and reassigned once per pass passes them flat, which is exactly
  * the limit CLAUDE.md records for the analogous {@code recordedAllergens} memo — so the single
  * construction site is asserted structurally instead, together with the class's whole FIELD BUDGET:
- * one mutable field, the injected service. That second half is stated over every field and not over
- * the memo's type, because a reviewer defeated the type-shaped version by moving the memo's state to
- * an outer field of a different type while leaving its construction and its call sites untouched. And a NEW per-subject caller of
+ * one mutable field, the injected service. That second half is asked of the compiled CLASS rather
+ * than of the source, because four reviewers in turn defeated the regex that asked it of the text —
+ * see {@link #theBeanHoldsNoStateButTheInjectedService}. And a NEW per-subject caller of
  * {@code orderPartners}, or of the uncached {@code entryForAtcCode(String)}, in an arm these fixtures
  * do not exercise would reintroduce the defect invisibly: {@code ruleAbout} was the second such caller
  * and this arrangement never reaches it, since that method returns before resolving anything when the
@@ -292,50 +294,8 @@ public class CoMedicationResolutionPerPassTest {
 
 	private static final Pattern RESOLUTION_CALL = Pattern.compile("\\borderPartners\\s*\\(");
 
-	/**
-	 * The ONE mutable field {@code DrugSafetyValidator} may declare: the injected service. Anything
-	 * else at class level — of any type, not only the memo's — is issue #172's trap, and it is the one
-	 * shape neither counting case can see, because a memo reassigned once per pass sweeps exactly as
-	 * often as a local does.
-	 *
-	 * <p><b>Stated over every field rather than over {@code CoMedications}-typed ones</b>, which is a
-	 * widening the first version of this guard needed: a reviewer defeated that version by leaving the
-	 * memo's construction and its two call sites untouched and moving only its STATE to an outer
-	 * {@code List<OrderPartner>} field that {@code resolved()} read and wrote — the same unsynchronized
-	 * structure shared by every concurrent request, under a type the needle was not looking for, with
-	 * all 1556 tests green. Naming a type is what let that through; naming the class's own field budget
-	 * does not.
-	 *
-	 * <p><b>What it matches, stated positively</b>, because stating what it excludes is how three
-	 * successive versions of it came to be wrong: a member of the outer class (one leading tab), any
-	 * number of leading annotations with or without arguments, then a run up to a declarator ending in
-	 * {@code ;} or {@code =}. That run may not cross a {@code (}, which is what keeps a METHOD out
-	 * without needing an exclusion for one — a method's name is followed by a paren — and the whole
-	 * line is exempted where it says {@code static final}, of which the class has many.
-	 *
-	 * <p><b>It has been defeated three times in review, each fix opening the next</b>, so treat no list
-	 * of evasions as closed. A version keyed on the memo's TYPE was beaten by moving the state to an
-	 * outer {@code List<OrderPartner>}; the field-budget version by giving that field a parenthesised
-	 * INITIALISER, which met an exclusion meant for methods; and that fix by prefixing the declaration
-	 * with {@code @SuppressWarnings("…")}, whose own paren the match-start could not cross. All three
-	 * were green across the whole suite. Two things follow. This needle is the WHOLE of the field net —
-	 * the construction-statement check beside it pins the text of the one {@code new
-	 * CoMedications(context)} statement and can see nothing inside the memo's own bodies. And a shape
-	 * that evades it is a new needle here, not a looser one.
-	 *
-	 * <p>A declaration split across lines is NOT a residue, though an earlier version of this comment
-	 * said it was: the {@code \s+} before the declarator spans a newline, so the wrapped form matches
-	 * as one field. That is why the assertion beside this reads the matched TEXT normalised rather than
-	 * the line the match starts on.
-	 */
-	private static final Pattern MUTABLE_FIELD = Pattern.compile(
-		"(?m)^\\t(?!.*\\bstatic\\s+final\\b)(?!.*\\bclass\\b)(?!.*\\benum\\b)(?!.*\\binterface\\b)"
-				+ "(?:@\\w+(?:\\([^)\\n]*\\))?\\s*)*[A-Za-z_][^\\n;=(]*\\s+\\w+\\s*[;=]");
-
-	/** The one such field the class is allowed: what Spring injects, with the annotation that injects
-	 *  it, whitespace-normalised as {@link SourceScan#matchTexts} reports it. */
-	private static final String INJECTED_SERVICE =
-			"@Autowired private DrugReferenceService drugReferenceService;";
+	/** The one mutable field the bean may declare: what Spring injects. */
+	private static final String INJECTED_SERVICE = "drugReferenceService";
 
 	/**
 	 * The two bodies that may build a co-medication, and so the only two that may WRITE to an
@@ -401,14 +361,7 @@ public class CoMedicationResolutionPerPassTest {
 					+ "longer the local declaration this guard reads, so it can no longer tell a pass "
 					+ "local from an assignment to something outliving the pass (issues #172, #256). If "
 					+ "the statement changed shape for a good reason, move this needle with it.");
-		assertEquals(Collections.singletonList(INJECTED_SERVICE), scan.matchTexts(MUTABLE_FIELD),
-			"DrugSafetyValidator must declare exactly one mutable field, the injected service, and it "
-					+ "declares these (lines " + scan.linesOf(scan.matches(MUTABLE_FIELD)) + "). This bean "
-					+ "is a Spring singleton, so state held on it is one unsynchronized structure shared "
-					+ "by every concurrent request, and the pass's own memos are keyed on one patient's "
-					+ "chart: a field answers for whoever asked first (issue #172). A pass memo belongs "
-					+ "in a local. Asserting WHAT was found and not only how many is deliberate — a "
-					+ "needle counting one thing it cannot name forbids nothing.");
+
 
 		List<Integer> resolutionCalls =
 				scan.callsOutsideDeclaration(RESOLUTION_CALL, RESOLUTION_DECLARATION);
@@ -433,6 +386,47 @@ public class CoMedicationResolutionPerPassTest {
 					+ ", outside its memoising overload. It is a full sweep of the dataset per code, and "
 					+ "ruleAbout called it that way until issue #256 — one sweep per (subject, partner, "
 					+ "code). Go through CoMedications, which holds the cache for the pass.");
+	}
+
+	/**
+	 * {@code DrugSafetyValidator} holds ONE piece of mutable state, and it is the service Spring
+	 * injects — issue #172's rule stated as the bean's whole field budget, since a pass memo kept on a
+	 * singleton is one unsynchronized structure shared by every concurrent request and, having no key,
+	 * answers for whoever asked first.
+	 *
+	 * <p><b>Asked of the compiled CLASS and not of the source text, which is the point of it.</b> This
+	 * began as a regex over {@code DrugSafetyValidator.java} and four successive reviewers defeated it
+	 * in turn, each fix opening the next and every one of them green across the whole suite: a memo
+	 * typed as something other than {@code CoMedications}; then the same field given a parenthesised
+	 * INITIALISER, which met an exclusion written for method declarations; then a declaration prefixed
+	 * with {@code @SuppressWarnings("…")}, whose own paren the match-start could not cross. Each of
+	 * those is a way of WRITING a field, and a reader of text can always be written around.
+	 * {@code getDeclaredFields} sees the field however it is spelled, so the arms race ends here rather
+	 * than continuing one needle at a time.
+	 *
+	 * <p>What it still cannot see is state held somewhere ELSE — a static holder class, a
+	 * {@code ThreadLocal} — and that is left uncovered on evidence rather than by oversight: both
+	 * shapes were tried and both fail the suite catastrophically, because Surefire runs one JVM and the
+	 * leak reaches unrelated test classes.
+	 */
+	@Test
+	public void theBeanHoldsNoStateButTheInjectedService() {
+		List<String> mutable = new ArrayList<String>();
+		for (Field field : DrugSafetyValidator.class.getDeclaredFields()) {
+			if (field.isSynthetic()) {
+				continue;
+			}
+			int modifiers = field.getModifiers();
+			if (!Modifier.isStatic(modifiers) || !Modifier.isFinal(modifiers)) {
+				mutable.add(field.getName());
+			}
+		}
+		assertEquals(Collections.singletonList(INJECTED_SERVICE), mutable,
+			"DrugSafetyValidator must hold exactly one piece of mutable state — the injected "
+					+ INJECTED_SERVICE + " — and holds " + mutable + ". This bean is a Spring singleton, "
+					+ "so anything else there is one unsynchronized structure shared by every concurrent "
+					+ "request, and a pass memo has no key, so it answers for whoever asked first (issue "
+					+ "#172). Hold it in a local of the pass, as CoMedications is.");
 	}
 
 	@Test

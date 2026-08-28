@@ -709,7 +709,19 @@ public final class DrugReferenceTestSupport {
 	 * stops testing what it says it tests.
 	 */
 	static DrugReferenceService ddinterServiceWithGroups() {
-		DrugReferenceService service = ddinterService();
+		return serviceWithGroups(ddinterEntries());
+	}
+
+	/**
+	 * A service over {@code entries} carrying the real curated cross-reactivity groups — the ONE body
+	 * behind {@link #ddinterServiceWithGroups}, {@link #ddiFixtureService} and any case that needs the
+	 * shipped knowledge base with groups. The two steps have to stay together for the reason those
+	 * javadocs give — {@link #serviceWith} pins the groups EMPTY through its {@code setEntries} seam,
+	 * so a service built without the second call silently cannot raise a curated-group chip — and the
+	 * argument is easier to keep true in one method than in three.
+	 */
+	static DrugReferenceService serviceWithGroups(List<DrugReference> entries) {
+		DrugReferenceService service = serviceWith(entries);
 		service.setCrossReactivityGroups(bundledGroups());
 		return service;
 	}
@@ -780,9 +792,7 @@ public final class DrugReferenceTestSupport {
 	 * fixture service built without the second call silently cannot raise a curated-group chip.
 	 */
 	static DrugReferenceService ddiFixtureService(String classpathResource) throws IOException {
-		DrugReferenceService service = serviceWith(ddiFixtureEntries(classpathResource));
-		service.setCrossReactivityGroups(bundledGroups());
-		return service;
+		return serviceWithGroups(ddiFixtureEntries(classpathResource));
 	}
 
 	/**

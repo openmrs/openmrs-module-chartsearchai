@@ -5963,7 +5963,7 @@ public class DrugSafetyValidator {
 			Map<PatientClinicalContext.ActiveDrugOrder, Map<Object, List<DrugReference>>> cache,
 			Map<Object, Set<Object>> impliedByName) {
 		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
-			if (!Collections.disjoint(order.getAtcCodes(), context.getActiveDrugAtcCodes())) {
+			if (!governedByTheNameLeg(order, context)) {
 				continue;
 			}
 			for (Map.Entry<Object, List<DrugReference>> named
@@ -6026,13 +6026,32 @@ public class DrugSafetyValidator {
 	 *         resolution of any name — {@link #substanceRowsNamedBy} is memoised for the whole
 	 *         {@link #orderPartners} call and every order here was resolved by the caller anyway.
 	 */
+	/**
+	 * @return whether {@code order} is one the NAME leg governs — an order none of whose ATC codes
+	 *         reached {@link #orderPartners}' code walk, so it produced no partner there.
+	 *
+	 *         <p>One expression rather than two, because two methods ask it and a drift between them is
+	 *         silent and in the narrowing direction: the helper would then read the administration of an
+	 *         order the loop never governed, letting a mapped prescription's route decide a substance
+	 *         this leg owns. Extracted for the reason {@code CLAUDE.md} gives for
+	 *         {@code PatientClinicalContext.matchableToken} — "not matchable" and "did not match" were
+	 *         split out of one predicate precisely so they cannot answer differently.
+	 *
+	 *         <p>Computed from what the code walk ACTUALLY walked, not from a proxy for it, which is
+	 *         {@link #addPartnersForUnmappedOrders}' own rule.
+	 */
+	private static boolean governedByTheNameLeg(PatientClinicalContext.ActiveDrugOrder order,
+			PatientClinicalContext context) {
+		return Collections.disjoint(order.getAtcCodes(), context.getActiveDrugAtcCodes());
+	}
+
 	private Set<String> codesForThisSubstancesPresentations(Object substance,
 			PatientClinicalContext context, Set<String> codes,
 			Map<PatientClinicalContext.ActiveDrugOrder, Map<Object, List<DrugReference>>> cache,
 			Map<Object, Set<Object>> impliedByName) {
 		Set<String> recorded = new LinkedHashSet<String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
-			if (!Collections.disjoint(order.getAtcCodes(), context.getActiveDrugAtcCodes())
+			if (!governedByTheNameLeg(order, context)
 					|| !substanceRowsNamedBy(order, cache, impliedByName).containsKey(substance)) {
 				continue;
 			}

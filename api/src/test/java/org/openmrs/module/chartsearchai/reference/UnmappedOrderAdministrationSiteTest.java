@@ -69,8 +69,8 @@ public class UnmappedOrderAdministrationSiteTest {
 	/** The three sites {@code SITE_TERMS} deliberately gives no recorded term — mouth, gut and
 	 *  anorectal, because {@code Oral} and {@code Rectal administration} serve locally-acting and
 	 *  systemic preparations alike. */
-	private static final Set<String> TERMLESS_SITES = DrugReferenceTestSupport.set("mouth", "gut",
-			"anorectal");
+	private static final Set<String> TERMLESS_SITES = DrugReferenceTestSupport.set(
+			DrugReference.SITE_MOUTH, DrugReference.SITE_GUT, DrugReference.SITE_ANORECTAL);
 
 	/** The curated sentence the issue #88 fold appends to the rated aspirin/ketoprofen rule. */
 	private static final String NSAID_GROUP_SENTENCE = "Acetylsalicylic acid (aspirin) is in the same"
@@ -182,14 +182,12 @@ public class UnmappedOrderAdministrationSiteTest {
 		// ophthalmic codes are dropped and the true S01BA chip disappears; naming no site, the arm keeps
 		// the answer it had. Both halves asserted, or the second alone would also pass on an arm that
 		// never ran.
-		Set<String> names = DrugReferenceTestSupport.set("Hydrocortisone eye ointment");
 		assertEquals(
 				Collections.singletonList("Dexamethasone is in the same ATC class (S01BA) as active"
 						+ " order Hydrocortisone — possible duplicate therapy"),
 				DrugReferenceTestSupport.details(chips(DEXAMETHASONE_QUESTION,
 						order("Hydrocortisone eye ointment", "Bilateral eye administration"))),
 				"recorded at the eye, the ophthalmic class is what the two share");
-		assertFalse(names.isEmpty());
 
 		assertEquals(Collections.singletonList(SYSTEMIC_CHIP), DrugReferenceTestSupport
 				.details(chips(DEXAMETHASONE_QUESTION,
@@ -442,6 +440,28 @@ public class UnmappedOrderAdministrationSiteTest {
 	}
 
 	@Test
+	public void everyLocallyAppliedGroupIsInOneHalfOfThePartitionOrTheOther() {
+		// The STRUCTURAL half of the partition claim, and the only thing that can see a group left out
+		// of BOTH halves. The data guard above walks the shipped knowledge base's codes, so a group that
+		// knowledge base publishes nothing under escapes it entirely — demonstrated by adding V07AY to
+		// LOCALLY_APPLIED_ATC_GROUPS and to neither half, which left the whole build green.
+		//
+		// Prefix-related in EITHER direction: the list writes S at main-group granularity and the site
+		// table expands it into S01/S02/S03, which are longer; a shorter site prefix would cover a
+		// longer member the other way round.
+		for (String group : DrugReference.locallyAppliedGroups()) {
+			boolean claimed = DrugReference.namesNoAdministrationSite(group);
+			for (String site : DrugReference.administrationSites()) {
+				for (String prefix : DrugReference.groupsForSite(site)) {
+					claimed = claimed || prefix.startsWith(group) || group.startsWith(prefix);
+				}
+			}
+			assertTrue(claimed, group + " is locally applied but belongs to no site and is not recorded"
+					+ " as naming none — the partition has a hole");
+		}
+	}
+
+	@Test
 	public void everySiteASpelledTermCanSelectClaimsCodesInTheShippedKnowledgeBase() {
 		// The other direction of the partition. A site with terms but no groups would be a term list
 		// that can never narrow anything — a recorded route silently taken as evidence and then dropped
@@ -515,9 +535,9 @@ public class UnmappedOrderAdministrationSiteTest {
 	 *  pins the groups empty, and a service built without the second call silently cannot raise a
 	 *  curated-group chip. */
 	private static List<SafetyWarning> shippedChips(String question, PatientClinicalContext context) {
-		DrugReferenceService service = DrugReferenceTestSupport
-				.serviceWith(DrugReferenceTestSupport.shippedEntries());
-		service.setCrossReactivityGroups(DrugReferenceTestSupport.bundledGroups());
-		return DrugReferenceTestSupport.validator(service).validate("", question, context);
+		return DrugReferenceTestSupport
+				.validator(DrugReferenceTestSupport
+						.serviceWithGroups(DrugReferenceTestSupport.shippedEntries()))
+				.validate("", question, context);
 	}
 }

@@ -996,8 +996,8 @@ public class DrugReference {
 	 * apart, and {@code UnmappedOrderAdministrationSiteTest} is what fails if a fourth group appears
 	 * in neither half.
 	 */
-	private static final List<String> LOCALLY_APPLIED_GROUPS_NAMING_NO_SITE = Collections
-			.unmodifiableList(Arrays.asList("B02BC", "B05C", "C05B"));
+	private static final List<String> LOCALLY_APPLIED_GROUPS_NAMING_NO_SITE = unmodifiable("B02BC",
+			"B05C", "C05B");
 
 	/**
 	 * Recorded words that name a route of ENTRY rather than a site of action, and so refuse the site
@@ -1220,6 +1220,25 @@ public class DrugReference {
 	static boolean namesNoAdministrationSite(String code) {
 		String normalized = normalizeAtcToken(code);
 		return normalized != null && fallsUnderAnyGroup(normalized, LOCALLY_APPLIED_GROUPS_NAMING_NO_SITE);
+	}
+
+	/** @return the locally-applied ATC groups {@link #ATC_GROUPS_BY_SITE} and
+	 *          {@link #LOCALLY_APPLIED_GROUPS_NAMING_NO_SITE} partition — for the guard that checks
+	 *          they still do, which is the only thing that can see a member left out of BOTH halves.
+	 *          The data guard beside it cannot: it walks the shipped KB's codes, so a group that KB
+	 *          publishes nothing under escapes it, which a mutation adding {@code V07AY} to this list
+	 *          demonstrated on a green build. */
+	static List<String> locallyAppliedGroups() {
+		return LOCALLY_APPLIED_ATC_GROUPS;
+	}
+
+	/** @return the group prefixes {@code site} claims — for that same guard, which has to relate the
+	 *          two halves prefix-wise in EITHER direction: {@code S} is covered by {@code S01} /
+	 *          {@code S02} / {@code S03}, which are longer than it, while a longer member would be
+	 *          covered by a shorter site prefix the other way round. */
+	static List<String> groupsForSite(String site) {
+		List<String> groups = ATC_GROUPS_BY_SITE.get(site);
+		return groups != null ? groups : Collections.<String> emptyList();
 	}
 
 	/** @return the administration sites this module can attribute a code to, in a stable order —

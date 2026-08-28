@@ -971,8 +971,8 @@ public class DrugSafetyValidator {
 	 * lookup and deleting {@code canonicalSubjects}. Do not read the paragraph above as saying no two
 	 * arms can disagree; it says the three that read this cannot.
 	 *
-	 * <p><b>And it is per REQUEST, not per pass — which is issue #238 and is the reason the rows this
-	 * folds are not the rows the arms rule over.</b> {@code validate} runs twice for one {@code /search}
+	 * <p><b>And it is per REQUEST given one chart read, not per pass — which is issue #238 and is the
+	 * reason the rows this folds are not the rows the arms rule over.</b> {@code validate} runs twice for one {@code /search}
 	 * — the pre-answer findings pass through {@code DrugReferenceInjector.injectRecords}, then the chips
 	 * pass — and of every input the naming decision reads, exactly one used to differ between them: the
 	 * rows the ANSWER put in play. So where the answer resolved a row of an in-play substance the question
@@ -1034,8 +1034,8 @@ public class DrugSafetyValidator {
 	 * {@code sourceFormat=json} dataset, which is what {@code PerRequestSubstanceSubjectTest}'s fixture
 	 * is, or a {@code ddinter} family whose {@code rxnorm_name} is not word-bounded inside the display
 	 * name (the {@code Omeprazole}/{@code esomeprazole} shape). No live instance was ever observed, and
-	 * no count over the shipped KB is published here — the property is that the two passes agree, which
-	 * does not depend on how often they would otherwise have differed.
+	 * no count over the shipped KB is published here — the property is that the two passes stop disagreeing
+	 * over {@code answer}, which does not depend on how often they would otherwise have differed.
 	 *
 	 * <p>Memoised for the pass and not beyond it, which #238 does not change: the two passes now compute
 	 * the same ANSWER, but they compute it from their own resolution of the rows and the recorded names,
@@ -2178,8 +2178,8 @@ public class DrugSafetyValidator {
 	 * an in-play substance that this PASS resolved, from either side — which is what the drug-in-play and
 	 * dose arms RULE over. Over {@code questionDrugs} alone it produces {@code namingRows}, which is what
 	 * {@link SubstanceSubjects} folds to decide what those arms CALL the substance: the same groups minus
-	 * the rows only the ANSWER put in play, and therefore the same in both {@code validate} passes of one
-	 * request. Two maps of freshly built lists over the same shared {@link DrugReference} objects; no arm
+	 * the rows only the ANSWER put in play. Two maps of freshly built lists over the same shared
+	 * {@link DrugReference} objects; no arm
 	 * mutates a group after it is built, so the two cannot drift apart.
 	 *
 	 * <p><b>Issue #175.</b> The subject of an interaction chip is a SUBSTANCE (issue #162), but the rows
@@ -2342,8 +2342,9 @@ public class DrugSafetyValidator {
 	 *         <p>Kept as a named method over the shared fold rather than inlined at its call sites,
 	 *         because "what a chip calls its subject" is the decision issue #162 made, #174 site 3
 	 *         extended to the screening arm, #194 anchored on the chart, #206 gave one answer per
-	 *         substance per validate pass and #238 made that answer per REQUEST (see
-	 *         {@link SubstanceSubjects}) — the name is where that decision is DEFINED. Where a chip arm looks
+	 *         substance per validate pass and #238 made that answer per REQUEST given one chart read (the
+	 *         qualifier is load-bearing; see {@link SubstanceSubjects}) — the name is where that decision
+	 *         is DEFINED. Where a chip arm looks
 	 *         it UP is {@link SubstanceSubjects}, and a new chip-subject site belongs there rather than
 	 *         here: calling this directly is how an arm ends up folding a narrower row group than its
 	 *         siblings, which is exactly what #206 was.

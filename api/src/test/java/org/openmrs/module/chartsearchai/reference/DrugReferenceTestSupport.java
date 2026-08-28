@@ -1007,7 +1007,7 @@ public final class DrugReferenceTestSupport {
 	 *         positive form fails loudly, and saying it of both would license the wrong conclusion about
 	 *         which accessor is unsafe for what.
 	 *
-	 *         <p>Shared rather than written per file because three cases select one warning of a type:
+	 *         <p>Shared rather than written per file because four cases select one warning of a type:
 	 *         {@code PerRequestSubstanceSubjectTest}'s two dose cases, and the two that assert a dose
 	 *         warning and an interaction chip call one substance the same thing
 	 *         ({@code OrderedSubjectRowTest}, {@code DoseCeilingBySubstanceTest}). Those two wrote it as a

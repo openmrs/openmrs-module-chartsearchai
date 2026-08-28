@@ -40,9 +40,9 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * <p><b>Which is not "the two passes cannot disagree", and these cases cannot see the difference.</b>
  * Each pass builds its own {@code PatientClinicalContext} from the patient, so the order rows and the
  * recorded names are a function of two chart reads separated by the LLM call;
- * {@code DrugSafetyValidator.SubstanceSubjects}' javadoc states that residue. Every case here is handed
- * ONE context object by {@link DrugReferenceTestSupport#contextNaming}, so what they assert is agreement
- * given one read. {@code mappings} is likewise not varied by any case — it is null in the real pre-answer
+ * {@code DrugSafetyValidator.SubstanceSubjects}' javadoc states that residue. Every case here that runs
+ * the passes is handed ONE context object by {@link DrugReferenceTestSupport#contextNaming}, so what they
+ * assert is agreement given one read. {@code mappings} is likewise not varied by any case — it is null in the real pre-answer
  * pass and real in the chips pass, and the claim that it reaches none of the three inputs this folds is
  * reasoned from its readers rather than exercised here.
  *

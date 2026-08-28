@@ -955,11 +955,18 @@ public class DrugSafetyValidator {
 	 * substance, two names, one response ({@code OrderedSubjectRowTest
 	 * .theQuestionPairChipNamesTheSubstanceTheOtherArmsName}).
 	 *
-	 * <p>What the two arms did NOT lose is their own row grouping for choosing which RULE to quote —
-	 * {@code substanceRows} over their own list, which is #175's and #189's axis and moves chip COUNTS.
-	 * Only the NAME moved. The memo below is what makes the guarantee structural rather than
-	 * coincidental: the pairwise arms run last, so for a substance any earlier arm chipped they read that
-	 * arm's stored answer rather than folding again.
+	 * <p>What neither arm lost is how it chooses which RULE to quote, and that is a different mechanism in
+	 * each: {@link #substanceRows} over its own order list for the screening arm, and — for the
+	 * question-pair arm, which calls {@code substanceRows} nowhere — candidates keyed by
+	 * {@link #pairKeyNames}/{@link #unorderedPairKey} and ranked by {@link #outranks} on the walked ROW.
+	 * Both are #175's and #189's axis and both move chip COUNTS. Only the NAME moved.
+	 *
+	 * <p><b>The shared {@code groups} map is what makes that structural rather than coincidental</b>, and
+	 * the memo is not: {@link #subjectOf} is {@link #interactionSubject} over {@code groups.get(key)} and
+	 * {@code recordedNames}, both fixed for the pass and folded by a pure static method, so every arm gets
+	 * the same answer whoever asks first. The memo only stops the pairwise arms — which run last — folding
+	 * a group an earlier arm already folded. Measured by deleting the {@code put}: the whole api suite
+	 * stays green, so nothing about the one-name-per-substance property rests on it.
 	 *
 	 * <p><b>And that is per PASS, not per request.</b> {@code validate} runs twice for one {@code /search}
 	 * — the pre-answer findings pass through {@code DrugReferenceInjector.injectRecords}, then the chips
@@ -982,7 +989,8 @@ public class DrugSafetyValidator {
 	 * {@code Botulinum toxin type A}, says {@code Kanamycin interacts with Botulinum toxin type A}. So
 	 * the injected {@code safety_finding} the model reads and the chip beside the answer can name that
 	 * substance differently — the residue the paragraph above already accepts for three arms, on a
-	 * fourth. Taken deliberately: the alternative is this arm naming a substance one way while the chips
+	 * fourth. ADR Decision 49 is canonical for the trade and carries the measurements. Taken
+	 * deliberately: the alternative is this arm naming a substance one way while the chips
 	 * beside it about that same substance name it another, which is what issue #236 is, and closing it
 	 * properly is the once-per-REQUEST decision the paragraph below says belongs elsewhere.
 	 *
@@ -992,6 +1000,15 @@ public class DrugSafetyValidator {
 	 * {@link InteractionPairs} then suppresses here — so every pair it still reports has a subject whose
 	 * group is the orders' alone, and both passes resolve that group alike. See the comment at that
 	 * arm's own read.
+	 *
+	 * <p>That is a statement about the screening arm's OWN chips and not about a screening QUESTION,
+	 * which the sentence above would otherwise be read as. The pair this arm stands down from is chipped
+	 * by {@link #addInteractionWarnings} instead, whose subject is folded over the answer-widened group —
+	 * so on a screening question the pre-answer finding can still come from here and the post-answer chip
+	 * from there, naming one substance two ways across the arm handoff. That residue is not #236's: the
+	 * drug-in-play arm has read this lookup since #206 while this arm folded the orders alone, so the two
+	 * could already differ. It is named here because the sentence above is exactly where a reader would
+	 * otherwise conclude the screening path is closed.
 	 *
 	 * <p>Not designed around, and the alternative is worse: naming from a pass-invariant set while RULING
 	 * from the whole group is the two-row-sets shape this class exists to remove, one level up. Closing
@@ -3249,7 +3266,12 @@ public class DrugSafetyValidator {
 	 * the strength clause after it ({@link DrugReferenceInjector#renderFinding}, issue #283 — a
 	 * question-pair finding is an INTERACTION, so it states one like every other), so a pair
 	 * finding's grounding comes from that record rather than from the promoted notes, and the
-	 * promoted-note budget is untouched. That half is worded to match
+	 * promoted-note budget is untouched. <b>Verbatim WITHIN one {@code validate} pass, which is all it
+	 * ever was and all it can be since issue #236</b>: {@code renderFinding} copies the chip the
+	 * PRE-ANSWER pass raised, and this arm's subject is now folded over a group the answer widens, so the
+	 * record the model reads and the chip the clinician sees can name one substance two ways — see
+	 * {@link SubstanceSubjects}, which is where that residue and its measurement live. What the two
+	 * cannot do is describe one finding differently within a pass. That half is worded to match
 	 * {@link DrugReferenceInjector#orderedInteractionNotes}, which this paragraph is paired with —
 	 * each cites the other — because the two came apart once already, when only one of them was
 	 * reworded for the clause.
@@ -3407,9 +3429,8 @@ public class DrugSafetyValidator {
 		// canonicalSubjects' javadoc stated as
 		// "label-only, and deliberately so" before it was deleted, and the one the ticket warns about,
 		// #205's hardening having turned 2 chips into 4 with a more precise resolver and an unmatched
-		// ledger key. Measured over the shipped 19 MB KB through the real DdiDrugReferenceSource.parse
-		// and the real validate: 12 probes reached this arm, chip count identical on every one, the name
-		// moved on 3.
+		// ledger key. Read it off the code rather than off a probe count: put the resolver's answer into
+		// the pair key and the count moves; nothing here does.
 		//
 		// So the name in either slot can now be a row the question's own word did not spell — through
 		// the chart, and, on a dataset whose rows carry the same rules from both sides, through the

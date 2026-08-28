@@ -54,6 +54,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 46: A drug-order record says whether the prescription is in force](#decision-46-a-drug-order-record-says-whether-the-prescription-is-in-force)
 - [Decision 47: An answer naming a drug from an ended order says so](#decision-47-an-answer-naming-a-drug-from-an-ended-order-says-so)
 - [Decision 48: A second dataset gets a second section, not a shared findings list](#decision-48-a-second-dataset-gets-a-second-section-not-a-shared-findings-list)
+- [Decision 49: One name per substance per pass, at the cost of the question-pair arm's pass-stability](#decision-49-one-name-per-substance-per-pass-at-the-cost-of-the-question-pair-arms-pass-stability)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 
@@ -3128,3 +3129,54 @@ Two further alternatives were weighed and are not this.
 - **−** **The endpoint now performs TWO lazy loads.** Reading it parses the groups file if nothing has yet, exactly as it already parsed the entries dataset. Bounded by the same switch — `enabled: false` reports `loaded: false` for both and parses neither — and the groups file is a small curated document, not the 19 MB knowledge base.
 - **−** **`DrugReferenceLoad` and `CrossReactivityGroupsLoad` are two classes answering one shape of question**, and neither is derived from the other. They will drift if a field is added to one and not the other. Accepted rather than unified because the shapes genuinely differ (there is no `sourceFormat` for the groups file and no `inert` verdict, and `arms` is meaningless for a group, which either matches a pair's codes or does not), and a common supertype carrying only what both have would carry almost nothing.
 - **−** **A fourth dataset would need a third section**, and this decision does not generalise the pattern into one. What it does leave behind is the guard: `DrugReferenceSourceValidityChannelTest` fails the build for a `DrugReferenceSource` that inherits `lastLoadFindings()`'s default instead of declaring it, which is the specific way `sourceFormat=atc` came to have no channel — a DEFAULTED interface method, so the omission compiled, loaded, answered questions, and reported an empty list with nothing erroring. That guard does not reach the groups loader, which is not a `DrugReferenceSource`; its accessors are ordinary methods the service calls, so removing one breaks the build.
+
+## Decision 49: One name per substance per pass, at the cost of the question-pair arm's pass-stability
+
+**Status: Accepted** (August 2026) — implemented, issue [#236](https://github.com/openmrs/openmrs-module-chartsearchai/issues/236). Moves which ROW two chip arms name a substance by. Raises and suppresses no chip, changes no key, no wire field and no global property.
+
+### Context
+
+Five arms of `DrugSafetyValidator` name a chip's subject. Issue [#206](https://github.com/openmrs/openmrs-module-chartsearchai/issues/206) gave three of them ONE memoised per-`validate` answer to "which row does this response call this substance by" — `SubstanceSubjects`, folding `resolvedSubstanceRows(inPlay, orderEntries)` — and left the two PAIRWISE arms folding their own narrower group through a private `canonicalSubjects`. Since issue [#175](https://github.com/openmrs/openmrs-module-chartsearchai/issues/175) an arm's own group is never the widest one: the shared group also carries the rows the ANSWER and the patient's ORDERS resolved.
+
+`canonicalSubjects`' javadoc had asserted the property that made the split safe — that every arm calls a substance what the drug-in-play arm calls it. #175 falsified it and #206 moved three arms without moving these two, so the safety of the split rested on nothing stated. That is the whole of #236's complaint; it filed the defect as *reasoned, not measured*.
+
+**It is now measured**, through the real `validate` over `drug-reference-charted-substance-row.json`: one response carrying `Amoxicillin interacts with Warfarin, also named in the question` beside `The stated Amoxicillin (suspension) dose ~4000 mg/day exceeds the 2000 mg/day maximum` — one substance, two names. `OrderedSubjectRowTest.theQuestionPairChipNamesTheSubstanceTheOtherArmsName` pins it.
+
+### Decision
+
+Both pairwise arms read the shared `SubstanceSubjects` instance; `canonicalSubjects` is deleted. Each arm keeps its own mechanism for choosing which RULE to quote — `substanceRows` over the order list for the screening arm, `pairKeyNames`/`unorderedPairKey` candidates ranked by `outranks` for the question-pair arm — because that is #175's and #189's axis and it moves chip COUNTS. Only the NAME moved.
+
+The rule that survives the deletion is a rule about CALLERS, and until this change nothing enforced it. `ChipSubjectOneResolutionTest` now scans `DrugSafetyValidator.java`'s own source and fails the build on a call to `interactionSubject` outside three permitted bodies (`SubstanceSubjects.subjectOf`, the two-arity overload, and `addPartnersForUnmappedOrders`, which answers the PARTNER-naming question rather than a chip's subject). Structural because a second resolution is only observable where the two row groups differ, which is rare in the shipped data — see the measurement below — so a sixth arm resolving separately would agree with its siblings on almost every input and redden nothing.
+
+### What it costs
+
+**The question-pair arm loses its pass-stability, and that is the price rather than a side effect.** `validate` runs twice per `/search` — `DrugReferenceInjector.preAnswerFindings` with an empty answer, producing the citable `safety_finding` records the model reads, then the chips pass. Folding `questionDrugs` made this arm pass-stable by construction; the shared group carries answer-resolved rows and does not. Measured on the shipped KB, one question (`Does Daxibotulinumtoxina interact with kanamycin?`) driven with each pass's own answer argument:
+
+```
+pre-answer pass:  Kanamycin interacts with Daxibotulinumtoxina (botulinum toxin type a), also named in the question — Major. …
+chips pass:       Kanamycin interacts with Botulinum toxin type A, also named in the question — Major. …
+```
+
+So the record the model reads and the chip the clinician sees can name that substance two ways. **This is the residue `SubstanceSubjects`' javadoc already accepted for three arms since #206, on a fourth**, and the alternative was refused there for a reason that applies unchanged: naming from a pass-invariant set while RULING from the whole group is the two-row-sets shape that class exists to remove, one level up. Closing it properly means deciding a substance's subject once per REQUEST rather than once per pass, which is the injector's and the inference service's business.
+
+Two consequences of it are recorded where they will be read rather than only here. The paired "the injected record carries the chip's detail **verbatim**" sentences — in `addQuestionPairInteractions`' javadoc and in `DrugReferenceInjector.orderedInteractionNotes`, which cite each other because they came apart once before — are now scoped to *within one pass*, in the same change. And the screening arm's own pass-stability, which the mechanism below preserves, is a statement about **that arm's chips** and not about a screening QUESTION: the pair it stands down from is chipped by `addInteractionWarnings` instead, whose subject is folded over the answer-widened group. That arm-handoff residue is NOT this decision's — the drug-in-play arm has read the shared lookup since #206 while the screening arm folded the orders alone, so the two could already differ.
+
+### Measurements
+
+Every figure produced by driving production code — `DdiDrugReferenceSource.parse` over the shipped 19 MB knowledge base, `DrugReference.matchesText`, `DrugReference.substanceGroupKey`, `DrugSafetyValidator.interactionSubject` and the real `validate`. Nothing re-expressed.
+
+**How rare the divergence is.** 2283 entries, 2114 substances, **129** filed as more than one row. Of those 129, **22** publish a name resolving a strict non-empty SUBSET of the family, and on **10** of the 22 the subset and the whole family elect two different rows. On the other 119 a second resolution agrees with the shared one, which is why nothing behavioural pinned the split.
+
+**Chip count versus chip subject, on the arm that can move.** A question naming a family's subset-resolving name plus an above-floor partner not on the chart, an answer naming the family by a wider name, no active orders: 12 probes reached the question-pair arm, chip **count identical on every one**, and the NAME moved on 3 — `Daxibotulinumtoxina (botulinum toxin type a)` → `Botulinum toxin type A`, `Fluoroestradiol f-18` → `Estradiol`, and `Tick-borne encephalitis vaccine (whole virus, inactivated, pediatric) (…)` → `Tick-borne encephalitis vaccine (whole virus, inactivated)`. Every one of the three is that family's own `canonicalRow` — the row every other arm was already naming.
+
+**The chart lever does not reach this arm on the shipped data, and the probe above therefore uses the ANSWER.** `DdiDrugReferenceSource` writes each interaction row onto BOTH drugs' entries, so a ddinter pair is symmetric or absent; `collectQuestionPairInteraction` asks `coveredByActiveOrderArm` of both directions, so putting the probed family on the chart makes the chart arm own the pair and this arm stand down. Measured: 12 chart-lever probes, **0** question-pair chips raised, before and after. A curated one-directional dataset is where the chart lever lives, which is what `drug-reference-charted-substance-row.json` supplies for the pinning test.
+
+### Consequences
+
+- **+** One substance is named one way across all five chip arms within a pass, and the identity contraindication chip stays exempt for #187/#192's reason — it quotes a chart record, so it keeps that record's name.
+- **+** The caller rule is enforced rather than documented. Verified by mutation: reintroducing a direct fold in either pair arm reddens `ChipSubjectOneResolutionTest` with the offending line numbers.
+- **+** Cheaper, incidentally: one fewer `substanceRows` grouping pass per `validate` (the screening arm had been grouping the same list twice), and `interactionSubject` folds are now bounded by emitted pairs rather than by each arm's whole row set.
+- **−** The question-pair arm's cross-pass residue above.
+- **−** A chip can now name a row the question's own word did not spell. That is the settled reading of a chip and not a new class of claim — a chip's subject is a SUBSTANCE (#162), and the module already reports what the TEXT stated under a row the text did not spell (#245, `The stated Amoxicillin (suspension) dose …` for an answer saying `amoxicillin`). The cost is the one #235 already recorded for the contraindication arm: a rule authored on one row is reported under the substance's name, a wider claim than that row makes.
+- **−** The structural guard reads ONE file. `interactionSubject` is package-private and static, so a chip arm written in another class of `…chartsearchai.reference` would call it unseen. Deliberate: the five arms all live in `DrugSafetyValidator`, and the blessed cross-class caller (`DrugReferenceInjector.chartAnchoredSubject`, which raises no chip) shows the package boundary is not the rule's edge. The guard also says nothing about an arm that resolves a subject some other way — by calling `DrugReference.canonicalRow` directly, say.
+- **−** `eval/drift-metric/score_probe_safety.py` filters a cell's chips by matching `DRUG_ALIASES` against the chip's `drug` field, so a subject renamed into a different alias family would drop the chip and mislabel the cell. Not reachable today — probe cells name one drug, so the question-pair arm (which needs two) never runs and the screening gate is never met — and named here rather than guarded, because the scorer would have to be changed for a shape that does not exist.

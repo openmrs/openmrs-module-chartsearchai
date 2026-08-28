@@ -44,11 +44,14 @@ import org.openmrs.module.chartsearchai.ModuleSourceRoot;
  *
  * <p><b>Why structural and not behavioural.</b> A second resolution is only OBSERVABLE where the two row
  * groups differ, which needs a substance whose rows publish different alias sets. Measured over the
- * shipped 19 MB KB through the real {@code DdiDrugReferenceSource.parse} and
- * {@code DrugReference.matchesText}: of its 129 multi-row substances, 13 publish a name that resolves a
- * strict SUBSET of the family, so on the other 116 a second resolution would agree with the shared one
- * and redden nothing. {@code OrderedSubjectRowTest.theQuestionPairChipNamesTheSubstanceTheOtherArmsName}
- * poses it on a hand-authored fixture, which is also what the chart lever needs — see there.
+ * shipped 19 MB KB by driving {@code DdiDrugReferenceSource.parse}, {@code DrugReference.matchesText}
+ * and {@code DrugReference.substanceGroupKey}: of its 129 multi-row substances, 22 publish a name that
+ * resolves a strict non-empty SUBSET of the family. On 10 of those 22 — the sharper figure, and the one
+ * the argument wants — putting that subset and the whole family to
+ * {@code DrugSafetyValidator.interactionSubject} elects two different rows; on the other 119 families a
+ * second resolution agrees with the shared one and reddens nothing.
+ * {@code OrderedSubjectRowTest.theQuestionPairChipNamesTheSubstanceTheOtherArmsName} poses it on a
+ * hand-authored fixture, which is also what the chart lever needs — see there.
  * So a new arm resolving separately would agree with its siblings on almost every input and redden
  * nothing. That is the same argument {@code OrderPartnerNameSourceWritePathTest} makes for its own scan,
  * and {@code ArchitectureGuardTest} is this repo's other source-scanning guard.

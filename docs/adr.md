@@ -3141,14 +3141,14 @@ The reported consequence: an unmapped `Hydrocortisone cream 1%` was named as a c
 
 ### The ticket's own proposed remedy is refuted by the data
 
-It proposed threading the route so the name-resolution leg could "prefer a row whose administration route matches". Measured through `DdiDrugReferenceSource.parse`, `DrugReference.substanceGroupKey()` and `normalizedAtcCodes()` over the shipped 19 MB knowledge base: **all 129 of its multi-row substances publish an identical ATC code list across every one of their rows, and none differs.** Hydrocortisone's four rows — `Hydrocortisone`, `(ophthalmic)`, `(topical)`, `Hydrocortisone butyrate` — each publish the same nine codes. That independently re-derives the invariant `DrugSafetyValidator.entryForAtcCode`'s javadoc already states from the other side, and it means choosing a row cannot change any classification. The narrowing has to be of the **codes**.
+It proposed threading the route so the name-resolution leg could "prefer a row whose administration route matches". Measured through `DdiDrugReferenceSource.parse`, `DrugReference.substanceGroupKey()` and `normalizedAtcCodes()` over the shipped 19 MB knowledge base: **all 129 of its multi-row substances publish an identical ATC code list across every one of their rows, and none differs.** Hydrocortisone's family is THREE rows — `Hydrocortisone`, `(ophthalmic)`, `(topical)` — and each publishes the same nine codes. (`Hydrocortisone butyrate` publishes them too and is filed as a separate substance, which is why it is named here rather than counted in: reading it as a hydrocortisone row is the identity conflation issue #209 exists to prevent.) That independently re-derives the invariant `DrugSafetyValidator.entryForAtcCode`'s javadoc already states from the other side, and it means choosing a row cannot change any classification. The narrowing has to be of the **codes**.
 
 ### Decision
 
 Carry the presentation, and narrow the codes with it, at one site.
 
 1. `PatientClinicalContextBuilder` reads `DrugOrder.getRoute()` and the ordered `Drug`'s `getDosageForm()`, each in its own `try`, and `PatientClinicalContext.ActiveDrugOrder.getAdministrationTerms()` carries them per order. **Both sources**, because neither alone covers the shapes that matter: the route is a `drug_order` column and so is the only leg a non-coded order has, while the dose form is a `drug` column and is the only leg that reaches the skin — measured 2026-08-28, the 3.7.1 reference dictionary's "Route of administration" set has 17 members and not one names a cutaneous route.
-2. `DrugReference.codesForRecordedAdministration` is the one rule that reads those terms against an ATC code list, and `DrugSafetyValidator.addPartnersForUnmappedOrders` is its only caller.
+2. `DrugReference.codesForRecordedAdministration` and `DrugReference.narrowsAnyCode` are the only two things that read those terms against an ATC code list — one narrows, one answers whether narrowing is possible at all — and they are built from the same pair of primitives, so they cannot disagree about what a record can express. `DrugSafetyValidator.codesForThisSubstancesPresentations` is the single production caller of both, reached from `addPartnersForUnmappedOrders`.
 
 ### The site table is a partition, not a list
 

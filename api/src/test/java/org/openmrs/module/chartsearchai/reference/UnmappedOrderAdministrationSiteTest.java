@@ -401,6 +401,19 @@ public class UnmappedOrderAdministrationSiteTest {
 		// still decline: the union of {nose, skin} keeps the cream's D codes, so a guard asking only
 		// "do the terms name a site" would let the cream's narrowing carry the nasal order with it and
 		// the chip would disappear for a patient who is on nasal hydrocortisone.
+		// BOTH halves of the premise, asserted rather than assumed — without the first the case would
+		// still pass with "Nasal administration" naming no site at all, which is the ordinary
+		// names-no-site decline another case already pins and not the distinction this one is for.
+		assertTrue(DrugReference.narrowsAnyCode(DrugReferenceTestSupport.set("R01AA08", "H02AB09"),
+				DrugReferenceTestSupport.set("Nasal administration")),
+				"the premise: the recorded route names a site, and narrows a substance filed there");
+		Set<String> hydrocortisone = DrugReferenceTestSupport
+				.row(DrugReferenceTestSupport.ddiFixtureEntries(FIXTURE), "Hydrocortisone")
+				.normalizedAtcCodes();
+		assertFalse(DrugReference.narrowsAnyCode(hydrocortisone,
+				DrugReferenceTestSupport.set("Nasal administration")),
+				"and the second half: THIS substance is filed under no code at that site");
+
 		Set<String> nasalNames = DrugReferenceTestSupport.set("Hydrocortisone nasal preparation");
 		Set<String> creamNames = DrugReferenceTestSupport.set(CREAM);
 		PatientClinicalContext.ActiveDrugOrder nasal = DrugReferenceTestSupport.activeOrder(
@@ -480,8 +493,11 @@ public class UnmappedOrderAdministrationSiteTest {
 	public void anOrderNamedOnlyByItsCodesCarriesWhatTheChartRecordsToo() {
 		// The issue #290 rung. Nothing reads these terms on an order the builder puts here — such an
 		// order always carries ATC codes, so the code walk groups it and the name-resolution leg never
-		// sees it — and the factory carries them anyway, for the reason its javadoc gives. Pinned
-		// because an overload with no case is one the next change can quietly drop the argument from.
+		// sees it — and the factory carries them anyway, for the reason its javadoc gives.
+		//
+		// This pins the OVERLOAD only. The builder's use of it is pinned separately, through the real
+		// build(), by ActiveOrderAdministrationTermsTest.anOrderNoNameCouldBeReadForCarriesItTooThroughTheRealBuilder
+		// — without that one, dropping the argument at the call site left the whole suite green.
 		assertEquals(DrugReferenceTestSupport.set("nasal administration"),
 				PatientClinicalContext.ActiveDrugOrder
 						.namedByCodesOnly("order-234-codes", "[ATC R01AA05]",

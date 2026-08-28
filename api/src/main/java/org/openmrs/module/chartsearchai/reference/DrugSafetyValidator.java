@@ -6038,18 +6038,17 @@ public class DrugSafetyValidator {
 	 *         <p><b>What the re-walk costs, measured rather than argued.</b> The WALK is quadratic in
 	 *         the orders this leg governs — a {@link Collections#disjoint} and a map lookup per pair —
 	 *         but the two expensive halves are not: the {@code containsKey} conjunct admits only the
-	 *         orders naming THIS substance, so the site walk is linear, and the caller has already
-	 *         populated {@code cache} for every governed order before the first call here, so no name
-	 *         is resolved twice. Counted through the real {@code validate} over the shipped KB: 27
+	 *         orders naming THIS substance, so the site walk is linear, and no name is resolved twice —
+	 *         though NOT for the reason it first looks. The caller has memoised only the order it is
+	 *         currently on: {@code cache} is one memo for the whole {@link #orderPartners} call, so the
+	 *         FIRST invocation here resolves every governed order's names and every later one hits it.
+	 *         The re-walk moves that work earlier rather than duplicating it. Counted through the real {@code validate} over the shipped KB: 27
 	 *         orders give 486 inner iterations against 27 site walks, and 320 give 67550 against 315.
 	 *         Timed the same way against a build with the narrowing removed altogether — 3 rounds of 20
 	 *         reps at 10, 80 and 320 orders — the two are indistinguishable within this machine's
 	 *         run-to-run spread, which is why no short-circuit is built here. Re-measure that way, and
 	 *         note that no TIME figure is quoted for the same reason {@link #orderPartners} quotes none.
 	 *
-	 *         <p>Through the caller's own {@code cache}, so re-walking the orders costs no second
-	 *         resolution of any name — {@link #substanceRowsNamedBy} is memoised for the whole
-	 *         {@link #orderPartners} call and every order here was resolved by the caller anyway.
 	 */
 	private Set<String> codesForThisSubstancesPresentations(Object substance,
 			PatientClinicalContext context, Set<String> codes,

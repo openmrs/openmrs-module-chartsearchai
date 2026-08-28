@@ -955,7 +955,7 @@ public class DrugReference {
 	 * <p><b>The criterion is the same one that list uses, read the other way round</b>: a group is
 	 * locally applied when its own published name says WHERE it is applied, so this map records WHAT
 	 * that name says. {@code A01} "Stomatological preparations" -&gt; mouth; {@code A07A} "Intestinal
-	 * anti-infectives" and {@code A07E} "Intestinal antiinflammatory agents" -&gt; gut; {@code C05A}
+	 * antiinfectives" and {@code A07E} "Intestinal antiinflammatory agents" -&gt; gut; {@code C05A}
 	 * "Antihemorrhoidals for topical use" -&gt; anorectal — spelled as
 	 * {@link #LOCALLY_APPLIED_ATC_GROUPS}'s javadoc spells it, because three other texts cite that one
 	 * as this module's record of ATC's published name and two records of one name is one too many;
@@ -1103,9 +1103,12 @@ public class DrugReference {
 
 	/**
 	 * @return {@code codes} narrowed to the ones that classify a presentation given at the site
-	 *         {@code recordedTerms} names — the ONE entry point for reading a chart-recorded route or
-	 *         dose form against an ATC code list, and the only one
-	 *         {@code DrugSafetyValidator.addPartnersForUnmappedOrders} may call (issue #234).
+	 *         {@code recordedTerms} names — the entry point for reading a chart-recorded route or dose
+	 *         form against an ATC code list (issue #234). {@link #narrowsAnyCode} is the only other
+	 *         thing that reads them, answering whether narrowing is possible at all, and the two are
+	 *         built from the same pair of primitives so they cannot disagree about what a record can
+	 *         express. {@code DrugSafetyValidator.codesForThisSubstancesPresentations} is the single
+	 *         production caller of both.
 	 *
 	 *         <p><b>What it is for.</b> An active order the concept dictionary did not classify is
 	 *         compared on every code the reference dataset files its SUBSTANCE under, which covers

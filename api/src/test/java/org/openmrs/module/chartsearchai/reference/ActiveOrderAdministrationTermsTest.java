@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -48,6 +49,9 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * with the two columns set the way the existing context-sensitive cases set theirs.
  */
 public class ActiveOrderAdministrationTermsTest extends BaseModuleContextSensitiveTest {
+
+	/** Concept 88 (ASPIRIN), the concept behind patient 7's single active drug order. */
+	private static final int ORDERED_CONCEPT = 88;
 
 	private Patient patient;
 
@@ -118,6 +122,39 @@ public class ActiveOrderAdministrationTermsTest extends BaseModuleContextSensiti
 
 		assertEquals(DrugReferenceTestSupport.set("bilateral eye administration"),
 				theOrder().getAdministrationTerms());
+	}
+
+	@Test
+	public void anOrderNoNameCouldBeReadForCarriesItTooThroughTheRealBuilder() {
+		// The issue #290 rung, driven through the real builder rather than through the factory. It is
+		// reached only by an order carrying ATC codes and no readable name, so the arrangement is
+		// NamelessActiveOrderPartnerTest's — the coded drug and the free text cleared, the concept's
+		// names voided — plus a WHOATC map so the order still has codes to be identified by.
+		//
+		// The factory case in UnmappedOrderAdministrationSiteTest pins the overload; without this one
+		// the builder's USE of it is unpinned, and dropping the argument at that call site leaves the
+		// whole suite green while silently emptying the field for exactly the orders it was added for.
+		DrugReferenceTestSupport.mapConceptToAtc(ORDERED_CONCEPT, "N02BA01");
+		recordRoute("Nasal administration");
+		makeTheOrderNameless();
+
+		PatientClinicalContext.ActiveDrugOrder order = theOrder();
+		assertFalse(order.hasKnownName(), "the arrangement must reach the code-only rung, was: " + order);
+		assertEquals(DrugReferenceTestSupport.set("nasal administration"),
+				order.getAdministrationTerms());
+	}
+
+	/** Order 111 with nothing left that can name it — the shape {@code namedByCodesOnly} stands in for.
+	 *  The same three columns {@code NamelessActiveOrderPartnerTest} clears, and cleared for the reason
+	 *  that file records: leaving {@code drug_non_coded} to the dataset would make the arrangement
+	 *  contingent on data this file does not control. */
+	private void makeTheOrderNameless() {
+		Context.getAdministrationService().executeSQL("update drug_order set drug_inventory_id = null,"
+				+ " drug_non_coded = null where order_id = 111", false);
+		Context.getAdministrationService()
+				.executeSQL("update concept_name set voided = 1 where concept_id = " + ORDERED_CONCEPT,
+					false);
+		flush();
 	}
 
 	/** The one active drug order patient 7 has, off the real builder. */

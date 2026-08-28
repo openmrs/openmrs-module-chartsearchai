@@ -3028,17 +3028,22 @@ public class DrugSafetyValidator {
 	 *         question, not this one.
 	 *
 	 *         <p><b>So a CONTESTED token can only be admitted at {@link DrugReference#NAME_IS_THE_DISPLAY_NAME},
-	 *         and the reconciled label is then that token re-cased.</b> Every rival reaching the comparison
+	 *         and — measured, not derived — the reconciled label is then that token re-cased.</b>
+	 *         Every rival reaching the comparison
 	 *         passed {@link #namesEntry}, so the token IS one of that rival's stored aliases; those are
-	 *         stored trimmed ({@link DrugReference#setAliases}) and the loader drops any that names
-	 *         nothing, so identity implies containment and the rival ranks at least
+	 *         stored trimmed ({@link DrugReference#setAliases}) and the loader leaves none that names
+	 *         nothing ({@code DrugReferenceValidity.sanitizeAliases}), so on a loaded dataset identity
+	 *         implies containment and the rival ranks at least
 	 *         {@link DrugReference#NAME_IS_ANOTHER_NAME}. Nothing strictly outranks
 	 *         that but the top rank. It is the trim that makes this a derivation rather than a hope —
 	 *         untrimmed, a padded alias answers {@link DrugReference#isNamed} true and
 	 *         {@link DrugReference#NAME_NO_MATCH}, and such a rival drops out of the contest entirely.
-	 *         Measured over the shipped KB through {@link DrugReference#displayLabel()}: of the 18
-	 *         contested pairs this admits, 18 are at the top rank and none has a label differing from the
-	 *         token by anything but case. That is what bounds the change downstream — the reconciled
+	 *         The LABEL half is a separate fact and only measured: the top rank says the token is the
+	 *         row's {@code name}, while the ladder prints {@link DrugReference#displayLabel()}, which can
+	 *         append a diverging generic — the shipped {@code Hyoscyamine} row renders
+	 *         {@code Hyoscyamine (atropine)}. Measured over the shipped KB: of the 18 contested pairs
+	 *         this admits, 18 are at the top rank and none has a label differing from the token by
+	 *         anything but case; if that goes stale the downstream bound goes with it. That is what bounds the change downstream — the reconciled
 	 *         sentence names the same substance by the same string, so the prompt's name union for that
 	 *         partner cannot move, and {@link SubjectRule#partnerKey} case-folds to the label the chip now
 	 *         renders rather than away from it. The UNCONTESTED path is unchanged and still admits at

@@ -722,12 +722,12 @@ public class DrugReference {
 	 * accents, dotted capital I, hyphen, period and digits, every pair where {@code isNamed} holds and
 	 * {@code nameMatchStrength} answers below {@link #NAME_IS_ANOTHER_NAME} has an alias differing from
 	 * its own {@code trim()} (a folds-to-empty alias is the other, and {@code DrugReferenceValidity}
-	 * drops that at load). With the alias trimmed AND that drop done, {@code isNamed} implies
-	 * {@code matchesDrugName}, because identity is a case of containment. Both halves are needed and the
-	 * second is the loader's: an alias of combining marks alone survives this trim, still answers
-	 * {@code isNamed}, and folds to an empty needle that {@code containsBoundedToken} can never match —
-	 * so the implication holds for a loaded dataset and not for one pushed through the {@code setEntries}
-	 * seam.
+	 * drops that at load). Both halves are needed and the second is the loader's: an alias of combining
+	 * marks alone survives this trim, still answers {@code isNamed}, and folds to an empty needle that
+	 * {@code containsBoundedToken} can never match. So the implication {@code isNamed} implies
+	 * {@code matchesDrugName} is a property of a LOADED dataset, resting on this trim and on
+	 * {@code DrugReferenceValidity.sanitizeAliases} leaving no alias that names nothing — not of this
+	 * setter alone, and not of an entry pushed through the {@code setEntries} seam.
 	 *
 	 * <p>Null elements are passed through untouched, as they were: {@link #normalizeName} and
 	 * {@code namesAnything} both answer for them, and dropping them here would move a decision the
@@ -1840,9 +1840,10 @@ public class DrugReference {
 	 * through {@link DrugReferenceService#uniqueStrongestClaimant}, to decide which of the substances a
 	 * token names it denotes. Only the top two ranks are in play there, and that is a consequence of
 	 * {@link #setAliases} storing the list trimmed rather than of the caller's {@link #isNamed} gate
-	 * alone: identity with a trimmed alias implies containment, so the gate cannot admit a pair this
-	 * method then answers {@link #NAME_NO_MATCH} for, and the containment rung below is unreachable
-	 * because identity is stronger. Without the trim both of those fail on a padded alias, in the two
+	 * alone: on a LOADED dataset, identity with a trimmed alias implies containment, so the gate cannot
+	 * admit a pair this method then answers {@link #NAME_NO_MATCH} for, and the containment rung below
+	 * is unreachable because identity is stronger. Loaded, because the trim is only half of it — see
+	 * {@link #setAliases} for the other half and for what an entry bypassing the loader can still do. Without the trim both of those fail on a padded alias, in the two
 	 * directions {@code DrugSafetyValidator.unambiguouslyNames} records. Noted because it widens what
 	 * this method is asked about, and ADR Decision 51 carries the argument for accepting that over a
 	 * second spelling of the comparison.

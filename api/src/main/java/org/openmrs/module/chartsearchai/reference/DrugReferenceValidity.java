@@ -794,10 +794,11 @@ public final class DrugReferenceValidity {
 	 * whitespace is the one thing an author writes that does not survive, because untrimmed it makes
 	 * {@link DrugReference#isNamed} and {@link DrugReference#matchesDrugName} disagree about the same
 	 * pair. That setter carries the measurement; this pass sees the trimmed list and its own rules are
-	 * unaffected by it, both of them reading an alias through {@code namesAnything} or
-	 * {@link DrugReference#normalizeName}, which trim — so a padded alias answered THOSE predicates
-	 * exactly as its trimmed form does, which is the narrow sense in which nothing here moves, and not
-	 * the false general one.
+	 * unaffected by it: both of them read an alias through {@code namesAnything}, which folds before it
+	 * looks for a letter or digit, or through {@link DrugReference#normalizeName}, which trims — so a
+	 * padded alias answered THOSE predicates exactly as its trimmed form does. That is the narrow sense
+	 * in which nothing here moves, and not the false general one: the trim exists precisely because
+	 * {@link DrugReference#matchesDrugName} did NOT answer alike.
 	 */
 	private void sanitizeAliases(List<DrugReference> entries) {
 		int blanks = 0;
@@ -823,8 +824,19 @@ public final class DrugReferenceValidity {
 			// blank is unnamed once it is gone. Gated on the display name being a name at all — the
 			// curated parser already drops a blank-named entry, and repairing one by giving it a blank
 			// alias would put back exactly what the rule above took out.
+			//
+			// That gate is namesAnything and not merely non-null, because the two disagree on exactly the
+			// string this comment is about (issue #296). normalizeName only trims, so a display name of
+			// combining marks alone survives it and the repair re-added an alias the drop above had just
+			// removed for naming nothing — measured on a real load of an entry named "\u0301", which came
+			// out carrying it again on both the json and the atc arms, with BOTH findings reported. Callers
+			// downstream read this pass's output as "no loaded alias names nothing", and one of them now
+			// rests a rank derivation on it: DrugReference.setAliases stores the list trimmed so that
+			// isNamed implies matchesDrugName, and an alias that folds to an empty needle is the one
+			// survivor of that trim. Leaving such an entry with no alias at all is the right answer for a
+			// display name that names nothing, and the blank-alias finding has already told the operator.
 			String own = DrugReference.normalizeName(entry.getName());
-			if (own != null && !entry.isNamed(own)) {
+			if (own != null && namesAnything(own) && !entry.isNamed(own)) {
 				unnamed++;
 				unnamedIn.add(entry.getName());
 				usable.add(own);

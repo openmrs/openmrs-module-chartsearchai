@@ -59,6 +59,11 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	private static final String NAME_NOT_ITS_OWN_ALIAS_FIXTURE =
 			"chartsearchai-test/drug-reference-name-not-its-own-alias.json";
 
+	/** An entry whose name and only alias are a combining mark and nothing else — the string the two
+	 *  alias rules used to disagree about (issue #296). */
+	private static final String MARKS_ONLY_NAME_FIXTURE =
+			"chartsearchai-test/drug-reference-marks-only-name.json";
+
 	private static final String SUBSTANCE_DECLARED_FIXTURE =
 			"chartsearchai-test/drug-reference-substance-name-declared.json";
 
@@ -349,6 +354,51 @@ public class DrugReferenceValidityContextTest extends BaseModuleContextSensitive
 	// ------------------------------------------------------------------
 	// #211 / #210 — a substance's rows disagree
 	// ------------------------------------------------------------------
+
+	/**
+	 * The repair rung asks the same question of a display name as the drop rung asks of an alias, so it
+	 * cannot put back what that rung just took out (issue #296).
+	 *
+	 * <p>The two used to disagree on exactly one string. {@code namesAnything} folds diacritics away and
+	 * then looks for a letter or digit, so an alias of combining marks alone names nothing and is
+	 * dropped; {@code DrugReference.normalizeName} only trims, so the same string as a display NAME is
+	 * non-blank, and the repair below re-added it as an alias. The loaded entry then answered
+	 * {@code isNamed} true and {@code matchesDrugName} false for that string — the disagreement
+	 * {@code DrugReference.setAliases}' trim exists to make impossible, surviving the trim because the
+	 * fold empties the needle rather than the stored value, and reaching a caller that gates on the
+	 * first predicate and ranks with the second ({@code DrugSafetyValidator.unambiguouslyNames}).
+	 *
+	 * <p>The right answer for a display name that names nothing is no alias at all, and the operator has
+	 * already been told: the {@code blank-alias} finding fires either way. What must not stand is a
+	 * loaded entry carrying an alias this pass reported as naming nothing.
+	 */
+	@Test
+	public void aNameThatNamesNothingIsNotPutBackAsAnAlias() throws IOException {
+		DrugReferenceService service = loading(MARKS_ONLY_NAME_FIXTURE, "h296-marks-only.json",
+				ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_JSON);
+		DrugReferenceLoad status = service.getLoadStatus();
+
+		DrugReference marks = null;
+		for (DrugReference entry : service.getAll()) {
+			if ("marks-only".equals(entry.getId())) {
+				marks = entry;
+			}
+		}
+		assertNotNull(marks, "precondition: the entry must have loaded, was: " + service.getAll());
+		assertEquals("[]", marks.getAliases().toString(),
+				"the alias the drop rung removed for naming nothing must not be re-added by the repair "
+						+ "rung, or the loaded list contradicts the finding reported about it");
+		assertFalse(marks.isNamed(marks.getName()) && !marks.matchesDrugName(marks.getName()),
+				"and the point of that: no loaded entry may answer isNamed true and matchesDrugName "
+						+ "false for one string, which is what DrugReference.setAliases' trim leaves to "
+						+ "this pass to finish");
+
+		assertTrue(rulesOf(status).contains(DrugReferenceValidity.BLANK_ALIAS),
+				"the operator is still told the file is wrong. Rules were: " + rulesOf(status));
+		DrugReference control = DrugReferenceTestSupport.row(service.getAll(), "Gentamicin");
+		assertEquals("[gentamicin]", control.getAliases().toString(),
+				"and the control in the same file is untouched");
+	}
 
 	/**
 	 * Issue #210's precondition, repaired. An entry whose {@code aliases} omit its own {@code name} is

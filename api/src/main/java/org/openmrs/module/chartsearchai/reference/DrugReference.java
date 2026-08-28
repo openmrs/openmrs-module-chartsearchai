@@ -698,8 +698,50 @@ public class DrugReference {
 		return aliases;
 	}
 
+	/**
+	 * Stores the alias list TRIMMED, which is what keeps this class's two name predicates from
+	 * disagreeing about the same pair (issue #296).
+	 *
+	 * <p>{@link #isNamed} compares through {@link #normalizeName}, which trims both operands;
+	 * {@link #matchesDrugName} hands the alias to {@link #containsBoundedToken} as the needle and trims
+	 * nothing. So a stored alias carrying padding IS one of the entry's names by the first predicate and
+	 * matches nothing by the second, and {@link #nameMatchStrength} — gated on the second — then answers
+	 * {@link #NAME_NO_MATCH} for a name the entry demonstrably has. Both directions of that are wrong
+	 * where a caller gates on one and ranks with the other: measured through the real
+	 * {@code JsonDrugReferenceSource} and the real {@code DrugSafetyValidator.validate}, a curated entry
+	 * named only by {@code " warfarin"} lost a folded-chip reconciliation it had, and the same padding on
+	 * a RIVAL row let that row drop out of the ranking contest and licensed a displacement — one
+	 * substance's rated mechanism under another's name, the #161/#187/#194 failure.
+	 *
+	 * <p>Trimming here rather than in either predicate, because the disagreement is a property of the
+	 * stored string and this is the one place every source writes it — {@code ddinter}, {@code atc}, the
+	 * curated {@code json} parser and {@code DrugReferenceValidity}'s own repairs all arrive here. It
+	 * changes no bundled dataset: 0 padded aliases over the shipped 19 MB knowledge base, the curated
+	 * seed and the DDInter excerpt. And it is exhaustive for the disagreement rather than a patch on one
+	 * shape of it — searched over both operands across space, tab, NBSP, NUL, precomposed and decomposed
+	 * accents, dotted capital I, hyphen, period and digits, every pair where {@code isNamed} holds and
+	 * {@code nameMatchStrength} answers below {@link #NAME_IS_ANOTHER_NAME} has an alias differing from
+	 * its own {@code trim()} (a folds-to-empty alias is the other, and {@code DrugReferenceValidity}
+	 * drops that at load). With the alias trimmed, {@code isNamed} implies {@code matchesDrugName},
+	 * because identity is a case of containment.
+	 *
+	 * <p>Null elements are passed through untouched, as they were: {@link #normalizeName} and
+	 * {@code namesAnything} both answer for them, and dropping them here would move a decision the
+	 * loader's validity pass owns.
+	 */
 	public void setAliases(List<String> aliases) {
-		this.aliases = aliases != null ? aliases : Collections.<String> emptyList();
+		this.aliases = aliases != null ? trimmedAliases(aliases) : Collections.<String> emptyList();
+	}
+
+	/** @return {@code aliases} with every non-null element trimmed — {@link #setAliases}'s whole rule,
+	 *          split out so the setter reads as the one-line assignment it is. The list is copied, so a
+	 *          caller keeping its own reference cannot un-trim what this stored. */
+	private static List<String> trimmedAliases(List<String> aliases) {
+		List<String> trimmed = new ArrayList<String>(aliases.size());
+		for (String alias : aliases) {
+			trimmed.add(alias == null ? null : alias.trim());
+		}
+		return trimmed;
 	}
 
 	public List<String> getAtcCodes() {
@@ -1792,11 +1834,14 @@ public class DrugReference {
 	 *
 	 * <p><b>Since issue #296 one caller asks it of a REFERENCE string</b> — a rule's own match token,
 	 * through {@link DrugReferenceService#uniqueStrongestClaimant}, to decide which of the substances a
-	 * token names it denotes. Only the top two ranks are in play there, because that caller gates on
-	 * {@link #isNamed} first, so {@link #matchesDrugName}'s recorded-name boundary rule and the
-	 * containment rung below it never decide anything. Recorded because it widens what this method is
-	 * asked about, and ADR Decision 51 carries the argument for accepting that over a second spelling
-	 * of the comparison.
+	 * token names it denotes. Only the top two ranks are in play there, and that is a consequence of
+	 * {@link #setAliases} storing the list trimmed rather than of the caller's {@link #isNamed} gate
+	 * alone: identity with a trimmed alias implies containment, so the gate cannot admit a pair this
+	 * method then answers {@link #NAME_NO_MATCH} for, and the containment rung below is unreachable
+	 * because identity is stronger. Without the trim both of those fail on a padded alias, in the two
+	 * directions {@code DrugSafetyValidator.unambiguouslyNames} records. Noted because it widens what
+	 * this method is asked about, and ADR Decision 51 carries the argument for accepting that over a
+	 * second spelling of the comparison.
 	 *
 	 * <p><b>Why a rank and not first-past-the-post (issue #176).</b> Resolution took the earliest
 	 * matching entry, and reference names nest: 206 of the shipped KB's 2283 entries did not resolve to

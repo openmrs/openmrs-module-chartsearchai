@@ -2802,7 +2802,10 @@ public class DrugSafetyValidator {
 	 * {@code antithrombin iii}) — and wherever {@link DrugReference#canonicalRow} hands the ladder a row
 	 * that is not the token's strongest claimant, which over the shipped KB is {@code gabapentin}
 	 * ({@code entryForAtcCode} resolves {@code N02BF01} to {@code Gabapentin enacarbil}, an alias claim,
-	 * while the {@code Gabapentin} row claims it outright); issue #296 closed the rest of what ADR
+	 * while the {@code Gabapentin} row claims it outright). That second shape is not gabapentin's alone —
+	 * {@code A02BC05} resolves to {@code Omeprazole} against the token {@code esomeprazole} the same way,
+	 * where refusing is the whole point of the guard — so what is named here is the instance among the
+	 * chips ADR Decision 51 measured, not the extent of the shape. Issue #296 closed the rest of what ADR
 	 * Decision 39 recorded here; a rule carrying only an ATC code keeps
 	 * naming its partner by that code; and chips of DIFFERENT subjects can still name one order two ways,
 	 * which is outside this ticket.
@@ -2990,9 +2993,12 @@ public class DrugSafetyValidator {
 	 *         {@code Atropine}'s claim carry a displacement onto the label
 	 *         {@code Atropine (ophthalmic)}, for a rule that may be {@code Hyoscyamine}'s. Rows of
 	 *         {@code entry}'s own substance are excluded from the contest instead of contesting it, or an
-	 *         uncontested token would start refusing wherever a substance is filed as several rows.
-	 *         {@code FoldedChipOnePartnerNameTest.aRuleTokenTheLaddersRowOnlyTiesKeepsItsOwnToken} is that
-	 *         pair, and reddens if either choice is reversed.
+	 *         uncontested token would start refusing wherever a sibling row claims it at least as
+	 *         strongly — which on DDInter is every token that is not some row's own display name, the
+	 *         rows of a substance sharing one alias list. A case apiece, because neither can see the
+	 *         other's choice: {@code FoldedChipOnePartnerNameTest.aRuleTokenTheLaddersRowOnlyTiesKeepsItsOwnToken}
+	 *         reddens if the row's claim gives way to its substance's, and
+	 *         {@code aSiblingRowOfTheLaddersOwnSubstanceDoesNotContestTheToken} if the exclusion goes.
 	 *
 	 *         <p>Not exotic, and not a shape a curated fixture can stand in for: over the shipped KB,
 	 *         25 of its 2093 distinct rule tokens are named by more than one substance
@@ -3023,9 +3029,13 @@ public class DrugSafetyValidator {
 	 *
 	 *         <p><b>So a CONTESTED token can only be admitted at {@link DrugReference#NAME_IS_THE_DISPLAY_NAME},
 	 *         and the reconciled label is then that token re-cased.</b> Every rival reaching the comparison
-	 *         passed {@link #namesEntry}, so every rival ranks at least
-	 *         {@link DrugReference#NAME_IS_ANOTHER_NAME}, and nothing can strictly outrank that but the top
-	 *         rank. Measured over the shipped KB through {@link DrugReference#displayLabel()}: of the 18
+	 *         passed {@link #namesEntry}, so the token IS one of that rival's stored aliases; those are
+	 *         stored trimmed ({@link DrugReference#setAliases}), so identity implies containment and the
+	 *         rival ranks at least {@link DrugReference#NAME_IS_ANOTHER_NAME}. Nothing strictly outranks
+	 *         that but the top rank. It is the trim that makes this a derivation rather than a hope —
+	 *         untrimmed, a padded alias answers {@link DrugReference#isNamed} true and
+	 *         {@link DrugReference#NAME_NO_MATCH}, and such a rival drops out of the contest entirely.
+	 *         Measured over the shipped KB through {@link DrugReference#displayLabel()}: of the 18
 	 *         contested pairs this admits, 18 are at the top rank and none has a label differing from the
 	 *         token by anything but case. That is what bounds the change downstream — the reconciled
 	 *         sentence names the same substance by the same string, so the prompt's name union for that
@@ -3040,22 +3050,19 @@ public class DrugSafetyValidator {
 	 *         orphan every reference issue #292 left behind, in this file, in {@code CLAUDE.md} and in the
 	 *         ADR, for a word that is still true under the definition given here.
 	 *
-	 *         <p><b>What it NARROWS, which is not nothing.</b> The rank floor inside
-	 *         {@link DrugReferenceService#uniqueStrongestClaimant} runs {@link DrugReference#nameMatchStrength},
-	 *         which gates on {@link DrugReference#matchesDrugName}, and that predicate does not trim the
-	 *         alias it scans for while {@link DrugReference#isNamed} trims both operands. So an entry whose
-	 *         own name survives only as a PADDED alias passes this method's first gate and fails the floor,
-	 *         and a chip that reconciled before issue #296 now keeps both names. Reachable only on an
-	 *         operator-edited {@code sourceFormat=json} file — {@code JsonDrugReferenceSource} is plain
-	 *         Jackson and {@code DrugReferenceValidity.sanitizeAliases} drops only an alias that names
-	 *         nothing — and measured absent from everything bundled: 0 of the shipped KB's 2297
-	 *         {@code (token, row)} {@code isNamed} pairs rank below {@link DrugReference#NAME_IS_ANOTHER_NAME},
-	 *         and the curated seed carries no padded alias either. Fail-closed rather than
-	 *         mis-attributing: the chip shows the pre-#292 two-name detail, and no sentence becomes false.
-	 *         Pinned by {@code FoldedChipOnePartnerNameTest.aPaddedAliasLosesAReconciliationItUsedToGet}, so
-	 *         a change that closes it reddens a test. Closing it means trimming aliases where the loader
-	 *         already normalises them, which widens {@code matchesDrugName} for every caller and is a
-	 *         decision on its own evidence.
+	 *         <p><b>It rests on the alias list being stored TRIMMED, and that was not free.</b> The rank
+	 *         floor inside {@link DrugReferenceService#uniqueStrongestClaimant} runs
+	 *         {@link DrugReference#nameMatchStrength}, which gates on {@link DrugReference#matchesDrugName};
+	 *         that predicate trims neither operand while {@link DrugReference#isNamed} trims both. So
+	 *         before {@link DrugReference#setAliases} trimmed, a curated entry named only by a PADDED
+	 *         alias passed this method's first gate and failed the floor — losing a reconciliation the
+	 *         existence form had made — and the same padding on a RIVAL row dropped that row out of the
+	 *         contest and licensed a displacement, which is the #161/#187/#194 failure the ranking exists
+	 *         to prevent. Both measured through the real {@code JsonDrugReferenceSource} and the real
+	 *         {@link #validate}, and both closed at the stored string rather than in either predicate,
+	 *         for the reasons {@code setAliases} records.
+	 *         {@code FoldedChipOnePartnerNameTest.aPaddedAliasNamesTheOneOrderOnce} reddens if that trim
+	 *         is removed.
 	 *
 	 *         <p>A sweep of {@code getAll()} per folded chip whose ladder resolved an entry, deliberately
 	 *         uncached: the immediately preceding {@link #ruleAbout} in the same iteration already calls

@@ -789,7 +789,12 @@ public final class DrugReferenceValidity {
 	 * holds by construction on every format instead of resting on the shape of the file.
 	 *
 	 * <p>Lowercased as those parsers lowercase theirs, so an alias list stays one vocabulary; the authored
-	 * aliases are kept and the name is appended, so nothing an author wrote is replaced.
+	 * aliases are kept and the name is appended, so nothing an author wrote is replaced. Kept as
+	 * {@link DrugReference#setAliases} stores them, which since issue #296 is TRIMMED — surrounding
+	 * whitespace is the one thing an author writes that does not survive, because untrimmed it makes
+	 * {@link DrugReference#isNamed} and {@link DrugReference#matchesDrugName} disagree about the same
+	 * pair. That setter carries the measurement; this pass sees the trimmed list and its own rules are
+	 * unaffected by it, a padded alias having named exactly what its trimmed form names all along.
 	 */
 	private void sanitizeAliases(List<DrugReference> entries) {
 		int blanks = 0;

@@ -2159,8 +2159,13 @@ public class DrugReferenceInjector {
 	 *         <p><b>The residue, stated rather than discovered.</b> The chips' post-answer pass can also
 	 *         resolve rows the ANSWER's own wording names, which no pre-answer record can carry — it is
 	 *         written before the answer exists. So this closes every shape reachable from the pass that
-	 *         writes the record, and the bound is the one {@code DrugSafetyValidator.SubstanceSubjects}
-	 *         already records for the same reason.
+	 *         writes the record, and the bound is the rows that pass resolved
+	 *         ({@code DrugSafetyValidator.resolvedSubstanceRows}, which the ANSWER still widens
+	 *         deliberately per issue #175). This used to cite
+	 *         {@code DrugSafetyValidator.SubstanceSubjects} as recording the same bound, and since issue
+	 *         #238 it no longer does: what a substance is CALLED is now folded over the question's and the
+	 *         orders' rows alone, so the two passes agree on the NAME while still differing on which rows
+	 *         are in play — which is the bound this residue is about.
 	 *
 	 * @param band the rendered row's own band for this patient, or null when it publishes none — in which
 	 *        case every sibling band differs, which is the starker form of the same defect: the record

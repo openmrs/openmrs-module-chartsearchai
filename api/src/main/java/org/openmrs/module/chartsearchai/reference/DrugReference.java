@@ -561,8 +561,10 @@ public class DrugReference {
 	 *         them to iterate in an order the others do not. Grep the callers rather than trusting a count
 	 *         here — every issue that finds another surface adds one. Since #206 the CHIP subjects share
 	 *         one per-{@code validate} lookup ({@code DrugSafetyValidator.SubstanceSubjects}) that ranks the
-	 *         patient's recorded names before folding; a caller with no recorded name to rank by asks this
-	 *         directly.
+	 *         patient's recorded names before folding — and since issue #238 the rows it folds are the
+	 *         question's and the patient's own, so the two {@code validate} passes of one request reach the
+	 *         same answer even though the lookup itself is per pass; a caller with no recorded name to rank
+	 *         by asks this directly.
 	 */
 	static DrugReference canonicalRow(Iterable<DrugReference> rows) {
 		DrugReference canonical = null;

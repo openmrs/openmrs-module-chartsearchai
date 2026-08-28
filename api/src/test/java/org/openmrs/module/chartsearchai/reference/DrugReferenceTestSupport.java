@@ -552,6 +552,20 @@ public final class DrugReferenceTestSupport {
 		return new PatientClinicalContext.ActiveDrugOrder(uuid, display, names, atcCodes);
 	}
 
+	/** As {@link #activeOrder}, additionally carrying what the chart records about where the drug is
+	 *  APPLIED — the names of the order's route concept and of its drug's dosage-form concept, the two
+	 *  sources {@link PatientClinicalContextBuilder} collects for issue #234. A case that passes none
+	 *  of them is stating that the chart records neither, which is the reading that narrows nothing.
+	 *
+	 *  <p>A case here passes ONE spelling per source; the builder passes every name the concept
+	 *  publishes ({@code PatientClinicalContextBuilder.addConceptNames}), which is why the case that
+	 *  pins THAT is context-sensitive and lives in {@code ActiveOrderAdministrationTermsTest}. */
+	static PatientClinicalContext.ActiveDrugOrder activeOrder(String uuid, String display,
+			Set<String> names, Set<String> atcCodes, Set<String> administrationTerms) {
+		return new PatientClinicalContext.ActiveDrugOrder(uuid, display, names, atcCodes,
+				administrationTerms);
+	}
+
 	/**
 	 * One active drug order for the named entry of {@code service}, carrying the ATC codes that entry
 	 * publishes, read off the loaded dataset through the production accessor rather than copied into
@@ -699,7 +713,19 @@ public final class DrugReferenceTestSupport {
 	 * stops testing what it says it tests.
 	 */
 	static DrugReferenceService ddinterServiceWithGroups() {
-		DrugReferenceService service = ddinterService();
+		return serviceWithGroups(ddinterEntries());
+	}
+
+	/**
+	 * A service over {@code entries} carrying the real curated cross-reactivity groups — the ONE body
+	 * behind {@link #ddinterServiceWithGroups}, {@link #ddiFixtureService} and any case that needs the
+	 * shipped knowledge base with groups. The two steps have to stay together for the reason those
+	 * javadocs give — {@link #serviceWith} pins the groups EMPTY through its {@code setEntries} seam,
+	 * so a service built without the second call silently cannot raise a curated-group chip — and the
+	 * argument is easier to keep true in one method than in three.
+	 */
+	static DrugReferenceService serviceWithGroups(List<DrugReference> entries) {
+		DrugReferenceService service = serviceWith(entries);
 		service.setCrossReactivityGroups(bundledGroups());
 		return service;
 	}
@@ -770,9 +796,7 @@ public final class DrugReferenceTestSupport {
 	 * fixture service built without the second call silently cannot raise a curated-group chip.
 	 */
 	static DrugReferenceService ddiFixtureService(String classpathResource) throws IOException {
-		DrugReferenceService service = serviceWith(ddiFixtureEntries(classpathResource));
-		service.setCrossReactivityGroups(bundledGroups());
-		return service;
+		return serviceWithGroups(ddiFixtureEntries(classpathResource));
 	}
 
 	/**

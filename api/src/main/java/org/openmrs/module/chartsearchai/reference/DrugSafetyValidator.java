@@ -2649,7 +2649,9 @@ public class DrugSafetyValidator {
 			// the codes are — and resolving them is a full dataset scan per code. That is the ORDINARY
 			// outcome of this arm: a class-only chip is one this method answered null for, and issue
 			// #228 made both sides of the product larger (more partners, and a name-reached partner
-			// carries the reference row's whole code list rather than one dictionary's).
+			// carries the reference row's code list rather than one dictionary's — the WHOLE list only
+			// where the chart records no presentation this module can place, since issue #234 narrows
+			// it to the site an order's own route or dose form names).
 			return null;
 		}
 		for (String orderCode : new TreeSet<String>(orderCodes)) {
@@ -3067,13 +3069,18 @@ public class DrugSafetyValidator {
 	 * genuinely differ — topical dexamethasone does
 	 * not have systemic dexamethasone's interaction profile, which is why DDInter rates voxelotor Major
 	 * against systemic dexamethasone, Moderate against two others and carries no row at all against the
-	 * topical variant — but nothing on a {@code DrugOrder} tells this layer which variant the order is
-	 * (the context carries names and ATC codes; all four variants publish an identical ATC list),
-	 * so the variant cannot be resolved here. Reporting the strongest rating over-warns rather than
+	 * topical variant — but this layer still cannot resolve which variant the order is, and since issue
+	 * #234 that is a DATA-side limit rather than a context-side one. The context does now carry what the
+	 * chart records about where each order is applied
+	 * ({@link PatientClinicalContext.ActiveDrugOrder#getAdministrationTerms()}), and it is deliberately
+	 * not read here: a rule ROW is what has to be selected, DDInter files each route variant as its own
+	 * row, and all four of them publish an identical ATC list — so nothing relates a recorded route to a
+	 * row. That is the data-side half of #115, and it is what issue #234 could not close;
+	 * {@link DrugReference#codesForRecordedAdministration} narrows CODES for exactly that reason.
+	 * Reporting the strongest rating over-warns rather than
 	 * under-warns on a non-blocking advisory the clinician adjudicates, which is the fail-safe
 	 * direction; the accepted cost is that a patient on a topical form may see the systemic
-	 * severity. Making the severity route-aware needs a dose-form/route vocabulary that does not
-	 * exist yet — the data-side half of #115. The note length is the only informativeness signal a
+	 * severity. The note length is the only informativeness signal a
 	 * row carries: DDInter's "no mechanism description on file" fallback is shorter than any real
 	 * mechanism paragraph, and where two equally-rated rows both carry prose the longer one has been
 	 * a strict superset in the shapes measured — in the two dolutegravir x iron rows (171 and 236
@@ -5327,7 +5334,8 @@ public class DrugSafetyValidator {
 		 * Whether {@link #codes} came from the loaded DATASET rather than from the patient's own
 		 * orders — true only for a partner reached by an order's NAME (issue #228,
 		 * {@link DrugSafetyValidator#addPartnersForUnmappedOrders}), where the order published no
-		 * code and the reference row's are the only classification there is.
+		 * code and the reference row's are the classification available — narrowed since issue #234 to
+		 * the presentation the order records, as the last paragraph here says.
 		 *
 		 * <p>Read by ONE thing: {@link DrugSafetyValidator#classRelationships}'s
 		 * restating-existing-therapy skip, to scope its exact-code leg out. That leg is a PROXY for
@@ -5342,6 +5350,13 @@ public class DrugSafetyValidator {
 		 * <p>Not read by the CLASS comparison, which wants these codes whatever their provenance —
 		 * they are what the reference data says the substance is, and without them the arm cannot
 		 * reach an unmapped order at all.
+		 *
+		 * <p>Since issue #234 "the DATASET's" is still the right word for the provenance but no longer
+		 * means the substance's whole list: {@link DrugSafetyValidator#addPartnersForUnmappedOrders}
+		 * narrows them to the presentation the order's own recorded route or dose form names. That
+		 * changes nothing here — the flag is about where the codes came FROM, and a narrowed reference
+		 * row's codes are still reference rows' on both sides of the exact-code leg, which is the whole
+		 * reason that leg is scoped out.
 		 */
 		private boolean codesFromDataset;
 
@@ -5912,7 +5927,11 @@ public class DrugSafetyValidator {
 	 * same "as active order Dexamethasone" whether or not a dictionary classified the concept, which is
 	 * the property this fix is for. The codes are that same row's, for the same reason and because there
 	 * is no alternative: the order published none, so what the reference data files the substance under
-	 * is the only classification there is.
+	 * is the only classification there is — <b>except for the one thing the order CAN say about itself,
+	 * which is where the drug is applied</b>. Since issue #234 those codes pass through
+	 * {@link DrugReference#codesForRecordedAdministration} first, so a substance marketed by several
+	 * routes is compared on the presentation the chart records rather than on all of them. Where the
+	 * chart records nothing this module can attribute to a site, the sentence above stands unchanged.
 	 *
 	 * <p><b>WHICH row of the substance</b> is {@link #interactionSubject}, not the bare fold. A partner
 	 * reached from an ATC CODE has no recorded name to prefer, which is why {@link #entryForAtcCode}
@@ -5949,12 +5968,23 @@ public class DrugSafetyValidator {
 	 *       {@code H02AB} where the same order mapped to {@code D07AA02} alone would say nothing. This
 	 *       is the over-claiming direction, and it is the one a clinician sees.</li>
 	 * </ul>
-	 * Neither is closable here, and for one reason: the ROUTE is not available to this arm at all —
-	 * {@link PatientClinicalContextBuilder} never reads {@code DrugOrder.getRoute()}, which is the same
-	 * bound {@link #sharedClass} records for its own class preference. What the order publishes is a
-	 * name; what the dataset publishes for that name is every route it markets. Given only those two,
-	 * naming the substance's classes is the honest reading, and narrowing it would need a route the
-	 * module does not carry.
+	 * <b>The second of those is issue #234 and is now closed; the first is not.</b> The route WAS
+	 * unavailable to this arm — {@link PatientClinicalContextBuilder} read a {@code DrugOrder}'s names
+	 * and its concept's ATC mappings and nothing else — and it is now carried, per order, as
+	 * {@link PatientClinicalContext.ActiveDrugOrder#getAdministrationTerms()}: every name the order's
+	 * route concept publishes and every name its drug's dosage-form concept publishes — not the one
+	 * {@code Concept.getName()} elects, which is the locale-PREFERRED spelling and hides the formal one
+	 * this module's vocabulary is written in for three of the reference dictionary's own routes. So the
+	 * codes this leg loads into the partner go through {@link DrugReference#codesForRecordedAdministration} first, which keeps the
+	 * ones classifying a presentation given where the chart says the drug is applied.
+	 *
+	 * <p>It closes the OVER-claiming direction only, and only where the chart says something this
+	 * module can attribute: a term naming no site, and a substance the dataset files under no code at
+	 * that site, both leave these codes exactly as they were. Measured on the 3.7.1 demo instance
+	 * 2026-08-28, that is all 46 of its active drug orders — 32 recording "Oral administration" and 14
+	 * recording nothing — so the narrowing is inert on every corpus this repo can drive and the first
+	 * bullet's own case is untouched. The under-claiming direction above is still deliberately open:
+	 * widening a partly-mapped order to the dataset's codes would change chips neither issue is about.
 	 *
 	 * <p><b>Appended after the code walk</b>, so every chip this arm already raised keeps its position and
 	 * a newly-reachable co-medication sorts after the ones a dictionary classified. A substance the walk
@@ -5987,7 +6017,7 @@ public class DrugSafetyValidator {
 			Map<PatientClinicalContext.ActiveDrugOrder, Map<Object, List<DrugReference>>> cache,
 			Map<Object, Set<Object>> impliedByName) {
 		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
-			if (!Collections.disjoint(order.getAtcCodes(), context.getActiveDrugAtcCodes())) {
+			if (!governedByTheNameLeg(order, context)) {
 				continue;
 			}
 			for (Map.Entry<Object, List<DrugReference>> named
@@ -5997,7 +6027,14 @@ public class DrugSafetyValidator {
 				}
 				DrugReference row = interactionSubject(named.getValue(), order.getNames());
 				OrderPartner partner = new OrderPartner(row);
-				partner.codes.addAll(row.normalizedAtcCodes());
+				// The dataset's codes for the SUBSTANCE, narrowed to the presentations the chart
+				// records (issue #234). Unnarrowed they cover every route the substance is marketed as,
+				// and sharedClass prefers the systemic subgroup among them, so a topical order was named
+				// in a systemic duplicate-therapy chip that the SAME order mapped to a topical code does
+				// not raise. Asked of the SUBSTANCE and not of this order — see the helper, which is
+				// where that distinction is load-bearing.
+				partner.codes.addAll(codesForThisSubstancesPresentations(named.getKey(), context,
+						row.normalizedAtcCodes(), cache, impliedByName));
 				partner.codesFromDataset = true;
 				// This partner IS this substance, so restating it is not duplicating it — and with the
 				// exact-code leg scoped out above, this is the WHOLE of that skip here.
@@ -6005,6 +6042,109 @@ public class DrugSafetyValidator {
 				byIdentity.put(named.getKey(), partner);
 			}
 		}
+	}
+
+	/**
+	 * @return {@code codes} — the reference row's whole ATC list for {@code substance} — narrowed to the
+	 *         presentations this patient's chart records for that substance, or unchanged where it
+	 *         records one this module cannot attribute to a site.
+	 *
+	 *         <p><b>Asked of the SUBSTANCE, over every unmapped order that names it, and not of the one
+	 *         order that happened to reach it first.</b> That is the whole reason this is a method. The
+	 *         partner is keyed on {@link DrugReference#substanceGroupKey()}, so two orders of one
+	 *         substance are ONE co-medication (issue #186) and {@link #alreadyACoMedication} skips the
+	 *         second before its terms are ever read — which made the FIRST order in {@code OrderService}
+	 *         list order decide the classification for both. Measured through the real {@code validate}
+	 *         over {@code ddi-contra-route-variants.json}, a patient on an unmapped
+	 *         {@code Hydrocortisone cream 1%} recorded {@code Topical} AND an unmapped
+	 *         {@code Hydrocortisone 20mg tablet} recorded {@code Oral administration}, asked about
+	 *         dexamethasone: cream first raised nothing, tablet first raised the {@code H02AB} chip. The
+	 *         patient is on systemic hydrocortisone in both. A suppression that depends on the sequence
+	 *         the prescriptions came back in is the hazard {@code CLAUDE.md} records for
+	 *         {@link OrderPartner#substances} and {@link #ordersCarrying}, reached here by another road.
+	 *
+	 *         <p><b>One presentation this module cannot express declines for the whole substance</b>,
+	 *         rather than the union of the sites the others name. The orders are presentations of ONE
+	 *         drug the patient is on, so an order it cannot place is a presentation it cannot rule out —
+	 *         and the substance's own classification is then the only honest answer, which is the same
+	 *         reading {@link DrugReference#codesForRecordedAdministration} takes for a single order that
+	 *         names no site. Failing the other way would let a topical cream silence the tablet beside
+	 *         it.
+	 *
+	 *         <p><b>"Cannot express" and not "names no site"</b>, which is
+	 *         {@link DrugReference#narrowsAnyCode}'s own distinction and a defect that stood between two
+	 *         passes of this change: an order the module places at a site the dataset files no code for
+	 *         passes the weaker test, and its decline then rests on a fallback evaluated over the UNION
+	 *         of every order's terms — which a sibling that does narrow rescues, taking the first
+	 *         order's codes with it.
+	 *
+	 *         <p>Scoped to the orders THIS leg governs — dictionary-unmapped, through the same
+	 *         {@link #governedByTheNameLeg} the caller applies. <b>Nothing in the suite pins that
+	 *         conjunct</b>: removing it left the whole api build green, so a reader must not delete it
+	 *         expecting a test to object. It is kept because the cover it duplicates is not total. In
+	 *         the ordinary case an order the code walk reached produced a partner of its own and
+	 *         {@link #alreadyACoMedication} keeps this leg away from that substance entirely — through
+	 *         its second half, {@link OrderPartner#substances}, wherever the dataset could name none of
+	 *         that order's codes. Where the dataset CAN name them the partner is keyed on the substance
+	 *         the dataset names the CODE, that field is not filled, and this leg asks a different
+	 *         question: what the order's NAME implies. A substance the name implies and the code does
+	 *         not name is therefore invisible to {@link #alreadyACoMedication} and can be given a
+	 *         partner here through an unmapped sibling order, at which point this loop would reach the
+	 *         mapped order too. Whether the shipped data holds such a pair is not measured; the
+	 *         conjunct makes it moot, by keeping a dictionary-mapped prescription's recorded
+	 *         administration out of a substance this leg owns.
+	 *
+	 *         <p><b>What the re-walk costs, measured rather than argued.</b> The WALK is quadratic in
+	 *         the orders this leg governs — a {@link Collections#disjoint} and a map lookup per pair —
+	 *         but the two expensive halves are not: the {@code containsKey} conjunct admits only the
+	 *         orders naming THIS substance, so the site walk is linear, and no name is resolved twice.
+	 *         {@code cache} is one memo for the whole {@link #orderPartners} call and the caller's own
+	 *         loop shares it, so each governed order's names are resolved once across the whole of
+	 *         {@link #addPartnersForUnmappedOrders}, by whichever of the two walks reaches it first.
+	 *         Nothing is said here about WHICH walk that is: this one returns early on a decline, so it
+	 *         may resolve none, and the property that matters does not depend on the answer. Counted through the real {@code validate} over the shipped KB: 27
+	 *         orders give 486 inner iterations against 27 site walks, and 320 give 67550 against 315.
+	 *         Timed the same way against a build with the narrowing removed altogether — 3 rounds of 20
+	 *         reps at 10, 80 and 320 orders — the two are indistinguishable within this machine's
+	 *         run-to-run spread, which is why no short-circuit is built here. Re-measure that way, and
+	 *         note that no TIME figure is quoted for the same reason {@link #orderPartners} quotes none.
+	 *
+	 */
+	private Set<String> codesForThisSubstancesPresentations(Object substance,
+			PatientClinicalContext context, Set<String> codes,
+			Map<PatientClinicalContext.ActiveDrugOrder, Map<Object, List<DrugReference>>> cache,
+			Map<Object, Set<Object>> impliedByName) {
+		Set<String> recorded = new LinkedHashSet<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+			if (!governedByTheNameLeg(order, context)
+					|| !substanceRowsNamedBy(order, cache, impliedByName).containsKey(substance)) {
+				continue;
+			}
+			if (!DrugReference.narrowsAnyCode(codes, order.getAdministrationTerms())) {
+				return codes;
+			}
+			recorded.addAll(order.getAdministrationTerms());
+		}
+		return DrugReference.codesForRecordedAdministration(codes, recorded);
+	}
+
+	/**
+	 * @return whether {@code order} is one the NAME leg governs — an order none of whose ATC codes
+	 *         reached {@link #orderPartners}' code walk, so it produced no partner there.
+	 *
+	 *         <p>One expression rather than two, because two methods ask it and a drift between them is
+	 *         silent and in the narrowing direction: the helper would then read the administration of an
+	 *         order the loop never governed, letting a mapped prescription's route decide a substance
+	 *         this leg owns. Extracted for the reason {@code CLAUDE.md} gives for
+	 *         {@code PatientClinicalContext.matchableToken} — "not matchable" and "did not match" were
+	 *         split out of one predicate precisely so they cannot answer differently.
+	 *
+	 *         <p>Computed from what the code walk ACTUALLY walked, not from a proxy for it, which is
+	 *         {@link #addPartnersForUnmappedOrders}' own rule.
+	 */
+	private static boolean governedByTheNameLeg(PatientClinicalContext.ActiveDrugOrder order,
+			PatientClinicalContext context) {
+		return Collections.disjoint(order.getAtcCodes(), context.getActiveDrugAtcCodes());
 	}
 
 	/**
@@ -6292,16 +6432,23 @@ public class DrugSafetyValidator {
 	 * not, which is the failure a clinician checks and then stops trusting.
 	 *
 	 * <p><b>Why prefer the systemic class rather than match the order's route.</b> The route is not
-	 * available here, and could only ever be available on one of the two call sites. This arm runs
-	 * both for a drug the QUESTION names, which has no route at all, and for one the patient is on
-	 * ({@link #addActiveOrderContraindications}) — and even there it receives a resolved
-	 * {@link DrugReference}, not the order. Nothing carries the route that far:
-	 * {@link PatientClinicalContextBuilder} reads a {@code DrugOrder}'s name concepts and its ATC
-	 * mappings, never {@code getRoute()}, and {@link PatientClinicalContext.ActiveDrugOrder}'s display
-	 * is the order's first NAME rather than a dosing line. Route-matching is therefore not a smaller
-	 * change than this one but a larger one — a new field on the context, a route-concept-to-ATC
-	 * mapping the module does not have — and it would still leave the question-driven half of this
-	 * arm choosing by some other rule.
+	 * available HERE, and the half of that which is about this seam is unchanged by issue #234: this
+	 * arm runs both for a drug the QUESTION names, which has no route at all, and for one the patient
+	 * is on ({@link #addActiveOrderContraindications}) — and even there it receives a resolved
+	 * {@link DrugReference}, not the order. So a route-matching rule could only ever bind one of the
+	 * two call sites, and the question-driven half would still be choosing by some other rule. That is
+	 * why the preference stays exactly as it is.
+	 *
+	 * <p><b>What issue #234 changed, and what it did not.</b> The premise that "nothing carries the
+	 * route that far" is no longer true of the context: {@link PatientClinicalContextBuilder} now reads
+	 * a {@code DrugOrder}'s route concept and its drug's dosage-form concept, and
+	 * {@link PatientClinicalContext.ActiveDrugOrder#getAdministrationTerms()} carries them. It is used
+	 * at ONE site — {@link #addPartnersForUnmappedOrders}, where a partner reached by NAME holds the
+	 * dataset's codes for a whole substance and the chart can say which presentation of it the patient
+	 * has. It is deliberately NOT used here. This method compares two code sets and is handed them by
+	 * four callers; the narrowing belongs where an order is turned into codes, not where codes are
+	 * compared, or the same evidence would be applied twice and once out of reach of the order it came
+	 * from.
 	 *
 	 * <p><b>WHICH PAIRS THE FIGURES BELOW COUNT (issue #243).</b> Two PAIR bases — the CLAIM base named
 	 * in the paragraph below headed "But the two arms CAN now name different classes" is a third thing,

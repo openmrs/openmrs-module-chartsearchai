@@ -5277,7 +5277,8 @@ public class DrugSafetyValidator {
 		 * Whether {@link #codes} came from the loaded DATASET rather than from the patient's own
 		 * orders — true only for a partner reached by an order's NAME (issue #228,
 		 * {@link DrugSafetyValidator#addPartnersForUnmappedOrders}), where the order published no
-		 * code and the reference row's are the only classification there is.
+		 * code and the reference row's are the classification available — narrowed since issue #234 to
+		 * the presentation the order records, as the last paragraph here says.
 		 *
 		 * <p>Read by ONE thing: {@link DrugSafetyValidator#classRelationships}'s
 		 * restating-existing-therapy skip, to scope its exact-code leg out. That leg is a PROXY for

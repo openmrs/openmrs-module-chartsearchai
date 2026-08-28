@@ -357,9 +357,19 @@ public class DrugReference {
 	 * @return whether this entry's display name names the substance with NO trailing route/formulation
 	 *         qualifier — {@code Dexamethasone} rather than {@code Dexamethasone (nasal)}. At most one
 	 *         row of a substance normally answers true, and it is the row a question naming the bare
-	 *         substance is about: nothing on a {@code DrugOrder} or in a question tells this module
-	 *         which route is in play (every variant publishes the same aliases and the same ATC list —
-	 *         the data-side gap issue #115 records), so the only route it can honestly assert is none.
+	 *         substance is about: nothing in a QUESTION tells this module which route is in play, and
+	 *         the data cannot help either, since every variant publishes the same aliases and the same
+	 *         ATC list — the data-side gap issue #115 records — so the only route this predicate can
+	 *         honestly assert is none.
+	 *
+	 *         <p><b>An ORDER can now say, and it makes no difference here</b> (issue #234). The
+	 *         builder reads a {@code DrugOrder}'s route and dose form, so the sentence above no longer
+	 *         holds of an order; what still holds is why that cannot move THIS choice. Every row of a
+	 *         substance publishes the same ATC list — measured over the shipped KB, all 129 of its
+	 *         multi-row substances and none differing — so preferring the row whose qualifier matches a
+	 *         recorded route would change which name a chip prints and nothing about what it claims.
+	 *         That is why {@link #codesForRecordedAdministration} narrows the CODES instead, and why
+	 *         issue #234 left this predicate alone.
 	 *
 	 *         <p>Consumed by {@link #canonicalRow}, which is where the collapses that need it agree
 	 *         on one answer. Measured over the shipped 19 MB KB (2026-08-07; re-measured 2026-08-13 for
@@ -1020,28 +1030,28 @@ public class DrugReference {
 
 	static {
 		Map<String, List<String>> groups = new LinkedHashMap<String, List<String>>();
-		groups.put(SITE_SKIN, Arrays.asList("D", "M02", "P03A"));
-		groups.put(SITE_EYE, Arrays.asList("S01", "S03"));
-		groups.put(SITE_EAR, Arrays.asList("S02", "S03"));
-		groups.put(SITE_NOSE, Arrays.asList("R01"));
-		groups.put(SITE_THROAT, Arrays.asList("R02"));
-		groups.put(SITE_AIRWAY, Arrays.asList("R03A", "R03B"));
-		groups.put(SITE_VAGINA, Arrays.asList("G01", "G02CC"));
-		groups.put(SITE_MOUTH, Arrays.asList("A01"));
-		groups.put(SITE_GUT, Arrays.asList("A07A", "A07E"));
-		groups.put(SITE_ANORECTAL, Arrays.asList("C05A"));
+		groups.put(SITE_SKIN, unmodifiable("D", "M02", "P03A"));
+		groups.put(SITE_EYE, unmodifiable("S01", "S03"));
+		groups.put(SITE_EAR, unmodifiable("S02", "S03"));
+		groups.put(SITE_NOSE, unmodifiable("R01"));
+		groups.put(SITE_THROAT, unmodifiable("R02"));
+		groups.put(SITE_AIRWAY, unmodifiable("R03A", "R03B"));
+		groups.put(SITE_VAGINA, unmodifiable("G01", "G02CC"));
+		groups.put(SITE_MOUTH, unmodifiable("A01"));
+		groups.put(SITE_GUT, unmodifiable("A07A", "A07E"));
+		groups.put(SITE_ANORECTAL, unmodifiable("C05A"));
 		ATC_GROUPS_BY_SITE = Collections.unmodifiableMap(groups);
 
 		Map<String, List<String>> terms = new LinkedHashMap<String, List<String>>();
-		terms.put(SITE_SKIN, Arrays.asList("topical", "cutaneous", "skin"));
-		terms.put(SITE_EYE, Arrays.asList("eye", "ophthalmic", "ocular", "intraocular", "conjunctival",
+		terms.put(SITE_SKIN, unmodifiable("topical", "cutaneous", "skin"));
+		terms.put(SITE_EYE, unmodifiable("eye", "ophthalmic", "ocular", "intraocular", "conjunctival",
 				"subconjunctival"));
-		terms.put(SITE_EAR, Arrays.asList("ear", "otic", "aural", "auricular"));
-		terms.put(SITE_NOSE, Arrays.asList("nasal", "intranasal", "nose"));
-		terms.put(SITE_THROAT, Arrays.asList("throat", "oropharyngeal"));
-		terms.put(SITE_AIRWAY, Arrays.asList("inhaled", "inhalation", "inhaler", "nebulised",
+		terms.put(SITE_EAR, unmodifiable("ear", "otic", "aural", "auricular"));
+		terms.put(SITE_NOSE, unmodifiable("nasal", "intranasal", "nose"));
+		terms.put(SITE_THROAT, unmodifiable("throat", "oropharyngeal"));
+		terms.put(SITE_AIRWAY, unmodifiable("inhaled", "inhalation", "inhaler", "nebulised",
 				"nebulized", "nebuliser", "nebulizer"));
-		terms.put(SITE_VAGINA, Arrays.asList("vaginal", "intravaginal"));
+		terms.put(SITE_VAGINA, unmodifiable("vaginal", "intravaginal"));
 		terms.put(SITE_MOUTH, Collections.<String> emptyList());
 		terms.put(SITE_GUT, Collections.<String> emptyList());
 		terms.put(SITE_ANORECTAL, Collections.<String> emptyList());
@@ -1163,6 +1173,14 @@ public class DrugReference {
 	static List<String> termsForSite(String site) {
 		List<String> terms = SITE_TERMS.get(site);
 		return terms != null ? terms : Collections.<String> emptyList();
+	}
+
+	/** {@code Arrays.asList} is fixed-size but its elements are still settable, and both maps above are
+	 *  handed out — {@link #termsForSite} returns one of these lists directly. Wrapped for the same
+	 *  reason {@link #LOCALLY_APPLIED_ATC_GROUPS} is, so the two constants cannot be immutable in
+	 *  different degrees. */
+	private static List<String> unmodifiable(String... values) {
+		return Collections.unmodifiableList(Arrays.asList(values));
 	}
 
 	/**

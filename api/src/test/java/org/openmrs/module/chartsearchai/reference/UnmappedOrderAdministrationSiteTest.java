@@ -138,11 +138,16 @@ public class UnmappedOrderAdministrationSiteTest {
 
 	@Test
 	public void aSystemicRouteThatContainsASiteWordNarrowsNothing() throws IOException {
-		// "Subcutaneous administration" is a member of the reference dictionary's own route set and it
-		// CONTAINS the skin term "cutaneous". Only the word boundary refuses it — and the hyphenated
+		// The first two spellings are the boundary case and are why this method exists: "Subcutaneous
+		// administration" is a member of the reference dictionary's own route set and it CONTAINS the
+		// skin term "cutaneous", refused only by containsWord's left boundary — and the hyphenated
 		// spelling defeats that boundary on its own, because containsWord accepts any non-alphanumeric
-		// on the left, which is why recordedSites strips hyphens before matching. Both spellings, or
-		// the guard pins only the half that never needed one.
+		// there, which is why recordedSites strips hyphens before matching. Both, or the guard pins only
+		// the half that never needed one.
+		//
+		// The last two are ordinary systemic routes and share no letters with any term; they are here
+		// as the commonest real recorded values (32 of the 3.7.1 demo's 46 active orders say "Oral
+		// administration"), not as boundary cases, and nothing here claims they are.
 		for (String route : Arrays.asList("Subcutaneous administration", "Sub-cutaneous administration",
 				"Transdermal administration", "Oral administration")) {
 			assertEquals(Collections.singletonList(SYSTEMIC_CHIP),

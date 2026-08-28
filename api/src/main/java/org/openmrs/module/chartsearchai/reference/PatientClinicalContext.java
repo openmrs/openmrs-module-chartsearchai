@@ -25,7 +25,9 @@ import java.util.Set;
  * order-driven injection), the active drug orders themselves — names and codes attributed to the
  * order they came from, both for reconciling the safety layer's read against the serialized chart
  * (see {@link DrugReferenceInjector#unrepresentedActiveOrders}) and so the interaction screen can
- * exclude a subject's own order from witnessing it — lowercased text tokens
+ * exclude a subject's own order from witnessing it, each also carrying what the chart records about
+ * where the drug is APPLIED (issue #234 — see
+ * {@link ActiveDrugOrder#getAdministrationTerms()}) — lowercased text tokens
  * from active allergies and conditions (for contraindication checks), and the names the loaded
  * reference data gives those same active drugs (issue #136 — see
  * {@link #getActiveDrugReferenceNames()}).
@@ -489,6 +491,12 @@ public class PatientClinicalContext {
 	 * still reached {@link #getActiveDrugAtcCodes()}, which made one prescription look like one partner
 	 * per code the loaded dataset could not name — a covered code is keyed on its substance either way,
 	 * so that half is unchanged and deliberate.
+	 *
+	 * <p><b>Beside its identity it carries one thing about the prescription itself</b> (issue #234):
+	 * where the chart says the drug is applied, as {@link #getAdministrationTerms()}. It is on every
+	 * rung including the code-only one, and it is read by exactly one arm — see that accessor and
+	 * {@link #namedByCodesOnly(String, String, Set, Set)}, which records why the rung it cannot reach
+	 * carries it anyway.
 	 */
 	public static final class ActiveDrugOrder {
 

@@ -1024,6 +1024,13 @@ public class DrugSafetyValidator {
 	 * this must never take: hoisting it onto the VALIDATOR, where {@link DrugReferenceService}'s class
 	 * javadoc gives the reasons. Not the {@code getAll()} hot-reload this used to cite, which does not
 	 * exist.
+	 *
+	 * <p><b>One instance per pass, and that is now pinned rather than described.</b> Every property above
+	 * rests on the arms sharing ONE of these, which nothing stated until
+	 * {@code ChipSubjectOneResolutionTest} began asserting that {@code new SubstanceSubjects(} appears once
+	 * in this file and inside {@code validate}. An arm re-constructing this over its own row group needs no
+	 * call to {@link #interactionSubject}, so the caller scan beside it does not see that edit — and it is
+	 * exactly issue #236's split, in the class written to close it.
 	 */
 	private static final class SubstanceSubjects {
 
@@ -2274,7 +2281,10 @@ public class DrugSafetyValidator {
 	 *         here: calling this directly is how an arm ends up folding a narrower row group than its
 	 *         siblings, which is exactly what #206 was — and what #236 removed from the last two arms.
 	 *         Since then {@code ChipSubjectOneResolutionTest} enforces it, by scanning this file's source
-	 *         for a caller outside the three permitted bodies; before that the rule was javadoc only.
+	 *         for a caller outside the three permitted bodies; before that the rule was javadoc only. That
+	 *         scan is about CALLERS of this method, so it is paired there with a second needle for the
+	 *         bypass that calls it not at all — re-constructing {@link SubstanceSubjects} over an arm's own
+	 *         group, which is the deleted {@code canonicalSubjects} wearing this class's name.
 	 *
 	 *         <p><b>And since issue #228 the class arm's PARTNER too</b>, on the one rung where that
 	 *         partner has a recorded name: {@link #addPartnersForUnmappedOrders} resolves a

@@ -28,9 +28,11 @@ import org.openmrs.module.chartsearchai.ModuleSourceRoot;
 
 /**
  * Build-time guard on the ONE resolution of "which row does this response call this substance by"
- * (issue #236): inside {@code DrugSafetyValidator}, {@code interactionSubject} is called from
+ * (issue #236), in two needles. {@code interactionSubject} is called from
  * {@code SubstanceSubjects.subjectOf}, from its own two-arity overload, and from
- * {@code addPartnersForUnmappedOrders} — and from nowhere else.
+ * {@code addPartnersForUnmappedOrders} — and from nowhere else in {@code DrugSafetyValidator}. And
+ * {@code SubstanceSubjects} is CONSTRUCTED once, inside {@code validate}, so that the arms reading it
+ * are reading one instance rather than one class.
  *
  * <p><b>What it forbids and why.</b> Five arms of that class name a chip's subject. Issue #206 gave
  * three of them one memoised per-{@code validate} lookup and left the two pairwise arms folding their
@@ -41,6 +43,17 @@ import org.openmrs.module.chartsearchai.ModuleSourceRoot;
  * up folding a narrower row group than its siblings, which is exactly what #206 was") — and until this
  * class existed nothing enforced it. A sixth arm resolving its own subject would reintroduce the split,
  * and the whole complaint of issue #236 is that its safety rested on nothing stated.
+ *
+ * <p><b>Why the second needle, and why it is not a belt on the first's braces.</b> The caller rule is a
+ * rule about {@code interactionSubject}, and the cheapest way to reintroduce #236's defect makes no call
+ * to it: re-construct {@code SubstanceSubjects} over the arm's own row group and read {@code subjectOf}
+ * off that. That is semantically the deleted {@code canonicalSubjects}, it is now the most natural edit
+ * available because this change introduced the class it reuses, and the caller scan is green through it —
+ * measured by writing exactly that line into {@code addActiveOrderPairInteractions} and again into
+ * {@code addQuestionPairInteractions}. So the two needles forbid different things: one arm may not fold
+ * its own group, and no arm may hold its own lookup. Locating the single construction inside
+ * {@code validate} is what closes the variant a count alone would not — a per-arm helper returning a
+ * fresh instance is one {@code new} in the file and one object per caller.
  *
  * <p><b>Why structural and not behavioural.</b> A second resolution is only OBSERVABLE where the two row
  * groups differ, which needs a substance whose rows publish different alias sets. Measured over the
@@ -73,22 +86,34 @@ import org.openmrs.module.chartsearchai.ModuleSourceRoot;
  * </ul>
  *
  * <p><b>What it does NOT cover, stated so the guard is not credited with more than it has.</b> It reads
- * ONE file. Unlike the write-path precedent — whose two fields are private members of a private nested
- * class, so the compiler covers every other file — {@code interactionSubject} is package-private and
- * static, so a new chip arm written in another class of {@code …chartsearchai.reference} could call it
- * and this scan would not see it. That residue is deliberate: the five arms all live in
+ * ONE file, and what that costs differs between the two needles rather than being one residue.
+ * {@code interactionSubject} is package-private and static, so a new chip arm written in another class
+ * of {@code …chartsearchai.reference} could call it and the caller scan would not see it — unlike the
+ * write-path precedent, whose two fields are private members of a private nested class, so the compiler
+ * covers every other file. That residue is deliberate: the five arms all live in
  * {@code DrugSafetyValidator}, a sixth outside it would be a larger design change than a slip, and the
  * blessed cross-class caller ({@code DrugReferenceInjector.chartAnchoredSubject}, which raises no chip)
- * shows the package boundary is not the rule's edge. It also says nothing about an arm that resolves a
- * subject some OTHER way — by calling {@code DrugReference.canonicalRow} directly, say — which is a
- * different needle and a different rule. And it is a statement about the source as WRITTEN: rename any
- * of the three permitted methods and this fails loudly rather than quietly forbidding nothing, which is
- * the safe direction.
+ * shows the package boundary is not the rule's edge. The CONSTRUCTION needle has no such residue while
+ * the class stays as declared: {@code SubstanceSubjects} is a {@code private static final} nested class,
+ * so no other file can name it and the compiler makes the one-file scan complete for that needle — which
+ * is why {@link #LOOKUP_DECLARATION} asserts the modifiers and not just the name, so that widening them
+ * reddens here rather than silently enlarging what is unscanned.
  *
- * <p><b>Why it cannot pass vacuously.</b> Every permitted body is located and asserted before anything
- * is compared, the declaration count is asserted, and the number of calls FOUND is asserted — so a
- * rename, a truncated read or a brace-matching failure fails this class instead of silently enforcing
- * nothing.
+ * <p>Neither needle says anything about an arm that resolves a subject some OTHER way — by calling
+ * {@code DrugReference.canonicalRow} directly, say, or by writing a second lookup class of its own —
+ * which is a different needle and a different rule; what bounds that residue is that such an arm still
+ * has to fold the group somehow, and the two folds this class knows of are {@code interactionSubject}
+ * (scanned) and {@code canonicalRow} (not). Both needles are statements about the source as WRITTEN:
+ * rename any of the three permitted methods, the lookup class or {@code validate}'s widest arity, and
+ * this fails loudly rather than quietly forbidding nothing, which is the safe direction.
+ *
+ * <p><b>Why neither test can pass vacuously.</b> For the caller scan: every permitted body is located
+ * and asserted before anything is compared, the declaration count is asserted, and the number of calls
+ * FOUND is asserted. For the construction scan: the class declaration and {@code validate}'s body are
+ * both located through {@link #uniqueOffsetOf}, which fails on absent and on ambiguous alike, and the
+ * count of constructions is asserted to be one rather than at most one — a needle matching nothing
+ * therefore fails instead of forbidding nothing. Either way a rename, a truncated read or a
+ * brace-matching failure fails this class rather than silently enforcing nothing.
  */
 public class ChipSubjectOneResolutionTest {
 
@@ -126,6 +151,23 @@ public class ChipSubjectOneResolutionTest {
 
 	private static final String RELATIVE_SOURCE =
 			"src/main/java/org/openmrs/module/chartsearchai/reference/DrugSafetyValidator.java";
+
+	private static final String CONSTRUCTION = "new SubstanceSubjects(";
+
+	/**
+	 * The declaration of the shared lookup, asserted with its MODIFIERS and not by name alone. The
+	 * {@code private} is what makes {@link #CONSTRUCTION}'s one-file scan complete rather than merely
+	 * convenient (see this class's javadoc), so widening it has to redden here instead of quietly
+	 * enlarging what a second construction could be written in.
+	 */
+	private static final String LOOKUP_DECLARATION = "private static final class SubstanceSubjects {";
+
+	/**
+	 * The one arity of {@code validate} that builds the pass's shared state — the other four delegate to
+	 * it. The needle stops at the line break so it is a single line of the file as written.
+	 */
+	private static final String VALIDATE =
+			"validate(String answer, String question, PatientClinicalContext rawContext,";
 
 	@Test
 	public void onlyTheSharedLookupAndThePartnerRungResolveASubjectDirectly() throws IOException {
@@ -185,6 +227,57 @@ public class ChipSubjectOneResolutionTest {
 						+ " caller happens to hold, and since issue #175 an arm's own group is never the"
 						+ " widest one.");
 		}
+	}
+
+	/**
+	 * The companion needle to {@link #onlyTheSharedLookupAndThePartnerRungResolveASubjectDirectly}, for
+	 * the bypass that makes no call to {@link #RESOLVER} at all: re-constructing {@code SubstanceSubjects}
+	 * over an arm's own narrower row group, which is the deleted {@code canonicalSubjects} under a new
+	 * name and passes the caller guard untouched.
+	 */
+	@Test
+	public void theSharedLookupIsBuiltOnceByValidateAndNeverPerArm() throws IOException {
+		String source = strippedSource();
+
+		// Asserted for its own sake and the offset discarded: this is the modifier check that keeps the
+		// one-file scan below complete (see this class's javadoc), not a scope for anything.
+		uniqueOffsetOf(source, LOOKUP_DECLARATION, 0, source.length());
+		Region validateBody =
+				bodyOf(source, uniqueOffsetOf(source, VALIDATE, 0, source.length()), VALIDATE);
+
+		List<Integer> constructions = offsetsOfLiteral(source, CONSTRUCTION);
+		assertEquals(1, constructions.size(),
+			"expected " + RELATIVE_SOURCE + " to construct SubstanceSubjects once — in validate, for the"
+					+ " whole pass — and found " + constructions.size() + " at lines "
+					+ linesOf(source, constructions) + ". A SECOND construction over an arm's own row group"
+					+ " is the deleted canonicalSubjects under a new name: it needs no call to " + RESOLVER
+					+ ", so the guard beside this one does not see it, and it reintroduces issue #236 —"
+					+ " one substance named two ways in one response, in the clinician's chip and in the"
+					+ " citable safety_finding record. An arm must READ the instance validate builds"
+					+ " (SubstanceSubjects.subjectOf). If a second instance is legitimately needed, say"
+					+ " here what stops it answering differently from the first.");
+
+		assertTrue(validateBody.contains(constructions.get(0)),
+			"the one construction of SubstanceSubjects is at line " + lineOf(source, constructions.get(0))
+					+ ", outside the body of validate(String, String, PatientClinicalContext, List) — so"
+					+ " the arms of a pass may no longer share ONE instance even though the file holds one"
+					+ " \"new\": a per-arm helper returning a fresh instance is one construction and many"
+					+ " objects, which is issue #236's split with an extra hop. If the construction moved"
+					+ " for a good reason, move this needle with it and state what still makes every arm"
+					+ " read one instance.");
+	}
+
+	/** @return every offset of the literal {@code needle}, which is what the construction scan wants —
+	 *          {@link #offsetsOf} reports the offset of {@link #RESOLVER} inside its match and so is
+	 *          specific to that one needle. */
+	private static List<Integer> offsetsOfLiteral(String source, String needle) {
+		List<Integer> found = new ArrayList<Integer>();
+		int at = source.indexOf(needle);
+		while (at >= 0) {
+			found.add(at);
+			at = source.indexOf(needle, at + 1);
+		}
+		return found;
 	}
 
 	/**

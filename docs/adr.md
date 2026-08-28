@@ -3144,7 +3144,7 @@ So the subject was decided per PASS. Where the answer resolved a row of an in-pl
 
 ### Decision
 
-Name from the rows the ANSWER cannot move; rule from all of them. `validate` builds a second group map, `namingRows = resolvedSubstanceRows(questionDrugs, orderEntries)` — the rows the question resolved and the rows the patient's own active orders resolved — and `SubstanceSubjects` folds THAT, falling back to the full group for a substance no pass-invariant row reaches. Every arm still reaches its rules and its bands over `resolvedRows`, unchanged.
+Name from the rows the ANSWER cannot move; rule from all of them. `validate` builds a second group map, `namingRows = resolvedSubstanceRows(questionDrugs, orderEntries)` — the rows the question resolved and the rows the patient's own active orders resolved — and `SubstanceSubjects` folds THAT, falling back to the full group for a substance no naming row reaches. Every arm still reaches its rules and its bands over `resolvedRows`, unchanged.
 
 **Both halves of the rejection above are wrong, and each for its own reason.**
 

@@ -777,7 +777,12 @@ public final class DrugReferenceValidity {
 	 * exactly the thing that fails open and nothing else, which is why it is preferred over refusing the
 	 * entry rather than merely gentler than it.
 	 *
-	 * <p><b>An entry no alias of its own names is REPAIRED</b> (#210, #211). The ranked resolution rests on
+	 * <p><b>An entry no alias of its own names is REPAIRED</b> (#210, #211) — <b>except where its display
+	 * NAME is itself a string that names nothing, which is REPORTED instead</b> (#296). Repairing that
+	 * one would append as an alias exactly what the blank-alias rule above drops, and leave the entry
+	 * answering {@link DrugReference#isNamed} for a string {@link DrugReference#matchesDrugName} can
+	 * never match — the disagreement {@link DrugReference#setAliases}' trim exists to make impossible.
+	 * So one rule id can carry two remedies in one load, and each says which entries it applied to. The ranked resolution rests on
 	 * a property of the PARSERS: {@link DdiDrugReferenceSource} makes an entry's display name its first
 	 * alias and {@link AtcDrugReferenceSource} makes it the only one, so on both of those the strongest
 	 * claimant on any alias an entry carries is itself in the matched set. A hand-authored {@code json}
@@ -846,7 +851,9 @@ public final class DrugReferenceValidity {
 				// what replaces it: measured on a curated file, an entry named "---" with a healthy alias
 				// list used to raise this rule REPAIRED and now raises nothing at all unless its own
 				// aliases happened to carry a names-nothing string too, which is the separate rule above.
-				// Such an entry loads unreachable by every name-driven arm, which is worth a line.
+				// Its own NAME then reaches no name-driven arm — the entry is findable by whatever other
+				// aliases it carries and by nothing at all where it carries none, which is the marks-only
+				// case above. Worth a line either way, and the two differ enough that the line says so.
 				unnameable++;
 				unnameableIn.add(entry.getName());
 			}
@@ -876,8 +883,10 @@ public final class DrugReferenceValidity {
 							+ "nothing but combining marks or punctuation) were left unnamed rather than "
 							+ "repaired: giving such an entry its own name as an alias would put back "
 							+ "exactly what the blank-alias rule drops, and would leave it answering "
-							+ "isNamed for a string nothing can match. It loads unreachable by every "
-							+ "name-driven arm; fix the name in the file. Entries: "
+							+ "isNamed for a string nothing can match. Its own NAME then reaches no "
+							+ "name-driven arm, so the entry is findable only by whatever other aliases it "
+							+ "carries and by nothing at all where it carries none; fix the name in the "
+							+ "file. Entries: "
 							+ sample(unnameableIn));
 		}
 	}

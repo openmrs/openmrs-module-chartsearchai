@@ -339,7 +339,7 @@ public class DrugReferenceInjector {
 		for (Map.Entry<DrugReference, SubstanceRendering> match : matched.entrySet()) {
 			DrugReference ref = match.getKey();
 			RenderedReference rendered =
-					render(ref, orderEntries, reading, match.getValue());
+					render(ref, orderEntries, reading, match.getValue(), findings);
 			// The rendering's own bookkeeping rides on the mapping, not in the line — see
 			// RenderedReference. The chart line and the mapping text stay byte-identical, so the
 			// grounding verifier still compares against exactly what the model read.
@@ -1134,11 +1134,16 @@ public class DrugReferenceInjector {
 
 	/**
 	 * One deterministic finding as a chart line. The detail text is reused verbatim — it is the same
-	 * string the clinician already sees on the chip, so the prose and the chip cannot describe the
-	 * same finding differently — and the finding then states what it licenses, so the answer's opening
+	 * string the chip carries, so the prose and the chip cannot describe the same finding differently —
+	 * and the finding then states what it licenses, so the answer's opening
 	 * call rests on what the deterministic layer decided rather than on the model's reading of a
 	 * severity word inside the prose (#283). Every finding states one; see {@link #strengthClause} for
 	 * why silence is not a third answer.
+	 *
+	 * <p><b>Of the chip THIS pass raised</b> — so the sentence above is about a pass and not about a
+	 * request. Since issue #236 the two can differ for
+	 * one arm; {@code DrugSafetyValidator.SubstanceSubjects} and ADR Decision 49 state which and why, and
+	 * that is deliberately not restated here.
 	 *
 	 * <p>"Verbatim" is of the detail, not of the whole line: a detail that does not already end a
 	 * sentence gains a full stop, so the clause after it reads as its own sentence rather than running
@@ -1262,16 +1267,17 @@ public class DrugReferenceInjector {
 	 * and inside the collapse below) — so a partner that raises a DRUG-IN-PLAY chip is exactly a
 	 * partner promoted here, and WHICH partners this text names cannot drift from that chip.
 	 *
-	 * <p>Which is a claim about the SET and, since issue #292, no longer about the NAME. Where
-	 * {@code DrugSafetyValidator.foldedPartnerLabel} reconciles a folded chip's two sentences it may name
-	 * the partner by the class arm's ladder, while the note below keeps
-	 * {@code DrugSafetyValidator.partnerLabel} — so for such a partner the chip and this record can call
-	 * one active order two things. Where that method refuses, the chip's rule sentence is
-	 * {@code partnerLabel} again and this record agrees with it as before. Deliberate, and the trade is
-	 * stated on that method and in ADR Decision 39: closing it would move this record's text, which is
-	 * PROMPT text and needs its own measurement. What is unchanged is that every name this record can
-	 * carry for that partner is one the same prompt already contained, because the chip used to carry
-	 * both.
+	 * <p>Which is a claim about the SET, and since issue #297 about the NAME again. Issue #292 let a
+	 * folded chip name the partner by the class arm's ladder while the note below kept
+	 * {@code DrugSafetyValidator.partnerLabel}, so for such a partner the chip and this record called one
+	 * active order two things — the trade ADR Decision 39 recorded and deferred because this text is
+	 * PROMPT text. It is closed by {@link #reconciledPartnerNoteName}, which takes the name off the chip that
+	 * decided it rather than re-deriving it: the two surfaces name one SUBSTANCE, each in its own
+	 * vocabulary, since this record's prose may not carry {@code DrugReference.displayLabel()}. Where the
+	 * fold refuses, and for every unfolded chip, this note is {@code partnerLabel} again exactly as
+	 * before. What still holds either way is that every name this record can carry for that partner is
+	 * one the same prompt already contained — the folded chip reaches it verbatim through
+	 * {@link #renderFinding} — so the prompt's name union for a partner cannot GROW.
 	 *
 	 * <p>Scoped to that arm deliberately, and the scope is the correction
 	 * {@link DrugSafetyValidator#addQuestionPairInteractions} asks for: across the whole chip set the
@@ -1281,7 +1287,13 @@ public class DrugReferenceInjector {
 	 * injected as its own numbered, citable record, carrying the chip's detail verbatim and the
 	 * strength clause after it ({@code preAnswerFindings} → {@link #renderFinding}, #283), so a pair
 	 * finding is grounded by that record rather than by these notes, and the promoted-note budget is
-	 * untouched by it.
+	 * untouched by it. Verbatim WITHIN one {@code validate} pass: {@link #renderFinding} renders the chip
+	 * the PRE-ANSWER pass raised, and since issue #236 the question-pair arm's subject is folded over a
+	 * group the answer widens, so that record and the chip beside the answer can name one substance two
+	 * ways — {@code DrugSafetyValidator.SubstanceSubjects} and ADR Decision 49 are where that residue and
+	 * its measurement live. Said here as well as in the paragraph this one is paired with
+	 * ({@link DrugSafetyValidator#addQuestionPairInteractions}), because the two came apart once already
+	 * when only one of them was reworded.
 	 *
 	 * <p>That correspondence is per PARTNER, and since issue #174 site 2 this method renders one note
 	 * per partner rather than one per ROW — the same collapse
@@ -1330,9 +1342,13 @@ public class DrugReferenceInjector {
 	 * @param orderEntries the reference entries the patient's active orders resolve to, which
 	 *        {@link #onePerPartner} keys a promoted partner on (issue #190 item 2); an empty list falls
 	 *        the grouping back to the label alone, as it was before that issue
+	 * @param findings this injection's pre-answer chips, from which {@link #reconciledPartnerNoteName} takes
+	 *        the name a folded chip gave a partner (issue #297); null or empty leaves every note on
+	 *        {@code DrugSafetyValidator.partnerLabel}, which is what the {@code drugSafety} toggles being
+	 *        off produces and what every note-text case in the suite runs on
 	 */
 	static OrderedInteractions orderedInteractionNotes(DrugReference ref, PatientClinicalContext context,
-			List<DrugReference> orderEntries) {
+			List<DrugReference> orderEntries, List<SafetyWarning> findings) {
 		List<InteractionNote> promoted = new ArrayList<InteractionNote>();
 		List<InteractionNote> rest = new ArrayList<InteractionNote>();
 		// Promotion honours the SAME severity floor the chips do (issue #84). Measured on the 3.7.1
@@ -1345,7 +1361,7 @@ public class DrugReferenceInjector {
 		// dataset position, exactly as before promotion existed.
 		int floor = DrugSafetyValidator.configuredSeverityFloor();
 		for (DrugReference.Interaction i : onePerPartner(ref, context, floor, orderEntries)) {
-			String label = DrugSafetyValidator.partnerLabel(i);
+			String label = reconciledPartnerNoteName(findings, context, i);
 			String note = ChartSearchAiUtils.firstNonBlank(i.getNote());
 			// Kept identical to the previous rendering: a labelless rule still contributes its bare
 			// note, and a null/blank pair contributes nothing (addIfPresent drops it) — the dataset
@@ -1399,6 +1415,87 @@ public class DrugReferenceInjector {
 	}
 
 	/**
+	 * @return the name this record's interaction note must call {@code rule}'s partner by: the name the
+	 *         FOLDED chip about that same rule gave it where one reconciled the two arms
+	 *         ({@link DrugSafetyValidator#partnerLabel}'s counterpart in this record's own vocabulary),
+	 *         else {@code partnerLabel} itself — which is what this list has always printed.
+	 *
+	 *         <p><b>Issue #297.</b> Since issue #292 a folded chip can name an active order by the class
+	 *         arm's ladder, and that chip reaches the prompt verbatim as a citable
+	 *         {@code safety_finding} ({@link #renderFinding}) — while this note kept the rule's own
+	 *         token. So one prompt carried one prescription under two names, the property
+	 *         {@code CLAUDE.md} states {@code partnerLabel} exists to hold.
+	 *
+	 *         <p><b>Read off the findings this injection already holds, never re-derived.</b>
+	 *         {@link #injectRecords} runs the whole fold once through {@link #preAnswerFindings}; asking
+	 *         {@link DrugSafetyValidator} to walk {@code classRelationships} a second time so the two
+	 *         answers could be compared is the two-resolutions-that-agree shape issue #151 forbids, and
+	 *         that failure was silent and one-directional. It also makes the scope right for free: a
+	 *         name can only come from a chip that was actually raised AND injected in this same
+	 *         response, so the prompt's name union for the partner cannot GROW — every name this note
+	 *         can newly carry is one the {@code safety_finding} beside it already contains. An
+	 *         ORDER-DRIVEN record, which no interaction chip stands behind (see {@code collect}), is
+	 *         therefore untouched rather than renamed after a chip that does not exist.
+	 *
+	 *         <p>The rule-identity condition is {@link SafetyWarning#reconciledPartnerNoteName}'s own,
+	 *         asked there rather than here: this record collapses to one note per partner over ONE row
+	 *         ({@link #onePerPartner}) while the chip chose across every row of the substance
+	 *         ({@code DrugSafetyValidator.bestRulePerPartner}), so the two can elect different rules for
+	 *         one partner and the answer there is then null. Falling back leaves the note exactly where
+	 *         it was, which is what makes this change able only to remove a divergence and never to
+	 *         create one.
+	 *
+	 *         <p><b>And only where the context carries per-order structure</b>, which is every context
+	 *         {@link PatientClinicalContextBuilder} builds for a real patient. On the flattened shape of
+	 *         issue #118 the class arm's own reach is key-dependent — {@code orderPartners} reads the
+	 *         FLATTENED set for its code rung and the per-order list for its name rung, so the same
+	 *         prescription folds when a dictionary published its ATC code and does not when it published
+	 *         only its name. That asymmetry is pinned as current behaviour by
+	 *         {@code DuplicateInteractionChipTest.aRuleOnlyPairIsWordedExactlyAsBefore} ("no ATC mapping,
+	 *         so the class arm has nothing to say") and forbidden from reaching the PROMPT by
+	 *         {@code OrderDrivenInjectionResolutionTest.oneOrderInjectsOneRecordSetWhicheverWayItResolves}
+	 *         ("the prompt behind those chips cannot depend on which key the dictionary carried"). The
+	 *         two together say the chip may be key-dependent on that shape and the injected records may
+	 *         not, so this gate is what keeps the record out of it. Closing the asymmetry itself was
+	 *         attempted and abandoned in the same change: a name rung over the flattened set reddens the
+	 *         first of those two tests, because it makes the class arm speak where that test says it must
+	 *         not. Issue #228 already made the ORDER-carrying shape key-symmetric, which is why the gate
+	 *         costs production nothing.
+	 *
+	 *         <p><b>The fallback below and the fold's own answer for its non-entry rungs are one method,
+	 *         not two spellings.</b> {@code DrugSafetyValidator.foldedPartnerLabel} hands the note
+	 *         {@code partnerLabel(rule)} on its NON-entry rungs — the rungs where no dataset name has
+	 *         been PROVED to be this rule's, which is not the same as the dataset having none for the
+	 *         partner — and that is verbatim what this method returns when it finds nothing, so a rule
+	 *         reconciled on those rungs and a rule not reconciled at all print the same string BECAUSE
+	 *         both call {@code partnerLabel}, which is what that method exists to be. Keep it that way:
+	 *         if this fallback ever became something else, those rungs would keep the old string while
+	 *         every unfolded partner took the new one, and one prescription would be named two ways
+	 *         inside one interaction list — issue #297 reopened a rung along.
+	 *
+	 *         <p>A linear scan of a list bounded by the chips this response raised, and deliberately not
+	 *         a map: the accessor above will not hand out a name without being shown the rule it was
+	 *         decided on, and a map keyed here would have to read the rule back out to build itself.
+	 *
+	 * @param findings the pre-answer chips, or an empty list when the {@code drugSafety} toggles are off
+	 *        — in which case there is no chip for this note to agree with and it keeps its own label,
+	 *        which is the same gating {@code preAnswerFindings} already applies to the record's
+	 *        contraindication reading (issue #208 item 2)
+	 */
+	private static String reconciledPartnerNoteName(List<SafetyWarning> findings,
+			PatientClinicalContext context, DrugReference.Interaction rule) {
+		if (findings != null && context != null && !context.getActiveDrugOrders().isEmpty()) {
+			for (SafetyWarning finding : findings) {
+				String reconciled = finding.reconciledPartnerNoteName(rule);
+				if (reconciled != null) {
+					return reconciled;
+				}
+			}
+		}
+		return DrugSafetyValidator.partnerLabel(rule);
+	}
+
+	/**
 	 * @return {@code ref}'s interaction rules, at most ONE per partner, in the dataset order of each
 	 *         partner's first row — the rendering counterpart of
 	 *         {@link DrugSafetyValidator#bestRulePerPartner} (issue #174 site 2).
@@ -1439,15 +1536,21 @@ public class DrugReferenceInjector {
 	 *               {@code (type, drug, detail)} triple, which stopped recognising a repeat the moment
 	 *               either arm reworded its chip (see {@code DrugSafetyValidator.InteractionPairs}). A
 	 *               partner's own coalesced, trimmed name is not that: it is the atomic unit of the
-	 *               grouping, and issue #121's invariant — the key IS what the RECORD says, which
-	 *               wherever the dataset identifies no partner entry is still exactly true of this
-	 *               method's own notes, {@code partnerLabel} being what it both keys and renders on that
-	 *               branch — is deliberate rather than incidental. (On the other branch
-	 *               {@link #onePerPartner} keys on the ENTRY while still rendering
-	 *               {@code partnerLabel}, which is the residue the next paragraph is about.) The chip half of that
+	 *               grouping, and issue #121's invariant — the key IS what the RECORD says — is
+	 *               deliberate rather than incidental. <b>Since issue #297 that second half is scoped for
+	 *               this record exactly as issue #292 scoped it for the chip</b>: on the no-entry branch
+	 *               the key is still {@code partnerLabel} case-folded and an unfolded partner's note is
+	 *               still that same string, while a partner a folded chip reconciled can now RENDER the
+	 *               fold's name here too. The grouping is unaffected, running before the note is worded
+	 *               and on that key. (On the other branch {@link #onePerPartner} keys on the ENTRY, and
+	 *               that is the branch the fold's entry rung reconciles on — so it rendered
+	 *               {@code partnerLabel} beside an entry key until issue #297, and now renders the
+	 *               reconciled name there. Which is issue #190 item 2's residue seen from the other side,
+	 *               the paragraph below it.) The chip half of that
 	 *               invariant is scoped since issue #292 (see
 	 *               {@code DrugSafetyValidator.foldedPartnerLabel}); this key is not, and does not
-	 *               follow the chip's rendered name.</li>
+	 *               follow the chip's rendered name — the KEY does not, though since issue #297 the
+	 *               rendered NAME does.</li>
 	 *         </ul>
 	 *
 	 *         <p><b>Issue #190 item 2</b> is the residue the label key left where an identity WAS to be
@@ -1811,8 +1914,10 @@ public class DrugReferenceInjector {
 	 *
 	 * <p>Private because {@code injectRecords} is the only caller. That is the whole reason: a
 	 * package-private signature would let a caller outside this class pass a null reading — measured,
-	 * {@code render(null, null, null, null)} compiles the moment the modifier is dropped, since four
-	 * nulls name no private type — and it would NPE on {@code reading.context()}.
+	 * a call passing a null for every parameter compiles the moment the modifier is dropped, since none
+	 * of the five names a private type — and it would NPE on {@code reading.context()}. Re-measure by
+	 * dropping the modifier rather than by counting the nulls here: the arity was four until issue #297
+	 * added {@code findings}, and the count went stale in that change before review caught it.
 	 *
 	 * <p>{@code substance} is what this row's own fields cannot say: the rows of its substance the pass
 	 * resolved, and which of them THIS RESPONSE names the substance by — the caller's
@@ -1821,9 +1926,15 @@ public class DrugReferenceInjector {
 	 * {@link #rowAttribution} and {@link #otherRowDosing} and nothing else: for a one-row substance whose
 	 * chart says nothing — every entry of every bundled dataset — this method's output is byte-identical
 	 * to what it produced before issues #237/#259.
+	 *
+	 * <p>{@code findings} is this injection's pre-answer chips, threaded through to
+	 * {@link #orderedInteractionNotes} so a promoted interaction note can name its partner the way the
+	 * folded chip about that same rule named it (issue #297). It is the caller's own list rather than a
+	 * second validation, which is the point — see {@link #reconciledPartnerNoteName}.
 	 */
 	private static RenderedReference render(DrugReference ref, List<DrugReference> orderEntries,
-			ContraindicationReading reading, SubstanceRendering substance) {
+			ContraindicationReading reading, SubstanceRendering substance,
+			List<SafetyWarning> findings) {
 		PatientClinicalContext context = reading.context();
 		Integer age = context != null ? context.getAgeYears() : null;
 		StringBuilder sb = new StringBuilder("Drug reference — ").append(ref.getName());
@@ -1914,7 +2025,7 @@ public class DrugReferenceInjector {
 		}
 		appendSection(sb, " Contraindicated with: ", contraindications.clauses);
 
-		OrderedInteractions interactions = orderedInteractionNotes(ref, context, orderEntries);
+		OrderedInteractions interactions = orderedInteractionNotes(ref, context, orderEntries, findings);
 		List<InteractionNote> ordered = interactions.ordered;
 		int withheld = 0;
 		if (!ordered.isEmpty()) {

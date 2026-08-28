@@ -553,6 +553,20 @@ public final class DrugReferenceTestSupport {
 		return new PatientClinicalContext.ActiveDrugOrder(uuid, display, names, atcCodes);
 	}
 
+	/** As {@link #activeOrder}, additionally carrying what the chart records about where the drug is
+	 *  APPLIED — the names of the order's route concept and of its drug's dosage-form concept, the two
+	 *  sources {@link PatientClinicalContextBuilder} collects for issue #234. A case that passes none
+	 *  of them is stating that the chart records neither, which is the reading that narrows nothing.
+	 *
+	 *  <p>A case here passes ONE spelling per source; the builder passes every name the concept
+	 *  publishes ({@code PatientClinicalContextBuilder.addConceptNames}), which is why the case that
+	 *  pins THAT is context-sensitive and lives in {@code ActiveOrderAdministrationTermsTest}. */
+	static PatientClinicalContext.ActiveDrugOrder activeOrder(String uuid, String display,
+			Set<String> names, Set<String> atcCodes, Set<String> administrationTerms) {
+		return new PatientClinicalContext.ActiveDrugOrder(uuid, display, names, atcCodes,
+				administrationTerms);
+	}
+
 	/**
 	 * One active drug order for the named entry of {@code service}, carrying the ATC codes that entry
 	 * publishes, read off the loaded dataset through the production accessor rather than copied into
@@ -700,7 +714,19 @@ public final class DrugReferenceTestSupport {
 	 * stops testing what it says it tests.
 	 */
 	static DrugReferenceService ddinterServiceWithGroups() {
-		DrugReferenceService service = ddinterService();
+		return serviceWithGroups(ddinterEntries());
+	}
+
+	/**
+	 * A service over {@code entries} carrying the real curated cross-reactivity groups — the ONE body
+	 * behind {@link #ddinterServiceWithGroups}, {@link #ddiFixtureService} and any case that needs the
+	 * shipped knowledge base with groups. The two steps have to stay together for the reason those
+	 * javadocs give — {@link #serviceWith} pins the groups EMPTY through its {@code setEntries} seam,
+	 * so a service built without the second call silently cannot raise a curated-group chip — and the
+	 * argument is easier to keep true in one method than in three.
+	 */
+	static DrugReferenceService serviceWithGroups(List<DrugReference> entries) {
+		DrugReferenceService service = serviceWith(entries);
 		service.setCrossReactivityGroups(bundledGroups());
 		return service;
 	}
@@ -771,9 +797,7 @@ public final class DrugReferenceTestSupport {
 	 * fixture service built without the second call silently cannot raise a curated-group chip.
 	 */
 	static DrugReferenceService ddiFixtureService(String classpathResource) throws IOException {
-		DrugReferenceService service = serviceWith(ddiFixtureEntries(classpathResource));
-		service.setCrossReactivityGroups(bundledGroups());
-		return service;
+		return serviceWithGroups(ddiFixtureEntries(classpathResource));
 	}
 
 	/**
@@ -934,6 +958,48 @@ public final class DrugReferenceTestSupport {
 		DrugReferenceInjector injector = injector(service);
 		injector.setDrugSafetyValidator(validator(service));
 		return injector;
+	}
+
+	/** The three {@code WHOATC} codes the 3.7.1 demo dictionary maps an aspirin order's concept to, and
+	 *  the ones issue #292's live run carried. The curated seed carries none of them, which is what
+	 *  leaves the class arm's ladder with no name at all. */
+	static final Set<String> ASPIRIN_ORDER_CODES = set("A01AD05", "B01AC06", "N02BA01");
+
+	/** What {@code PatientClinicalContextBuilder.codeOnlyDisplay} builds for an order no name could be
+	 *  read for: the codes it carries, labelled as codes, sorted. */
+	static final String CODE_ONLY_DISPLAY = "[ATC A01AD05, B01AC06, N02BA01]";
+
+	/** A partner keyed on one substance and then renamed after a DIFFERENT order — see the fixture. */
+	static final String RENAMED_PARTNER_FIXTURE =
+			"chartsearchai-test/drug-reference-fold-order-renamed-partner.json";
+
+	/**
+	 * Issue #292's own arrangement: a NAMELESS order the class arm can only call by its codes, beside a
+	 * curated rule that names the same prescription {@code aspirin} — so the ladder finds no name at all
+	 * and {@code foldedPartnerLabel}'s first rung hands the rule's token to both chip sentences.
+	 *
+	 * <p>Here rather than in a test file because two now read it — the chip side
+	 * ({@code FoldedChipOnePartnerNameTest}) and the record side
+	 * ({@code OneNameAcrossChipAndInjectedRecordTest}) — and issue #297's whole claim is that those two
+	 * surfaces are ONE arrangement seen twice. A copy per file lets an edit to one leave both green while
+	 * they silently stop describing the same prescription.
+	 */
+	static PatientClinicalContext namelessAspirinOrder() {
+		return ctx(60, null, null, ASPIRIN_ORDER_CODES, null, null,
+			Arrays.asList(PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly("order-nameless",
+				CODE_ONLY_DISPLAY, ASPIRIN_ORDER_CODES)));
+	}
+
+	/**
+	 * One order carrying a code {@link #RENAMED_PARTNER_FIXTURE} covers ({@code M01AE02}, resolving
+	 * {@code Naproxen}) and one it cannot name ({@code A02BC05}), so the partner is keyed on that
+	 * substance and then renamed after this order — the issue #186 rung, reached by the prescription the
+	 * rule is actually about. Shared for the reason {@link #namelessAspirinOrder} is.
+	 */
+	static PatientClinicalContext renamedByItsOwnNaproxenOrder() {
+		Set<String> codes = set("M01AE02", "A02BC05");
+		return ctx(60, null, set("naproxen 500mg"), codes, null, null,
+			Arrays.asList(activeOrder("order-naproxen", "Naproxen 500mg", set("naproxen 500mg"), codes)));
 	}
 
 	/** A one-record chart to inject into; the injected reference must append as record [2]. */

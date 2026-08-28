@@ -25,7 +25,9 @@ import java.util.Set;
  * order-driven injection), the active drug orders themselves — names and codes attributed to the
  * order they came from, both for reconciling the safety layer's read against the serialized chart
  * (see {@link DrugReferenceInjector#unrepresentedActiveOrders}) and so the interaction screen can
- * exclude a subject's own order from witnessing it — lowercased text tokens
+ * exclude a subject's own order from witnessing it, each also carrying what the chart records about
+ * where the drug is APPLIED (issue #234 — see
+ * {@link ActiveDrugOrder#getAdministrationTerms()}) — lowercased text tokens
  * from active allergies and conditions (for contraindication checks), and the names the loaded
  * reference data gives those same active drugs (issue #136 — see
  * {@link #getActiveDrugReferenceNames()}).
@@ -489,6 +491,12 @@ public class PatientClinicalContext {
 	 * still reached {@link #getActiveDrugAtcCodes()}, which made one prescription look like one partner
 	 * per code the loaded dataset could not name — a covered code is keyed on its substance either way,
 	 * so that half is unchanged and deliberate.
+	 *
+	 * <p><b>Beside its identity it carries one thing about the prescription itself</b> (issue #234):
+	 * where the chart says the drug is applied, as {@link #getAdministrationTerms()}. It is on every
+	 * rung including the code-only one, and it is read by exactly one arm — see that accessor and
+	 * {@link #namedByCodesOnly(String, String, Set, Set)}, which records why the rung it cannot reach
+	 * carries it anyway.
 	 */
 	public static final class ActiveDrugOrder {
 
@@ -499,6 +507,11 @@ public class PatientClinicalContext {
 		private final Set<String> names;
 
 		private final Set<String> atcCodes;
+
+		/** The administration the chart records for THIS order — the names its route concept publishes
+		 *  and the names its drug's dosage-form concept publishes, whichever of the two is recorded
+		 *  (issue #234). */
+		private final Set<String> administrationTerms;
 
 		/** Whether {@link #display} is a name for this order, as opposed to a stand-in the module
 		 *  synthesized because it could not read one — see {@link #namedByCodesOnly}. Asked, rather
@@ -516,7 +529,19 @@ public class PatientClinicalContext {
 		}
 
 		public ActiveDrugOrder(String uuid, String display, Set<String> names, Set<String> atcCodes) {
-			this(uuid, display, names, atcCodes, true);
+			this(uuid, display, names, atcCodes, null);
+		}
+
+		/**
+		 * An order carrying the ADMINISTRATION the chart records for it — issue #234.
+		 *
+		 * <p>A separate overload rather than a fifth argument on the two above, so that every existing
+		 * caller keeps the "nothing is recorded" reading it already had, which is the reading that
+		 * narrows nothing.
+		 */
+		public ActiveDrugOrder(String uuid, String display, Set<String> names, Set<String> atcCodes,
+				Set<String> administrationTerms) {
+			this(uuid, display, names, atcCodes, administrationTerms, true);
 		}
 
 		/**
@@ -529,12 +554,36 @@ public class PatientClinicalContext {
 		 * accident and the one place that does is named.
 		 */
 		static ActiveDrugOrder namedByCodesOnly(String uuid, String display, Set<String> atcCodes) {
-			return new ActiveDrugOrder(uuid, display, null, atcCodes, false);
+			return namedByCodesOnly(uuid, display, atcCodes, null);
+		}
+
+		/**
+		 * As {@link #namedByCodesOnly(String, String, Set)}, for an order that records where it is
+		 * applied even though no name for it could be read (issue #234). Two overloads rather than one
+		 * for the reason the constructors above have three: a caller that says nothing about
+		 * administration must keep meaning "nothing is recorded".
+		 *
+		 * <p><b>Nothing READS those terms on an order built here today, and that is a property of the
+		 * builder rather than of this class.</b> The site narrowing they exist for is applied in
+		 * {@code DrugSafetyValidator.addPartnersForUnmappedOrders}, which resolves a partner from an
+		 * order's NAMES — and this rung has none. {@link PatientClinicalContextBuilder} only reaches it
+		 * for an order carrying ATC codes, which the same builder folds into
+		 * {@link PatientClinicalContext#getActiveDrugAtcCodes()}, so such an order is grouped by the
+		 * code walk and never offered to that leg at all. They are carried anyway because this class
+		 * records what the chart says about an order and not what some arm currently asks of it; a
+		 * hand-built context can put a code-only order outside the flattened set, and a future rung
+		 * that reads administration off the code walk would otherwise find the field empty for exactly
+		 * the orders it was added for.
+		 */
+		static ActiveDrugOrder namedByCodesOnly(String uuid, String display, Set<String> atcCodes,
+				Set<String> administrationTerms) {
+			return new ActiveDrugOrder(uuid, display, null, atcCodes, administrationTerms, false);
 		}
 
 		private ActiveDrugOrder(String uuid, String display, Set<String> names, Set<String> atcCodes,
-				boolean nameKnown) {
+				Set<String> administrationTerms, boolean nameKnown) {
 			this.nameKnown = nameKnown;
+			this.administrationTerms = lower(administrationTerms);
 			this.uuid = uuid;
 			this.display = display;
 			this.names = lower(names);
@@ -586,6 +635,31 @@ public class PatientClinicalContext {
 		 *          legitimately wants. */
 		public Set<String> getAtcCodes() {
 			return atcCodes;
+		}
+
+		/**
+		 * @return the administration the chart records for this order, normalized the same way its
+		 *         {@link #getNames()} are — EVERY name the order's route concept publishes and every
+		 *         name its drug's dosage-form concept publishes, either source or both, empty when
+		 *         neither is recorded or neither could be read (issue #234).
+		 *
+		 *         <p>Every name and not the one {@code Concept.getName()} elects, which returns the
+		 *         locale-PREFERRED spelling first: on the 3.7.1 reference dictionary that hides the
+		 *         formal spelling of the bilateral eye and ear routes and of the only vaginal one.
+		 *         {@code PatientClinicalContextBuilder.addConceptNames} is where that is argued.
+		 *
+		 *         <p>Both sources and not one: measured on the 3.7.1 reference dictionary, its route set
+		 *         has 17 members and none of them names the skin, so a locally applied presentation of
+		 *         that kind can only reach this module through the dose FORM. Read by
+		 *         {@code DrugReference.codesForRecordedAdministration}, which is the one thing that
+		 *         decides what a recorded term means; nothing here interprets it.
+		 *
+		 *         <p>Empty is "nothing is recorded", never "administered nowhere" — the same reading the
+		 *         two constructors above give an order built before this field existed, and the reading
+		 *         that narrows nothing.
+		 */
+		public Set<String> getAdministrationTerms() {
+			return administrationTerms;
 		}
 
 		/**

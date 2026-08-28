@@ -939,9 +939,10 @@ public class DrugSafetyValidator {
 	 * <p>A shared lookup rather than three calls to one method, because equal answers from three call
 	 * sites are equal only while their INPUTS stay equal: the row group and the recorded names are both
 	 * arguments, and it is a narrowed row set at one site that this class's own history says to expect
-	 * (issues #162, #174, #175 are all "this arm was handed fewer rows than that one"). For the three
-	 * arms that read this the group is looked up rather than passed, so a caller cannot supply a
-	 * different one.
+	 * (issues #162, #174, #175 are all "this arm was handed fewer rows than that one"). For every arm
+	 * that reads this — three at #206, all five since #236 — the group is looked up rather than passed,
+	 * so a caller cannot supply a different one, and that is the property
+	 * {@code ChipSubjectOneResolutionTest} now enforces.
 	 *
 	 * <p><b>All five arms read it, since issue #236.</b> The two pairwise arms
 	 * ({@link #addQuestionPairInteractions}, {@link #addActiveOrderPairInteractions}) resolved their own
@@ -964,9 +965,12 @@ public class DrugSafetyValidator {
 	 * <p><b>The shared {@code groups} map is what makes that structural rather than coincidental</b>, and
 	 * the memo is not: {@link #subjectOf} is {@link #interactionSubject} over {@code groups.get(key)} and
 	 * {@code recordedNames}, both fixed for the pass and folded by a pure static method, so every arm gets
-	 * the same answer whoever asks first. The memo only stops the pairwise arms — which run last — folding
-	 * a group an earlier arm already folded. Measured by deleting the {@code put}: the whole api suite
-	 * stays green, so nothing about the one-name-per-substance property rests on it.
+	 * the same answer whoever asks first. What the memo buys is that no arm REFOLDS a group another has
+	 * already folded — including within one arm, which is why {@link #addContraindications} may ask once
+	 * per MATCHED rule (see its own comment there), and within one iteration of {@code validate}'s
+	 * drug-in-play loop, where the interaction and dose arms ask about the same substance in turn.
+	 * Measured by deleting the {@code put}: the whole api suite stays green, so it is a cost property and
+	 * nothing about the one-name-per-substance property rests on it.
 	 *
 	 * <p><b>And that is per PASS, not per request.</b> {@code validate} runs twice for one {@code /search}
 	 * — the pre-answer findings pass through {@code DrugReferenceInjector.injectRecords}, then the chips
@@ -2169,7 +2173,7 @@ public class DrugSafetyValidator {
 	 * rule falls back to "keep the incumbent", which is only "the dataset's first such row" while the
 	 * group is in dataset order.
 	 *
-	 * <p>The order BETWEEN groups is load-bearing for ONE of the four callers, and it is worth naming
+	 * <p>The order BETWEEN groups is load-bearing for ONE of the three callers, and it is worth naming
 	 * which rather than leaving a {@link LinkedHashMap} looking like a blanket guarantee.
 	 * {@link #substanceRowsNamedBy} feeds {@link #addPartnersForUnmappedOrders}, which walks this map's
 	 * {@code entrySet()} and appends a partner per group, and {@link #classRelationships} emits a class
@@ -3266,8 +3270,9 @@ public class DrugSafetyValidator {
 	 * the strength clause after it ({@link DrugReferenceInjector#renderFinding}, issue #283 — a
 	 * question-pair finding is an INTERACTION, so it states one like every other), so a pair
 	 * finding's grounding comes from that record rather than from the promoted notes, and the
-	 * promoted-note budget is untouched. <b>Verbatim WITHIN one {@code validate} pass, which is all it
-	 * ever was and all it can be since issue #236</b>: {@code renderFinding} copies the chip the
+	 * promoted-note budget is untouched. <b>Verbatim WITHIN one {@code validate} pass since issue
+	 * #236</b> — before it this arm's chip was byte-identical across the two passes, which is the
+	 * pass-stability ADR Decision 49 records losing: {@code renderFinding} copies the chip the
 	 * PRE-ANSWER pass raised, and this arm's subject is now folded over a group the answer widens, so the
 	 * record the model reads and the chip the clinician sees can name one substance two ways — see
 	 * {@link SubstanceSubjects}, which is where that residue and its measurement live. What the two

@@ -46,10 +46,13 @@ import org.openmrs.module.chartsearchai.ModuleSourceRoot;
  * groups differ, which needs a substance whose rows publish different alias sets. Measured over the
  * shipped 19 MB KB by driving {@code DdiDrugReferenceSource.parse}, {@code DrugReference.matchesText}
  * and {@code DrugReference.substanceGroupKey}: of its 129 multi-row substances, 22 publish a name that
- * resolves a strict non-empty SUBSET of the family. On 10 of those 22 — the sharper figure, and the one
- * the argument wants — putting that subset and the whole family to
- * {@code DrugSafetyValidator.interactionSubject} elects two different rows; on the other 119 families a
- * second resolution agrees with the shared one and reddens nothing.
+ * resolves a strict non-empty SUBSET of the family. Putting that subset and the whole family to
+ * {@code DrugSafetyValidator.interactionSubject} then elects two different rows on 10 of the 22 —
+ * <b>and that figure is a property of the SECOND operand, which has to be stated with it</b>: 10 with
+ * {@code Collections.emptyList()} as the recorded names, 0 where the patient's own record names the
+ * subset-resolving name, and 22 — every one of them — where it names one of the family's other rows.
+ * So the divergence is rare in the KB and ordinary on a chart that names the drug, which is why the
+ * shared group carries the ORDER rows too.
  * {@code OrderedSubjectRowTest.theQuestionPairChipNamesTheSubstanceTheOtherArmsName} poses it on a
  * hand-authored fixture, which is also what the chart lever needs — see there.
  * So a new arm resolving separately would agree with its siblings on almost every input and redden

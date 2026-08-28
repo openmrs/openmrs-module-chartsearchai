@@ -1141,9 +1141,9 @@ public class DrugReferenceInjector {
 	 * why silence is not a third answer.
 	 *
 	 * <p><b>Of the chip THIS pass raised</b> — so the sentence above is about a pass and not about a
-	 * request. Since issue #236 the two can differ for
-	 * one arm; {@code DrugSafetyValidator.SubstanceSubjects} and ADR Decision 49 state which and why, and
-	 * that is deliberately not restated here.
+	 * request. Between issue #236 and issue #238 the two could differ for one arm — the question-pair
+	 * arm; {@code DrugSafetyValidator.SubstanceSubjects} and ADR Decision 49 record which and why, and
+	 * ADR Decision 52 records issue #238 closing it — and that is deliberately not restated here.
 	 *
 	 * <p>"Verbatim" is of the detail, not of the whole line: a detail that does not already end a
 	 * sentence gains a full stop, so the clause after it reads as its own sentence rather than running
@@ -1287,11 +1287,13 @@ public class DrugReferenceInjector {
 	 * injected as its own numbered, citable record, carrying the chip's detail verbatim and the
 	 * strength clause after it ({@code preAnswerFindings} → {@link #renderFinding}, #283), so a pair
 	 * finding is grounded by that record rather than by these notes, and the promoted-note budget is
-	 * untouched by it. Verbatim WITHIN one {@code validate} pass: {@link #renderFinding} renders the chip
-	 * the PRE-ANSWER pass raised, and since issue #236 the question-pair arm's subject is folded over a
-	 * group the answer widens, so that record and the chip beside the answer can name one substance two
-	 * ways — {@code DrugSafetyValidator.SubstanceSubjects} and ADR Decision 49 are where that residue and
-	 * its measurement live. Said here as well as in the paragraph this one is paired with
+	 * untouched by it. Verbatim across passes too, not only within one: {@link #renderFinding} renders
+	 * the chip the PRE-ANSWER pass raised, and between issue #236 and issue #238 the question-pair
+	 * arm's subject was folded over a group the answer widens, so that record and the chip beside the
+	 * answer could name one substance two ways — {@code DrugSafetyValidator.SubstanceSubjects} and ADR
+	 * Decision 49 are where that residue and its measurement live. Issue #238 (ADR Decision 52) closed
+	 * it: the arm's subject now comes from the naming group every question drug is already in, so the
+	 * answer cannot move it. Said here as well as in the paragraph this one is paired with
 	 * ({@link DrugSafetyValidator#addQuestionPairInteractions}), because the two came apart once already
 	 * when only one of them was reworded.
 	 *

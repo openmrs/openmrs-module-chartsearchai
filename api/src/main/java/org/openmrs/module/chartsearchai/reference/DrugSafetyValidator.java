@@ -938,8 +938,12 @@ public class DrugSafetyValidator {
 	/**
 	 * What one RESPONSE calls each substance a {@code validate} pass resolved: {@link #interactionSubject}
 	 * over the rows the question and the patient's own orders resolved for that substance, asked once and
-	 * remembered. Not over the rows the ANSWER put in play — those decide what the arms RULE on and not
-	 * what they call it, which is issue #238 — see the paragraph beginning "And it is per REQUEST".
+	 * remembered — for a substance those rows reach at all. Not over the rows the ANSWER put in play for
+	 * such a substance — those decide what the arms RULE on and not what they call it, which is issue
+	 * #238 — see the paragraph beginning "And it is per REQUEST". That is the ordinary case and not a
+	 * universal one: a substance in play ONLY because the answer named it has no such rows to remember,
+	 * and for exactly that substance {@link #groupOf} folds its answer-only rows instead — see that
+	 * method's own javadoc, which states the narrower, correct claim.
 	 *
 	 * <p><b>Issue #206.</b> Five arms of this class name a subject. Three read this — the drug-in-play
 	 * interaction chip (issue #162), the dose warning (#174 site 4) and the contraindication chip — and
@@ -998,19 +1002,22 @@ public class DrugSafetyValidator {
 	 * contraindication arm's old positional rule happened to be pass-stable, since {@code inPlay} seeds
 	 * from the question first; the interaction and dose arms have had this since #175/#194.
 	 *
-	 * <p><b>And the question-pair arm since issue #236</b>, which is what that change COSTS and is
-	 * recorded here rather than sold as free. Folding this arm's own rows made it invariant to the
-	 * ANSWER — {@code questionDrugs} is a function of the question, which both passes share — and that
-	 * is the only sense of "pass-stable" this paragraph and the one below claim, for either arm. Not
+	 * <p><b>And the question-pair arm since issue #236</b>, which is what that change COST until issue
+	 * #238 closed it. Folding this arm's own rows made it invariant to the ANSWER —
+	 * {@code questionDrugs} is a function of the question, which both passes share — and that is the
+	 * only sense of "pass-stable" this paragraph and the one below claim, for either arm. Not
 	 * byte-identical across the passes, which nothing here ever established: the two passes build two
 	 * {@link PatientClinicalContext}s, so the recorded names this fold ranks by could already move
 	 * between them for reasons that have nothing to do with #236. So the injected
-	 * {@code safety_finding} the model reads and the chip beside the answer can name that substance
-	 * differently — the residue the paragraph above already accepts for three arms, on a fourth. ADR
-	 * Decision 49 is canonical for the trade and carries the measurement that shows it live; it is not
-	 * reprinted here. Taken deliberately: the alternative is this arm naming a substance one way while the chips
-	 * beside it about that same substance name it another, which is what issue #236 is, and closing it
-	 * properly is the once-per-REQUEST decision the paragraph below says belongs elsewhere.
+	 * {@code safety_finding} the model reads and the chip beside the answer COULD name that substance
+	 * differently — the residue the paragraph above already accepted for three arms, on a fourth. ADR
+	 * Decision 49 is canonical for the measurement that showed it live. <b>That residue is closed as of
+	 * issue #238 (ADR Decision 52), for this arm along with the other three</b>: every substance this
+	 * arm asks {@link #subjectOf} about is one of {@code questionDrugs}, which {@code namingGroups}
+	 * always covers, so its naming decision never falls through to {@code allGroups}'s answer-widened
+	 * rows and the ANSWER cannot move it. What #238 did not touch is the caveat two sentences up — a
+	 * chart read that genuinely differs between the two passes is a different residue from the one this
+	 * paragraph is about.
 	 *
 	 * <p>The SCREENING arm keeps its pass-stability, and by mechanism rather than by luck: its group
 	 * differs from this one only where a row of an ordered substance is in play, and such a substance
@@ -3468,12 +3475,14 @@ public class DrugSafetyValidator {
 	 * the strength clause after it ({@link DrugReferenceInjector#renderFinding}, issue #283 — a
 	 * question-pair finding is an INTERACTION, so it states one like every other), so a pair
 	 * finding's grounding comes from that record rather than from the promoted notes, and the
-	 * promoted-note budget is untouched. <b>Verbatim WITHIN one {@code validate} pass since issue
-	 * #236</b>, which is what ADR Decision 49 records that change costing: {@code renderFinding} copies the chip the
-	 * PRE-ANSWER pass raised, and this arm's subject is now folded over a group the answer widens, so the
-	 * record the model reads and the chip the clinician sees can name one substance two ways — see
-	 * {@link SubstanceSubjects}, which is where that residue and its measurement live. What the two
-	 * cannot do is describe one finding differently within a pass. That half is worded to match
+	 * promoted-note budget is untouched. <b>Verbatim across passes too, not only within one</b>:
+	 * {@code renderFinding} copies the chip the PRE-ANSWER pass raised, and between issue #236 and issue
+	 * #238 this arm's subject was folded over a group the answer widens, so the record the model reads
+	 * and the chip the clinician sees could name one substance two ways — ADR Decision 49 is canonical
+	 * for that measurement. Issue #238 (ADR Decision 52) closed it: this arm's subject now comes from
+	 * {@code namingGroups}, which every question drug is already in, so the answer cannot move it — see
+	 * {@link SubstanceSubjects}. What the two cannot do, before or after #238, is describe one finding
+	 * differently within a pass. That half is worded to match
 	 * {@link DrugReferenceInjector#orderedInteractionNotes}, which this paragraph is paired with —
 	 * each cites the other — because the two came apart once already, when only one of them was
 	 * reworded for the clause.

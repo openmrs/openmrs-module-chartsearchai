@@ -32,10 +32,14 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * additionally sees the rows the ANSWER puts in play, so the two could name one substance two ways in one
  * response — the injected record a clinician can cite saying one thing and the chip beside it another.
  *
- * <p>The fix is INVARIANCE rather than a per-request carrier: {@code answer} was the only input the
- * naming decision read that varies WITHIN {@code validate}, so the subject is folded over the question's
- * rows and the patient's own order-resolved ones while every arm still reaches its rules and its bands
- * over the whole group. Nothing is transported from one pass to the other.
+ * <p>The fix is INVARIANCE rather than a per-request carrier, for a substance the question or the
+ * patient's own orders resolve: the subject is folded over those rows alone while every arm still
+ * reaches its rules and its bands over the whole group, so {@code answer} — the one input that varies
+ * WITHIN {@code validate} — is no longer read for such a substance. Nothing is transported from one pass
+ * to the other. Not universal: a substance in play ONLY because the answer named it has no such group to
+ * fold, and {@code SubstanceSubjects.groupOf} then folds THAT pass's own answer-widened rows instead —
+ * see {@link #aSubstanceOnlyTheAnswerNamesIsStillFoldedRatherThanAnsweredPositionally}, which is exactly
+ * that shape, and {@code groupOf}'s own javadoc, which states this narrower claim correctly.
  *
  * <p><b>Which is not "the two passes cannot disagree", and these cases cannot see the difference.</b>
  * Each pass builds its own {@code PatientClinicalContext} from the patient, so the order rows and the
@@ -239,6 +243,54 @@ public class PerRequestSubstanceSubjectTest {
 		assertEquals(Arrays.asList("Norethisterone"), named,
 				"the substance only the answer named is folded to its unqualified row, not left as the "
 						+ "row the arm reached first: " + DrugReferenceTestSupport.details(chips));
+	}
+
+	/**
+	 * Issue #236's own residue, closed by this change too — not only for the drug-in-play, dose and
+	 * contraindication arms {@link #thePreAnswerPassAndTheChipsPassNameTheSubstanceAlike} covers, but for
+	 * the QUESTION-PAIR arm ({@code DrugSafetyValidator.addQuestionPairInteractions}), which #236 moved
+	 * onto the shared {@code SubstanceSubjects} lookup this change folds. Reproduces ADR Decision 49's own
+	 * live measurement over the real shipped 19 MB knowledge base: a question naming both Kanamycin and
+	 * {@code Daxibotulinumtoxina}, a brand-named row of a substance the dataset also files under
+	 * {@code Botulinum toxin type A} — the two rows tie on {@code namesNoRoute} and {@code canonicalRow}
+	 * elects the latter on the second rung, the row the data files the family under (issue #250).
+	 * Answered with wording that names {@code Botulinum toxin type A} instead. Before issue #238,
+	 * Decision 49 measured the pre-answer record and the chip printing two different names for that
+	 * family; this
+	 * case asserts they now print one.
+	 */
+	@Test
+	public void theQuestionPairArmNamesTheSubstanceAlikeAcrossBothPasses() throws Exception {
+		DrugReferenceService service =
+				DrugReferenceTestSupport.serviceWithGroups(DrugReferenceTestSupport.shippedEntries());
+		String question = "Does Daxibotulinumtoxina interact with kanamycin?";
+		String answer = "Botulinum toxin type A can interact with kanamycin.";
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, 70.0, null, null, null, null);
+
+		assertEquals(Arrays.asList("Kanamycin", "Daxibotulinumtoxina"),
+				DrugReferenceTestSupport.names(service.findImpliedByQuery(question)),
+				"precondition: the question must name exactly these two rows, or the question-pair arm "
+						+ "never runs and this case asserts nothing");
+		assertTrue(DrugReferenceTestSupport.names(service.findImpliedByQuery(answer))
+						.contains("Botulinum toxin type A"),
+				"precondition: the answer must reach the family's OTHER row, or nothing can move between "
+						+ "the passes");
+
+		List<SafetyWarning> preAnswer = DrugReferenceTestSupport.injectorWithSafety(service)
+				.preAnswerFindings(context, question);
+		List<SafetyWarning> chips = DrugReferenceTestSupport.validator(service)
+				.validate(answer, question, context);
+
+		SafetyWarning preAnswerPair =
+				DrugReferenceTestSupport.onlyOfType(preAnswer, SafetyWarning.TYPE_INTERACTION);
+		SafetyWarning chipPair = DrugReferenceTestSupport.onlyOfType(chips, SafetyWarning.TYPE_INTERACTION);
+
+		assertEquals(preAnswerPair.getDetail(), chipPair.getDetail(),
+				"the pre-answer record the model read and the chip beside the answer must name one "
+						+ "substance alike. Before issue #238 the pre-answer pass printed '...Daxibotulinumtoxina "
+						+ "(botulinum toxin type a)...' and the chips pass printed '...Botulinum toxin type A...' "
+						+ "for the identical pair, which is ADR Decision 49's own reproducer: pre-answer="
+						+ preAnswerPair.getDetail() + " | chips=" + chipPair.getDetail());
 	}
 
 	/**

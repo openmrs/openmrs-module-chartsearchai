@@ -189,7 +189,7 @@ beyond a rename had no test at all.
   [#238](https://github.com/openmrs/openmrs-module-chartsearchai/issues/238) had to establish rather
   than something the build gave for free. What makes this fixture counterfactual is the pairing of a
   finding with an EMPTY `safetyWarnings`, which neither pass can produce; the naming half is a
-  separate property and is now held by ADR Decision 49. The reference block's shape is copied from
+  separate property and is now held by ADR Decision 52. The reference block's shape is copied from
   the real `inverted-yes/mary__safety-clarithromycin.json`; only the reference set and the answer
   differ.
 

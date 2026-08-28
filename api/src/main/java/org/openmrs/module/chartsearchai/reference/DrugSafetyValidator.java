@@ -971,6 +971,28 @@ public class DrugSafetyValidator {
 	 * contraindication arm's old positional rule happened to be pass-stable, since {@code inPlay} seeds
 	 * from the question first; the interaction and dose arms have had this since #175/#194.
 	 *
+	 * <p><b>And the question-pair arm since issue #236</b>, which is what that change COSTS and is
+	 * recorded here rather than sold as free. Folding this arm's own rows made it pass-stable by
+	 * construction — {@code questionDrugs} is a function of the question, which both passes share.
+	 * Measured on the shipped KB through the real {@code validate}, one question
+	 * ({@code Does Daxibotulinumtoxina interact with kanamycin?}) driven with the two passes' own answer
+	 * arguments: the pre-answer pass ({@code answer} empty, the shape
+	 * {@code DrugReferenceInjector.preAnswerFindings} calls with) says {@code Kanamycin interacts with
+	 * Daxibotulinumtoxina (botulinum toxin type a)} and the chips pass, given an answer naming
+	 * {@code Botulinum toxin type A}, says {@code Kanamycin interacts with Botulinum toxin type A}. So
+	 * the injected {@code safety_finding} the model reads and the chip beside the answer can name that
+	 * substance differently — the residue the paragraph above already accepts for three arms, on a
+	 * fourth. Taken deliberately: the alternative is this arm naming a substance one way while the chips
+	 * beside it about that same substance name it another, which is what issue #236 is, and closing it
+	 * properly is the once-per-REQUEST decision the paragraph below says belongs elsewhere.
+	 *
+	 * <p>The SCREENING arm keeps its pass-stability, and by mechanism rather than by luck: its group
+	 * differs from this one only where a row of an ordered substance is in play, and such a substance
+	 * has already been through {@link #addInteractionWarnings}, whose pairs
+	 * {@link InteractionPairs} then suppresses here — so every pair it still reports has a subject whose
+	 * group is the orders' alone, and both passes resolve that group alike. See the comment at that
+	 * arm's own read.
+	 *
 	 * <p>Not designed around, and the alternative is worse: naming from a pass-invariant set while RULING
 	 * from the whole group is the two-row-sets shape this class exists to remove, one level up. Closing
 	 * it properly means deciding a substance's subject once per REQUEST rather than once per pass, which
@@ -2233,7 +2255,9 @@ public class DrugSafetyValidator {
 	 *         substance per validate PASS — the name is where that decision is DEFINED. Where a chip arm looks
 	 *         it UP is {@link SubstanceSubjects}, and a new chip-subject site belongs there rather than
 	 *         here: calling this directly is how an arm ends up folding a narrower row group than its
-	 *         siblings, which is exactly what #206 was.
+	 *         siblings, which is exactly what #206 was — and what #236 removed from the last two arms.
+	 *         Since then {@code ChipSubjectOneResolutionTest} enforces it, by scanning this file's source
+	 *         for a caller outside the three permitted bodies; before that the rule was javadoc only.
 	 *
 	 *         <p><b>And since issue #228 the class arm's PARTNER too</b>, on the one rung where that
 	 *         partner has a recorded name: {@link #addPartnersForUnmappedOrders} resolves a
@@ -3377,6 +3401,16 @@ public class DrugSafetyValidator {
 		// one thing here and another by the chip beside it. Both slots read it, because both are
 		// clinician-facing names for a substance in this response.
 		//
+		// Nothing this arm collapses on reads the resolver — it keys its candidates on
+		// pairKeyNames/unorderedPairKey and ranks them with outranks(row, rule, …) — so the chip COUNT
+		// does not move with the name, which is the check issue #236 owes. That is the property
+		// canonicalSubjects' javadoc stated as
+		// "label-only, and deliberately so" before it was deleted, and the one the ticket warns about,
+		// #205's hardening having turned 2 chips into 4 with a more precise resolver and an unmatched
+		// ledger key. Measured over the shipped 19 MB KB through the real DdiDrugReferenceSource.parse
+		// and the real validate: 12 probes reached this arm, chip count identical on every one, the name
+		// moved on 3.
+		//
 		// So the name in either slot can now be a row the question's own word did not spell — through
 		// the chart, and, on a dataset whose rows carry the same rules from both sides, through the
 		// ANSWER using a second alias of the family. That is the settled reading of a chip and not a
@@ -3842,9 +3876,11 @@ public class DrugSafetyValidator {
 				// and records each in InteractionPairs, so alreadyReported skips it above. What can
 				// move is the WITHHELD-pair WARN label below, whose partnerSubject is read where the
 				// PARTNER's substance is in play and the subject's is not; that needs a dataset whose
-				// two directions carry different rules, which the ddinter parser never produces and a
-				// curated json file can. Unified anyway: the arms must not hold two answers to one
-				// question, which is what let them disagree before.
+				// two directions carry different rules, and DdiDrugReferenceSource writes each
+				// interaction row onto BOTH drugs' entries (its two partners.computeIfAbsent calls), so
+				// a ddinter pair is symmetric or absent — a curated json file is where the shape lives.
+				// Unified anyway: the arms must not hold two answers to one question, which is what let
+				// them disagree before.
 				DrugReference subject = subjects.subjectOf(ref);
 				DrugReference partnerSubject = partner != null ? subjects.subjectOf(partner) : null;
 				pairs.add(new ScreenedPair(interactionWarning(subject, i),

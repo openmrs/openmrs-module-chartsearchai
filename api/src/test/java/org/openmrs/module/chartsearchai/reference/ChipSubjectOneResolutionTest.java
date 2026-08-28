@@ -43,9 +43,12 @@ import org.openmrs.module.chartsearchai.ModuleSourceRoot;
  * and the whole complaint of issue #236 is that its safety rested on nothing stated.
  *
  * <p><b>Why structural and not behavioural.</b> A second resolution is only OBSERVABLE where the two row
- * groups differ, which needs a substance whose rows publish different alias sets — the shipped DDInter
- * KB's rows mostly do not, and a hand-authored fixture is what
- * {@code OrderedSubjectRowTest.theQuestionPairChipNamesTheSubstanceTheOtherArmsName} needs to pose it.
+ * groups differ, which needs a substance whose rows publish different alias sets. Measured over the
+ * shipped 19 MB KB through the real {@code DdiDrugReferenceSource.parse} and
+ * {@code DrugReference.matchesText}: of its 129 multi-row substances, 13 publish a name that resolves a
+ * strict SUBSET of the family, so on the other 116 a second resolution would agree with the shared one
+ * and redden nothing. {@code OrderedSubjectRowTest.theQuestionPairChipNamesTheSubstanceTheOtherArmsName}
+ * poses it on a hand-authored fixture, which is also what the chart lever needs — see there.
  * So a new arm resolving separately would agree with its siblings on almost every input and redden
  * nothing. That is the same argument {@code OrderPartnerNameSourceWritePathTest} makes for its own scan,
  * and {@code ArchitectureGuardTest} is this repo's other source-scanning guard.

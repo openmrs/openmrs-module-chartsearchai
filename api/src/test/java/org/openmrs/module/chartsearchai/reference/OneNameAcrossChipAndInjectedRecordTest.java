@@ -43,9 +43,13 @@ public class OneNameAcrossChipAndInjectedRecordTest {
 	private static final String BLANK_PARTNER_NAME_FIXTURE =
 			"chartsearchai-test/ddi-fold-blank-partner-name.json";
 
-	/** The DDInter-shaped fixture whose rule token {@code esomeprazole} is named by TWO substances, so
-	 *  {@code unambiguouslyNames} refuses the fold — {@code FoldedChipOnePartnerNameTest} owns the
-	 *  chip-side case over the same file. */
+	/** The DDInter-shaped fixture whose rule token {@code esomeprazole} is named by two substances and
+	 *  claimed most strongly by the one the ladder did NOT resolve — the {@code Omeprazole} row holds it
+	 *  as an alias while the {@code Esomeprazole} row holds it as its own display name — so
+	 *  {@code unambiguouslyNames} refuses the fold. Being named by two substances stopped being the
+	 *  reason at issue #296: a token two substances name is reconciled where the ladder's row is the one
+	 *  that names it outright. {@code FoldedChipOnePartnerNameTest} owns the chip-side case over the same
+	 *  file, and {@code aRuleTokenTheLaddersRowOutranksIsHandedToBothSentences} is the admitting half. */
 	private static final String AMBIGUOUS_TOKEN_FIXTURE =
 			"chartsearchai-test/ddi-fold-ambiguous-token.json";
 

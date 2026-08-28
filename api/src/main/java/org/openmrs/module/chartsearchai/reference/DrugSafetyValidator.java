@@ -6029,13 +6029,20 @@ public class DrugSafetyValidator {
 	 *         order's codes with it.
 	 *
 	 *         <p>Scoped to the orders THIS leg governs — dictionary-unmapped, through the same
-	 *         {@link #governedByTheNameLeg} the caller applies. <b>Nothing pins that conjunct and
-	 *         nothing can today</b>: an order the code walk reached produced a partner of its own, and
-	 *         {@link #alreadyACoMedication} then keeps this leg away from that substance entirely, so
-	 *         the conjunct cannot change an answer. It is defence in depth against a future rung that
-	 *         reaches this leg for a mapped order — stated the way {@code CLAUDE.md} states it for
-	 *         {@code describesEndedOrder}'s unreachable null checks, so a later reader neither deletes
-	 *         it expecting a test to object nor keeps it believing one would.
+	 *         {@link #governedByTheNameLeg} the caller applies. <b>Nothing in the suite pins that
+	 *         conjunct</b>: removing it left the whole api build green, so a reader must not delete it
+	 *         expecting a test to object. It is kept because the cover it duplicates is not total. In
+	 *         the ordinary case an order the code walk reached produced a partner of its own and
+	 *         {@link #alreadyACoMedication} keeps this leg away from that substance entirely — through
+	 *         its second half, {@link OrderPartner#substances}, wherever the dataset could name none of
+	 *         that order's codes. Where the dataset CAN name them the partner is keyed on the substance
+	 *         the dataset names the CODE, that field is not filled, and this leg asks a different
+	 *         question: what the order's NAME implies. A substance the name implies and the code does
+	 *         not name is therefore invisible to {@link #alreadyACoMedication} and can be given a
+	 *         partner here through an unmapped sibling order, at which point this loop would reach the
+	 *         mapped order too. Whether the shipped data holds such a pair is not measured; the
+	 *         conjunct makes it moot, by keeping a dictionary-mapped prescription's recorded
+	 *         administration out of a substance this leg owns.
 	 *
 	 *         <p><b>What the re-walk costs, measured rather than argued.</b> The WALK is quadratic in
 	 *         the orders this leg governs — a {@link Collections#disjoint} and a map lookup per pair —

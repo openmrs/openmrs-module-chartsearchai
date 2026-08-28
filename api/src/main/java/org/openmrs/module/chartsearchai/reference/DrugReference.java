@@ -1069,6 +1069,19 @@ public class DrugReference {
 	 * listed in its own right rather than the boundary being loosened, because loosening it is what
 	 * would let {@code cutaneous} reach {@code subcutaneous}. Everything this list fails to recognise
 	 * narrows nothing, which is the fail-safe direction.
+	 *
+	 * <p><b>An INFLECTION of a term already here is one of those spellings.</b> {@code eyes},
+	 * {@code ears} and {@code vaginally} are the words carried by the names the 3.7.1 reference
+	 * dictionary ELECTS for its bilateral eye route (874, {@code In both eyes}), its bilateral ear
+	 * route (877, {@code In both ears}) and the only vaginal route it publishes (872,
+	 * {@code Vaginally}), and {@code containsWord} takes no trailing letters, so the singular
+	 * {@code eye} does not reach {@code In both eyes}. They are carried BESIDE
+	 * {@code PatientClinicalContextBuilder.addConceptNames} reading every name a concept publishes,
+	 * not instead of it: on that dictionary either mechanism alone reaches those three routes, and a
+	 * dictionary that publishes only one of the two spellings still narrows. Neither makes this list
+	 * complete, and it does not claim to be — the same dictionary also elects {@code OU}, {@code OD}
+	 * and {@code OS} for its three eye routes, which no vocabulary of site WORDS carries and which
+	 * reach a site here only through another name of the same concept.
 	 */
 	private static final Map<String, List<String>> SITE_TERMS;
 
@@ -1088,14 +1101,14 @@ public class DrugReference {
 
 		Map<String, List<String>> terms = new LinkedHashMap<String, List<String>>();
 		terms.put(SITE_SKIN, unmodifiable("cutaneous", "skin"));
-		terms.put(SITE_EYE, unmodifiable("eye", "ophthalmic", "ocular", "intraocular", "conjunctival",
-				"subconjunctival"));
-		terms.put(SITE_EAR, unmodifiable("ear", "otic", "aural", "auricular"));
+		terms.put(SITE_EYE, unmodifiable("eye", "eyes", "ophthalmic", "ocular", "intraocular",
+				"conjunctival", "subconjunctival"));
+		terms.put(SITE_EAR, unmodifiable("ear", "ears", "otic", "aural", "auricular"));
 		terms.put(SITE_NOSE, unmodifiable("nasal", "intranasal", "nose"));
 		terms.put(SITE_THROAT, unmodifiable("throat", "oropharyngeal"));
 		terms.put(SITE_AIRWAY, unmodifiable("inhaled", "inhalation", "inhaler", "nebulised",
 				"nebulized", "nebuliser", "nebulizer"));
-		terms.put(SITE_VAGINA, unmodifiable("vaginal", "intravaginal"));
+		terms.put(SITE_VAGINA, unmodifiable("vaginal", "vaginally", "intravaginal"));
 		terms.put(SITE_MOUTH, Collections.<String> emptyList());
 		terms.put(SITE_GUT, Collections.<String> emptyList());
 		terms.put(SITE_ANORECTAL, Collections.<String> emptyList());
@@ -1142,16 +1155,22 @@ public class DrugReference {
 			return codes;
 		}
 		// No emptiness guard on the SITES: codesAtSites keeps nothing for an empty site set, and the
-		// tail below already returns codes for that. The two emptiness halves above are cost
-		// short-circuits and not a second decline rule — deleting them changes no answer, which is
-		// said here because a reader applying "one decline path" to them would be right to.
+		// tail below already returns codes for that. The two isEmpty() disjuncts above are cost
+		// short-circuits and not a second decline rule — the tail returns codes for either of them
+		// anyway. The two NULL disjuncts are a different thing and are load-bearing: recordedSites
+		// reads recordedTerms.size() and codesAtSites iterates codes, so removing either turns a null
+		// argument from a returned value into an NPE. That is the asymmetry narrowsAnyCode's javadoc
+		// states from its own side, where a null code set throws because that method has no such guard.
 		//
 		// The tail is UNREACHABLE from the one production caller today, and stays because it is this
 		// method's contract rather than that caller's convenience: since the caller admits an order
 		// only where narrowsAnyCode is true of it, the union it passes keeps at least that order's
-		// codes. Nothing discriminates it, which is said here rather than left for a mutation to
-		// discover — the method must never hand back an empty classification, and a second caller
-		// would need that whether or not it asked narrowsAnyCode first.
+		// codes. A CASE discriminates it even so —
+		// ActiveOrderAdministrationTermsTest.aRouteThatNamesNoSiteIsCarriedAndSelectsNothing, whose
+		// recorded term is the standard dataset's own route "unknown" against a non-empty code set, so
+		// returning kept unguarded is the one failure that mutation produces. The method must never
+		// hand back an empty classification, and a second caller would need that whether or not it
+		// asked narrowsAnyCode first.
 		Set<String> kept = codesAtSites(codes, recordedSites(recordedTerms));
 		return kept.isEmpty() ? codes : kept;
 	}

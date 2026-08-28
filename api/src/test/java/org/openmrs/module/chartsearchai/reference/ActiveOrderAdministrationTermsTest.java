@@ -150,21 +150,27 @@ public class ActiveOrderAdministrationTermsTest extends BaseModuleContextSensiti
 		// The reference dictionary's OWN shape, which nothing in this class could express while every
 		// concept it built carried a single ConceptName. Concept.getName() returns the locale-PREFERRED
 		// name ahead of the fully specified one, and on the 3.7.1 dictionary three of the nine
-		// site-naming routes are preferred under a spelling no term matches: 874 "In both eyes" (FSN
-		// "Bilateral eye administration"), 877 "In both ears", and 872 "Vaginally" — the only vaginal
-		// route there is. containsWord takes no trailing letters, deliberately, so the plural misses
-		// the term "eye" and the adverb misses "vaginal", and a builder reading one name left issue
-		// #234's own defect standing for three of that dictionary's nine site-naming routes.
+		// site-naming routes are elected under a spelling that is not the formal one this module's
+		// vocabulary is written in: 874 "In both eyes" (FSN "Bilateral eye administration"), 877 "In
+		// both ears", and 872 "Vaginally" — the only vaginal route there is. containsWord takes no
+		// trailing letters, deliberately, so the plural does not reach the term "eye" nor the adverb
+		// "vaginal", and a builder reading one name left issue #234's own defect standing for all three.
 		//
-		// Asserted on the CODES and not merely on the terms: what the ticket is about is which class a
-		// chip names, and hydrocortisone's nine codes cover every route it is marketed as. The
-		// arrangement's premise is asserted first, because a case that stopped at the terms would pass
-		// for a platform that elected the fully specified name after all.
+		// The words those three elected names are built on are terms of their own now (SITE_TERMS
+		// carries "eyes", "ears" and "vaginally"), so the CODE assertion below no longer
+		// discriminates: the preferred name alone selects the eye, which is what
+		// UnmappedOrderAdministrationSiteTest
+		// .aRouteSpelledAsAnInflectionOfItsTermStillSelectsItsSite pins. What discriminates here is the
+		// middle assertion, on the TERMS — measured, mutating addAdministration back to addConceptName
+		// reddens that assertion and nothing else in this class. The code assertion is kept even so,
+		// because the ticket is about which class a chip names and hydrocortisone's nine codes cover
+		// every route it is marketed as. The arrangement's premise is asserted first, or the case would
+		// pass for a platform that elected the fully specified name after all.
 		recordRoute("Bilateral eye administration", "In both eyes");
 		assertEquals("In both eyes",
 				Context.getConceptService().getConcept(routeOfOrder111()).getName().getName(),
-				"the premise: the name Concept.getName() elects is the preferred one, which names no"
-						+ " site this module can attribute");
+				"the premise: the name Concept.getName() elects is the preferred one, not the fully"
+						+ " specified spelling this module's term vocabulary is written in");
 
 		Set<String> terms = theOrder().getAdministrationTerms();
 		assertTrue(terms.contains("bilateral eye administration"),

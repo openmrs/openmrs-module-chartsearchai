@@ -435,8 +435,14 @@ final class PatientClinicalContextBuilder {
 	 * no trailing letters, deliberately, so {@code eyes} does not reach the term {@code eye} nor
 	 * {@code Vaginally} the term {@code vaginal}: reading one name left issue #234's own defect
 	 * standing for the standard bilateral eye route, the standard bilateral ear route and the only
-	 * vaginal route that dictionary publishes. Three of its nine site-naming routes, unfixed and
-	 * silently — no exception, no log line, and a chip identical to the pre-fix one.
+	 * vaginal route that dictionary publishes — three of its nine site-naming routes, unfixed and
+	 * silently, with no exception, no log line and a chip identical to the pre-fix one. The words those
+	 * three elected names are built on are terms in their own right now ({@code eyes},
+	 * {@code ears}, {@code vaginally}, see {@code DrugReference.SITE_TERMS}), so on that dictionary
+	 * either mechanism alone reaches them; the two are independent and neither replaces the other. What this read
+	 * covers that a term list cannot is the open set beyond those three — the same dictionary elects
+	 * {@code OU}, {@code OD} and {@code OS} for its three eye routes, which no vocabulary of site
+	 * WORDS carries and which reach a site only because another name of the same concept does.
 	 *
 	 * <p><b>Not by widening {@link #addConceptName}</b>, which the order-NAME path shares: what counts
 	 * as a name there decides which reference entries an order can reach at all

@@ -106,8 +106,10 @@ public class UnmappedOrderAdministrationSiteTest {
 	public void andTheSameOrderWithNoRecordedAdministrationIsUnchanged() throws IOException {
 		// The control, and the half that makes the case above a NARROWING rather than an arm going
 		// silent. It is also the state of every order this repo can drive: measured on the 3.7.1
-		// standalone, all 46 active drug orders record either "Oral administration" or nothing, and the
-		// reference dictionary's 17-member route set names no locally applied site at all.
+		// standalone, all 46 active drug orders record either "Oral administration" or nothing. That
+		// dictionary's 17-member route set does name sites — nine of its routes name the eye, the ear,
+		// the nose, the airway or the vagina — but none of them names the skin, and it publishes no
+		// cutaneous dose form either, so the cream this case orders has no spelling there to record.
 		assertEquals(Collections.singletonList(SYSTEMIC_CHIP),
 				DrugReferenceTestSupport.details(chips(DEXAMETHASONE_QUESTION, cream())));
 	}
@@ -196,6 +198,43 @@ public class UnmappedOrderAdministrationSiteTest {
 						order("Hydrocortisone eye ointment", "Topical"))),
 				"and recorded only as topical, the arm keeps the answer it had rather than guessing"
 						+ " the skin");
+	}
+
+	@Test
+	public void aRouteSpelledAsAnInflectionOfItsTermStillSelectsItsSite() throws IOException {
+		// The spelling a dictionary ELECTS, rather than the formal one this vocabulary is written in.
+		// containsWord takes no trailing letters, so "eye" does not reach "In both eyes" — which is how
+		// the 3.7.1 reference dictionary names concept 874, "In both ears" concept 877 and "Vaginally"
+		// concept 872, the only vaginal route it publishes. SITE_TERMS carries those three inflections
+		// itself, so a dictionary that publishes the elected spelling and no "... administration" one
+		// still narrows; PatientClinicalContextBuilder.addConceptNames reading every published name is
+		// the other half and neither is a substitute for the other.
+		assertEquals(
+				Collections.singletonList("Dexamethasone is in the same ATC class (S01BA) as active"
+						+ " order Hydrocortisone — possible duplicate therapy"),
+				DrugReferenceTestSupport.details(chips(DEXAMETHASONE_QUESTION, cream("In both eyes"))),
+				"the plural spelling of the bilateral eye route must select the eye");
+
+		assertEquals(
+				Collections.singletonList("Dexamethasone is in the same ATC class (S02BA) as active"
+						+ " order Hydrocortisone — possible duplicate therapy"),
+				DrugReferenceTestSupport.details(chips(DEXAMETHASONE_QUESTION, cream("In both ears"))),
+				"and the plural spelling of the bilateral ear route must select the ear");
+
+		// The vaginal route gets the same treatment and cannot be asserted the same way: this fixture's
+		// hydrocortisone rows publish no G0 code, so a record naming the vagina narrows nothing there
+		// and the arm correctly declines. Asserted against the same pool the per-site case below uses,
+		// which does carry one.
+		Set<String> pool = new LinkedHashSet<String>();
+		pool.add("H02AB09");
+		for (String[] pair : ONE_TERM_AND_ONE_CODE_PER_SITE.values()) {
+			pool.add(pair[1]);
+		}
+		assertEquals(DrugReferenceTestSupport.set("G01AF02"),
+				DrugReference.codesForRecordedAdministration(pool,
+						DrugReferenceTestSupport.set("Vaginally")),
+				"and the adverbial spelling of the only vaginal route that dictionary publishes must"
+						+ " select the vagina, from: " + pool);
 	}
 
 	@Test

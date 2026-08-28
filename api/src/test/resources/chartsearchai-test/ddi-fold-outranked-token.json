@@ -1,0 +1,35 @@
+{
+  "metadata": { "source": "test fixture — issue #296" },
+  "note": "Rows copied field-for-field from the 19 MB openmrs-ddi-knowledge-base DDInter 2.0 dataset, in KB order, with every interaction row and mechanism text that falls wholly inside the slice. The ticket's own arrangement: Ketoconazole and Levoketoconazole are two substances the KB files under ONE rxnorm_name (ketoconazole) and one rxcui, publishing the same four ATC codes, so neither an identity test nor a code-scoped one separates them. What does is that `ketoconazole` is Ketoconazole's own display name and only Levoketoconazole's rxnorm_name alias. Osilodrostat shares H02CA with both, which is what makes the class arm fold onto the rule arm. Rows, ids, codes, aliases and mechanism texts are the dataset's own; nothing here is hand-authored.",
+  "mechanisms": {
+    "5190": {
+      "text": "Coadministration with potent inhibitors of CYP450 3A4 may increase the plasma concentrations of osilodrostat, which is partially metabolized by the isoenzyme. Clinically, high plasma levels of osilodrostat may increase the risk of adverse effects such as hypocortisolism (which may lead to life-threatening adrenal insufficiency), QT prolongation (which may increase the risk of ventricular arrhythmias including torsade de pointes and sudden death), and elevated androgen and 11-deoxycorticosterone levels (the latter of which may activate mineralocorticoid receptors and cause hypokalemia, edema, and hypertension).",
+      "categories": ["metabolism"]
+    },
+    "6747": {
+      "text": "Levoketoconazole can cause concentration-dependent, life-threatening prolongation of the QT interval.",
+      "categories": ["synergistic_effect"]
+    }
+  },
+  "drugs": [
+    {
+      "id": "DDInter1008", "name": "Ketoconazole", "rxcui": "6135", "rxnorm_name": "ketoconazole",
+      "drugbank_id": "DB01026", "atc": ["D01AC08", "G01AF11", "H02CA03", "J02AB02"],
+      "ciel": [{ "code": "78476", "uuid": "78476AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "name": "Ketoconazole" }]
+    },
+    {
+      "id": "DDInter1351", "name": "Osilodrostat", "rxcui": "2286252", "rxnorm_name": "osilodrostat",
+      "drugbank_id": "DB11837", "atc": ["H02CA02"], "ciel": []
+    },
+    {
+      "id": "DDInter2007", "name": "Levoketoconazole", "rxcui": "6135", "rxnorm_name": "ketoconazole",
+      "drugbank_id": "DB05667", "atc": ["D01AC08", "G01AF11", "H02CA03", "J02AB02"],
+      "ciel": [{ "code": "78476", "uuid": "78476AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "name": "Ketoconazole" }]
+    }
+  ],
+  "interactions": [
+    ["DDInter1008", "DDInter1351", "Major", "5190"],
+    ["DDInter1008", "DDInter2007", "Major", "6747"],
+    ["DDInter1351", "DDInter2007", "Major", "6747"]
+  ]
+}

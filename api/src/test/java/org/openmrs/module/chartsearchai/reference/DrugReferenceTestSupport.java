@@ -216,15 +216,32 @@ public final class DrugReferenceTestSupport {
 	/**
 	 * @return the one finding for {@code rule}, or a hard failure naming what was actually there. Shared
 	 *         with {@link #rulesOf(List)} and for the same reason.
+	 *
+	 *         <p>A rule id is NOT a unique key over a load's findings, so this fails on a second match
+	 *         rather than returning the first. Since issue #296
+	 *         {@link DrugReferenceValidity#ENTRY_NOT_NAMED_BY_ITS_OWN_ALIASES} has two {@code report}
+	 *         call sites, one per remedy, and each finding counts only its own shape — so on a dataset
+	 *         raising both, returning the first would hand an assertion about {@code getOccurrences()}
+	 *         a partial count that reads exactly like the total. A caller that means one of them must
+	 *         select on the REMEDY.
 	 */
 	static DrugReferenceValidity.Finding finding(List<DrugReferenceValidity.Finding> findings,
 			String rule) {
+		DrugReferenceValidity.Finding found = null;
 		for (DrugReferenceValidity.Finding candidate : findings) {
 			if (rule.equals(candidate.getRule())) {
-				return candidate;
+				if (found != null) {
+					throw new AssertionError("expected ONE " + rule + " finding and this load raised "
+							+ "more than one, one per remedy — select on the remedy instead. Had: "
+							+ findings);
+				}
+				found = candidate;
 			}
 		}
-		throw new AssertionError("expected a " + rule + " finding, had: " + findings);
+		if (found == null) {
+			throw new AssertionError("expected a " + rule + " finding, had: " + findings);
+		}
+		return found;
 	}
 
 	/**

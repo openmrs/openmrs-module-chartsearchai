@@ -701,8 +701,54 @@ public class DrugReference {
 		return aliases;
 	}
 
+	/**
+	 * Stores the alias list TRIMMED, which is what keeps this class's two name predicates from
+	 * disagreeing about the same pair (issue #296).
+	 *
+	 * <p>{@link #isNamed} compares through {@link #normalizeName}, which trims both operands;
+	 * {@link #matchesDrugName} hands the alias to {@link #containsBoundedToken} as the needle and trims
+	 * nothing. So a stored alias carrying padding IS one of the entry's names by the first predicate and
+	 * matches nothing by the second, and {@link #nameMatchStrength} — gated on the second — then answers
+	 * {@link #NAME_NO_MATCH} for a name the entry demonstrably has. Both directions of that are wrong
+	 * where a caller gates on one and ranks with the other: measured through the real
+	 * {@code JsonDrugReferenceSource} and the real {@code DrugSafetyValidator.validate}, a curated entry
+	 * named only by {@code " warfarin"} lost a folded-chip reconciliation it had, and the same padding on
+	 * a RIVAL row let that row drop out of the ranking contest and licensed a displacement — one
+	 * substance's rated mechanism under another's name, the #161/#187/#194 failure.
+	 *
+	 * <p>Trimming here rather than in either predicate, because the disagreement is a property of the
+	 * stored string and this is the one place every source writes it — {@code ddinter}, {@code atc}, the
+	 * curated {@code json} parser and {@code DrugReferenceValidity}'s own repairs all arrive here. It
+	 * changes no bundled dataset: 0 padded aliases over the shipped 19 MB knowledge base, the curated
+	 * seed and the DDInter excerpt. And it is exhaustive for the disagreement rather than a patch on one
+	 * shape of it — searched over both operands across space, tab, NBSP, NUL, precomposed and decomposed
+	 * accents, dotted capital I, hyphen, period and digits, every pair where {@code isNamed} holds and
+	 * {@code nameMatchStrength} answers below {@link #NAME_IS_ANOTHER_NAME} has an alias differing from
+	 * its own {@code trim()} (a folds-to-empty alias is the other, and {@code DrugReferenceValidity}
+	 * drops that at load). Both halves are needed and the second is the loader's: an alias of combining
+	 * marks alone survives this trim, still answers {@code isNamed}, and folds to an empty needle that
+	 * {@code containsBoundedToken} can never match. So the implication {@code isNamed} implies
+	 * {@code matchesDrugName} is a property of a LOADED dataset, resting on this trim and on
+	 * {@code DrugReferenceValidity.sanitizeAliases} leaving no alias that names nothing — not of this
+	 * setter alone, and not of an entry pushed through the {@code setEntries} seam.
+	 *
+	 * <p>Null elements are passed through untouched, as they were: {@link #normalizeName} and
+	 * {@code namesAnything} both answer for them, and dropping them here would move a decision the
+	 * loader's validity pass owns.
+	 */
 	public void setAliases(List<String> aliases) {
-		this.aliases = aliases != null ? aliases : Collections.<String> emptyList();
+		this.aliases = aliases != null ? trimmedAliases(aliases) : Collections.<String> emptyList();
+	}
+
+	/** @return {@code aliases} with every non-null element trimmed — {@link #setAliases}'s whole rule,
+	 *          split out so the setter reads as the one-line assignment it is. The list is copied, so a
+	 *          caller keeping its own reference cannot un-trim what this stored. */
+	private static List<String> trimmedAliases(List<String> aliases) {
+		List<String> trimmed = new ArrayList<String>(aliases.size());
+		for (String alias : aliases) {
+			trimmed.add(alias == null ? null : alias.trim());
+		}
+		return trimmed;
 	}
 
 	public List<String> getAtcCodes() {
@@ -1793,6 +1839,22 @@ public class DrugReference {
 	 * the entry with the strongest claim on it, so that ONE definition orders the three kinds of claim
 	 * rather than each caller re-deciding what "the same drug" means.
 	 *
+	 * <p><b>Since issue #296 one caller asks it of a REFERENCE string</b> — a rule's own match token,
+	 * through {@link DrugReferenceService#uniqueStrongestClaimant}, to decide which of the substances a
+	 * token names it denotes. Only the top two ranks are in play there, and the two rungs below are shut
+	 * for DIFFERENT reasons — one of which does not involve the trim, so do not read the trim as holding
+	 * both. {@link #NAME_TOKEN_INSIDE_A_NAME} is returned from one expression below and only where
+	 * {@link #isNamed} is false, which {@code DrugSafetyValidator.unambiguouslyNames} has already
+	 * required to be TRUE of every row it ranks — the ladder's entry and each rival alike — so that
+	 * rung is shut by that gate, trimmed list or not. {@link #NAME_NO_MATCH} is the one the
+	 * trim shuts: on a LOADED dataset identity with a trimmed alias implies containment, so the gate
+	 * cannot admit a pair this method then answers it for. Loaded, because the trim is only half of it
+	 * — see {@link #setAliases} for the other half and for what an entry bypassing the loader can still
+	 * do. Without the trim that rung reopens on a padded alias, in the two directions
+	 * {@code DrugSafetyValidator.unambiguouslyNames} records. Noted because it widens what this method
+	 * is asked about, and ADR Decision 52 carries the argument for accepting that over a second
+	 * spelling of the comparison.
+	 *
 	 * <p><b>Why a rank and not first-past-the-post (issue #176).</b> Resolution took the earliest
 	 * matching entry, and reference names nest: 206 of the shipped KB's 2283 entries did not resolve to
 	 * themselves, 54 of them landing on a different SUBSTANCE (measured 2026-08-08 through
@@ -1841,8 +1903,10 @@ public class DrugReference {
 	 *         identity; {@code DrugSafetyValidator.identifies} records what scanning them instead
 	 *         produced (a multi-word token naming every drug called after one of its words).
 	 *
-	 *         <p>Also the middle rank of {@link #nameMatchStrength}, where the second operand is a
-	 *         clinician-entered name rather than a reference one. It stays unfolded there for the reason
+	 *         <p>Also the middle rank of {@link #nameMatchStrength}, whose second operand is usually a
+	 *         clinician-entered name rather than a reference one — though since issue #296 it is a
+	 *         reference token at one caller, which reaches that rank through this very method. It stays
+	 *         unfolded there for the reason
 	 *         {@link #normalizeName} records: an accented chart string therefore reaches no exact rank
 	 *         and falls through to the folded matcher, which is exactly what it did before — the fold's
 	 *         own measurement says the reference side carries no combining mark, so the gap is on the

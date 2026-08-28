@@ -1143,7 +1143,7 @@ public class DrugReferenceInjector {
 	 * <p><b>Of the chip THIS pass raised</b> — so the sentence above is about a pass and not about a
 	 * request. Between issue #236 and issue #238 the two could differ for one arm — the question-pair
 	 * arm; {@code DrugSafetyValidator.SubstanceSubjects} and ADR Decision 49 record which and why, and
-	 * ADR Decision 52 records issue #238 closing it — and that is deliberately not restated here.
+	 * ADR Decision 53 records issue #238 closing it — and that is deliberately not restated here.
 	 *
 	 * <p>"Verbatim" is of the detail, not of the whole line: a detail that does not already end a
 	 * sentence gains a full stop, so the clause after it reads as its own sentence rather than running

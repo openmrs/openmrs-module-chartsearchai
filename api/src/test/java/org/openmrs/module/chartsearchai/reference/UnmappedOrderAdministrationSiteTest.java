@@ -236,6 +236,51 @@ public class UnmappedOrderAdministrationSiteTest {
 	}
 
 	@Test
+	public void aSecondPresentationOfOneSubstanceIsNotSilencedByTheFirstInListOrder() throws IOException {
+		// Two unmapped orders of ONE substance at different sites. The partner is keyed on the substance
+		// (issue #186), so the two are one co-medication and alreadyACoMedication skips the second before
+		// its terms are ever read — which made the FIRST order OrderService returned decide the
+		// classification for both. Asserted as an equality between the two sequences rather than as two
+		// literals, so neither side can be corrected into agreement on its own, and asserted non-empty
+		// too, or an arm silenced altogether would satisfy the equality.
+		//
+		// The patient IS on systemic hydrocortisone in both runs; the cream must not speak for the
+		// tablet.
+		List<String> creamFirst = DrugReferenceTestSupport.details(chips(DEXAMETHASONE_QUESTION,
+				twoPresentations(true)));
+		List<String> tabletFirst = DrugReferenceTestSupport.details(chips(DEXAMETHASONE_QUESTION,
+				twoPresentations(false)));
+
+		assertEquals(Collections.singletonList(SYSTEMIC_CHIP), tabletFirst,
+				"a systemic presentation the chart records must still be named");
+		assertEquals(tabletFirst, creamFirst,
+				"and which order OrderService returned first must not decide it");
+	}
+
+	@Test
+	public void twoPresentationsTheModuleCanBothPlaceNarrowToTheUnionOfTheirSites() throws IOException {
+		// The pair to the case above: where EVERY order of the substance names a site, there is nothing
+		// unattributable and the narrowing is the union of what they name. Topical plus ophthalmic
+		// hydrocortisone shares S01BA with dexamethasone and no longer shares H02AB — the chip the eye
+		// case pins, reached with a second order beside it.
+		Set<String> creamNames = DrugReferenceTestSupport.set(CREAM);
+		Set<String> dropNames = DrugReferenceTestSupport.set("Hydrocortisone eye preparation");
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set(CREAM, "Hydrocortisone eye preparation"), null, null, null,
+				Arrays.asList(
+						DrugReferenceTestSupport.activeOrder("order-234-cream", CREAM, creamNames, null,
+								DrugReferenceTestSupport.set("Topical")),
+						DrugReferenceTestSupport.activeOrder("order-234-drop",
+								"Hydrocortisone eye preparation", dropNames, null,
+								DrugReferenceTestSupport.set("Bilateral eye administration"))));
+
+		assertEquals(
+				Collections.singletonList("Dexamethasone is in the same ATC class (S01BA) as active"
+						+ " order Hydrocortisone — possible duplicate therapy"),
+				DrugReferenceTestSupport.details(chips(DEXAMETHASONE_QUESTION, context)));
+	}
+
+	@Test
 	public void aGroupNamedForSystemicUseIsNotKeptByTheSiteItsPrefixSitsUnder() throws IOException {
 		// The conjunct that would otherwise be free to delete: codesAtSites asks
 		// isLocallyAppliedAtcCode as well as the site's group prefixes, so the SYSTEMIC_USE_EXCEPTIONS
@@ -332,6 +377,22 @@ public class UnmappedOrderAdministrationSiteTest {
 
 	private static PatientClinicalContext terbinafine(String... administration) {
 		return order("Terbinafine 1% preparation", administration);
+	}
+
+	/** One patient, two unmapped hydrocortisone orders — a topical cream and an oral tablet — in either
+	 *  sequence, which is the only thing that differs between the two contexts. */
+	private static PatientClinicalContext twoPresentations(boolean creamFirst) {
+		Set<String> creamNames = DrugReferenceTestSupport.set(CREAM);
+		Set<String> tabletNames = DrugReferenceTestSupport.set("Hydrocortisone 20mg tablet");
+		PatientClinicalContext.ActiveDrugOrder cream = DrugReferenceTestSupport
+				.activeOrder("order-234-cream", CREAM, creamNames, null,
+						DrugReferenceTestSupport.set("Topical"));
+		PatientClinicalContext.ActiveDrugOrder tablet = DrugReferenceTestSupport
+				.activeOrder("order-234-tablet", "Hydrocortisone 20mg tablet", tabletNames, null,
+						DrugReferenceTestSupport.set("Oral administration"));
+		return DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set(CREAM, "Hydrocortisone 20mg tablet"), null, null, null,
+				creamFirst ? Arrays.asList(cream, tablet) : Arrays.asList(tablet, cream));
 	}
 
 	/** One unmapped active order — no ATC codes, so the arm reaches it only by name — carrying whatever

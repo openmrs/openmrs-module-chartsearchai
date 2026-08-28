@@ -5968,16 +5968,14 @@ public class DrugSafetyValidator {
 				}
 				DrugReference row = interactionSubject(named.getValue(), order.getNames());
 				OrderPartner partner = new OrderPartner(row);
-				// The dataset's codes for the SUBSTANCE, narrowed to the presentation the chart records
-				// (issue #234). Unnarrowed they cover every route the substance is marketed as, and
-				// sharedClass prefers the systemic subgroup among them, so a topical order was named in
-				// a systemic duplicate-therapy chip that the SAME order mapped to a topical code does not
-				// raise. This is the one call site of that rule; it declines — returning these codes
-				// untouched — wherever the chart records no site or the substance is not filed at the
-				// one it records, so nothing here can silence a partner, only stop it claiming a class
-				// its presentation is not in.
-				partner.codes.addAll(DrugReference.codesForRecordedAdministration(
-						row.normalizedAtcCodes(), order.getAdministrationTerms()));
+				// The dataset's codes for the SUBSTANCE, narrowed to the presentations the chart
+				// records (issue #234). Unnarrowed they cover every route the substance is marketed as,
+				// and sharedClass prefers the systemic subgroup among them, so a topical order was named
+				// in a systemic duplicate-therapy chip that the SAME order mapped to a topical code does
+				// not raise. Asked of the SUBSTANCE and not of this order — see the helper, which is
+				// where that distinction is load-bearing.
+				partner.codes.addAll(codesForThisSubstancesPresentations(named.getKey(), context,
+						row.normalizedAtcCodes(), cache, impliedByName));
 				partner.codesFromDataset = true;
 				// This partner IS this substance, so restating it is not duplicating it — and with the
 				// exact-code leg scoped out above, this is the WHOLE of that skip here.
@@ -5985,6 +5983,60 @@ public class DrugSafetyValidator {
 				byIdentity.put(named.getKey(), partner);
 			}
 		}
+	}
+
+	/**
+	 * @return {@code codes} — the reference row's whole ATC list for {@code substance} — narrowed to the
+	 *         presentations this patient's chart records for that substance, or unchanged where it
+	 *         records one this module cannot attribute to a site.
+	 *
+	 *         <p><b>Asked of the SUBSTANCE, over every unmapped order that names it, and not of the one
+	 *         order that happened to reach it first.</b> That is the whole reason this is a method. The
+	 *         partner is keyed on {@link DrugReference#substanceGroupKey()}, so two orders of one
+	 *         substance are ONE co-medication (issue #186) and {@link #alreadyACoMedication} skips the
+	 *         second before its terms are ever read — which made the FIRST order in {@code OrderService}
+	 *         list order decide the classification for both. Measured through the real {@code validate}
+	 *         over {@code ddi-contra-route-variants.json}, a patient on an unmapped
+	 *         {@code Hydrocortisone cream 1%} recorded {@code Topical} AND an unmapped
+	 *         {@code Hydrocortisone 20mg tablet} recorded {@code Oral administration}, asked about
+	 *         dexamethasone: cream first raised nothing, tablet first raised the {@code H02AB} chip. The
+	 *         patient is on systemic hydrocortisone in both. A suppression that depends on the sequence
+	 *         the prescriptions came back in is the hazard {@code CLAUDE.md} records for
+	 *         {@link OrderPartner#substances} and {@link #ordersCarrying}, reached here by another road.
+	 *
+	 *         <p><b>One unattributable presentation declines for the whole substance</b>, rather than
+	 *         the union of the sites the others name. The orders are presentations of ONE drug the
+	 *         patient is on, so an order this module cannot place is a presentation it cannot rule out —
+	 *         and the substance's own classification is then the only honest answer, which is the same
+	 *         reading {@link DrugReference#codesForRecordedAdministration} takes for a single order that
+	 *         names no site. Failing the other way would let a topical cream silence the tablet beside
+	 *         it.
+	 *
+	 *         <p>Scoped to the orders THIS leg governs — dictionary-unmapped, by the same disjointness
+	 *         test the caller applies. An order the code walk reached is not here: it produced a partner
+	 *         of its own, and {@link #alreadyACoMedication} then keeps this leg away from that substance
+	 *         entirely, so its presentation is already the dictionary's business.
+	 *
+	 *         <p>Through the caller's own {@code cache}, so re-walking the orders costs no second
+	 *         resolution of any name — {@link #substanceRowsNamedBy} is memoised for the whole
+	 *         {@link #orderPartners} call and every order here was resolved by the caller anyway.
+	 */
+	private Set<String> codesForThisSubstancesPresentations(Object substance,
+			PatientClinicalContext context, Set<String> codes,
+			Map<PatientClinicalContext.ActiveDrugOrder, Map<Object, List<DrugReference>>> cache,
+			Map<Object, Set<Object>> impliedByName) {
+		Set<String> recorded = new LinkedHashSet<String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+			if (!Collections.disjoint(order.getAtcCodes(), context.getActiveDrugAtcCodes())
+					|| !substanceRowsNamedBy(order, cache, impliedByName).containsKey(substance)) {
+				continue;
+			}
+			if (!DrugReference.namesAnAdministrationSite(order.getAdministrationTerms())) {
+				return codes;
+			}
+			recorded.addAll(order.getAdministrationTerms());
+		}
+		return DrugReference.codesForRecordedAdministration(codes, recorded);
 	}
 
 	/**

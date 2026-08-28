@@ -1114,17 +1114,38 @@ public class DrugReference {
 	 *         widening the boundary rule several arms share.
 	 */
 	private static Set<String> recordedSites(Set<String> recordedTerms) {
+		// De-hyphenated once, before the site walk: the transformation depends only on the recorded
+		// term, and inside the two loops it was recomputed once per (site term x recorded term) pair.
+		// The null filter comes with it, so the hot test does not repeat that either.
+		List<String> matchable = new ArrayList<String>(recordedTerms.size());
+		for (String recorded : recordedTerms) {
+			if (recorded != null) {
+				matchable.add(recorded.replace("-", ""));
+			}
+		}
 		Set<String> sites = new LinkedHashSet<String>();
 		for (Map.Entry<String, List<String>> site : SITE_TERMS.entrySet()) {
 			for (String term : site.getValue()) {
-				for (String recorded : recordedTerms) {
-					if (recorded != null && containsWord(recorded.replace("-", ""), term)) {
+				for (String recorded : matchable) {
+					if (containsWord(recorded, term)) {
 						sites.add(site.getKey());
 					}
 				}
 			}
 		}
 		return sites;
+	}
+
+	/**
+	 * @return whether {@code recordedTerms} names any site this module can attribute — the question a
+	 *         caller asks when it must decide about SEVERAL orders of one substance together
+	 *         ({@code DrugSafetyValidator.codesForThisSubstancesPresentations}). "Names no site" and
+	 *         "narrowed nothing" are not the same answer: the second is also true of a term that names
+	 *         a site the substance is not filed under, and only the first says the module could not
+	 *         place the presentation at all.
+	 */
+	static boolean namesAnAdministrationSite(Set<String> recordedTerms) {
+		return recordedTerms != null && !recordedTerms.isEmpty() && !recordedSites(recordedTerms).isEmpty();
 	}
 
 	/**

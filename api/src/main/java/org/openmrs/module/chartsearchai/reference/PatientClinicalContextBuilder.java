@@ -449,34 +449,25 @@ final class PatientClinicalContextBuilder {
 	 * is recorded on the {@code Drug}, which a non-coded order does not have, so an order typed as free
 	 * text can only ever say it through the route.
 	 *
-	 * <p>Each read in its OWN try, and both inside the caller's per-order loop rather than the chart-wide
-	 * one: a lazy-init proxy on one detached order must cost that order its route, never the whole
-	 * medication list — the same reason {@code addConceptName}'s catch is where it is. A failed read
-	 * degrades to nothing recorded, which is the reading that narrows nothing, so the failure is
-	 * fail-SAFE here in a way it is not for a contraindication record (issue #208 item 2) and needs no
-	 * flag beside it.
+	 * <p>Through {@link #addConceptName} for both, which is where this builder's one concept-name read
+	 * lives: null concept, {@code getName()} inside its own {@code try}, {@link #addRaw} for the
+	 * string. A third copy of that read here would have been a third place for the lazy-init catch to
+	 * drift. {@code getRoute()} and {@code getDrug()} are evaluated outside the try like
+	 * {@code addDrugName}'s {@code getDrug()} is and for the same reason — reading the association
+	 * returns the proxy, and it is {@code getName()} on it that can throw.
 	 *
-	 * <p>Through {@link #addRaw} like every other recorded string this builder reads, so a concept
-	 * named with irregular whitespace is collapsed the one way (issue #293) and a blank name is
-	 * dropped rather than stored as a term that matches nothing.
+	 * <p>A failed read degrades to nothing recorded, which is the reading that narrows nothing, so the
+	 * failure is fail-SAFE here in a way it is not for a contraindication record (issue #208 item 2)
+	 * and needs no flag beside it.
+	 *
+	 * <p>{@link #addRaw} also collapses whitespace runs, so a concept named irregularly is normalized
+	 * the one way (issue #293) and a blank name is dropped rather than stored as a term that matches
+	 * nothing.
 	 */
 	private static void addAdministration(Set<String> terms, DrugOrder drugOrder) {
-		try {
-			if (drugOrder.getRoute() != null && drugOrder.getRoute().getName() != null) {
-				addRaw(terms, drugOrder.getRoute().getName().getName());
-			}
-		}
-		catch (RuntimeException e) {
-			log.debug("Could not read the route of drug order {}", drugOrder.getUuid(), e);
-		}
-		try {
-			if (drugOrder.getDrug() != null && drugOrder.getDrug().getDosageForm() != null
-					&& drugOrder.getDrug().getDosageForm().getName() != null) {
-				addRaw(terms, drugOrder.getDrug().getDosageForm().getName().getName());
-			}
-		}
-		catch (RuntimeException e) {
-			log.debug("Could not read the dose form of drug order {}", drugOrder.getUuid(), e);
+		addConceptName(terms, drugOrder.getRoute());
+		if (drugOrder.getDrug() != null) {
+			addConceptName(terms, drugOrder.getDrug().getDosageForm());
 		}
 	}
 

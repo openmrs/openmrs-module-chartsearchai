@@ -2727,7 +2727,8 @@ public class DrugSafetyValidator {
 	 * injected {@code drug_reference} note has to name that same partner and may not carry
 	 * {@link DrugReference#displayLabel()}. Which name the RECORD takes is decided per outcome above and
 	 * moves on ONE of them: outcomes 1 and 2 hand it the rule's own token, which is what it already
-	 * printed, and outcome 3 hands it {@link OrderPartner#labelEntry}'s {@code getName()} — the ENTRY rung
+	 * printed, and outcome 3 hands it {@link OrderPartner#labelEntry}'s {@code getName()} coalesced with
+	 * that same token, for the reason stated at the branch itself — the ENTRY rung
 	 * being the one place the dataset has a name of its own to offer. The record's own vocabulary, not the
 	 * chip's; the two name one SUBSTANCE rather than sharing one string.
 	 *

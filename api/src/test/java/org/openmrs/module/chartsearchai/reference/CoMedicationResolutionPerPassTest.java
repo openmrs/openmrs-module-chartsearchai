@@ -306,15 +306,22 @@ public class CoMedicationResolutionPerPassTest {
 	 * does not.
 	 *
 	 * <p>Anchored to a single leading tab, which is this file's indentation for a member of the outer
-	 * class, and it admits a {@code static final} constant, of which the class has many. Its residue is
-	 * a declaration whose SHAPE it does not fit — split across lines, or an initialiser holding a
-	 * {@code (} — and the construction-statement check beside it is the second net, since state has to
-	 * be ASSIGNED to be a memo and that assignment is not the local declaration the needle there
-	 * demands. A shape that evades both is a new needle here, not a looser one.
+	 * class, and it admits a {@code static final} constant, of which the class has many. A METHOD
+	 * declaration cannot match it without any exclusion for one, because the run before the declarator
+	 * may not cross a {@code (} and a method's name is followed by one — which is worth stating,
+	 * because an earlier version DID exclude every line holding a {@code (} and a reviewer walked
+	 * through the hole that left: {@code private List<OrderPartner> sneaky = new ArrayList<…>();} has a
+	 * paren in its INITIALISER, and with the memo's state moved onto it the whole suite stayed green.
+	 *
+	 * <p>The residue that is left is a declaration split across lines. The construction-statement check
+	 * beside this one does NOT cover it — that check pins the text of the one {@code new
+	 * CoMedications(context)} statement and can see nothing inside the memo's own bodies — so this
+	 * needle is the whole of the field net, and a shape that evades it is a new needle here rather than
+	 * a looser one.
 	 */
 	private static final Pattern MUTABLE_FIELD = Pattern.compile(
 		"(?m)^\\t(?!.*\\bstatic\\s+final\\b)(?!.*\\bclass\\b)(?!.*\\benum\\b)(?!.*\\binterface\\b)"
-				+ "(?![^\\n]*\\()[A-Za-z_@][^\\n;=(]*\\s+\\w+\\s*[;=]");
+				+ "[A-Za-z_@][^\\n;=(]*\\s+\\w+\\s*[;=]");
 
 	/** The one such field the class is allowed: what Spring injects. */
 	private static final String INJECTED_SERVICE = "private DrugReferenceService drugReferenceService;";

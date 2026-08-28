@@ -856,6 +856,10 @@ public class DrugReference {
 	 * {@code B02BC}: its only shipped-KB pairs are epinephrine route variants, which issue #160
 	 * collapses to an identity chip before this arm can name a class at all.
 	 */
+	private static final List<String> LOCALLY_APPLIED_ATC_GROUPS = Collections
+			.unmodifiableList(Arrays.asList("A01", "A07A", "A07E", "B02BC", "B05C", "C05A", "C05B",
+					"D", "G01", "G02CC", "M02", "P03A", "R01", "R02", "R03A", "R03B", "S"));
+
 	/** The administration sites {@link #ATC_GROUPS_BY_SITE} and {@link #SITE_TERMS} are both keyed on —
 	 *  named constants so the two halves cannot drift apart on a typo. */
 	static final String SITE_SKIN = "skin";
@@ -878,9 +882,6 @@ public class DrugReference {
 
 	static final String SITE_ANORECTAL = "anorectal";
 
-	private static final List<String> LOCALLY_APPLIED_ATC_GROUPS = Collections
-			.unmodifiableList(Arrays.asList("A01", "A07A", "A07E", "B02BC", "B05C", "C05A", "C05B",
-					"D", "G01", "G02CC", "M02", "P03A", "R01", "R02", "R03A", "R03B", "S"));
 
 	/**
 	 * The groups nested INSIDE {@link #LOCALLY_APPLIED_ATC_GROUPS} that ATC itself names "for systemic

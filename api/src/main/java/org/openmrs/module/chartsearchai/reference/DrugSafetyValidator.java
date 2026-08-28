@@ -3008,13 +3008,18 @@ public class DrugSafetyValidator {
 	 * genuinely differ — topical dexamethasone does
 	 * not have systemic dexamethasone's interaction profile, which is why DDInter rates voxelotor Major
 	 * against systemic dexamethasone, Moderate against two others and carries no row at all against the
-	 * topical variant — but nothing on a {@code DrugOrder} tells this layer which variant the order is
-	 * (the context carries names and ATC codes; all four variants publish an identical ATC list),
-	 * so the variant cannot be resolved here. Reporting the strongest rating over-warns rather than
+	 * topical variant — but this layer still cannot resolve which variant the order is, and since issue
+	 * #234 that is a DATA-side limit rather than a context-side one. The context does now carry what the
+	 * chart records about where each order is applied
+	 * ({@link PatientClinicalContext.ActiveDrugOrder#getAdministrationTerms()}), and it is deliberately
+	 * not read here: a rule ROW is what has to be selected, DDInter files each route variant as its own
+	 * row, and all four of them publish an identical ATC list — so nothing relates a recorded route to a
+	 * row. That is the data-side half of #115, and it is what issue #234 could not close;
+	 * {@link DrugReference#codesForRecordedAdministration} narrows CODES for exactly that reason.
+	 * Reporting the strongest rating over-warns rather than
 	 * under-warns on a non-blocking advisory the clinician adjudicates, which is the fail-safe
 	 * direction; the accepted cost is that a patient on a topical form may see the systemic
-	 * severity. Making the severity route-aware needs a dose-form/route vocabulary that does not
-	 * exist yet — the data-side half of #115. The note length is the only informativeness signal a
+	 * severity. The note length is the only informativeness signal a
 	 * row carries: DDInter's "no mechanism description on file" fallback is shorter than any real
 	 * mechanism paragraph, and where two equally-rated rows both carry prose the longer one has been
 	 * a strict superset in the shapes measured — in the two dolutegravir x iron rows (171 and 236

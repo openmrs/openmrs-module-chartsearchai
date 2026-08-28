@@ -3158,6 +3158,12 @@ Writing it freehand was tried first and was wrong: it mapped the eye to `S01` an
 
 Measured impact per site over the shipped knowledge base (substances filed there / of those, the ones the table narrows / the ones already filed only there): skin 139/106/33, eye 134/101/33, ear 20/20/0, nose 24/24/0, airway 24/19/5, vagina 22/20/2, throat 12/12/0.
 
+### The question is asked of the SUBSTANCE, over every order that names it
+
+A partner is keyed on `DrugReference.substanceGroupKey()`, so two orders of one substance are ONE co-medication ([Decision 31](#decision-31-one-shared-class-choice-for-both-arms)'s neighbour, issue #186) and `alreadyACoMedication` skips the second before its terms are ever read. Resolving the narrowing from the order that reached the partner first therefore let `OrderService`'s list order decide the classification for both. Measured through the real `validate` over `ddi-contra-route-variants.json`, a patient on an unmapped `Hydrocortisone cream 1%` recorded `Topical` **and** an unmapped `Hydrocortisone 20mg tablet` recorded `Oral administration`, asked about dexamethasone: cream first raised nothing, tablet first raised the `H02AB` chip. The patient is on systemic hydrocortisone in both.
+
+`DrugSafetyValidator.codesForThisSubstancesPresentations` asks it of the substance instead, over every dictionary-unmapped order that names it. **One unattributable presentation declines for the whole substance**, rather than the union of the sites the others name: the orders are presentations of one drug the patient is on, so an order this module cannot place is a presentation it cannot rule out. Failing the other way would let a topical cream silence the tablet beside it. Where every such order does name a site, the narrowing is the union of them.
+
 ### A term must name the SITE, not the form
 
 `cream`, `ointment` and `lotion` were in the first draft and were removed. A cream is made for the skin, the vagina or the anorectum alike, so reading one as "skin" asserts something the record did not say — and reading it as all three is **worse** rather than more cautious: hydrocortisone's `C05AA01` then survives, dexamethasone publishes `C05AA09`, and a chip that said `H02AB` says `C05AA` instead, which is a haemorrhoid preparation and no more true. A form word is admitted only where the form serves one site and no other, which is why `inhaler` is a term and those three are not.

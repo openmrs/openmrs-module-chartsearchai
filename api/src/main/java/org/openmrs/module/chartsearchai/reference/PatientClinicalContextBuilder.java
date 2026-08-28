@@ -81,9 +81,11 @@ final class PatientClinicalContextBuilder {
 		}
 
 		// Active drug orders -> names + ATC codes (for interaction checks and order-driven injection),
-		// plus the orders themselves — names AND codes attributed per order, for reconciling this read
-		// against the serialized chart (#118) and so the interaction screen can exclude a subject's own
-		// order from witnessing it (#132).
+		// plus the orders themselves — names, codes AND what the chart records about where the drug is
+		// applied (#234), attributed per order, for reconciling this read against the serialized chart
+		// (#118) and so the interaction screen can exclude a subject's own order from witnessing it
+		// (#132). ActiveDrugOrder's own javadoc is the authority on what an order carries; this is a
+		// pointer, not a second list.
 		try {
 			for (Order order : Context.getOrderService().getActiveOrders(patient, null, null, null)) {
 				if (!(order instanceof DrugOrder)) {

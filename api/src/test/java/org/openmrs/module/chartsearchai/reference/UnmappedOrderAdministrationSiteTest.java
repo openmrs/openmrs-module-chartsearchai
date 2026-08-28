@@ -238,6 +238,27 @@ public class UnmappedOrderAdministrationSiteTest {
 	}
 
 	@Test
+	public void aRouteOfEntryRefusesTheSiteADoseFormNames() throws IOException {
+		// The granularity of the ROUTES_OF_ENTRY refusal, pinned because it is a choice and not an
+		// accident. An order records a route AND a dose form, and this refuses on either: a record
+		// naming a route of entry beside a site of action contradicts itself, and narrowing on the half
+		// one prefers would silence a chip on the strength of a record the module cannot reconcile.
+		//
+		// It costs the two-source design its one contradictory case — the dose form is otherwise the
+		// only leg that reaches the skin, since the reference dictionary has no cutaneous route. The
+		// first half shows the form alone does narrow, so the second is a refusal and not a form the
+		// module cannot read.
+		assertEquals(Collections.<String> emptyList(), DrugReferenceTestSupport
+				.details(chips(DEXAMETHASONE_QUESTION, order(CREAM, "Cutaneous cream"))),
+				"the dose form alone names the skin and narrows");
+
+		assertEquals(Collections.singletonList(SYSTEMIC_CHIP), DrugReferenceTestSupport
+				.details(chips(DEXAMETHASONE_QUESTION,
+						order(CREAM, "Oral administration", "Cutaneous cream"))),
+				"and a route of entry beside it declines for the whole record");
+	}
+
+	@Test
 	public void aFormWordThatServesSeveralSitesNamesNone() throws IOException {
 		// Why "cream", "ointment" and "lotion" are not terms. A cream is made for the skin, the vagina
 		// or the anorectum alike, so reading one as "skin" asserts something the record did not say —

@@ -2590,7 +2590,9 @@ public class DrugSafetyValidator {
 			// the codes are — and resolving them is a full dataset scan per code. That is the ORDINARY
 			// outcome of this arm: a class-only chip is one this method answered null for, and issue
 			// #228 made both sides of the product larger (more partners, and a name-reached partner
-			// carries the reference row's whole code list rather than one dictionary's).
+			// carries the reference row's code list rather than one dictionary's — the WHOLE list only
+			// where the chart records no presentation this module can place, since issue #234 narrows
+			// it to the site an order's own route or dose form names).
 			return null;
 		}
 		for (String orderCode : new TreeSet<String>(orderCodes)) {

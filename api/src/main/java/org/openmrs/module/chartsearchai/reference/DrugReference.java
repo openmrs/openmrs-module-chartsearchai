@@ -882,7 +882,6 @@ public class DrugReference {
 
 	static final String SITE_ANORECTAL = "anorectal";
 
-
 	/**
 	 * The groups nested INSIDE {@link #LOCALLY_APPLIED_ATC_GROUPS} that ATC itself names "for systemic
 	 * use" — {@code D01B} antifungals, {@code D02BB} UV-radiation protectives, {@code D05B}
@@ -1018,13 +1017,23 @@ public class DrugReference {
 	 * first makes the site walk unreachable for such a string. Refusing narrows nothing, which is the
 	 * fail-safe direction, so a term wrongly listed here costs a correction and never a false silence.
 	 *
+	 * <p><b>The refusal is of the whole recorded SET, not of the string it fired on.</b> An order
+	 * records a route and a dose form, and this refuses on either — so {@code "Oral administration"}
+	 * beside {@code "Cutaneous cream"} narrows nothing, though the second names the skin. That is
+	 * deliberate rather than incidental: a record naming a route of entry AND a site of action
+	 * contradicts itself, and narrowing on the half one prefers would silence a chip on the strength
+	 * of a record the module cannot reconcile. Declining keeps the answer the arm already had. It does
+	 * cost the two-source design its one contradictory case — the dose form is otherwise the only leg
+	 * that reaches the skin, see {@code PatientClinicalContextBuilder.addAdministration} — and
+	 * {@code UnmappedOrderAdministrationSiteTest.aRouteOfEntryRefusesTheSiteADoseFormNames} is what
+	 * pins it, so a reader who thinks the other reading is right has a case to move rather than a
+	 * silence to interpret.
+	 *
 	 * <p><b>Two residues, named rather than claimed away.</b> This is word matching after the hyphen
 	 * strip, so it reaches {@code sub-cutaneous} but not {@code sub cutaneous} spaced — that spelling
-	 * still matches {@code cutaneous} and narrows to the skin. Closing it would need spaces removed
-	 * too, which costs {@code eye drops} its match. And a recorded string that names a route of entry
-	 * BESIDE a site refuses on the first: {@code "Oral inhalation solution"} is a real dose form and it
-	 * narrows nothing, though {@code inhalation} names the airway. Both cost a narrowing rather than
-	 * causing a false one, which is why neither is closed here.
+	 * still matches {@code cutaneous} and narrows to the skin. And {@code "Oral inhalation solution"}
+	 * is a real dose form that names the airway in the same breath as a route of entry, so it declines
+	 * by the paragraph above. Both cost a narrowing rather than causing a false one.
 	 */
 	private static final List<String> ROUTES_OF_ENTRY = unmodifiable("transdermal", "sublingual",
 			"buccal", "subcutaneous", "intradermal", "intravenous", "intramuscular", "intraosseous",

@@ -553,9 +553,13 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/** As {@link #activeOrder}, additionally carrying what the chart records about where the drug is
-	 *  APPLIED — the order's route concept name and its drug's dosage-form concept name, the pair
-	 *  {@link PatientClinicalContextBuilder} collects for issue #234. A case that passes none of them
-	 *  is stating that the chart records neither, which is the reading that narrows nothing. */
+	 *  APPLIED — the names of the order's route concept and of its drug's dosage-form concept, the two
+	 *  sources {@link PatientClinicalContextBuilder} collects for issue #234. A case that passes none
+	 *  of them is stating that the chart records neither, which is the reading that narrows nothing.
+	 *
+	 *  <p>A case here passes ONE spelling per source; the builder passes every name the concept
+	 *  publishes ({@code PatientClinicalContextBuilder.addConceptNames}), which is why the case that
+	 *  pins THAT is context-sensitive and lives in {@code ActiveOrderAdministrationTermsTest}. */
 	static PatientClinicalContext.ActiveDrugOrder activeOrder(String uuid, String display,
 			Set<String> names, Set<String> atcCodes, Set<String> administrationTerms) {
 		return new PatientClinicalContext.ActiveDrugOrder(uuid, display, names, atcCodes,

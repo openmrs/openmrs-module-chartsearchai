@@ -508,8 +508,9 @@ public class PatientClinicalContext {
 
 		private final Set<String> atcCodes;
 
-		/** The administration the chart records for THIS order — the name of its route concept and of
-		 *  its drug's dosage-form concept, whichever of the two is recorded (issue #234). */
+		/** The administration the chart records for THIS order — the names its route concept publishes
+		 *  and the names its drug's dosage-form concept publishes, whichever of the two is recorded
+		 *  (issue #234). */
 		private final Set<String> administrationTerms;
 
 		/** Whether {@link #display} is a name for this order, as opposed to a stand-in the module
@@ -638,9 +639,14 @@ public class PatientClinicalContext {
 
 		/**
 		 * @return the administration the chart records for this order, normalized the same way its
-		 *         {@link #getNames()} are — the name of the order's route concept and the name of its
-		 *         drug's dosage-form concept, either or both, empty when neither is recorded or neither
-		 *         could be read (issue #234).
+		 *         {@link #getNames()} are — EVERY name the order's route concept publishes and every
+		 *         name its drug's dosage-form concept publishes, either source or both, empty when
+		 *         neither is recorded or neither could be read (issue #234).
+		 *
+		 *         <p>Every name and not the one {@code Concept.getName()} elects, which returns the
+		 *         locale-PREFERRED spelling first: on the 3.7.1 reference dictionary that hides the
+		 *         formal spelling of the bilateral eye and ear routes and of the only vaginal one.
+		 *         {@code PatientClinicalContextBuilder.addConceptNames} is where that is argued.
 		 *
 		 *         <p>Both sources and not one: measured on the 3.7.1 reference dictionary, its route set
 		 *         has 17 members and none of them names the skin, so a locally applied presentation of

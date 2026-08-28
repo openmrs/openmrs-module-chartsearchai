@@ -420,6 +420,63 @@ final class PatientClinicalContextBuilder {
 		}
 	}
 
+	/**
+	 * Collects EVERY name the dictionary publishes for {@code concept}, not the one
+	 * {@code Concept.getName()} elects — for {@link #addAdministration} and nothing else.
+	 *
+	 * <p><b>Why the elected name is not enough, and why widening is scoped here.</b>
+	 * {@code Concept.getName()} walks the allowed locales and returns the locale-PREFERRED name before
+	 * the fully specified one, so a dictionary that publishes a colloquial preferred spelling hides the
+	 * formal one this module's vocabulary is written in. Read off the 3.7.1 reference dictionary's
+	 * 17-member "Route of administration" set: concept 874 is preferred {@code In both eyes} with the
+	 * fully specified name {@code Bilateral eye administration}, 877 is {@code In both ears} against
+	 * {@code Bilateral ear administration}, and 872 — the only vaginal route there is — is
+	 * {@code Vaginally} against {@code Vaginal administration}. {@code DrugReference}'s matching takes
+	 * no trailing letters, deliberately, so {@code eyes} does not reach the term {@code eye} nor
+	 * {@code Vaginally} the term {@code vaginal}: reading one name left issue #234's own defect
+	 * standing for the standard bilateral eye route, the standard bilateral ear route and the only
+	 * vaginal route that dictionary publishes. Three of its nine site-naming routes, unfixed and
+	 * silently — no exception, no log line, and a chip identical to the pre-fix one.
+	 *
+	 * <p><b>Not by widening {@link #addConceptName}</b>, which the order-NAME path shares: what counts
+	 * as a name there decides which reference entries an order can reach at all
+	 * ({@code DrugReferenceService.findImpliedByDrugName}), and admitting a concept's every synonym
+	 * there is a change to drug matching this issue has no evidence about.
+	 *
+	 * <p><b>Which direction the widening fails in.</b> More names matched is more evidence, and it cuts
+	 * both ways rather than only towards narrowing: a term naming a site narrows the codes (removing a
+	 * chip), and a term naming a route of ENTRY refuses the whole record (keeping one). Both halves are
+	 * reached here — the same dictionary prefers {@code Rectally} and {@code Per NG tube}, whose fully
+	 * specified names {@code Rectal administration} and {@code Nasogastric tube administration} are
+	 * what {@code DrugReference}'s route-of-entry refusal is spelled for.
+	 *
+	 * <p>The read is NOT scoped to a locale. A name in another language contributes nothing to an
+	 * English term vocabulary, so the ordinary outcome is inert; the residue is a foreign spelling that
+	 * happens to be an English site word, which no locale-free vocabulary can exclude and which would
+	 * narrow rather than refuse. Scoping to {@code Context.getLocale()} instead would drop the very
+	 * spelling that carries the site wherever a dictionary files it in a locale the session is not in,
+	 * which is the failure this method exists to remove.
+	 *
+	 * <p>{@code getNames()} excludes voided names and is the same lazy association
+	 * {@link #addConceptName} wraps, so the read keeps that method's {@code try} and its degrade-to-
+	 * nothing behaviour: nothing recorded is the reading that narrows nothing.
+	 */
+	private static void addConceptNames(Set<String> tokens, Concept concept) {
+		if (concept == null) {
+			return;
+		}
+		try {
+			for (ConceptName name : concept.getNames()) {
+				if (name != null) {
+					addRaw(tokens, name.getName());
+				}
+			}
+		}
+		catch (RuntimeException e) {
+			log.debug("Could not read concept names", e);
+		}
+	}
+
 	private static void addAtcCodes(Set<String> atcCodes, Concept concept) {
 		if (concept == null) {
 			return;
@@ -442,8 +499,8 @@ final class PatientClinicalContextBuilder {
 	}
 
 	/**
-	 * Collects where the chart says {@code drugOrder} is APPLIED — the name of its route concept and
-	 * the name of its drug's dosage-form concept (issue #234).
+	 * Collects where the chart says {@code drugOrder} is APPLIED — the names its route concept
+	 * publishes and the names its drug's dosage-form concept publishes (issue #234).
 	 *
 	 * <p><b>Both, because neither alone covers the shapes that matter.</b> Measured on the 3.7.1
 	 * reference dictionary, the "Route of administration" set has 17 members and not one of them names
@@ -451,12 +508,13 @@ final class PatientClinicalContextBuilder {
 	 * is recorded on the {@code Drug}, which a non-coded order does not have, so an order typed as free
 	 * text can only ever say it through the route.
 	 *
-	 * <p>Through {@link #addConceptName} for both, which is where this builder's one concept-name read
-	 * lives: null concept, {@code getName()} inside its own {@code try}, {@link #addRaw} for the
-	 * string. A third copy of that read here would have been a third place for the lazy-init catch to
-	 * drift. {@code getRoute()} and {@code getDrug()} are evaluated outside the try like
-	 * {@code addDrugName}'s {@code getDrug()} is and for the same reason — reading the association
-	 * returns the proxy, and it is {@code getName()} on it that can throw.
+	 * <p>Through {@link #addConceptNames} for both — EVERY name the dictionary publishes for the
+	 * concept and not the one {@code Concept.getName()} elects, which is that method's whole subject
+	 * and where the reason lives. Not {@link #addConceptName}: that one is the order-NAME path's read
+	 * and widening it would change which reference entries an order reaches. {@code getRoute()} and
+	 * {@code getDrug()} are evaluated outside the try like {@code addDrugName}'s {@code getDrug()} is
+	 * and for the same reason — reading the association returns the proxy, and it is the name read on
+	 * it that can throw.
 	 *
 	 * <p>A failed read degrades to nothing recorded, which is the reading that narrows nothing, so the
 	 * failure is fail-SAFE here in a way it is not for a contraindication record (issue #208 item 2)
@@ -467,9 +525,9 @@ final class PatientClinicalContextBuilder {
 	 * nothing.
 	 */
 	private static void addAdministration(Set<String> terms, DrugOrder drugOrder) {
-		addConceptName(terms, drugOrder.getRoute());
+		addConceptNames(terms, drugOrder.getRoute());
 		if (drugOrder.getDrug() != null) {
-			addConceptName(terms, drugOrder.getDrug().getDosageForm());
+			addConceptNames(terms, drugOrder.getDrug().getDosageForm());
 		}
 	}
 

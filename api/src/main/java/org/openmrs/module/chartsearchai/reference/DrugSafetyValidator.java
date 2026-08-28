@@ -5921,9 +5921,11 @@ public class DrugSafetyValidator {
 	 * <b>The second of those is issue #234 and is now closed; the first is not.</b> The route WAS
 	 * unavailable to this arm — {@link PatientClinicalContextBuilder} read a {@code DrugOrder}'s names
 	 * and its concept's ATC mappings and nothing else — and it is now carried, per order, as
-	 * {@link PatientClinicalContext.ActiveDrugOrder#getAdministrationTerms()}: the name of the order's
-	 * route concept and of its drug's dosage-form concept. So the codes this leg loads into the
-	 * partner go through {@link DrugReference#codesForRecordedAdministration} first, which keeps the
+	 * {@link PatientClinicalContext.ActiveDrugOrder#getAdministrationTerms()}: every name the order's
+	 * route concept publishes and every name its drug's dosage-form concept publishes — not the one
+	 * {@code Concept.getName()} elects, which is the locale-PREFERRED spelling and hides the formal one
+	 * this module's vocabulary is written in for three of the reference dictionary's own routes. So the
+	 * codes this leg loads into the partner go through {@link DrugReference#codesForRecordedAdministration} first, which keeps the
 	 * ones classifying a presentation given where the chart says the drug is applied.
 	 *
 	 * <p>It closes the OVER-claiming direction only, and only where the chart says something this

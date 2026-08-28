@@ -22,6 +22,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Concept;
 import org.openmrs.ConceptName;
+import org.openmrs.DrugOrder;
 import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
@@ -144,6 +145,37 @@ public class ActiveOrderAdministrationTermsTest extends BaseModuleContextSensiti
 				order.getAdministrationTerms());
 	}
 
+	@Test
+	public void everySpellingTheRouteConceptPublishesIsCarried() {
+		// The reference dictionary's OWN shape, which nothing in this class could express while every
+		// concept it built carried a single ConceptName. Concept.getName() returns the locale-PREFERRED
+		// name ahead of the fully specified one, and on the 3.7.1 dictionary three of the nine
+		// site-naming routes are preferred under a spelling no term matches: 874 "In both eyes" (FSN
+		// "Bilateral eye administration"), 877 "In both ears", and 872 "Vaginally" — the only vaginal
+		// route there is. containsWord takes no trailing letters, deliberately, so the plural misses
+		// the term "eye" and the adverb misses "vaginal", and a builder reading one name left issue
+		// #234's own defect standing for three of that dictionary's nine site-naming routes.
+		//
+		// Asserted on the CODES and not merely on the terms: what the ticket is about is which class a
+		// chip names, and hydrocortisone's nine codes cover every route it is marketed as. The
+		// arrangement's premise is asserted first, because a case that stopped at the terms would pass
+		// for a platform that elected the fully specified name after all.
+		recordRoute("Bilateral eye administration", "In both eyes");
+		assertEquals("In both eyes",
+				Context.getConceptService().getConcept(routeOfOrder111()).getName().getName(),
+				"the premise: the name Concept.getName() elects is the preferred one, which names no"
+						+ " site this module can attribute");
+
+		Set<String> terms = theOrder().getAdministrationTerms();
+		assertTrue(terms.contains("bilateral eye administration"),
+				"the fully specified spelling must be carried beside the preferred one, was: " + terms);
+
+		Set<String> everyRoute = DrugReferenceTestSupport.set("D07AA02", "S01BA02", "H02AB09");
+		assertEquals(DrugReferenceTestSupport.set("S01BA02"),
+				DrugReference.codesForRecordedAdministration(everyRoute, terms),
+				"and the ophthalmic code is the one an order recorded at the eye keeps");
+	}
+
 	/** Order 111 with nothing left that can name it — the shape {@code namedByCodesOnly} stands in for.
 	 *  The same three columns {@code NamelessActiveOrderPartnerTest} clears, and cleared for the reason
 	 *  that file records: leaving {@code drug_non_coded} to the dataset would make the arrangement
@@ -155,6 +187,11 @@ public class ActiveOrderAdministrationTermsTest extends BaseModuleContextSensiti
 				.executeSQL("update concept_name set voided = 1 where concept_id = " + ORDERED_CONCEPT,
 					false);
 		flush();
+	}
+
+	/** The route concept order 111 currently records, read back from the row {@link #recordRoute} set. */
+	private int routeOfOrder111() {
+		return ((DrugOrder) Context.getOrderService().getOrder(111)).getRoute().getConceptId();
 	}
 
 	/** The one active drug order patient 7 has, off the real builder. */
@@ -175,8 +212,12 @@ public class ActiveOrderAdministrationTermsTest extends BaseModuleContextSensiti
 	}
 
 	private void recordRoute(String conceptName) {
+		recordRoute(conceptName, null);
+	}
+
+	private void recordRoute(String fullySpecifiedName, String preferredSynonym) {
 		Context.getAdministrationService().executeSQL("update drug_order set route = "
-				+ concept(conceptName) + " where order_id = 111", false);
+				+ concept(fullySpecifiedName, preferredSynonym) + " where order_id = 111", false);
 		flush();
 	}
 
@@ -189,11 +230,22 @@ public class ActiveOrderAdministrationTermsTest extends BaseModuleContextSensiti
 
 	/** A concept to stand in for a route or a dose form, saved through the real {@code ConceptService}
 	 *  rather than inserted by SQL, so it is a concept the platform would actually hand back — the
-	 *  builder reads its {@code getName()}, which walks locales and falls back, and a hand-inserted row
-	 *  can be missing what that walk needs. */
+	 *  builder walks its names, and a hand-inserted row can be missing what that walk needs. One name,
+	 *  so preferred and fully specified coincide; {@link #concept(String, String)} is the overload for
+	 *  the shape where they do not. */
 	private int concept(String name) {
+		return concept(name, null);
+	}
+
+	/** A concept whose locale-PREFERRED name is not its fully specified one — the shape the reference
+	 *  dictionary's own routes have and the one this class could not express while every concept it
+	 *  built carried a single {@code ConceptName}. */
+	private int concept(String fullySpecifiedName, String preferredSynonym) {
 		Concept concept = new Concept();
-		concept.addName(new ConceptName(name, Locale.ENGLISH));
+		concept.addName(new ConceptName(fullySpecifiedName, Locale.ENGLISH));
+		if (preferredSynonym != null) {
+			concept.setPreferredName(new ConceptName(preferredSynonym, Locale.ENGLISH));
+		}
 		concept.setDatatype(Context.getConceptService().getConceptDatatypeByName("N/A"));
 		concept.setConceptClass(Context.getConceptService().getConceptClassByName("Misc"));
 		Concept saved = Context.getConceptService().saveConcept(concept);

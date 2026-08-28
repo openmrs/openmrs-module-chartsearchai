@@ -1214,7 +1214,15 @@ public class DrugReference {
 	 *         beside it, which is the direction the whole-substance decline exists to prevent.
 	 *
 	 *         <p>Built from the same two primitives the narrowing itself uses, so the decline and the
-	 *         narrowing cannot come to disagree about what this record can express.
+	 *         narrowing cannot come to disagree about what this RECORD can express. That is a claim
+	 *         about the site walk and about nothing else: the two do not share
+	 *         {@link #codesForRecordedAdministration}'s guard on {@code codes}, so a null code set
+	 *         returns unchanged there and throws here. Deliberately not guarded to match — the single
+	 *         production caller passes {@code DrugReference.normalizedAtcCodes()}, which is never null,
+	 *         and an unreachable branch here would be one no case can pin, stated the way
+	 *         {@code CLAUDE.md} states it for {@code describesEndedOrder}'s unreachable null checks. A
+	 *         second caller holding a nullable code set guards at its own site or asks for the guard
+	 *         here; what it must not do is read the sentence above as covering it.
 	 */
 	static boolean narrowsAnyCode(Set<String> codes, Set<String> recordedTerms) {
 		return recordedTerms != null && !codesAtSites(codes, recordedSites(recordedTerms)).isEmpty();

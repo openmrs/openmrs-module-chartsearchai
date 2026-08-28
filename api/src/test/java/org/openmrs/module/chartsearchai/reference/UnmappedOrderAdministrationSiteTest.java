@@ -16,8 +16,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.junit.jupiter.api.Test;
@@ -606,6 +608,63 @@ public class UnmappedOrderAdministrationSiteTest {
 			}
 			assertFalse(DrugReference.codesAtSites(shipped, Collections.singleton(site)).isEmpty(),
 					site + " is selectable by a recorded term and must claim at least one code");
+		}
+	}
+
+	/** One recorded spelling that selects each site a term CAN select, beside one ATC code that site's
+	 *  groups claim and no other site's do. Real dictionary spellings, so the pairing is a statement
+	 *  about the vocabulary a chart actually carries; the codes are real level-5 codes of a locally
+	 *  applied presentation at that site. {@code H02AB09} rides along in the pool as the systemic
+	 *  control no site may keep. */
+	private static final Map<String, String[]> ONE_TERM_AND_ONE_CODE_PER_SITE;
+
+	static {
+		Map<String, String[]> pairs = new LinkedHashMap<String, String[]>();
+		pairs.put(DrugReference.SITE_SKIN, new String[] { CUTANEOUS, "D07AA02" });
+		pairs.put(DrugReference.SITE_EYE, new String[] { "Bilateral eye administration", "S01BA02" });
+		pairs.put(DrugReference.SITE_EAR, new String[] { "Bilateral ear administration", "S02AA07" });
+		pairs.put(DrugReference.SITE_NOSE, new String[] { "Nasal administration", "R01AA07" });
+		pairs.put(DrugReference.SITE_THROAT, new String[] { "Oropharyngeal spray", "R02AA20" });
+		pairs.put(DrugReference.SITE_AIRWAY, new String[] { "Inhalation", "R03AC02" });
+		pairs.put(DrugReference.SITE_VAGINA, new String[] { "Vaginal administration", "G01AF02" });
+		ONE_TERM_AND_ONE_CODE_PER_SITE = Collections.unmodifiableMap(pairs);
+	}
+
+	@Test
+	public void eachSpelledSiteKeepsItsOwnGroupsCodeAndNoOtherSitesCode() {
+		// The two partition guards below relate the table to LOCALLY_APPLIED_ATC_GROUPS and to the
+		// shipped knowledge base, but neither relates a GROUP to the RIGHT SITE: mutating nose from
+		// {R01} to {R01, R03A} passed the whole build, and under it an order recorded at the nose keeps
+		// an inhalant's codes and can be named in a duplicate-therapy chip against an inhaled
+		// co-medication. Skin, eye and ear had a case tying a recorded term to the codes it keeps; the
+		// other four sites a term can select had none.
+		//
+		// One recorded term against a pool holding a code of EVERY site, so each assertion is both
+		// halves at once — this site's code survives, and no other site's does. A group moved or
+		// duplicated between two sites reddens both of them: the site that gained it keeps a code it
+		// must not, and the site that lost it keeps nothing, which codesForRecordedAdministration's
+		// decline then turns into the whole pool.
+		Set<String> pool = new LinkedHashSet<String>();
+		pool.add("H02AB09");
+		for (String[] pair : ONE_TERM_AND_ONE_CODE_PER_SITE.values()) {
+			pool.add(pair[1]);
+		}
+
+		for (String site : DrugReference.administrationSites()) {
+			String[] pair = ONE_TERM_AND_ONE_CODE_PER_SITE.get(site);
+			if (pair == null) {
+				// Exhaustive over the table, so a site added with terms but no case here reddens rather
+				// than being silently unrelated to any code — which is the state this case is written
+				// against.
+				assertTrue(DrugReference.termsForSite(site).isEmpty(),
+						site + " can be selected by a recorded term and has no term-to-code case");
+				continue;
+			}
+			assertEquals(DrugReferenceTestSupport.set(pair[1]),
+					DrugReference.codesForRecordedAdministration(pool,
+							DrugReferenceTestSupport.set(pair[0])),
+					"a record naming the " + site + " must keep that site's code and no other's, from: "
+							+ pool);
 		}
 	}
 

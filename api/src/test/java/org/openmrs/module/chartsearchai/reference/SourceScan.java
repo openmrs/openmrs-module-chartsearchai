@@ -73,6 +73,15 @@ final class SourceScan {
 		return at;
 	}
 
+	/**
+	 * @return the one occurrence of {@code declaration} TOGETHER with the brace-delimited body it
+	 *         opens — the region a guard wants when it forbids a NAME, since a method's declaration
+	 *         mentions its own name and sits outside the braces.
+	 */
+	Region declarationAndBody(String declaration) {
+		return new Region(uniqueOffset(declaration), body(declaration).end());
+	}
+
 	/** @return the brace-delimited body FOLLOWING the one occurrence of {@code declaration}. */
 	Region body(String declaration) {
 		int from = uniqueOffset(declaration);
@@ -115,73 +124,6 @@ final class SourceScan {
 			found.add(matcher.start());
 		}
 		return found;
-	}
-
-	/**
-	 * @return every match of {@code call} that is not the one occurrence of {@code declaration}, which
-	 *         is asserted present and unique first — so renaming the method reddens the guard reading
-	 *         this instead of emptying it.
-	 */
-	List<Integer> callsOutsideDeclaration(Pattern call, String declaration) {
-		int declared = uniqueOffset(declaration);
-		List<Integer> found = new ArrayList<Integer>();
-		for (int at : matches(call)) {
-			if (at < declared || at > declared + declaration.length()) {
-				found.add(at);
-			}
-		}
-		return found;
-	}
-
-	/**
-	 * @return every offset at which {@code name} is CALLED with a single argument — the parentheses are
-	 *         matched, so an argument that is itself an expression counts, and only a top-level comma
-	 *         separates this from a call to a wider overload. The one occurrence of
-	 *         {@code declaration} is excluded by offset rather than by shape, and is asserted present
-	 *         first, so renaming the method reddens the guard instead of emptying it.
-	 *
-	 *         <p>The residue, named rather than left to be found: a comma inside a generic witness or a
-	 *         lambda in the argument counts as a separator, so such a call reads as several arguments
-	 *         and is not returned. That direction is fail-OPEN, which is why it is written down; no
-	 *         call in the file this was extracted for takes that shape.
-	 */
-	List<Integer> singleArgumentCallsTo(String name, String declaration) {
-		int declared = uniqueOffset(declaration);
-		List<Integer> found = new ArrayList<Integer>();
-		Matcher matcher = Pattern.compile("\\b" + Pattern.quote(name) + "\\s*\\(").matcher(source);
-		while (matcher.find()) {
-			if (matcher.start() >= declared && matcher.start() <= declared + declaration.length()) {
-				continue;
-			}
-			if (argumentCount(matcher.end() - 1) == 1) {
-				found.add(matcher.start());
-			}
-		}
-		return found;
-	}
-
-	/** @return the number of top-level arguments of the call whose '(' is at {@code open}; 0 for an
-	 *          empty list. Unbalanced parentheses are a hard failure, as everywhere else here. */
-	private int argumentCount(int open) {
-		int depth = 0;
-		int arguments = 1;
-		for (int i = open; i < source.length(); i++) {
-			char c = source.charAt(i);
-			if (c == '(') {
-				depth++;
-			}
-			else if (c == ')') {
-				depth--;
-				if (depth == 0) {
-					return i == open + 1 ? 0 : arguments;
-				}
-			}
-			else if (c == ',' && depth == 1) {
-				arguments++;
-			}
-		}
-		throw new AssertionError("parentheses never balanced from offset " + open + " in " + relativePath
-				+ "; the scan cannot count a call's arguments, so it must fail rather than guess");
 	}
 
 	/** @return the trimmed line {@code at} sits on. */
@@ -273,6 +215,10 @@ final class SourceScan {
 
 		int start() {
 			return start;
+		}
+
+		int end() {
+			return end;
 		}
 
 		boolean contains(int at) {

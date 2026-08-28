@@ -18,8 +18,10 @@ import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -283,16 +285,42 @@ public class CoMedicationResolutionPerPassTest {
 	/** The memo's own accessor, which is the only body permitted to call {@code orderPartners}. */
 	private static final String RESOLVED = "List<OrderPartner> resolved() {";
 
-	private static final String RESOLUTION_DECLARATION = "private List<OrderPartner> orderPartners(";
+	/**
+	 * The NAME of a resolver, wherever it appears in code — not {@code name\s*\(}, because a METHOD
+	 * REFERENCE reaches the resolver without ever writing the paren. That is not hypothetical here: a
+	 * reviewer routed {@code ruleAbout} back to the uncached sweep through
+	 * {@code Function<String, DrugReference> bypass = this::entryForAtcCode}, reinstating a full dataset
+	 * walk per (subject, partner, code) with the whole suite green, because the guard was reading a call
+	 * shape. {@code ChipSubjectOneResolutionTest} learned the same thing about {@code interactionSubject}
+	 * and its javadoc records it; this is that lesson applied, one method along.
+	 *
+	 * <p>So the rule is stated over BODIES rather than over call shapes: these names may be mentioned
+	 * only where {@link #RESOLVER_BODIES} permits, and every mention outside them is a finding whatever
+	 * syntax it uses.
+	 */
+	private static Pattern mentionOf(String resolver) {
+		return Pattern.compile("\\b" + resolver + "\\b");
+	}
 
-	/** The memoising overload, which is the only body permitted to call the uncached sweep. */
-	private static final String CACHING_LOOKUP =
-			"private DrugReference entryForAtcCode(String upperCode, Map<String, DrugReference> cache) {";
+	/**
+	 * Where each resolver's name may appear. A body is named by a needle matching its DECLARATION, and
+	 * the region taken spans that declaration as well as the braces it opens
+	 * ({@link SourceScan#declarationAndBody}) — a method's declaration mentions its own name and sits
+	 * outside its own braces, so the narrower region rejects the declaration itself.
+	 */
+	private static final Map<String, String[]> RESOLVER_BODIES = new LinkedHashMap<String, String[]>();
 
-	private static final String UNCACHED_LOOKUP_DECLARATION =
-			"private DrugReference entryForAtcCode(String upperCode) {";
-
-	private static final Pattern RESOLUTION_CALL = Pattern.compile("\\borderPartners\\s*\\(");
+	static {
+		RESOLVER_BODIES.put("orderPartners", new String[] {
+			"private List<OrderPartner> orderPartners(",
+			"List<OrderPartner> resolved() {" });
+		RESOLVER_BODIES.put("entryForAtcCode", new String[] {
+			"private DrugReference entryForAtcCode(String upperCode, Map<String, DrugReference> cache) {",
+			"private DrugReference entryForAtcCode(String upperCode) {",
+			"private List<OrderPartner> orderPartners(",
+			"private DrugReference soleSubstanceOf(",
+			"DrugReference entryForCode(String upperCode) {" });
+	}
 
 	/** The one mutable field the bean may declare: what Spring injects. */
 	private static final String INJECTED_SERVICE = "drugReferenceService";
@@ -301,7 +329,7 @@ public class CoMedicationResolutionPerPassTest {
 	 * The two bodies that may build a co-medication, and so the only two that may WRITE to an
 	 * {@code OrderPartner}.
 	 */
-	private static final String[] PARTNER_BUILDERS = { RESOLUTION_DECLARATION,
+	private static final String[] PARTNER_BUILDERS = { "private List<OrderPartner> orderPartners(",
 		"private void addPartnersForUnmappedOrders(" };
 
 	/**
@@ -338,7 +366,6 @@ public class CoMedicationResolutionPerPassTest {
 		SourceScan scan = new SourceScan(RELATIVE_SOURCE);
 		SourceScan.Region memo = scan.body(MEMO_DECLARATION);
 		SourceScan.Region resolved = scan.body(RESOLVED);
-		SourceScan.Region cachingLookup = scan.body(CACHING_LOOKUP);
 		SourceScan.Region validate = scan.body(VALIDATE);
 		assertTrue(memo.contains(resolved.start()),
 			"the accessor matched by \"" + RESOLVED + "\" is not inside CoMedications, so this guard has "
@@ -363,29 +390,30 @@ public class CoMedicationResolutionPerPassTest {
 					+ "the statement changed shape for a good reason, move this needle with it.");
 
 
-		List<Integer> resolutionCalls =
-				scan.callsOutsideDeclaration(RESOLUTION_CALL, RESOLUTION_DECLARATION);
-		assertEquals(1, resolutionCalls.size(),
-			"expected exactly one call to orderPartners in " + RELATIVE_SOURCE + " — the pass's own, "
-					+ "inside CoMedications.resolved() — and found " + resolutionCalls.size() + " at lines "
-					+ scan.linesOf(resolutionCalls) + " (issue #256).");
-		assertTrue(resolved.contains(resolutionCalls.get(0)),
-			"orderPartners is called at line " + scan.lineOf(resolutionCalls.get(0)) + ", outside "
-					+ "CoMedications.resolved(). That resolution is a function of the pass's context "
-					+ "alone; calling it from an arm resolves the whole active-order list again, once per "
-					+ "in-play substance, which is issue #256. Read CoMedications instead.");
-
-		List<Integer> uncachedCalls =
-				scan.singleArgumentCallsTo("entryForAtcCode", UNCACHED_LOOKUP_DECLARATION);
-		assertEquals(1, uncachedCalls.size(),
-			"expected exactly one call to the uncached entryForAtcCode(String) in " + RELATIVE_SOURCE
-					+ " — the one inside its memoising overload — and found " + uncachedCalls.size()
-					+ " at lines " + scan.linesOf(uncachedCalls) + " (issue #256).");
-		assertTrue(cachingLookup.contains(uncachedCalls.get(0)),
-			"the uncached entryForAtcCode(String) is called at line " + scan.lineOf(uncachedCalls.get(0))
-					+ ", outside its memoising overload. It is a full sweep of the dataset per code, and "
-					+ "ruleAbout called it that way until issue #256 — one sweep per (subject, partner, "
-					+ "code). Go through CoMedications, which holds the cache for the pass.");
+		for (Map.Entry<String, String[]> resolver : RESOLVER_BODIES.entrySet()) {
+			List<SourceScan.Region> permitted = new ArrayList<SourceScan.Region>();
+			for (String body : resolver.getValue()) {
+				permitted.add(scan.declarationAndBody(body));
+			}
+			List<Integer> mentions = scan.matches(mentionOf(resolver.getKey()));
+			assertTrue(!mentions.isEmpty(), "this guard found no mention of " + resolver.getKey() + " in "
+					+ RELATIVE_SOURCE + ", so it is forbidding nothing — the name has gone stale against "
+					+ "the code it reads (issue #256)");
+			for (int at : mentions) {
+				boolean inside = false;
+				for (SourceScan.Region body : permitted) {
+					inside = inside || body.contains(at);
+				}
+				assertTrue(inside, "line " + scan.lineOf(at) + " names " + resolver.getKey() + " outside "
+						+ "every body permitted to: " + scan.statementAt(at) + ". Both of these resolve "
+						+ "the patient's chart against the whole dataset, and before issue #256 an arm "
+						+ "reached them once per IN-PLAY SUBSTANCE — the resolution once, and the code "
+						+ "lookup once per (subject, partner, code). Read the pass's CoMedications "
+						+ "instead. This is asserted over the NAME rather than over a call, because a "
+						+ "method reference reaches either without writing a paren and a reviewer used "
+						+ "one to reinstate the defect with the suite green.");
+			}
+		}
 	}
 
 	/**

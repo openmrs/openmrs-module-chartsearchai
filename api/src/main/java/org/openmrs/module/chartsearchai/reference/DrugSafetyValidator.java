@@ -973,9 +973,12 @@ public class DrugSafetyValidator {
 	 *
 	 * <p><b>And that is per PASS, not per request.</b> {@code validate} runs twice for one {@code /search}
 	 * — the pre-answer findings pass through {@code DrugReferenceInjector.injectRecords}, then the chips
-	 * pass — and the group differs between them by exactly one input, the rows the ANSWER put in play
-	 * (issue #175 admits them deliberately). Where the answer resolves a row of an in-play substance that
-	 * the question did
+	 * pass — and the group differs between them BY DESIGN in one input, the rows the ANSWER put in play
+	 * (issue #175 admits them deliberately). By design, not in total: {@code orderEntries} is read from
+	 * the pass's own {@link PatientClinicalContext} exactly as the recorded names are, so an order that
+	 * stops during the LLM call moves that input too — see the paragraph below, which says the same thing
+	 * of the recorded names. Where the answer resolves a row of an in-play substance that the question
+	 * did
 	 * not, the group grows and this can answer differently, so the injected {@code safety_finding} the
 	 * model READ can name a substance one way and the chip beside the answer another. The
 	 * contraindication arm's old positional rule happened to be pass-stable, since {@code inPlay} seeds

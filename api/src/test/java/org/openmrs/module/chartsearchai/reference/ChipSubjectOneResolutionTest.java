@@ -103,7 +103,17 @@ import org.openmrs.module.chartsearchai.ModuleSourceRoot;
  * {@code DrugReference.canonicalRow} directly, say, or by writing a second lookup class of its own —
  * which is a different needle and a different rule; what bounds that residue is that such an arm still
  * has to fold the group somehow, and the two folds this class knows of are {@code interactionSubject}
- * (scanned) and {@code canonicalRow} (not). Both needles are statements about the source as WRITTEN:
+ * (scanned, in every syntactic form the name can take — see {@link #CALL}) and {@code canonicalRow}
+ * (not).
+ *
+ * <p>And both needles read the source as TEXT, so an indirection that keeps the text unchanged is
+ * outside them. The one measured on this PR: a lambda declared inside {@code validate} that closes over
+ * a construction and is applied per arm keeps this file at one literal {@code new SubstanceSubjects(}
+ * inside {@code validate}'s body, and passes both. It is named rather than closed because closing it is
+ * a dataflow question and this is a text scan; what catches it is the behavioural case
+ * ({@code OrderedSubjectRowTest.theQuestionPairChipNamesTheSubstanceTheOtherArmsName}), and that case
+ * covers the question-pair arm only — so on the screening arm this residue is uncovered, which is the
+ * honest bound on what these two needles buy. Both needles are statements about the source as WRITTEN:
  * rename any of the three permitted methods, the lookup class or {@code validate}'s widest arity, and
  * this fails loudly rather than quietly forbidding nothing, which is the safe direction.
  *
@@ -140,11 +150,17 @@ public class ChipSubjectOneResolutionTest {
 				new String[] { null, "void addPartnersForUnmappedOrders(" });
 	}
 
-	/** A call, never a declaration: {@code static DrugReference interactionSubject(} is excluded by
-	 *  requiring that the name is not preceded by a return type on the same construct — asserted here by
-	 *  matching the name followed by {@code (} and then filtering out the offsets the declaration scan
-	 *  found, which is exact rather than heuristic. */
-	private static final Pattern CALL = Pattern.compile("\\b" + RESOLVER + "\\s*\\(");
+	/**
+	 * Every mention of the resolver's NAME in code, whatever follows it — the declarations are filtered
+	 * out afterwards by offset, which is exact rather than heuristic.
+	 *
+	 * <p>The name alone, and not {@code interactionSubject\\s*\\(} as this matched until round 2 of the
+	 * review of issue #236's PR: a METHOD REFERENCE reaches the fold without ever writing the paren, and
+	 * a field {@code = DrugSafetyValidator::interactionSubject} applied inside a pairwise arm IS the
+	 * deleted {@code canonicalSubjects}. Measured on that head — it passed both needles of this class and
+	 * the whole api suite, and on the SCREENING arm nothing behavioural sees it either.
+	 */
+	private static final Pattern CALL = Pattern.compile("\\b" + RESOLVER + "\\b");
 
 	private static final Pattern DECLARATION =
 			Pattern.compile("\\bstatic\\s+DrugReference\\s+" + RESOLVER + "\\s*\\(");

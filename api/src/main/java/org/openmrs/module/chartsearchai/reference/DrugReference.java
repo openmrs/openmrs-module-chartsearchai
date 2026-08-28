@@ -956,7 +956,9 @@ public class DrugReference {
 	 * locally applied when its own published name says WHERE it is applied, so this map records WHAT
 	 * that name says. {@code A01} "Stomatological preparations" -&gt; mouth; {@code A07A} "Intestinal
 	 * anti-infectives" and {@code A07E} "Intestinal antiinflammatory agents" -&gt; gut; {@code C05A}
-	 * "Agents for treatment of haemorrhoids and anal fissures for topical use" -&gt; anorectal;
+	 * "Antihemorrhoidals for topical use" -&gt; anorectal — spelled as
+	 * {@link #LOCALLY_APPLIED_ATC_GROUPS}'s javadoc spells it, because three other texts cite that one
+	 * as this module's record of ATC's published name and two records of one name is one too many;
 	 * {@code D} "Dermatologicals", {@code M02} "Topical products for joint and muscular pain" and
 	 * {@code P03A} "Ectoparasiticides, incl. scabicides" -&gt; skin; {@code G01} "Gynecological
 	 * antiinfectives and antiseptics" and {@code G02CC} "Antiinflammatory products for vaginal
@@ -1135,9 +1137,10 @@ public class DrugReference {
 		if (codes == null || codes.isEmpty() || recordedTerms == null || recordedTerms.isEmpty()) {
 			return codes;
 		}
-		// No emptiness guard on the sites: codesAtSites keeps nothing for an empty site set, and the
-		// tail below already returns codes for that. One decline path rather than two saying the same
-		// thing.
+		// No emptiness guard on the SITES: codesAtSites keeps nothing for an empty site set, and the
+		// tail below already returns codes for that. The two emptiness halves above are cost
+		// short-circuits and not a second decline rule — deleting them changes no answer, which is
+		// said here because a reader applying "one decline path" to them would be right to.
 		//
 		// The tail is UNREACHABLE from the one production caller today, and stays because it is this
 		// method's contract rather than that caller's convenience: since the caller admits an order

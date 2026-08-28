@@ -425,25 +425,34 @@ public class UnmappedOrderAdministrationSiteTest {
 
 	@Test
 	public void twoPresentationsTheModuleCanBothPlaceNarrowToTheUnionOfTheirSites() throws IOException {
-		// The pair to the case above: where EVERY order of the substance names a site, there is nothing
-		// unattributable and the narrowing is the union of what they name. Topical plus ophthalmic
-		// hydrocortisone shares S01BA with dexamethasone and no longer shares H02AB — the chip the eye
-		// case pins, reached with a second order beside it.
-		Set<String> creamNames = DrugReferenceTestSupport.set(CREAM);
-		Set<String> dropNames = DrugReferenceTestSupport.set("Hydrocortisone eye preparation");
-		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null,
-				DrugReferenceTestSupport.set(CREAM, "Hydrocortisone eye preparation"), null, null, null,
-				Arrays.asList(
-						DrugReferenceTestSupport.activeOrder("order-234-cream", CREAM, creamNames, null,
-								DrugReferenceTestSupport.set(CUTANEOUS)),
-						DrugReferenceTestSupport.activeOrder("order-234-drop",
-								"Hydrocortisone eye preparation", dropNames, null,
-								DrugReferenceTestSupport.set("Bilateral eye administration"))));
+		// Where EVERY order of the substance is one the data can express, there is nothing to decline
+		// and the narrowing is the UNION of what they name. Three assertions, because the obvious one
+		// pins less than it looks: eye-only and skin-plus-eye produce the SAME chip here (dexamethasone
+		// shares no D07AA/D07XA subgroup with hydrocortisone), so asserting the chip alone would also
+		// pass for an implementation that kept the LAST order's terms and threw the rest away.
+		//
+		// So the union is asserted where it is visible — on the codes — and the order-independence by
+		// running both sequences, which is the property codesForThisSubstancesPresentations exists for
+		// and the only thing that separates a union from last-order-wins.
+		Set<String> hydrocortisone = DrugReferenceTestSupport
+				.row(DrugReferenceTestSupport.ddiFixtureEntries(FIXTURE), "Hydrocortisone")
+				.normalizedAtcCodes();
+		Set<String> union = DrugReference.codesForRecordedAdministration(hydrocortisone,
+				DrugReferenceTestSupport.set(CUTANEOUS, "Bilateral eye administration"));
+		assertTrue(union.contains("D07AA02") && union.contains("S01BA02"),
+				"the union keeps a code from each site, was: " + union);
+
+		List<String> creamFirst = DrugReferenceTestSupport
+				.details(chips(DEXAMETHASONE_QUESTION, creamAndEyePreparation(true)));
+		List<String> dropFirst = DrugReferenceTestSupport
+				.details(chips(DEXAMETHASONE_QUESTION, creamAndEyePreparation(false)));
 
 		assertEquals(
 				Collections.singletonList("Dexamethasone is in the same ATC class (S01BA) as active"
 						+ " order Hydrocortisone — possible duplicate therapy"),
-				DrugReferenceTestSupport.details(chips(DEXAMETHASONE_QUESTION, context)));
+				dropFirst);
+		assertEquals(dropFirst, creamFirst,
+				"and which order OrderService returned first must not decide it");
 	}
 
 	@Test
@@ -544,6 +553,20 @@ public class UnmappedOrderAdministrationSiteTest {
 			assertTrue(claimed, group + " is locally applied but belongs to no site and is not recorded"
 					+ " as naming none — the partition has a hole");
 		}
+
+		// And the DISJOINTNESS half, which the OR above cannot see: a group claimed by a site must not
+		// ALSO be excused as naming none. It matters because that excuse is an escape hatch — the data
+		// guard above SKIPS a code namesNoAdministrationSite admits — so a site group wrongly listed
+		// there would silently stop that guard checking the very codes it exists for. Derived from the
+		// two constants rather than from a hand-listed set of codes, so it cannot go stale as sites are
+		// added.
+		for (String site : DrugReference.administrationSites()) {
+			for (String prefix : DrugReference.groupsForSite(site)) {
+				assertFalse(DrugReference.namesNoAdministrationSite(prefix),
+						prefix + " is claimed by site " + site + " and must not also be excused as"
+								+ " naming none — the partition's halves overlap");
+			}
+		}
 	}
 
 	@Test
@@ -580,6 +603,21 @@ public class UnmappedOrderAdministrationSiteTest {
 
 	private static PatientClinicalContext terbinafine(String... administration) {
 		return order("Terbinafine 1% preparation", administration);
+	}
+
+	/** One patient, two unmapped hydrocortisone orders — a cutaneous cream and an eye preparation — in
+	 *  either sequence, which is the only thing that differs between the two contexts. */
+	private static PatientClinicalContext creamAndEyePreparation(boolean creamFirst) {
+		Set<String> creamNames = DrugReferenceTestSupport.set(CREAM);
+		Set<String> dropNames = DrugReferenceTestSupport.set("Hydrocortisone eye preparation");
+		PatientClinicalContext.ActiveDrugOrder cream = DrugReferenceTestSupport.activeOrder(
+				"order-234-cream", CREAM, creamNames, null, DrugReferenceTestSupport.set(CUTANEOUS));
+		PatientClinicalContext.ActiveDrugOrder drop = DrugReferenceTestSupport.activeOrder(
+				"order-234-drop", "Hydrocortisone eye preparation", dropNames, null,
+				DrugReferenceTestSupport.set("Bilateral eye administration"));
+		return DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set(CREAM, "Hydrocortisone eye preparation"), null, null, null,
+				creamFirst ? Arrays.asList(cream, drop) : Arrays.asList(drop, cream));
 	}
 
 	/** One patient, two unmapped hydrocortisone orders — a topical cream and an oral tablet — in either

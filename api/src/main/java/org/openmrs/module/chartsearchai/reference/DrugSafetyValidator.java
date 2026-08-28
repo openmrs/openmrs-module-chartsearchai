@@ -6011,13 +6011,20 @@ public class DrugSafetyValidator {
 	 *         the prescriptions came back in is the hazard {@code CLAUDE.md} records for
 	 *         {@link OrderPartner#substances} and {@link #ordersCarrying}, reached here by another road.
 	 *
-	 *         <p><b>One unattributable presentation declines for the whole substance</b>, rather than
-	 *         the union of the sites the others name. The orders are presentations of ONE drug the
-	 *         patient is on, so an order this module cannot place is a presentation it cannot rule out —
+	 *         <p><b>One presentation this module cannot express declines for the whole substance</b>,
+	 *         rather than the union of the sites the others name. The orders are presentations of ONE
+	 *         drug the patient is on, so an order it cannot place is a presentation it cannot rule out —
 	 *         and the substance's own classification is then the only honest answer, which is the same
 	 *         reading {@link DrugReference#codesForRecordedAdministration} takes for a single order that
 	 *         names no site. Failing the other way would let a topical cream silence the tablet beside
 	 *         it.
+	 *
+	 *         <p><b>"Cannot express" and not "names no site"</b>, which is
+	 *         {@link DrugReference#narrowsAnyCode}'s own distinction and a defect that stood between two
+	 *         passes of this change: an order the module places at a site the dataset files no code for
+	 *         passes the weaker test, and its decline then rests on a fallback evaluated over the UNION
+	 *         of every order's terms — which a sibling that does narrow rescues, taking the first
+	 *         order's codes with it.
 	 *
 	 *         <p>Scoped to the orders THIS leg governs — dictionary-unmapped, through the same
 	 *         {@link #governedByTheNameLeg} the caller applies. <b>Nothing pins that conjunct and
@@ -6054,7 +6061,7 @@ public class DrugSafetyValidator {
 					|| !substanceRowsNamedBy(order, cache, impliedByName).containsKey(substance)) {
 				continue;
 			}
-			if (!DrugReference.namesAnAdministrationSite(order.getAdministrationTerms())) {
+			if (!DrugReference.narrowsAnyCode(codes, order.getAdministrationTerms())) {
 				return codes;
 			}
 			recorded.addAll(order.getAdministrationTerms());

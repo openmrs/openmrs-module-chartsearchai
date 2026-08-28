@@ -1138,6 +1138,13 @@ public class DrugReference {
 		// No emptiness guard on the sites: codesAtSites keeps nothing for an empty site set, and the
 		// tail below already returns codes for that. One decline path rather than two saying the same
 		// thing.
+		//
+		// The tail is UNREACHABLE from the one production caller today, and stays because it is this
+		// method's contract rather than that caller's convenience: since the caller admits an order
+		// only where narrowsAnyCode is true of it, the union it passes keeps at least that order's
+		// codes. Nothing discriminates it, which is said here rather than left for a mutation to
+		// discover — the method must never hand back an empty classification, and a second caller
+		// would need that whether or not it asked narrowsAnyCode first.
 		Set<String> kept = codesAtSites(codes, recordedSites(recordedTerms));
 		return kept.isEmpty() ? codes : kept;
 	}
@@ -1184,16 +1191,26 @@ public class DrugReference {
 	}
 
 	/**
-	 * @return whether {@code recordedTerms} names any site this module can attribute — the question a
-	 *         caller asks when it must decide about SEVERAL orders of one substance together
-	 *         ({@code DrugSafetyValidator.codesForThisSubstancesPresentations}). "Names no site" and
-	 *         "narrowed nothing" are not the same answer: the second is also true of a term that names
-	 *         a site the substance is not filed under, and only the first says the module could not
-	 *         place the presentation at all.
+	 * @return whether {@code recordedTerms} narrows {@code codes} at all — the question a caller asks
+	 *         when it must decide about SEVERAL orders of one substance together
+	 *         ({@code DrugSafetyValidator.codesForThisSubstancesPresentations}).
+	 *
+	 *         <p><b>Narrows, not "names a site", and the difference is a defect that shipped between
+	 *         two passes of this change.</b> The two answers come apart for an order this module CAN
+	 *         place at a site the substance is filed under no code for — a nasal hydrocortisone, say,
+	 *         where the KB publishes no {@code R01}. Asked the weaker question that order passes, and
+	 *         its own decline then depends on {@link #codesForRecordedAdministration}'s empty-set
+	 *         fallback, which is evaluated once over the UNION of every order's terms — so a sibling
+	 *         order that DOES narrow rescues the union from emptiness and the nasal order's codes are
+	 *         dropped with it. Measured through the real {@code validate}: that patient's systemic chip
+	 *         stood for the nasal order alone and vanished when a cutaneous cream was prescribed
+	 *         beside it, which is the direction the whole-substance decline exists to prevent.
+	 *
+	 *         <p>Built from the same two primitives the narrowing itself uses, so the decline and the
+	 *         narrowing cannot come to disagree about what this record can express.
 	 */
-	static boolean namesAnAdministrationSite(Set<String> recordedTerms) {
-		// No emptiness test: recordedSites of an empty set is empty, which the last conjunct catches.
-		return recordedTerms != null && !recordedSites(recordedTerms).isEmpty();
+	static boolean narrowsAnyCode(Set<String> codes, Set<String> recordedTerms) {
+		return recordedTerms != null && !codesAtSites(codes, recordedSites(recordedTerms)).isEmpty();
 	}
 
 	/**

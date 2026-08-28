@@ -392,6 +392,38 @@ public class UnmappedOrderAdministrationSiteTest {
 	}
 
 	@Test
+	public void aPresentationAtASiteTheDatasetDoesNotFileDeclinesForTheWholeSubstanceToo() throws IOException {
+		// The distinction narrowsAnyCode draws, and the one a weaker guard misses. Hydrocortisone
+		// publishes no R01 code, so a NASAL presentation of it is one this module can place and the
+		// dataset cannot express — the terms name a site, and narrow nothing.
+		//
+		// Alone, that order declines and the systemic chip stands. Beside a cutaneous cream it must
+		// still decline: the union of {nose, skin} keeps the cream's D codes, so a guard asking only
+		// "do the terms name a site" would let the cream's narrowing carry the nasal order with it and
+		// the chip would disappear for a patient who is on nasal hydrocortisone.
+		Set<String> nasalNames = DrugReferenceTestSupport.set("Hydrocortisone nasal preparation");
+		Set<String> creamNames = DrugReferenceTestSupport.set(CREAM);
+		PatientClinicalContext.ActiveDrugOrder nasal = DrugReferenceTestSupport.activeOrder(
+				"order-234-nasal", "Hydrocortisone nasal preparation", nasalNames, null,
+				DrugReferenceTestSupport.set("Nasal administration"));
+		PatientClinicalContext.ActiveDrugOrder cream = DrugReferenceTestSupport.activeOrder(
+				"order-234-cream", CREAM, creamNames, null, DrugReferenceTestSupport.set(CUTANEOUS));
+
+		assertEquals(Collections.singletonList(SYSTEMIC_CHIP),
+				DrugReferenceTestSupport.details(chips(DEXAMETHASONE_QUESTION,
+						DrugReferenceTestSupport.ctx(60, null, nasalNames, null, null, null,
+								Collections.singletonList(nasal)))),
+				"the nasal order alone: the dataset files no R01 code, so nothing is narrowed");
+
+		assertEquals(Collections.singletonList(SYSTEMIC_CHIP),
+				DrugReferenceTestSupport.details(chips(DEXAMETHASONE_QUESTION,
+						DrugReferenceTestSupport.ctx(60, null,
+								DrugReferenceTestSupport.set("Hydrocortisone nasal preparation", CREAM),
+								null, null, null, Arrays.asList(nasal, cream)))),
+				"and a cream beside it must not carry it into the skin");
+	}
+
+	@Test
 	public void twoPresentationsTheModuleCanBothPlaceNarrowToTheUnionOfTheirSites() throws IOException {
 		// The pair to the case above: where EVERY order of the substance names a site, there is nothing
 		// unattributable and the narrowing is the union of what they name. Topical plus ophthalmic

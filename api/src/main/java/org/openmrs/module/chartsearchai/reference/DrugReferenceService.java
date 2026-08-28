@@ -364,8 +364,11 @@ public class DrugReferenceService {
 	 * ({@link DdiDrugReferenceSource} makes the display name {@code alias[0]},
 	 * {@link AtcDrugReferenceSource} makes it the only alias) and, since issue #150, of
 	 * {@link DrugReferenceValidity}'s {@code sanitizeAliases}, which appends an entry's own name when it
-	 * is missing. So what would make this reachable is a future DATASET, not a future caller — re-derive
-	 * that count before relying on it. The narrowing is meanwhile doing real work and is not inert:
+	 * is missing — except, since issue #296, where that name is itself a string that names nothing, which
+	 * it REPORTS instead of repairing, for the reason recorded there. So an entry left without a
+	 * self-name IS constructible again, in a hand-authored file whose display name folds to nothing;
+	 * what would make this reachable is a future DATASET, not a future caller — re-derive that count
+	 * before relying on it. The narrowing is meanwhile doing real work and is not inert:
 	 * measured the same way through this method, it removes a substance the string does not name on
 	 * <b>276 of 29 808</b> order-name-shaped strings, {@code Hydrocortisone Injection vial 100mg} reaching
 	 * {@code Hydrocortisone butyrate} (issue #209) among them.

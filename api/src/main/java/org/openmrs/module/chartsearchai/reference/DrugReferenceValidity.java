@@ -42,7 +42,9 @@ import org.slf4j.Logger;
  * it requires (#242) — an empty PARSE of a non-empty file, where #149 made an empty LOAD loud.
  *
  * <p><b>Why the remedies differ per rule, deliberately.</b> Making them uniform would be a decision taken
- * by default. Each rule below records which of the three it takes and why:
+ * by default. Each rule below records which of the three it takes and why — one of them, since issue
+ * #296, records TWO, so a rule id is not a unique key over one load's findings and a reader picking a
+ * finding by rule id alone can be reading a partial count ({@link #ENTRY_NOT_NAMED_BY_ITS_OWN_ALIASES}):
  * <ul>
  *   <li>{@link Remedy#DROPPED} where the offending VALUE is the whole defect and the rest of the entry
  *       is usable. Dropping more than that would trade a fail-open for a silent fail-closed, and this
@@ -118,8 +120,19 @@ public final class DrugReferenceValidity {
 	 */
 	public static final String NULL_LIST_ELEMENT = "null-list-element";
 
-	/** An entry that none of its own aliases names, so the ranked resolution can reach a claimant that
-	 *  is not in the candidate set — issues #210, #211. */
+	/**
+	 * An entry that none of its own aliases names, so the ranked resolution can reach a claimant that is
+	 * not in the candidate set — issues #210, #211.
+	 *
+	 * <p><b>The one rule id with two {@code report} call sites, so the one that can carry TWO remedies
+	 * and two findings in one load</b>
+	 * (issue #296). {@link Remedy#REPAIRED} where the entry's display name is a name at all, which is
+	 * the #210/#211 shape; {@link Remedy#REPORTED} where that name itself names nothing, which cannot be
+	 * repaired without putting back exactly what {@link #BLANK_ALIAS} drops — {@code sanitizeAliases}
+	 * carries the argument. Each finding counts only its own shape, so neither
+	 * {@code getOccurrences()} is the total for this rule; a caller that wants one of them must select
+	 * on the REMEDY and not on the rule id.
+	 */
 	public static final String ENTRY_NOT_NAMED_BY_ITS_OWN_ALIASES = "entry-not-named-by-its-own-aliases";
 
 	/** A rule-bearing entry sharing a published name with another entry, neither declaring which

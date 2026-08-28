@@ -37,8 +37,10 @@ import org.junit.jupiter.api.Test;
  * ladder: a folded chip names the partner by the class arm's label where that ladder found a NAME and
  * the two arms are provably about one prescription — the rule's own token naming the ladder's ENTRY
  * unambiguously, or naming the very ORDER the label came from — and each arm keeps its own name where
- * they are not. Unfolded rule chips, class-only chips, the grouping keys and the injected
- * {@code drug_reference} note list are untouched — see {@code foldedPartnerLabel}.
+ * they are not. Unfolded rule chips, class-only chips and the grouping keys are untouched — see
+ * {@code foldedPartnerLabel}. The injected {@code drug_reference} note list was untouched too, which is
+ * the deviation issue #297 closed: it now takes that same reconciled name in its own vocabulary, and
+ * {@code OneNameAcrossChipAndInjectedRecordTest} is where that half is pinned.
  *
  * <p>Driven through the real {@link DrugSafetyValidator#validate} over datasets read by the real
  * parsers, because the defect is in what the two arms make of a real context: the bundled curated seed
@@ -50,12 +52,11 @@ public class FoldedChipOnePartnerNameTest {
 	/** The three {@code WHOATC} codes the 3.7.1 demo dictionary maps an aspirin order's concept to, and
 	 *  the ones the ticket's live run carried. The curated seed carries none of them, which is what
 	 *  leaves its ladder with no name at all. */
-	private static final Set<String> ASPIRIN_ORDER_CODES = DrugReferenceTestSupport
-			.set("A01AD05", "B01AC06", "N02BA01");
+	private static final Set<String> ASPIRIN_ORDER_CODES = DrugReferenceTestSupport.ASPIRIN_ORDER_CODES;
 
 	/** What {@code PatientClinicalContextBuilder.codeOnlyDisplay} builds for an order no name could be
 	 *  read for: the codes it carries, labelled as codes, sorted. */
-	private static final String CODE_ONLY_DISPLAY = "[ATC A01AD05, B01AC06, N02BA01]";
+	private static final String CODE_ONLY_DISPLAY = DrugReferenceTestSupport.CODE_ONLY_DISPLAY;
 
 	private static final String QUESTION = "Can I give ibuprofen?";
 
@@ -121,8 +122,7 @@ public class FoldedChipOnePartnerNameTest {
 			"chartsearchai-test/drug-reference-fold-tokenless-uncovered.json";
 
 	/** A partner keyed on one substance and then renamed after a DIFFERENT order — see the fixture. */
-	private static final String RENAMED_PARTNER_FIXTURE =
-			"chartsearchai-test/drug-reference-fold-order-renamed-partner.json";
+	private static final String RENAMED_PARTNER_FIXTURE = DrugReferenceTestSupport.RENAMED_PARTNER_FIXTURE;
 
 	/** Lisinopril and enalapril each interact with ramipril and all three share subgroup C09AA;
 	 *  enalapril's rule carries NO mechanism note, which is the shape the extraction below has to cope
@@ -172,9 +172,7 @@ public class FoldedChipOnePartnerNameTest {
 	/** The ticket's own arrangement: a nameless order the class arm can only call by its codes, beside a
 	 *  curated rule that names the same prescription {@code aspirin}. */
 	private static PatientClinicalContext namelessAspirinOrder() {
-		return DrugReferenceTestSupport.ctx(60, null, null, ASPIRIN_ORDER_CODES, null, null,
-			Arrays.asList(PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly("order-nameless",
-				CODE_ONLY_DISPLAY, ASPIRIN_ORDER_CODES)));
+		return DrugReferenceTestSupport.namelessAspirinOrder();
 	}
 
 	/**
@@ -704,11 +702,7 @@ public class FoldedChipOnePartnerNameTest {
 	 *  it cannot name ({@code A02BC05}), so the partner is keyed on that substance and then renamed after
 	 *  this order — the issue #186 rung, reached by the prescription the rule is actually about. */
 	private static PatientClinicalContext renamedByItsOwnNaproxenOrder() {
-		Set<String> codes = DrugReferenceTestSupport.set("M01AE02", "A02BC05");
-		return DrugReferenceTestSupport.ctx(60, null,
-			DrugReferenceTestSupport.set("naproxen 500mg"), codes, null, null,
-			Arrays.asList(DrugReferenceTestSupport.activeOrder("order-naproxen", "Naproxen 500mg",
-				DrugReferenceTestSupport.set("naproxen 500mg"), codes)));
+		return DrugReferenceTestSupport.renamedByItsOwnNaproxenOrder();
 	}
 
 	/**

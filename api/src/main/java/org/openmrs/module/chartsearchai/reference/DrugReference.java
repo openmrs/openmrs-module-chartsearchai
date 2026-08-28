@@ -1838,15 +1838,19 @@ public class DrugReference {
 	 *
 	 * <p><b>Since issue #296 one caller asks it of a REFERENCE string</b> — a rule's own match token,
 	 * through {@link DrugReferenceService#uniqueStrongestClaimant}, to decide which of the substances a
-	 * token names it denotes. Only the top two ranks are in play there, and that is a consequence of
-	 * {@link #setAliases} storing the list trimmed rather than of the caller's {@link #isNamed} gate
-	 * alone: on a LOADED dataset, identity with a trimmed alias implies containment, so the gate cannot
-	 * admit a pair this method then answers {@link #NAME_NO_MATCH} for, and the containment rung below
-	 * is unreachable because identity is stronger. Loaded, because the trim is only half of it — see
-	 * {@link #setAliases} for the other half and for what an entry bypassing the loader can still do. Without the trim both of those fail on a padded alias, in the two
-	 * directions {@code DrugSafetyValidator.unambiguouslyNames} records. Noted because it widens what
-	 * this method is asked about, and ADR Decision 51 carries the argument for accepting that over a
-	 * second spelling of the comparison.
+	 * token names it denotes. Only the top two ranks are in play there, and the two rungs below are shut
+	 * for DIFFERENT reasons — one of which does not involve the trim, so do not read the trim as holding
+	 * both. {@link #NAME_TOKEN_INSIDE_A_NAME} is returned from one expression below and only where
+	 * {@link #isNamed} is false, which {@code DrugSafetyValidator.unambiguouslyNames} has already
+	 * required to be TRUE of every row it ranks — the ladder's entry and each rival alike — so that
+	 * rung is shut by that gate, trimmed list or not. {@link #NAME_NO_MATCH} is the one the
+	 * trim shuts: on a LOADED dataset identity with a trimmed alias implies containment, so the gate
+	 * cannot admit a pair this method then answers it for. Loaded, because the trim is only half of it
+	 * — see {@link #setAliases} for the other half and for what an entry bypassing the loader can still
+	 * do. Without the trim that rung reopens on a padded alias, in the two directions
+	 * {@code DrugSafetyValidator.unambiguouslyNames} records. Noted because it widens what this method
+	 * is asked about, and ADR Decision 52 carries the argument for accepting that over a second
+	 * spelling of the comparison.
 	 *
 	 * <p><b>Why a rank and not first-past-the-post (issue #176).</b> Resolution took the earliest
 	 * matching entry, and reference names nest: 206 of the shipped KB's 2283 entries did not resolve to

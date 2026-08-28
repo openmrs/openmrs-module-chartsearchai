@@ -794,7 +794,10 @@ public final class DrugReferenceValidity {
 	 * whitespace is the one thing an author writes that does not survive, because untrimmed it makes
 	 * {@link DrugReference#isNamed} and {@link DrugReference#matchesDrugName} disagree about the same
 	 * pair. That setter carries the measurement; this pass sees the trimmed list and its own rules are
-	 * unaffected by it, a padded alias having named exactly what its trimmed form names all along.
+	 * unaffected by it, both of them reading an alias through {@code namesAnything} or
+	 * {@link DrugReference#normalizeName}, which trim — so a padded alias answered THOSE predicates
+	 * exactly as its trimmed form does, which is the narrow sense in which nothing here moves, and not
+	 * the false general one.
 	 */
 	private void sanitizeAliases(List<DrugReference> entries) {
 		int blanks = 0;

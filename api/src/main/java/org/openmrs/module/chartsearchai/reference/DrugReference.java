@@ -722,8 +722,12 @@ public class DrugReference {
 	 * accents, dotted capital I, hyphen, period and digits, every pair where {@code isNamed} holds and
 	 * {@code nameMatchStrength} answers below {@link #NAME_IS_ANOTHER_NAME} has an alias differing from
 	 * its own {@code trim()} (a folds-to-empty alias is the other, and {@code DrugReferenceValidity}
-	 * drops that at load). With the alias trimmed, {@code isNamed} implies {@code matchesDrugName},
-	 * because identity is a case of containment.
+	 * drops that at load). With the alias trimmed AND that drop done, {@code isNamed} implies
+	 * {@code matchesDrugName}, because identity is a case of containment. Both halves are needed and the
+	 * second is the loader's: an alias of combining marks alone survives this trim, still answers
+	 * {@code isNamed}, and folds to an empty needle that {@code containsBoundedToken} can never match —
+	 * so the implication holds for a loaded dataset and not for one pushed through the {@code setEntries}
+	 * seam.
 	 *
 	 * <p>Null elements are passed through untouched, as they were: {@link #normalizeName} and
 	 * {@code namesAnything} both answer for them, and dropping them here would move a decision the

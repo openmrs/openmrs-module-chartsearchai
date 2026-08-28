@@ -2802,10 +2802,10 @@ public class DrugSafetyValidator {
 	 * {@code antithrombin iii}) — and wherever {@link DrugReference#canonicalRow} hands the ladder a row
 	 * that is not the token's strongest claimant, which over the shipped KB is {@code gabapentin}
 	 * ({@code entryForAtcCode} resolves {@code N02BF01} to {@code Gabapentin enacarbil}, an alias claim,
-	 * while the {@code Gabapentin} row claims it outright). That second shape is not gabapentin's alone —
-	 * {@code A02BC05} resolves to {@code Omeprazole} against the token {@code esomeprazole} the same way,
-	 * where refusing is the whole point of the guard — so what is named here is the instance among the
-	 * chips ADR Decision 51 measured, not the extent of the shape. Issue #296 closed the rest of what ADR
+	 * while the {@code Gabapentin} row claims it outright) — the instance among the chips ADR Decision 51
+	 * measured, and not the extent of the shape, which is not gabapentin's alone: {@code A02BC05}
+	 * resolves to {@code Omeprazole} against the token {@code esomeprazole} the same way, and there
+	 * refusing is the whole point of the guard. Issue #296 closed the rest of what ADR
 	 * Decision 39 recorded here; a rule carrying only an ATC code keeps
 	 * naming its partner by that code; and chips of DIFFERENT subjects can still name one order two ways,
 	 * which is outside this ticket.
@@ -3030,8 +3030,9 @@ public class DrugSafetyValidator {
 	 *         <p><b>So a CONTESTED token can only be admitted at {@link DrugReference#NAME_IS_THE_DISPLAY_NAME},
 	 *         and the reconciled label is then that token re-cased.</b> Every rival reaching the comparison
 	 *         passed {@link #namesEntry}, so the token IS one of that rival's stored aliases; those are
-	 *         stored trimmed ({@link DrugReference#setAliases}), so identity implies containment and the
-	 *         rival ranks at least {@link DrugReference#NAME_IS_ANOTHER_NAME}. Nothing strictly outranks
+	 *         stored trimmed ({@link DrugReference#setAliases}) and the loader drops any that names
+	 *         nothing, so identity implies containment and the rival ranks at least
+	 *         {@link DrugReference#NAME_IS_ANOTHER_NAME}. Nothing strictly outranks
 	 *         that but the top rank. It is the trim that makes this a derivation rather than a hope —
 	 *         untrimmed, a padded alias answers {@link DrugReference#isNamed} true and
 	 *         {@link DrugReference#NAME_NO_MATCH}, and such a rival drops out of the contest entirely.
@@ -3041,7 +3042,7 @@ public class DrugSafetyValidator {
 	 *         sentence names the same substance by the same string, so the prompt's name union for that
 	 *         partner cannot move, and {@link SubjectRule#partnerKey} case-folds to the label the chip now
 	 *         renders rather than away from it. The UNCONTESTED path is unchanged and still admits at
-	 *         either rank, which is where a label like {@code Acetylsalicylic acid} for the token
+	 *         either rank, which is where a label like {@code Acetylsalicylic acid (aspirin)} for the token
 	 *         {@code aspirin} comes from.
 	 *
 	 *         <p><b>The name is kept although the criterion moved.</b> "Unambiguously" now means the token

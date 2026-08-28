@@ -39,13 +39,13 @@ public class OneNameAcrossChipAndInjectedRecordTest {
 
 	private static final String QUESTION = "Can I give ibuprofen?";
 
-	/** The DDInter-shaped fixture whose rule token {@code esomeprazole} is named by TWO substances, so
-	 *  {@code unambiguouslyNames} refuses the fold — {@code FoldedChipOnePartnerNameTest} owns the
-	 *  chip-side case over the same file. */
 	/** A DDInter-shaped partner row whose display name is WHITESPACE — see the case that reads it. */
 	private static final String BLANK_PARTNER_NAME_FIXTURE =
 			"chartsearchai-test/ddi-fold-blank-partner-name.json";
 
+	/** The DDInter-shaped fixture whose rule token {@code esomeprazole} is named by TWO substances, so
+	 *  {@code unambiguouslyNames} refuses the fold — {@code FoldedChipOnePartnerNameTest} owns the
+	 *  chip-side case over the same file. */
 	private static final String AMBIGUOUS_TOKEN_FIXTURE =
 			"chartsearchai-test/ddi-fold-ambiguous-token.json";
 

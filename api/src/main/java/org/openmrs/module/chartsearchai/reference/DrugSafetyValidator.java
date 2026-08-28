@@ -991,18 +991,19 @@ public class DrugSafetyValidator {
 	 *
 	 * <p><b>And issue #238 makes the fold invariant to the ANSWER within each pass — never a shared answer
 	 * across the whole REQUEST, which is why the rows this folds are not the rows the arms rule
-	 * over.</b> {@code validate} runs twice for one {@code /search}
-	 * — the pre-answer findings pass through {@code DrugReferenceInjector.injectRecords}, then the chips
-	 * pass — and the group differs between them BY DESIGN in one input, the rows the ANSWER put in play
-	 * (issue #175 admits them deliberately). By design, not in total: {@code orderEntries} is read from
-	 * the pass's own {@link PatientClinicalContext} exactly as the recorded names are, so an order that
-	 * stops during the LLM call moves that input too — see the paragraph below, which says the same thing
-	 * of the recorded names. Where the answer resolves a row of an in-play substance that the question
-	 * did
-	 * not, the group grows and this can answer differently, so the injected {@code safety_finding} the
-	 * model READ can name a substance one way and the chip beside the answer another. The
-	 * contraindication arm's old positional rule happened to be pass-stable, since {@code inPlay} seeds
-	 * from the question first; the interaction and dose arms have had this since #175/#194.
+	 * over.</b> {@code validate} runs twice for one {@code /search} — the pre-answer findings pass
+	 * through {@code DrugReferenceInjector.injectRecords}, then the chips pass. Before this issue, the
+	 * group differed between them precisely in the rows the ANSWER put in play (issue #175 admits them
+	 * deliberately): where the answer resolved a row of an in-play substance that the question did not,
+	 * the group grew for that pass alone, so the injected {@code safety_finding} the model READ could
+	 * name a substance one way and the chip beside the answer another. {@code namingRows} closes that —
+	 * it folds only {@code questionDrugs} and {@code orderEntries}, neither of which the answer-side
+	 * widening touches, so the two passes now fold the identical rows for the identical substance. By
+	 * design, not in total: {@code orderEntries} is read from the pass's own
+	 * {@link PatientClinicalContext} exactly as the recorded names are, so an order that stops during
+	 * the LLM call still moves that input between the two passes — see the paragraph beginning "And the
+	 * question-pair arm since issue #236", which says the same thing of the recorded names. That is a
+	 * chart-read residue #238 does not close, not the answer-driven one this paragraph is about.
 	 *
 	 * <p><b>And the question-pair arm since issue #236</b>, which is what that change COST until issue
 	 * #238 closed it. Folding this arm's own rows made it invariant to the ANSWER —
@@ -1021,11 +1022,15 @@ public class DrugSafetyValidator {
 	 * chart read that genuinely differs between the two passes is a different residue from the one this
 	 * paragraph is about.
 	 *
-	 * <p>The SCREENING arm keeps its pass-stability, and by mechanism rather than by luck: its group
-	 * differs from this one only where a row of an ordered substance is in play, and such a substance
-	 * has already been through {@link #addInteractionWarnings}, whose pairs
-	 * {@link InteractionPairs} then suppresses here — so every pair it still reports has a subject whose
-	 * group is the orders' alone. See the comment at that arm's own read.
+	 * <p>The SCREENING arm keeps its pass-stability, and structurally rather than by luck: on a
+	 * screening question {@code questionDrugs} is empty by the arm's own gate — see the paragraph
+	 * beginning "That is a statement about the screening arm's OWN chips" — so its {@code namingRows}
+	 * reduces to {@code resolvedSubstanceRows(<empty set>, orderEntries)}: byte-for-byte the same map
+	 * the arm already builds for itself, {@code substanceRows(orderDrugs)}, same membership and the same
+	 * order (see the comment at that arm's own read, near {@code substances = substanceRows(orderDrugs)}).
+	 * {@link InteractionPairs} plays no part in this — it dedups PAIRS the drug-in-play arm already
+	 * reported, never subject groups — so every pair this arm still reports has a subject whose group is
+	 * the orders' alone.
 	 *
 	 * <p>That is a statement about the screening arm's OWN chips and not about a screening QUESTION,
 	 * which the sentence above would otherwise be read as. This javadoc used to say the pair this arm
@@ -3599,7 +3604,7 @@ public class DrugSafetyValidator {
 	 * {@code renderFinding} copies the chip the PRE-ANSWER pass raised, and between issue #236 and issue
 	 * #238 this arm's subject was folded over a group the answer widens, so the record the model reads
 	 * and the chip the clinician sees could name one substance two ways — ADR Decision 49 is canonical
-	 * for that measurement. Issue #238 (ADR Decision 52) closed it: this arm's subject now comes from
+	 * for that measurement. Issue #238 (ADR Decision 53) closed it: this arm's subject now comes from
 	 * {@code namingGroups}, which every question drug is already in, so the answer cannot move it — see
 	 * {@link SubstanceSubjects}. What the two cannot do, before or after #238, is describe one finding
 	 * differently within a pass. That half is worded to match

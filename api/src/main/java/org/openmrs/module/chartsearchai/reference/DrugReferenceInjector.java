@@ -1291,7 +1291,7 @@ public class DrugReferenceInjector {
 	 * the chip the PRE-ANSWER pass raised, and between issue #236 and issue #238 the question-pair
 	 * arm's subject was folded over a group the answer widens, so that record and the chip beside the
 	 * answer could name one substance two ways — {@code DrugSafetyValidator.SubstanceSubjects} and ADR
-	 * Decision 49 are where that residue and its measurement live. Issue #238 (ADR Decision 52) closed
+	 * Decision 49 are where that residue and its measurement live. Issue #238 (ADR Decision 53) closed
 	 * it: the arm's subject now comes from the naming group every question drug is already in, so the
 	 * answer cannot move it. Said here as well as in the paragraph this one is paired with
 	 * ({@link DrugSafetyValidator#addQuestionPairInteractions}), because the two came apart once already

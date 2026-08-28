@@ -3138,7 +3138,7 @@ Two further alternatives were weighed and are not this.
 
 **Status: Accepted** (August 2026) — implemented, issue [#236](https://github.com/openmrs/openmrs-module-chartsearchai/issues/236). Moves which ROW two chip arms name a substance by. Raises and suppresses no chip, changes no key, no wire field and no global property.
 
-**The cost this decision accepts was subsequently removed.** [Decision 53](#decision-53-the-answer-no-longer-decides-what-a-substance-is-called-so-the-two-safety-passes-stop-disagreeing), issue [#238](https://github.com/openmrs/openmrs-module-chartsearchai/issues/238), makes every arm's naming decision — including the question-pair arm's — invariant to the ANSWER. The "What it costs" section and the matching consequence bullet below are kept as the record of what was true between #236 and #238; they no longer describe the shipped behaviour. See Decision 52 for the current state and its own measurement.
+**The cost this decision accepts was subsequently removed.** [Decision 53](#decision-53-the-answer-no-longer-decides-what-a-substance-is-called-so-the-two-safety-passes-stop-disagreeing), issue [#238](https://github.com/openmrs/openmrs-module-chartsearchai/issues/238), makes every arm's naming decision — including the question-pair arm's — invariant to the ANSWER. The "What it costs" section and the matching consequence bullet below are kept as the record of what was true between #236 and #238; they no longer describe the shipped behaviour. See Decision 53 for the current state and its own measurement.
 
 ### Context
 

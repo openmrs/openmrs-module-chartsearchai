@@ -11,7 +11,6 @@ package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -196,17 +195,13 @@ public class OrderedSubjectRowTest {
 		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service).validate(
 				"Give amoxicillin 2000 mg twice daily.", "Is amoxicillin safe for her?", context);
 
-		SafetyWarning interaction = null;
-		SafetyWarning overdose = null;
-		for (SafetyWarning warning : warnings) {
-			if (SafetyWarning.TYPE_INTERACTION.equals(warning.getType())) {
-				interaction = warning;
-			} else if (SafetyWarning.TYPE_OVERDOSE.equals(warning.getType())) {
-				overdose = warning;
-			}
-		}
-		assertNotNull(interaction, "precondition: the interaction arm must chip, was: " + warnings);
-		assertNotNull(overdose, "precondition: the dose arm must warn, was: " + warnings);
+		// Through the shared selector rather than a local last-match-wins loop, which could not see a
+		// DUPLICATE warning of either type — the shape issues #162/#173/#206 keep removing, and the
+		// property this case is about. See DrugReferenceTestSupport.onlyOfType.
+		SafetyWarning interaction = DrugReferenceTestSupport.onlyOfType(warnings,
+				SafetyWarning.TYPE_INTERACTION);
+		SafetyWarning overdose = DrugReferenceTestSupport.onlyOfType(warnings,
+				SafetyWarning.TYPE_OVERDOSE);
 		assertEquals("Amoxicillin (suspension)", interaction.getDrug(),
 				"the interaction chip must name the charted row, was: " + warnings);
 		assertEquals(interaction.getDrug(), overdose.getDrug(),

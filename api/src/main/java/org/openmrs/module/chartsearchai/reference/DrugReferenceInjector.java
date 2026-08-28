@@ -2164,8 +2164,10 @@ public class DrugReferenceInjector {
 	 *         deliberately per issue #175). This used to cite
 	 *         {@code DrugSafetyValidator.SubstanceSubjects} as recording the same bound, and since issue
 	 *         #238 it no longer does: what a substance is CALLED is now folded over the question's and the
-	 *         orders' rows alone, so the two passes agree on the NAME while still differing on which rows
-	 *         are in play — which is the bound this residue is about.
+	 *         orders' rows alone, so the two passes no longer differ over the ANSWER when they name a
+	 *         substance, while still differing over which rows are in play — which is the bound this
+	 *         residue is about. "No longer differ over the answer" and not "agree": each pass reads the
+	 *         chart itself, which {@code DrugSafetyValidator.SubstanceSubjects} records.
 	 *
 	 * @param band the rendered row's own band for this patient, or null when it publishes none — in which
 	 *        case every sibling band differs, which is the starker form of the same defect: the record

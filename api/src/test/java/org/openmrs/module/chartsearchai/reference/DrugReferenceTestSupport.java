@@ -1001,12 +1001,19 @@ public final class DrugReferenceTestSupport {
 	 *
 	 *         <p>Selected by TYPE and deliberately not by drug name, which is what separates it from
 	 *         {@link #overdoseDetail} and {@link #overdoseCount} beside it: those answer "what did the chip
-	 *         for THIS drug say", and a case about which row a chip is NAMED after cannot use them —
-	 *         {@code overdoseDetail} returns {@code ""} for a chip named after another row, so a
-	 *         {@code contains} assertion over it passes vacuously on exactly the defect under test. Shared
-	 *         rather than written per file because the select-one-by-type loop was already inline in two
-	 *         other cases, and the strictness (exactly one, not merely non-null) does not propagate from a
-	 *         copy.
+	 *         for THIS drug say", and a case about which row a chip is NAMED after cannot use them.
+	 *         {@code overdoseDetail} returns {@code ""} for a chip named after another row, so a NEGATIVE
+	 *         {@code contains} assertion over it passes vacuously on exactly the defect under test — the
+	 *         positive form fails loudly, and saying it of both would license the wrong conclusion about
+	 *         which accessor is unsafe for what.
+	 *
+	 *         <p>Shared rather than written per file because three cases select one warning of a type:
+	 *         {@code PerRequestSubstanceSubjectTest}'s two dose cases, and the two that assert a dose
+	 *         warning and an interaction chip call one substance the same thing
+	 *         ({@code OrderedSubjectRowTest}, {@code DoseCeilingBySubstanceTest}). Those two wrote it as a
+	 *         last-match-wins loop plus {@code assertNotNull}, which cannot see a DUPLICATE warning of
+	 *         either type — the defect class issues #162/#173/#206 keep removing — so the strictness is
+	 *         what the shared form buys them, and it does not propagate from a copy.
 	 */
 	static SafetyWarning onlyOfType(List<SafetyWarning> warnings, String type) {
 		List<SafetyWarning> matched = new ArrayList<SafetyWarning>();

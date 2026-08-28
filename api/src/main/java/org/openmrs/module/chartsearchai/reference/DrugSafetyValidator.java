@@ -989,8 +989,9 @@ public class DrugSafetyValidator {
 	 * "the two passes cannot disagree", and that stronger claim was written here and is false.</b> Each pass
 	 * builds its own {@link PatientClinicalContext} from the patient — the injector at its own entry point,
 	 * the chips pass at {@link #validate(String, String, Patient, List)} — so {@code orderEntries} and the
-	 * recorded names are one function of TWO chart reads separated by the LLM call. A read that degrades
-	 * to empty ({@code PatientClinicalContextBuilder}'s catch on the active-order read, which unlike
+	 * recorded names are one function of TWO chart reads separated by the LLM call. A read that degrades to
+	 * an empty or — the catch wrapping the whole order loop — a silently PARTIAL set
+	 * ({@code PatientClinicalContextBuilder}'s catch on the active-order read, which unlike
 	 * {@code contraindicationRecordsRead} raises no flag) or an order lapsing between them moves this
 	 * answer again. Bounded rather than closed, and dominated: a divergent order read already changes
 	 * which chips exist at all, not merely what they are called. The cases below cannot see it — they hand

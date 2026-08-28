@@ -32,11 +32,25 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * additionally sees the rows the ANSWER puts in play, so the two could name one substance two ways in one
  * response — the injected record a clinician can cite saying one thing and the chip beside it another.
  *
- * <p>The fix is request INVARIANCE rather than a per-request carrier: of every input the naming decision
- * reads, only {@code answer} varies between the passes, so the subject is folded over the pass-invariant
- * rows — the question's and the patient's own order-resolved ones — while every arm still reaches its
- * rules and its bands over the whole group. Nothing is transported from one pass to the other; the two
- * compute the same function of the same inputs.
+ * <p>The fix is INVARIANCE rather than a per-request carrier: {@code answer} was the only input the
+ * naming decision read that varies WITHIN {@code validate}, so the subject is folded over the question's
+ * rows and the patient's own order-resolved ones while every arm still reaches its rules and its bands
+ * over the whole group. Nothing is transported from one pass to the other.
+ *
+ * <p><b>Which is not "the two passes cannot disagree", and these cases cannot see the difference.</b>
+ * Each pass builds its own {@code PatientClinicalContext} from the patient, so the order rows and the
+ * recorded names are a function of two chart reads separated by the LLM call;
+ * {@code DrugSafetyValidator.SubstanceSubjects}' javadoc states that residue. Every case here is handed
+ * ONE context object by {@link DrugReferenceTestSupport#contextNaming}, so what they assert is agreement
+ * given one read. {@code mappings} is likewise not varied by any case — it is null in the real pre-answer
+ * pass and real in the chips pass, and the claim that it reaches none of the three inputs this folds is
+ * reasoned from its readers rather than exercised here.
+ *
+ * <p>The one-substance premise is asserted by
+ * {@link #theFixturePosesTheDivergenceAndSurvivesTheLoadTimeRepair} and by that case alone: break the
+ * fixture's {@code substanceName} and the two headline cases below still pass, on a fixture where there is
+ * then no divergence to close. They are non-vacuous because that sibling case reddens, not because they
+ * check it themselves.
  *
  * <p><b>Both channels are asserted, and by the key rather than the prose.</b> The injected finding's
  * {@code resourceUuid} is {@link ChartSearchAiUtils#resourceKey} over the finding's type and drug

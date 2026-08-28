@@ -2797,8 +2797,10 @@ public class DrugSafetyValidator {
 	 * false ABOUT it, since the class sentence's subject moves from the prescription to whatever the
 	 * token names — pinned AS WRONG by {@code FoldedChipOnePartnerNameTest}'s
 	 * {@code aNamelessOrderCarryingTwoSubstancesCodesNamesTheClassSentenceAfterTheRulesDrug}, so a
-	 * change that closes it fails there rather than passing in silence; outcome 3 is
-	 * over-cautious on 72 above-floor rules of the shipped KB; a rule carrying only an ATC code keeps
+	 * change that closes it fails there rather than passing in silence; outcome 3 still refuses wherever the
+	 * ranking finds a TIE, which over the shipped KB is a token no substance claims as its own display
+	 * name ({@code penicillin g}, {@code antithrombin iii}) — issue #296 closed the rest of what ADR
+	 * Decision 39 recorded here; a rule carrying only an ATC code keeps
 	 * naming its partner by that code; and chips of DIFFERENT subjects can still name one order two ways,
 	 * which is outside this ticket.
 	 *

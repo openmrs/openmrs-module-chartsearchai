@@ -1790,6 +1790,14 @@ public class DrugReference {
 	 * the entry with the strongest claim on it, so that ONE definition orders the three kinds of claim
 	 * rather than each caller re-deciding what "the same drug" means.
 	 *
+	 * <p><b>Since issue #296 one caller asks it of a REFERENCE string</b> — a rule's own match token,
+	 * through {@link DrugReferenceService#uniqueStrongestClaimant}, to decide which of the substances a
+	 * token names it denotes. Only the top two ranks are in play there, because that caller gates on
+	 * {@link #isNamed} first, so {@link #matchesDrugName}'s recorded-name boundary rule and the
+	 * containment rung below it never decide anything. Recorded because it widens what this method is
+	 * asked about, and ADR Decision 51 carries the argument for accepting that over a second spelling
+	 * of the comparison.
+	 *
 	 * <p><b>Why a rank and not first-past-the-post (issue #176).</b> Resolution took the earliest
 	 * matching entry, and reference names nest: 206 of the shipped KB's 2283 entries did not resolve to
 	 * themselves, 54 of them landing on a different SUBSTANCE (measured 2026-08-08 through
@@ -1838,8 +1846,10 @@ public class DrugReference {
 	 *         identity; {@code DrugSafetyValidator.identifies} records what scanning them instead
 	 *         produced (a multi-word token naming every drug called after one of its words).
 	 *
-	 *         <p>Also the middle rank of {@link #nameMatchStrength}, where the second operand is a
-	 *         clinician-entered name rather than a reference one. It stays unfolded there for the reason
+	 *         <p>Also the middle rank of {@link #nameMatchStrength}, whose second operand is usually a
+	 *         clinician-entered name rather than a reference one — though since issue #296 it is a
+	 *         reference token at one caller, which reaches that rank through this very method. It stays
+	 *         unfolded there for the reason
 	 *         {@link #normalizeName} records: an accented chart string therefore reaches no exact rank
 	 *         and falls through to the folded matcher, which is exactly what it did before — the fold's
 	 *         own measurement says the reference side carries no combining mark, so the gap is on the

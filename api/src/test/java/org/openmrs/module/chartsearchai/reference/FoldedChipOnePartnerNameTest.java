@@ -281,7 +281,12 @@ public class FoldedChipOnePartnerNameTest {
 	 * printed under the other's name, and 25 of the shipped KB's 2093 rule tokens are named by more than
 	 * one substance ({@code hydrocortisone}, {@code trastuzumab}, {@code gabapentin} …).
 	 *
-	 * <p>So the guard asks {@code unambiguouslyNames}: one substance, not merely this one among several.
+	 * <p>So the guard asks {@code unambiguouslyNames}, and since issue #296 what it asks is which substance
+	 * the token claims most strongly rather than whether it claims only one. Here the ladder resolved the
+	 * {@code Omeprazole} row, whose claim on {@code esomeprazole} is an alias while the {@code Esomeprazole}
+	 * row's is its own display name — so the ladder's row loses and the displacement is refused, as it was
+	 * before that issue and for a reason that now distinguishes this pair from
+	 * {@link #aRuleTokenTheLaddersSubstanceOutranksIsHandedToBothSentences}, where the ladder's row wins.
 	 * This fixture reproduces the collision through the real parser — two rows publishing
 	 * {@code A02BC05} and sharing the {@code rxnorm_name} the token is, while remaining two substances.
 	 *

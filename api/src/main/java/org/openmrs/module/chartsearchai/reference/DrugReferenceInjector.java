@@ -1331,6 +1331,10 @@ public class DrugReferenceInjector {
 	 * @param orderEntries the reference entries the patient's active orders resolve to, which
 	 *        {@link #onePerPartner} keys a promoted partner on (issue #190 item 2); an empty list falls
 	 *        the grouping back to the label alone, as it was before that issue
+	 * @param findings this injection's pre-answer chips, from which {@link #reconciledPartnerName} takes
+	 *        the name a folded chip gave a partner (issue #297); null or empty leaves every note on
+	 *        {@code DrugSafetyValidator.partnerLabel}, which is what the {@code drugSafety} toggles being
+	 *        off produces and what every note-text case in the suite runs on
 	 */
 	static OrderedInteractions orderedInteractionNotes(DrugReference ref, PatientClinicalContext context,
 			List<DrugReference> orderEntries, List<SafetyWarning> findings) {
@@ -1896,6 +1900,11 @@ public class DrugReferenceInjector {
 	 * {@link #rowAttribution} and {@link #otherRowDosing} and nothing else: for a one-row substance whose
 	 * chart says nothing — every entry of every bundled dataset — this method's output is byte-identical
 	 * to what it produced before issues #237/#259.
+	 *
+	 * <p>{@code findings} is this injection's pre-answer chips, threaded through to
+	 * {@link #orderedInteractionNotes} so a promoted interaction note can name its partner the way the
+	 * folded chip about that same rule named it (issue #297). It is the caller's own list rather than a
+	 * second validation, which is the point — see {@link #reconciledPartnerName}.
 	 */
 	private static RenderedReference render(DrugReference ref, List<DrugReference> orderEntries,
 			ContraindicationReading reading, SubstanceRendering substance,

@@ -3659,6 +3659,11 @@ public class DrugSafetyValidator {
 	 *        applies to, and for a folded one {@link #foldedPartnerLabel}'s answer where it reconciled the
 	 *        two arms — where it refused, this is {@link #partnerLabel} again and the class sentence keeps
 	 *        the ladder's label, so such a detail still names one order two ways, deliberately (issue #292)
+	 * @param partnerNoteName what the injected {@code drug_reference} note must call that same order —
+	 *        {@link #foldedPartnerLabel}'s answer in the RECORD's vocabulary, null for a chip no fold
+	 *        reconciled, which leaves that note on {@link #partnerLabel} exactly as before (issue #297).
+	 *        Carried on the warning rather than re-derived by the injector: see
+	 *        {@link SafetyWarning#reconciledPartnerNoteName}
 	 * @param alsoSameClass the class arm's own sentence about that order ({@link #classRelationships}),
 	 *        or null when the class arm says nothing about this partner — in which case the detail is
 	 *        byte-identical to what it has always been, so no single-arm chip changes
@@ -6000,8 +6005,10 @@ public class DrugSafetyValidator {
 	 * that shared-code pair AND both substances prescribed AND a rated rule, and correlating on the
 	 * partner's SUBSTANCE instead is a change to issue #88's fold rather than to this leg.
 	 *
-	 * <p><b>Since issue #292 that fold depends on this paragraph</b>, so closing the bound here is no
-	 * longer a local change: {@link #foldedPartnerLabel}'s second refusal cites exactly this reasoning
+	 * <p><b>Since issue #292 that fold depends on this paragraph</b>, and since issue #297 so does the
+	 * injected {@code drug_reference} note, which takes the fold's answer in its own vocabulary — so
+	 * closing the bound here is no longer a local change, and it now reaches PROMPT text:
+	 * {@link #foldedPartnerLabel}'s second refusal cites exactly this reasoning
 	 * for why it will not let the class arm's label displace a rule's own token, and
 	 * {@code FoldedChipOnePartnerNameTest.aRuleAboutAnotherSubstanceSharingTheCodeKeepsItsOwnToken}
 	 * pins the behaviour that follows from it. Read that method before narrowing this.

@@ -86,22 +86,7 @@ public class SafetyWarning {
 	}
 
 	public SafetyWarning(String type, String drug, String detail, String severity) {
-		this(type, drug, detail, severity, false);
-	}
-
-	/**
-	 * Package-private, matching {@link #carriesUnratedRelationship()}: a caller may set only what it
-	 * may read back. The three- and four-argument forms above are public because the wire-facing
-	 * shape is, and this flag is deliberately not part of it — public here would offer an outside
-	 * caller a way to govern the injected record's strength with no way to observe the assertion from
-	 * where it was made. The one caller is {@code DrugSafetyValidator.interactionWarning}.
-	 *
-	 * @param unratedRelationship whether this warning also asserts a relationship the source rates
-	 *            nothing for — see {@link #carriesUnratedRelationship()}
-	 */
-	SafetyWarning(String type, String drug, String detail, String severity,
-			boolean unratedRelationship) {
-		this(type, drug, detail, severity, unratedRelationship, false, null, null);
+		this(type, drug, detail, severity, false, false, null, null);
 	}
 
 	/**
@@ -148,10 +133,18 @@ public class SafetyWarning {
 	 * arm folds, so only its chips have a reconciled name at all, and a constructor offering the pair
 	 * beside {@code uncorroboratedChartMatch} would offer a caller a combination that has no meaning.
 	 *
-	 * <p>Package-private, matching the accessor: a caller may set only what it may read back. The one
-	 * caller is {@code DrugSafetyValidator.interactionWarning}, which is itself the one place either
-	 * interaction arm builds a chip.
+	 * <p>Package-private, matching the accessors: a caller may set only what it may read back. The
+	 * three- and four-argument constructors above are public because the wire-facing shape is, and
+	 * neither of these two facts is part of it — public here would offer an outside caller a way to
+	 * govern the injected record's strength, and the name of a partner in it, with no way to observe
+	 * either assertion from where it was made. The one caller is
+	 * {@code DrugSafetyValidator.interactionWarning}, which is itself the one place either interaction
+	 * arm builds a chip. It replaced a five-argument package-private CONSTRUCTOR that carried
+	 * {@code unratedRelationship} alone; that constructor is gone rather than left unreachable beside
+	 * this, because a second way in is a second way for the two facts to be set apart.
 	 *
+	 * @param unratedRelationship whether this warning also asserts a relationship the source rates
+	 *        nothing for — see {@link #carriesUnratedRelationship()}
 	 * @param reconciledRule the rule this chip's detail was folded on, or null when nothing folded
 	 * @param reconciledNoteName see {@link #reconciledPartnerNoteName} — null when the fold refused, so
 	 *        that a refusal and an absent fold are one answer here, as they are for the chip

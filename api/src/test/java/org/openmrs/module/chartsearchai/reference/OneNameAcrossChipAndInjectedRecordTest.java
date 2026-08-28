@@ -167,6 +167,90 @@ public class OneNameAcrossChipAndInjectedRecordTest {
 	}
 
 	/**
+	 * The rung where the ladder found NO name at all — a nameless order the class arm can only call by
+	 * its codes — hands the rule's own token to both chip sentences, and the note keeps that same token.
+	 *
+	 * <p>Behaviour-neutral against the state before issue #297, which is why it is pinned: the fold's
+	 * answer for this rung is {@code partnerLabel} in both vocabularies, so nothing moves. What the case
+	 * guards is the direction a later change would move it in — measured by mutation, handing this rung's
+	 * note {@code OrderPartner.label} instead leaves all 1515 api tests green while putting the
+	 * {@code [ATC …]} stand-in into the record's prose, and thence into the prompt as citable text. A code
+	 * list is the ABSENCE of a name (issue #290) and ADR Decision 38 already measured that direction on
+	 * the chip.
+	 *
+	 * <p>The arrangement is {@code FoldedChipOnePartnerNameTest}'s own for that rung: the curated seed
+	 * carries none of the order's three codes, and the order itself carries no readable name.
+	 */
+	@Test
+	public void aNamelessOrdersNoteKeepsTheRulesTokenAndNeverItsCodeList() {
+		Set<String> codes = DrugReferenceTestSupport.set("A01AD05", "B01AC06", "N02BA01");
+		PatientChart chart = DrugReferenceTestSupport
+				.injectorWithSafety(DrugReferenceTestSupport.curatedService())
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+					DrugReferenceTestSupport.ctx(60, null, null, codes, null, null,
+						Arrays.asList(PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly(
+							"order-nameless", "[ATC A01AD05, B01AC06, N02BA01]", codes))),
+					QUESTION);
+
+		String finding = DrugReferenceTestSupport.safetyFindingIn(chart).getText();
+		assertTrue(finding.contains("interacts with active order aspirin")
+				&& finding.contains("cross-reactivity group (NSAID) as active order aspirin"),
+			"precondition: the ladder found no name, so both sentences take the rule's token, was: "
+					+ finding);
+
+		String record = recordFor(chart, "Ibuprofen");
+		assertTrue(record.contains("aspirin ("),
+			"the note keeps that same token, was: " + record);
+		assertFalse(record.contains("[ATC"),
+			"a code list is the absence of a name and must never enter the record's prose, was: "
+					+ record);
+	}
+
+	/**
+	 * The ORDER rung reconciles, and the note still keeps the rule's own token — the one rung where the
+	 * two surfaces are deliberately NOT handed the same string, pinned so the decision is visible rather
+	 * than latent.
+	 *
+	 * <p>The record names a partner by the DATASET's name for it, and this rung was reached precisely
+	 * because the dataset could not name the order's codes, so it has none to offer. What
+	 * {@code namesNamingOrder} has just proved is that the rule's token names that display, so the note's
+	 * name is a WORD of the chip's rather than a second name — and handing the note the prescription
+	 * display would put a strength and a formulation the knowledge base knows nothing about into a list
+	 * of that knowledge base's own partners.
+	 *
+	 * <p>The arrangement is {@code FoldedChipOnePartnerNameTest}'s own for that rung: one order carrying
+	 * a code the fixture covers ({@code M01AE02}, resolving {@code Naproxen}) and one it cannot name
+	 * ({@code A02BC05}), so the partner is keyed on that substance and renamed after this order.
+	 */
+	@Test
+	public void anOrderRungFoldStillLeavesTheNoteOnTheRulesOwnToken() throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
+			DrugReferenceTestSupport.fixtureEntries(
+				"chartsearchai-test/drug-reference-fold-order-renamed-partner.json"));
+		Set<String> codes = DrugReferenceTestSupport.set("M01AE02", "A02BC05");
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service).injectRecords(
+			DrugReferenceTestSupport.oneRecordChart(),
+			DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set("naproxen 500mg"), codes, null, null,
+				Arrays.asList(DrugReferenceTestSupport.activeOrder("order-naproxen", "Naproxen 500mg",
+					DrugReferenceTestSupport.set("naproxen 500mg"), codes))),
+			QUESTION);
+
+		String finding = DrugReferenceTestSupport.safetyFindingIn(chart).getText();
+		assertTrue(finding.contains("interacts with active order Naproxen 500mg")
+				&& finding.contains("is in the same"),
+			"precondition: the ORDER rung must have reconciled a FOLDED chip, was: " + finding);
+
+		String record = recordFor(chart, "Ibuprofen");
+		assertTrue(record.contains("naproxen ("),
+			"the note keeps the rule's own token: the dataset has no name of its own for this partner,"
+					+ " and the token names the very display the chip prints, was: " + record);
+		assertFalse(record.contains("Naproxen 500mg"),
+			"a prescription display must not enter a list of the knowledge base's own partners, was: "
+					+ record);
+	}
+
+	/**
 	 * The residue, pinned so it is visible rather than latent: on a context carrying NO per-order
 	 * structure — the flattened shape of issue #118, which {@code PatientClinicalContextBuilder} does not
 	 * build for a real patient — the note keeps the rule's own token however the chip came out.

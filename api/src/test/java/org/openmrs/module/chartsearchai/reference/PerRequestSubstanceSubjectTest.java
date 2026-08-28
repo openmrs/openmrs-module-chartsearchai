@@ -82,21 +82,6 @@ public class PerRequestSubstanceSubjectTest {
 		return ChartSearchAiUtils.resourceKey(warning.getType(), warning.getDrug());
 	}
 
-	/** @return the one overdose chip {@code warnings} carries, failing with the whole set when there is
-	 *          not exactly one — selected by TYPE rather than by drug name, so a case about which row the
-	 *          chip is NAMED after cannot be satisfied by finding no chip at all. */
-	private static SafetyWarning onlyOverdose(List<SafetyWarning> warnings) {
-		List<SafetyWarning> doses = new ArrayList<SafetyWarning>();
-		for (SafetyWarning warning : warnings) {
-			if (SafetyWarning.TYPE_OVERDOSE.equals(warning.getType())) {
-				doses.add(warning);
-			}
-		}
-		assertEquals(1, doses.size(), "expected exactly one overdose chip, got: "
-				+ DrugReferenceTestSupport.details(warnings));
-		return doses.get(0);
-	}
-
 	@Test
 	public void theFixturePosesTheDivergenceAndSurvivesTheLoadTimeRepair() throws Exception {
 		List<DrugReference> entries = DrugReferenceTestSupport.fixtureEntries(FIXTURE);
@@ -254,8 +239,9 @@ public class PerRequestSubstanceSubjectTest {
 		DrugReferenceService service = service();
 		PatientClinicalContext context = onWarfarin(service);
 
-		SafetyWarning dose = onlyOverdose(DrugReferenceTestSupport.validator(service)
-				.validate("Estrone sulfate 4000 mg daily is fine.", QUESTION, context));
+		SafetyWarning dose = DrugReferenceTestSupport.onlyOfType(DrugReferenceTestSupport.validator(service)
+				.validate("Estrone sulfate 4000 mg daily is fine.", QUESTION, context),
+				SafetyWarning.TYPE_OVERDOSE);
 
 		assertEquals(QUALIFIED, dose.getDrug(),
 				"the dose chip names the substance the way every other arm in this response does: "
@@ -278,8 +264,9 @@ public class PerRequestSubstanceSubjectTest {
 		DrugReferenceService service = service();
 		PatientClinicalContext context = onWarfarin(service);
 
-		SafetyWarning dose = onlyOverdose(DrugReferenceTestSupport.validator(service)
-				.validate("Estrone sulfate 2500 mg daily is fine.", QUESTION, context));
+		SafetyWarning dose = DrugReferenceTestSupport.onlyOfType(DrugReferenceTestSupport.validator(service)
+				.validate("Estrone sulfate 2500 mg daily is fine.", QUESTION, context),
+				SafetyWarning.TYPE_OVERDOSE);
 
 		assertEquals(QUALIFIED, dose.getDrug(),
 				"the chip is still named after the row the response names the substance by: "

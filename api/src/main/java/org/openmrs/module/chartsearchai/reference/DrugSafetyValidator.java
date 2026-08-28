@@ -983,9 +983,18 @@ public class DrugSafetyValidator {
 	 *
 	 * <p>Closed by INVARIANCE and not by a carrier: the fold reads {@code namingRows} — the rows the
 	 * question resolved and the rows the patient's own orders resolved, and neither the answer's nor the
-	 * cited records' — while every arm still reaches its rules and its bands over the whole group. Both
-	 * passes compute that set from the same two inputs, so they cannot disagree, and nothing is
-	 * transported from one to the other. Nothing had to reach into the injector or
+	 * cited records' — while every arm still reaches its rules and its bands over the whole group. So
+	 * {@code answer} is no longer read by the naming decision, and it was the only input to it that
+	 * varies WITHIN {@code validate}; nothing is transported from one pass to the other. <b>Not the same as
+	 * "the two passes cannot disagree", and that stronger claim was written here and is false.</b> Each pass
+	 * builds its own {@link PatientClinicalContext} from the patient — the injector at its own entry point,
+	 * the chips pass at {@link #validate(String, String, Patient, List)} — so {@code orderEntries} and the
+	 * recorded names are one function of TWO chart reads separated by the LLM call. A read that degrades
+	 * to empty ({@code PatientClinicalContextBuilder}'s catch on the active-order read, which unlike
+	 * {@code contraindicationRecordsRead} raises no flag) or an order lapsing between them moves this
+	 * answer again. Bounded rather than closed, and dominated: a divergent order read already changes
+	 * which chips exist at all, not merely what they are called. The cases below cannot see it — they hand
+	 * ONE context to both passes. Nothing had to reach into the injector or
 	 * {@code LlmInferenceService} for it, which is where this javadoc used to say the fix belonged;
 	 * request-invariance is reachable here because {@code answer} was the only pass-varying input the
 	 * naming decision read. ({@code mappings} varies too — null in the pre-answer pass — but its only
@@ -1016,10 +1025,16 @@ public class DrugSafetyValidator {
 	 *
 	 * <p>Still narrow to reach, and still reasoned rather than counted: it needs a family whose rows
 	 * publish DIFFERENT alias sets, so that a question and an answer using different aliases resolve
-	 * different rows ({@code Estrone sulfate (topical)} publishes {@code estrone} and nothing spelled
-	 * {@code estrone sulfate}; see {@link DrugReferenceService#findImpliedByQuery}). No live instance was
-	 * ever observed, and no count over the shipped KB is published here — the property is that the two
-	 * passes agree, which does not depend on how often they would otherwise have differed.
+	 * different rows. This used to name {@code Estrone sulfate (topical)} as such a family, on the
+	 * strength of its publishing {@code estrone}; measured through the real
+	 * {@code DdiDrugReferenceSource.parse} of the shipped knowledge base, that family does NOT pose it —
+	 * its unqualified sibling publishes {@code estrone} too, because the {@code ddinter} parser builds
+	 * both rows' aliases from one {@code rxnorm_name}. So the shape wants a curated
+	 * {@code sourceFormat=json} dataset, which is what {@code PerRequestSubstanceSubjectTest}'s fixture
+	 * is, or a {@code ddinter} family whose {@code rxnorm_name} is not word-bounded inside the display
+	 * name (the {@code Omeprazole}/{@code esomeprazole} shape). No live instance was ever observed, and
+	 * no count over the shipped KB is published here — the property is that the two passes agree, which
+	 * does not depend on how often they would otherwise have differed.
 	 *
 	 * <p>Memoised for the pass and not beyond it, which #238 does not change: the two passes now compute
 	 * the same ANSWER, but they compute it from their own resolution of the rows and the recorded names,
@@ -2325,8 +2340,9 @@ public class DrugSafetyValidator {
 	 *
 	 *         <p>Kept as a named method over the shared fold rather than inlined at its call sites,
 	 *         because "what a chip calls its subject" is the decision issue #162 made, #174 site 3
-	 *         extended to the screening arm, #194 anchored on the chart and #206 gave one answer per
-	 *         substance per validate PASS — the name is where that decision is DEFINED. Where a chip arm looks
+	 *         extended to the screening arm, #194 anchored on the chart, #206 gave one answer per
+	 *         substance per validate pass and #238 made that answer per REQUEST (see
+	 *         {@link SubstanceSubjects}) — the name is where that decision is DEFINED. Where a chip arm looks
 	 *         it UP is {@link SubstanceSubjects}, and a new chip-subject site belongs there rather than
 	 *         here: calling this directly is how an arm ends up folding a narrower row group than its
 	 *         siblings, which is exactly what #206 was.

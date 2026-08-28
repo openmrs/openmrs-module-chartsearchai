@@ -66,6 +66,12 @@ public class UnmappedOrderAdministrationSiteTest {
 
 	private static final String GRISEOFULVIN_QUESTION = "Is it safe to give griseofulvin?";
 
+	/** The three sites {@code SITE_TERMS} deliberately gives no recorded term — mouth, gut and
+	 *  anorectal, because {@code Oral} and {@code Rectal administration} serve locally-acting and
+	 *  systemic preparations alike. */
+	private static final Set<String> TERMLESS_SITES = DrugReferenceTestSupport.set("mouth", "gut",
+			"anorectal");
+
 	/** The curated sentence the issue #88 fold appends to the rated aspirin/ketoprofen rule. */
 	private static final String NSAID_GROUP_SENTENCE = "Acetylsalicylic acid (aspirin) is in the same"
 			+ " cross-reactivity group (NSAID) as active order Ketoprofen — possible additive or"
@@ -73,6 +79,10 @@ public class UnmappedOrderAdministrationSiteTest {
 
 	/** The ticket's own order name, verbatim. */
 	private static final String CREAM = "Hydrocortisone cream 1%";
+
+	/** A recorded route that names the skin and nothing else. NOT {@code Topical}: see
+	 *  {@link #aTermNamingMoreThanOneSiteNamesNone}, which is why that word is not a term. */
+	private static final String CUTANEOUS = "Cutaneous administration";
 
 	/** The chip the ticket reports as wrong: a topical presentation named in a SYSTEMIC corticosteroid
 	 *  class. Worded exactly as the arm produces it today for an order recording no administration. */
@@ -87,7 +97,7 @@ public class UnmappedOrderAdministrationSiteTest {
 		// under D07AA02/D07XA01, which meet none of dexamethasone's D subgroups (D07AB, D07XB, D10AA),
 		// so the honest answer is the one the MAPPED order already gives: nothing.
 		assertEquals(Collections.<String> emptyList(),
-				DrugReferenceTestSupport.details(chips(DEXAMETHASONE_QUESTION, cream("Topical"))));
+				DrugReferenceTestSupport.details(chips(DEXAMETHASONE_QUESTION, cream(CUTANEOUS))));
 	}
 
 	@Test
@@ -145,15 +155,88 @@ public class UnmappedOrderAdministrationSiteTest {
 		// there, which is why recordedSites strips hyphens before matching. Both, or the guard pins only
 		// the half that never needed one.
 		//
-		// The last two are ordinary systemic routes and share no letters with any term; they are here
-		// as the commonest real recorded values (32 of the 3.7.1 demo's 46 active orders say "Oral
-		// administration"), not as boundary cases, and nothing here claims they are.
+		// The middle two are ordinary systemic routes; they are here as the commonest real recorded
+		// values (32 of the 3.7.1 demo's 46 active orders say "Oral administration"), and they reach
+		// ROUTES_OF_ENTRY rather than merely failing to match a term.
+		//
+		// The last is why that refusal has to exist at all rather than being an absence: "Transdermal
+		// skin patch" CONTAINS the term "skin", so with no refusal it read a systemic presentation as a
+		// skin one and silenced a real chip. What the refusal still does not reach is the spaced
+		// spelling "sub cutaneous", stated on ROUTES_OF_ENTRY rather than claimed away.
 		for (String route : Arrays.asList("Subcutaneous administration", "Sub-cutaneous administration",
-				"Transdermal administration", "Oral administration")) {
+				"Transdermal administration", "Oral administration", "Transdermal skin patch")) {
 			assertEquals(Collections.singletonList(SYSTEMIC_CHIP),
 					DrugReferenceTestSupport.details(chips(DEXAMETHASONE_QUESTION, cream(route))),
 					route + " names no site this module can attribute");
 		}
+	}
+
+	@Test
+	public void aTermNamingMoreThanOneSiteNamesNone() throws IOException {
+		// Why "topical" is not a term, and it is the same rule as the form words below rather than a
+		// separate exception. ATC uses the word for the anorectum as well as the skin — this repo's own
+		// LOCALLY_APPLIED_ATC_GROUPS javadoc quotes C05A "Antihemorrhoidals for topical use" — so read
+		// as the skin it SILENCES a claim, which is the direction this rule must not fail in.
+		//
+		// The order is an EYE preparation recorded with the route "Topical". Read as the skin its
+		// ophthalmic codes are dropped and the true S01BA chip disappears; naming no site, the arm keeps
+		// the answer it had. Both halves asserted, or the second alone would also pass on an arm that
+		// never ran.
+		Set<String> names = DrugReferenceTestSupport.set("Hydrocortisone eye ointment");
+		assertEquals(
+				Collections.singletonList("Dexamethasone is in the same ATC class (S01BA) as active"
+						+ " order Hydrocortisone — possible duplicate therapy"),
+				DrugReferenceTestSupport.details(chips(DEXAMETHASONE_QUESTION,
+						order("Hydrocortisone eye ointment", "Bilateral eye administration"))),
+				"recorded at the eye, the ophthalmic class is what the two share");
+		assertFalse(names.isEmpty());
+
+		assertEquals(Collections.singletonList(SYSTEMIC_CHIP), DrugReferenceTestSupport
+				.details(chips(DEXAMETHASONE_QUESTION,
+						order("Hydrocortisone eye ointment", "Topical"))),
+				"and recorded only as topical, the arm keeps the answer it had rather than guessing"
+						+ " the skin");
+	}
+
+	@Test
+	public void anotherOrdersRouteDoesNotDecideThisSubstancesClassification() throws IOException {
+		// The scope conjunct in codesForThisSubstancesPresentations: the terms are gathered from the
+		// orders that name THIS substance, not from every unmapped order. Without it the oral route of
+		// an unrelated second prescription declines the narrowing for the first, and the chip this issue
+		// removes comes back.
+		Set<String> creamNames = DrugReferenceTestSupport.set(CREAM);
+		Set<String> otherNames = DrugReferenceTestSupport.set("Omeprazole 20mg capsule");
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set(CREAM, "Omeprazole 20mg capsule"), null, null, null,
+				Arrays.asList(
+						DrugReferenceTestSupport.activeOrder("order-234-cream", CREAM, creamNames, null,
+								DrugReferenceTestSupport.set(CUTANEOUS)),
+						DrugReferenceTestSupport.activeOrder("order-234-other",
+								"Omeprazole 20mg capsule", otherNames, null,
+								DrugReferenceTestSupport.set("Oral administration"))));
+
+		assertEquals(Collections.<String> emptyList(),
+				DrugReferenceTestSupport.details(chips(DEXAMETHASONE_QUESTION, context)),
+				"the omeprazole order's route says nothing about the hydrocortisone one");
+	}
+
+	@Test
+	public void aSiteWhoseOnlyCodeThereIsAnS03OneStillClaimsIt() {
+		// S03 "Ophthalmological and otological preparations" is the one group two sites share, and it is
+		// what the first draft of the table dropped. The partition guard below cannot see a HALF-drop —
+		// it only asks that SOME site claim each code — so the dual membership is pinned here, on both
+		// sides, over the shipped knowledge base's own neomycin row.
+		DrugReference neomycin = DrugReferenceTestSupport.row(DrugReferenceTestSupport.shippedEntries(),
+				"Neomycin");
+		assertTrue(neomycin.normalizedAtcCodes().contains("S03AA01"),
+				"the premise: the shipped row files an S03 code, was: " + neomycin.normalizedAtcCodes());
+
+		assertTrue(DrugReference.codesAtSites(neomycin.normalizedAtcCodes(),
+				Collections.singleton(DrugReference.SITE_EYE)).contains("S03AA01"),
+				"S03 is an eye group");
+		assertTrue(DrugReference.codesAtSites(neomycin.normalizedAtcCodes(),
+				Collections.singleton(DrugReference.SITE_EAR)).contains("S03AA01"),
+				"and an ear one");
 	}
 
 	@Test
@@ -202,7 +285,7 @@ public class UnmappedOrderAdministrationSiteTest {
 						+ withNothingRecorded.get(0));
 
 		List<String> recordedAtTheSkin = DrugReferenceTestSupport
-				.details(shippedChips(ASPIRIN_QUESTION, ketoprofen("Topical")));
+				.details(shippedChips(ASPIRIN_QUESTION, ketoprofen(CUTANEOUS)));
 		assertEquals(1, recordedAtTheSkin.size(), "the rated rule must still chip, was: "
 				+ recordedAtTheSkin);
 		assertFalse(recordedAtTheSkin.get(0).contains("cross-reactivity group"),
@@ -228,9 +311,9 @@ public class UnmappedOrderAdministrationSiteTest {
 		// two share a subgroup that IS the skin — and that chip reads the same before and after.
 		assertEquals(DrugReferenceTestSupport.details(shippedChips(DICLOFENAC_QUESTION, ketoprofen())),
 				DrugReferenceTestSupport
-						.details(shippedChips(DICLOFENAC_QUESTION, ketoprofen("Topical"))));
+						.details(shippedChips(DICLOFENAC_QUESTION, ketoprofen(CUTANEOUS))));
 		assertTrue(DrugReferenceTestSupport.details(shippedChips(DICLOFENAC_QUESTION,
-				ketoprofen("Topical"))).get(0).endsWith("is in the same ATC class (M02AA) as active"
+				ketoprofen(CUTANEOUS))).get(0).endsWith("is in the same ATC class (M02AA) as active"
 						+ " order Ketoprofen — possible duplicate therapy"),
 				"…and it is the class arm that is speaking, not only the rule arm");
 	}
@@ -269,7 +352,7 @@ public class UnmappedOrderAdministrationSiteTest {
 				DrugReferenceTestSupport.set(CREAM, "Hydrocortisone eye preparation"), null, null, null,
 				Arrays.asList(
 						DrugReferenceTestSupport.activeOrder("order-234-cream", CREAM, creamNames, null,
-								DrugReferenceTestSupport.set("Topical")),
+								DrugReferenceTestSupport.set(CUTANEOUS)),
 						DrugReferenceTestSupport.activeOrder("order-234-drop",
 								"Hydrocortisone eye preparation", dropNames, null,
 								DrugReferenceTestSupport.set("Bilateral eye administration"))));
@@ -298,7 +381,7 @@ public class UnmappedOrderAdministrationSiteTest {
 				"the control: unnarrowed, the systemic antifungal class is what the two share");
 
 		assertEquals(Collections.<String> emptyList(), DrugReferenceTestSupport
-				.details(shippedChips(GRISEOFULVIN_QUESTION, terbinafine("Topical"))));
+				.details(shippedChips(GRISEOFULVIN_QUESTION, terbinafine(CUTANEOUS))));
 	}
 
 	@Test
@@ -346,6 +429,16 @@ public class UnmappedOrderAdministrationSiteTest {
 		}
 		assertEquals(Collections.<String> emptyList(), unaccounted,
 				"every locally applied code must fall under a site or under a group naming none");
+
+		// The escape hatch has to be pinned too, or widening it is how a later unaccounted group gets
+		// "fixed": this guard SKIPS a code namesNoAdministrationSite admits, so that predicate must
+		// stay false of every group a site does claim.
+		for (String code : DrugReferenceTestSupport.set("A01AC03", "C05AA01", "D07AA02", "G01AF01",
+				"M02AA10", "P03AB02", "R01AA08", "R02AD02", "R03AC08", "S01BA02", "S02AA07",
+				"S03AA01")) {
+			assertFalse(DrugReference.namesNoAdministrationSite(code),
+					code + " is claimed by a site and must not be excused as naming none");
+		}
 	}
 
 	@Test
@@ -360,6 +453,11 @@ public class UnmappedOrderAdministrationSiteTest {
 		}
 		for (String site : DrugReference.administrationSites()) {
 			if (DrugReference.termsForSite(site).isEmpty()) {
+				// Emptying a term list is the drift this case is written against, so the skip states
+				// which sites may take it rather than trusting the emptiness itself.
+				assertTrue(TERMLESS_SITES.contains(site),
+						site + " has no recorded term that can select it, and is not one of the three"
+								+ " sites whose terms are deliberately absent");
 				continue;
 			}
 			assertFalse(DrugReference.codesAtSites(shipped, Collections.singleton(site)).isEmpty(),
@@ -386,7 +484,7 @@ public class UnmappedOrderAdministrationSiteTest {
 		Set<String> tabletNames = DrugReferenceTestSupport.set("Hydrocortisone 20mg tablet");
 		PatientClinicalContext.ActiveDrugOrder cream = DrugReferenceTestSupport
 				.activeOrder("order-234-cream", CREAM, creamNames, null,
-						DrugReferenceTestSupport.set("Topical"));
+						DrugReferenceTestSupport.set(CUTANEOUS));
 		PatientClinicalContext.ActiveDrugOrder tablet = DrugReferenceTestSupport
 				.activeOrder("order-234-tablet", "Hydrocortisone 20mg tablet", tabletNames, null,
 						DrugReferenceTestSupport.set("Oral administration"));

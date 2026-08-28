@@ -1000,6 +1000,37 @@ public class DrugReference {
 			.unmodifiableList(Arrays.asList("B02BC", "B05C", "C05B"));
 
 	/**
+	 * Recorded words that name a route of ENTRY rather than a site of action, and so refuse the site
+	 * walk outright — whatever site word the same recorded string may also contain.
+	 *
+	 * <p>The criterion is {@link #SITE_TERMS}' own, applied to the other half of the vocabulary: a term
+	 * names a site when it says where the drug ACTS, and it names a route of entry when it says how the
+	 * drug gets in. {@code transdermal}, {@code sublingual} and {@code buccal} name a surface and
+	 * deliver through it; {@code subcutaneous}, {@code intradermal}, {@code intravenous},
+	 * {@code intramuscular}, {@code intraosseous}, {@code intrathecal}, {@code epidural} and
+	 * {@code parenteral} name a compartment; {@code oral}, {@code rectal} and {@code nasogastric} name
+	 * a way in that serves locally-acting and systemic preparations alike, which is the same reason
+	 * mouth, gut and anorectal have no term in {@link #SITE_TERMS}.
+	 *
+	 * <p><b>Why a refusal and not merely an absence.</b> Absence is not enough where a systemic route's
+	 * recorded name CONTAINS a site word: measured, {@code "transdermal skin patch"} matched
+	 * {@code skin} and narrowed a systemic presentation to the skin, silencing a real chip. Refusing
+	 * first makes the site walk unreachable for such a string. Refusing narrows nothing, which is the
+	 * fail-safe direction, so a term wrongly listed here costs a correction and never a false silence.
+	 *
+	 * <p><b>Two residues, named rather than claimed away.</b> This is word matching after the hyphen
+	 * strip, so it reaches {@code sub-cutaneous} but not {@code sub cutaneous} spaced — that spelling
+	 * still matches {@code cutaneous} and narrows to the skin. Closing it would need spaces removed
+	 * too, which costs {@code eye drops} its match. And a recorded string that names a route of entry
+	 * BESIDE a site refuses on the first: {@code "Oral inhalation solution"} is a real dose form and it
+	 * narrows nothing, though {@code inhalation} names the airway. Both cost a narrowing rather than
+	 * causing a false one, which is why neither is closed here.
+	 */
+	private static final List<String> ROUTES_OF_ENTRY = unmodifiable("transdermal", "sublingual",
+			"buccal", "subcutaneous", "intradermal", "intravenous", "intramuscular", "intraosseous",
+			"intrathecal", "epidural", "parenteral", "oral", "rectal", "nasogastric");
+
+	/**
 	 * The recorded route and dose-form words that NAME each site — matched against what the chart
 	 * records for an order ({@code PatientClinicalContext.ActiveDrugOrder.getAdministrationTerms()}),
 	 * never against the drug's name.
@@ -1044,7 +1075,7 @@ public class DrugReference {
 		ATC_GROUPS_BY_SITE = Collections.unmodifiableMap(groups);
 
 		Map<String, List<String>> terms = new LinkedHashMap<String, List<String>>();
-		terms.put(SITE_SKIN, unmodifiable("topical", "cutaneous", "skin"));
+		terms.put(SITE_SKIN, unmodifiable("cutaneous", "skin"));
 		terms.put(SITE_EYE, unmodifiable("eye", "ophthalmic", "ocular", "intraocular", "conjunctival",
 				"subconjunctival"));
 		terms.put(SITE_EAR, unmodifiable("ear", "otic", "aural", "auricular"));
@@ -1095,11 +1126,10 @@ public class DrugReference {
 		if (codes == null || codes.isEmpty() || recordedTerms == null || recordedTerms.isEmpty()) {
 			return codes;
 		}
-		Set<String> sites = recordedSites(recordedTerms);
-		if (sites.isEmpty()) {
-			return codes;
-		}
-		Set<String> kept = codesAtSites(codes, sites);
+		// No emptiness guard on the sites: codesAtSites keeps nothing for an empty site set, and the
+		// tail below already returns codes for that. One decline path rather than two saying the same
+		// thing.
+		Set<String> kept = codesAtSites(codes, recordedSites(recordedTerms));
 		return kept.isEmpty() ? codes : kept;
 	}
 
@@ -1124,6 +1154,13 @@ public class DrugReference {
 				matchable.add(recorded.replace("-", ""));
 			}
 		}
+		for (String recorded : matchable) {
+			for (String entry : ROUTES_OF_ENTRY) {
+				if (containsWord(recorded, entry)) {
+					return Collections.emptySet();
+				}
+			}
+		}
 		Set<String> sites = new LinkedHashSet<String>();
 		for (Map.Entry<String, List<String>> site : SITE_TERMS.entrySet()) {
 			for (String term : site.getValue()) {
@@ -1146,7 +1183,8 @@ public class DrugReference {
 	 *         place the presentation at all.
 	 */
 	static boolean namesAnAdministrationSite(Set<String> recordedTerms) {
-		return recordedTerms != null && !recordedTerms.isEmpty() && !recordedSites(recordedTerms).isEmpty();
+		// No emptiness test: recordedSites of an empty set is empty, which the last conjunct catches.
+		return recordedTerms != null && !recordedSites(recordedTerms).isEmpty();
 	}
 
 	/**

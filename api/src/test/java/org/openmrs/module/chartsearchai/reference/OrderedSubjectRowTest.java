@@ -299,4 +299,59 @@ public class OrderedSubjectRowTest {
 				"and must not assert a product the chart does not record, was: "
 						+ warnings.get(0).getDetail());
 	}
+
+	/** The marker that tells the question-PAIR chip from every other interaction chip: it is the only
+	 *  one whose sentence is a claim about the question rather than about the chart. */
+	private static final String PAIR_MARKER = ", also named in the question";
+
+	@Test
+	public void theQuestionPairChipNamesTheSubstanceTheOtherArmsName() throws Exception {
+		// Issue #236. The same invariant as everyArmOfOneResponseNamesOneSubstanceOneWay above, extended
+		// to the FIFTH arm — the question-pair arm, which resolves its subject over the question's OWN
+		// rows while every other arm folds the rows the question, the answer AND the chart resolved.
+		List<DrugReference> entries = DrugReferenceTestSupport.fixtureEntries(CHARTED_ROW_FIXTURE);
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(entries);
+		String question = "Is amoxicillin safe with warfarin?";
+
+		assertEquals(DrugReferenceTestSupport.row(entries, "Amoxicillin").substanceGroupKey(),
+				DrugReferenceTestSupport.row(entries, "Amoxicillin (suspension)").substanceGroupKey(),
+				"precondition: the two rows must be ONE substance");
+		// findImpliedByQuery, not findByQuery: the two answer different questions (CLAUDE.md) and this is
+		// the one validate() itself builds questionDrugs from, so the precondition guards the predicate
+		// production actually uses rather than the unranked primitive underneath it.
+		assertEquals(Arrays.asList("Amoxicillin", "Warfarin"),
+				DrugReferenceTestSupport.names(service.findImpliedByQuery(question)),
+				"precondition: the question must name TWO drugs, or the pair arm never runs — and the "
+						+ "bare word must resolve the UNQUALIFIED row alone");
+
+		// ONE order, and deliberately not a warfarin one: with the pair's rule naming an active order
+		// the chart arm owns the pair and this arm stands down, so the divergence could not be seen.
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(30, 70.0,
+				DrugReferenceTestSupport.set("Amoxicillin (suspension)"), null, null, null);
+		assertEquals(Arrays.asList("Amoxicillin", "Amoxicillin (suspension)"),
+				DrugReferenceTestSupport.names(service.findForActiveOrders(context)),
+				"precondition: while the ORDER's name resolves both rows");
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+				.validate("Give amoxicillin 2000 mg twice daily.", question, context);
+
+		SafetyWarning pair = null;
+		SafetyWarning overdose = null;
+		for (SafetyWarning warning : warnings) {
+			if (SafetyWarning.TYPE_INTERACTION.equals(warning.getType())
+					&& warning.getDetail().contains(PAIR_MARKER)) {
+				pair = warning;
+			} else if (SafetyWarning.TYPE_OVERDOSE.equals(warning.getType())) {
+				overdose = warning;
+			}
+		}
+		assertNotNull(pair, "precondition: the question-pair arm must chip, was: " + warnings);
+		assertNotNull(overdose, "precondition: the dose arm must warn, was: " + warnings);
+		assertEquals(overdose.getDrug(), pair.getDrug(),
+				"one response must call one substance one thing, was: " + warnings);
+		assertEquals("Amoxicillin (suspension)", pair.getDrug(),
+				"and that one thing is the row the patient's own order names, was: " + warnings);
+		assertTrue(pair.getDetail().startsWith("Amoxicillin (suspension) interacts with Warfarin"),
+				"in its sentence as well as in its drug field, was: " + pair.getDetail());
+	}
 }

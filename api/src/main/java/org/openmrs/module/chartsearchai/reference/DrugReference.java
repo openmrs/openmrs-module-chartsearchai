@@ -417,8 +417,8 @@ public class DrugReference {
 
 	/**
 	 * Which of two rows of ONE substance should represent it — the row a collapsed chip is named after
-	 * ({@code DrugSafetyValidator.interactionSubject}, issue #162, and since issue #206 every chip arm
-	 * through {@code DrugSafetyValidator.SubstanceSubjects}), the row a collapsed reference
+	 * ({@code DrugSafetyValidator.interactionSubject}, issue #162, and since issues #206/#236 every chip
+	 * arm through {@code DrugSafetyValidator.SubstanceSubjects}), the row a collapsed reference
 	 * record is rendered from ({@link DrugReferenceInjector#matchingEntries}, issue #163), and the row a
 	 * class chip names its PARTNER by ({@code DrugSafetyValidator.entryForAtcCode}, issue #174 site 1 —
 	 * where the ambiguity is not two rows a question resolved but the several rows that all publish the
@@ -559,7 +559,8 @@ public class DrugReference {
 	 *         all: every surface that must describe one substance to one clinician chooses its
 	 *         representative row here, and a fold written once per surface is one chance per surface for
 	 *         them to iterate in an order the others do not. Grep the callers rather than trusting a count
-	 *         here — every issue that finds another surface adds one. Since #206 the CHIP subjects share
+	 *         here — every issue that finds another surface adds one. Since #206 for three arms and #236
+	 *         for the last two, the CHIP subjects share
 	 *         one per-{@code validate} lookup ({@code DrugSafetyValidator.SubstanceSubjects}) that ranks the
 	 *         patient's recorded names before folding; a caller with no recorded name to rank by asks this
 	 *         directly.

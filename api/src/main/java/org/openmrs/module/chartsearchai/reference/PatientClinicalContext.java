@@ -500,6 +500,10 @@ public class PatientClinicalContext {
 
 		private final Set<String> atcCodes;
 
+		/** The administration the chart records for THIS order — the name of its route concept and of
+		 *  its drug's dosage-form concept, whichever of the two is recorded (issue #234). */
+		private final Set<String> administrationTerms;
+
 		/** Whether {@link #display} is a name for this order, as opposed to a stand-in the module
 		 *  synthesized because it could not read one — see {@link #namedByCodesOnly}. Asked, rather
 		 *  than inferred from {@link #names} being empty, because that is a PROXY: a caller may hand
@@ -516,7 +520,19 @@ public class PatientClinicalContext {
 		}
 
 		public ActiveDrugOrder(String uuid, String display, Set<String> names, Set<String> atcCodes) {
-			this(uuid, display, names, atcCodes, true);
+			this(uuid, display, names, atcCodes, null);
+		}
+
+		/**
+		 * An order carrying the ADMINISTRATION the chart records for it — issue #234.
+		 *
+		 * <p>A separate overload rather than a fifth argument on the two above, so that every existing
+		 * caller keeps the "nothing is recorded" reading it already had, which is the reading that
+		 * narrows nothing.
+		 */
+		public ActiveDrugOrder(String uuid, String display, Set<String> names, Set<String> atcCodes,
+				Set<String> administrationTerms) {
+			this(uuid, display, names, atcCodes, administrationTerms, true);
 		}
 
 		/**
@@ -529,12 +545,24 @@ public class PatientClinicalContext {
 		 * accident and the one place that does is named.
 		 */
 		static ActiveDrugOrder namedByCodesOnly(String uuid, String display, Set<String> atcCodes) {
-			return new ActiveDrugOrder(uuid, display, null, atcCodes, false);
+			return namedByCodesOnly(uuid, display, atcCodes, null);
+		}
+
+		/**
+		 * As {@link #namedByCodesOnly(String, String, Set)}, for an order that records where it is
+		 * applied even though no name for it could be read (issue #234). Two overloads rather than one
+		 * for the reason the constructors above have three: a caller that says nothing about
+		 * administration must keep meaning "nothing is recorded".
+		 */
+		static ActiveDrugOrder namedByCodesOnly(String uuid, String display, Set<String> atcCodes,
+				Set<String> administrationTerms) {
+			return new ActiveDrugOrder(uuid, display, null, atcCodes, administrationTerms, false);
 		}
 
 		private ActiveDrugOrder(String uuid, String display, Set<String> names, Set<String> atcCodes,
-				boolean nameKnown) {
+				Set<String> administrationTerms, boolean nameKnown) {
 			this.nameKnown = nameKnown;
+			this.administrationTerms = lower(administrationTerms);
 			this.uuid = uuid;
 			this.display = display;
 			this.names = lower(names);
@@ -586,6 +614,26 @@ public class PatientClinicalContext {
 		 *          legitimately wants. */
 		public Set<String> getAtcCodes() {
 			return atcCodes;
+		}
+
+		/**
+		 * @return the administration the chart records for this order, normalized the same way its
+		 *         {@link #getNames()} are — the name of the order's route concept and the name of its
+		 *         drug's dosage-form concept, either or both, empty when neither is recorded or neither
+		 *         could be read (issue #234).
+		 *
+		 *         <p>Both sources and not one: measured on the 3.7.1 reference dictionary, its route set
+		 *         has 17 members and none of them names the skin, so a locally applied presentation of
+		 *         that kind can only reach this module through the dose FORM. Read by
+		 *         {@code DrugReference.codesForRecordedAdministration}, which is the one thing that
+		 *         decides what a recorded term means; nothing here interprets it.
+		 *
+		 *         <p>Empty is "nothing is recorded", never "administered nowhere" — the same reading the
+		 *         two constructors above give an order built before this field existed, and the reading
+		 *         that narrows nothing.
+		 */
+		public Set<String> getAdministrationTerms() {
+			return administrationTerms;
 		}
 
 		/**

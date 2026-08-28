@@ -5899,12 +5899,21 @@ public class DrugSafetyValidator {
 	 *       {@code H02AB} where the same order mapped to {@code D07AA02} alone would say nothing. This
 	 *       is the over-claiming direction, and it is the one a clinician sees.</li>
 	 * </ul>
-	 * Neither is closable here, and for one reason: the ROUTE is not available to this arm at all —
-	 * {@link PatientClinicalContextBuilder} never reads {@code DrugOrder.getRoute()}, which is the same
-	 * bound {@link #sharedClass} records for its own class preference. What the order publishes is a
-	 * name; what the dataset publishes for that name is every route it markets. Given only those two,
-	 * naming the substance's classes is the honest reading, and narrowing it would need a route the
-	 * module does not carry.
+	 * <b>The second of those is issue #234 and is now closed; the first is not.</b> The route WAS
+	 * unavailable to this arm — {@link PatientClinicalContextBuilder} read a {@code DrugOrder}'s names
+	 * and its concept's ATC mappings and nothing else — and it is now carried, per order, as
+	 * {@link PatientClinicalContext.ActiveDrugOrder#getAdministrationTerms()}: the name of the order's
+	 * route concept and of its drug's dosage-form concept. So the codes this leg loads into the
+	 * partner go through {@link DrugReference#codesForRecordedAdministration} first, which keeps the
+	 * ones classifying a presentation given where the chart says the drug is applied.
+	 *
+	 * <p>It closes the OVER-claiming direction only, and only where the chart says something this
+	 * module can attribute: a term naming no site, and a substance the dataset files under no code at
+	 * that site, both leave these codes exactly as they were. Measured on the 3.7.1 demo instance
+	 * 2026-08-28, that is all 46 of its active drug orders — 32 recording "Oral administration" and 14
+	 * recording nothing — so the narrowing is inert on every corpus this repo can drive and the first
+	 * bullet's own case is untouched. The under-claiming direction above is still deliberately open:
+	 * widening a partly-mapped order to the dataset's codes would change chips neither issue is about.
 	 *
 	 * <p><b>Appended after the code walk</b>, so every chip this arm already raised keeps its position and
 	 * a newly-reachable co-medication sorts after the ones a dictionary classified. A substance the walk
@@ -5947,7 +5956,16 @@ public class DrugSafetyValidator {
 				}
 				DrugReference row = interactionSubject(named.getValue(), order.getNames());
 				OrderPartner partner = new OrderPartner(row);
-				partner.codes.addAll(row.normalizedAtcCodes());
+				// The dataset's codes for the SUBSTANCE, narrowed to the presentation the chart records
+				// (issue #234). Unnarrowed they cover every route the substance is marketed as, and
+				// sharedClass prefers the systemic subgroup among them, so a topical order was named in
+				// a systemic duplicate-therapy chip that the SAME order mapped to a topical code does not
+				// raise. This is the one call site of that rule; it declines — returning these codes
+				// untouched — wherever the chart records no site or the substance is not filed at the
+				// one it records, so nothing here can silence a partner, only stop it claiming a class
+				// its presentation is not in.
+				partner.codes.addAll(DrugReference.codesForRecordedAdministration(
+						row.normalizedAtcCodes(), order.getAdministrationTerms()));
 				partner.codesFromDataset = true;
 				// This partner IS this substance, so restating it is not duplicating it — and with the
 				// exact-code leg scoped out above, this is the WHOLE of that skip here.
@@ -6242,16 +6260,23 @@ public class DrugSafetyValidator {
 	 * not, which is the failure a clinician checks and then stops trusting.
 	 *
 	 * <p><b>Why prefer the systemic class rather than match the order's route.</b> The route is not
-	 * available here, and could only ever be available on one of the two call sites. This arm runs
-	 * both for a drug the QUESTION names, which has no route at all, and for one the patient is on
-	 * ({@link #addActiveOrderContraindications}) — and even there it receives a resolved
-	 * {@link DrugReference}, not the order. Nothing carries the route that far:
-	 * {@link PatientClinicalContextBuilder} reads a {@code DrugOrder}'s name concepts and its ATC
-	 * mappings, never {@code getRoute()}, and {@link PatientClinicalContext.ActiveDrugOrder}'s display
-	 * is the order's first NAME rather than a dosing line. Route-matching is therefore not a smaller
-	 * change than this one but a larger one — a new field on the context, a route-concept-to-ATC
-	 * mapping the module does not have — and it would still leave the question-driven half of this
-	 * arm choosing by some other rule.
+	 * available HERE, and the half of that which is about this seam is unchanged by issue #234: this
+	 * arm runs both for a drug the QUESTION names, which has no route at all, and for one the patient
+	 * is on ({@link #addActiveOrderContraindications}) — and even there it receives a resolved
+	 * {@link DrugReference}, not the order. So a route-matching rule could only ever bind one of the
+	 * two call sites, and the question-driven half would still be choosing by some other rule. That is
+	 * why the preference stays exactly as it is.
+	 *
+	 * <p><b>What issue #234 changed, and what it did not.</b> The premise that "nothing carries the
+	 * route that far" is no longer true of the context: {@link PatientClinicalContextBuilder} now reads
+	 * a {@code DrugOrder}'s route concept and its drug's dosage-form concept, and
+	 * {@link PatientClinicalContext.ActiveDrugOrder#getAdministrationTerms()} carries them. It is used
+	 * at ONE site — {@link #addPartnersForUnmappedOrders}, where a partner reached by NAME holds the
+	 * dataset's codes for a whole substance and the chart can say which presentation of it the patient
+	 * has. It is deliberately NOT used here. This method compares two code sets and is handed them by
+	 * four callers; the narrowing belongs where an order is turned into codes, not where codes are
+	 * compared, or the same evidence would be applied twice and once out of reach of the order it came
+	 * from.
 	 *
 	 * <p><b>WHICH PAIRS THE FIGURES BELOW COUNT (issue #243).</b> Two PAIR bases — the CLAIM base named
 	 * in the paragraph below headed "But the two arms CAN now name different classes" is a third thing,

@@ -552,6 +552,16 @@ public final class DrugReferenceTestSupport {
 		return new PatientClinicalContext.ActiveDrugOrder(uuid, display, names, atcCodes);
 	}
 
+	/** As {@link #activeOrder}, additionally carrying what the chart records about where the drug is
+	 *  APPLIED — the order's route concept name and its drug's dosage-form concept name, the pair
+	 *  {@link PatientClinicalContextBuilder} collects for issue #234. A case that passes none of them
+	 *  is stating that the chart records neither, which is the reading that narrows nothing. */
+	static PatientClinicalContext.ActiveDrugOrder activeOrder(String uuid, String display,
+			Set<String> names, Set<String> atcCodes, Set<String> administrationTerms) {
+		return new PatientClinicalContext.ActiveDrugOrder(uuid, display, names, atcCodes,
+				administrationTerms);
+	}
+
 	/**
 	 * One active drug order for the named entry of {@code service}, carrying the ATC codes that entry
 	 * publishes, read off the loaded dataset through the production accessor rather than copied into

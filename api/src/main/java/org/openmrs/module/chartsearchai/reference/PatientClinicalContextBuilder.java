@@ -110,6 +110,12 @@ final class PatientClinicalContextBuilder {
 				Set<String> orderAtcCodes = new LinkedHashSet<String>();
 				addAtcCodes(orderAtcCodes, concept);
 				atcCodes.addAll(orderAtcCodes);
+				// Where the chart says the drug is APPLIED (issue #234). Per order only — there is no
+				// flattened counterpart and there must not be one, because the whole point of it is to
+				// narrow ONE prescription's classification and a union over the medication list would
+				// attribute one order's route to another.
+				Set<String> orderAdministration = new LinkedHashSet<String>();
+				addAdministration(orderAdministration, drugOrder);
 				// Resolved once and read by both the skip test and the label below, so the two cannot
 				// answer differently about which codes this order has.
 				Set<String> normalizedCodes = DrugReference.normalizeAtcTokens(orderAtcCodes);
@@ -154,15 +160,15 @@ final class PatientClinicalContextBuilder {
 				// someone acts on it.
 				if (!orderNames.isEmpty()) {
 					activeOrders.add(new PatientClinicalContext.ActiveDrugOrder(drugOrder.getUuid(),
-							orderNames.iterator().next(), orderNames, orderAtcCodes));
+							orderNames.iterator().next(), orderNames, orderAtcCodes, orderAdministration));
 				} else if (!normalizedCodes.isEmpty()) {
 					String codeOnlyDisplay = codeOnlyDisplay(normalizedCodes);
 					log.warn("Active drug order {} has no readable name; it will be identified by its ATC "
 							+ "codes as {}. A safety chip for it is labelled that way unless the reference "
 							+ "data can name one of those codes, and the order cannot be matched against "
 							+ "chart text at all.", drugOrder.getUuid(), codeOnlyDisplay);
-					activeOrders.add(PatientClinicalContext.ActiveDrugOrder
-							.namedByCodesOnly(drugOrder.getUuid(), codeOnlyDisplay, orderAtcCodes));
+					activeOrders.add(PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly(
+							drugOrder.getUuid(), codeOnlyDisplay, orderAtcCodes, orderAdministration));
 				}
 			}
 		}
@@ -430,6 +436,47 @@ final class PatientClinicalContextBuilder {
 		}
 		catch (RuntimeException e) {
 			log.debug("Could not read concept mappings for ATC codes", e);
+		}
+	}
+
+	/**
+	 * Collects where the chart says {@code drugOrder} is APPLIED — the name of its route concept and
+	 * the name of its drug's dosage-form concept (issue #234).
+	 *
+	 * <p><b>Both, because neither alone covers the shapes that matter.</b> Measured on the 3.7.1
+	 * reference dictionary, the "Route of administration" set has 17 members and not one of them names
+	 * the skin, so a topical presentation reaches this module only through the dose FORM; and a form
+	 * is recorded on the {@code Drug}, which a non-coded order does not have, so an order typed as free
+	 * text can only ever say it through the route.
+	 *
+	 * <p>Each read in its OWN try, and both inside the caller's per-order loop rather than the chart-wide
+	 * one: a lazy-init proxy on one detached order must cost that order its route, never the whole
+	 * medication list — the same reason {@code addConceptName}'s catch is where it is. A failed read
+	 * degrades to nothing recorded, which is the reading that narrows nothing, so the failure is
+	 * fail-SAFE here in a way it is not for a contraindication record (issue #208 item 2) and needs no
+	 * flag beside it.
+	 *
+	 * <p>Through {@link #addRaw} like every other recorded string this builder reads, so a concept
+	 * named with irregular whitespace is collapsed the one way (issue #293) and a blank name is
+	 * dropped rather than stored as a term that matches nothing.
+	 */
+	private static void addAdministration(Set<String> terms, DrugOrder drugOrder) {
+		try {
+			if (drugOrder.getRoute() != null && drugOrder.getRoute().getName() != null) {
+				addRaw(terms, drugOrder.getRoute().getName().getName());
+			}
+		}
+		catch (RuntimeException e) {
+			log.debug("Could not read the route of drug order {}", drugOrder.getUuid(), e);
+		}
+		try {
+			if (drugOrder.getDrug() != null && drugOrder.getDrug().getDosageForm() != null
+					&& drugOrder.getDrug().getDosageForm().getName() != null) {
+				addRaw(terms, drugOrder.getDrug().getDosageForm().getName().getName());
+			}
+		}
+		catch (RuntimeException e) {
+			log.debug("Could not read the dose form of drug order {}", drugOrder.getUuid(), e);
 		}
 	}
 

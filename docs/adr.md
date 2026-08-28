@@ -2115,7 +2115,7 @@ The route/site knowledge is two prefix lists on `DrugReference`: the locally app
 
 ### Why not the two alternatives
 
-- **Match the route of the active order.** The route is not available at this seam and could only ever be available at one of the two call sites: the arm also runs for a drug the *question* names, which has no route at all. Nothing carries the route that far.
+- **Match the route of the active order.** The route is not available at this seam and could only ever be available at one of the two call sites: the arm also runs for a drug the *question* names, which has no route at all. Nothing carries the route that far. — *Amended by [Decision 49](#decision-49-an-unmapped-orders-codes-are-narrowed-to-the-presentation-the-chart-records) ([#234](https://github.com/openmrs/openmrs-module-chartsearchai/issues/234)): the second sentence no longer holds of the context — `ActiveDrugOrder` now carries the order's route and dose form — but the first still holds of **this** seam, so `sharedClass`'s preference is unchanged. The route is applied one layer out, where an order is turned into codes.*
 - **Fall back to ATC level 3.** Widening the class breadth to make the label read better trades a wrong reason for a vaguer one and reopens the false-positive cost [Decision 24](#decision-24-drug-reference-as-a-pluggable-consumer-of-authoritative-datasets) settled. The grain stays level 4; only the *choice among* shared level-4 codes changed. ([Decision 33](#decision-33-a-residual-atc-subgroup-is-not-a-relationship) later added the possibility of choosing **none** of them; the matching grain is still level 4.)
 
 ## Decision 32: Observable drug-reference load status
@@ -3128,3 +3128,52 @@ Two further alternatives were weighed and are not this.
 - **−** **The endpoint now performs TWO lazy loads.** Reading it parses the groups file if nothing has yet, exactly as it already parsed the entries dataset. Bounded by the same switch — `enabled: false` reports `loaded: false` for both and parses neither — and the groups file is a small curated document, not the 19 MB knowledge base.
 - **−** **`DrugReferenceLoad` and `CrossReactivityGroupsLoad` are two classes answering one shape of question**, and neither is derived from the other. They will drift if a field is added to one and not the other. Accepted rather than unified because the shapes genuinely differ (there is no `sourceFormat` for the groups file and no `inert` verdict, and `arms` is meaningless for a group, which either matches a pair's codes or does not), and a common supertype carrying only what both have would carry almost nothing.
 - **−** **A fourth dataset would need a third section**, and this decision does not generalise the pattern into one. What it does leave behind is the guard: `DrugReferenceSourceValidityChannelTest` fails the build for a `DrugReferenceSource` that inherits `lastLoadFindings()`'s default instead of declaring it, which is the specific way `sourceFormat=atc` came to have no channel — a DEFAULTED interface method, so the omission compiled, loaded, answered questions, and reported an empty list with nothing erroring. That guard does not reach the groups loader, which is not a `DrugReferenceSource`; its accessors are ordinary methods the service calls, so removing one breaks the build.
+
+## Decision 49: An unmapped order's codes are narrowed to the presentation the chart records
+
+**Status: Accepted** (August 2026) — implemented, issue [#234](https://github.com/openmrs/openmrs-module-chartsearchai/issues/234). Amends [Decision 31](#decision-31-one-shared-class-choice-for-both-arms)'s first rejected alternative.
+
+### Context
+
+[#228](https://github.com/openmrs/openmrs-module-chartsearchai/issues/228) gave the duplicate-therapy class arm a second leg, so it reaches an active order the concept dictionary mapped to no ATC code by resolving the order's NAME against the reference dataset. That left the two legs comparing on two different authorities. A dictionary-**mapped** order is compared on the one code the dictionary published for its concept — a specific presentation. An **unmapped** one is compared on every code the dataset files its substance under, which covers every route that substance is marketed as. `DrugSafetyValidator.sharedClass` prefers a subgroup that is not locally applied ([Decision 31](#decision-31-one-shared-class-choice-for-both-arms), issue #161), so the systemic one always won.
+
+The reported consequence: an unmapped `Hydrocortisone cream 1%` was named as a co-medication in an `H02AB` systemic-corticosteroid duplicate-therapy chip, while the same order mapped to `D07AA02` correctly says nothing. Mapping an order **more** correctly made the module quieter, and the chip an implementer saw was the wrong one of the two.
+
+### The ticket's own proposed remedy is refuted by the data
+
+It proposed threading the route so the name-resolution leg could "prefer a row whose administration route matches". Measured through `DdiDrugReferenceSource.parse`, `DrugReference.substanceGroupKey()` and `normalizedAtcCodes()` over the shipped 19 MB knowledge base: **all 129 of its multi-row substances publish an identical ATC code list across every one of their rows, and none differs.** Hydrocortisone's four rows — `Hydrocortisone`, `(ophthalmic)`, `(topical)`, `Hydrocortisone butyrate` — each publish the same nine codes. That independently re-derives the invariant `DrugSafetyValidator.entryForAtcCode`'s javadoc already states from the other side, and it means choosing a row cannot change any classification. The narrowing has to be of the **codes**.
+
+### Decision
+
+Carry the presentation, and narrow the codes with it, at one site.
+
+1. `PatientClinicalContextBuilder` reads `DrugOrder.getRoute()` and the ordered `Drug`'s `getDosageForm()`, each in its own `try`, and `PatientClinicalContext.ActiveDrugOrder.getAdministrationTerms()` carries them per order. **Both sources**, because neither alone covers the shapes that matter: the route is a `drug_order` column and so is the only leg a non-coded order has, while the dose form is a `drug` column and is the only leg that reaches the skin — measured 2026-08-28, the 3.7.1 reference dictionary's "Route of administration" set has 17 members and not one names a cutaneous route.
+2. `DrugReference.codesForRecordedAdministration` is the one rule that reads those terms against an ATC code list, and `DrugSafetyValidator.addPartnersForUnmappedOrders` is its only caller.
+
+### The site table is a partition, not a list
+
+`ATC_GROUPS_BY_SITE` together with `LOCALLY_APPLIED_GROUPS_NAMING_NO_SITE` partitions `DrugReference.LOCALLY_APPLIED_ATC_GROUPS`, deliberately, so it cannot go stale relative to the list it partitions. The criterion is that list's own, read the other way round: a group is locally applied when its published name says **where** it is applied, so the table records **what** that name says.
+
+Writing it freehand was tried first and was wrong: it mapped the eye to `S01` and the ear to `S02` and dropped `S03` "Ophthalmological and otological preparations" altogether, which the shipped knowledge base uses — neomycin's ear codes are `{S02AA07, S03AA01}` — so an order recorded at the ear would have had one of its own site's codes discarded by a rule whose whole purpose is to keep them. That is the failure mode `LOCALLY_APPLIED_ATC_GROUPS`'s javadoc already records for issue #161's hand-picked list, reproduced one level along. `S` is the one prefix that list writes at main-group granularity, and it is the only one this table expands, into ATC's own three level-2 children.
+
+Measured impact per site over the shipped knowledge base (substances filed there / of those, the ones the table narrows / the ones already filed only there): skin 139/106/33, eye 134/101/33, ear 20/20/0, nose 24/24/0, airway 24/19/5, vagina 22/20/2, throat 12/12/0.
+
+### A term must name the SITE, not the form
+
+`cream`, `ointment` and `lotion` were in the first draft and were removed. A cream is made for the skin, the vagina or the anorectum alike, so reading one as "skin" asserts something the record did not say — and reading it as all three is **worse** rather than more cautious: hydrocortisone's `C05AA01` then survives, dexamethasone publishes `C05AA09`, and a chip that said `H02AB` says `C05AA` instead, which is a haemorrhoid preparation and no more true. A form word is admitted only where the form serves one site and no other, which is why `inhaler` is a term and those three are not.
+
+Mouth, gut and anorectal have groups but no terms. `Oral administration` and `Rectal administration` are the systemic routes in the reference dictionary **and** the way an `A01`/`A07`/`C05A` presentation is given, so the recorded term cannot separate the two readings.
+
+### Why not
+
+- **Suppress the co-medication when the module cannot attribute the route.** That would silence every unmapped order of the 157 substances the shipped knowledge base files on both sides of `isLocallyAppliedAtcCode`, on no positive evidence, in the direction a safety net must not fail. Declining leaves today's answer instead, and this rule can only ever remove codes, never a partner.
+- **Read the order's NAME for the site.** `UnmappedOrderClassPartnerTest.thePartnerIsNamedByTheRowTheORDERRecords` pins a chip for an order literally named `Hydrocortisone (topical)`, and a drug name carries a presentation word for many reasons. The narrowing is decided by what the chart RECORDS as the administration, and that case is untouched.
+- **Apply it inside `sharedClass`.** That method compares two code sets and has four callers; the narrowing belongs where an order is turned into codes, not where codes are compared. Applying it there would use the same evidence twice and once out of reach of the order it came from — and would still leave the question-driven half of that arm choosing by another rule, which is what [Decision 31](#decision-31-one-shared-class-choice-for-both-arms) rejected route-matching for and still holds.
+
+### Trade-offs
+
+- **It is measurably inert on every corpus this repo can drive.** Measured 2026-08-28: all 46 active drug orders on the 3.7.1 demo instance record either `Oral administration` (32) or nothing (14), and none names a locally applied site. The ticket's own `Hydrocortisone cream 1%` is fixed when the chart records a topical route, and not when the only thing recorded is the form word `Cream` — for the reason above. What ships is the mechanism and the data channel, and it fires on an implementation whose dictionary records where a drug is applied.
+- **A systemically-absorbed local presentation loses a chip it raises today.** Ophthalmic timolol against an oral beta-blocker narrows to `S01ED01` and the shared `C07AA` disappears. The same order MAPPED already says nothing, so this is the symmetry the issue asks for — but which side of that symmetry is clinically right is not settled here, and nothing in this module measures it. It is recorded as an open question rather than as a consequence of symmetry.
+- **`isLocallyAppliedAtcCode` gains a second caller and a stricter use.** `sharedClass` prefers among candidates; `codesAtSites` can drop one, so that a `D01B` systemic antifungal is not read as a skin presentation. The difference is the evidence: the second caller holds an independent statement about the presentation the patient was given. `CLAUDE.md`'s bullet is amended to say so rather than being reinterpreted at the call site.
+- **Losing the class sentence unfolds a chip.** Where the issue #88 fold had joined a rated rule and a class sentence about one partner, narrowing the class sentence away leaves the rule chip unfolded, and an unfolded rule chip is labelled by the rule's own match token rather than by the name the two arms reconciled (issue #292). One order, one name per chip either way; what moves is which rule decides it.
+

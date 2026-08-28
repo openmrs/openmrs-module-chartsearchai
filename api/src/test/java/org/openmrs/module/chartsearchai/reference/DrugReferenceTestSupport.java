@@ -1073,13 +1073,15 @@ public final class DrugReferenceTestSupport {
 	 *         positive form fails loudly, and saying it of both would license the wrong conclusion about
 	 *         which accessor is unsafe for what.
 	 *
-	 *         <p>Shared rather than written per file because four cases select one warning of a type:
-	 *         {@code PerRequestSubstanceSubjectTest}'s two dose cases, and the two that assert a dose
-	 *         warning and an interaction chip call one substance the same thing
-	 *         ({@code OrderedSubjectRowTest}, {@code DoseCeilingBySubstanceTest}). Those two wrote it as a
-	 *         last-match-wins loop plus {@code assertNotNull}, which cannot see a DUPLICATE warning of
-	 *         either type — the defect class issues #162/#173/#206 keep removing — so the strictness is
-	 *         what the shared form buys them, and it does not propagate from a copy.
+	 *         <p>Shared rather than written per file because more than one case selects one warning of a
+	 *         type — a count named here has already gone stale once (it said "four cases" and missed
+	 *         {@code PerRequestSubstanceSubjectTest.theQuestionPairArmNamesTheSubstanceAlikeAcrossBothPasses},
+	 *         which calls this method TWICE), so grep this method's call sites for the current set rather
+	 *         than trust a number written in a comment. {@code OrderedSubjectRowTest} and
+	 *         {@code DoseCeilingBySubstanceTest} each wrote their own case as a last-match-wins loop plus
+	 *         {@code assertNotNull} before this existed, which cannot see a DUPLICATE warning of either
+	 *         type — the defect class issues #162/#173/#206 keep removing — so the strictness is what the
+	 *         shared form buys them, and it does not propagate from a copy.
 	 */
 	static SafetyWarning onlyOfType(List<SafetyWarning> warnings, String type) {
 		List<SafetyWarning> matched = new ArrayList<SafetyWarning>();

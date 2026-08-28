@@ -974,8 +974,8 @@ public class DrugSafetyValidator {
 	 * <p><b>And that is per PASS, not per request.</b> {@code validate} runs twice for one {@code /search}
 	 * — the pre-answer findings pass through {@code DrugReferenceInjector.injectRecords}, then the chips
 	 * pass — and the group differs between them by exactly one input, the rows the ANSWER put in play
-	 * (issue #175 admits them deliberately; the orders and the recorded names are read from the same
-	 * context both times). Where the answer resolves a row of an in-play substance that the question did
+	 * (issue #175 admits them deliberately). Where the answer resolves a row of an in-play substance that
+	 * the question did
 	 * not, the group grows and this can answer differently, so the injected {@code safety_finding} the
 	 * model READ can name a substance one way and the chip beside the answer another. The
 	 * contraindication arm's old positional rule happened to be pass-stable, since {@code inPlay} seeds
@@ -987,17 +987,11 @@ public class DrugSafetyValidator {
 	 * is the only sense of "pass-stable" this paragraph and the one below claim, for either arm. Not
 	 * byte-identical across the passes, which nothing here ever established: the two passes build two
 	 * {@link PatientClinicalContext}s, so the recorded names this fold ranks by could already move
-	 * between them for reasons that have nothing to do with #236.
-	 * Measured on the shipped KB through the real {@code validate}, one question
-	 * ({@code Does Daxibotulinumtoxina interact with kanamycin?}) driven with the two passes' own answer
-	 * arguments: the pre-answer pass ({@code answer} empty, the shape
-	 * {@code DrugReferenceInjector.preAnswerFindings} calls with) says {@code Kanamycin interacts with
-	 * Daxibotulinumtoxina (botulinum toxin type a)} and the chips pass, given an answer naming
-	 * {@code Botulinum toxin type A}, says {@code Kanamycin interacts with Botulinum toxin type A}. So
-	 * the injected {@code safety_finding} the model reads and the chip beside the answer can name that
-	 * substance differently — the residue the paragraph above already accepts for three arms, on a
-	 * fourth. ADR Decision 49 is canonical for the trade and carries the measurements. Taken
-	 * deliberately: the alternative is this arm naming a substance one way while the chips
+	 * between them for reasons that have nothing to do with #236. So the injected
+	 * {@code safety_finding} the model reads and the chip beside the answer can name that substance
+	 * differently — the residue the paragraph above already accepts for three arms, on a fourth. ADR
+	 * Decision 49 is canonical for the trade and carries the measurement that shows it live; it is not
+	 * reprinted here. Taken deliberately: the alternative is this arm naming a substance one way while the chips
 	 * beside it about that same substance name it another, which is what issue #236 is, and closing it
 	 * properly is the once-per-REQUEST decision the paragraph below says belongs elsewhere.
 	 *
@@ -1005,8 +999,7 @@ public class DrugSafetyValidator {
 	 * differs from this one only where a row of an ordered substance is in play, and such a substance
 	 * has already been through {@link #addInteractionWarnings}, whose pairs
 	 * {@link InteractionPairs} then suppresses here — so every pair it still reports has a subject whose
-	 * group is the orders' alone, and both passes resolve that group alike. See the comment at that
-	 * arm's own read.
+	 * group is the orders' alone. See the comment at that arm's own read.
 	 *
 	 * <p>That is a statement about the screening arm's OWN chips and not about a screening QUESTION,
 	 * which the sentence above would otherwise be read as. The pair this arm stands down from is chipped

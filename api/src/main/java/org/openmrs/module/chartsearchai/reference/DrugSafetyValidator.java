@@ -1060,11 +1060,15 @@ public class DrugSafetyValidator {
 		 *         an ungrouped row honest rather than null.
 		 *
 		 *         <p>That fallback is deliberately NOT memoised, and the difference only shows for a
-		 *         caller this class does not yet have: every arm today asks about a row that IS in the
-		 *         group map, so the branch is unreachable. Were it memoised, the first arm ever added over
+		 *         caller this class does not yet have: every arm today asks about a row of a substance
+		 *         {@link #allGroups} groups — that map is the one {@code validate} walks to reach the arms
+		 *         at all — so the branch is unreachable. Were it memoised, the first arm ever added over
 		 *         rows outside that map would cache a POSITIONAL answer under the substance's key and hand
 		 *         it back to every arm that asks afterwards, with the group lookup skipped — issue #206
 		 *         re-created by the class written to prevent it, silently and with no test reddening.
+		 *         Note which map that is: a substance MISSING from {@link #namingGroups} is ordinary since
+		 *         issue #238 (one the answer alone named), and {@link #groupOf} answers it from
+		 *         {@code allGroups} rather than falling through to here.
 		 *
 		 *         <p>{@code null} is therefore the memo's MISS sentinel rather than a stored answer, which
 		 *         is sound because the memoised branch cannot produce one: {@link #interactionSubject}
@@ -2149,10 +2153,18 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * The subject groups the drug-in-play and dose arms work over: {@link #substanceRows} over
+	 * The rows of each substance {@code inPlay} names, grouped: {@link #substanceRows} over
 	 * {@code inPlay}, each group additionally carrying the rows of that same substance the patient's own
-	 * ACTIVE ORDERS resolved — i.e. every row of an in-play substance that THIS REQUEST resolved, from
-	 * either side.
+	 * ACTIVE ORDERS resolved.
+	 *
+	 * <p><b>Called TWICE per {@code validate}, with two candidate sets, and the difference is what issue
+	 * #238 turns on.</b> Over the whole {@code inPlay} set it produces {@code resolvedRows} — every row of
+	 * an in-play substance that this PASS resolved, from either side — which is what the drug-in-play and
+	 * dose arms RULE over. Over {@code questionDrugs} alone it produces {@code namingRows}, which is what
+	 * {@link SubstanceSubjects} folds to decide what those arms CALL the substance: the same groups minus
+	 * the rows only the ANSWER put in play, and therefore the same in both {@code validate} passes of one
+	 * request. Two maps of freshly built lists over the same shared {@link DrugReference} objects; no arm
+	 * mutates a group after it is built, so the two cannot drift apart.
 	 *
 	 * <p><b>Issue #175.</b> The subject of an interaction chip is a SUBSTANCE (issue #162), but the rows
 	 * this arm saw were only the ones the question and answer TEXT resolved — an accident of which alias
@@ -2181,8 +2193,13 @@ public class DrugSafetyValidator {
 	 * this arm too — the same chip the screen raises for the same pair, which is the point: the two arms
 	 * must not choose from different row sets.
 	 *
-	 * <p>In-play rows come FIRST and order rows after, so a full tie on {@link #outranks} keeps a row
-	 * the text actually named. It is still a per-{@code validate} local for issue #172's reason — which
+	 * <p>Rows from the candidate set come FIRST and order rows after, so a full tie on
+	 * {@link #outranks} keeps a row the text actually named. The two maps therefore agree on the relative
+	 * order of the rows they share — which is not the same as agreeing on order outright: a row the ANSWER
+	 * matched that {@code orderEntries} also carries sits at its in-play position in {@code resolvedRows}
+	 * and at its order position in {@code namingRows}, and where a family ties on both of
+	 * {@link DrugReference#canonicalRow}'s rungs that difference decides which row is elected. It is still
+	 * a per-{@code validate} local for issue #172's reason — which
 	 * lives in {@link DrugReferenceService}'s class javadoc and not on the issue, whose own statement of
 	 * it is false — and the lists are the ones {@link #substanceRows} just built, so appending to them
 	 * mutates nothing shared.
@@ -2218,8 +2235,9 @@ public class DrugSafetyValidator {
 	 *
 	 * <p>The other three do not iterate it for emission: {@link #resolvedSubstanceRows}'s caller walks
 	 * {@code inPlay} itself and drains a key set as it reaches each group's first row (the key set is
-	 * seeded from {@code keySet()}, but into an unordered {@link java.util.HashSet}, so it carries no
-	 * order anywhere); {@link #addActiveOrderPairInteractions} drains by {@code remove()} while walking
+	 * seeded from the WIDER of the two maps that method builds — {@code resolvedRows}' {@code keySet()},
+	 * never the naming one — but into an unordered {@link java.util.HashSet}, so it carries no order
+	 * anywhere); {@link #addActiveOrderPairInteractions} drains by {@code remove()} while walking
 	 * its own list; and {@link #canonicalSubjects} iterates only to build a lookup. For those three what
 	 * keeps a substance's chips in the position that row's chips had is the CALLER's iteration, and
 	 * replacing this with a {@code HashMap} would change no output there (measured before the fourth

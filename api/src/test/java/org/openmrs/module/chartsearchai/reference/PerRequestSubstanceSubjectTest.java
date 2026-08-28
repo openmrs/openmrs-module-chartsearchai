@@ -16,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -116,6 +117,15 @@ public class PerRequestSubstanceSubjectTest {
 							+ "alias repair changes this fixture and the premises below are about a "
 							+ "dataset the module cannot load: " + entry.getName());
 		}
+		// The same premise put to the production check itself rather than to the one rule of it this
+		// fixture was designed around, so an edit tripping some OTHER rule — a repair or a drop — is
+		// caught too. Asserted on freshly parsed entries because checkEntries MUTATES what it repairs.
+		DrugReferenceValidity validity = new DrugReferenceValidity();
+		validity.checkEntries(DrugReferenceTestSupport.fixtureEntries(FIXTURE));
+		assertEquals(Collections.<String> emptyList(),
+				DrugReferenceTestSupport.rulesOf(validity.getFindings()),
+				"precondition: the real load-time validity check must find nothing to repair or report "
+						+ "here, or this fixture is not a dataset a real load would produce");
 
 		assertEquals(qualified.substanceGroupKey(), unqualified.substanceGroupKey(),
 				"precondition: the two rows must be ONE substance, or there is no group to name");

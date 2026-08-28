@@ -297,6 +297,19 @@ public class CoMedicationResolutionPerPassTest {
 	 * <p>So the rule is stated over BODIES rather than over call shapes: these names may be mentioned
 	 * only where {@link #RESOLVER_BODIES} permits, and every mention outside them is a finding whatever
 	 * syntax it uses.
+	 *
+	 * <p><b>The residue, and why the chase stops here rather than at "there is none".</b> This reads
+	 * SOURCE TEXT with string literals blanked — deliberately, so that a method named in a javadoc is
+	 * prose and not a call — so a name reached AS a literal is outside it by construction. Demonstrated:
+	 * {@code getClass().getDeclaredMethod("entryForAtcCode", String.class)} with {@code setAccessible},
+	 * from inside {@code ruleAbout}, reinstates the full dataset walk per (subject, partner, code) with
+	 * the whole suite green. It is left uncovered on a judgement worth stating, because five earlier
+	 * evasions of this guard family were all fixed: the shapes that got through before — a field of
+	 * another type, a parenthesised initialiser, an annotation prefix, a method reference — are ways
+	 * ordinary code gets WRITTEN, and a regression can be made of them by accident. Writing reflection
+	 * into a private call inside the same class is not an accident, and no textual guard can close that
+	 * family, only push it one syntax further along. What a reader should take from this is that the
+	 * guard stops a REGRESSION and not a determined author.
 	 */
 	private static Pattern mentionOf(String resolver) {
 		return Pattern.compile("\\b" + resolver + "\\b");

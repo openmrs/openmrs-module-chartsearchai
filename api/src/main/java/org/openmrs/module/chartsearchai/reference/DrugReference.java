@@ -1055,13 +1055,13 @@ public class DrugReference {
 	 * admitted only where the form serves ONE site and no other, which is why {@code inhaler} is here
 	 * and those three are not.
 	 *
-	 * <p><b>Mouth, gut and anorectal have no term, deliberately.</b> {@code Oral administration} and
+	 * <p><b>Mouth, gut and anorectal have no term, deliberately</b>, and neither do
+	 * {@code transdermal}, {@code sublingual} and {@code buccal}. {@code Oral administration} and
 	 * {@code Rectal administration} are the systemic routes in the reference dictionary AND the way an
 	 * {@code A01}/{@code A07}/{@code C05A} presentation is given, so the recorded term cannot separate
-	 * the two readings and the honest answer is to narrow nothing. {@code transdermal},
-	 * {@code sublingual} and {@code buccal} name a surface but deliver systemically, so they name no
-	 * site HERE — and they do more than fail to match: {@link #ROUTES_OF_ENTRY} refuses the whole
-	 * record on them, which is not the same thing and is the difference that constant exists for.
+	 * the two readings; the other three name a surface and deliver through it. All five are members of
+	 * {@link #ROUTES_OF_ENTRY}, so none of them merely fails to match here — each refuses the whole
+	 * record, which is that constant's own distinction and applies to every word in this sentence.
 	 *
 	 * <p><b>A prefixed or suffixed spelling needs its own entry.</b> Matching is
 	 * {@link #containsWord}, whose prose boundary is symmetric, so {@code nasal} does not reach

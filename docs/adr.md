@@ -58,6 +58,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 50: An unmapped order's codes are narrowed to the presentation the chart records](#decision-50-an-unmapped-orders-codes-are-narrowed-to-the-presentation-the-chart-records)
 - [Decision 51: The injected record names a folded chip's partner in its own vocabulary](#decision-51-the-injected-record-names-a-folded-chips-partner-in-its-own-vocabulary)
 - [Decision 52: A folded chip reconciles a token two substances name when one of them names it outright](#decision-52-a-folded-chip-reconciles-a-token-two-substances-name-when-one-of-them-names-it-outright)
+- [Decision 53: The patient's co-medications are resolved once per validate pass, and the pairwise cap is not the lever](#decision-53-the-patients-co-medications-are-resolved-once-per-validate-pass-and-the-pairwise-cap-is-not-the-lever)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 
@@ -3341,3 +3342,60 @@ Re-derive rather than trusting the figures; they are a property of the dataset a
 - **− 34 of the 62 folded chips still show Decision 39's symptom**, and they are not all ties. 20 (`penicillin g`) and 12 (`antithrombin iii`) are: no substance claims those tokens as its own display name, so nothing says which of them a rule is about, and admitting on a tie would be the `Omeprazole`/`Esomeprazole` displacement in a different spelling. The other 2 are `gabapentin`, where the ranking is decisive and the ladder still loses because `canonicalRow` hands it the weaker claimant — recorded here rather than left to read as a tie, because closing it is a question about `entryForAtcCode`'s pick and not about this predicate. That shape is not gabapentin's alone: `A02BC05` resolves to `Omeprazole` against the token `esomeprazole` the same way, and there refusing is exactly what the guard is for. What is named here is the instance among these 62 chips, not the extent of the shape.
 - **− `uniqueStrongestClaimant` is now asked of a rule TOKEN as well as of a name the chart recorded**, which is wider than `DrugReference.nameMatchStrength`'s stated scope. The alternative was a second spelling of "strictly outranks every rival" inside the validator, and a second spelling could drift from this one in the direction that matters — admitting where this refuses puts one substance's rated mechanism under another's name. The candidate sets stay the callers' own and differ deliberately; only the comparison is shared.
 - **+ The two directions #292 pinned both still hold, and now for reasons that distinguish them.** `aRuleWhoseTokenNamesTwoSubstancesKeepsItsOwnToken` refuses because the ladder's `Omeprazole` row claims `esomeprazole` only as an alias while the `Esomeprazole` row claims it outright; `aRuleAboutAnotherSubstanceSharingTheCodeKeepsItsOwnToken` refuses at the `isNamed` gate, unchanged.
+
+## Decision 53: The patient's co-medications are resolved once per validate pass, and the pairwise cap is not the lever
+
+**Status: Accepted** (August 2026) — implemented, issue [#256](https://github.com/openmrs/openmrs-module-chartsearchai/issues/256).
+
+### Context
+
+#256 reports that `DrugSafetyValidator.validate` grows steeply with the number of drugs a question puts in play (D), attributes the growth to the pairwise arms, and observes that `chartsearchai.drugSafety.maxPairChips` (#131) caps CHIPS rather than WORK. It asks for the relayed figures to be re-derived, and poses a discriminator: *can the pairwise arms stop enumerating once the cap is reached, or does the cap's ordering requirement force full enumeration?* Its own provenance line says the numbers were relayed and not re-derived.
+
+Re-derived through the real `validate` — real `DdiDrugReferenceSource` load of the shipped 19 MB knowledge base, the real curated cross-reactivity groups, a context of 43 active orders with 16 carrying ATC codes and 27 by name only (the 3.7.1 ratio), 5 warmups and 20 reps, runs alternated between the two heads. Before the change:
+
+| drugs in play | 43 active orders | no active orders |
+|---|---|---|
+| 1 | 95–130 ms | 1.2 ms |
+| 2 | 136–188 ms | 3.7–4.6 ms |
+| 5 | 224–307 ms | 9.6–11.7 ms |
+| 10 | 482–488 ms | 30.3 ms |
+
+**The attribution in the ticket is wrong.** The per-extra-drug cost scales with the number of ORDERS, not with D — 2.15 ms at 0 orders, 5.12 at 5, 17.70 at 20, 35.04 at 43 — so the dominant term is D × O, a product, not D². The pairwise arms sit inside the "no active orders" column, which is everything the chart does not drive — those arms plus the drug-in-play ones — and that column is about 30 ms at ten drugs in play, roughly 6% of the pass. So 30 ms bounds the arms the ticket blamed rather than measuring them. A probe wrapping `orderPartners` (one run, not interleaved) attributed 42% of the one-drug pass and 77% of the ten-drug pass to that one method, at 1, 4 and 7 calls for D = 1, 5 and 10.
+
+`DrugSafetyValidator.classRelationships` runs per in-play SUBSTANCE and called `orderPartners(context)` each time. That resolution is a function of the pass's `context` and the loaded dataset, both fixed for the pass. The method's own javadoc had already named the remedy and declined to build it — *"widening them to the whole `validate` pass would … cut the repeated full scans, but they must then be locals threaded through the pass and NEVER fields"*, and *"the per-PASS memo stays unbuilt … Measure it the same way, interleaved and more than once, before treating the repeat as free at a larger order count."* #256 is that measurement.
+
+### Decision
+
+**One lazy per-pass resolution, threaded as a local: `DrugSafetyValidator.CoMedications`.**
+
+- `validate` constructs one and hands it to `addInteractionWarnings` → `classRelationships` / `ruleAbout`. `orderPartners` has one caller, inside the memo.
+- **Lazy, not eager.** A question that puts no substance in play — the commonest one — resolves nothing at all today, because `classRelationships` is never reached. An eager hoist into `validate` would make that question pay for a chart nothing asks about.
+- **Two memos, because there are two per-subject sweeps and memoising the resolution does not reach the second.** `ruleAbout` calls the uncached `entryForAtcCode(String)` — a full walk of `getAll()` — once per (subject, partner, code), so `entryByCode` is held by the memo for the whole pass and passed into `orderPartners` as a parameter rather than declared as its local.
+- **A per-call LOCAL and never a field**, #172's rule: the bean is a Spring singleton, and both memos are keyed on one patient's chart.
+
+**The ticket's discriminator is answered NO, and recorded on `maxPairChips()` itself** so the misreading is not re-derived from the cap's name: every candidate pair must be enumerated and evaluated before the cut, because the cut is defined as "the least severe go" and a pair's rating is not known until it has been evaluated — an early stop would change WHICH pairs are dropped, which is the one property the cap exists to guarantee (#131).
+
+### Alternatives rejected
+
+- **Stop the pairwise arms enumerating at the cap** — the ticket's own proposal. Refused on the ordering requirement above, and moot on the measurement: it could recover at most the 30 ms a chart-less pass costs at ten drugs — itself an upper bound, since the drug-in-play arms are inside it — leaving the ~460 ms that actually grew untouched.
+- **Widen `orderPartners`' four internal per-call memos to the pass, which is what its javadoc literally suggested.** Memoising the RESULT is strictly stronger — it removes the walk, the `OrderPartner` construction and `codesForThisSubstancesPresentations` as well as the sweeps — and simpler, one local rather than four threaded maps. The one thing the result memo does NOT reach is `ruleAbout`, which is why `entryByCode` is threaded as well; that half of the javadoc's suggestion is taken.
+- **Leaving `ruleAbout`'s sweep alone as immaterial.** Measured small: 0, 0, 3 and 5 sweeps at one, two, five and ten drugs in play, against 93 to 433 sweeps in total, over a chart built so that every active order shares an ATC subgroup with an in-play drug — because `ruleAbout` returns before resolving anything when the subject has no rule about an active order, and a class-only chip is the ordinary outcome. Kept anyway: it is a second copy of the same defect, invisible to any fixture that does not reach it, and the invariant the test pins would otherwise be fixture-conditional.
+- **A behavioural test for the field-versus-local distinction.** There is none to write: a field reassigned once per pass sweeps exactly as often as a local does, which is the limit `CLAUDE.md` already records for the analogous `recordedAllergens` memo. The single construction site is pinned structurally instead, by a source scan modelled on `ChipSubjectOneResolutionTest`'s.
+
+### Why sharing one partner list across subjects is sound
+
+Read out of the source rather than assumed. Every write to an `OrderPartner` — `nameByOrder`, `codes.add`, `codes.addAll`, `substances.add`, `substances.addAll`, `codesFromDataset` — happens inside `orderPartners` / `addPartnersForUnmappedOrders` while the list is being built; every touch downstream is a read (`classRelationships`, `ruleAbout`, `foldedPartnerLabel`, the chip sentences). `OrderPartner` declares no `equals`/`hashCode`, and the only structure keyed on one is the `LinkedHashMap` `classRelationships` builds fresh per call and its caller consumes inside one loop. `PatientClinicalContext` exposes no mutator, so the pass's context cannot change under the memo. And the two collection consumers copy rather than mutate: `DrugReference.atcSubgroups(Set)` builds a new set, `CrossReactivityGroup.containsAnyCode` only iterates.
+
+### Effect
+
+Same measurement, alternated runs, 43 active orders: ten drugs in play 482–488 ms → 130–173 ms; per extra drug in play 39–40 ms → 3.4–4.4 ms, and no longer a function of the order count (2.51 / 2.64 / 2.88 / 3.76 ms at 0 / 5 / 20 / 43 orders). One drug in play is indistinguishable, 95–130 ms against 96–134 ms, which is expected: one resolution either way.
+
+Behaviour-neutral, verified rather than argued: the full rendered chip list — type, severity and detail in full, for questions naming one to five drugs against an eight-order chart, 89 chips — is byte-identical across the two heads, order included.
+
+### Trade-offs
+
+- **+** The growth the ticket reports is removed at its cause, and the cause is not the one the ticket names. What remains is bounded by the chart-less pass, 30 ms at ten drugs in play.
+- **+** `validate` runs twice per request, so the saving is paid twice.
+- **−** Each pass still resolves the chart once, and `DrugReferenceInjector` resolves the active orders again for its own promotion predicate. Sharing one resolution across the two passes of a request is a larger change across the injector/validator boundary and is not taken here.
+- **−** The pairwise arms still enumerate every pair. That is the ordering requirement, not an oversight, and it is now recorded where the cap is defined.
+- **−** A third copy of the source-scanning machinery (`ChipSubjectOneResolutionTest` and `OrderPartnerNameSourceWritePathTest` have the other two). Unifying them is a change of its own; the first of those records that keeping them independent was deliberate.

@@ -723,8 +723,10 @@ public class DrugSafetyValidator {
 	 * early stop would change WHICH pairs are dropped, which is the one property this cap exists to
 	 * guarantee. Asking whether it could stop early was #256's own discriminator, and the answer is no.
 	 * <b>It also does not matter</b>, which is the part worth recording here: measured through the real
-	 * {@code validate} over the shipped knowledge base, the pairwise arms are about 30 ms of a 490 ms
-	 * ten-drug pass on a 43-order chart, roughly 6%. What grew with the question was the co-medication
+	 * {@code validate} over the shipped knowledge base, the SAME question against a chart with no
+	 * active orders at all costs 30 ms of a 490 ms ten-drug pass on a 43-order chart, roughly 6% — and
+	 * that 30 ms is the drug-in-play arms and the pairwise ones together, so it is an upper bound on
+	 * these rather than a measurement of them. What grew with the question was the co-medication
 	 * resolution the arms above run per in-play substance — see {@link CoMedications}, which is where
 	 * #256's fix went. Do not re-derive the misreading from the cap's name.
 	 *
@@ -5887,8 +5889,9 @@ public class DrugSafetyValidator {
 	 * {@code validate} over the shipped knowledge base with a 43-order chart, five interleaved runs:
 	 * 95–130 ms at one drug in play and 482–488 ms at ten, against 96–134 ms and 130–173 ms with this
 	 * class in place. A probe wrapping the resolution (one run, not interleaved) attributed 42% of the
-	 * one-drug pass and 77% of the ten-drug pass to it; the pairwise arms account for about 30 ms of
-	 * that ten-drug pass.
+	 * one-drug pass and 77% of the ten-drug pass to it. The same questions against a chart with NO
+	 * active orders cost 1.2 ms and 30 ms, which bounds everything the chart does not drive — the
+	 * pairwise arms the issue blamed included.
 	 *
 	 * <p><b>Lazy, and that is not an optimisation of an optimisation.</b> A question that puts no
 	 * substance in play — the commonest one — resolves nothing at all today, because
@@ -6091,9 +6094,10 @@ public class DrugSafetyValidator {
 		// ActiveDrugOrder, which is a per-request object, so a field would grow for the life of the JVM.
 		// The other two are bounded and take only the singleton reason — entryByCode by the ATC code
 		// space, impliedByName by the dataset's own aliases (see findImpliedByDrugName(String, Map)).
-		// The first of the four is the caller's, held for the whole pass because ruleAbout reads it too
-		// (issue #256, see CoMedications); the three below are this method's own, and since that issue
-		// this method runs once per pass, so they are per-pass by construction.
+		// Four between two owners since issue #256: entryByCode is the CALLER's, a parameter rather than
+		// a local, because ruleAbout reads it after this method has returned (see CoMedications); the
+		// three declared below are this method's own, and since that issue this method runs once per
+		// pass, so per-call and per-pass have become the same scope for them.
 		Map<PatientClinicalContext.ActiveDrugOrder, DrugReference> substanceByOrder =
 				new LinkedHashMap<PatientClinicalContext.ActiveDrugOrder, DrugReference>();
 		Map<PatientClinicalContext.ActiveDrugOrder, Map<Object, List<DrugReference>>> rowsByOrderName =

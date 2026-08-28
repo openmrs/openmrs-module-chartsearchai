@@ -385,7 +385,8 @@ public class DrugReferenceService {
 	 * names each (the coded drug's, the free text a clinician typed for a non-coded one, and the
 	 * concept's) and several orders of one family carry the same aliases, and
 	 * since issue #228 {@code DrugSafetyValidator.substanceRowsNamedBy}, which asks the same question of
-	 * the same names once per in-play substance. What the cache saves is not the match scan but the
+	 * the same names once per {@code validate} pass — once per IN-PLAY SUBSTANCE until issue #256
+	 * hoisted the co-medication resolution that reaches it to the pass. What the cache saves is not the match scan but the
 	 * WITNESS resolution behind it: each alias a matched row carries costs a {@link #findImpliedSubstances},
 	 * and those repeat across the names of one order and across orders of one family.
 	 *

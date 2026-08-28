@@ -38,7 +38,8 @@ import org.openmrs.module.chartsearchai.ModuleSourceRoot;
  * already had. The cost is NOT the pairwise arms the issue names: measured through the real
  * {@code validate} over the shipped knowledge base, it grows as drugs-in-play TIMES active orders
  * rather than as pairs, and on a 43-order chart a probe attributed 77% of a ten-drug pass to that one
- * method while the pairwise arms accounted for about 30 ms of 490.
+ * method, while ALL the work a chart-less pass does — the drug-in-play arms and the pairwise ones
+ * together — came to 30 ms of that 490, which is the upper bound on the arms the issue blamed.
  *
  * <p><b>What these cases count, and why that is the honest unit.</b> A timing assertion would be flaky
  * and machine-shaped. The repeat's own cost is full sweeps of the loaded dataset — what

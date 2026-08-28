@@ -303,10 +303,11 @@ public class CoMedicationResolutionPerPassTest {
 	 * prose and not a call — so a name reached AS a literal is outside it by construction. Demonstrated:
 	 * {@code getClass().getDeclaredMethod("entryForAtcCode", String.class)} with {@code setAccessible},
 	 * from inside {@code ruleAbout}, reinstates the full dataset walk per (subject, partner, code) with
-	 * the whole suite green. It is left uncovered on a judgement worth stating, because five earlier
-	 * evasions of this guard family were all fixed: the shapes that got through before — a field of
-	 * another type, a parenthesised initialiser, an annotation prefix, a method reference — are ways
-	 * ordinary code gets WRITTEN, and a regression can be made of them by accident. Writing reflection
+	 * the whole suite green. It is left uncovered on a judgement worth stating, and every earlier
+	 * evasion of this guard family WAS closed: those shapes — a memo field typed as something other
+	 * than {@code CoMedications}, a parenthesised initialiser, an annotation prefix, a method
+	 * reference — are ways ordinary code gets WRITTEN, and a regression can be made of them by
+	 * accident. Writing reflection
 	 * into a private call inside the same class is not an accident, and no textual guard can close that
 	 * family, only push it one syntax further along. What a reader should take from this is that the
 	 * guard stops a REGRESSION and not a determined author.
@@ -436,8 +437,8 @@ public class CoMedicationResolutionPerPassTest {
 	 * answers for whoever asked first.
 	 *
 	 * <p><b>Asked of the compiled CLASS and not of the source text, which is the point of it.</b> This
-	 * began as a regex over {@code DrugSafetyValidator.java} and four successive reviewers defeated it
-	 * in turn, each fix opening the next and every one of them green across the whole suite: a memo
+	 * began as a regex over {@code DrugSafetyValidator.java} and successive reviewers defeated it in
+	 * turn, each fix opening the next and every one of them green across the whole suite: a memo
 	 * typed as something other than {@code CoMedications}; then the same field given a parenthesised
 	 * INITIALISER, which met an exclusion written for method declarations; then a declaration prefixed
 	 * with {@code @SuppressWarnings("…")}, whose own paren the match-start could not cross. Each of

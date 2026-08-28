@@ -3179,11 +3179,15 @@ public class DrugSafetyValidator {
 	 *         is removed.
 	 *
 	 *         <p>A sweep of {@code getAll()} per folded chip whose ladder resolved an entry, deliberately
-	 *         uncached: the immediately preceding {@link #ruleAbout} in the same iteration already calls
-	 *         the UNCACHED {@link #entryForAtcCode} once per partner code, so this is one alias-list scan
-	 *         beside sweeps that were already there. If that ever needs a memo it is a per-call local
-	 *         threaded through, never a field — CLAUDE.md's rule, and the reasons are on
-	 *         {@link DrugReferenceService}.
+	 *         uncached — and <b>no longer one scan beside sweeps that were already there</b>, which is
+	 *         what this paragraph said until issue #256. It rested on {@link #ruleAbout} calling the
+	 *         UNCACHED {@code entryForAtcCode} once per partner code in the same iteration; that method
+	 *         now reads the pass's own cache ({@code CoMedications}), so at most one sweep per CODE per
+	 *         pass happens there and this one stands alone. It is kept uncached all the same: it runs
+	 *         once per FOLDED chip, which is the rare outcome of the class arm rather than the ordinary
+	 *         one, and it is keyed on a (rule, entry) pair rather than on a code, so the pass's cache
+	 *         has nothing to offer it. If it ever needs a memo it is a per-call local threaded through,
+	 *         never a field — CLAUDE.md's rule, and the reasons are on {@link DrugReferenceService}.
 	 */
 	private boolean unambiguouslyNames(DrugReference.Interaction rule, DrugReference entry) {
 		String token = rule.getToken();

@@ -1,0 +1,418 @@
+{
+  "metadata": {
+    "source": "test fixture — issue #296"
+  },
+  "note": "Rows copied field-for-field from the 19 MB openmrs-ddi-knowledge-base DDInter 2.0 dataset, in KB order, with every interaction row and mechanism text that falls wholly inside the slice. The BOUNDARY of issue #296's ranking, in the one arrangement that separates its two choices. `atropine` is Atropine's own display name (rank 2), and only an alias of both its Atropine (ophthalmic) presentation and the separate Hyoscyamine substance (rank 1 each) — all three publish A03BA01 and S01FA01, and Homatropine shares S01FA, which is what folds the class arm onto the rule arm. An order the dictionary did not map, recorded as `Atropine (ophthalmic)`, reaches the ladder through DrugSafetyValidator.addPartnersForUnmappedOrders, so the labelEntry is the PRESENTATION row rather than canonicalRow's pick. Its own claim merely ties Hyoscyamine's, so the fold must refuse; reading the SUBSTANCE's strongest row instead, or letting a tie through, would admit it. Rows, ids, codes, aliases and mechanism texts are the dataset's own; nothing here is hand-authored.",
+  "mechanisms": {
+    "6254": {
+      "text": "Agents with anticholinergic properties (e.g., sedating antihistamines; antispasmodics; neuroleptics; phenothiazines; skeletal muscle relaxants; tricyclic antidepressants; disopyramide) may have additive effects when used in combination.  Excessive parasympatholytic effects may result in paralytic ileus, hyperthermia, heat stroke, and the anticholinergic intoxication syndrome.  Peripheral symptoms of intoxication commonly include mydriasis, blurred vision, flushed face, fever, dry skin and mucous membranes, tachycardia, urinary retention, and constipation.  Central symptoms may include memory loss, disorientation, incoherence, hallucinations, psychosis, delirium, hyperactivity, twitching or jerking movements, stereotypy, and seizures.  Central nervous system-depressant effects may also be additively or synergistically increased when these agents are combined, especially in elderly or debilitated patients.  Use of neuroleptics in combination with other neuroleptics or anticholinergic agents may increase the risk of tardive dyskinesia.  In addition, some neuroleptics and tricyclic antidepressants may cause prolongation of the QT interval and theoretically, concurrent use of two or more drugs that can cause QT interval prolongation may result in additive effects and increased risk of ventricular arrhythmias including torsade de pointes and sudden death.",
+      "categories": [
+        "synergistic_effect"
+      ]
+    },
+    "1064": {
+      "text": "Agents with anticholinergic properties (e.g., sedating antihistamines; antispasmodics; neuroleptics; phenothiazines; skeletal muscle relaxants; tricyclic antidepressants; disopyramide) may have additive effects when used in combination. Excessive parasympatholytic effects may result in paralytic ileus, hyperthermia, heat stroke, and the anticholinergic intoxication syndrome. Peripheral symptoms of intoxication commonly include mydriasis, blurred vision, flushed face, fever, dry skin and mucous membranes, tachycardia, urinary retention, and constipation. Central symptoms may include memory loss, disorientation, incoherence, hallucinations, psychosis, delirium, hyperactivity, twitching or jerking movements, stereotypy, and seizures. Central nervous system-depressant effects may also be additively or synergistically increased when these agents are combined, especially in elderly or debilitated patients.",
+      "categories": [
+        "synergistic_effect"
+      ]
+    }
+  },
+  "drugs": [
+    {
+      "id": "DDInter136",
+      "name": "Atropine",
+      "rxcui": "1223",
+      "rxnorm_name": "atropine",
+      "drugbank_id": "DB00572",
+      "atc": [
+        "A03BA01",
+        "S01FA01"
+      ],
+      "ciel": [
+        {
+          "code": "103180",
+          "uuid": "103180AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Acetaminophen / atropine / ethaverine / salicylamide"
+        },
+        {
+          "code": "103735",
+          "uuid": "103735AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / benzoic acid / hyoscyamine / methenamine / methylene blue / phenyl salicylate"
+        },
+        {
+          "code": "103736",
+          "uuid": "103736AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / brompheniramine / phenyltoloxamine / pseudoephedrine"
+        },
+        {
+          "code": "103737",
+          "uuid": "103737AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / chlorpheniramine"
+        },
+        {
+          "code": "103738",
+          "uuid": "103738AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / chlorpheniramine / ephedrine"
+        },
+        {
+          "code": "103739",
+          "uuid": "103739AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / chlorpheniramine / hyoscyamine / phenylephrine / phenylpropanolamine / scopolamine"
+        },
+        {
+          "code": "103740",
+          "uuid": "103740AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / chlorpheniramine / phenylephrine / phenyltoloxamine"
+        },
+        {
+          "code": "103741",
+          "uuid": "103741AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / chlorpheniramine / phenylpropanolamine"
+        },
+        {
+          "code": "103743",
+          "uuid": "103743AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / difenoxin"
+        },
+        {
+          "code": "103744",
+          "uuid": "103744AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / diphenoxylate"
+        },
+        {
+          "code": "103745",
+          "uuid": "103745AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / edrophonium"
+        },
+        {
+          "code": "103746",
+          "uuid": "103746AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / hyoscyamine / phenobarbital / scopolamine"
+        },
+        {
+          "code": "103747",
+          "uuid": "103747AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / hyoscyamine / scopolamine"
+        },
+        {
+          "code": "103748",
+          "uuid": "103748AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / kaolin / phenobarbital"
+        },
+        {
+          "code": "103749",
+          "uuid": "103749AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / meperidine"
+        },
+        {
+          "code": "103752",
+          "uuid": "103752AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / phenobarbital"
+        },
+        {
+          "code": "103753",
+          "uuid": "103753AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / prednisolone"
+        },
+        {
+          "code": "71681",
+          "uuid": "71681AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine"
+        },
+        {
+          "code": "71682",
+          "uuid": "71682AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine sulfate"
+        }
+      ]
+    },
+    {
+      "id": "DDInter137",
+      "name": "Atropine (ophthalmic)",
+      "rxcui": "1223",
+      "rxnorm_name": "atropine",
+      "drugbank_id": null,
+      "atc": [
+        "A03BA01",
+        "S01FA01"
+      ],
+      "ciel": [
+        {
+          "code": "103180",
+          "uuid": "103180AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Acetaminophen / atropine / ethaverine / salicylamide"
+        },
+        {
+          "code": "103735",
+          "uuid": "103735AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / benzoic acid / hyoscyamine / methenamine / methylene blue / phenyl salicylate"
+        },
+        {
+          "code": "103736",
+          "uuid": "103736AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / brompheniramine / phenyltoloxamine / pseudoephedrine"
+        },
+        {
+          "code": "103737",
+          "uuid": "103737AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / chlorpheniramine"
+        },
+        {
+          "code": "103738",
+          "uuid": "103738AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / chlorpheniramine / ephedrine"
+        },
+        {
+          "code": "103739",
+          "uuid": "103739AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / chlorpheniramine / hyoscyamine / phenylephrine / phenylpropanolamine / scopolamine"
+        },
+        {
+          "code": "103740",
+          "uuid": "103740AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / chlorpheniramine / phenylephrine / phenyltoloxamine"
+        },
+        {
+          "code": "103741",
+          "uuid": "103741AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / chlorpheniramine / phenylpropanolamine"
+        },
+        {
+          "code": "103743",
+          "uuid": "103743AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / difenoxin"
+        },
+        {
+          "code": "103744",
+          "uuid": "103744AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / diphenoxylate"
+        },
+        {
+          "code": "103745",
+          "uuid": "103745AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / edrophonium"
+        },
+        {
+          "code": "103746",
+          "uuid": "103746AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / hyoscyamine / phenobarbital / scopolamine"
+        },
+        {
+          "code": "103747",
+          "uuid": "103747AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / hyoscyamine / scopolamine"
+        },
+        {
+          "code": "103748",
+          "uuid": "103748AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / kaolin / phenobarbital"
+        },
+        {
+          "code": "103749",
+          "uuid": "103749AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / meperidine"
+        },
+        {
+          "code": "103752",
+          "uuid": "103752AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / phenobarbital"
+        },
+        {
+          "code": "103753",
+          "uuid": "103753AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / prednisolone"
+        },
+        {
+          "code": "71681",
+          "uuid": "71681AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine"
+        },
+        {
+          "code": "71682",
+          "uuid": "71682AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine sulfate"
+        }
+      ]
+    },
+    {
+      "id": "DDInter865",
+      "name": "Homatropine",
+      "rxcui": "27084",
+      "rxnorm_name": "homatropine",
+      "drugbank_id": "DB11181",
+      "atc": [
+        "S01FA05"
+      ],
+      "ciel": [
+        {
+          "code": "104356",
+          "uuid": "104356AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Cocaine / homatropine"
+        },
+        {
+          "code": "104413",
+          "uuid": "104413AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Dehydrocholate / homatropine"
+        },
+        {
+          "code": "104414",
+          "uuid": "104414AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Dehydrocholate / homatropine / phenobarbital"
+        },
+        {
+          "code": "104821",
+          "uuid": "104821AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Homatropine / hydrocodone"
+        },
+        {
+          "code": "104822",
+          "uuid": "104822AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Homatropine / opium / pectin"
+        },
+        {
+          "code": "77555",
+          "uuid": "77555AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Homatropine"
+        },
+        {
+          "code": "77556",
+          "uuid": "77556AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Homatropine hydrobromide"
+        },
+        {
+          "code": "77557",
+          "uuid": "77557AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Homatropine methylbromide"
+        }
+      ]
+    },
+    {
+      "id": "DDInter896",
+      "name": "Hyoscyamine",
+      "rxcui": "1223",
+      "rxnorm_name": "atropine",
+      "drugbank_id": "DB00424",
+      "atc": [
+        "A03BA01",
+        "S01FA01"
+      ],
+      "ciel": [
+        {
+          "code": "103180",
+          "uuid": "103180AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Acetaminophen / atropine / ethaverine / salicylamide"
+        },
+        {
+          "code": "103735",
+          "uuid": "103735AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / benzoic acid / hyoscyamine / methenamine / methylene blue / phenyl salicylate"
+        },
+        {
+          "code": "103736",
+          "uuid": "103736AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / brompheniramine / phenyltoloxamine / pseudoephedrine"
+        },
+        {
+          "code": "103737",
+          "uuid": "103737AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / chlorpheniramine"
+        },
+        {
+          "code": "103738",
+          "uuid": "103738AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / chlorpheniramine / ephedrine"
+        },
+        {
+          "code": "103739",
+          "uuid": "103739AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / chlorpheniramine / hyoscyamine / phenylephrine / phenylpropanolamine / scopolamine"
+        },
+        {
+          "code": "103740",
+          "uuid": "103740AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / chlorpheniramine / phenylephrine / phenyltoloxamine"
+        },
+        {
+          "code": "103741",
+          "uuid": "103741AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / chlorpheniramine / phenylpropanolamine"
+        },
+        {
+          "code": "103743",
+          "uuid": "103743AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / difenoxin"
+        },
+        {
+          "code": "103744",
+          "uuid": "103744AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / diphenoxylate"
+        },
+        {
+          "code": "103745",
+          "uuid": "103745AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / edrophonium"
+        },
+        {
+          "code": "103746",
+          "uuid": "103746AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / hyoscyamine / phenobarbital / scopolamine"
+        },
+        {
+          "code": "103747",
+          "uuid": "103747AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / hyoscyamine / scopolamine"
+        },
+        {
+          "code": "103748",
+          "uuid": "103748AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / kaolin / phenobarbital"
+        },
+        {
+          "code": "103749",
+          "uuid": "103749AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / meperidine"
+        },
+        {
+          "code": "103752",
+          "uuid": "103752AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / phenobarbital"
+        },
+        {
+          "code": "103753",
+          "uuid": "103753AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine / prednisolone"
+        },
+        {
+          "code": "71681",
+          "uuid": "71681AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine"
+        },
+        {
+          "code": "71682",
+          "uuid": "71682AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Atropine sulfate"
+        }
+      ]
+    }
+  ],
+  "interactions": [
+    [
+      "DDInter136",
+      "DDInter865",
+      "Moderate",
+      "6254"
+    ],
+    [
+      "DDInter136",
+      "DDInter896",
+      "Moderate",
+      "1064"
+    ],
+    [
+      "DDInter865",
+      "DDInter896",
+      "Moderate",
+      "1064"
+    ]
+  ]
+}

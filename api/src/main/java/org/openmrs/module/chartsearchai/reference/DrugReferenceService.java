@@ -364,8 +364,11 @@ public class DrugReferenceService {
 	 * ({@link DdiDrugReferenceSource} makes the display name {@code alias[0]},
 	 * {@link AtcDrugReferenceSource} makes it the only alias) and, since issue #150, of
 	 * {@link DrugReferenceValidity}'s {@code sanitizeAliases}, which appends an entry's own name when it
-	 * is missing. So what would make this reachable is a future DATASET, not a future caller — re-derive
-	 * that count before relying on it. The narrowing is meanwhile doing real work and is not inert:
+	 * is missing — except, since issue #296, where that name is itself a string that names nothing, which
+	 * it REPORTS instead of repairing, for the reason recorded there. So an entry left without a
+	 * self-name IS constructible again, in a hand-authored file whose display name folds to nothing;
+	 * what would make this reachable is a future DATASET, not a future caller — re-derive that count
+	 * before relying on it. The narrowing is meanwhile doing real work and is not inert:
 	 * measured the same way through this method, it removes a substance the string does not name on
 	 * <b>276 of 29 808</b> order-name-shaped strings, {@code Hydrocortisone Injection vial 100mg} reaching
 	 * {@code Hydrocortisone butyrate} (issue #209) among them.
@@ -831,17 +834,37 @@ public class DrugReferenceService {
 
 	/** @return whether {@code row} claims the whole of {@code drugName} as a NAME
 	 *          ({@link DrugReference#NAME_IS_ANOTHER_NAME} or better) AND strictly more strongly than
-	 *          every other substance in {@code implied} — {@link #findNamedSubstances}'s first clause,
+	 *          every other candidate in {@code candidates} — {@link #findNamedSubstances}'s first clause,
 	 *          both halves. The rank floor is not a detail of the implementation: without it an
 	 *          uncontested CONTAINMENT match passes, which is the shape that reads
-	 *          {@code gallium — hives} and names a radiodiagnostic. */
-	private static boolean uniqueStrongestClaimant(String drugName, DrugReference row,
-			List<DrugReference> implied) {
+	 *          {@code gallium — hives} and names a radiodiagnostic.
+	 *
+	 *          <p><b>Package-visible since issue #296, for a second caller asking the same question of a
+	 *          different string.</b> {@code DrugSafetyValidator.unambiguouslyNames} asks it of a rule's
+	 *          match TOKEN rather than of a name the chart recorded, to decide whether a folded chip may
+	 *          call an active order by the class arm's label instead of by that token. One definition
+	 *          rather than two: both callers are deciding whether a name may be PRINTED as this
+	 *          substance's, and a second spelling of "strictly outranks every rival" could drift from
+	 *          this one in the direction that matters — admitting where this refuses puts one
+	 *          substance's rated mechanism under another's name.
+	 *
+	 *          <p><b>The candidate set is the caller's</b>, and the two differ on purpose. This one is
+	 *          {@link #findImpliedSubstances}'s output: one representative row per substance, over a
+	 *          {@link DrugReference#matchesDrugName} superset. The validator's is every row the token
+	 *          {@link DrugReference#isNamed}s, minus the rows of {@code row}'s own substance — so a
+	 *          sibling presentation of the substance being named cannot contest its own family's claim,
+	 *          and a rival substance is measured by its STRONGEST row rather than by a representative.
+	 *          What is shared is the comparison, which is the part that must not be written twice.
+	 *
+	 *          <p>Strictly, so a TIE refuses: two substances that claim a name equally cannot say which
+	 *          of them it denotes, and both callers need that answer to be "neither". */
+	static boolean uniqueStrongestClaimant(String drugName, DrugReference row,
+			List<DrugReference> candidates) {
 		int claim = row.nameMatchStrength(drugName);
 		if (claim < DrugReference.NAME_IS_ANOTHER_NAME) {
 			return false;
 		}
-		for (DrugReference other : implied) {
+		for (DrugReference other : candidates) {
 			if (other != row && other.nameMatchStrength(drugName) >= claim) {
 				return false;
 			}

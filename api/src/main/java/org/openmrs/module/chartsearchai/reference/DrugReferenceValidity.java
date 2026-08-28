@@ -42,7 +42,9 @@ import org.slf4j.Logger;
  * it requires (#242) — an empty PARSE of a non-empty file, where #149 made an empty LOAD loud.
  *
  * <p><b>Why the remedies differ per rule, deliberately.</b> Making them uniform would be a decision taken
- * by default. Each rule below records which of the three it takes and why:
+ * by default. Each rule below records which of the three it takes and why — one of them, since issue
+ * #296, records TWO, so a rule id is not a unique key over one load's findings and a reader picking a
+ * finding by rule id alone can be reading a partial count ({@link #ENTRY_NOT_NAMED_BY_ITS_OWN_ALIASES}):
  * <ul>
  *   <li>{@link Remedy#DROPPED} where the offending VALUE is the whole defect and the rest of the entry
  *       is usable. Dropping more than that would trade a fail-open for a silent fail-closed, and this
@@ -118,8 +120,19 @@ public final class DrugReferenceValidity {
 	 */
 	public static final String NULL_LIST_ELEMENT = "null-list-element";
 
-	/** An entry that none of its own aliases names, so the ranked resolution can reach a claimant that
-	 *  is not in the candidate set — issues #210, #211. */
+	/**
+	 * An entry that none of its own aliases names, so the ranked resolution can reach a claimant that is
+	 * not in the candidate set — issues #210, #211.
+	 *
+	 * <p><b>The one rule id with two {@code report} call sites, so the one that can carry TWO remedies
+	 * and two findings in one load</b>
+	 * (issue #296). {@link Remedy#REPAIRED} where the entry's display name is a name at all, which is
+	 * the #210/#211 shape; {@link Remedy#REPORTED} where that name itself names nothing, which cannot be
+	 * repaired without putting back exactly what {@link #BLANK_ALIAS} drops — {@code sanitizeAliases}
+	 * carries the argument. Each finding counts only its own shape, so neither
+	 * {@code getOccurrences()} is the total for this rule; a caller that wants one of them must select
+	 * on the REMEDY and not on the rule id.
+	 */
 	public static final String ENTRY_NOT_NAMED_BY_ITS_OWN_ALIASES = "entry-not-named-by-its-own-aliases";
 
 	/** A rule-bearing entry sharing a published name with another entry, neither declaring which
@@ -777,7 +790,12 @@ public final class DrugReferenceValidity {
 	 * exactly the thing that fails open and nothing else, which is why it is preferred over refusing the
 	 * entry rather than merely gentler than it.
 	 *
-	 * <p><b>An entry no alias of its own names is REPAIRED</b> (#210, #211). The ranked resolution rests on
+	 * <p><b>An entry no alias of its own names is REPAIRED</b> (#210, #211) — <b>except where its display
+	 * NAME is itself a string that names nothing, which is REPORTED instead</b> (#296). Repairing that
+	 * one would append as an alias exactly what the blank-alias rule above drops, and leave the entry
+	 * answering {@link DrugReference#isNamed} for a string {@link DrugReference#matchesDrugName} can
+	 * never match — the disagreement {@link DrugReference#setAliases}' trim exists to make impossible.
+	 * So one rule id can carry two remedies in one load, and each says which entries it applied to. The ranked resolution rests on
 	 * a property of the PARSERS: {@link DdiDrugReferenceSource} makes an entry's display name its first
 	 * alias and {@link AtcDrugReferenceSource} makes it the only one, so on both of those the strongest
 	 * claimant on any alias an entry carries is itself in the matched set. A hand-authored {@code json}
@@ -789,13 +807,24 @@ public final class DrugReferenceValidity {
 	 * holds by construction on every format instead of resting on the shape of the file.
 	 *
 	 * <p>Lowercased as those parsers lowercase theirs, so an alias list stays one vocabulary; the authored
-	 * aliases are kept and the name is appended, so nothing an author wrote is replaced.
+	 * aliases are kept and the name is appended, so nothing an author wrote is replaced. Kept as
+	 * {@link DrugReference#setAliases} stores them, which since issue #296 is TRIMMED — surrounding
+	 * whitespace is the one thing an author writes that does not survive, because untrimmed it makes
+	 * {@link DrugReference#isNamed} and {@link DrugReference#matchesDrugName} disagree about the same
+	 * pair. That setter carries the measurement; this pass sees the trimmed list and its own rules are
+	 * unaffected by it: both of them read an alias through {@code namesAnything}, which folds before it
+	 * looks for a letter or digit, or through {@link DrugReference#normalizeName}, which trims — so a
+	 * padded alias answered THOSE predicates exactly as its trimmed form does. That is the narrow sense
+	 * in which nothing here moves, and not the false general one: the trim exists precisely because
+	 * {@link DrugReference#matchesDrugName} did NOT answer alike.
 	 */
 	private void sanitizeAliases(List<DrugReference> entries) {
 		int blanks = 0;
 		int unnamed = 0;
+		int unnameable = 0;
 		Set<String> blankIn = new LinkedHashSet<String>();
 		Set<String> unnamedIn = new LinkedHashSet<String>();
+		Set<String> unnameableIn = new LinkedHashSet<String>();
 		for (DrugReference entry : entries) {
 			List<String> usable = new ArrayList<String>(entry.getAliases().size() + 1);
 			for (String alias : entry.getAliases()) {
@@ -815,8 +844,31 @@ public final class DrugReferenceValidity {
 			// blank is unnamed once it is gone. Gated on the display name being a name at all — the
 			// curated parser already drops a blank-named entry, and repairing one by giving it a blank
 			// alias would put back exactly what the rule above took out.
+			//
+			// That gate is namesAnything and not merely non-null, because the two disagree on exactly the
+			// string this comment is about (issue #296). normalizeName only trims, so a display name of
+			// combining marks alone survives it and the repair re-added an alias the drop above had just
+			// removed for naming nothing — measured on a real load of an entry named "\u0301", which came
+			// out carrying it again on both the json and the atc arms, with BOTH findings reported. Callers
+			// downstream read this pass's output as "no loaded alias names nothing", and one of them now
+			// rests a rank derivation on it: DrugReference.setAliases stores the list trimmed so that
+			// isNamed implies matchesDrugName, and an alias that folds to an empty needle is the one
+			// survivor of that trim. Leaving such an entry with no alias at all is the right answer for a
+			// display name that names nothing — and the branch below reports it, because dropping the
+			// repair dropped the only line the operator got for that shape: blank-alias fires on the
+			// ALIAS list, so an entry named "---" with healthy aliases used to raise this rule REPAIRED
+			// and would otherwise now raise nothing.
 			String own = DrugReference.normalizeName(entry.getName());
-			if (own != null && !entry.isNamed(own)) {
+			if (own != null && !namesAnything(own)) {
+				// What the two shapes cost differs, which is why the finding's text says both: measured
+				// through the real service, an entry named "---" whose other aliases are healthy is found
+				// by those (`findByDrugName("warfarin sodium")` returns it) and by nothing under its own
+				// name, while one whose whole alias list named nothing is left with none and is found by
+				// nothing at all.
+				unnameable++;
+				unnameableIn.add(entry.getName());
+			}
+			else if (own != null && !entry.isNamed(own)) {
 				unnamed++;
 				unnamedIn.add(entry.getName());
 				usable.add(own);
@@ -835,6 +887,18 @@ public final class DrugReferenceValidity {
 					unnamed + " entr(ies) whose aliases omitted their own name were given it, so the "
 							+ "strongest claimant on a name is always among the entries that name "
 							+ "matches. Entries: " + sample(unnamedIn));
+		}
+		if (unnameable > 0) {
+			report(ENTRY_NOT_NAMED_BY_ITS_OWN_ALIASES, Remedy.REPORTED, unnameable,
+					unnameable + " entr(ies) whose display NAME names nothing (blank once folded, or "
+							+ "nothing but combining marks or punctuation) were left unnamed rather than "
+							+ "repaired: giving such an entry its own name as an alias would put back "
+							+ "exactly what the blank-alias rule drops, and would leave it answering "
+							+ "isNamed for a string nothing can match. Its own NAME then reaches no "
+							+ "name-driven arm, so the entry is findable only by whatever other aliases it "
+							+ "carries and by nothing at all where it carries none; fix the name in the "
+							+ "file. Entries: "
+							+ sample(unnameableIn));
 		}
 	}
 

@@ -1,0 +1,37 @@
+{
+  "version": "1.0",
+  "source": "test fixture — an operator-authored alias carrying padding",
+  "description": "Issue #296's ranking runs DrugReference.nameMatchStrength, which gates on matchesDrugName; that predicate hands the alias to containsBoundedToken as the needle and trims nothing, while DrugReference.isNamed trims both operands through normalizeName. Warfarin's only authored alias is ' warfarin' with a leading space, which a curated json file can carry: JsonDrugReferenceSource is plain Jackson. Untrimmed, that row IS named by the rule's token and claims it at no rank at all, so the fold's isNamed gate admits the pair and the rank floor refuses it — and the same padding on a RIVAL row drops that row out of the contest and licenses a displacement instead. DrugReference.setAliases stores the list trimmed so neither can happen; this fixture is what reddens if that trim is removed.",
+  "entries": [
+    {
+      "id": "acenocoumarol",
+      "name": "Acenocoumarol",
+      "aliases": [
+        "acenocoumarol"
+      ],
+      "atcCodes": [
+        "B01AA07"
+      ],
+      "interactions": [
+        {
+          "token": "warfarin",
+          "atc": "B01AA03",
+          "severity": "Major",
+          "note": "Major. Two coumarin anticoagulants together compound the bleeding risk."
+        }
+      ],
+      "source": "test fixture"
+    },
+    {
+      "id": "warfarin",
+      "name": "Warfarin",
+      "aliases": [
+        " warfarin"
+      ],
+      "atcCodes": [
+        "B01AA03"
+      ],
+      "source": "test fixture"
+    }
+  ]
+}

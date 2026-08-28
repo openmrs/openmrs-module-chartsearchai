@@ -72,7 +72,7 @@ import org.junit.jupiter.api.Test;
  * the limit CLAUDE.md records for the analogous {@code recordedAllergens} memo — so the single
  * construction site is asserted structurally instead, together with the class's whole FIELD BUDGET:
  * one mutable field, the injected service. That second half is asked of the compiled CLASS rather
- * than of the source, because four reviewers in turn defeated the regex that asked it of the text —
+ * than of the source, because successive reviewers in turn defeated the regex that asked it of the text —
  * see {@link #theBeanHoldsNoStateButTheInjectedService}. And a NEW per-subject caller of
  * {@code orderPartners}, or of the uncached {@code entryForAtcCode(String)}, in an arm these fixtures
  * do not exercise would reintroduce the defect invisibly: {@code ruleAbout} was the second such caller

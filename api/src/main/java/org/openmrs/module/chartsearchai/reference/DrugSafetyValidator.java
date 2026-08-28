@@ -2217,9 +2217,9 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * The rows of each substance {@code inPlay} names, grouped: {@link #substanceRows} over
-	 * {@code inPlay}, each group additionally carrying the rows of that same substance the patient's own
-	 * ACTIVE ORDERS resolved.
+	 * The rows of each substance {@code candidates} names, grouped: {@link #substanceRows} over
+	 * {@code candidates}, each group additionally carrying the rows of that same substance the patient's
+	 * own ACTIVE ORDERS resolved.
 	 *
 	 * <p><b>Called TWICE per {@code validate}, with two candidate sets, and the difference is what issue
 	 * #238 turns on.</b> Over the whole {@code inPlay} set it produces {@code resolvedRows} — every row of
@@ -2269,8 +2269,8 @@ public class DrugSafetyValidator {
 	 * mutates nothing shared.
 	 */
 	private static Map<Object, List<DrugReference>> resolvedSubstanceRows(
-			Collection<DrugReference> inPlay, List<DrugReference> orderEntries) {
-		Map<Object, List<DrugReference>> groups = substanceRows(inPlay);
+			Collection<DrugReference> candidates, List<DrugReference> orderEntries) {
+		Map<Object, List<DrugReference>> groups = substanceRows(candidates);
 		for (DrugReference ordered : orderEntries) {
 			List<DrugReference> rows = groupFor(groups, ordered);
 			// contains() is identity here — DrugReference defines no equals, and both sets are resolved
@@ -4107,21 +4107,39 @@ public class DrugSafetyValidator {
 				// label below names, so a withheld pair is recoverable under the name the chip would
 				// have carried.
 				//
-				// The shared lookup since issue #236 (issue #174 site 3 put it on this arm's own rows,
-				// anchored on the patient's order names by #194). No chip moves: this arm's group and
-				// the shared one differ only where some row of an ordered substance is IN PLAY — the
-				// shared group appends the order rows to substanceRows(inPlay), so even an identical
-				// membership can arrive re-ordered and canonicalRow keeps the earliest on a tie — and
-				// a substance in play has already been through addInteractionWarnings over a superset
-				// row set and a superset context, which chips every group bestRulePerPartner returns
-				// and records each in InteractionPairs, so alreadyReported skips it above. What can
-				// move is the WITHHELD-pair WARN label below, whose partnerSubject is read where the
-				// PARTNER's substance is in play and the subject's is not; that needs a dataset whose
-				// two directions carry different rules, and DdiDrugReferenceSource writes each
-				// interaction row onto BOTH drugs' entries (its two partners.computeIfAbsent calls), so
-				// a ddinter pair is symmetric or absent — a curated json file is where the shape lives.
-				// Unified anyway: the arms must not hold two answers to one question, which is what let
-				// them disagree before.
+				// The naming group (SubstanceSubjects.groupOf's namingGroups map) IS this arm's own
+				// fold, not merely close to it — since issue #238. This method's only call site
+				// (validate(), gated on questionDrugs.isEmpty()) hands namingRows =
+				// resolvedSubstanceRows(questionDrugs, orderEntries), which for THIS arm reduces to
+				// resolvedSubstanceRows(<empty set>, orderEntries): substanceRows(<empty set>) is an
+				// empty map, so the fold does nothing but walk orderEntries and groupFor/add each row
+				// in list order — byte-for-byte the `substances = substanceRows(orderDrugs)` map this
+				// method builds for itself a few lines above, same membership and the same order.
+				// Both rows this loop ever hands subjectOf are drawn from that same orderDrugs list —
+				// ref, always one of substance's own rows, and partner, always
+				// activeOrderEntryFor(orderDrugs, ref, i)'s answer or null — so the lookup always hits
+				// the naming group and never falls through to allGroups (the fuller resolvedRows,
+				// built from inPlay, which can differ from questionDrugs wherever the ANSWER named a
+				// substance the question and the orders did not). There is no re-ordering to have and
+				// no fallback to reach: for this arm the two maps are not merely equal, they are the
+				// same construction over the same list, so the WITHHELD-pair WARN label below can
+				// never diverge from the chip's. That is a stronger guarantee than the question-pair
+				// arm gets (its own comment above, near addQuestionPairInteractions' use of
+				// interactionSubject): there, namingRows is substanceRows(questionDrugs) with THIS
+				// arm's own order rows appended on top, by design (issue #175) — a substance the
+				// question names can still pick up an order row in its naming group that the pair loop
+				// itself never iterates, so the two are provably non-empty for every row that arm asks
+				// about but not provably the identical construction the way they are here, where
+				// orderEntries is the only source either map draws from.
+				//
+				// ddinter symmetry is what makes a labelling divergence hypothetically possible at
+				// all, so it is still worth naming even though the reduction above closes it for this
+				// arm: DdiDrugReferenceSource writes each interaction row onto BOTH drugs' entries (its
+				// two partners.computeIfAbsent calls), so a ddinter pair's rule is symmetric or absent
+				// and only a curated json file could carry different rules per direction.
+				// Unified anyway, as a design choice and not only as this arm's happy accident: the
+				// arms must not hold two answers to one question, which is what let them disagree
+				// before issue #236.
 				DrugReference subject = subjects.subjectOf(ref);
 				DrugReference partnerSubject = partner != null ? subjects.subjectOf(partner) : null;
 				pairs.add(new ScreenedPair(interactionWarning(subject, i),

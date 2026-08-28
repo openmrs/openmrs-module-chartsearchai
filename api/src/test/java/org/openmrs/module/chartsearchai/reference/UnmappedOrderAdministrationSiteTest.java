@@ -64,6 +64,8 @@ public class UnmappedOrderAdministrationSiteTest {
 
 	private static final String DICLOFENAC_QUESTION = "Is it safe to give diclofenac?";
 
+	private static final String GRISEOFULVIN_QUESTION = "Is it safe to give griseofulvin?";
+
 	/** The curated sentence the issue #88 fold appends to the rated aspirin/ketoprofen rule. */
 	private static final String NSAID_GROUP_SENTENCE = "Acetylsalicylic acid (aspirin) is in the same"
 			+ " cross-reactivity group (NSAID) as active order Ketoprofen — possible additive or"
@@ -229,6 +231,46 @@ public class UnmappedOrderAdministrationSiteTest {
 	}
 
 	@Test
+	public void aGroupNamedForSystemicUseIsNotKeptByTheSiteItsPrefixSitsUnder() throws IOException {
+		// The conjunct that would otherwise be free to delete: codesAtSites asks
+		// isLocallyAppliedAtcCode as well as the site's group prefixes, so the SYSTEMIC_USE_EXCEPTIONS
+		// nested inside a matched site are honoured without a second copy of that list.
+		//
+		// Terbinafine is D01AE15 (topical antifungal) and D01BA02 — and D01B is "Antifungals for
+		// systemic use", which sits under the D prefix the skin claims. Griseofulvin publishes D01BA01,
+		// so without the conjunct a topical terbinafine cream would be reported as duplicating an oral
+		// griseofulvin. Both halves are asserted, because the emptiness alone would also be satisfied by
+		// an arm that never ran.
+		assertEquals(
+				Collections.singletonList("Griseofulvin is in the same ATC class (D01BA) as active order"
+						+ " Terbinafine — possible duplicate therapy"),
+				DrugReferenceTestSupport.details(shippedChips(GRISEOFULVIN_QUESTION, terbinafine())),
+				"the control: unnarrowed, the systemic antifungal class is what the two share");
+
+		assertEquals(Collections.<String> emptyList(), DrugReferenceTestSupport
+				.details(shippedChips(GRISEOFULVIN_QUESTION, terbinafine("Topical"))));
+	}
+
+	@Test
+	public void anOrderNamedOnlyByItsCodesCarriesWhatTheChartRecordsToo() {
+		// The issue #290 rung. Nothing reads these terms on an order the builder puts here — such an
+		// order always carries ATC codes, so the code walk groups it and the name-resolution leg never
+		// sees it — and the factory carries them anyway, for the reason its javadoc gives. Pinned
+		// because an overload with no case is one the next change can quietly drop the argument from.
+		assertEquals(DrugReferenceTestSupport.set("nasal administration"),
+				PatientClinicalContext.ActiveDrugOrder
+						.namedByCodesOnly("order-234-codes", "[ATC R01AA05]",
+								DrugReferenceTestSupport.set("R01AA05"),
+								DrugReferenceTestSupport.set("Nasal administration"))
+						.getAdministrationTerms());
+		assertEquals(Collections.<String> emptySet(),
+				PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly("order-234-codes",
+						"[ATC R01AA05]", DrugReferenceTestSupport.set("R01AA05"))
+						.getAdministrationTerms(),
+				"and the overload that says nothing about administration keeps meaning nothing recorded");
+	}
+
+	@Test
 	public void everyLocallyAppliedCodeInTheShippedKnowledgeBaseIsAccountedFor() {
 		// The partition guard, and the case that would have caught this change's own first draft: it
 		// mapped the eye to S01 and the ear to S02 and dropped S03 "Ophthalmological and otological
@@ -281,6 +323,10 @@ public class UnmappedOrderAdministrationSiteTest {
 
 	private static PatientClinicalContext ketoprofen(String... administration) {
 		return order("Ketoprofen 2.5% preparation", administration);
+	}
+
+	private static PatientClinicalContext terbinafine(String... administration) {
+		return order("Terbinafine 1% preparation", administration);
 	}
 
 	/** One unmapped active order — no ATC codes, so the arm reaches it only by name — carrying whatever

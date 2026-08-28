@@ -5292,6 +5292,13 @@ public class DrugSafetyValidator {
 		 * <p>Not read by the CLASS comparison, which wants these codes whatever their provenance —
 		 * they are what the reference data says the substance is, and without them the arm cannot
 		 * reach an unmapped order at all.
+		 *
+		 * <p>Since issue #234 "the DATASET's" is still the right word for the provenance but no longer
+		 * means the substance's whole list: {@link DrugSafetyValidator#addPartnersForUnmappedOrders}
+		 * narrows them to the presentation the order's own recorded route or dose form names. That
+		 * changes nothing here — the flag is about where the codes came FROM, and a narrowed reference
+		 * row's codes are still reference rows' on both sides of the exact-code leg, which is the whole
+		 * reason that leg is scoped out.
 		 */
 		private boolean codesFromDataset;
 
@@ -5862,7 +5869,11 @@ public class DrugSafetyValidator {
 	 * same "as active order Dexamethasone" whether or not a dictionary classified the concept, which is
 	 * the property this fix is for. The codes are that same row's, for the same reason and because there
 	 * is no alternative: the order published none, so what the reference data files the substance under
-	 * is the only classification there is.
+	 * is the only classification there is — <b>except for the one thing the order CAN say about itself,
+	 * which is where the drug is applied</b>. Since issue #234 those codes pass through
+	 * {@link DrugReference#codesForRecordedAdministration} first, so a substance marketed by several
+	 * routes is compared on the presentation the chart records rather than on all of them. Where the
+	 * chart records nothing this module can attribute to a site, the sentence above stands unchanged.
 	 *
 	 * <p><b>WHICH row of the substance</b> is {@link #interactionSubject}, not the bare fold. A partner
 	 * reached from an ATC CODE has no recorded name to prefer, which is why {@link #entryForAtcCode}

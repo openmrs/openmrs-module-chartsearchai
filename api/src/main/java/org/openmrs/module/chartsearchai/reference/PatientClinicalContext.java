@@ -553,6 +553,18 @@ public class PatientClinicalContext {
 		 * applied even though no name for it could be read (issue #234). Two overloads rather than one
 		 * for the reason the constructors above have three: a caller that says nothing about
 		 * administration must keep meaning "nothing is recorded".
+		 *
+		 * <p><b>Nothing READS those terms on an order built here today, and that is a property of the
+		 * builder rather than of this class.</b> The site narrowing they exist for is applied in
+		 * {@code DrugSafetyValidator.addPartnersForUnmappedOrders}, which resolves a partner from an
+		 * order's NAMES — and this rung has none. {@link PatientClinicalContextBuilder} only reaches it
+		 * for an order carrying ATC codes, which the same builder folds into
+		 * {@link PatientClinicalContext#getActiveDrugAtcCodes()}, so such an order is grouped by the
+		 * code walk and never offered to that leg at all. They are carried anyway because this class
+		 * records what the chart says about an order and not what some arm currently asks of it; a
+		 * hand-built context can put a code-only order outside the flattened set, and a future rung
+		 * that reads administration off the code walk would otherwise find the field empty for exactly
+		 * the orders it was added for.
 		 */
 		static ActiveDrugOrder namedByCodesOnly(String uuid, String display, Set<String> atcCodes,
 				Set<String> administrationTerms) {

@@ -74,7 +74,9 @@ public class SafetyWarning {
 	private final boolean uncorroboratedChartMatch;
 
 	/** The rule {@link #reconciledPartnerNoteName} was decided on — see that accessor. Null for every
-	 *  warning no fold reconciled, which is every warning but a folded interaction chip's. */
+	 *  warning that carries no reconciled name, which is every warning but a folded interaction chip's
+	 *  whose fold RECONCILED: a folded chip whose fold refused answers null here too, deliberately, so
+	 *  that a refusal and an absent fold are one answer to the record. */
 	private final DrugReference.Interaction reconciledRule;
 
 	private final String reconciledNoteName;
@@ -346,8 +348,12 @@ public class SafetyWarning {
 	 * {@code preAnswerFindings}: a second walk is the two-resolutions-that-agree shape issue #151
 	 * forbids, and its failure mode is silent and one-directional.
 	 *
-	 * <p><b>It is the RECORD's vocabulary and never the chip's.</b> The chip's name can be
-	 * {@link DrugReference#displayLabel()}, which may not enter this record's prose
+	 * <p><b>It is the RECORD's own vocabulary</b> — the dataset's {@code getName()} where the dataset has
+	 * a name for the partner, the rule's own token everywhere else — and never
+	 * {@link DrugReference#displayLabel()}. On the rung where the ladder found no name the two surfaces
+	 * do end up on one string, which is not a counterexample: they agree there because both take the
+	 * rule's token, not because this one took the chip's. The chip's name can be
+	 * {@code displayLabel()}, which may not enter this record's prose
 	 * ({@code DrugSafetyChipLabelTest.displayLabelNeverLeaksIntoTheRenderedRecordText}), so the two
 	 * surfaces name one SUBSTANCE in each one's own vocabulary rather than sharing one string —
 	 * {@code Acetylsalicylic acid} in the note beside {@code Acetylsalicylic acid (aspirin)} in the

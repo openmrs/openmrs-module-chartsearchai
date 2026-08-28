@@ -52,7 +52,9 @@ public class OneNameAcrossChipAndInjectedRecordTest {
 	/**
 	 * A context of ONE active drug order, carrying the per-order structure
 	 * {@link PatientClinicalContextBuilder} always attaches for a real patient — the shape the record's
-	 * adoption of the fold's name is gated on, and the only shape production builds. The flattened sets
+	 * adoption of the fold's name is gated on. {@code PatientClinicalContextBuilder} attaches that list
+	 * for every patient whose orders it can read; the one shape it builds without it is its null-patient
+	 * early return, which carries no drug names or codes either and so folds nothing. The flattened sets
 	 * carry the same name and codes, exactly as that builder writes them.
 	 */
 	private static PatientClinicalContext oneOrder(String display, Set<String> codes) {

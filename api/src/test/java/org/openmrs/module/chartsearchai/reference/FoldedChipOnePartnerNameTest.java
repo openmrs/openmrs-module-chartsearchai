@@ -42,7 +42,7 @@ import org.junit.jupiter.api.Test;
  *
  * <p>Driven through the real {@link DrugSafetyValidator#validate} over datasets read by the real
  * parsers, because the defect is in what the two arms make of a real context: the bundled curated seed
- * through its real load path, the bundled DDInter sample, a pinned DDInter excerpt, and the five json
+ * through its real load path, the bundled DDInter sample, a pinned DDInter excerpt, and the json
  * fixtures named below.
  */
 public class FoldedChipOnePartnerNameTest {
@@ -95,6 +95,11 @@ public class FoldedChipOnePartnerNameTest {
 	 *  the token names both — but it is one of them's own display NAME and only the other's alias. */
 	private static final String OUTRANKED_TOKEN_FIXTURE =
 			"chartsearchai-test/ddi-fold-outranked-token.json";
+
+	/** An operator-authored alias carrying padding, where issue #296's ranking refuses a reconciliation
+	 *  the existence form allowed — the one direction that change is NOT a widening. */
+	private static final String PADDED_ALIAS_FIXTURE =
+			"chartsearchai-test/drug-reference-fold-padded-alias.json";
 
 	/** The BOUNDARY of that ranking (issue #296): the ladder's own row merely TIES the rival substance,
 	 *  while a sibling presentation of its own substance outranks both. */
@@ -286,7 +291,7 @@ public class FoldedChipOnePartnerNameTest {
 	 * {@code Omeprazole} row, whose claim on {@code esomeprazole} is an alias while the {@code Esomeprazole}
 	 * row's is its own display name — so the ladder's row loses and the displacement is refused, as it was
 	 * before that issue and for a reason that now distinguishes this pair from
-	 * {@link #aRuleTokenTheLaddersSubstanceOutranksIsHandedToBothSentences}, where the ladder's row wins.
+	 * {@link #aRuleTokenTheLaddersRowOutranksIsHandedToBothSentences}, where the ladder's row wins.
 	 * This fixture reproduces the collision through the real parser — two rows publishing
 	 * {@code A02BC05} and sharing the {@code rxnorm_name} the token is, while remaining two substances.
 	 *
@@ -345,7 +350,7 @@ public class FoldedChipOnePartnerNameTest {
 	 * keeps it clear of the narrowing the ticket rules out.
 	 */
 	@Test
-	public void aRuleTokenTheLaddersSubstanceOutranksIsHandedToBothSentences() throws IOException {
+	public void aRuleTokenTheLaddersRowOutranksIsHandedToBothSentences() throws IOException {
 		DrugSafetyValidator validator = DrugReferenceTestSupport
 				.validator(DrugReferenceTestSupport.serviceWith(
 					DrugReferenceTestSupport.ddiFixtureEntries(OUTRANKED_TOKEN_FIXTURE)));
@@ -376,7 +381,10 @@ public class FoldedChipOnePartnerNameTest {
 	 * {@code Atropine (ophthalmic)}, so it reaches the ladder through
 	 * {@code DrugSafetyValidator.addPartnersForUnmappedOrders} and the {@code labelEntry} is that
 	 * PRESENTATION row rather than {@code canonicalRow}'s pick — which is what makes the two choices
-	 * visible at all, since the coded rung always hands over the row that claims its name most strongly.
+	 * visible at all. {@code canonicalRow} does not rank by claim at all (route-qualification, then
+	 * {@code namesItsSubstance}, then first-seen), but over the shipped KB its pick is never outranked on
+	 * a rule token by another row of its own substance — measured, 0 codes — so the coded rung does not
+	 * reach this arrangement on the data as shipped.
 	 *
 	 * <p>The presentation row's own claim merely ties {@code Hyoscyamine}'s, so neither says which
 	 * substance the rule is about and the two sentences keep their own names. Homatropine carries an
@@ -390,7 +398,7 @@ public class FoldedChipOnePartnerNameTest {
 	 * passes before issue #296 as well, because the existence form refused every contested token.
 	 */
 	@Test
-	public void aRuleTokenNoSubstanceOutranksKeepsItsOwnToken() throws IOException {
+	public void aRuleTokenTheLaddersRowOnlyTiesKeepsItsOwnToken() throws IOException {
 		Set<String> names = DrugReferenceTestSupport.set("Atropine (ophthalmic)");
 		DrugSafetyValidator validator = DrugReferenceTestSupport
 				.validator(DrugReferenceTestSupport.serviceWith(
@@ -412,6 +420,46 @@ public class FoldedChipOnePartnerNameTest {
 			"the rule's mechanism must stay under the name the RULE names: this row's claim on the token"
 					+ " only TIES Hyoscyamine's, so it cannot tell the fold which substance the rule is"
 					+ " about, and its sibling's stronger claim is not this row's, was: " + detail);
+	}
+
+	/**
+	 * The one direction issue #296 is NOT a widening, pinned so it is visible rather than latent.
+	 *
+	 * <p>The ranking runs {@code DrugReference.nameMatchStrength}, which gates on
+	 * {@code DrugReference.matchesDrugName}; that predicate does not trim the alias it scans for, while
+	 * {@code DrugReference.isNamed} trims both operands. So this fixture's {@code Warfarin} row, whose
+	 * only alias is {@code " warfarin"}, IS named by the rule's token and yet claims it at no rank at
+	 * all — {@code uniqueStrongestClaimant}'s rank floor then refuses, and the chip keeps both names.
+	 * Before issue #296 the second condition was an existence test that never asked the rank, so the
+	 * very same fixture reconciled: measured by reverting {@code unambiguouslyNames} to that form, this
+	 * detail reads {@code active order Warfarin} in both sentences.
+	 *
+	 * <p>Reachable only on an operator-edited {@code sourceFormat=json} file — {@code ddinter} writes no
+	 * padded alias and {@code DrugReferenceValidity.sanitizeAliases} drops only an alias naming nothing —
+	 * and measured absent from everything bundled. Fail-closed rather than mis-attributing: what the
+	 * clinician sees is the pre-#292 two-name detail, and neither sentence becomes false. Closing it
+	 * means trimming aliases at load, which widens {@code matchesDrugName} for every caller and needs
+	 * its own evidence.
+	 */
+	@Test
+	public void aPaddedAliasLosesAReconciliationItUsedToGet() throws IOException {
+		DrugSafetyValidator validator = DrugReferenceTestSupport
+				.validator(DrugReferenceTestSupport.serviceWith(
+					DrugReferenceTestSupport.fixtureEntries(PADDED_ALIAS_FIXTURE)));
+
+		List<SafetyWarning> warnings = validator.validate("", "Is acenocoumarol safe here?",
+			DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("warfarin"),
+				DrugReferenceTestSupport.set("B01AA03"), null, null));
+
+		List<String> details = DrugReferenceTestSupport.classChipDetails(warnings);
+		assertEquals(1, details.size(), "one class-arm chip, was: " + warnings);
+		String detail = details.get(0);
+		assertTrue(detail.contains("interacts with active order") && detail.contains("is in the same"),
+			"precondition: the two arms must have folded, or there is nothing to reconcile, was: "
+					+ detail);
+		assertEquals(DrugReferenceTestSupport.set("warfarin", "Warfarin"), orderNamesIn(detail),
+			"the residue: isNamed admits this pair and the rank floor refuses it, so a chip that"
+					+ " reconciled before issue #296 keeps both names, was: " + detail);
 	}
 
 	/**
@@ -947,7 +995,7 @@ public class FoldedChipOnePartnerNameTest {
 	 * whose single name therefore comes from the rule's token.
 	 *
 	 * <p>The seventh is issue #296's
-	 * {@link #aRuleTokenTheLaddersSubstanceOutranksIsHandedToBothSentences}, the entry rung's other
+	 * {@link #aRuleTokenTheLaddersRowOutranksIsHandedToBothSentences}, the entry rung's other
 	 * reconciling half: a token two substances name, handed to both sentences because one of them is the
 	 * substance it names outright.
 	 *

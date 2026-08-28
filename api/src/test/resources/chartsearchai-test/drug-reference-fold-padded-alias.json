@@ -1,0 +1,29 @@
+{
+  "version": "1.0",
+  "source": "test fixture — an operator-authored alias carrying padding",
+  "description": "The narrowing issue #296 introduces, pinned so it is visible rather than latent. Warfarin's only alias is ' warfarin' with a leading space, which a curated json file can carry: JsonDrugReferenceSource is plain Jackson and DrugReferenceValidity.sanitizeAliases drops only aliases naming nothing. DrugReference.isNamed trims both operands through normalizeName, so the entry IS named by the rule's token; DrugReference.matchesDrugName does not trim the alias needle, so nameMatchStrength answers NAME_NO_MATCH for the same pair, and uniqueStrongestClaimant's rank floor then refuses. Before #296 the fold's second condition was an existence test that never asked the rank, so this chip reconciled. No substanceName is published, so each row is its own substance.",
+  "entries": [
+    {
+      "id": "acenocoumarol",
+      "name": "Acenocoumarol",
+      "aliases": ["acenocoumarol"],
+      "atcCodes": ["B01AA07"],
+      "interactions": [
+        {
+          "token": "warfarin",
+          "atc": "B01AA03",
+          "severity": "Major",
+          "note": "Major. Two coumarin anticoagulants together compound the bleeding risk."
+        }
+      ],
+      "source": "test fixture"
+    },
+    {
+      "id": "warfarin",
+      "name": "Warfarin",
+      "aliases": [" warfarin"],
+      "atcCodes": ["B01AA03"],
+      "source": "test fixture"
+    }
+  ]
+}

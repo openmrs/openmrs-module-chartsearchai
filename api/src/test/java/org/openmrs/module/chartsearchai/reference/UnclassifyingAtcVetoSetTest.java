@@ -39,7 +39,9 @@ import org.junit.jupiter.api.Test;
  * re-measure that constant's own counts and update them with it, saying which method produced them.
  * {@code LOCALLY_APPLIED_ATC_GROUPS}' 46/21 and 19/2 are NOT due on that red — they are taken with
  * the claim filters off, i.e. with {@code UNCLASSIFYING_ATC_GROUPS} emptied, so a change to it
- * cannot move them; they are due only on the KB-refresh red.
+ * cannot move them. They are keyed on {@code LOCALLY_APPLIED_ATC_GROUPS} instead, and their tripwire
+ * is {@link LocallyAppliedAtcGroupKeyTest}, which reddens on a change to that list this one is
+ * silent on; a KB refresh is due on both.
  *
  * <p><b>Two holes, both real, and the second is the likelier one.</b> A group added that covers no
  * subgroup this KB publishes is invisible: 9 of the shipped list's 36 members are already in that

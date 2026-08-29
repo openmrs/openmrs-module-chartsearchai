@@ -917,6 +917,20 @@ public class DrugReference {
 	 * whole list emptied: the preference passed over an alphabetically earlier shared subgroup to
 	 * reach one of the four, rather than finding it there.
 	 *
+	 * <p><b>All four of those figures are answers under a configuration of THIS list, so a change to
+	 * it is what makes them due again</b> — extending it, trimming it, or moving one of the
+	 * {@link #SYSTEMIC_USE_EXCEPTIONS} nested inside it, since {@link #isLocallyAppliedAtcCode} reads
+	 * both. That is the shape issue #263 was filed over, one list along, and
+	 * {@link #UNCLASSIFYING_ATC_GROUPS}' javadoc invites the change in as many words ("extend that
+	 * list and it has to be re-derived against the same index"). {@code LocallyAppliedAtcGroupKeyTest}
+	 * reddens when such a change reaches a subgroup the shipped KB publishes; that class's javadoc
+	 * says what it leaves uncovered, and it is not the two partition guards in
+	 * {@code UnmappedOrderAdministrationSiteTest}, which an edit adding the new group to a site
+	 * satisfies. Measured 2026-08-30 by adding {@code A06AD} here and to {@code SITE_GUT} — the
+	 * completed edit, the one those guards leave green: 1 of the api suite's 1571 cases red, and it is
+	 * that one. PR #331's first review round measured the same edit on head {@code 97445233}, where no
+	 * such case existed, taking 46 to 47 and 19 to 20 with the suite green throughout.
+	 *
 	 * <p>{@code CrossReactivityClassChoiceTest} pins one case per group for those four prefixes, save
 	 * {@code B02BC}: its only shipped-KB pairs are epinephrine route variants, which issue #160
 	 * collapses to an identity chip before this arm can name a class at all.
@@ -966,8 +980,17 @@ public class DrugReference {
 	 * against its own second row, which issue #160 collapses to an identity chip before this arm can
 	 * name a class (re-measured 2026-08-14 for issue #243; the two bases are defined at
 	 * {@code DrugSafetyValidator.sharedClass}). The other four change none and are here on the
-	 * criterion rather than on measured impact; removing them breaks no test, which is exactly why the
-	 * criterion and not the test suite has to decide membership.
+	 * criterion rather than on measured impact. What this sentence went on to say until issue #263 —
+	 * that removing them breaks no test — no longer holds, and had already stopped holding for
+	 * {@code D01B} at issue #234, whose {@code UnmappedOrderAdministrationSiteTest} case
+	 * {@code aGroupNamedForSystemicUseIsNotKeptByTheSiteItsPrefixSitsUnder} reddens on that removal,
+	 * over an unmapped-order arrangement rather than a KB pair. Since issue #263 removing any ONE of
+	 * the five reddens {@code LocallyAppliedAtcGroupKeyTest} as well, each of the five covering at
+	 * least one of the six subgroups just enumerated and that case pinning which published subgroups
+	 * {@link #isLocallyAppliedAtcCode} reads as locally applied (measured 2026-08-30, one run per
+	 * prefix). Neither case says the group BELONGS — one reports that a published figure's key has
+	 * moved, the other that a site kept a systemic code — so the criterion and not the test suite
+	 * still has to decide membership.
 	 *
 	 * <p>An exception list here, while R03's systemic halves are handled by leaving {@code R03C} and
 	 * {@code R03D} out of the list above, because the shapes differ: under D and R01 the locally
@@ -1455,10 +1478,13 @@ public class DrugReference {
 	 * missing groups reproduced the defect it had just fixed. The shipped KB uses 20 of the 27, plus 8
 	 * of {@code V03A}'s children; {@code S02DC} and {@code V07A} match no shipped-KB entry at all and
 	 * are here on the criterion rather than on measured impact, exactly as four of the
-	 * {@link #SYSTEMIC_USE_EXCEPTIONS} are — removing them breaks no test, which is why the criterion
-	 * and not the test suite has to decide membership. The first family is complete only WITH RESPECT
-	 * TO {@link #LOCALLY_APPLIED_ATC_GROUPS}: extend that list and it has to be re-derived against the
-	 * same index.
+	 * {@link #SYSTEMIC_USE_EXCEPTIONS} are — removing {@code S02DC} or {@code V07A} breaks no test,
+	 * this KB publishing no subgroup under either, which is why the criterion and not the test suite
+	 * has to decide membership. The analogy stops at the criterion: since issue #263 removing one of
+	 * those four DOES redden a case, for the reason that list's own javadoc gives. The first family is
+	 * complete only WITH RESPECT TO {@link #LOCALLY_APPLIED_ATC_GROUPS}: extend that list and it has to
+	 * be re-derived against the same index — and, since issue #263, the figures published on that list
+	 * have to be re-taken with it ({@code LocallyAppliedAtcGroupKeyTest}).
 	 *
 	 * <p><b>The fourth family, added for issue #184: a residue whose ancestry asserts nothing at any
 	 * level.</b> The reading above is that a residue inherits its parent's assertion; apply it
@@ -2146,8 +2172,8 @@ public class DrugReference {
 	 * which is what let this widening be scored against #128's kill set instead of argued about, and
 	 * the kill set includes the accented spellings, which are the ones folding could newly break:
 	 * {@code nitroglycérine} folds to {@code nitroglycerine}, i.e. {@code glycerin} plus one
-	 * inflectional letter, so it becomes a candidate for that token at the very moment {@code glycérine} legitimately does, and only the
-	 * LEFT boundary separates them.
+	 * inflectional letter, so it becomes a candidate for that token at the very moment
+	 * {@code glycérine} legitimately does, and only the LEFT boundary separates them.
 	 *
 	 * <p>76 of the 78 are an accented spelling of the token's own drug ({@code héparine} ~ heparin,
 	 * {@code lévofloxacine} ~ levofloxacin, {@code énoxaparine} ~ enoxaparin). The other two, for the

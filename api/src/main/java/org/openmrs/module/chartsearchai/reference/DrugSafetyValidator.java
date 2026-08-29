@@ -2817,9 +2817,8 @@ public class DrugSafetyValidator {
 	 *         and {@code enalaprilat}, two genuinely different entries which that grouping deliberately
 	 *         keeps as two chips — the population that figure counts, and its base, are named at
 	 *         {@link #bestRulePerPartner} (issue #263). The first in dataset order takes the fold; the
-	 *         other keeps its rule chip
-	 *         unfolded, which is the conservative direction, since the alternative is stating one
-	 *         duplicate-therapy relationship twice.
+	 *         other keeps its rule chip unfolded, which is the conservative direction, since the
+	 *         alternative is stating one duplicate-therapy relationship twice.
 	 */
 	private SubjectRule ruleAbout(Set<String> orderCodes, List<SubjectRule> rules,
 			CoMedications coMedications) {

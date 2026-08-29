@@ -1,0 +1,17 @@
+{
+  "version": "1.0",
+  "source": "Test fixture — an entry whose every name carries an accent (issue #330)",
+  "description": "The shipped knowledge base carries no alias above U+007F, so DrugReference.foldDiacritics takes its ASCII fast path and returns the alias unchanged: over that dataset a folded alias list is INDISTINGUISHABLE from the raw one, and a guard comparing the two proves nothing. This fixture is the one shape where the reference side of the fold is load-bearing — the shape containsBoundedToken's javadoc says it exists for, 'a hand-authored json KB may carry an accented alias' — so the entry deliberately carries NO unaccented sibling alias, unlike drug-reference-accented-tokens.json whose entries each carry one. An unaccented recorded name reaches this entry only if the alias really was folded.",
+  "entries": [
+    {
+      "id": "ketoprofene-accented-only",
+      "name": "Kétoprofène",
+      "drugClass": "AINS",
+      "aliases": ["kétoprofène"],
+      "contraindications": [
+        { "type": "allergy", "token": "aspirine", "note": "hypersensibilité croisée aux salicylés" }
+      ],
+      "source": "Test fixture"
+    }
+  ]
+}

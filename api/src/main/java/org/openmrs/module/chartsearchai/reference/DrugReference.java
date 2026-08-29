@@ -62,6 +62,27 @@ public class DrugReference {
 
 	private List<String> aliases = Collections.emptyList();
 
+	/**
+	 * {@link #aliases}, each element in {@link #foldedLower} form and INDEX-ALIGNED with it, so a
+	 * witness accessor scanning this list reports the raw alias beside it. Derived in
+	 * {@link #setAliases}, which is the only writer of either list.
+	 *
+	 * <p><b>Derived, not memoised</b> (issue #330). {@link #setAliases} already derives what it stores
+	 * ({@code trimmedAliases}); this is the same assignment carrying one more form of the same value,
+	 * so there is no moment at which the two describe different aliases and CLAUDE.md's rule against
+	 * memo FIELDS — which is about values derived from {@code getAll()} on a Spring singleton — does
+	 * not reach it. The initialiser mirrors {@link #aliases}' so an entry whose aliases were never set
+	 * scans an empty list rather than throwing.
+	 *
+	 * <p><b>What it costs.</b> One list per entry and, over every dataset the module ships, no
+	 * duplicated strings at all: the parsers store aliases trimmed and lower-cased,
+	 * {@link #foldDiacritics} returns its argument unchanged for pure-ASCII input, and
+	 * {@link String#toLowerCase} returns {@code this} when no character changes — so each element here
+	 * is the very instance {@link #aliases} holds. An accented alias is the case that allocates, and
+	 * the shipped 19 MB knowledge base carries none.
+	 */
+	private List<String> foldedAliases = Collections.emptyList();
+
 	private List<String> atcCodes = Collections.emptyList();
 
 	private List<AgeBand> ageBands = Collections.emptyList();
@@ -738,6 +759,19 @@ public class DrugReference {
 	 */
 	public void setAliases(List<String> aliases) {
 		this.aliases = aliases != null ? trimmedAliases(aliases) : Collections.<String> emptyList();
+		this.foldedAliases = foldedAliases(this.aliases);
+	}
+
+	/** @return {@code trimmed} with every non-null element in {@link #foldedLower} form, index-aligned
+	 *          — {@link #foldedAliases}'s whole derivation, and taken from what this entry STORES
+	 *          rather than from the setter's argument so the two lists cannot describe different
+	 *          strings. Nulls are carried through for the reason {@link #setAliases} carries them. */
+	private static List<String> foldedAliases(List<String> trimmed) {
+		List<String> folded = new ArrayList<String>(trimmed.size());
+		for (String alias : trimmed) {
+			folded.add(alias == null ? null : foldedLower(alias));
+		}
+		return folded;
 	}
 
 	/** @return {@code aliases} with every non-null element trimmed — {@link #setAliases}'s whole rule,
@@ -1711,8 +1745,11 @@ public class DrugReference {
 		if (lowerText == null) {
 			return false;
 		}
-		for (String alias : aliases) {
-			if (containsWord(lowerText, alias)) {
+		// The text is this loop's invariant operand and the aliases arrive already folded, so each is
+		// folded once where it was produced rather than twice per alias (issue #330).
+		String foldedText = foldedLower(lowerText);
+		for (String foldedAlias : foldedAliases) {
+			if (foldedWordMatch(foldedText, foldedAlias)) {
 				return true;
 			}
 		}
@@ -1739,9 +1776,12 @@ public class DrugReference {
 			return Collections.emptyList();
 		}
 		List<String> carried = new ArrayList<String>();
-		for (String alias : aliases) {
-			if (containsWord(lowerText, alias)) {
-				carried.add(alias);
+		String foldedText = foldedLower(lowerText);
+		for (int i = 0; i < foldedAliases.size(); i++) {
+			if (foldedWordMatch(foldedText, foldedAliases.get(i))) {
+				// The RAW alias, which is what a witness is: the folded list is an index-aligned view
+				// of it and exists only to keep this scan from re-deriving one.
+				carried.add(aliases.get(i));
 			}
 		}
 		return carried;
@@ -1786,8 +1826,22 @@ public class DrugReference {
 	 *         117 more (order name, entry) pairs resolve and none stops resolving.
 	 */
 	boolean matchesDrugName(String drugName) {
-		for (String alias : aliases) {
-			if (matchesOrderName(drugName, alias)) {
+		return matchesDrugName(fold(drugName));
+	}
+
+	/**
+	 * @return {@link #matchesDrugName}'s answer for a name a caller has already folded — the form a
+	 *         SCAN uses, so the recorded name is folded once for the whole scan rather than once per
+	 *         entry (issue #330). Same rule and the same primitive, not a fourth one: both arities
+	 *         reach {@link #foldedOrderNameMatch}, so the boundary rule and the fold each stay in one
+	 *         place. A null operand never matches, as a null name never did.
+	 */
+	boolean matchesDrugName(FoldedName drugName) {
+		if (drugName == null) {
+			return false;
+		}
+		for (String foldedAlias : foldedAliases) {
+			if (foldedOrderNameMatch(drugName.folded, foldedAlias)) {
 				return true;
 			}
 		}
@@ -1805,10 +1859,20 @@ public class DrugReference {
 	 *         ({@link #matchesOrderName} here, {@link #containsWord} there), so neither pair can drift.
 	 */
 	List<String> aliasesNaming(String drugName) {
+		return aliasesNaming(fold(drugName));
+	}
+
+	/** @return {@link #aliasesNaming}'s answer for an already-folded name, the witness counterpart of
+	 *          {@link #matchesDrugName(FoldedName)} and calling the same primitive it does, so the
+	 *          boolean and its witnesses cannot drift. The witnesses are the RAW aliases. */
+	List<String> aliasesNaming(FoldedName drugName) {
 		List<String> carried = new ArrayList<String>();
-		for (String alias : aliases) {
-			if (matchesOrderName(drugName, alias)) {
-				carried.add(alias);
+		if (drugName == null) {
+			return carried;
+		}
+		for (int i = 0; i < foldedAliases.size(); i++) {
+			if (foldedOrderNameMatch(drugName.folded, foldedAliases.get(i))) {
+				carried.add(aliases.get(i));
 			}
 		}
 		return carried;
@@ -1886,14 +1950,25 @@ public class DrugReference {
 	 *         claim on {@code drugName}
 	 */
 	int nameMatchStrength(String drugName) {
-		if (!matchesDrugName(drugName)) {
+		return nameMatchStrength(fold(drugName));
+	}
+
+	/**
+	 * @return {@link #nameMatchStrength}'s answer for an already-folded name — the form the two
+	 *         whole-dataset scans that rank a name use ({@code DrugReferenceService.lookupByToken} and
+	 *         {@code findImpliedSubstances}), so the name is folded once for the scan (issue #330).
+	 *         The carrier keeps the raw string beside the folded one, which is why the identity rungs
+	 *         below need no second operand and cannot be handed the wrong string.
+	 */
+	int nameMatchStrength(FoldedName drugName) {
+		if (drugName == null || !matchesDrugName(drugName)) {
 			return NAME_NO_MATCH;
 		}
-		String recorded = normalizeName(drugName);
+		String recorded = normalizeName(drugName.raw);
 		if (recorded != null && recorded.equals(normalizeName(name))) {
 			return NAME_IS_THE_DISPLAY_NAME;
 		}
-		return isNamed(drugName) ? NAME_IS_ANOTHER_NAME : NAME_TOKEN_INSIDE_A_NAME;
+		return isNamed(drugName.raw) ? NAME_IS_ANOTHER_NAME : NAME_TOKEN_INSIDE_A_NAME;
 	}
 
 	/**
@@ -1952,9 +2027,12 @@ public class DrugReference {
 	 *         ("chlorothiazide" is not a whole word in "hydrochlorothiazide"), while a real token
 	 *         still matches ("aspirin" in "Aspirin 81 mg"). Case-insensitive and
 	 *         diacritic-insensitive (see {@link #containsBoundedToken}); a null or empty word
-	 *         never matches. Backs {@link #matchesText} (alias-in-prose); the active-order
-	 *         counterpart is {@link #matchesOrderName}, which shares this rule's left boundary but
-	 *         not its right one — see there for why one matcher cannot serve both.
+	 *         never matches. The prose rule; the active-order counterpart is
+	 *         {@link #matchesOrderName}, which shares this rule's left boundary but not its right one
+	 *         — see there for why one matcher cannot serve both. {@link #matchesText} used to reach
+	 *         the rule through here and since issue #330 reaches it through {@link #foldedWordMatch}
+	 *         instead, its operands both being folded already; that is the same rule and the same
+	 *         allowance constant, not a second one.
 	 */
 	static boolean containsWord(String text, String word) {
 		return containsBoundedToken(text, word, PROSE_TRAILING_LETTERS);
@@ -2084,11 +2162,27 @@ public class DrugReference {
 	}
 
 	/**
+	 * @return {@link #matchesOrderName}'s answer with BOTH operands already in {@link #foldedLower}
+	 *         form — the shape {@link PatientClinicalContext#hasActiveDrug} needs, where the order
+	 *         names it scans and the rule token it scans for are BOTH fixed for the pass and were both
+	 *         re-derived once per comparison (issue #330). The token arrives in the carrier and the
+	 *         haystack as a plain string because that is what each side already holds: the context
+	 *         folds its order names once when it is built, and the token is folded once per call.
+	 *         Same rule and the same primitive as the arity above.
+	 */
+	static boolean matchesFoldedOrderName(String foldedOrderName, FoldedName token) {
+		return token != null && foldedOrderNameMatch(foldedOrderName, token.folded);
+	}
+
+	/**
 	 * Whether {@code text} carries {@code token} under the boundary rule: the boolean view of
-	 * {@link #boundedTokenIndex}, which is the one scan and has three sharers — prose matching
-	 * ({@link #containsWord}) and order-name matching ({@link #matchesOrderName}) through here, and
-	 * {@link #namedOccurrences} through {@link #wordIndex}, because since issue #260 the dose arm
-	 * needs the POSITION rather than the answer. So the boundary rule cannot drift between them.
+	 * {@link #boundedTokenIndex}, which is the one scan. Its sharers reach it three ways and the rule
+	 * therefore cannot drift between them: through here, where the operands still need folding
+	 * ({@link #containsWord} and {@link #matchesOrderName}); through {@link #foldedWordMatch} and
+	 * {@link #foldedOrderNameMatch}, the same two rules for operands a caller folded once where they
+	 * were produced (issue #330); and through {@link #wordIndex} for {@link #namedOccurrences}, which
+	 * since issue #260 needs the POSITION rather than the answer. Every one of those routes takes its
+	 * allowance from the same constant as the rule it is, which is what keeps them one rule apiece.
 	 * A match needs {@code token} to start at a word boundary in {@code text} and to end at
 	 * one, give or take up to {@code maxTrailingLetters} letters. Letters only: a digit is never an
 	 * inflection, so a digit sitting against the token is neither stepped over nor treated as the
@@ -2129,17 +2223,46 @@ public class DrugReference {
 	 * {@code json} KB may carry an accented alias, and a one-sided fold would then silently stop
 	 * matching the accented order name it was written for.
 	 *
-	 * <p>Since issue #260 one caller does its own folding — {@link #namedOccurrences} folds its needle
-	 * and takes its haystack already folded, because it returns a POSITION and the fold is not
-	 * length-preserving. That is a deliberate exception to "the fold lives here" and not a second copy of
-	 * the rule: both go through {@link #foldedLower}, so there is still exactly one expression of what
-	 * this scan's operands must be.
+	 * <p><b>Some callers fold for themselves, and that is deliberate rather than a second copy of the
+	 * rule</b> — every one of them goes through {@link #foldedLower}, so there is still exactly one
+	 * expression of what this scan's operands must be. Since issue #260 {@link #namedOccurrences}
+	 * takes its haystack already folded, because it returns a POSITION and the fold is not
+	 * length-preserving. Since issue #330 an entry's own aliases are folded once in
+	 * {@link #setAliases} and a scan's recorded name once in a {@link FoldedName}, because each is
+	 * fixed while the loop that compares it runs: folding at THIS level meant deriving both operands
+	 * again for every alias of every entry, measured at 1,420,480 {@link #foldedLower} calls in a
+	 * one-drug {@code validate} pass over the shipped knowledge base and a 43-order chart.
 	 */
 	private static boolean containsBoundedToken(String text, String token, int maxTrailingLetters) {
 		if (text == null || token == null) {
 			return false;
 		}
-		return boundedTokenIndex(foldedLower(text), foldedLower(token), maxTrailingLetters, 0) >= 0;
+		return foldedMatch(foldedLower(text), foldedLower(token), maxTrailingLetters);
+	}
+
+	/**
+	 * {@link #matchesOrderName}'s rule with both operands already folded — one named entry point per
+	 * boundary rule, so the rule's own trailing-letter allowance stays bound to it in ONE place. Two
+	 * call sites passing {@link #MAX_ORDER_NAME_INFLECTION_LETTERS} to {@link #boundedTokenIndex}
+	 * themselves would be two decisions about which rule an operand shape gets, which is the drift
+	 * {@link #PROSE_TRAILING_LETTERS}' own javadoc records one level up.
+	 */
+	private static boolean foldedOrderNameMatch(String foldedText, String foldedToken) {
+		return foldedMatch(foldedText, foldedToken, MAX_ORDER_NAME_INFLECTION_LETTERS);
+	}
+
+	/** {@link #containsWord}'s rule with both operands already folded — the prose counterpart of
+	 *  {@link #foldedOrderNameMatch}, and here for the same reason. */
+	private static boolean foldedWordMatch(String foldedText, String foldedWord) {
+		return foldedMatch(foldedText, foldedWord, PROSE_TRAILING_LETTERS);
+	}
+
+	/** The one scan, for operands already in {@link #foldedLower} form: {@link #containsBoundedToken}'s
+	 *  own body minus the fold, shared with it so nothing below can differ between the two. A null
+	 *  operand never matches, which is the rule the unfolded arity states. */
+	private static boolean foldedMatch(String foldedText, String foldedToken, int maxTrailingLetters) {
+		return foldedText != null && foldedToken != null
+				&& boundedTokenIndex(foldedText, foldedToken, maxTrailingLetters, 0) >= 0;
 	}
 
 	/**
@@ -2159,6 +2282,44 @@ public class DrugReference {
 	 */
 	static String foldedLower(String value) {
 		return foldDiacritics(value.toLowerCase(Locale.ROOT));
+	}
+
+	/**
+	 * A clinician-entered drug NAME together with its {@link #foldedLower} form, derived ONCE — what a
+	 * caller holding one name across a scan of many entries hands to {@link #matchesDrugName} and
+	 * {@link #nameMatchStrength} instead of the raw string (issue #330).
+	 *
+	 * <p><b>Why a type rather than a parameter named for its contents.</b> {@link #foldedLower} is
+	 * documented as NOT idempotent, so a pre-folded value must never re-enter the unfolded path; a
+	 * {@code String} parameter cannot say which of the two it is holding, and getting it wrong costs
+	 * either a silent second fold or the whole hoist. It also carries the RAW string beside the folded
+	 * one, so {@link #nameMatchStrength} — which needs {@link #normalizeName} of the same name — takes
+	 * ONE operand rather than two same-typed ones a caller could pair wrongly.
+	 *
+	 * <p><b>What it is not.</b> It is not a second expression of the fold rule: {@link #fold} calls
+	 * {@link #foldedLower} and nothing here re-expresses it. And it is not a rival to
+	 * {@link #namedOccurrences}' {@code foldedLowerText} parameter, which is PROSE folded under the
+	 * prose rule and handed back POSITIONS into that exact string — a length contract this type
+	 * deliberately does not make, and one whose caller must therefore hold the folded string itself.
+	 */
+	static final class FoldedName {
+
+		/** The name as the caller holds it — for {@link #normalizeName}, which is a different form. */
+		private final String raw;
+
+		private final String folded;
+
+		private FoldedName(String raw) {
+			this.raw = raw;
+			this.folded = foldedLower(raw);
+		}
+	}
+
+	/** @return {@code value} and its {@link #foldedLower} form, or {@code null} for a null name — the
+	 *          sole producer of a {@link FoldedName}, so there is no way to assemble one whose folded
+	 *          half was derived by anything else. */
+	static FoldedName fold(String value) {
+		return value == null ? null : new FoldedName(value);
 	}
 
 	/** Any run of whitespace, for {@link #collapseWhitespace}. */
@@ -2261,8 +2422,11 @@ public class DrugReference {
 	 *         rival on the far side that is merely longer looks like a container and is not one.
 	 *
 	 *         <p><b>The PROSE rule</b>, through {@link #wordIndex}, which is the same binding of
-	 *         {@link #boundedTokenIndex} that {@link #containsWord} is — so this shares the rule by
-	 *         construction rather than by both spelling the same allowance. Prose gets symmetric word
+	 *         {@link #boundedTokenIndex} that {@link #containsWord} and {@link #foldedWordMatch} are —
+	 *         so this shares the rule by construction rather than by all of them spelling the same
+	 *         allowance. Its needles are this entry's aliases in {@link #foldedLower} form, which since
+	 *         issue #330 it reads off {@link #foldedAliases} rather than deriving per call; the value
+	 *         is the same expression it used to compute, so no position it returns moves. Prose gets symmetric word
 	 *         boundaries and a clinician-entered drug NAME gets {@link #matchesOrderName}'s left boundary
 	 *         plus a short tail, and widening one to serve the other was issues #86, #128, #147 and #209.
 	 *         Its caller has already gated the clause on {@link #matchesText}, so answering the WHERE by a
@@ -2293,11 +2457,10 @@ public class DrugReference {
 		// allocate nothing. Thrift, not a fix for a cost anyone measured — and the empty answer is shared
 		// with the null-text path above so both return one shape.
 		List<NamedOccurrence> found = null;
-		for (String alias : aliases) {
-			if (alias == null) {
+		for (String w : foldedAliases) {
+			if (w == null) {
 				continue;
 			}
-			String w = foldedLower(alias);
 			int idx = wordIndex(foldedLowerText, w, 0);
 			while (idx >= 0) {
 				// w.length() is the whole match only because the prose rule allows no trailing letters;

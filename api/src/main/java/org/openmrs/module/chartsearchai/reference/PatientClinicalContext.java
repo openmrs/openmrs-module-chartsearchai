@@ -49,6 +49,15 @@ public class PatientClinicalContext {
 
 	private final Set<String> activeDrugNames;
 
+	/**
+	 * {@link #activeDrugNames}, each in {@link DrugReference#foldedLower} form — the haystack side of
+	 * {@link #hasActiveDrug}'s scan, folded once when this context is built rather than once per
+	 * comparison (issue #330). Beside the raw set and not instead of it:
+	 * {@link #getActiveDrugNames()} is read by {@code DrugReferenceService.findForActiveOrders} and by
+	 * the chip sentences, which need the name the chart records.
+	 */
+	private final List<String> foldedActiveDrugNames;
+
 	private final Set<String> activeDrugAtcCodes;
 
 	private final Set<String> allergyTokens;
@@ -118,6 +127,7 @@ public class PatientClinicalContext {
 		this.ageYears = ageYears;
 		this.weightKg = weightKg;
 		this.activeDrugNames = lower(activeDrugNames);
+		this.foldedActiveDrugNames = folded(this.activeDrugNames);
 		this.activeDrugAtcCodes = upper(activeDrugAtcCodes);
 		this.allergyTokens = lower(allergyTokens);
 		this.conditionTokens = lower(conditionTokens);
@@ -167,6 +177,18 @@ public class PatientClinicalContext {
 			}
 		}
 		return Collections.unmodifiableSet(out);
+	}
+
+	/** @return each of {@code names} in {@link DrugReference#foldedLower} form — {@link
+	 *          #foldedActiveDrugNames}'s whole derivation, taken from what this context STORES so the
+	 *          two cannot describe different names. A list rather than a set: {@link #hasActiveDrug}
+	 *          only iterates it, and two names that fold alike must not collapse into one. */
+	private static List<String> folded(Set<String> names) {
+		List<String> out = new ArrayList<String>(names.size());
+		for (String name : names) {
+			out.add(DrugReference.foldedLower(name));
+		}
+		return Collections.unmodifiableList(out);
 	}
 
 	private static Set<String> upper(Set<String> in) {
@@ -291,13 +313,21 @@ public class PatientClinicalContext {
 	boolean hasActiveDrug(String nameToken, String atcCode) {
 		if (nameToken != null && !nameToken.trim().isEmpty()) {
 			String n = nameToken.trim();
-			for (String drug : activeDrugNames) {
-				if (DrugReference.matchesOrderName(drug, n)) {
-					return true;
-				}
-			}
+			// The identity arm first: it is one hash lookup and the name arm below is a scan of every
+			// order the patient is on, so asking the cheap question second cost the whole scan whenever
+			// the answer was yes. Which of the two answers is immaterial — both arms return true, and
+			// both operands are pure — so this is an ordering, not a change of rule (issue #330).
 			if (activeDrugReferenceNames.contains(DrugReference.normalizeName(n))) {
 				return true;
+			}
+			// BOTH operands of the scan below are fixed for the pass — the order names since this
+			// context was built, the token for this call — so each is folded once above the loop
+			// rather than once per comparison (issue #330).
+			DrugReference.FoldedName token = DrugReference.fold(n);
+			for (String folded : foldedActiveDrugNames) {
+				if (DrugReference.matchesFoldedOrderName(folded, token)) {
+					return true;
+				}
 			}
 		}
 		String normalizedAtc = DrugReference.normalizeAtcToken(atcCode);

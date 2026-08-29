@@ -406,8 +406,9 @@ public class DrugReferenceService {
 			return matched;
 		}
 		Set<Object> inPlay = new HashSet<Object>();
+		DrugReference.FoldedName folded = DrugReference.fold(drugName);
 		for (DrugReference ref : matched) {
-			if (namesSubstanceOf(ref, ref.aliasesNaming(drugName), impliedByName)) {
+			if (namesSubstanceOf(ref, ref.aliasesNaming(folded), impliedByName)) {
 				inPlay.add(ref.substanceGroupKey());
 			}
 		}
@@ -576,8 +577,9 @@ public class DrugReferenceService {
 		}
 		DrugReference best = null;
 		int strongest = DrugReference.NAME_NO_MATCH;
+		DrugReference.FoldedName folded = DrugReference.fold(drugToken);
 		for (DrugReference ref : getAll()) {
-			int strength = ref.nameMatchStrength(drugToken);
+			int strength = ref.nameMatchStrength(folded);
 			// Strictly greater, so the earliest entry keeps the role on a tie — including the tie with
 			// NAME_NO_MATCH, which is how a non-matching entry is skipped.
 			if (strength > strongest) {
@@ -690,12 +692,13 @@ public class DrugReferenceService {
 		}
 		Map<Object, DrugReference> bySubstance = new LinkedHashMap<Object, DrugReference>();
 		bySubstance.put(strongest.substanceGroupKey(), strongest);
-		int claim = strongest.nameMatchStrength(drugName);
+		DrugReference.FoldedName folded = DrugReference.fold(drugName);
+		int claim = strongest.nameMatchStrength(folded);
 		if (claim >= DrugReference.NAME_IS_ANOTHER_NAME) {
 			for (DrugReference ref : getAll()) {
 				// A full scan, unlike lookupByToken's, which stops at the first display-name claim: the
 				// equal claimants are exactly what it stops looking for.
-				if (ref != strongest && ref.nameMatchStrength(drugName) == claim) {
+				if (ref != strongest && ref.nameMatchStrength(folded) == claim) {
 					addSubstance(bySubstance, ref);
 				}
 			}
@@ -861,12 +864,13 @@ public class DrugReferenceService {
 	 *          of them it denotes, and both callers need that answer to be "neither". */
 	static boolean uniqueStrongestClaimant(String drugName, DrugReference row,
 			List<DrugReference> candidates) {
-		int claim = row.nameMatchStrength(drugName);
+		DrugReference.FoldedName folded = DrugReference.fold(drugName);
+		int claim = row.nameMatchStrength(folded);
 		if (claim < DrugReference.NAME_IS_ANOTHER_NAME) {
 			return false;
 		}
 		for (DrugReference other : candidates) {
-			if (other != row && other.nameMatchStrength(drugName) >= claim) {
+			if (other != row && other.nameMatchStrength(folded) >= claim) {
 				return false;
 			}
 		}
@@ -991,8 +995,11 @@ public class DrugReferenceService {
 			return Collections.emptyList();
 		}
 		List<DrugReference> out = new ArrayList<DrugReference>();
+		// Folded once for the whole sweep, not once per entry (issue #330): the name is this scan's
+		// invariant operand and every entry's aliases arrive already folded, so nothing below folds.
+		DrugReference.FoldedName folded = DrugReference.fold(drugName);
 		for (DrugReference ref : getAll()) {
-			if (ref.matchesDrugName(drugName)) {
+			if (ref.matchesDrugName(folded)) {
 				out.add(ref);
 			}
 		}

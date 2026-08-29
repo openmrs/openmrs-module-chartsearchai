@@ -19,7 +19,7 @@ import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
 
 /**
- * A tripwire on the KEY that {@link DrugReference#isUnclassifyingAtcCode}'s published figures are
+ * A tripwire on the KEY that {@code DrugReference.UNCLASSIFYING_ATC_GROUPS}' published figures are
  * measured against (issue #263).
  *
  * <p><b>The defect it exists to prevent, which has already happened once.</b> A figure keyed on
@@ -29,15 +29,16 @@ import org.junit.jupiter.api.Test;
  * stale value was in prose. The figures, their bases and the whole of that story are at
  * {@code DrugReference.UNCLASSIFYING_ATC_GROUPS}, and are deliberately not repeated here.
  *
- * <p><b>So this pins the veto set rather than the figures.</b> It asserts which of the level-4
- * subgroups the shipped knowledge base actually publishes {@code isUnclassifyingAtcCode} refuses —
- * one direct call of the production predicate per subgroup, over the production load, with no
- * composition of its own. It reddens when a change reaches a subgroup this KB publishes: a group
- * added to that list or removed from it, or a KB refresh that changes which subgroups the dataset
- * publishes. When it goes red, re-measure {@code isUnclassifyingAtcCode}'s own counts and update
- * them with this list, saying which method produced them. {@code LOCALLY_APPLIED_ATC_GROUPS}' 46/21
- * and 19/2 are NOT due on that red — they are taken with the claim filters off, i.e. with this list
- * emptied, so a change to it cannot move them; they are due only on the KB-refresh red.
+ * <p><b>So this pins the veto set rather than the figures.</b> It asserts, of the level-4 subgroups
+ * the shipped knowledge base actually publishes, which ones
+ * {@link DrugReference#isUnclassifyingAtcCode} refuses — one direct call of the production predicate
+ * per subgroup, over the production load, with no composition of its own. It reddens when a change
+ * reaches a subgroup this KB publishes: a group added to {@code UNCLASSIFYING_ATC_GROUPS} or removed
+ * from it, or a KB refresh that changes which subgroups the dataset publishes. When it goes red,
+ * re-measure that constant's own counts and update them with it, saying which method produced them.
+ * {@code LOCALLY_APPLIED_ATC_GROUPS}' 46/21 and 19/2 are NOT due on that red — they are taken with
+ * the claim filters off, i.e. with {@code UNCLASSIFYING_ATC_GROUPS} emptied, so a change to it
+ * cannot move them; they are due only on the KB-refresh red.
  *
  * <p><b>Two holes, both real, and the second is the likelier one.</b> A group added that covers no
  * subgroup this KB publishes is invisible: 9 of the shipped list's 36 members are already in that
@@ -45,22 +46,24 @@ import org.junit.jupiter.api.Test;
  * {@code R03BX}, {@code S01JX}, {@code S01KX}, {@code S02DC}, {@code V07A}), and the list's own
  * javadoc says of two of them that they are members on the criterion rather than on measured impact.
  * And a KB refresh that adds or removes ROWS under subgroups the dataset already publishes can move
- * every pair figure this class is a tripwire for while leaving both assertions here green, because
- * both are keyed on the SET of subgroups and neither counts rows or pairs. Measured: dropping 1372
- * of the shipped KB's 2283 rows and adding 2, chosen so the published SET is unchanged, leaves this
- * case passing.
+ * every pair figure this class is a tripwire for while leaving this case green, because its
+ * assertions are keyed on the SET of subgroups and none of them counts rows or pairs. Measured:
+ * dropping 1372 of the shipped KB's 2283 rows and adding 2, chosen so the published SET is
+ * unchanged, leaves this case passing.
  *
  * <p><b>What it does NOT pin, stated so the guard does not look stronger than it is.</b> Not the
  * figures themselves: they are answers of {@code DrugSafetyValidator.sharedClass}, which is private,
  * so computing its null condition here would be a reimplementation of pipeline logic. Issue #263
- * reached them by temporarily mutating the production source, and only one of its two
- * counterfactuals could have been reached from the INPUTS instead — vetoing a subgroup and removing
- * it from the caller's code set both end in the same {@code continue}, so the blanket-residue one is
- * input-reachable, while striking the four locally-applied prefixes behind
+ * reached them by temporarily mutating the production source, and of the two counterfactuals named
+ * here only one could have been reached from the INPUTS instead. Vetoing a subgroup and removing it
+ * from the caller's code set both end in the same {@code continue}, so the blanket-residue one is
+ * input-reachable. Striking the four locally-applied prefixes behind
  * {@code LOCALLY_APPLIED_ATC_GROUPS}' 46/21 is not: it needs one of those four returned EAGERLY,
- * ahead of a surviving systemic subgroup, and removing candidates from the inputs cannot promote
- * one. (They are returned by the unmutated method often enough — as the fallback, when nothing
- * systemic survives.) This guard only says when the figures are due to be taken again.
+ * ahead of a surviving systemic subgroup, and no uniform input transformation promotes one there —
+ * the unmutated method does return them, but through the fallback, when nothing systemic survives.
+ * Deciding per pair which subgroups to withhold would re-express this loop's own ordering rule,
+ * which is the re-implementation the measurement rule forbids. This guard only says when the figures
+ * are due to be taken again.
  */
 public class UnclassifyingAtcVetoSetTest {
 

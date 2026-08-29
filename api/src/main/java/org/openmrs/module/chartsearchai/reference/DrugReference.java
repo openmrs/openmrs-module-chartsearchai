@@ -906,7 +906,7 @@ public class DrugReference {
 	 * multi-subgroup SUBSTANCE pairs, 2 of them moved</b> (issue #263) — the magnitude in the unit a
 	 * chip is raised for, since a chip names a substance and not a row.
 	 *
-	 * <p>Re-measured 2026-08-29 for that conversion, and it reproduced 46 and 21 on the ROW base
+	 * <p>That conversion was re-measured 2026-08-29, and the run reproduced 46 and 21 on the ROW base
 	 * before 19 and 2 were quoted: the shipped KB loaded through {@code DdiDrugReferenceSource.load},
 	 * the substance base through {@link #substanceGroupKey()} and {@link #canonicalRow}, and the
 	 * choice itself through {@code DrugSafetyValidator.sharedClass} with the four prefixes struck out
@@ -1406,31 +1406,8 @@ public class DrugReference {
 	 * <b>1974 of the KB's 7783 ROW pairs</b> that share a subgroup and <b>1741 of the 5550 SUBSTANCE
 	 * pairs</b>; of those, <b>1331 ROW / 1291 SUBSTANCE pairs keep it under the 36 groups this list
 	 * holds today</b>. The two bases, and the conversion between them, are defined at
-	 * {@code DrugSafetyValidator.sharedClass} (issue #243).
-	 *
-	 * <p><b>That second figure read 1488 until issue #263, and the reason is worth keeping.</b> 1488 is
-	 * the answer over the <em>30</em> groups this list held at issue #182 — the scope the 486/54/7243
-	 * triple states for itself — and issue #184 (PR #241) added six more without re-measuring it, so a
-	 * figure whose own wording says "keep it <em>here</em>" came to describe a rule this class no
-	 * longer applies. The 1974 did not move with it — all six additions are themselves residues, so
-	 * the blanket veto already covered them — which is exactly why nothing looked wrong: only the
-	 * surviving half drifted. Re-measured 2026-08-29 over the shipped KB, loaded through
-	 * {@code DdiDrugReferenceSource.load}, with the substance base from
-	 * {@link #substanceGroupKey()} and {@link #canonicalRow} and the choice from
-	 * {@code DrugSafetyValidator.sharedClass} — reproducing 1974 and the 30-group 1488 (and 1448 over
-	 * substance pairs) before quoting 1331 and 1291. The veto the run applied was the groups this list
-	 * already holds PLUS a residue set — which is what makes 1974 minus 643 a set difference rather
-	 * than a subtraction of two unrelated counts, since 7 of the 34 subgroups this list refuses over
-	 * the shipped KB ({@code V03AB} and its siblings) are not residues at all. That residue set was
-	 * the <b>98</b> of the 594 level-4 subgroups {@link #atcSubgroups()} yields over this KB whose WHO
-	 * ATC/DDD published name begins "Other"/"Various", the names read off the WHO index snapshot of
-	 * 2026-04-25. Counted over the same population as the 97 this javadoc records, and one more than
-	 * it; this pass did not hold the snapshot the 97 was read from, so the discrepancy is recorded
-	 * rather than resolved. What can be said for the 98 is that 1974 reproduces exactly with it as the
-	 * run's residue set — not with it as the whole veto, which is a smaller drop, since the seven
-	 * non-residues above are then unvetoed — and that restricting it to
-	 * {@link #LOCALLY_APPLIED_ATC_GROUPS} gives the same 20 the "shipped KB uses 20 of the 27"
-	 * sentence records.
+	 * {@code DrugSafetyValidator.sharedClass} (issue #243). That 1331 read 1488 until issue #263; the
+	 * measurement paragraphs at the end of this javadoc say why, and how both were taken.
 	 *
 	 * <p><b>The families, and the reading of ATC's words that puts each here:</b>
 	 * <ul>
@@ -1530,16 +1507,6 @@ public class DrugReference {
 	 * family below, the duplicate-therapy claim goes too — that is the whole difference between
 	 * "asserts nothing" and "asserts a purpose".
 	 *
-	 * <p><b>Adding them also moved two figures this javadoc states elsewhere</b> — the count of pairs
-	 * a blanket residue veto would drop but this list does not, and the class-claim drop this list's
-	 * own cost paragraph states — and that went unnoticed until issue #263 re-measured both. The six
-	 * move that drop by 157 on BOTH pair bases (486 to 643 ROW, 293 to 450 SUBSTANCE), which is also
-	 * the number the claim-base sentence above states for them; three identical deltas on three bases,
-	 * and #263 did not check whether they count the same pairs. {@code UnclassifyingAtcVetoSetTest} now
-	 * reddens when a change to this
-	 * list reaches a subgroup the shipped KB publishes, which is less than "whenever this list moves";
-	 * that class's javadoc says what it leaves uncovered.
-	 *
 	 * <p>Measured over the shipped KB for the 30 groups this list held at issue #182 (2026-08-06,
 	 * re-measured independently 2026-08-07; re-measure before relying on a figure): of the 7783 ROW
 	 * pairs sharing at least one level-4 subgroup, 486 lose their class claim entirely, 54 keep one and
@@ -1549,14 +1516,46 @@ public class DrugReference {
 	 * Decision 33 carries the full three-way split on both bases) — quoted here because that
 	 * paragraph's 1331 is 1974 minus this 643 and its 1291 is 1741 minus this 450, as the 1488 it
 	 * replaced was 1974 minus this 486, and without them a reader cannot close that arithmetic on
-	 * either base. The largest contributors are {@code V03AB}
-	 * (135 pairs), {@code D11AX} "Other dermatologicals" (130),
-	 * {@code S01XA} "Other ophthalmologicals" (99) and {@code D06AX} "Other antibiotics for topical
-	 * use" (68).
+	 * either base. On the 30-group split the largest contributors were {@code V03AB} (135 pairs),
+	 * {@code D11AX} "Other dermatologicals" (130), {@code S01XA} "Other ophthalmologicals" (99) and
+	 * {@code D06AX} "Other antibiotics for topical use" (68); issue #263 did not re-take those four
+	 * magnitudes, and on the 36-group split {@code A16AX} and {@code N07XX} join them.
+	 *
+	 * <p><b>That 1331 read 1488 until issue #263, and the reason is worth keeping.</b> 1488 is the
+	 * answer over the <em>30</em> groups this list held at issue #182 — the scope the 486/54/7243
+	 * triple above states for itself — and issue #184 (PR #241) added six more without re-measuring
+	 * it, so a figure whose own wording says "keep it <em>here</em>" came to describe a rule this
+	 * class no longer applies. The 1974 did not move with it, because all six additions are themselves
+	 * residues and a blanket veto already covered them; that is exactly why nothing looked wrong, only
+	 * the surviving half having drifted. The same six moved the class-claim drop by 157 on BOTH pair
+	 * bases (486 to 643 ROW, 293 to 450 SUBSTANCE), which is also the number the claim-base sentence
+	 * above states for them — three identical deltas on three bases, and issue #263 did not check
+	 * whether they count the same pairs.
+	 *
+	 * <p>The re-measurement, 2026-08-29: the shipped KB loaded through
+	 * {@code DdiDrugReferenceSource.load}, the substance base from {@link #substanceGroupKey()} and
+	 * {@link #canonicalRow}, the choice from {@code DrugSafetyValidator.sharedClass}. It reproduced
+	 * 1974 and the 30-group 1488 (and 1448 over substance pairs) before 1331 and 1291 were quoted.
+	 * The veto it applied was the groups this list already holds PLUS a residue set, which is what
+	 * makes 1974 minus 643 a set difference rather than a subtraction of two unrelated counts: 7 of
+	 * the 34 subgroups this list refuses over the shipped KB ({@code V03AB} and its siblings) are not
+	 * residues at all. That residue set was the <b>98</b> of the 594 level-4 subgroups
+	 * {@link #atcSubgroups()} yields over this KB whose WHO ATC/DDD published name begins
+	 * "Other"/"Various", the names read off the WHO index snapshot of 2026-04-25. It is counted over
+	 * the same population as the 97 this javadoc records and is one more than that 97; this pass did
+	 * not hold the snapshot the 97 was read from, so the discrepancy is recorded rather than resolved.
+	 * What can be said for the 98 is that 1974 reproduces exactly with it as the run's residue set —
+	 * not with it as the whole veto, which is a smaller drop, since the seven non-residues just named
+	 * are then unvetoed — and that restricting it to {@link #LOCALLY_APPLIED_ATC_GROUPS} gives the
+	 * same 20 the "shipped KB uses 20 of the 27" sentence records.
+	 *
+	 * <p>{@code UnclassifyingAtcVetoSetTest} now reddens when a change to this list reaches a subgroup
+	 * the shipped KB publishes, which is less than "whenever this list moves"; that class's javadoc
+	 * says what it leaves uncovered.
 	 *
 	 * <p><b>What that costs, counted rather than rounded down</b> — over that same 30-group 486, not
-	 * the 643 above. 116 of the 486 name a subgroup whose
-	 * own published name states a therapy or an indication, so the claim they lose was defensible:
+	 * the 643. 116 of the 486 name a subgroup whose own published name states a therapy or an
+	 * indication, so the claim they lose was defensible:
 	 * {@code D06AX} 33, {@code D05AX} 26, {@code D01AE} 25, {@code S01GX} 12, {@code V03AE} 6,
 	 * {@code D10AX} 5, {@code V03AC} 3, {@code G01AX} 3, {@code S01AX} 2, {@code M02AX} 1. Concretely:
 	 * calcipotriol and calcitriol are both topical vitamin-D analogues and share only {@code D05AX};
@@ -1842,10 +1841,9 @@ public class DrugReference {
 	 *         direction, 0 of 21 nesting pairs resolving to the nested drug. On the 2533 order names,
 	 *         117 more (order name, entry) pairs resolve and none stops resolving.
 	 *
-	 *         <p><b>Three populations, none of them an ATC pair base</b> (issue #263).
-	 *         The 549 and the 624 count NAMES, out of that dictionary's 1219 allergen candidates. A
-	 *         NESTING PAIR
-	 *         is a pair of drug NAMES one of which sits inside the other; the 21 is the size of the
+	 *         <p><b>Three populations, none of them an ATC pair base</b> (issue #263). The 549 and the
+	 *         624 count NAMES, out of that dictionary's 1219 allergen candidates. A NESTING PAIR is a
+	 *         pair of drug NAMES one of which sits inside the other; the 21 is the size of the
 	 *         curated #86/#128/#129 kill set, which is a hand-assembled list of known collisions and
 	 *         not a population derived from a corpus, so it has no substance-pair counterpart to
 	 *         convert to. The 117 counts (order name, ENTRY) pairs, which is a different pair kind
@@ -2079,10 +2077,7 @@ public class DrugReference {
 	 * inflected display name with a dose appended. Typically, not always — since issue #293 an order's
 	 * names include the free text a clinician typed, which can be a sentence; the allowance is still
 	 * right for the display-name shape it was measured on, and what it is applied to is now wider. Measured over the 3.7.1 demo dictionary (2531 drug and
-	 * drug-concept names x the full KB's 2093 rule tokens) — a (NAME, TOKEN) population of its own,
-	 * and neither of the ATC pair bases {@code DrugSafetyValidator.sharedClass} defines (issue #263,
-	 * which did not re-derive the unit of the {@code matches} column itself, the corpus behind it
-	 * being a dictionary this repo does not carry) — by tolerated trailing letters:
+	 * drug-concept names x the full KB's 2093 rule tokens), by tolerated trailing letters:
 	 *
 	 * <pre>
 	 *   rule                    matches   nested-name collisions leaking   what enters at this step
@@ -2096,7 +2091,12 @@ public class DrugReference {
 	 *                                              Multi-Vitamin Adult ~ vitamin a)
 	 * </pre>
 	 *
-	 * A symmetric boundary would therefore stop checking a patient on {@code Aspirine Co 81mg} for
+	 * That product is a (NAME, TOKEN) population of its own, and neither of the ATC pair bases
+	 * {@code DrugSafetyValidator.sharedClass} defines — issue #263, which labelled the 78 below on it
+	 * and did not re-derive the unit of the {@code matches} column itself, the corpus behind that
+	 * column being a dictionary this repo does not carry.
+	 *
+	 * <p>A symmetric boundary would therefore stop checking a patient on {@code Aspirine Co 81mg} for
 	 * aspirin interactions at all — trading a false positive for a false NEGATIVE, the wrong
 	 * direction for a safety net, and one that looks exactly like the noise being removed. Two is the
 	 * far edge of the plateau where every legitimate name is matched and no false positive has yet
@@ -2130,8 +2130,8 @@ public class DrugReference {
 	 * 224 of the 2531 names carry a diacritic. Folding both operands makes the change a pure
 	 * relaxation — 78 (NAME, TOKEN) pairs added over the 2531 x 2093 product, <em>0 removed</em> —
 	 * which is what let this widening be scored against #128's kill set instead of argued about, and
-	 * the kill set includes the accented
-	 * spellings, which are the ones folding could newly break: {@code nitroglycérine} folds to
+	 * the kill set includes the accented spellings, which are the ones folding could newly break:
+	 * {@code nitroglycérine} folds to
 	 * {@code nitroglycerine}, i.e. {@code glycerin} plus one inflectional letter, so it becomes a
 	 * candidate for that token at the very moment {@code glycérine} legitimately does, and only the
 	 * LEFT boundary separates them.

@@ -35,9 +35,7 @@ import org.junit.jupiter.api.Test;
  * per subgroup, over the production load, with no composition of its own. It reddens when a change
  * reaches a subgroup this KB publishes: a group added to {@code UNCLASSIFYING_ATC_GROUPS} or removed
  * from it, or a KB refresh that changes the NUMBER of level-4 subgroups the dataset publishes or
- * which of them the list refuses. A refresh that swaps one unrefused subgroup for another leaves
- * both the count and the refused set alone and so escapes — the published population is pinned by
- * its size, not member by member. When it goes red,
+ * which of them the list refuses. When it goes red,
  * re-measure that constant's own counts and update them with it, saying which method produced them.
  * {@code LOCALLY_APPLIED_ATC_GROUPS}' 46/21 and 19/2 are NOT due on that red — they are taken with
  * the claim filters off, i.e. with {@code UNCLASSIFYING_ATC_GROUPS} emptied, so a change to it
@@ -48,10 +46,12 @@ import org.junit.jupiter.api.Test;
  * position (measured 2026-08-29 — {@code A07AX}, {@code C05BX}, {@code D02AX}, {@code D03AX},
  * {@code R03BX}, {@code S01JX}, {@code S01KX}, {@code S02DC}, {@code V07A}), and the list's own
  * javadoc says of two of them that they are members on the criterion rather than on measured impact.
- * And a KB refresh that adds or removes ROWS under subgroups the dataset already publishes can move
- * every pair figure this class is a tripwire for while leaving this case green, because its
- * assertions are keyed on the SET of subgroups and none of them counts rows or pairs. Measured:
- * dropping 1372 of the shipped KB's 2283 rows and adding 2, chosen so the published SET is
+ * And a KB refresh can move every pair figure this class is a tripwire for while leaving this case
+ * green, because its assertions are keyed on the NUMBER of level-4 subgroups the dataset publishes
+ * and on which of them the list refuses, and neither of those counts rows or pairs. Two shapes
+ * escape: ROWS added or removed under subgroups the dataset already publishes, and a swap of one
+ * unrefused subgroup for another, which leaves the count and the refused set alike. Measured for the
+ * first: dropping 1372 of the shipped KB's 2283 rows and adding 2, chosen so the published set is
  * unchanged, leaves this case passing.
  *
  * <p><b>What it does NOT pin, stated so the guard does not look stronger than it is.</b> Not the

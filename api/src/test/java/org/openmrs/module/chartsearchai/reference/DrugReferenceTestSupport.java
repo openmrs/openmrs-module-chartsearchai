@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.io.ByteArrayOutputStream;
@@ -1088,6 +1089,40 @@ public final class DrugReferenceTestSupport {
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * @return the ONE warning of {@code type} in {@code warnings}, failing with every detail when there is
+	 *         not exactly one.
+	 *
+	 *         <p>Selected by TYPE and deliberately not by drug name, which is what separates it from
+	 *         {@link #overdoseDetail} and {@link #overdoseCount} beside it: those answer "what did the chip
+	 *         for THIS drug say", and a case about which row a chip is NAMED after cannot use them.
+	 *         {@code overdoseDetail} returns {@code ""} for a chip named after another row, so a NEGATIVE
+	 *         {@code contains} assertion over it passes vacuously on exactly the defect under test — the
+	 *         positive form fails loudly, and saying it of both would license the wrong conclusion about
+	 *         which accessor is unsafe for what.
+	 *
+	 *         <p>Shared rather than written per file because more than one case selects one warning of a
+	 *         type — a count named here has already gone stale once (it said "four cases" and missed
+	 *         {@code PerRequestSubstanceSubjectTest.theQuestionPairArmNamesTheSubstanceAlikeAcrossBothPasses},
+	 *         which calls this method TWICE), so grep this method's call sites for the current set rather
+	 *         than trust a number written in a comment. {@code OrderedSubjectRowTest} and
+	 *         {@code DoseCeilingBySubstanceTest} each wrote their own case as a last-match-wins loop plus
+	 *         {@code assertNotNull} before this existed, which cannot see a DUPLICATE warning of either
+	 *         type — the defect class issues #162/#173/#206 keep removing — so the strictness is what the
+	 *         shared form buys them, and it does not propagate from a copy.
+	 */
+	static SafetyWarning onlyOfType(List<SafetyWarning> warnings, String type) {
+		List<SafetyWarning> matched = new ArrayList<SafetyWarning>();
+		for (SafetyWarning warning : warnings) {
+			if (type.equals(warning.getType())) {
+				matched.add(warning);
+			}
+		}
+		assertEquals(1, matched.size(),
+				"expected exactly one " + type + " warning, got: " + details(warnings));
+		return matched.get(0);
 	}
 
 	static long overdoseCount(List<SafetyWarning> warnings, String drug) {

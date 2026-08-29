@@ -367,7 +367,18 @@ public class DrugSafetyValidator {
 		// exist. This bean is a Spring singleton, so a field memo is one unsynchronized structure shared
 		// by every concurrent request.
 		Map<Object, List<DrugReference>> resolvedRows = resolvedSubstanceRows(inPlay, orderEntries);
-		SubstanceSubjects subjects = new SubstanceSubjects(resolvedRows, recordedDrugNames(context));
+		// The rows a substance is NAMED by, which is a strictly smaller question than the rows it is RULED
+		// over, and since issue #238 a different set: the question's and the patient's own, never the
+		// ANSWER's. Of every input the naming decision reads this is the one that varied between the two
+		// validate passes of one request — the pre-answer findings pass calls in with an EMPTY answer
+		// (DrugReferenceInjector.preAnswerFindings) and the chips pass with the real one, while the
+		// question, orderEntries and the recorded names are read identically both times — so the citable
+		// safety_finding record the model read could name a substance one way and the chip beside the
+		// answer another. Naming off a set neither pass can disagree about closes that by construction,
+		// with nothing carried from one pass to the other. See SubstanceSubjects.
+		Map<Object, List<DrugReference>> namingRows = resolvedSubstanceRows(questionDrugs, orderEntries);
+		SubstanceSubjects subjects = new SubstanceSubjects(namingRows, resolvedRows,
+				recordedDrugNames(context));
 
 		// One ledger for every contraindication chip this pass raises, across BOTH arms and both of
 		// their call sites (the drug-in-play loop below and the order-driven arm after it) — see
@@ -943,8 +954,14 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * What ONE {@code validate} pass calls each substance it resolved: {@link #interactionSubject} over
-	 * the rows THIS PASS resolved for that substance, asked once and remembered.
+	 * What one RESPONSE calls each substance a {@code validate} pass resolved: {@link #interactionSubject}
+	 * over the rows the question and the patient's own orders resolved for that substance, asked once and
+	 * remembered — for a substance those rows reach at all. Not over the rows the ANSWER put in play for
+	 * such a substance — those decide what the arms RULE on and not what they call it, which is issue
+	 * #238 — see the paragraph beginning "And issue #238 makes the fold invariant". That is the ordinary
+	 * case and not a universal one: a substance in play ONLY because the answer named it has no such rows
+	 * to remember, and for exactly that substance {@link #groupOf} folds its answer-only rows instead — see that
+	 * method's own javadoc, which states the narrower, correct claim.
 	 *
 	 * <p><b>Issue #206.</b> Five arms of this class name a subject. Three read this — the drug-in-play
 	 * interaction chip (issue #162), the dose warning (#174 site 4) and the contraindication chip — and
@@ -979,69 +996,136 @@ public class DrugSafetyValidator {
 	 * {@link #pairKeyNames}/{@link #unorderedPairKey} and ranked by {@link #outranks} on the walked ROW.
 	 * Both are #175's and #189's axis and both move chip COUNTS. Only the NAME moved.
 	 *
-	 * <p><b>The shared {@code groups} map is what makes that structural rather than coincidental</b>, and
-	 * the memo is not: {@link #subjectOf} is {@link #interactionSubject} over {@code groups.get(key)} and
-	 * {@code recordedNames}, both fixed for the pass and folded by a pure static method, so every arm gets
-	 * the same answer whoever asks first. What the memo buys is that no arm REFOLDS a group another has
+	 * <p><b>The shared {@code namingGroups}/{@code allGroups} lookup is what makes that structural rather
+	 * than coincidental</b>, and the memo is not: {@link #subjectOf} is {@link #interactionSubject} over
+	 * {@link #groupOf}{@code (substance)} and {@code recordedNames}, both fixed for the pass and folded by
+	 * a pure static method, so every arm gets the same answer whoever asks first. What the memo buys is
+	 * that no arm REFOLDS a group another has
 	 * already folded — including within one arm, which is why {@link #addContraindications} may ask once
 	 * per MATCHED rule (see its own comment there), and within one iteration of {@code validate}'s
 	 * drug-in-play loop, where the interaction and dose arms ask about the same substance in turn.
 	 * Measured by deleting the {@code put}: the whole api suite stays green, so it is a cost property and
 	 * nothing about the one-name-per-substance property rests on it.
 	 *
-	 * <p><b>And that is per PASS, not per request.</b> {@code validate} runs twice for one {@code /search}
-	 * — the pre-answer findings pass through {@code DrugReferenceInjector.injectRecords}, then the chips
-	 * pass — and the group differs between them BY DESIGN in one input, the rows the ANSWER put in play
-	 * (issue #175 admits them deliberately). By design, not in total: {@code orderEntries} is read from
-	 * the pass's own {@link PatientClinicalContext} exactly as the recorded names are, so an order that
-	 * stops during the LLM call moves that input too — see the paragraph below, which says the same thing
-	 * of the recorded names. Where the answer resolves a row of an in-play substance that the question
-	 * did
-	 * not, the group grows and this can answer differently, so the injected {@code safety_finding} the
-	 * model READ can name a substance one way and the chip beside the answer another. The
-	 * contraindication arm's old positional rule happened to be pass-stable, since {@code inPlay} seeds
-	 * from the question first; the interaction and dose arms have had this since #175/#194.
+	 * <p><b>And issue #238 makes the fold invariant to the ANSWER within each pass — never a shared answer
+	 * across the whole REQUEST, which is why the rows this folds are not the rows the arms rule
+	 * over.</b> {@code validate} runs twice for one {@code /search} — the pre-answer findings pass
+	 * through {@code DrugReferenceInjector.injectRecords}, then the chips pass. Before this issue, the
+	 * group differed between them precisely in the rows the ANSWER put in play (issue #175 admits them
+	 * deliberately): where the answer resolved a row of an in-play substance that the question did not,
+	 * the group grew for that pass alone, so the injected {@code safety_finding} the model READ could
+	 * name a substance one way and the chip beside the answer another. {@code namingRows} closes that —
+	 * it folds only {@code questionDrugs} and {@code orderEntries}, neither of which the answer-side
+	 * widening touches, so the two passes now fold the identical rows for the identical substance. By
+	 * design, not in total: {@code orderEntries} is read from the pass's own
+	 * {@link PatientClinicalContext} exactly as the recorded names are, so an order that stops during
+	 * the LLM call still moves that input between the two passes — see the paragraph beginning "And the
+	 * question-pair arm since issue #236", which says the same thing of the recorded names. That is a
+	 * chart-read residue #238 does not close, not the answer-driven one this paragraph is about.
 	 *
-	 * <p><b>And the question-pair arm since issue #236</b>, which is what that change COSTS and is
-	 * recorded here rather than sold as free. Folding this arm's own rows made it invariant to the
-	 * ANSWER — {@code questionDrugs} is a function of the question, which both passes share — and that
-	 * is the only sense of "pass-stable" this paragraph and the one below claim, for either arm. Not
+	 * <p><b>And the question-pair arm since issue #236</b>, which is what that change COST until issue
+	 * #238 closed it. Folding this arm's own rows made it invariant to the ANSWER —
+	 * {@code questionDrugs} is a function of the question, which both passes share — and that is the
+	 * only sense of "pass-stable" this paragraph and the one below claim, for either arm. Not
 	 * byte-identical across the passes, which nothing here ever established: the two passes build two
 	 * {@link PatientClinicalContext}s, so the recorded names this fold ranks by could already move
 	 * between them for reasons that have nothing to do with #236. So the injected
-	 * {@code safety_finding} the model reads and the chip beside the answer can name that substance
-	 * differently — the residue the paragraph above already accepts for three arms, on a fourth. ADR
-	 * Decision 49 is canonical for the trade and carries the measurement that shows it live; it is not
-	 * reprinted here. Taken deliberately: the alternative is this arm naming a substance one way while the chips
-	 * beside it about that same substance name it another, which is what issue #236 is, and closing it
-	 * properly is the once-per-REQUEST decision the paragraph below says belongs elsewhere.
+	 * {@code safety_finding} the model reads and the chip beside the answer COULD name that substance
+	 * differently — the residue the paragraph above already accepted for three arms, on a fourth. ADR
+	 * Decision 49 is canonical for the measurement that showed it live. <b>That residue is closed as of
+	 * issue #238 (ADR Decision 53), for this arm along with the other three</b>: every substance this
+	 * arm asks {@link #subjectOf} about is one of {@code questionDrugs}, which {@code namingGroups}
+	 * always covers, so its naming decision never falls through to {@code allGroups}'s answer-widened
+	 * rows and the ANSWER cannot move it. What #238 did not touch is the caveat two sentences up — a
+	 * chart read that genuinely differs between the two passes is a different residue from the one this
+	 * paragraph is about.
 	 *
-	 * <p>The SCREENING arm keeps its pass-stability, and by mechanism rather than by luck: its group
-	 * differs from this one only where a row of an ordered substance is in play, and such a substance
-	 * has already been through {@link #addInteractionWarnings}, whose pairs
-	 * {@link InteractionPairs} then suppresses here — so every pair it still reports has a subject whose
-	 * group is the orders' alone. See the comment at that arm's own read.
+	 * <p>The SCREENING arm keeps its pass-stability, and structurally rather than by luck: on a
+	 * screening question {@code questionDrugs} is empty by the arm's own gate — see the paragraph
+	 * beginning "That is a statement about the screening arm's OWN chips" — so its {@code namingRows}
+	 * reduces to {@code resolvedSubstanceRows(<empty set>, orderEntries)}: byte-for-byte the same map
+	 * the arm already builds for itself, {@code substanceRows(orderDrugs)}, same membership and the same
+	 * order (see the comment at that arm's own read, near {@code substances = substanceRows(orderDrugs)}).
+	 * {@link InteractionPairs} plays no part in this — it dedups PAIRS the drug-in-play arm already
+	 * reported, never subject groups — so every pair this arm still reports has a subject whose group is
+	 * the orders' alone.
 	 *
 	 * <p>That is a statement about the screening arm's OWN chips and not about a screening QUESTION,
-	 * which the sentence above would otherwise be read as. The pair this arm stands down from is chipped
-	 * by {@link #addInteractionWarnings} instead, whose subject is folded over the answer-widened group —
-	 * so on a screening question the pre-answer finding can still come from here and the post-answer chip
-	 * from there, naming one substance two ways across the arm handoff. That residue is not #236's: the
-	 * drug-in-play arm has read this lookup since #206 while this arm folded the orders alone, so the two
-	 * could already differ. It is named here because the sentence above is exactly where a reader would
-	 * otherwise conclude the screening path is closed.
+	 * which the sentence above would otherwise be read as. This javadoc used to say the pair this arm
+	 * stands down from is chipped by {@link #addInteractionWarnings} instead, "whose subject is folded
+	 * over the answer-widened group", so the pre-answer finding could come from here and the post-answer
+	 * chip from there, naming one substance two ways across the arm handoff. <b>That cannot happen, as of
+	 * issue #238.</b> The substance a pair like this is about is an ORDERED one —
+	 * {@code questionDrugs} is empty by this arm's own gate, so every substance the screening arm reaches
+	 * is one {@code orderEntries} names — and {@code namingGroups}, built from
+	 * {@code orderEntries} alone, always has that substance's group. The two arms
+	 * therefore fold the identical group for that substance in both passes.
 	 *
-	 * <p>Not designed around, and the alternative is worse: naming from a pass-invariant set while RULING
-	 * from the whole group is the two-row-sets shape this class exists to remove, one level up. Closing
-	 * it properly means deciding a substance's subject once per REQUEST rather than once per pass, which
-	 * is the injector's and the inference service's business rather than this class's. Narrow in
-	 * practice — it needs a family whose rows publish DIFFERENT alias sets, so that a question and an
-	 * answer using different aliases resolve different rows ({@code Estrone sulfate (topical)} publishes
-	 * {@code estrone} and nothing spelled {@code estrone sulfate}; see
-	 * {@link DrugReferenceService#findImpliedByQuery}) — and reasoned rather than measured.
+	 * <p>What does survive at that handoff is a PARTNER-label asymmetry, and it is not answer-driven: an
+	 * unfolded chip from {@link #addInteractionWarnings} names its partner from the rule's own match token
+	 * ({@link #partnerLabel}, or {@link #foldedPartnerLabel} where a class sentence folds in), while
+	 * {@link #addActiveOrderPairInteractions} names its partner from {@code subjects.subjectOf(partner)}'s
+	 * {@code displayLabel()} wherever the partner resolves to an entry at all. A rule's own token and the
+	 * subject lookup's canonical display name are not always the same spelling of one substance, so the
+	 * two arms can still name one PARTNER two ways across the handoff — not because either subject's
+	 * group moved, but because the two arms have never named a partner by the same mechanism. That
+	 * residue is not #236's or #238's, and neither closes it: it is named here because the sentence above
+	 * is exactly where a reader would otherwise conclude the screening path is closed outright.
 	 *
-	 * <p>Memoised for the pass and not beyond it. The memo below IS a field, of an object {@code validate}
-	 * constructs per pass — which is the shape issue #172's rule asks for, and the rule binds the step
+	 * <p>This javadoc used to reject closing that gap here at all, calling it "not designed around, and
+	 * the alternative is worse" on two grounds: that naming from a pass-invariant set while RULING from
+	 * the whole group is the two-row-sets shape this class exists to remove, one level up; and that
+	 * closing it properly means deciding a substance's subject once per REQUEST rather than once per
+	 * pass, which is the injector's and the inference service's business rather than this class's.
+	 * <b>Both grounds are wrong, and each for its own reason (ADR Decision 53) — it is the REJECTION that
+	 * is retracted below, not the gap, which #238 closes inside this class.</b>
+	 *
+	 * <p>The two-row-sets ground is wrong: the shape issues #162/#174/#175 removed is arms RULING from
+	 * different row sets, whose harm is a milder rule surviving where a more severe one existed (issue
+	 * #86's direction), and no arm's candidate set moves here. Naming from a set narrower than the one
+	 * that decides content is moreover already this module's design, stated for the out-of-class caller
+	 * in {@link #interactionSubject(List, PatientClinicalContext)}'s own javadoc — "deliberately NOT the
+	 * narrower set it decides to INJECT … what a substance is CALLED may not depend on them" — and the set
+	 * this folds IS the union that caller asks over.
+	 *
+	 * <p>The "injector's and the inference service's business" ground is wrong too: of every input the
+	 * naming decision reads, exactly one varies between the two passes from INSIDE {@code validate} —
+	 * {@code answer}. The question is the same string at both call sites; {@code orderEntries} is
+	 * {@code findForActiveOrders(rawContext)}, reading the order's ATC codes and
+	 * {@code getActiveDrugNames()}, neither of which the answer-side widening touches; and
+	 * {@code recordedDrugNames(context)} is {@code getActiveDrugNames()} again. So the pass-varying input
+	 * can be, and is, removed INSIDE {@code validate} — per pass, with nothing carried between the two
+	 * passes and no new parameter on the public entry point — which is exactly what {@code namingRows}
+	 * does. Closing this was never the injector's or the inference service's business to begin with; it
+	 * needed no cross-pass carrier at all.
+	 *
+	 * <p><b>What it does cost, stated because it is a real trade.</b> {@link #addOverdose} tries the
+	 * SUBJECT's own band first, so moving the subject moves which of a substance's published ceilings a
+	 * dose chip quotes: over a fixture whose rows publish 3000 and 2000 mg/day, a stated 4000 mg/day is
+	 * now reported against the named row's own 3000 rather than the answer-widened subject's 2000. That
+	 * ceiling has followed the subject since #206 by that arm's own design, no warning is lost (the walk
+	 * after the subject still reaches every row, and {@link #ceilingAttribution} says whose ceiling it
+	 * quoted), and the alternative would have the dose arm name a substance differently from the other
+	 * two, which is this class's whole reason to exist. Both directions are pinned by
+	 * {@code PerRequestSubstanceSubjectTest}.
+	 *
+	 * <p>Still narrow to reach, and still reasoned rather than counted: it needs a family whose rows
+	 * publish DIFFERENT alias sets, so that a question and an answer using different aliases resolve
+	 * different rows. This used to name {@code Estrone sulfate (topical)} as such a family, on the
+	 * strength of its publishing {@code estrone}; measured through the real
+	 * {@code DdiDrugReferenceSource.parse} of the shipped knowledge base, that family does NOT pose it —
+	 * its unqualified sibling publishes {@code estrone} too, because the {@code ddinter} parser builds
+	 * both rows' aliases from one {@code rxnorm_name}. So the shape wants a curated
+	 * {@code sourceFormat=json} dataset, which is what {@code PerRequestSubstanceSubjectTest}'s fixture
+	 * is, or a {@code ddinter} family whose {@code rxnorm_name} is not word-bounded inside the display
+	 * name (the {@code Omeprazole}/{@code esomeprazole} shape). No live instance was ever observed, and
+	 * no count over the shipped KB is published here — the property is that the two passes stop disagreeing
+	 * over {@code answer}, which does not depend on how often they would otherwise have differed.
+	 *
+	 * <p>Memoised for the pass and not beyond it, which #238 does not change: each pass resolves the rows
+	 * and the recorded names for itself, so the memo may not outlive the pass that built it. The memo below IS a field, of an object
+	 * {@code validate} constructs per pass — which is the shape issue #172's rule asks for, and the rule
+	 * binds the step
 	 * this must never take: hoisting it onto the VALIDATOR, where {@link DrugReferenceService}'s class
 	 * javadoc gives the reasons. Not the {@code getAll()} hot-reload this used to cite, which does not
 	 * exist.
@@ -1055,30 +1139,44 @@ public class DrugSafetyValidator {
 	 */
 	private static final class SubstanceSubjects {
 
-		private final Map<Object, List<DrugReference>> groups;
+		/** The rows the naming decision folds — the question's and the patient's own orders' (issue #238),
+		 *  never the ANSWER's, which was the input that moved this answer between the two
+		 *  {@code validate} passes. */
+		private final Map<Object, List<DrugReference>> namingGroups;
+
+		/** Every row this pass resolved, including the ones only the ANSWER put in play — the fallback
+		 *  for a substance {@link #namingGroups} has no group for, i.e. one in play only because the
+		 *  answer named it. */
+		private final Map<Object, List<DrugReference>> allGroups;
 
 		private final Collection<String> recordedNames;
 
 		private final Map<Object, DrugReference> subjectBySubstance =
 				new HashMap<Object, DrugReference>();
 
-		SubstanceSubjects(Map<Object, List<DrugReference>> groups, Collection<String> recordedNames) {
-			this.groups = groups;
+		SubstanceSubjects(Map<Object, List<DrugReference>> namingGroups,
+				Map<Object, List<DrugReference>> allGroups, Collection<String> recordedNames) {
+			this.namingGroups = namingGroups;
+			this.allGroups = allGroups;
 			this.recordedNames = recordedNames;
 		}
 
 		/**
-		 * @return the row {@code row}'s substance is named by in this response — {@code row} itself when
-		 *         this pass grouped no rows for it, which is the answer every arm gave before there was a
-		 *         group to choose from and keeps a caller holding an ungrouped row honest rather than
-		 *         null.
+		 * @return the row {@code row}'s substance is named by in this response — {@link #groupOf}'s rows
+		 *         folded, or {@code row} itself when NEITHER map grouped any rows for it, which is the
+		 *         answer every arm gave before there was a group to choose from and keeps a caller holding
+		 *         an ungrouped row honest rather than null.
 		 *
 		 *         <p>That fallback is deliberately NOT memoised, and the difference only shows for a
-		 *         caller this class does not yet have: every arm today asks about a row that IS in the
-		 *         group map, so the branch is unreachable. Were it memoised, the first arm ever added over
+		 *         caller this class does not yet have: every arm today asks about a row of a substance
+		 *         {@link #allGroups} groups — that map is the one {@code validate} walks to reach the arms
+		 *         at all — so the branch is unreachable. Were it memoised, the first arm ever added over
 		 *         rows outside that map would cache a POSITIONAL answer under the substance's key and hand
 		 *         it back to every arm that asks afterwards, with the group lookup skipped — issue #206
 		 *         re-created by the class written to prevent it, silently and with no test reddening.
+		 *         Note which map that is: a substance MISSING from {@link #namingGroups} is ordinary since
+		 *         issue #238 (one the answer alone named), and {@link #groupOf} answers it from
+		 *         {@code allGroups} rather than falling through to here.
 		 *
 		 *         <p>{@code null} is therefore the memo's MISS sentinel rather than a stored answer, which
 		 *         is sound because the memoised branch cannot produce one: {@link #interactionSubject}
@@ -1091,13 +1189,37 @@ public class DrugSafetyValidator {
 			if (subject != null) {
 				return subject;
 			}
-			List<DrugReference> group = groups.get(substance);
+			List<DrugReference> group = groupOf(substance);
 			if (group == null || group.isEmpty()) {
 				return row;
 			}
 			subject = interactionSubject(group, recordedNames);
 			subjectBySubstance.put(substance, subject);
 			return subject;
+		}
+
+		/**
+		 * @return the rows this response NAMES {@code substance} by: the naming group, else every row this
+		 *         pass resolved for it, else {@code null} for a substance neither map groups.
+		 *
+		 *         <p>The fallback is reached by exactly one shape — a substance in play only because the
+		 *         ANSWER named it, which the question did not resolve and the patient is not on — and it
+		 *         cannot make the two passes disagree over the ANSWER, because the pre-answer pass
+		 *         validates with an empty answer and so never reaches this branch at all. It folds that substance's
+		 *         answer-only rows rather than falling through to {@code subjectOf}'s positional
+		 *         {@code row}, because within ONE pass those rows still have to be named alike, which is
+		 *         issue #206's own property.
+		 *
+		 *         <p>Emptiness is checked and not only nullness: {@link #resolvedSubstanceRows} never
+		 *         stores an empty list, so today the two are the same test, and asking both is what keeps
+		 *         a naming group that could be empty from silently answering for the whole group.
+		 */
+		private List<DrugReference> groupOf(Object substance) {
+			List<DrugReference> naming = namingGroups.get(substance);
+			if (naming != null && !naming.isEmpty()) {
+				return naming;
+			}
+			return allGroups.get(substance);
 		}
 	}
 
@@ -1189,7 +1311,9 @@ public class DrugSafetyValidator {
 	 * <p><b>What the chip CALLS that substance is a separate question, and not a positional one (issue
 	 * #206).</b> It is {@link SubstanceSubjects} — {@link #interactionSubject} over the substance's rows,
 	 * the same answer the interaction chip (issue #162) and the dose warning (#174 site 4) get, resolved
-	 * once for the pass. This arm used to name the chip after whichever row reached it first, which
+	 * once for the pass and — since issue #238, the naming rows being a function of the question and the
+	 * orders alone — no longer moved between the pre-answer pass and the chips pass by the ANSWER. This arm
+	 * used to name the chip after whichever row reached it first, which
 	 * disagreed with those two for the shipped families whose route-unspecified row is not the dataset's
 	 * first, and — once issue #194 anchored them on the chart — wherever the chart names some other row,
 	 * i.e. on a property of the patient's data rather than of the dataset. Renaming, not re-counting:
@@ -2141,10 +2265,18 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * The subject groups the drug-in-play and dose arms work over: {@link #substanceRows} over
-	 * {@code inPlay}, each group additionally carrying the rows of that same substance the patient's own
-	 * ACTIVE ORDERS resolved — i.e. every row of an in-play substance that THIS REQUEST resolved, from
-	 * either side.
+	 * The rows of each substance {@code candidates} names, grouped: {@link #substanceRows} over
+	 * {@code candidates}, each group additionally carrying the rows of that same substance the patient's
+	 * own ACTIVE ORDERS resolved.
+	 *
+	 * <p><b>Called TWICE per {@code validate}, with two candidate sets, and the difference is what issue
+	 * #238 turns on.</b> Over the whole {@code inPlay} set it produces {@code resolvedRows} — every row of
+	 * an in-play substance that this PASS resolved, from either side — which is what the drug-in-play and
+	 * dose arms RULE over. Over {@code questionDrugs} alone it produces {@code namingRows}, which is what
+	 * {@link SubstanceSubjects} folds to decide what those arms CALL the substance: the same groups minus
+	 * the rows only the ANSWER put in play. Two maps of freshly built lists over the same shared
+	 * {@link DrugReference} objects; no arm
+	 * mutates a group after it is built, so the two cannot drift apart.
 	 *
 	 * <p><b>Issue #175.</b> The subject of an interaction chip is a SUBSTANCE (issue #162), but the rows
 	 * this arm saw were only the ones the question and answer TEXT resolved — an accident of which alias
@@ -2173,15 +2305,19 @@ public class DrugSafetyValidator {
 	 * this arm too — the same chip the screen raises for the same pair, which is the point: the two arms
 	 * must not choose from different row sets.
 	 *
-	 * <p>In-play rows come FIRST and order rows after, so a full tie on {@link #outranks} keeps a row
-	 * the text actually named. It is still a per-{@code validate} local for issue #172's reason — which
+	 * <p>Rows from the candidate set come FIRST and order rows after, so a full tie on
+	 * {@link #outranks} keeps a row the text actually named. A row the ANSWER
+	 * matched that {@code orderEntries} also carries sits at its in-play position in {@code resolvedRows}
+	 * and at its order position in {@code namingRows}, and where a family ties on both of
+	 * {@link DrugReference#canonicalRow}'s rungs that difference decides which row is elected. It is still
+	 * a per-{@code validate} local for issue #172's reason — which
 	 * lives in {@link DrugReferenceService}'s class javadoc and not on the issue, whose own statement of
 	 * it is false — and the lists are the ones {@link #substanceRows} just built, so appending to them
 	 * mutates nothing shared.
 	 */
 	private static Map<Object, List<DrugReference>> resolvedSubstanceRows(
-			Collection<DrugReference> inPlay, List<DrugReference> orderEntries) {
-		Map<Object, List<DrugReference>> groups = substanceRows(inPlay);
+			Collection<DrugReference> candidates, List<DrugReference> orderEntries) {
+		Map<Object, List<DrugReference>> groups = substanceRows(candidates);
 		for (DrugReference ordered : orderEntries) {
 			List<DrugReference> rows = groupFor(groups, ordered);
 			// contains() is identity here — DrugReference defines no equals, and both sets are resolved
@@ -2300,8 +2436,11 @@ public class DrugSafetyValidator {
 	 *
 	 *         <p>Kept as a named method over the shared fold rather than inlined at its call sites,
 	 *         because "what a chip calls its subject" is the decision issue #162 made, #174 site 3
-	 *         extended to the screening arm, #194 anchored on the chart and #206 gave one answer per
-	 *         substance per validate PASS — the name is where that decision is DEFINED. Where a chip arm looks
+	 *         extended to the screening arm, #194 anchored on the chart, #206 gave one answer per
+	 *         substance per validate pass and #238 made that answer invariant to the ANSWER within each
+	 *         pass — never one shared answer across the request (the qualifier is load-bearing; see
+	 *         {@link SubstanceSubjects}) — the name is where that decision
+	 *         is DEFINED. Where a chip arm looks
 	 *         it UP is {@link SubstanceSubjects}, and a new chip-subject site belongs there rather than
 	 *         here: calling this directly is how an arm ends up folding a narrower row group than its
 	 *         siblings, which is exactly what #206 was — and what #236 removed from the last two arms.
@@ -2368,14 +2507,18 @@ public class DrugSafetyValidator {
 	 *         depend on them, and building the group from the injected rows was measured to lose the
 	 *         charted row exactly when the clause is needed.
 	 *
-	 *         <p>Two things that union does not guarantee, stated rather than assumed. A question word
+	 *         <p>One thing that union does not guarantee, stated rather than assumed. A question word
 	 *         does not always resolve every row of the substance it names — the rows of one substance
 	 *         USUALLY publish the same aliases, and {@code drug-reference-charted-substance-row.json} is
 	 *         a fixture where they deliberately do not — so a substance reached by the question alone can
-	 *         still be grouped short. And the injector cannot see the rows the ANSWER puts in play, which
-	 *         is the per-pass residue {@link SubstanceSubjects}' javadoc already records and bounds. In
-	 *         both cases the group is narrower, the fold decides, and the injector's caller stays silent
-	 *         rather than guessing — see {@code DrugReferenceInjector.chartAnchoredSubject}.
+	 *         still be grouped short, the group is narrower, the fold decides, and the injector's caller
+	 *         stays silent rather than guessing — see {@code DrugReferenceInjector.chartAnchoredSubject}.
+	 *         (This used to name a second thing the union does not guarantee: that the injector cannot see
+	 *         the rows the ANSWER puts in play. Since issue #238 the chip layer does not fold them either,
+	 *         so that is no longer a difference between the two — the INPUTS now coincide. Their GROUPING
+	 *         still does not, {@code DrugReferenceInjector.collect} keying on {@code substanceKey()}
+	 *         falling back to the row's own id where this keys on {@link DrugReference#substanceGroupKey},
+	 *         so do not read the coincidence as agreement in general.)
 	 */
 	static DrugReference interactionSubject(List<DrugReference> rows, PatientClinicalContext context) {
 		return interactionSubject(rows, recordedDrugNames(context));
@@ -3483,12 +3626,14 @@ public class DrugSafetyValidator {
 	 * the strength clause after it ({@link DrugReferenceInjector#renderFinding}, issue #283 — a
 	 * question-pair finding is an INTERACTION, so it states one like every other), so a pair
 	 * finding's grounding comes from that record rather than from the promoted notes, and the
-	 * promoted-note budget is untouched. <b>Verbatim WITHIN one {@code validate} pass since issue
-	 * #236</b>, which is what ADR Decision 49 records that change costing: {@code renderFinding} copies the chip the
-	 * PRE-ANSWER pass raised, and this arm's subject is now folded over a group the answer widens, so the
-	 * record the model reads and the chip the clinician sees can name one substance two ways — see
-	 * {@link SubstanceSubjects}, which is where that residue and its measurement live. What the two
-	 * cannot do is describe one finding differently within a pass. That half is worded to match
+	 * promoted-note budget is untouched. <b>Verbatim across passes too, not only within one</b>:
+	 * {@code renderFinding} copies the chip the PRE-ANSWER pass raised, and between issue #236 and issue
+	 * #238 this arm's subject was folded over a group the answer widens, so the record the model reads
+	 * and the chip the clinician sees could name one substance two ways — ADR Decision 49 is canonical
+	 * for that measurement. Issue #238 (ADR Decision 53) closed it: this arm's subject now comes from
+	 * {@code namingGroups}, which every question drug is already in, so the answer cannot move it — see
+	 * {@link SubstanceSubjects}. What the two cannot do, before or after #238, is describe one finding
+	 * differently within a pass. That half is worded to match
 	 * {@link DrugReferenceInjector#orderedInteractionNotes}, which this paragraph is paired with —
 	 * each cites the other — because the two came apart once already, when only one of them was
 	 * reworded for the clause.
@@ -3634,11 +3779,15 @@ public class DrugSafetyValidator {
 		// same defect issue #162 fixed on the drug-in-play arm, reached here through the dataset
 		// order the tie-break above deliberately settles on.
 		//
-		// The shared lookup since issue #236, not a fold over this arm's own rows: that fold saw only
-		// the question's drugs, while every other arm folds the rows the question, the ANSWER and the
-		// patient's ORDERS resolved, so a substance whose rows publish different alias sets was named
-		// one thing here and another by the chip beside it. Both slots read it, because both are
-		// clinician-facing names for a substance in this response.
+		// The shared lookup since issue #236, not a fold over this arm's own rows: that fold (the old
+		// canonicalSubjects, deleted at #236) saw only the question's drugs. This comment used to say
+		// every OTHER arm folds the rows the question, the ANSWER and the patient's ORDERS resolved, and
+		// that a substance whose rows publish different alias sets could be named one thing here and
+		// another by the chip beside it. That was true between issues #236 and #238 and is NOT true now:
+		// issue #238 (ADR Decision 53) moved every arm's naming decision onto namingGroups, which folds
+		// the question's drugs and the patient's ORDERS and never the ANSWER — see this method's own
+		// javadoc above and SubstanceSubjects. Both slots still read the shared lookup, because both are
+		// clinician-facing names for a substance in this response — that much has not changed.
 		//
 		// Nothing this arm collapses on reads the resolver — it keys its candidates on
 		// pairKeyNames/unorderedPairKey and ranks them with outranks(row, rule, …) — so the chip COUNT
@@ -3649,13 +3798,16 @@ public class DrugSafetyValidator {
 		// ledger key. Read it off the code rather than off a probe count: put the resolver's answer into
 		// the pair key and the count moves; nothing here does.
 		//
-		// So the name in either slot can now be a row the question's own word did not spell — through
-		// the chart, and, on a dataset whose rows carry the same rules from both sides, through the
-		// ANSWER using a second alias of the family. That is the settled reading of a chip and not a
-		// widening of the claim: a chip's subject is a SUBSTANCE (issue #162), the sentence's clause
-		// says the pair came from the question rather than from the chart, and the module already
-		// reports what the TEXT stated under a row the text did not spell — "The stated Amoxicillin
-		// (suspension) dose …" for an answer saying "amoxicillin" (issue #245, pinned by
+		// So the name in either slot can still be a row the question's own word did not spell — through
+		// the CHART, where the patient's own orders resolve a different row of the family than the
+		// question's word did. NOT through the answer any more: both slots here are questionDrugs rows,
+		// so groupOf always resolves them from namingGroups, which the answer cannot widen (issue #238) —
+		// PerRequestSubstanceSubjectTest.theQuestionPairArmNamesTheSubstanceAlikeAcrossBothPasses pins
+		// exactly that. The chart leg is the settled reading of a chip and not a widening of the claim: a
+		// chip's subject is a SUBSTANCE (issue #162), the sentence's clause says the pair came from the
+		// question rather than from the chart, and the module already reports what the TEXT stated under
+		// a row the text did not spell — "The stated Amoxicillin (suspension) dose …" for an answer
+		// saying "amoxicillin" (issue #245, pinned by
 		// OrderedSubjectRowTest.everyArmOfOneResponseNamesOneSubstanceOneWay). The row named is the one
 		// the patient's own record claims most strongly (#187/#192/#194), never the one this walk
 		// reached, which is what the paragraph above refuses.
@@ -4113,21 +4265,39 @@ public class DrugSafetyValidator {
 				// label below names, so a withheld pair is recoverable under the name the chip would
 				// have carried.
 				//
-				// The shared lookup since issue #236 (issue #174 site 3 put it on this arm's own rows,
-				// anchored on the patient's order names by #194). No chip moves: this arm's group and
-				// the shared one differ only where some row of an ordered substance is IN PLAY — the
-				// shared group appends the order rows to substanceRows(inPlay), so even an identical
-				// membership can arrive re-ordered and canonicalRow keeps the earliest on a tie — and
-				// a substance in play has already been through addInteractionWarnings over a superset
-				// row set and a superset context, which chips every group bestRulePerPartner returns
-				// and records each in InteractionPairs, so alreadyReported skips it above. What can
-				// move is the WITHHELD-pair WARN label below, whose partnerSubject is read where the
-				// PARTNER's substance is in play and the subject's is not; that needs a dataset whose
-				// two directions carry different rules, and DdiDrugReferenceSource writes each
-				// interaction row onto BOTH drugs' entries (its two partners.computeIfAbsent calls), so
-				// a ddinter pair is symmetric or absent — a curated json file is where the shape lives.
-				// Unified anyway: the arms must not hold two answers to one question, which is what let
-				// them disagree before.
+				// The naming group (SubstanceSubjects.groupOf's namingGroups map) IS this arm's own
+				// fold, not merely close to it — since issue #238. This method's only call site
+				// (validate(), gated on questionDrugs.isEmpty()) hands namingRows =
+				// resolvedSubstanceRows(questionDrugs, orderEntries), which for THIS arm reduces to
+				// resolvedSubstanceRows(<empty set>, orderEntries): substanceRows(<empty set>) is an
+				// empty map, so the fold does nothing but walk orderEntries and groupFor/add each row
+				// in list order — byte-for-byte the `substances = substanceRows(orderDrugs)` map this
+				// method builds for itself a few lines above, same membership and the same order.
+				// Both rows this loop ever hands subjectOf are drawn from that same orderDrugs list —
+				// ref, always one of substance's own rows, and partner, always
+				// activeOrderEntryFor(orderDrugs, ref, i)'s answer or null — so the lookup always hits
+				// the naming group and never falls through to allGroups (the fuller resolvedRows,
+				// built from inPlay, which can differ from questionDrugs wherever the ANSWER named a
+				// substance the question and the orders did not). There is no re-ordering to have and
+				// no fallback to reach: for this arm the two maps are not merely equal, they are the
+				// same construction over the same list, so the WITHHELD-pair WARN label below can
+				// never diverge from the chip's. That is a stronger guarantee than the question-pair
+				// arm gets (its own comment above, near addQuestionPairInteractions' use of
+				// interactionSubject): there, namingRows is substanceRows(questionDrugs) with THIS
+				// arm's own order rows appended on top, by design (issue #175) — a substance the
+				// question names can still pick up an order row in its naming group that the pair loop
+				// itself never iterates, so the two are provably non-empty for every row that arm asks
+				// about but not provably the identical construction the way they are here, where
+				// orderEntries is the only source either map draws from.
+				//
+				// ddinter symmetry is what makes a labelling divergence hypothetically possible at
+				// all, so it is still worth naming even though the reduction above closes it for this
+				// arm: DdiDrugReferenceSource writes each interaction row onto BOTH drugs' entries (its
+				// two partners.computeIfAbsent calls), so a ddinter pair's rule is symmetric or absent
+				// and only a curated json file could carry different rules per direction.
+				// Unified anyway, as a design choice and not only as this arm's happy accident: the
+				// arms must not hold two answers to one question, which is what let them disagree
+				// before issue #236.
 				DrugReference subject = subjects.subjectOf(ref);
 				DrugReference partnerSubject = partner != null ? subjects.subjectOf(partner) : null;
 				pairs.add(new ScreenedPair(interactionWarning(subject, i),
@@ -7022,7 +7192,15 @@ public class DrugSafetyValidator {
 	 * rest after it, and the first warning found is the one raised — which keeps the quoted band the
 	 * named row's own wherever that row's own ceiling is the one exceeded. (Subject-first, not
 	 * canonical-first: this paragraph predates issue #206, which made every arm name the row the chart
-	 * records, and the row tried first has followed that choice ever since.) What the collapse gives up
+	 * records, and the row tried first has followed that choice ever since — including through issue
+	 * #238, which moved the subject to the row the QUESTION and the patient's own orders name and so
+	 * moved the ceiling quoted with it. Over a fixture publishing 3000 mg/day for a route-qualified row
+	 * and 2000 for its unqualified sibling, a stated 4000 mg/day is reported against the named row's own
+	 * 3000 where it used to be reported against the answer-widened subject's 2000. That is this ordering
+	 * working rather than a regression — the alternative leaves the dose arm naming a substance
+	 * differently from the other two arms, which is what {@link SubstanceSubjects} exists to prevent —
+	 * and it costs no warning, for the reason the next sentence gives. Both directions are pinned by
+	 * {@code PerRequestSubstanceSubjectTest}.) What the collapse gives up
 	 * is the ability to report two different published ceilings for one substance, which is not a thing
 	 * a clinician can act on: nothing here knows which formulation is in play (see
 	 * {@link DrugReference#namesNoRoute()}), so a second ceiling is a second guess, not a second

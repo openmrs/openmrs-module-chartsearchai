@@ -34,7 +34,10 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
  * <p><b>Marked, not filtered.</b> A drug's contraindications are properties of the drug, and this record
  * is the only reference material the prompt carries about it — filtering to the matched subset would make
  * the record disagree with itself between the two {@code validate} passes of one request (the pre-answer
- * pass and the chips pass see different rows in play; see {@code DrugSafetyValidator.SubstanceSubjects}),
+ * pass and the chips pass see different rows IN PLAY — the answer widens that set deliberately, issue
+ * #175; see {@code DrugSafetyValidator.resolvedSubstanceRows}, and not
+ * {@code DrugSafetyValidator.SubstanceSubjects}, whose own answer stopped being moved by the ANSWER at
+ * issue #238),
  * and would delete the operator-authored clinical prose that {@code InjectedContraindicationClauseTest}
  * exists to preserve. So the list is unchanged and the record states the patient-specific reading of it.
  *

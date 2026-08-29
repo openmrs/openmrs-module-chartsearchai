@@ -181,9 +181,15 @@ beyond a rename had no test at all.
   chip and the zero-chip refusal does not fire — same role it plays in `alias-own-drug/`.
 * `mary__safety-simvastatin.json` — **COUNTERFACTUAL**, and necessarily so. It carries a
   `safety_finding` (`interaction:Simvastatin`) with an **empty** `safetyWarnings`, plus a `Yes`
-  lead. The shipped build cannot produce that pair: the finding is injected pre-answer and the chip
-  computed post-answer from the same `DrugSafetyValidator.validate` call, so for the drug asked
-  about they agree, and a finding arrives with its chip. The reference block's shape is copied from
+  lead. The shipped build cannot produce that pair: the finding is injected
+  pre-answer and the chip computed post-answer, by the same computation read at two points in one
+  request (`score_probe_safety.py`'s own wording), so for the drug asked about a finding arrives with
+  its chip. Not "the same `DrugSafetyValidator.validate` call", which this said and which is false —
+  there are two calls, and that they name a substance alike is what
+  [#238](https://github.com/openmrs/openmrs-module-chartsearchai/issues/238) had to establish rather
+  than something the build gave for free. What makes this fixture counterfactual is the pairing of a
+  finding with an EMPTY `safetyWarnings`, which neither pass can produce; the naming half is a
+  separate property and is now held by ADR Decision 53. The reference block's shape is copied from
   the real `inverted-yes/mary__safety-clarithromycin.json`; only the reference set and the answer
   differ.
 

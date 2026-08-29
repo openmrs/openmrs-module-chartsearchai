@@ -3181,8 +3181,9 @@ public class DrugSafetyValidator {
 	 *         <p>A sweep of {@code getAll()} per folded chip whose ladder resolved an entry, deliberately
 	 *         uncached — and <b>no longer one scan beside sweeps that were already there</b>, which is
 	 *         what this paragraph said until issue #256. It rested on {@link #ruleAbout} calling the
-	 *         UNCACHED {@code entryForAtcCode} once per partner code in the same iteration; that method
-	 *         now reads the pass's own cache ({@code CoMedications}), so at most one sweep per CODE per
+	 *         UNCACHED sweep ({@link #sweepForAtcCode}) once per partner code in the same iteration;
+	 *         that method now reads the pass's own cache ({@code CoMedications}), so at most one sweep
+	 *         per CODE per
 	 *         pass happens there and this one stands alone. It is kept uncached all the same: it runs
 	 *         once per FOLDED chip, which is the rare outcome of the class arm rather than the ordinary
 	 *         one, and it is keyed on a (rule, entry) pair rather than on a code, so the pass's cache
@@ -5973,14 +5974,15 @@ public class DrugSafetyValidator {
 		 * The entry the dataset files {@code upperCode} under, resolved at most once per pass.
 		 * {@code null} is a real answer and is cached as one — see the delegate.
 		 *
-		 * <p>Named apart from {@link DrugSafetyValidator#entryForAtcCode(String)} deliberately: that
-		 * one is the uncached full sweep, and the source guard in
-		 * {@code CoMedicationResolutionPerPassTest} reads the two names apart to say that nothing but
-		 * the memoising overload calls the sweep. Sharing the name would not make the two
-		 * indistinguishable — a needle that refuses a preceding dot separates them — but it would force
-		 * the needle to refuse one, and it would then also miss a {@code this.}-qualified call to the
-		 * sweep from inside the outer class. Two names let the guard stay dot-BLIND, which is the
-		 * property that costs it nothing.
+		 * <p>Named apart from {@link DrugSafetyValidator#entryForAtcCode(String, Map)} deliberately, and
+		 * for the reason that method's own javadoc gives one level down: the source guard in
+		 * {@code CoMedicationResolutionPerPassTest} forbids a NAME, so each of the three — this
+		 * accessor, the memoising overload, and the uncached
+		 * {@link DrugSafetyValidator#sweepForAtcCode} — is separately nameable, and a mention of one is
+		 * never a mention of another. Sharing a name here would not make two bodies indistinguishable —
+		 * a needle that refuses a preceding dot separates them — but it would force the needle to refuse
+		 * one, and it would then also miss a {@code this.}-qualified call from inside the outer class.
+		 * Three names let the guard stay dot-BLIND, which is the property that costs it nothing.
 		 */
 		DrugReference entryForCode(String upperCode) {
 			return entryForAtcCode(upperCode, entryByCode);
@@ -6664,24 +6666,27 @@ public class DrugSafetyValidator {
 		return canonical;
 	}
 
-	/** {@link #entryForAtcCode(String)} memoised for one {@code validate} pass — {@code cache} is
+	/** {@link #sweepForAtcCode} memoised for one {@code validate} pass — {@code cache} is
 	 *  {@link CoMedications}' own, since issue #256, because {@link #ruleAbout} asks this after
 	 *  {@link #orderPartners} has finished asking it. {@code null} is a real answer ("the dataset does
 	 *  not cover this code") and is cached as one, so an uncovered code does not rescan the dataset on
 	 *  every visit — hence {@code containsKey} rather than a null check.
 	 *
-	 *  <p>This is the only caller of the uncached sweep, and
-	 *  {@code CoMedicationResolutionPerPassTest} reddens on a second one it can SEE — a single-argument
-	 *  call anywhere outside this body, its parentheses matched rather than its argument's shape
-	 *  guessed at. That sweep is a full walk of {@code getAll()} per code, and {@code ruleAbout} calling
-	 *  it directly cost one walk per (subject, partner, code). What the guard reads is source text, so
-	 *  it can be evaded; that test names the shapes it does not see rather than claiming there are
-	 *  none. */
+	 *  <p>The uncached sweep it delegates to carries a NAME OF ITS OWN, {@link #sweepForAtcCode} — and
+	 *  that separation is what a guard can read. A sweep is a full walk of {@code getAll()} per code,
+	 *  and {@code ruleAbout} reaching it directly cost one walk per (subject, partner, code); while the
+	 *  two shared this method's name, the shape that reinstates that — dropping the {@code cache}
+	 *  argument at a call site — resolved one overload to the other rather than writing a new mention,
+	 *  at the very sites a guard over that name had to permit. Under two names it does not compile at
+	 *  all, and a call
+	 *  written to the sweep's own name is a mention {@code CoMedicationResolutionPerPassTest} forbids
+	 *  outside this body and the sweep's own. What that guard reads is source text, so it can still be
+	 *  evaded; that test names the shapes it does not see rather than claiming there are none. */
 	private DrugReference entryForAtcCode(String upperCode, Map<String, DrugReference> cache) {
 		if (cache.containsKey(upperCode)) {
 			return cache.get(upperCode);
 		}
-		DrugReference entry = entryForAtcCode(upperCode);
+		DrugReference entry = sweepForAtcCode(upperCode);
 		cache.put(upperCode, entry);
 		return entry;
 	}
@@ -6967,6 +6972,14 @@ public class DrugSafetyValidator {
 	 *         correlation asks WHICH RULE POINTS AT IT ({@link #ruleAbout}): resolving the code two
 	 *         ways would let a chip name one substance while the fold decided about another.
 	 *
+	 *         <p><b>A full walk of {@code getAll()} per code, and named as one</b> so that a guard can
+	 *         forbid it by name: {@link #entryForAtcCode(String, Map)} memoises it for the pass and is
+	 *         what every arm asks. Callers reach it through that overload; a call written to THIS name
+	 *         outside it is a mention {@code CoMedicationResolutionPerPassTest} fails on, whatever
+	 *         syntax it uses. Sharing one name with the memo was the state issue #256 shipped, and a
+	 *         dropped {@code cache} argument then reinstated the walk as an overload resolution nothing
+	 *         could see.
+	 *
 	 *         <p><b>Which row, when the substance is filed as several (issue #174, site 1).</b> Every
 	 *         row of a substance publishes the SAME ATC list, so "the entry carrying this code" is
 	 *         ambiguous by construction and this returned whichever row the dataset listed first. Four
@@ -6979,7 +6992,7 @@ public class DrugSafetyValidator {
 	 *         make, so one substance is one name wherever it appears. A full scan rather than a
 	 *         first-match return is what that costs.
 	 */
-	private DrugReference entryForAtcCode(String upperCode) {
+	private DrugReference sweepForAtcCode(String upperCode) {
 		DrugReference canonical = null;
 		for (DrugReference ref : drugReferenceService.getAll()) {
 			if (ref.normalizedAtcCodes().contains(upperCode)) {

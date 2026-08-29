@@ -17,6 +17,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -74,7 +75,7 @@ import org.junit.jupiter.api.Test;
  * one mutable field, the injected service. That second half is asked of the compiled CLASS rather
  * than of the source, because successive reviewers in turn defeated the regex that asked it of the text —
  * see {@link #theBeanHoldsNoStateButTheInjectedService}. And a NEW per-subject caller of
- * {@code orderPartners}, or of the uncached {@code entryForAtcCode(String)}, in an arm these fixtures
+ * {@code orderPartners}, or of the uncached {@code sweepForAtcCode}, in an arm these fixtures
  * do not exercise would reintroduce the defect invisibly: {@code ruleAbout} was the second such caller
  * and this arrangement never reaches it, since that method returns before resolving anything when the
  * subject has no rule about an active order, which is the ordinary outcome. The mechanism mirrors
@@ -289,7 +290,7 @@ public class CoMedicationResolutionPerPassTest {
 	 * The NAME of a resolver, wherever it appears in code — not {@code name\s*\(}, because a METHOD
 	 * REFERENCE reaches the resolver without ever writing the paren. That is not hypothetical here: a
 	 * reviewer routed {@code ruleAbout} back to the uncached sweep through
-	 * {@code Function<String, DrugReference> bypass = this::entryForAtcCode}, reinstating a full dataset
+	 * {@code Function<String, DrugReference> bypass = this::sweepForAtcCode}, reinstating a full dataset
 	 * walk per (subject, partner, code) with the whole suite green, because the guard was reading a call
 	 * shape. {@code ChipSubjectOneResolutionTest} learned the same thing about {@code interactionSubject}
 	 * and its javadoc records it; this is that lesson applied, one method along.
@@ -298,16 +299,29 @@ public class CoMedicationResolutionPerPassTest {
 	 * only where {@link #RESOLVER_BODIES} permits, and every mention outside them is a finding whatever
 	 * syntax it uses.
 	 *
+	 * <p><b>A needle over a name can only be as sharp as the names are, which is why the sweep has one
+	 * of its own.</b> While the memoising overload and the uncached sweep were two arities of
+	 * {@code entryForAtcCode}, this pattern could not tell them apart AT THE SITES THAT MATTER —
+	 * {@code orderPartners}, {@code soleSubstanceOf} and {@code CoMedications.entryForCode}, where the
+	 * cache argument is passed and the name is therefore permitted. Dropping that argument there is an
+	 * overload resolution, not a new mention: measured in review at both sites, it reinstated a full
+	 * walk per (subject, partner, code) with this class and the api suite green, and a name-based
+	 * needle had nothing to catch it by. The sweep is now {@code sweepForAtcCode}, so that mutation
+	 * does not compile, and a call
+	 * written to the sweep's own name from any of them is a mention outside its permitted bodies.
+	 * Mutate {@code entryForCode} to call {@code sweepForAtcCode(upperCode)} and read which case fails,
+	 * rather than trusting this paragraph.
+	 *
 	 * <p><b>The residue, and why the chase stops here rather than at "there is none".</b> This reads
 	 * SOURCE TEXT with string literals blanked — deliberately, so that a method named in a javadoc is
 	 * prose and not a call — so a name reached AS a literal is outside it by construction. Demonstrated:
-	 * {@code getClass().getDeclaredMethod("entryForAtcCode", String.class)} with {@code setAccessible},
+	 * {@code getClass().getDeclaredMethod("sweepForAtcCode", String.class)} with {@code setAccessible},
 	 * from inside {@code ruleAbout}, reinstates the full dataset walk per (subject, partner, code) with
 	 * the whole suite green. It is left uncovered on a judgement worth stating, and every earlier
 	 * evasion of this guard family WAS closed: those shapes — a memo field typed as something other
 	 * than {@code CoMedications}, a parenthesised initialiser, an annotation prefix, a method
-	 * reference — are ways ordinary code gets WRITTEN, and a regression can be made of them by
-	 * accident. Writing reflection
+	 * reference, a dropped overload argument — are ways ordinary code gets WRITTEN, and a regression can
+	 * be made of them by accident. Writing reflection
 	 * into a private call inside the same class is not an accident, and no textual guard can close that
 	 * family, only push it one syntax further along. What a reader should take from this is that the
 	 * guard stops a REGRESSION and not a determined author.
@@ -321,6 +335,15 @@ public class CoMedicationResolutionPerPassTest {
 	 * the region taken spans that declaration as well as the braces it opens
 	 * ({@link SourceScan#declarationAndBody}) — a method's declaration mentions its own name and sits
 	 * outside its own braces, so the narrower region rejects the declaration itself.
+	 *
+	 * <p><b>The two entries forbid different things, and the wider one is not the strong guard.</b>
+	 * {@code entryForAtcCode} is the PASS-MEMOISED resolver, and calling it is not itself a defect — a
+	 * new body reaching it has to obtain the pass's cache, which is what listing its callers makes
+	 * reviewable. {@code sweepForAtcCode} is the full {@code getAll()} walk, and its list is the
+	 * narrow one: its own declaration, and the memoising overload that delegates to it. That is what
+	 * the two names bought — a needle over a shared name had to permit the sweep wherever the memo was
+	 * called, and so could not see a dropped cache argument at those very sites. Read each array below
+	 * rather than this paragraph for the current lists.
 	 */
 	private static final Map<String, String[]> RESOLVER_BODIES = new LinkedHashMap<String, String[]>();
 
@@ -330,10 +353,12 @@ public class CoMedicationResolutionPerPassTest {
 			"List<OrderPartner> resolved() {" });
 		RESOLVER_BODIES.put("entryForAtcCode", new String[] {
 			"private DrugReference entryForAtcCode(String upperCode, Map<String, DrugReference> cache) {",
-			"private DrugReference entryForAtcCode(String upperCode) {",
 			"private List<OrderPartner> orderPartners(",
 			"private DrugReference soleSubstanceOf(",
 			"DrugReference entryForCode(String upperCode) {" });
+		RESOLVER_BODIES.put("sweepForAtcCode", new String[] {
+			"private DrugReference entryForAtcCode(String upperCode, Map<String, DrugReference> cache) {",
+			"private DrugReference sweepForAtcCode(String upperCode) {" });
 	}
 
 	/** The one mutable field the bean may declare: what Spring injects. */
@@ -419,13 +444,15 @@ public class CoMedicationResolutionPerPassTest {
 					inside = inside || body.contains(at);
 				}
 				assertTrue(inside, "line " + scan.lineOf(at) + " names " + resolver.getKey() + " outside "
-						+ "every body permitted to: " + scan.statementAt(at) + ". Both of these resolve "
+						+ "every body permitted to: " + scan.statementAt(at) + ". Each of these resolves "
 						+ "the patient's chart against the whole dataset, and before issue #256 an arm "
 						+ "reached them once per IN-PLAY SUBSTANCE — the resolution once, and the code "
 						+ "lookup once per (subject, partner, code). Read the pass's CoMedications "
-						+ "instead. This is asserted over the NAME rather than over a call, because a "
-						+ "method reference reaches either without writing a paren and a reviewer used "
-						+ "one to reinstate the defect with the suite green.");
+						+ "instead: orderPartners through its resolved(), a code through entryForCode, "
+						+ "and sweepForAtcCode through the memoising entryForAtcCode(String, Map) that "
+						+ "is its one caller. This is asserted over the NAME rather than over a call, "
+						+ "because a method reference reaches any of them without writing a paren and a "
+						+ "reviewer used one to reinstate the defect with the suite green.");
 			}
 		}
 	}
@@ -446,10 +473,24 @@ public class CoMedicationResolutionPerPassTest {
 	 * {@code getDeclaredFields} sees the field however it is spelled, so the arms race ends here rather
 	 * than continuing one needle at a time.
 	 *
-	 * <p>What it still cannot see is state held somewhere ELSE — a static holder class, a
+	 * <p><b>{@code static final} is not an exemption, because {@code final} binds the REFERENCE and not
+	 * the contents.</b> {@code private static final Map<…> CACHE = new LinkedHashMap<…>()} is the most
+	 * idiomatic way a Java author writes a memo, and it is issue #172's trap in its worst form —
+	 * unsynchronized, shared by every concurrent request, and keyed on a per-request object so it grows
+	 * for the life of the JVM. A modifier check alone exempted it: added to this class with
+	 * {@code CoMedications.resolved()} reading and populating it, the whole api suite stayed green, and
+	 * the behavioural cases here cannot see it either since the memo still resolves once per pass. So a
+	 * {@code static final} field is collected too where it HOLDS a container — {@link #holdsAContainer}
+	 * asks the declared type and, failing that, the value, so a field declared as {@code Object} is
+	 * caught as well. What that leaves permitted is the class's constants, which are immutable values:
+	 * a {@code Logger}, {@code Pattern}s and {@code int}s today.
+	 *
+	 * <p>What it still cannot see is state held in ANOTHER class — a static holder, a
 	 * {@code ThreadLocal} — and that is left uncovered on evidence rather than by oversight: both
 	 * shapes were tried and both fail the suite catastrophically, because Surefire runs one JVM and the
-	 * leak reaches unrelated test classes.
+	 * leak reaches unrelated test classes. The residue on THIS class is a mutable object that is
+	 * neither a container nor declared as one — a static holder instance of a bespoke type, say — which
+	 * no type-shaped rule reaches; it is named rather than claimed away.
 	 */
 	@Test
 	public void theBeanHoldsNoStateButTheInjectedService() {
@@ -459,7 +500,7 @@ public class CoMedicationResolutionPerPassTest {
 				continue;
 			}
 			int modifiers = field.getModifiers();
-			if (!Modifier.isStatic(modifiers) || !Modifier.isFinal(modifiers)) {
+			if (!Modifier.isStatic(modifiers) || !Modifier.isFinal(modifiers) || holdsAContainer(field)) {
 				mutable.add(field.getName());
 			}
 		}
@@ -468,7 +509,38 @@ public class CoMedicationResolutionPerPassTest {
 					+ INJECTED_SERVICE + " — and holds " + mutable + ". This bean is a Spring singleton, "
 					+ "so anything else there is one unsynchronized structure shared by every concurrent "
 					+ "request, and a pass memo has no key, so it answers for whoever asked first (issue "
-					+ "#172). Hold it in a local of the pass, as CoMedications is.");
+					+ "#172). A static final COLLECTION is that too: final binds the reference, not the "
+					+ "contents. Hold it in a local of the pass, as CoMedications is.");
+	}
+
+	/**
+	 * Whether {@code field} holds something whose CONTENTS can move — a collection, a map or an array —
+	 * however the modifiers describe the reference to it.
+	 *
+	 * <p>The declared type answers first, and the VALUE is read only where it does not, so that a memo
+	 * declared as {@code Object} or as some interface of its own is caught by what it actually holds.
+	 * The residue, stated rather than papered over: a field whose value cannot be read at all — a
+	 * failed initialiser, an access refusal — keeps the declared type's answer, so a container hidden
+	 * behind an unreadable {@code Object} field would pass. Nothing on this class is in that state,
+	 * and every field it does declare is read.
+	 */
+	private static boolean holdsAContainer(Field field) {
+		if (isContainer(field.getType())) {
+			return true;
+		}
+		try {
+			field.setAccessible(true);
+			Object value = field.get(null);
+			return value != null && isContainer(value.getClass());
+		}
+		catch (RuntimeException | IllegalAccessException unreadable) {
+			return false;
+		}
+	}
+
+	private static boolean isContainer(Class<?> type) {
+		return type.isArray() || Collection.class.isAssignableFrom(type)
+				|| Map.class.isAssignableFrom(type);
 	}
 
 	@Test

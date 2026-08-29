@@ -442,6 +442,11 @@ public class DrugSafetyValidator {
 		final Set<Object> allergicSubstances = allergicSubstanceKeys(recordedAllergens);
 		Supplier<Set<Object>> allergicSubstanceSupplier = () -> allergicSubstances;
 
+		// The patient's co-medications, resolved at most ONCE for this pass and read by every arm that
+		// needs them (issue #256). A per-pass local and never a field — see CoMedications, which also
+		// says why it is lazy rather than resolved here and now.
+		CoMedications coMedications = new CoMedications(context);
+
 		for (DrugReference ref : inPlay) {
 			if (warnContra) {
 				// Ungated: a drug in play IS the subject matter — the question resolved it or the
@@ -468,7 +473,7 @@ public class DrugSafetyValidator {
 				// the same active order, so the decision of how many chips that pair gets belongs to a
 				// method that sees both (issue #88).
 				addInteractionWarnings(warnings, rows, subjects, context, severityFloor, orderEntries,
-						interactionPairs);
+						interactionPairs, coMedications);
 			}
 			if (dosePending.remove(substance)) {
 				addOverdose(warnings, rows, subjects, context, lower, all);
@@ -722,6 +727,19 @@ public class DrugSafetyValidator {
 	 * it recoverable, and picking the other order would instead discard an operator's own hand-authored
 	 * rule in favour of a third-party rating — which is why the convention is shared with the injector
 	 * rather than reversed here.
+	 *
+	 * <p><b>It bounds CHIPS and not WORK, and that is settled rather than pending</b> (issue #256).
+	 * Every candidate pair is enumerated and evaluated before the cut, because the cut is defined as
+	 * "the least severe go" and nothing knows a pair's rating until it has been evaluated — so an
+	 * early stop would change WHICH pairs are dropped, which is the one property this cap exists to
+	 * guarantee. Asking whether it could stop early was #256's own discriminator, and the answer is no.
+	 * <b>It also does not matter</b>, which is the part worth recording here: measured through the real
+	 * {@code validate} over the shipped knowledge base, the SAME question against a chart with no
+	 * active orders at all costs 30 ms of a 490 ms ten-drug pass on a 43-order chart, roughly 6% — and
+	 * that 30 ms is the drug-in-play arms and the pairwise ones together, so it is an upper bound on
+	 * these rather than a measurement of them. What grew with the question was the co-medication
+	 * resolution the arms above run per in-play substance — see {@link CoMedications}, which is where
+	 * #256's fix went. Do not re-derive the misreading from the cap's name.
 	 *
 	 * @return the configured cap, or {@link ChartSearchAiConstants#DEFAULT_DRUG_SAFETY_MAX_PAIR_CHIPS}
 	 *         when the GP is absent, unparseable or non-positive
@@ -2167,7 +2185,7 @@ public class DrugSafetyValidator {
 	 */
 	private void addInteractionWarnings(List<SafetyWarning> warnings, List<DrugReference> rows,
 			SubstanceSubjects subjects, PatientClinicalContext context, int severityFloor,
-			List<DrugReference> orderEntries, InteractionPairs pairs) {
+			List<DrugReference> orderEntries, InteractionPairs pairs, CoMedications coMedications) {
 		if (context == null) {
 			return;
 		}
@@ -2193,8 +2211,9 @@ public class DrugSafetyValidator {
 		Map<SubjectRule, FoldedClassSentence> folded =
 				new LinkedHashMap<SubjectRule, FoldedClassSentence>();
 		List<String> classOnly = new ArrayList<String>();
-		for (Map.Entry<OrderPartner, ClassRelationship> hit : classRelationships(ref, context).entrySet()) {
-			SubjectRule rule = ruleAbout(hit.getKey().codes, rules);
+		for (Map.Entry<OrderPartner, ClassRelationship> hit : classRelationships(ref, coMedications)
+				.entrySet()) {
+			SubjectRule rule = ruleAbout(hit.getKey().codes, rules, coMedications);
 			if (rule == null) {
 				// No rule to reconcile with, so the ladder's own name is the only one there is.
 				classOnly.add(hit.getValue().sentence(ref, hit.getKey().label));
@@ -2789,11 +2808,14 @@ public class DrugSafetyValidator {
 	 *         unfolded, which is the conservative direction, since the alternative is stating one
 	 *         duplicate-therapy relationship twice.
 	 */
-	private SubjectRule ruleAbout(Set<String> orderCodes, List<SubjectRule> rules) {
+	private SubjectRule ruleAbout(Set<String> orderCodes, List<SubjectRule> rules,
+			CoMedications coMedications) {
 		if (rules.isEmpty()) {
 			// Both tests below are inside the rule loop, so with no rules the answer is null whatever
-			// the codes are — and resolving them is a full dataset scan per code. That is the ORDINARY
-			// outcome of this arm: a class-only chip is one this method answered null for, and issue
+			// the codes are — and resolving them is a full dataset scan per code, though since issue
+			// #256 one shared with orderPartners through CoMedications and so paid at most once per
+			// pass per code. That is the ORDINARY outcome of this arm: a class-only chip is one this
+			// method answered null for, and issue
 			// #228 made both sides of the product larger (more partners, and a name-reached partner
 			// carries the reference row's code list rather than one dictionary's — the WHOLE list only
 			// where the chart records no presentation this module can place, since issue #234 narrows
@@ -2801,7 +2823,7 @@ public class DrugSafetyValidator {
 			return null;
 		}
 		for (String orderCode : new TreeSet<String>(orderCodes)) {
-			DrugReference orderEntry = entryForAtcCode(orderCode);
+			DrugReference orderEntry = coMedications.entryForCode(orderCode);
 			for (SubjectRule rule : rules) {
 				if (orderCode.equals(DrugReference.normalizeAtcToken(rule.rule.getAtc()))) {
 					return rule;
@@ -3300,11 +3322,16 @@ public class DrugSafetyValidator {
 	 *         is removed.
 	 *
 	 *         <p>A sweep of {@code getAll()} per folded chip whose ladder resolved an entry, deliberately
-	 *         uncached: the immediately preceding {@link #ruleAbout} in the same iteration already calls
-	 *         the UNCACHED {@link #entryForAtcCode} once per partner code, so this is one alias-list scan
-	 *         beside sweeps that were already there. If that ever needs a memo it is a per-call local
-	 *         threaded through, never a field — CLAUDE.md's rule, and the reasons are on
-	 *         {@link DrugReferenceService}.
+	 *         uncached — and <b>no longer one scan beside sweeps that were already there</b>, which is
+	 *         what this paragraph said until issue #256. It rested on {@link #ruleAbout} calling the
+	 *         UNCACHED sweep ({@link #sweepForAtcCode}) once per partner code in the same iteration;
+	 *         that method now reads the pass's own cache ({@code CoMedications}), so at most one sweep
+	 *         per CODE per
+	 *         pass happens there and this one stands alone. It is kept uncached all the same: it runs
+	 *         once per FOLDED chip, which is the rare outcome of the class arm rather than the ordinary
+	 *         one, and it is keyed on a (rule, entry) pair rather than on a code, so the pass's cache
+	 *         has nothing to offer it. If it ever needs a memo it is a per-call local threaded through,
+	 *         never a field — CLAUDE.md's rule, and the reasons are on {@link DrugReferenceService}.
 	 */
 	private boolean unambiguouslyNames(DrugReference.Interaction rule, DrugReference entry) {
 		String token = rule.getToken();
@@ -5510,11 +5537,8 @@ public class DrugSafetyValidator {
 	 *         previous promise here and is no longer one that can be kept.
 	 */
 	private Map<OrderPartner, ClassRelationship> classRelationships(DrugReference ref,
-			PatientClinicalContext context) {
+			CoMedications coMedications) {
 		Map<OrderPartner, ClassRelationship> out = new LinkedHashMap<OrderPartner, ClassRelationship>();
-		if (context == null) {
-			return out;
-		}
 		Set<String> refClasses = ref.atcSubgroups();
 		List<CrossReactivityGroup> refGroups = CrossReactivityGroup.groupsOf(ref,
 				drugReferenceService.getCrossReactivityGroups());
@@ -5523,7 +5547,7 @@ public class DrugSafetyValidator {
 		}
 		Set<String> refCodes = ref.normalizedAtcCodes();
 		Object refSubstance = ref.substanceGroupKey();
-		for (OrderPartner partner : orderPartners(context)) {
+		for (OrderPartner partner : coMedications.resolved()) {
 			if (partner.substances.contains(refSubstance)
 					|| (!partner.codesFromDataset
 							&& !Collections.disjoint(partner.codes, refCodes))) {
@@ -6026,6 +6050,116 @@ public class DrugSafetyValidator {
 	}
 
 	/**
+	 * The patient's co-medications, resolved ONCE for a {@code validate} pass and read by every arm of
+	 * it that needs them (issue #256).
+	 *
+	 * <p>{@link DrugSafetyValidator#classRelationships} runs per in-play SUBSTANCE, and it used to call
+	 * {@link DrugSafetyValidator#orderPartners} each time. That resolution is a function of the pass's
+	 * {@code context} and the loaded dataset — both fixed for the pass — so every call after the first
+	 * re-derived an answer the pass already had, and a request's cost grew as drugs-in-play TIMES
+	 * active orders rather than as the PAIRS the issue blamed. Measured through the real
+	 * {@code validate} over the shipped knowledge base with a 43-order chart, five interleaved runs:
+	 * 95–130 ms at one drug in play and 482–488 ms at ten, against 96–134 ms and 130–173 ms with this
+	 * class in place. A probe wrapping the resolution (one run, not interleaved) attributed 42% of the
+	 * one-drug pass and 77% of the ten-drug pass to it. The same questions against a chart with NO
+	 * active orders cost 1.2 ms and 30 ms, which bounds everything the chart does not drive — the
+	 * pairwise arms the issue blamed included.
+	 *
+	 * <p><b>Lazy, and that is not an optimisation of an optimisation.</b> A question that puts no
+	 * substance in play — the commonest one — resolves nothing at all today, because
+	 * {@link DrugSafetyValidator#classRelationships} is never reached; hoisting the call into
+	 * {@code validate} eagerly would make that question pay for a chart nothing asks about. So the pass
+	 * carries the ABILITY to resolve and pays on first use.
+	 *
+	 * <p><b>Two memos, because there are two per-subject sweeps and the first does not reach the
+	 * second.</b> {@link #resolved()} holds the partner list; {@link #entryForCode(String)} holds the
+	 * code-to-entry resolution that {@link DrugSafetyValidator#orderPartners} needs while building that
+	 * list and that {@link DrugSafetyValidator#ruleAbout} needs afterwards, per class hit, from the
+	 * arm's own loop. Memoising the list alone would leave {@code ruleAbout} sweeping the dataset per
+	 * (subject, partner, code) — measured SMALL, 0, 0, 3 and 5 sweeps at one, two, five and ten drugs
+	 * in play against 93 to 433 dataset-walk CALLS in total, over a chart built so that every active order shares a
+	 * subgroup with an in-play drug, because that method returns before resolving anything when the
+	 * subject has no rule about an active order and that is the ordinary outcome — but real, and a
+	 * second copy of the defect this class removes.
+	 *
+	 * <p><b>A per-call LOCAL and never a field</b> — issue #172's rule, for the reasons
+	 * {@link DrugReferenceService}'s class javadoc gives — and which reason applies is asked per memo
+	 * rather than reciting both, because they do not both bind. The SINGLETON reason binds each: a
+	 * field on this bean would be one unsynchronized structure shared by every concurrent request. The
+	 * second binds only {@link #resolved()}, which has no key at all — it is this patient's chart, so a
+	 * field would answer for whoever asked first. {@link #entryForCode(String)}'s cache is bounded by
+	 * the ATC code space and its values are a function of the loaded dataset rather than of any chart,
+	 * so it takes the singleton reason alone.
+	 * {@code CoMedicationResolutionPerPassTest} pins the sweep invariant and the chips it must
+	 * not move behaviourally, and pins the single construction site structurally — the second because a
+	 * field reassigned once per pass sweeps exactly as often as a local does, which is the limit
+	 * CLAUDE.md records for the analogous {@code recordedAllergens} memo.
+	 *
+	 * <p>Sharing ONE partner list across the pass's subjects is sound because nothing downstream
+	 * mutates or retains a partner: every write to an {@link OrderPartner} happens inside
+	 * {@link DrugSafetyValidator#orderPartners} and
+	 * {@link DrugSafetyValidator#addPartnersForUnmappedOrders} while the list is being built,
+	 * {@code OrderPartner} declares no {@code equals}/{@code hashCode}, and the only structure keyed on
+	 * one is the map {@link DrugSafetyValidator#classRelationships} builds fresh per call and consumes
+	 * inside its caller's loop.
+	 */
+	private final class CoMedications {
+
+		private final PatientClinicalContext context;
+
+		/** {@link DrugSafetyValidator#entryForAtcCode(String, Map)}'s cache, held for the PASS rather
+		 *  than for one {@code orderPartners} call — see this class's javadoc for the second reader that
+		 *  makes the difference. Bounded by the ATC code space, so it takes only the singleton reason
+		 *  above. */
+		private final Map<String, DrugReference> entryByCode = new LinkedHashMap<String, DrugReference>();
+
+		private List<OrderPartner> partners;
+
+		CoMedications(PatientClinicalContext context) {
+			this.context = context;
+		}
+
+		/**
+		 * The pass's co-medications, resolved on first use — empty where the module could read no
+		 * chart at all.
+		 *
+		 * <p>The null-context answer lives HERE rather than at the caller, and that is the point of it:
+		 * before, {@link DrugSafetyValidator#classRelationships} took the context beside the memo and
+		 * used it for nothing but that test, so two parameters carried one fact and a caller could
+		 * supply them disagreeing — null-checking one chart while resolving another. Unreachable today
+		 * ({@link DrugSafetyValidator#addInteractionWarnings} returns first), which is why this is a
+		 * hazard removed rather than a defect fixed. The empty list is immutable and its one consumer
+		 * only iterates.
+		 */
+		List<OrderPartner> resolved() {
+			if (partners == null) {
+				partners = context == null
+						? Collections.<OrderPartner> emptyList()
+						: orderPartners(context, entryByCode);
+			}
+			return partners;
+		}
+
+		/**
+		 * The entry the dataset files {@code upperCode} under, resolved at most once per pass.
+		 * {@code null} is a real answer and is cached as one — see the delegate.
+		 *
+		 * <p>Named apart from {@link DrugSafetyValidator#entryForAtcCode(String, Map)} deliberately, and
+		 * for the reason that method's own javadoc gives one level down: the source guard in
+		 * {@code CoMedicationResolutionPerPassTest} forbids a NAME, so each of the three — this
+		 * accessor, the memoising overload, and the uncached
+		 * {@link DrugSafetyValidator#sweepForAtcCode} — is separately nameable, and a mention of one is
+		 * never a mention of another. Sharing a name here would not make two bodies indistinguishable —
+		 * a needle that refuses a preceding dot separates them — but it would force the needle to refuse
+		 * one, and it would then also miss a {@code this.}-qualified call from inside the outer class.
+		 * Three names let the guard stay dot-BLIND, which is the property that costs it nothing.
+		 */
+		DrugReference entryForCode(String upperCode) {
+			return entryForAtcCode(upperCode, entryByCode);
+		}
+	}
+
+	/**
 	 * The patient's co-medications as the class arm sees them: every active-order ATC code, grouped by
 	 * the co-medication it identifies, followed by the orders no such code reached at all
 	 * ({@link #addPartnersForUnmappedOrders}, issue #228) — each in first-appearance order.
@@ -6109,40 +6243,38 @@ public class DrugSafetyValidator {
 	 *
 	 * <p>Grouped once per SUBJECT and carried through that subject's sentence and its fold, so the
 	 * partner a chip names and the partner {@link #addInteractionWarnings} decides about cannot be
-	 * different ones. Not once per {@code validate}: {@link #classRelationships} runs per in-play
-	 * substance and calls this each time, and {@link #ruleAbout} re-runs {@link #entryForAtcCode}
-	 * itself rather than reading the resolution carried here. They agree because that scan is a
-	 * function of {@code getAll()} alone, which is loaded once — a property of the service, not
-	 * something this method enforces. The memos below are per CALL and do not change that; widening
-	 * them to the whole {@code validate} pass would, and would cut the repeated full scans, but they
-	 * must then be locals threaded through the pass and NEVER fields — issue #172's rule, for the
-	 * reasons {@link DrugReferenceService}'s class javadoc gives. Not the {@code getAll()} reload this
-	 * used to cite: there is none, which the "loaded once" above already said.
+	 * different ones. <b>And now once per {@code validate} as well</b> (issue #256): call this only
+	 * through {@link CoMedications}, which is the pass's one resolution and the only caller —
+	 * {@link #classRelationships} used to call it per in-play substance, so a request's cost grew as
+	 * drugs-in-play TIMES active orders. The resolution this method returns, and the code cache it is
+	 * handed, both live on that class as LOCALS threaded through the pass and never fields (issue
+	 * #172's rule, for the reasons {@link DrugReferenceService}'s class javadoc gives; not the
+	 * {@code getAll()} reload this used to cite, of which there is none). {@link #ruleAbout} reads the
+	 * same code cache through that class rather than re-running the sweep for itself.
 	 *
 	 * <p>Issue #185 added a name resolution to this loop, bounded rather than paid for everywhere:
 	 * {@link #substanceRowsNamedBy} runs only for a code the dataset cannot name, and is memoised per
 	 * order. Timed interleaved against the pre-change code over the shipped 19 MB KB with
 	 * a 30-order, 60-name context, the two were indistinguishable within this machine's run-to-run
-	 * spread — which is the reason no figure is quoted here, and the reason the per-pass memo stays
-	 * unbuilt. Measure it the same way, interleaved and more than once, before treating the repeat as
-	 * free at a larger order count.
+	 * spread — which is the reason no figure is quoted here. Issue #256 is the larger order count that
+	 * sentence asked to be measured at, and it built the per-pass memo: see {@link CoMedications}.
 	 *
 	 * <p>Issue #228 gave that resolution a second caller, and it is the one that raises the bound:
 	 * {@link #addPartnersForUnmappedOrders} asks it once per DICTIONARY-UNMAPPED order rather than once
-	 * per unnameable code, through the same per-call memo, so the work is one dataset sweep per NAME of
-	 * each such order, per call — and this method is called once per in-play substance, while
-	 * {@code validate} itself runs twice per query (pre-answer through
-	 * {@link DrugReferenceInjector#preAnswerFindings}, post-answer through {@code LlmInferenceService}).
-	 * That is a repeat the pre-change code did not make at all for an order carrying no codes, and on
-	 * the 3.7.1 standalone it is 27 of 43 orders' worth of names for every substance a question puts in
-	 * play. What that per-order memo cannot save is a name REPEATED across orders, which is a separate
-	 * cache and is threaded as one; the per-PASS memo stays unbuilt for the reason stated above rather
-	 * than because the repeat is free. No TIME is claimed for any of it — the sentence above says how
-	 * to measure one.
+	 * per unnameable code, through the same memo, so the work is one dataset sweep per NAME of each
+	 * such order — on the 3.7.1 standalone, 27 of 43 orders' worth of names. That is work the
+	 * pre-change code did not do at all for an order carrying no codes. It is paid once per
+	 * {@code validate} PASS since issue #256, and was once per in-play SUBSTANCE until then; the pass
+	 * itself still runs twice per query (pre-answer through
+	 * {@link DrugReferenceInjector#preAnswerFindings}, post-answer through {@code LlmInferenceService}),
+	 * so a query pays it twice. What that per-order memo cannot save is a name REPEATED across orders,
+	 * which is a separate cache and is threaded as one. And because this method now runs once per pass,
+	 * "per call" and "per pass" are the same scope for the three memos below.
 	 */
-	private List<OrderPartner> orderPartners(PatientClinicalContext context) {
+	private List<OrderPartner> orderPartners(PatientClinicalContext context,
+			Map<String, DrugReference> entryByCode) {
 		Map<Object, OrderPartner> byIdentity = new LinkedHashMap<Object, OrderPartner>();
-		// Per-CALL memos, never fields. Each covers a dataset sweep this loop would otherwise repeat:
+		// Memos, never fields. Each covers a dataset sweep this loop would otherwise repeat:
 		// entryForAtcCode is a full scan of getAll() and the rung added by issue #186 asks it once per
 		// code of an order as well as once per code of the context, so without the first two a
 		// partly-covered order rescans the dataset for every code it carries; substanceRowsNamedBy is a
@@ -6154,7 +6286,10 @@ public class DrugSafetyValidator {
 		// ActiveDrugOrder, which is a per-request object, so a field would grow for the life of the JVM.
 		// The other two are bounded and take only the singleton reason — entryByCode by the ATC code
 		// space, impliedByName by the dataset's own aliases (see findImpliedByDrugName(String, Map)).
-		Map<String, DrugReference> entryByCode = new LinkedHashMap<String, DrugReference>();
+		// Four between two owners since issue #256: entryByCode is the CALLER's, a parameter rather than
+		// a local, because ruleAbout reads it after this method has returned (see CoMedications); the
+		// three declared below are this method's own, and since that issue this method runs once per
+		// pass, so per-call and per-pass have become the same scope for them.
 		Map<PatientClinicalContext.ActiveDrugOrder, DrugReference> substanceByOrder =
 				new LinkedHashMap<PatientClinicalContext.ActiveDrugOrder, DrugReference>();
 		Map<PatientClinicalContext.ActiveDrugOrder, Map<Object, List<DrugReference>>> rowsByOrderName =
@@ -6701,15 +6836,27 @@ public class DrugSafetyValidator {
 		return canonical;
 	}
 
-	/** {@link #entryForAtcCode} memoised for one {@code orderPartners} call. {@code null} is a real
-	 *  answer ("the dataset does not cover this code") and is cached as one, so an uncovered code
-	 *  does not rescan the dataset on every visit — hence {@code containsKey} rather than a null
-	 *  check. */
+	/** {@link #sweepForAtcCode} memoised for one {@code validate} pass — {@code cache} is
+	 *  {@link CoMedications}' own, since issue #256, because {@link #ruleAbout} asks this after
+	 *  {@link #orderPartners} has finished asking it. {@code null} is a real answer ("the dataset does
+	 *  not cover this code") and is cached as one, so an uncovered code does not rescan the dataset on
+	 *  every visit — hence {@code containsKey} rather than a null check.
+	 *
+	 *  <p>The uncached sweep it delegates to carries a NAME OF ITS OWN, {@link #sweepForAtcCode} — and
+	 *  that separation is what a guard can read. A sweep is a full walk of {@code getAll()} per code,
+	 *  and {@code ruleAbout} reaching it directly cost one walk per (subject, partner, code); while the
+	 *  two shared this method's name, the shape that reinstates that — dropping the {@code cache}
+	 *  argument at a call site — resolved one overload to the other rather than writing a new mention,
+	 *  at the very sites a guard over that name had to permit. Under two names it does not compile at
+	 *  all, and a call
+	 *  written to the sweep's own name is a mention {@code CoMedicationResolutionPerPassTest} forbids
+	 *  outside this body and the sweep's own. What that guard reads is source text, so it can still be
+	 *  evaded; that test names the shapes it does not see rather than claiming there are none. */
 	private DrugReference entryForAtcCode(String upperCode, Map<String, DrugReference> cache) {
 		if (cache.containsKey(upperCode)) {
 			return cache.get(upperCode);
 		}
-		DrugReference entry = entryForAtcCode(upperCode);
+		DrugReference entry = sweepForAtcCode(upperCode);
 		cache.put(upperCode, entry);
 		return entry;
 	}
@@ -6995,6 +7142,14 @@ public class DrugSafetyValidator {
 	 *         correlation asks WHICH RULE POINTS AT IT ({@link #ruleAbout}): resolving the code two
 	 *         ways would let a chip name one substance while the fold decided about another.
 	 *
+	 *         <p><b>A full walk of {@code getAll()} per code, and named as one</b> so that a guard can
+	 *         forbid it by name: {@link #entryForAtcCode(String, Map)} memoises it for the pass and is
+	 *         what every arm asks. Callers reach it through that overload; a call written to THIS name
+	 *         outside it is a mention {@code CoMedicationResolutionPerPassTest} fails on, whatever
+	 *         syntax it uses. Sharing one name with the memo was the state issue #256 shipped, and a
+	 *         dropped {@code cache} argument then reinstated the walk as an overload resolution nothing
+	 *         could see.
+	 *
 	 *         <p><b>Which row, when the substance is filed as several (issue #174, site 1).</b> Every
 	 *         row of a substance publishes the SAME ATC list, so "the entry carrying this code" is
 	 *         ambiguous by construction and this returned whichever row the dataset listed first. Four
@@ -7007,7 +7162,7 @@ public class DrugSafetyValidator {
 	 *         make, so one substance is one name wherever it appears. A full scan rather than a
 	 *         first-match return is what that costs.
 	 */
-	private DrugReference entryForAtcCode(String upperCode) {
+	private DrugReference sweepForAtcCode(String upperCode) {
 		DrugReference canonical = null;
 		for (DrugReference ref : drugReferenceService.getAll()) {
 			if (ref.normalizedAtcCodes().contains(upperCode)) {

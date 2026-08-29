@@ -735,15 +735,28 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/**
-	 * A service over {@code entries} carrying the real curated cross-reactivity groups — the ONE body
-	 * behind {@link #ddinterServiceWithGroups}, {@link #ddiFixtureService} and any case that needs the
-	 * shipped knowledge base with groups. The two steps have to stay together for the reason those
-	 * javadocs give — {@link #serviceWith} pins the groups EMPTY through its {@code setEntries} seam,
-	 * so a service built without the second call silently cannot raise a curated-group chip — and the
-	 * argument is easier to keep true in one method than in three.
+	 * A service over {@code entries} carrying the real curated cross-reactivity groups — the
+	 * new-service form of {@link #withEntriesAndGroups}, which is where the argument for keeping the
+	 * two steps together lives.
 	 */
 	static DrugReferenceService serviceWithGroups(List<DrugReference> entries) {
-		DrugReferenceService service = serviceWith(entries);
+		return withEntriesAndGroups(new DrugReferenceService(), entries);
+	}
+
+	/**
+	 * The pairing itself — {@code setEntries} then {@code setCrossReactivityGroups}, in that order —
+	 * applied to a service the caller already has, for a case that needs a SUBCLASS of the service (an
+	 * instrument counting its dataset walks, say) and so cannot take one this class constructed.
+	 *
+	 * <p><b>The one body the two steps live in</b>, and they have to live together: {@code setEntries}
+	 * pins the groups EMPTY through its seam, so a service built without the second call silently
+	 * cannot raise a curated-group chip and the case just stops testing what it says it tests. Nothing
+	 * goes red. That argument is easier to keep true in one method than in the four call shapes that
+	 * would otherwise each carry it.
+	 */
+	static <T extends DrugReferenceService> T withEntriesAndGroups(T service,
+			List<DrugReference> entries) {
+		service.setEntries(entries);
 		service.setCrossReactivityGroups(bundledGroups());
 		return service;
 	}

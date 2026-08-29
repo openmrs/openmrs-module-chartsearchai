@@ -1037,11 +1037,11 @@ public class DrugSafetyValidator {
 	 * stands down from is chipped by {@link #addInteractionWarnings} instead, "whose subject is folded
 	 * over the answer-widened group", so the pre-answer finding could come from here and the post-answer
 	 * chip from there, naming one substance two ways across the arm handoff. <b>That cannot happen, as of
-	 * issue #238.</b> Every substance either arm can reach on a screening question is an ORDERED one —
-	 * {@code questionDrugs} is empty by this arm's own gate — so {@code namingGroups}, built from
-	 * {@code orderEntries} alone, always has that substance's group, and neither arm's {@link #subjectOf}
-	 * call for the SUBJECT ever falls through to {@code allGroups}'s answer-widened rows. The two arms
-	 * therefore fold the identical group for the identical substance in both passes.
+	 * issue #238.</b> The substance a pair like this is about is an ORDERED one —
+	 * {@code questionDrugs} is empty by this arm's own gate, so every substance the screening arm reaches
+	 * is one {@code orderEntries} names — and {@code namingGroups}, built from
+	 * {@code orderEntries} alone, always has that substance's group. The two arms
+	 * therefore fold the identical group for that substance in both passes.
 	 *
 	 * <p>What does survive at that handoff is a PARTNER-label asymmetry, and it is not answer-driven: an
 	 * unfolded chip from {@link #addInteractionWarnings} names its partner from the rule's own match token
@@ -2287,8 +2287,7 @@ public class DrugSafetyValidator {
 	 * must not choose from different row sets.
 	 *
 	 * <p>Rows from the candidate set come FIRST and order rows after, so a full tie on
-	 * {@link #outranks} keeps a row the text actually named. The two maps therefore agree on the relative
-	 * order of the rows they share — which is not the same as agreeing on order outright: a row the ANSWER
+	 * {@link #outranks} keeps a row the text actually named. A row the ANSWER
 	 * matched that {@code orderEntries} also carries sits at its in-play position in {@code resolvedRows}
 	 * and at its order position in {@code namingRows}, and where a family ties on both of
 	 * {@link DrugReference#canonicalRow}'s rungs that difference decides which row is elected. It is still

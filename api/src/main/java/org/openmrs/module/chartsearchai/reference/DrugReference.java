@@ -917,7 +917,7 @@ public class DrugReference {
 	 * whole list emptied: the preference passed over an alphabetically earlier shared subgroup to
 	 * reach one of the four, rather than finding it there.
 	 *
-	 * <p>{@code CrossReactivityClassChoiceTest} pins one case per group for three of those four, save
+	 * <p>{@code CrossReactivityClassChoiceTest} pins one case per group for those four, save
 	 * {@code B02BC}: its only shipped-KB pairs are epinephrine route variants, which issue #160
 	 * collapses to an identity chip before this arm can name a class at all.
 	 */
@@ -1407,7 +1407,7 @@ public class DrugReference {
 	 * pairs</b>; of those, <b>1331 ROW / 1291 SUBSTANCE pairs keep it under the 36 groups this list
 	 * holds today</b>. The two bases, and the conversion between them, are defined at
 	 * {@code DrugSafetyValidator.sharedClass} (issue #243). That 1331 read 1488 until issue #263; the
-	 * measurement paragraphs at the end of this javadoc say why, and how both were taken.
+	 * measurement paragraphs further down this javadoc say why, and how both were taken.
 	 *
 	 * <p><b>The families, and the reading of ATC's words that puts each here:</b>
 	 * <ul>
@@ -1512,14 +1512,19 @@ public class DrugReference {
 	 * pairs sharing at least one level-4 subgroup, 486 lose their class claim entirely, 54 keep one and
 	 * name a subgroup that does classify the substances instead, and 7243 are untouched. Over the
 	 * <em>36</em> groups the list holds today the drop is <b>643 ROW / 450 SUBSTANCE pairs</b> (issue
-	 * #263, measured 2026-08-29 by the run this class's blanket-residue-veto paragraph records; ADR
-	 * Decision 33 carries the full three-way split on both bases) — quoted here because that
+	 * #263, taken by the re-measurement recorded below; ADR Decision 33 carries the full three-way
+	 * split on both bases) — quoted here because that
 	 * paragraph's 1331 is 1974 minus this 643 and its 1291 is 1741 minus this 450, as the 1488 it
 	 * replaced was 1974 minus this 486, and without them a reader cannot close that arithmetic on
-	 * either base. On the 30-group split the largest contributors were {@code V03AB} (135 pairs),
-	 * {@code D11AX} "Other dermatologicals" (130), {@code S01XA} "Other ophthalmologicals" (99) and
-	 * {@code D06AX} "Other antibiotics for topical use" (68); issue #263 did not re-take those four
-	 * magnitudes, and on the 36-group split {@code A16AX} and {@code N07XX} join them.
+	 * either base. Attributing each lost pair to the subgroup the unvetoed scan chose for it, the
+	 * largest contributors on the 30-group split are {@code V03AB} (134 ROW pairs),
+	 * {@code D11AX} "Other dermatologicals" (115), {@code S01XA} "Other ophthalmologicals" (99) and
+	 * {@code D06AX} "Other antibiotics for topical use" (33); on the 36-group split {@code A16AX} (91)
+	 * and {@code N07XX} (55) come in fourth and fifth, pushing {@code D06AX} to sixth. Re-measured for
+	 * issue #263, which found the four this javadoc previously carried (135/130/99/68) reproducing
+	 * under no attribution it tried — and the 68 contradicting the {@code D06AX} 33 the cost paragraph
+	 * below states, since every {@code D06AX} pair that loses its claim is one of that paragraph's
+	 * 116.
 	 *
 	 * <p><b>That 1331 read 1488 until issue #263, and the reason is worth keeping.</b> 1488 is the
 	 * answer over the <em>30</em> groups this list held at issue #182 — the scope the 486/54/7243
@@ -1846,10 +1851,9 @@ public class DrugReference {
 	 *         pair of drug NAMES one of which sits inside the other; the 21 is the size of the
 	 *         curated #86/#128/#129 kill set, which is a hand-assembled list of known collisions and
 	 *         not a population derived from a corpus, so it has no substance-pair counterpart to
-	 *         convert to. The 117 counts (order name, ENTRY) pairs, which is a different pair kind
-	 *         again from the (name, TOKEN) pairs {@link #matchesOrderName}'s own table counts — an
-	 *         entry publishes many names — and it is over that dictionary's 2533 ORDER names, where
-	 *         that table's corpus is 2531. Both corpora are the 3.7.1 demo dictionary, which this repo
+	 *         convert to. The 117 counts (order name, ENTRY) pairs — an entry publishes many names, so
+	 *         this is a pair kind of its own — and it is over that dictionary's 2533 ORDER names,
+	 *         whereas {@link #matchesOrderName}'s own table has a corpus of 2531. Both corpora are the 3.7.1 demo dictionary, which this repo
 	 *         does not carry, so none of the three is re-derivable here; what is stated is which
 	 *         population each is over, not a new measurement of it.
 	 */
@@ -2076,8 +2080,9 @@ public class DrugReference {
 	 * the two kinds of string differ: prose is words, an order name is typically one localized,
 	 * inflected display name with a dose appended. Typically, not always — since issue #293 an order's
 	 * names include the free text a clinician typed, which can be a sentence; the allowance is still
-	 * right for the display-name shape it was measured on, and what it is applied to is now wider. Measured over the 3.7.1 demo dictionary (2531 drug and
-	 * drug-concept names x the full KB's 2093 rule tokens), by tolerated trailing letters:
+	 * right for the display-name shape it was measured on, and what it is applied to is now wider.
+	 * Measured over the 3.7.1 demo dictionary (2531 drug and drug-concept names x the full KB's 2093
+	 * rule tokens), by tolerated trailing letters:
 	 *
 	 * <pre>
 	 *   rule                    matches   nested-name collisions leaking   what enters at this step
@@ -2091,11 +2096,6 @@ public class DrugReference {
 	 *                                              Multi-Vitamin Adult ~ vitamin a)
 	 * </pre>
 	 *
-	 * That product is a (NAME, TOKEN) population of its own, and neither of the ATC pair bases
-	 * {@code DrugSafetyValidator.sharedClass} defines — issue #263, which labelled the 78 below on it
-	 * and did not re-derive the unit of the {@code matches} column itself, the corpus behind that
-	 * column being a dictionary this repo does not carry.
-	 *
 	 * <p>A symmetric boundary would therefore stop checking a patient on {@code Aspirine Co 81mg} for
 	 * aspirin interactions at all — trading a false positive for a false NEGATIVE, the wrong
 	 * direction for a safety net, and one that looks exactly like the noise being removed. Two is the
@@ -2104,6 +2104,11 @@ public class DrugReference {
 	 * recommendation) leaves exactly one legitimate name unmatched, {@code Multivitamines et fer},
 	 * whose reference entry carries 2 Major and 8 Moderate rules that would silently stop being
 	 * checked.
+	 *
+	 * <p>That product is a (NAME, TOKEN) population of its own, and neither of the ATC pair bases
+	 * {@code DrugSafetyValidator.sharedClass} defines — issue #263, which labelled the 78 below on it
+	 * and did not re-derive the unit of the {@code matches} column itself, the corpus behind that
+	 * column being a dictionary this repo does not carry.
 	 *
 	 * <p>A bound on the tail, rather than a list of known inflections: stripping
 	 * {@code -e}/{@code -a}/{@code -o} from both sides was measured on the same corpus at 826
@@ -2131,8 +2136,8 @@ public class DrugReference {
 	 * relaxation — 78 (NAME, TOKEN) pairs added over the 2531 x 2093 product, <em>0 removed</em> —
 	 * which is what let this widening be scored against #128's kill set instead of argued about, and
 	 * the kill set includes the accented spellings, which are the ones folding could newly break:
-	 * {@code nitroglycérine} folds to
-	 * {@code nitroglycerine}, i.e. {@code glycerin} plus one inflectional letter, so it becomes a
+	 * {@code nitroglycérine} folds to {@code nitroglycerine}, i.e. {@code glycerin} plus one
+	 * inflectional letter, so it becomes a
 	 * candidate for that token at the very moment {@code glycérine} legitimately does, and only the
 	 * LEFT boundary separates them.
 	 *

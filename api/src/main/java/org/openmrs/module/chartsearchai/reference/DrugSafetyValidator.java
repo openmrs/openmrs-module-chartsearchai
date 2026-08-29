@@ -2140,7 +2140,7 @@ public class DrugSafetyValidator {
 	 * not one carries a contentless note, so on this dataset the case #88 argued from never arises where
 	 * a fold could act on it.
 	 *
-	 * <p>The shape that DOES survive is the UNRATED rule:
+	 * <p>The shape that DOES survive the severity floor is the UNRATED rule:
 	 * {@link #clearsSeverityFloor} deliberately exempts a rule with no severity rather than treating
 	 * it as low, so every hand-authored curated rule reaches a chip whatever it carries, and one
 	 * authored with no note produces a chip reading only "X interacts with active order Y". No bundled
@@ -2815,7 +2815,7 @@ public class DrugSafetyValidator {
 	 *         and per label where it cannot (see {@link #bestRulePerPartner}) — so two rows can still
 	 *         both name one order: across the full KB exactly one such pair exists, {@code enalapril}
 	 *         and {@code enalaprilat}, two genuinely different entries which that grouping deliberately
-	 *         keeps as two chips — the population that count is over, and its base, are named at
+	 *         keeps as two chips — the population that count is over and its base are named at
 	 *         {@link #bestRulePerPartner} (issue #263). The first in dataset order takes the fold; the
 	 *         other keeps its rule chip
 	 *         unfolded, which is the conservative direction, since the alternative is stating one
@@ -3458,12 +3458,12 @@ public class DrugSafetyValidator {
 	 * <p><b>Which pairs that 1 counts</b> (issue #263). Pairs of dataset ENTRIES both matched by ONE
 	 * order name: a population of its own, and neither of the subgroup-sharing populations
 	 * {@link #sharedClass} counts, which relate two entries by ATC and not by a name. The two BASES
-	 * {@link #sharedClass}'s javadoc defines do apply to it, and the answer is 1 on both: measured
-	 * 2026-08-29 over the
-	 * shipped KB through {@code DdiDrugReferenceSource.load}, {@link DrugReference#substanceGroupKey()}
-	 * and {@link DrugReference#canonicalRow}, {@code Enalapril} and {@code Enalaprilat} are one row
-	 * each and fall into two substance families, so the one ROW pair is also one SUBSTANCE pair. The 1
-	 * itself is the pre-existing figure and was not re-derived.
+	 * {@link #sharedClass}'s javadoc defines do apply to it, and the answer is 1 on both. Measured
+	 * 2026-08-29 over the shipped KB through {@code DdiDrugReferenceSource.load},
+	 * {@link DrugReference#substanceGroupKey()} and {@link DrugReference#canonicalRow}:
+	 * {@code Enalapril} and {@code Enalaprilat} are one row each and fall into two substance families,
+	 * so the one ROW pair is also one SUBSTANCE pair. The 1 itself is the pre-existing figure and was
+	 * not re-derived.
 	 *
 	 * @param orderEntries the reference entries the patient's active orders resolve to
 	 *        ({@link DrugReferenceService#findForActiveOrders}), from which

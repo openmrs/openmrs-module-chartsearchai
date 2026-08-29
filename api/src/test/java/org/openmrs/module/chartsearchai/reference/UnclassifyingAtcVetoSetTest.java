@@ -22,46 +22,45 @@ import org.junit.jupiter.api.Test;
  * A tripwire on the KEY that {@link DrugReference#isUnclassifyingAtcCode}'s published figures are
  * measured against (issue #263).
  *
- * <p><b>The defect it exists to prevent, which has already happened once.</b> That javadoc's
- * "vetoing every residue would drop a class claim from 1974 ROW pairs; N of those keep it here"
- * read N = 1488 from issue #182 until issue #263. 1488 is the answer over the THIRTY groups
- * {@code UNCLASSIFYING_ATC_GROUPS} held then; issue #184 (PR #241) added six more and the figure was
- * not re-measured, so a sentence saying "keep it <em>here</em>" came to describe a rule this class no
- * longer applies. Nothing reddened, because the change was to a list and the stale value was in
- * prose. The corrected figures, and their bases, are at {@code DrugReference.isUnclassifyingAtcCode};
- * they are deliberately not repeated here, because nothing below asserts one.
+ * <p><b>The defect it exists to prevent, which has already happened once.</b> A figure keyed on
+ * {@code UNCLASSIFYING_ATC_GROUPS} was read from issue #182 until issue #263 while that list grew
+ * from 30 members to 36 at issue #184 (PR #241), so a sentence saying a rule keeps N pairs came to
+ * describe a rule this class no longer applies. Nothing reddened: the change was to a list and the
+ * stale value was in prose. The figures, their bases and the whole of that story are at
+ * {@code DrugReference.UNCLASSIFYING_ATC_GROUPS}, and are deliberately not repeated here.
  *
  * <p><b>So this pins the veto set rather than the figures.</b> It asserts which of the level-4
  * subgroups the shipped knowledge base actually publishes {@code isUnclassifyingAtcCode} refuses —
  * one direct call of the production predicate per subgroup, over the production load, with no
- * composition of its own. It reddens when a change reaches a subgroup this KB publishes — a group
+ * composition of its own. It reddens when a change reaches a subgroup this KB publishes: a group
  * added to that list or removed from it, or a KB refresh that changes which subgroups the dataset
- * publishes — and each of those is an occasion to re-measure the figures rather than a defect in
- * itself. When it goes red: re-measure the counts at {@code isUnclassifyingAtcCode} and at
- * {@code LOCALLY_APPLIED_ATC_GROUPS}, update them together with this list, and say which method
- * produced them.
+ * publishes. When it goes red, re-measure {@code isUnclassifyingAtcCode}'s own counts and update
+ * them with this list, saying which method produced them. {@code LOCALLY_APPLIED_ATC_GROUPS}' 46/21
+ * and 19/2 are NOT due on that red — they are taken with the claim filters off, i.e. with this list
+ * emptied, so a change to it cannot move them; they are due only on the KB-refresh red.
  *
  * <p><b>Two holes, both real, and the second is the likelier one.</b> A group added that covers no
  * subgroup this KB publishes is invisible: 9 of the shipped list's 36 members are already in that
  * position (measured 2026-08-29 — {@code A07AX}, {@code C05BX}, {@code D02AX}, {@code D03AX},
  * {@code R03BX}, {@code S01JX}, {@code S01KX}, {@code S02DC}, {@code V07A}), and the list's own
  * javadoc says of two of them that they are members on the criterion rather than on measured impact.
- * And a KB refresh that adds or removes ROWS under subgroups the dataset already publishes moves
+ * And a KB refresh that adds or removes ROWS under subgroups the dataset already publishes can move
  * every pair figure this class is a tripwire for while leaving both assertions here green, because
- * both are keyed on the SET of subgroups and neither counts rows or pairs.
+ * both are keyed on the SET of subgroups and neither counts rows or pairs. Measured: dropping 1372
+ * of the shipped KB's 2283 rows and adding 2, chosen so the published SET is unchanged, leaves this
+ * case passing.
  *
  * <p><b>What it does NOT pin, stated so the guard does not look stronger than it is.</b> Not the
- * figures themselves — the counts at {@code isUnclassifyingAtcCode} and at
- * {@code LOCALLY_APPLIED_ATC_GROUPS} are all answers of {@code DrugSafetyValidator.sharedClass},
- * which is private, and computing its null condition here would be a reimplementation of pipeline
- * logic. Reaching them needs either a temporary mutation of
- * the production source or a residue list this repo does not carry, and which of the two differs by
- * counterfactual: the blanket-residue one is reachable from the INPUTS, since vetoing a subgroup and
- * removing it from the caller's code set both end in the same {@code continue}; the {@code drop4} one
- * is not, because it needs one of those four groups RETURNED, and that turns on
- * {@link DrugReference#isLocallyAppliedAtcCode} reading the subgroup string, which no choice of
- * inputs changes. Issue #263 measured them that way and recorded the method beside each figure;
- * this guard only says when they are due to be taken again.
+ * figures themselves: they are answers of {@code DrugSafetyValidator.sharedClass}, which is private,
+ * so computing its null condition here would be a reimplementation of pipeline logic. Issue #263
+ * reached them by temporarily mutating the production source, and only one of its two
+ * counterfactuals could have been reached from the INPUTS instead — vetoing a subgroup and removing
+ * it from the caller's code set both end in the same {@code continue}, so the blanket-residue one is
+ * input-reachable, while striking the four locally-applied prefixes behind
+ * {@code LOCALLY_APPLIED_ATC_GROUPS}' 46/21 is not: it needs one of those four returned EAGERLY,
+ * ahead of a surviving systemic subgroup, and removing candidates from the inputs cannot promote
+ * one. (They are returned by the unmutated method often enough — as the fallback, when nothing
+ * systemic survives.) This guard only says when the figures are due to be taken again.
  */
 public class UnclassifyingAtcVetoSetTest {
 
@@ -83,6 +82,9 @@ public class UnclassifyingAtcVetoSetTest {
 		for (DrugReference entry : DrugReferenceTestSupport.shippedEntries()) {
 			published.addAll(entry.atcSubgroups());
 		}
+		assertEquals(34, REFUSED_IN_THE_SHIPPED_KB.size(),
+				"the 34 this class's field javadoc decomposes as 20 + 8 + 6; the set comparison below"
+						+ " would not see a duplicate entry");
 		assertEquals(594, published.size(),
 				"the shipped KB's level-4 subgroups, the population the veto set is read over");
 

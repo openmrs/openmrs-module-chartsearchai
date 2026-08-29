@@ -2149,7 +2149,7 @@ public class DrugSafetyValidator {
 	 * available here, because several rows can rate one substance pair; that conversion is a
 	 * re-measurement, and issue #263 deliberately did not run one.
 	 *
-	 * <p>The shape that DOES survive that filtering is the UNRATED rule:
+	 * <p>The shape that DOES survive the severity floor is the UNRATED rule:
 	 * {@link #clearsSeverityFloor} deliberately exempts a rule with no severity rather than treating
 	 * it as low, so every hand-authored curated rule reaches a chip whatever it carries, and one
 	 * authored with no note produces a chip reading only "X interacts with active order Y". No bundled

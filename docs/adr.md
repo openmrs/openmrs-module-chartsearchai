@@ -2222,6 +2222,8 @@ Decision 33 said separating meaningful groups from meaningless ones is "a per-gr
 
 1565 cross-reactivity claims go, 586 of them for a pair DDInter also rates, so for those the interaction chip survives and only the class claim goes; 157 duplicate-therapy claims go with them, 14 rated. The residue family costs real relationships too — `G02CX` bremelanotide × flibanserin, `M09AX` onasemnogene × risdiplam, `A16AX` miglustat × eliglustat are genuine pairs — because no rule over ATC's words can tell them from eliglustat × givosiran, which is not one.
 
+The six subgroups this decision adds to `isUnclassifyingAtcCode` also move [Decision 33](#decision-33-a-residual-atc-subgroup-is-not-a-relationship)'s cost split, which was measured before them and left unadjusted until [#263](https://github.com/openmrs/openmrs-module-chartsearchai/issues/263) re-measured it: its 486 / 54 / 7243 row pairs becomes **643 / 54 / 7086**, and 293 / 12 / 5245 substance pairs becomes **450 / 12 / 5088**.
+
 ### Rejected
 
 - **A blanket rule** (ATC → duplicate therapy only). Measured above; rejected 2.4 to 1.

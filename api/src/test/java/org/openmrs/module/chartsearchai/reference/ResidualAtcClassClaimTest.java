@@ -109,8 +109,8 @@ public class ResidualAtcClassClaimTest {
 		// pairs, and its SUBSTANCE pairs, that name a residual subgroup under a therapeutic group —
 		// among them every antihistamine, antidepressant and aminoglycoside pair. The two counts, and
 		// the reason the row one read 1488 until issue #263, are at
-		// DrugReference.isUnclassifyingAtcCode; DrugSafetyValidator.sharedClass defines the two bases
-		// against each other. No numeral is repeated here, because nothing in this case asserts one.
+		// DrugReference.isUnclassifyingAtcCode, stated there as what today's list KEEPS;
+		// DrugSafetyValidator.sharedClass defines the two bases against each other.
 		List<SafetyWarning> warnings = fixtureValidator().validate("",
 				"Is it safe to give desloratadine?",
 				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Loratadine 10mg"),

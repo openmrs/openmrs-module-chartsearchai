@@ -910,14 +910,14 @@ public class DrugReference {
 	 * before 19 and 2 were quoted: the shipped KB loaded through {@code DdiDrugReferenceSource.load},
 	 * the substance base through {@link #substanceGroupKey()} and {@link #canonicalRow}, and the
 	 * choice itself through {@code DrugSafetyValidator.sharedClass} with the four prefixes struck out
-	 * of the list below. With the claim filters OFF, which is the state that method was in when 46 and
-	 * 21 were taken — they date from issue #166 ({@code 45c1cc4a}, 2026-08-06) and
+	 * of the list below, and with the claim filters OFF — the state that method was in when 46 and 21
+	 * were taken, since they date from issue #166 ({@code 45c1cc4a}, 2026-08-06) while
 	 * {@link #UNCLASSIFYING_ATC_GROUPS} first appears the following day at issue #182
 	 * ({@code 078a3d54}). "Moved" means the answer differs from the one the same scan gives with this
 	 * whole list emptied: the preference passed over an alphabetically earlier shared subgroup to
 	 * reach one of the four, rather than finding it there.
 	 *
-	 * <p>{@code CrossReactivityClassChoiceTest} pins one case per one of those four groups, save
+	 * <p>{@code CrossReactivityClassChoiceTest} pins one case per group for three of those four, save
 	 * {@code B02BC}: its only shipped-KB pairs are epinephrine route variants, which issue #160
 	 * collapses to an identity chip before this arm can name a class at all.
 	 */
@@ -1426,9 +1426,11 @@ public class DrugReference {
 	 * ATC/DDD published name begins "Other"/"Various", the names read off the WHO index snapshot of
 	 * 2026-04-25. Counted over the same population as the 97 this javadoc records, and one more than
 	 * it; this pass did not hold the snapshot the 97 was read from, so the discrepancy is recorded
-	 * rather than resolved. What can be said for the 98 is that 1974 reproduces exactly on it, and
-	 * that restricting it to {@link #LOCALLY_APPLIED_ATC_GROUPS} gives the same 20 the "shipped KB
-	 * uses 20 of the 27" sentence records.
+	 * rather than resolved. What can be said for the 98 is that 1974 reproduces exactly with it as the
+	 * run's residue set — not with it as the whole veto, which is a smaller drop, since the seven
+	 * non-residues above are then unvetoed — and that restricting it to
+	 * {@link #LOCALLY_APPLIED_ATC_GROUPS} gives the same 20 the "shipped KB uses 20 of the 27"
+	 * sentence records.
 	 *
 	 * <p><b>The families, and the reading of ATC's words that puts each here:</b>
 	 * <ul>
@@ -1530,10 +1532,10 @@ public class DrugReference {
 	 *
 	 * <p><b>Adding them also moved two figures this javadoc states elsewhere</b> — the count of pairs
 	 * a blanket residue veto would drop but this list does not, and the class-claim drop this list's
-	 * own cost paragraph states — and that went unnoticed until issue #263 re-measured both. On the
-	 * substance base the six move that drop from 293 to 450, i.e. by 157 — the same number the
-	 * claim-base sentence above states for them, over a different base; #263 did not check whether the
-	 * two count the same pairs. {@code UnclassifyingAtcVetoSetTest} now reddens when a change to this
+	 * own cost paragraph states — and that went unnoticed until issue #263 re-measured both. The six
+	 * move that drop by 157 on BOTH pair bases (486 to 643 ROW, 293 to 450 SUBSTANCE), which is also
+	 * the number the claim-base sentence above states for them; three identical deltas on three bases,
+	 * and #263 did not check whether they count the same pairs. {@code UnclassifyingAtcVetoSetTest} now reddens when a change to this
 	 * list reaches a subgroup the shipped KB publishes, which is less than "whenever this list moves";
 	 * that class's javadoc says what it leaves uncovered.
 	 *
@@ -1546,7 +1548,7 @@ public class DrugReference {
 	 * Decision 33 carries the full three-way split on both bases) — quoted here because that
 	 * paragraph's 1331 is 1974 minus this 643 and its 1291 is 1741 minus this 450, as the 1488 it
 	 * replaced was 1974 minus this 486, and without them a reader cannot close that arithmetic on
-	 * either base. On the 30-group split the largest contributors are {@code V03AB}
+	 * either base. The largest contributors are {@code V03AB}
 	 * (135 pairs), {@code D11AX} "Other dermatologicals" (130),
 	 * {@code S01XA} "Other ophthalmologicals" (99) and {@code D06AX} "Other antibiotics for topical
 	 * use" (68).
@@ -1839,7 +1841,7 @@ public class DrugReference {
 	 *         direction, 0 of 21 nesting pairs resolving to the nested drug. On the 2533 order names,
 	 *         117 more (order name, entry) pairs resolve and none stops resolving.
 	 *
-	 *         <p><b>Three counts, three populations, none of them an ATC pair base</b> (issue #263).
+	 *         <p><b>Three populations, none of them an ATC pair base</b> (issue #263).
 	 *         The 549 and the 624 count NAMES, out of that dictionary's 1219 allergen candidates. A
 	 *         NESTING PAIR
 	 *         is a pair of drug NAMES one of which sits inside the other; the 21 is the size of the
@@ -2076,11 +2078,10 @@ public class DrugReference {
 	 * inflected display name with a dose appended. Typically, not always — since issue #293 an order's
 	 * names include the free text a clinician typed, which can be a sentence; the allowance is still
 	 * right for the display-name shape it was measured on, and what it is applied to is now wider. Measured over the 3.7.1 demo dictionary (2531 drug and
-	 * drug-concept names x the full KB's 2093 rule tokens), by tolerated trailing letters. That
-	 * product is a (NAME, TOKEN) population of its own, neither of the ATC pair bases
-	 * {@code DrugSafetyValidator.sharedClass} defines, and it is what the 78 the diacritic fold adds
-	 * counts over — issue #263, which did not re-derive the unit of the {@code matches} column itself,
-	 * the corpus behind it being a dictionary this repo does not carry:
+	 * drug-concept names x the full KB's 2093 rule tokens) — a (NAME, TOKEN) population of its own,
+	 * and neither of the ATC pair bases {@code DrugSafetyValidator.sharedClass} defines (issue #263,
+	 * which did not re-derive the unit of the {@code matches} column itself, the corpus behind it
+	 * being a dictionary this repo does not carry) — by tolerated trailing letters:
 	 *
 	 * <pre>
 	 *   rule                    matches   nested-name collisions leaking   what enters at this step

@@ -1411,12 +1411,11 @@ public class DrugReference {
 	 * <p><b>That second figure read 1488 until issue #263, and the reason is worth keeping.</b> 1488 is
 	 * the answer over the <em>30</em> groups this list held at issue #182 — the scope the 486/54/7243
 	 * triple states for itself — and issue #184 (PR #241) added six more without re-measuring it, so a
-	 * figure
-	 * whose own wording says "keep it <em>here</em>" came to describe a rule this class no longer
-	 * applies. The 1974 did not move with it — all six additions are themselves residues, so the
-	 * blanket veto already covered them — which is exactly why nothing looked wrong: only the
-	 * surviving half drifted. Re-measured 2026-08-29 over the shipped KB, loaded
-	 * through {@code DdiDrugReferenceSource.load}, with the substance base from
+	 * figure whose own wording says "keep it <em>here</em>" came to describe a rule this class no
+	 * longer applies. The 1974 did not move with it — all six additions are themselves residues, so
+	 * the blanket veto already covered them — which is exactly why nothing looked wrong: only the
+	 * surviving half drifted. Re-measured 2026-08-29 over the shipped KB, loaded through
+	 * {@code DdiDrugReferenceSource.load}, with the substance base from
 	 * {@link #substanceGroupKey()} and {@link #canonicalRow} and the choice from
 	 * {@code DrugSafetyValidator.sharedClass} — reproducing 1974 and the 30-group 1488 (and 1448 over
 	 * substance pairs) before quoting 1331 and 1291. The veto the run applied was the groups this list
@@ -2128,7 +2127,8 @@ public class DrugReference {
 	 *
 	 * 224 of the 2531 names carry a diacritic. Folding both operands makes the change a pure
 	 * relaxation — 78 (NAME, TOKEN) pairs added over the 2531 x 2093 product, <em>0 removed</em> —
-	 * which is what let this widening be scored against #128's kill set instead of argued about, and the kill set includes the accented
+	 * which is what let this widening be scored against #128's kill set instead of argued about, and
+	 * the kill set includes the accented
 	 * spellings, which are the ones folding could newly break: {@code nitroglycérine} folds to
 	 * {@code nitroglycerine}, i.e. {@code glycerin} plus one inflectional letter, so it becomes a
 	 * candidate for that token at the very moment {@code glycérine} legitimately does, and only the

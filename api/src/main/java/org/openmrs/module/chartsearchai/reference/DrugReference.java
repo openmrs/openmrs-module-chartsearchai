@@ -1535,7 +1535,8 @@ public class DrugReference {
 	 * own cost paragraph states — and that went unnoticed until issue #263 re-measured both. The six
 	 * move that drop by 157 on BOTH pair bases (486 to 643 ROW, 293 to 450 SUBSTANCE), which is also
 	 * the number the claim-base sentence above states for them; three identical deltas on three bases,
-	 * and #263 did not check whether they count the same pairs. {@code UnclassifyingAtcVetoSetTest} now reddens when a change to this
+	 * and #263 did not check whether they count the same pairs. {@code UnclassifyingAtcVetoSetTest} now
+	 * reddens when a change to this
 	 * list reaches a subgroup the shipped KB publishes, which is less than "whenever this list moves";
 	 * that class's javadoc says what it leaves uncovered.
 	 *

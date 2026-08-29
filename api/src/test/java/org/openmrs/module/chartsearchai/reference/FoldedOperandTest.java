@@ -63,6 +63,8 @@ public class FoldedOperandTest {
 
 		private final List<DrugReference.FoldedName> ranked = new ArrayList<DrugReference.FoldedName>();
 
+		private final List<String> prose = new ArrayList<String>();
+
 		Probe(String id) {
 			setId(id);
 			setName(id);
@@ -80,6 +82,12 @@ public class FoldedOperandTest {
 			ranked.add(drugName);
 			return super.nameMatchStrength(drugName);
 		}
+
+		@Override
+		boolean matchesFoldedText(String foldedLowerText) {
+			prose.add(foldedLowerText);
+			return super.matchesFoldedText(foldedLowerText);
+		}
 	}
 
 	/**
@@ -90,6 +98,13 @@ public class FoldedOperandTest {
 	 * {@code fold(name)} written inside it both call the folded matcher exactly once per entry, and
 	 * both leave the unfolded entry point uncalled. What separates them is that the hoisted one hands
 	 * every entry the SAME object and the other hands each a fresh one.
+	 *
+	 * <p>Identity discriminates here whatever the name looks like, because {@link DrugReference#fold}
+	 * allocates a carrier per call — unlike
+	 * {@link #theProseScanFoldsItsTextOnceForTheWholeSweep}, whose operand is a folded {@code String}
+	 * and which therefore needs an accented text to discriminate at all. That difference is measured,
+	 * not asserted: with the prose fold moved into its loop, the accented question reddens that case
+	 * and an ASCII one leaves it green.
 	 *
 	 * <p>Adjacent, and compared element-wise rather than as sets, because a scan may legitimately stop
 	 * early — {@code lookupByToken} returns as soon as an entry claims the display name — and may
@@ -130,13 +145,49 @@ public class FoldedOperandTest {
 	}
 
 	/**
+	 * The prose a whole-dataset scan is resolving is folded ONCE for that scan — the same property as
+	 * above for the other boundary rule, asked the same way and at {@code findByQuery}.
+	 *
+	 * <p><b>The question must carry an accent, and that is the case rather than a detail of it.</b>
+	 * Identity separates a hoisted fold from one written inside the loop only where folding actually
+	 * produces a new string: {@code findByQuery} lower-cases before it folds, and for an ASCII question
+	 * {@link DrugReference#foldDiacritics} takes its fast path and returns the argument, so a fold
+	 * written per entry would hand every entry that SAME instance and this case would pass on a
+	 * defective implementation. An accented question allocates per fold, so it discriminates.
+	 */
+	@Test
+	public void theProseScanFoldsItsTextOnceForTheWholeSweep() {
+		Probe first = new Probe("zzq-probe-alpha");
+		Probe second = new Probe("zzq-probe-beta");
+		List<DrugReference> entries = new ArrayList<DrugReference>();
+		entries.add(first);
+		entries.add(second);
+		entries.addAll(DrugReferenceTestSupport.ddinterEntries());
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(entries);
+
+		DrugReferenceTestSupport.validator(service).validate("",
+				"Puis-je lui donner de la warfarine avec de l'aspirine \u00e0 c\u00f4t\u00e9 ?",
+				DrugReferenceTestSupport.ctx(60, null, null, null, null, null));
+
+		assertFalse(first.prose.isEmpty(), "the probes must have been reached by a prose scan at all");
+		assertEquals(first.prose.size(), second.prose.size(),
+				"two adjacent entries must be reached by the same prose scans");
+		for (int i = 0; i < first.prose.size(); i++) {
+			assertSame(first.prose.get(i), second.prose.get(i), "call " + i + " of matchesFoldedText "
+					+ "handed two entries of ONE scan two different folded strings, so the question is "
+					+ "being folded per entry rather than once for the scan");
+		}
+	}
+
+	/**
 	 * An entry every one of whose names carries an accent is still reached by an unaccented recorded
 	 * name — the shape {@code containsBoundedToken}'s javadoc says the reference-side fold exists for,
 	 * and the only shape in which storing the RAW alias list where the folded one belongs is visible.
 	 *
-	 * <p>Over the shipped knowledge base it is not visible: 0 of its 5169 aliases carry a combining
-	 * mark, so {@code foldDiacritics} returns its argument and the two lists are equal element for
-	 * element. {@code drug-reference-accented-tokens.json} does not reach it either — its entries each
+	 * <p>Over the shipped knowledge base it is not visible: measured 2026-08-30 through the real
+	 * loader, 0 of its 8300 aliases folds to a different String — its one alias above U+007F carries
+	 * an EN DASH rather than a combining mark — so the two lists are equal element for element and,
+	 * on that dataset, the very same instances. {@code drug-reference-accented-tokens.json} does not reach it either — its entries each
 	 * carry an unaccented sibling alias, so the accented one is never the only way in.
 	 */
 	@Test

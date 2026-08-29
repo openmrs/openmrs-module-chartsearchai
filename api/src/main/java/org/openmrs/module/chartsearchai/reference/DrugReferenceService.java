@@ -224,8 +224,12 @@ public class DrugReferenceService {
 		}
 		String lower = question.toLowerCase(Locale.ROOT);
 		List<DrugReference> out = new ArrayList<DrugReference>();
+		// Folded once for the whole sweep, not once per entry (issue #330) — the prose counterpart of
+		// findByDrugName's hoist below. What still folds per call is findImpliedByQuery's aliasesIn,
+		// over the entries this returned rather than over the dataset.
+		String foldedLower = DrugReference.foldedLower(lower);
 		for (DrugReference ref : getAll()) {
-			if (ref.matchesText(lower)) {
+			if (ref.matchesFoldedText(foldedLower)) {
 				out.add(ref);
 			}
 		}

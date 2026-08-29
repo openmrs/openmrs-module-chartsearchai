@@ -450,7 +450,9 @@ public class DrugReferenceInjector {
 	 * {@code "Drug order: Nasal spray"} — and a sibling record could mask an order whose name is a
 	 * substring of it ({@code Aspirin} inside {@code Aspirin/Dipyridamole}).
 	 * {@code ActiveDrugOrder.namedIn} now shares {@link DrugReference#containsWord} — the existing
-	 * symmetric-boundary rule that already backs alias-in-prose matching — rather than introducing a
+	 * symmetric-boundary rule, which is also the rule alias-in-prose matching applies (since issue #330
+	 * {@code matchesText} reaches it through the folded arity {@code foldedWordMatch} rather than
+	 * through this method, which is the same rule and the same allowance) — rather than introducing a
 	 * third matcher beside it and {@code matchesOrderName}. Which of those two it borrows is a real
 	 * decision, not a coin toss; {@code namedIn}'s javadoc records why the symmetric one is the
 	 * correct and the safe choice for this direction.

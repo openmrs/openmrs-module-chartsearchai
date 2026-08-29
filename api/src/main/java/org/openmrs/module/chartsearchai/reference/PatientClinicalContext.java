@@ -279,7 +279,10 @@ public class PatientClinicalContext {
 	 *         {@link DrugReferenceInjector} — reach every one of those arms only through here, which is
 	 *         what keeps the chips and the promoted prose agreeing about which orders a rule matches.
 	 *
-	 *         <p><b>The order-name arm</b> goes through {@link DrugReference#matchesOrderName} — not
+	 *         <p><b>The order-name arm</b> goes through {@link DrugReference#matchesOrderName}'s rule —
+	 *         since issue #330 through its folded arity {@link DrugReference#matchesFoldedOrderName},
+	 *         both operands being fixed for the pass, which is the same rule and the same allowance —
+	 *         not
 	 *         bare containment, which reported drugs the patient had never taken because drug names
 	 *         nest ("tiotropium" contains "opium"; issue #86), and not the prose rule either, because
 	 *         an order's display name is localized and inflected (see there). Since issue #293 this set
@@ -287,7 +290,10 @@ public class PatientClinicalContext {
 	 *         matcher is unchanged and the cost of applying it to prose is recorded on
 	 *         {@code PatientClinicalContextBuilder.addDrugName}.
 	 *
-	 *         <p><b>The reference-name arm</b> (issue #136) exists because a rule carries ONE token for
+	 *         <p><b>The reference-name arm</b> is asked FIRST, though which of the two answers is
+	 *         immaterial — both return true — and the order is not part of the contract: it is one hash
+	 *         lookup against a scan of every order the patient is on (issue #330). It (issue #136)
+	 *         exists because a rule carries ONE token for
 	 *         its partner while the reference data knows that drug by several names, and the chart may
 	 *         use any of them: every DDInter rule about aspirin carries the token {@code aspirin}, its
 	 *         entry's own name is {@code Acetylsalicylic acid}, and an order under the latter matched no

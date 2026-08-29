@@ -74,12 +74,24 @@ public class DrugReference {
 	 * not reach it. The initialiser mirrors {@link #aliases}' so an entry whose aliases were never set
 	 * scans an empty list rather than throwing.
 	 *
-	 * <p><b>What it costs.</b> One list per entry and, over every dataset the module ships, no
-	 * duplicated strings at all: the parsers store aliases trimmed and lower-cased,
-	 * {@link #foldDiacritics} returns its argument unchanged for pure-ASCII input, and
-	 * {@link String#toLowerCase} returns {@code this} when no character changes — so each element here
-	 * is the very instance {@link #aliases} holds. An accented alias is the case that allocates, and
-	 * the shipped 19 MB knowledge base carries none.
+	 * <p><b>Two assignments, and what makes them visible together.</b> {@link #setAliases} writes both
+	 * lists, and a reader indexing one by a position taken from the other would misalign if it could
+	 * see one write without the other. It cannot: the setter is reached only while a dataset is being
+	 * built — by the three parsers and by {@code DrugReferenceValidity}'s repairs — and the entries
+	 * become reachable to another thread only through {@code DrugReferenceService}'s VOLATILE
+	 * {@code dataset} field, whose write happens after all of it. A caller invoking the setter on an
+	 * entry already published would race, but it raced before this field existed too: an
+	 * unsafely-published {@code ArrayList} is what {@link #aliases} alone would expose.
+	 *
+	 * <p><b>What it costs.</b> One list per entry, and on both bundled datasets no duplicated strings
+	 * at all: {@link #foldDiacritics} returns its argument unchanged for pure-ASCII input and
+	 * {@link String#toLowerCase} returns {@code this} when no character changes, so each element here
+	 * is the very instance {@link #aliases} holds. Measured 2026-08-30 by reading the two lists off
+	 * every entry through the real loaders: 0 of the shipped knowledge base's 8300 aliases folds to a
+	 * different String, and 0 of the curated seed's 12. Its ONE alias above U+007F carries an EN DASH
+	 * rather than a combining mark, so the fold leaves it alone. What WOULD allocate is an alias the
+	 * fold actually changes — a combining mark, or an upper-case letter in a hand-authored {@code json}
+	 * KB, since that parser trims its aliases without lower-casing them.
 	 */
 	private List<String> foldedAliases = Collections.emptyList();
 
@@ -1742,14 +1754,24 @@ public class DrugReference {
 	 *         {@link #matchesDrugName}; see there for why one matcher cannot serve both.
 	 */
 	public boolean matchesText(String lowerText) {
-		if (lowerText == null) {
-			return false;
-		}
-		// The text is this loop's invariant operand and the aliases arrive already folded, so each is
-		// folded once where it was produced rather than twice per alias (issue #330).
-		String foldedText = foldedLower(lowerText);
+		return lowerText != null && matchesFoldedText(foldedLower(lowerText));
+	}
+
+	/**
+	 * @return {@link #matchesText}'s answer for prose a caller has already folded — the form
+	 *         {@code DrugReferenceService.findByQuery} uses, so one question or answer is folded once
+	 *         for the whole dataset sweep rather than once per entry (issue #330). The aliases arrive
+	 *         folded from {@link #foldedAliases}, so nothing here folds at all.
+	 *
+	 *         <p>A plain {@code String} and not a {@link FoldedName}, deliberately: this operand is
+	 *         PROSE, and prose already has a folded shape in this class — {@link #namedOccurrences}'
+	 *         {@code foldedLowerText}, which its caller must hold itself because it hands back
+	 *         positions into that exact string. A second carrier for the same operand shape is what
+	 *         that type's own javadoc says it is not.
+	 */
+	boolean matchesFoldedText(String foldedLowerText) {
 		for (String foldedAlias : foldedAliases) {
-			if (foldedWordMatch(foldedText, foldedAlias)) {
+			if (foldedWordMatch(foldedLowerText, foldedAlias)) {
 				return true;
 			}
 		}
@@ -1759,8 +1781,9 @@ public class DrugReference {
 	/**
 	 * @return WHICH of this entry's names {@code lowerText} carries — {@link #matchesText}'s witnesses,
 	 *         in alias order, empty exactly when that returns false. Same rule, same primitive
-	 *         ({@link #containsWord}), so the two cannot come to disagree about what prose carries; the
-	 *         boolean stays separate because it is the hot path and must not allocate.
+	 *         ({@link #foldedWordMatch}, which is {@link #containsWord}'s rule for operands already
+	 *         folded), so the two cannot come to disagree about what prose carries; the boolean stays
+	 *         separate because it is the hot path and must not allocate.
 	 *
 	 *         <p><b>Why a caller needs the witness and not only the answer (issue #209).</b> A boolean
 	 *         says an entry is mentioned; it does not say by WHICH name, and that is what decides whether
@@ -1856,7 +1879,9 @@ public class DrugReference {
 	 *         display name carries is not the set its prose reading would carry ({@code Aspirine Co 81mg}
 	 *         carries {@code aspirin} under this rule and nothing under the prose one, issue #147). Each
 	 *         witness accessor calls the same primitive as its own boolean
-	 *         ({@link #matchesOrderName} here, {@link #containsWord} there), so neither pair can drift.
+	 *         ({@link #foldedOrderNameMatch} here, {@link #foldedWordMatch} there — since issue #330 the
+	 *         folded arities of the two rules, which is what both members of each pair now reach), so
+	 *         neither pair can drift.
 	 */
 	List<String> aliasesNaming(String drugName) {
 		return aliasesNaming(fold(drugName));
@@ -2303,6 +2328,9 @@ public class DrugReference {
 	 * deliberately does not make, and one whose caller must therefore hold the folded string itself.
 	 */
 	static final class FoldedName {
+
+		// No equals/hashCode, deliberately: this is a carrier for one scan's operand, never a value to
+		// key on, and FoldedOperandTest asks by identity whether a whole scan was handed ONE of them.
 
 		/** The name as the caller holds it — for {@link #normalizeName}, which is a different form. */
 		private final String raw;

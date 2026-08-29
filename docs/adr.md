@@ -60,6 +60,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 52: A folded chip reconciles a token two substances name when one of them names it outright](#decision-52-a-folded-chip-reconciles-a-token-two-substances-name-when-one-of-them-names-it-outright)
 - [Decision 53: The ANSWER no longer decides what a substance is called, so the two safety passes stop disagreeing](#decision-53-the-answer-no-longer-decides-what-a-substance-is-called-so-the-two-safety-passes-stop-disagreeing)
 - [Decision 54: The patient's co-medications are resolved once per validate pass, and the pairwise cap is not the lever](#decision-54-the-patients-co-medications-are-resolved-once-per-validate-pass-and-the-pairwise-cap-is-not-the-lever)
+- [Decision 55: Each operand of the name scan is folded once where it is produced](#decision-55-each-operand-of-the-name-scan-is-folded-once-where-it-is-produced)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 
@@ -2338,6 +2339,89 @@ Bundled byte-identical to the upstream release, so it can be verified rather tha
 - **−** 19 known data defects ship with it, reported but unfixed, pending an upstream handoff.
 - **−** +2.1 MB of packed jar, ~30 MB of heap, and 0.6 s on the first drug question after a restart. (The omod grows twice that: its build unpacks the whole api jar into the omod root as well, an SDK-archetype step whose stated purpose is only `moduleApplicationContext.xml` and `messages`. Narrowing that would recover ~2.1 MB and is untouched here.)
 
+## Decision 55: Each operand of the name scan is folded once where it is produced
+
+**Status: Accepted** (August 2026) — implemented, issue [#330](https://github.com/openmrs/openmrs-module-chartsearchai/issues/330).
+
+### Context
+
+`DrugReference.containsBoundedToken` folds BOTH of its operands at the innermost comparison:
+
+```java
+return boundedTokenIndex(foldedLower(text), foldedLower(token), maxTrailingLetters, 0) >= 0;
+```
+
+The fold was correctly single-homed and applied at the wrong LEVEL. Every caller holding one operand fixed across a scan re-derived it once per comparison, and both operands are in fact fixed — an entry's own alias for the life of the loaded dataset, a scan's recorded name for the scan.
+
+Re-derived through the real `DrugSafetyValidator.validate` over the real `DdiDrugReferenceSource` load of the shipped 19 MB knowledge base (2283 entries), the real curated cross-reactivity groups, and a 43-order chart (16 orders carrying their entry's own ATC codes, 27 by name only — the 3.7.1 ratio), with each question verified through `findImpliedByQuery` to put the stated number of substances in play. **Counters keyed on the CALLER of `matchesDrugName`, not on the call site inside it**, which is what #330's own first measurement got wrong and what Decision 54's residue paragraph got wrong before that:
+
+| drugs in play | alias comparisons | `findByDrugName` | `lookupByToken` | `findImpliedSubstances` equal claimants | `hasActiveDrug` | prose (`containsWord`) |
+|---|---|---|---|---|---|---|
+| 1 | 701,938 | 597,480 | 25,571 | 74,671 | 3,952 | 8,302 |
+| 5 | 808,901 | 597,480 | 50,444 | 99,565 | 61,145 | 8,305 |
+| 10 | 955,463 | 597,480 | 100,145 | 149,351 | 108,214 | 8,311 |
+
+`findByDrugName` is exactly constant — it is chart-driven, not question-driven. The two `nameMatchStrength` scans together are 14% of the comparisons at one drug in play and **26% at ten**, which the shallower bucketing could not see; the issue's own plan reached only the first of the three.
+
+`foldedLower` itself ran **1,420,480** times in a one-drug pass and **1,927,548** in a ten-drug one — two per comparison, one per operand, for two values that do not change.
+
+### Decision
+
+**Each operand is folded once, where it is produced.**
+
+- **An entry's aliases, in `setAliases`.** It stores the `foldedLower` form of each alias beside the trimmed one, index-aligned, so a witness accessor reports the raw alias while the scan compares the folded one. **Derived, not memoised**: `setAliases` is the only writer of either list and already derives what it stores, so there is no moment at which the two describe different aliases and CLAUDE.md's rule against memo FIELDS — which is about values derived from `getAll()` on a Spring singleton — does not reach it.
+- **A scan's recorded name, in a `DrugReference.FoldedName`.** Package-private, immutable, sole producer `DrugReference.fold(String)`, carrying the raw string beside the folded one. Applied at `findByDrugName`, `lookupByToken`, `findImpliedSubstances`' equal-claimant pass, `uniqueStrongestClaimant` (which scans the caller's candidate list rather than the dataset) and `findImpliedByDrugName`'s witness pass. The `String` arities become `fold` + delegate, so there is one loop per rule and every non-scan caller gets a per-call hoist for free.
+- **`PatientClinicalContext.hasActiveDrug` gets BOTH**, because both of its operands are fixed for the pass: the context folds its active-order names once when it is built (beside the raw set, which `findForActiveOrders` and the chip sentences still read), and the rule token once per call. It also asks the O(1) `activeDrugReferenceNames` identity question BEFORE the O(N) name scan instead of after it — an ordering, not a change of rule, since both arms return true and both operands are pure.
+- **One named folded entry point per boundary RULE** (`foldedOrderNameMatch`, `foldedWordMatch`), each binding its own trailing-letter allowance, both over one `foldedMatch` core that is `containsBoundedToken`'s body minus the fold. No boundary rule moves and no allowance is spelled at a new site.
+
+### Why a TYPE and not a parameter named for its contents
+
+`foldedLower` is documented as NOT idempotent, so a pre-folded value must never re-enter the unfolded path; a `String` parameter cannot say which of the two it holds, and getting it wrong costs either a silent second fold or the whole hoist. It also lets `nameMatchStrength` — which needs `normalizeName` of the same name — take ONE operand instead of two same-typed ones a caller could pair wrongly.
+
+It is not a second expression of the fold rule (`fold` calls `foldedLower`) and it is not a rival to `namedOccurrences`' `foldedLowerText` parameter, which is PROSE folded under the prose rule and handed back POSITIONS into that exact string — a length contract this type deliberately does not make, and one whose caller must therefore hold the folded string itself. The two never need to converge.
+
+### Effect
+
+Same harness, the same box, run against each head's production code in turn:
+
+| drugs in play | `main` @ `c90d9181` | this change | delta |
+|---|---|---|---|
+| 1 | 88.9 ms | **12.6 ms** | −76.3 (86%) |
+| 2 | 89.5 ms | **13.2 ms** | −76.3 (85%) |
+| 5 | 96.2 ms | **16.8 ms** | −79.4 (83%) |
+| 10 | 115.9 ms | **24.1 ms** | −91.8 (79%) |
+
+`validate` runs twice per request. Behaviour-neutral, verified rather than argued: the full rendered chip list — type, severity, drug and detail in full, in order — is byte-identical across the two heads in every cell, by length AND by hash (1615 / 1615 / 15127 / 27687 characters).
+
+**The two halves are not substitutes**, measured separately in one JVM behind a flag: the recorded-name hoist is worth 8.9–14.2 ms alone and **16.0–20.9 ms on top of the alias pre-fold**, because once the alias folds are gone the name folds are a larger share. The asymmetry between them is locality — the recorded name is one hot string re-folded, the aliases are 5169 distinct char arrays each touched once per scan.
+
+### What this does to the issue's own figures
+
+#330 asks whether **~8 ms** is worth the change. It is 76–92 ms. Its prototype hoisted only the recorded name and only at `findByDrugName`, which reproduces here at 8.9–14.2 ms, and its premise that *"`token` is the alias, which genuinely varies"* is true within a scan and false across the dataset's life — that operand is where five sixths of the cost was.
+
+### How it is pinned
+
+`FoldedOperandTest`, and every case there was mutated and read rather than trusted.
+
+- **"Folded once per scan" is asked by object IDENTITY**, across two probe entries at ADJACENT dataset positions, driven through the real `validate`. A COUNT cannot see it: `fold` hoisted above the loop and `fold(name)` written inside it both call the folded matcher exactly once per entry and both leave the unfolded arity uncalled. Adjacent and compared element-wise because a scan may legitimately stop early — `lookupByToken` returns at the first display-name claim — so a set-shaped or count-shaped guard would fail for a correct implementation.
+- **The alias-side fold has exactly one visible shape and the shipped datasets are not it.** Over every dataset the module ships, `foldDiacritics` takes its ASCII fast path and returns the alias unchanged, so a guard comparing a stored folded alias against `foldedLower` of the raw one is satisfied element-for-element by the raw list and proves nothing. `drug-reference-accented-alias-only.json` is the one shape where it is load-bearing — an entry with no unaccented sibling alias, unlike `drug-reference-accented-tokens.json`, whose entries each carry one — reached from an unaccented order name and from unaccented prose.
+- **Two structural guards for the halves nothing behavioural reaches**, the mechanism Decision 54 records: that `setAliases` remains the sole writer of either alias list, and that `hasActiveDrug` folds neither operand inside its loop — that comparison goes through a static matcher, so no probe can subclass it.
+
+### Alternatives rejected
+
+- **Fixing only the operand the issue names.** Measured: it leaves 50.9–63.5 ms of the 68–84 ms on the table.
+- **Hoisting `normalizeName(drugName)` out of `nameMatchStrength`'s scans as well.** Measured at 2,141 (one drug in play) to 143,533 (ten) calls against 1.42M–1.93M folds, and `normalizeName` is a trim plus a `toLowerCase` with no NFD scan. Not taken.
+- **A memo on the entry, filled lazily on first use.** Rejected for the reason CLAUDE.md gives about memo fields, and it buys nothing over deriving in the setter, which cannot go stale by construction.
+- **Replacing `activeDrugNames` with its folded form** rather than carrying both. `getActiveDrugNames()` feeds `findForActiveOrders` and the chip sentences, which need the name the chart records.
+
+### Trade-offs
+
+- **+** The dominant cost of a `validate` pass is removed at its cause, and the pass is now dominated by work that is not string folding.
+- **+** No boundary rule moves, no candidate set changes, and the chip list is byte-identical across the heads.
+- **−** One extra list per entry. Over every dataset the module ships it duplicates no strings at all — the parsers store aliases trimmed and lower-cased, `foldDiacritics` returns its argument for pure ASCII, and `String.toLowerCase` returns `this` when no character changes — so each element is the very instance the raw list holds. An accented alias is the case that allocates, and the shipped knowledge base carries none.
+- **−** The pre-answer pass still resolves `findForActiveOrders` TWICE over one context — once in `DrugReferenceInjector.injectRecords` and again inside the `validate` it calls — which `DrugSafetyValidator` already records as cost. That is a repeat to REMOVE rather than a fold to hoist, it needs no new type, and by the argument above its share GROWS now that the folding is gone. Not taken here; CLAUDE.md's #151 bullet prescribes the shape ("wherever a caller already holds the resolved list, pass it down rather than resolving again").
+- **−** The identity guard rests on probes inserted into the dataset. They match nothing and perturb no chip, but a future scan that stops on a criterion the probes can satisfy would make the case fixture-conditional.
+
 ## Known limitations
 
 - **Counting questions**: LLMs are unreliable at precise counting tasks (e.g., "how many weight records in the last 10 years?"). The model may undercount or overcount even when all relevant records are provided. Larger, more capable models perform better at counting but are still not perfectly reliable. This is a fundamental limitation of LLM inference, not a retrieval issue. Questions that require exact counts are better suited to structured queries.
@@ -3437,7 +3521,7 @@ That was already true before this change and nothing pinned it, because until no
 
 ### Effect
 
-Same measurement, alternated runs, 43 active orders: ten drugs in play 482–488 ms → 130–173 ms; per extra drug in play 39–40 ms → 3.4–4.4 ms, and nearly flat in the order count where it used to be linear in it: 2.51 / 2.64 / 2.88 / 3.76 ms per extra drug at 0 / 5 / 20 / 43 orders, against 2.15 / 5.12 / 17.70 / 35.04 before. The residue is about 1.3 ms per extra drug across 43 orders, and it is attributed: `PatientClinicalContext.hasActiveDrug`, reached from `bestRulePerPartner` once per (in-play row × above-floor rule), re-folds pass-invariant strings — 251,788 `DrugReference.matchesOrderName` calls over 43 distinct order names in one ten-drug pass, each re-running `foldedLower` on both sides. That is the same shape one layer along, and `CoMedications` does not reach it. Left out of this change deliberately: the fix is in `PatientClinicalContext` and `DrugReference`, which this slice does not touch, and a prototype measured it at 0.97 ms per extra drug (interleaved in one JVM, chips byte-identical). It is a follow-up, not a gap here. One drug in play is indistinguishable, 95–130 ms against 96–134 ms, which is expected: one resolution either way.
+Same measurement, alternated runs, 43 active orders: ten drugs in play 482–488 ms → 130–173 ms; per extra drug in play 39–40 ms → 3.4–4.4 ms, and nearly flat in the order count where it used to be linear in it: 2.51 / 2.64 / 2.88 / 3.76 ms per extra drug at 0 / 5 / 20 / 43 orders, against 2.15 / 5.12 / 17.70 / 35.04 before. The residue is about 1.3 ms per extra drug across 43 orders, and it is re-folding: a `validate` pass derives `foldedLower` of the same strings over and over, because `containsBoundedToken` folds both of its operands at the innermost comparison. **This paragraph used to attribute that residue to `PatientClinicalContext.hasActiveDrug` and to quote 251,788 `matchesOrderName` calls for it. Both halves were wrong and Decision 55 corrects them** (issue [#330](https://github.com/openmrs/openmrs-module-chartsearchai/issues/330)). The figure was measured on this change's PRE-fix branch, where `hasActiveDrug` ran 5,989 times in a ten-drug pass against 1,954 after it; and that arm was never the dominant folder even then — the dataset alias scan was, at roughly nine times its volume. Nobody counted the scan because the probe that produced the figure was a counter placed INSIDE `hasActiveDrug`, so it could only ever see that one caller. **That is the same mistake this decision's own "the attribution in the ticket is wrong" section is about, made one layer along and by the same instrument.** Left out of this change for a reason that still stands — the fix is in `PatientClinicalContext` and `DrugReference`, which this slice does not touch — but it was a follow-up about the wrong arm. One drug in play is indistinguishable, 95–130 ms against 96–134 ms, which is expected: one resolution either way.
 
 Behaviour-neutral, verified rather than argued: the full rendered chip list — type, severity and detail in full, for questions naming one to five drugs against an eight-order chart, 89 chips — is byte-identical across the two heads, order included.
 

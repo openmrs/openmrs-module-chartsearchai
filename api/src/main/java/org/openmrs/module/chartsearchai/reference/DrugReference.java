@@ -902,7 +902,22 @@ public class DrugReference {
 	 * moved onto one by this rule itself rather than merely left there (measured 2026-08-06). ROW
 	 * pairs: that base and the substance-pair one, and the conversion between them, are defined at
 	 * {@code DrugSafetyValidator.sharedClass}, which also carries this 1090's substance-pair
-	 * counterpart (issue #243). {@code CrossReactivityClassChoiceTest} pins one case per group, save
+	 * counterpart (issue #243). Over that counterpart the same two counts are <b>19 of the 319
+	 * multi-subgroup SUBSTANCE pairs, 2 of them moved</b> (issue #263) — which is the magnitude a
+	 * clinician would have met, since a chip names a substance and not a row.
+	 *
+	 * <p>Re-measured 2026-08-29 for that conversion, and it reproduced 46 and 21 on the ROW base
+	 * before 19 and 2 were quoted: the shipped KB loaded through {@code DdiDrugReferenceSource.load},
+	 * the substance base through {@link #substanceGroupKey()} and {@link #canonicalRow}, and the
+	 * choice itself through {@code DrugSafetyValidator.sharedClass} with the four prefixes struck out
+	 * of the list below. With the claim filters OFF, which is the state that method was in when 46 and
+	 * 21 were taken — they date from issue #166 ({@code 45c1cc4a}, 2026-08-06) and
+	 * {@link #UNCLASSIFYING_ATC_GROUPS} first appears the following day at issue #182
+	 * ({@code 078a3d54}). "Moved" means the answer differs from the one the same scan gives with this
+	 * whole list emptied: the preference passed over an alphabetically earlier shared subgroup to
+	 * reach one of the four, rather than finding it there.
+	 *
+	 * <p>{@code CrossReactivityClassChoiceTest} pins one case per group, save
 	 * {@code B02BC}: its only shipped-KB pairs are epinephrine route variants, which issue #160
 	 * collapses to an identity chip before this arm can name a class at all.
 	 */
@@ -1382,15 +1397,33 @@ public class DrugReference {
 	 * <p><b>Why a residual bucket is not automatically one of these.</b> ATC files a residue in most of
 	 * its groups — a level-4 subgroup whose published name begins "Other" or "Various", meaning
 	 * "everything in the group above that is not classified so far". The shipped 19 MB KB uses 97 of
-	 * them. But a residue INHERITS whatever the group containing it asserts: {@code R06AX} is "Other
+	 * them (98 on the WHO index snapshot issue #263 read; see below). But a residue INHERITS whatever the group containing it asserts: {@code R06AX} is "Other
 	 * antihistamines for systemic use", and its parent {@code R06A} is "ANTIHISTAMINES FOR SYSTEMIC
 	 * USE", so two drugs sharing {@code R06AX} really are both antihistamines and one really is
 	 * duplicate therapy for the other. Same for {@code J01GB} "Other aminoglycosides" (already pinned
 	 * by {@code CrossReactivityClassChoiceTest}), {@code N06AX} antidepressants, {@code N03AX}
-	 * antiepileptics, {@code N02AX} opioids. Vetoing every residue would have dropped a class claim
-	 * from 1974 of the KB's 7783 ROW pairs that share a subgroup; 1488 of those keep it here. ROW
-	 * pairs, not the SUBSTANCE pairs the 5550 below counts: the two bases, and the conversion between
-	 * them, are defined at {@code DrugSafetyValidator.sharedClass} (issue #243).
+	 * antiepileptics, {@code N02AX} opioids. Vetoing every residue would drop a class claim from
+	 * <b>1974 of the KB's 7783 ROW pairs</b> that share a subgroup and <b>1741 of the 5550 SUBSTANCE
+	 * pairs</b>; of those, <b>1331 ROW / 1291 SUBSTANCE pairs keep it under the 36 groups this list
+	 * holds today</b>. The two bases, and the conversion between them, are defined at
+	 * {@code DrugSafetyValidator.sharedClass} (issue #243).
+	 *
+	 * <p><b>That second figure read 1488 until issue #263, and the reason is worth keeping.</b> 1488 is
+	 * the answer over the <em>30</em> groups this list held at issue #182 — the same list the
+	 * 486/54/7243 triple further down is explicitly scoped to — and issue #241 added six more without
+	 * re-measuring it, so a figure whose own wording says "keep it <em>here</em>" came to describe a
+	 * rule this class no longer applies. The 1974 did not move with it (all six additions are
+	 * themselves residues, so the blanket veto already covered them), which is exactly why nothing
+	 * looked wrong: only the surviving half drifted. Re-measured 2026-08-29 over the shipped KB, loaded
+	 * through {@code DdiDrugReferenceSource.load}, with the substance base from
+	 * {@link #substanceGroupKey()} and {@link #canonicalRow} and the choice from
+	 * {@code DrugSafetyValidator.sharedClass} — reproducing 1974 and the 30-group 1488 (and 1448 over
+	 * substance pairs) before quoting 1331 and 1291. The residue set was the <b>98</b> of the 594
+	 * level-4 subgroups {@link #atcSubgroups()} yields over that KB whose WHO ATC/DDD published name
+	 * begins "Other"/"Various", read off the WHO index snapshot of 2026-04-25. That is one more than
+	 * the 97 recorded above; the discrepancy is reported rather than explained, since this pass did
+	 * not have the snapshot the 97 was read from. What can be said is that 1974 reproduces exactly on
+	 * the 98, and so does the 20-of-27 enumeration two paragraphs down.
 	 *
 	 * <p><b>The families, and the reading of ATC's words that puts each here:</b>
 	 * <ul>
@@ -1493,8 +1526,12 @@ public class DrugReference {
 	 * <p>Measured over the shipped KB for the 30 groups this list held at issue #182 (2026-08-06,
 	 * re-measured independently 2026-08-07; re-measure before relying on a figure): of the 7783 ROW
 	 * pairs sharing at least one level-4 subgroup, 486 lose their class claim entirely, 54 keep one and
-	 * name a subgroup that does classify the substances instead, and 7243 are untouched. The largest
-	 * contributors are {@code V03AB} (135 pairs), {@code D11AX} "Other dermatologicals" (130),
+	 * name a subgroup that does classify the substances instead, and 7243 are untouched. Over the
+	 * <em>36</em> groups the list holds today that same split is <b>643 / 54 / 7086 ROW pairs and
+	 * 450 / 12 / 5088 SUBSTANCE pairs</b> (issue #263, measured 2026-08-29 as the paragraph on the
+	 * 1974 above records) — quoted here because the 1331 there is 1974 minus this 643, as the 1488 it
+	 * replaced was 1974 minus this 486, and without both a reader cannot close that arithmetic on
+	 * either base. The largest contributors are {@code V03AB} (135 pairs), {@code D11AX} "Other dermatologicals" (130),
 	 * {@code S01XA} "Other ophthalmologicals" (99) and {@code D06AX} "Other antibiotics for topical
 	 * use" (68).
 	 *
@@ -1784,6 +1821,18 @@ public class DrugReference {
 	 *         624 — 75 gained, 0 lost — and the whole #86/#128/#129 kill set was re-scored in this
 	 *         direction, 0 of 21 nesting pairs resolving to the nested drug. On the 2533 order names,
 	 *         117 more (order name, entry) pairs resolve and none stops resolving.
+	 *
+	 *         <p><b>Three counts, three populations, none of them an ATC pair base</b> (issue #263).
+	 *         The 549/624 count NAMES — allergen-candidate names out of the 1219 above. A NESTING PAIR
+	 *         is a pair of drug NAMES one of which sits inside the other; the 21 is the size of the
+	 *         curated #86/#128/#129 kill set, which is a hand-assembled list of known collisions and
+	 *         not a population derived from a corpus, so it has no substance-pair counterpart to
+	 *         convert to. The 117 counts (order name, ENTRY) pairs, which is a different pair kind
+	 *         again from the (name, TOKEN) pairs {@link #matchesOrderName}'s own table counts — an
+	 *         entry publishes many names — and it is over that dictionary's 2533 ORDER names, where
+	 *         that table's corpus is 2531. Both corpora are the 3.7.1 demo dictionary, which this repo
+	 *         does not carry, so none of the three is re-derivable here; what is stated is which
+	 *         population each is over, not a new measurement of it.
 	 */
 	boolean matchesDrugName(String drugName) {
 		for (String alias : aliases) {
@@ -2009,7 +2058,10 @@ public class DrugReference {
 	 * inflected display name with a dose appended. Typically, not always — since issue #293 an order's
 	 * names include the free text a clinician typed, which can be a sentence; the allowance is still
 	 * right for the display-name shape it was measured on, and what it is applied to is now wider. Measured over the 3.7.1 demo dictionary (2531 drug and
-	 * drug-concept names x the full KB's 2093 rule tokens), by tolerated trailing letters:
+	 * drug-concept names x the full KB's 2093 rule tokens), by tolerated trailing letters. Every
+	 * figure in the {@code matches} column below, and the 78 further down, counts (NAME, TOKEN) MATCH
+	 * PAIRS over that product — a population of its own, and neither of the ATC pair bases
+	 * {@code DrugSafetyValidator.sharedClass} defines (issue #263):
 	 *
 	 * <pre>
 	 *   rule                    matches   nested-name collisions leaking   what enters at this step
@@ -2055,8 +2107,9 @@ public class DrugReference {
 	 * </pre>
 	 *
 	 * 224 of the 2531 names carry a diacritic. Folding both operands makes the change a pure
-	 * relaxation — 78 pairs added, <em>0 removed</em> — which is what let this widening be scored
-	 * against #128's kill set instead of argued about, and the kill set includes the accented
+	 * relaxation — 78 (NAME, TOKEN) pairs added, <em>0 removed</em>, 829 to 907 on the base the table
+	 * above names — which is what let this widening be scored against #128's kill set instead of
+	 * argued about, and the kill set includes the accented
 	 * spellings, which are the ones folding could newly break: {@code nitroglycérine} folds to
 	 * {@code nitroglycerine}, i.e. {@code glycerin} plus one inflectional letter, so it becomes a
 	 * candidate for that token at the very moment {@code glycérine} legitimately does, and only the

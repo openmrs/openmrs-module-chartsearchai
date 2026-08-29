@@ -105,12 +105,12 @@ public class ResidualAtcClassClaimTest {
 	public void aResidualSubgroupInsideATherapeuticGroupStillChips() throws IOException {
 		// The boundary. R06AX is as residual as A01AD in ATC's own wording, and this chip is right: the
 		// two drugs are both H1 antihistamines because R06A says so, and prescribing one alongside the
-		// other IS duplicate therapy. An exclusion that dropped this would remove 1331 of the shipped
-		// KB's ROW pairs, and 1291 of its SUBSTANCE pairs, that name a residual subgroup under a
-		// therapeutic group (measured — see DrugReference.isUnclassifyingAtcCode, which carries both
-		// figures and the reason the row one read 1488 until issue #263, and
-		// DrugSafetyValidator.sharedClass, which defines the two bases against each other), among them
-		// every antihistamine, antidepressant and aminoglycoside pair.
+		// other IS duplicate therapy. An exclusion that dropped this would remove the shipped KB's ROW
+		// pairs, and its SUBSTANCE pairs, that name a residual subgroup under a therapeutic group —
+		// among them every antihistamine, antidepressant and aminoglycoside pair. The two counts, and
+		// the reason the row one read 1488 until issue #263, are at
+		// DrugReference.isUnclassifyingAtcCode; DrugSafetyValidator.sharedClass defines the two bases
+		// against each other. No numeral is repeated here, because nothing in this case asserts one.
 		List<SafetyWarning> warnings = fixtureValidator().validate("",
 				"Is it safe to give desloratadine?",
 				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Loratadine 10mg"),

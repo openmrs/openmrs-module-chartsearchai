@@ -2142,14 +2142,14 @@ public class DrugSafetyValidator {
 	 *
 	 * <p><b>Which rows those counts are over</b> (issue #263). INTERACTION ROWS: the records of the
 	 * loaded KB's own {@code interactions} table, 295,184 of them on the shipped KB, each rating one
-	 * unordered pair of entry ids. That is a fourth population, and not either of the two
+	 * unordered pair of entry ids. That is a population of its own, and neither of the two
 	 * {@link #sharedClass} defines — 295,183 of these rows do pair two DIFFERENT entries, but one pairs
 	 * an entry with ITSELF ({@code DDInter225}, the case {@code ddi-self-interaction.json} is built
 	 * on), which no ROW PAIR can be. They do not convert to SUBSTANCE-pair figures by any arithmetic
 	 * available here, because several rows can rate one substance pair; that conversion is a
 	 * re-measurement, and issue #263 deliberately did not run one.
 	 *
-	 * <p>The shape that DOES survive is the UNRATED rule:
+	 * <p>The shape that DOES survive that filtering is the UNRATED rule:
 	 * {@link #clearsSeverityFloor} deliberately exempts a rule with no severity rather than treating
 	 * it as low, so every hand-authored curated rule reaches a chip whatever it carries, and one
 	 * authored with no note produces a chip reading only "X interacts with active order Y". No bundled
@@ -2813,9 +2813,9 @@ public class DrugSafetyValidator {
 	 *
 	 *         <p>{@code rules} holds one row per partner — per ENTRY where the dataset identifies one
 	 *         and per label where it cannot (see {@link #bestRulePerPartner}) — so two rows can still
-	 *         both name one order: across the full KB exactly one such pair exists — one ROW pair and,
-	 *         since the two are one row each and two substances, one SUBSTANCE pair too; the population
-	 *         and both bases are named at {@link #bestRulePerPartner} (issue #263) — {@code enalapril}
+	 *         both name one order: across the full KB exactly one such pair exists — the population it
+	 *         counts, and its base, are named at {@link #bestRulePerPartner} (issue #263) —
+	 *         {@code enalapril}
 	 *         and {@code enalaprilat}, two genuinely different entries which that grouping deliberately
 	 *         keeps as two chips. The first in dataset order takes the fold; the other keeps its rule chip
 	 *         unfolded, which is the conservative direction, since the alternative is stating one
@@ -3461,9 +3461,8 @@ public class DrugSafetyValidator {
 	 * that javadoc defines do apply to it, and the answer is 1 on both: measured 2026-08-29 over the
 	 * shipped KB through {@code DdiDrugReferenceSource.load}, {@link DrugReference#substanceGroupKey()}
 	 * and {@link DrugReference#canonicalRow}, {@code Enalapril} and {@code Enalaprilat} are one row
-	 * each and fall into two substance families, so the one ROW pair is also one SUBSTANCE pair. What
-	 * is NOT re-derived here is the 1 itself, which needs an order-name corpus this repo does not
-	 * carry — see {@link DrugReference#matchesOrderName}, whose own figures are on that corpus.
+	 * each and fall into two substance families, so the one ROW pair is also one SUBSTANCE pair. The 1
+	 * itself is the pre-existing figure and was not re-derived.
 	 *
 	 * @param orderEntries the reference entries the patient's active orders resolve to
 	 *        ({@link DrugReferenceService#findForActiveOrders}), from which

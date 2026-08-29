@@ -25,29 +25,36 @@ import org.junit.jupiter.api.Test;
  * <p><b>The defect it exists to prevent, which has already happened once.</b> That javadoc's
  * "vetoing every residue would drop a class claim from 1974 ROW pairs; N of those keep it here"
  * read N = 1488 from issue #182 until issue #263. 1488 is the answer over the THIRTY groups
- * {@code UNCLASSIFYING_ATC_GROUPS} held then; issue #241 added six more and the figure was not
- * re-measured, so a sentence saying "keep it <em>here</em>" came to describe a rule this class no
+ * {@code UNCLASSIFYING_ATC_GROUPS} held then; issue #184 (PR #241) added six more and the figure was
+ * not re-measured, so a sentence saying "keep it <em>here</em>" came to describe a rule this class no
  * longer applies. Nothing reddened, because the change was to a list and the stale value was in
- * prose. The true figure over the shipped list is 1331, and 486 -> 643 the same way.
+ * prose. The corrected figures, and their bases, are at {@code DrugReference.isUnclassifyingAtcCode};
+ * they are deliberately not repeated here, because nothing below asserts one.
  *
  * <p><b>So this pins the veto set rather than the figures.</b> It asserts which of the level-4
  * subgroups the shipped knowledge base actually publishes {@code isUnclassifyingAtcCode} refuses —
  * one direct call of the production predicate per subgroup, over the production load, with no
- * composition of its own. It reddens whenever a change reaches a subgroup this KB publishes — a
- * group added to that list or removed from it, or a KB refresh whose codes fall differently — and
- * each of those is an occasion to re-measure the figures rather than a defect in itself. What it
- * does not see is a group added that covers no subgroup this KB publishes: 9 of the shipped list's
- * 36 members are already in that position (measured 2026-08-29 — {@code A07AX}, {@code C05BX},
- * {@code D02AX}, {@code D03AX}, {@code R03BX}, {@code S01JX}, {@code S01KX}, {@code S02DC},
- * {@code V07A}), and the list's own javadoc says of two of them that they are members on the
- * criterion rather than on measured impact. When it goes red: re-measure the counts at
- * {@code isUnclassifyingAtcCode} and at {@code LOCALLY_APPLIED_ATC_GROUPS}, update them together
- * with this list, and say which method produced them.
+ * composition of its own. It reddens when a change reaches a subgroup this KB publishes — a group
+ * added to that list or removed from it, or a KB refresh that changes which subgroups the dataset
+ * publishes — and each of those is an occasion to re-measure the figures rather than a defect in
+ * itself. When it goes red: re-measure the counts at {@code isUnclassifyingAtcCode} and at
+ * {@code LOCALLY_APPLIED_ATC_GROUPS}, update them together with this list, and say which method
+ * produced them.
+ *
+ * <p><b>Two holes, both real, and the second is the likelier one.</b> A group added that covers no
+ * subgroup this KB publishes is invisible: 9 of the shipped list's 36 members are already in that
+ * position (measured 2026-08-29 — {@code A07AX}, {@code C05BX}, {@code D02AX}, {@code D03AX},
+ * {@code R03BX}, {@code S01JX}, {@code S01KX}, {@code S02DC}, {@code V07A}), and the list's own
+ * javadoc says of two of them that they are members on the criterion rather than on measured impact.
+ * And a KB refresh that adds or removes ROWS under subgroups the dataset already publishes moves
+ * every pair figure this class is a tripwire for while leaving both assertions here green, because
+ * both are keyed on the SET of subgroups and neither counts rows or pairs.
  *
  * <p><b>What it does NOT pin, stated so the guard does not look stronger than it is.</b> Not the
- * figures themselves — 1974, 1331, 643, 46 and 21 are all answers of
- * {@code DrugSafetyValidator.sharedClass}, which is private, and computing its null condition here
- * would be a reimplementation of pipeline logic. Reaching them needs either a temporary mutation of
+ * figures themselves — the counts at {@code isUnclassifyingAtcCode} and at
+ * {@code LOCALLY_APPLIED_ATC_GROUPS} are all answers of {@code DrugSafetyValidator.sharedClass},
+ * which is private, and computing its null condition here would be a reimplementation of pipeline
+ * logic. Reaching them needs either a temporary mutation of
  * the production source or a residue list this repo does not carry, and which of the two differs by
  * counterfactual: the blanket-residue one is reachable from the INPUTS, since vetoing a subgroup and
  * removing it from the caller's code set both end in the same {@code continue}; the {@code drop4} one

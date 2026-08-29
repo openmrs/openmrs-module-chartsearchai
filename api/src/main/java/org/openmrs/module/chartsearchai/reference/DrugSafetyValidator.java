@@ -2140,15 +2140,16 @@ public class DrugSafetyValidator {
 	 * not one carries a contentless note, so on this dataset the case #88 argued from never arises where
 	 * a fold could act on it.
 	 *
-	 * <p><b>Which rows the 42,415, the 3, the 2,195, the 2,181 and the 14 above count</b> (issue #263).
-	 * INTERACTION ROWS: the records of the loaded KB's own {@code interactions} table, the 295,184
-	 * the paragraph above names, each rating one unordered pair of entry ids. That is a
-	 * fourth population, and not either of the two {@link #sharedClass} defines — 295,183 of these rows
-	 * do pair two DIFFERENT entries, but one pairs an entry with ITSELF ({@code DDInter225}, the case
-	 * {@code ddi-self-interaction.json} is built on), which no ROW PAIR can be. None of the five
-	 * converts to a SUBSTANCE-pair figure by any arithmetic available here, because several rows can
-	 * rate one substance pair; that conversion is a re-measurement, and issue #263 deliberately did not
-	 * run it. The shape that DOES survive is the UNRATED rule:
+	 * <p><b>Which rows those counts are over</b> (issue #263). INTERACTION ROWS: the records of the
+	 * loaded KB's own {@code interactions} table, 295,184 of them on the shipped KB, each rating one
+	 * unordered pair of entry ids. That is a fourth population, and not either of the two
+	 * {@link #sharedClass} defines — 295,183 of these rows do pair two DIFFERENT entries, but one pairs
+	 * an entry with ITSELF ({@code DDInter225}, the case {@code ddi-self-interaction.json} is built
+	 * on), which no ROW PAIR can be. They do not convert to SUBSTANCE-pair figures by any arithmetic
+	 * available here, because several rows can rate one substance pair; that conversion is a
+	 * re-measurement, and issue #263 deliberately did not run one.
+	 *
+	 * <p>The shape that DOES survive is the UNRATED rule:
 	 * {@link #clearsSeverityFloor} deliberately exempts a rule with no severity rather than treating
 	 * it as low, so every hand-authored curated rule reaches a chip whatever it carries, and one
 	 * authored with no note produces a chip reading only "X interacts with active order Y". No bundled

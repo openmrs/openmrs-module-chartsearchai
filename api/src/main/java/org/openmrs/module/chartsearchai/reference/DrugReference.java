@@ -1397,7 +1397,9 @@ public class DrugReference {
 	 * <p><b>Why a residual bucket is not automatically one of these.</b> ATC files a residue in most of
 	 * its groups — a level-4 subgroup whose published name begins "Other" or "Various", meaning
 	 * "everything in the group above that is not classified so far". The shipped 19 MB KB uses 97 of
-	 * them (98 on the WHO index snapshot issue #263 read; see below). But a residue INHERITS whatever the group containing it asserts: {@code R06AX} is "Other
+	 * them; issue #263's own count over the WHO index snapshot of 2026-04-25 was 98, and since neither
+	 * pass held the other's snapshot the discrepancy is recorded rather than resolved. But a residue
+	 * INHERITS whatever the group containing it asserts: {@code R06AX} is "Other
 	 * antihistamines for systemic use", and its parent {@code R06A} is "ANTIHISTAMINES FOR SYSTEMIC
 	 * USE", so two drugs sharing {@code R06AX} really are both antihistamines and one really is
 	 * duplicate therapy for the other. Same for {@code J01GB} "Other aminoglycosides" (already pinned
@@ -1409,10 +1411,10 @@ public class DrugReference {
 	 * {@code DrugSafetyValidator.sharedClass} (issue #243).
 	 *
 	 * <p><b>That second figure read 1488 until issue #263, and the reason is worth keeping.</b> 1488 is
-	 * the answer over the <em>30</em> groups this list held at issue #182 — the same list the
-	 * 486/54/7243 triple further down is explicitly scoped to — and issue #241 added six more without
-	 * re-measuring it, so a figure whose own wording says "keep it <em>here</em>" came to describe a
-	 * rule this class no longer applies. The 1974 did not move with it (all six additions are
+	 * the answer over the <em>30</em> groups this list held at issue #182 — the scope the 486/54/7243
+	 * triple states for itself — and issue #241 added six more without re-measuring it, so a figure
+	 * whose own wording says "keep it <em>here</em>" came to describe a rule this class no longer
+	 * applies. The 1974 did not move with it (all six additions are
 	 * themselves residues, so the blanket veto already covered them), which is exactly why nothing
 	 * looked wrong: only the surviving half drifted. Re-measured 2026-08-29 over the shipped KB, loaded
 	 * through {@code DdiDrugReferenceSource.load}, with the substance base from
@@ -1421,9 +1423,10 @@ public class DrugReference {
 	 * substance pairs) before quoting 1331 and 1291. The residue set was the <b>98</b> of the 594
 	 * level-4 subgroups {@link #atcSubgroups()} yields over that KB whose WHO ATC/DDD published name
 	 * begins "Other"/"Various", read off the WHO index snapshot of 2026-04-25. That is one more than
-	 * the 97 recorded above; the discrepancy is reported rather than explained, since this pass did
-	 * not have the snapshot the 97 was read from. What can be said is that 1974 reproduces exactly on
-	 * the 98, and so does the 20-of-27 enumeration two paragraphs down.
+	 * the 97 this javadoc records; the discrepancy is reported rather than explained, since this pass
+	 * did not have the snapshot the 97 was read from. What can be said for the 98 is that 1974
+	 * reproduces exactly on it, and that restricting it to {@link #LOCALLY_APPLIED_ATC_GROUPS} gives
+	 * the same 20 the "shipped KB uses 20 of the 27" sentence records.
 	 *
 	 * <p><b>The families, and the reading of ATC's words that puts each here:</b>
 	 * <ul>
@@ -1523,15 +1526,21 @@ public class DrugReference {
 	 * family below, the duplicate-therapy claim goes too — that is the whole difference between
 	 * "asserts nothing" and "asserts a purpose".
 	 *
+	 * <p><b>Adding them also moved two figures this javadoc states elsewhere</b> — the count of pairs
+	 * a blanket residue veto would drop but this list does not, and the class-claim drop below — and
+	 * that went unnoticed until issue #263 re-measured both. {@code UnclassifyingAtcVetoSetTest} now
+	 * reddens when this list moves again, so the next change to it cannot leave a figure behind.
+	 *
 	 * <p>Measured over the shipped KB for the 30 groups this list held at issue #182 (2026-08-06,
 	 * re-measured independently 2026-08-07; re-measure before relying on a figure): of the 7783 ROW
 	 * pairs sharing at least one level-4 subgroup, 486 lose their class claim entirely, 54 keep one and
 	 * name a subgroup that does classify the substances instead, and 7243 are untouched. Over the
 	 * <em>36</em> groups the list holds today that same split is <b>643 / 54 / 7086 ROW pairs and
-	 * 450 / 12 / 5088 SUBSTANCE pairs</b> (issue #263, measured 2026-08-29 as the paragraph on the
-	 * 1974 above records) — quoted here because the 1331 there is 1974 minus this 643, as the 1488 it
-	 * replaced was 1974 minus this 486, and without both a reader cannot close that arithmetic on
-	 * either base. The largest contributors are {@code V03AB} (135 pairs), {@code D11AX} "Other dermatologicals" (130),
+	 * 450 / 12 / 5088 SUBSTANCE pairs</b> (issue #263, measured 2026-08-29 by the run this class's
+	 * blanket-residue-veto paragraph records) — quoted here because that paragraph's 1331 is 1974
+	 * minus this 643, as the 1488 it replaced was 1974 minus this 486, and without both a reader
+	 * cannot close that arithmetic on either base. The largest contributors are {@code V03AB}
+	 * (135 pairs), {@code D11AX} "Other dermatologicals" (130),
 	 * {@code S01XA} "Other ophthalmologicals" (99) and {@code D06AX} "Other antibiotics for topical
 	 * use" (68).
 	 *

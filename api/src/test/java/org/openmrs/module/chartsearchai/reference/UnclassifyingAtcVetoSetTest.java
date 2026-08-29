@@ -33,9 +33,14 @@ import org.junit.jupiter.api.Test;
  * <p><b>So this pins the veto set rather than the figures.</b> It asserts which of the level-4
  * subgroups the shipped knowledge base actually publishes {@code isUnclassifyingAtcCode} refuses —
  * one direct call of the production predicate per subgroup, over the production load, with no
- * composition of its own. Adding a group to that list, removing one, or refreshing the KB into one
- * whose codes fall differently all redden it, and every one of those is an occasion to re-measure
- * the figures rather than a defect in itself. When it goes red: re-measure the counts at
+ * composition of its own. It reddens whenever a change reaches a subgroup this KB publishes — a
+ * group added to that list or removed from it, or a KB refresh whose codes fall differently — and
+ * each of those is an occasion to re-measure the figures rather than a defect in itself. What it
+ * does not see is a group added that covers no subgroup this KB publishes: 9 of the shipped list's
+ * 36 members are already in that position (measured 2026-08-29 — {@code A07AX}, {@code C05BX},
+ * {@code D02AX}, {@code D03AX}, {@code R03BX}, {@code S01JX}, {@code S01KX}, {@code S02DC},
+ * {@code V07A}), and the list's own javadoc says of two of them that they are members on the
+ * criterion rather than on measured impact. When it goes red: re-measure the counts at
  * {@code isUnclassifyingAtcCode} and at {@code LOCALLY_APPLIED_ATC_GROUPS}, update them together
  * with this list, and say which method produced them.
  *
@@ -43,9 +48,12 @@ import org.junit.jupiter.api.Test;
  * figures themselves — 1974, 1331, 643, 46 and 21 are all answers of
  * {@code DrugSafetyValidator.sharedClass}, which is private, and computing its null condition here
  * would be a reimplementation of pipeline logic. Reaching them needs either a temporary mutation of
- * the production source (the {@code drop4} counterfactual, which requires a group to be RETURNED
- * eagerly and so cannot be produced from the inputs) or a residue list this repo does not carry
- * (the blanket-residue counterfactual, which an input-side removal does reach). Issue #263 measured
+ * the production source or a residue list this repo does not carry, and which of the two differs by
+ * counterfactual: the blanket-residue one is reachable from the INPUTS, since vetoing a subgroup and
+ * removing it from the caller's code set both end in the same {@code continue}; the {@code drop4} one
+ * is not, because it needs one of those four groups RETURNED, and that turns on
+ * {@link DrugReference#isLocallyAppliedAtcCode} reading the subgroup string, which no choice of
+ * inputs changes. Issue #263 measured
  * them that way and recorded the method beside each figure; this guard only says when they are due
  * to be taken again.
  */

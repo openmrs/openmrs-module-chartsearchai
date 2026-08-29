@@ -1516,15 +1516,21 @@ public class DrugReference {
 	 * split on both bases) — quoted here because that
 	 * paragraph's 1331 is 1974 minus this 643 and its 1291 is 1741 minus this 450, as the 1488 it
 	 * replaced was 1974 minus this 486, and without them a reader cannot close that arithmetic on
-	 * either base. Attributing each lost pair to the subgroup the unvetoed scan chose for it, the
-	 * largest contributors on the 30-group split are {@code V03AB} (134 ROW pairs),
-	 * {@code D11AX} "Other dermatologicals" (115), {@code S01XA} "Other ophthalmologicals" (99) and
-	 * {@code D06AX} "Other antibiotics for topical use" (33); on the 36-group split {@code A16AX} (91)
-	 * and {@code N07XX} (55) come in fourth and fifth, pushing {@code D06AX} to sixth. Re-measured for
-	 * issue #263, which found the four this javadoc previously carried (135/130/99/68) reproducing
-	 * under no attribution it tried — and the 68 contradicting the {@code D06AX} 33 the cost paragraph
-	 * below states, since every {@code D06AX} pair that loses its claim is one of that paragraph's
-	 * 116.
+	 * either base. Attributing each pair to the subgroup the unvetoed scan chose for it, the largest
+	 * contributors among those that LOSE the claim are, on the 30-group split, {@code V03AB} (134 ROW
+	 * pairs), {@code D11AX} "Other dermatologicals" (115), {@code S01XA} "Other ophthalmologicals"
+	 * (99) and {@code D06AX} "Other antibiotics for topical use" (33); on the 36-group split
+	 * {@code A16AX} (91) and {@code N07XX} (55) come in fourth and fifth and push {@code D06AX} to
+	 * sixth.
+	 *
+	 * <p><b>Those four read 135/130/99/68 until issue #263, and they were not wrong — they were on an
+	 * unstated base.</b> Same attribution, wider population: every pair the scan gave that subgroup,
+	 * whether the veto went on to cost it its claim or merely to move it. 135 = 134 + 1,
+	 * 130 = 115 + 15, 99 = 99 + 0, 68 = 33 + 35, and those moved halves sum to exactly the 54 this
+	 * paragraph already states ({@code D06AX} 35, {@code D11AX} 15, {@code D01AE} 3, {@code V03AB} 1).
+	 * The missing base is what made the 68 read as a contradiction of the {@code D06AX} 33 the cost
+	 * paragraph below states, which counts losses alone. A sentence about the drop wants the loss
+	 * counts, so those are what it now carries — issue #243's pattern, one level down.
 	 *
 	 * <p><b>That 1331 read 1488 until issue #263, and the reason is worth keeping.</b> 1488 is the
 	 * answer over the <em>30</em> groups this list held at issue #182 — the scope the 486/54/7243
@@ -1853,7 +1859,9 @@ public class DrugReference {
 	 *         not a population derived from a corpus, so it has no substance-pair counterpart to
 	 *         convert to. The 117 counts (order name, ENTRY) pairs — an entry publishes many names, so
 	 *         this is a pair kind of its own — and it is over that dictionary's 2533 ORDER names,
-	 *         whereas {@link #matchesOrderName}'s own table has a corpus of 2531. Both corpora are the 3.7.1 demo dictionary, which this repo
+	 *         whereas {@link #matchesOrderName}'s own table has a corpus of 2531.
+	 *
+	 *         <p>Both corpora are the 3.7.1 demo dictionary, which this repo
 	 *         does not carry, so none of the three is re-derivable here; what is stated is which
 	 *         population each is over, not a new measurement of it.
 	 */
@@ -2105,8 +2113,9 @@ public class DrugReference {
 	 * whose reference entry carries 2 Major and 8 Moderate rules that would silently stop being
 	 * checked.
 	 *
-	 * <p>That product is a (NAME, TOKEN) population of its own, and neither of the ATC pair bases
-	 * {@code DrugSafetyValidator.sharedClass} defines — issue #263, which labelled the 78 below on it
+	 * <p>That 2531 x 2093 product is a (NAME, TOKEN) population of its own, and neither of the ATC
+	 * pair bases {@code DrugSafetyValidator.sharedClass} defines — issue #263, which labelled
+	 * the 78 below on it
 	 * and did not re-derive the unit of the {@code matches} column itself, the corpus behind that
 	 * column being a dictionary this repo does not carry.
 	 *

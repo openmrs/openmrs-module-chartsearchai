@@ -107,9 +107,8 @@ public class ResidualAtcClassClaimTest {
 		// two drugs are both H1 antihistamines because R06A says so, and prescribing one alongside the
 		// other IS duplicate therapy. An exclusion that dropped this would remove every ROW pair of the
 		// shipped KB, and every SUBSTANCE pair, that names a residual subgroup under a therapeutic
-		// group —
-		// among them every antihistamine, antidepressant and aminoglycoside pair. The two counts, and
-		// the reason the row one read 1488 until issue #263, are at
+		// group — among them every antihistamine, antidepressant and aminoglycoside pair. The two
+		// counts, and the reason the row one read 1488 until issue #263, are at
 		// DrugReference.UNCLASSIFYING_ATC_GROUPS, stated there as what today's list KEEPS;
 		// DrugSafetyValidator.sharedClass defines the two bases against each other.
 		List<SafetyWarning> warnings = fixtureValidator().validate("",

@@ -54,8 +54,8 @@ import org.junit.jupiter.api.Test;
  * <p><b>What it does NOT pin, stated so the guard does not look stronger than it is.</b> Not the
  * figures themselves: they are answers of {@code DrugSafetyValidator.sharedClass}, which is private,
  * so computing its null condition here would be a reimplementation of pipeline logic. Issue #263
- * reached them by temporarily mutating the production source, and of the two counterfactuals behind
- * those figures only one could have been reached from the INPUTS instead. Vetoing a subgroup and removing it
+ * reached them by temporarily mutating the production source, and of the two counterfactuals named
+ * below only one could have been reached from the INPUTS instead. Vetoing a subgroup and removing it
  * from the caller's code set both end in the same {@code continue}, so the blanket-residue one is
  * input-reachable. Striking the four locally-applied prefixes behind
  * {@code LOCALLY_APPLIED_ATC_GROUPS}' 46/21 is not: it needs one of those four returned EAGERLY,

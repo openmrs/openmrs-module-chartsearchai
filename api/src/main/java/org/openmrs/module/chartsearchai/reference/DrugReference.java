@@ -903,8 +903,8 @@ public class DrugReference {
 	 * pairs: that base and the substance-pair one, and the conversion between them, are defined at
 	 * {@code DrugSafetyValidator.sharedClass}, which also carries this 1090's substance-pair
 	 * counterpart (issue #243). Over that counterpart the same two counts are <b>19 of the 319
-	 * multi-subgroup SUBSTANCE pairs, 2 of them moved</b> (issue #263) — which is the magnitude a
-	 * clinician would have met, since a chip names a substance and not a row.
+	 * multi-subgroup SUBSTANCE pairs, 2 of them moved</b> (issue #263) — the magnitude in the unit a
+	 * chip is raised for, since a chip names a substance and not a row.
 	 *
 	 * <p>Re-measured 2026-08-29 for that conversion, and it reproduced 46 and 21 on the ROW base
 	 * before 19 and 2 were quoted: the shipped KB loaded through {@code DdiDrugReferenceSource.load},
@@ -1414,9 +1414,9 @@ public class DrugReference {
 	 * the answer over the <em>30</em> groups this list held at issue #182 — the scope the 486/54/7243
 	 * triple states for itself — and issue #241 added six more without re-measuring it, so a figure
 	 * whose own wording says "keep it <em>here</em>" came to describe a rule this class no longer
-	 * applies. The 1974 did not move with it (all six additions are
-	 * themselves residues, so the blanket veto already covered them), which is exactly why nothing
-	 * looked wrong: only the surviving half drifted. Re-measured 2026-08-29 over the shipped KB, loaded
+	 * applies. The 1974 did not move with it — all six additions are themselves residues, so the
+	 * blanket veto already covered them — which is exactly why nothing looked wrong: only the
+	 * surviving half drifted. Re-measured 2026-08-29 over the shipped KB, loaded
 	 * through {@code DdiDrugReferenceSource.load}, with the substance base from
 	 * {@link #substanceGroupKey()} and {@link #canonicalRow} and the choice from
 	 * {@code DrugSafetyValidator.sharedClass} — reproducing 1974 and the 30-group 1488 (and 1448 over
@@ -1527,8 +1527,8 @@ public class DrugReference {
 	 * "asserts nothing" and "asserts a purpose".
 	 *
 	 * <p><b>Adding them also moved two figures this javadoc states elsewhere</b> — the count of pairs
-	 * a blanket residue veto would drop but this list does not, and the class-claim drop below — and
-	 * that went unnoticed until issue #263 re-measured both. {@code UnclassifyingAtcVetoSetTest} now
+	 * a blanket residue veto would drop but this list does not, and the class-claim drop this list's
+	 * own cost paragraph states — and that went unnoticed until issue #263 re-measured both. {@code UnclassifyingAtcVetoSetTest} now
 	 * reddens when this list moves again, so the next change to it cannot leave a figure behind.
 	 *
 	 * <p>Measured over the shipped KB for the 30 groups this list held at issue #182 (2026-08-06,
@@ -1832,7 +1832,8 @@ public class DrugReference {
 	 *         117 more (order name, entry) pairs resolve and none stops resolving.
 	 *
 	 *         <p><b>Three counts, three populations, none of them an ATC pair base</b> (issue #263).
-	 *         The 549/624 count NAMES — allergen-candidate names out of the 1219 above. A NESTING PAIR
+	 *         The 549 and the 624 count NAMES, out of that dictionary's 1219 allergen candidates. A
+	 *         NESTING PAIR
 	 *         is a pair of drug NAMES one of which sits inside the other; the 21 is the size of the
 	 *         curated #86/#128/#129 kill set, which is a hand-assembled list of known collisions and
 	 *         not a population derived from a corpus, so it has no substance-pair counterpart to
@@ -2068,8 +2069,8 @@ public class DrugReference {
 	 * names include the free text a clinician typed, which can be a sentence; the allowance is still
 	 * right for the display-name shape it was measured on, and what it is applied to is now wider. Measured over the 3.7.1 demo dictionary (2531 drug and
 	 * drug-concept names x the full KB's 2093 rule tokens), by tolerated trailing letters. Every
-	 * figure in the {@code matches} column below, and the 78 further down, counts (NAME, TOKEN) MATCH
-	 * PAIRS over that product — a population of its own, and neither of the ATC pair bases
+	 * figure in the {@code matches} column below, and the 78 the diacritic fold adds, counts
+	 * (NAME, TOKEN) MATCH PAIRS over that product — a population of its own, and neither of the ATC pair bases
 	 * {@code DrugSafetyValidator.sharedClass} defines (issue #263):
 	 *
 	 * <pre>

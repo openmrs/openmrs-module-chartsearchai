@@ -34,7 +34,10 @@ import org.junit.jupiter.api.Test;
  * {@link DrugReference#isUnclassifyingAtcCode} refuses — one direct call of the production predicate
  * per subgroup, over the production load, with no composition of its own. It reddens when a change
  * reaches a subgroup this KB publishes: a group added to {@code UNCLASSIFYING_ATC_GROUPS} or removed
- * from it, or a KB refresh that changes which subgroups the dataset publishes. When it goes red,
+ * from it, or a KB refresh that changes the NUMBER of level-4 subgroups the dataset publishes or
+ * which of them the list refuses. A refresh that swaps one unrefused subgroup for another leaves
+ * both the count and the refused set alone and so escapes — the published population is pinned by
+ * its size, not member by member. When it goes red,
  * re-measure that constant's own counts and update them with it, saying which method produced them.
  * {@code LOCALLY_APPLIED_ATC_GROUPS}' 46/21 and 19/2 are NOT due on that red — they are taken with
  * the claim filters off, i.e. with {@code UNCLASSIFYING_ATC_GROUPS} emptied, so a change to it

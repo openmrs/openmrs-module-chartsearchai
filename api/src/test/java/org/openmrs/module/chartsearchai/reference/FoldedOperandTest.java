@@ -52,6 +52,9 @@ import org.junit.jupiter.api.Test;
  */
 public class FoldedOperandTest {
 
+	/** A name no shipped or fixture entry carries, aliased by BOTH probes — see {@code Probe}. */
+	private static final String SHARED_ALIAS = "zzq-probe";
+
 	/**
 	 * An entry that names nothing in any fixture, so inserting it perturbs no chip, whose only job is
 	 * to record WHICH operand instance each scan handed it. An instrument, not a mock: every method
@@ -65,10 +68,17 @@ public class FoldedOperandTest {
 
 		private final List<String> prose = new ArrayList<String>();
 
+		private final List<DrugReference.FoldedName> witnessed =
+				new ArrayList<DrugReference.FoldedName>();
+
 		Probe(String id) {
 			setId(id);
 			setName(id);
-			setAliases(java.util.Collections.singletonList(id));
+			// Two aliases: one of its own, and one BOTH probes share. The shared one is what puts the two
+			// of them in one candidate set, which is the only way the witness pass and the ranking scans
+			// reach them at all — a probe that matches nothing is never in `matched` and never outranks
+			// anything, so those scans would visit it and record nothing.
+			setAliases(java.util.Arrays.asList(id, SHARED_ALIAS));
 		}
 
 		@Override
@@ -81,6 +91,12 @@ public class FoldedOperandTest {
 		int nameMatchStrength(DrugReference.FoldedName drugName) {
 			ranked.add(drugName);
 			return super.nameMatchStrength(drugName);
+		}
+
+		@Override
+		List<String> aliasesNaming(DrugReference.FoldedName drugName) {
+			witnessed.add(drugName);
+			return super.aliasesNaming(drugName);
 		}
 
 		@Override
@@ -121,18 +137,32 @@ public class FoldedOperandTest {
 		entries.addAll(DrugReferenceTestSupport.ddinterEntries());
 		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(entries);
 
+		// The order and the allergy both spell the shared alias, which is what reaches the RANKING scans
+		// (lookupByToken and findImpliedSubstances resolve a recorded allergen) and the WITNESS pass
+		// (findImpliedByDrugName runs it only for a name matching two or more entries — which is what
+		// the shared alias makes true). Without them only findByDrugName is exercised, and reverting
+		// the two nameMatchStrength hoists leaves the whole suite green.
 		DrugReferenceTestSupport.validator(service).validate("", "Can I give her warfarin?",
 				DrugReferenceTestSupport.ctx(60, null,
-						DrugReferenceTestSupport.set("Aspirin 81mg", "Ibuprofen 400mg", "Methotrexate 2.5mg"),
-						null, null, null));
+						DrugReferenceTestSupport.set("Aspirin 81mg", "Ibuprofen 400mg", SHARED_ALIAS + " 5mg"),
+						null, DrugReferenceTestSupport.set(SHARED_ALIAS), null));
 
-		assertFalse(first.named.isEmpty(), "the probes must have been reached by a name-driven scan at "
-				+ "all, or this case asserts nothing about where the fold happened");
-		assertEquals(first.named.size(), second.named.size(), "two adjacent entries must be reached by "
-				+ "the same scans; if they are not, the lists below are not comparable");
-		assertEquals(first.ranked.size(), second.ranked.size(), "likewise for the ranking scans");
-		assertSameOperands(first.named, second.named, "matchesDrugName");
-		assertSameOperands(first.ranked, second.ranked, "nameMatchStrength");
+		assertReached(first.named, second.named, "matchesDrugName");
+		assertReached(first.ranked, second.ranked, "nameMatchStrength");
+		assertReached(first.witnessed, second.witnessed, "aliasesNaming");
+	}
+
+	/** Both probes were reached the same number of times, and every one of those times by the SAME
+	 *  operand instance. The non-empty half is what stops {@code 0 == 0} standing in for the property:
+	 *  the ranking and witness lists WERE empty in this case's first arrangement, and reverting both
+	 *  {@code nameMatchStrength} hoists then left the whole build green. */
+	private static void assertReached(List<DrugReference.FoldedName> a,
+			List<DrugReference.FoldedName> b, String what) {
+		assertFalse(a.isEmpty(), "the probes were never reached by a " + what + " scan, so this case "
+				+ "asserts nothing about where that scan folds");
+		assertEquals(a.size(), b.size(), "two entries sharing an alias and adjacent in the dataset must "
+				+ "be reached by the same " + what + " scans, or the lists are not comparable");
+		assertSameOperands(a, b, what);
 	}
 
 	private static void assertSameOperands(List<DrugReference.FoldedName> a,
@@ -231,7 +261,17 @@ public class FoldedOperandTest {
 		SourceScan scan = new SourceScan("src/main/java/org/openmrs/module/chartsearchai/reference/"
 				+ "DrugReference.java");
 		SourceScan.Region setter = scan.body("public void setAliases(List<String> aliases) {");
-		for (Integer at : scan.matches(Pattern.compile("this\\.(folded)?[aA]liases\\s*="))) {
+		// The receiver is deliberately optional and unpinned. Written as "this.foldedAliases =" the
+		// needle was defeated three ways in one review — a bare assignment with no receiver at all, a
+		// line wrap between "this" and the dot, and a static helper writing "entry.foldedAliases =" —
+		// and each is how a copy, a merge or a lazy repair would most naturally be spelled. What is
+		// left out is the two field DECLARATIONS, which are assignments to the same names and are
+		// recognised by their own statement text rather than by their position.
+		for (Integer at : scan.matches(Pattern.compile(
+				"(?s)(?<![\\w.])(?:[A-Za-z_$][\\w$]*\\s*\\.\\s*)?(?:aliases|foldedAliases)\\s*=(?!=)"))) {
+			if (scan.statementAt(at).startsWith("private List<String>")) {
+				continue;
+			}
 			assertTrue(setter.contains(at), "\"" + scan.statementAt(at) + "\" (line " + scan.lineOf(at)
 					+ ") assigns an alias list outside setAliases; the folded list is derived there and "
 					+ "nowhere else, so a second writer is how it comes to describe aliases the entry no "
@@ -259,7 +299,10 @@ public class FoldedOperandTest {
 					+ ") folds inside hasActiveDrug's loop; both of its operands are fixed for the pass, "
 					+ "so both are folded above it");
 		}
-		for (Integer at : scan.literalOffsets("DrugReference.fold(")) {
+		// "fold(" and not "DrugReference.fold(": the qualified form is defeated by a line wrap between
+		// the class name and the dot, and this needle does not collide with foldedLower(, whose next
+		// character is "e".
+		for (Integer at : scan.literalOffsets("fold(")) {
 			assertFalse(loop.contains(at), "\"" + scan.statementAt(at) + "\" (line " + scan.lineOf(at)
 					+ ") folds the rule token inside hasActiveDrug's loop, once per order name");
 		}

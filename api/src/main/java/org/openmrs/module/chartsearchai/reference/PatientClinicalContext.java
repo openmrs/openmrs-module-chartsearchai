@@ -14,7 +14,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -55,6 +54,13 @@ public class PatientClinicalContext {
 	 * comparison (issue #330). Beside the raw set and not instead of it:
 	 * {@link #getActiveDrugNames()} is read by {@code DrugReferenceService.findForActiveOrders} and by
 	 * the chip sentences, which need the name the chart records.
+	 *
+	 * <p>Derived through {@link DrugReference#foldedAll}, which is where a collection's folded view is
+	 * expressed, and a {@code List} because that method returns one — its other caller needs index
+	 * alignment with the raw list. Nothing here does: {@link #hasActiveDrug} iterates this and ORs, so
+	 * a duplicate would be unobservable and the shape is not load-bearing. Only the ORDER of the two
+	 * derivations is: this reads {@link #activeDrugNames} after {@code lower} has normalised it, so the
+	 * folded view is of what this context stores rather than of what a caller passed.
 	 */
 	private final List<String> foldedActiveDrugNames;
 
@@ -127,7 +133,7 @@ public class PatientClinicalContext {
 		this.ageYears = ageYears;
 		this.weightKg = weightKg;
 		this.activeDrugNames = lower(activeDrugNames);
-		this.foldedActiveDrugNames = folded(this.activeDrugNames);
+		this.foldedActiveDrugNames = DrugReference.foldedAll(this.activeDrugNames);
 		this.activeDrugAtcCodes = upper(activeDrugAtcCodes);
 		this.allergyTokens = lower(allergyTokens);
 		this.conditionTokens = lower(conditionTokens);
@@ -179,18 +185,6 @@ public class PatientClinicalContext {
 		return Collections.unmodifiableSet(out);
 	}
 
-	/** @return each of {@code names} in {@link DrugReference#foldedLower} form — {@link
-	 *          #foldedActiveDrugNames}'s whole derivation, taken from what this context STORES so the
-	 *          two cannot describe different names. A list rather than a set: {@link #hasActiveDrug}
-	 *          only iterates it, and two names that fold alike must not collapse into one. */
-	private static List<String> folded(Set<String> names) {
-		List<String> out = new ArrayList<String>(names.size());
-		for (String name : names) {
-			out.add(DrugReference.foldedLower(name));
-		}
-		return Collections.unmodifiableList(out);
-	}
-
 	private static Set<String> upper(Set<String> in) {
 		// The active-order side of every ATC comparison must normalize by the same shared rule as
 		// the reference side (entry codes / group prefixes), or matching silently drifts apart.
@@ -227,7 +221,8 @@ public class PatientClinicalContext {
 	 *
 	 *         <p>Held separately from {@link #getActiveDrugNames()} rather than folded into it because
 	 *         the two are matched by DIFFERENT rules and must stay distinguishable: an order's display
-	 *         name is a localized string scanned with {@link DrugReference#matchesOrderName}, while
+	 *         name is a localized string scanned under {@link DrugReference#matchesOrderName}'s rule
+	 *         (since issue #330 {@link #hasActiveDrug} reaches it through the folded arity), while
 	 *         these are canonical reference names compared by identity. Folding them together would
 	 *         scan a rule token across a combination product's alias, which is exactly the wrong
 	 *         answer — see {@link #hasActiveDrug}.
@@ -485,7 +480,10 @@ public class PatientClinicalContext {
 	 *  {@link #allergensMatching} so the boolean and its witnesses fold alike, and with
 	 *  {@link #matchableToken}, whose whole subject is whether this expression comes out empty. */
 	private static String foldedToken(String token) {
-		return DrugReference.foldDiacritics(token.trim().toLowerCase(Locale.ROOT));
+		// Through DrugReference.foldedLower, not a second spelling of it: that method is "named once so
+		// that a caller preparing them itself cannot apply half of it or apply the two in the other
+		// order", and this was the hand-written copy its javadoc warns against (issue #330).
+		return DrugReference.foldedLower(token.trim());
 	}
 
 	/** The one comparison behind both {@link #containsToken} and {@link #allergensMatching}: a recorded

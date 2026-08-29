@@ -7598,13 +7598,19 @@ public class DrugSafetyValidator {
 		return LIMIT_CUE.matcher(clause.substring(from, dosePos)).find();
 	}
 
-	/** @return whether any row of the substance {@code rows} are the rows of names the clause — the
-	 *          clause-level gate {@link DrugReference#matchesText} used to answer for ONE row, widened to
-	 *          the substance for issue #245's reason: a clause naming the drug names it whichever of its
-	 *          rows publishes the alias the wording used. */
-	private static boolean namesSubstance(String clause, List<DrugReference> rows) {
+	/** @return whether any row of the substance {@code rows} names the clause — the clause-level gate
+	 *          {@link DrugReference#matchesText} used to answer for ONE row, widened to the substance
+	 *          for issue #245's reason: a clause naming the drug names it whichever of its rows
+	 *          publishes the alias the wording used.
+	 *
+	 *          <p>Through {@link DrugReference#matchesFoldedText} since issue #330, because
+	 *          {@link #attributedDoses} folded this clause once already and {@code matchesText} would
+	 *          fold it again — which is what let the gate and the locator read two different strings.
+	 *          See {@link #substanceOwnsDose}, where that divergence was measured and, until this
+	 *          accessor existed, could only be reported. */
+	private static boolean namesSubstance(String foldedClause, List<DrugReference> rows) {
 		for (DrugReference row : rows) {
-			if (row.matchesText(clause)) {
+			if (row.matchesFoldedText(foldedClause)) {
 				return true;
 			}
 		}
@@ -7751,17 +7757,18 @@ public class DrugSafetyValidator {
 	 *         it does, and, the same disagreement reversed, a subject the gate had just accepted could
 	 *         fail to locate itself.
 	 *
-	 *         <p><b>That second one is closed for every string this arm can receive — but not
-	 *         structurally, and the difference is worth stating rather than rounding off.</b> The gate
-	 *         re-folds the clause ({@link DrugReference#matchesText} folds its own operands) while this
-	 *         reads the clause exactly as {@link #attributedDoses} established it, and
-	 *         {@link DrugReference#foldedLower} is not idempotent — see there. Measured 2026-08-14
-	 *         through both production methods: an entry whose alias is {@code a}, U+1D165, U+1D16D is
-	 *         matched by the gate in a clause folded from {@code a}, U+1D16D, U+0E31, U+1D165 and is
-	 *         NOT located here, so this substance has no occurrence at all for a clause that passed.
-	 *         Unreachable from any dataset or chart string — it needs musical combining marks in a drug
-	 *         name — and closing it means changing which accessor {@link #namesSubstance} calls, which
-	 *         CLAUDE.md governs. Reported rather than taken.
+	 *         <p><b>That second one is now closed structurally, and how it used to fail is worth
+	 *         keeping.</b> The gate re-folded the clause ({@link DrugReference#matchesText} folds its
+	 *         own operands) while this reads the clause exactly as {@link #attributedDoses} established
+	 *         it, and {@link DrugReference#foldedLower} is not idempotent — see there. Measured
+	 *         2026-08-14 through both production methods: an entry whose alias is {@code a}, U+1D165,
+	 *         U+1D16D was matched by the gate in a clause folded from {@code a}, U+1D16D, U+0E31,
+	 *         U+1D165 and was NOT located here, so that substance had no occurrence at all for a clause
+	 *         that passed. Unreachable from any dataset or chart string — it needs musical combining
+	 *         marks in a drug name — and this paragraph used to end "closing it means changing which
+	 *         accessor {@link #namesSubstance} calls, which CLAUDE.md governs. Reported rather than
+	 *         taken." Issue #330 built that accessor ({@link DrugReference#matchesFoldedText}) and
+	 *         CLAUDE.md now requires it, so the gate and the locator read one string.
 	 */
 	private static boolean substanceOwnsDose(String clause, int dosePos, List<DrugReference> rows,
 			List<DrugReference> allEntries) {

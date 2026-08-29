@@ -80,8 +80,11 @@ public class DrugReference {
 	 * built — by the three parsers and by {@code DrugReferenceValidity}'s repairs — and the entries
 	 * become reachable to another thread only through {@code DrugReferenceService}'s VOLATILE
 	 * {@code dataset} field, whose write happens after all of it. A caller invoking the setter on an
-	 * entry already published would race, but it raced before this field existed too: an
-	 * unsafely-published {@code ArrayList} is what {@link #aliases} alone would expose.
+	 * entry already published would race — and it would race DIFFERENTLY from before this field
+	 * existed, which is the part not to round off: one list alone could be seen stale but never
+	 * inconsistent with itself, whereas two non-final fields written in sequence can be seen TORN, a
+	 * new {@link #aliases} beside the old folded view. Do not add a writer reachable after publication
+	 * without making the pair one assignment.
 	 *
 	 * <p><b>What it costs.</b> One list per entry, and on both bundled datasets no duplicated strings
 	 * at all: {@link #foldDiacritics} returns its argument unchanged for pure-ASCII input and
@@ -731,7 +734,12 @@ public class DrugReference {
 	}
 
 	public List<String> getAliases() {
-		return aliases;
+		// Unmodifiable since issue #330, and that is a correctness guard rather than tidiness: two
+		// index-aligned lists are now derived here, aliasesIn and aliasesNaming index one by a position
+		// taken from the other, and an in-place add or remove through this getter would desynchronise
+		// them — a silently invisible alias, or an IndexOutOfBoundsException out of the safety pipeline.
+		// No caller mutates it today; this is what keeps that true. Jackson binds through setAliases.
+		return Collections.unmodifiableList(aliases);
 	}
 
 	/**
@@ -771,19 +779,26 @@ public class DrugReference {
 	 */
 	public void setAliases(List<String> aliases) {
 		this.aliases = aliases != null ? trimmedAliases(aliases) : Collections.<String> emptyList();
-		this.foldedAliases = foldedAliases(this.aliases);
+		this.foldedAliases = foldedAll(this.aliases);
 	}
 
-	/** @return {@code trimmed} with every non-null element in {@link #foldedLower} form, index-aligned
-	 *          — {@link #foldedAliases}'s whole derivation, and taken from what this entry STORES
-	 *          rather than from the setter's argument so the two lists cannot describe different
-	 *          strings. Nulls are carried through for the reason {@link #setAliases} carries them. */
-	private static List<String> foldedAliases(List<String> trimmed) {
-		List<String> folded = new ArrayList<String>(trimmed.size());
-		for (String alias : trimmed) {
-			folded.add(alias == null ? null : foldedLower(alias));
+	/**
+	 * @return every element of {@code values} in {@link #foldedLower} form, in order and index-aligned
+	 *         with it, unmodifiable; nulls are carried through untouched, for the reason
+	 *         {@link #setAliases} carries them.
+	 *
+	 *         <p>Here rather than at its two call sites — {@link #setAliases} and
+	 *         {@code PatientClinicalContext}'s own folded view of the patient's order names — for the
+	 *         reason {@link #foldedLower} itself is one method: a collection's folded view is the form
+	 *         one side of a comparison must be in, and two spellings of it is how the two sides come
+	 *         apart. Issue #330 added both in one commit, which is exactly when a third becomes likely.
+	 */
+	static List<String> foldedAll(Collection<String> values) {
+		List<String> folded = new ArrayList<String>(values.size());
+		for (String value : values) {
+			folded.add(value == null ? null : foldedLower(value));
 		}
-		return folded;
+		return Collections.unmodifiableList(folded);
 	}
 
 	/** @return {@code aliases} with every non-null element trimmed — {@link #setAliases}'s whole rule,
@@ -1785,6 +1800,12 @@ public class DrugReference {
 	 *         folded), so the two cannot come to disagree about what prose carries; the boolean stays
 	 *         separate because it is the hot path and must not allocate.
 	 *
+	 *         <p><b>No folded arity, unlike its boolean</b> ({@link #matchesFoldedText}), and that is a
+	 *         cost decision rather than an oversight: this is asked of the entries a scan already
+	 *         MATCHED rather than of the dataset, so the per-call fold is bounded by the answer.
+	 *         Measured through the real {@code validate} over the shipped knowledge base: 0 calls in a
+	 *         one-drug pass and 9 in a ten-drug one, against the ~1.4M folds issue #330 removed.
+	 *
 	 *         <p><b>Why a caller needs the witness and not only the answer (issue #209).</b> A boolean
 	 *         says an entry is mentioned; it does not say by WHICH name, and that is what decides whether
 	 *         the mention is about this entry's substance. One alias is routinely shared by two
@@ -1886,6 +1907,10 @@ public class DrugReference {
 	List<String> aliasesNaming(String drugName) {
 		return aliasesNaming(fold(drugName));
 	}
+
+	// This arity is the one CLAUDE.md names as the witness accessor and is kept for that reason; since
+	// issue #330 production reaches the FoldedName one below, because its caller holds a name it has
+	// already folded for the scan that produced these candidates.
 
 	/** @return {@link #aliasesNaming}'s answer for an already-folded name, the witness counterpart of
 	 *          {@link #matchesDrugName(FoldedName)} and calling the same primitive it does, so the
@@ -2070,9 +2095,12 @@ public class DrugReference {
 	 * record gets.
 	 *
 	 * <p>A constant rather than a literal for the same reason {@link #MAX_ORDER_NAME_INFLECTION_LETTERS}
-	 * is one, and since issue #260 for a sharper one: prose is now asked as a boolean
-	 * ({@link #containsWord}) and as a position ({@link #wordIndex}), and two literals would be two
-	 * decisions about which of the two boundary rules prose gets — the drift #260 was, one level up.
+	 * is one, and since issue #260 for a sharper one: prose is asked in more than one shape — as a
+	 * boolean over unfolded operands ({@link #containsWord}), as a boolean over folded ones
+	 * ({@link #foldedWordMatch}, issue #330, which is what {@link #matchesText} and
+	 * {@code DrugReferenceService.findByQuery} now reach), and as a position ({@link #wordIndex}) —
+	 * and a literal at any of them would be a decision about which of the two boundary rules prose
+	 * gets, which is the drift #260 was, one level up.
 	 * {@link #namedOccurrences} also depends on it arithmetically: its {@code end} is
 	 * {@code idx + w.length()}, which is the whole match only while this is zero.
 	 */
@@ -2267,10 +2295,14 @@ public class DrugReference {
 
 	/**
 	 * {@link #matchesOrderName}'s rule with both operands already folded — one named entry point per
-	 * boundary rule, so the rule's own trailing-letter allowance stays bound to it in ONE place. Two
-	 * call sites passing {@link #MAX_ORDER_NAME_INFLECTION_LETTERS} to {@link #boundedTokenIndex}
-	 * themselves would be two decisions about which rule an operand shape gets, which is the drift
-	 * {@link #PROSE_TRAILING_LETTERS}' own javadoc records one level up.
+	 * (rule, operand shape), which is what keeps the allowance a property of the RULE rather than of
+	 * the call site. It does not make the constant appear once: {@link #MAX_ORDER_NAME_INFLECTION_LETTERS}
+	 * is now spelled here and in {@link #matchesOrderName}, and {@link #PROSE_TRAILING_LETTERS} in
+	 * {@link #containsWord}, {@link #foldedWordMatch} and {@link #wordIndex}. What each of those sites
+	 * is, is one shape of one rule — a boolean over unfolded operands, a boolean over folded ones, a
+	 * position — and none of them CHOOSES an allowance. Choosing one, which is the drift
+	 * {@code PROSE_TRAILING_LETTERS}' own javadoc records, would be a caller handing
+	 * {@link #boundedTokenIndex} a number of its own.
 	 */
 	private static boolean foldedOrderNameMatch(String foldedText, String foldedToken) {
 		return foldedMatch(foldedText, foldedToken, MAX_ORDER_NAME_INFLECTION_LETTERS);
@@ -2340,6 +2372,12 @@ public class DrugReference {
 		private FoldedName(String raw) {
 			this.raw = raw;
 			this.folded = foldedLower(raw);
+		}
+
+		/** The name, so an identity assertion's failure message names the operand rather than a hash. */
+		@Override
+		public String toString() {
+			return raw;
 		}
 	}
 

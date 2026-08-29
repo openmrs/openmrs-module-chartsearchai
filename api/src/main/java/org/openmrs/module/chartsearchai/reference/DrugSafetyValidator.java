@@ -2815,7 +2815,7 @@ public class DrugSafetyValidator {
 	 *         and per label where it cannot (see {@link #bestRulePerPartner}) — so two rows can still
 	 *         both name one order: across the full KB exactly one such pair exists, {@code enalapril}
 	 *         and {@code enalaprilat}, two genuinely different entries which that grouping deliberately
-	 *         keeps as two chips — the population that count is over and its base are named at
+	 *         keeps as two chips — the population that figure counts, and its base, are named at
 	 *         {@link #bestRulePerPartner} (issue #263). The first in dataset order takes the fold; the
 	 *         other keeps its rule chip
 	 *         unfolded, which is the conservative direction, since the alternative is stating one

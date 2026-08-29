@@ -917,7 +917,7 @@ public class DrugReference {
 	 * whole list emptied: the preference passed over an alphabetically earlier shared subgroup to
 	 * reach one of the four, rather than finding it there.
 	 *
-	 * <p>{@code CrossReactivityClassChoiceTest} pins one case per group for those four, save
+	 * <p>{@code CrossReactivityClassChoiceTest} pins one case per group for those four prefixes, save
 	 * {@code B02BC}: its only shipped-KB pairs are epinephrine route variants, which issue #160
 	 * collapses to an identity chip before this arm can name a class at all.
 	 */
@@ -1523,14 +1523,13 @@ public class DrugReference {
 	 * {@code A16AX} (91) and {@code N07XX} (55) come in fourth and fifth and push {@code D06AX} to
 	 * sixth.
 	 *
-	 * <p><b>Those four read 135/130/99/68 until issue #263, and they were not wrong — they were on an
-	 * unstated base.</b> Same attribution, wider population: every pair the scan gave that subgroup,
-	 * whether the veto went on to cost it its claim or merely to move it. 135 = 134 + 1,
-	 * 130 = 115 + 15, 99 = 99 + 0, 68 = 33 + 35, and those moved halves sum to exactly the 54 this
-	 * paragraph already states ({@code D06AX} 35, {@code D11AX} 15, {@code D01AE} 3, {@code V03AB} 1).
+	 * <p><b>Those four 30-group figures read 135/130/99/68 until issue #263, and were not wrong — they
+	 * were on an unstated base.</b> Same attribution, wider population: every pair the scan gave that
+	 * subgroup, whether the veto went on to cost it its claim or merely to move it. 135 = 134 + 1,
+	 * 130 = 115 + 15, 99 = 99 + 0, 68 = 33 + 35, and those moved pairs are the whole of the 54 the
+	 * paragraph above states ({@code D06AX} 35, {@code D11AX} 15, {@code D01AE} 3, {@code V03AB} 1).
 	 * The missing base is what made the 68 read as a contradiction of the {@code D06AX} 33 the cost
-	 * paragraph below states, which counts losses alone. A sentence about the drop wants the loss
-	 * counts, so those are what it now carries — issue #243's pattern, one level down.
+	 * breakdown below states, which counts losses alone — issue #243's pattern, one level down.
 	 *
 	 * <p><b>That 1331 read 1488 until issue #263, and the reason is worth keeping.</b> 1488 is the
 	 * answer over the <em>30</em> groups this list held at issue #182 — the scope the 486/54/7243
@@ -1859,11 +1858,13 @@ public class DrugReference {
 	 *         not a population derived from a corpus, so it has no substance-pair counterpart to
 	 *         convert to. The 117 counts (order name, ENTRY) pairs — an entry publishes many names, so
 	 *         this is a pair kind of its own — and it is over that dictionary's 2533 ORDER names,
-	 *         whereas {@link #matchesOrderName}'s own table has a corpus of 2531.
+	 *         whereas {@link #matchesOrderName}'s own table has a corpus of 2531; this pass held
+	 *         neither dictionary, so that discrepancy is recorded rather than resolved.
 	 *
-	 *         <p>Both corpora are the 3.7.1 demo dictionary, which this repo
-	 *         does not carry, so none of the three is re-derivable here; what is stated is which
-	 *         population each is over, not a new measurement of it.
+	 *         <p>All three corpora — the 1219 allergen candidates, the 2533 order names and that
+	 *         table's 2531 — are the 3.7.1 demo dictionary, which this repo does not carry, so none of
+	 *         the three counts is re-derivable here; what is stated is which population each is over,
+	 *         not a new measurement of it.
 	 */
 	boolean matchesDrugName(String drugName) {
 		for (String alias : aliases) {
@@ -2113,12 +2114,6 @@ public class DrugReference {
 	 * whose reference entry carries 2 Major and 8 Moderate rules that would silently stop being
 	 * checked.
 	 *
-	 * <p>That 2531 x 2093 product is a (NAME, TOKEN) population of its own, and neither of the ATC
-	 * pair bases {@code DrugSafetyValidator.sharedClass} defines — issue #263, which labelled
-	 * the 78 below on it
-	 * and did not re-derive the unit of the {@code matches} column itself, the corpus behind that
-	 * column being a dictionary this repo does not carry.
-	 *
 	 * <p>A bound on the tail, rather than a list of known inflections: stripping
 	 * {@code -e}/{@code -a}/{@code -o} from both sides was measured on the same corpus at 826
 	 * matches, a strict subset of this rule, and trades one bound for a per-language whitelist that a
@@ -2141,13 +2136,17 @@ public class DrugReference {
 	 *   this matcher, folded (#129)       907     0 of 9   (0 of 12 accented)     10 of 10
 	 * </pre>
 	 *
-	 * 224 of the 2531 names carry a diacritic. Folding both operands makes the change a pure
+	 * <p>That 2531 x 2093 product is a (NAME, TOKEN) population of its own, and neither of the ATC
+	 * pair bases {@code DrugSafetyValidator.sharedClass} defines — issue #263, which labels the 78
+	 * below on it and did not re-derive the unit of the {@code matches} column itself, the corpus
+	 * behind that column being a dictionary this repo does not carry.
+	 *
+	 * <p>224 of the 2531 names carry a diacritic. Folding both operands makes the change a pure
 	 * relaxation — 78 (NAME, TOKEN) pairs added over the 2531 x 2093 product, <em>0 removed</em> —
 	 * which is what let this widening be scored against #128's kill set instead of argued about, and
 	 * the kill set includes the accented spellings, which are the ones folding could newly break:
 	 * {@code nitroglycérine} folds to {@code nitroglycerine}, i.e. {@code glycerin} plus one
-	 * inflectional letter, so it becomes a
-	 * candidate for that token at the very moment {@code glycérine} legitimately does, and only the
+	 * inflectional letter, so it becomes a candidate for that token at the very moment {@code glycérine} legitimately does, and only the
 	 * LEFT boundary separates them.
 	 *
 	 * <p>76 of the 78 are an accented spelling of the token's own drug ({@code héparine} ~ heparin,

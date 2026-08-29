@@ -53,9 +53,8 @@ import org.junit.jupiter.api.Test;
  * removing it from the caller's code set both end in the same {@code continue}; the {@code drop4} one
  * is not, because it needs one of those four groups RETURNED, and that turns on
  * {@link DrugReference#isLocallyAppliedAtcCode} reading the subgroup string, which no choice of
- * inputs changes. Issue #263 measured
- * them that way and recorded the method beside each figure; this guard only says when they are due
- * to be taken again.
+ * inputs changes. Issue #263 measured them that way and recorded the method beside each figure;
+ * this guard only says when they are due to be taken again.
  */
 public class UnclassifyingAtcVetoSetTest {
 

@@ -1528,8 +1528,9 @@ public class DrugReference {
 	 *
 	 * <p><b>Adding them also moved two figures this javadoc states elsewhere</b> — the count of pairs
 	 * a blanket residue veto would drop but this list does not, and the class-claim drop this list's
-	 * own cost paragraph states — and that went unnoticed until issue #263 re-measured both. {@code UnclassifyingAtcVetoSetTest} now
-	 * reddens when this list moves again, so the next change to it cannot leave a figure behind.
+	 * own cost paragraph states — and that went unnoticed until issue #263 re-measured both.
+	 * {@code UnclassifyingAtcVetoSetTest} now reddens when this list moves again, so the next change
+	 * to it cannot leave a figure behind.
 	 *
 	 * <p>Measured over the shipped KB for the 30 groups this list held at issue #182 (2026-08-06,
 	 * re-measured independently 2026-08-07; re-measure before relying on a figure): of the 7783 ROW

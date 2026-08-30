@@ -61,6 +61,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 53: The ANSWER no longer decides what a substance is called, so the two safety passes stop disagreeing](#decision-53-the-answer-no-longer-decides-what-a-substance-is-called-so-the-two-safety-passes-stop-disagreeing)
 - [Decision 54: The patient's co-medications are resolved once per validate pass, and the pairwise cap is not the lever](#decision-54-the-patients-co-medications-are-resolved-once-per-validate-pass-and-the-pairwise-cap-is-not-the-lever)
 - [Decision 55: Each operand of the name scan is folded once where it is produced](#decision-55-each-operand-of-the-name-scan-is-folded-once-where-it-is-produced)
+- [Decision 56: A trailing parenthetical that is the substance's own name qualifies nothing](#decision-56-a-trailing-parenthetical-that-is-the-substances-own-name-qualifies-nothing)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 
@@ -2773,7 +2774,9 @@ So the question is now put to the chart itself, of the row the record RENDERS: `
 
 **Gated on the two rows being one substance**, because this fold is also applied to sets that are not one: `DrugSafetyValidator.entryForAtcCode` folds every loaded row publishing one ATC code, and 30 of the KB's 2148 codes span more than one substance. Ungated, the rung renames three of those **across** substances — `A02BC05 Omeprazole` → `Esomeprazole`, `N02BF01 Gabapentin enacarbil` → `Gabapentin`, `D08AG03 Iodide I-131` → `Iodine` — every pair one `DrugReference.substanceKey`'s own javadoc names as deliberately distinct, and the first the pair `substanceKey`'s `drugbank_id` component exists to keep apart. The shipped `Omeprazole` row carries `rxnorm_name: esomeprazole`, so it does not name its own substance while `Esomeprazole` does; unscoped, the rung would rename a class chip's partner to a substance the patient is not on.
 
-### Rejected alternative for the fourth family: correcting rung ONE, instead of reordering the rungs
+### The fourth family: correcting rung ONE, instead of reordering the rungs — DEFERRED HERE, TAKEN IN DECISION 56
+
+**Superseded by [Decision 56](#decision-56-a-trailing-parenthetical-that-is-the-substances-own-name-qualifies-nothing).** This section deferred the alternative below on one named gap — `DrugSafetyValidator.outranks` was unswept — and issue [#250](https://github.com/openmrs/openmrs-module-chartsearchai/issues/250) stayed open for it. That sweep was done and the alternative taken; what follows is the analysis as it stood, kept because Decision 56 is a response to it.
 
 The refusal above is argued structurally — with rung two above rung one the influenza A/Vietnam family elects a row `namesNoRoute()` calls qualified while the family holds one it calls unqualified — and that much is true. What it never asks is **why `namesNoRoute()` says that**. The parenthetical in `Influenza A virus A/Vietnam/1194/2004 (H5N1) antigen (formaldehyde inactivated)` is not a route or a formulation qualifier at all: it is part of the row's own `substanceName`, character for character — the same phenomenon `DrugReference.namesItsSubstance()`'s javadoc already documents for the tick-borne family, read from the other side. So there is a second route to the ticket's fourth family that leaves the rung ORDER alone: teach rung one that a row whose display name IS its own substance name carries no qualifier.
 
@@ -2787,7 +2790,7 @@ The refusal above is argued structurally — with rung two above rung one the in
 | ATC folds that move (all 2148 codes, folded as `entryForAtcCode` folds them) | **0** |
 | api suite under the alternative | exactly **1** failure — mutate `namesNoRoute()` as above and read it rather than trusting a total here |
 
-So the alternative delivers the ticket's fourth family and nothing else on the shipped data. Its single test failure is not a behavioural assertion: it is this change's own vacuity **precondition** in `SubstanceNameRowTest.routeQualificationStillOutranksNamingTheSubstance` ("at least one such family's ONLY self-naming row must carry a qualifier"). Under the alternative no shipped family discriminates the two rung placements at all, so the reorder guard becomes unwitnessable rather than falsified — which is the honest form of "it also dissolves the rung-order constraint".
+So the alternative delivers the ticket's fourth family and nothing else on the shipped data. Its single test failure is not a behavioural assertion: it is this change's own vacuity **precondition** in `SubstanceNameRowTest.routeQualificationStillOutranksNamingTheSubstance` ("at least one such family's ONLY self-naming row must carry a qualifier" — Decision 56 retired that precondition and the case is now `aFamilyWithAnUnqualifiedRowElectsOneAndNoOtherRowSpeaksForIt`). Under the alternative no shipped family discriminates the two rung placements at all, so the reorder guard becomes unwitnessable rather than falsified — which is the honest form of "it also dissolves the rung-order constraint".
 
 **Declined here on scope, not on doubt, and the cost is named rather than waved at.** `namesNoRoute()` has a second production consumer — `DrugSafetyValidator.outranks`, which decides whose MECHANISM PROSE a chip renders where two rows of one substance rate a pair equally — and the alternative changes that predicate's answer for 4 rows. That surface was not measured for it; the api suite being green is weaker evidence than a sweep over the KB's rated pairs, and it is exactly the kind of second consumer this decision's own gate paragraph exists because of. It also pays the same 12 rendered interaction partners the refusal above cites (251 → 239), since the elected row is where a record's rules come from. What this section records is that the rung ORDER is not the only route to that family, so a later reader does not conclude that it is: as the refusal stands alone, the argument for letting a typo row speak for its family rests on a `namesNoRoute()` reading that this alternative shows to be a misreading.
 
@@ -3551,3 +3554,78 @@ Behaviour-neutral, verified rather than argued: the full rendered chip list — 
 - **−** The pairwise arms still enumerate every pair. That is the ordering requirement, not an oversight, and it is now recorded where the cap is defined.
 - **−** The structural guards read source text, so they stop a regression and not a determined author. Review pass after review pass defeated one, and every shape but the last was closed: a memo field typed as something other than `CoMedications`, that field given a parenthesised initialiser, the declaration prefixed with an annotation, the resolvers reached by method reference, a `static final` collection exempted by a modifier check, and the uncached sweep reached by dropping an overload's `cache` argument — all ways ordinary code gets written, so a regression can be made of them by accident. The last, reaching a resolver through `getDeclaredMethod("sweepForAtcCode", …)` with `setAccessible`, is left open: the scan blanks string literals by design (a method named in a javadoc is prose), and writing reflection into a private call inside the same class is a deliberate act rather than an accident. Closing it would need a bytecode or constant-pool check, and the next syntax after that would still be open. Named on the guard itself rather than left to be discovered.
 - **−** The two older source-scanning copies (`ChipSubjectOneResolutionTest`, `OrderPartnerNameSourceWritePathTest`) are not migrated onto `SourceScan`, which this change extracted at the third caller — the threshold `ModuleSourceRoot`'s own javadoc records. They have already diverged from each other in their block-comment handling; migrating them is a change of its own, and the second keeps its file locator apart from `ModuleSourceRoot` for a reason its own javadoc states.
+
+## Decision 56: A trailing parenthetical that is the substance's own name qualifies nothing
+
+**Status: Accepted** (August 2026) — implemented, closing issue [#250](https://github.com/openmrs/openmrs-module-chartsearchai/issues/250). One line in `DrugReference.namesNoRoute()`. No new call site, no new predicate and no wire-format change; [Decision 43](#decision-43-a-substance-is-named-by-the-row-the-data-files-it-under)'s deferred alternative, taken once the surface it named as unswept was swept.
+
+### Context
+
+Decision 43 delivered three of #250's four families and deferred the fourth — the influenza A/Vietnam antigen, whose family the fold hands to `Nfluenza a virus a/vietnam/1194/2004 (h5n1) antigen`, a row the shipped KB spells with a dropped leading "I". It deferred it **on scope, not on doubt**, and named exactly one gap: `DrugReference.namesNoRoute()` has a second production consumer, `DrugSafetyValidator.outranks`, which decides whose MECHANISM PROSE a chip renders, and "the api suite being green is weaker evidence than a sweep over the KB's rated pairs".
+
+`namesNoRoute()` is a **syntactic proxy** for "does this display name carry a route or formulation qualifier": `normalizeName(name).equals(displayStem(name))`, i.e. "carries no trailing parenthetical". It misreads a row whose trailing parenthetical is not a qualifier at all but part of the name the data files that row's family under. Measured over the shipped 19 MB KB through the real `DdiDrugReferenceSource().load()`, **4 of 2283 rows** are in that class — each row's `substanceName` being its own display name character for character:
+
+| row | rules |
+|---|---|
+| `Influenza A virus A/Vietnam/1194/2004 (H5N1) antigen (formaldehyde inactivated)` | 239 |
+| `Influenza a virus a/california/7/2009 x-179a (h1n1) antigen (formaldehyde inactivated)` | 234 |
+| `Yersinia pestis 195/p antigen (formaldehyde inactivated)` | 227 |
+| `Tick-borne encephalitis vaccine (whole virus, inactivated)` | 252 |
+
+The A/Vietnam typo row's own `(h5n1)` sits MID-name and `TRAILING_QUALIFIER` is end-anchored, so the proxy calls the typo row unqualified and the correctly-spelled row qualified, and rung one hands the family to the typo. Driven through the real `validate` over a verbatim slice of the two rows and their `ozanimod` rules, that is what a clinician reads:
+
+> `Nfluenza a virus a/vietnam/1194/2004 (h5n1) antigen interacts with active order ozanimod — Moderate. The administration of inactivated, killed, or otherwise noninfectious vaccines during ozanimod therapy is generally safe but may be associated with a diminished or suboptimal immunologic response.`
+
+### Decision
+
+**A trailing parenthetical is a QUALIFIER only where it distinguishes the row from its substance.** `namesNoRoute()` reads `namesItsSubstance()` as well as the stem.
+
+**In the predicate, not at either call site.** Both consumers ask the same question and got the same wrong answer, so correcting `canonicalRow`'s rung one alone would leave `outranks` misreading the same four rows — and for the ticket's own family that means printing the correctly-spelled name over the TYPO row's shorter note, since `ozanimod` is the one partner whose two rows carry different prose. Measured: the same chip after the correction reads
+
+> `Influenza A virus A/Vietnam/1194/2004 (H5N1) antigen (formaldehyde inactivated) interacts with active order ozanimod — Moderate. … a diminished or suboptimal immunologic response. **Vaccination may be less effective during and for up to three months after discontinuation of ozanimod therapy.**`
+
+**It stays a UNARY property and therefore needs no gate.** `canonicalRow`'s second rung is scoped to two rows of one substance because its CONCLUSION is relational — "this row represents THIS family" — and ungated it renamed `A02BC05 Omeprazole` to `Esomeprazole`. `namesItsSubstance()` read from inside `namesNoRoute()` asks one row about its OWN `substanceName` and nothing about the other row, so comparing two rows on it introduces no cross-family claim. **That argument alone does not make the cross-family fold unreachable, and it should not be read as if it did**: what makes it unreachable *on this dataset* is that none of those four rows publishes an ATC code, so `DrugSafetyValidator.entryForAtcCode` never sees one. `SubstanceNameRowTest.aRowWhoseTrailingParentheticalIsItsOwnSubstanceNameCarriesNoQualifier` asserts that emptiness, so a KB refresh that gives one of them a code reddens and says to measure that fold before trusting it.
+
+**The rung ORDER stops deciding anything, and that is the point rather than a loss.** With the predicate corrected, `namesItsSubstance()` IMPLIES `namesNoRoute()`, so rung two above rung one can never elect a row rung one calls qualified — on any dataset, not merely this one. Decision 43's refusal was argued from the shipped data's ability to witness the reorder; the correction removes that ability by removing the misreading it rested on. Nothing pins the order because nothing can. What the order guard protected substantively is pinned instead, on RAW SYNTAX so a weakening of either predicate cannot satisfy it by definition: `SubstanceNameRowTest.aFamilyWithAnUnqualifiedRowElectsOneAndNoOtherRowSpeaksForIt` asserts that a family holding a row with no trailing parenthetical may elect one that HAS a trailing parenthetical only where that parenthetical is the name the data files the family under. Mutate `namesItsSubstance()` to compare display stems and it reddens on `Salicylic acid (sodium)` being elected for a family holding a plain `Salicylic acid` row — a case nothing in the suite caught before that assertion existed.
+
+### Measured
+
+Real `DdiDrugReferenceSource().load()` of the shipped KB and the real predicates on **both** sides — the baseline is the same methods unmutated, driven by the same harness through reflection into the real private `bestRulePerPartner`, `aboveFloorRulesAgainst`, `bestRule` and `outranks` rather than a re-expression of any of them.
+
+| | |
+|---|---|
+| rows `namesNoRoute()` misreads | **4 of 2283** |
+| multi-row families | 129, unchanged |
+| family elections that move | **1** — the A/Vietnam family, to the correctly-spelled row |
+| elected rows ANSWERING `!namesNoRoute()` | 10 → **9** |
+| elected rows whose RAW name carries a trailing parenthetical | 10 → **11** |
+| ATC-code folds that move (all 2148) | **0** — entailed, not independently observed: the four rows publish no ATC codes |
+| `outranks`, drug-in-play arm (real `bestRulePerPartner`, per family) | 40,619 groups, **222 winners move** |
+| `outranks`, question-pair arm (that arm's own entry-pair walk, floor 0) | 951 groups, **97 winners move** |
+| of those 319 moves: severity changed | **0** |
+| … rendered note text changed | **1** — A/Vietnam × `ozanimod` |
+| … which SUBSTANCE owns the sentence changed | **4**, all in the question-pair arm |
+| api suite | 1585 api + 87 omod, 0 failures |
+
+**State which reading a qualification count is on.** 10 → 9 and 10 → 11 count different things and the correction is exactly what makes them diverge: before it, "answers `!namesNoRoute()`" and "carries a trailing parenthetical" were the same predicate. Quoting either without its unit is unreadable afterwards.
+
+**The four substance swaps, enumerated rather than counted.** `outranks`' winner sets `fromFirst`, which chooses the question-pair sentence's `subject` and `partner`, so a winner moving across substances swaps which substance the sentence names. All four are the tick-borne family against a Moderna COVID-19 vaccine presentation row, and all four move the same way:
+
+| before | after |
+|---|---|
+| `Moderna COVID-19 Vaccine (6m-5y bivalent booster) interacts with Tick-borne encephalitis vaccine (whole virus, inactivated), also named in the question` | `Tick-borne encephalitis vaccine (whole virus, inactivated) interacts with Moderna COVID-19 Vaccine (6m-5y bivalent booster), also named in the question` |
+| the same, `(6m-5y)` | reversed |
+| the same, `(6y-11y)` | reversed |
+| the same, `(booster only)` | reversed |
+
+Severity is Moderate on both sides of every one and the mechanism prose is byte-identical; both drugs are named in the question and both appear in the sentence either way. What moves is which of the two owns it — from a paediatric or booster-restricted PRESENTATION to the row the data names the substance after, which is the direction the route step's own javadoc says it exists to move in.
+
+### Trade-offs
+
+- **+** #250's last family is delivered and the issue closes. A question naming the antigen is answered under the antigen's name.
+- **+** The chip carries the fuller of the two notes for that family's one partner whose rows differ — the clause about vaccination remaining less effective for three months after discontinuation, which the typo row's note does not have.
+- **+** One predicate, corrected once, fixes both consumers. Correcting the fold alone would have produced the right name over the wrong note.
+- **−** **The injected `drug_reference` record for that family loses partners.** The elected row goes from 251 rules to 239 — **239 → 228 distinct partners, 12 lost and 1 gained**. Eleven of the twelve lost are other vaccines (five Moderna COVID presentations, the AstraZeneca, Janssen and Nuvaxovid rows, a SARS-CoV-2 vaccine row and an influenza B antigen); the twelfth is `umbralisib` and the gain is `trifluridine`. This is the same shape Decision 43 records for the estradiol move, and it falls on the RECORD only: the chip arm pools every row of the substance, and that pool is **240 partners before and after**.
+- **−** **The typo stays.** `Nfluenza a virus …` keeps the display name the data spells; this fixes which row is ELECTED, not what a row is called. Repairing the string would be this module correcting a redistributed dataset on its own authority — issue [#196](https://github.com/openmrs/openmrs-module-chartsearchai/issues/196)'s upstream handoff, the same one the estradiol MERGE already takes.
+- **−** The rung-order guard is gone, and no structural pin replaces it. That is deliberate: a `SourceScan`-style pin on the branch order would pin a no-op and tell the next reader the order matters when it provably does not.
+- **−** Four question-pair sentences reverse subject and partner. Adjudicated above rather than left as a count; no drug the clinician did not ask about appears in any of them.

@@ -46,11 +46,15 @@ import org.opentest4j.AssertionFailedError;
  * every entry of a sweep one instance just as a correct one does, so
  * {@link #theProseOperandIsDiacriticFoldedAndNotMerelyLowerCased} asks the other half of that line
  * by reaching a folded alias from an ACCENTED question.
+ * {@link #anAccentedEntryKeepsItsPlaceBesideASiblingTheSameNameReaches} drives the two WITNESS scans,
+ * whose compared operand the class-scope whitelist cannot see because both are entitled to name the raw
+ * list; it needs a SECOND matching entry, since the narrowing those scans serve returns early on fewer
+ * than two matches.
  * {@link #anAccentedAliasIsTheOnlyNameOfAnEntryAnUnaccentedOrderReaches} drives the one shape in
  * which the alias-side fold is load-bearing at all — over every dataset the module ships,
  * {@link DrugReference#foldDiacritics} takes its ASCII fast path and returns the alias unchanged, so
  * a guard comparing a stored folded alias against {@code foldedLower} of the raw one is satisfied
- * element-for-element by the raw list and proves nothing. And the source scan pins the half no
+ * element-for-element by the raw list and proves nothing. And the source scan pins what no
  * behavioural case reaches: {@code PatientClinicalContext.hasActiveDrug} compares through a static
  * matcher with no seam a probe can override, and a memo-shaped regression in {@code setAliases}
  * would be invisible to both.
@@ -226,7 +230,7 @@ public class FoldedOperandTest {
 	/**
 	 * An entry every one of whose names carries an accent is still reached by an unaccented recorded
 	 * name — the shape {@code containsBoundedToken}'s javadoc says the reference-side fold exists for,
-	 * and the only shape in which storing the RAW alias list where the folded one belongs is visible.
+	 * and the shape in which storing the RAW alias list where the folded one belongs is visible at all.
 	 *
 	 * <p>Over the shipped knowledge base it is not visible: measured 2026-08-30 through the real
 	 * loader, 0 of its 8300 alias slots (5169 distinct) folds to a different String — its one alias
@@ -245,8 +249,11 @@ public class FoldedOperandTest {
 	 * — leaves every alias carrying an upper-case letter matching nothing, which is a shape the
 	 * {@code json} parser reaches (it trims its aliases without lower-casing them), and a review
 	 * measured the whole api suite green under it. With the alias spelled {@code Kétoprofène} that
-	 * mutation reddens this case and {@link #theProseOperandIsDiacriticFoldedAndNotMerelyLowerCased},
-	 * and nothing else in the api suite.
+	 * mutation reddens this case, {@link #theProseOperandIsDiacriticFoldedAndNotMerelyLowerCased} and
+	 * {@link #anAccentedEntryKeepsItsPlaceBesideASiblingTheSameNameReaches} — whose fixture carries this
+	 * entry beside a sibling — and nothing else in the api suite. Re-measured 2026-08-30 over the whole
+	 * api suite when the third of those was added; mutate the line and read the failures rather than
+	 * trusting the list.
 	 */
 	@Test
 	public void anAccentedAliasIsTheOnlyNameOfAnEntryAnUnaccentedOrderReaches() throws IOException {
@@ -307,6 +314,61 @@ public class FoldedOperandTest {
 				"an accented question must reach an entry whose stored alias the fold made unaccented; "
 						+ "a scan that only lower-cases its prose reaches it for no spelling at all, was: "
 						+ byAccentedProse);
+	}
+
+	/**
+	 * The two WITNESS scans compare the folded alias, and an entry whose witness goes missing is dropped
+	 * from the candidate set.
+	 *
+	 * <p>The behavioural channel for the two accessors {@link #everyAliasScanReadsTheStoredFoldedList}
+	 * can say least about. {@code DrugReference.aliasesIn} and {@code aliasesNaming} walk the folded list
+	 * while reporting the RAW alias at that index, so both must name the raw list and its whitelist must
+	 * let them — and their "names the folded list" assertion is then satisfied by the
+	 * {@code foldedAliases.size()} in the loop header, whatever the comparison one line below reads. That
+	 * swap is not the "same answers" shape the class javadoc calls forced: it calls the folded primitive
+	 * with an unfolded operand, so it answers DIFFERENTLY, and this is where the difference shows. The
+	 * two {@code assertContains} calls naming each compared expression are the structural channel for the
+	 * same property; each mutation reddens both.
+	 *
+	 * <p><b>It needs a SECOND matching entry, which is the whole of what separates this fixture from
+	 * {@code drug-reference-accented-alias-only.json}.</b> {@code findImpliedByQuery} and
+	 * {@code findImpliedByDrugName} return early on fewer than two matches, so over the one-entry fixture
+	 * neither witness scan runs; and where the witness pass DOES run, {@code rowsOf} hands back the whole
+	 * matched list when nothing at all is in play, so the sibling has to carry its own substance into
+	 * play under the mutation as well — which its plain-ASCII alias does. Then the accented entry alone
+	 * is dropped, and with it the contraindication the arms would have raised: issue #209's surface,
+	 * fail-closed and silent.
+	 *
+	 * <p>Both legs, because the two scans are separate methods under the two different boundary rules:
+	 * the recorded name reaches {@code aliasesNaming} and the prose {@code aliasesIn}. Measured — with
+	 * only {@code aliasesIn} mutated the recorded-name leg above stays green and this one fails. The
+	 * converse was not measured and cannot be from here: mutating {@code aliasesNaming} fails the first
+	 * assertion, so the prose leg is never reached.
+	 */
+	@Test
+	public void anAccentedEntryKeepsItsPlaceBesideASiblingTheSameNameReaches() throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport
+				.fixtureEntries("chartsearchai-test/drug-reference-accented-alias-with-sibling.json"));
+
+		List<SafetyWarning> byOrderName = DrugReferenceTestSupport.validator(service).validate("",
+				"What are her current medications?",
+				DrugReferenceTestSupport.ctx(60, null,
+						DrugReferenceTestSupport.set("Ketoprofene 100mg"), null,
+						DrugReferenceTestSupport.set("aspirine"), null));
+		assertTrue(DrugReferenceTestSupport.detailContains(byOrderName,
+				SafetyWarning.TYPE_CONTRAINDICATION, "Kétoprofène"),
+				"the recorded-name witness must be found by comparing the FOLDED alias; comparing the raw "
+						+ "one leaves this entry naming no substance of its own, and the sibling's alias then "
+						+ "carries the narrowing past rowsOf's empty-set fallback, was: " + byOrderName);
+
+		List<SafetyWarning> byProse = DrugReferenceTestSupport.validator(service).validate("",
+				"Can I give her ketoprofene?",
+				DrugReferenceTestSupport.ctx(60, null, null, null,
+						DrugReferenceTestSupport.set("aspirine"), null));
+		assertTrue(DrugReferenceTestSupport.detailContains(byProse,
+				SafetyWarning.TYPE_CONTRAINDICATION, "Kétoprofène"),
+				"and the prose witness likewise, which is a different scan under a different boundary rule, "
+						+ "was: " + byProse);
 	}
 
 	/**
@@ -416,13 +478,23 @@ public class FoldedOperandTest {
 	 * none of them folds an alias itself.
 	 *
 	 * <p>This is the half of the change worth most — by ADR Decision 55's own decomposition the alias
-	 * side is five sixths of the win — and <b>nothing behavioural can see it</b>, deliberately: the
-	 * unfolded primitives fold the raw alias for themselves, so an accessor rewritten to iterate
-	 * {@code aliases} through {@code containsWord} or {@code matchesOrderName} returns exactly the same
-	 * answers while reinstating ~1.4 million {@code foldedLower} calls a pass. A review did precisely
-	 * that to the two hottest accessors and the whole api suite stayed green.
+	 * side is five sixths of the win — and <b>the shape that reinstates the folds is invisible to every
+	 * behavioural case</b>, deliberately: the unfolded primitives fold the raw alias for themselves, so
+	 * an accessor rewritten to iterate {@code aliases} through {@code containsWord} or
+	 * {@code matchesOrderName} returns exactly the same answers while reinstating ~1.4 million
+	 * {@code foldedLower} calls a pass. A review did precisely that to the two hottest accessors and the
+	 * whole api suite stayed green.
 	 * {@link #anAccentedAliasIsTheOnlyNameOfAnEntryAnUnaccentedOrderReaches} cannot reach it either: it
 	 * pins that {@code setAliases} STORES a folded list, not that anything reads it.
+	 *
+	 * <p><b>A different shape IS behaviourally visible, and it lives in the two witness accessors.</b>
+	 * They walk the folded list and report {@code aliases.get(i)}, so each must name the raw list and the
+	 * class-scope whitelist below has to let it — which leaves the folded primitive called with the RAW
+	 * operand — the expression already sitting one line below, on the {@code carried.add} line — which
+	 * satisfied every structural assertion in this class until the two {@code assertContains} calls below
+	 * named each compared expression. That one answers DIFFERENTLY rather than identically, so it is not
+	 * the "forced" shape above: {@link #anAccentedEntryKeepsItsPlaceBesideASiblingTheSameNameReaches}
+	 * reddens on either swap, and those two say which line went wrong.
 	 *
 	 * <p>Positive for the reason the case above is. {@code foldedLower(} is deliberately NOT forbidden:
 	 * two of these accessors legitimately fold the invariant TEXT once per call, which is the same rule
@@ -451,6 +523,17 @@ public class FoldedOperandTest {
 		assertContains(scan, prose, "foldedAliases", "aliasesIn");
 		assertForbids(scan, prose, "aliasesIn", "containsWord(", "matchesOrderName(", "matchesText(",
 				"containsBoundedToken(", "foldDiacritics(");
+
+		// The two WITNESS accessors are entitled to name the raw list — the witness they return IS
+		// aliases.get(i) — so their "foldedAliases" assertion above is already satisfied by the
+		// foldedAliases.size() in the loop header and says nothing about which list the COMPARISON
+		// reads. Swapping the compared operand for the raw alias — the expression already one line
+		// below, on the carried.add line — is a spelling both bodies admit and it answers DIFFERENTLY,
+		// so require the compared expression itself. anAccentedEntryKeepsItsPlaceBesideASiblingTheSameNameReaches is the behavioural half
+		// of this and reddens on either swap; this names the line.
+		assertContains(scan, scan.body("List<String> aliasesNaming(FoldedName drugName) {"),
+				"foldedOrderNameMatch(drugName.folded, foldedAliases.get(i))", "aliasesNaming");
+		assertContains(scan, prose, "foldedWordMatch(foldedText, foldedAliases.get(i))", "aliasesIn");
 
 		// And the property stated ONCE, at class scope, because the per-body form above is anchored on
 		// a method declaration and satisfied by any mention of the folded list inside it. A review beat
@@ -508,7 +591,9 @@ public class FoldedOperandTest {
 	/** The bodies entitled to read {@link DrugReference}'s RAW alias list: the two that store and
 	 *  publish it, the derivation of what is stored, the IDENTITY predicate (which compares
 	 *  {@code normalizeName}, a different form, and is a named residue of issue #330), and the two
-	 *  witness accessors, which report the raw alias at an index taken from the folded list. */
+	 *  witness accessors, which report the raw alias at an index taken from the folded list — entitled
+	 *  to it for that and nothing else, which is why the expression each COMPARES is required by name
+	 *  above. */
 	private static boolean readsRawAliases(SourceScan scan, int at) throws IOException {
 		String[] entitled = {
 				"public void setAliases(List<String> aliases) {",

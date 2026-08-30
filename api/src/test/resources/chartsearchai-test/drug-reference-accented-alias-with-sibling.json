@@ -1,0 +1,24 @@
+{
+  "version": "1.0",
+  "source": "Test fixture — an accented-only alias BESIDE a sibling the same recorded name reaches (issue #330)",
+  "description": "drug-reference-accented-alias-only.json with one more entry, and the extra entry is the whole point: DrugReferenceService.findImpliedByQuery and findImpliedByDrugName take a matched.size() < 2 early return, so over a single-entry fixture their WITNESS pass — DrugReference.aliasesIn / aliasesNaming, the two scans that read the folded alias list while reporting the raw alias at that index — never runs at all. Here the recorded name \"Ketoprofene 100mg\" and the prose token \"ketoprofene\" each reach BOTH entries, so the pass runs, and the sibling's plain-ASCII alias is enough to put its own substance in play — which is what stops rowsOf's empty-set fallback from handing back the whole matched list. An implementation whose witness scan compares the RAW alias then finds no witness for the accented entry, drops it, and its contraindication is silently not raised. The two entries publish no substanceName, so each keys on itself and neither is the other's substance.",
+  "entries": [
+    {
+      "id": "ketoprofene-accented-only",
+      "name": "Kétoprofène",
+      "drugClass": "AINS",
+      "aliases": ["Kétoprofène"],
+      "contraindications": [
+        { "type": "allergy", "token": "aspirine", "note": "hypersensibilité croisée aux salicylés" }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "ketoprofene-lysine-ascii",
+      "name": "Ketoprofene lysine",
+      "drugClass": "AINS",
+      "aliases": ["ketoprofene lysine", "ketoprofene"],
+      "source": "Test fixture"
+    }
+  ]
+}

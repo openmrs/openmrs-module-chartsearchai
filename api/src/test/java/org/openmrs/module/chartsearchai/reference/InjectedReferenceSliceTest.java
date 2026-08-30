@@ -13,8 +13,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Collections;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
+import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
@@ -127,6 +132,46 @@ public class InjectedReferenceSliceTest {
 		assertTrue(slice.getCharacters() < allInjectedChars,
 				"counting every injected record would report " + allInjectedChars
 						+ " rather than the reference slice's " + slice.getCharacters());
+	}
+
+	/**
+	 * The DEBUG line reports the slice BESIDE the drug-reference-entry total it already reported, and
+	 * the two are different numbers.
+	 *
+	 * <p>An earlier draft of this change replaced that total with the slice, on the reasoning that a
+	 * log and an audit row must state the same number. The build refuted it:
+	 * {@code ReferenceRecordSubstanceCollapseTest.theDebugLineReportsTheReferenceSliceCharacterTotalAndOnlyThat}
+	 * is the specification for that fragment and requires the entries' characters and explicitly not
+	 * the findings', because that is issue #163's question. So the line answers both questions, and
+	 * this case is the half of it #229 added — the other half stays pinned where it already was.
+	 *
+	 * <p>The strict inequality is what makes this more than "a number was printed": it holds because
+	 * the arrangement injects a finding whose text the slice counts and the entry total does not, so
+	 * a line printing one number twice fails it.
+	 */
+	@Test
+	public void theDebugLineReportsTheSliceBesideTheEntryOnlyTotal() {
+		List<String> logged;
+		PatientChart chart;
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER, Level.DEBUG)) {
+			chart = chartWithAllThreeInjectedKinds();
+			logged = capture.messagesAt(Level.DEBUG);
+		}
+		String line = String.join("\n", logged);
+		ChartSearchAiUtils.ReferenceSlice slice =
+				ChartSearchAiUtils.referenceSlice(chart.getMappings());
+
+		Matcher reported =
+				Pattern.compile("reference slice (\\d+) record\\(s\\), (\\d+) chars").matcher(line);
+		assertTrue(reported.find(), "the DEBUG line must report the slice, was: " + logged);
+		assertEquals(slice.getRecords(), Integer.parseInt(reported.group(1)));
+		assertEquals(slice.getCharacters(), Integer.parseInt(reported.group(2)));
+
+		Matcher entries = Pattern.compile("drug-reference \\((\\d+) chars\\)").matcher(line);
+		assertTrue(entries.find(), "the entry-only total must still be on the line, was: " + logged);
+		assertTrue(Integer.parseInt(entries.group(1)) < slice.getCharacters(),
+				"the two totals answer different questions and this arrangement separates them; "
+						+ "was " + entries.group(1) + " against " + slice.getCharacters());
 	}
 
 	@Test

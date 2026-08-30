@@ -691,8 +691,9 @@ public class ChartSearchAiConstants {
 	 * distinguished — so it is withheld too, in
 	 * {@code ChartSearchAiRestController.groundedForWire}. The key stays present and null, which is
 	 * this field's existing "unverified" value. Adding a type to this group therefore stops its
-	 * citations being VERIFIED (they are still graded, demote-only) AND stops any verdict of theirs
-	 * reaching a client. Since issue #284 it does one more thing, to OTHER citations: a chart
+	 * citations being VERIFIED (they are still graded, demote-only), stops any verdict of theirs
+	 * reaching a client, and — since issue #229 — counts its records into the prompt-cost figure the
+	 * audit row carries ({@code ChartSearchAiUtils.referenceSlice}). Since issue #284 it does one more thing, to OTHER citations: a chart
 	 * citation whose claim rests on a record in this group has its own entailment negative withheld,
 	 * so the blast radius of a type added here is not confined to that type's citations.
 	 */

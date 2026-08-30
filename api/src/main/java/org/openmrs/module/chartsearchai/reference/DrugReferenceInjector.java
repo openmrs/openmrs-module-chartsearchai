@@ -63,7 +63,10 @@ import org.springframework.stereotype.Service;
  * it was graded. So classifying a new injected type as reference material silently removes its
  * citations from the grounding signal a client sees — which is correct for module-supplied prose
  * and wrong for the patient's own record, and is one more reason to decide on provenance rather
- * than on "the module injected it".
+ * than on "the module injected it". Since issue #229 it also decides prompt COST: the record and
+ * character totals {@code ChartSearchAiUtils.referenceSlice} measures, and the audit row carries,
+ * are the reference-group ones — so classifying a new injected type here also puts it into the
+ * figure an operator reads as this module's share of the context window.
  *
  * <p>Three kinds are injected today, and they are not all module-supplied: a
  * {@code drug_reference} entry and a {@code safety_finding} present as reference material, while an

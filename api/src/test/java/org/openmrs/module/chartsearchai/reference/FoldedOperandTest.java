@@ -125,8 +125,11 @@ public class FoldedOperandTest {
 	 *
 	 * <p>Adjacent, and compared element-wise rather than as sets, because a scan may legitimately stop
 	 * early — {@code lookupByToken} returns as soon as an entry claims the display name — and may
-	 * therefore reach neither probe. Nothing sits between them, so every scan that reaches one reaches
-	 * the other, and the two lists stay aligned however many scans stop short.
+	 * therefore reach neither probe. Nothing sits between them, so a scan that
+	 * stops short of the pair reaches neither and the two lists stay aligned. It could still stop
+	 * BETWEEN them, if the first probe itself claimed the display name — no arrangement here spells a
+	 * probe's own name as the token, and if one ever does the size assertion fails loudly rather than
+	 * comparing two lists that describe different scans.
 	 */
 	@Test
 	public void theRecordedNameIsFoldedOnceForAWholeScanAndNotOncePerEntry() {
@@ -334,7 +337,7 @@ public class FoldedOperandTest {
 		SourceScan scan = new SourceScan("src/main/java/org/openmrs/module/chartsearchai/reference/"
 				+ "PatientClinicalContext.java");
 		SourceScan.Region loop = scan.body("for (String folded : foldedActiveDrugNames) {");
-		assertContains(scan, loop, "DrugReference.matchesFoldedOrderName(", "hasActiveDrug's loop");
+		assertContains(scan, loop, "matchesFoldedOrderName(", "hasActiveDrug's loop");
 		assertForbids(scan, loop, "hasActiveDrug's loop", "matchesOrderName(", "containsWord(",
 				"foldedLower(", "foldDiacritics(", "toLowerCase(", "fold(");
 	}
@@ -360,18 +363,25 @@ public class FoldedOperandTest {
 	public void everyAliasScanReadsTheStoredFoldedList() throws IOException {
 		SourceScan scan = new SourceScan("src/main/java/org/openmrs/module/chartsearchai/reference/"
 				+ "DrugReference.java");
-		String[] accessors = {
+		// Both operands already folded, so nothing in these four may fold anything at all.
+		String[] foldNothing = {
 				"boolean matchesFoldedText(String foldedLowerText) {",
 				"boolean matchesDrugName(FoldedName drugName) {",
-				"List<String> aliasesIn(String lowerText) {",
 				"List<String> aliasesNaming(FoldedName drugName) {",
 				"List<NamedOccurrence> namedOccurrences(String foldedLowerText, int pos) {" };
-		for (String accessor : accessors) {
+		for (String accessor : foldNothing) {
 			SourceScan.Region body = scan.body(accessor);
 			assertContains(scan, body, "foldedAliases", accessor);
 			assertForbids(scan, body, accessor, "containsWord(", "matchesOrderName(", "matchesText(",
-					"containsBoundedToken(", "foldDiacritics(");
+					"containsBoundedToken(", "foldDiacritics(", "foldedLower(");
 		}
+		// aliasesIn is the one that still folds, and only its TEXT: it takes prose lower-cased but not
+		// folded, which is the invariant operand of its own loop, so foldedLower( is permitted here and
+		// nowhere above. Everything that would reach an ALIAS through a folding primitive is not.
+		SourceScan.Region prose = scan.body("List<String> aliasesIn(String lowerText) {");
+		assertContains(scan, prose, "foldedAliases", "aliasesIn");
+		assertForbids(scan, prose, "aliasesIn", "containsWord(", "matchesOrderName(", "matchesText(",
+				"containsBoundedToken(", "foldDiacritics(");
 	}
 
 	/**

@@ -248,16 +248,7 @@ public class SubstanceNameRowTest {
 		// that used to refuse vacuity here ("at least one family's ONLY self-naming row must carry a
 		// qualifier") became unsatisfiable for the same reason, and is replaced by one that is not.
 		List<DrugReference> all = DrugReferenceTestSupport.shippedEntries();
-		Map<Object, List<DrugReference>> families = new LinkedHashMap<Object, List<DrugReference>>();
-		for (DrugReference row : all) {
-			Object substance = row.substanceGroupKey();
-			List<DrugReference> rows = families.get(substance);
-			if (rows == null) {
-				rows = new ArrayList<DrugReference>();
-				families.put(substance, rows);
-			}
-			rows.add(row);
-		}
+		Map<Object, List<DrugReference>> families = multiRowFamiliesAndSingletons(all);
 
 		int multiRow = 0;
 		int electedOnItsSubstanceName = 0;
@@ -324,17 +315,16 @@ public class SubstanceNameRowTest {
 		// Named and not counted, because each member is a decision to trust one substanceName against a
 		// plain sibling, and a count cannot say which one moved. A KB refresh that adds a member reddens
 		// here with that member's own name, which is the point: it needs adjudicating, not accepting.
+		//
+		// This and aFamilyWithAnUnqualifiedRowElectsOneAndNoOtherRowSpeaksForIt are NOT redundant, and
+		// which way round is worth stating because it is not the obvious way. Against a change in the
+		// DATA this case is the stronger of the two — measured under the stem mutation of
+		// namesItsSubstance() it reddens naming four families where that one names one. What that one
+		// still buys is the other direction: it asserts the PROPERTY, so it is the only thing standing
+		// between the golden list below and someone who "fixes" a red build by pasting a refresh's new
+		// family into it without adjudicating. Delete either and the pair stops being a ratchet.
 		List<DrugReference> all = DrugReferenceTestSupport.shippedEntries();
-		Map<Object, List<DrugReference>> families = new LinkedHashMap<Object, List<DrugReference>>();
-		for (DrugReference row : all) {
-			Object substance = row.substanceGroupKey();
-			List<DrugReference> rows = families.get(substance);
-			if (rows == null) {
-				rows = new ArrayList<DrugReference>();
-				families.put(substance, rows);
-			}
-			rows.add(row);
-		}
+		Map<Object, List<DrugReference>> families = multiRowFamiliesAndSingletons(all);
 
 		List<String> elected = new ArrayList<String>();
 		for (List<DrugReference> rows : families.values()) {
@@ -358,6 +348,25 @@ public class SubstanceNameRowTest {
 		            + "files the family under that qualified name, and every such family is adjudicated "
 		            + "here by name — a new one is a substanceName carrying a parenthetical the module "
 		            + "cannot tell from a route, so read it before accepting it. Was: " + elected);
+	}
+
+	/** The shipped dataset grouped by {@link DrugReference#substanceGroupKey()} — the walk both KB-wide
+	 *  cases below need, written once so the two cannot come to disagree about what a FAMILY is. They
+	 *  assert over the same population deliberately: one states the invariant, the other names the
+	 *  families that reach its boundary, and a later edit putting one on {@code substanceKey()} or on the
+	 *  raw {@code substanceName} would leave both green while they stopped covering the same rows. */
+	private static Map<Object, List<DrugReference>> multiRowFamiliesAndSingletons(List<DrugReference> all) {
+		Map<Object, List<DrugReference>> families = new LinkedHashMap<Object, List<DrugReference>>();
+		for (DrugReference row : all) {
+			Object substance = row.substanceGroupKey();
+			List<DrugReference> rows = families.get(substance);
+			if (rows == null) {
+				rows = new ArrayList<DrugReference>();
+				families.put(substance, rows);
+			}
+			rows.add(row);
+		}
+		return families;
 	}
 
 	/** Whether {@code row}'s display name carries no TRAILING parenthetical — the raw syntax
@@ -440,7 +449,7 @@ public class SubstanceNameRowTest {
 		            + "witness the stem weakening — was: " + DrugReferenceTestSupport.names(silverNitrate));
 		
 		// Not "no qualified row may be elected" — every row of this family is qualified and one of them IS
-		// elected, which is the 10-family case canonicalRow's own @return documents. What must not happen
+		// elected, which is the case canonicalRow's own @return documents. What must not happen
 		// is the OPHTHALMIC presentation taking the role: the fold decides nothing here today, and this is
 		// what stops it starting to decide for that row.
 		assertNotEquals(OPHTHALMIC_SILVER, DrugReference.canonicalRow(silverNitrate).getName(),

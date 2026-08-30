@@ -453,7 +453,9 @@ public class DrugReference {
 	 *         {@code Oxymetazoline (nasal)}/{@code (ophthalmic)}/{@code (topical)},
 	 *         {@code Iobenguane (I-123)}/{@code (I-131)} — and in <b>8</b> of the 120 it is NOT the
 	 *         family's first row, which is why the choice cannot be left to dataset order. Those were
-	 *         119/10/7 before the correction; the family that moves is the influenza A/Vietnam antigen.
+	 *         119/10/7 before the correction. WHICH family accounts for a given delta is stated once, in
+	 *         CLAUDE.md's identity bullet, and deliberately not restated here: two copies of that
+	 *         attribution have been written in this repo and both were wrong, in opposite directions.
 	 */
 	boolean namesNoRoute() {
 		String normalized = normalizeName(name);
@@ -595,9 +597,11 @@ public class DrugReference {
 	 * 129 families but a DIFFERENT three — {@code Fluoroestradiol f-18}/{@code Estradiol}, the influenza
 	 * A/Vietnam typo row/the row the data files that family under, and
 	 * {@code Daxibotulinumtoxina}/{@code Botulinum toxin type A}. The tick-borne family is now decided by
-	 * rung ONE and is not a rung-two move at all, and the A/Vietnam move is not lateral: the incumbent
-	 * carries no trailing parenthetical and the elected row does. The 10-before-10-after count moves too,
-	 * in a direction that depends on which reading it is on — see the paragraph below. At the one
+	 * rung ONE and is not a rung-two move at all. The A/Vietnam move is lateral in the PREDICATE's terms
+	 * like the other two — rung two is only ever reached between rows that agree on rung one — while over
+	 * the RAW strings it replaces a display name carrying no trailing parenthetical with one that does.
+	 * That is why a count over the predicate and a count over the string now move in opposite directions;
+	 * the paragraph below states both with their units. At the one
 	 * {@code canonicalRow} site whose row set is NOT one substance
 	 * ({@code DrugSafetyValidator.entryForAtcCode}, over every row publishing one ATC code, 30 of the
 	 * KB's 2148 codes spanning more than one substance) exactly 1 fold moves, and within one substance.
@@ -641,10 +645,13 @@ public class DrugReference {
 	 *
 	 * @return {@code candidate} where it outranks {@code incumbent} on {@link #namesNoRoute()}, or — for
 	 *         two rows of one substance agreeing on that — on {@link #namesItsSubstance()}; else
-	 *         {@code incumbent}. For the 10 shipped families that name no unqualified row the survivor
-	 *         still carries a qualifier: the KB publishes no unqualified name for those substances, and
-	 *         manufacturing one by stripping a display name is the pattern-match-a-label mistake issue
-	 *         #148 had to undo.
+	 *         {@code incumbent}. For a family that holds no row answering {@link #namesNoRoute()} at all
+	 *         the survivor still carries a qualifier: the KB publishes no unqualified name for those
+	 *         substances, and manufacturing one by stripping a display name is the pattern-match-a-label
+	 *         mistake issue #148 had to undo. How MANY such families the shipped KB has is stated once,
+	 *         on {@link #namesNoRoute()}, with the reading it is counted on — it is not restated here,
+	 *         because this sentence carried a figure for one reading while that javadoc carried the other
+	 *         and the two came apart the moment the predicate changed.
 	 */
 	static DrugReference canonicalRow(DrugReference incumbent, DrugReference candidate) {
 		if (incumbent == null) {

@@ -710,9 +710,13 @@ public class DrugReferenceInjector {
 	 *       <p><b>Read "{@code namesNoRoute()}" here as the predicate and never as the raw string.</b>
 	 *       Issue #250's second half corrected that predicate to say that a trailing parenthetical which
 	 *       IS the name the data files the row's family under qualifies nothing, so an elected row may
-	 *       now CARRY a trailing parenthetical while answering true — the influenza A/Vietnam antigen is
-	 *       the one shipped family where it does, and this record's rendered row moves there from a name
-	 *       carrying no parenthetical to one that does. The invariant this bullet rests on is unchanged
+	 *       now CARRY a trailing parenthetical while answering true. TWO shipped families elect such a
+	 *       row — the influenza A/Vietnam antigen and the tick-borne encephalitis vaccine — and only the
+	 *       first ALSO holds a plain sibling, which is the narrower class
+	 *       {@link DrugReference#namesNoRoute()}'s javadoc and
+	 *       {@code SubstanceNameRowTest.everyFamilyElectingAQualifiedRowOverAPlainSiblingIsNamedRatherThanCounted}
+	 *       are about; do not read a figure for one as a figure for the other. This record's rendered row
+	 *       moves for the A/Vietnam family, from a name carrying no parenthetical to one that does. The invariant this bullet rests on is unchanged
 	 *       under the predicate; what it is NOT is a claim about the shape of the string. The version of
 	 *       that invariant stated on raw syntax lives in
 	 *       {@code SubstanceNameRowTest.aFamilyWithAnUnqualifiedRowElectsOneAndNoOtherRowSpeaksForIt}.</p>

@@ -36,9 +36,11 @@ public class ChartSearchAiUtils {
 
 	/**
 	 * Matches an inline {@code [N]} citation marker in LLM answer prose. The
-	 * single source of truth for citation-marker parsing, shared by citation
-	 * extraction ({@code LlmInferenceService}) and grounding
-	 * ({@code CitationGroundingVerifier}) so the two cannot drift apart.
+	 * single source of truth for citation-marker parsing, shared by every consumer
+	 * {@link #citedIndexes} names — citation extraction ({@code LlmInferenceService}),
+	 * grounding ({@code CitationGroundingVerifier}), safety echo-scoping
+	 * ({@code DrugSafetyValidator}) and the class-code parenthetical check
+	 * ({@code ClassCodeFidelityCheck}) — so they cannot drift apart.
 	 *
 	 * <p>Deliberately single-index. Small local models also emit compact shorthand —
 	 * {@code [6, 7]} (measured on the rc.2 standalone, 2026-07-21: the #76 guard read such

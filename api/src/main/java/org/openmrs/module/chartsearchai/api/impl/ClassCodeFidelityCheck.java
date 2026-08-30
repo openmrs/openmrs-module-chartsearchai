@@ -9,7 +9,9 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -164,7 +166,9 @@ final class ClassCodeFidelityCheck {
 	/**
 	 * @return every ATC-shaped code token in {@code text}, in first-appearance order; empty for
 	 *         null text. Used for both sides of the comparison — what the answer states and what a
-	 *         record states — so the two can never be read by different rules.
+	 *         record states — so the two can never be read by different rules, and, since issue #338,
+	 *         for a third reading: what one PARENTHETICAL of the answer states
+	 *         ({@link #reportMalformedParentheticals}). A filter added here reaches all three.
 	 *
 	 *         <p>Package-private rather than private on purpose: this is the predicate a measurement
 	 *         over captured answers has to CALL rather than re-express (CLAUDE.md's rule for any
@@ -302,22 +306,27 @@ final class ClassCodeFidelityCheck {
 	 * FORM. It is a LIST that has a source and a REPETITION that has none: the injected
 	 * drug-reference record renders a substance's own codes as a round-parenthesised list, so two
 	 * DIFFERENT codes in one parenthetical are deliberately left alone — but it builds that list from
-	 * {@code DrugReference.normalizedAtcCodes()}, which returns a {@code Set}, and the only other
-	 * renderer that puts a code in round parentheses is the chip's class sentence, which renders
-	 * exactly one ({@code DrugSafetyValidator}: {@code "ATC class (" + shared + ")"}, {@code shared}
-	 * a single subgroup). Measured over both shipped datasets: none of the knowledge base's 2283 rows
-	 * carries a {@code drugClass} at all, and all 4 rows of the curated file carry one stating no
-	 * ATC-shaped token. The residue is an operator-authored dataset whose free-text {@code drugClass}
-	 * states a code the same entry also publishes — the reference record then renders it twice inside
-	 * its own parenthetical, and an answer quoting that record faithfully is reported.
+	 * {@code DrugReference.normalizedAtcCodes()}, which returns a {@code Set}. Four renderers put
+	 * something in round parentheses beside a code: that one; the chip's class sentence, which
+	 * renders exactly one subgroup ({@code DrugSafetyValidator}: {@code "ATC class (" + shared + ")"});
+	 * the cross-reactivity sentence beside it ({@code "cross-reactivity group (" + group.getName()});
+	 * and {@code DrugReferenceInjector}'s {@code label + " (" + note + ")"}. The last two parenthesise
+	 * OPERATOR-AUTHORED free text, from the curated file and from the separately loaded
+	 * cross-reactivity groups file, so each is a residue rather than a guarantee — as is a
+	 * {@code drugClass} that states a code the same entry also publishes. Measured over all three
+	 * shipped reference files: none of the knowledge base's 2283 rows carries a {@code drugClass} at
+	 * all, none of its interaction notes or warnings states an ATC-shaped token, the curated file's 4
+	 * rows carry a {@code drugClass} stating none, and the one shipped cross-reactivity group is
+	 * named {@code NSAID}. An operator file that breaks any of those renders a code twice inside one
+	 * parenthetical, and an answer quoting that record faithfully is reported.
 	 *
-	 * <p><b>Groups are read OUTERMOST-first</b>, over a depth walk rather than a regex, so a marker
-	 * buried in a nested aside ({@code (J01MA (see [4]))}) is still inside the parenthetical that
-	 * states the code; an innermost-only scan reads {@code (see [4])}, finds no code in it, and never
-	 * examines the group that has one. An unclosed {@code (} yields no group at all and an unmatched
-	 * {@code )} is ignored — model prose can emit either, and a scan that ran an unclosed group to
-	 * the end of the answer would pool a whole paragraph's codes and markers into one "parenthetical",
-	 * which is a false alarm manufactured out of a typo.
+	 * <p><b>Every BALANCED group is read</b> ({@link #balancedParentheticals}), over a bracket walk
+	 * rather than a regex, so a marker buried in a nested aside ({@code (J01MA (see [4]))}) is inside
+	 * the parenthetical that states the code; an innermost-only scan reads {@code (see [4])}, finds
+	 * no code in it, and never examines the group that has one. An unmatched {@code (} is never
+	 * emitted and does not pool a whole paragraph's codes into one "parenthetical" — that would be a
+	 * false alarm manufactured out of a typo — and, since every group is read rather than only the
+	 * outermost, it does not silence what follows it either.
 	 *
 	 * <p><b>It reports; it never rewrites</b>, for the reason the membership report gives and not for
 	 * a new one: editing a clinician-facing sentence is a larger decision than this check is licensed
@@ -335,28 +344,40 @@ final class ClassCodeFidelityCheck {
 	 */
 	private static void reportMalformedParentheticals(Integer patientId, String answer) {
 		Set<String> repeated = new LinkedHashSet<String>();
-		List<String> enclosed = new ArrayList<String>();
-		for (String group : outermostParentheticals(answer)) {
-			Set<String> seen = new LinkedHashSet<String>();
+		Set<String> enclosed = new LinkedHashSet<String>();
+		for (String group : balancedParentheticals(answer)) {
+			// Through classCodesIn, not a second reading of the pattern: that accessor is what this
+			// class means by "the codes a text states", and a filter added to it later (dropping a
+			// level too coarse to be a claim, say) has to reach these two rules as well as the
+			// membership one. The matcher loop below is only for what a Set discards — multiplicity.
+			Set<String> stated = classCodesIn(group);
+			if (stated.isEmpty()) {
+				// A parenthetical stating no class code is out of both rules' subject matter: an
+				// aside, a gloss, a blood pressure. Reporting a marker inside one would make this a
+				// rule about brackets rather than about codes.
+				continue;
+			}
+			Set<String> once = new LinkedHashSet<String>();
 			Matcher codes = ATC_CLASS_CODE.matcher(group);
 			while (codes.find()) {
-				if (!seen.add(codes.group())) {
-					repeated.add(codes.group());
+				String code = codes.group();
+				if (stated.contains(code) && !once.add(code)) {
+					repeated.add(code);
 				}
-			}
-			if (seen.isEmpty()) {
-				continue;
 			}
 			// The shared decode step over INLINE_CITATION, never a second matcher: this class must
 			// not carry a bracket-marker dialect of its own, and it needs no text offset — the group
-			// it is asking about IS the substring (CLAUDE.md's inline-citation rule).
+			// it is asking about IS the substring (CLAUDE.md's inline-citation rule). Single-index
+			// by that rule's own design, so a compact group the structured citations array does not
+			// corroborate — {@code (H02AB [12, 13])} — is not read as markers here and is missed.
 			Set<Integer> inGroup = ChartSearchAiUtils.citedIndexes(group);
 			if (!inGroup.isEmpty()) {
 				// One entry per offending group, not two pooled lists: with two such groups in one
 				// answer, pooled lists say which codes and which markers occurred and no longer say
 				// which sat with which, and reconstructing the placement from the line alone is what
-				// this check's logging is for.
-				enclosed.add(seen + " with " + inGroup);
+				// this check's logging is for. A Set because nesting yields the same group's codes
+				// and markers again at each level it is enclosed by, and one placement is one entry.
+				enclosed.add(stated + " with " + inGroup);
 			}
 		}
 		// Neither line logs the answer or the record text — they carry patient data, and the codes
@@ -375,32 +396,30 @@ final class ClassCodeFidelityCheck {
 	}
 
 	/**
-	 * @return the contents of each OUTERMOST balanced {@code (...)} group in {@code text}, in
-	 *         first-appearance order, nested groups included in the content rather than reported
-	 *         separately. An unclosed {@code (} contributes nothing and an unmatched {@code )} is
-	 *         ignored — see {@link #reportMalformedParentheticals} for why either is treated as no
-	 *         group rather than as one running to the end of the answer. Empty for null text.
+	 * @return the contents of every BALANCED {@code (...)} group in {@code text} — a nested group on
+	 *         its own as well as inside each group enclosing it — in closing order. An unmatched
+	 *         {@code (} is never emitted and neither poisons nor pools what follows it, and an
+	 *         unmatched {@code )} is ignored. Empty for null text.
+	 *
+	 *         <p>Every group rather than the outermost: an outermost-only walk emits nothing at all
+	 *         once an unclosed {@code (} is open, so a single stray bracket anywhere in the prose
+	 *         made both rules blind to the whole remainder of the answer — silently, and fail-open,
+	 *         in a rule whose subject IS malformed model prose. Reading every group costs the
+	 *         repeated evaluation of a nested one, which the callers' sets collapse.
 	 */
-	private static List<String> outermostParentheticals(String text) {
+	private static List<String> balancedParentheticals(String text) {
 		List<String> groups = new ArrayList<String>();
 		if (text == null) {
 			return groups;
 		}
-		int depth = 0;
-		int start = -1;
+		Deque<Integer> open = new ArrayDeque<Integer>();
 		for (int i = 0; i < text.length(); i++) {
 			char c = text.charAt(i);
 			if (c == '(') {
-				if (depth == 0) {
-					start = i;
-				}
-				depth++;
+				open.push(Integer.valueOf(i + 1));
 			}
-			else if (c == ')' && depth > 0) {
-				depth--;
-				if (depth == 0) {
-					groups.add(text.substring(start + 1, i));
-				}
+			else if (c == ')' && !open.isEmpty()) {
+				groups.add(text.substring(open.pop().intValue(), i));
 			}
 		}
 		return groups;

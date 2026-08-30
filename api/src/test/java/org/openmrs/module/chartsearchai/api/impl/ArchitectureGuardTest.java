@@ -195,49 +195,76 @@ public class ArchitectureGuardTest {
 		assertNoViolations(violations);
 	}
 
-	// --- Infrastructure ---
-
 	/**
-	 * {@code ClassCodeFidelityCheck} must not carry a citation-marker dialect of its own. Since issue
+	 * {@code ClassCodeFidelityCheck} must reach citation markers through
+	 * {@code ChartSearchAiUtils.citedIndexes} and carry no marker dialect of its own. Since issue
 	 * #338 it asks whether a marker sits inside a class-code parenthetical, and CLAUDE.md's rule for
 	 * that question is that {@code ChartSearchAiUtils.INLINE_CITATION} is the single parsing pattern,
-	 * reached through the shared {@code citedIndexes} decode step; the one production site that keeps
-	 * its own matcher does so because it needs each marker's text OFFSET, which this check does not.
+	 * reached through that shared decode step; the one production site that keeps its own matcher
+	 * does so because it needs each marker's text OFFSET, which this check does not.
 	 *
-	 * <p>Nothing behavioural can pin that. A private {@code Pattern.compile("\\[(\\d+)\\]")}
-	 * inside the check answers identically on every case in {@code ClassCodeFidelityTest}, so the
-	 * whole suite stays green on exactly the regression the rule exists to prevent — the same reason
-	 * {@code noDirectGetEmbeddingPrefixCalls} exists for a visibility the compiler already enforces.
-	 * So this asks for the SHAPE: the check compiles exactly one pattern, its own ATC code shape, and
-	 * names no bracketed-digit regex anywhere in its source.
+	 * <p>Nothing behavioural can pin it: a private bracket pattern, a hand-rolled {@code charAt}
+	 * walk, or {@code INLINE_CITATION.matcher(...)} used directly all answer identically on every
+	 * case in {@code ClassCodeFidelityTest}, so the whole suite stays green on exactly the regression
+	 * the rule exists to prevent — the same reason {@link #noDirectGetEmbeddingPrefixCalls} exists
+	 * for a visibility the compiler already enforces.
+	 *
+	 * <p><b>Stated POSITIVELY, because forbidding spellings was measured not to work.</b> The first
+	 * version asked only for one compiled {@code Pattern} and no {@code \\[} literal, and three
+	 * ordinary relocations walked through it with the build green — a nested class assembling the
+	 * brackets by concatenation, a {@code charAt}/{@code isDigit} scan with no regex at all, and
+	 * {@code INLINE_CITATION.matcher} used directly. What closes all three is the first assertion
+	 * below: the decode step must be CALLED. The two negatives stay as defence in depth.
+	 *
+	 * <p>It reads the file itself rather than going through {@link #scanForPattern}, which reports
+	 * per-line matches across the whole tree: this rule needs a COUNT, one file, and a positive
+	 * assertion, none of which that helper expresses. It borrows the helper's comment skip, so a
+	 * maintainer may record the rejected alternative in this class's own javadoc — which ADR
+	 * Decision 59 spells character for character — without breaking the build.
 	 */
 	@Test
-	public void classCodeFidelityCheckCompilesNoCitationMarkerPatternOfItsOwn() throws IOException {
+	public void classCodeFidelityCheckReachesMarkersOnlyThroughTheSharedDecodeStep() throws IOException {
 		List<String> lines = getSourceCache().get("ClassCodeFidelityCheck.java");
 		org.junit.jupiter.api.Assertions.assertNotNull(lines,
 				"precondition: ClassCodeFidelityCheck.java was not found by the source scan, so this "
 						+ "rule would pass vacuously");
 		int compiles = 0;
-		List<String> markerPatterns = new ArrayList<>();
+		boolean callsDecodeStep = false;
+		List<String> ownDialect = new ArrayList<>();
 		for (int i = 0; i < lines.size(); i++) {
 			String line = lines.get(i);
+			String trimmed = line.trim();
+			if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) {
+				continue;
+			}
+			if (line.contains("ChartSearchAiUtils.citedIndexes(")) {
+				callsDecodeStep = true;
+			}
 			if (line.contains("Pattern.compile(")) {
 				compiles++;
 			}
-			// The source spelling of a bracket in a regex literal. Ordinary prose and the javadoc's
-			// own [4] examples do not double the backslash, so only a regex can match this.
-			if (line.contains("\\[")) {
-				markerPatterns.add("line " + (i + 1) + ": " + line.trim());
+			// A bracketed-digit regex of its own, and the shared pattern read directly instead of
+			// through its decode step. Both are marker dialects; neither is caught by the count.
+			if (line.contains("\\[") || line.contains("INLINE_CITATION")) {
+				ownDialect.add("line " + (i + 1) + ": " + trimmed);
 			}
 		}
+		org.junit.jupiter.api.Assertions.assertTrue(callsDecodeStep,
+				"ClassCodeFidelityCheck must read citation markers through "
+						+ "ChartSearchAiUtils.citedIndexes. If that call is gone, the marker rule has "
+						+ "grown a dialect of its own — a regex, a hand-rolled scan, or the shared "
+						+ "pattern matched directly — and no behavioural case can see it.");
 		org.junit.jupiter.api.Assertions.assertEquals(1, compiles,
 				"ClassCodeFidelityCheck must compile exactly one pattern — ATC_CLASS_CODE. A second "
 						+ "one is either a citation-marker dialect (use ChartSearchAiUtils.citedIndexes) "
-						+ "or a second reading of the code shape.");
-		org.junit.jupiter.api.Assertions.assertTrue(markerPatterns.isEmpty(),
-				"ClassCodeFidelityCheck must not spell a bracketed regex of its own; markers are "
-						+ "decoded by ChartSearchAiUtils.citedIndexes. Found: " + markerPatterns);
+						+ "or a second compiled reading of the code shape (reuse ATC_CLASS_CODE).");
+		org.junit.jupiter.api.Assertions.assertTrue(ownDialect.isEmpty(),
+				"ClassCodeFidelityCheck must not spell a bracketed regex of its own nor name "
+						+ "INLINE_CITATION; markers are decoded by ChartSearchAiUtils.citedIndexes. "
+						+ "Found: " + ownDialect);
 	}
+
+	// --- Infrastructure ---
 
 	/** Cache of file name → lines, populated once by {@link #loadAllSources}. */
 	private static java.util.Map<String, List<String>> sourceCache;

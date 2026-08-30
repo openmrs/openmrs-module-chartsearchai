@@ -433,9 +433,10 @@ public class LlmInferenceService implements ChartSearchService {
 					referenceSlice));
 
 			// After the user-visible handoff, before grounding: an exact token comparison that
-			// reports an ATC class code no cited record states (issue #142). It answers in
-			// microseconds and reports only to the log, so nothing downstream — and no consumer
-			// above — waits on it.
+			// reports an ATC class code no cited record states (issue #142), and the two
+			// malformations of a class-code parenthetical that comparison cannot see (issue #338).
+			// It answers in microseconds and reports only to the log, so nothing downstream — and no
+			// consumer above — waits on it.
 			ClassCodeFidelityCheck.reportClassCodeDefects(patient, question, response.getAnswer(),
 					cited, chart.getMappings());
 

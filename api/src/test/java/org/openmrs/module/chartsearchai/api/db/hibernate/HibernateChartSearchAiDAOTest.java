@@ -238,10 +238,12 @@ public class HibernateChartSearchAiDAOTest extends BaseModuleContextSensitiveTes
 	 * — those capture the entity the controller built and never persist it. This is the same
 	 * "a wrong signal is indistinguishable from a right one" shape issue #178 was.
 	 *
-	 * <p>What it does NOT cover: the liquibase changeset. Nothing in this suite reads
-	 * {@code liquibase.xml} — the schema under test is the one Hibernate derives — so a column
-	 * present in the mapping and absent from the changeset is invisible here, exactly as it already
-	 * is for {@code search_mode} and {@code input_tokens}.
+	 * <p>What it does NOT cover: the liquibase changeset. The schema under test here is the one
+	 * Hibernate derives from the mapping, so deleting {@code chartsearchai-009} outright leaves this
+	 * class green. {@code AuditLogSchemaMappingTest} is the other half — it reads the changelog and
+	 * asserts every column this mapping binds is one some changeset creates — and between them a
+	 * column present in the mapping and absent from the schema is caught. Neither RUNS the changelog,
+	 * so whether a changeset executes on a given instance is still outside both.
 	 */
 	@Test
 	public void saveAuditLog_shouldPersistTheInjectedReferenceSlice() {

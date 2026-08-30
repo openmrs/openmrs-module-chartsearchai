@@ -220,7 +220,7 @@ public class ActiveOrderResolutionPerPassTest {
 	 *
 	 * <p><b>It does not catch a widening that makes the resolution read those names, and it was written
 	 * believing it did.</b> Measured: adding a leg to {@code findForActiveOrders} that resolves
-	 * {@code getActiveDrugReferenceNames()} leaves all three cases here green. Not because the case is
+	 * {@code getActiveDrugReferenceNames()} leaves the cases here green. Not because the case is
 	 * vacuous — the enriched context really does carry eleven reference names on this arrangement — but
 	 * because the excerpt has no alias that names an entry the order's own display does not, so the
 	 * widened resolution returns the same entries from raw and enriched alike. Catching it needs a

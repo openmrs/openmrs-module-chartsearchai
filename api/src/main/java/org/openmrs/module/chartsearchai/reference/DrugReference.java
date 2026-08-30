@@ -91,8 +91,9 @@ public class DrugReference {
 	 * {@link String#toLowerCase} returns {@code this} when no character changes, so each element here
 	 * is the very instance {@link #aliases} holds. Measured 2026-08-30 by reading the two lists off
 	 * every entry through the real loaders: 0 of the shipped knowledge base's 8300 alias slots
-	 * (5169 distinct) folds to a different String, and 0 of the curated seed's 12. Its ONE alias
-	 * above U+007F carries an EN DASH rather than a combining mark, so the fold leaves it alone.
+	 * (5169 distinct) folds to a different String, and 0 of the curated seed's 12. The KNOWLEDGE
+	 * BASE's one alias above U+007F carries an EN DASH rather than a combining mark, so the fold leaves
+	 * it alone; the curated seed carries no non-ASCII alias at all.
 	 * What WOULD allocate is an alias the fold actually changes — a combining mark, or an upper-case
 	 * letter in a hand-authored {@code json} KB, since that parser trims its aliases without
 	 * lower-casing them.

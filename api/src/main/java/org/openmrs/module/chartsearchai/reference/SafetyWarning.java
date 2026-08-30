@@ -186,7 +186,7 @@ public class SafetyWarning {
 	 * exemptions and residues included. Do not re-derive that list here — it has moved.
 	 *
 	 * <p>What distinguishes one warning from another is {@link #getDetail()}: of the four fields a
-	 * client receives, it is the one that varies between warnings about a single substance, because it
+	 * client receives, it is the one that tells warnings about a single substance apart, because it
 	 * names the interacting order, the allergen or the ceiling that particular finding is about. Since
 	 * issue #340 {@link #getSeverity()} travels beside it on the wire and may differ too —
 	 * that issue's own capture has a Major and a Minor chip of one drug — but it is no more a key than
@@ -208,10 +208,10 @@ public class SafetyWarning {
 	 * its place ("one for a contraindication, two for a rated interaction, three when folded") which
 	 * measurement refuted as well. What the composition depends on is authored TEXT — a dataset's
 	 * mechanism description is whatever its author wrote — so measure it over the dataset you ship if
-	 * you need a number. How a rated interaction's detail is assembled is stated once, on
-	 * {@link #getSeverity()}, and is not restated here. A renderer that splits or truncates at a
-	 * sentence boundary drops the mechanism text, which is the chip's clinical content; render the
-	 * whole string.
+	 * you need a number. {@link #getSeverity()} is canonical for how a rated interaction's detail is
+	 * assembled, and it is not restated here. A renderer that splits or truncates at a
+	 * sentence boundary drops the mechanism text, which is the chip's clinical content — and on a
+	 * folded chip the class sentence after it. Render the whole string.
 	 *
 	 * <p><b>Renderers should display this alone</b>; prefixing {@link #getDrug()} duplicates the
 	 * subject, because every detail already names it. It is also this field, not
@@ -267,19 +267,24 @@ public class SafetyWarning {
 	 * the production method that produced it, and is not restated here.
 	 *
 	 * <p><b>Read this field; do not fall back to parsing {@link #getDetail()}.</b> On the bundled
-	 * DDInter dataset that prose does carry the rating, and without exception — though not at its
-	 * start, which is the drug's own name: {@code DdiDrugReferenceSource.noteFor} builds every note as
-	 * {@code severity + ". " + mechanism}, or as
+	 * DDInter dataset the rating is somewhere in that prose: {@code DdiDrugReferenceSource.noteFor}
+	 * builds every note as {@code severity + ". " + mechanism}, or as
 	 * {@code severity + " severity interaction (… no mechanism description on file)."} where the row
-	 * has none, and {@code DrugSafetyValidator.interactionWarning} appends that note after an em dash,
-	 * so the rating is the first word after the dash. Measured 2026-08-30 over the shipped KB's
-	 * 590,312 links: no note is null or blank, no rated rule carries none, and none fails to start
-	 * with its own severity word. So a parse is not broken there TODAY; what it rests on is that
-	 * {@code detail} is prose this module rewords freely and holds out as no contract. It is broken on
-	 * an operator {@code sourceFormat=json} dataset, where the note and the rating are independently
-	 * authored fields: a rule may carry no note at all, in which case {@code interactionWarning}
-	 * appends none and the rating is nowhere in the chip's SENTENCE, or carry one whose leading word
-	 * is a different rating.
+	 * has none, and {@code DrugSafetyValidator.interactionWarning} appends that note. Measured
+	 * 2026-08-30 over the shipped KB's 590,312 links: no note is null or blank, no rated rule carries
+	 * none, and none fails to start with its own severity word.
+	 *
+	 * <p><b>That measurement is about the NOTE, and no claim about where the rating sits in the
+	 * rendered detail follows from it.</b> Three attempts to state one have been refuted, which is why
+	 * none is made here. The detail is assembled from chart text as well as dataset text, and the
+	 * chart's half goes in unquoted — a free-text prescription display can carry the very delimiter
+	 * the chip appends its note after, which
+	 * {@code NonCodedDrugOrderNameTest.aFreeTextDisplayIsPrintedIntoTheChipUnquoted} pins as current
+	 * behaviour. What is left, and is enough, is that {@code detail} is prose this module rewords
+	 * freely and holds out as no contract. And on an operator {@code sourceFormat=json} dataset the
+	 * rating need not be in the detail at all: note and severity are independently authored fields
+	 * there, so a rule may carry no note, in which case {@code interactionWarning} appends none, or
+	 * carry one whose leading word is a different rating.
 	 * {@code ChartSearchAiSafetyWarningSeverityWireTest.theRatingIsPublishedEvenWhereTheProseNamesItNowhere}
 	 * drives both of those.
 	 *

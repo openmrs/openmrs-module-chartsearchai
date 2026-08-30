@@ -556,6 +556,53 @@ public class ClassCodeFidelityTest {
 	}
 
 	@Test
+	public void removingANestedSpanDoesNotWeldTheTextEitherSideOfIt() {
+		// The level walk leaves a SPACE where a nested group was, not nothing. Deleting it welds the
+		// text either side into one run, and both rules read tokens off the result: measured, this
+		// answer states J01MA exactly once and was reported as repeating it, the second "occurrence"
+		// manufactured by joining "J01M" to the "A" on the far side of the aside.
+		service.setLlmProvider(answering("Ciprofloxacin is in the same ATC class (" + TRUE_CODE
+				.substring(0, TRUE_CODE.length() - 1) + "(sic)" + TRUE_CODE.substring(TRUE_CODE.length() - 1)
+				+ ", " + TRUE_CODE + ") as the order [" + finding.getIndex() + "]."));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			service.search(patient(), QUESTION);
+			assertFalse(warnStating(capture, "more than once inside one parenthetical"),
+					"the code is stated once; a repetition here is manufactured by the walk. Captured: "
+							+ capture.describeAll());
+		}
+	}
+
+	@Test
+	public void aMarkerManufacturedByRemovingANestedSpanIsNotReported() {
+		// The same weld, on the marker rule and in its worst direction: "[0(sic)3]" carries no
+		// citation marker at all, and joining across the aside makes it "[03]" — an index that
+		// resolves to a real record, so the validated-citation intersection cannot see it either.
+		service.setLlmProvider(answering("Ciprofloxacin is in the same ATC class (" + TRUE_CODE
+				+ " [0(sic)" + finding.getIndex() + "]) as the order [" + finding.getIndex() + "]."));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			service.search(patient(), QUESTION);
+			assertFalse(warnStating(capture, "inside a parenthetical"),
+					"there is no marker inside those brackets; one welded out of two fragments is not "
+							+ "a citation the model placed. Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void aRepetitionSeparatedOnlyByAnEmptyNestedGroupIsStillReported() {
+		// The other direction of the same weld, which the separator also fixes: without it the empty
+		// group's removal joins the two codes into one alphanumeric run and the token boundaries
+		// reject both, so a real repetition went silently unreported.
+		service.setLlmProvider(answering("Ciprofloxacin is in the same ATC class (" + TRUE_CODE + "()"
+				+ TRUE_CODE + ") as the order [" + finding.getIndex() + "]."));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			service.search(patient(), QUESTION);
+			assertTrue(warnStating(capture, "more than once inside one parenthetical",
+					"[" + TRUE_CODE + "]"),
+					"the codes are two, separated by an empty aside. Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
 	public void twoClausesWrappedInOneAsideAreStillTwoClauses() {
 		// The false alarm that decided the level semantics. Read whole, the enclosing aside states
 		// the class twice — once from each child — and a correct answer about two partners of one
@@ -592,12 +639,13 @@ public class ClassCodeFidelityTest {
 	}
 
 	@Test
-	public void aBracketedClinicalValueInsideTheParentheticalIsNotAMisplacedMarker() {
-		// The marker rule reads the VALIDATED citations, not every bracketed integer: an
-		// uncorroborated bracketed number in answer prose is a clinical value, which is the whole
-		// reason INLINE_CITATION is single-index. Re-derived from the prose, a dose or an eGFR
-		// written inside the class parenthetical is reported as a misplaced citation of a record
-		// that does not exist.
+	public void aBracketedNumberTheChartHasNoRecordForIsNotAMisplacedMarker() {
+		// The marker rule reads the answer's own VALIDATED citations rather than every bracketed
+		// integer in the prose. Named for what it actually pins, because a wider claim was written
+		// here first: extractCitedReferences promotes every IN-RANGE bracket to a citation, so what
+		// this excludes is a number the chart has no record for — [97] on a chart of a few records —
+		// and NOT bracketed clinical values as such. An eGFR of 45 beside a 45-record chart is still
+		// reported; that residue is recorded on ADR Decision 59.
 		service.setLlmProvider(answering("Ciprofloxacin is in the same ATC class (" + TRUE_CODE
 				+ ", dose [97] mg) as the patient's active order — possible duplicate therapy ["
 				+ finding.getIndex() + "]."));
@@ -690,10 +738,13 @@ public class ClassCodeFidelityTest {
 	}
 
 	@Test
-	public void twoOffendingParentheticalsAreReportedAsTwoEntries() {
-		// Why the marker report is one entry per parenthetical rather than two pooled lists: with two
+	public void twoOffendingParentheticalsWithDifferentCodesAreTwoEntries() {
+		// Why the marker report is one entry per PAIRING rather than two pooled lists: with two
 		// offending groups, pooled lists say which codes and which markers occurred and no longer say
 		// which sat with which. Nothing else in this file has two offending groups in one answer.
+		// The line reports distinct placements and not a count of brackets — two groups stating the
+		// same codes with the same markers are one entry, which is what the WARN's wording says and
+		// what aTwiceRepeatedIdenticalPlacementIsOneEntry pins.
 		RecordMapping reference = referenceRecord();
 		List<String> codes = new ArrayList<String>(
 				ClassCodeFidelityCheck.classCodesIn(reference.getText()));
@@ -705,7 +756,7 @@ public class ClassCodeFidelityTest {
 				+ "])."));
 		try (LogCapture capture = LogCapture.on(CHECK)) {
 			service.search(patient(), QUESTION);
-			assertTrue(warnStating(capture, "one entry per parenthetical",
+			assertTrue(warnStating(capture, "one entry per distinct code-and-marker pairing",
 					"[" + codes.get(0) + "] with [" + reference.getIndex() + "]",
 					"[" + codes.get(1) + "] with [" + finding.getIndex() + "]"),
 					"each offending parenthetical has to be its own entry, pairing the codes it "
@@ -732,6 +783,23 @@ public class ClassCodeFidelityTest {
 			assertTrue(debugStating(capture, "no cited record states a class code"),
 					"and which gate declined has to be identifiable, or the silence could be the "
 							+ "rule never having run. Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void aTwiceRepeatedIdenticalPlacementIsOneEntry() {
+		// The other half of the wording: the entries are distinct PLACEMENTS, not offending brackets.
+		// Two parentheticals stating the same code with the same marker inside collapse to one entry,
+		// so a maintainer counting clauses off this line would undercount — which is why the line
+		// does not offer itself as a count.
+		service.setLlmProvider(answering("First (" + TRUE_CODE + " [" + finding.getIndex()
+				+ "]) and second (" + TRUE_CODE + " [" + finding.getIndex() + "])."));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			service.search(patient(), QUESTION);
+			assertTrue(warnStating(capture, "one entry per distinct code-and-marker pairing",
+					"[[" + TRUE_CODE + "] with [" + finding.getIndex() + "]]"),
+					"two identical placements are one entry, and the line says pairing rather than "
+							+ "parenthetical for exactly that reason. Captured: " + capture.describeAll());
 		}
 	}
 

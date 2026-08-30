@@ -294,8 +294,10 @@ final class ClassCodeFidelityCheck {
 	 * comparison above is structurally unable to see (issue #338): the same code stated more than
 	 * once inside one parenthetical, and a citation marker placed inside one.
 	 *
-	 * <p><b>Both are answer-LOCAL.</b> Neither asks what the records state — they ask what SHAPE the
-	 * prose has, and the shape is wrong on its own terms. That is what keeps them clear of the
+	 * <p><b>Both are answer-LOCAL in the sense that matters here.</b> Neither asks what the records
+	 * STATE — they ask what SHAPE the prose has, and the shape is wrong on its own terms. (The marker
+	 * rule does ask the records one thing: whether an index resolves to one, which is what keeps a
+	 * number the chart has no record for out of it.) That is what keeps them clear of the
 	 * comparison ADR Decision 35 rejects (the answer's codes against the CHIPS, i.e. against what the
 	 * answer was expected to report rather than what it was licensed to state): nothing here reads a
 	 * chip, and nothing here reads what the answer failed to say.
@@ -314,13 +316,15 @@ final class ClassCodeFidelityCheck {
 	 * it is stated as a measurement rather than as a list of renderers that would go stale.
 	 *
 	 * <p>Measured over all three shipped reference files, by driving the real parsers and this
-	 * class's own {@link #classCodesIn}: of the knowledge base's 597,161 free-text fields across
-	 * 2283 entries — drug class, generic name, display label, every interaction note and severity,
-	 * every contraindication note and token — ZERO state an ATC-shaped token; the curated file's 4
-	 * rows carry a drug class stating none; and the one shipped cross-reactivity group is named
-	 * {@code NSAID}. So no shipped data can put a code inside a parenthetical twice. An operator
-	 * file that states one in any of those fields can, and an answer quoting that record faithfully
-	 * is then reported.
+	 * class's own {@link #classCodesIn}: over the knowledge base's 2283 entries and their 590,312
+	 * interactions, counting one field at a time — drug class, generic name and display label per
+	 * entry, note and severity per interaction, note and token per contraindication, 1,187,473
+	 * fields in all — ZERO state an ATC-shaped token. State the base as well as the count: the
+	 * contraindication clause contributes none of those fields, the shipped KB parsing to zero
+	 * contraindications. The curated file's 4 rows carry a drug class stating none, and the one
+	 * shipped cross-reactivity group is named {@code NSAID}. So no shipped data can put a code
+	 * inside a parenthetical twice. An operator file that states one in any of those fields can,
+	 * and an answer quoting that record faithfully is then reported.
 	 *
 	 * <p><b>Every parenthetical is read AT ITS OWN LEVEL</b> ({@link #parentheticalsAtTheirOwnLevel}),
 	 * over a bracket walk rather than a regex: a nested group's codes and markers are that group's,
@@ -345,6 +349,8 @@ final class ClassCodeFidelityCheck {
 	 */
 	private static void reportMalformedParentheticals(Integer patientId, String answer,
 			List<Integer> cited) {
+		// cited: the validated indexes for THIS answer, as resolved by reportClassCodeDefects, whose
+		// @param cited carries the contract. One call site, after both abstain gates.
 		Set<String> repeated = new LinkedHashSet<String>();
 		Set<String> enclosed = new LinkedHashSet<String>();
 		for (String group : parentheticalsAtTheirOwnLevel(answer)) {
@@ -377,19 +383,22 @@ final class ClassCodeFidelityCheck {
 			// by that rule's own design, so a compact group the structured citations array does not
 			// corroborate — {@code (H02AB [12, 13])} — is not read as markers here and is missed.
 			Set<Integer> inGroup = ChartSearchAiUtils.citedIndexes(group);
-			// Only markers that really are citations: this method is handed the same validated list
-			// the membership report cites, so a bracketed CLINICAL value inside the parenthetical —
-			// "(J01MA, dose [97] mg)", "(J01MA, eGFR [45] ml/min)" — is not read as a misplaced
-			// marker. Re-deriving citedness from the prose is what reportClassCodeDefects' own
-			// @param cited forbids one arity up, and CLAUDE.md's inline-citation rule one level up
-			// again: an uncorroborated bracketed number is a value, not a reference.
+			// Only markers the answer's own resolution admitted: this method is handed the same
+			// validated list the membership report cites, rather than re-deriving citedness from the
+			// prose, which reportClassCodeDefects' @param cited forbids one arity up. State the bound
+			// exactly, because a weaker one was written here first and is what a reader will assume.
+			// extractCitedReferences promotes every IN-RANGE bracketed integer in the answer to a
+			// citation, so what this excludes is a bracketed number the chart has NO record for
+			// ("(J01MA, dose [97] mg)" on a 40-record chart) — not bracketed clinical values as such.
+			// An eGFR of 45 beside a 45-record chart is still reported, and that residue is real.
 			inGroup.retainAll(cited);
 			if (!inGroup.isEmpty()) {
-				// One entry per offending group, not two pooled lists: with two such groups in one
+				// One entry per PAIRING, not two pooled lists: with two offending groups in one
 				// answer, pooled lists say which codes and which markers occurred and no longer say
 				// which sat with which, and reconstructing the placement from the line alone is what
-				// this check's logging is for. A Set so two groups stating the same thing are one
-				// entry; each group appears once, since each is read at its own level.
+				// this check's logging is for. A Set, so two groups stating the same codes with the
+				// same markers are one entry — the line reports distinct placements, not a count of
+				// offending brackets, and it is worded that way.
 				enclosed.add(stated + " with " + inGroup);
 			}
 		}
@@ -402,17 +411,19 @@ final class ClassCodeFidelityCheck {
 		}
 		if (!enclosed.isEmpty()) {
 			log.warn("Answer for patient={} places citation marker(s) inside a parenthetical stating "
-					+ "ATC class code(s), one entry per parenthetical: {}; a marker attributes the "
-					+ "clause and belongs after it. The answer prose is left unchanged (issue #338).",
-					patientId, enclosed);
+					+ "ATC class code(s), one entry per distinct code-and-marker pairing: {}; a marker "
+					+ "attributes the clause and belongs after it. The answer prose is left unchanged "
+					+ "(issue #338).", patientId, enclosed);
 		}
 	}
 
 	/**
 	 * @return the text of every {@code (...)} group in {@code text} AT ITS OWN LEVEL — the content
-	 *         between its brackets with each nested group's own span left out, since that span is
-	 *         its own entry — in opening order, one entry per matched {@code (}. An unmatched
+	 *         between its brackets with each nested group's own span REPLACED BY A SPACE, since that
+	 *         span is its own entry — in opening order, one entry per matched {@code (}. An unmatched
 	 *         {@code (} opens nothing and an unmatched {@code )} closes nothing. Empty for null text.
+	 *         A space and not nothing: the replacement is a separator, or the text either side of a
+	 *         nested span is welded into one run and both rules read TOKENS off the result.
 	 *
 	 *         <p><b>Own level, and both halves of that were wrong once.</b> Reading only the
 	 *         OUTERMOST group emitted nothing at all while an unclosed {@code (} was open, so one
@@ -454,6 +465,11 @@ final class ClassCodeFidelityCheck {
 			int j = i + 1;
 			while (j < closedAt[i]) {
 				if (closedAt[j] >= 0) {
+					// A SPACE where the nested span was, never nothing: deleting it would weld the
+					// text either side into one run and both rules read tokens. Measured — "(J01M(sic)A,
+					// J01MA)" reported a repetition the prose does not have, "(J01MA [0(sic)3])" a marker
+					// it does not carry, and "(J01MA()J01MA)" went silent on one it does.
+					own.append(' ');
 					j = closedAt[j] + 1;
 				}
 				else {

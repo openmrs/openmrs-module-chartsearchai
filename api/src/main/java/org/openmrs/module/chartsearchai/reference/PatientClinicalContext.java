@@ -14,7 +14,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -48,6 +47,22 @@ public class PatientClinicalContext {
 	private final Double weightKg;
 
 	private final Set<String> activeDrugNames;
+
+	/**
+	 * {@link #activeDrugNames}, each in {@link DrugReference#foldedLower} form — the haystack side of
+	 * {@link #hasActiveDrug}'s scan, folded once when this context is built rather than once per
+	 * comparison (issue #330). Beside the raw set and not instead of it:
+	 * {@link #getActiveDrugNames()} is read by {@code DrugReferenceService.findForActiveOrders} and by
+	 * the chip sentences, which need the name the chart records.
+	 *
+	 * <p>Derived through {@link DrugReference#foldedAll}, which is where a collection's folded view is
+	 * expressed, and a {@code List} because that method returns one — its other caller needs index
+	 * alignment with the raw list. Nothing here does: {@link #hasActiveDrug} iterates this and ORs, so
+	 * a duplicate would be unobservable and the shape is not load-bearing. Only the ORDER of the two
+	 * derivations is: this reads {@link #activeDrugNames} after {@code lower} has normalised it, so the
+	 * folded view is of what this context stores rather than of what a caller passed.
+	 */
+	private final List<String> foldedActiveDrugNames;
 
 	private final Set<String> activeDrugAtcCodes;
 
@@ -118,6 +133,7 @@ public class PatientClinicalContext {
 		this.ageYears = ageYears;
 		this.weightKg = weightKg;
 		this.activeDrugNames = lower(activeDrugNames);
+		this.foldedActiveDrugNames = DrugReference.foldedAll(this.activeDrugNames);
 		this.activeDrugAtcCodes = upper(activeDrugAtcCodes);
 		this.allergyTokens = lower(allergyTokens);
 		this.conditionTokens = lower(conditionTokens);
@@ -205,7 +221,8 @@ public class PatientClinicalContext {
 	 *
 	 *         <p>Held separately from {@link #getActiveDrugNames()} rather than folded into it because
 	 *         the two are matched by DIFFERENT rules and must stay distinguishable: an order's display
-	 *         name is a localized string scanned with {@link DrugReference#matchesOrderName}, while
+	 *         name is a localized string scanned under {@link DrugReference#matchesOrderName}'s rule
+	 *         (since issue #330 {@link #hasActiveDrug} reaches it through the folded arity), while
 	 *         these are canonical reference names compared by identity. Folding them together would
 	 *         scan a rule token across a combination product's alias, which is exactly the wrong
 	 *         answer — see {@link #hasActiveDrug}.
@@ -257,10 +274,13 @@ public class PatientClinicalContext {
 	 *         {@link DrugReferenceInjector} — reach every one of those arms only through here, which is
 	 *         what keeps the chips and the promoted prose agreeing about which orders a rule matches.
 	 *
-	 *         <p><b>The order-name arm</b> goes through {@link DrugReference#matchesOrderName} — not
-	 *         bare containment, which reported drugs the patient had never taken because drug names
-	 *         nest ("tiotropium" contains "opium"; issue #86), and not the prose rule either, because
-	 *         an order's display name is localized and inflected (see there). Since issue #293 this set
+	 *         <p><b>The order-name arm</b> goes through {@link DrugReference#matchesOrderName}'s rule —
+	 *         since issue #330 through its folded arity {@link DrugReference#matchesFoldedOrderName},
+	 *         both operands being fixed for the pass, which is the same rule and the same allowance —
+	 *         not bare containment, which reported drugs the patient had never taken because drug
+	 *         names nest ("tiotropium" contains "opium"; issue #86), and not the prose rule either,
+	 *         because an order's display name is localized and inflected (see there). Since issue
+	 *         #293 this set
 	 *         also holds the free text a clinician typed for a non-coded order, which CAN be prose; the
 	 *         matcher is unchanged and the cost of applying it to prose is recorded on
 	 *         {@code PatientClinicalContextBuilder.addDrugName}.
@@ -287,17 +307,34 @@ public class PatientClinicalContext {
 	 *         it, which is the same predicate that formulation applies to the partner. Where the two
 	 *         differ is the ATC leg, which this one also reaches — an order mapped to an entry's exact
 	 *         level-5 code is that substance, so the entry's names are the patient's names too.)
+	 *
+	 *         <p><b>The reference-name arm is asked FIRST</b> since issue #330, though which of the two
+	 *         answers comes back is immaterial — both return true — and the order is not part of the
+	 *         contract. It is one hash lookup, against a scan of every order the patient is on.
 	 */
 	boolean hasActiveDrug(String nameToken, String atcCode) {
 		if (nameToken != null && !nameToken.trim().isEmpty()) {
 			String n = nameToken.trim();
-			for (String drug : activeDrugNames) {
-				if (DrugReference.matchesOrderName(drug, n)) {
-					return true;
-				}
-			}
+			// The identity arm first: it is one hash lookup and the name arm below is a scan of every
+			// order the patient is on, so asking the cheap question second cost the whole scan whenever
+			// the answer was yes. Which of the two answers is immaterial — both arms return true, and
+			// both operands are pure — so this is an ordering, not a change of rule (issue #330).
 			if (activeDrugReferenceNames.contains(DrugReference.normalizeName(n))) {
 				return true;
+			}
+			// BOTH operands of the scan below are fixed for the pass — the order names since this
+			// context was built, the token for this call — so each is folded once above the loop
+			// rather than once per comparison (issue #330).
+			// Emptiness before the fold, so a chart with no readable drug order pays neither the
+			// allocation nor the NFD scan — which is what the pre-#330 code did by simply not entering
+			// the loop, and this arm is asked once per above-floor rule of every in-play entry.
+			if (!foldedActiveDrugNames.isEmpty()) {
+				DrugReference.FoldedName token = DrugReference.fold(n);
+				for (String folded : foldedActiveDrugNames) {
+					if (DrugReference.matchesFoldedOrderName(folded, token)) {
+						return true;
+					}
+				}
 			}
 		}
 		String normalizedAtc = DrugReference.normalizeAtcToken(atcCode);
@@ -449,7 +486,10 @@ public class PatientClinicalContext {
 	 *  {@link #allergensMatching} so the boolean and its witnesses fold alike, and with
 	 *  {@link #matchableToken}, whose whole subject is whether this expression comes out empty. */
 	private static String foldedToken(String token) {
-		return DrugReference.foldDiacritics(token.trim().toLowerCase(Locale.ROOT));
+		// Through DrugReference.foldedLower, not a second spelling of it: that method is "named once so
+		// that a caller preparing them itself cannot apply half of it or apply the two in the other
+		// order", and this was the hand-written copy its javadoc warns against (issue #330).
+		return DrugReference.foldedLower(token.trim());
 	}
 
 	/** The one comparison behind both {@link #containsToken} and {@link #allergensMatching}: a recorded

@@ -20,10 +20,8 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.Test;
@@ -142,14 +140,8 @@ public class CoMedicationResolutionPerPassTest {
 	}
 
 	private static PatientClinicalContext chartWithOrders() {
-		List<PatientClinicalContext.ActiveDrugOrder> orders =
-				new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
-		Set<String> names = new LinkedHashSet<String>();
-		for (String name : ORDER_NAMES) {
-			orders.add(DrugReferenceTestSupport.activeOrder("order-" + name, name, name));
-			names.add(name.toLowerCase());
-		}
-		return DrugReferenceTestSupport.ctx(60, 70.0, names, null, null, null, orders);
+		return DrugReferenceTestSupport.rawContextNaming(60, 70.0,
+				ORDER_NAMES.toArray(new String[0]));
 	}
 
 	private static String questionNaming(int drugs) {
@@ -270,9 +262,15 @@ public class CoMedicationResolutionPerPassTest {
 			"src/main/java/org/openmrs/module/chartsearchai/reference/DrugSafetyValidator.java";
 
 	/** The one arity of {@code validate} that builds the pass's shared state; the others delegate to
-	 *  it. The needle stops at the line break, so it is a single line of the file as written. */
+	 *  it. It spans BOTH lines of the declaration: since issue #255 the arity above opens with a
+	 *  byte-identical first line, so the first line alone matches twice and {@link SourceScan#body}
+	 *  hard-fails on that; and the second line alone names no METHOD, so nothing about it says the body
+	 *  it lands on is {@code validate}'s. What the first line buys is that name — see
+	 *  {@code ChipSubjectOneResolutionTest}'s copy of this constant for what a tail-only needle does
+	 *  and does not let through, which is not what it first appears. */
 	private static final String VALIDATE =
-			"validate(String answer, String question, PatientClinicalContext rawContext,";
+			"validate(String answer, String question, PatientClinicalContext rawContext,\n"
+					+ "\t\t\tList<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries) {";
 
 	private static final String MEMO_DECLARATION = "private final class CoMedications {";
 
@@ -418,7 +416,7 @@ public class CoMedicationResolutionPerPassTest {
 					+ "(issue #256).");
 		assertTrue(validate.contains(constructions.get(0)),
 			"CoMedications is constructed at line " + scan.lineOf(constructions.get(0)) + ", outside the "
-					+ "body of validate(String, String, PatientClinicalContext, List). Built anywhere "
+					+ "body of validate(String, String, PatientClinicalContext, List, List). Built anywhere "
 					+ "per-subject it memoises nothing; held in a FIELD it is issue #172's trap, which the "
 					+ "counting cases here cannot see for a field REASSIGNED once per pass — that sweeps "
 					+ "exactly as often as a local does.");

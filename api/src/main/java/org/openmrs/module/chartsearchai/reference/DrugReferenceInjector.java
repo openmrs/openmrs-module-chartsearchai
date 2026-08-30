@@ -253,6 +253,22 @@ public class DrugReferenceInjector {
 	 * wording — the direction issue #107 guards.
 	 */
 	List<SafetyWarning> preAnswerFindings(PatientClinicalContext context, String question) {
+		return preAnswerFindings(context, question, null);
+	}
+
+	/**
+	 * As {@link #preAnswerFindings(PatientClinicalContext, String)}, for a caller that has already
+	 * resolved the patient's active orders to their reference entries and so can spare the validator
+	 * deriving them a second time (issue #255) — which is {@link #injectRecords}, the only production
+	 * caller that passes a non-null list; the two-argument overload above reaches this one too.
+	 *
+	 * @param orderEntries that resolution, or {@code null} to let the validator resolve for itself.
+	 *        It must be the resolution of {@code context}'s own orders; see the validator's own
+	 *        parameter javadoc for why the list travels and the enriched CONTEXT deliberately does
+	 *        not.
+	 */
+	List<SafetyWarning> preAnswerFindings(PatientClinicalContext context, String question,
+			List<DrugReference> orderEntries) {
 		// Gated on the SAME toggle that gates the chips, because the two must never disagree. The
 		// validator's public entry point checks this GP; the package-private overload used here does
 		// not, so without this an operator setting validateAnswers=false would switch the chips off
@@ -264,7 +280,7 @@ public class DrugReferenceInjector {
 				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_VALIDATE_ANSWERS)) {
 			return Collections.emptyList();
 		}
-		return drugSafetyValidator.validate("", question, context);
+		return drugSafetyValidator.validate("", question, context, null, orderEntries);
 	}
 
 	/**
@@ -301,7 +317,8 @@ public class DrugReferenceInjector {
 		// PatientClinicalContext.hasActiveDrug, so a context without the reference names here would
 		// promote a different set of partners than the chips name — the exact chip-versus-prose split
 		// that method's javadoc exists to rule out.
-		// Resolved once and kept, exactly as DrugSafetyValidator.validate does: orderedInteractionNotes
+		// Resolved once and kept, and since issue #255 once for the whole PASS: this list is handed to
+		// the validate below rather than derived a second time there. orderedInteractionNotes
 		// groups a partner by the active-order ENTRY the rule names (issue #190 item 2), which is the
 		// chip's own key, so these entries have to be the same resolution the names above come from —
 		// two resolutions is how the record and the chip come to disagree about which rows are one
@@ -320,7 +337,9 @@ public class DrugReferenceInjector {
 		// and the reason to pass this one is that a later change to what the ranking reads must not have
 		// to notice that the injector was feeding it a different context from everything else.
 		Map<DrugReference, SubstanceRendering> matched = matchingEntries(orderEntries, question, context);
-		List<SafetyWarning> findings = preAnswerFindings(context, question);
+		// Handed the resolution above rather than left to derive it again (issue #255): validate used to
+		// resolve the same orders again, and this method already holds that answer.
+		List<SafetyWarning> findings = preAnswerFindings(context, question, orderEntries);
 		List<PatientClinicalContext.ActiveDrugOrder> unrepresented = unrepresentedActiveOrders(chart, context);
 		if (matched.isEmpty() && findings.isEmpty() && unrepresented.isEmpty()) {
 			return chart;

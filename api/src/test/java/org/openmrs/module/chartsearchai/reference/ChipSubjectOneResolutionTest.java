@@ -179,11 +179,20 @@ public class ChipSubjectOneResolutionTest {
 	private static final String LOOKUP_DECLARATION = "private static final class SubstanceSubjects {";
 
 	/**
-	 * The one arity of {@code validate} that builds the pass's shared state — the other four delegate to
-	 * it. The needle stops at the line break so it is a single line of the file as written.
+	 * The one arity of {@code validate} that builds the pass's shared state — the other five delegate
+	 * to it. It spans BOTH lines of the declaration, which is a correction rather than a style: since
+	 * issue #255 the arity above opens with a byte-identical first line, so the first line alone
+	 * matches twice and {@link #uniqueOffsetOf} hard-fails on that; and the second line alone names no
+	 * METHOD, so nothing about it says the body it lands on is {@code validate}'s. What the first line
+	 * buys is that name. Do not read it as "a sibling with the same tail would pass": measured, a
+	 * sibling alone makes TWO matches and fails loudly, because {@code validate}'s own declaration
+	 * still carries the tail. The shape that gets through a tail-only needle is a sibling together
+	 * with a rename or a re-wrap of {@code validate}'s own parameters. It still ends at the body's own
+	 * opening brace, which is what {@link #bodyOf} looks for.
 	 */
 	private static final String VALIDATE =
-			"validate(String answer, String question, PatientClinicalContext rawContext,";
+			"validate(String answer, String question, PatientClinicalContext rawContext,\n"
+					+ "\t\t\tList<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries) {";
 
 	@Test
 	public void onlyTheSharedLookupAndThePartnerRungResolveASubjectDirectly() throws IOException {
@@ -275,7 +284,7 @@ public class ChipSubjectOneResolutionTest {
 
 		assertTrue(validateBody.contains(constructions.get(0)),
 			"the one construction of SubstanceSubjects is at line " + lineOf(source, constructions.get(0))
-					+ ", outside the body of validate(String, String, PatientClinicalContext, List) — so"
+					+ ", outside the body of validate(String, String, PatientClinicalContext, List, List) — so"
 					+ " the arms of a pass may no longer share ONE instance even though the file holds one"
 					+ " \"new\": a per-arm helper returning a fresh instance is one construction and many"
 					+ " objects, which is issue #236's split with an extra hop. If the construction moved"

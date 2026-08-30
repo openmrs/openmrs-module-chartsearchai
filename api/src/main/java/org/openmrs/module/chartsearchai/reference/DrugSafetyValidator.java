@@ -273,9 +273,66 @@ public class DrugSafetyValidator {
 	 */
 	List<SafetyWarning> validate(String answer, String question, PatientClinicalContext rawContext,
 			List<RecordMapping> mappings) {
+		return validate(answer, question, rawContext, mappings, null);
+	}
+
+	/**
+	 * The widest arity, and the one that builds the pass's shared state — every other delegates to it.
+	 *
+	 * <p><b>Two structural guards delimit this body by a literal needle, and each spells BOTH lines of
+	 * this declaration.</b> Neither line alone will do, for two different reasons, and both were
+	 * measured: the first line alone matches twice, since the arity above opens with a byte-identical
+	 * one, and a needle matching twice is a hard failure in each guard's own unique-offset check
+	 * ({@code SourceScan.uniqueOffset} for {@code CoMedicationResolutionPerPassTest}, and
+	 * {@code ChipSubjectOneResolutionTest}'s own copy of it, which ADR Decision 54 records as
+	 * deliberately not migrated); and the second line alone names no METHOD, which is what the first
+	 * line buys. Move this declaration and the needles
+	 * move with it — {@code ChipSubjectOneResolutionTest} and {@code CoMedicationResolutionPerPassTest},
+	 * which say so themselves.
+	 *
+	 * @param resolvedOrderEntries the patient's active orders ALREADY resolved to their reference
+	 *        entries by a caller that needed them itself, or {@code null} from a caller that has not
+	 *        resolved them — which is every caller but {@code DrugReferenceInjector.injectRecords}.
+	 *        Issue #255: that method resolves the list for its own promotion predicate, for
+	 *        {@code matchingEntries}' candidate set (issue #151) and for the reference names it
+	 *        attaches, and then calls in here; resolving it again was a second derivation of a value
+	 *        the pass already held. {@code CLAUDE.md}'s {@code findForActiveOrders} bullet prescribes
+	 *        the shape — "wherever a caller already holds the resolved list, pass it down rather than
+	 *        resolving again" — and it is a PARAMETER rather than a memo for issue #172's reason: this
+	 *        bean is a Spring singleton, so a field would be one unsynchronized map shared by every
+	 *        concurrent request.
+	 *
+	 *        <p>It is the transported input and not a transported CONTEXT: {@link
+	 *        DrugReferenceService#withReferenceNames} is still applied below, because it costs no
+	 *        dataset walk and keeping it here leaves this method the sole constructor of the context
+	 *        it reasons over. A caller that handed a pre-enriched context instead would make that
+	 *        construction depend on the caller having applied the right step, and a caller that got it
+	 *        wrong would be silent.
+	 *
+	 *        <p>It is READ here and never written — every use below is an iteration or a pass-through,
+	 *        and that is now load-bearing where it was not. The caller does not hand the list over: it
+	 *        goes on rendering from the very same one after this returns ({@code render(ref,
+	 *        orderEntries, …)}), so an arm added here that mutated it would change what the injector
+	 *        puts in the chart, after the fact. The contract is therefore enforced at the producer
+	 *        rather than described here —
+	 *        {@link DrugReferenceService#findForActiveOrders} returns an unmodifiable list — and no
+	 *        copy is taken here. Do not read that as a class-wide convention: the
+	 *        {@code List<SafetyWarning> warnings} the arms below take is an ACCUMULATOR and is written
+	 *        by design.
+	 *
+	 *        <p>Passing a list resolved from a DIFFERENT context than {@code rawContext} is the one
+	 *        way to misuse this. The injector's own list is resolved from the raw context this then
+	 *        receives enriched, and those answer alike — {@code withReferenceNames} writes only
+	 *        {@code activeDrugReferenceNames}, which {@code findForActiveOrders} does not read.
+	 *        {@code ActiveOrderResolutionPerPassTest} pins both halves: that the pass resolves once,
+	 *        and that what it injects is what a self-resolving pass produces.
+	 */
+	List<SafetyWarning> validate(String answer, String question, PatientClinicalContext rawContext,
+			List<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries) {
 		List<SafetyWarning> warnings = new ArrayList<SafetyWarning>();
-		// The patient's active orders resolved to their reference entries, ONE dataset sweep per
-		// validate, feeding both things this pass needs from that resolution (issue #136):
+		// The patient's active orders resolved to their reference entries — at most ONE dataset sweep
+		// per validate, and none at all where the caller has already made it (issue #255) — feeding
+		// both things this pass needs from that resolution (issue #136):
 		//
 		//   - the entries themselves, for the three arms that screen or name them — the chip grouping's
 		//     partner identity below, the active-order contraindication subjects (#143) and the
@@ -286,12 +343,15 @@ public class DrugSafetyValidator {
 		//     accidentally ask the narrower question.
 		//
 		// One resolution for both, so the names the context carries and the subjects the arms read can
-		// never describe different sets of orders. Per validate, not per question: the pre-answer
-		// findings pass reaches this method through DrugReferenceInjector.injectRecords, which resolves
-		// the same orders for its own promotion predicate before calling in. That repeat is idempotent
-		// today — neither leg of the resolution reads the names it attaches — so it is cost, and a trap
-		// for the first widening that makes it read them. Reported, not fixed here.
-		List<DrugReference> orderEntries = drugReferenceService.findForActiveOrders(rawContext);
+		// never describe different sets of orders. Per validate, not per question — and since issue
+		// #255 per PASS rather than per validate wherever the caller already holds the list: the
+		// pre-answer findings pass reaches this method through DrugReferenceInjector.injectRecords,
+		// which resolves the same orders for its own promotion predicate before calling in, and now
+		// hands that resolution down instead of leaving this one to derive it again. Why the two
+		// answers were the same, and why the INPUT travels and the enriched context does not, are on
+		// resolvedOrderEntries above; ADR Decision 58 is canonical for both.
+		List<DrugReference> orderEntries = resolvedOrderEntries != null ? resolvedOrderEntries
+				: drugReferenceService.findForActiveOrders(rawContext);
 		PatientClinicalContext context = drugReferenceService.withReferenceNames(rawContext, orderEntries);
 
 		boolean warnDose = toggle(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_DOSE_EXCESS,

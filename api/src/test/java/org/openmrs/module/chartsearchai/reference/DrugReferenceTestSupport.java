@@ -358,6 +358,22 @@ public final class DrugReferenceTestSupport {
 				.collect(Collectors.toList());
 	}
 
+	/**
+	 * The rendered TEXT of {@link #injectedFindings} — the finding-shaped counterpart of
+	 * {@link #referenceTexts}. What a finding's text consists of is decided in one place
+	 * ({@code DrugReferenceInjector.renderFinding} appends the strength clause and the
+	 * uncorroborated-match note), so this is the shared spelling for the files that take it. It is not
+	 * yet the only one: {@code UncorroboratedFindingProvenanceTest} writes the same loop out at ten
+	 * sites, untouched here, and retiring those is a change of its own.
+	 */
+	static List<String> findingTexts(PatientChart chart) {
+		List<String> texts = new ArrayList<String>();
+		for (RecordMapping mapping : injectedFindings(chart)) {
+			texts.add(mapping.getText());
+		}
+		return texts;
+	}
+
 	/** The real WHO ATC sample fixture (parsed by the real {@link AtcDrugReferenceSource#parse}). */
 	static final String ATC_SAMPLE = "atc/atc-sample.tsv";
 
@@ -635,6 +651,23 @@ public final class DrugReferenceTestSupport {
 	 */
 	static PatientClinicalContext contextNaming(DrugReferenceService service, Integer age,
 			Double weightKg, String... displays) {
+		PatientClinicalContext raw = rawContextNaming(age, weightKg, displays);
+		return service.withReferenceNames(raw);
+	}
+
+	/**
+	 * The unresolved half of {@link #contextNaming} — the chart as the builder reads it, before either
+	 * production surface attaches the reference data's own names. For a case whose subject IS that
+	 * resolution, so it must hold the raw context and the enriched one apart.
+	 *
+	 * <p>Extracted at the third caller (issue #255), the threshold {@code ModuleSourceRoot}'s javadoc
+	 * records: the two per-pass counting tests had each written this loop out. The name set's CASING is
+	 * not a knob and must not become one — {@link PatientClinicalContext}'s own constructor lower-cases
+	 * it (through {@code DrugReference.normalizeName}), so a caller that pre-lower-cases and one that
+	 * does not build the same context. Measured: the api suite is green with the loop lower-casing and
+	 * without it.
+	 */
+	static PatientClinicalContext rawContextNaming(Integer age, Double weightKg, String... displays) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders =
 				new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
 		Set<String> names = new LinkedHashSet<String>();
@@ -642,8 +675,7 @@ public final class DrugReferenceTestSupport {
 			orders.add(activeOrder("order-" + display, display, display));
 			names.add(display);
 		}
-		PatientClinicalContext raw = ctx(age, weightKg, names, null, null, null, orders);
-		return service.withReferenceNames(raw, service.findForActiveOrders(raw));
+		return ctx(age, weightKg, names, null, null, null, orders);
 	}
 
 	/**

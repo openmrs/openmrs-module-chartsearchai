@@ -1062,6 +1062,13 @@ public class DrugReferenceService {
 	 *
 	 * <p>Identity de-duplication is sound because both matchers resolve against this bean's shared
 	 * {@link #getAll()} cache (the same reason the drugs-in-play set can dedup by identity).
+	 *
+	 * <p><b>The list is UNMODIFIABLE</b> — adding to it, removing from it or sorting it in place throws
+	 * {@code UnsupportedOperationException}. Said here rather than only where it is returned, because
+	 * this method is public and a caller reads the javadoc: since issue #255 the list one caller holds
+	 * can be the same object another reasons over, and the two production paths that could reach a
+	 * mutation both sit inside a {@code catch (RuntimeException)}, so an undocumented throw degrades to
+	 * no injected records and no chips behind one WARN rather than to a stack trace.
 	 */
 	public List<DrugReference> findForActiveOrders(PatientClinicalContext context) {
 		if (context == null) {
@@ -1074,7 +1081,13 @@ public class DrugReferenceService {
 		for (String name : context.getActiveDrugNames()) {
 			entries.addAll(findImpliedByDrugName(name, impliedByName));
 		}
-		return new ArrayList<DrugReference>(entries);
+		// Unmodifiable, and that is a contract rather than caution (issue #255). Since that change the
+		// list a caller holds can be the SAME object another one reasons over — DrugReferenceInjector
+		// hands its resolution to the validate it calls and then goes on rendering from it — so an arm
+		// that sorted or filtered it in place would change what the injector puts in the chart, after
+		// the fact and silently. The wrapper is O(1) over the copy already being made, it binds every
+		// consumer from the one place the list is produced, and nothing in the module mutates it today.
+		return Collections.unmodifiableList(new ArrayList<DrugReference>(entries));
 	}
 
 	/**

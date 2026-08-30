@@ -26,7 +26,7 @@
 		controller catches and logs, and auditing stops with no error anywhere. Folding is the
 		SECOND step of the lifecycle and happens at a deliberate consolidation, once every
 		instance has run the intermediate. See chartsearchai-009's own comment, and ADR
-		Decision 56.
+		Decision 57.
 
 		Module is pre-production, and changesets that every instance has already run are
 		consolidated to their canonical end-state rather than preserving the audit trail of

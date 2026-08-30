@@ -409,18 +409,68 @@ public class DrugReference {
 	 *         That is why {@link #codesForRecordedAdministration} narrows the CODES instead, and why
 	 *         issue #234 left this predicate alone.
 	 *
-	 *         <p>Consumed by {@link #canonicalRow}, which is where the collapses that need it agree
-	 *         on one answer. Measured over the shipped 19 MB KB (2026-08-07; re-measured 2026-08-13 for
-	 *         issue #206 by driving {@link #substanceGroupKey()}, this predicate and
-	 *         {@link #canonicalRow} over the shipped file, unchanged at 129/119/7; re-measure before relying
-	 *         on the figures): of the 129 substances filed as more than one row, 119 have such a row and
-	 *         10 do not — {@code Oxymetazoline (nasal)}/{@code (ophthalmic)}/{@code (topical)},
-	 *         {@code Iobenguane (I-123)}/{@code (I-131)} — and in 7 of the 119 it is NOT the family's
-	 *         first row, which is why the choice cannot be left to dataset order.
+	 *         <p><b>A trailing parenthetical is a QUALIFIER only where it distinguishes the row from its
+	 *         substance</b> (issue #250). Where the data files the family under that very string —
+	 *         {@code Tick-borne encephalitis vaccine (whole virus, inactivated)}, whose own
+	 *         {@code substanceName} is that name character for character — it qualifies nothing, and the
+	 *         syntactic reading alone called such a row route-qualified. Measured over the shipped KB,
+	 *         <b>4 of 2283 rows</b> are in that class: the influenza A/Vietnam and A/California antigens,
+	 *         the Yersinia pestis 195/P antigen and the tick-borne row. That is why this reads
+	 *         {@link #namesItsSubstance()} as well as the stem.
+	 *
+	 *         <p><b>And what that trusts, said plainly.</b> Nothing here can tell
+	 *         {@code (formaldehyde inactivated)} from {@code (ophthalmic)} — reading the parenthetical's
+	 *         CONTENT would be the pattern-match-a-label mistake issue #148 undid — so what admits the
+	 *         first is only that the data files the family under it. A family filed under a
+	 *         route-qualified substance name that ALSO holds a plain row would therefore have its
+	 *         presentation elected, which is the shape issues #174 and #187 removed. The shipped dataset
+	 *         has exactly one family whose elected row carries a trailing parenthetical while a plain
+	 *         sibling exists, and
+	 *         {@code SubstanceNameRowTest.everyFamilyElectingAQualifiedRowOverAPlainSiblingIsNamedRatherThanCounted}
+	 *         names its members rather than counting them, so a refresh that adds one reddens with the
+	 *         offending name.
+	 *
+	 *         <p>It stays a UNARY property — one row's display name against THAT SAME ROW's own
+	 *         {@code substanceName} — which is why it needs none of the same-substance scoping
+	 *         {@link #canonicalRow}'s second rung has: that rung's conclusion is RELATIONAL ("this row
+	 *         represents THIS family") and applying it across substances renamed {@code A02BC05
+	 *         Omeprazole} to {@code Esomeprazole}, while nothing here asks anything about the other row.
+	 *         Do not conclude from that alone that the cross-family fold is unreachable: what makes it
+	 *         unreachable on this dataset is that none of those 4 rows publishes an ATC code, so
+	 *         {@code DrugSafetyValidator.entryForAtcCode} never sees one, and
+	 *         {@code SubstanceNameRowTest.aRowWhoseTrailingParentheticalIsItsOwnSubstanceNameCarriesNoQualifier}
+	 *         reddens if a refresh gives one a code.
+	 *
+	 *         <p>Consumed by {@link #canonicalRow} — where the collapses that need it agree on one
+	 *         answer — and by {@code DrugSafetyValidator.outranks}, which reads it to decide whose
+	 *         MECHANISM PROSE a chip renders. Both consumers asked the same question and got the same
+	 *         wrong answer for those 4 rows, which is why issue #250 corrected the predicate rather than
+	 *         either call site. Measured over the shipped 19 MB KB (2026-08-07; re-measured 2026-08-13
+	 *         for issue #206, and 2026-08-30 for issue #250 by driving {@link #substanceGroupKey()}, this
+	 *         predicate and {@link #canonicalRow} over the shipped file on both sides of the correction;
+	 *         re-measure before relying on the figures): of the 129 substances filed as more than one
+	 *         row, <b>120</b> have such a row and <b>9</b> do not —
+	 *         {@code Oxymetazoline (nasal)}/{@code (ophthalmic)}/{@code (topical)},
+	 *         {@code Iobenguane (I-123)}/{@code (I-131)} — and in <b>8</b> of the 120 it is NOT the
+	 *         family's first row, which is why the choice cannot be left to dataset order. Those were
+	 *         119/10/7 before the correction. WHICH family accounts for a given delta is NOT stated here:
+	 *         two copies of that attribution have been written in this repo and both named the wrong
+	 *         family, so re-measure it by diffing the NAMED lists rather than the counts. CLAUDE.md's
+	 *         identity bullet and {@link #canonicalRow}'s own measured paragraph each attribute one of
+	 *         the two deltas; this sentence claimed they were the only home and that claim was itself
+	 *         wrong, which is why it now says where to look instead of how many places say it.
 	 */
 	boolean namesNoRoute() {
 		String normalized = normalizeName(name);
-		return normalized != null && normalized.equals(displayStem(name));
+		if (normalized == null) {
+			return false;
+		}
+		// The trailing parenthetical this reads for is a QUALIFIER only where it distinguishes the row
+		// from its substance. Where the data files the family under that very string it qualifies
+		// nothing, and stripping it is what made the syntactic reading call the row route-qualified
+		// (issue #250). A row's own claim about its own family, so this stays a UNARY property and needs
+		// none of the same-substance scoping canonicalRow's second rung has.
+		return normalized.equals(displayStem(name)) || namesItsSubstance();
 	}
 
 	/**
@@ -450,8 +500,9 @@ public class DrugReference {
 	 *         it answers false where this answers true, i.e. fails CLOSED. Recorded because the
 	 *         measurement is what makes the two look interchangeable to whoever reads them next.
 	 *
-	 *         <p>Read by {@link #canonicalRow} alone in production, and by the cases that state its
-	 *         premises. It is not a claim that the row is
+	 *         <p>Read by {@link #canonicalRow} and, since issue #250, by {@link #namesNoRoute()} — a row
+	 *         whose trailing parenthetical is the name the data files its family under carries no
+	 *         qualifier — plus the cases that state its premises. It is not a claim that the row is
 	 *         the substance — {@code DrugReferenceValidity.derivesFromItsOwnSubstance} asks a different
 	 *         and narrower question about the same two fields (does this row's stem carry the substance's
 	 *         name without naming it as a word, i.e. is it a DERIVATIVE) and reusing that here fixes 1 of
@@ -508,44 +559,65 @@ public class DrugReference {
 	 * 3.7.1 standalone, a question naming estradiol was answered <em>"No — Fluoroestradiol f-18 should
 	 * not be given"</em>, the substance the clinician asked about named nowhere in the response.
 	 *
-	 * <p><b>Why the second rung is BELOW the first and not above it.</b> Above it, the rung renames a
-	 * fourth shipped family — the influenza A/Vietnam antigen, whose elected row carries a display name
-	 * with a dropped leading "I" — and issue #250 lists that as one of its four. It is also the ONLY
-	 * shipped family for which that placement elects a route-qualified row while the family HAS an
-	 * unqualified one, which falsifies this method's own first rung and, with it,
-	 * {@link DrugReferenceInjector#matchingEntries}' stated reason for widening its candidate set
-	 * ("{@code canonicalRow} never moves AWAY from {@code namesNoRoute()}"). And the row a record
-	 * renders is where its rules come from ({@code DrugReferenceInjector.onePerPartner} walks the
-	 * elected row's own {@code getInteractions()}), so that placement costs that family 12 rendered
-	 * interaction partners against 1 gained — traded for a typo the issue itself files as a ninth
-	 * instance of issue #196's upstream data problem, which is the handoff the estradiol MERGE already
-	 * takes. That refusal is about the rung ORDER and is NOT an argument that this is the only route to
-	 * that family: the parenthetical {@code namesNoRoute()} reads as a qualifier there is part of the row's
-	 * own {@code substanceName}, so correcting THIS rung's reading of it delivers that family and, measured
-	 * over the shipped KB, no other family's election. ADR Decision 43's rejected-alternative section
-	 * carries that measurement and why it is out of scope here — a second consumer of this predicate,
-	 * {@code DrugSafetyValidator.outranks}, decides whose mechanism prose a chip renders and was not
-	 * measured for it.
+	 * <p><b>The rung ORDER no longer decides anything, and that is issue #250's second half rather than
+	 * a lapse.</b> It used to: placing the second rung above the first renamed a fourth shipped family —
+	 * the influenza A/Vietnam antigen, whose elected row carried a display name with a dropped leading
+	 * "I" — and did so by electing a row {@code namesNoRoute()} called route-qualified while the family
+	 * held one it called unqualified, falsifying this method's own first rung. What that argument never
+	 * asked is WHY the predicate said that, and the answer was that it was wrong: the parenthetical it
+	 * read as a qualifier is part of that row's own {@code substanceName}, character for character. With
+	 * {@link #namesNoRoute()} corrected to say so, {@code namesItsSubstance()} IMPLIES
+	 * {@code namesNoRoute()}, so the second rung can no longer elect a row the first calls qualified —
+	 * on any dataset, not merely this one — and the two placements are indistinguishable. Nothing pins
+	 * the order because nothing can; what the order guard protected substantively is pinned instead by
+	 * {@code SubstanceNameRowTest.aFamilyWithAnUnqualifiedRowElectsOneAndNoOtherRowSpeaksForIt}, whose
+	 * second assertion states the invariant on RAW SYNTAX so that a weakening of either predicate cannot
+	 * satisfy it. Mutate {@code namesItsSubstance()} to compare display stems and read the
+	 * failures; that mutation elects {@code Salicylic acid (sodium)} for a family holding a plain
+	 * {@code Salicylic acid} row. That mutation is not invisible to the suite as a whole — it reddens
+	 * many cases — but that FAMILY's election was reached by none of them before the assertion existed.
+	 *
+	 * <p><b>It guards a weakening of the PREDICATES and nothing else — in particular not a KB
+	 * refresh</b>, and that scope is stated because two earlier texts ran the two together. With the
+	 * predicates as they stand the raw equality is ENTAILED by the election: a row carrying a trailing
+	 * parenthetical is elected over a plain sibling only by answering {@link #namesNoRoute()}, whose
+	 * syntactic disjunct is false for it, so {@link #namesItsSubstance()} — the very equality asserted
+	 * — holds. Measured rather than left there: a synthetic two-row family appended to the shipped
+	 * entries through the real {@code DdiDrugReferenceSource.parse} (a plain {@code Zzprobe} row and a
+	 * {@code Zzprobe (ophthalmic)} row whose own {@code substanceName} is that name) reddens
+	 * {@code SubstanceNameRowTest.everyFamilyElectingAQualifiedRowOverAPlainSiblingIsNamedRatherThanCounted}
+	 * alone and leaves that case green. The named list is the guard a data change reaches; the two
+	 * cases cover different mutations rather than ratcheting one another.
 	 *
 	 * <p>Below the first rung the fold never moves AWAY from {@code namesNoRoute()}, and that is
 	 * structural rather than a property of the shipped data: the first rung RETURNS whenever the two rows
 	 * disagree on it, so the second is only ever reached between rows that agree, and it therefore cannot
 	 * replace an unqualified row with a qualified one. It can still move LATERALLY between two rows that
 	 * agree — which is what all three of its shipped moves are — so "monotone" here means the weaker
-	 * thing; {@link DrugReferenceInjector#matchingEntries}' bullet says so at its own site.
-	 * {@code SubstanceNameRowTest.routeQualificationStillOutranksNamingTheSubstance} is what fails if the
-	 * rungs are ever reordered. Reorder them and read the failures rather than trusting a list here; when
-	 * that case was written it was the only one that reddened, which is why it exists.
+	 * thing; {@link DrugReferenceInjector#matchingEntries}' bullet says so at its own site. Read that in
+	 * the predicate's terms and not the raw string's: since issue #250 an elected row may CARRY a
+	 * trailing parenthetical where that parenthetical is its own substance name, which is what the
+	 * A/Vietnam family now does.
 	 *
 	 * <p><b>What it moves, measured 2026-08-24 through the real parse and this method on BOTH sides</b> —
 	 * the baseline is this same method as it stands before the rung, driven from a second worktree, rather
 	 * than a re-expression of it; re-measure before relying on the figures. Of the 129 multi-row families,
 	 * <b>3 change subject</b> and 126 do not: {@code Fluoroestradiol f-18}/{@code Estradiol},
 	 * {@code Daxibotulinumtoxina}/{@code Botulinum toxin type A}, and the paediatric tick-borne
-	 * encephalitis vaccine/the row the data files that family under. <b>All three moves are LATERAL in
-	 * route terms</b> — the first two elect a row that names no route where the incumbent did too, and the
-	 * third elects one that does not where the incumbent did not either, since neither tick-borne row is
-	 * unqualified. The count of families electing a route-qualified row is 10 before and 10 after. At the one
+	 * encephalitis vaccine/the row the data files that family under. All three moves were LATERAL in route
+	 * terms, and the count of families electing a route-qualified row was 10 before and 10 after.
+	 *
+	 * <p><b>That paragraph is a historical measurement and must be read against the PRE-issue-#250
+	 * predicate, which is what produced it.</b> Do not carry any of its three claims forward: re-measured
+	 * 2026-08-30 against the corrected {@link #namesNoRoute()}, disabling this rung still moves 3 of the
+	 * 129 families but a DIFFERENT three — {@code Fluoroestradiol f-18}/{@code Estradiol}, the influenza
+	 * A/Vietnam typo row/the row the data files that family under, and
+	 * {@code Daxibotulinumtoxina}/{@code Botulinum toxin type A}. The tick-borne family is now decided by
+	 * rung ONE and is not a rung-two move at all. The A/Vietnam move is lateral in the PREDICATE's terms
+	 * like the other two — rung two is only ever reached between rows that agree on rung one — while over
+	 * the RAW strings it replaces a display name carrying no trailing parenthetical with one that does.
+	 * That is why a count over the predicate and a count over the string now move in opposite directions;
+	 * the paragraph below states both with their units. At the one
 	 * {@code canonicalRow} site whose row set is NOT one substance
 	 * ({@code DrugSafetyValidator.entryForAtcCode}, over every row publishing one ATC code, 30 of the
 	 * KB's 2148 codes spanning more than one substance) exactly 1 fold moves, and within one substance.
@@ -560,6 +632,22 @@ public class DrugReference {
 	 * the tracer's. The CHIP arm is unaffected there, because it pools every row of the substance
 	 * ({@code DrugSafetyValidator.bestRulePerPartner}): that pool is 580 partners before and after.
 	 *
+	 * <p><b>What issue #250's SECOND half moves, measured 2026-08-30 the same way</b> — the real parse of
+	 * the shipped KB and this method on both sides of the {@link #namesNoRoute()} correction, the baseline
+	 * being that same predicate unmutated; re-measure before relying on the figures. Of the 129 multi-row
+	 * families <b>exactly 1 election moves</b>, the influenza A/Vietnam antigen, to the row the data files
+	 * it under. <b>State which reading a qualification count is on, because the correction is exactly what
+	 * makes the two diverge</b>: elected rows that ANSWER {@code !namesNoRoute()} go 10 → 9, while elected
+	 * rows whose raw display name carries a trailing parenthetical go 10 → <b>11</b> — the A/Vietnam row
+	 * joins, and its parenthetical is its own substance name. Both are true and they count different
+	 * things. At {@code DrugSafetyValidator.entryForAtcCode} <b>0 of 2148</b> folds move, which is
+	 * ENTAILED rather than independently observed: none of the 4 rows the correction reaches publishes an
+	 * ATC code, so none appears in any code's row set. The RENDERED record for that family moves with the
+	 * row, from the typo row's 251 rules to 239 — <b>239 → 228 distinct partners, 12 lost and 1 gained</b>,
+	 * 11 of the 12 lost being other vaccines, the twelfth {@code umbralisib} and the gain
+	 * {@code trifluridine}. The CHIP arm is unaffected: it pools every row of the substance, and that pool
+	 * is <b>240 partners before and after</b>.
+	 *
 	 * <p><b>The residue of the same-substance gate, stated rather than left to be found.</b> Where the
 	 * row set spans substances the second rung is skipped per PAIR, so the answer can depend on the order
 	 * the rows arrive in — a row of one substance interposed between two rows of another is compared
@@ -573,10 +661,14 @@ public class DrugReference {
 	 *
 	 * @return {@code candidate} where it outranks {@code incumbent} on {@link #namesNoRoute()}, or — for
 	 *         two rows of one substance agreeing on that — on {@link #namesItsSubstance()}; else
-	 *         {@code incumbent}. For the 10 shipped families that name no unqualified row the survivor
-	 *         still carries a qualifier: the KB publishes no unqualified name for those substances, and
-	 *         manufacturing one by stripping a display name is the pattern-match-a-label mistake issue
-	 *         #148 had to undo.
+	 *         {@code incumbent}. For a family that holds no row answering {@link #namesNoRoute()} at all
+	 *         the survivor still carries a qualifier: the KB publishes no unqualified name for those
+	 *         substances, and manufacturing one by stripping a display name is the pattern-match-a-label
+	 *         mistake issue #148 had to undo. How MANY such families the shipped KB has is NOT restated
+	 *         here: this sentence carried a figure for one reading while {@link #namesNoRoute()}'s
+	 *         javadoc carried the other, and the two came apart the moment the predicate changed. That
+	 *         javadoc carries it with the reading it is counted on. Older copies elsewhere are stale on
+	 *         their base as well as their count, so re-measure rather than reconciling them.
 	 */
 	static DrugReference canonicalRow(DrugReference incumbent, DrugReference candidate) {
 		if (incumbent == null) {

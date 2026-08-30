@@ -3530,6 +3530,31 @@ public class DrugSafetyValidator {
 	 *         independent measurements over the KB disagreed about that count while agreeing about these
 	 *         rows and about the order of magnitude, so the rows are what this records.
 	 *
+	 *         <p><b>The predicate it reads was corrected by issue #250, and this is the second site of
+	 *         that defect rather than a bystander.</b> {@link DrugReference#namesNoRoute()} used to read
+	 *         a trailing parenthetical as a qualifier even where it was the name the data files the row's
+	 *         family under, so for 4 of the shipped KB's 2283 rows this step preferred the wrong side:
+	 *         the tick-borne encephalitis chip was NAMED after the substance row while the prose under
+	 *         that name was credited to the {@code (whole virus, inactivated, pediatric)} row — the very
+	 *         failure the paragraph above describes, inverted. Measured 2026-08-30 through the real
+	 *         {@link #bestRulePerPartner} over every multi-row family of the shipped KB, and through the
+	 *         question-PAIR arm's own entry-pair walk: <b>222 of 40,619</b> drug-in-play groups and
+	 *         <b>97 of 951</b> question-pair groups change which row wins, and exactly <b>1</b> changes
+	 *         the rendered note text — the influenza A/Vietnam family against
+	 *         {@code ozanimod}, where the fuller of the two notes now survives. <b>0 of the 319 change
+	 *         severity</b>, and that figure is ENTAILED rather than independently observed: this method
+	 *         compares {@link #severityPriority} first and returns wherever the two differ, so the route
+	 *         step is reached only at equal severity and a group's winner is maximal in severity whatever
+	 *         the steps below it decide. <b>4</b> of the 97 change
+	 *         which SUBSTANCE owns the sentence, every one of them from a Moderna COVID-19 vaccine
+	 *         PRESENTATION row ({@code (6m-5y)}, {@code (6m-5y bivalent booster)}, {@code (6y-11y)},
+	 *         {@code (booster only)}) to the row the data names the tick-borne substance after, at
+	 *         identical severity and byte-identical prose — the direction this step exists to move in,
+	 *         with both drugs still named in the sentence because both were named in the question.
+	 *         {@code SubstanceNameRowTest.aQuestionPairSentenceIsOwnedByTheSubstanceRowAndNotByAPresentationOfTheRival}
+	 *         pins that arm over a verbatim slice, and it carries TWO Moderna rows so that the pair whose
+	 *         rival names no route can be seen NOT moving beside the one that does.
+	 *
 	 *         <p>It sits below severity, not above it, and that is the deliberate residue: some
 	 *         route-qualified rows are STRICTLY more severe than their substance's unqualified row
 	 *         ({@code Sirolimus (protein-bound)} Major against plain {@code Sirolimus} Moderate, against

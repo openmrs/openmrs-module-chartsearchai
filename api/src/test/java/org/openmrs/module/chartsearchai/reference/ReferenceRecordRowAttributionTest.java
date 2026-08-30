@@ -272,7 +272,7 @@ public class ReferenceRecordRowAttributionTest {
 	@Test
 	public void theClauseCostsTheRecordItsOwnLengthAndNoRecordItDoesNotQualify() throws IOException {
 		// What this adds to the prompt is asserted rather than assumed, because nothing BOUNDS the number
-		// of injected records — issue #229 measured that and ADR Decision 56 declines a cap on it
+		// of injected records — issue #229 measured that and ADR Decision 57 declines a cap on it
 		// deliberately. Its other half is closed: the slice's size is observed, by
 		// ChartSearchAiUtils.referenceSlice and on the audit row, so read that rather than building a
 		// second measurement of it. The clause is the ONLY difference between the attributed record and
@@ -301,7 +301,7 @@ public class ReferenceRecordRowAttributionTest {
 		// The COST MODEL rather than a ceiling: the clause is the two row names plus a fixed frame, so
 		// what a deployment pays is bounded by names it already carries. A bare "< N" would have to be
 		// re-derived on every wording change and would say nothing about how the cost scales, which is
-		// what matters while nothing bounds the number of records (ADR Decision 56).
+		// what matters while nothing bounds the number of records (ADR Decision 57).
 		assertEquals(121, clause.length() - "Dexamethasone".length()
 				- "Dexamethasone (ophthalmic)".length(),
 				"the clause is one sentence of fixed size around the two names it contrasts, was: "

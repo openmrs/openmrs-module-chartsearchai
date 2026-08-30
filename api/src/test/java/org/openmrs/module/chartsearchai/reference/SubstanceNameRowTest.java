@@ -225,17 +225,168 @@ public class SubstanceNameRowTest {
 	}
 	
 	@Test
-	public void routeQualificationStillOutranksNamingTheSubstance() throws Exception {
-		// The rung ORDER, over the shipped dataset — and the guard for the one decision in this change
-		// that nothing else pins. Issue #250 reads as "add a third rung", and a reader who places the new
-		// rung ABOVE namesNoRoute() gets a fourth renamed family, passes every other test in this suite,
-		// and silently breaks this invariant: measured, moving it up reddens nothing but this case.
+	public void aFamilyWithAnUnqualifiedRowElectsOneAndNoOtherRowSpeaksForIt() throws Exception {
+		// The KB-wide invariant every consumer of the fold rests on: where a substance has a row that
+		// names no route, that row — not a presentation of it — speaks for the substance.
+		// DrugReferenceInjector.matchingEntries widens its candidate set on exactly this ("canonicalRow
+		// never moves AWAY from namesNoRoute()").
 		//
-		// What it costs is stated where the fold is defined. The family that discriminates the two
-		// placements is the influenza A/Vietnam antigen, whose elected row carries a display name with a
-		// dropped leading "I" — so this case is also what keeps that typo UNFIXED here, deliberately, as
-		// issue #196's upstream handoff rather than something to repair by re-ranking rows.
+		// TWO assertions, deliberately, because since issue #250 the first one alone can be satisfied by
+		// construction. namesItsSubstance() now implies namesNoRoute(), so a family electing a row whose
+		// display name carries a trailing parenthetical passes the first assertion whenever that
+		// parenthetical is the name the data files the family under — which is what the A/Vietnam and
+		// tick-borne families do. The second states the same invariant on RAW SYNTAX: an elected row may
+		// carry a trailing parenthetical only where that parenthetical is its own substanceName.
+		//
+		// What the second one CATCHES is a weakening of the two PREDICATES, and not a change in the
+		// DATA. Both halves are said because an earlier comment on the other case claimed the wider
+		// thing, and both were measured. Weaken namesItsSubstance() to compare display STEMS and it
+		// reddens on Salicylic acid (sodium) where the first stays green. Append a synthetic two-row
+		// family to the shipped entries instead — a plain "Zzprobe" row and a "Zzprobe (ophthalmic)" row
+		// whose own substanceName is that name, parsed by the real DdiDrugReferenceSource — and this
+		// whole case stays green while everyFamilyElectingAQualifiedRowOverAPlainSiblingIsNamedRatherThanCounted
+		// reddens naming it. That is structural and not an accident of the probe: a parenthesised row
+		// reaches the second assertion only by having been elected over a plain sibling, canonicalRow's
+		// rung one returns the namesNoRoute() row whenever two rows disagree on it, and a parenthesised
+		// row can answer namesNoRoute() only through namesItsSubstance() — which is the raw equality the
+		// assertion states. So a KB refresh that adds such a family reddens that other case's named list
+		// and not this assertion; that case's own comment says the same thing from the other side.
+		//
+		// It no longer guards the rung ORDER, and that is a consequence of issue #250 rather than a gap.
+		// It used to: a reader who placed the second rung ABOVE namesNoRoute() got a fourth renamed
+		// family and broke this invariant. With namesNoRoute() corrected, rung two above rung one can
+		// never elect a row rung one calls qualified, because namesItsSubstance() implies namesNoRoute()
+		// — so the reorder is a no-op on any dataset and there is nothing left to pin. The precondition
+		// that used to refuse vacuity here ("at least one family's ONLY self-naming row must carry a
+		// qualifier") became unsatisfiable for the same reason, and is replaced by one that is not.
 		List<DrugReference> all = DrugReferenceTestSupport.shippedEntries();
+		Map<Object, List<DrugReference>> families = multiRowFamiliesAndSingletons(all);
+
+		int multiRow = 0;
+		int electedOnItsSubstanceName = 0;
+		for (List<DrugReference> rows : families.values()) {
+			if (rows.size() < 2) {
+				continue;
+			}
+			multiRow++;
+			DrugReference elected = DrugReference.canonicalRow(rows);
+			boolean anyUnqualified = false;
+			boolean anyPlain = false;
+			for (DrugReference row : rows) {
+				if (row.namesNoRoute()) {
+					anyUnqualified = true;
+				}
+				if (carriesNoTrailingParenthetical(row)) {
+					anyPlain = true;
+				}
+			}
+			if (anyUnqualified) {
+				assertTrue(elected.namesNoRoute(), "a family with an unqualified row must elect one, was "
+				        + elected.getName() + " among " + DrugReferenceTestSupport.names(rows));
+			}
+			if (!anyPlain) {
+				continue;
+			}
+			// On raw syntax throughout — displayStem and getSubstanceName, never namesNoRoute() or
+			// namesItsSubstance() — so a WEAKENING of either predicate cannot satisfy this. It says
+			// nothing about the DATA, which cannot redden it at all; the header measures both.
+			if (!carriesNoTrailingParenthetical(elected)) {
+				electedOnItsSubstanceName++;
+				assertEquals(DrugReference.normalizeName(elected.getSubstanceName()),
+				    DrugReference.normalizeName(elected.getName()),
+				    "a family holding a row with no trailing parenthetical may elect one that has a "
+				            + "trailing parenthetical only where that IS the name the data files the "
+				            + "family under, was " + elected.getName() + " among "
+				            + DrugReferenceTestSupport.names(rows));
+			}
+		}
+		assertTrue(multiRow > 1, "precondition: the shipped dataset must file some substance as several "
+		        + "rows, or this asserts nothing — was " + multiRow);
+		assertTrue(electedOnItsSubstanceName > 0,
+		    "precondition: and at least one such family must elect a row whose trailing parenthetical is "
+		            + "its own substance name, or the second assertion never runs and this case is "
+		            + "vacuous on the half issue #250 added");
+	}
+
+	@Test
+	public void everyFamilyElectingAQualifiedRowOverAPlainSiblingIsNamedRatherThanCounted()
+	        throws Exception {
+		// The residue issue #250's correction CREATES, kept visible because the module cannot see it
+		// itself. Rung one used to refuse any trailing parenthetical outright, so a presentation row could
+		// never outrank a plain sibling. It now admits one whose display name IS the name the data files
+		// the family under — and nothing in the predicate can tell `(formaldehyde inactivated)`, a
+		// manufacturing descriptor, from `(ophthalmic)`, a route. Reading the parenthetical's CONTENT
+		// would be the pattern-match-a-label mistake issue #148 removed, so the module trusts the data
+		// instead, and this is where that trust is declared.
+		//
+		// So: a family filed under a route-qualified substance name that ALSO carries a plain row would
+		// have its presentation elected to speak for it — the shape issues #174 and #187 removed.
+		//
+		// TWO classes, and the list below is the WIDER one. What this case collects is every family
+		// electing a row that carries a trailing parenthetical while a plain sibling exists, whatever
+		// that parenthetical says: the shipped dataset has ONE, the influenza A/Vietnam antigen, whose
+		// plain sibling is the row with a dropped leading "I". The narrower class — the same shape where
+		// the parenthetical really is a route — has no shipped member, but that is read off one string
+		// by a person rather than measured, because the module has no route vocabulary and giving it one
+		// is what this comment opens by refusing.
+		//
+		// Named and not counted, because each member is a decision to trust one substanceName against a
+		// plain sibling, and a count cannot say which one moved. A KB refresh that adds a member reddens
+		// here with that member's own name, which is the point: it needs adjudicating, not accepting.
+		//
+		// This and aFamilyWithAnUnqualifiedRowElectsOneAndNoOtherRowSpeaksForIt assert over the same
+		// families, and what each one CATCHES was measured rather than reasoned — the comment that used
+		// to stand here reasoned it and was wrong. Under the stem mutation of namesItsSubstance() this
+		// case reddens naming four families (Salicylic acid (sodium), Chloroprocaine (ophthalmic),
+		// Cyclosporine (ophthalmic), Iron (bisglycinate)) where that one's second assertion names one.
+		// Under a change in the DATA only this case reddens: append a synthetic two-row family through
+		// the real DdiDrugReferenceSource.parse — a plain "Zzprobe" row listed first and a
+		// "Zzprobe (ophthalmic)" row whose own substanceName is that name, so the two share a
+		// substanceGroupKey and the parenthesised row is elected — and this case fails naming it while
+		// the other 18 cases in the class pass, that second assertion included.
+		//
+		// So the list below is the only thing in this class a KB refresh reddens here. The withdrawn
+		// comment said the opposite — that the property assertion stood between this list and someone
+		// who "fixes" a red build by pasting a refresh's new family into it — and that was false
+		// structurally rather than only on that probe: a row carrying a trailing parenthetical reaches
+		// this list only by being elected over a plain sibling, canonicalRow's rung one returns the
+		// namesNoRoute() row whenever two rows disagree on it, and such a row can answer namesNoRoute()
+		// only through namesItsSubstance(), which is the raw equality that assertion states. The message
+		// on the assertion below is the whole of the defence: read the parenthetical before accepting a
+		// new member into the list.
+		List<DrugReference> all = DrugReferenceTestSupport.shippedEntries();
+		Map<Object, List<DrugReference>> families = multiRowFamiliesAndSingletons(all);
+
+		List<String> elected = new ArrayList<String>();
+		for (List<DrugReference> rows : families.values()) {
+			if (rows.size() < 2) {
+				continue;
+			}
+			boolean anyPlain = false;
+			for (DrugReference row : rows) {
+				if (carriesNoTrailingParenthetical(row)) {
+					anyPlain = true;
+				}
+			}
+			DrugReference winner = DrugReference.canonicalRow(rows);
+			if (anyPlain && !carriesNoTrailingParenthetical(winner)) {
+				elected.add(winner.getName());
+			}
+		}
+
+		assertEquals(Arrays.asList(SUBSTANCE_ROW), elected,
+		    "a family holding a plain row may have a qualified one speak for it only where the data "
+		            + "files the family under that qualified name, and every such family is adjudicated "
+		            + "here by name — a new one is a substanceName carrying a parenthetical the module "
+		            + "cannot tell from a route, so read it before accepting it. Was: " + elected);
+	}
+
+	/** The shipped dataset grouped by {@link DrugReference#substanceGroupKey()} — the walk both KB-wide
+	 *  cases in this class need, written once so the two cannot come to disagree about what a FAMILY is. They
+	 *  assert over the same population deliberately: one states the invariant, the other names the
+	 *  families that reach its boundary, and a later edit putting one on {@code substanceKey()} or on the
+	 *  raw {@code substanceName} would leave both green while they stopped covering the same rows. */
+	private static Map<Object, List<DrugReference>> multiRowFamiliesAndSingletons(List<DrugReference> all) {
 		Map<Object, List<DrugReference>> families = new LinkedHashMap<Object, List<DrugReference>>();
 		for (DrugReference row : all) {
 			Object substance = row.substanceGroupKey();
@@ -246,47 +397,16 @@ public class SubstanceNameRowTest {
 			}
 			rows.add(row);
 		}
-		
-		int multiRow = 0;
-		int discriminating = 0;
-		for (List<DrugReference> rows : families.values()) {
-			if (rows.size() < 2) {
-				continue;
-			}
-			multiRow++;
-			boolean anyUnqualified = false;
-			boolean unqualifiedSelfNamer = false;
-			boolean qualifiedSelfNamer = false;
-			for (DrugReference row : rows) {
-				if (row.namesNoRoute()) {
-					anyUnqualified = true;
-					if (row.namesItsSubstance()) {
-						unqualifiedSelfNamer = true;
-					}
-				} else if (row.namesItsSubstance()) {
-					qualifiedSelfNamer = true;
-				}
-			}
-			if (!anyUnqualified) {
-				continue;
-			}
-			// The DISCRIMINATING shape, and it is narrower than "holds a qualified self-namer": with the
-			// rungs reordered, a family that ALSO holds an unqualified self-namer still elects that row,
-			// which names no route, so the invariant survives there and such a family proves nothing. Only
-			// a family whose sole self-naming row carries a qualifier can witness the reorder.
-			if (qualifiedSelfNamer && !unqualifiedSelfNamer) {
-				discriminating++;
-			}
-			assertTrue(DrugReference.canonicalRow(rows).namesNoRoute(),
-			    "a family with an unqualified row must elect one, was "
-			            + DrugReference.canonicalRow(rows).getName() + " among "
-			            + DrugReferenceTestSupport.names(rows));
-		}
-		assertTrue(multiRow > 1, "precondition: the shipped dataset must file some substance as several "
-		        + "rows, or this asserts nothing — was " + multiRow);
-		assertTrue(discriminating > 0,
-		    "precondition: and at least one such family's ONLY self-naming row must carry a qualifier, or "
-		            + "no family here can witness the reorder and the case is vacuous");
+		return families;
+	}
+
+	/** Whether {@code row}'s display name carries no TRAILING parenthetical — the raw syntax
+	 *  {@link DrugReference#namesNoRoute()} reads, spelled out so a case can assert against the
+	 *  predicate rather than in its own terms. Anchored at the end like the predicate's own pattern, so
+	 *  a parenthetical mid-name ({@code … a/vietnam/1194/2004 (h5n1) antigen}) does not count. */
+	private static boolean carriesNoTrailingParenthetical(DrugReference row) {
+		String normalized = DrugReference.normalizeName(row.getName());
+		return normalized != null && normalized.equals(DrugReference.displayStem(row.getName()));
 	}
 
 	@Test
@@ -360,7 +480,7 @@ public class SubstanceNameRowTest {
 		            + "witness the stem weakening — was: " + DrugReferenceTestSupport.names(silverNitrate));
 		
 		// Not "no qualified row may be elected" — every row of this family is qualified and one of them IS
-		// elected, which is the 10-family case canonicalRow's own @return documents. What must not happen
+		// elected, which is the case canonicalRow's own @return documents. What must not happen
 		// is the OPHTHALMIC presentation taking the role: the fold decides nothing here today, and this is
 		// what stops it starting to decide for that row.
 		assertNotEquals(OPHTHALMIC_SILVER, DrugReference.canonicalRow(silverNitrate).getName(),
@@ -719,5 +839,201 @@ public class SubstanceNameRowTest {
 		assertFalse(record.contains(DrugReferenceTestSupport.ROW_ATTRIBUTION_LEAD),
 		    "and it must attribute its row to nobody, since the chart claims both rows alike, was: "
 		            + record);
+	}
+
+	/** The verbatim slice for issue #250's remaining family — the two influenza A/Vietnam rows and the
+	 *  one partner whose RENDERED note differs between them. See the fixture's own note. */
+	private static final String TYPO_ROW_FIXTURE = "chartsearchai-test/ddi-typo-row-names-its-substance.json";
+
+	/** The row the shipped KB spells with a dropped leading "I" — a #196 upstream data defect this does
+	 *  NOT repair, and must not be read as repairing: what moves is which row is ELECTED. */
+	private static final String TYPO_ROW = "Nfluenza a virus a/vietnam/1194/2004 (h5n1) antigen";
+
+	/** Its correctly-spelled sibling, whose display name IS the name the data files the family under. */
+	private static final String SUBSTANCE_ROW =
+	        "Influenza A virus A/Vietnam/1194/2004 (H5N1) antigen (formaldehyde inactivated)";
+
+	/** The clause only the correctly-spelled row's note carries — what makes the note difference
+	 *  assertable as TEXT rather than as a length. */
+	private static final String FULLER_NOTE_CLAUSE =
+	        "Vaccination may be less effective during and for up to three months after discontinuation";
+
+	@Test
+	public void theRowTheDataNamesTheFamilyAfterIsElectedEvenWhenItsOwnNameCarriesAParenthetical()
+	        throws Exception {
+		// Issue #250's fourth family, and the half PR #311 left. `namesNoRoute()` is a SYNTACTIC proxy —
+		// "carries no trailing parenthesised qualifier" — and it misreads a row whose trailing
+		// parenthetical is not a qualifier at all but part of the name the data files that row's family
+		// under. The A/Vietnam family is where that costs an election: the typo row's own parenthetical
+		// `(h5n1)` sits MID-name and TRAILING_QUALIFIER is end-anchored, so the proxy calls the typo row
+		// unqualified and the correctly-spelled row — whose whole display name IS its `substanceName` —
+		// qualified, and rung one hands the family to the typo.
+		//
+		// Over the shipped dataset and not a slice, per shippedEntries()' own rule: this asserts which row
+		// a real family elects, not any rendered text.
+		List<DrugReference> all = DrugReferenceTestSupport.shippedEntries();
+		List<DrugReference> family = new ArrayList<DrugReference>();
+		String familyName = DrugReference.normalizeName(SUBSTANCE_ROW);
+		for (DrugReference row : all) {
+			if (familyName.equals(DrugReference.normalizeName(row.getSubstanceName()))) {
+				family.add(row);
+			}
+		}
+
+		assertEquals(2, family.size(), "precondition: the family must be the two shipped rows, was: "
+		        + DrugReferenceTestSupport.names(family));
+		DrugReference typo = DrugReferenceTestSupport.row(family, TYPO_ROW);
+		DrugReference substance = DrugReferenceTestSupport.row(family, SUBSTANCE_ROW);
+		assertEquals(typo.substanceGroupKey(), substance.substanceGroupKey(),
+		    "precondition: and they must be ONE substance to this module");
+		assertSame(typo, family.get(0),
+		    "precondition: the typo row must be listed first, as in the shipped file, or dataset order "
+		            + "would elect the right row for the wrong reason");
+		assertTrue(substance.namesItsSubstance(),
+		    "precondition: the correctly-spelled row's display name must BE the name the data files the "
+		            + "family under, or there is nothing for this to prefer");
+		assertFalse(carriesNoTrailingParenthetical(substance),
+		    "precondition: and that display name must carry a TRAILING parenthetical, or the proxy never "
+		            + "misread it and this case witnesses nothing — was " + substance.getName());
+		assertTrue(carriesNoTrailingParenthetical(typo),
+		    "precondition: while the typo row's must carry none, which is what wins it rung one today — "
+		            + "was " + typo.getName());
+
+		assertEquals(SUBSTANCE_ROW, DrugReference.canonicalRow(family).getName(),
+		    "the row the data files the family under must be elected, was elected from "
+		            + DrugReferenceTestSupport.names(family));
+	}
+
+	@Test
+	public void theChipNamesThatRowAndCarriesItsOwnNote() throws Exception {
+		// The same correction on the surface a clinician reads, through the real validate, and it moves
+		// two things at once because ONE predicate decides both: canonicalRow picks the name the chip is
+		// subjected on, and DrugSafetyValidator.outranks — whose route step reads that same predicate to
+		// decide whose MECHANISM PROSE the chip renders where two rows of a substance rate a partner
+		// alike — stops preferring the typo row. Ozanimod is why the fixture uses that partner and not
+		// another: of the 227 partners the family's two rows SHARE, 199 carry different note text, and
+		// ozanimod is the only one where the CORRECTLY-SPELLED row's note is the fuller of the two — so
+		// it is the only partner whose chip note moves, the pooled collapse falling through to the
+		// note-length step. Without the second half of the correction the chip would print the
+		// correctly-spelled name over the typo row's shorter note.
+		//
+		// On a verbatim slice and not the shipped KB, per shippedEntries()' own rule, because this asserts
+		// chip TEXT.
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(TYPO_ROW_FIXTURE);
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null,
+		    DrugReferenceTestSupport.set("Ozanimod"), null, null, null);
+		String question = "Is it safe to give her " + SUBSTANCE_ROW + "?";
+
+		List<DrugReference> asked = service.findImpliedByQuery(question);
+		assertEquals(Arrays.asList(TYPO_ROW, SUBSTANCE_ROW), DrugReferenceTestSupport.names(asked),
+		    "precondition: the question must put BOTH rows in play, typo row first, or the fold has "
+		            + "nothing to choose between");
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+		        .validate("", question, context);
+
+		assertEquals(1, warnings.size(), "one substance, one partner, one chip, was: " + warnings);
+		assertEquals(SUBSTANCE_ROW, warnings.get(0).getDrug(),
+		    "the chip must name the row the data files the family under, was: " + warnings);
+		assertTrue(warnings.get(0).getDetail().startsWith(SUBSTANCE_ROW
+		        + " interacts with active order ozanimod — Moderate."),
+		    "and its detail must lead with that same name, was: " + warnings.get(0).getDetail());
+		assertTrue(warnings.get(0).getDetail().contains(FULLER_NOTE_CLAUSE),
+		    "and must carry that row's OWN note rather than the typo row's shorter one, was: "
+		            + warnings.get(0).getDetail());
+	}
+
+	@Test
+	public void aRowWhoseTrailingParentheticalIsItsOwnSubstanceNameCarriesNoQualifier() throws Exception {
+		// What the correction claims about the shipped DATA, stated on RAW strings so that no clause here
+		// can be satisfied by the shape of the predicate it is about. `displayStem` and `getSubstanceName`
+		// only; `namesItsSubstance()` appears nowhere below.
+		//
+		// Three clauses, three different things they can fail on. The class must be NON-EMPTY, or the
+		// correction has no witness in this dataset and everything resting on it is vacuous. Every member
+		// must answer namesNoRoute(), which is the correction itself and reddens if it is removed. And
+		// none may publish an ATC code — which is not decoration: DrugSafetyValidator.entryForAtcCode is
+		// the one canonicalRow site whose row set is NOT one substance, so it is the site where a row's
+		// answer about its OWN family could reach a fold across families. On this KB it cannot, because
+		// these rows appear in no ATC row set at all. A refresh that gives one of them a code reddens here
+		// and tells whoever reads it to measure that fold before trusting it, rather than leaving it to be
+		// found in a chip.
+		List<DrugReference> all = DrugReferenceTestSupport.shippedEntries();
+		List<DrugReference> selfNamingAndParenthesised = new ArrayList<DrugReference>();
+		for (DrugReference row : all) {
+			String normalized = DrugReference.normalizeName(row.getName());
+			String substance = DrugReference.normalizeName(row.getSubstanceName());
+			if (normalized != null && normalized.equals(substance)
+			        && !carriesNoTrailingParenthetical(row)) {
+				selfNamingAndParenthesised.add(row);
+			}
+		}
+
+		assertFalse(selfNamingAndParenthesised.isEmpty(),
+		    "precondition: the shipped dataset must file some row under a substance name that itself "
+		            + "carries a trailing parenthetical, or nothing here witnesses the correction");
+		for (DrugReference row : selfNamingAndParenthesised) {
+			assertTrue(row.namesNoRoute(), "a row whose trailing parenthetical is the name the data files "
+			        + "its family under carries no qualifier, was read as qualified: " + row.getName());
+			assertTrue(row.normalizedAtcCodes().isEmpty(),
+			    "and no such row may publish an ATC code without the cross-family fold in "
+			            + "DrugSafetyValidator.entryForAtcCode being measured again — " + row.getName()
+			            + " now publishes " + row.normalizedAtcCodes());
+		}
+	}
+
+
+	/** The verbatim slice for the SECOND consumer of the corrected predicate — the question-PAIR arm's
+	 *  use of {@code DrugSafetyValidator.outranks}. See the fixture's own note. */
+	private static final String QUESTION_PAIR_FIXTURE = "chartsearchai-test/ddi-question-pair-subject.json";
+
+	private static final String TICK_BORNE = "Tick-borne encephalitis vaccine (whole virus, inactivated)";
+
+	/** The Moderna row that carries a trailing parenthetical — a PRESENTATION, and the rival whose
+	 *  sentence moves. */
+	private static final String MODERNA_PRESENTATION = "Moderna COVID-19 Vaccine (6m-5y)";
+
+	/** The Moderna row that carries none, whose sentence does NOT move — what makes the case
+	 *  discriminating rather than merely green. */
+	private static final String MODERNA_SUBSTANCE = "Moderna covid-19 vaccine";
+
+	@Test
+	public void aQuestionPairSentenceIsOwnedByTheSubstanceRowAndNotByAPresentationOfTheRival()
+	        throws Exception {
+		// The other production consumer of the predicate issue #250 corrected. `outranks`' middle step
+		// prefers the row that names no route, so that a chip does not render prose describing a
+		// presentation nobody named — and in the question-PAIR arm the row it picks also decides which of
+		// the two drugs OWNS the sentence, because `fromFirst` chooses `subject` and `partner`. Before the
+		// correction the tick-borne substance row was read as route-qualified, so a paediatric COVID-19
+		// vaccine presentation owned the sentence against it.
+		//
+		// Two pairs in one question and only one of them moves, which is what makes this discriminate:
+		// the unqualified `Moderna covid-19 vaccine` ties on that step both before and after, so its
+		// sentence stays where dataset order put it.
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(QUESTION_PAIR_FIXTURE);
+		String question = "Can " + TICK_BORNE + " be given with " + MODERNA_PRESENTATION + "?";
+		// No active orders: this arm fires only for a pair the ACTIVE-ORDER arm has not already covered.
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null, null, null, null, null);
+
+		List<DrugReference> asked = service.findImpliedByQuery(question);
+		assertTrue(DrugReferenceTestSupport.names(asked).contains(MODERNA_SUBSTANCE),
+		    "precondition: the unqualified Moderna row must be in play too, or the case has only the "
+		            + "pair that moves and cannot show that the other one does not — was: " + asked);
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+		        .validate("", question, context);
+
+		List<String> subjects = new ArrayList<String>();
+		for (SafetyWarning warning : warnings) {
+			subjects.add(warning.getDrug());
+		}
+		assertEquals(Arrays.asList(MODERNA_SUBSTANCE, TICK_BORNE), subjects,
+		    "the pair whose rival is a PRESENTATION must be owned by the row the data names the "
+		            + "substance after, while the pair whose rival names no route is untouched — was: "
+		            + warnings);
+		assertTrue(warnings.get(1).getDetail()
+		        .startsWith(TICK_BORNE + " interacts with " + MODERNA_PRESENTATION),
+		    "and that sentence must name the presentation as the PARTNER, was: "
+		            + warnings.get(1).getDetail());
 	}
 }

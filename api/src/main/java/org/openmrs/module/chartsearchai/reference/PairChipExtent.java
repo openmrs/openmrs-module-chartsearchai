@@ -46,13 +46,14 @@ package org.openmrs.module.chartsearchai.reference;
  * pairwise arm ran and the reference data related none of the pairs it enumerated — a complete
  * screen, positively assertable, which is half of what this type exists for. No extent at all
  * ({@code null} on the answer, {@code null} on the wire) says the producer stated no measurement.
- * <b>The enumeration has exactly two homes, this javadoc and {@code README.md}'s client-facing
- * form</b> — the second because it is the only one a frontend author reads, and everywhere else
- * points here rather than restating it. Add a situation and you update two places by design; restate
- * it in a third and the list grows in one of them, which is what
- * {@code SerializedRecord.getOrderActive()}'s own rule records having happened. Three situations —
- * the first two deliberately not distinguished, because a consumer must treat them alike, and the
- * third told apart by WHERE it is read rather than by this value:
+ * This javadoc and {@code README.md}'s client-facing paragraph carry that list — the second because
+ * it is the only one a frontend author reads — and everything else points here rather than
+ * restating it. <b>Do not count the entries or the homes.</b> Three successive drafts of this
+ * paragraph published a count and each was refuted by the next review: three situations where the
+ * list held two, one home where README held a second, and two situations while the async
+ * early-{@code done} case below was a third nobody had counted. What is worth stating is the
+ * mechanism, so here it is, unnumbered; the first cases are alike to a consumer and the last is told
+ * apart by WHERE it is read rather than by this value:
  *
  * <ol>
  *   <li>no pairwise arm enumerated anything — the question named fewer than two reference drugs

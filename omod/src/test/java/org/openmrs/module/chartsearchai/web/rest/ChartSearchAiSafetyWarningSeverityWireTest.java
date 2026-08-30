@@ -42,27 +42,30 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  *
  * <p>Before this, {@code ChartSearchAiRestController.serializeSafetyWarnings} wrote {@code type},
  * {@code drug} and {@code detail}, and {@link SafetyWarning#getSeverity()} — public, populated by
- * every rated arm, and the key {@code DrugSafetyValidator}'s two pair comparators sort on before the
- * cap drops the least severe — stopped there. The only surviving trace of it on the wire was a word
- * in the middle of prose the module rewords freely, and this repo already carries a reader that has
- * to parse it: {@code eval/drift-metric/score_probe_safety.py}'s {@code CHIP_SEVERITY} regex, whose
- * own comment calls that "the fault issue #207 exists to have removed".
+ * every rated arm, and the rating the two PAIRWISE arms order their own chips by before
+ * {@code DrugSafetyValidator.maxPairChips} cuts the list — stopped there. The only surviving trace of
+ * it on the wire was a word in the middle of prose the module rewords freely, and this repo already
+ * carries a reader that has to parse it: {@code eval/drift-metric/score_probe_safety.py}'s
+ * {@code CHIP_SEVERITY} regex, whose own comment calls that "the fault issue #207 exists to have
+ * removed".
  *
- * <p><b>The prose is not a fallback, which is why {@link #theRatingIsPublishedEvenWhereTheProseNamesIt
- * Nowhere} is here.</b> The word in {@code detail} arrives there only because
+ * <p><b>The prose is not a fallback.</b> The word in {@code detail} arrives there only because
  * {@code DdiDrugReferenceSource.noteFor} happens to build a DDInter note as
  * {@code severity + ". " + mechanism} and {@code DrugSafetyValidator.interactionWarning} appends that
  * note after an em dash — and it appends it only when the rule carries one. A rated rule with no
  * mechanism note therefore yields a chip whose rating is nowhere in its own sentence, and on
  * {@code sourceFormat=json} the note and the rating are two independently authored fields with
- * nothing tying them together at all.
+ * nothing tying them together at all. Both directions are pinned, in
+ * {@link #theRatingIsPublishedEvenWhereTheProseNamesItNowhere}.
  *
- * <p>Driven through the real controller, on both published surfaces: the blocking {@code /search}
- * handler and the SSE {@code done} event. Those are two of the three call sites of the one private
- * helper (the third is the async {@code grounded} event), and the SSE one is the one whose ACTUAL
- * JSON can be read back — {@code doneEventJson} serializes with a default {@link ObjectMapper}, so it
- * is where "the key is present and null" can be asserted of the bytes a client receives rather than
- * of a {@code Map} Spring has not serialized yet.
+ * <p>Driven through the real controller, at all three call sites of the one private helper: the
+ * blocking {@code /search} handler, the SSE {@code done} event, and the {@code grounded} event of the
+ * async-grounding path. Covering the helper at one site would prove the helper and not that the other
+ * two call it — the reason {@code ChartSearchAiSearchResponseGroupingTest} exists for its own
+ * endpoint. The two SSE sites are also the ones whose ACTUAL JSON can be read back, since the
+ * controller serializes those payloads itself with a default {@link ObjectMapper}; so it is there
+ * that "the key is present and null" is asserted of the bytes a client receives, rather than of a
+ * {@code Map} Spring has not serialized yet.
  *
  * <p>The stubbed {@link ChartSearchService} is this package's established seam for a wire-contract
  * test — {@code omod/pom.xml} declares no {@code chartsearchai-api} test-jar, so the api-side

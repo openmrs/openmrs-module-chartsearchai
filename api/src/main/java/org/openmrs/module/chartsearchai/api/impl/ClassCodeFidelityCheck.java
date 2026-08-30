@@ -26,9 +26,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Reports an ATC classification code the answer states that no record the answer CITES contains
- * (issue #142) — a deterministic, exact check for the one failure the semantic grounding pass is
- * structurally unable to see.
+ * Reports what an answer does to a class code it was handed — a deterministic, exact check for the
+ * failures the semantic grounding pass is structurally unable to see. Three of them: a code no
+ * record the answer CITES contains (issue #142), and, since issue #338, a code stated more than
+ * once inside one parenthetical and a citation marker placed inside one.
  *
  * <p><b>The failure.</b> Measured live: the deterministic chip said class {@code J01MA}
  * (fluoroquinolones) while the answer, citing that finding's record number, said {@code J01CA}
@@ -184,7 +185,8 @@ final class ClassCodeFidelityCheck {
 
 	/**
 	 * Reports, at WARN, every ATC class code {@code answer} states that none of the records it
-	 * cites contains.
+	 * cites contains — and then, behind the same gates, the two malformations of a class-code
+	 * parenthetical that comparison cannot see ({@link #reportMalformedParentheticals}, issue #338).
 	 *
 	 * @param patient whose answer it is — logged so a line is attributable under concurrent requests
 	 * @param question the clinician's own question — its codes count as support, see the body
@@ -203,7 +205,7 @@ final class ClassCodeFidelityCheck {
 	 *            (that is grounding's question, and {@code grounding.clauseScoped} is where it is
 	 *            answered).
 	 */
-	static void reportUnsupportedClassCodes(Patient patient, String question, String answer,
+	static void reportClassCodeDefects(Patient patient, String question, String answer,
 			List<RecordReference> cited, List<RecordMapping> mappings) {
 		Integer patientId = null;
 		try {
@@ -300,10 +302,14 @@ final class ClassCodeFidelityCheck {
 	 * FORM. It is a LIST that has a source and a REPETITION that has none: the injected
 	 * drug-reference record renders a substance's own codes as a round-parenthesised list, so two
 	 * DIFFERENT codes in one parenthetical are deliberately left alone — but it builds that list from
-	 * {@code DrugReference.normalizedAtcCodes()}, which returns a {@code Set}, and the chip's class
-	 * sentence renders exactly one code ({@code DrugSafetyValidator}: {@code "is in the same ATC
-	 * class (" + shared}). So no renderer in this module can state one code twice inside one
-	 * parenthetical, and a code that appears twice there came from neither.
+	 * {@code DrugReference.normalizedAtcCodes()}, which returns a {@code Set}, and the only other
+	 * renderer that puts a code in round parentheses is the chip's class sentence, which renders
+	 * exactly one ({@code DrugSafetyValidator}: {@code "ATC class (" + shared + ")"}, {@code shared}
+	 * a single subgroup). Measured over both shipped datasets: none of the knowledge base's 2283 rows
+	 * carries a {@code drugClass} at all, and all 4 rows of the curated file carry one stating no
+	 * ATC-shaped token. The residue is an operator-authored dataset whose free-text {@code drugClass}
+	 * states a code the same entry also publishes — the reference record then renders it twice inside
+	 * its own parenthetical, and an answer quoting that record faithfully is reported.
 	 *
 	 * <p><b>Groups are read OUTERMOST-first</b>, over a depth walk rather than a regex, so a marker
 	 * buried in a nested aside ({@code (J01MA (see [4]))}) is still inside the parenthetical that
@@ -329,8 +335,7 @@ final class ClassCodeFidelityCheck {
 	 */
 	private static void reportMalformedParentheticals(Integer patientId, String answer) {
 		Set<String> repeated = new LinkedHashSet<String>();
-		Set<String> markedCodes = new LinkedHashSet<String>();
-		Set<Integer> markers = new LinkedHashSet<Integer>();
+		List<String> enclosed = new ArrayList<String>();
 		for (String group : outermostParentheticals(answer)) {
 			Set<String> seen = new LinkedHashSet<String>();
 			Matcher codes = ATC_CLASS_CODE.matcher(group);
@@ -347,8 +352,11 @@ final class ClassCodeFidelityCheck {
 			// it is asking about IS the substring (CLAUDE.md's inline-citation rule).
 			Set<Integer> inGroup = ChartSearchAiUtils.citedIndexes(group);
 			if (!inGroup.isEmpty()) {
-				markers.addAll(inGroup);
-				markedCodes.addAll(seen);
+				// One entry per offending group, not two pooled lists: with two such groups in one
+				// answer, pooled lists say which codes and which markers occurred and no longer say
+				// which sat with which, and reconstructing the placement from the line alone is what
+				// this check's logging is for.
+				enclosed.add(seen + " with " + inGroup);
 			}
 		}
 		// Neither line logs the answer or the record text — they carry patient data, and the codes
@@ -358,11 +366,11 @@ final class ClassCodeFidelityCheck {
 					+ "parenthetical; nothing this module renders states one code twice inside one. "
 					+ "The answer prose is left unchanged (issue #338).", patientId, repeated);
 		}
-		if (!markers.isEmpty()) {
-			log.warn("Answer for patient={} places citation marker(s) {} inside a parenthetical "
-					+ "stating ATC class code(s) {}; a marker attributes the clause and belongs after "
-					+ "it. The answer prose is left unchanged (issue #338).",
-					patientId, markers, markedCodes);
+		if (!enclosed.isEmpty()) {
+			log.warn("Answer for patient={} places citation marker(s) inside a parenthetical stating "
+					+ "ATC class code(s), one entry per parenthetical: {}; a marker attributes the "
+					+ "clause and belongs after it. The answer prose is left unchanged (issue #338).",
+					patientId, enclosed);
 		}
 	}
 

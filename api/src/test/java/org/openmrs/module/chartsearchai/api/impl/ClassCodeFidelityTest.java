@@ -52,7 +52,10 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * cites state class codes, every ATC-shaped token in the answer must be one of them — or one the
  * QUESTION states, which is the reader's own word and not a fabrication — and one that is not is
  * reported at WARN carrying both the code the answer states and the codes its cited records state.
- * When they state none, there was nothing to copy and the check says nothing. There is deliberately
+ * When they state none, there was nothing to copy and the check says nothing. Since issue #338 it
+ * also pins what the answer does with a code it copied FAITHFULLY: a code stated more than once
+ * inside one parenthetical, and a citation marker placed inside one, are reported from the shape of
+ * the prose alone — see the block above {@link #aClassCodeRepeatedInsideOneParentheticalIsReported()}. There is deliberately
  * no roll-up from a cited substance code to its class: correct as such an answer usually is,
  * accepting it silences this issue's own headline capture, and
  * {@link #generalisingACitedSubstanceCodeToItsClassIsReported()} pins that with the reason. The answer prose
@@ -430,8 +433,8 @@ public class ClassCodeFidelityTest {
 		// the answer fused them into one clause reading "(H02AB, H02AB, H02AB, H02AB)". Every token
 		// is supported, so the membership report stays silent — and a MULTISET reading would call
 		// all four occurrences supported too. What no record licenses is the SHAPE: a LIST has a
-		// source (the injected reference record renders one) and a REPETITION has none, because that
-		// list is built from a Set and the chip's class sentence renders exactly one code.
+		// source (the injected reference record renders one) and a REPETITION has none — see
+		// ClassCodeFidelityCheck.reportMalformedParentheticals for what was measured and its residue.
 		service.setLlmProvider(answering(sentenceStating(TRUE_CODE + ", " + TRUE_CODE)));
 		try (LogCapture capture = LogCapture.on(CHECK)) {
 			service.search(patient(), QUESTION);
@@ -541,6 +544,28 @@ public class ClassCodeFidelityTest {
 			assertTrue(warnStating(capture, "inside a parenthetical", "[" + TRUE_CODE + "]"),
 					"the outermost group states the code and carries the marker, so the marker is "
 							+ "inside the code's own parenthetical. Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void aRepeatedCodeIsSilentWhereNoCitedRecordStatesAClassCode() {
+		// The shape rules inherit the membership report's gates rather than re-arguing them, and
+		// this is where that costs something: the repetition is wrong on its own terms, but with no
+		// code-bearing record cited the whole check declines and says nothing about it. ADR Decision
+		// 59 records that as a place a real defect can hide; this pins it so a later change that
+		// moves the rules out from behind the gates has to say so rather than drift there.
+		PatientChart codeless = chartRecordStating("Antibiotic course: ceftriaxone 1 g IV completed");
+		TestableService onCodeless = newService(codeless);
+		onCodeless.setLlmProvider(answering("She had ceftriaxone, ATC class (" + TRUE_CODE + ", "
+				+ TRUE_CODE + ") [1]."));
+		try (LogCapture capture = LogCapture.on(CHECK, Level.DEBUG)) {
+			onCodeless.search(patient(), QUESTION);
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"the shape rules run behind the membership gates, so this declines. Captured: "
+							+ capture.describeAll());
+			assertTrue(debugStating(capture, "no cited record states a class code"),
+					"and which gate declined has to be identifiable, or the silence could be the "
+							+ "rule never having run. Captured: " + capture.describeAll());
 		}
 	}
 

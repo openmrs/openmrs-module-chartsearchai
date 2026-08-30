@@ -56,10 +56,10 @@ public class ChartSearchAiUtils {
 	 * in first-appearance order. The shared decode step over {@link #INLINE_CITATION} for
 	 * citation extraction ({@code LlmInferenceService}), grounding
 	 * ({@code CitationGroundingVerifier}), safety echo-scoping ({@code DrugSafetyValidator}) and —
-	 * since issue #338 — the answer-fidelity check that asks whether a marker sits INSIDE a class-code
-	 * parenthetical ({@code ClassCodeFidelityCheck}), so those consumers cannot drift. (The clause-scoped splitter keeps its own matcher — it
-	 * needs each marker's text offset, which a set of indexes cannot carry.) Returns an empty
-	 * set for null/blank text.
+	 * since issue #338 — the check that asks whether a marker sits INSIDE a class-code parenthetical
+	 * ({@code ClassCodeFidelityCheck}), so those consumers cannot drift. (The clause-scoped splitter
+	 * keeps its own matcher — it needs each marker's text offset, which a set of indexes cannot
+	 * carry.) Returns an empty set for null/blank text.
 	 */
 	public static Set<Integer> citedIndexes(String text) {
 		Set<Integer> indexes = new java.util.LinkedHashSet<Integer>();

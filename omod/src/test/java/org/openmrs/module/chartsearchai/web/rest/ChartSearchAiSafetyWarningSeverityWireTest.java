@@ -76,9 +76,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * test — {@code omod/pom.xml} declares no {@code chartsearchai-api} test-jar, so the api-side
  * fixtures that drive the real {@code DrugSafetyValidator} are not reachable from here. What that
  * seam leaves to the api suite is that the real arms populate the rating at all, which
- * {@code DrugSafetyInteractionSeverityFloorTest} and {@code DrugSafetyQuestionPairInteractionTest}
- * already assert of chips built by the real validator; what is unique to this class, and missing
- * without it, is whether the value survives the last step.
+ * {@code DrugSafetyQuestionPairInteractionTest} asserts of chips built by the real validator
+ * ({@code anInteractionChipCarriesTheRatingItWasOrderedOn} and
+ * {@code thePairChipsAreOrderedBySeverityAndBounded}: nulling the rating at both arms reddens those
+ * two and nothing else). {@code DrugSafetyInteractionSeverityFloorTest} is NOT a second guard for it
+ * — it asserts the dataset ROW's rating and the floor's filtering, never a chip's, and stays green
+ * under that same mutation. What is unique to this class, and missing without it, is whether the
+ * value survives the last step.
  */
 public class ChartSearchAiSafetyWarningSeverityWireTest {
 
@@ -86,13 +90,16 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 
 	/**
 	 * The fixture chips. <b>Every case below indexes this list positionally, so the indices are the
-	 * contract</b> — inserting or reordering a chip retargets them, and only two of the four
-	 * positional reads carry a precondition assertion that would catch it.
+	 * contract</b> — inserting or reordering a chip retargets them silently, and only some of the
+	 * reads carry a {@code precondition:} assertion that would catch it. Do not count on which: add a
+	 * chip in the middle and read the failures.
 	 *
 	 * <ul>
-	 *   <li>0, 1, 3, 4 — the shape of issue #340's own measured response (patient
-	 *       {@code 763e6e5f-…}, "Please screen her current medications for drug interactions."): a
-	 *       rated Major and a rated Minor interaction on one drug, and two contraindications.</li>
+	 *   <li>0, 1, 3, 4 — drawn from issue #340's own measured response (patient
+	 *       {@code 763e6e5f-…}, "Please screen her current medications for drug interactions.",
+	 *       which returned two Major and one Minor interaction and two contraindications): here one
+	 *       rated Major and one rated Minor interaction on a single drug, and two
+	 *       contraindications.</li>
 	 *   <li>2 — a rated rule carrying NO note, so its rating appears nowhere in its own
 	 *       {@code detail}. An operator {@code sourceFormat=json} shape: the shipped DDInter dataset
 	 *       cannot produce it, because {@code DdiDrugReferenceSource.noteFor} always writes a note and

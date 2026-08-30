@@ -202,14 +202,17 @@ public class SafetyWarning {
 	 * Ibuprofen dose ~2400 mg/day exceeds the 1200 mg/day maximum for ages 2-11", or
 	 * "Warfarin interacts with active order aspirin — Major. …".
 	 *
-	 * <p><b>One SENTENCE is what a contraindication or an overdose is, and not what this field
-	 * is</b> — the second example above is two, and a folded chip is three. This javadoc said
-	 * "one complete, standalone sentence" while illustrating it with that two-sentence example:
-	 * {@code DdiDrugReferenceSource.noteFor} builds a rated rule's note as
-	 * {@code severity + ". " + mechanism} and {@code DrugSafetyValidator.interactionWarning} appends
-	 * it after an em dash, then the fold appends the class sentence after
-	 * {@code DrugSafetyValidator.endSentence}. A renderer that splits or truncates at the first
-	 * sentence boundary therefore drops the mechanism text, which is the chip's clinical content.
+	 * <p><b>How many SENTENCES it runs to is not part of the contract, and no rule about that
+	 * belongs here.</b> This javadoc read "one complete, standalone sentence" while illustrating it
+	 * with the two-sentence second example above, and a first attempt to correct that put a rule in
+	 * its place ("one for a contraindication, two for a rated interaction, three when folded") which
+	 * measurement refuted as well. What the composition actually depends on is authored TEXT:
+	 * {@code DdiDrugReferenceSource.noteFor} appends a rule's note — one sentence or many, whatever
+	 * the dataset's mechanism description happens to be, and a single sentence where the row has
+	 * none — and the fold then appends the class sentence after {@code DrugSafetyValidator.endSentence}.
+	 * Measure it if you need a number, over the dataset you actually ship. A renderer that splits or
+	 * truncates at a sentence boundary drops the mechanism text, which is the chip's clinical
+	 * content; render the whole string.
 	 *
 	 * <p><b>Renderers should display this alone</b>; prefixing {@link #getDrug()} duplicates the
 	 * subject, because every detail already opens with it. It is also this field, not

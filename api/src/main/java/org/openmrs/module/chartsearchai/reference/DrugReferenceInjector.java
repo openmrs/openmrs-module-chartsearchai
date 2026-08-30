@@ -1522,6 +1522,20 @@ public class DrugReferenceInjector {
 	 *         it was, which is what makes this change able only to remove a divergence and never to
 	 *         create one.
 	 *
+	 *         <p><b>Issue #339 widened what that costs on the flattened shape, and the guard below is
+	 *         kept anyway.</b> The reconciliation now answers for every rule chip, so on a context
+	 *         carrying only the flattened code set an UNFOLDED chip can be reconciled while this note
+	 *         is not — measured through the real {@code validate} over the pinned excerpt, a chart
+	 *         carrying {@code Warfarin} and {@code B01AA03} and no per-order list chips
+	 *         {@code interacts with active order Warfarin} beside a note reading {@code warfarin}.
+	 *         Before #339 that pair agreed, both being {@code partnerLabel}. It is the residue issue
+	 *         #297 already accepted for a FOLDED chip on that same shape, reaching further; the two
+	 *         surfaces still name one SUBSTANCE, which is what this record's own vocabulary paragraph
+	 *         above says they share. Closing it means dropping the condition below, which is what makes
+	 *         the RECORD key-dependent — the thing
+	 *         {@code OrderDrivenInjectionResolutionTest.oneOrderInjectsOneRecordSetWhicheverWayItResolves}
+	 *         forbids — so the trade is unchanged by #339 and is recorded rather than taken.
+	 *
 	 *         <p><b>And only where the context carries per-order structure</b>, which is every context
 	 *         {@link PatientClinicalContextBuilder} builds for a real patient. On the flattened shape of
 	 *         issue #118 the class arm's own reach is key-dependent — {@code orderPartners} reads the

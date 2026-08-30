@@ -37,8 +37,11 @@ import org.junit.jupiter.api.Test;
  * ladder: a folded chip names the partner by the class arm's label where that ladder found a NAME and
  * the two arms are provably about one prescription — the rule's own token naming the ladder's ENTRY
  * unambiguously, or naming the very ORDER the label came from — and each arm keeps its own name where
- * they are not. Unfolded rule chips, class-only chips and the grouping keys are untouched — see
- * {@code reconciledPartnerName}. The injected {@code drug_reference} note list was untouched too, which is
+ * they are not. Class-only chips and the grouping keys are untouched — see
+ * {@code reconciledPartnerName}. Unfolded rule chips WERE untouched by #292 and are not since issue
+ * #339, which asks that same method of every rule chip in both active-order arms:
+ * {@code OneOrderNameAcrossOneResponseTest} is where that half lives, and the cases here still say what
+ * they said, because a chip's two SENTENCES naming one order once is what this class is about. The injected {@code drug_reference} note list was untouched too, which is
  * the deviation issue #297 closed: it now takes that same reconciled name in its own vocabulary, and
  * {@code OneNameAcrossChipAndInjectedRecordTest} is where that half is pinned.
  *

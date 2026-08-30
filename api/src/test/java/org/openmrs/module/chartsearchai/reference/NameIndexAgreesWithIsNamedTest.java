@@ -119,4 +119,32 @@ public class NameIndexAgreesWithIsNamedTest {
 		assertTrue(DrugReferenceService.entriesNamedBy(null, index).isEmpty(),
 			"and so does no token at all");
 	}
+
+	/**
+	 * The answer is not the index's own list to be sorted or filtered in place.
+	 *
+	 * <p>Same contract and same reason as {@code findForActiveOrders}' (ADR Decision 58): this list is
+	 * held for the whole pass and read by every reconciliation in it, so a consumer that reordered it
+	 * would change what a later chip is told about a token's claimants — which decides whether one
+	 * substance's rated mechanism may be printed under another's name. Nothing in the module mutates
+	 * it, so the guarantee cost nothing to take, and nothing behavioural can see it: this is what
+	 * reddens if the wrapper is removed.
+	 */
+	@Test
+	public void theClaimantsOfATokenCannotBeMutatedByAHolder() {
+		DrugReferenceService service =
+				DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport.ddinterEntries());
+		Map<String, List<DrugReference>> index = service.nameIndex();
+		List<DrugReference> named = DrugReferenceService.entriesNamedBy("warfarin", index);
+
+		assertTrue(!named.isEmpty(), "precondition: the excerpt must name warfarin, or this asserts "
+				+ "nothing about a list with anything in it");
+		try {
+			named.clear();
+			org.junit.jupiter.api.Assertions.fail("the claimant list must not be mutable by a holder");
+		}
+		catch (UnsupportedOperationException expected) {
+			// the contract
+		}
+	}
 }

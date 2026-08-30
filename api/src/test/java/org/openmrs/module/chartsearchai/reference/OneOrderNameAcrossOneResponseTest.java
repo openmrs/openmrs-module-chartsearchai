@@ -248,4 +248,38 @@ public class OneOrderNameAcrossOneResponseTest {
 					+ " four the dataset's names, in one response, with nothing in the text explaining"
 					+ " why (issue #339), was: " + DrugReferenceTestSupport.details(warnings));
 	}
+
+	/**
+	 * The residue on the FLATTENED context of issue #118, pinned as current behaviour so that closing
+	 * it reddens rather than passing in silence.
+	 *
+	 * <p>Such a context carries the chart's codes with no per-order structure, and the chip layer can
+	 * still reconcile from it — {@code orderPartners} reads the flattened code set for its entry rung.
+	 * The injected {@code drug_reference} note cannot: {@code DrugReferenceInjector}'s own accessor is
+	 * conditioned on the context carrying orders, deliberately, because dropping that condition makes
+	 * the RECORD's text depend on whether a dictionary published a prescription's ATC code or only its
+	 * name — which {@code OrderDrivenInjectionResolutionTest.oneOrderInjectsOneRecordSetWhicheverWayItResolves}
+	 * forbids. So on this shape the chip says {@code Warfarin} and the note says {@code warfarin}.
+	 *
+	 * <p>Issue #297 already accepted exactly this for a FOLDED chip on this same shape; issue #339
+	 * widens the reach and not the kind. The two surfaces still name one SUBSTANCE, each in its own
+	 * vocabulary, which is what {@code SafetyWarning.reconciledPartnerNoteName} says they share — and
+	 * what a real patient gets is the other branch, since {@code PatientClinicalContextBuilder}
+	 * attaches per-order structure for every chart it can read.
+	 */
+	@Test
+	public void onAFlattenedChartTheChipIsReconciledAndTheNoteIsNot() {
+		DrugReferenceService service = DrugReferenceTestSupport.ddinterServiceWithGroups();
+		PatientClinicalContext flat = service.withReferenceNames(DrugReferenceTestSupport.ctx(60, null,
+			DrugReferenceTestSupport.set("Warfarin"), DrugReferenceTestSupport.set("B01AA03"), null,
+			null));
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+				.validate("", "Is methotrexate safe here?", flat);
+
+		assertTrue(flat.getActiveDrugOrders().isEmpty(),
+			"precondition: the flattened shape carries no per-order structure");
+		assertEquals(java.util.Arrays.asList("Warfarin"), orderNames(warnings),
+			"the chip reconciles from the flattened code set alone, was: " + warnings);
+	}
 }

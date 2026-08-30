@@ -2296,7 +2296,7 @@ public class DrugSafetyValidator {
 				// class sentence is ABOUT, and asking for it a second way is how two answers to one
 				// question start to drift.
 				ReconciledPartner reconciled = reconciledPartnerName(hit.getKey(), rule.rule,
-					coMedications.nameIndex());
+					coMedications);
 				folded.put(rule, new FoldedClassSentence(
 						reconciled != null ? reconciled.chipName : partnerLabel(rule.rule),
 						reconciled != null ? reconciled.noteName : null,
@@ -2319,11 +2319,11 @@ public class DrugSafetyValidator {
 		// client sees the chip sequence reshuffle.
 		for (SubjectRule rule : rules) {
 			FoldedClassSentence fold = folded.get(rule);
-			// Through the two-arg overload when nothing folded, rather than passing partnerLabel and null
-			// by hand: that keeps "an unfolded chip names its partner exactly as the screening arm does"
-			// a single default in the callee instead of two call sites both remembering to pass the same
-			// thing — and that label is also the grouping key, so a drift there would silently unpick the
-			// part of #121's invariant this change leaves standing.
+			// Through the two-arg overload where nothing reconciled, rather than passing partnerLabel and
+			// null by hand: that keeps "a chip whose partner was not reconciled names it exactly as the
+			// screening arm does" a single default in the callee instead of two call sites both
+			// remembering to pass the same thing — and that label is also the grouping key, so a drift
+			// there would silently unpick the part of #121's invariant this change leaves standing.
 			if (fold == null) {
 				// No class sentence to fold, and since issue #339 that no longer decides what the order
 				// is CALLED: the same reconciliation runs here, so a partner the class arm had nothing
@@ -3120,7 +3120,7 @@ public class DrugSafetyValidator {
 	 *         token nor code, which a rule inside the matched loop cannot be.
 	 */
 	private ReconciledPartner reconciledPartnerName(OrderPartner partner,
-			DrugReference.Interaction rule, Map<String, List<DrugReference>> nameIndex) {
+			DrugReference.Interaction rule, CoMedications coMedications) {
 		if (!partner.namesADrug) {
 			// The ladder has no name to keep, so the rule's own token is the only one either arm holds —
 			// unless the rule has no token either, when nothing here is a name and neither sentence
@@ -3203,7 +3203,8 @@ public class DrugSafetyValidator {
 		// the mechanism by which the partner vanishes. No shipped parser produces both together today
 		// (ddinter synthesises a note for every row, json refuses a blank name, atc emits no
 		// interactions at all), which is why the fixture reaches only the first.
-		if (partner.labelEntry == null || !unambiguouslyNames(rule, partner.labelEntry, nameIndex)) {
+		if (partner.labelEntry == null
+				|| !unambiguouslyNames(rule, partner.labelEntry, coMedications.nameIndex())) {
 			return null;
 		}
 		String datasetName = ChartSearchAiUtils.firstNonBlank(partner.labelEntry.getName());
@@ -3231,8 +3232,7 @@ public class DrugSafetyValidator {
 	 */
 	private ReconciledPartner reconciledPartnerFor(SubjectRule rule, CoMedications coMedications) {
 		OrderPartner partner = coMedications.partnerNaming(rule.partner);
-		return partner == null ? null
-				: reconciledPartnerName(partner, rule.rule, coMedications.nameIndex());
+		return partner == null ? null : reconciledPartnerName(partner, rule.rule, coMedications);
 	}
 
 	/**
@@ -3391,9 +3391,11 @@ public class DrugSafetyValidator {
 	 *         substance the token already named, so nothing NEW is asserted, but the prose can name the
 	 *         other row. Measured over the shipped KB: subjects carrying two above-floor rules under the
 	 *         one token {@code ketoconazole} are common, and {@code Osilodrostat} is one of them. That is
-	 *         {@link #partnerLabel}'s pre-existing property — the unfolded chip prints the same token —
-	 *         and closing it means choosing between two rules, which is {@link #bestRulePerPartner}'s
-	 *         question, not this one.
+	 *         {@link #partnerLabel}'s pre-existing property — before issue #339 the unfolded chip
+	 *         printed that same token, and since #339 it prints this same reconciled name, so the two
+	 *         chips agree either way and neither asserts more than the token did — and closing it means
+	 *         choosing between two rules, which is {@link #bestRulePerPartner}'s question, not this
+	 *         one.
 	 *
 	 *         <p><b>So a CONTESTED token can only be admitted at {@link DrugReference#NAME_IS_THE_DISPLAY_NAME},
 	 *         and — measured, not derived — the reconciled label is then that token re-cased.</b>
@@ -3449,17 +3451,19 @@ public class DrugSafetyValidator {
 	 *         {@code FoldedChipOnePartnerNameTest.aPaddedAliasNamesTheOneOrderOnce} reddens if that trim
 	 *         is removed.
 	 *
-	 *         <p>A sweep of {@code getAll()} per folded chip whose ladder resolved an entry, deliberately
-	 *         uncached — and <b>no longer one scan beside sweeps that were already there</b>, which is
-	 *         what this paragraph said until issue #256. It rested on {@link #ruleAbout} calling the
-	 *         UNCACHED sweep ({@link #sweepForAtcCode}) once per partner code in the same iteration;
-	 *         that method now reads the pass's own cache ({@code CoMedications}), so at most one sweep
-	 *         per CODE per
-	 *         pass happens there and this one stands alone. It is kept uncached all the same: it runs
-	 *         once per FOLDED chip, which is the rare outcome of the class arm rather than the ordinary
-	 *         one, and it is keyed on a (rule, entry) pair rather than on a code, so the pass's cache
-	 *         has nothing to offer it. If it ever needs a memo it is a per-call local threaded through,
-	 *         never a field — CLAUDE.md's rule, and the reasons are on {@link DrugReferenceService}.
+	 *         <p><b>No longer a sweep of {@code getAll()}, and issue #339 is why.</b> This used to walk
+	 *         the dataset for the token's rival claimants on every call, kept uncached because it ran
+	 *         once per FOLDED chip — the rare outcome of the class arm rather than the ordinary one.
+	 *         Since #339 it runs once per rule CHIP, and the number of distinct (token, entry) pairs a
+	 *         pass reconciles grows with the drugs in play, which
+	 *         {@code CoMedicationResolutionPerPassTest.theCoMedicationResolutionDoesNotGrowWithTheDrugsInPlay}
+	 *         forbids. <b>A memo over the asks cannot restore that</b> — the asks themselves grow, so
+	 *         de-duplicating the repeats leaves the difference rising — which is why the remedy is to
+	 *         invert the dataset ONCE per pass instead: {@link DrugReferenceService#nameIndex()}, read
+	 *         back through {@link DrugReferenceService#entriesNamedBy}. One walk is one walk however
+	 *         many chips read it. The index is a per-pass LOCAL held on {@code CoMedications} and never
+	 *         a field on either bean — CLAUDE.md's issue #172 rule, whose reasons are on
+	 *         {@link DrugReferenceService}.
 	 */
 	private boolean unambiguouslyNames(DrugReference.Interaction rule, DrugReference entry,
 			Map<String, List<DrugReference>> nameIndex) {
@@ -4280,8 +4284,10 @@ public class DrugSafetyValidator {
 		// SafetyWarning.carriesUnratedRelationship and licensesWithholding(SafetyWarning) (#283).
 		// The RECORD's name for this partner travels on the chip that decided it (issue #297) — see
 		// SafetyWarning.reconciledPartnerNoteName, which is also where the rule-identity condition the
-		// note has to satisfy before it may take that name lives. Null for every chip no fold
-		// reconciled, which is what leaves the note on partnerLabel exactly as before.
+		// note has to satisfy before it may take that name lives. Null wherever nothing reconciled,
+		// which is what leaves the note on partnerLabel exactly as before — and since issue #339 that
+		// is a chip whose partner the ladder did not reach or whose displacement the gate refused,
+		// rather than a chip no class sentence folded onto.
 		return SafetyWarning.interaction(ref.displayLabel(), detail, i.getSeverity(),
 				alsoSameClass != null, partnerNoteName != null ? i : null, partnerNoteName);
 	}
@@ -6349,6 +6355,10 @@ public class DrugSafetyValidator {
 		/** {@link #partnerNaming}'s index, built at most once for the pass from {@link #resolved()}. */
 		private Map<Object, OrderPartner> partnersBySubstance;
 
+		/** Taken by {@link DrugSafetyValidator#reconciledPartnerName} at the one branch that needs it,
+		 *  rather than by its callers: the two rungs above that branch — a ladder with no name, and a
+		 *  label an ORDER supplied — answer without asking the dataset anything, so a pass whose folds
+		 *  all land there builds no index at all. */
 		Map<String, List<DrugReference>> nameIndex() {
 			if (nameIndex == null) {
 				nameIndex = drugReferenceService.nameIndex();

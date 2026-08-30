@@ -1169,7 +1169,8 @@ public class CitationGroundingVerifierTest {
 	 * of any kind, which is what this said until #229 measured it: hardcode the predicate, add a
 	 * fourth declared constant that groups as CHART evidence, and this sweep stays green — the
 	 * hardcode and the classification agree that such a type is not demote-only, so nothing here can
-	 * tell them apart. Classify that same constant as reference material instead and it reddens. Its counterpart in {@code ChartSearchAiReferenceGroupTest} asserts
+	 * tell them apart. Classify that same constant as reference material instead and it reddens.
+	 * Its counterpart in {@code ChartSearchAiReferenceGroupTest} asserts
 	 * the same rule against the group each constant is RECORDED as, so the two registries cannot drift
 	 * together either.
 	 *

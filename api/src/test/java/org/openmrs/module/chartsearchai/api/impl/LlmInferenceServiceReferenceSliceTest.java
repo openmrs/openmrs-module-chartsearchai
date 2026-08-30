@@ -45,7 +45,9 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  *
  * <p><b>It is resolved off the POST-inject chart.</b> The strategy here builds a chart with no
  * reference material and the injector seam returns one the REAL injector produced, so a slice
- * resolved before {@code inject()} reports zero and every assertion below fails. That is deliberate:
+ * resolved before {@code inject()} reports zero and both ordering cases below fail — measured, and
+ * stated as two rather than as "every case here", because the third pins the producer-side
+ * null-versus-zero contract on a directly constructed answer and no ordering can move it. That is deliberate:
  * a seam returning the chart unchanged — which is what every other test in this package installs —
  * cannot tell the two orderings apart, so those cases would stay green under exactly the mutation
  * {@code LlmInferenceService}'s own comment guards ("After inject() deliberately: that is the chart

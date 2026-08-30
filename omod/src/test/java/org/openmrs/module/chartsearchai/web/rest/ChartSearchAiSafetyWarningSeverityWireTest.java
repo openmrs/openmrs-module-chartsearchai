@@ -357,8 +357,12 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 	 * today), and so does a static one; both are excluded deliberately, because a per-chip wire field
 	 * is per-warning and takes no argument. It is ONE-directional — such an accessor implies a key,
 	 * never the converse — so a serializer is still free to publish something derived that no
-	 * accessor names. Mutate the selection and read the failures rather than trusting this
-	 * paragraph.
+	 * accessor names. And it reflects over whatever {@code SafetyWarning} the omod build resolved:
+	 * {@code omod/pom.xml} unpacks the RESOLVED api artifact over {@code omod/target/classes}, so
+	 * under {@code mvn -pl omod test} — the natural command for someone who has just edited
+	 * {@code SafetyWarning} — it reads a stale {@code ~/.m2} copy and passes over the very accessor it
+	 * exists to catch, silently. Build from the ROOT, which is this repo's standing rule for that
+	 * reason. Mutate the selection and read the failures rather than trusting this paragraph.
 	 */
 	@Test
 	public void everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire() {

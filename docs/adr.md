@@ -64,6 +64,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 56: A trailing parenthetical that is the substance's own name qualifies nothing](#decision-56-a-trailing-parenthetical-that-is-the-substances-own-name-qualifies-nothing)
 - [Decision 57: The injected reference slice gets a durable observable, and deliberately no cap](#decision-57-the-injected-reference-slice-gets-a-durable-observable-and-deliberately-no-cap)
 - [Decision 58: The pre-answer pass resolves the patient's active orders once, and the post-answer pass is a different question](#decision-58-the-pre-answer-pass-resolves-the-patients-active-orders-once-and-the-post-answer-pass-is-a-different-question)
+- [Decision 59: The chip publishes the rating it was ordered on, verbatim, and says what a client may not conclude from it](#decision-59-the-chip-publishes-the-rating-it-was-ordered-on-verbatim-and-says-what-a-client-may-not-conclude-from-it)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 

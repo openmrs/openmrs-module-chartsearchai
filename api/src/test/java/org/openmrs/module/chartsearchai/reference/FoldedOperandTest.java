@@ -402,7 +402,10 @@ public class FoldedOperandTest {
 		// catches that helper wherever it is written, which no per-accessor rule can. It reads TEXT and
 		// not scopes, so a local called aliases inside this class reddens it too; the failure says to
 		// rename the local, which is the cheaper of the two ways to make the identifier unambiguous.
-		for (Integer at : scan.matches(Pattern.compile("(?<![\\w.])aliases\\b"))) {
+		// The getter as well as the field: reading the raw list through {@code getAliases()} inside this
+		// class reaches the same list by another name, and a helper spelled that way escaped the field
+		// needle. Its own declaration is inside a whitelisted body, so it is not caught by itself.
+		for (Integer at : scan.matches(Pattern.compile("(?<![\\w.])aliases\\b|getAliases\\s*\\("))) {
 			if (DECLARATION.matcher(scan.statementAt(at)).find()) {
 				continue;
 			}

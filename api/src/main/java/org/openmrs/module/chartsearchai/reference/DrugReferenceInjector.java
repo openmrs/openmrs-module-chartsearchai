@@ -1509,8 +1509,11 @@ public class DrugReferenceInjector {
 	 *         answers could be compared is the two-resolutions-that-agree shape issue #151 forbids, and
 	 *         that failure was silent and one-directional. It also makes the scope right for free: a
 	 *         name can only come from a chip that was actually raised AND injected in this same
-	 *         response, so the prompt's name union for the partner cannot GROW — every name this note
-	 *         can newly carry is one the {@code safety_finding} beside it already contains. An
+	 *         response — so every name this NOTE can newly carry is one the {@code safety_finding}
+	 *         beside it already contains. That is the half of the union bound that survives issue #339;
+	 *         the wider reading, that the prompt's name union for the partner cannot GROW at all, does
+	 *         not, because the chip's own name moved for rule-only partners (see the paragraph on that
+	 *         issue above, and ADR Decision 59). An
 	 *         ORDER-DRIVEN record, which no interaction chip stands behind (see {@code collect}), is
 	 *         therefore untouched rather than renamed after a chip that does not exist.
 	 *
@@ -1563,6 +1566,22 @@ public class DrugReferenceInjector {
 	 *         if this fallback ever became something else, those rungs would keep the old string while
 	 *         every unreconciled partner took the new one, and one prescription would be named two ways
 	 *         inside one interaction list — issue #297 reopened a rung along.
+	 *
+	 *         <p><b>An ORDER-DRIVEN record's notes are outside all of this, and issue #339 widened what
+	 *         that costs.</b> Such a record is injected because a drug is an active order, with no
+	 *         interaction chip behind it (see {@code collect}), and it renders its OWN entry's rules —
+	 *         {@code Interaction} objects no chip carries — so the identity test above never matches and
+	 *         every one of its notes falls back to {@code partnerLabel}. That was harmless while an
+	 *         unfolded chip printed {@code partnerLabel} too; since #339 it does not, so one prompt can
+	 *         carry one prescription under two names across two records. Measured through the real
+	 *         {@code injectRecords} over the pinned excerpt, a patient on Warfarin, Acetylsalicylic acid
+	 *         and Digoxin asked {@code "Can I give her ibuprofen?"}: the in-play {@code Ibuprofen} record
+	 *         lists {@code Warfarin}, the order-driven {@code Acetylsalicylic acid} record lists
+	 *         {@code warfarin}, and before #339 both read {@code warfarin}. Closing it means keying this
+	 *         lookup on the PARTNER rather than on rule identity, which needs the partner entry to travel
+	 *         beside the name — a change to what a {@link SafetyWarning} carries, not to this scan — and
+	 *         it re-opens the key-dependence question the condition below exists for. Recorded in ADR
+	 *         Decision 59's trade-offs rather than taken here.
 	 *
 	 *         <p>A linear scan of a list bounded by the chips this response raised, and deliberately not
 	 *         a map: the accessor above will not hand out a name without being shown the rule it was

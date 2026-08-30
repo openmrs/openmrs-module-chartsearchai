@@ -40,6 +40,14 @@ import org.junit.jupiter.api.Test;
  */
 public class NameIndexAgreesWithIsNamedTest {
 
+	/** An operator-authored dataset one of whose entries spells a name ONLY in mixed case, beside a
+	 *  second entry claiming the lower-case form. The {@code json} parser trims but does not
+	 *  lower-case, so this is the shape in which the index's KEY-side normalisation has work to do —
+	 *  and a fixture carrying BOTH spellings on ONE entry is not, since the lower-case key is then
+	 *  present either way (measured: such a fixture passes under the mutation). */
+	private static final String NOT_PRE_NORMALISED_FIXTURE =
+			"chartsearchai-test/drug-reference-capitalised-only-alias.json";
+
 	/** @return the entries {@code token} names, found the way the predicate finds them: by asking each
 	 *          loaded row. This is the walk the index replaces, written out here and nowhere in
 	 *          production. */
@@ -146,5 +154,40 @@ public class NameIndexAgreesWithIsNamedTest {
 		catch (UnsupportedOperationException expected) {
 			// the contract
 		}
+	}
+
+	/**
+	 * A dataset whose aliases are NOT already normalised — which is where the KEY side of the
+	 * agreement is actually asked to do something.
+	 *
+	 * <p>The two cases above drive datasets the {@code ddinter} parser produced, and that parser
+	 * lower-cases and trims every alias it writes. So {@code corpus()}'s padded and upper-cased
+	 * spellings exercise only the QUERY side — {@code entriesNamedBy}'s own {@code normalizeName} —
+	 * and the normalisation inside {@link DrugReference#nameKeys()} is never put to a name that needs
+	 * it. Measured: dropping it there left the whole api suite green, this class included.
+	 *
+	 * <p>The {@code json} source trims but does not lower-case, so an operator file can spell a name
+	 * ONLY in mixed case — and it has to be a name no OTHER alias of that entry supplies in lower case,
+	 * or the key is present under the mutation anyway and the case passes. The drift it catches is
+	 * fail-OPEN: an index that
+	 * loses a claimant makes {@code uniqueStrongestClaimant} more likely to answer true, so the gate
+	 * PERMITS a displacement it should refuse — one substance's rated mechanism under another's name.
+	 */
+	@Test
+	public void theIndexAgreesOverAnOperatorAuthoredDatasetThatIsNotAlreadyLowerCased()
+			throws IOException {
+		List<DrugReference> entries =
+				DrugReferenceTestSupport.fixtureEntries(NOT_PRE_NORMALISED_FIXTURE);
+		boolean capitalised = false;
+		for (DrugReference entry : entries) {
+			for (String alias : entry.getAliases()) {
+				capitalised |= alias != null
+						&& !alias.equals(alias.toLowerCase(java.util.Locale.ROOT));
+			}
+		}
+		assertTrue(capitalised, "precondition: this fixture must carry an alias the parser did NOT "
+				+ "lower-case, or the key side of the agreement is not being asked anything");
+
+		assertAgrees(entries, "the operator-authored fixture " + NOT_PRE_NORMALISED_FIXTURE);
 	}
 }

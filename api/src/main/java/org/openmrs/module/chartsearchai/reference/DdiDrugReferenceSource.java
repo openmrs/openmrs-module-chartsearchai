@@ -339,9 +339,10 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 	 *       a chip prints, so such a pair can ONLY read as a substance interacting with itself. The
 	 *       systemic-plus-topical exposure the KB row is about cannot be stated by anything this module
 	 *       renders, while the self-reference can. Every surface that could name such a pair names the
-	 *       partner by that shared token — the screening chip and every UNFOLDED drug-in-play chip through
-	 *       {@code DrugSafetyValidator.partnerLabel}, and the injected reference record through
-	 *       {@code DrugReferenceInjector.orderedInteractionNotes} wherever no fold reconciled the pair —
+	 *       partner by that shared token wherever nothing reconciled it — which since issue #339 is the
+	 *       condition for the screening chip and the drug-in-play chip alike
+	 *       ({@code DrugSafetyValidator.partnerLabel}), and for the injected reference record through
+	 *       {@code DrugReferenceInjector.orderedInteractionNotes} —
 	 *       and the one surface that would print
 	 *       the partner's own display label, {@code addQuestionPairInteractions}, already declines a pair
 	 *       whose two entries share a name. Since issue #292 a FOLDED drug-in-play chip is a second such

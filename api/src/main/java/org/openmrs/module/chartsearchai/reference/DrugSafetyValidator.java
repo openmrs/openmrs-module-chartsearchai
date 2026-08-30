@@ -2932,9 +2932,11 @@ public class DrugSafetyValidator {
 	 *
 	 * <p><b>It is the GROUPING key, and since issue #339 it is no longer what most chips SAY.</b> Issue
 	 * #292 scoped issue #121's second half — that the key is also the rendered label — to unfolded
-	 * chips; #339 removes the rest of it, because the reconciliation the fold used to own is now asked
-	 * at every rule chip. So this remains the value both surfaces group on, and it is what a chip
-	 * renders only where {@link #reconciledPartnerName} refuses or reaches no co-medication at all.
+	 * chips, and #339 narrows it again rather than removing it: the reconciliation the fold used to own
+	 * is now asked at every rule chip. So this remains the value both surfaces group on, and it is what
+	 * a chip renders only where {@link #reconciledPartnerName} refuses or reaches no co-medication at
+	 * all — which on the no-entry branch #121 is about is EVERY chip, since {@link SubjectRule#partner}
+	 * is null there and the reconciliation declines on exactly that.
 	 * That method states what the departure costs; the grouping is unaffected either way, running
 	 * before the reconciliation and on this value.
 	 *
@@ -5829,8 +5831,10 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * The ONE name a folded chip's two sentences agree on, in each of the two vocabularies that name
-	 * has to be spoken in (issue #297) — {@link #reconciledPartnerName}'s answer.
+	 * The ONE name a chip and its injected note call an active-order partner by, in each of the two
+	 * vocabularies that name has to be spoken in (issue #297) — {@link #reconciledPartnerName}'s
+	 * answer. For a FOLDED chip that is also the name its two sentences agree on, which is what this
+	 * type was built for; since issue #339 it is returned for a chip with one sentence too.
 	 *
 	 * <p>Two strings and one decision, deliberately, because the surfaces cannot share a single string:
 	 * the chip's name may be {@link DrugReference#displayLabel()} and that label may not enter the
@@ -5842,7 +5846,7 @@ public class DrugSafetyValidator {
 	 */
 	private static final class ReconciledPartner {
 
-		/** What both sentences of the CHIP call the order. */
+		/** What the CHIP calls the order — both of its sentences, where it has two. */
 		private final String chipName;
 
 		/** What the injected {@code drug_reference} note calls it. */
@@ -6028,13 +6032,17 @@ public class DrugSafetyValidator {
 		 * {@link DrugSafetyValidator#orderPartners} — or null on the order and code rungs, where no
 		 * entry named it.
 		 *
-		 * <p>Read by ONE thing, {@link DrugSafetyValidator#reconciledPartnerName}, which asks whether the
-		 * rule about to be folded onto this partner NAMES that entry before letting this label displace
+		 * <p>Read by two things, and only one of them reads it as a NAME.
+		 * {@link DrugSafetyValidator#reconciledPartnerName} asks whether the rule about to be printed
+		 * beside this partner NAMES that entry before letting this label displace
 		 * the rule's own token — and only on the branch where {@link #label} is still this entry's own
 		 * display label, because {@link #nameByOrder} does not update this field and a renamed partner's
 		 * label can therefore name a different drug from the one validated here. So a renamed partner is
 		 * validated against {@link #namingOrder} instead, which is the order the label actually came from;
-		 * this field is not consulted there at all. Not the same question as {@link #substances}, which is
+		 * this field is not consulted there at all. The second reader is
+		 * {@code CoMedications.partnerNaming}, which reads only its {@code substanceGroupKey()} — to key
+		 * this partner in the pass's substance index — and never its name, so nothing about the
+		 * paragraph above is weakened by it. Not the same question as {@link #substances}, which is
 		 * what an ORDER is known to contain and is populated on one rung only — conflating the two would
 		 * widen a suppression that decides which chips are silenced (see that field).
 		 */

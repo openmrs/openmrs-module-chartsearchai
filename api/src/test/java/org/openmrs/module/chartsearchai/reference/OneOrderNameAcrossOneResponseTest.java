@@ -282,4 +282,45 @@ public class OneOrderNameAcrossOneResponseTest {
 		assertEquals(java.util.Arrays.asList("Warfarin"), orderNames(warnings),
 			"the chip reconciles from the flattened code set alone, was: " + warnings);
 	}
+
+	/**
+	 * The two index passes are ORDERED, and this is what says so: the substance a combination order
+	 * merely CONTAINS must not take a chip away from the single-substance order of that same drug.
+	 *
+	 * <p>{@code CoMedications.partnerNaming} lays down a key for each partner's {@code labelEntry}
+	 * substance first and lets no {@code substances} key displace one. Break that — last writer wins,
+	 * or the two loops swapped — and the whole api suite stays green while BOTH chips below read
+	 * {@code active order Isoniazid / Rifapentine}: the isoniazid rule is printed as being about the
+	 * combination product, and the patient's actual standalone isoniazid prescription vanishes from the
+	 * response. That is the #161/#187/#194 mis-attribution, in text {@code renderFinding} copies
+	 * verbatim into the prompt as a citable {@code safety_finding}.
+	 *
+	 * <p>The case above reaches the {@code substances} pass and cannot see this: with only the
+	 * combination order on the chart there is no second partner for a key to be taken from.
+	 */
+	@Test
+	public void aCombinationOrderDoesNotTakeAChipFromTheSingleSubstanceOrderOfTheSameDrug()
+			throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
+			DrugReferenceTestSupport.fixtureEntries(COMBINATION_ORDER_FIXTURE));
+		java.util.Set<String> combinationCodes = DrugReferenceTestSupport.set("J04AC51", "J04AB05");
+		java.util.Set<String> isoniazidCodes = DrugReferenceTestSupport.set("J04AC01");
+		java.util.Set<String> all = new java.util.LinkedHashSet<String>(combinationCodes);
+		all.addAll(isoniazidCodes);
+		PatientClinicalContext chart = DrugReferenceTestSupport.ctx(60, null,
+			DrugReferenceTestSupport.set(COMBINATION_DISPLAY, "Isoniazid 300mg"), all, null, null,
+			java.util.Arrays.asList(
+				DrugReferenceTestSupport.activeOrder("order-combination", COMBINATION_DISPLAY,
+					DrugReferenceTestSupport.set("isoniazid / rifapentine"), combinationCodes),
+				DrugReferenceTestSupport.activeOrder("order-isoniazid", "Isoniazid 300mg",
+					DrugReferenceTestSupport.set("isoniazid"), isoniazidCodes)));
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+				.validate("", "Can I give her carbamazepine?", chart);
+
+		assertEquals(java.util.Arrays.asList("Isoniazid", COMBINATION_DISPLAY), orderNames(warnings),
+			"the isoniazid rule must name the isoniazid PRESCRIPTION and the rifapentine rule the "
+					+ "combination one — a partner that merely contains a substance may not speak for "
+					+ "the order that IS it, was: " + warnings);
+	}
 }

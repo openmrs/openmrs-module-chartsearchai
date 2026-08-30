@@ -81,9 +81,11 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 	 * {@code 763e6e5f-…}, "Please screen her current medications for drug interactions.") — a rated
 	 * Major, a rated Minor and two contraindications — and the last two are shapes that capture did
 	 * not contain and that the prose parse cannot reach: a RATED rule carrying no mechanism note, so
-	 * that its rating appears nowhere in its own {@code detail}, and a rating the module does not
+	 * that its rating appears nowhere in its own {@code detail}; a rating the module does not
 	 * RECOGNISE, which it treats exactly as it treats null and which must still reach the wire as the
-	 * dataset wrote it.
+	 * dataset wrote it; and a chip whose sentence and rating DISAGREE, which is what makes
+	 * {@link #theRatingIsPublishedEvenWhereTheProseNamesItNowhere} able to tell a field read from a
+	 * parse that falls back to the field.
 	 */
 	private static List<SafetyWarning> fixtureWarnings() {
 		return Arrays.asList(
@@ -111,7 +113,16 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 				// severity is a plain Jackson-bound string with no vocabulary check over it.
 				new SafetyWarning(SafetyWarning.TYPE_INTERACTION, "Phenelzine",
 						"Phenelzine interacts with active order selegiline — Severe. Operator-authored rule.",
-						"Severe"));
+						"Severe"),
+				// The two DISAGREEING, which a json dataset reaches immediately: the note and the rating
+				// are independently authored fields, so a curated note may open on a rating word that is
+				// not the rule's. score_probe_safety.py records this exact hazard for its own prose
+				// parse — "a curated note opening 'Major bleeding risk…' would read as a Major rating
+				// for a rule the module rates as null".
+				new SafetyWarning(SafetyWarning.TYPE_INTERACTION, "Tramadol",
+						"Tramadol interacts with active order sertraline — Major bleeding risk is not what "
+								+ "this rule is rated.",
+						"Minor"));
 	}
 
 	private ChartSearchAiRestController controller;
@@ -223,6 +234,18 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 		assertEquals("Moderate", chip.get("severity"),
 				"so the field is the structured rating the chip was raised with, not a parse of the "
 						+ "sentence beside it: " + chip);
+
+		// The other direction, and the one a PURE-parse check cannot reach: a serializer that parses
+		// the prose and falls back to the field agrees with the field wherever the two agree, so it
+		// survives the assertion above. Measured — replacing the field read with exactly that
+		// fallback left this class green until this chip existed. Here the sentence says one thing
+		// and the rule is rated another, which no fallback can reconcile.
+		Map<String, Object> disagreeing = searchChips().get(6);
+		assertTrue(((String) disagreeing.get("detail")).contains("Major"),
+				"precondition: this fixture chip's sentence carries a rating word that is not its rating");
+		assertEquals("Minor", disagreeing.get("severity"),
+				"the wire must carry the rule's own rating, never a word read out of its sentence: "
+						+ disagreeing);
 	}
 
 	@Test

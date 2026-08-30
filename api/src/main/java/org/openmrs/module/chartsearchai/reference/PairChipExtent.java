@@ -39,19 +39,22 @@ package org.openmrs.module.chartsearchai.reference;
  * <p><b>Zero is a measurement and absence is not.</b> An extent stating {@code found == 0} says a
  * pairwise arm ran and the reference data related none of the pairs it enumerated — a complete
  * screen, positively assertable, which is half of what this type exists for. No extent at all
- * ({@code null} on the answer, {@code null} on the wire) says the producer stated no measurement,
- * and covers exactly three situations, deliberately not distinguished because a consumer must
- * treat them alike:
+ * ({@code null} on the answer, {@code null} on the wire) says the producer stated no measurement.
+ * It covers two situations, deliberately not distinguished because a consumer must treat them
+ * alike:
  *
  * <ol>
- *   <li>neither pairwise arm ran — the question named fewer than two reference drugs and did not
- *       ask to be screened, which is the ordinary case for most questions;</li>
- *   <li>the drug-reference feature or the answer validator is off, so no arm was reachable;</li>
- *   <li>{@code validate} threw and degraded to no warnings, its documented fail-safe.</li>
+ *   <li>no pairwise arm enumerated anything — the question named fewer than two reference drugs
+ *       and did not ask to be screened, which is the ordinary case for most questions, or a
+ *       global property gating those arms is off (the drug-reference feature, the answer
+ *       validator, {@code warnOnInteractions});</li>
+ *   <li>{@code validate} threw and degraded to no warnings, its documented fail-safe — and the
+ *       statement is published only on the normal return, so a degraded pass states nothing
+ *       rather than describing chips that were discarded.</li>
  * </ol>
  *
- * <p>That list has exactly two homes, this one and {@code CLAUDE.md}'s bullet on it. Never read
- * absence as completeness, and never re-derive either count from the chip list.
+ * <p>That list has two homes, this one and {@code CLAUDE.md}'s bullet on it. Never read absence as
+ * completeness, and never re-derive either count from the chip list.
  */
 public final class PairChipExtent {
 

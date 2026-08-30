@@ -252,7 +252,7 @@ public class ChartSearchAiRestController {
 		// verdict (withheld for reference material, see groundedForWire) and the `group`
 		// discriminator; see serializeReferences.
 		response.put("references", serializeReferences(chartAnswer.getReferences()));
-		putSafetyFindings(response, chartAnswer);
+		putSafetyChips(response, chartAnswer);
 		if (questionId != null) {
 			response.put("questionId", questionId);
 		}
@@ -621,7 +621,7 @@ public class ChartSearchAiRestController {
 				// replace its reference list wholesale; questionId correlates the two events.
 				Map<String, Object> groundedData = new HashMap<String, Object>();
 				groundedData.put("references", serializeReferences(chartAnswer.getReferences()));
-				putSafetyFindings(groundedData, chartAnswer);
+				putSafetyChips(groundedData, chartAnswer);
 				if (earlyQuestionId[0] != null) {
 					groundedData.put("questionId", earlyQuestionId[0]);
 				}
@@ -745,7 +745,7 @@ public class ChartSearchAiRestController {
 		doneData.put("answer", answer.getAnswer());
 		doneData.put("disclaimer", DISCLAIMER);
 		doneData.put("references", serializeReferences(answer.getReferences()));
-		putSafetyFindings(doneData, answer);
+		putSafetyChips(doneData, answer);
 		if (questionId != null) {
 			doneData.put("questionId", questionId);
 		}
@@ -1212,6 +1212,10 @@ public class ChartSearchAiRestController {
 	 * Writes an answer's drug-safety chips AND the statement of how bounded the pairwise interaction
 	 * list behind them is, into one payload map. Every emission surface goes through here.
 	 *
+	 * <p>Named for the CHIPS and not for "findings", deliberately: {@code safety_finding} is a
+	 * reference resource type — the citable record form of a chip — and this method has nothing to
+	 * do with it.
+	 *
 	 * <p><b>One method for both keys, and that is the point</b> (issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/336">#336</a>). A
 	 * capped screen was byte-indistinguishable from a complete one on the wire — 8 of 18 pairs
@@ -1228,7 +1232,7 @@ public class ChartSearchAiRestController {
 	 * drug-in-play arm raises those too, so a client must render this as a ratio of pairs, not of
 	 * chips.
 	 */
-	private void putSafetyFindings(Map<String, Object> target, ChartAnswer answer) {
+	private void putSafetyChips(Map<String, Object> target, ChartAnswer answer) {
 		target.put("safetyWarnings", serializeSafetyWarnings(answer.getSafetyWarnings()));
 		target.put("interactionPairs", serializePairChipExtent(answer.getPairChipExtent()));
 	}

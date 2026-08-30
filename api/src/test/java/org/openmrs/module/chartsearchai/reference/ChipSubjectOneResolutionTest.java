@@ -179,8 +179,8 @@ public class ChipSubjectOneResolutionTest {
 	private static final String LOOKUP_DECLARATION = "private static final class SubstanceSubjects {";
 
 	/**
-	 * The one arity of {@code validate} that builds the pass's shared state — the other six delegate
-	 * to it. It spans ALL THREE lines of the declaration, which is a correction rather than a style:
+	 * The one arity of {@code validate} that builds the pass's shared state; the others delegate to
+	 * it. It spans ALL THREE lines of the declaration, which is a correction rather than a style:
 	 * since issue #255 the arity above opens with a byte-identical first line, and since issue #336
 	 * the five-argument seam it delegates from wraps its own parameters identically, so the first TWO
 	 * lines now match twice and {@link #uniqueOffsetOf} hard-fails on either prefix; the third line,
@@ -287,7 +287,8 @@ public class ChipSubjectOneResolutionTest {
 
 		assertTrue(validateBody.contains(constructions.get(0)),
 			"the one construction of SubstanceSubjects is at line " + lineOf(source, constructions.get(0))
-					+ ", outside the body of validate(String, String, PatientClinicalContext, List, List) — so"
+					+ ", outside the body of validate(String, String, PatientClinicalContext, List, List,"
+					+ " PairChipExtent.Sink) — so"
 					+ " the arms of a pass may no longer share ONE instance even though the file holds one"
 					+ " \"new\": a per-arm helper returning a fresh instance is one construction and many"
 					+ " objects, which is issue #236's split with an extra hop. If the construction moved"

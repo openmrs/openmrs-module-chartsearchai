@@ -77,7 +77,7 @@ public class ChartSearchAiInteractionPairExtentTest {
 	private final RestControllerContext openmrsContext = new RestControllerContext();
 
 	/** Null for the answer that states nothing; set per case before the handler runs. */
-	private static PairChipExtent stated;
+	private PairChipExtent stated;
 
 	@BeforeEach
 	public void setUp() {
@@ -109,7 +109,7 @@ public class ChartSearchAiInteractionPairExtentTest {
 		return p;
 	}
 
-	private static ChartSearchService.ChartAnswer answer() {
+	private ChartSearchService.ChartAnswer answer() {
 		return new ChartSearchService.ChartAnswer("Ten interactions were found [1].",
 				Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
 				Arrays.asList(new SafetyWarning("interaction", "Warfarin",
@@ -205,15 +205,23 @@ public class ChartSearchAiInteractionPairExtentTest {
 				"src/main/java/org/openmrs/module/chartsearchai/web/rest/ChartSearchAiRestController.java")),
 				StandardCharsets.UTF_8);
 
+		// The KEY, not the helper, is what a payload actually carries — so this is the assertion that
+		// also catches a site inlining the serialization loop instead of calling the helper.
+		int keys = occurrences(source, "\"safetyWarnings\"");
+		assertEquals(1, keys,
+				"the safetyWarnings key must be written in exactly one place, beside the statement of "
+						+ "how bounded those chips are (issue #336). Found " + keys + " writes of it.");
 		int calls = occurrences(source, "serializeSafetyWarnings(");
 		assertEquals(2, calls,
 				"serializeSafetyWarnings must be named exactly twice — its own declaration and the one "
-						+ "call inside putSafetyFindings. A third naming is an emission site that can "
-						+ "publish chips without the statement of how bounded they are (issue #336). "
-						+ "Found " + calls + ".");
+						+ "call inside putSafetyChips. A third naming is an emission site building the "
+						+ "chip array for itself. Found " + calls + ".");
 		assertTrue(source.contains("target.put(\"safetyWarnings\", serializeSafetyWarnings(answer.getSafetyWarnings()));")
 				&& source.contains("target.put(\"interactionPairs\", serializePairChipExtent(answer.getPairChipExtent()));"),
-				"putSafetyFindings must still write BOTH keys; splitting them re-opens the defect");
+				"putSafetyChips must still write BOTH keys; splitting them re-opens the defect");
+		// What this does NOT reach: a payload that publishes the chips under some OTHER key name. No
+		// source scan can, and nothing in the module does it today — mutate a site and read which of
+		// the three assertions above answers, rather than trusting this one to answer for all of them.
 	}
 
 	private static int occurrences(String haystack, String needle) {
@@ -224,7 +232,7 @@ public class ChartSearchAiInteractionPairExtentTest {
 		return count;
 	}
 
-	private static class CappedScreenStubService implements ChartSearchService {
+	private class CappedScreenStubService implements ChartSearchService {
 
 		@Override
 		public ChartAnswer search(Patient patient, String question) {

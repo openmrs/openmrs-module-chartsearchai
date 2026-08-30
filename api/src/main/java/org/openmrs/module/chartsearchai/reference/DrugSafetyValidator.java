@@ -303,8 +303,9 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * Five-argument seam retained for every caller that does not publish the pairwise extent, which
-	 * is every caller but {@code LlmInferenceService}; see the widest arity for both parameters.
+	 * Five-argument seam for a caller that does not publish the pairwise extent — the internal
+	 * mappings-aware overload above and {@code DrugReferenceInjector.preAnswerFindings}, whose
+	 * findings go to the PROMPT rather than to a response. See the widest arity for both parameters.
 	 */
 	List<SafetyWarning> validate(String answer, String question, PatientClinicalContext rawContext,
 			List<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries) {
@@ -365,8 +366,8 @@ public class DrugSafetyValidator {
 	 *        and that what it injects is what a self-resolving pass produces.
 	 *
 	 * @param pairExtentSink where the PAIRWISE arms state how many above-floor pairs they found and
-	 *        how many of them {@link #maxPairChips()} let them report, or {@code null} from a caller
-	 *        that does not publish it — which is every caller but {@code LlmInferenceService}. It is
+	 *        how many of them {@link #maxPairChips()} let them report, or {@code null} down every
+	 *        path but the one {@code LlmInferenceService} takes to publish it on the answer. It is
 	 *        a caller-supplied per-call object rather than a field for issue #172's reason, the same
 	 *        one {@code resolvedOrderEntries} above gives. Issue #336: without it a capped list was
 	 *        indistinguishable from a complete one everywhere but the log. See
@@ -608,9 +609,15 @@ public class DrugSafetyValidator {
 		}
 		// LAST, so the patient's own findings lead: a chip about their allergy or their active order
 		// is a fact about them, and outranks a reference lookup about a pair they may not be on.
+		// Held in a local and published to the caller's sink only on the normal return below, so a pass
+		// that degrades cannot leave a statement about chips it did not produce: the public entry
+		// answers a RuntimeException with an EMPTY warning list, and a sink written arm-by-arm would
+		// then say "18 found, 10 reported" beside no chips at all. At most one of the two arms can
+		// assign it — their gates are mutually exclusive, see the screening gate below.
+		PairChipExtent pairExtent = null;
 		if (warnInteractions) {
-			recordPairExtent(pairExtentSink,
-					addQuestionPairInteractions(warnings, questionDrugs, subjects, context, severityFloor));
+			pairExtent = addQuestionPairInteractions(warnings, questionDrugs, subjects, context,
+					severityFloor);
 		}
 		// Interaction screening (issue #113). A question that asks to be SCREENED names no drug, so
 		// neither question-driven arm above has an anchor and the whole feature stayed silent for the
@@ -633,12 +640,13 @@ public class DrugSafetyValidator {
 		// drift apart on what a pair is, which of its rows is worth chipping, or how many are shown.
 		if (warnInteractions && questionDrugs.isEmpty()
 				&& QueryScopeRouter.isInteractionScreening(question)) {
-			recordPairExtent(pairExtentSink, addActiveOrderPairInteractions(warnings, subjects, context,
-					severityFloor, orderEntries, interactionPairs));
+			pairExtent = addActiveOrderPairInteractions(warnings, subjects, context, severityFloor,
+					orderEntries, interactionPairs);
 		}
 		if (!warnings.isEmpty()) {
 			log.info("Drug-safety validator raised {} warning(s)", warnings.size());
 		}
+		recordPairExtent(pairExtentSink, pairExtent);
 		return warnings;
 	}
 
@@ -868,11 +876,14 @@ public class DrugSafetyValidator {
 	/**
 	 * States a pairwise arm's extent into the caller's sink, where there is one and the arm ran.
 	 *
-	 * <p>One method for both arms, so neither can be given the statement and the other forgotten —
-	 * they are mutually exclusive, so at most one of these two calls can carry a non-null extent
-	 * (issue #336). A {@code null} extent means the arm's own gate refused before it enumerated
-	 * anything, which is not the same as its having enumerated nothing: an arm that ran and found no
-	 * above-floor pair states {@code found == 0}, a complete screen. See {@link PairChipExtent}.
+	 * <p>Called ONCE, on {@code validate}'s normal return, from a local both arms assign — never per
+	 * arm. That is what makes the statement atomic with the chips: the public entry answers a
+	 * RuntimeException with an empty warning list, so a sink written as each arm finished could
+	 * describe a screen whose chips were then discarded (issue #336).
+	 *
+	 * <p>A {@code null} extent means no pairwise arm enumerated anything, which is not the same as an
+	 * arm having enumerated nothing: an arm that ran and found no above-floor pair states
+	 * {@code found == 0}, a complete screen. See {@link PairChipExtent}.
 	 */
 	private static void recordPairExtent(PairChipExtent.Sink sink, PairChipExtent extent) {
 		if (sink != null && extent != null) {

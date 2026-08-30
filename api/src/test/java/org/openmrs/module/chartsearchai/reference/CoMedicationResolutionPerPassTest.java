@@ -419,7 +419,8 @@ public class CoMedicationResolutionPerPassTest {
 					+ "(issue #256).");
 		assertTrue(validate.contains(constructions.get(0)),
 			"CoMedications is constructed at line " + scan.lineOf(constructions.get(0)) + ", outside the "
-					+ "body of validate(String, String, PatientClinicalContext, List, List). Built anywhere "
+					+ "body of validate(String, String, PatientClinicalContext, List, List, PairChipExtent.Sink)."
+					+ " Built anywhere "
 					+ "per-subject it memoises nothing; held in a FIELD it is issue #172's trap, which the "
 					+ "counting cases here cannot see for a field REASSIGNED once per pass — that sweeps "
 					+ "exactly as often as a local does.");

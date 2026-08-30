@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.Test;
+import org.opentest4j.AssertionFailedError;
 
 /**
  * Each operand of the boundary scan is {@link DrugReference#foldedLower}-folded ONCE, where it is
@@ -248,6 +249,36 @@ public class FoldedOperandTest {
 	}
 
 	/**
+	 * A witness is the alias that MATCHED, not whatever sits at its index in the other list.
+	 *
+	 * <p>The two lists are index-aligned and {@link DrugReference#aliasesIn} /
+	 * {@code aliasesNaming} walk the folded one while reading the raw one, so alignment is the change's
+	 * central invariant — and nothing pinned it. Measured by a review: making
+	 * {@code DrugReference.foldedAll} SKIP nulls instead of carrying them, one line and exactly the
+	 * edit its second caller invites (a context's name set has no nulls to carry), left the whole api
+	 * suite green while both witness accessors began reporting {@code [null]}. Those witnesses are what
+	 * {@code DrugReferenceService.namesSubstanceOf} narrows a candidate set by, so the failure is issue
+	 * #209's, fail-silent.
+	 *
+	 * <p>Through the real {@code JsonDrugReferenceSource} over a fixture that already carries the one
+	 * shape that can expose it — a null BEFORE a real alias — rather than through a hand-built entry.
+	 */
+	@Test
+	public void aWitnessIsTheAliasThatMatchedAndNotItsNeighbour() throws IOException {
+		DrugReference row = DrugReferenceTestSupport.row(DrugReferenceTestSupport.fixtureEntries(
+				"chartsearchai-test/drug-reference-null-interaction-and-alias.json"), "Ibuprofen");
+		assertEquals(java.util.Arrays.asList(null, "ibuprofen"), row.getAliases(),
+				"precondition: the fixture entry must still carry a null BEFORE a real alias, or nothing "
+						+ "below can tell an aligned read from a misaligned one");
+		assertEquals(java.util.Collections.singletonList("ibuprofen"),
+				row.aliasesNaming(DrugReference.fold("Ibuprofen 400mg")),
+				"the recorded-name witness must be the alias that matched");
+		assertEquals(java.util.Collections.singletonList("ibuprofen"),
+				row.aliasesIn("she takes ibuprofen daily"),
+				"and so must the prose witness");
+	}
+
+	/**
 	 * {@code setAliases} is the only writer of either alias list, so the folded one cannot go stale.
 	 *
 	 * <p>Structural because nothing behavioural can see it, which is the situation ADR Decision 54
@@ -281,30 +312,112 @@ public class FoldedOperandTest {
 	}
 
 	/**
-	 * {@code PatientClinicalContext.hasActiveDrug} folds its token, and the order names it scans,
-	 * OUTSIDE its loop.
+	 * {@code PatientClinicalContext.hasActiveDrug} compares through the FOLDED matcher and folds
+	 * nothing inside its loop.
 	 *
-	 * <p>Structural because that comparison goes through a static matcher: there is no instance a
-	 * probe can subclass, so the identity argument the first case makes is unavailable here. This is
-	 * the site with the residue that grows with the number of drugs in play — 3,952 comparisons at one
-	 * drug and 108,214 at ten, by the caller-attributed counts in the issue's re-derivation.
+	 * <p>Structural because that comparison goes through a static matcher: there is no instance a probe
+	 * can subclass, so the identity argument the first case makes is unavailable here. This is the site
+	 * whose comparison count grows with the number of drugs in play — 3,952 at one drug and 108,214 at
+	 * ten, by the caller-attributed counts in ADR Decision 55.
+	 *
+	 * <p><b>Stated POSITIVELY, because a list of forbidden spellings has been defeated once for every
+	 * time one was written.</b> Its first version forbade the literals {@code foldedLower(} and
+	 * {@code fold(}, and a review then reverted the loop body to the UNFOLDED
+	 * {@code DrugReference.matchesOrderName(folded, n)} — which restores two folds per comparison and
+	 * additionally double-folds the haystack — with the whole build green, because neither literal
+	 * appears in that spelling. Requiring the one call that is correct forbids every spelling that is
+	 * not, including the ones nobody has thought of; the forbidden list is kept beside it only so a
+	 * failure names what went in rather than what went missing.
 	 */
 	@Test
-	public void hasActiveDrugFoldsNeitherOperandInsideItsLoop() throws IOException {
+	public void hasActiveDrugComparesThroughTheFoldedMatcherAndFoldsNothingInItsLoop() throws IOException {
 		SourceScan scan = new SourceScan("src/main/java/org/openmrs/module/chartsearchai/reference/"
 				+ "PatientClinicalContext.java");
 		SourceScan.Region loop = scan.body("for (String folded : foldedActiveDrugNames) {");
-		for (Integer at : scan.literalOffsets("foldedLower(")) {
-			assertFalse(loop.contains(at), "\"" + scan.statementAt(at) + "\" (line " + scan.lineOf(at)
-					+ ") folds inside hasActiveDrug's loop; both of its operands are fixed for the pass, "
-					+ "so both are folded above it");
+		assertContains(scan, loop, "DrugReference.matchesFoldedOrderName(", "hasActiveDrug's loop");
+		assertForbids(scan, loop, "hasActiveDrug's loop", "matchesOrderName(", "containsWord(",
+				"foldedLower(", "foldDiacritics(", "toLowerCase(", "fold(");
+	}
+
+	/**
+	 * Every scan of an entry's own names reads {@link DrugReference}'s stored FOLDED alias list, and
+	 * none of them folds an alias itself.
+	 *
+	 * <p>This is the half of the change worth most — by ADR Decision 55's own decomposition the alias
+	 * side is five sixths of the win — and <b>nothing behavioural can see it</b>, deliberately: the
+	 * unfolded primitives fold the raw alias for themselves, so an accessor rewritten to iterate
+	 * {@code aliases} through {@code containsWord} or {@code matchesOrderName} returns exactly the same
+	 * answers while reinstating ~1.4 million {@code foldedLower} calls a pass. A review did precisely
+	 * that to the two hottest accessors and the whole api suite stayed green.
+	 * {@link #anAccentedAliasIsTheOnlyNameOfAnEntryAnUnaccentedOrderReaches} cannot reach it either: it
+	 * pins that {@code setAliases} STORES a folded list, not that anything reads it.
+	 *
+	 * <p>Positive for the reason the case above is. {@code foldedLower(} is deliberately NOT forbidden:
+	 * two of these accessors legitimately fold the invariant TEXT once per call, which is the same rule
+	 * one operand along. What is forbidden is reaching an alias through a primitive that folds it.
+	 */
+	@Test
+	public void everyAliasScanReadsTheStoredFoldedList() throws IOException {
+		SourceScan scan = new SourceScan("src/main/java/org/openmrs/module/chartsearchai/reference/"
+				+ "DrugReference.java");
+		String[] accessors = {
+				"boolean matchesFoldedText(String foldedLowerText) {",
+				"boolean matchesDrugName(FoldedName drugName) {",
+				"List<String> aliasesIn(String lowerText) {",
+				"List<String> aliasesNaming(FoldedName drugName) {",
+				"List<NamedOccurrence> namedOccurrences(String foldedLowerText, int pos) {" };
+		for (String accessor : accessors) {
+			SourceScan.Region body = scan.body(accessor);
+			assertContains(scan, body, "foldedAliases", accessor);
+			assertForbids(scan, body, accessor, "containsWord(", "matchesOrderName(", "matchesText(",
+					"containsBoundedToken(", "foldDiacritics(");
 		}
-		// "fold(" and not "DrugReference.fold(": the qualified form is defeated by a line wrap between
-		// the class name and the dot, and this needle does not collide with foldedLower(, whose next
-		// character is "e".
-		for (Integer at : scan.literalOffsets("fold(")) {
-			assertFalse(loop.contains(at), "\"" + scan.statementAt(at) + "\" (line " + scan.lineOf(at)
-					+ ") folds the rule token inside hasActiveDrug's loop, once per order name");
+	}
+
+	/**
+	 * The dose arm's clause-level gate reads the clause the arm already folded.
+	 *
+	 * <p>{@code DrugSafetyValidator.attributedDoses} folds the clause once and every position the arm
+	 * compares is an index into THAT string, so a gate re-folding it reads a different one — measured
+	 * on {@code substanceOwnsDose}, where an entry matched by the gate could not then locate itself.
+	 * Closing that meant an accessor taking prose already folded, which issue #330 built.
+	 *
+	 * <p>Guarded here because the prose operand is a bare {@code String} by design — see
+	 * {@link DrugReference#matchesFoldedText} for why it is not a {@link DrugReference.FoldedName} —
+	 * so unlike the recorded-name operand, handing this one to the unfolded arity COMPILES, and
+	 * reverting the call left the whole api suite green when a review tried it.
+	 */
+	@Test
+	public void theDoseArmsClauseGateReadsTheClauseTheArmFolded() throws IOException {
+		SourceScan scan = new SourceScan("src/main/java/org/openmrs/module/chartsearchai/reference/"
+				+ "DrugSafetyValidator.java");
+		SourceScan.Region gate = scan.body(
+				"private static boolean namesSubstance(String foldedClause, List<DrugReference> rows) {");
+		assertContains(scan, gate, "matchesFoldedText(", "namesSubstance");
+		assertForbids(scan, gate, "namesSubstance", "matchesText(", "foldedLower(", "containsWord(");
+	}
+
+	/** @param what names the body in the failure message. */
+	private static void assertContains(SourceScan scan, SourceScan.Region body, String needle,
+			String what) {
+		for (Integer at : scan.literalOffsets(needle)) {
+			if (body.contains(at)) {
+				return;
+			}
+		}
+		throw new AssertionFailedError("\"" + needle + "\" is gone from " + what + "; that call is what "
+				+ "the guard requires, and requiring it is what forbids every spelling that is not it — "
+				+ "a list of forbidden spellings has been defeated once for every time one was written");
+	}
+
+	private static void assertForbids(SourceScan scan, SourceScan.Region body, String what,
+			String... needles) {
+		for (String needle : needles) {
+			for (Integer at : scan.literalOffsets(needle)) {
+				assertFalse(body.contains(at), "\"" + scan.statementAt(at) + "\" (line " + scan.lineOf(at)
+						+ ") reaches an operand through \"" + needle + "\" inside " + what + ", which folds "
+						+ "for itself — the operand is already folded where it was produced");
+			}
 		}
 	}
 }

@@ -3906,7 +3906,8 @@ public class DrugSafetyValidator {
 	 *
 	 * <p>So this arm compares names rather than scanning: exactly one of {@code other}'s aliases,
 	 * case-folded. No third matcher is introduced — this reads the same {@link DrugReference#getAliases}
-	 * list {@code matchesText} reads, so #128's change to how that list is scanned cannot drift from it.
+	 * list {@code matchesText} scans — since issue #330 through the entry's folded view of it, which is
+	 * that same list element for element — so #128's change to how it is scanned cannot drift from it.
 	 * Nothing genuine is lost: {@code ddinter} writes each rule's token from its partner row's
 	 * {@code rxnorm_name} (falling back to its name), and the parser puts both in that partner's
 	 * aliases, so every real rule still names its partner exactly — and an entry whose aliases omit its
@@ -7768,7 +7769,11 @@ public class DrugSafetyValidator {
 	 *         marks in a drug name — and this paragraph used to end "closing it means changing which
 	 *         accessor {@link #namesSubstance} calls, which CLAUDE.md governs. Reported rather than
 	 *         taken." Issue #330 built that accessor ({@link DrugReference#matchesFoldedText}) and
-	 *         CLAUDE.md now requires it, so the gate and the locator read one string.
+	 *         {@link #namesSubstance} calls it, so the gate and the locator read one string. Pinned by a
+	 *         source guard rather than by the compiler, and the difference matters: the prose operand is
+	 *         a bare {@code String} by design, so handing this one to the unfolded arity COMPILES — a
+	 *         review reverted the call with the whole api suite green before
+	 *         {@code FoldedOperandTest.theDoseArmsClauseGateReadsTheClauseTheArmFolded} existed.
 	 */
 	private static boolean substanceOwnsDose(String clause, int dosePos, List<DrugReference> rows,
 			List<DrugReference> allEntries) {

@@ -1903,14 +1903,14 @@ public class DrugReference {
 	 *         ({@link #foldedOrderNameMatch} here, {@link #foldedWordMatch} there — since issue #330 the
 	 *         folded arities of the two rules, which is what both members of each pair now reach), so
 	 *         neither pair can drift.
+	 *
+	 *         <p>This is the arity CLAUDE.md names as the witness accessor and it is kept for that
+	 *         reason; since issue #330 production reaches the {@link FoldedName} one below, because its
+	 *         caller holds a name it has already folded for the scan that produced these candidates.
 	 */
 	List<String> aliasesNaming(String drugName) {
 		return aliasesNaming(fold(drugName));
 	}
-
-	// This arity is the one CLAUDE.md names as the witness accessor and is kept for that reason; since
-	// issue #330 production reaches the FoldedName one below, because its caller holds a name it has
-	// already folded for the scan that produced these candidates.
 
 	/** @return {@link #aliasesNaming}'s answer for an already-folded name, the witness counterpart of
 	 *          {@link #matchesDrugName(FoldedName)} and calling the same primitive it does, so the
@@ -2334,8 +2334,8 @@ public class DrugReference {
 	 *         gives {@code a}, U+1D165, U+1D16D — stripping a combining mark of canonical class 0 from
 	 *         between two of higher class merges two canonical-ordering runs, and the next NFD reorders
 	 *         them. No reference or chart string reaches that shape, but do not build an argument on
-	 *         re-folding being free; {@code DrugSafetyValidator.substanceOwnsDose} records what it still
-	 *         costs at the one place a string is folded twice.
+	 *         re-folding being free; {@code DrugSafetyValidator.substanceOwnsDose} records what it cost
+	 *         at the one place a string USED to be folded twice, which issue #330 closed.
 	 */
 	static String foldedLower(String value) {
 		return foldDiacritics(value.toLowerCase(Locale.ROOT));

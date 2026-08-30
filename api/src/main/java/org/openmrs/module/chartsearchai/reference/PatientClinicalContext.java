@@ -324,10 +324,15 @@ public class PatientClinicalContext {
 			// BOTH operands of the scan below are fixed for the pass — the order names since this
 			// context was built, the token for this call — so each is folded once above the loop
 			// rather than once per comparison (issue #330).
-			DrugReference.FoldedName token = DrugReference.fold(n);
-			for (String folded : foldedActiveDrugNames) {
-				if (DrugReference.matchesFoldedOrderName(folded, token)) {
-					return true;
+			// Emptiness before the fold, so a chart with no readable drug order pays neither the
+			// allocation nor the NFD scan — which is what the pre-#330 code did by simply not entering
+			// the loop, and this arm is asked once per above-floor rule of every in-play entry.
+			if (!foldedActiveDrugNames.isEmpty()) {
+				DrugReference.FoldedName token = DrugReference.fold(n);
+				for (String folded : foldedActiveDrugNames) {
+					if (DrugReference.matchesFoldedOrderName(folded, token)) {
+						return true;
+					}
 				}
 			}
 		}

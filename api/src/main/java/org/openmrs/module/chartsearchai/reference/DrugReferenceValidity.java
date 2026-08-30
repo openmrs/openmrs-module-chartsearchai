@@ -767,8 +767,8 @@ public final class DrugReferenceValidity {
 	 *
 	 * <p><b>Blank aliases are DROPPED</b> (#150). An alias with no letter or digit in it names nothing, so
 	 * it cannot identify a drug and can only match by accident — and it does:
-	 * {@link DrugReference#containsBoundedToken} already refuses a token that is EMPTY after the
-	 * diacritic fold, but a single space is not empty. Where a space sits after a non-alphanumeric
+	 * the scan already refuses a token that is EMPTY after the diacritic fold, whichever of the boundary
+	 * rule's arities it arrives through, but a single space is not empty. Where a space sits after a non-alphanumeric
 	 * character its left boundary holds, and the recorded-name rule's two-letter inflection allowance then
 	 * carries the match over a short trailing word. So a blank alias makes
 	 * {@link DrugReference#matchesDrugName} true for allergen text the entry has nothing to do with, and
@@ -1220,8 +1220,9 @@ public final class DrugReferenceValidity {
 
 	/**
 	 * @return whether {@code alias} can identify a drug at all: it must carry a letter or a digit once
-	 *         diacritics are folded away, which is the same fold
-	 *         {@link DrugReference#containsBoundedToken} applies before scanning. Anything else — blank,
+	 *         diacritics are folded away, which is the same fold {@link DrugReference#foldedLower}
+	 *         expresses — applied before scanning by {@link DrugReference#containsBoundedToken}, and
+	 *         since issue #330 carried by the entry's own folded alias list. Anything else — blank,
 	 *         punctuation, nothing but combining marks — names nothing, and the scan's boundary rules
 	 *         then make it match at word gaps rather than not at all.
 	 */
@@ -1229,7 +1230,7 @@ public final class DrugReferenceValidity {
 		if (alias == null) {
 			return false;
 		}
-		String folded = DrugReference.foldDiacritics(alias.toLowerCase(Locale.ROOT));
+		String folded = DrugReference.foldedLower(alias);
 		for (int i = 0; i < folded.length(); i++) {
 			if (Character.isLetterOrDigit(folded.charAt(i))) {
 				return true;

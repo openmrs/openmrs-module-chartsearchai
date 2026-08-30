@@ -661,13 +661,11 @@ public final class DrugReferenceTestSupport {
 	 * resolution, so it must hold the raw context and the enriched one apart.
 	 *
 	 * <p>Extracted at the third caller (issue #255), the threshold {@code ModuleSourceRoot}'s javadoc
-	 * records: the two per-pass counting tests had each written this loop out, differing only in that
-	 * one lower-cased the flattened name set and the other did not — and that difference is inert,
-	 * because {@link PatientClinicalContext}'s own constructor lower-cases it either way (through
-	 * {@code DrugReference.normalizeName}), so the two spellings never produced different contexts.
-	 * Measured while extracting: with the loop lower-casing, not lower-casing, and doing so under a
-	 * flag, the api suite is green all three ways. So there is no knob here, and the reason there is
-	 * none is stated rather than left for the next author to rediscover.
+	 * records: the two per-pass counting tests had each written this loop out. The name set's CASING is
+	 * not a knob and must not become one — {@link PatientClinicalContext}'s own constructor lower-cases
+	 * it (through {@code DrugReference.normalizeName}), so a caller that pre-lower-cases and one that
+	 * does not build the same context. Measured: the api suite is green with the loop lower-casing and
+	 * without it.
 	 */
 	static PatientClinicalContext rawContextNaming(Integer age, Double weightKg, String... displays) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders =

@@ -26,8 +26,8 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
  * <p>{@code DrugReferenceInjector.injectRecords} resolves
  * {@code DrugReferenceService.findForActiveOrders} for its own promotion predicate, for
  * {@code matchingEntries}' candidate set (issue #151) and for the reference names it attaches — and
- * then calls {@code preAnswerFindings}, whose {@code validate} resolved the very same list again from
- * the very same context. A second derivation of a value the pass already holds, which is the shape
+ * then calls {@code preAnswerFindings}, whose {@code validate} resolved the very same list again.
+ * A second derivation of a value the pass already holds, which is the shape
  * {@code CLAUDE.md} prescribes removing rather than caching: "wherever a caller already holds the
  * resolved list, pass it down rather than resolving again".
  *
@@ -191,8 +191,7 @@ public class ActiveOrderResolutionPerPassTest {
 	 *
 	 * <p>It pins {@code validate}'s INPUT, not the injector's threading; the case above is what pins
 	 * that. It does not discriminate the change — and it cannot be run against the pre-change code at
-	 * all, since it calls the arity this change adds. It would redden only if {@code withReferenceNames}
-	 * started writing something {@code findForActiveOrders} reads.
+	 * all, since it calls the arity this change adds.
 	 */
 	@Test
 	public void theResolutionIsTheSameWhicheverContextItIsAskedOf() {

@@ -187,9 +187,8 @@ public class ChipSubjectOneResolutionTest {
 	 * buys is that name. Do not read it as "a sibling with the same tail would pass": measured, a
 	 * sibling alone makes TWO matches and fails loudly, because {@code validate}'s own declaration
 	 * still carries the tail. The shape that gets through a tail-only needle is a sibling together
-	 * with a rename or a re-wrap of {@code validate}'s own parameters, which is the compound this
-	 * anchor closes. It still ends at the body's own opening brace, which is what {@link #bodyOf}
-	 * looks for.
+	 * with a rename or a re-wrap of {@code validate}'s own parameters. It still ends at the body's own
+	 * opening brace, which is what {@link #bodyOf} looks for.
 	 */
 	private static final String VALIDATE =
 			"validate(String answer, String question, PatientClinicalContext rawContext,\n"

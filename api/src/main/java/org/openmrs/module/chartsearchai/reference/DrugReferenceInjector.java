@@ -328,7 +328,7 @@ public class DrugReferenceInjector {
 		// to notice that the injector was feeding it a different context from everything else.
 		Map<DrugReference, SubstanceRendering> matched = matchingEntries(orderEntries, question, context);
 		// Handed the resolution above rather than left to derive it again (issue #255): validate used to
-		// resolve the same orders from the same context, and this method already holds that answer.
+		// resolve the same orders again, and this method already holds that answer.
 		List<SafetyWarning> findings = preAnswerFindings(context, question, orderEntries);
 		List<PatientClinicalContext.ActiveDrugOrder> unrepresented = unrepresentedActiveOrders(chart, context);
 		if (matched.isEmpty() && findings.isEmpty() && unrepresented.isEmpty()) {

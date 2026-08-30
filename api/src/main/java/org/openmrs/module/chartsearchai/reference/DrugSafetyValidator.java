@@ -286,8 +286,7 @@ public class DrugSafetyValidator {
 	 * ({@code SourceScan.uniqueOffset} for {@code CoMedicationResolutionPerPassTest}, and
 	 * {@code ChipSubjectOneResolutionTest}'s own copy of it, which ADR Decision 54 records as
 	 * deliberately not migrated); and the second line alone names no METHOD, which is what the first
-	 * line buys — with the name in the needle, only a declaration OF THIS METHOD can be the one it
-	 * delimits, where a tail alone can be worn by any sibling. Move this declaration and the needles
+	 * line buys. Move this declaration and the needles
 	 * move with it — {@code ChipSubjectOneResolutionTest} and {@code CoMedicationResolutionPerPassTest},
 	 * which say so themselves.
 	 *

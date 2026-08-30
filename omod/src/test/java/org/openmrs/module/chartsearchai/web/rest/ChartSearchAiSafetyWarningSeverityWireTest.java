@@ -77,11 +77,13 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
 	/**
-	 * The five chips, mirroring issue #340's own measured response (patient
-	 * {@code 763e6e5f-…}, "Please screen her current medications for drug interactions.") — two rated
-	 * Major, one rated Minor, one contraindication — plus the fourth shape the reporter's capture did
-	 * not contain and which the prose parse cannot reach: a RATED rule carrying no mechanism note, so
-	 * that its rating appears nowhere in its own {@code detail}.
+	 * The fixture chips. The first four mirror issue #340's own measured response (patient
+	 * {@code 763e6e5f-…}, "Please screen her current medications for drug interactions.") — a rated
+	 * Major, a rated Minor and two contraindications — and the last two are shapes that capture did
+	 * not contain and that the prose parse cannot reach: a RATED rule carrying no mechanism note, so
+	 * that its rating appears nowhere in its own {@code detail}, and a rating the module does not
+	 * RECOGNISE, which it treats exactly as it treats null and which must still reach the wire as the
+	 * dataset wrote it.
 	 */
 	private static List<SafetyWarning> fixtureWarnings() {
 		return Arrays.asList(
@@ -104,7 +106,12 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 				new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, "Ibuprofen",
 						"Ibuprofen is contraindicated by a documented Severe allergy to Aspirin."),
 				new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, "Ibuprofen",
-						"Ibuprofen is contraindicated by the recorded condition Peptic ulcer disease."));
+						"Ibuprofen is contraindicated by the recorded condition Peptic ulcer disease."),
+				// An operator's json dataset writes its own vocabulary: DrugReference.Interaction's
+				// severity is a plain Jackson-bound string with no vocabulary check over it.
+				new SafetyWarning(SafetyWarning.TYPE_INTERACTION, "Phenelzine",
+						"Phenelzine interacts with active order selegiline — Severe. Operator-authored rule.",
+						"Severe"));
 	}
 
 	private ChartSearchAiRestController controller;
@@ -176,6 +183,33 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 		assertNull(contraindication.get("severity"),
 				"a contraindication carries no rating, and null is that statement rather than a floor: "
 						+ contraindication);
+	}
+
+	/**
+	 * A rating the module does not recognise still reaches the wire as the dataset wrote it.
+	 *
+	 * <p>This is the assertion that would fail if the field were later "helpfully" normalized into a
+	 * closed vocabulary, and normalizing it is the thing issue #340 deliberately did not do. Measured
+	 * 2026-08-30 by driving the real {@code DrugSafetyValidator.severityPriority},
+	 * {@code ratingLicensesWithholding} and {@code clearsSeverityFloor} on {@code "Severe"},
+	 * {@code ""} and null: all three answer identically for all three inputs (priority
+	 * {@code 2147483647} against {@code Major}'s {@code 3}, withholding true, floor cleared), because
+	 * {@code severityRank} maps everything it does not recognise to the same {@code -1} that null
+	 * gets. So publishing null here would deny a rating the chip's own {@code detail} still quotes,
+	 * and a client would be told the source rated nothing when it rated something.
+	 *
+	 * <p><b>This case pins the WIRE half of that and not the reader half.</b> That an unrecognised
+	 * rating is treated as unrated is {@code severityRank}'s behaviour, is unchanged by #340, and is
+	 * not pinned here — a change to it would leave this case green while making
+	 * {@code README.md}'s advice to clients wrong.
+	 */
+	@Test
+	public void anUnrecognisedRatingReachesTheWireAsTheDatasetWroteIt() {
+		Map<String, Object> chip = searchChips().get(5);
+
+		assertEquals("Severe", chip.get("severity"),
+				"the field is the dataset's word, not a value coerced into the four DDInter ratings: "
+						+ chip);
 	}
 
 	@Test

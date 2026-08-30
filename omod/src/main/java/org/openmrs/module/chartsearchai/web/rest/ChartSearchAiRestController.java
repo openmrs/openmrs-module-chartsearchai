@@ -1193,10 +1193,10 @@ public class ChartSearchAiRestController {
 	 * always present (possibly empty) so the frontend can branch on length without a null check.
 	 *
 	 * <p><b>{@code severity} is published because the alternative is a client parsing English</b>
-	 * (issue #340). The rating is what the two pair comparators order the chips by and what the cap
-	 * then drops the least severe of, and until #340 it stopped here — so the only way to badge a
-	 * Major differently from a Minor was to substring-match the middle of {@link
-	 * SafetyWarning#getDetail()}, a clinician-facing sentence this module rewords freely. That is not
+	 * (issue #340). It is the rating the two PAIRWISE arms order their chips by before
+	 * {@code DrugSafetyValidator.maxPairChips} cuts the list, and until #340 it stopped here — so the
+	 * only way to badge a Major differently from a Minor was to substring-match the middle of
+	 * {@link SafetyWarning#getDetail()}, a clinician-facing sentence this module rewords freely. Not
 	 * hypothetical: {@code eval/drift-metric/score_probe_safety.py} carries such a parse and its own
 	 * comment calls it "the fault issue #207 exists to have removed". Publishing the rating asserts
 	 * nothing the chip's own prose does not already assert to the clinician — it is the SOURCE

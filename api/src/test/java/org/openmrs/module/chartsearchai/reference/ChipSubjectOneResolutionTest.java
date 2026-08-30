@@ -179,11 +179,14 @@ public class ChipSubjectOneResolutionTest {
 	private static final String LOOKUP_DECLARATION = "private static final class SubstanceSubjects {";
 
 	/**
-	 * The one arity of {@code validate} that builds the pass's shared state — the other four delegate to
-	 * it. The needle stops at the line break so it is a single line of the file as written.
+	 * The one arity of {@code validate} that builds the pass's shared state — the other five delegate
+	 * to it. The needle is that declaration's SECOND line, not its first: since issue #255 the arity
+	 * above it opens with a byte-identical first line, and a needle matching twice is a hard failure
+	 * in {@link #uniqueOffsetOf}. It is still a single line of the file as written, and it still ends
+	 * at the body's own opening brace, which is what {@link #bodyOf} looks for.
 	 */
 	private static final String VALIDATE =
-			"validate(String answer, String question, PatientClinicalContext rawContext,";
+			"List<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries) {";
 
 	@Test
 	public void onlyTheSharedLookupAndThePartnerRungResolveASubjectDirectly() throws IOException {
@@ -275,7 +278,7 @@ public class ChipSubjectOneResolutionTest {
 
 		assertTrue(validateBody.contains(constructions.get(0)),
 			"the one construction of SubstanceSubjects is at line " + lineOf(source, constructions.get(0))
-					+ ", outside the body of validate(String, String, PatientClinicalContext, List) — so"
+					+ ", outside the body of validate(String, String, PatientClinicalContext, List, List) — so"
 					+ " the arms of a pass may no longer share ONE instance even though the file holds one"
 					+ " \"new\": a per-arm helper returning a fresh instance is one construction and many"
 					+ " objects, which is issue #236's split with an extra hop. If the construction moved"

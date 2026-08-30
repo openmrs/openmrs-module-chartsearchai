@@ -270,9 +270,11 @@ public class CoMedicationResolutionPerPassTest {
 			"src/main/java/org/openmrs/module/chartsearchai/reference/DrugSafetyValidator.java";
 
 	/** The one arity of {@code validate} that builds the pass's shared state; the others delegate to
-	 *  it. The needle stops at the line break, so it is a single line of the file as written. */
+	 *  it. The needle is that declaration's SECOND line, not its first: since issue #255 the arity
+	 *  above it opens with a byte-identical first line, and a needle matching twice is a hard failure
+	 *  in {@link SourceScan#body}. It is still a single line of the file as written. */
 	private static final String VALIDATE =
-			"validate(String answer, String question, PatientClinicalContext rawContext,";
+			"List<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries) {";
 
 	private static final String MEMO_DECLARATION = "private final class CoMedications {";
 
@@ -418,7 +420,7 @@ public class CoMedicationResolutionPerPassTest {
 					+ "(issue #256).");
 		assertTrue(validate.contains(constructions.get(0)),
 			"CoMedications is constructed at line " + scan.lineOf(constructions.get(0)) + ", outside the "
-					+ "body of validate(String, String, PatientClinicalContext, List). Built anywhere "
+					+ "body of validate(String, String, PatientClinicalContext, List, List). Built anywhere "
 					+ "per-subject it memoises nothing; held in a FIELD it is issue #172's trap, which the "
 					+ "counting cases here cannot see for a field REASSIGNED once per pass — that sweeps "
 					+ "exactly as often as a local does.");

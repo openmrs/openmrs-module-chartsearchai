@@ -61,6 +61,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 53: The ANSWER no longer decides what a substance is called, so the two safety passes stop disagreeing](#decision-53-the-answer-no-longer-decides-what-a-substance-is-called-so-the-two-safety-passes-stop-disagreeing)
 - [Decision 54: The patient's co-medications are resolved once per validate pass, and the pairwise cap is not the lever](#decision-54-the-patients-co-medications-are-resolved-once-per-validate-pass-and-the-pairwise-cap-is-not-the-lever)
 - [Decision 55: Each operand of the name scan is folded once where it is produced](#decision-55-each-operand-of-the-name-scan-is-folded-once-where-it-is-produced)
+- [Decision 56: The pre-answer pass resolves the patient's active orders once, and the post-answer pass is a different question](#decision-56-the-pre-answer-pass-resolves-the-patients-active-orders-once-and-the-post-answer-pass-is-a-different-question)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 
@@ -3551,3 +3552,61 @@ Behaviour-neutral, verified rather than argued: the full rendered chip list — 
 - **−** The pairwise arms still enumerate every pair. That is the ordering requirement, not an oversight, and it is now recorded where the cap is defined.
 - **−** The structural guards read source text, so they stop a regression and not a determined author. Review pass after review pass defeated one, and every shape but the last was closed: a memo field typed as something other than `CoMedications`, that field given a parenthesised initialiser, the declaration prefixed with an annotation, the resolvers reached by method reference, a `static final` collection exempted by a modifier check, and the uncached sweep reached by dropping an overload's `cache` argument — all ways ordinary code gets written, so a regression can be made of them by accident. The last, reaching a resolver through `getDeclaredMethod("sweepForAtcCode", …)` with `setAccessible`, is left open: the scan blanks string literals by design (a method named in a javadoc is prose), and writing reflection into a private call inside the same class is a deliberate act rather than an accident. Closing it would need a bytecode or constant-pool check, and the next syntax after that would still be open. Named on the guard itself rather than left to be discovered.
 - **−** The two older source-scanning copies (`ChipSubjectOneResolutionTest`, `OrderPartnerNameSourceWritePathTest`) are not migrated onto `SourceScan`, which this change extracted at the third caller — the threshold `ModuleSourceRoot`'s own javadoc records. They have already diverged from each other in their block-comment handling; migrating them is a change of its own, and the second keeps its file locator apart from `ModuleSourceRoot` for a reason its own javadoc states.
+
+## Decision 56: The pre-answer pass resolves the patient's active orders once, and the post-answer pass is a different question
+
+**Status: Accepted** (August 2026) — implemented, issue [#255](https://github.com/openmrs/openmrs-module-chartsearchai/issues/255).
+
+### Context
+
+#255 reports `DrugReferenceService.findForActiveOrders` resolved three times per request — once in `DrugReferenceInjector.injectRecords` and once in each of the two `DrugSafetyValidator.validate` calls, pre-answer and post-answer. It relays 16.6–29.3 ms each and says so ("Relayed; I have not re-derived the per-call figures"). It prescribes the shape: *"#151 already removed one such duplication by passing the resolved list down rather than making two resolutions agree … eliminate the second derivation rather than cache it"*, and it repeats #172's constraint — a per-call local, never a field, because these beans are Spring singletons.
+
+Two of the three are one pass. `injectRecords` resolves the list for its own promotion predicate, for `matchingEntries`' candidate set (#151) and for the reference names it attaches, and then calls `preAnswerFindings`, whose `validate` resolved the same orders again from the same context. `DrugSafetyValidator` already recorded it — *"That repeat is idempotent today … so it is cost, and a trap for the first widening that makes it read them. Reported, not fixed here"* — and Decision 55's trade-off list named it as *"a repeat to REMOVE rather than a fold to hoist"*.
+
+Re-derived here through the real `injectRecords` and the real `validate` over the shipped 19 MB knowledge base (`DdiDrugReferenceSource.load()`, 2283 entries), a 43-order chart of the 3.7.1 shape, question `Can I give her ibuprofen?`, counted and timed by a subclass of `DrugReferenceService` that increments and delegates to `super.findForActiveOrders` — an instrument, not a re-expression — 5 runs after a warm-up:
+
+| pass | resolutions | ms resolving | ms per resolution | pass total |
+|---|---|---|---|---|
+| `injectRecords` (including its `preAnswerFindings` → `validate`) | 2 | 13.8–16.5 | 6.9–8.3 | 66.5–72.9 |
+| post-answer `validate` | 1 | 6.3–7.2 | 6.3–7.2 | 16.5–17.8 |
+
+The count of three reproduces. The per-call milliseconds do not: 6.3–8.3 ms on this box against the relayed 16.6–29.3. **Do not carry either figure to another arrangement** — the reason `CLAUDE.md`'s `foldDiacritics` bullet gives, `main`'s absolutes having moved by a fifth between two sessions on this box.
+
+### Decision
+
+`DrugSafetyValidator.validate` gains a fifth parameter, `List<DrugReference> resolvedOrderEntries` — the active orders a caller has ALREADY resolved, or `null` from a caller that has not, which is every caller but one. `DrugReferenceInjector.injectRecords` hands down the list it holds, through a three-argument `preAnswerFindings`. A parameter and not a memo: #172's constraint is then met by construction rather than by discipline.
+
+**The INPUT travels and the enriched CONTEXT deliberately does not.** `withReferenceNames` is still applied inside `validate`. It costs no dataset walk — it collects aliases off entries already in hand — and keeping it there leaves `validate` the sole constructor of the context it reasons over, which is Decision 53's own argument for preferring invariance to transport: *"a third caller of `validate` gets the property for free, where a carrier would have to be threaded to it."* A caller handing a pre-enriched context would make that construction depend on the caller having applied the right step, and a caller that got it wrong would be silent.
+
+**Why the transported list is the same value the removed resolution produced.** Production is asymmetric: the injector resolves from the RAW context and hands `validate` the ENRICHED one, so before this change `validate` resolved the enriched context and after it consumes a list resolved from the raw one. Those cannot differ — `PatientClinicalContext.withActiveDrugReferenceNames` copies the active drug names, the ATC codes and the orders through and writes only `activeDrugReferenceNames`, none of which `findForActiveOrders` reads (Decision 53 states the same non-overlap from the other side). Nothing between the injector's resolution and its `preAnswerFindings` call mutates the list. Removing the repeat therefore also removes the trap the validator's comment warned about: a later widening that DID make the resolution read the names it attaches no longer has two answers to keep in step.
+
+**The third resolution is not this defect and is not taken.** The post-answer `validate(String, String, Patient, List)` runs on the far side of the LLM call and builds its own `PatientClinicalContextBuilder.build(patient)`. Removing it means carrying a chart-time context across a multi-second call, so the orders it screens would be the ones read before the answer rather than after — a semantic change, and precisely the caching hazard #255 weighs. That is a decision on its own evidence. #255 therefore stays open.
+
+### Alternatives considered
+
+- **Widening the existing four-parameter body in place** rather than adding a fifth-parameter body beneath it. Attractive because the two structural needles that delimit this body (`ChipSubjectOneResolutionTest`, `CoMedicationResolutionPerPassTest`) both hold its first line, which would stay byte-identical and unique. Implemented and reverted: it breaks **33 call sites across three test classes** (`SubjectMatterScopedContraindicationTest`, `ActiveOrderContraindicationTest`, `DrugSafetyValidatorEchoScopingTest`) — the refutation gate estimated three, from a grep that saw one of the three files. Thirty-three mechanical arity edits to spare two needle re-targetings is the worse trade, and it would put two adjacent same-typed nulls at every one of them.
+- **A memo on the bean.** #172's forbidden shape, and here in its worst form: keyed on a per-request context, unsynchronized on a Spring singleton.
+- **Making `findForActiveOrders` itself cheaper** — Decision 55's trade-off list already names the deeper lever, its sibling (2), the repeated `findByDrugName` sweeps behind a per-pass `impliedByName` map. Its figures were taken on another arrangement in another session and are NOT compared with these. This change takes the shallower lever because it is the one #255 asks for and the one that needs no new keying decision, not because anyone has shown it is the bigger.
+
+### Effect
+
+Same instrument and arrangement, on the same box:
+
+| | before | after |
+|---|---|---|
+| resolutions per `injectRecords` pass | 2 | **1** |
+| ms resolving within that pass | 13.8–16.5 | **7.1–8.0** |
+| pass total | 66.5–72.9 | 42.8–52.8 |
+
+The two columns are separate JVM runs, not alternated, so **the pass-total delta is not attributed in full**: it exceeds the resolution time removed, and ordinary variance plus the second `withReferenceNames` and its context allocation both sit inside it. The attributable quantity is the one the count gives — one whole resolution of the patient's orders, 7.1–8.3 ms on this arrangement.
+
+Behaviour-neutral, and pinned rather than argued: `ActiveOrderResolutionPerPassTest.theInjectedFindingsAreThoseTheSelfResolvingPassProduces` asserts that the `safety_finding` records the real `injectRecords` puts in the chart are exactly the findings of the self-resolving pre-answer pass, rendered through the injector's own renderer.
+
+### Trade-offs
+
+- **+** One resolution of the patient's active orders removed from every request, and with it the trap the validator's own comment recorded.
+- **+** No cache, no memo, no field: #172's constraint is met by the shape rather than by discipline.
+- **−** The two structural needles now name the declaration's SECOND line, because the arity above it opens with a byte-identical first one. That binds them to this change's own parameter name where they were bound to three long-stable ones. Both constants say so, and `SourceScan.uniqueOffset`'s failure message prescribes exactly this remedy: *"Update the needle along with the code it names."*
+- **−** A caller could hand `validate` a list resolved from a DIFFERENT context. Nothing in the type system stops it; the parameter's javadoc names it as the one way to misuse the seam, and the behavioural case above is what would redden.
+- **−** The post-answer resolution stands, so #255 is referenced and not closed. Its removal is a decision about carrying a context across the LLM call, which nothing here settles.
+- **−** The count assertion is a tally, and a tally of one. It is stated as an invariant of a PASS rather than as a total for the request, so it does not go stale with an arm added elsewhere — but an injection path that legitimately needed a second resolution would have to say so here.

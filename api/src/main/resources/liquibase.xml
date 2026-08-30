@@ -6,15 +6,30 @@
 			http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
 
 	<!--
-		Module is pre-production. Liquibase changesets are consolidated to their canonical
-		end-state rather than preserving the audit trail of historical schema edits. Any
-		instance that already executed a now-removed intermediate changeset retains the
-		corresponding liquibasechangelog row as a harmless orphan; the live schema matches
-		what this file declares because each intermediate's effect is now folded into the
-		surviving changeset's create-time definition.
+		HOW TO ADD A COLUMN HERE. Add a NEW changeset with the next id no instance has ever
+		run, and leave the existing ones alone. Do not fold it into chartsearchai-002, however
+		much the consolidation note below reads like an invitation to: an instance that has
+		already executed 002 will not re-run it, so the column never appears there, while
+		ChartSearchAuditLog.hbm.xml declares it immediately — the insert then fails, the
+		controller catches and logs, and auditing stops with no error anywhere. Folding is the
+		SECOND step of the lifecycle and happens at a deliberate consolidation, once every
+		instance has run the intermediate. See chartsearchai-009's own comment, and ADR
+		Decision 56.
 
-		When this module ships to production, every changeset below must become immutable —
-		new schema needs come in as new changesets, never as edits to these.
+		Module is pre-production, and changesets that every instance has already run are
+		consolidated to their canonical end-state rather than preserving the audit trail of
+		historical schema edits. Any instance that executed a now-removed intermediate retains
+		the corresponding liquibasechangelog row as a harmless orphan — which is why a NEW
+		changeset must also take an id that has never been used, rather than the next free
+		number in this file: liquibase keys on id + author + filename and stores a checksum,
+		so a reused id raises ValidationFailedException wherever such an orphan survives.
+
+		The consolidation paragraph describes chartsearchai-002 and no longer the whole file:
+		chartsearchai-009 is deliberately un-folded, for the reason above.
+
+		When this module ships to production, every changeset below becomes immutable and the
+		consolidation step goes away entirely — leaving only the first rule, which is already
+		the one to follow today.
 	-->
 
 	<changeSet id="chartsearchai-002" author="openmrs">

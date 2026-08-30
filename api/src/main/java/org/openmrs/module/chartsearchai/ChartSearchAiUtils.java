@@ -200,7 +200,7 @@ public class ChartSearchAiUtils {
 	 * recitations were judged entailed while the one faithful recitation was judged not (issue #106).
 	 * A passing verdict is therefore false assurance. A FAILING verdict still carries information — it
 	 * says the citation is not about the record at all — so the flag is kept and only the pass is
-	 * withheld. Faithfulness of reference content is checked deterministically instead, by two
+	 * withheld. Faithfulness of reference content is checked deterministically instead, by
 	 * report-only comparisons that run after every answer: {@code ClassCodeFidelityCheck} for an ATC
 	 * class code the answer states that no cited record does (issue #142), and
 	 * {@code ReferenceProseFidelityCheck} for an answer that reproduces a cited reference record's

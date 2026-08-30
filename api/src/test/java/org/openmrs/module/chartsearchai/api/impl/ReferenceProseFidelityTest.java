@@ -21,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
@@ -296,7 +297,10 @@ public class ReferenceProseFidelityTest {
 	/** The mechanism's second sentence, reproduced whole — 60-odd words, longer than any other run
 	 *  in the answer that carries it. */
 	private String secondMechanismSentence() {
-		String[] sentences = mechanism().split("(?<=[.!?])\\s+");
+		// The production constant, not a second spelling of it: this slice exists partly because two
+		// copies of one boundary rule is issue #260's shape, and a test that spells its own is a
+		// third copy that agrees with neither by construction.
+		String[] sentences = ChartSearchAiUtils.SENTENCE_BOUNDARY.split(mechanism());
 		assertTrue(sentences.length > 2, "the premise: the mechanism has a second sentence. Was: "
 				+ mechanism());
 		return sentences[1];

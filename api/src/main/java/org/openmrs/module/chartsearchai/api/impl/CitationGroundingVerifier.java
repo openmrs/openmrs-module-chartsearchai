@@ -101,7 +101,7 @@ import org.springframework.stereotype.Service;
  * claim unit under entailment, the stronger rule below wins and even the fail is withheld — no
  * consumer can see the difference, since #201 withholds every reference-group verdict at the wire.)
  * Faithfulness of reference content is
- * checked deterministically instead, by two report-only comparisons over what the answer states
+ * checked deterministically instead, by report-only comparisons over what the answer states
  * about the record: {@link ClassCodeFidelityCheck} for an ATC class code the model edited while
  * citing the record that carries it (issue #142), and {@link ReferenceProseFidelityCheck} for a
  * recitation the model diverged from inside the sentence it was copying (issue #337). NOT by the

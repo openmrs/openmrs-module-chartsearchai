@@ -434,10 +434,11 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getCachedTokens(), Collections.<SafetyWarning> emptyList(), searchMode,
 					referenceSlice));
 
-			// After the user-visible handoff, before grounding: an exact token comparison that
-			// reports an ATC class code no cited record states (issue #142). It answers in
-			// microseconds and reports only to the log, so nothing downstream — and no consumer
-			// above — waits on it.
+			// After the user-visible handoff, before grounding: two exact comparisons over what the
+			// answer states about the records it cites — an ATC class code no cited record states
+			// (issue #142), and prose reproduced from a cited reference record and then rewritten
+			// inside the sentence it was copying (issue #337). Both answer in microseconds and
+			// report only to the log, so nothing downstream — and no consumer above — waits on them.
 			ClassCodeFidelityCheck.reportUnsupportedClassCodes(patient, question, response.getAnswer(),
 					cited, chart.getMappings());
 			ReferenceProseFidelityCheck.reportUnfaithfulReferenceProse(patient, response.getAnswer(),

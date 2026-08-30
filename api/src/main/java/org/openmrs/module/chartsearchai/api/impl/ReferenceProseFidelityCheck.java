@@ -44,8 +44,8 @@ import org.slf4j.LoggerFactory;
  * entirely (demote-only, #106/#122) and Tier-1 cosine barely moves when one phrase inside a long
  * recitation changes. {@link ClassCodeFidelityCheck} compares one token shape and says nothing
  * about prose. The {@code safetyWarnings} chips carry the true text but are a parallel list that
- * nothing reconciles against the answer — which is what the README asserted they did, in
- * seven places, all corrected with this change.
+ * nothing reconciles against the answer — which is what this repository asserted they did, in every
+ * place the claim was written; ADR Decision 59 names them and says how they were found.
  *
  * <p><b>What it does and does not do.</b> It reports; it never rewrites, and nothing about it
  * reaches the wire. Editing a clinician-facing sentence is a larger decision than this check is
@@ -84,7 +84,10 @@ import org.slf4j.LoggerFactory;
  *       Read against that record alone, an answer that reproduced the whole mechanism and welded a
  *       clause on looks exactly like a substitution. So a continuation ANY cited record explains —
  *       by ending, by opening a new sentence, or by simply continuing the same way — is not a
- *       divergence, whatever a second record's layout makes of it;</li>
+ *       divergence, whatever a second record's layout makes of it. Only the cited REFERENCE records
+ *       are asked, and widening that to the chart records buys nothing: an explainer has to carry
+ *       the reproduced run itself, and a chart record does not carry twelve consecutive words of a
+ *       knowledge-base mechanism;</li>
  *   <li>it compares WORDS — runs of letters and digits, lower-cased — so punctuation cannot make
  *       two identical words differ. The sentence-boundary bit each word carries is deliberately NOT
  *       part of that equality: were it, a record writing {@code "(e.g. chloroquine"} against an
@@ -187,7 +190,7 @@ final class ReferenceProseFidelityCheck {
 				Reproductions found = new Reproductions();
 				for (RecordReference reference : cited) {
 					RecordMapping mapping = byIndex.get(Integer.valueOf(reference.getIndex()));
-					if (mapping == null || !isReferenceMaterial(mapping.getResourceType())) {
+					if (mapping == null || !isModuleSuppliedReferenceProse(mapping.getResourceType())) {
 						continue;
 					}
 					String text = mapping.getText();
@@ -232,9 +235,15 @@ final class ReferenceProseFidelityCheck {
 	 * @return whether a record of this type is this module's own reference material — the classifier
 	 *         and never a type name, so a reference type added later is covered without this class
 	 *         changing (CLAUDE.md: for a question that is not about grading, ask
-	 *         {@code referenceGroup} directly rather than borrowing the grounding view of it)
+	 *         {@code referenceGroup} directly rather than borrowing the grounding view of it).
+	 *
+	 *         <p>Named for what it asks rather than after {@code ChartSearchAiUtils}' own private
+	 *         {@code isReferenceMaterial}, which it deliberately does NOT reach: that one is the
+	 *         shared body under {@code isGroundingDemoteOnly} and {@code referenceSlice}, and
+	 *         borrowing a named view of the classification is what couples a caller to what that view
+	 *         is for.
 	 */
-	private static boolean isReferenceMaterial(String resourceType) {
+	private static boolean isModuleSuppliedReferenceProse(String resourceType) {
 		return ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE.equals(
 				ChartSearchAiUtils.referenceGroup(resourceType));
 	}

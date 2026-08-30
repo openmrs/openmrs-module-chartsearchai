@@ -882,4 +882,59 @@ public class SubstanceNameRowTest {
 			            + " now publishes " + row.normalizedAtcCodes());
 		}
 	}
+
+
+	/** The verbatim slice for the SECOND consumer of the corrected predicate — the question-PAIR arm's
+	 *  use of {@code DrugSafetyValidator.outranks}. See the fixture's own note. */
+	private static final String QUESTION_PAIR_FIXTURE = "chartsearchai-test/ddi-question-pair-subject.json";
+
+	private static final String TICK_BORNE = "Tick-borne encephalitis vaccine (whole virus, inactivated)";
+
+	/** The Moderna row that carries a trailing parenthetical — a PRESENTATION, and the rival whose
+	 *  sentence moves. */
+	private static final String MODERNA_PRESENTATION = "Moderna COVID-19 Vaccine (6m-5y)";
+
+	/** The Moderna row that carries none, whose sentence does NOT move — what makes the case
+	 *  discriminating rather than merely green. */
+	private static final String MODERNA_SUBSTANCE = "Moderna covid-19 vaccine";
+
+	@Test
+	public void aQuestionPairSentenceIsOwnedByTheSubstanceRowAndNotByAPresentationOfTheRival()
+	        throws Exception {
+		// The other production consumer of the predicate issue #250 corrected. `outranks`' middle step
+		// prefers the row that names no route, so that a chip does not render prose describing a
+		// presentation nobody named — and in the question-PAIR arm the row it picks also decides which of
+		// the two drugs OWNS the sentence, because `fromFirst` chooses `subject` and `partner`. Before the
+		// correction the tick-borne substance row was read as route-qualified, so a paediatric COVID-19
+		// vaccine presentation owned the sentence against it.
+		//
+		// Two pairs in one question and only one of them moves, which is what makes this discriminate:
+		// the unqualified `Moderna covid-19 vaccine` ties on that step both before and after, so its
+		// sentence stays where dataset order put it.
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(QUESTION_PAIR_FIXTURE);
+		String question = "Can " + TICK_BORNE + " be given with " + MODERNA_PRESENTATION + "?";
+		// No active orders: this arm fires only for a pair the ACTIVE-ORDER arm has not already covered.
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null, null, null, null, null);
+
+		List<DrugReference> asked = service.findImpliedByQuery(question);
+		assertTrue(DrugReferenceTestSupport.names(asked).contains(MODERNA_SUBSTANCE),
+		    "precondition: the unqualified Moderna row must be in play too, or the case has only the "
+		            + "pair that moves and cannot show that the other one does not — was: " + asked);
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+		        .validate("", question, context);
+
+		List<String> subjects = new ArrayList<String>();
+		for (SafetyWarning warning : warnings) {
+			subjects.add(warning.getDrug());
+		}
+		assertEquals(Arrays.asList(MODERNA_SUBSTANCE, TICK_BORNE), subjects,
+		    "the pair whose rival is a PRESENTATION must be owned by the row the data names the "
+		            + "substance after, while the pair whose rival names no route is untouched — was: "
+		            + warnings);
+		assertTrue(warnings.get(1).getDetail()
+		        .startsWith(TICK_BORNE + " interacts with " + MODERNA_PRESENTATION),
+		    "and that sentence must name the presentation as the PARTNER, was: "
+		            + warnings.get(1).getDetail());
+	}
 }

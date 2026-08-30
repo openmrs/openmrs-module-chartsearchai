@@ -3618,7 +3618,7 @@ Real `DdiDrugReferenceSource().load()` of the shipped KB and the real predicates
 | the same, `(6y-11y)` | reversed |
 | the same, `(booster only)` | reversed |
 
-Severity is Moderate on both sides of every one and the mechanism prose is byte-identical; both drugs are named in the question and both appear in the sentence either way. What moves is which of the two owns it — from a paediatric or booster-restricted PRESENTATION to the row the data names the substance after, which is the direction the route step's own javadoc says it exists to move in.
+Severity is Moderate on both sides of every one and the mechanism prose is byte-identical; both drugs are named in the question and both appear in the sentence either way. What moves is which of the two owns it — from a paediatric or booster-restricted PRESENTATION to the row the data names the substance after, which is the direction the route step's own javadoc says it exists to move in. The chip COUNT does not move: driving the real `validate` over the shipped KB for a question naming the tick-borne vaccine and `Moderna COVID-19 Vaccine (6m-5y)` gives two chips before and two after, and only the second one's subject reverses — the first pairs the tick-borne row against the UNQUALIFIED `Moderna covid-19 vaccine` row, whose route step ties on both sides. `SubstanceNameRowTest.aQuestionPairSentenceIsOwnedByTheSubstanceRowAndNotByAPresentationOfTheRival` pins both halves over a verbatim four-row slice that reproduces that answer.
 
 ### Trade-offs
 

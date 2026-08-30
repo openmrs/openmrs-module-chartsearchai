@@ -3547,6 +3547,9 @@ public class DrugSafetyValidator {
 	 *         {@code (booster only)}) to the row the data names the tick-borne substance after, at
 	 *         identical severity and byte-identical prose — the direction this step exists to move in,
 	 *         with both drugs still named in the sentence because both were named in the question.
+	 *         {@code SubstanceNameRowTest.aQuestionPairSentenceIsOwnedByTheSubstanceRowAndNotByAPresentationOfTheRival}
+	 *         pins that arm over a verbatim slice, and it carries TWO Moderna rows so that the pair whose
+	 *         rival names no route can be seen NOT moving beside the one that does.
 	 *
 	 *         <p>It sits below severity, not above it, and that is the deliberate residue: some
 	 *         route-qualified rows are STRICTLY more severe than their substance's unqualified row

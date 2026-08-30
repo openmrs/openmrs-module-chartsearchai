@@ -455,7 +455,7 @@ public class DrugReference {
 	 *         family's first row, which is why the choice cannot be left to dataset order. Those were
 	 *         119/10/7 before the correction. WHICH family accounts for a given delta is stated once, in
 	 *         CLAUDE.md's identity bullet, and deliberately not restated here: two copies of that
-	 *         attribution have been written in this repo and both were wrong, in opposite directions.
+	 *         attribution have been written in this repo and both named the wrong family.
 	 */
 	boolean namesNoRoute() {
 		String normalized = normalizeName(name);

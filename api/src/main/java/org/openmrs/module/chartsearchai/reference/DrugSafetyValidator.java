@@ -3539,9 +3539,13 @@ public class DrugSafetyValidator {
 	 *         failure the paragraph above describes, inverted. Measured 2026-08-30 through the real
 	 *         {@link #bestRulePerPartner} over every multi-row family of the shipped KB, and through the
 	 *         question-PAIR arm's own entry-pair walk: <b>222 of 40,619</b> drug-in-play groups and
-	 *         <b>97 of 951</b> question-pair groups change which row wins, <b>0 change severity</b>, and
-	 *         exactly <b>1</b> changes the rendered note text — the influenza A/Vietnam family against
-	 *         {@code ozanimod}, where the fuller of the two notes now survives. <b>4</b> of the 97 change
+	 *         <b>97 of 951</b> question-pair groups change which row wins, and exactly <b>1</b> changes
+	 *         the rendered note text — the influenza A/Vietnam family against
+	 *         {@code ozanimod}, where the fuller of the two notes now survives. <b>0 of the 319 change
+	 *         severity</b>, and that figure is ENTAILED rather than independently observed: this method
+	 *         compares {@link #severityPriority} first and returns wherever the two differ, so the route
+	 *         step is reached only at equal severity and a group's winner is maximal in severity whatever
+	 *         the steps below it decide. <b>4</b> of the 97 change
 	 *         which SUBSTANCE owns the sentence, every one of them from a Moderna COVID-19 vaccine
 	 *         PRESENTATION row ({@code (6m-5y)}, {@code (6m-5y bivalent booster)}, {@code (6y-11y)},
 	 *         {@code (booster only)}) to the row the data names the tick-borne substance after, at

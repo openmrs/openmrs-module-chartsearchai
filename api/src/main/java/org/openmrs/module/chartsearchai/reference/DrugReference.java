@@ -569,10 +569,22 @@ public class DrugReference {
 	 * the order because nothing can; what the order guard protected substantively is pinned instead by
 	 * {@code SubstanceNameRowTest.aFamilyWithAnUnqualifiedRowElectsOneAndNoOtherRowSpeaksForIt}, whose
 	 * second assertion states the invariant on RAW SYNTAX so that a weakening of either predicate cannot
-	 * satisfy it by definition. Mutate {@code namesItsSubstance()} to compare display stems and read the
+	 * satisfy it. Mutate {@code namesItsSubstance()} to compare display stems and read the
 	 * failures; that mutation elects {@code Salicylic acid (sodium)} for a family holding a plain
 	 * {@code Salicylic acid} row. That mutation is not invisible to the suite as a whole — it reddens
 	 * many cases — but that FAMILY's election was reached by none of them before the assertion existed.
+	 *
+	 * <p><b>It guards a weakening of the PREDICATES and nothing else — in particular not a KB
+	 * refresh</b>, and that scope is stated because two earlier texts ran the two together. With the
+	 * predicates as they stand the raw equality is ENTAILED by the election: a row carrying a trailing
+	 * parenthetical is elected over a plain sibling only by answering {@link #namesNoRoute()}, whose
+	 * syntactic disjunct is false for it, so {@link #namesItsSubstance()} — the very equality asserted
+	 * — holds. Measured rather than left there: a synthetic two-row family appended to the shipped
+	 * entries through the real {@code DdiDrugReferenceSource.parse} (a plain {@code Zzprobe} row and a
+	 * {@code Zzprobe (ophthalmic)} row whose own {@code substanceName} is that name) reddens
+	 * {@code SubstanceNameRowTest.everyFamilyElectingAQualifiedRowOverAPlainSiblingIsNamedRatherThanCounted}
+	 * alone and leaves that case green. The named list is the guard a data change reaches; the two
+	 * cases cover different mutations rather than ratcheting one another.
 	 *
 	 * <p>Below the first rung the fold never moves AWAY from {@code namesNoRoute()}, and that is
 	 * structural rather than a property of the shipped data: the first rung RETURNS whenever the two rows

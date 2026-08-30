@@ -716,9 +716,9 @@ public class DrugReferenceInjector {
 	 *       {@link DrugReference#namesNoRoute()}'s javadoc and
 	 *       {@code SubstanceNameRowTest.everyFamilyElectingAQualifiedRowOverAPlainSiblingIsNamedRatherThanCounted}
 	 *       are about; do not read a figure for one as a figure for the other. This record's rendered row
-	 *       moves for the A/Vietnam family, from a name carrying no parenthetical to one that does. The invariant this bullet rests on is unchanged
-	 *       under the predicate; what it is NOT is a claim about the shape of the string. The version of
-	 *       that invariant stated on raw syntax lives in
+	 *       moves for the A/Vietnam family, from a name carrying no parenthetical to one that does. The
+	 *       invariant this bullet rests on is unchanged under the predicate; what it is NOT is a claim
+	 *       about the shape of the string. The version of that invariant stated on raw syntax lives in
 	 *       {@code SubstanceNameRowTest.aFamilyWithAnUnqualifiedRowElectsOneAndNoOtherRowSpeaksForIt}.</p>
 	 *       <p>This used to add "and it makes this record agree with the chip layer's subject rather
 	 *       than diverge from it". That was true when written and is <b>not</b> true now, which is

@@ -235,10 +235,22 @@ public class SubstanceNameRowTest {
 		// construction. namesItsSubstance() now implies namesNoRoute(), so a family electing a row whose
 		// display name carries a trailing parenthetical passes the first assertion whenever that
 		// parenthetical is the name the data files the family under — which is what the A/Vietnam and
-		// tick-borne families do. The second states the same invariant on RAW SYNTAX, so it cannot be
-		// satisfied by the shape of the predicate it is about: an elected row may carry a trailing
-		// parenthetical only where that parenthetical is its own substanceName. Weaken
-		// namesItsSubstance() to compare display STEMS and the second reddens where the first does not.
+		// tick-borne families do. The second states the same invariant on RAW SYNTAX: an elected row may
+		// carry a trailing parenthetical only where that parenthetical is its own substanceName.
+		//
+		// What the second one CATCHES is a weakening of the two PREDICATES, and not a change in the
+		// DATA. Both halves are said because an earlier comment on the other case claimed the wider
+		// thing, and both were measured. Weaken namesItsSubstance() to compare display STEMS and it
+		// reddens on Salicylic acid (sodium) where the first stays green. Append a synthetic two-row
+		// family to the shipped entries instead — a plain "Zzprobe" row and a "Zzprobe (ophthalmic)" row
+		// whose own substanceName is that name, parsed by the real DdiDrugReferenceSource — and this
+		// whole case stays green while everyFamilyElectingAQualifiedRowOverAPlainSiblingIsNamedRatherThanCounted
+		// reddens naming it. That is structural and not an accident of the probe: a parenthesised row
+		// reaches the second assertion only by having been elected over a plain sibling, canonicalRow's
+		// rung one returns the namesNoRoute() row whenever two rows disagree on it, and a parenthesised
+		// row can answer namesNoRoute() only through namesItsSubstance() — which is the raw equality the
+		// assertion states. So a KB refresh that adds such a family reddens that other case's named list
+		// and not this assertion; that case's own comment says the same thing from the other side.
 		//
 		// It no longer guards the rung ORDER, and that is a consequence of issue #250 rather than a gap.
 		// It used to: a reader who placed the second rung ABOVE namesNoRoute() got a fourth renamed
@@ -276,7 +288,8 @@ public class SubstanceNameRowTest {
 				continue;
 			}
 			// On raw syntax throughout — displayStem and getSubstanceName, never namesNoRoute() or
-			// namesItsSubstance() — so a weakening of either cannot satisfy this by definition.
+			// namesItsSubstance() — so a WEAKENING of either predicate cannot satisfy this. It says
+			// nothing about the DATA, which cannot redden it at all; the header measures both.
 			if (!carriesNoTrailingParenthetical(elected)) {
 				electedOnItsSubstanceName++;
 				assertEquals(DrugReference.normalizeName(elected.getSubstanceName()),
@@ -321,13 +334,26 @@ public class SubstanceNameRowTest {
 		// plain sibling, and a count cannot say which one moved. A KB refresh that adds a member reddens
 		// here with that member's own name, which is the point: it needs adjudicating, not accepting.
 		//
-		// This and aFamilyWithAnUnqualifiedRowElectsOneAndNoOtherRowSpeaksForIt are NOT redundant, and
-		// which way round is worth stating because it is not the obvious way. Against a change in the
-		// DATA this case is the stronger of the two — measured under the stem mutation of
-		// namesItsSubstance() it reddens naming four families where that one names one. What that one
-		// still buys is the other direction: it asserts the PROPERTY, so it is the only thing standing
-		// between the golden list below and someone who "fixes" a red build by pasting a refresh's new
-		// family into it without adjudicating. Delete either and the pair stops being a ratchet.
+		// This and aFamilyWithAnUnqualifiedRowElectsOneAndNoOtherRowSpeaksForIt assert over the same
+		// families, and what each one CATCHES was measured rather than reasoned — the comment that used
+		// to stand here reasoned it and was wrong. Under the stem mutation of namesItsSubstance() this
+		// case reddens naming four families (Salicylic acid (sodium), Chloroprocaine (ophthalmic),
+		// Cyclosporine (ophthalmic), Iron (bisglycinate)) where that one's second assertion names one.
+		// Under a change in the DATA only this case reddens: append a synthetic two-row family through
+		// the real DdiDrugReferenceSource.parse — a plain "Zzprobe" row listed first and a
+		// "Zzprobe (ophthalmic)" row whose own substanceName is that name, so the two share a
+		// substanceGroupKey and the parenthesised row is elected — and this case fails naming it while
+		// the other 18 cases in the class pass, that second assertion included.
+		//
+		// So the list below is the only thing in this class a KB refresh reddens here. The withdrawn
+		// comment said the opposite — that the property assertion stood between this list and someone
+		// who "fixes" a red build by pasting a refresh's new family into it — and that was false
+		// structurally rather than only on that probe: a row carrying a trailing parenthetical reaches
+		// this list only by being elected over a plain sibling, canonicalRow's rung one returns the
+		// namesNoRoute() row whenever two rows disagree on it, and such a row can answer namesNoRoute()
+		// only through namesItsSubstance(), which is the raw equality that assertion states. The message
+		// on the assertion below is the whole of the defence: read the parenthetical before accepting a
+		// new member into the list.
 		List<DrugReference> all = DrugReferenceTestSupport.shippedEntries();
 		Map<Object, List<DrugReference>> families = multiRowFamiliesAndSingletons(all);
 

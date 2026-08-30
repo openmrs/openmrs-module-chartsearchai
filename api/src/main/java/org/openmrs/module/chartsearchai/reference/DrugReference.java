@@ -1426,11 +1426,17 @@ public class DrugReference {
 	 * duplicate therapy for the other. Same for {@code J01GB} "Other aminoglycosides" (already pinned
 	 * by {@code CrossReactivityClassChoiceTest}), {@code N06AX} antidepressants, {@code N03AX}
 	 * antiepileptics, {@code N02AX} opioids. Vetoing every residue would drop a class claim from
-	 * <b>1974 of the KB's 7783 ROW pairs</b> that share a subgroup and <b>1741 of the 5550 SUBSTANCE
-	 * pairs</b>; of those, <b>1331 ROW / 1291 SUBSTANCE pairs keep it under the 36 groups this list
-	 * holds today</b>. The two bases, and the conversion between them, are defined at
-	 * {@code DrugSafetyValidator.sharedClass} (issue #243). That 1331 read 1488 until issue #263; the
-	 * measurement paragraphs further down this javadoc say why, and how both were taken.
+	 * <b>1816 of the KB's 7783 ROW pairs</b> that share a subgroup and <b>1598 of the 5550 SUBSTANCE
+	 * pairs</b>; <b>1331 ROW / 1291 SUBSTANCE of those keep it under the 36 groups this list holds
+	 * today</b>. The two bases, and the conversion between them, are defined at
+	 * {@code DrugSafetyValidator.sharedClass} (issue #243). <b>Those keeps are a set difference of two
+	 * runs, not a subtraction of the two counts</b>, because this list's veto is not a subset of a
+	 * residue veto: 158 ROW / 143 SUBSTANCE pairs go the other way, dropped here and by no residue at
+	 * all, under the non-residue members of this list the re-measurement paragraphs below name. So of
+	 * this list's own 643 ROW / 450 SUBSTANCE drop, 485 ROW / 307 SUBSTANCE are inside the residue
+	 * counterfactual and the rest is not. That 1331 read 1488 until issue #263, and the 1816 / 1598
+	 * read 1974 / 1741 until round 2 of the same issue; the measurement paragraphs further down this
+	 * javadoc say why, and how each was taken.
 	 *
 	 * <p><b>The families, and the reading of ATC's words that puts each here:</b>
 	 * <ul>
@@ -1539,15 +1545,18 @@ public class DrugReference {
 	 * name a subgroup that does classify the substances instead, and 7243 are untouched. Over the
 	 * <em>36</em> groups the list holds today the drop is <b>643 ROW / 450 SUBSTANCE pairs</b> (issue
 	 * #263, taken by the re-measurement recorded below; ADR Decision 33 carries the full three-way
-	 * split on both bases) — quoted here because that
-	 * paragraph's 1331 is 1974 minus this 643 and its 1291 is 1741 minus this 450, as the 1488 it
-	 * replaced was 1974 minus this 486, and without them a reader cannot close that arithmetic on
-	 * either base. Attributing each pair to the subgroup the unvetoed scan chose for it, the largest
-	 * contributors among those that LOSE the claim are, on the 30-group split, {@code V03AB} (134 ROW
-	 * pairs), {@code D11AX} "Other dermatologicals" (115), {@code S01XA} "Other ophthalmologicals"
-	 * (99) and {@code D06AX} "Other antibiotics for topical use" (33); on the 36-group split
-	 * {@code A16AX} (91) and {@code N07XX} (55) come in fourth and fifth and push {@code D06AX} to
-	 * sixth.
+	 * split on both bases) — quoted here because it is what the residue counterfactual is differenced
+	 * against, and because the arithmetic closes only once its OVERLAP with that counterfactual is
+	 * stated: 485 of this 643 are among the 1816 a residue veto drops, so 1816 = 1331 kept here + 485
+	 * lost under both, and the remaining 158 are dropped here and by no residue. Over substance pairs,
+	 * 307 of this 450, so 1598 = 1291 + 307, the remaining 143 dropped here alone. The 1488 / 1448 the
+	 * paragraph above records for the 30-group list is the same difference taken against that list's
+	 * 486 / 293, and 158 / 143 are the same pairs there. Attributing each pair to the subgroup the
+	 * unvetoed scan chose for it, the largest contributors among those that LOSE the claim are, on
+	 * the 30-group split, {@code V03AB} (134 ROW pairs), {@code D11AX} "Other dermatologicals" (115),
+	 * {@code S01XA} "Other ophthalmologicals" (99) and {@code D06AX} "Other antibiotics for topical
+	 * use" (33); on the 36-group split {@code A16AX} (91) and {@code N07XX} (55) come in fourth and
+	 * fifth and push {@code D06AX} to sixth.
 	 *
 	 * <p><b>Those four 30-group figures read 135/130/99/68 until issue #263, and were not wrong — they
 	 * were on an unstated base.</b> Same attribution, wider population: every pair the scan gave that
@@ -1561,29 +1570,42 @@ public class DrugReference {
 	 * answer over the <em>30</em> groups this list held at issue #182 — the scope the 486/54/7243
 	 * triple above states for itself — and issue #184 (PR #241) added six more without re-measuring
 	 * it, so a figure whose own wording says "keep it <em>here</em>" came to describe a rule this
-	 * class no longer applies. The 1974 did not move with it, because all six additions are themselves
-	 * residues and a blanket veto already covered them; that is exactly why nothing looked wrong, only
-	 * the surviving half having drifted. The same six moved the class-claim drop by 157 on BOTH pair
-	 * bases (486 to 643 ROW, 293 to 450 SUBSTANCE), which is also the number the claim-base sentence
-	 * above states for them — three identical deltas on three bases, and issue #263 did not check
-	 * whether they count the same pairs.
+	 * class no longer applies. The residue counterfactual beside it did not move, because all six
+	 * additions are themselves residues and a blanket residue veto already covered them; that is
+	 * exactly why nothing looked wrong, only the surviving half having drifted. The same six moved
+	 * the class-claim drop by 157 on BOTH pair bases (486 to 643 ROW, 293 to 450 SUBSTANCE), which is
+	 * also the number the claim-base sentence above states for them — three identical deltas on three
+	 * bases, and issue #263 did not check whether they count the same pairs.
 	 *
-	 * <p>The re-measurement, 2026-08-29: the shipped KB loaded through
-	 * {@code DdiDrugReferenceSource.load}, the substance base from {@link #substanceGroupKey()} and
-	 * {@link #canonicalRow}, the choice from {@code DrugSafetyValidator.sharedClass}. It reproduced
-	 * 1974 and the 30-group 1488 (and 1448 over substance pairs) before 1331 and 1291 were quoted.
-	 * The veto it applied was the groups this list already holds PLUS a residue set, which is what
-	 * makes 1974 minus 643 a set difference rather than a subtraction of two unrelated counts: 7 of
-	 * the 34 subgroups this list refuses over the shipped KB ({@code V03AB} and its siblings) are not
-	 * residues at all. That residue set was the <b>98</b> of the 594 level-4 subgroups
-	 * {@link #atcSubgroups()} yields over this KB whose WHO ATC/DDD published name begins
-	 * "Other"/"Various", the names read off the WHO index snapshot of 2026-04-25. It is counted over
-	 * the same population as the 97 this javadoc records and is one more than that 97; this pass did
-	 * not hold the snapshot the 97 was read from, so the discrepancy is recorded rather than resolved.
-	 * What can be said for the 98 is that 1974 reproduces exactly with it as the run's residue set —
-	 * not with it as the whole veto, which is a smaller drop, since the seven non-residues just named
-	 * are then unvetoed — and that restricting it to {@link #LOCALLY_APPLIED_ATC_GROUPS} gives the
-	 * same 20 the "shipped KB uses 20 of the 27" sentence records.
+	 * <p>The re-measurement, 2026-08-29, retaken in round 2 of the same issue on head
+	 * {@code 3084cd80}: the shipped KB loaded through {@code DdiDrugReferenceSource.load}, the
+	 * substance base from {@link #substanceGroupKey()} and {@link #canonicalRow}, the choice from
+	 * {@code DrugSafetyValidator.sharedClass} reached by reflection and never re-expressed. Each veto
+	 * configuration is one dump of every pair sharing a level-4 subgroup with the answer of that
+	 * method beside it, so a counterfactual is a DIFF of two dumps line for line rather than a
+	 * recomputation. The round-2 run reproduced the 7783 / 5550 pair bases and the unmutated 643 / 450
+	 * byte for byte against the first run's dumps before anything was re-quoted. The residue set is
+	 * the <b>98</b> of the 594 level-4 subgroups {@link #atcSubgroups()} yields over this KB whose WHO
+	 * ATC/DDD published name begins "Other"/"Various", the names read off the WHO index snapshot of
+	 * 2026-04-25. It is counted over the same population as the 97 this javadoc records and is one
+	 * more than that 97; neither pass held the snapshot the 97 was read from, so the discrepancy is
+	 * recorded rather than resolved. Restricting the 98 to {@link #LOCALLY_APPLIED_ATC_GROUPS} gives
+	 * the same 20 the "shipped KB uses 20 of the 27" sentence records.
+	 *
+	 * <p><b>The counterfactual read 1974 ROW / 1741 SUBSTANCE for one round, and the base is why.</b>
+	 * Those are the drop under the 98 residues UNIONED with this list's own 36 members — a veto nobody
+	 * proposes, and not the "vetoing every residue" the sentence publishing them describes. The union
+	 * was taken because under it this list's drop is a subset of the counterfactual's, so 1974 minus
+	 * 643 closes as a subtraction. Vetoing exactly the 98 does not close that way and gives
+	 * <b>1816 ROW / 1598 SUBSTANCE</b>. The 158 ROW / 143 SUBSTANCE gap between the two readings is
+	 * carried by the seven of the 34 subgroups this list refuses over the shipped KB that are not
+	 * residues at all — {@code V03AB} (134 ROW / 119 SUBSTANCE pairs), {@code V03AF} (15 / 15),
+	 * {@code V03AE} (6 / 6) and {@code V03AC} (3 / 3), attributed by the subgroup the residue-only run
+	 * chose for each pair; {@code V03AH}, {@code V03AN} and {@code V03AZ} are the other three and
+	 * carry none.
+	 * What did NOT move is the KEPT counts, on this KB: 1331 ROW / 1291 SUBSTANCE against the 36 and
+	 * 1488 / 1448 against the 30 come out identical under both vetoes, pair for pair, because a set
+	 * difference is what they always were.
 	 *
 	 * <p>{@code UnclassifyingAtcVetoSetTest} now reddens when a change to this list reaches a subgroup
 	 * the shipped KB publishes, which is less than "whenever this list moves"; that class's javadoc

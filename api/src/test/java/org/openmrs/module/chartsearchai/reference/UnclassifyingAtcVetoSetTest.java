@@ -41,7 +41,11 @@ import org.junit.jupiter.api.Test;
  * the claim filters off, i.e. with {@code UNCLASSIFYING_ATC_GROUPS} emptied, so a change to it
  * cannot move them. They are keyed on {@code LOCALLY_APPLIED_ATC_GROUPS} instead, and their tripwire
  * is {@link LocallyAppliedAtcGroupKeyTest}, which reddens on a change to that list this one is
- * silent on; a KB refresh is due on both.
+ * silent on; a KB refresh is due on both. The exemption does not run the other way, and that class's
+ * javadoc says why: {@code sharedClass} consults {@link DrugReference#isLocallyAppliedAtcCode} on
+ * every call, to decide WHICH of a pair's shared subgroups it returns, so
+ * {@code UNCLASSIFYING_ATC_GROUPS}' own counts and attributions are due on that case's red as well as
+ * on this one's.
  *
  * <p><b>Two holes, both real, and the second is the likelier one.</b> A group added that covers no
  * subgroup this KB publishes is invisible: 9 of the shipped list's 36 members are already in that

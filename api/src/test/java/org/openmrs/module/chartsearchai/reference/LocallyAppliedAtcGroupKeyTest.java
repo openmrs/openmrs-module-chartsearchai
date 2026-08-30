@@ -46,6 +46,18 @@ import org.junit.jupiter.api.Test;
  * figures at {@code DrugReference.LOCALLY_APPLIED_ATC_GROUPS} and update them with it, saying which
  * method produced them.
  *
+ * <p><b>And not only those.</b> {@code DrugSafetyValidator.sharedClass} consults
+ * {@link DrugReference#isLocallyAppliedAtcCode} to decide WHICH of a pair's shared subgroups it
+ * returns — a non-locally-applied one eagerly, a locally applied one only as the fallback — so every
+ * figure that is an answer of that method is keyed on this list as well as on whatever else it is
+ * keyed on, {@code DrugReference.UNCLASSIFYING_ATC_GROUPS}' own counts and per-subgroup attributions
+ * included. The asymmetry with the sibling is not a symmetry to restore: that one can rule 46/21 and
+ * 19/2 out of ITS red for a stated reason, that they are taken with the veto list emptied, and this
+ * list has no such configuration — it is live in every run. Whether a given figure actually MOVES is
+ * a separate question this case cannot answer, since it turns on whether the edit reaches a pair
+ * sharing both a locally applied and a non-locally-applied subgroup with the locally applied one
+ * sorting first; re-taking a figure may well reproduce the published value. Re-take it and say so.
+ *
  * <p><b>It is not the partition guards.</b> {@code UnmappedOrderAdministrationSiteTest} already
  * carries two cases over this list, and neither can see the change above: they ask whether every
  * locally applied group is accounted for by a site, which an edit that adds the group to a site

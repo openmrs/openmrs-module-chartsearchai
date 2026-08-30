@@ -349,7 +349,7 @@ final class ClassCodeFidelityCheck {
 			// Through classCodesIn, not a second reading of the pattern: that accessor is what this
 			// class means by "the codes a text states", and a filter added to it later (dropping a
 			// level too coarse to be a claim, say) has to reach these two rules as well as the
-			// membership one. The matcher loop below is only for what a Set discards — multiplicity.
+			// membership one.
 			Set<String> stated = classCodesIn(group);
 			if (stated.isEmpty()) {
 				// A parenthetical stating no class code is out of both rules' subject matter: an
@@ -357,6 +357,10 @@ final class ClassCodeFidelityCheck {
 				// rule about brackets rather than about codes.
 				continue;
 			}
+			// Multiplicity is the one thing classCodesIn's Set discards, so it is counted here — but
+			// only for codes that reading admits, so a filter added there governs this rule too.
+			// Nothing in the suite can discriminate that conjunct while classCodesIn filters nothing:
+			// it is written for the change that gives it something to filter, not for today.
 			Set<String> once = new LinkedHashSet<String>();
 			Matcher codes = ATC_CLASS_CODE.matcher(group);
 			while (codes.find()) {

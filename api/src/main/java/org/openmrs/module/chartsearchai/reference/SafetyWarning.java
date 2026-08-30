@@ -208,8 +208,9 @@ public class SafetyWarning {
 	 * its place ("one for a contraindication, two for a rated interaction, three when folded") which
 	 * measurement refuted as well. What the composition depends on is authored TEXT — a dataset's
 	 * mechanism description is whatever its author wrote — so measure it over the dataset you ship if
-	 * you need a number. {@link #getSeverity()} is canonical for how a rated interaction's detail is
-	 * assembled, and it is not restated here. A renderer that splits or truncates at a
+	 * you need a number. {@link #getSeverity()} is canonical for how the dataset builds a rated rule's
+	 * NOTE, which is the part of a detail this field's own contract turns on, and it is not restated
+	 * here. A renderer that splits or truncates at a
 	 * sentence boundary drops the mechanism text, which is the chip's clinical content — and on a
 	 * folded chip the class sentence after it. Render the whole string.
 	 *
@@ -246,10 +247,9 @@ public class SafetyWarning {
 	 * that carry chips, since all three go through one
 	 * {@code ChartSearchAiRestController.serializeSafetyWarnings}. Verbatim and UNNORMALIZED, which is
 	 * deliberate rather than lazy: the field is the dataset's rating, and coercing it would put the
-	 * wire at odds with the very prose a client is being told to stop parsing. Publishing it asserts
-	 * nothing the chip's own prose does not already assert to the clinician — it is the SOURCE's
-	 * rating, not this module's judgment about what may be done, which is the separate thing issue
-	 * #283 keeps off the wire ({@code DrugSafetyValidator.licensesWithholding} and the
+	 * wire at odds with the very prose a client is being told to stop parsing. What it publishes is the
+	 * SOURCE's rating, not this module's judgment about what may be done — which is the separate thing
+	 * issue #283 keeps off the wire ({@code DrugSafetyValidator.licensesWithholding} and the
 	 * {@code DrugReferenceInjector.STRENGTH_*} clauses are prompt-facing only).
 	 *
 	 * <p><b>A non-null value is NOT a guarantee the module recognises it, so it does not mean "the

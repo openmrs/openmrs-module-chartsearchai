@@ -319,14 +319,21 @@ ANSWER_SEVERITY = re.compile(r"(?<![A-Za-z])(" + _SEVERITY_ALT + r")(?![A-Za-z])
 # the parse alone and corrected only what had become false. It reads the detail,
 # where `DrugSafetyValidator.interactionWarning` puts the rule's note straight after an em dash and
 # `DdiDrugReferenceSource.noteFor` builds that note as `severity + ". " + mechanism` — so the
-# leading token after the dash IS the rating, for `sourceFormat=ddinter`. That holds without
-# exception on the shipped KB and is not merely usual: measured through the real
+# note therefore carries the rating, for `sourceFormat=ddinter`: measured through the real
 # `DdiDrugReferenceSource.load()`, of its 590,312 links none carries a null or blank note, none is
-# rated with no note, and none has a note that does not start with its own severity word. So this
-# parse is sound on every ddinter capture, and what it is exposed to is a REWORD — which is the
-# hazard the arm below already exists to catch. A `sourceFormat=json` capture is the case it cannot
-# read at all, note and severity being independently authored there; that is a second reason a
-# future capture should prefer the field where one is present.
+# rated with no note, and none has a note that does not start with its own severity word.
+#
+# THAT MEASUREMENT IS ABOUT THE NOTE, AND NOTHING POSITIONAL ABOUT THE RENDERED DETAIL FOLLOWS FROM
+# IT. An earlier revision of this comment said "the leading token after the dash IS the rating" and
+# offered the census above as proof; #340 retracted that, because the detail is assembled from chart
+# text as well as dataset text and the chart's half goes in UNQUOTED — a free-text prescription
+# display can carry the very delimiter the chip appends its note after, which
+# `NonCodedDrugOrderNameTest.aFreeTextDisplayIsPrintedIntoTheChipUnquoted` pins as current behaviour.
+# This parse is unaffected in practice, and not because the positional claim holds: `CHIP_SEVERITY`
+# is applied with `findall` below, so it collects every dash-then-rating in the string rather than
+# resting on the first. A `sourceFormat=json` capture is the case it cannot read at all, note and
+# severity being independently authored there; that is a second reason a future capture should prefer
+# the field where one is present.
 #
 # Two things follow and both are stated rather than hidden. On `sourceFormat=json` the same position
 # holds free operator text, so a curated note opening "Major bleeding risk…" would read as a Major

@@ -313,9 +313,8 @@ public class DrugSafetyValidator {
 	 *        and that is now load-bearing where it was not. The caller does not hand the list over: it
 	 *        goes on rendering from the very same one after this returns ({@code render(ref,
 	 *        orderEntries, …)}), so an arm added here that mutated it would change what the injector
-	 *        puts in the chart, silently and after the fact — measured, and no test in the module sees
-	 *        it: a {@code Collections.reverse} placed after this method's own reads leaves the whole
-	 *        api suite green. So the contract is enforced at the producer rather than described here —
+	 *        puts in the chart, after the fact. The contract is therefore enforced at the producer
+	 *        rather than described here —
 	 *        {@link DrugReferenceService#findForActiveOrders} returns an unmodifiable list — and no
 	 *        copy is taken here. Do not read that as a class-wide convention: the
 	 *        {@code List<SafetyWarning> warnings} the arms below take is an ACCUMULATOR and is written

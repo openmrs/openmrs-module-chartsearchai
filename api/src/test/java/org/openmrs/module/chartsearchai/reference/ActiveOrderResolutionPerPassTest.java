@@ -178,13 +178,14 @@ public class ActiveOrderResolutionPerPassTest {
 	 * resolution to the {@code validate} it calls and then goes on rendering from it — so an arm that
 	 * sorted or filtered it in place would change what the injector puts in the chart, after the fact.
 	 *
-	 * <p>Two measurements are why this case exists rather than a comment. The hazard is invisible to
-	 * the suite: a {@code Collections.reverse} placed after {@code validate}'s own reads, where only
-	 * the injector's later rendering is damaged, leaves the whole api suite green. And the remedy was
-	 * invisible too: with {@link DrugReferenceService#findForActiveOrders} returning a bare
-	 * {@code ArrayList} again, the suite is green as well — so before this case the wrapper was a
-	 * contract three comments asserted and nothing enforced, which the next change could delete for
-	 * free.
+	 * <p>Two measurements are why this case exists rather than a comment, and both were taken BEFORE
+	 * the remedy. The hazard was invisible to the suite: with the list still mutable, a
+	 * {@code Collections.reverse} placed after {@code validate}'s own reads — where only the injector's
+	 * later rendering is damaged — left the whole api suite green. And the remedy was invisible too:
+	 * with {@link DrugReferenceService#findForActiveOrders} returning a bare {@code ArrayList} again,
+	 * the suite is green as well, so before this case the wrapper was a contract three comments
+	 * asserted and nothing enforced, which the next change could delete for free. Neither holds now,
+	 * which is the point: that reverse throws today, and removing the wrapper reddens this case.
 	 *
 	 * <p>Through the real service over real parsed data, and {@code Collections.reverse} is here
 	 * because it is the exact mutation that measurement used.

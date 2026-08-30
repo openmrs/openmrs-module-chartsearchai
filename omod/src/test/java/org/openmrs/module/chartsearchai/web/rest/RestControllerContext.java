@@ -39,7 +39,8 @@ import org.openmrs.api.context.UserContext;
  * run afterwards. What it would cost here is specific — several classes in this package
  * ({@code ChartSearchAiStreamEventOrderTest}, {@code ChartSearchAiReferenceGroupingTest},
  * {@code ChartSearchAiReferenceProvenanceTest}, and the contextless tests of
- * {@code ChartSearchAiReferenceGroundingWithholdingTest}) drive {@code streamAnswer} with NO
+ * {@code ChartSearchAiReferenceGroundingWithholdingTest} and
+ * {@code ChartSearchAiSafetyWarningSeverityWireTest}) drive {@code streamAnswer} with NO
  * context at all, and on the REQUEST thread that is the only thing enforcing its "free of
  * {@code Context} reads" contract: a re-added global-property read throws because nothing is
  * installed. A leaked stub answers instead of throwing, and they go green over exactly the drift

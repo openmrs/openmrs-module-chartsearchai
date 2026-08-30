@@ -15,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.beans.Introspector;
 import java.io.ByteArrayOutputStream;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -395,14 +396,22 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 		return false;
 	}
 
-	/** The wire key an accessor names: its property name — {@code getSeverity} to {@code severity} —
-	 *  or, for an accessor this class names without either prefix, the method name verbatim. */
+	/**
+	 * The wire key an accessor names: its property name — {@code getSeverity} to {@code severity} — or,
+	 * for an accessor this class names without either prefix, the method name verbatim.
+	 *
+	 * <p>The remainder is decapitalized by {@link Introspector#decapitalize}, the JDK's own rule,
+	 * rather than by lower-casing the first character here: the two differ on consecutive capitals
+	 * ({@code getURL} yields {@code URL}, not {@code uRL}). No accessor on {@code SafetyWarning} has
+	 * that shape today, so this is reuse rather than a fix — but a hand-rolled convention is the thing
+	 * that would silently be wrong when one does.
+	 */
 	private static String wireKeyOf(Method m) {
 		String name = m.getName();
 		for (String prefix : Arrays.asList("get", "is")) {
 			if (name.startsWith(prefix) && name.length() > prefix.length()
 					&& Character.isUpperCase(name.charAt(prefix.length()))) {
-				return Character.toLowerCase(name.charAt(prefix.length())) + name.substring(prefix.length() + 1);
+				return Introspector.decapitalize(name.substring(prefix.length()));
 			}
 		}
 		return name;

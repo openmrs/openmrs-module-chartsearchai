@@ -247,11 +247,10 @@ public class SafetyWarning {
 	 * plain Jackson-bound string with no vocabulary check and no {@code DrugReferenceValidity} rule
 	 * over it, so an operator's {@code json} dataset supplies its own words. A reader comparing this
 	 * value should trim and case-fold as {@code severityRank} does, and treat anything it does not
-	 * recognise as unrated rather than as a floor. Measured 2026-08-30 through the real
-	 * {@code DdiDrugReferenceSource.load()} and {@code DrugReference.Interaction#getSeverity()}, never
-	 * a re-expression of them: over the shipped KB's 590,312 interaction links (2283 entries) the
-	 * distinct values are exactly {@code Major}, {@code Moderate}, {@code Minor} and {@code Unknown},
-	 * with none null and none blank; over the bundled curated seed, all five of its rules are null.
+	 * recognise as unrated rather than as a floor. The shipped DDInter dataset publishes exactly
+	 * {@code Major}, {@code Moderate}, {@code Minor} and {@code Unknown}, none null and none blank,
+	 * and the bundled curated seed rates none of its rules; ADR Decision 59 carries that census and
+	 * the production method that produced it, and is not restated here.
 	 *
 	 * <p><b>Read this field; do not fall back to parsing {@link #getDetail()}.</b> On the bundled
 	 * DDInter dataset that sentence does lead with the rating, and does so without exception:

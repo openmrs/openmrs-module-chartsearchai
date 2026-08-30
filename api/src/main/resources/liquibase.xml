@@ -6,15 +6,42 @@
 			http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
 
 	<!--
-		Module is pre-production. Liquibase changesets are consolidated to their canonical
-		end-state rather than preserving the audit trail of historical schema edits. Any
-		instance that already executed a now-removed intermediate changeset retains the
-		corresponding liquibasechangelog row as a harmless orphan; the live schema matches
-		what this file declares because each intermediate's effect is now folded into the
-		surviving changeset's create-time definition.
+		BEFORE ANY OF THIS: A NEW CHANGESET DOES NOT RUN ON A SAME-VERSION REDEPLOY, and it fails
+		silently. openmrs-core runs a module's changelog only from
+		AdministrationServiceImpl.runModuleSetupOnVersionChange, gated on
+		isModuleSetupOnVersionChangeNeeded, which compares the module's version against the global
+		property module.<id>.version. Redeploying 1.0.0-SNAPSHOT over 1.0.0-SNAPSHOT therefore logs
+		"chartsearchai module did not change, skipping setup", runs no liquibase, and still reports
+		the module started with a null startup error. Measured live 2026-08-30 for chartsearchai-009:
+		the instance served requests for ten minutes against a table lacking both columns, with
+		nothing anywhere saying so. Bump the version, or delete that global property and restart
+		(core re-runs setup and rewrites the property at the same value). This is core's behaviour
+		and binds every changeset added to any module, not only this one.
 
-		When this module ships to production, every changeset below must become immutable —
-		new schema needs come in as new changesets, never as edits to these.
+		HOW TO ADD A COLUMN HERE. Add a NEW changeset with the next id no instance has ever
+		run, and leave the existing ones alone. Do not fold it into chartsearchai-002, however
+		much the consolidation note below reads like an invitation to: an instance that has
+		already executed 002 will not re-run it, so the column never appears there, while
+		ChartSearchAuditLog.hbm.xml declares it immediately — the insert then fails, the
+		controller catches and logs, and auditing stops with no error anywhere. Folding is the
+		SECOND step of the lifecycle and happens at a deliberate consolidation, once every
+		instance has run the intermediate. See chartsearchai-009's own comment, and ADR
+		Decision 57.
+
+		Module is pre-production, and changesets that every instance has already run are
+		consolidated to their canonical end-state rather than preserving the audit trail of
+		historical schema edits. Any instance that executed a now-removed intermediate retains
+		the corresponding liquibasechangelog row as a harmless orphan — which is why a NEW
+		changeset must also take an id that has never been used, rather than the next free
+		number in this file: liquibase keys on id + author + filename and stores a checksum,
+		so a reused id raises ValidationFailedException wherever such an orphan survives.
+
+		The consolidation paragraph describes chartsearchai-002 and no longer the whole file:
+		chartsearchai-009 is deliberately un-folded, for the reason above.
+
+		When this module ships to production, every changeset below becomes immutable and the
+		consolidation step goes away entirely — leaving only the first rule, which is already
+		the one to follow today.
 	-->
 
 	<changeSet id="chartsearchai-002" author="openmrs">
@@ -68,6 +95,42 @@
 		<createIndex tableName="chartsearchai_audit_log" indexName="idx_chartsearchai_audit_log_date">
 			<column name="date_created"/>
 		</createIndex>
+	</changeSet>
+
+	<changeSet id="chartsearchai-009" author="openmrs">
+		<comment>
+			Record how much module-supplied reference material each answer's prompt carried
+			(issue #229): reference_slice_records and reference_slice_chars, beside the existing
+			reference_count, which counts the citations IN the answer rather than the material put in
+			front of the model. Nullable, because null means the producer stated no slice while 0
+			means the prompt was measured and carried no reference material. Zero says what the prompt
+			carried and not why: a toggle being off, an injection that threw and was caught, and an
+			injection that added only the patient's own active-order records all produce it too.
+
+			A new changeset rather than an edit to chartsearchai-002, which is the lifecycle this
+			file's history already shows for a new column: input_tokens/output_tokens arrived as
+			chartsearchai-005 on 2026-04-02 and were folded into 002's create-time definition by the
+			consolidation seven weeks later. Editing 002 now would add nothing on an instance that has
+			already run it, while ChartSearchAuditLog.hbm.xml would declare the columns immediately —
+			so the insert would fail, the controller would swallow it, and auditing would stop with no
+			error anywhere. Fold this into 002 at the next consolidation, once every instance has run
+			it.
+
+			Numbered 009 and not 003. Ids 001 to 006 have existed in this file on this branch's own
+			history, and 007 and 008 exist in unmerged branches. Liquibase keys a changeset on
+			id + author + filename AND stores its checksum, so reusing an id an instance holds an
+			orphan row for does not skip quietly — the checksums differ and liquibase raises
+			ValidationFailedException and the module fails to start. Not swallowed, though not
+			surfaced as that type either: ModuleFactory.runLiquibase catches Exception and rethrows
+			ModuleException. Measured on liquibase 4.32.0 (the version openmrs-api puts on this
+			module's classpath) against an instance built from the consolidation-era file, which
+			really does leave orphan rows for 001 and 003. A later merge of the two unmerged branches
+			would collide the same way.
+		</comment>
+		<addColumn tableName="chartsearchai_audit_log">
+			<column name="reference_slice_records" type="int"/>
+			<column name="reference_slice_chars" type="int"/>
+		</addColumn>
 	</changeSet>
 
 </databaseChangeLog>

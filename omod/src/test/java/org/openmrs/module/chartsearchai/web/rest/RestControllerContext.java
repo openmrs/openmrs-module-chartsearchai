@@ -12,6 +12,8 @@ package org.openmrs.module.chartsearchai.web.rest;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.openmrs.Patient;
 import org.openmrs.User;
@@ -105,6 +107,19 @@ final class RestControllerContext {
 				return true;
 			}
 		});
+	}
+
+	/**
+	 * The {@code /search} request body the controller tests post — this fixture's own patient uuid and
+	 * a question. Here rather than copied per test file for the reason {@code StubAuditLogService}'s
+	 * javadoc gives about itself: the patient uuid it posts is this class's own, so a per-file copy is
+	 * a second place that has to change when the request shape does.
+	 */
+	static Map<String, String> searchBody(String question) {
+		Map<String, String> body = new HashMap<String, String>();
+		body.put("patient", PATIENT_UUID);
+		body.put("question", question);
+		return body;
 	}
 
 	/**

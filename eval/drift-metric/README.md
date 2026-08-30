@@ -529,8 +529,10 @@ to change.
 > failures rather than trusting a tally here, which went stale the first time another arm exercised
 > the same gate.
 >
-> **The census is a gate, not just a number.** The chip side has to parse the chip `detail` —
-> `serializeSafetyWarnings` puts type/drug/detail on the wire and no severity field — and every
+> **The census is a gate, not just a number.** The chip side parses the chip `detail` — since
+> [#340](https://github.com/openmrs/openmrs-module-chartsearchai/issues/340) `serializeSafetyWarnings`
+> also puts a `severity` key on the wire, but every capture in this tree predates it, so the parse
+> stays as the reader for them — and every
 > fixture here is a frozen capture, so a reword in `DrugSafetyValidator.interactionWarning` or
 > `DdiDrugReferenceSource.noteFor` cannot redden any of them while every live arm reports a clean
 > zero for the wrong reason. Measured: reword BOTH of `severity-overstated/`'s chip clauses to

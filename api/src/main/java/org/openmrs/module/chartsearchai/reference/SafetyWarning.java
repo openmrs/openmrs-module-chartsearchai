@@ -185,10 +185,13 @@ public class SafetyWarning {
 	 * {@code DrugSafetyValidator}'s to state, and {@code SubstanceSubjects}' javadoc states it,
 	 * exemptions and residues included. Do not re-derive that list here — it has moved.
 	 *
-	 * <p>What distinguishes one warning from another is {@link #getDetail()}: of the three fields a
-	 * client receives, it is the one that varies between warnings about a single substance, because it
-	 * names the interacting order, the allergen or the ceiling that particular finding is about. Key
-	 * per-finding identity on {@code detail}, or on the whole warning.
+	 * <p>What distinguishes one warning from another is {@link #getDetail()}: of the four fields a
+	 * client receives, it is the one that ALWAYS varies between warnings about a single substance,
+	 * because it names the interacting order, the allergen or the ceiling that particular finding is
+	 * about. Since issue #340 {@link #getSeverity()} travels beside it on the wire and may differ too —
+	 * that issue's own capture has a Major and a Minor chip of one drug — but it is no more a key than
+	 * this field is: two findings about one substance commonly share a rating, and every unrated one
+	 * shares null. Key per-finding identity on {@code detail}, or on the whole warning.
 	 */
 	public String getDrug() {
 		return drug;
@@ -205,9 +208,10 @@ public class SafetyWarning {
 	}
 
 	/**
-	 * The severity the reference data assigns the rule this warning was raised from — one of
-	 * {@code Major}, {@code Moderate}, {@code Minor}, {@code Unknown} for a DDInter-rated rule, ranked
-	 * by {@code DrugSafetyValidator.severityPriority}, which is also what
+	 * The severity the reference data assigns the rule this warning was raised from — {@code Major},
+	 * {@code Moderate}, {@code Minor} or {@code Unknown} for a rule the shipped DDInter dataset rates,
+	 * though that is what one dataset publishes and not a closed set (see the wire paragraph below) —
+	 * ranked by {@code DrugSafetyValidator.severityPriority}, which is also what
 	 * {@code addQuestionPairInteractions} and the screening arm sort their chips on.
 	 *
 	 * <p><b>Null means the source rates nothing here</b>, which is a real distinction rather than a
@@ -221,7 +225,42 @@ public class SafetyWarning {
 	 * {@link #getDetail()} prose — which meant the ordering could only be asserted by parsing
 	 * clinician-facing text, anchored on a clause the module rewords freely. Measured: rewording that
 	 * clause left {@code thePairChipsAreOrderedBySeverityAndBounded} green while it asserted nothing at
-	 * all. Not serialized onto the REST response; the wire shape is unchanged.
+	 * all.
+	 *
+	 * <p><b>Published on the wire since issue #340</b>, as the {@code severity} key of every
+	 * {@code safetyWarnings} chip — on the blocking {@code /search} response and on both SSE events
+	 * that carry chips, since all three go through one
+	 * {@code ChartSearchAiRestController.serializeSafetyWarnings}. Verbatim and UNNORMALIZED, which is
+	 * deliberate rather than lazy: the field is the dataset's rating, and coercing it would put the
+	 * wire at odds with the very prose a client is being told to stop parsing. Publishing it asserts
+	 * nothing the chip's sentence does not already assert to the clinician — it is the SOURCE's
+	 * rating, not this module's judgment about what may be done, which is the separate thing issue
+	 * #283 keeps off the wire ({@code DrugSafetyValidator.licensesWithholding} and the
+	 * {@code DrugReferenceInjector.STRENGTH_*} clauses are prompt-facing only).
+	 *
+	 * <p><b>A non-null value is NOT a guarantee the module recognises it, so it does not mean "the
+	 * source rated this".</b> {@code DrugSafetyValidator.severityRank} trims and lower-cases, and maps
+	 * every value it does not recognise — including null — to the same answer, UNRATED: exempt from
+	 * {@code clearsSeverityFloor}, sorted above {@code Major} by {@code severityPriority}, and
+	 * licensing withholding in {@code ratingLicensesWithholding}. So there are three classes on the
+	 * wire and not two, and the third is reachable: {@code DrugReference.Interaction}'s severity is a
+	 * plain Jackson-bound string with no vocabulary check and no {@code DrugReferenceValidity} rule
+	 * over it, so an operator's {@code json} dataset supplies its own words. A reader comparing this
+	 * value should trim and case-fold as {@code severityRank} does, and treat anything it does not
+	 * recognise as unrated rather than as a floor. Measured 2026-08-30 through the real
+	 * {@code DdiDrugReferenceSource.load()} and {@code DrugReference.Interaction#getSeverity()}, never
+	 * a re-expression of them: over the shipped KB's 590,312 interaction links (2283 entries) the
+	 * distinct values are exactly {@code Major}, {@code Moderate}, {@code Minor} and {@code Unknown},
+	 * with none null and none blank; over the bundled curated seed, all five of its rules are null.
+	 *
+	 * <p><b>Read this field; do not fall back to parsing {@link #getDetail()}.</b> The rating appears
+	 * in that sentence only because {@code DdiDrugReferenceSource.noteFor} happens to build a DDInter
+	 * note as {@code severity + ". " + mechanism} and {@code DrugSafetyValidator.interactionWarning}
+	 * appends the note ONLY when the rule carries one — so a rated rule with no mechanism text names
+	 * its rating nowhere in its own chip, and on {@code sourceFormat=json} the note and the rating are
+	 * two independently authored fields with nothing tying them together.
+	 * {@code ChartSearchAiSafetyWarningSeverityWireTest.theRatingIsPublishedEvenWhereTheProseNamesItNowhere}
+	 * is the first of those arrangements.
 	 *
 	 * <p>Since issue #283 this value has a second reader, and it decides more than an order:
 	 * {@code DrugSafetyValidator.ratingLicensesWithholding} splits it into "a reason to withhold" and
@@ -388,7 +427,7 @@ public class SafetyWarning {
 	 * {@code DrugReferenceInjector.onePerPartner} records) and a hand-authored {@code json} dataset
 	 * reaches it immediately. Whoever fixtures it should assert this condition, not assume it.
 	 *
-	 * <p>Not serialized — the wire shape is the three keys
+	 * <p>Not serialized — the wire shape is the four keys
 	 * {@code ChartSearchAiRestController.serializeSafetyWarnings} writes, and the chip's own detail is
 	 * unchanged by this.
 	 */

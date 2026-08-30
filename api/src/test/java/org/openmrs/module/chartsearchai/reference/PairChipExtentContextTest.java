@@ -164,18 +164,31 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 	public void theStatedReportedCountTracksTheChipsAtEveryCap() {
 		// Stronger than any single cap: whatever the operator sets, what the response SAYS it reported
 		// is what it reported. A statement derived from the GP rather than from the cut would pass at
-		// the default and diverge wherever the candidate list is shorter than the cap.
+		// the default and diverge wherever the candidate list is SHORTER than the cap — publishing a
+		// reported count above the found one, which getReported()'s own javadoc says cannot happen.
+		//
+		// Asked of BOTH arms, because the class javadoc's "both arms, one statement" is otherwise a
+		// claim about one: measured, the GP-instead-of-the-cut mutation on the question-pair arm alone
+		// survived the entire api suite while the same mutation on the screening arm reddened two
+		// cases — every question-arm case here ran with the cap BELOW the candidate count, where
+		// min(found, cap) and cap are the same number.
 		for (int cap : new int[] { 1, 3, 10, 15, 1000 }) {
 			configureCap(String.valueOf(cap));
-			Pass screened = screeningPass();
-
-			assertEquals(SCREENED_PAIRS, screened.extent.getFound(),
-					"at cap " + cap + " the candidate count is a property of the data, not of the cap");
-			assertEquals(Math.min(SCREENED_PAIRS, cap), screened.extent.getReported(),
-					"at cap " + cap + " the stated reported count must be the cut that happened");
-			assertEquals(screened.chips.size(), screened.extent.getReported(),
-					"at cap " + cap + " the statement must match the chips raised");
+			assertCutIsWhatIsStated("screening", screeningPass(), SCREENED_PAIRS, cap);
+			assertCutIsWhatIsStated("question-pair", questionPairPass(), QUESTION_PAIRS, cap);
 		}
+	}
+
+	/** One pass's statement against the cut that actually happened, and against the chips it raised. */
+	private static void assertCutIsWhatIsStated(String arm, Pass pass, int candidates, int cap) {
+		assertEquals(candidates, pass.extent.getFound(),
+				"the " + arm + " arm at cap " + cap + ": the candidate count is a property of the data, "
+						+ "not of the cap");
+		assertEquals(Math.min(candidates, cap), pass.extent.getReported(),
+				"the " + arm + " arm at cap " + cap + ": the stated reported count must be the cut that "
+						+ "happened, never the configured cap");
+		assertEquals(pass.chips.size(), pass.extent.getReported(),
+				"the " + arm + " arm at cap " + cap + ": the statement must match the chips raised");
 	}
 
 	@Test

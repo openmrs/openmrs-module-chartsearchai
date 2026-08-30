@@ -215,11 +215,11 @@ public class ChartSearchAiInteractionPairExtentTest {
 
 		// The KEY, not the helper, is what a payload actually carries — so this is the assertion that
 		// also catches a site inlining the serialization loop instead of calling the helper.
-		int keys = occurrences(source, "\"safetyWarnings\"");
+		int keys = ChartSearchAiStreamingTest.occurrences(source, "\"safetyWarnings\"");
 		assertEquals(1, keys,
 				"the safetyWarnings key must be written in exactly one place, beside the statement of "
 						+ "how bounded those chips are (issue #336). Found " + keys + " writes of it.");
-		int calls = occurrences(source, "serializeSafetyWarnings(");
+		int calls = ChartSearchAiStreamingTest.occurrences(source, "serializeSafetyWarnings(");
 		assertEquals(2, calls,
 				"serializeSafetyWarnings must be named exactly twice — its own declaration and the one "
 						+ "call inside putSafetyChips. A third naming is an emission site building the "
@@ -230,14 +230,6 @@ public class ChartSearchAiInteractionPairExtentTest {
 		// What this does NOT reach: a payload that publishes the chips under some OTHER key name. No
 		// source scan can, and nothing in the module does it today — mutate a site and read which of
 		// the three assertions above answers, rather than trusting this one to answer for all of them.
-	}
-
-	private static int occurrences(String haystack, String needle) {
-		int count = 0;
-		for (int at = haystack.indexOf(needle); at >= 0; at = haystack.indexOf(needle, at + 1)) {
-			count++;
-		}
-		return count;
 	}
 
 	private class CappedScreenStubService implements ChartSearchService {

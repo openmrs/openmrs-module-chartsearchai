@@ -201,8 +201,14 @@ public class ChartSearchAiStreamingTest {
 
 	/**
 	 * @return how many times {@code needle} occurs in {@code haystack}, counting overlaps
+	 *
+	 *         <p>Package-visible because a second class in this package makes EXACT-count assertions
+	 *         off it ({@code ChartSearchAiInteractionPairExtentTest}, issue #336). A copy there would
+	 *         be one that could be "fixed" to step by {@code needle.length()} — the non-overlapping
+	 *         form two api tests use — leaving the two guards counting differently with no compile
+	 *         error and no failure.
 	 */
-	private static int occurrences(String haystack, String needle) {
+	static int occurrences(String haystack, String needle) {
 		int count = 0;
 		for (int at = haystack.indexOf(needle); at >= 0; at = haystack.indexOf(needle, at + 1)) {
 			count++;
@@ -327,10 +333,11 @@ public class ChartSearchAiStreamingTest {
 	/**
 	 * Reads the controller's production source as UTF-8.
 	 *
-	 * <p>One reader for every source-scanning test in this class, which had each grown its own
-	 * spelling of it. Stated as "every" rather than counted, for the reason
-	 * {@link #resolveSourceFile()} gives one level up: a count here drifts the moment a test is added,
-	 * as it already has.</p>
+	 * <p>One reader for every source-scanning test that reads this controller — the ones in this
+	 * class, which had each grown its own spelling of it, and since issue #336
+	 * {@code ChartSearchAiInteractionPairExtentTest}'s guard as well. Stated as "every" rather than
+	 * counted, for the reason {@link #resolveSourceFile()} gives one level up: a count here drifts the
+	 * moment a test is added, as it already has.</p>
 	 *
 	 * <p>The charset is explicit because the file contains non-ASCII characters and
 	 * {@code new String(byte[])} decodes with the platform default: every needle asserted here is
@@ -345,13 +352,14 @@ public class ChartSearchAiStreamingTest {
 	}
 
 	/**
-	 * Locates the controller's production source, which every source-scanning assertion in this class
-	 * reads.
+	 * Locates the controller's production source, which every source-scanning assertion against that
+	 * file reads — in this class, and since issue #336 in
+	 * {@code ChartSearchAiInteractionPairExtentTest} too.
 	 *
 	 * <p>A file it cannot find FAILS rather than skips. It skipped until now, through
 	 * {@code Assumptions.assumeTrue}, and that is the same defect as the short-region one above, one
 	 * level further up: measured by pointing the path below at a directory that does not exist, omod
-	 * built GREEN with two tests skipped, so every assertion in this class stopped running and nothing
+	 * built GREEN with two tests skipped, so every assertion resting on it stopped running and nothing
 	 * said so. Stated as "every" rather than listed, because a list here drifts the moment an
 	 * assertion is added — as it already had.</p>
 	 *

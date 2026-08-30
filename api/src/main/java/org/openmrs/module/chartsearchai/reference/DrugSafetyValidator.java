@@ -296,8 +296,14 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * Mappings-aware overload — the seam the public entry point delegates to. See
-	 * {@link #validate(String, String, Patient, List)} for the echo-scoping contract.
+	 * Mappings-aware overload, reached from the question- and answer-only seams above it and from
+	 * tests. See {@link #validate(String, String, Patient, List)} for the echo-scoping contract.
+	 *
+	 * <p><b>It is not the seam production reaches</b>, and has not been since issue #336: the public
+	 * {@code Patient} entry point delegates to the widest arity directly, because a sink has to travel
+	 * with it. So overriding THIS overload does not intercept production either — the same trap the
+	 * four-argument entry point above documents, one level down, and the reason that one documents it
+	 * is that a sweep of the tree found two stubs already caught by it.
 	 */
 	List<SafetyWarning> validate(String answer, String question, PatientClinicalContext rawContext,
 			List<RecordMapping> mappings) {

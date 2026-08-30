@@ -46,9 +46,12 @@ package org.openmrs.module.chartsearchai.reference;
  * pairwise arm ran and the reference data related none of the pairs it enumerated — a complete
  * screen, positively assertable, which is half of what this type exists for. No extent at all
  * ({@code null} on the answer, {@code null} on the wire) says the producer stated no measurement.
- * <b>This javadoc is the canonical enumeration of what that covers</b>; everywhere else points here
- * rather than restating it, because a list restated in several places is one that grows in one of
- * them. Two situations, deliberately not distinguished because a consumer must treat them alike:
+ * <b>The enumeration has exactly two homes, this javadoc and {@code README.md}'s client-facing
+ * form</b> — the second because it is the only one a frontend author reads, and everywhere else
+ * points here rather than restating it. Add a situation and you update two places by design; restate
+ * it in a third and the list grows in one of them, which is what
+ * {@code SerializedRecord.getOrderActive()}'s own rule records having happened. Two situations,
+ * deliberately not distinguished because a consumer must treat them alike:
  *
  * <ol>
  *   <li>no pairwise arm enumerated anything — the question named fewer than two reference drugs
@@ -91,7 +94,13 @@ public final class PairChipExtent {
 		return found;
 	}
 
-	/** How many of those it reported as chips. Never greater than {@link #getFound()}. */
+	/**
+	 * How many of those it reported as chips. For an extent a pairwise arm produced this is
+	 * {@code min(found, maxPairChips())} and so never greater than {@link #getFound()} — a property of
+	 * those two arms, not one this type enforces: {@link Sink#record} takes the two numbers it is
+	 * given. Stated this way because the type cannot keep the stronger promise, and an accessor
+	 * promising what nothing checks is how a client comes to render "1000 of 72 shown".
+	 */
 	public int getReported() {
 		return reported;
 	}

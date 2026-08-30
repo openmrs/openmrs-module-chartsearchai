@@ -174,8 +174,16 @@ public class LlmInferenceServiceReferenceSliceTest {
 		}
 	}
 
-	/** Builds a chart with no reference material, so only the post-inject chart can satisfy the
-	 *  assertions above. */
+	/**
+	 * Builds a chart with no reference material, so the two ordering cases above cannot pass on a
+	 * pre-{@code inject()} chart.
+	 *
+	 * <p>It does NOT guard the whole file, and the difference matters to anyone swapping this for the
+	 * pass-through injector seam every other test in this package installs. The identity guard
+	 * ({@code assertSame}) and the null-versus-zero case are both satisfied on a pre-inject chart, so
+	 * replacing this stub unguards them silently rather than reddening. Move the resolution above
+	 * {@code inject()} and read which assertions fail rather than trusting a tally here.
+	 */
 	private static final class StubStrategy extends ChartBuildingStrategy {
 
 		@Override

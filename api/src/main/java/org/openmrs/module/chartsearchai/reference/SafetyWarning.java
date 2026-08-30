@@ -197,12 +197,24 @@ public class SafetyWarning {
 		return drug;
 	}
 
-	/** The warning as one complete, standalone sentence naming the drug — e.g. "The stated
-	 *  Ibuprofen dose ~2400 mg/day exceeds the 1200 mg/day maximum for ages 2-11" or
-	 *  "Warfarin interacts with active order aspirin — Major. …". <b>Renderers should display
-	 *  this alone</b>; prefixing {@link #getDrug()} duplicates the subject, because every
-	 *  detail already leads with it. It is also this field, not {@link #getDrug()}, that
-	 *  tells one warning from another — see {@link #getDrug()} for why. */
+	/**
+	 * The warning as complete, standalone prose opening on the drug's name — e.g. "The stated
+	 * Ibuprofen dose ~2400 mg/day exceeds the 1200 mg/day maximum for ages 2-11", or
+	 * "Warfarin interacts with active order aspirin — Major. …".
+	 *
+	 * <p><b>One SENTENCE is what a contraindication or an overdose is, and not what this field
+	 * is</b> — the second example above is two, and a folded chip is three. This javadoc said
+	 * "one complete, standalone sentence" while illustrating it with that two-sentence example:
+	 * {@code DdiDrugReferenceSource.noteFor} builds a rated rule's note as
+	 * {@code severity + ". " + mechanism} and {@code DrugSafetyValidator.interactionWarning} appends
+	 * it after an em dash, then the fold appends the class sentence after
+	 * {@code DrugSafetyValidator.endSentence}. A renderer that splits or truncates at the first
+	 * sentence boundary therefore drops the mechanism text, which is the chip's clinical content.
+	 *
+	 * <p><b>Renderers should display this alone</b>; prefixing {@link #getDrug()} duplicates the
+	 * subject, because every detail already opens with it. It is also this field, not
+	 * {@link #getDrug()}, that tells one warning from another — see {@link #getDrug()} for why.
+	 */
 	public String getDetail() {
 		return detail;
 	}

@@ -2393,7 +2393,7 @@ Same harness, the same box, run against each head's production code in turn, on 
 | 1 | 107.7 ms | **17.0 ms** | −90.7 (**84%**) |
 | 2 | 107.0 ms | **16.9 ms** | −90.1 (**84%**) |
 | 5 | 119.0 ms | **20.0 ms** | −99.0 (**83%**) |
-| 10 | 142.0 ms | **28.0 ms** | −114.1 (**80%**) |
+| 10 | 142.0 ms | **28.0 ms** | −114.0 (**80%**) |
 
 **Re-measure rather than carrying any of these figures.** An earlier run of the same harness against the same two heads gave 88.9 → 12.6 and 115.9 → 24.1 — `main`'s own figure moved by a fifth between sessions for identical code, which is the run-to-run drift #330 warns about and the reason its own prototype was interleaved in one JVM. The proportion is stable across both runs of this harness: 79–86%. It is stable against that DRIFT and not across ARRANGEMENTS — a review re-measuring the same two heads on its own chart and question set got 70–77%, over 24 to 175 chips where this one raises 4 to 65 — so a figure from a different chart landing outside 79–86% is not a regression. What is invariant is that the pass is several times cheaper, and that the rendered chip list is byte-identical: that review's four cells matched by SHA-256 as well as by length. The absolutes above are the ones measured on the head being merged, per CLAUDE.md's rule that a figure carried across a code change stops describing the code.
 

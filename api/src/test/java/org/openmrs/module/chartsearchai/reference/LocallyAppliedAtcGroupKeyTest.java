@@ -41,8 +41,10 @@ import org.junit.jupiter.api.Test;
  * composition of its own. That predicate consults both halves of the rule, so this case is keyed on
  * {@code LOCALLY_APPLIED_ATC_GROUPS} and {@code SYSTEMIC_USE_EXCEPTIONS} together, which is how the
  * figures are keyed too. It reddens when a change to either reaches a subgroup this knowledge base
- * publishes, and on a knowledge-base refresh that changes which level-4 subgroups the dataset
- * publishes or which of them the rule reads as locally applied. When it goes red, re-measure the
+ * publishes, and on a knowledge-base refresh that changes the NUMBER of level-4 subgroups the
+ * dataset publishes or which of them the rule reads as locally applied — the sibling's wording, and
+ * for the sibling's reason: a refresh that swaps one subgroup the rule does NOT read as locally
+ * applied for another leaves all three assertions here alike and escapes. When it goes red, re-measure the
  * figures at {@code DrugReference.LOCALLY_APPLIED_ATC_GROUPS} and update them with it, saying which
  * method produced them.
  *
@@ -71,8 +73,9 @@ import org.junit.jupiter.api.Test;
  * knowledge base publishes is invisible here, exactly as {@code S02DC} and {@code V07A} are to the
  * sibling. And a knowledge-base refresh can move every pair figure this case is a tripwire for while
  * leaving it green, because the assertion is keyed on which PUBLISHED SUBGROUPS the rule reads as
- * locally applied, which counts neither rows nor pairs: rows added or removed under subgroups the
- * dataset already publishes leave it untouched.
+ * locally applied, which counts neither rows nor pairs. Two shapes escape, as at the sibling: rows
+ * added or removed under subgroups the dataset already publishes, and a swap of one subgroup the
+ * rule does not read as locally applied for another, which leaves the count and the set alike.
  *
  * <p><b>What it does NOT pin, stated so the guard does not look stronger than it is.</b> Not the
  * figures themselves. {@code DrugSafetyValidator.sharedClass} is private, and reaching 46/21 and

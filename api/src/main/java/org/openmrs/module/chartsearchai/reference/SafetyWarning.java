@@ -186,9 +186,9 @@ public class SafetyWarning {
 	 * exemptions and residues included. Do not re-derive that list here — it has moved.
 	 *
 	 * <p>What distinguishes one warning from another is {@link #getDetail()}: of the four fields a
-	 * client receives, it is the one that ALWAYS varies between warnings about a single substance,
-	 * because it names the interacting order, the allergen or the ceiling that particular finding is
-	 * about. Since issue #340 {@link #getSeverity()} travels beside it on the wire and may differ too —
+	 * client receives, it is the one that varies between warnings about a single substance, because it
+	 * names the interacting order, the allergen or the ceiling that particular finding is about. Since
+	 * issue #340 {@link #getSeverity()} travels beside it on the wire and may differ too —
 	 * that issue's own capture has a Major and a Minor chip of one drug — but it is no more a key than
 	 * this field is: two findings about one substance commonly share a rating, and every unrated one
 	 * shares null. Key per-finding identity on {@code detail}, or on the whole warning.
@@ -253,14 +253,19 @@ public class SafetyWarning {
 	 * distinct values are exactly {@code Major}, {@code Moderate}, {@code Minor} and {@code Unknown},
 	 * with none null and none blank; over the bundled curated seed, all five of its rules are null.
 	 *
-	 * <p><b>Read this field; do not fall back to parsing {@link #getDetail()}.</b> The rating appears
-	 * in that sentence only because {@code DdiDrugReferenceSource.noteFor} happens to build a DDInter
-	 * note as {@code severity + ". " + mechanism} and {@code DrugSafetyValidator.interactionWarning}
-	 * appends the note ONLY when the rule carries one — so a rated rule with no mechanism text names
-	 * its rating nowhere in its own chip, and on {@code sourceFormat=json} the note and the rating are
-	 * two independently authored fields with nothing tying them together.
+	 * <p><b>Read this field; do not fall back to parsing {@link #getDetail()}.</b> On the bundled
+	 * DDInter dataset that sentence does lead with the rating, and does so without exception:
+	 * {@code DdiDrugReferenceSource.noteFor} builds every note as {@code severity + ". " + mechanism},
+	 * or as {@code severity + " severity interaction (… no mechanism description on file)."} where the
+	 * row has none — measured 2026-08-30 over the shipped KB's 590,312 links, no note is null or
+	 * blank, no rated rule carries none, and none fails to start with its own severity word. So a
+	 * parse is not broken there TODAY; what it rests on is that {@code detail} is prose this module
+	 * rewords freely and holds out as no contract. It is broken on an operator {@code sourceFormat=json}
+	 * dataset, where the note and the rating are independently authored fields: a rule may carry no
+	 * note at all, in which case {@code DrugSafetyValidator.interactionWarning} appends none and the
+	 * rating is nowhere in the chip, or carry one whose leading word is a different rating.
 	 * {@code ChartSearchAiSafetyWarningSeverityWireTest.theRatingIsPublishedEvenWhereTheProseNamesItNowhere}
-	 * is the first of those arrangements.
+	 * drives both of those.
 	 *
 	 * <p>Since issue #283 this value has a second reader, and it decides more than an order:
 	 * {@code DrugSafetyValidator.ratingLicensesWithholding} splits it into "a reason to withhold" and

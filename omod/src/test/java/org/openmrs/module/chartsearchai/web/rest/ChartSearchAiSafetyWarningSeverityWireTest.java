@@ -20,6 +20,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -49,13 +50,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * {@code CHIP_SEVERITY} regex, whose own comment calls that "the fault issue #207 exists to have
  * removed".
  *
- * <p><b>The prose is not a fallback.</b> The word in {@code detail} arrives there only because
- * {@code DdiDrugReferenceSource.noteFor} happens to build a DDInter note as
- * {@code severity + ". " + mechanism} and {@code DrugSafetyValidator.interactionWarning} appends that
- * note after an em dash — and it appends it only when the rule carries one. A rated rule with no
- * mechanism note therefore yields a chip whose rating is nowhere in its own sentence, and on
- * {@code sourceFormat=json} the note and the rating are two independently authored fields with
- * nothing tying them together at all. Both directions are pinned, in
+ * <p><b>The prose is not a fallback — though on the shipped dataset it currently looks like one.</b>
+ * {@code DdiDrugReferenceSource.noteFor} builds every DDInter note as
+ * {@code severity + ". " + mechanism}, or as {@code severity + " severity interaction (…)."} where the
+ * row has no mechanism text, and {@code DrugSafetyValidator.interactionWarning} appends that note
+ * after an em dash — so over the shipped KB's 590,312 links there is no rated rule whose chip fails
+ * to name its rating (measured; no note is null or blank either). What a parse rests on there is only
+ * that {@code detail} is prose this module rewords freely. On an operator {@code sourceFormat=json}
+ * dataset it breaks outright: note and rating are independently authored, so a rule may carry no note
+ * — the branch above appends nothing and the rating is nowhere in the sentence — or one whose leading
+ * word is a different rating. Both are pinned, in
  * {@link #theRatingIsPublishedEvenWhereTheProseNamesItNowhere}.
  *
  * <p>Driven through the real controller, at all three call sites of the one private helper: the
@@ -80,15 +84,24 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
 	/**
-	 * The fixture chips. The first four mirror issue #340's own measured response (patient
-	 * {@code 763e6e5f-…}, "Please screen her current medications for drug interactions.") — a rated
-	 * Major, a rated Minor and two contraindications — and the last two are shapes that capture did
-	 * not contain and that the prose parse cannot reach: a RATED rule carrying no mechanism note, so
-	 * that its rating appears nowhere in its own {@code detail}; a rating the module does not
-	 * RECOGNISE, which it treats exactly as it treats null and which must still reach the wire as the
-	 * dataset wrote it; and a chip whose sentence and rating DISAGREE, which is what makes
-	 * {@link #theRatingIsPublishedEvenWhereTheProseNamesItNowhere} able to tell a field read from a
-	 * parse that falls back to the field.
+	 * The fixture chips. <b>Every case below indexes this list positionally, so the indices are the
+	 * contract</b> — inserting or reordering a chip retargets them, and only two of the four
+	 * positional reads carry a precondition assertion that would catch it.
+	 *
+	 * <ul>
+	 *   <li>0, 1, 3, 4 — the shape of issue #340's own measured response (patient
+	 *       {@code 763e6e5f-…}, "Please screen her current medications for drug interactions."): a
+	 *       rated Major and a rated Minor interaction on one drug, and two contraindications.</li>
+	 *   <li>2 — a rated rule carrying NO note, so its rating appears nowhere in its own
+	 *       {@code detail}. An operator {@code sourceFormat=json} shape: the shipped DDInter dataset
+	 *       cannot produce it, because {@code DdiDrugReferenceSource.noteFor} always writes a note and
+	 *       always leads it with the rating.</li>
+	 *   <li>5 — a rating the module does not RECOGNISE, which it treats exactly as it treats null and
+	 *       which must still reach the wire as the dataset wrote it.</li>
+	 *   <li>6 — a chip whose sentence and rating DISAGREE, which is what makes
+	 *       {@link #theRatingIsPublishedEvenWhereTheProseNamesItNowhere} able to tell a field read
+	 *       from a parse that falls back to the field.</li>
+	 * </ul>
 	 */
 	private static List<SafetyWarning> fixtureWarnings() {
 		return Arrays.asList(
@@ -101,9 +114,9 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 						"Lidocaine interacts with active order neomycin — Minor. Limited in vitro data "
 								+ "suggest additive neuromuscular blockade.",
 						"Minor"),
-				// A rated rule whose dataset row carries no mechanism text: interactionWarning appends
-				// the note only when there is one, so the rating is on the chip and nowhere in the
-				// sentence. This is the shape that makes the field load-bearing rather than convenient.
+				// A rated rule carrying NO note: interactionWarning appends one only when there is one,
+				// so the rating is on the chip and nowhere in its sentence. A json-dataset shape — the
+				// ddinter parser writes a note for every row, and always leads it with the rating.
 				new SafetyWarning(SafetyWarning.TYPE_INTERACTION, "Warfarin",
 						"Warfarin interacts with active order aspirin", "Moderate"),
 				// Contraindications carry no rating at all — the arms that raise one use the
@@ -228,7 +241,8 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 
 	@Test
 	public void theRatingIsPublishedEvenWhereTheProseNamesItNowhere() {
-		Map<String, Object> chip = searchChips().get(2);
+		List<Map<String, Object>> chips = searchChips();
+		Map<String, Object> chip = chips.get(2);
 
 		assertEquals("Warfarin interacts with active order aspirin", chip.get("detail"),
 				"precondition: this fixture chip's own sentence names no rating");
@@ -243,7 +257,7 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 		// survives the assertion above. Measured — replacing the field read with exactly that
 		// fallback left this class green until this chip existed. Here the sentence says one thing
 		// and the rule is rated another, which no fallback can reconcile.
-		Map<String, Object> disagreeing = searchChips().get(6);
+		Map<String, Object> disagreeing = chips.get(6);
 		assertTrue(((String) disagreeing.get("detail")).contains("Major"),
 				"precondition: this fixture chip's sentence carries a rating word that is not its rating");
 		assertEquals("Minor", disagreeing.get("severity"),
@@ -302,10 +316,15 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 		assertNotNull(chips, "the grounded event carried no safetyWarnings array");
 		assertEquals(fixtureWarnings().size(), chips.size(),
 				"every fixture warning must reach the grounded event");
-		assertEquals("Major", chips.get(0).get("severity").asText(),
-				"the async surface must publish the rating like the other two: " + chips.get(0));
-		assertTrue(chips.get(3).get("severity").isNull(),
-				"and an unrated chip's key must be JSON null here too: " + chips.get(3));
+		JsonNode rated = chips.get(0);
+		assertTrue(rated.has("severity"),
+				"the async surface must publish the rating like the other two: " + rated);
+		assertEquals("Major", rated.get("severity").asText(),
+				"and it must be the rating the chip was raised with: " + rated);
+		JsonNode unrated = chips.get(3);
+		assertTrue(unrated.has("severity"),
+				"an unrated chip's key must survive here too rather than being omitted: " + unrated);
+		assertTrue(unrated.get("severity").isNull(), "and it must be JSON null: " + unrated);
 	}
 
 	/**
@@ -359,7 +378,7 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 				}
 			}
 		}
-		assertEquals(java.util.Collections.emptyList(), unpublished,
+		assertEquals(Collections.emptyList(), unpublished,
 				"every accessor a client can read off a SafetyWarning must name a key the wire carries; "
 						+ "a value the module computes and then drops at serialization is issue #340");
 	}

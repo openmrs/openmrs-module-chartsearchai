@@ -318,9 +318,14 @@ ANSWER_SEVERITY = re.compile(r"(?<![A-Za-z])(" + _SEVERITY_ALT + r")(?![A-Za-z])
 # regardless (issue #340 anticipated exactly that and left this scorer alone). It reads the detail,
 # where `DrugSafetyValidator.interactionWarning` puts the rule's note straight after an em dash and
 # `DdiDrugReferenceSource.noteFor` builds that note as `severity + ". " + mechanism` — so the
-# leading token after the dash IS the rating, for `sourceFormat=ddinter` rules carrying a note. A
-# rated rule with NO note names its rating nowhere in its detail, and this parse cannot see it; that
-# is a second reason a future capture should prefer the field where one is present.
+# leading token after the dash IS the rating, for `sourceFormat=ddinter`. That holds without
+# exception on the shipped KB and is not merely usual: measured through the real
+# `DdiDrugReferenceSource.load()`, of its 590,312 links none carries a null or blank note, none is
+# rated with no note, and none has a note that does not start with its own severity word. So this
+# parse is sound on every ddinter capture, and what it is exposed to is a REWORD — which is the
+# hazard the arm below already exists to catch. A `sourceFormat=json` capture is the case it cannot
+# read at all, note and severity being independently authored there; that is a second reason a
+# future capture should prefer the field where one is present.
 #
 # Two things follow and both are stated rather than hidden. On `sourceFormat=json` the same position
 # holds free operator text, so a curated note opening "Major bleeding risk…" would read as a Major

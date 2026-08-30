@@ -197,6 +197,48 @@ public class ArchitectureGuardTest {
 
 	// --- Infrastructure ---
 
+	/**
+	 * {@code ClassCodeFidelityCheck} must not carry a citation-marker dialect of its own. Since issue
+	 * #338 it asks whether a marker sits inside a class-code parenthetical, and CLAUDE.md's rule for
+	 * that question is that {@code ChartSearchAiUtils.INLINE_CITATION} is the single parsing pattern,
+	 * reached through the shared {@code citedIndexes} decode step; the one production site that keeps
+	 * its own matcher does so because it needs each marker's text OFFSET, which this check does not.
+	 *
+	 * <p>Nothing behavioural can pin that. A private {@code Pattern.compile("\\[(\\d+)\\]")}
+	 * inside the check answers identically on every case in {@code ClassCodeFidelityTest}, so the
+	 * whole suite stays green on exactly the regression the rule exists to prevent — the same reason
+	 * {@code noDirectGetEmbeddingPrefixCalls} exists for a visibility the compiler already enforces.
+	 * So this asks for the SHAPE: the check compiles exactly one pattern, its own ATC code shape, and
+	 * names no bracketed-digit regex anywhere in its source.
+	 */
+	@Test
+	public void classCodeFidelityCheckCompilesNoCitationMarkerPatternOfItsOwn() throws IOException {
+		List<String> lines = getSourceCache().get("ClassCodeFidelityCheck.java");
+		org.junit.jupiter.api.Assertions.assertNotNull(lines,
+				"precondition: ClassCodeFidelityCheck.java was not found by the source scan, so this "
+						+ "rule would pass vacuously");
+		int compiles = 0;
+		List<String> markerPatterns = new ArrayList<>();
+		for (int i = 0; i < lines.size(); i++) {
+			String line = lines.get(i);
+			if (line.contains("Pattern.compile(")) {
+				compiles++;
+			}
+			// The source spelling of a bracket in a regex literal. Ordinary prose and the javadoc's
+			// own [4] examples do not double the backslash, so only a regex can match this.
+			if (line.contains("\\[")) {
+				markerPatterns.add("line " + (i + 1) + ": " + line.trim());
+			}
+		}
+		org.junit.jupiter.api.Assertions.assertEquals(1, compiles,
+				"ClassCodeFidelityCheck must compile exactly one pattern — ATC_CLASS_CODE. A second "
+						+ "one is either a citation-marker dialect (use ChartSearchAiUtils.citedIndexes) "
+						+ "or a second reading of the code shape.");
+		org.junit.jupiter.api.Assertions.assertTrue(markerPatterns.isEmpty(),
+				"ClassCodeFidelityCheck must not spell a bracketed regex of its own; markers are "
+						+ "decoded by ChartSearchAiUtils.citedIndexes. Found: " + markerPatterns);
+	}
+
 	/** Cache of file name → lines, populated once by {@link #loadAllSources}. */
 	private static java.util.Map<String, List<String>> sourceCache;
 

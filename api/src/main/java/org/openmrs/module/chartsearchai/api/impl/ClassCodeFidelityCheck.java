@@ -40,11 +40,17 @@ import org.slf4j.LoggerFactory;
  * ({@code (A02BC)}→{@code (A02B)}, {@code (D01AC)}→{@code (D01AC07, G01AF08)}), and a correct code
  * duplicated ({@code (A01AD) (A01AD)}).
  *
- * <p><b>Two of those modes this check cannot see, by construction.</b> A duplicated correct code is
- * textually supported by its record, and so is any code the answer OMITS — this reads what the
- * answer states, never what it fails to state. Detecting either needs a comparison against the
- * chips the answer was expected to report, which is a different question with a different failure
- * mode (a chip the model deliberately did not repeat is not an error).
+ * <p><b>What the MEMBERSHIP comparison cannot see, and what issue #338 added beside it.</b> A
+ * duplicated correct code is textually supported by its record, and so is any code the answer
+ * OMITS — that comparison reads what the answer states, never what it fails to state. The reason
+ * recorded here used to be that detecting either needs a comparison against the chips the answer
+ * was expected to report; that is still true of an OMISSION (and is why one is not attempted — a
+ * chip the model deliberately did not repeat is not an error), and it was measured wrong for one
+ * shape of the duplication. {@link #reportMalformedParentheticals} detects a code repeated inside
+ * ONE parenthetical answer-locally, reading no chip and no record: nothing this module renders
+ * states one code twice inside one parenthetical, so the SHAPE is wrong on its own terms whatever
+ * the records state. What stays undetected is the cross-parenthetical duplication of #142's own capture
+ * ({@code (A01AD) (A01AD)}), which two clauses about two partners legitimately produce.
  *
  * <p><b>Why the existing passes cannot catch it.</b> For the citation #142 was measured on — an
  * injected {@code safety_finding} — {@link CitationGroundingVerifier}'s Tier-2 entailment never runs
@@ -264,6 +270,7 @@ final class ClassCodeFidelityCheck {
 						+ "contains; cited record(s) {} state {}. The answer prose is left unchanged "
 						+ "(issue #142).", patientId, unsupported, citedIndexes, recordCodes);
 			}
+			reportMalformedParentheticals(patientId, answer);
 		}
 		catch (RuntimeException e) {
 			// A diagnostic must never break a clinical answer. Nothing here does I/O and every line
@@ -273,6 +280,122 @@ final class ClassCodeFidelityCheck {
 			log.warn("Class-code check failed for patient={}; the answer is unaffected: {}",
 					patientId, e.toString());
 		}
+	}
+
+	/**
+	 * Reports, at WARN, the two malformations of a class-code parenthetical that the membership
+	 * comparison above is structurally unable to see (issue #338): the same code stated more than
+	 * once inside one parenthetical, and a citation marker placed inside one.
+	 *
+	 * <p><b>Both are answer-LOCAL.</b> Neither asks what the records state — they ask what SHAPE the
+	 * prose has, and the shape is wrong on its own terms. That is what keeps them clear of the
+	 * comparison ADR Decision 35 rejects (the answer's codes against the CHIPS, i.e. against what the
+	 * answer was expected to report rather than what it was licensed to state): nothing here reads a
+	 * chip, and nothing here reads what the answer failed to say.
+	 *
+	 * <p><b>The repetition rule is a shape claim and not a licensing one</b>, and saying so is the
+	 * point. On #338's capture four cited findings each state {@code H02AB}, so the four occurrences
+	 * of it in {@code (H02AB, H02AB, H02AB, H02AB)} are supported both as a set and as a multiset;
+	 * a membership test of any strength calls that answer faithful. What no record licenses is the
+	 * FORM. It is a LIST that has a source and a REPETITION that has none: the injected
+	 * drug-reference record renders a substance's own codes as a round-parenthesised list, so two
+	 * DIFFERENT codes in one parenthetical are deliberately left alone — but it builds that list from
+	 * {@code DrugReference.normalizedAtcCodes()}, which returns a {@code Set}, and the chip's class
+	 * sentence renders exactly one code ({@code DrugSafetyValidator}: {@code "is in the same ATC
+	 * class (" + shared}). So no renderer in this module can state one code twice inside one
+	 * parenthetical, and a code that appears twice there came from neither.
+	 *
+	 * <p><b>Groups are read OUTERMOST-first</b>, over a depth walk rather than a regex, so a marker
+	 * buried in a nested aside ({@code (J01MA (see [4]))}) is still inside the parenthetical that
+	 * states the code; an innermost-only scan reads {@code (see [4])}, finds no code in it, and never
+	 * examines the group that has one. An unclosed {@code (} yields no group at all and an unmatched
+	 * {@code )} is ignored — model prose can emit either, and a scan that ran an unclosed group to
+	 * the end of the answer would pool a whole paragraph's codes and markers into one "parenthetical",
+	 * which is a false alarm manufactured out of a typo.
+	 *
+	 * <p><b>It reports; it never rewrites</b>, for the reason the membership report gives and not for
+	 * a new one: editing a clinician-facing sentence is a larger decision than this check is licensed
+	 * to make, and a silent edit is worse than a visible flag (ADR Decision 35, point 4). It is NOT
+	 * because the streaming path has already handed the answer out — {@code normalizeSlashCitations}
+	 * already ships a repair that applies to the final answer only, with the client contract that
+	 * makes it safe, so streaming forces nothing here.
+	 *
+	 * <p><b>What the false-alarm rate is, is unmeasured.</b> ADR Decision 35's own gates were
+	 * justified by driving {@link #classCodesIn} over 340 live captured answers; that corpus is
+	 * outside this repository and the fixture tree inside it is structurally blind to these rules —
+	 * measured here by driving {@link #classCodesIn} itself over that tree (72 json files, 42 captured
+	 * answers, ZERO stating an ATC-shaped token; 0 repetitions and 0 enclosed markers, both
+	 * vacuously), so "no hits in the fixtures" is vacuous rather than evidence.
+	 */
+	private static void reportMalformedParentheticals(Integer patientId, String answer) {
+		Set<String> repeated = new LinkedHashSet<String>();
+		Set<String> markedCodes = new LinkedHashSet<String>();
+		Set<Integer> markers = new LinkedHashSet<Integer>();
+		for (String group : outermostParentheticals(answer)) {
+			Set<String> seen = new LinkedHashSet<String>();
+			Matcher codes = ATC_CLASS_CODE.matcher(group);
+			while (codes.find()) {
+				if (!seen.add(codes.group())) {
+					repeated.add(codes.group());
+				}
+			}
+			if (seen.isEmpty()) {
+				continue;
+			}
+			// The shared decode step over INLINE_CITATION, never a second matcher: this class must
+			// not carry a bracket-marker dialect of its own, and it needs no text offset — the group
+			// it is asking about IS the substring (CLAUDE.md's inline-citation rule).
+			Set<Integer> inGroup = ChartSearchAiUtils.citedIndexes(group);
+			if (!inGroup.isEmpty()) {
+				markers.addAll(inGroup);
+				markedCodes.addAll(seen);
+			}
+		}
+		// Neither line logs the answer or the record text — they carry patient data, and the codes
+		// with the patient identify the claim. The same rule the membership report follows.
+		if (!repeated.isEmpty()) {
+			log.warn("Answer for patient={} states ATC class code(s) {} more than once inside one "
+					+ "parenthetical; nothing this module renders states one code twice inside one. "
+					+ "The answer prose is left unchanged (issue #338).", patientId, repeated);
+		}
+		if (!markers.isEmpty()) {
+			log.warn("Answer for patient={} places citation marker(s) {} inside a parenthetical "
+					+ "stating ATC class code(s) {}; a marker attributes the clause and belongs after "
+					+ "it. The answer prose is left unchanged (issue #338).",
+					patientId, markers, markedCodes);
+		}
+	}
+
+	/**
+	 * @return the contents of each OUTERMOST balanced {@code (...)} group in {@code text}, in
+	 *         first-appearance order, nested groups included in the content rather than reported
+	 *         separately. An unclosed {@code (} contributes nothing and an unmatched {@code )} is
+	 *         ignored — see {@link #reportMalformedParentheticals} for why either is treated as no
+	 *         group rather than as one running to the end of the answer. Empty for null text.
+	 */
+	private static List<String> outermostParentheticals(String text) {
+		List<String> groups = new ArrayList<String>();
+		if (text == null) {
+			return groups;
+		}
+		int depth = 0;
+		int start = -1;
+		for (int i = 0; i < text.length(); i++) {
+			char c = text.charAt(i);
+			if (c == '(') {
+				if (depth == 0) {
+					start = i;
+				}
+				depth++;
+			}
+			else if (c == ')' && depth > 0) {
+				depth--;
+				if (depth == 0) {
+					groups.add(text.substring(start + 1, i));
+				}
+			}
+		}
+		return groups;
 	}
 
 }

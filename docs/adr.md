@@ -2386,14 +2386,16 @@ It is not a second expression of the fold rule (`fold` calls `foldedLower`) and 
 
 ### Effect
 
-Same harness, the same box, run against each head's production code in turn:
+Same harness, the same box, run against each head's production code in turn, on the MERGING head:
 
 | drugs in play | `main` @ `c90d9181` | this change | delta |
 |---|---|---|---|
-| 1 | 88.9 ms | **12.6 ms** | −76.3 (86%) |
-| 2 | 89.5 ms | **13.2 ms** | −76.3 (85%) |
-| 5 | 96.2 ms | **16.8 ms** | −79.4 (83%) |
-| 10 | 115.9 ms | **24.1 ms** | −91.8 (79%) |
+| 1 | 107.7 ms | **17.0 ms** | −90.7 (**84%**) |
+| 2 | 107.0 ms | **16.9 ms** | −90.1 (**84%**) |
+| 5 | 119.0 ms | **20.0 ms** | −99.0 (**83%**) |
+| 10 | 142.0 ms | **28.0 ms** | −114.1 (**80%**) |
+
+**Read the ratio, not the absolutes.** An earlier run of the same harness against the same two heads gave 88.9 → 12.6 and 115.9 → 24.1 — `main`'s own figure moved by a fifth between sessions for identical code, which is the run-to-run drift #330 warns about and the reason its own prototype was interleaved in one JVM. The proportion is stable across both: 79–86%. The absolutes above are the ones measured on the head being merged, per CLAUDE.md's rule that a figure carried across a code change stops describing the code.
 
 `validate` runs twice per request. Behaviour-neutral **on every reachable string**, verified rather than argued: the full rendered chip list — type, severity, drug and detail in full, in order — is byte-identical across the two heads in every cell, by length AND by hash (1615 / 1615 / 15127 / 27687 characters). Reproduced independently by a review on its own arrangement: 23 further cells over the shipped knowledge base and three curated fixtures — allergies and conditions together, no active orders at all, accented order names against both an accented and an English question, a code-only order, an unreadable-records context, duplicate therapy, a screening question, and nested-name and accented dose clauses — byte-identical on the chip surface (27 chips) and on the injected-record surface (9 `drug_reference` records and 12 `safety_finding` texts). The one string that is NOT neutral is the `namesSubstance` corner named in the Decision above, and it needs a drug name containing musical combining marks.
 

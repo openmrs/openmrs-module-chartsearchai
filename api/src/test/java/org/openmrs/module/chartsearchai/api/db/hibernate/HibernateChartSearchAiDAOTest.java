@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.api.db.hibernate;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Date;
@@ -225,5 +226,64 @@ public class HibernateChartSearchAiDAOTest extends BaseModuleContextSensitiveTes
 		Date inTheFuture = new Date(System.currentTimeMillis() + 3600000);
 		long count = dao.getQueryCountByUserSince(user, inTheFuture);
 		assertEquals(0, count);
+	}
+
+	/**
+	 * Issue #229 — the injected reference slice's size survives a write and a read.
+	 *
+	 * <p>The round trip is the point, and it is the only thing in this suite that can see the
+	 * failure it guards: a property declared on {@link ChartSearchAuditLog} but missing from
+	 * {@code ChartSearchAuditLog.hbm.xml} is written and read back as null with no exception and no
+	 * log line, so the column ships permanently empty while every controller-level case stays green
+	 * — those capture the entity the controller built and never persist it. This is the same
+	 * "a wrong signal is indistinguishable from a right one" shape issue #178 was.
+	 *
+	 * <p>What it does NOT cover: the liquibase changeset. Nothing in this suite reads
+	 * {@code liquibase.xml} — the schema under test is the one Hibernate derives — so a column
+	 * present in the mapping and absent from the changeset is invisible here, exactly as it already
+	 * is for {@code search_mode} and {@code input_tokens}.
+	 */
+	@Test
+	public void saveAuditLog_shouldPersistTheInjectedReferenceSlice() {
+		ChartSearchAuditLog auditLog = new ChartSearchAuditLog();
+		auditLog.setUser(Context.getAuthenticatedUser());
+		auditLog.setPatient(patient);
+		auditLog.setQuestion("is it safe to give clarithromycin?");
+		auditLog.setAnswer("No interaction is expected [1].");
+		auditLog.setReferenceCount(1);
+		auditLog.setSearchMode("llm");
+		auditLog.setResponseTimeMs(500L);
+		auditLog.setReferenceSliceRecords(3);
+		auditLog.setReferenceSliceChars(4096);
+		auditLog.setDateCreated(new Date());
+
+		Integer id = dao.saveAuditLog(auditLog).getAuditLogId();
+		Context.flushSession();
+		Context.clearSession();
+
+		ChartSearchAuditLog reread = dao.getAuditLogs(patient, null, null, null, 0, 50).get(0);
+		assertEquals(id, reread.getAuditLogId(), "the re-read row must be the one just written");
+		assertEquals(Integer.valueOf(3), reread.getReferenceSliceRecords());
+		assertEquals(Integer.valueOf(4096), reread.getReferenceSliceChars());
+	}
+
+	/**
+	 * Issue #229 — a row whose producer stated no slice reads back as null, not as zero.
+	 *
+	 * <p>Zero is a real and common measurement: a question that matches no reference entry injects
+	 * nothing. An answer that states no slice at all has measured nothing. A column that collapsed
+	 * the two would make "the prompt carried no reference material" indistinguishable from "nobody
+	 * looked", which is the reading {@code ChartAnswer.getReferenceSlice()} keeps apart by returning
+	 * null and the reason these columns are nullable.
+	 */
+	@Test
+	public void saveAuditLog_shouldKeepAnUnstatedSliceNullRatherThanZero() {
+		createAuditLog("What medications?", "Metformin [1]");
+		Context.flushSession();
+		Context.clearSession();
+
+		ChartSearchAuditLog reread = dao.getAuditLogs(patient, null, null, null, 0, 50).get(0);
+		assertNull(reread.getReferenceSliceRecords());
+		assertNull(reread.getReferenceSliceChars());
 	}
 }

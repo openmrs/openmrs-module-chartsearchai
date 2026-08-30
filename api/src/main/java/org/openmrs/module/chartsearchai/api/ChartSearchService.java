@@ -15,6 +15,7 @@ import java.util.function.Consumer;
 
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 
 /**
@@ -220,6 +221,8 @@ public interface ChartSearchService {
 
 		private final String searchMode;
 
+		private final ChartSearchAiUtils.ReferenceSlice referenceSlice;
+
 		public ChartAnswer(String answer, List<RecordReference> references) {
 			this(answer, references, 0, 0, 0);
 		}
@@ -244,6 +247,14 @@ public interface ChartSearchService {
 		public ChartAnswer(String answer, List<RecordReference> references,
 				int inputTokens, int outputTokens, int cachedTokens,
 				List<SafetyWarning> safetyWarnings, String searchMode) {
+			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, searchMode,
+					null);
+		}
+
+		public ChartAnswer(String answer, List<RecordReference> references,
+				int inputTokens, int outputTokens, int cachedTokens,
+				List<SafetyWarning> safetyWarnings, String searchMode,
+				ChartSearchAiUtils.ReferenceSlice referenceSlice) {
 			this.answer = answer;
 			this.references = java.util.Collections.unmodifiableList(
 					new java.util.ArrayList<>(references));
@@ -254,6 +265,7 @@ public interface ChartSearchService {
 					new java.util.ArrayList<>(safetyWarnings == null
 							? java.util.Collections.<SafetyWarning> emptyList() : safetyWarnings));
 			this.searchMode = searchMode;
+			this.referenceSlice = referenceSlice;
 		}
 
 		/**
@@ -320,6 +332,44 @@ public interface ChartSearchService {
 		 */
 		public String getSearchMode() {
 			return searchMode == null ? ChartSearchAiConstants.SEARCH_MODE_UNKNOWN : searchMode;
+		}
+
+		/**
+		 * How much module-supplied reference material the prompt behind this answer carried — the
+		 * record count and character total the audit row's {@code reference_slice_records} and
+		 * {@code reference_slice_chars} columns record (issue #229).
+		 *
+		 * <p>The producer states it and the consumer derives nothing, the same discipline
+		 * {@link #getSearchMode()} follows and for the same reason: the number is a property of the
+		 * chart that was actually assembled, and anything re-deriving it afterwards is measuring a
+		 * different chart. {@code LlmInferenceService} resolves it once per method, off the chart
+		 * {@code DrugReferenceInjector.inject} returned, and sets it on every answer that method
+		 * produces — including the ungrounded one the streaming path hands its consumer, because the
+		 * two audit shapes read different objects.
+		 *
+		 * <p><b>Null is not zero.</b> Zero is a real and common measurement — a question matching no
+		 * reference entry injects nothing — while null says the producer stated nothing at all, which
+		 * is what the five constructors above do. Collapsing them would make an unmeasured row
+		 * indistinguishable from a measured empty one, which is the failure issue #178 fixed for the
+		 * mode column; the audit columns are nullable for exactly this reason. There is no
+		 * {@code UNKNOWN} sentinel to return instead because those columns, unlike
+		 * {@code search_mode}, are not NOT NULL.
+		 *
+		 * <p><b>On a cache hit this states the ORIGINAL request's slice.</b>
+		 * {@code ChartSearchServiceRouter} returns the cached {@code ChartAnswer} unchanged, so the
+		 * row files the prompt the answer was actually built from — which is the truthful reading for
+		 * one row, and means an operator SUMMING the column across rows over-reports prompt spend by
+		 * every cache hit. That is inherited from how caching works here rather than chosen, and it
+		 * matches what {@code search_mode} already does.
+		 *
+		 * <p>It counts reference-group records only, so the {@code active_drug_order} records the
+		 * injector also writes are outside it — they are the patient's own prescriptions and group as
+		 * chart evidence. Their count remains on the injector's DEBUG line.
+		 *
+		 * @return the slice, or null when the producer stated none
+		 */
+		public ChartSearchAiUtils.ReferenceSlice getReferenceSlice() {
+			return referenceSlice;
 		}
 	}
 

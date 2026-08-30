@@ -107,6 +107,13 @@ public class DrugReferenceInjector {
 	 * actually on is represented (full note, or a compact {@code name (Severity)} form when the
 	 * note will not fit), and one dataset-order partner renders alongside them — compact when the
 	 * patient has a relevant partner (breadth is all it is there for), in full when they do not.
+	 *
+	 * <p><b>Per record, and nothing bounds how many records there are.</b> N records cost N times
+	 * this. That is a deliberate standing decision rather than an omission — issue #229 asked for a
+	 * cap in the shape of {@code maxPairChips} and it was declined; ADR Decision 56 is canonical for
+	 * the measurement and the argument, and is not restated here. What replaces it is a durable
+	 * observable: {@code ChartSearchAiUtils.referenceSlice} measures the assembled chart and the
+	 * figure reaches the audit row, so the cost is readable per answer without a log level.
 	 */
 	static final int MAX_INTERACTION_RENDER_CHARS = 1500;
 
@@ -359,15 +366,27 @@ public class DrugReferenceInjector {
 			index++;
 		}
 
-		// The drug-reference character total is here because that slice's SIZE is the thing issue #163 is
-		// about and the REST response cannot show it: the response returns only CITED references, so a
-		// question injecting one near-duplicate record per route variant looked identical from outside
-		// while spending several times the prompt budget. A count alone did not settle it either — what
-		// crowds out chart records is characters — so an operator (or a verification pass) can now read
-		// both off one line.
-		log.debug("Injected {} active-order, {} drug-reference ({} chars) and {} safety-finding record(s) "
-				+ "into chart for question '{}'", unrepresented.size(), matched.size(),
-				referenceCharacters(mappings), findings.size(), question);
+		// The drug-reference character total is here because that slice's SIZE is the thing issue #163
+		// is about and the REST response cannot show it: the response returns only CITED references,
+		// so a question injecting one near-duplicate record per route variant looked identical from
+		// outside while spending several times the prompt budget. A count alone did not settle it
+		// either — what crowds out chart records is characters — so an operator (or a verification
+		// pass) can read both off one line.
+		//
+		// TWO character totals since issue #229, deliberately, because they answer two questions and
+		// neither is the other's approximation. `referenceCharacters` is #163's: the drug-reference
+		// ENTRIES' own text, which is what a near-duplicate-per-route-variant defect inflates, and it
+		// is pinned to EXCLUDE the findings rendered beside them
+		// (ReferenceRecordSubstanceCollapseTest). The slice is #229's: every record
+		// ChartSearchAiUtils.referenceGroup calls reference material, which is the prompt budget the
+		// module's own material spends and the figure the audit row carries. Both are printed and
+		// labelled, so an operator correlating this line with a row is never comparing two
+		// populations under one name — which is what happens if either number replaces the other.
+		ChartSearchAiUtils.ReferenceSlice slice = ChartSearchAiUtils.referenceSlice(mappings);
+		log.debug("Injected {} active-order, {} drug-reference ({} chars) and {} safety-finding "
+				+ "record(s) — reference slice {} record(s), {} chars — into chart for question '{}'",
+				unrepresented.size(), matched.size(), referenceCharacters(mappings), findings.size(),
+				slice.getRecords(), slice.getCharacters(), question);
 		PatientChart injected = new PatientChart(text.toString(), Collections.unmodifiableList(mappings),
 				chart.getFocusIndices());
 		// Carry the query-scoped stamp across the reconstruction. LlmInferenceService.searchStreaming
@@ -2560,8 +2579,18 @@ public class DrugReferenceInjector {
 		return new ContraindicationSections(byRule.values(), recorded, notRecorded, uncorroborated);
 	}
 
-	/** @return how many characters of {@code drug_reference} record text {@code mappings} carries — the
-	 *          prompt budget the reference slice spends, for the DEBUG line in {@code injectRecords}. */
+	/**
+	 * The budget the drug-reference ENTRIES spend, for the DEBUG line in {@code injectRecords}.
+	 *
+	 * <p>Deliberately narrower than {@code ChartSearchAiUtils.referenceSlice}, which counts every
+	 * reference-group record and is what the audit row carries (issue #229). This one is issue #163's
+	 * question — one near-duplicate entry per route variant — and
+	 * {@code ReferenceRecordSubstanceCollapseTest.theDebugLineReportsTheReferenceSliceCharacterTotalAndOnlyThat}
+	 * pins it to exclude the safety findings rendered beside those entries. Keep both; a reader
+	 * replacing either with the other reports one population under the other's name.
+	 *
+	 * @return how many characters of {@code drug_reference} record text {@code mappings} carries
+	 */
 	private static int referenceCharacters(List<RecordMapping> mappings) {
 		int chars = 0;
 		for (RecordMapping mapping : mappings) {

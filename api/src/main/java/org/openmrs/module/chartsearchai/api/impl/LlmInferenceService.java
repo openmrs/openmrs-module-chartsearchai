@@ -121,6 +121,12 @@ public class LlmInferenceService implements ChartSearchService {
 			// so the audit row the REST layer writes states the mode instead of re-deriving it
 			// (issue #178). After inject() deliberately: that is the chart the LLM sees.
 			String searchMode = chartBuildingStrategy.searchModeLabel(chart);
+			// And, off the same chart and for the same reason, how much of it is the module's own
+			// reference material (issue #229). After inject() is not incidental here — before it the
+			// answer is always zero, since nothing else mints a reference-group record. Carried on
+			// the answer because by audit-write time this chart is gone.
+			ChartSearchAiUtils.ReferenceSlice referenceSlice =
+					ChartSearchAiUtils.referenceSlice(chart.getMappings());
 			buildMs = System.currentTimeMillis() - buildStart;
 
 			long llmStart = System.currentTimeMillis();
@@ -140,7 +146,7 @@ public class LlmInferenceService implements ChartSearchService {
 					patient, chart.getMappings());
 			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
 					response.getInputTokens(), response.getOutputTokens(),
-					response.getCachedTokens(), safetyWarnings, searchMode);
+					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice);
 			outcome = "ok";
 			return answer;
 		}
@@ -381,6 +387,11 @@ public class LlmInferenceService implements ChartSearchService {
 			// each of them derived separately is two audit-write sites that can disagree — which is
 			// half of what #178 was, one layer up.
 			String searchMode = chartBuildingStrategy.searchModeLabel(chart);
+			// The slice too, and for the reason just given about the mode: one resolution for both
+			// answers this method produces (issue #229). Off the post-inject chart, which is the whole
+			// point of the number — see the same pair in search() above.
+			ChartSearchAiUtils.ReferenceSlice referenceSlice =
+					ChartSearchAiUtils.referenceSlice(chart.getMappings());
 			buildMs = System.currentTimeMillis() - buildStart;
 
 			// Progressive reasoning: stream a fast preview reasoning from the focused top-K chart to
@@ -418,7 +429,8 @@ public class LlmInferenceService implements ChartSearchService {
 			// Fires regardless of whether grounding is enabled — see the interface contract.
 			ungroundedAnswerConsumer.accept(new ChartAnswer(response.getAnswer(), cited,
 					response.getInputTokens(), response.getOutputTokens(),
-					response.getCachedTokens(), Collections.<SafetyWarning> emptyList(), searchMode));
+					response.getCachedTokens(), Collections.<SafetyWarning> emptyList(), searchMode,
+					referenceSlice));
 
 			// After the user-visible handoff, before grounding: an exact token comparison that
 			// reports an ATC class code no cited record states (issue #142). It answers in
@@ -436,7 +448,7 @@ public class LlmInferenceService implements ChartSearchService {
 					patient, chart.getMappings());
 			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
 					response.getInputTokens(), response.getOutputTokens(),
-					response.getCachedTokens(), safetyWarnings, searchMode);
+					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice);
 			outcome = "ok";
 			return answer;
 		}

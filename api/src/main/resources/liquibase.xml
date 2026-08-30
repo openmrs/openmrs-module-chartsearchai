@@ -70,4 +70,33 @@
 		</createIndex>
 	</changeSet>
 
+	<changeSet id="chartsearchai-009" author="openmrs">
+		<comment>
+			Record how much module-supplied reference material each answer's prompt carried
+			(issue #229): reference_slice_records and reference_slice_chars, beside the existing
+			reference_count, which counts the citations IN the answer rather than the material put in
+			front of the model. Nullable, because null means the producer stated no slice while 0
+			means it measured one and found nothing — a question that matched no reference entry.
+
+			A new changeset rather than an edit to chartsearchai-002, which is the lifecycle this
+			file's history already shows for a new column: input_tokens/output_tokens arrived as
+			chartsearchai-005 (April 2026) and were folded into 002's create-time definition by the
+			consolidation two months later. Editing 002 now would add nothing on an instance that has
+			already run it, while ChartSearchAuditLog.hbm.xml would declare the columns immediately —
+			so the insert would fail, the controller would swallow it, and auditing would stop with no
+			error anywhere. Fold this into 002 at the next consolidation, once every instance has run
+			it.
+
+			Numbered 009 and not 003. Ids 001 to 006 have existed in this file on this branch's own
+			history, and 007 and 008 exist in unmerged branches; liquibase keys a changeset on
+			id + author + filename, so a pre-consolidation instance holding an orphan row for a reused
+			id would record this one as already run and silently skip it, and a later merge of those
+			branches would collide outright.
+		</comment>
+		<addColumn tableName="chartsearchai_audit_log">
+			<column name="reference_slice_records" type="int"/>
+			<column name="reference_slice_chars" type="int"/>
+		</addColumn>
+	</changeSet>
+
 </databaseChangeLog>

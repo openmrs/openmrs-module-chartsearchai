@@ -713,6 +713,13 @@ public class ChartSearchAiRestController {
 		auditLog.setQuestion(question);
 		auditLog.setAnswer(answer.getAnswer());
 		auditLog.setReferenceCount(answer.getReferences().size());
+		// Written from the answer, never re-derived here, for the reason the mode is: by the time
+		// this runs the chart the slice was measured on is gone. A null slice files two nulls rather
+		// than two zeros — zero is a real measurement (a question that matched no reference entry)
+		// and must not be indistinguishable from an answer that measured nothing (issue #229).
+		ChartSearchAiUtils.ReferenceSlice referenceSlice = answer.getReferenceSlice();
+		auditLog.setReferenceSliceRecords(referenceSlice == null ? null : referenceSlice.getRecords());
+		auditLog.setReferenceSliceChars(referenceSlice == null ? null : referenceSlice.getCharacters());
 		auditLog.setSearchMode(answer.getSearchMode());
 		auditLog.setResponseTimeMs(responseTimeMs);
 		auditLog.setInputTokens(answer.getInputTokens() > 0 ? answer.getInputTokens() : null);
@@ -807,6 +814,12 @@ public class ChartSearchAiRestController {
 			entry.put("question", auditLog.getQuestion());
 			entry.put("answer", auditLog.getAnswer());
 			entry.put("referenceCount", auditLog.getReferenceCount());
+			// The prompt COST beside the answer's USE of it: referenceCount is the citations in the
+			// answer, these two are the reference material put in front of the model, most of which
+			// is never cited. Published here because the point of issue #229 is that the size was
+			// unreadable without a log level nobody can durably set.
+			entry.put("referenceSliceRecords", auditLog.getReferenceSliceRecords());
+			entry.put("referenceSliceChars", auditLog.getReferenceSliceChars());
 			entry.put("searchMode", auditLog.getSearchMode());
 			entry.put("responseTimeMs", auditLog.getResponseTimeMs());
 			entry.put("inputTokens", auditLog.getInputTokens());

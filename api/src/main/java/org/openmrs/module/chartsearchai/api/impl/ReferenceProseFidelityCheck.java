@@ -85,9 +85,13 @@ import org.slf4j.LoggerFactory;
  *       clause on looks exactly like a substitution. So a continuation ANY cited record explains —
  *       by ending, by opening a new sentence, or by simply continuing the same way — is not a
  *       divergence, whatever a second record's layout makes of it. Only the cited REFERENCE records
- *       are asked, and widening that to the chart records buys nothing: an explainer has to carry
- *       the reproduced run itself, and a chart record does not carry twelve consecutive words of a
- *       knowledge-base mechanism;</li>
+ *       are asked, and widening that to the chart records is refused rather than merely unnecessary:
+ *       a chart record is the patient's own charted prose, which this module never asked the answer
+ *       to reproduce, and the WARN carries the patient id
+ *       ({@code aCitedChartRecordIsNeverComparedAgainstTheAnswer}). The third leg — "by simply
+ *       continuing the same way" — is narrower than it reads: an explaining record's own overlap
+ *       must itself reach {@link #MIN_REPRODUCED_WORDS}, so a record that carries the continuation
+ *       but joins the answer eleven words later is never consulted;</li>
  *   <li>it compares WORDS — runs of letters and digits, lower-cased — so punctuation cannot make
  *       two identical words differ. The sentence-boundary bit each word carries is deliberately NOT
  *       part of that equality: were it, a record writing {@code "(e.g. chloroquine"} against an
@@ -96,10 +100,18 @@ import org.slf4j.LoggerFactory;
  *       accusation instead of silence.</li>
  * </ul>
  *
- * <p><b>Which way a boundary misreading fails.</b> Both bit-driven conditions are SILENCING, so a
- * sentence boundary read where none was meant — an abbreviation dot before a space — can only add
- * silence: on the record side it takes the "reproduced a sentence and moved on" exit, on the answer
- * side the "stopped copying" one. The check loses recall, never precision.
+ * <p><b>Which way a boundary misreading fails, and why the gap question is the WEAK one.</b> Both
+ * bit-driven conditions are SILENCING, so a gap read as a sentence end can only add silence: on the
+ * record side it takes the "reproduced a sentence and moved on" exit, on the answer side the
+ * "stopped copying" one. The check therefore loses recall, never precision — but only because the
+ * bit is {@link ChartSearchAiUtils#mayEndASentence}, which says yes to a terminator ANYWHERE in the
+ * gap. Asking {@link ChartSearchAiUtils#SENTENCE_BOUNDARY} instead makes the property false in the
+ * other direction, and that was measured rather than argued: it wants the terminator followed
+ * IMMEDIATELY by whitespace, so an answer that quotes the record verbatim, closes the quotation
+ * ({@code ."}) and starts its own next sentence has no answer-side boundary, falls through to the
+ * report, and is accused of substituting words it did not substitute
+ * ({@code aQuotationTheAnswerClosedBeforeItsOwnNextSentenceIsNotReported}, which reddens under that
+ * predicate).
  *
  * <p><b>What the WARN carries, and what it deliberately does not.</b> The patient, the cited
  * record's index, how many words were reproduced, and the word offset in the record at which the
@@ -117,6 +129,16 @@ import org.slf4j.LoggerFactory;
  * {@code searchStreaming} — beside the class-code check and for the same reasons it states there:
  * not the progressive-reasoning preview, which resolves no citations, not a cached answer, which
  * was checked when it was produced, and not the model's reasoning, which cites nothing.
+ *
+ * <p><b>One silencing leg the suite does not pin.</b> {@code Reproductions.carriedThrough} — a
+ * divergence at an answer position some record's reproduction CARRIES THROUGH is not reported — is
+ * unreachable on the bundled data, and deliberately kept anyway. Reaching it needs two cited
+ * reference records whose reproductions of one passage end at different answer positions, and the
+ * two the injector produces for a question carry the same mechanism string, so they diverge
+ * together. Every other silencing leg here reddens a named case when it is removed; this one
+ * reddens nothing, so a later change can delete it for free. What that would cost is a false report
+ * and never a missed one, which is the safe direction — said here rather than left for the next
+ * reader to infer from a green suite.
  *
  * <p><b>One regression this file cannot see.</b> Its gate asks
  * {@link ChartSearchAiUtils#referenceGroup} rather than testing {@code resourceType} against a type
@@ -176,48 +198,53 @@ final class ReferenceProseFidelityCheck {
 			// Inside the guard, not above it: reading a detached patient proxy is the one line here
 			// that could throw, and the promise this catch makes is structural or it is nothing.
 			patientId = patient == null ? null : patient.getPatientId();
-			Words answerWords = Words.of(answer == null ? ""
-					: ChartSearchAiUtils.INLINE_CITATION.matcher(answer).replaceAll(" "));
+			List<RecordMapping> reference = citedReferenceProse(cited, mappings);
+			if (reference.isEmpty()) {
+				// The first gate, and the commonest by far: on a stock install
+				// chartsearchai.drugReference.enabled is false, so no answer cites reference prose
+				// and nothing here — including tokenising the answer — is worth doing.
+				log.debug("Reference-prose check skipped for patient={}: the answer cites no readable "
+						+ "reference record", patientId);
+				return;
+			}
 			// Replaced with a space rather than removed: a marker sits between words, and deleting
 			// it would weld its neighbours into one token that matches nothing.
-			if (answerWords.size() >= MIN_REPRODUCED_WORDS && cited != null) {
-				Map<Integer, RecordMapping> byIndex = new HashMap<Integer, RecordMapping>();
-				if (mappings != null) {
-					for (RecordMapping mapping : mappings) {
-						byIndex.put(Integer.valueOf(mapping.getIndex()), mapping);
-					}
-				}
-				Reproductions found = new Reproductions();
-				for (RecordReference reference : cited) {
-					RecordMapping mapping = byIndex.get(Integer.valueOf(reference.getIndex()));
-					if (mapping == null || !isModuleSuppliedReferenceProse(mapping.getResourceType())) {
-						continue;
-					}
-					String text = mapping.getText();
-					if (ChartSearchAiUtils.isBlank(text)) {
-						// A record we could not read is one we cannot say the answer diverged from.
-						continue;
-					}
-					examine(answerWords, Words.of(text), reference.getIndex(), found);
-				}
-				if (found.any()) {
-					for (Divergence divergence : found.unexplained()) {
-						// Both halves are needed to reconstruct it: which record's prose was
-						// degraded, and where in it the answer stopped agreeing. Neither the answer
-						// nor the record text is logged — see the class javadoc.
-						log.warn("Answer for patient={} reproduces {} words of cited record [{}] and "
-								+ "then states different words inside the sentence it was copying "
-								+ "(the record's own text continues at its word {}). The answer prose "
-								+ "is left unchanged (issue #337).", patientId,
-								Integer.valueOf(divergence.reproducedWords),
-								Integer.valueOf(divergence.recordIndex),
-								Integer.valueOf(divergence.recordWordOffset));
-					}
-					return;
+			Words answerWords = Words.of(answer == null ? ""
+					: ChartSearchAiUtils.INLINE_CITATION.matcher(answer).replaceAll(" "));
+			Reproductions found = new Reproductions();
+			if (answerWords.size() >= MIN_REPRODUCED_WORDS) {
+				for (RecordMapping mapping : reference) {
+					examine(answerWords, Words.of(mapping.getText()), mapping.getIndex(), found);
 				}
 			}
-			log.debug("Reference-prose check skipped for patient={}: the answer reproduces no cited "
-					+ "reference record", patientId);
+			if (!found.any()) {
+				log.debug("Reference-prose check skipped for patient={}: the answer reproduces no "
+						+ "cited reference record", patientId);
+				return;
+			}
+			List<Divergence> unexplained = found.unexplained();
+			if (unexplained.isEmpty()) {
+				// Reproduced and faithful — the state the check exists to be able to tell from the
+				// two above, and silent without a line of its own would be the third indistinguishable
+				// silence ClassCodeFidelityTest's own gate assertions exist to prevent.
+				log.debug("Reference-prose check found no divergence for patient={}: every "
+						+ "reproduction of a cited reference record is faithful", patientId);
+				return;
+			}
+			for (Divergence divergence : unexplained) {
+				// Both halves are needed to reconstruct it: which record's prose was degraded, and
+				// where in it the answer stopped agreeing. Neither the answer nor the record text is
+				// logged — see the class javadoc. The word position counts from one, because it is
+				// the only handle a maintainer has for finding the divergence in a record this line
+				// deliberately does not quote.
+				log.warn("Answer for patient={} reproduces {} words of cited record [{}] and "
+						+ "then states different words inside the sentence it was copying "
+						+ "(the record's own text continues at its word {}, counting from one). The "
+						+ "answer prose is left unchanged (issue #337).", patientId,
+						Integer.valueOf(divergence.reproducedWords),
+						Integer.valueOf(divergence.recordIndex),
+						Integer.valueOf(divergence.recordWordOffset));
+			}
 		}
 		catch (RuntimeException e) {
 			// A diagnostic must never break a clinical answer. Nothing here does I/O and every line
@@ -229,6 +256,35 @@ final class ReferenceProseFidelityCheck {
 			log.warn("Reference-prose check failed for patient={}; the answer is unaffected: {}",
 					patientId, e.toString());
 		}
+	}
+
+	/**
+	 * @return the cited records that are this module's own reference prose and carry text to compare
+	 *         against, in citation order. A record whose text could not be read is left out rather
+	 *         than accused: one we could not read is one we cannot say the answer diverged from.
+	 *
+	 *         <p>Resolved BEFORE the answer is tokenised, so the commonest arrangement — the shipped
+	 *         default, where {@code chartsearchai.drugReference.enabled} is false and no reference
+	 *         record exists at all — costs a map build and nothing else.
+	 */
+	private static List<RecordMapping> citedReferenceProse(List<RecordReference> cited,
+			List<RecordMapping> mappings) {
+		List<RecordMapping> reference = new ArrayList<RecordMapping>();
+		if (cited == null || cited.isEmpty() || mappings == null) {
+			return reference;
+		}
+		Map<Integer, RecordMapping> byIndex = new HashMap<Integer, RecordMapping>();
+		for (RecordMapping mapping : mappings) {
+			byIndex.put(Integer.valueOf(mapping.getIndex()), mapping);
+		}
+		for (RecordReference citation : cited) {
+			RecordMapping mapping = byIndex.get(Integer.valueOf(citation.getIndex()));
+			if (mapping != null && isModuleSuppliedReferenceProse(mapping.getResourceType())
+					&& !ChartSearchAiUtils.isBlank(mapping.getText())) {
+				reference.add(mapping);
+			}
+		}
+		return reference;
 	}
 
 	/**
@@ -285,7 +341,7 @@ final class ReferenceProseFidelityCheck {
 					found.explained(i);
 				}
 				else {
-					found.diverged(i, new Divergence(recordIndex, length, j + 1));
+					found.diverged(i, new Divergence(recordIndex, length, j + 2));
 				}
 			}
 			int[] swap = previous;
@@ -361,9 +417,13 @@ final class ReferenceProseFidelityCheck {
 	 * A text as the words this check compares — runs of letters and digits, lower-cased — each
 	 * carrying whether a sentence boundary stands between it and the word before it.
 	 *
-	 * <p>The bit is read by {@link ChartSearchAiUtils#sentenceBoundaryBetween}, the one spelling of
-	 * that rule in this module, which {@link CitationGroundingVerifier} splits its own units on. It
-	 * is deliberately not part of {@link #word} equality; the class javadoc says why.
+	 * <p>The bit is read by {@link ChartSearchAiUtils#mayEndASentence}, the deliberately WEAK question
+	 * over the terminator set {@link ChartSearchAiUtils#SENTENCE_BOUNDARY} splits
+	 * {@link CitationGroundingVerifier}'s units on: any terminator anywhere in the gap answers yes.
+	 * Both of this check's uses of the bit are silencing, so the weaker reading can only suppress a
+	 * report — and the stronger one was measured to cause a false one, on a quotation the model closed
+	 * with {@code ."} before starting its own next sentence. It is deliberately not part of
+	 * {@link #word} equality; the class javadoc says why.
 	 */
 	private static final class Words {
 
@@ -395,7 +455,7 @@ final class ReferenceProseFidelityCheck {
 				// The gap since the previous word — for the first word, the text before it, which no
 				// caller reads: the two conditions above ask this of a word that follows one.
 				boundaries.add(Boolean.valueOf(
-						ChartSearchAiUtils.sentenceBoundaryBetween(text.substring(gapFrom, start))));
+						ChartSearchAiUtils.mayEndASentence(text.substring(gapFrom, start))));
 				gapFrom = at;
 			}
 			return new Words(words, boundaries);

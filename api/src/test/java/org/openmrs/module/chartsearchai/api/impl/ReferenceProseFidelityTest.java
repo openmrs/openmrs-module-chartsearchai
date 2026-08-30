@@ -20,7 +20,6 @@ import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
-import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
@@ -28,6 +27,7 @@ import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 
@@ -100,7 +100,7 @@ public class ReferenceProseFidelityTest {
 	public void setUp() {
 		chart = DrugReferenceTestSupport.injectedSafetyFindingChart(QUESTION, ACTIVE_DRUG, ACTIVE_ATC);
 		finding = DrugReferenceTestSupport.safetyFindingIn(chart);
-		reference = referenceRecord();
+		reference = DrugReferenceTestSupport.injectedReference(chart);
 		recordTokens = finding.getText().split("\\s+");
 		// The premises, asserted rather than assumed — every case below slices this text.
 		assertTrue(finding.getText().contains(DrugReferenceInjector.STRENGTH_WITHHOLD),
@@ -259,6 +259,79 @@ public class ReferenceProseFidelityTest {
 	}
 
 	@Test
+	public void aQuotationTheAnswerClosedBeforeItsOwnNextSentenceIsNotReported() {
+		// The false positive a Phase 2 reviewer measured, and the reason the gap predicate is the
+		// WEAK one. The answer quotes the record verbatim, closes the quotation, and starts its own
+		// sentence. Nothing was substituted — but the quote's closing mark stands between the full
+		// stop and the space, so the strict boundary rule (a terminator followed IMMEDIATELY by
+		// whitespace, which is what CitationGroundingVerifier splits on) does not see a sentence end
+		// and the answer-side exit is unreachable. This module's own reference prose is full of
+		// "(SSRIs)" and "(M1)", so ".)" and ".\"" are ordinary here.
+		//
+		// The reproduction deliberately ends MID record sentence, so the record-side exit cannot
+		// stand in: this is the one case in the file that turns on answer.startsSentence.
+		service.setLlmProvider(answering("The finding states: \"" + copiedThrough("may")
+				+ ".\" Monitor the patient closely [" + finding.getIndex() + "]."));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			service.search(patient(), QUESTION);
+			assertFalse(capture.describeAll().isEmpty(),
+					"the capture must receive the pipeline's own INFO lines, or this passes vacuously");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"a faithful quotation the answer closed before its own next sentence states "
+							+ "nothing the record does not, and reporting it is the crying-wolf failure "
+							+ "this check must not have. Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void anAnswerThatReproducesTheRecordToItsLastWordIsNotReported() {
+		// The record-exhausted exit, on its own: the answer reproduces the whole record — appended
+		// strength clause included, which the prompt teaches the model verbatim — and then carries on
+		// inside its own sentence. There is no next record word to have substituted for.
+		service.setLlmProvider(answering(finding.getText() + ", so monitor closely ["
+				+ finding.getIndex() + "]."));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			service.search(patient(), QUESTION);
+			assertFalse(capture.describeAll().isEmpty(),
+					"the capture must receive the pipeline's own INFO lines, or this passes vacuously");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"a record reproduced to its last word has nothing left to diverge from. Captured: "
+							+ capture.describeAll());
+		}
+	}
+
+	@Test
+	public void aCitedChartRecordIsNeverComparedAgainstTheAnswer() {
+		// The scope of the check, which is the classification and not a type name. A chart record is
+		// the patient's own charted prose, not module-supplied reference material the answer is
+		// expected to reproduce — and the WARN carries the patient id, which is the whole reason the
+		// check quotes no prose. Widening the gate to every resource type leaves every other case in
+		// this file green, so this is the one that holds it.
+		PatientChart charted = chartRecordStating("She reports intermittent headache with photophobia "
+				+ "and nausea in the mornings after waking, relieved by rest");
+		TestableService onCharted = newService(charted);
+		onCharted.setLlmProvider(answering("She reports intermittent headache with photophobia and "
+				+ "nausea in the mornings after breakfast [1]."));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			onCharted.search(patient(), QUESTION);
+			assertFalse(capture.describeAll().isEmpty(),
+					"the capture must receive the pipeline's own INFO lines, or this passes vacuously");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"a chart record is not this module's own reference prose and must not be compared. "
+							+ "Captured: " + capture.describeAll());
+		}
+	}
+
+	/** A one-record chart rendered by the REAL serializer over the real test-dataset helper, so the
+	 *  record the check reads is a genuine chart line rather than a hand-assembled imitation. */
+	private static PatientChart chartRecordStating(String text) {
+		return new PatientChartSerializer().serialize(null,
+				TestDatasetHelper.toSerializedRecords(
+						new String[] { "Clinical observation: (2026-03-18) " + text }),
+				Collections.<String> emptySet());
+	}
+
+	@Test
 	public void searchStreaming_shouldRunTheSameCheckOnThePrimaryProductionPath() {
 		// /search/stream is the path users hit: a check wired only into search() would be absent
 		// from production traffic while every non-streaming test stayed green.
@@ -328,16 +401,6 @@ public class ReferenceProseFidelityTest {
 		return text.substring(Math.max(0, text.length() - 60));
 	}
 
-	/** The injected drug-reference record in the same chart, as the real renderer writes it. */
-	private RecordMapping referenceRecord() {
-		for (RecordMapping mapping : chart.getMappings()) {
-			if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(mapping.getResourceType())) {
-				return mapping;
-			}
-		}
-		throw new IllegalStateException("no drug-reference record was injected: " + chart.getText());
-	}
-
 	private TestableService newService(PatientChart served) {
 		TestableService created = new TestableService();
 		created.setChartBuildingStrategy(new StubStrategy(served));
@@ -359,28 +422,15 @@ public class ReferenceProseFidelityTest {
 		return created;
 	}
 
-	/** @return whether one DEBUG line carries {@code needle} */
+	/** @return whether one DEBUG line carries {@code needle} — the three declines all produce
+	 *  silence, and a case that claims one of them has to say which. */
 	private static boolean debugStating(LogCapture capture, String needle) {
-		for (String message : capture.messagesAt(Level.DEBUG)) {
-			if (message.contains(needle)) {
-				return true;
-			}
-		}
-		return false;
+		return capture.hasMessageAt(Level.DEBUG, needle);
 	}
 
 	/** @return whether one WARN carries every one of {@code required} */
 	private static boolean warnStating(LogCapture capture, String... required) {
-		for (String message : capture.messagesAt(Level.WARN)) {
-			boolean all = true;
-			for (String needle : required) {
-				all = all && message.contains(needle);
-			}
-			if (all) {
-				return true;
-			}
-		}
-		return false;
+		return capture.hasMessageAt(Level.WARN, required);
 	}
 
 	private static Patient patient() {

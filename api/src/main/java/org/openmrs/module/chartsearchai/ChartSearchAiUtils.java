@@ -52,37 +52,65 @@ public class ChartSearchAiUtils {
 	public static final Pattern INLINE_CITATION = Pattern.compile("\\[(\\d{1,9})\\]");
 
 	/**
+	 * The characters this module reads as the end of a sentence. One home, because
+	 * {@link #SENTENCE_BOUNDARY} and {@link #mayEndASentence} are two QUESTIONS over one set and a
+	 * second spelling of the set would let them disagree about what a sentence is.
+	 */
+	private static final String SENTENCE_TERMINATORS = ".!?";
+
+	/**
 	 * Where one sentence of an answer or a record ends and the next begins: a {@code .}, {@code !}
-	 * or {@code ?} followed by whitespace, or a line break. The single spelling of that rule in this
-	 * module, with one named entry point per operand shape — {@code CitationGroundingVerifier} SPLITS
-	 * a text into the units it grades, and {@link #sentenceBoundaryBetween} asks whether a boundary
-	 * stands in one GAP, which is what a word-by-word comparison needs
-	 * ({@code ReferenceProseFidelityCheck}, issue #337).
+	 * or {@code ?} followed by whitespace, or a line break. The SPLITTING question over
+	 * {@link #SENTENCE_TERMINATORS}: {@code CitationGroundingVerifier} cuts a text into the units it
+	 * grades on it, and it is strict because a splitter that cut at every dot would halve a sentence
+	 * at {@code Q12H.} or at an abbreviation. {@link #mayEndASentence} is the other question over the
+	 * same set — could a sentence have ended in this GAP — and is deliberately weaker; read its
+	 * javadoc before reaching for either, because they are not interchangeable in either direction.
 	 *
-	 * <p>Two spellings of one boundary rule is the shape issue #260 records the cost of: the two
-	 * disagreed in both directions and both silently. So a consumer takes this constant or an entry
-	 * point over it, and never a second regex of its own.
+	 * <p>Two spellings of one terminator set is the shape issue #260 records the cost of: the two
+	 * disagreed in both directions and both silently. So a consumer takes one of these two entry
+	 * points, and never a regex of its own.
 	 *
 	 * <p>The line-break arm is not decoration: the system prompt instructs the model to "use numbered
 	 * lines or simple newlines to structure lists", so a multi-item answer often carries no
 	 * sentence-ending punctuation at all.
 	 */
-	public static final Pattern SENTENCE_BOUNDARY = Pattern.compile("(?<=[.!?])\\s+|[\\r\\n]+");
+	public static final Pattern SENTENCE_BOUNDARY =
+			Pattern.compile("(?<=[" + SENTENCE_TERMINATORS + "])\\s+|[\\r\\n]+");
 
 	/**
-	 * @return whether a sentence boundary stands inside {@code between} — the text separating two
-	 *         adjacent words. The lookbehind reads a terminator that is INSIDE the gap, so the
-	 *         punctuation trailing the earlier word must be part of it.
+	 * @return whether a sentence COULD have ended inside {@code between} — the text separating two
+	 *         adjacent words — which is a deliberately weaker question than
+	 *         {@link #SENTENCE_BOUNDARY} asks. Any terminator anywhere in the gap answers yes, and
+	 *         so does a line break; nothing has to follow the terminator.
 	 *
-	 *         <p>It is deliberately narrow in one direction: a terminator not directly followed by
-	 *         whitespace is not a boundary, so {@code ".); "} — the seam between two {@code "; "}-joined
-	 *         items of a rendered interaction list — reads as none. That is the honest reading of
-	 *         that seam and a caller that needs those items separated has to know its own layout;
-	 *         this cannot be widened to serve one, because {@code ";"} inside a sentence is ordinary
-	 *         clinical prose.
+	 *         <p><b>Weaker on purpose, and the weakness is the correctness.</b> Its caller
+	 *         ({@code ReferenceProseFidelityCheck}) uses the answer only to STAY SILENT, so a gap
+	 *         read as a sentence end can only suppress a report and never cause one — which is what
+	 *         makes that check's "loses recall, never precision" property true. Asking
+	 *         {@code SENTENCE_BOUNDARY} instead was measured wrong in exactly that direction: it
+	 *         requires the terminator to be followed IMMEDIATELY by whitespace, so a quotation the
+	 *         model closed — {@code ."} or {@code .)} , and this module's own reference prose is full
+	 *         of {@code (SSRIs)} and {@code (M1)} — is not a boundary, and a faithful quotation
+	 *         followed by the model's own next sentence was reported as a substitution.
+	 *
+	 *         <p>It must not be used to SPLIT a text into units: {@code Q12H. }-shaped prose and an
+	 *         abbreviation dot both answer yes here, and a splitter that believed them would cut a
+	 *         sentence in half. That is {@link #SENTENCE_BOUNDARY}'s question, and the two are kept
+	 *         apart for the reason issue #260 records — one rule, one terminator set, one named entry
+	 *         point per question, never a second regex at a call site.
 	 */
-	public static boolean sentenceBoundaryBetween(String between) {
-		return between != null && SENTENCE_BOUNDARY.matcher(between).find();
+	public static boolean mayEndASentence(String between) {
+		if (between == null) {
+			return false;
+		}
+		for (int at = 0; at < between.length(); at++) {
+			char c = between.charAt(at);
+			if (SENTENCE_TERMINATORS.indexOf(c) >= 0 || c == '\r' || c == '\n') {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

@@ -437,8 +437,11 @@ public class LlmInferenceService implements ChartSearchService {
 			// After the user-visible handoff, before grounding: two exact comparisons over what the
 			// answer states about the records it cites — an ATC class code no cited record states
 			// (issue #142), and prose reproduced from a cited reference record and then rewritten
-			// inside the sentence it was copying (issue #337). Both answer in microseconds and
-			// report only to the log, so nothing downstream — and no consumer above — waits on them.
+			// inside the sentence it was copying (issue #337). Both report only to the log, so
+			// nothing downstream — and no consumer above — waits on them. Not "microseconds", which
+			// this comment said and which is true only of the first: the second is a word-level
+			// dynamic program, measured at ~0.7 ms on a realistic chart and ~1.2 ms at the largest
+			// injected record set anyone has swept (ADR Decision 59).
 			ClassCodeFidelityCheck.reportUnsupportedClassCodes(patient, question, response.getAnswer(),
 					cited, chart.getMappings());
 			ReferenceProseFidelityCheck.reportUnfaithfulReferenceProse(patient, response.getAnswer(),

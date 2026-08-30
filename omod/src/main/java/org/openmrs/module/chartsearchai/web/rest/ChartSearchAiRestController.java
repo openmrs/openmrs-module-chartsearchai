@@ -716,9 +716,11 @@ public class ChartSearchAiRestController {
 		// Written from the answer, never re-derived here, for the reason the mode is: by the time this
 		// runs the chart the slice was measured on is gone. A null slice files two nulls rather than
 		// two zeros — see ChartAnswer.getReferenceSlice() for what the distinction is and why the
-		// columns are nullable (issue #229). Note that the neighbour two lines below does NOT follow
-		// that rule: inputTokens/outputTokens collapse a measured 0 to null, so this table is not
-		// uniform about it and a reader must not generalise either convention to the other.
+		// columns are nullable (issue #229). Note that setInputTokens/setOutputTokens below do NOT
+		// follow that rule — they collapse a measured 0 to null — so this table is not uniform about
+		// it and a reader must not generalise either convention to the other. Named rather than
+		// located: a line count is a claim about layout that the next insertion falsifies, and this
+		// one already had.
 		ChartSearchAiUtils.ReferenceSlice referenceSlice = answer.getReferenceSlice();
 		auditLog.setReferenceSliceRecords(referenceSlice == null ? null : referenceSlice.getRecords());
 		auditLog.setReferenceSliceChars(referenceSlice == null ? null : referenceSlice.getCharacters());

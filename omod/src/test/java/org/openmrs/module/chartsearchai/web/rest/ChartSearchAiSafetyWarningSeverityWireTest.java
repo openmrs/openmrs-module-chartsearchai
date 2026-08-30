@@ -276,6 +276,36 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 	}
 
 	/**
+	 * The third emission site: the trailing {@code grounded} event of the async-grounding path.
+	 *
+	 * <p>Asserted separately rather than left to the shared helper, for the reason
+	 * {@code ChartSearchAiSearchResponseGroupingTest}'s own javadoc gives about its endpoint —
+	 * covering the helper at two sites proves the helper, not that the third one calls it. This is
+	 * also the only surface on which a client sees the chips at all when
+	 * {@code chartsearchai.grounding.async=true}, since the {@code done} that precedes it publishes an
+	 * empty array by design.
+	 */
+	@Test
+	public void theTrailingGroundedEventCarriesTheRatingToo() throws Exception {
+		controller.streamAnswer(out, RestControllerContext.patient(),
+				"Please screen her current medications for drug interactions.",
+				RestControllerContext.user(), true);
+
+		JsonNode doneChips = MAPPER.readTree(SseEvents.ofType(out, "done").data).get("safetyWarnings");
+		assertEquals(0, doneChips.size(),
+				"precondition: an async done publishes no chips — validation runs with grounding");
+
+		JsonNode chips = MAPPER.readTree(SseEvents.ofType(out, "grounded").data).get("safetyWarnings");
+		assertNotNull(chips, "the grounded event carried no safetyWarnings array");
+		assertEquals(fixtureWarnings().size(), chips.size(),
+				"every fixture warning must reach the grounded event");
+		assertEquals("Major", chips.get(0).get("severity").asText(),
+				"the async surface must publish the rating like the other two: " + chips.get(0));
+		assertTrue(chips.get(3).get("severity").isNull(),
+				"and an unrated chip's key must be JSON null here too: " + chips.get(3));
+	}
+
+	/**
 	 * Every accessor a client can read off a {@link SafetyWarning} names a key on the wire.
 	 *
 	 * <p><b>This is a NEW contract, introduced by issue #340 — it does not enforce a rule the class
@@ -380,6 +410,14 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 				Consumer<ChartAnswer> ungroundedAnswerConsumer) {
 			tokenConsumer.accept("Two interactions and two contraindications were found [1].");
 			citationsConsumer.accept(search(patient, question).getReferences());
+			// The ungrounded answer carries NO chips, which is the documented async contract —
+			// validation runs with grounding, so an async `done` publishes an empty array and the
+			// trailing `grounded` event delivers the chips. Firing it is what makes that event
+			// reachable at all; without it the controller takes its cache-hit fallback and emits the
+			// classic single `done`.
+			ungroundedAnswerConsumer.accept(new ChartAnswer(
+					"Two interactions and two contraindications were found [1].",
+					search(patient, question).getReferences()));
 			return search(patient, question);
 		}
 

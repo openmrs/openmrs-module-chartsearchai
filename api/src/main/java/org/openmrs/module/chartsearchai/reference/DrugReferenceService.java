@@ -222,12 +222,12 @@ public class DrugReferenceService {
 		if (question == null || question.trim().isEmpty()) {
 			return Collections.emptyList();
 		}
-		String lower = question.toLowerCase(Locale.ROOT);
 		List<DrugReference> out = new ArrayList<DrugReference>();
 		// Folded once for the whole sweep, not once per entry (issue #330) — the prose counterpart of
-		// findByDrugName's hoist below. What still folds per call is findImpliedByQuery's aliasesIn,
-		// over the entries this returned rather than over the dataset.
-		String foldedLower = DrugReference.foldedLower(lower);
+		// findByDrugName's hoist below. foldedLower lower-cases for itself, so the separate
+		// toLowerCase this used to keep would only have been a second one. What still folds per call is
+		// findImpliedByQuery's aliasesIn, over the entries this returned rather than over the dataset.
+		String foldedLower = DrugReference.foldedLower(question);
 		for (DrugReference ref : getAll()) {
 			if (ref.matchesFoldedText(foldedLower)) {
 				out.add(ref);

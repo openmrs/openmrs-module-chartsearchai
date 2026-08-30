@@ -768,7 +768,8 @@ public final class DrugReferenceValidity {
 	 * <p><b>Blank aliases are DROPPED</b> (#150). An alias with no letter or digit in it names nothing, so
 	 * it cannot identify a drug and can only match by accident — and it does:
 	 * the scan already refuses a token that is EMPTY after the diacritic fold, whichever of the boundary
-	 * rule's arities it arrives through, but a single space is not empty. Where a space sits after a non-alphanumeric
+	 * rule's arities it arrives through, but a single space is not empty. Where a space sits after a
+	 * non-alphanumeric
 	 * character its left boundary holds, and the recorded-name rule's two-letter inflection allowance then
 	 * carries the match over a short trailing word. So a blank alias makes
 	 * {@link DrugReference#matchesDrugName} true for allergen text the entry has nothing to do with, and

@@ -277,18 +277,15 @@ public class PatientClinicalContext {
 	 *         <p><b>The order-name arm</b> goes through {@link DrugReference#matchesOrderName}'s rule —
 	 *         since issue #330 through its folded arity {@link DrugReference#matchesFoldedOrderName},
 	 *         both operands being fixed for the pass, which is the same rule and the same allowance —
-	 *         not
-	 *         bare containment, which reported drugs the patient had never taken because drug names
-	 *         nest ("tiotropium" contains "opium"; issue #86), and not the prose rule either, because
-	 *         an order's display name is localized and inflected (see there). Since issue #293 this set
+	 *         not bare containment, which reported drugs the patient had never taken because drug
+	 *         names nest ("tiotropium" contains "opium"; issue #86), and not the prose rule either,
+	 *         because an order's display name is localized and inflected (see there). Since issue
+	 *         #293 this set
 	 *         also holds the free text a clinician typed for a non-coded order, which CAN be prose; the
 	 *         matcher is unchanged and the cost of applying it to prose is recorded on
 	 *         {@code PatientClinicalContextBuilder.addDrugName}.
 	 *
-	 *         <p><b>The reference-name arm</b> is asked FIRST, though which of the two answers is
-	 *         immaterial — both return true — and the order is not part of the contract: it is one hash
-	 *         lookup against a scan of every order the patient is on (issue #330). It (issue #136)
-	 *         exists because a rule carries ONE token for
+	 *         <p><b>The reference-name arm</b> (issue #136) exists because a rule carries ONE token for
 	 *         its partner while the reference data knows that drug by several names, and the chart may
 	 *         use any of them: every DDInter rule about aspirin carries the token {@code aspirin}, its
 	 *         entry's own name is {@code Acetylsalicylic acid}, and an order under the latter matched no
@@ -310,6 +307,10 @@ public class PatientClinicalContext {
 	 *         it, which is the same predicate that formulation applies to the partner. Where the two
 	 *         differ is the ATC leg, which this one also reaches — an order mapped to an entry's exact
 	 *         level-5 code is that substance, so the entry's names are the patient's names too.)
+	 *
+	 *         <p><b>The reference-name arm is asked FIRST</b> since issue #330, though which of the two
+	 *         answers comes back is immaterial — both return true — and the order is not part of the
+	 *         contract. It is one hash lookup, against a scan of every order the patient is on.
 	 */
 	boolean hasActiveDrug(String nameToken, String atcCode) {
 		if (nameToken != null && !nameToken.trim().isEmpty()) {

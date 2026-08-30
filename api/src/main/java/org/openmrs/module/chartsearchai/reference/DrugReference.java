@@ -90,11 +90,12 @@ public class DrugReference {
 	 * at all: {@link #foldDiacritics} returns its argument unchanged for pure-ASCII input and
 	 * {@link String#toLowerCase} returns {@code this} when no character changes, so each element here
 	 * is the very instance {@link #aliases} holds. Measured 2026-08-30 by reading the two lists off
-	 * every entry through the real loaders: 0 of the shipped knowledge base's 8300 aliases folds to a
-	 * different String, and 0 of the curated seed's 12. Its ONE alias above U+007F carries an EN DASH
-	 * rather than a combining mark, so the fold leaves it alone. What WOULD allocate is an alias the
-	 * fold actually changes — a combining mark, or an upper-case letter in a hand-authored {@code json}
-	 * KB, since that parser trims its aliases without lower-casing them.
+	 * every entry through the real loaders: 0 of the shipped knowledge base's 8300 alias slots
+	 * (5169 distinct) folds to a different String, and 0 of the curated seed's 12. Its ONE alias
+	 * above U+007F carries an EN DASH rather than a combining mark, so the fold leaves it alone.
+	 * What WOULD allocate is an alias the fold actually changes — a combining mark, or an upper-case
+	 * letter in a hand-authored {@code json} KB, since that parser trims its aliases without
+	 * lower-casing them.
 	 */
 	private List<String> foldedAliases = Collections.emptyList();
 
@@ -1904,9 +1905,10 @@ public class DrugReference {
 	 *         folded arities of the two rules, which is what both members of each pair now reach), so
 	 *         neither pair can drift.
 	 *
-	 *         <p>This is the arity CLAUDE.md names as the witness accessor and it is kept for that
-	 *         reason; since issue #330 production reaches the {@link FoldedName} one below, because its
-	 *         caller holds a name it has already folded for the scan that produced these candidates.
+	 *         <p><b>No production caller since issue #330</b> — its one caller holds a name it has
+	 *         already folded for the scan that produced these candidates, so it reaches the
+	 *         {@link FoldedName} arity below, which is the witness accessor CLAUDE.md's rule is about.
+	 *         Kept for a caller holding a raw string, and called by two cases.
 	 */
 	List<String> aliasesNaming(String drugName) {
 		return aliasesNaming(fold(drugName));
@@ -2492,7 +2494,8 @@ public class DrugReference {
 	 *         so this shares the rule by construction rather than by all of them spelling the same
 	 *         allowance. Its needles are this entry's aliases in {@link #foldedLower} form, which since
 	 *         issue #330 it reads off {@link #foldedAliases} rather than deriving per call; the value
-	 *         is the same expression it used to compute, so no position it returns moves. Prose gets symmetric word
+	 *         is the same expression it used to compute, so no position it returns
+	 *         moves. Prose gets symmetric word
 	 *         boundaries and a clinician-entered drug NAME gets {@link #matchesOrderName}'s left boundary
 	 *         plus a short tail, and widening one to serve the other was issues #86, #128, #147 and #209.
 	 *         Its caller has already gated the clause on {@link #matchesText}, so answering the WHERE by a

@@ -53,6 +53,12 @@ import org.opentest4j.AssertionFailedError;
  */
 public class FoldedOperandTest {
 
+	/** A statement DECLARING something called {@code aliases}/{@code foldedAliases} — a type token in
+	 *  front of the name — as opposed to assigning the field of that name. */
+	private static final Pattern DECLARATION = Pattern.compile(
+			"^(?:private\\s+|public\\s+|protected\\s+|static\\s+|final\\s+)*[\\w.<>\\[\\], ?]+\\s+"
+					+ "(?:folded)?[aA]liases\\s*=");
+
 	/** A name no shipped or fixture entry carries, aliased by BOTH probes — see {@code Probe}. */
 	private static final String SHARED_ALIAS = "zzq-probe";
 
@@ -219,10 +225,11 @@ public class FoldedOperandTest {
 	 * and the only shape in which storing the RAW alias list where the folded one belongs is visible.
 	 *
 	 * <p>Over the shipped knowledge base it is not visible: measured 2026-08-30 through the real
-	 * loader, 0 of its 8300 aliases folds to a different String — its one alias above U+007F carries
-	 * an EN DASH rather than a combining mark — so the two lists are equal element for element and,
-	 * on that dataset, the very same instances. {@code drug-reference-accented-tokens.json} does not reach it either — its entries each
-	 * carry an unaccented sibling alias, so the accented one is never the only way in.
+	 * loader, 0 of its 8300 alias slots (5169 distinct) folds to a different String — its one alias
+	 * above U+007F carries an EN DASH rather than a combining mark — so the two lists are equal
+	 * element for element and, on that dataset, the very same instances.
+	 * {@code drug-reference-accented-tokens.json} does not reach it either — its entries each carry an
+	 * unaccented sibling alias, so the accented one is never the only way in.
 	 */
 	@Test
 	public void anAccentedAliasIsTheOnlyNameOfAnEntryAnUnaccentedOrderReaches() throws IOException {
@@ -303,7 +310,11 @@ public class FoldedOperandTest {
 		// recognised by their own statement text rather than by their position.
 		for (Integer at : scan.matches(Pattern.compile(
 				"(?s)(?<![\\w.])(?:[A-Za-z_$][\\w$]*\\s*\\.\\s*)?(?:aliases|foldedAliases)\\s*=(?!=)"))) {
-			if (scan.statementAt(at).startsWith("private List<String>")) {
+			// A DECLARATION of something called aliases is not a write to the field, whether it is one
+			// of the two fields or an ordinary local. Recognised by the type token in front of the
+			// name rather than by one hard-coded modifier prefix, which reddened on a local and whose
+			// natural repair — loosening the needle — is how the two earlier needle rounds were lost.
+			if (DECLARATION.matcher(scan.statementAt(at)).find()) {
 				continue;
 			}
 			assertTrue(setter.contains(at), "\"" + scan.statementAt(at) + "\" (line " + scan.lineOf(at)
@@ -382,6 +393,28 @@ public class FoldedOperandTest {
 		assertContains(scan, prose, "foldedAliases", "aliasesIn");
 		assertForbids(scan, prose, "aliasesIn", "containsWord(", "matchesOrderName(", "matchesText(",
 				"containsBoundedToken(", "foldDiacritics(");
+
+		// And the property stated ONCE, at class scope, because the per-body form above is anchored on
+		// a method declaration and satisfied by any mention of the folded list inside it. A review beat
+		// it with an emptiness fast-path — `return !foldedAliases.isEmpty() && anyAliasIn(text);` beside
+		// a private helper looping the RAW list through containsWord — which is the shape hasActiveDrug
+		// itself models, and the build stayed green. Whitelisting the bodies that may READ the raw list
+		// catches that helper wherever it is written, which no per-accessor rule can. It reads TEXT and
+		// not scopes, so a local called aliases inside this class reddens it too; the failure says to
+		// rename the local, which is the cheaper of the two ways to make the identifier unambiguous.
+		for (Integer at : scan.matches(Pattern.compile("(?<![\\w.])aliases\\b"))) {
+			if (DECLARATION.matcher(scan.statementAt(at)).find()) {
+				continue;
+			}
+			assertTrue(readsRawAliases(scan, at), "\"" + scan.statementAt(at) + "\" (line "
+					+ scan.lineOf(at) + ") reads the RAW alias list outside the bodies entitled to it. "
+					+ "Every scan of an entry's names reads the FOLDED list; the raw one is for storing "
+					+ "it, handing it out, and reporting a witness by index. A helper extracted out of a "
+					+ "scan to loop the raw list is the shape that beat the per-accessor form of this "
+					+ "guard with the whole build green. If this is a LOCAL that merely shares the name, "
+					+ "rename it: inside this class the bare identifier is the field, and saying so is "
+					+ "cheaper than a guard that resolves scopes.");
+		}
 	}
 
 	/**
@@ -405,6 +438,28 @@ public class FoldedOperandTest {
 				"private static boolean namesSubstance(String foldedClause, List<DrugReference> rows) {");
 		assertContains(scan, gate, "matchesFoldedText(", "namesSubstance");
 		assertForbids(scan, gate, "namesSubstance", "matchesText(", "foldedLower(", "containsWord(");
+	}
+
+	/** The bodies entitled to read {@link DrugReference}'s RAW alias list: the two that store and
+	 *  publish it, the derivation of what is stored, the IDENTITY predicate (which compares
+	 *  {@code normalizeName}, a different form, and is a named residue of issue #330), and the two
+	 *  witness accessors, which report the raw alias at an index taken from the folded list. */
+	private static boolean readsRawAliases(SourceScan scan, int at) throws IOException {
+		String[] entitled = {
+				"public void setAliases(List<String> aliases) {",
+				"public List<String> getAliases() {",
+				"private static List<String> trimmedAliases(List<String> aliases) {",
+				"boolean isNamed(String token) {",
+				"List<String> aliasesIn(String lowerText) {",
+				"List<String> aliasesNaming(FoldedName drugName) {" };
+		for (String body : entitled) {
+			// declarationAndBody, not body: two of these name the list in their SIGNATURE, and a
+			// parameter called aliases is not a read of the field either.
+			if (scan.declarationAndBody(body).contains(at)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** @param what names the body in the failure message. */

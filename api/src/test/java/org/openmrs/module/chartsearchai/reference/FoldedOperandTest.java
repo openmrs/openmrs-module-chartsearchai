@@ -50,6 +50,11 @@ import org.opentest4j.AssertionFailedError;
  * whose compared operand the class-scope whitelist cannot see because both are entitled to name the raw
  * list; it needs a SECOND matching entry, since the narrowing those scans serve returns early on fewer
  * than two matches.
+ * {@link #aWitnessIsTheAliasThatMatchedAndNotItsNeighbour} and
+ * {@link #everyAliasOfALoadedEntryIsItsOwnWitness} ask the index alignment those two witness accessors
+ * rest on: the first over the one fixture shape that exposes a skipped null, the second as a property
+ * of whole loaded datasets, which is what reaches the edits — a collapsed duplicate, a filter — the
+ * first cannot see.
  * {@link #anAccentedAliasIsTheOnlyNameOfAnEntryAnUnaccentedOrderReaches} drives the one shape in
  * which the alias-side fold is load-bearing at all — over every dataset the module ships,
  * {@link DrugReference#foldDiacritics} takes its ASCII fast path and returns the alias unchanged, so
@@ -385,6 +390,11 @@ public class FoldedOperandTest {
 	 *
 	 * <p>Through the real {@code JsonDrugReferenceSource} over a fixture that already carries the one
 	 * shape that can expose it — a null BEFORE a real alias — rather than through a hand-built entry.
+	 *
+	 * <p><b>One shape of that edit, not the class of them.</b> A review measured a second edit breaking
+	 * the same invariant with this case green: see {@link #everyAliasOfALoadedEntryIsItsOwnWitness},
+	 * which asks the invariant as a property instead. This case stays because it names the failure at
+	 * one row an operator can read — {@code [null]} where a witness belongs.
 	 */
 	@Test
 	public void aWitnessIsTheAliasThatMatchedAndNotItsNeighbour() throws IOException {
@@ -399,6 +409,99 @@ public class FoldedOperandTest {
 		assertEquals(java.util.Collections.singletonList("ibuprofen"),
 				row.aliasesIn("she takes ibuprofen daily"),
 				"and so must the prose witness");
+	}
+
+	/** An entry carrying the alias-list shapes no bundled dataset does — a null before the first real
+	 *  alias, one name spelled twice in two cases, and a third alias after both. See the fixture's own
+	 *  {@code description} for why each is needed. */
+	private static final String ALIAS_SPELLED_TWICE_FIXTURE =
+			"chartsearchai-test/drug-reference-alias-spelled-twice.json";
+
+	/**
+	 * Every name a loaded entry carries is found, AS ITSELF, by a scan for that very name — the
+	 * alignment invariant asked as the property the witness accessors rest on, over whole loaded
+	 * datasets rather than over one arrangement.
+	 *
+	 * <p><b>Why this stands beside the case above rather than being covered by it.</b> That case pins
+	 * ONE edit to {@code DrugReference.foldedAll}: dropping nulls. A review measured a SECOND edit
+	 * breaking the same invariant with the whole api suite green, that case included — collapsing
+	 * duplicates, {@code if (!folded.contains(one)) folded.add(one);} — after which
+	 * {@code setAliases(["Aspirin", "aspirin", "acetylsalicylic acid"])} answered
+	 * {@code aliasesNaming("Acetylsalicylic acid 100mg")} with {@code [aspirin]} while
+	 * {@code matchesDrugName} still answered true. Those witnesses are what
+	 * {@code DrugReferenceService.namesSubstanceOf} narrows a candidate set by, so an entry naming the
+	 * recorded drug resolves to another substance or to none and {@code findImpliedByQuery} /
+	 * {@code findImpliedByDrugName} drop it — issue #209's surface, fail-closed and silent.
+	 *
+	 * <p><b>What it covers.</b> Any edit that leaves the folded list a DIFFERENT sequence from
+	 * {@code foldedLower} of the raw one: skipping nulls, collapsing duplicates, filtering, reordering.
+	 * It reads no field and asks no shape — it asks the two witness accessors, which is where a
+	 * misalignment does its damage, so it covers a misaligned READ as well as a misaligned STORE:
+	 * measured, reporting {@code aliases.get(aliases.size() - 1 - i)} reddens it, and so does comparing
+	 * the RAW alias instead of the folded one, because the fixture spells one alias with a capital and
+	 * {@code foldedLower} is a lower-case fold too — a third channel for the shape
+	 * {@link #anAccentedEntryKeepsItsPlaceBesideASiblingTheSameNameReaches} and the source guard
+	 * already hold, not a replacement for either.
+	 *
+	 * <p><b>What it does not.</b> It says nothing about WHERE an operand is folded, which is what the
+	 * identity cases above ask, nor that the alias side is folded at ALL, which needs an accented alias
+	 * no shipped dataset carries ({@link #anAccentedAliasIsTheOnlyNameOfAnEntryAnUnaccentedOrderReaches}).
+	 * It skips null and blank aliases, which name nothing under either boundary rule, so an edit that
+	 * only moves those among themselves is invisible to it. It sees only the datasets it loads, so an
+	 * alias-list shape none of them carries escapes — which is the whole reason
+	 * {@link #ALIAS_SPELLED_TWICE_FIXTURE} exists, and the reason to add to that fixture rather than to
+	 * assume the real datasets grew the shape. And a collapse of two aliases whose RAW spellings are
+	 * identical, with no distinct alias after them, shifts nothing this can observe. <b>It GUARDS the
+	 * class of edits; it does not make it unconstructible.</b> Carrying the raw and folded halves
+	 * together — one list of pairs, which is what {@link DrugReference.FoldedName} is for the recorded
+	 * name — would; ADR Decision 55 records why that was not taken here.
+	 *
+	 * <p>Over three loaded datasets and not one: the fixture for the shapes, the null-alias fixture the
+	 * case above already reaches, and the shipped knowledge base, so the property is stated over the
+	 * whole alias corpus the module actually ships rather than over hand-picked rows.
+	 */
+	@Test
+	public void everyAliasOfALoadedEntryIsItsOwnWitness() throws IOException {
+		List<DrugReference> shapes = DrugReferenceTestSupport.fixtureEntries(ALIAS_SPELLED_TWICE_FIXTURE);
+		assertEquals(java.util.Arrays.asList(null, "Aspirin", "aspirin", "acetylsalicylic acid"),
+				DrugReferenceTestSupport.row(shapes, "Aspirin").getAliases(),
+				"precondition: the fixture must still carry a null, then one name in two cases, then a "
+						+ "DIFFERENT alias after them — drop any of the three and the dedupe, null-skip, "
+						+ "filter and reorder edits stop shifting an observable index");
+
+		assertEveryAliasIsItsOwnWitness(shapes, ALIAS_SPELLED_TWICE_FIXTURE);
+		assertEveryAliasIsItsOwnWitness(DrugReferenceTestSupport.fixtureEntries(
+				"chartsearchai-test/drug-reference-null-interaction-and-alias.json"),
+				"the null-alias fixture");
+		assertEveryAliasIsItsOwnWitness(DrugReferenceTestSupport.shippedEntries(),
+				"the shipped knowledge base");
+	}
+
+	/** Asserts the property above on both boundary rules — the recorded-name scan and the prose one —
+	 *  for every alias of every entry, and fails loudly if a dataset yielded no alias to check, which is
+	 *  the {@code 0 == 0} shape that left the ranking assertions above asserting nothing. */
+	private static void assertEveryAliasIsItsOwnWitness(List<DrugReference> entries, String dataset) {
+		int checked = 0;
+		for (DrugReference entry : entries) {
+			for (String alias : entry.getAliases()) {
+				if (alias == null || alias.trim().isEmpty()) {
+					continue;
+				}
+				checked++;
+				assertTrue(entry.aliasesNaming(DrugReference.fold(alias)).contains(alias),
+						"in " + dataset + ", entry \"" + entry.getName() + "\" does not report \"" + alias
+								+ "\" as the witness for that very name; the recorded-name scan walks the "
+								+ "folded alias list and reports the raw one at the same index, so this is the "
+								+ "two lists having come out of step. Was: "
+								+ entry.aliasesNaming(DrugReference.fold(alias)));
+				assertTrue(entry.aliasesIn(alias.toLowerCase(java.util.Locale.ROOT)).contains(alias),
+						"in " + dataset + ", entry \"" + entry.getName() + "\" does not report \"" + alias
+								+ "\" as the witness for that name in prose, which is the same alignment under "
+								+ "the other boundary rule. Was: "
+								+ entry.aliasesIn(alias.toLowerCase(java.util.Locale.ROOT)));
+			}
+		}
+		assertTrue(checked > 0, dataset + " yielded no alias to check, so this asserts nothing");
 	}
 
 	/**

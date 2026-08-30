@@ -794,6 +794,17 @@ public class DrugReference {
 	 *         reason {@link #foldedLower} itself is one method: a collection's folded view is the form
 	 *         one side of a comparison must be in, and two spellings of it is how the two sides come
 	 *         apart. Issue #330 added both in one commit, which is exactly when a third becomes likely.
+	 *
+	 *         <p><b>Index alignment is what {@link #aliasesIn} and {@link #aliasesNaming} rest on, and
+	 *         this method decides the sequence half of it.</b> Both walk the folded list and report the
+	 *         raw alias at the same index, so any edit leaving this list a different SEQUENCE from the
+	 *         raw one — a null skipped, a duplicate collapsed, an element filtered or reordered — makes
+	 *         a witness the wrong alias, which is what {@code DrugReferenceService.namesSubstanceOf}
+	 *         narrows a candidate set by: issue #209's surface, fail-closed and silent.
+	 *         {@code FoldedOperandTest.everyAliasOfALoadedEntryIsItsOwnWitness} is what fails on it, by
+	 *         asking of whole loaded datasets that every name an entry carries is found as ITSELF;
+	 *         mutate this line and read the failures rather than trusting that the shape you have in
+	 *         mind is covered.
 	 */
 	static List<String> foldedAll(Collection<String> values) {
 		List<String> folded = new ArrayList<String>(values.size());
@@ -1909,7 +1920,9 @@ public class DrugReference {
 	 *         <p><b>No production caller since issue #330</b> — its one caller holds a name it has
 	 *         already folded for the scan that produced these candidates, so it reaches the
 	 *         {@link FoldedName} arity below, which is the witness accessor CLAUDE.md's rule is about.
-	 *         Kept for a caller holding a raw string, and called by two cases.
+	 *         Kept for a caller holding a raw string; the callers it has today are test cases stating a
+	 *         premise about which of its names a row carries — grep the name rather than trusting a
+	 *         count written here, which is what went stale.
 	 */
 	List<String> aliasesNaming(String drugName) {
 		return aliasesNaming(fold(drugName));

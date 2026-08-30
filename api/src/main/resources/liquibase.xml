@@ -76,7 +76,9 @@
 			(issue #229): reference_slice_records and reference_slice_chars, beside the existing
 			reference_count, which counts the citations IN the answer rather than the material put in
 			front of the model. Nullable, because null means the producer stated no slice while 0
-			means it measured one and found nothing — a question that matched no reference entry.
+			means the prompt was measured and carried no reference material. Zero does not on its own
+			mean the question matched nothing: the feature being off, and an injection that threw and
+			was caught, produce it too.
 
 			A new changeset rather than an edit to chartsearchai-002, which is the lifecycle this
 			file's history already shows for a new column: input_tokens/output_tokens arrived as
@@ -92,8 +94,9 @@
 			id + author + filename AND stores its checksum, so reusing an id an instance holds an
 			orphan row for does not skip quietly — the checksums differ and liquibase raises
 			ValidationFailedException, which openmrs-core propagates and which stops the module
-			starting. Measured on liquibase 4.32.0 (the version openmrs-api puts on this module's
-			classpath) against an instance built from the consolidation-era file, which really does
+			starting — openmrs-core does not swallow it, though ModuleFactory.runLiquibase catches
+			Exception and rethrows ModuleException, so the type itself does not surface. Measured on
+			liquibase 4.32.0 (the version openmrs-api puts on this module's classpath) against an instance built from the consolidation-era file, which really does
 			leave orphan rows for 001 and 003. A later merge of the two unmerged branches would
 			collide the same way.
 		</comment>

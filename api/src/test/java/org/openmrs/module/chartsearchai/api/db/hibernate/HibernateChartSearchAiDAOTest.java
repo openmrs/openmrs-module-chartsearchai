@@ -270,8 +270,8 @@ public class HibernateChartSearchAiDAOTest extends BaseModuleContextSensitiveTes
 	/**
 	 * Issue #229 — a row whose producer stated no slice reads back as null, not as zero.
 	 *
-	 * <p>Zero is a real and common measurement: a question that matches no reference entry injects
-	 * nothing. An answer that states no slice at all has measured nothing. A column that collapsed
+	 * <p>Zero is a real measurement: the prompt carried no reference material. An answer that states
+	 * no slice at all has measured nothing. A column that collapsed
 	 * the two would make "the prompt carried no reference material" indistinguishable from "nobody
 	 * looked", which is the reading {@code ChartAnswer.getReferenceSlice()} keeps apart by returning
 	 * null and the reason these columns are nullable.

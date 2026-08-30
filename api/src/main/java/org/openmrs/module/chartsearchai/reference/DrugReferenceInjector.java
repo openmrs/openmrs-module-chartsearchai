@@ -388,9 +388,9 @@ public class DrugReferenceInjector {
 		//
 		// Guarded on isDebugEnabled because both totals are full walks of the mapping list evaluated
 		// as ARGUMENTS, i.e. before SLF4J is consulted — one of them already was before this change,
-		// and adding the second doubled it. The cost is small (measured ~0.35 µs per injecting
-		// request on a realistic chart) and the guard is not here for the cost; it is here because
-		// this codebase already uses the idiom where a log argument does real work
+		// and adding the second doubled it. The guard is not here for the cost, which is small enough
+		// that quoting a figure would mean quoting the method and arrangement that produced it; it is
+		// here because this codebase already uses the idiom where a log argument does real work
 		// (ChartSearchServiceRouter, QueryStoreChartBuilder), and a discarded walk is easier to
 		// notice than to justify.
 		if (log.isDebugEnabled()) {

@@ -24,9 +24,10 @@ import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
  * <p>Shared rather than nested per test class, for the reason {@code StubAuditLogService}'s own
  * javadoc gives about itself and {@code RestControllerContext}'s repeats: {@code AuditLogService} has
  * six methods, and with a copy per test file a seventh would have to be added in every copy, letting
- * two files quietly pin different answers to the same question. It had grown to two copies — one
- * capturing saves only, one additionally serving a listing back — which is exactly the drift those
- * two javadocs were written against.
+ * two files quietly pin different answers to the same question. Issue #229 was about to add a second
+ * copy — one capturing saves only, one additionally serving a listing back — which is the drift those
+ * two javadocs were written against, so it was promoted here instead. Before that there was one, and
+ * it was nested in {@code ChartSearchAiAuditSearchModeTest}.
  *
  * <p>{@link #saved} is what {@code saveAuditLog} was called with, in order. {@link #listed} is what
  * the listing endpoint is served; it is empty by default, so a class that only cares about saves gets

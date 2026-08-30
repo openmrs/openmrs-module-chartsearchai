@@ -42,8 +42,8 @@ import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
  * <p>The row is a projection of the ANSWER, never re-derived here — the same discipline issue #178
  * imposed on {@code search_mode} after two write sites derived it separately and disagreed. So the
  * assertions are that the controller writes what it is told, including telling it nothing: an answer
- * that states no slice must file nulls rather than zeros, because zero is a real measurement (a
- * question that matched no entry) and must not be indistinguishable from "nobody looked".
+ * that states no slice must file nulls rather than zeros, because zero is a real measurement (the
+ * prompt carried no reference material) and must not be indistinguishable from "nobody looked".
  */
 public class ChartSearchAiAuditReferenceSliceTest {
 
@@ -113,7 +113,7 @@ public class ChartSearchAiAuditReferenceSliceTest {
 	@Test
 	public void everySite_filesNullRatherThanZeroWhenTheAnswerStatesNoSlice() {
 		// Zero is a real reading and the commonest one; "not stated" is not a measurement at all.
-		// Collapsing them would make an unmeasured row look like a question that matched nothing,
+		// Collapsing them would make an unmeasured row look like a prompt that carried nothing,
 		// which is the wrong-signal-indistinguishable-from-a-right-one shape #178 was.
 		controller.setChartSearchService(new StubService(null));
 
@@ -131,9 +131,10 @@ public class ChartSearchAiAuditReferenceSliceTest {
 
 	@Test
 	public void aRowThatMeasuredAnEmptySliceStillFilesZero() {
-		// The other side of the same distinction: a question that injected nothing DID measure, and
+		// The other side of the same distinction: a request that injected nothing DID measure, and
 		// zero is what it measured. Filing null there would lose the only evidence that the slice
-		// was looked at.
+		// was looked at. (Why it injected nothing — no match, the feature off, or a caught injection
+		// failure — is not something this number separates; see ChartAnswer.getReferenceSlice().)
 		controller.setChartSearchService(new StubService(slice(0, 0)));
 
 		controller.search(RestControllerContext.searchBody("any infections?"));

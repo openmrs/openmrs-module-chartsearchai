@@ -183,8 +183,8 @@ public class ChartSearchAiReferenceGroupTest {
 							+ " material, so grounding must " + (referenceMaterial ? "" : "NOT ")
 							+ "treat it as demote-only. Module-supplied material cannot be verified by a "
 							+ "cosine pass (#106); the patient's own records must be, however they reached "
-							+ "the chart (#118). Keep the two registries derived from one classification "
-							+ "rather than re-listing type names in either.");
+							+ "the chart (#118). Keep every registry derived from one classification "
+							+ "rather than re-listing type names in any of them.");
 		}
 	}
 

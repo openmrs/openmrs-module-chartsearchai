@@ -351,16 +351,22 @@ public interface ChartSearchService {
 		 * material — while null says the producer stated nothing at all, which is what the five
 		 * constructors above do.
 		 *
-		 * <p><b>And zero has three causes, which this number cannot tell apart.</b> The question
-		 * matched no reference entry; the {@code drugReference.enabled} global property is off; or
+		 * <p><b>Zero says what the prompt carried, never why.</b> It is a true reading in every case —
+		 * the prompt really did carry no reference material — which is why no third value is owed here
+		 * the way {@code PatientClinicalContext.contraindicationRecordsRead()} is owed one: that
+		 * exists because a chart the module could not read is not a chart that records nothing,
+		 * whereas a prompt that carried nothing did carry nothing. What it will not tell you is which
+		 * of several quite different situations produced it — the question matched no reference entry;
+		 * a {@code drugReference} toggle is off ({@code enabled}, {@code injectFromQuery},
+		 * {@code injectFromOrders}, or the {@code validateAnswers} gate on findings);
 		 * {@code DrugReferenceInjector.inject} threw and returned the chart unmodified, which it does
-		 * deliberately so an enrichment can never break the answer path. All three are TRUE readings
-		 * of the prompt — it really did carry nothing — so unlike
-		 * {@code PatientClinicalContext.contraindicationRecordsRead()}, which exists because a chart
-		 * the module could not read is not a chart that records nothing, there is no false claim here
-		 * to fix with a third value. What there is, is a reading an operator can get wrong: a column
-		 * of zeros is not evidence the corpus raises no reference material, and the only thing
-		 * separating the third cause from the first is the WARN {@code inject} logs when it catches. Collapsing them would make an unmeasured row
+		 * deliberately so an enrichment can never break the answer path; or the injector rebuilt the
+		 * chart with active-order records alone, which are the patient's own and outside this number.
+		 * Do not read that list as complete — it is the paths visible from {@code inject} and
+		 * {@code injectRecords} today, and an earlier version of this javadoc claimed there were three
+		 * when a count was never checked. The operational point does not depend on the count: a column
+		 * of zeros is not evidence a corpus raises no reference material, and the injector's own log
+		 * is the only thing that separates a swallowed failure from an honest miss. Collapsing them would make an unmeasured row
 		 * indistinguishable from a measured empty one, which is the failure issue #178 fixed for the
 		 * mode column; the audit columns are nullable for exactly this reason. There is no
 		 * {@code UNKNOWN} sentinel to return instead because those columns, unlike

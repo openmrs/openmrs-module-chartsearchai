@@ -76,9 +76,9 @@
 			(issue #229): reference_slice_records and reference_slice_chars, beside the existing
 			reference_count, which counts the citations IN the answer rather than the material put in
 			front of the model. Nullable, because null means the producer stated no slice while 0
-			means the prompt was measured and carried no reference material. Zero does not on its own
-			mean the question matched nothing: the feature being off, and an injection that threw and
-			was caught, produce it too.
+			means the prompt was measured and carried no reference material. Zero says what the prompt
+			carried and not why: a toggle being off, an injection that threw and was caught, and an
+			injection that added only the patient's own active-order records all produce it too.
 
 			A new changeset rather than an edit to chartsearchai-002, which is the lifecycle this
 			file's history already shows for a new column: input_tokens/output_tokens arrived as

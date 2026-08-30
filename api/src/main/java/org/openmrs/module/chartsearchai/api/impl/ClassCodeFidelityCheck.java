@@ -313,7 +313,14 @@ final class ClassCodeFidelityCheck {
 	 * group name, a generic name — so the guarantee is about the data rather than about the code, and
 	 * it is stated as a measurement rather than as a list of renderers that would go stale.
 	 *
-	 * <p>Measured over all three shipped reference files, by driving the real parsers and this class's own {@link #classCodesIn}: of the knowledge base's 597,161 free-text fields across 2283 entries — drug class, generic name, display label, every interaction note and severity, every contraindication note and token — ZERO state an ATC-shaped token; the curated file's 4 rows carry a drug class stating none; and the one shipped cross-reactivity group is named {@code NSAID}. So no shipped data can put a code inside a parenthetical twice. An operator file that states one in any of those fields can, and an answer quoting that record faithfully is then reported.
+	 * <p>Measured over all three shipped reference files, by driving the real parsers and this
+	 * class's own {@link #classCodesIn}: of the knowledge base's 597,161 free-text fields across
+	 * 2283 entries — drug class, generic name, display label, every interaction note and severity,
+	 * every contraindication note and token — ZERO state an ATC-shaped token; the curated file's 4
+	 * rows carry a drug class stating none; and the one shipped cross-reactivity group is named
+	 * {@code NSAID}. So no shipped data can put a code inside a parenthetical twice. An operator
+	 * file that states one in any of those fields can, and an answer quoting that record faithfully
+	 * is then reported.
 	 *
 	 * <p><b>Every parenthetical is read AT ITS OWN LEVEL</b> ({@link #parentheticalsAtTheirOwnLevel}),
 	 * over a bracket walk rather than a regex: a nested group's codes and markers are that group's,

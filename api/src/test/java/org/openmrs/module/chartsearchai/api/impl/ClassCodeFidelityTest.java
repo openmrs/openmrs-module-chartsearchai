@@ -55,7 +55,9 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * When they state none, there was nothing to copy and the check says nothing. Since issue #338 it
  * also pins what the answer does with a code it copied FAITHFULLY: a code stated more than once
  * inside one parenthetical, and a citation marker placed inside one, are reported from the shape of
- * the prose alone — see the block above {@link #aClassCodeRepeatedInsideOneParentheticalIsReported()}. There is deliberately
+ * the prose alone, each parenthetical read at its own level — see the block above
+ * {@link #aClassCodeRepeatedInsideOneParentheticalIsReported()} for what that level buys and
+ * what it gives up. There is deliberately
  * no roll-up from a cited substance code to its class: correct as such an answer usually is,
  * accepting it silences this issue's own headline capture, and
  * {@link #generalisingACitedSubstanceCodeToItsClassIsReported()} pins that with the reason. The answer prose

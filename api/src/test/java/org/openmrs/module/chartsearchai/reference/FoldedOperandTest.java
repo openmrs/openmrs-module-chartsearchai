@@ -348,7 +348,14 @@ public class FoldedOperandTest {
 		SourceScan scan = new SourceScan("src/main/java/org/openmrs/module/chartsearchai/reference/"
 				+ "PatientClinicalContext.java");
 		SourceScan.Region loop = scan.body("for (String folded : foldedActiveDrugNames) {");
-		assertContains(scan, loop, "matchesFoldedOrderName(", "hasActiveDrug's loop");
+		// The ARGUMENTS and not only the call, plus the hoist above the loop. Requiring the call alone
+		// left `matchesFoldedOrderName(folded, tokenFor(n))` — a private helper doing the fold — green
+		// across the whole build, which is the same extract-a-helper escape that forced the alias
+		// guard to be stated at class scope. A token computed per comparison is what this exists to
+		// forbid, whatever the expression computing it is called.
+		assertContains(scan, loop, "matchesFoldedOrderName(folded, token)", "hasActiveDrug's loop");
+		assertContains(scan, scan.body("boolean hasActiveDrug(String nameToken, String atcCode) {"),
+				"DrugReference.fold(n)", "hasActiveDrug, above its loop");
 		assertForbids(scan, loop, "hasActiveDrug's loop", "matchesOrderName(", "containsWord(",
 				"foldedLower(", "foldDiacritics(", "toLowerCase(", "fold(");
 	}
@@ -405,7 +412,11 @@ public class FoldedOperandTest {
 		// The getter as well as the field: reading the raw list through {@code getAliases()} inside this
 		// class reaches the same list by another name, and a helper spelled that way escaped the field
 		// needle. Its own declaration is inside a whitelisted body, so it is not caught by itself.
-		for (Integer at : scan.matches(Pattern.compile("(?<![\\w.])aliases\\b|getAliases\\s*\\("))) {
+		// The lookbehind excludes a word character and NOT a dot, so a qualified read — this.aliases,
+		// entry.aliases — is matched too. Its first version excluded both, and `for (String a :
+		// this.aliases)` inside an extracted helper then escaped the very guard whose javadoc names
+		// that refactor. The companion write needle below has anticipated a receiver from the start.
+		for (Integer at : scan.matches(Pattern.compile("(?<!\\w)aliases\\b|getAliases\\s*\\("))) {
 			if (DECLARATION.matcher(scan.statementAt(at)).find()) {
 				continue;
 			}

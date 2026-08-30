@@ -140,6 +140,8 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getCitations(), chart.getMappings());
 			ClassCodeFidelityCheck.reportUnsupportedClassCodes(patient, question, response.getAnswer(),
 					cited, chart.getMappings());
+			ReferenceProseFidelityCheck.reportUnfaithfulReferenceProse(patient, response.getAnswer(),
+					cited, chart.getMappings());
 			List<RecordReference> references = groundReferences(response.getAnswer(), cited,
 					chart.getMappings());
 			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), question,
@@ -437,6 +439,8 @@ public class LlmInferenceService implements ChartSearchService {
 			// microseconds and reports only to the log, so nothing downstream — and no consumer
 			// above — waits on it.
 			ClassCodeFidelityCheck.reportUnsupportedClassCodes(patient, question, response.getAnswer(),
+					cited, chart.getMappings());
+			ReferenceProseFidelityCheck.reportUnfaithfulReferenceProse(patient, response.getAnswer(),
 					cited, chart.getMappings());
 
 			long groundStart = System.currentTimeMillis();

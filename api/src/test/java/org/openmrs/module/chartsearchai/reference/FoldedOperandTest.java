@@ -41,9 +41,13 @@ import org.opentest4j.AssertionFailedError;
  * so nothing here times anything — the argument this class makes is about WHERE the fold happens.
  * {@link #theRecordedNameIsFoldedOnceForAWholeScanAndNotOncePerEntry} asks it by object IDENTITY,
  * which is the only thing that separates a fold hoisted out of the loop from one written inside it:
- * a count cannot, because both spellings call the folded matcher exactly once per entry.
- * {@link #anAccentedAliasIsTheOnlyNameOfAnEntryAnUnaccentedOrderReaches} is the one shape in which
- * the alias-side fold is load-bearing at all — over every dataset the module ships,
+ * a count cannot, because both spellings call the folded matcher exactly once per entry. Identity
+ * says WHERE and never WHAT: a hoist folding only half of {@link DrugReference#foldedLower} hands
+ * every entry of a sweep one instance just as a correct one does, so
+ * {@link #theProseOperandIsDiacriticFoldedAndNotMerelyLowerCased} asks the other half of that line
+ * by reaching a folded alias from an ACCENTED question.
+ * {@link #anAccentedAliasIsTheOnlyNameOfAnEntryAnUnaccentedOrderReaches} drives the one shape in
+ * which the alias-side fold is load-bearing at all — over every dataset the module ships,
  * {@link DrugReference#foldDiacritics} takes its ASCII fast path and returns the alias unchanged, so
  * a guard comparing a stored folded alias against {@code foldedLower} of the raw one is satisfied
  * element-for-element by the raw list and proves nothing. And the source scan pins the half no
@@ -230,6 +234,19 @@ public class FoldedOperandTest {
 	 * element for element and, on that dataset, the very same instances.
 	 * {@code drug-reference-accented-tokens.json} does not reach it either — its entries each carry an
 	 * unaccented sibling alias, so the accented one is never the only way in.
+	 *
+	 * <p><b>The fixture's alias carries an upper-case letter as well as its combining marks, and that
+	 * is the case rather than a detail of it.</b> {@link DrugReference#foldedLower} is a lower-case
+	 * AND a diacritic fold, {@code foldedAll} is the sole producer of both folded lists, and its body
+	 * names neither alias list, so {@link #everyAliasScanReadsTheStoredFoldedList} — which scans the
+	 * READING accessors' bodies and every mention of the raw list at class scope — does not reach it.
+	 * With a lower-case alias this case saw only half of it: writing
+	 * {@code foldedAll} as {@code foldDiacritics(value)} — the spelling CLAUDE.md's own fold rule names
+	 * — leaves every alias carrying an upper-case letter matching nothing, which is a shape the
+	 * {@code json} parser reaches (it trims its aliases without lower-casing them), and a review
+	 * measured the whole api suite green under it. With the alias spelled {@code Kétoprofène} that
+	 * mutation reddens this case and {@link #theProseOperandIsDiacriticFoldedAndNotMerelyLowerCased},
+	 * and nothing else in the api suite.
 	 */
 	@Test
 	public void anAccentedAliasIsTheOnlyNameOfAnEntryAnUnaccentedOrderReaches() throws IOException {
@@ -244,9 +261,10 @@ public class FoldedOperandTest {
 		assertTrue(DrugReferenceTestSupport.detailContains(byOrderName,
 				SafetyWarning.TYPE_CONTRAINDICATION, "Kétoprofène"),
 				"an order recorded as \"Ketoprofene 100mg\" must reach an entry whose only name is "
-						+ "\"kétoprofène\" — the alias is matched in its FOLDED form, and an "
-						+ "implementation storing the raw list where the folded one belongs reaches it "
-						+ "only for a chart that spells the accent, was: " + byOrderName);
+						+ "\"Kétoprofène\" — the alias is matched in its FOLDED form, lower-cased and "
+						+ "diacritic-stripped, and an implementation storing the raw list where the folded "
+						+ "one belongs, or folding only one of the two, reaches it only for a chart that "
+						+ "spells the alias as it is written, was: " + byOrderName);
 
 		List<SafetyWarning> byProse = DrugReferenceTestSupport.validator(service).validate("",
 				"Can I give her ketoprofene?",
@@ -256,6 +274,39 @@ public class FoldedOperandTest {
 				SafetyWarning.TYPE_CONTRAINDICATION, "Kétoprofène"),
 				"and the same entry must be reached from unaccented PROSE, which scans the same aliases "
 						+ "under the other boundary rule, was: " + byProse);
+	}
+
+	/**
+	 * The prose operand is {@link DrugReference#foldedLower}-folded, not merely lower-cased.
+	 *
+	 * <p>The other side of the case above, over the same fixture and differing from its prose leg only
+	 * in how the question spells the drug: there an unaccented question reaches a stored alias the
+	 * fold made unaccented, here an ACCENTED one does, which it can only do if the QUESTION was folded
+	 * too. Before this change {@code findByQuery}'s operand was folded by {@code containsBoundedToken}
+	 * at the innermost comparison and the hoist could not be got wrong; now it is one line's
+	 * responsibility, and {@code question.toLowerCase(Locale.ROOT)} — the expression that line
+	 * replaced, so the most likely "restore" edit — is a hoist that folds half of what it must.
+	 * Measured: with that expression in place this case is the only one in the api suite that reddens,
+	 * and a review measured the same expression green across the whole suite before it existed.
+	 *
+	 * <p>{@link #theProseScanFoldsItsTextOnceForTheWholeSweep} cannot see that, and the two are asking
+	 * different questions of one line: that one asks WHERE the fold happens, by handing every entry of
+	 * a sweep the same instance, which a lower-case-only hoist satisfies just as well.
+	 */
+	@Test
+	public void theProseOperandIsDiacriticFoldedAndNotMerelyLowerCased() throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport
+				.fixtureEntries("chartsearchai-test/drug-reference-accented-alias-only.json"));
+
+		List<SafetyWarning> byAccentedProse = DrugReferenceTestSupport.validator(service).validate("",
+				"Can I give her kétoprofène?",
+				DrugReferenceTestSupport.ctx(60, null, null, null,
+						DrugReferenceTestSupport.set("aspirine"), null));
+		assertTrue(DrugReferenceTestSupport.detailContains(byAccentedProse,
+				SafetyWarning.TYPE_CONTRAINDICATION, "Kétoprofène"),
+				"an accented question must reach an entry whose stored alias the fold made unaccented; "
+						+ "a scan that only lower-cases its prose reaches it for no spelling at all, was: "
+						+ byAccentedProse);
 	}
 
 	/**

@@ -76,12 +76,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * test — {@code omod/pom.xml} declares no {@code chartsearchai-api} test-jar, so the api-side
  * fixtures that drive the real {@code DrugSafetyValidator} are not reachable from here. What that
  * seam leaves to the api suite is that the real arms populate the rating at all, which
- * {@code DrugSafetyQuestionPairInteractionTest} asserts of chips built by the real validator
- * ({@code anInteractionChipCarriesTheRatingItWasOrderedOn} and
- * {@code thePairChipsAreOrderedBySeverityAndBounded}: nulling the rating at both arms reddens those
- * two and nothing else). {@code DrugSafetyInteractionSeverityFloorTest} is NOT a second guard for it
- * — it asserts the dataset ROW's rating and the floor's filtering, never a chip's, and stays green
- * under that same mutation. What is unique to this class, and missing without it, is whether the
+ * {@code DrugSafetyQuestionPairInteractionTest} asserts of chips built by the real validator, and
+ * which several strength-clause cases depend on besides — null the rating at the arms that build a
+ * chip and read the failures rather than trusting a list here, since #283 gave that value a second
+ * class of reader. One negative is worth stating because it is the guard a reader would reach for
+ * first and it does NOT hold: {@code DrugSafetyInteractionSeverityFloorTest} is not a guard for this
+ * at all — it asserts the dataset ROW's rating and the floor's filtering, never a chip's, and stays
+ * green under that mutation. What is unique to this class, and missing without it, is whether the
  * value survives the last step.
  */
 public class ChartSearchAiSafetyWarningSeverityWireTest {
@@ -89,7 +90,7 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
 	/**
-	 * The fixture chips. <b>Every case below indexes this list positionally, so the indices are the
+	 * The fixture chips. <b>The cases below index this list positionally, so the indices are the
 	 * contract</b> — inserting or reordering a chip retargets them silently, and only some of the
 	 * reads carry a {@code precondition:} assertion that would catch it. Do not count on which: add a
 	 * chip in the middle and read the failures.
@@ -356,7 +357,7 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 	 * {@code clone()} and {@code finalize()} are protected, so a future covariant
 	 * {@code public SafetyWarning clone()} would slip past a {@code getMethod} form and be demanded
 	 * on the wire. The prefix-based {@code getX}/{@code isX} filter this case was first written with
-	 * is deliberately NOT used: this class names two of its own non-wire accessors without that
+	 * is deliberately NOT used: this class names non-wire accessors of its own that carry neither
 	 * prefix, so a prefix rule would stop seeing them the moment one were made public.
 	 *
 	 * <p><b>It pins that SHAPE, and not every way the defect can recur.</b> An accessor taking a

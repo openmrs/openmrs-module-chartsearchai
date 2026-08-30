@@ -253,16 +253,19 @@ public class SafetyWarning {
 	 * the production method that produced it, and is not restated here.
 	 *
 	 * <p><b>Read this field; do not fall back to parsing {@link #getDetail()}.</b> On the bundled
-	 * DDInter dataset that sentence does lead with the rating, and does so without exception:
-	 * {@code DdiDrugReferenceSource.noteFor} builds every note as {@code severity + ". " + mechanism},
-	 * or as {@code severity + " severity interaction (… no mechanism description on file)."} where the
-	 * row has none — measured 2026-08-30 over the shipped KB's 590,312 links, no note is null or
-	 * blank, no rated rule carries none, and none fails to start with its own severity word. So a
-	 * parse is not broken there TODAY; what it rests on is that {@code detail} is prose this module
-	 * rewords freely and holds out as no contract. It is broken on an operator {@code sourceFormat=json}
-	 * dataset, where the note and the rating are independently authored fields: a rule may carry no
-	 * note at all, in which case {@code DrugSafetyValidator.interactionWarning} appends none and the
-	 * rating is nowhere in the chip, or carry one whose leading word is a different rating.
+	 * DDInter dataset that sentence does carry the rating, and without exception — though not at its
+	 * start, which is the drug's own label: {@code DdiDrugReferenceSource.noteFor} builds every note as
+	 * {@code severity + ". " + mechanism}, or as
+	 * {@code severity + " severity interaction (… no mechanism description on file)."} where the row
+	 * has none, and {@code DrugSafetyValidator.interactionWarning} appends that note after an em dash,
+	 * so the rating is the first word after the dash. Measured 2026-08-30 over the shipped KB's
+	 * 590,312 links: no note is null or blank, no rated rule carries none, and none fails to start
+	 * with its own severity word. So a parse is not broken there TODAY; what it rests on is that
+	 * {@code detail} is prose this module rewords freely and holds out as no contract. It is broken on
+	 * an operator {@code sourceFormat=json} dataset, where the note and the rating are independently
+	 * authored fields: a rule may carry no note at all, in which case {@code interactionWarning}
+	 * appends none and the rating is nowhere in the chip's SENTENCE, or carry one whose leading word
+	 * is a different rating.
 	 * {@code ChartSearchAiSafetyWarningSeverityWireTest.theRatingIsPublishedEvenWhereTheProseNamesItNowhere}
 	 * drives both of those.
 	 *

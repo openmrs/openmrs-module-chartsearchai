@@ -315,7 +315,8 @@ ANSWER_SEVERITY = re.compile(r"(?<![A-Za-z])(" + _SEVERITY_ALT + r")(?![A-Za-z])
 # The chip's own rating, read from the DETAIL. Since issue #340 `serializeSafetyWarnings` also emits
 # a `severity` key, so the wire is no longer silent — but every capture and every fixture in this
 # tree predates that field, so a wire-based read would be inert on all of them and this parse stays
-# regardless (issue #340 anticipated exactly that and left this scorer alone). It reads the detail,
+# regardless — the argument this comment itself made before the field existed, which is why #340 left
+# the parse alone and corrected only what had become false. It reads the detail,
 # where `DrugSafetyValidator.interactionWarning` puts the rule's note straight after an em dash and
 # `DdiDrugReferenceSource.noteFor` builds that note as `severity + ". " + mechanism` — so the
 # leading token after the dash IS the rating, for `sourceFormat=ddinter`. That holds without

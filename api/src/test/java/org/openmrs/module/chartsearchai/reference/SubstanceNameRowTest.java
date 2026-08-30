@@ -307,10 +307,15 @@ public class SubstanceNameRowTest {
 		// instead, and this is where that trust is declared.
 		//
 		// So: a family filed under a route-qualified substance name that ALSO carries a plain row would
-		// have its presentation elected to speak for it — the shape issues #174 and #187 removed. The
-		// shipped dataset has no such family; the ONE member of this class is the influenza A/Vietnam
-		// antigen, whose plain sibling is the row with a dropped leading "I" and whose parenthetical
-		// names no route.
+		// have its presentation elected to speak for it — the shape issues #174 and #187 removed.
+		//
+		// TWO classes, and the list below is the WIDER one. What this case collects is every family
+		// electing a row that carries a trailing parenthetical while a plain sibling exists, whatever
+		// that parenthetical says: the shipped dataset has ONE, the influenza A/Vietnam antigen, whose
+		// plain sibling is the row with a dropped leading "I". The narrower class — the same shape where
+		// the parenthetical really is a route — has no shipped member, but that is read off one string
+		// by a person rather than measured, because the module has no route vocabulary and giving it one
+		// is what this comment opens by refusing.
 		//
 		// Named and not counted, because each member is a decision to trust one substanceName against a
 		// plain sibling, and a count cannot say which one moved. A KB refresh that adds a member reddens
@@ -351,7 +356,7 @@ public class SubstanceNameRowTest {
 	}
 
 	/** The shipped dataset grouped by {@link DrugReference#substanceGroupKey()} — the walk both KB-wide
-	 *  cases below need, written once so the two cannot come to disagree about what a FAMILY is. They
+	 *  cases in this class need, written once so the two cannot come to disagree about what a FAMILY is. They
 	 *  assert over the same population deliberately: one states the invariant, the other names the
 	 *  families that reach its boundary, and a later edit putting one on {@code substanceKey()} or on the
 	 *  raw {@code substanceName} would leave both green while they stopped covering the same rows. */
@@ -879,9 +884,12 @@ public class SubstanceNameRowTest {
 		// two things at once because ONE predicate decides both: canonicalRow picks the name the chip is
 		// subjected on, and DrugSafetyValidator.outranks — whose route step reads that same predicate to
 		// decide whose MECHANISM PROSE the chip renders where two rows of a substance rate a partner
-		// alike — stops preferring the typo row. Ozanimod is the one partner of this family whose two
-		// rows carry different note text, which is why the fixture uses it: without the second half the
-		// chip would print the correctly-spelled name over the typo row's shorter note.
+		// alike — stops preferring the typo row. Ozanimod is why the fixture uses that partner and not
+		// another: of the 227 partners the family's two rows SHARE, 199 carry different note text, and
+		// ozanimod is the only one where the CORRECTLY-SPELLED row's note is the fuller of the two — so
+		// it is the only partner whose chip note moves, the pooled collapse falling through to the
+		// note-length step. Without the second half of the correction the chip would print the
+		// correctly-spelled name over the typo row's shorter note.
 		//
 		// On a verbatim slice and not the shipped KB, per shippedEntries()' own rule, because this asserts
 		// chip TEXT.

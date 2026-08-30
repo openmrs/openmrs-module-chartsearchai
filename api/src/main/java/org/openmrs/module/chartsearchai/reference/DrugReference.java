@@ -571,7 +571,8 @@ public class DrugReference {
 	 * second assertion states the invariant on RAW SYNTAX so that a weakening of either predicate cannot
 	 * satisfy it by definition. Mutate {@code namesItsSubstance()} to compare display stems and read the
 	 * failures; that mutation elects {@code Salicylic acid (sodium)} for a family holding a plain
-	 * {@code Salicylic acid} row, which nothing in the suite caught before that assertion existed.
+	 * {@code Salicylic acid} row. That mutation is not invisible to the suite as a whole — it reddens
+	 * many cases — but that FAMILY's election was reached by none of them before the assertion existed.
 	 *
 	 * <p>Below the first rung the fold never moves AWAY from {@code namesNoRoute()}, and that is
 	 * structural rather than a property of the shipped data: the first rung RETURNS whenever the two rows
@@ -648,10 +649,11 @@ public class DrugReference {
 	 *         {@code incumbent}. For a family that holds no row answering {@link #namesNoRoute()} at all
 	 *         the survivor still carries a qualifier: the KB publishes no unqualified name for those
 	 *         substances, and manufacturing one by stripping a display name is the pattern-match-a-label
-	 *         mistake issue #148 had to undo. How MANY such families the shipped KB has is stated once,
-	 *         on {@link #namesNoRoute()}, with the reading it is counted on — it is not restated here,
-	 *         because this sentence carried a figure for one reading while that javadoc carried the other
-	 *         and the two came apart the moment the predicate changed.
+	 *         mistake issue #148 had to undo. How MANY such families the shipped KB has is NOT restated
+	 *         here: this sentence carried a figure for one reading while {@link #namesNoRoute()}'s
+	 *         javadoc carried the other, and the two came apart the moment the predicate changed. That
+	 *         javadoc carries it with the reading it is counted on. Older copies elsewhere are stale on
+	 *         their base as well as their count, so re-measure rather than reconciling them.
 	 */
 	static DrugReference canonicalRow(DrugReference incumbent, DrugReference candidate) {
 		if (incumbent == null) {

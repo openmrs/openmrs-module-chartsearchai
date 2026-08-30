@@ -218,8 +218,13 @@ public class InteractionRouteVariantTest {
 
 	@Test
 	public void aSubstanceWithNoRouteUnspecifiedRowStillRaisesOneChip() throws IOException {
-		// 11 of the shipped KB's 121 multi-row families name no unqualified row at all (measured
-		// 2026-08-06). The collapse must still be one chip for them — and the label is then the family's
+		// Some of the shipped KB's multi-row families name no unqualified row at all — oxymetazoline is
+		// one. The count that stood here (11 of 121, measured 2026-08-06) is deliberately gone rather
+		// than refreshed: its base was already stale at 129, and since issue #250 "unqualified" reads one
+		// way as a trailing parenthetical and another as namesNoRoute(), which answer differently for
+		// four shipped rows — so the count needs a unit this sentence does not need to carry.
+		// DrugReference.namesNoRoute()'s javadoc is where it lives with its unit.
+		// The collapse must still be one chip for them — and the label is then the family's
 		// first row, qualifier included, because the KB publishes no unqualified name to use instead and
 		// building one by string surgery on a display name is the mistake issue #148 had to undo.
 		List<SafetyWarning> warnings = validator().validate("", "Is it safe to give oxymetazoline?",

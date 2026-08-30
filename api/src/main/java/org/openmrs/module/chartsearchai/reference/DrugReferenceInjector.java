@@ -1420,7 +1420,8 @@ public class DrugReferenceInjector {
 	 *        {@link #onePerPartner} keys a promoted partner on (issue #190 item 2); an empty list falls
 	 *        the grouping back to the label alone, as it was before that issue
 	 * @param findings this injection's pre-answer chips, from which {@link #reconciledPartnerNoteName} takes
-	 *        the name a folded chip gave a partner (issue #297); null or empty leaves every note on
+	 *        the name a rule chip gave a partner (issue #297; since #339 a chip that folded or not);
+	 *        null or empty leaves every note on
 	 *        {@code DrugSafetyValidator.partnerLabel}, which is what the {@code drugSafety} toggles being
 	 *        off produces and what every note-text case in the suite runs on
 	 */
@@ -1493,7 +1494,8 @@ public class DrugReferenceInjector {
 
 	/**
 	 * @return the name this record's interaction note must call {@code rule}'s partner by: the name the
-	 *         FOLDED chip about that same rule gave it where one reconciled the two arms
+	 *         chip about that same rule gave it where the reconciliation answered — a FOLDED chip until
+	 *         issue #339 and any rule chip since
 	 *         ({@link DrugSafetyValidator#partnerLabel}'s counterpart in this record's own vocabulary),
 	 *         else {@code partnerLabel} itself — which is what this list has always printed.
 	 *
@@ -2041,7 +2043,7 @@ public class DrugReferenceInjector {
 	 *
 	 * <p>{@code findings} is this injection's pre-answer chips, threaded through to
 	 * {@link #orderedInteractionNotes} so a promoted interaction note can name its partner the way the
-	 * folded chip about that same rule named it (issue #297). It is the caller's own list rather than a
+	 * chip about that same rule named it (issue #297). It is the caller's own list rather than a
 	 * second validation, which is the point — see {@link #reconciledPartnerNoteName}.
 	 */
 	private static RenderedReference render(DrugReference ref, List<DrugReference> orderEntries,

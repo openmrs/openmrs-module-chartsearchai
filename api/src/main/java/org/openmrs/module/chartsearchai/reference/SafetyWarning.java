@@ -136,8 +136,11 @@ public class SafetyWarning {
 	 * together only for an interaction chip, and a constructor offering the pair beside
 	 * {@code uncorroboratedChartMatch} would offer a caller a combination that has no meaning. They are
 	 * not the same fact and do not arrive together: only the drug-in-play arm can FOLD, so only its
-	 * chips carry {@code unratedRelationship}, while since issue #339 both active-order arms can carry
-	 * a reconciled name.
+	 * chips carry {@code unratedRelationship}, while since issue #339 both active-order arms set a
+	 * reconciled name. Only the drug-in-play arm's is READ today — {@code DrugReferenceInjector}
+	 * reaches this accessor from the loop over the entries a question put in play, and a screening
+	 * question puts none in play by its own gate — so the screening arm's is set for the shape rather
+	 * than for a consumer, which is what stops a later reader having to remember to set it.
 	 *
 	 * <p>Package-private, matching the accessors: a caller may set only what it may read back. The
 	 * three- and four-argument constructors above are public because the wire-facing shape is, and

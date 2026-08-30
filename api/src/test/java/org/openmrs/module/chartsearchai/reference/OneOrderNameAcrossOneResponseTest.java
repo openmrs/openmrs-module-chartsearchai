@@ -59,6 +59,12 @@ public class OneOrderNameAcrossOneResponseTest {
 	/** ADR Decision 39's own live example, verbatim. */
 	private static final String COMBINATION_DISPLAY = "Isoniazid / Rifapentine";
 
+	/** {@code OrderedSubjectRowTest}'s trap arrangement: a multi-row substance whose CHARTED
+	 *  presentation is not the row {@code canonicalRow} elects. */
+	private static final String COVID_ORDER = "Pfizer-BioNTech Covid-19 Vaccine";
+
+	private static final String TYPHOID_ORDER = "Typhoid vaccine (live)";
+
 	/** What the excerpt's aspirin ROW is called — {@code DrugReference.displayLabel()}, which appends
 	 *  the diverging generic the {@code ddinter} parser read off {@code rxnorm_name}. */
 	private static final String ASPIRIN_ENTRY_NAME = "Acetylsalicylic acid (aspirin)";
@@ -322,5 +328,82 @@ public class OneOrderNameAcrossOneResponseTest {
 			"the isoniazid rule must name the isoniazid PRESCRIPTION and the rifapentine rule the "
 					+ "combination one — a partner that merely contains a substance may not speak for "
 					+ "the order that IS it, was: " + warnings);
+	}
+
+	/**
+	 * The name a chip gives its PARTNER is the row this response names that substance by — never a
+	 * sibling row the chart does not record.
+	 *
+	 * <p>The ladder elects its own label with {@code canonicalRow} alone
+	 * ({@code entryForAtcCode}), while every other name slot in a response is elected by
+	 * {@code interactionSubject}: the row the patient's own record claims most strongly, THEN
+	 * {@code canonicalRow} among the rows tied on that (issue #194). Those two disagree on a
+	 * multi-row substance whose charted presentation is not the canonical one — which is issue #187 —
+	 * and before this case the partner slot took the ladder's answer, so a charted
+	 * {@code Pfizer-BioNTech Covid-19 Vaccine} order was named {@code Tozinameran (…)} while the
+	 * SCREENING arm named that same prescription by the charted row.
+	 * {@code OrderedSubjectRowTest.theOrderNamedRowIsNamedWhereTheFoldCannotReachIt} pins the same
+	 * property on the SUBJECT side of a chip over this same fixture; this is the partner side, which
+	 * issue #339 made reachable for every rule chip.
+	 *
+	 * <p>Reading {@code partner.labelEntry} instead of the row {@code SubstanceSubjects} elects reddens
+	 * exactly here — the whole api suite is otherwise green on that mutation.
+	 */
+	@Test
+	public void aPartnerIsNamedByTheRowThisResponseNamesItsSubstanceBy() throws Exception {
+		List<DrugReference> entries = DrugReferenceTestSupport
+				.ddiFixtureEntries(DrugReferenceTestSupport.DDI_SUBSTANCE_IDENTITY);
+		DrugReference charted = DrugReferenceTestSupport.row(entries, COVID_ORDER);
+		DrugReferenceService service = DrugReferenceTestSupport
+				.ddiFixtureService(DrugReferenceTestSupport.DDI_SUBSTANCE_IDENTITY);
+		java.util.Set<String> codes = charted.normalizedAtcCodes();
+		PatientClinicalContext chart = DrugReferenceTestSupport.ctx(60, null,
+			DrugReferenceTestSupport.set(COVID_ORDER), codes, null, null,
+			java.util.Arrays.asList(DrugReferenceTestSupport.activeOrder("order-covid", COVID_ORDER,
+				DrugReferenceTestSupport.set(COVID_ORDER), codes)));
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+				.validate("", "Is " + TYPHOID_ORDER + " safe here?", service.withReferenceNames(chart));
+
+		assertTrue(!warnings.isEmpty(), "precondition: the pair must chip at all, was: " + warnings);
+		assertEquals(java.util.Arrays.asList(charted.displayLabel()), orderNames(warnings),
+			"a chip must name its partner by the row the patient's own order names — the ladder's own"
+					+ " canonicalRow answer is a sibling this chart does not record, was: "
+					+ DrugReferenceTestSupport.details(warnings));
+	}
+
+	/**
+	 * A co-medication the ladder reached from a CODE with no order behind it carries no entry, and the
+	 * index must skip it rather than ask it for a substance.
+	 *
+	 * <p>{@code orderPartners}' last rung builds {@code new OrderPartner(null, orderCode)} for a
+	 * chart-wide ATC code the loaded dataset cannot name and no order carries — the flattened shape of
+	 * issue #118, and an ordinary one for a dictionary code this knowledge base lacks. Its
+	 * {@code labelEntry} is null. Before issue #339 no reader walked the partner list looking for a
+	 * substance, so nothing dereferenced it; {@code CoMedications.partnerNaming} does, and its
+	 * {@code labelEntry != null} guard is what stands between that walk and an NPE.
+	 *
+	 * <p>Nothing else in the suite reaches that branch — measured, 0 hits over the whole api suite —
+	 * and losing the guard is not a loud failure: the pre-answer path swallows a
+	 * {@code RuntimeException} into no records and no chips, while the post-answer path has no catch
+	 * at all. So this case exists to make the mutation red rather than silent.
+	 */
+	@Test
+	public void aChartCodeWithNoOrderAndNoEntryBehindItDoesNotStopTheChips() {
+		DrugReferenceService service = DrugReferenceTestSupport.ddinterService();
+		PatientClinicalContext chart = DrugReferenceTestSupport.ctx(60, null,
+			DrugReferenceTestSupport.set("Warfarin 5mg tablet"),
+			DrugReferenceTestSupport.set("ZZ99XX99"), null, null,
+			java.util.Arrays.asList(DrugReferenceTestSupport.activeOrder("order-warfarin",
+				"Warfarin 5mg tablet", "warfarin")));
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+				.validate("", "Can I give ibuprofen?", service.withReferenceNames(chart));
+
+		assertEquals(1, warnings.size(),
+			"the covered order must still chip beside a code the dataset cannot name and no order "
+					+ "carries, was: " + warnings);
+		assertEquals(java.util.Arrays.asList("Warfarin"), orderNames(warnings),
+			"and it must still be named, was: " + DrugReferenceTestSupport.details(warnings));
 	}
 }

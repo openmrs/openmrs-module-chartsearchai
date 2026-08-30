@@ -808,9 +808,15 @@ public class FoldedChipOnePartnerNameTest {
 	}
 
 	/**
-	 * A chip no fold applies to must be byte-identical to what it always was: the rule arm keeps
-	 * {@code partnerLabel}, which is also the label the injected {@code drug_reference} note and the
-	 * grouping keys read, and the class arm keeps its ladder.
+	 * A chip no fold applies to must be byte-identical to what it always was ON THIS ARRANGEMENT: the
+	 * rule arm keeps {@code partnerLabel}, which is also the label the injected {@code drug_reference}
+	 * note and the grouping keys read.
+	 *
+	 * <p><b>That is a property of the chart this case builds and not of unfolded chips in general
+	 * since issue #339</b>, which asks the same reconciliation of every rule chip. This context carries
+	 * no ATC codes and no per-order list, so {@code orderPartners} resolves no co-medication and
+	 * nothing is reconciled — which is exactly the residue {@code partnerLabel} is still rendered for.
+	 * What the case pins is unchanged, and the class arm keeps its ladder.
 	 *
 	 * <p>Byte-identical for THESE arrangements, which is narrower than the method name reads. The same
 	 * change moved the guard on {@code OrderPartner.nameByOrder} into that method, so an unfolded
@@ -831,7 +837,7 @@ public class FoldedChipOnePartnerNameTest {
 			null, DrugReferenceTestSupport.set("aspirin 81mg"), null, null, null));
 		assertEquals(Arrays.asList("Ibuprofen interacts with active order aspirin"
 				+ " — additive GI and bleeding risk"), DrugReferenceTestSupport.classChipDetails(ruleOnly),
-			"a rule-only chip carries the rule's own token, as it always has");
+			"a rule-only chip carries the rule's own token, as it always has where the ladder reaches no co-medication");
 
 		// The seed carries no naproxen entry, so this exercises the ladder's MIDDLE rung — the order's
 		// own display — which is the rung a folded chip can now displace `partnerLabel` with. Without an

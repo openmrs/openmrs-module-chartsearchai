@@ -37,6 +37,9 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
  */
 public class OneNameAcrossChipAndInjectedRecordTest {
 
+	/** The chip's own lead-in, so a case can read back what the chip called the order. */
+	private static final String ACTIVE_ORDER = "interacts with active order ";
+
 	private static final String QUESTION = "Can I give ibuprofen?";
 
 	/** A DDInter-shaped partner row whose display name is WHITESPACE — see the case that reads it. */
@@ -154,10 +157,12 @@ public class OneNameAcrossChipAndInjectedRecordTest {
 	 * depends on whether the class arm happened to have a sentence to fold — and a case named after the
 	 * old answer would state something false while passing.
 	 *
-	 * <p>So it asserts the PROPERTY rather than the string: whatever the chip calls this prescription,
-	 * the note calls it that too. That is what issue #297 is about, it survives the widening, and it is
-	 * strictly stronger than the pair of literals it replaces — a change moving one surface and not the
-	 * other reddens it whichever direction it moves them. The arrangement is unchanged: a real chip
+	 * <p>So it asserts the PROPERTY rather than the string: it READS the name out of the chip and
+	 * requires the note to carry that one. That is what issue #297 is about, it survives the widening,
+	 * and it is stronger than the pair of literals it replaces, which a single edit re-casing both
+	 * surfaces would have satisfied. A precondition keeps it honest — the chip's name must not be the
+	 * lower-case token, or the two agree for the reason they always did and the widening is not being
+	 * exercised at all. The arrangement is unchanged: a real chip
 	 * that does NOT fold, read from the record side.
 	 */
 	@Test
@@ -167,15 +172,25 @@ public class OneNameAcrossChipAndInjectedRecordTest {
 			"Is methotrexate safe here?");
 
 		String finding = DrugReferenceTestSupport.safetyFindingIn(chart).getText();
-		assertTrue(finding.contains("interacts with active order Warfarin"),
-			"precondition: an UNFOLDED chip, naming its partner as the dataset names it since issue"
-					+ " #339, was: " + finding);
 		assertFalse(finding.contains("is in the same"),
 			"precondition: nothing may have folded here, was: " + finding);
 
+		// Read out of the chip rather than written down, so the case cannot pass by both surfaces
+		// having been re-cased together in one edit — which is what the pair of literals it replaced
+		// could do.
+		int at = finding.indexOf(ACTIVE_ORDER);
+		assertTrue(at >= 0, "precondition: the chip must name an active order, was: " + finding);
+		String chipName = finding.substring(at + ACTIVE_ORDER.length(),
+			finding.indexOf(" — ", at));
+		assertTrue(!chipName.isEmpty() && !chipName.equals(chipName.toLowerCase(java.util.Locale.ROOT)),
+			"precondition: this chip must have been RECONCILED, or the two surfaces agree for the"
+					+ " reason they always did and nothing about issue #339 is exercised, was: "
+					+ finding);
+
 		String record = recordFor(chart, "Methotrexate");
-		assertTrue(record.contains("Warfarin ("),
-			"an unfolded chip's note names that partner the way the chip does, was: " + record);
+		assertTrue(record.contains(chipName + " ("),
+			"an unfolded chip's note names that partner the way the chip does — \"" + chipName
+					+ "\" was: " + record);
 	}
 
 	/**

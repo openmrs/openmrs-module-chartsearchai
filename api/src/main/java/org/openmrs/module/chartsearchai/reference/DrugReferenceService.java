@@ -849,8 +849,9 @@ public class DrugReferenceService {
 	 *
 	 *          <p><b>Package-visible since issue #296, for a second caller asking the same question of a
 	 *          different string.</b> {@code DrugSafetyValidator.unambiguouslyNames} asks it of a rule's
-	 *          match TOKEN rather than of a name the chart recorded, to decide whether a folded chip may
-	 *          call an active order by the class arm's label instead of by that token. One definition
+	 *          match TOKEN rather than of a name the chart recorded, to decide whether a chip may
+	 *          call an active order by the class arm's label instead of by that token (since issue #339
+	 *          any rule chip, not only a folded one). One definition
 	 *          rather than two: both callers are deciding whether a name may be PRINTED as this
 	 *          substance's, and a second spelling of "strictly outranks every rival" could drift from
 	 *          this one in the direction that matters — admitting where this refuses puts one

@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.api.impl;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -276,7 +277,7 @@ final class ClassCodeFidelityCheck {
 						+ "contains; cited record(s) {} state {}. The answer prose is left unchanged "
 						+ "(issue #142).", patientId, unsupported, citedIndexes, recordCodes);
 			}
-			reportMalformedParentheticals(patientId, answer);
+			reportMalformedParentheticals(patientId, answer, citedIndexes);
 		}
 		catch (RuntimeException e) {
 			// A diagnostic must never break a clinical answer. Nothing here does I/O and every line
@@ -306,27 +307,20 @@ final class ClassCodeFidelityCheck {
 	 * FORM. It is a LIST that has a source and a REPETITION that has none: the injected
 	 * drug-reference record renders a substance's own codes as a round-parenthesised list, so two
 	 * DIFFERENT codes in one parenthetical are deliberately left alone — but it builds that list from
-	 * {@code DrugReference.normalizedAtcCodes()}, which returns a {@code Set}. Four renderers put
-	 * something in round parentheses beside a code: that one; the chip's class sentence, which
-	 * renders exactly one subgroup ({@code DrugSafetyValidator}: {@code "ATC class (" + shared + ")"});
-	 * the cross-reactivity sentence beside it ({@code "cross-reactivity group (" + group.getName()});
-	 * and {@code DrugReferenceInjector}'s {@code label + " (" + note + ")"}. The last two parenthesise
-	 * OPERATOR-AUTHORED free text, from the curated file and from the separately loaded
-	 * cross-reactivity groups file, so each is a residue rather than a guarantee — as is a
-	 * {@code drugClass} that states a code the same entry also publishes. Measured over all three
-	 * shipped reference files: none of the knowledge base's 2283 rows carries a {@code drugClass} at
-	 * all, none of its interaction notes or warnings states an ATC-shaped token, the curated file's 4
-	 * rows carry a {@code drugClass} stating none, and the one shipped cross-reactivity group is
-	 * named {@code NSAID}. An operator file that breaks any of those renders a code twice inside one
-	 * parenthetical, and an answer quoting that record faithfully is reported.
+	 * {@code DrugReference.normalizedAtcCodes()}, which returns a {@code Set}, and the chip's class
+	 * sentence renders one subgroup. Several renderers parenthesise dataset- or operator-authored
+	 * FREE TEXT beside a code — a drug class, an interaction note, a severity, a cross-reactivity
+	 * group name, a generic name — so the guarantee is about the data rather than about the code, and
+	 * it is stated as a measurement rather than as a list of renderers that would go stale.
 	 *
-	 * <p><b>Every BALANCED group is read</b> ({@link #balancedParentheticals}), over a bracket walk
-	 * rather than a regex, so a marker buried in a nested aside ({@code (J01MA (see [4]))}) is inside
-	 * the parenthetical that states the code; an innermost-only scan reads {@code (see [4])}, finds
-	 * no code in it, and never examines the group that has one. An unmatched {@code (} is never
-	 * emitted and does not pool a whole paragraph's codes into one "parenthetical" — that would be a
-	 * false alarm manufactured out of a typo — and, since every group is read rather than only the
-	 * outermost, it does not silence what follows it either.
+	 * <p>Measured over all three shipped reference files, by driving the real parsers and this class's own {@link #classCodesIn}: of the knowledge base's 597,161 free-text fields across 2283 entries — drug class, generic name, display label, every interaction note and severity, every contraindication note and token — ZERO state an ATC-shaped token; the curated file's 4 rows carry a drug class stating none; and the one shipped cross-reactivity group is named {@code NSAID}. So no shipped data can put a code inside a parenthetical twice. An operator file that states one in any of those fields can, and an answer quoting that record faithfully is then reported.
+	 *
+	 * <p><b>Every parenthetical is read AT ITS OWN LEVEL</b> ({@link #parentheticalsAtTheirOwnLevel}),
+	 * over a bracket walk rather than a regex: a nested group's codes and markers are that group's,
+	 * not its parent's. Both rules are then about one pair of brackets, which is what they say. An
+	 * unmatched {@code (} opens nothing — it neither pools a paragraph into one "parenthetical" nor
+	 * silences the groups after it — and an unmatched {@code )} closes nothing. That walk's javadoc
+	 * carries what the two rejected readings cost, both of which shipped in review.
 	 *
 	 * <p><b>It reports; it never rewrites</b>, for the reason the membership report gives and not for
 	 * a new one: editing a clinician-facing sentence is a larger decision than this check is licensed
@@ -342,10 +336,11 @@ final class ClassCodeFidelityCheck {
 	 * answers, ZERO stating an ATC-shaped token; 0 repetitions and 0 enclosed markers, both
 	 * vacuously), so "no hits in the fixtures" is vacuous rather than evidence.
 	 */
-	private static void reportMalformedParentheticals(Integer patientId, String answer) {
+	private static void reportMalformedParentheticals(Integer patientId, String answer,
+			List<Integer> cited) {
 		Set<String> repeated = new LinkedHashSet<String>();
 		Set<String> enclosed = new LinkedHashSet<String>();
-		for (String group : balancedParentheticals(answer)) {
+		for (String group : parentheticalsAtTheirOwnLevel(answer)) {
 			// Through classCodesIn, not a second reading of the pattern: that accessor is what this
 			// class means by "the codes a text states", and a filter added to it later (dropping a
 			// level too coarse to be a claim, say) has to reach these two rules as well as the
@@ -375,12 +370,19 @@ final class ClassCodeFidelityCheck {
 			// by that rule's own design, so a compact group the structured citations array does not
 			// corroborate — {@code (H02AB [12, 13])} — is not read as markers here and is missed.
 			Set<Integer> inGroup = ChartSearchAiUtils.citedIndexes(group);
+			// Only markers that really are citations: this method is handed the same validated list
+			// the membership report cites, so a bracketed CLINICAL value inside the parenthetical —
+			// "(J01MA, dose [97] mg)", "(J01MA, eGFR [45] ml/min)" — is not read as a misplaced
+			// marker. Re-deriving citedness from the prose is what reportClassCodeDefects' own
+			// @param cited forbids one arity up, and CLAUDE.md's inline-citation rule one level up
+			// again: an uncorroborated bracketed number is a value, not a reference.
+			inGroup.retainAll(cited);
 			if (!inGroup.isEmpty()) {
 				// One entry per offending group, not two pooled lists: with two such groups in one
 				// answer, pooled lists say which codes and which markers occurred and no longer say
 				// which sat with which, and reconstructing the placement from the line alone is what
-				// this check's logging is for. A Set because nesting yields the same group's codes
-				// and markers again at each level it is enclosed by, and one placement is one entry.
+				// this check's logging is for. A Set so two groups stating the same thing are one
+				// entry; each group appears once, since each is read at its own level.
 				enclosed.add(stated + " with " + inGroup);
 			}
 		}
@@ -400,31 +402,59 @@ final class ClassCodeFidelityCheck {
 	}
 
 	/**
-	 * @return the contents of every BALANCED {@code (...)} group in {@code text} — a nested group on
-	 *         its own as well as inside each group enclosing it — in closing order. An unmatched
-	 *         {@code (} is never emitted and neither poisons nor pools what follows it, and an
-	 *         unmatched {@code )} is ignored. Empty for null text.
+	 * @return the text of every {@code (...)} group in {@code text} AT ITS OWN LEVEL — the content
+	 *         between its brackets with each nested group's own span left out, since that span is
+	 *         its own entry — in opening order, one entry per matched {@code (}. An unmatched
+	 *         {@code (} opens nothing and an unmatched {@code )} closes nothing. Empty for null text.
 	 *
-	 *         <p>Every group rather than the outermost: an outermost-only walk emits nothing at all
-	 *         once an unclosed {@code (} is open, so a single stray bracket anywhere in the prose
-	 *         made both rules blind to the whole remainder of the answer — silently, and fail-open,
-	 *         in a rule whose subject IS malformed model prose. Reading every group costs the
-	 *         repeated evaluation of a nested one, which the callers' sets collapse.
+	 *         <p><b>Own level, and both halves of that were wrong once.</b> Reading only the
+	 *         OUTERMOST group emitted nothing at all while an unclosed {@code (} was open, so one
+	 *         stray bracket made both rules blind to the whole remainder of an answer — silently,
+	 *         fail-open, on exactly the malformed prose they are about. Reading every group's WHOLE
+	 *         text instead put a child's codes and markers into its parent as well, so two clauses
+	 *         wrapped in one aside ({@code (levofloxacin (J01MA) and moxifloxacin (J01MA))}) reported
+	 *         a repetition, and a marker correctly placed after an inner clause
+	 *         ({@code (ATC class (J01MA) [3])}) reported a misplacement — both correct prose, and the
+	 *         cries-wolf direction this check must not fail in. Pairing the brackets first and then
+	 *         reading each group at its own level is what answers all three, and it is linear: every
+	 *         character belongs to exactly one level, and an ancestor steps over a nested span in one
+	 *         jump. The whole-text form was measured quadratic — seconds of blocking-path CPU and a
+	 *         multi-megabyte WARN line on a deeply bracketed answer.
 	 */
-	private static List<String> balancedParentheticals(String text) {
+	private static List<String> parentheticalsAtTheirOwnLevel(String text) {
 		List<String> groups = new ArrayList<String>();
 		if (text == null) {
 			return groups;
 		}
+		int length = text.length();
+		int[] closedAt = new int[length];
+		Arrays.fill(closedAt, -1);
 		Deque<Integer> open = new ArrayDeque<Integer>();
-		for (int i = 0; i < text.length(); i++) {
+		for (int i = 0; i < length; i++) {
 			char c = text.charAt(i);
 			if (c == '(') {
-				open.push(Integer.valueOf(i + 1));
+				open.push(Integer.valueOf(i));
 			}
 			else if (c == ')' && !open.isEmpty()) {
-				groups.add(text.substring(open.pop().intValue(), i));
+				closedAt[open.pop().intValue()] = i;
 			}
+		}
+		for (int i = 0; i < length; i++) {
+			if (closedAt[i] < 0) {
+				continue;
+			}
+			StringBuilder own = new StringBuilder();
+			int j = i + 1;
+			while (j < closedAt[i]) {
+				if (closedAt[j] >= 0) {
+					j = closedAt[j] + 1;
+				}
+				else {
+					own.append(text.charAt(j));
+					j++;
+				}
+			}
+			groups.add(own.toString());
 		}
 		return groups;
 	}

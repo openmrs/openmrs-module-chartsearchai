@@ -210,11 +210,17 @@ public class ArchitectureGuardTest {
 	 * for a visibility the compiler already enforces.
 	 *
 	 * <p><b>Stated POSITIVELY, because forbidding spellings was measured not to work.</b> The first
-	 * version asked only for one compiled {@code Pattern} and no {@code \\[} literal, and three
-	 * ordinary relocations walked through it with the build green — a nested class assembling the
-	 * brackets by concatenation, a {@code charAt}/{@code isDigit} scan with no regex at all, and
-	 * {@code INLINE_CITATION.matcher} used directly. What closes all three is the first assertion
-	 * below: the decode step must be CALLED. The two negatives stay as defence in depth.
+	 * version asked only for one compiled {@code Pattern} and no {@code \\[} literal, and three of
+	 * four ordinary relocations walked through it with the build green — a nested class assembling
+	 * the brackets by concatenation, a {@code charAt}/{@code isDigit} scan with no regex at all, and
+	 * {@code INLINE_CITATION.matcher} used directly (only a plain single-line
+	 * {@code Pattern.compile} was caught). What closes the other three is the first assertion below:
+	 * the decode step must be CALLED. The two negatives stay as defence in depth.
+	 *
+	 * <p>It reads SOURCE TEXT, so it asks that the call be present and not that its result be used:
+	 * a dialect written BESIDE a retained {@code citedIndexes} call is out of its reach, and no
+	 * behavioural case sees that either. Named rather than papered over — the residue is what a
+	 * later rule would have to close.
 	 *
 	 * <p>It reads the file itself rather than going through {@link #scanForPattern}, which reports
 	 * per-line matches across the whole tree: this rule needs a COUNT, one file, and a positive

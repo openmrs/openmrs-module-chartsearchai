@@ -531,19 +531,85 @@ public class ClassCodeFidelityTest {
 	}
 
 	@Test
-	public void aMarkerNestedOneParentheticalDeeperIsStillInsideTheCodesOwn() {
-		// The grouping rule, pinned rather than left to a regex: groups are read OUTERMOST-first, so
-		// a marker the model buries in a nested aside is still inside the parenthetical that states
-		// the code. An innermost-only scan reads "(see [N])" — which states no code — and never
-		// examines the group that does, so it reports nothing here and the rule's reach would be
-		// decided by which regex was written rather than by what the rule says.
+	public void aMarkerInANestedAsideBelongsToTheAsideAndNotToTheCode() {
+		// REPLACES a case added earlier in this same change, which asserted the opposite. That case
+		// read a parenthetical's WHOLE text, nested groups included, and clean-context review
+		// measured what it costs: "(ATC class (J01MA) [3])" — a marker correctly placed after the
+		// clause it attributes — was reported as misplaced, and "(levofloxacin (J01MA) and
+		// moxifloxacin (J01MA))" as a repetition, both on correct prose. Each parenthetical is now
+		// read at its own level, so a nested aside's marker is the aside's. The cost is this shape:
+		// a marker the model really did bury inside the code's brackets, one level down, is not
+		// reported. Silence is the direction this check must fail in.
 		service.setLlmProvider(answering("Ciprofloxacin is in the same ATC class (" + TRUE_CODE
 				+ " (see [" + finding.getIndex() + "])) as the patient's active order."));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			service.search(patient(), QUESTION);
+			assertFalse(capture.describeAll().isEmpty(),
+					"the capture must receive the pipeline's own INFO lines, or the assertion below "
+							+ "passes vacuously");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"a marker one level deeper is the aside's, not the code's. Captured: "
+							+ capture.describeAll());
+		}
+	}
+
+	@Test
+	public void twoClausesWrappedInOneAsideAreStillTwoClauses() {
+		// The false alarm that decided the level semantics. Read whole, the enclosing aside states
+		// the class twice — once from each child — and a correct answer about two partners of one
+		// class is accused of the defect this check exists to report. At its own level the aside
+		// states no code at all.
+		service.setLlmProvider(answering("Two of her orders (levofloxacin (" + TRUE_CODE
+				+ ") and moxifloxacin (" + TRUE_CODE + ")) are fluoroquinolones ["
+				+ finding.getIndex() + "]."));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			service.search(patient(), QUESTION);
+			assertFalse(capture.describeAll().isEmpty(),
+					"the capture must receive the pipeline's own INFO lines, or the assertion below "
+							+ "passes vacuously");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"two clauses inside one aside are two clauses, not a repetition. Captured: "
+							+ capture.describeAll());
+		}
+	}
+
+	@Test
+	public void aRepetitionNestedInsideAnotherParentheticalIsStillReported() {
+		// The other side of the same rule, and what an outermost-or-maximal-only walk loses: the
+		// offending brackets are the INNER ones, and the group enclosing them states no code of its
+		// own. Reading only the outermost group reports nothing here.
+		service.setLlmProvider(answering("Her chart notes (she is in the same ATC class (" + TRUE_CODE
+				+ ", " + TRUE_CODE + ") as the order) throughout [" + finding.getIndex() + "]."));
 		try (LogCapture capture = LogCapture.on(CHECK)) {
 			service.search(patient(), QUESTION);
-			assertTrue(warnStating(capture, "inside a parenthetical", "[" + TRUE_CODE + "]"),
-					"the outermost group states the code and carries the marker, so the marker is "
-							+ "inside the code's own parenthetical. Captured: " + capture.describeAll());
+			assertTrue(warnStating(capture, "more than once inside one parenthetical",
+					"[" + TRUE_CODE + "]"),
+					"the inner brackets are the offending ones and must be read on their own. "
+							+ "Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void aBracketedClinicalValueInsideTheParentheticalIsNotAMisplacedMarker() {
+		// The marker rule reads the VALIDATED citations, not every bracketed integer: an
+		// uncorroborated bracketed number in answer prose is a clinical value, which is the whole
+		// reason INLINE_CITATION is single-index. Re-derived from the prose, a dose or an eGFR
+		// written inside the class parenthetical is reported as a misplaced citation of a record
+		// that does not exist.
+		service.setLlmProvider(answering("Ciprofloxacin is in the same ATC class (" + TRUE_CODE
+				+ ", dose [97] mg) as the patient's active order — possible duplicate therapy ["
+				+ finding.getIndex() + "]."));
+		// On the PACKAGE so the assertion is not vacuous — the check reports nothing here and a
+		// class-scoped capture would be empty — but asserted on the check's OWN message rather than
+		// on WARN level, because the pipeline legitimately warns about the out-of-range index
+		// itself ("LLM cited record [97] which does not exist"), which is that guard doing its job.
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			service.search(patient(), QUESTION);
+			assertFalse(capture.describeAll().isEmpty(),
+					"the capture must receive the pipeline's own lines, or the assertion below "
+							+ "passes vacuously");
+			assertFalse(warnStating(capture, "inside a parenthetical"),
+					"[97] is a dose, not a citation of record 97. Captured: " + capture.describeAll());
 		}
 	}
 

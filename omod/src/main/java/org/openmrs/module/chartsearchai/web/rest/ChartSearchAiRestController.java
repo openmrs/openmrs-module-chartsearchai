@@ -1196,7 +1196,7 @@ public class ChartSearchAiRestController {
 	 * (issue #340). It is the rating the two PAIRWISE arms order their chips by before
 	 * {@code DrugSafetyValidator.maxPairChips} cuts the list, and until #340 it stopped here — so the
 	 * only way to badge a Major differently from a Minor was to substring-match the middle of
-	 * {@link SafetyWarning#getDetail()}, a clinician-facing sentence this module rewords freely. Not
+	 * {@link SafetyWarning#getDetail()}, clinician-facing prose this module rewords freely. Not
 	 * hypothetical: {@code eval/drift-metric/score_probe_safety.py} carries such a parse and its own
 	 * comment calls it "the fault issue #207 exists to have removed". Publishing the rating asserts
 	 * nothing the chip's own prose does not already assert to the clinician — it is the SOURCE

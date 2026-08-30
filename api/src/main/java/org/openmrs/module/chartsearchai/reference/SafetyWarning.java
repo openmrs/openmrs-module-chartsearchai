@@ -198,7 +198,7 @@ public class SafetyWarning {
 	}
 
 	/**
-	 * The warning as complete, standalone prose opening on the drug's name — e.g. "The stated
+	 * The warning as complete, standalone prose naming its own drug — e.g. "The stated
 	 * Ibuprofen dose ~2400 mg/day exceeds the 1200 mg/day maximum for ages 2-11", or
 	 * "Warfarin interacts with active order aspirin — Major. …".
 	 *
@@ -206,16 +206,15 @@ public class SafetyWarning {
 	 * belongs here.</b> This javadoc read "one complete, standalone sentence" while illustrating it
 	 * with the two-sentence second example above, and a first attempt to correct that put a rule in
 	 * its place ("one for a contraindication, two for a rated interaction, three when folded") which
-	 * measurement refuted as well. What the composition actually depends on is authored TEXT:
-	 * {@code DdiDrugReferenceSource.noteFor} appends a rule's note — one sentence or many, whatever
-	 * the dataset's mechanism description happens to be, and a single sentence where the row has
-	 * none — and the fold then appends the class sentence after {@code DrugSafetyValidator.endSentence}.
-	 * Measure it if you need a number, over the dataset you actually ship. A renderer that splits or
-	 * truncates at a sentence boundary drops the mechanism text, which is the chip's clinical
-	 * content; render the whole string.
+	 * measurement refuted as well. What the composition depends on is authored TEXT — a dataset's
+	 * mechanism description is whatever its author wrote — so measure it over the dataset you ship if
+	 * you need a number. How a rated interaction's detail is assembled is stated once, on
+	 * {@link #getSeverity()}, and is not restated here. A renderer that splits or truncates at a
+	 * sentence boundary drops the mechanism text, which is the chip's clinical content; render the
+	 * whole string.
 	 *
 	 * <p><b>Renderers should display this alone</b>; prefixing {@link #getDrug()} duplicates the
-	 * subject, because every detail already opens with it. It is also this field, not
+	 * subject, because every detail already names it. It is also this field, not
 	 * {@link #getDrug()}, that tells one warning from another — see {@link #getDrug()} for why.
 	 */
 	public String getDetail() {
@@ -248,7 +247,7 @@ public class SafetyWarning {
 	 * {@code ChartSearchAiRestController.serializeSafetyWarnings}. Verbatim and UNNORMALIZED, which is
 	 * deliberate rather than lazy: the field is the dataset's rating, and coercing it would put the
 	 * wire at odds with the very prose a client is being told to stop parsing. Publishing it asserts
-	 * nothing the chip's sentence does not already assert to the clinician — it is the SOURCE's
+	 * nothing the chip's own prose does not already assert to the clinician — it is the SOURCE's
 	 * rating, not this module's judgment about what may be done, which is the separate thing issue
 	 * #283 keeps off the wire ({@code DrugSafetyValidator.licensesWithholding} and the
 	 * {@code DrugReferenceInjector.STRENGTH_*} clauses are prompt-facing only).
@@ -268,8 +267,8 @@ public class SafetyWarning {
 	 * the production method that produced it, and is not restated here.
 	 *
 	 * <p><b>Read this field; do not fall back to parsing {@link #getDetail()}.</b> On the bundled
-	 * DDInter dataset that sentence does carry the rating, and without exception — though not at its
-	 * start, which is the drug's own label: {@code DdiDrugReferenceSource.noteFor} builds every note as
+	 * DDInter dataset that prose does carry the rating, and without exception — though not at its
+	 * start, which is the drug's own name: {@code DdiDrugReferenceSource.noteFor} builds every note as
 	 * {@code severity + ". " + mechanism}, or as
 	 * {@code severity + " severity interaction (… no mechanism description on file)."} where the row
 	 * has none, and {@code DrugSafetyValidator.interactionWarning} appends that note after an em dash,

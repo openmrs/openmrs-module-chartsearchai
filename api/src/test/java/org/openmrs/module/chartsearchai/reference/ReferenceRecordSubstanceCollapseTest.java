@@ -203,8 +203,12 @@ public class ReferenceRecordSubstanceCollapseTest {
 	@Test
 	public void theSurvivingRecordIsTheRouteUnspecifiedRowEvenWhenItIsNotTheFamilysFirst()
 			throws IOException {
-		// 7 of the shipped KB's 121 multi-row families list a qualified row BEFORE the unqualified one
-		// (measured 2026-08-06) — Chloroprocaine is one of them, and the slice keeps the KB's order. A
+		// Some of the shipped KB's multi-row families list a qualified row BEFORE the unqualified one —
+		// Chloroprocaine is one of them, and the slice keeps the KB's order. The count that stood here
+		// (7 of 121, measured 2026-08-06) is deliberately gone rather than refreshed: its base was
+		// already stale at 129, and since issue #250 "qualified" reads one way as a trailing
+		// parenthetical and another as `namesNoRoute()`, which answer differently for four shipped rows
+		// — so a bare count here says less than the family it names. A
 		// first-wins collapse injects "Chloroprocaine (ophthalmic)" for a question about chloroprocaine,
 		// i.e. an ophthalmic monograph as the profile of a drug asked about by its bare name.
 		List<String> texts = DrugReferenceTestSupport.referenceTexts(DrugReferenceTestSupport

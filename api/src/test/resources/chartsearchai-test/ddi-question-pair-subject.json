@@ -1,0 +1,65 @@
+{
+ "metadata": {
+  "note": "Verbatim DDInter 2.0 slice for issue #250's second consumer — DrugSafetyValidator.outranks, which reads the same namesNoRoute() the fold does, to decide which row owns a question-PAIR chip's sentence. Four rows and their two mutual interaction rows, taken unedited from the shipped 19 MB KB in the shipped file's own order (DDInter2019, DDInter2100, DDInter2101, DDInter2221 at indices 1134, 1225, 1226 and 1359). The tick-borne family is filed under 'Tick-borne encephalitis vaccine (whole virus, inactivated)', which is the non-paediatric row's own display name, so before #250 the syntactic reading called that row route-qualified. TWO Moderna rows and not one, deliberately: they make the fixture discriminate. 'Moderna covid-19 vaccine' carries no trailing parenthetical, so its pair's route step ties on both sides of the correction and dataset order keeps that sentence where it was; 'Moderna COVID-19 Vaccine (6m-5y)' is a PRESENTATION, so its pair's sentence moves to the row the data names the tick-borne substance after. One question, two pairs, exactly one of them moving — which is what a slice carrying only the second could not show. Verified to reproduce the shipped KB's own answer for this question on both sides of the correction: two chips before and after, one subject reversing."
+ },
+ "mechanisms": {
+  "7957": {
+   "text": "The safety, immunogenicity, and efficacy of SARS-CoV-2 (COVID-19) vaccines when administered concurrently with other vaccines have not been adequately assessed.  Extensive experience with non-COVID-19 vaccines has demonstrated that immunogenicity and adverse event profiles are generally similar when vaccines are administered simultaneously compared to when they are administered alone.",
+   "categories": [
+    "others"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter2019",
+   "name": "Moderna covid-19 vaccine",
+   "rxcui": "2468299",
+   "rxnorm_name": "Moderna COVID-19 Vaccine",
+   "drugbank_id": null,
+   "atc": [],
+   "ciel": []
+  },
+  {
+   "id": "DDInter2100",
+   "name": "Tick-borne encephalitis vaccine (whole virus, inactivated, pediatric)",
+   "rxcui": "2568586",
+   "rxnorm_name": "Tick-borne encephalitis vaccine (whole virus, inactivated)",
+   "drugbank_id": null,
+   "atc": [],
+   "ciel": []
+  },
+  {
+   "id": "DDInter2101",
+   "name": "Tick-borne encephalitis vaccine (whole virus, inactivated)",
+   "rxcui": "2568586",
+   "rxnorm_name": "Tick-borne encephalitis vaccine (whole virus, inactivated)",
+   "drugbank_id": "DB16611",
+   "atc": [],
+   "ciel": []
+  },
+  {
+   "id": "DDInter2221",
+   "name": "Moderna COVID-19 Vaccine (6m-5y)",
+   "rxcui": null,
+   "rxnorm_name": null,
+   "drugbank_id": null,
+   "atc": [],
+   "ciel": []
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter2019",
+   "DDInter2101",
+   "Moderate",
+   "7957"
+  ],
+  [
+   "DDInter2101",
+   "DDInter2221",
+   "Moderate",
+   "7957"
+  ]
+ ]
+}

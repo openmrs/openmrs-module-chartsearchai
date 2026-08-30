@@ -140,7 +140,9 @@ public class LlmInferenceServicePairChipExtentTest {
 	@Test
 	public void anAnswerBuiltWithoutAProducerStatesNothingRatherThanACompleteScreen() {
 		// Absence is "nobody measured", never "the screen found everything" — the distinction
-		// getSearchMode() makes for its own field, and the one PairChipExtent's javadoc enumerates.
+		// getReferenceSlice() makes for its own field, and the one PairChipExtent's javadoc enumerates.
+		// NOT getSearchMode(), which does the opposite: it collapses absence into a SEARCH_MODE_UNKNOWN
+		// sentinel and is never null, which is the fail-open this type refuses.
 		ChartAnswer unstated = new ChartAnswer("A [1].", Collections.<RecordReference> emptyList());
 
 		assertNull(unstated.getPairChipExtent());

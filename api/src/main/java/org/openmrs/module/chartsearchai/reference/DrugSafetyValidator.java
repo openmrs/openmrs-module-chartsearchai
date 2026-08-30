@@ -213,7 +213,7 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * Production entry point with the chart's record mappings, which enable echo scoping: an
+	 * Public entry point with the chart's record mappings, which enable echo scoping: an
 	 * answer-named drug that a record cited by the answer already names in its own text (a
 	 * recited reference partner, an allergy reported off the chart) is a mention, not a
 	 * proposal, and is not validated (issue #105). Passing {@code null}/empty mappings disables

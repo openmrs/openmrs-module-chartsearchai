@@ -50,8 +50,9 @@ package org.openmrs.module.chartsearchai.reference;
  * form</b> — the second because it is the only one a frontend author reads, and everywhere else
  * points here rather than restating it. Add a situation and you update two places by design; restate
  * it in a third and the list grows in one of them, which is what
- * {@code SerializedRecord.getOrderActive()}'s own rule records having happened. Two situations,
- * deliberately not distinguished because a consumer must treat them alike:
+ * {@code SerializedRecord.getOrderActive()}'s own rule records having happened. Three situations —
+ * the first two deliberately not distinguished, because a consumer must treat them alike, and the
+ * third told apart by WHERE it is read rather than by this value:
  *
  * <ol>
  *   <li>no pairwise arm enumerated anything — the question named fewer than two reference drugs
@@ -61,6 +62,10 @@ package org.openmrs.module.chartsearchai.reference;
  *   <li>{@code validate} threw and degraded to no warnings, its documented fail-safe — and the
  *       statement is published only on the normal return, so a degraded pass states nothing
  *       rather than describing chips that were discarded.</li>
+ *   <li>the statement has not been produced YET — the early {@code done} answer of an
+ *       async-grounding stream is built before validation runs, carries no chips either, and is
+ *       followed by a {@code grounded} event carrying both. A streaming client must keep consuming
+ *       rather than read this one as an answer about the screen.</li>
  * </ol>
  *
  * <p>Never read absence as completeness, and never re-derive either count from the chip list.

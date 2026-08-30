@@ -258,6 +258,39 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 	}
 
 	@Test
+	public void aPassThatThrewStatesNothingRatherThanACompleteScreen() {
+		// The one leg of the null contract a code change can break, and it was unpinned: the others
+		// return before an arm can run, but the fail-safe catches a RuntimeException and answers with
+		// an EMPTY warning list, so a sink written there would publish {found: 0, reported: 0} — which
+		// README tells a client to read as a screen that ran and related nothing, i.e. COMPLETE.
+		// Measured before this case existed: recording (0, 0) inside that catch left api and omod
+		// entirely green. Rendering silence as a denial, on a safety surface.
+		Context.getAdministrationService()
+				.setGlobalProperty(ChartSearchAiConstants.GP_DRUG_REFERENCE_ENABLED, "true");
+		DrugSafetyValidator throwing = DrugReferenceTestSupport.validator(new DrugReferenceService() {
+
+			// The arity validate actually calls — the one-argument sibling is not on its path, and a
+			// stub on that one throws nothing, leaving this case green against a screen that really
+			// did run and honestly state (0, 0). Ask what the fixture can EXPRESS, not only what it
+			// asserts.
+			@Override
+			public PatientClinicalContext withReferenceNames(PatientClinicalContext context,
+					List<DrugReference> orderEntries) {
+				throw new IllegalStateException("the reference dataset is unreadable");
+			}
+		});
+		PairChipExtent.Sink sink = new PairChipExtent.Sink();
+
+		List<SafetyWarning> chips = throwing.validate("", SCREENING_QUESTION,
+				Context.getPatientService().getPatient(7), null, sink);
+
+		assertTrue(chips.isEmpty(), "precondition: the fail-safe answers a throw with no warnings");
+		assertNull(sink.stated(),
+				"and it must state NOTHING about a screen it could not run — a zero here is a positive "
+						+ "claim that the pairwise check ran and related no pairs");
+	}
+
+	@Test
 	public void aQuestionThatRunsNeitherPairwiseArmStatesNothing() {
 		// Absence means the producer measured nothing, never that the screen was complete. This
 		// question names one reference drug — too few for the question-pair arm — and does not ask to

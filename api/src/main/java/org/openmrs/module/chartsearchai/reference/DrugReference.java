@@ -418,6 +418,18 @@ public class DrugReference {
 	 *         the Yersinia pestis 195/P antigen and the tick-borne row. That is why this reads
 	 *         {@link #namesItsSubstance()} as well as the stem.
 	 *
+	 *         <p><b>And what that trusts, said plainly.</b> Nothing here can tell
+	 *         {@code (formaldehyde inactivated)} from {@code (ophthalmic)} — reading the parenthetical's
+	 *         CONTENT would be the pattern-match-a-label mistake issue #148 undid — so what admits the
+	 *         first is only that the data files the family under it. A family filed under a
+	 *         route-qualified substance name that ALSO holds a plain row would therefore have its
+	 *         presentation elected, which is the shape issues #174 and #187 removed. The shipped dataset
+	 *         has exactly one family whose elected row carries a trailing parenthetical while a plain
+	 *         sibling exists, and
+	 *         {@code SubstanceNameRowTest.everyFamilyElectingAQualifiedRowOverAPlainSiblingIsNamedRatherThanCounted}
+	 *         names its members rather than counting them, so a refresh that adds one reddens with the
+	 *         offending name.
+	 *
 	 *         <p>It stays a UNARY property — one row's display name against THAT SAME ROW's own
 	 *         {@code substanceName} — which is why it needs none of the same-substance scoping
 	 *         {@link #canonicalRow}'s second rung has: that rung's conclusion is RELATIONAL ("this row
@@ -574,13 +586,18 @@ public class DrugReference {
 	 * than a re-expression of it; re-measure before relying on the figures. Of the 129 multi-row families,
 	 * <b>3 change subject</b> and 126 do not: {@code Fluoroestradiol f-18}/{@code Estradiol},
 	 * {@code Daxibotulinumtoxina}/{@code Botulinum toxin type A}, and the paediatric tick-borne
-	 * encephalitis vaccine/the row the data files that family under. <b>All three moves are LATERAL in
-	 * route terms</b> — the first two elect a row that names no route where the incumbent did too, and the
-	 * third elects one that does not where the incumbent did not either, since neither tick-borne row is
-	 * unqualified. <b>Read that paragraph against the PRE-issue-#250 predicate</b>, which is what it was
-	 * measured with: {@link #namesNoRoute()} now calls the tick-borne substance row unqualified, so the
-	 * third move reads as lateral for a different reason and the count below moves. The count of families
-	 * electing a route-qualified row is 10 before and 10 after. At the one
+	 * encephalitis vaccine/the row the data files that family under. All three moves were LATERAL in route
+	 * terms, and the count of families electing a route-qualified row was 10 before and 10 after.
+	 *
+	 * <p><b>That paragraph is a historical measurement and must be read against the PRE-issue-#250
+	 * predicate, which is what produced it.</b> Do not carry any of its three claims forward: re-measured
+	 * 2026-08-30 against the corrected {@link #namesNoRoute()}, disabling this rung still moves 3 of the
+	 * 129 families but a DIFFERENT three — {@code Fluoroestradiol f-18}/{@code Estradiol}, the influenza
+	 * A/Vietnam typo row/the row the data files that family under, and
+	 * {@code Daxibotulinumtoxina}/{@code Botulinum toxin type A}. The tick-borne family is now decided by
+	 * rung ONE and is not a rung-two move at all, and the A/Vietnam move is not lateral: the incumbent
+	 * carries no trailing parenthetical and the elected row does. The 10-before-10-after count moves too,
+	 * in a direction that depends on which reading it is on — see the paragraph below. At the one
 	 * {@code canonicalRow} site whose row set is NOT one substance
 	 * ({@code DrugSafetyValidator.entryForAtcCode}, over every row publishing one ATC code, 30 of the
 	 * KB's 2148 codes spanning more than one substance) exactly 1 fold moves, and within one substance.

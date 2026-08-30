@@ -304,6 +304,62 @@ public class SubstanceNameRowTest {
 		            + "vacuous on the half issue #250 added");
 	}
 
+	@Test
+	public void everyFamilyElectingAQualifiedRowOverAPlainSiblingIsNamedRatherThanCounted()
+	        throws Exception {
+		// The residue issue #250's correction CREATES, kept visible because the module cannot see it
+		// itself. Rung one used to refuse any trailing parenthetical outright, so a presentation row could
+		// never outrank a plain sibling. It now admits one whose display name IS the name the data files
+		// the family under — and nothing in the predicate can tell `(formaldehyde inactivated)`, a
+		// manufacturing descriptor, from `(ophthalmic)`, a route. Reading the parenthetical's CONTENT
+		// would be the pattern-match-a-label mistake issue #148 removed, so the module trusts the data
+		// instead, and this is where that trust is declared.
+		//
+		// So: a family filed under a route-qualified substance name that ALSO carries a plain row would
+		// have its presentation elected to speak for it — the shape issues #174 and #187 removed. The
+		// shipped dataset has no such family; the ONE member of this class is the influenza A/Vietnam
+		// antigen, whose plain sibling is the row with a dropped leading "I" and whose parenthetical
+		// names no route.
+		//
+		// Named and not counted, because each member is a decision to trust one substanceName against a
+		// plain sibling, and a count cannot say which one moved. A KB refresh that adds a member reddens
+		// here with that member's own name, which is the point: it needs adjudicating, not accepting.
+		List<DrugReference> all = DrugReferenceTestSupport.shippedEntries();
+		Map<Object, List<DrugReference>> families = new LinkedHashMap<Object, List<DrugReference>>();
+		for (DrugReference row : all) {
+			Object substance = row.substanceGroupKey();
+			List<DrugReference> rows = families.get(substance);
+			if (rows == null) {
+				rows = new ArrayList<DrugReference>();
+				families.put(substance, rows);
+			}
+			rows.add(row);
+		}
+
+		List<String> elected = new ArrayList<String>();
+		for (List<DrugReference> rows : families.values()) {
+			if (rows.size() < 2) {
+				continue;
+			}
+			boolean anyPlain = false;
+			for (DrugReference row : rows) {
+				if (carriesNoTrailingParenthetical(row)) {
+					anyPlain = true;
+				}
+			}
+			DrugReference winner = DrugReference.canonicalRow(rows);
+			if (anyPlain && !carriesNoTrailingParenthetical(winner)) {
+				elected.add(winner.getName());
+			}
+		}
+
+		assertEquals(Arrays.asList(SUBSTANCE_ROW), elected,
+		    "a family holding a plain row may have a qualified one speak for it only where the data "
+		            + "files the family under that qualified name, and every such family is adjudicated "
+		            + "here by name — a new one is a substanceName carrying a parenthetical the module "
+		            + "cannot tell from a route, so read it before accepting it. Was: " + elected);
+	}
+
 	/** Whether {@code row}'s display name carries no TRAILING parenthetical — the raw syntax
 	 *  {@link DrugReference#namesNoRoute()} reads, spelled out so a case can assert against the
 	 *  predicate rather than in its own terms. Anchored at the end like the predicate's own pattern, so
@@ -796,12 +852,12 @@ public class SubstanceNameRowTest {
 		assertTrue(substance.namesItsSubstance(),
 		    "precondition: the correctly-spelled row's display name must BE the name the data files the "
 		            + "family under, or there is nothing for this to prefer");
-		assertNotEquals(DrugReference.normalizeName(substance.getName()),
-		    DrugReference.displayStem(substance.getName()),
+		assertFalse(carriesNoTrailingParenthetical(substance),
 		    "precondition: and that display name must carry a TRAILING parenthetical, or the proxy never "
-		            + "misread it and this case witnesses nothing");
-		assertEquals(DrugReference.normalizeName(typo.getName()), DrugReference.displayStem(typo.getName()),
-		    "precondition: while the typo row's must carry none, which is what wins it rung one today");
+		            + "misread it and this case witnesses nothing — was " + substance.getName());
+		assertTrue(carriesNoTrailingParenthetical(typo),
+		    "precondition: while the typo row's must carry none, which is what wins it rung one today — "
+		            + "was " + typo.getName());
 
 		assertEquals(SUBSTANCE_ROW, DrugReference.canonicalRow(family).getName(),
 		    "the row the data files the family under must be elected, was elected from "
@@ -865,7 +921,7 @@ public class SubstanceNameRowTest {
 			String normalized = DrugReference.normalizeName(row.getName());
 			String substance = DrugReference.normalizeName(row.getSubstanceName());
 			if (normalized != null && normalized.equals(substance)
-			        && !normalized.equals(DrugReference.displayStem(row.getName()))) {
+			        && !carriesNoTrailingParenthetical(row)) {
 				selfNamingAndParenthesised.add(row);
 			}
 		}

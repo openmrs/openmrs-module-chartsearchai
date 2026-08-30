@@ -77,8 +77,10 @@ public class ActiveOrderResolutionPerPassTest {
 	 * arm, which reads the context's reference names through {@code hasActiveDrug} — and the injector
 	 * has already attached those before it calls in, so handing {@code validate} an EMPTY list leaves
 	 * every one of them standing. Measured by mutating the production call to thread
-	 * {@code Collections.emptyList()}: all three cases here stayed green, the build compiled and the
-	 * cases ran. A screening question is different in exactly the way this needs — it names no drug,
+	 * {@code Collections.emptyList()} while all three cases below were still driven with
+	 * {@link #QUESTION}: every one of them stayed green, the build compiled and the cases ran. Rerun
+	 * that mutation now and the case below REDDENS — because it is driven with this question, which is
+	 * the whole point. A screening question is different in exactly the way this needs — it names no drug,
 	 * so its subjects ARE the resolved active orders, straight off the threaded list
 	 * ({@code addActiveOrderPairInteractions}) — and under the same mutation it reddens.
 	 */
@@ -176,8 +178,16 @@ public class ActiveOrderResolutionPerPassTest {
 	 * context and after it consumes a list resolved from the raw one. The two cannot differ —
 	 * {@code withActiveDrugReferenceNames} copies the active drug names, the ATC codes and the orders
 	 * through and writes only the reference names, none of which {@code findForActiveOrders} reads —
-	 * but nothing said so, and this is what would redden if a later widening made the resolution read
-	 * the names it attaches. That is the "trap" {@code DrugSafetyValidator} recorded and did not fix.
+	 * but nothing said so, and this states it over a real resolution of real parsed data.
+	 *
+	 * <p><b>It does not catch a widening that makes the resolution read those names, and it was written
+	 * believing it did.</b> Measured: adding a leg to {@code findForActiveOrders} that resolves
+	 * {@code getActiveDrugReferenceNames()} leaves all three cases here green. Not because the case is
+	 * vacuous — the enriched context really does carry eleven reference names on this arrangement — but
+	 * because the excerpt has no alias that names an entry the order's own display does not, so the
+	 * widened resolution returns the same entries from raw and enriched alike. Catching it needs a
+	 * dataset where one entry's alias names another; this arrangement is not one, and saying so is
+	 * better than leaving the next author to trust a guard that cannot fire.
 	 *
 	 * <p>It pins {@code validate}'s INPUT, not the injector's threading; the case above is what pins
 	 * that. It does not discriminate the change — and it cannot be run against the pre-change code at

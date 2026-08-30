@@ -352,12 +352,19 @@ public final class DrugReferenceTestSupport {
 	 * the list rather than the first, because that count is the assertion in every caller but
 	 * {@link #injectedSafetyFinding}, which layers its own throw-on-empty contract on top.
 	 */
+	static List<RecordMapping> injectedFindings(PatientChart chart) {
+		return chart.getMappings().stream()
+				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(m.getResourceType()))
+				.collect(Collectors.toList());
+	}
+
 	/**
 	 * The rendered TEXT of {@link #injectedFindings} — the finding-shaped counterpart of
-	 * {@link #referenceTexts}, owned here for the same reason that one is: what a finding's text
-	 * consists of is decided in one place ({@code DrugReferenceInjector.renderFinding} appends the
-	 * strength clause and the uncorroborated-match note), so a file that spells the extraction itself
-	 * silently stops matching the others when that changes.
+	 * {@link #referenceTexts}. What a finding's text consists of is decided in one place
+	 * ({@code DrugReferenceInjector.renderFinding} appends the strength clause and the
+	 * uncorroborated-match note), so this is the shared spelling for the files that take it. It is not
+	 * yet the only one: {@code UncorroboratedFindingProvenanceTest} writes the same loop out at ten
+	 * sites, untouched here, and retiring those is a change of its own.
 	 */
 	static List<String> findingTexts(PatientChart chart) {
 		List<String> texts = new ArrayList<String>();
@@ -365,12 +372,6 @@ public final class DrugReferenceTestSupport {
 			texts.add(mapping.getText());
 		}
 		return texts;
-	}
-
-	static List<RecordMapping> injectedFindings(PatientChart chart) {
-		return chart.getMappings().stream()
-				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(m.getResourceType()))
-				.collect(Collectors.toList());
 	}
 
 	/** The real WHO ATC sample fixture (parsed by the real {@link AtcDrugReferenceSource#parse}). */
@@ -660,9 +661,9 @@ public final class DrugReferenceTestSupport {
 	 * resolution, so it must hold the raw context and the enriched one apart.
 	 *
 	 * <p>Extracted at the third caller (issue #255), the threshold {@code ModuleSourceRoot}'s javadoc
-	 * records: the two per-pass counting tests had each written this loop out, byte for byte. They
-	 * differed in one respect and it is inert — one lower-cased the flattened name set and the other
-	 * did not, and {@link PatientClinicalContext}'s own constructor lower-cases it either way (through
+	 * records: the two per-pass counting tests had each written this loop out, differing only in that
+	 * one lower-cased the flattened name set and the other did not — and that difference is inert,
+	 * because {@link PatientClinicalContext}'s own constructor lower-cases it either way (through
 	 * {@code DrugReference.normalizeName}), so the two spellings never produced different contexts.
 	 * Measured while extracting: with the loop lower-casing, not lower-casing, and doing so under a
 	 * flag, the api suite is green all three ways. So there is no knob here, and the reason there is

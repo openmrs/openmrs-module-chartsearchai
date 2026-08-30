@@ -250,7 +250,7 @@ public class DrugReferenceInjector {
 	 * As {@link #preAnswerFindings(PatientClinicalContext, String)}, for a caller that has already
 	 * resolved the patient's active orders to their reference entries and so can spare the validator
 	 * deriving them a second time (issue #255) — which is {@link #injectRecords}, the only production
-	 * caller of this arity.
+	 * caller that passes a non-null list; the two-argument overload above reaches this one too.
 	 *
 	 * @param orderEntries that resolution, or {@code null} to let the validator resolve for itself.
 	 *        It must be the resolution of {@code context}'s own orders; see the validator's own

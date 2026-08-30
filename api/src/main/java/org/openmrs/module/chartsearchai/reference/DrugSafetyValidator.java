@@ -285,11 +285,11 @@ public class DrugSafetyValidator {
 	 * one, and a needle matching twice is a hard failure in each guard's own unique-offset check
 	 * ({@code SourceScan.uniqueOffset} for {@code CoMedicationResolutionPerPassTest}, and
 	 * {@code ChipSubjectOneResolutionTest}'s own copy of it, which ADR Decision 54 records as
-	 * deliberately not migrated); and the second line alone names no METHOD, so it delimits whatever
-	 * body carries that parameter tail — a sibling helper given the same tail took the guard with it
-	 * and left the per-arm construction the assertion forbids passing. Move this declaration and the
-	 * needles move with it — {@code ChipSubjectOneResolutionTest} and
-	 * {@code CoMedicationResolutionPerPassTest}, which say so themselves.
+	 * deliberately not migrated); and the second line alone names no METHOD, which is what the first
+	 * line buys — with the name in the needle, only a declaration OF THIS METHOD can be the one it
+	 * delimits, where a tail alone can be worn by any sibling. Move this declaration and the needles
+	 * move with it — {@code ChipSubjectOneResolutionTest} and {@code CoMedicationResolutionPerPassTest},
+	 * which say so themselves.
 	 *
 	 * @param resolvedOrderEntries the patient's active orders ALREADY resolved to their reference
 	 *        entries by a caller that needed them itself, or {@code null} from a caller that has not

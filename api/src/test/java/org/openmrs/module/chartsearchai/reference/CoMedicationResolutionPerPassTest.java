@@ -264,9 +264,10 @@ public class CoMedicationResolutionPerPassTest {
 	/** The one arity of {@code validate} that builds the pass's shared state; the others delegate to
 	 *  it. It spans BOTH lines of the declaration: since issue #255 the arity above opens with a
 	 *  byte-identical first line, so the first line alone matches twice and {@link SourceScan#body}
-	 *  hard-fails on that; and the second line alone names no METHOD, so it would delimit whatever
-	 *  body carries that parameter tail — a sibling helper given the same tail takes the guard with
-	 *  it. Two lines keep the name in the needle and keep it unique. */
+	 *  hard-fails on that; and the second line alone names no METHOD, so nothing about it says the body
+	 *  it lands on is {@code validate}'s. What the first line buys is that name — see
+	 *  {@code ChipSubjectOneResolutionTest}'s copy of this constant for what a tail-only needle does
+	 *  and does not let through, which is not what it first appears. */
 	private static final String VALIDATE =
 			"validate(String answer, String question, PatientClinicalContext rawContext,\n"
 					+ "\t\t\tList<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries) {";

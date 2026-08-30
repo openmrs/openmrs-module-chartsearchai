@@ -262,15 +262,18 @@ public class CoMedicationResolutionPerPassTest {
 			"src/main/java/org/openmrs/module/chartsearchai/reference/DrugSafetyValidator.java";
 
 	/** The one arity of {@code validate} that builds the pass's shared state; the others delegate to
-	 *  it. It spans BOTH lines of the declaration: since issue #255 the arity above opens with a
-	 *  byte-identical first line, so the first line alone matches twice and {@link SourceScan#body}
-	 *  hard-fails on that; and the second line alone names no METHOD, so nothing about it says the body
+	 *  it. It spans ALL THREE lines of the declaration: since issue #255 the arity above opens with a
+	 *  byte-identical first line, and since issue #336 the five-argument seam it delegates from wraps
+	 *  its own parameters identically, so either shorter prefix matches twice and
+	 *  {@link SourceScan#body} hard-fails on it; the third line, the one naming the sink, is what
+	 *  makes the needle unique. The tail alone names no METHOD, so nothing about it would say the body
 	 *  it lands on is {@code validate}'s. What the first line buys is that name — see
 	 *  {@code ChipSubjectOneResolutionTest}'s copy of this constant for what a tail-only needle does
 	 *  and does not let through, which is not what it first appears. */
 	private static final String VALIDATE =
 			"validate(String answer, String question, PatientClinicalContext rawContext,\n"
-					+ "\t\t\tList<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries) {";
+					+ "\t\t\tList<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries,\n"
+					+ "\t\t\tPairChipExtent.Sink pairExtentSink) {";
 
 	private static final String MEMO_DECLARATION = "private final class CoMedications {";
 

@@ -219,9 +219,35 @@ public class DrugSafetyValidator {
 	 * proposal, and is not validated (issue #105). Passing {@code null}/empty mappings disables
 	 * the scoping and keeps every answer-named drug in play (the conservative pre-scoping
 	 * behavior).
+	 *
+	 * <p><b>Since issue #336, {@code LlmInferenceService} calls the five-argument overload below,
+	 * not this one</b> — it also publishes how bounded the pairwise interaction list is, which this
+	 * arity has nowhere to carry. A decorator or a test double that overrides THIS method alone is
+	 * therefore inert on the production path, and inert SILENTLY — it returns, production simply
+	 * never reaches it. Every such stub in this repo was retargeted in that commit, and only the one
+	 * asserting on the seam had gone red; the rest passed while stubbing nothing. Override the
+	 * overload below, and where a test asserts that production reached the validator at all, assert
+	 * WHICH arity it reached ({@code LlmInferenceServiceCitationWiringTest} does).
 	 */
 	public List<SafetyWarning> validate(String answer, String question, Patient patient,
 			List<RecordMapping> mappings) {
+		return validate(answer, question, patient, mappings, null);
+	}
+
+	/**
+	 * The production entry point a caller uses when it intends to PUBLISH how bounded the answer's
+	 * pairwise interaction list is (issue #336). Identical to
+	 * {@link #validate(String, String, Patient, List)} in every other respect.
+	 *
+	 * @param pairExtentSink a caller-supplied one-slot accumulator the pairwise arms state their
+	 *        candidate and reported counts into, or {@code null} from a caller that does not
+	 *        publish it. It is the caller's per-call object and never a field: this bean is a
+	 *        Spring singleton, so a field would be one slot shared by every concurrent request
+	 *        (issue #172). The fail-safe below is what makes the sink's own null honest — a pass
+	 *        that threw states nothing rather than stating a complete screen.
+	 */
+	public List<SafetyWarning> validate(String answer, String question, Patient patient,
+			List<RecordMapping> mappings, PairChipExtent.Sink pairExtentSink) {
 		try {
 			if (!ChartSearchAiUtils.isDrugReferenceEnabled()
 					|| !ChartSearchAiUtils.getBooleanGlobalProperty(
@@ -230,7 +256,7 @@ public class DrugSafetyValidator {
 				return new ArrayList<SafetyWarning>();
 			}
 			PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
-			return validate(answer, question, context, mappings);
+			return validate(answer, question, context, mappings, null, pairExtentSink);
 		}
 		catch (RuntimeException e) {
 			log.warn("Drug-safety validation failed; returning no warnings — the answer path is never broken", e);
@@ -277,16 +303,27 @@ public class DrugSafetyValidator {
 	}
 
 	/**
+	 * Five-argument seam retained for every caller that does not publish the pairwise extent, which
+	 * is every caller but {@code LlmInferenceService}; see the widest arity for both parameters.
+	 */
+	List<SafetyWarning> validate(String answer, String question, PatientClinicalContext rawContext,
+			List<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries) {
+		return validate(answer, question, rawContext, mappings, resolvedOrderEntries, null);
+	}
+
+	/**
 	 * The widest arity, and the one that builds the pass's shared state — every other delegates to it.
 	 *
-	 * <p><b>Two structural guards delimit this body by a literal needle, and each spells BOTH lines of
-	 * this declaration.</b> Neither line alone will do, for two different reasons, and both were
-	 * measured: the first line alone matches twice, since the arity above opens with a byte-identical
-	 * one, and a needle matching twice is a hard failure in each guard's own unique-offset check
-	 * ({@code SourceScan.uniqueOffset} for {@code CoMedicationResolutionPerPassTest}, and
-	 * {@code ChipSubjectOneResolutionTest}'s own copy of it, which ADR Decision 54 records as
-	 * deliberately not migrated); and the second line alone names no METHOD, which is what the first
-	 * line buys. Move this declaration and the needles
+	 * <p><b>Two structural guards delimit this body by a literal needle, and each spells ALL THREE
+	 * lines of this declaration.</b> No shorter prefix will do, and each shortening was measured. The
+	 * first line alone matches twice, since the arity above opens with a byte-identical one — and
+	 * since issue #336 that arity matches the first TWO lines byte for byte as well, because the
+	 * five-argument seam it delegates from wraps its own parameters identically, so it is now the
+	 * THIRD line, the one naming the sink, that makes the needle unique. A needle matching twice is a
+	 * hard failure in each guard's own unique-offset check ({@code SourceScan.uniqueOffset} for
+	 * {@code CoMedicationResolutionPerPassTest}, and {@code ChipSubjectOneResolutionTest}'s own copy
+	 * of it, which ADR Decision 54 records as deliberately not migrated). And the tail alone names no
+	 * METHOD, which is what the first line buys. Move this declaration and the needles
 	 * move with it — {@code ChipSubjectOneResolutionTest} and {@code CoMedicationResolutionPerPassTest},
 	 * which say so themselves.
 	 *
@@ -326,9 +363,18 @@ public class DrugSafetyValidator {
 	 *        {@code activeDrugReferenceNames}, which {@code findForActiveOrders} does not read.
 	 *        {@code ActiveOrderResolutionPerPassTest} pins both halves: that the pass resolves once,
 	 *        and that what it injects is what a self-resolving pass produces.
+	 *
+	 * @param pairExtentSink where the PAIRWISE arms state how many above-floor pairs they found and
+	 *        how many of them {@link #maxPairChips()} let them report, or {@code null} from a caller
+	 *        that does not publish it — which is every caller but {@code LlmInferenceService}. It is
+	 *        a caller-supplied per-call object rather than a field for issue #172's reason, the same
+	 *        one {@code resolvedOrderEntries} above gives. Issue #336: without it a capped list was
+	 *        indistinguishable from a complete one everywhere but the log. See
+	 *        {@link PairChipExtent} for what an absent statement does and does not mean.
 	 */
 	List<SafetyWarning> validate(String answer, String question, PatientClinicalContext rawContext,
-			List<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries) {
+			List<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries,
+			PairChipExtent.Sink pairExtentSink) {
 		List<SafetyWarning> warnings = new ArrayList<SafetyWarning>();
 		// The patient's active orders resolved to their reference entries — at most ONE dataset sweep
 		// per validate, and none at all where the caller has already made it (issue #255) — feeding
@@ -563,7 +609,8 @@ public class DrugSafetyValidator {
 		// LAST, so the patient's own findings lead: a chip about their allergy or their active order
 		// is a fact about them, and outranks a reference lookup about a pair they may not be on.
 		if (warnInteractions) {
-			addQuestionPairInteractions(warnings, questionDrugs, subjects, context, severityFloor);
+			recordPairExtent(pairExtentSink,
+					addQuestionPairInteractions(warnings, questionDrugs, subjects, context, severityFloor));
 		}
 		// Interaction screening (issue #113). A question that asks to be SCREENED names no drug, so
 		// neither question-driven arm above has an anchor and the whole feature stayed silent for the
@@ -586,8 +633,8 @@ public class DrugSafetyValidator {
 		// drift apart on what a pair is, which of its rows is worth chipping, or how many are shown.
 		if (warnInteractions && questionDrugs.isEmpty()
 				&& QueryScopeRouter.isInteractionScreening(question)) {
-			addActiveOrderPairInteractions(warnings, subjects, context, severityFloor, orderEntries,
-					interactionPairs);
+			recordPairExtent(pairExtentSink, addActiveOrderPairInteractions(warnings, subjects, context,
+					severityFloor, orderEntries, interactionPairs));
 		}
 		if (!warnings.isEmpty()) {
 			log.info("Drug-safety validator raised {} warning(s)", warnings.size());
@@ -770,11 +817,18 @@ public class DrugSafetyValidator {
 	 * <p><b>What the cap drops, and how it is visible.</b> A count rather than a character budget: a
 	 * chip is a whole sentence a clinician reads, and half a chip is not a smaller chip. Candidates are
 	 * ordered most-severe-first BEFORE the cut, so what goes is the least severe, and every withheld
-	 * pair is named in a WARN — a silent truncation would read to a clinician as "everything is
-	 * covered". That log line is currently the ONLY place the withheld count surfaces: a clinician-facing
-	 * "10 of 72 shown" needs a per-question container the chip API does not have (chips are per-drug
-	 * findings), so it is a frontend change rather than a module one. Recorded here as a decision rather
-	 * than left as an oversight.
+	 * pair is NAMED in a WARN — a silent truncation would read to a clinician as "everything is
+	 * covered". <b>The WARN is no longer the only place the cut surfaces</b> (issue #336): both arms
+	 * now state how many pairs they found beside how many they reported, on the answer as
+	 * {@code ChartAnswer.getPairChipExtent()} and on the wire as {@code interactionPairs}. This
+	 * javadoc used to say a clinician-facing "10 of 72 shown" needed a per-question container the chip
+	 * API does not have and was therefore a frontend change; the premise was half right and the
+	 * conclusion wrong. The CHIP array has no such container — chips are per-drug findings — but the
+	 * RESPONSE is itself the per-question container, and a key beside {@code safetyWarnings} is a
+	 * module change. Rendering "10 of 18 shown" is still the frontend's, in
+	 * {@code openmrs-esm-chartsearchai}; having something to render is not. What the WARN still holds
+	 * alone is WHICH pairs went, and their ratings — the statement is a count, deliberately, because a
+	 * list of withheld pairs on the wire is the uncapped prompt expansion this cap exists to prevent.
 	 *
 	 * <p><b>One honest limit on "most severe first":</b> {@link #severityPriority} sorts an UNRATED rule
 	 * above Major, matching {@code DrugReferenceInjector.InteractionNote} and for the same reason —
@@ -809,6 +863,21 @@ public class DrugSafetyValidator {
 				ChartSearchAiConstants.GP_DRUG_SAFETY_MAX_PAIR_CHIPS,
 				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_MAX_PAIR_CHIPS);
 		return configured > 0 ? configured : ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_MAX_PAIR_CHIPS;
+	}
+
+	/**
+	 * States a pairwise arm's extent into the caller's sink, where there is one and the arm ran.
+	 *
+	 * <p>One method for both arms, so neither can be given the statement and the other forgotten —
+	 * they are mutually exclusive, so at most one of these two calls can carry a non-null extent
+	 * (issue #336). A {@code null} extent means the arm's own gate refused before it enumerated
+	 * anything, which is not the same as its having enumerated nothing: an arm that ran and found no
+	 * above-floor pair states {@code found == 0}, a complete screen. See {@link PairChipExtent}.
+	 */
+	private static void recordPairExtent(PairChipExtent.Sink sink, PairChipExtent extent) {
+		if (sink != null && extent != null) {
+			sink.record(extent.getFound(), extent.getReported());
+		}
 	}
 
 	/**
@@ -3751,10 +3820,13 @@ public class DrugSafetyValidator {
 	 *        in {@code inPlay}, so its substance is always in that lookup's group map and the
 	 *        ungrouped-row fallback is unreachable from here.
 	 */
-	private void addQuestionPairInteractions(List<SafetyWarning> warnings, Set<DrugReference> questionDrugs,
-			SubstanceSubjects subjects, PatientClinicalContext context, int severityFloor) {
+	private PairChipExtent addQuestionPairInteractions(List<SafetyWarning> warnings,
+			Set<DrugReference> questionDrugs, SubstanceSubjects subjects, PatientClinicalContext context,
+			int severityFloor) {
 		if (questionDrugs.size() < 2) {
-			return;
+			// The arm did not run: one drug is not a pair, so there is no candidate list to state the
+			// extent of. Null, never a zero — see PairChipExtent for what the two say differently.
+			return null;
 		}
 		List<DrugReference> drugs = new ArrayList<DrugReference>(questionDrugs);
 		Map<DrugReference, String> names = pairKeyNames(drugs, severityFloor);
@@ -3788,16 +3860,21 @@ public class DrugSafetyValidator {
 		// equally-rated pairs keep the dataset order the entry loop produced them in.
 		if (found.isEmpty()) {
 			// Nothing to order or bound, and no GP read for the common "these two do not interact" case —
-			// the same shape the screening arm's own early return takes.
-			return;
+			// the same shape the screening arm's own early return takes. The extent is still STATED, and
+			// it is the whole reason zero is a measurement here: this pair list is complete, and a
+			// caller that heard nothing could not tell that from an arm that never ran (issue #336).
+			// Math.min(0, cap) is 0 whatever the cap, so stating it still reads no global property.
+			return PairChipExtent.of(0, 0);
 		}
 		Collections.sort(found, PAIR_SEVERITY_DESCENDING);
 		int cap = maxPairChips();
 		int shown = Math.min(found.size(), cap);
 		if (shown < found.size()) {
-			// WARN, not INFO: a clinician reading the chips cannot tell a bounded list from a complete
-			// one, so an operator has to be able to see that this question outran the bound and which
-			// ratings went unshown. Silent truncation in a safety net reads as "nothing else was found".
+			// WARN, not INFO: which pairs went, and at what ratings, is an operator's diagnostic and it
+			// lives only here — the response states the COUNTS (see the extent returned below) and
+			// deliberately not the list, because putting the withheld pairs on the wire is the unbounded
+			// expansion this cap exists to prevent. Silent truncation in a safety net reads as "nothing
+			// else was found", which since issue #336 the response itself no longer says.
 			List<String> withheld = new ArrayList<String>();
 			for (PairFinding finding : found.subList(shown, found.size())) {
 				withheld.add(finding.severity);
@@ -3811,6 +3888,7 @@ public class DrugSafetyValidator {
 		for (PairFinding finding : found.subList(0, shown)) {
 			warnings.add(finding.warning);
 		}
+		return PairChipExtent.of(found.size(), shown);
 	}
 
 	/** Orders candidate pair chips most-severe first; see {@link #severityPriority}. */
@@ -4297,11 +4375,12 @@ public class DrugSafetyValidator {
 	 *        lookup's group map by {@link #resolvedSubstanceRows}, so the ungrouped-row fallback is
 	 *        unreachable from here too.
 	 */
-	private void addActiveOrderPairInteractions(List<SafetyWarning> warnings, SubstanceSubjects subjects,
-			PatientClinicalContext context, int severityFloor, List<DrugReference> orderDrugs,
-			InteractionPairs reportedPairs) {
+	private PairChipExtent addActiveOrderPairInteractions(List<SafetyWarning> warnings,
+			SubstanceSubjects subjects, PatientClinicalContext context, int severityFloor,
+			List<DrugReference> orderDrugs, InteractionPairs reportedPairs) {
 		if (context == null) {
-			return;
+			// The arm could not run at all, so it states nothing — not a complete screen of zero pairs.
+			return null;
 		}
 		List<ScreenedPair> pairs = new ArrayList<ScreenedPair>();
 		Set<List<String>> seenPairs = new LinkedHashSet<List<String>>();
@@ -4418,7 +4497,11 @@ public class DrugSafetyValidator {
 			}
 		}
 		if (pairs.isEmpty()) {
-			return;
+			// Stated, and stated as zero: this screen ran over the patient's orders and the reference
+			// data related none of the pairs it enumerated. That is a COMPLETE screen, and it is the
+			// half of issue #336 a truncation signal alone would leave unsaid — a caller hearing
+			// nothing cannot tell it from a question that never asked to be screened.
+			return PairChipExtent.of(0, 0);
 		}
 		Collections.sort(pairs, SCREENED_PAIR_SEVERITY_DESCENDING);
 		// The same cap the question-pair arm applies, from the same GP — the two gates are mutually
@@ -4426,9 +4509,10 @@ public class DrugSafetyValidator {
 		// arbitrary (issue #131).
 		int reported = Math.min(pairs.size(), maxPairChips());
 		if (pairs.size() > reported) {
-			// Named, not counted: a clinician reading the reported chips has no way to tell a capped
-			// screen from a complete one, so the withheld pairs must at least be recoverable from the
-			// log rather than vanishing.
+			// Named here, counted on the response. A clinician reading the reported chips could not tell
+			// a capped screen from a complete one, which is issue #336 — and the count that closes it is
+			// the extent this method returns, not this line. What the log still holds alone is WHICH
+			// pairs went and at what ratings, an operator's diagnostic that must not go on the wire.
 			List<String> withheld = new ArrayList<String>();
 			for (int n = reported; n < pairs.size(); n++) {
 				withheld.add(pairs.get(n).label);
@@ -4441,6 +4525,7 @@ public class DrugSafetyValidator {
 		for (int n = 0; n < reported; n++) {
 			warnings.add(pairs.get(n).warning);
 		}
+		return PairChipExtent.of(pairs.size(), reported);
 	}
 
 	/**

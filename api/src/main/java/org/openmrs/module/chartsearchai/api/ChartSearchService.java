@@ -16,6 +16,7 @@ import java.util.function.Consumer;
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
+import org.openmrs.module.chartsearchai.reference.PairChipExtent;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 
 /**
@@ -223,6 +224,8 @@ public interface ChartSearchService {
 
 		private final ChartSearchAiUtils.ReferenceSlice referenceSlice;
 
+		private final PairChipExtent pairChipExtent;
+
 		public ChartAnswer(String answer, List<RecordReference> references) {
 			this(answer, references, 0, 0, 0);
 		}
@@ -255,6 +258,14 @@ public interface ChartSearchService {
 				int inputTokens, int outputTokens, int cachedTokens,
 				List<SafetyWarning> safetyWarnings, String searchMode,
 				ChartSearchAiUtils.ReferenceSlice referenceSlice) {
+			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, searchMode,
+					referenceSlice, null);
+		}
+
+		public ChartAnswer(String answer, List<RecordReference> references,
+				int inputTokens, int outputTokens, int cachedTokens,
+				List<SafetyWarning> safetyWarnings, String searchMode,
+				ChartSearchAiUtils.ReferenceSlice referenceSlice, PairChipExtent pairChipExtent) {
 			this.answer = answer;
 			this.references = java.util.Collections.unmodifiableList(
 					new java.util.ArrayList<>(references));
@@ -266,6 +277,7 @@ public interface ChartSearchService {
 							? java.util.Collections.<SafetyWarning> emptyList() : safetyWarnings));
 			this.searchMode = searchMode;
 			this.referenceSlice = referenceSlice;
+			this.pairChipExtent = pairChipExtent;
 		}
 
 		/**
@@ -391,6 +403,25 @@ public interface ChartSearchService {
 		 */
 		public ChartSearchAiUtils.ReferenceSlice getReferenceSlice() {
 			return referenceSlice;
+		}
+
+		/**
+		 * How many drug pairs this answer's PAIRWISE interaction check found and how many of them it
+		 * reported — what the {@code interactionPairs} key on the {@code /search} response and on the
+		 * {@code done} and {@code grounded} SSE events publishes (issue
+		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/336">#336</a>).
+		 *
+		 * <p>The producer states it, so no consumer derives it. A capped list was otherwise
+		 * indistinguishable from a complete one everywhere but a server-side WARN, and the chip count
+		 * cannot stand in for it: interaction chips also come from the drug-in-play arm, so counting
+		 * them answers a different question.
+		 *
+		 * @return the statement, or {@code null} where the pairwise check made none —
+		 *         {@link PairChipExtent} is canonical for the three situations that covers, and for
+		 *         why {@code null} is not zero
+		 */
+		public PairChipExtent getPairChipExtent() {
+			return pairChipExtent;
 		}
 	}
 

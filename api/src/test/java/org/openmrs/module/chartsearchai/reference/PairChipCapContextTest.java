@@ -210,9 +210,10 @@ public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 
 	@Test
 	public void theQuestionPairWarnNamesTheWithheldPairsAndTheConfiguredCap() {
-		// The withheld pairs exist only in this log line — chips have no per-question container to show
-		// "3 of 72" in — so it is the only thing standing between a capped list and a clinician reading
-		// it as complete. It must report the CAP THAT ACTUALLY CUT, not the compiled-in default.
+		// WHICH pairs went, and at what ratings, exists only in this log line: since issue #336 the
+		// response states the COUNTS (PairChipExtentContextTest) but deliberately not the list, so this
+		// is still the only place an operator can see what was dropped. It must report the CAP THAT
+		// ACTUALLY CUT, not the compiled-in default.
 		configureCap("3");
 		List<String> logged = capturedWarnings(new Runnable() {
 

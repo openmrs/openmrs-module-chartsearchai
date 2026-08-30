@@ -53,6 +53,7 @@ import org.openmrs.module.chartsearchai.api.impl.PrewarmStatus;
 import org.openmrs.module.chartsearchai.api.impl.WarmupExecutor;
 import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceService;
+import org.openmrs.module.chartsearchai.reference.PairChipExtent;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.openmrs.util.PrivilegeConstants;
@@ -251,7 +252,7 @@ public class ChartSearchAiRestController {
 		// verdict (withheld for reference material, see groundedForWire) and the `group`
 		// discriminator; see serializeReferences.
 		response.put("references", serializeReferences(chartAnswer.getReferences()));
-		response.put("safetyWarnings", serializeSafetyWarnings(chartAnswer.getSafetyWarnings()));
+		putSafetyFindings(response, chartAnswer);
 		if (questionId != null) {
 			response.put("questionId", questionId);
 		}
@@ -620,7 +621,7 @@ public class ChartSearchAiRestController {
 				// replace its reference list wholesale; questionId correlates the two events.
 				Map<String, Object> groundedData = new HashMap<String, Object>();
 				groundedData.put("references", serializeReferences(chartAnswer.getReferences()));
-				groundedData.put("safetyWarnings", serializeSafetyWarnings(chartAnswer.getSafetyWarnings()));
+				putSafetyFindings(groundedData, chartAnswer);
 				if (earlyQuestionId[0] != null) {
 					groundedData.put("questionId", earlyQuestionId[0]);
 				}
@@ -744,7 +745,7 @@ public class ChartSearchAiRestController {
 		doneData.put("answer", answer.getAnswer());
 		doneData.put("disclaimer", DISCLAIMER);
 		doneData.put("references", serializeReferences(answer.getReferences()));
-		doneData.put("safetyWarnings", serializeSafetyWarnings(answer.getSafetyWarnings()));
+		putSafetyFindings(doneData, answer);
 		if (questionId != null) {
 			doneData.put("questionId", questionId);
 		}
@@ -1205,6 +1206,47 @@ public class ChartSearchAiRestController {
 			out.add(map);
 		}
 		return out;
+	}
+
+	/**
+	 * Writes an answer's drug-safety chips AND the statement of how bounded the pairwise interaction
+	 * list behind them is, into one payload map. Every emission surface goes through here.
+	 *
+	 * <p><b>One method for both keys, and that is the point</b> (issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/336">#336</a>). A
+	 * capped screen was byte-indistinguishable from a complete one on the wire — 8 of 18 pairs
+	 * withheld, 0 signals — so the completeness statement must travel with the chips it is about,
+	 * and a fourth emission site added later must not be able to publish one without the other. Two
+	 * sites kept in step by hand is the structural condition the {@code search_mode} column's own
+	 * comment above records as having held one value for 6036 rows;
+	 * {@code ChartSearchAiInteractionPairExtentTest} fails the build on a call to
+	 * {@link #serializeSafetyWarnings} outside this method.
+	 *
+	 * <p>{@code interactionPairs} is always present and is {@code null} where the pairwise check
+	 * stated nothing — see {@code PairChipExtent}, which is canonical for what that does and does
+	 * not mean. It is deliberately NOT the count of {@code interaction} chips beside it: the
+	 * drug-in-play arm raises those too, so a client must render this as a ratio of pairs, not of
+	 * chips.
+	 */
+	private void putSafetyFindings(Map<String, Object> target, ChartAnswer answer) {
+		target.put("safetyWarnings", serializeSafetyWarnings(answer.getSafetyWarnings()));
+		target.put("interactionPairs", serializePairChipExtent(answer.getPairChipExtent()));
+	}
+
+	/**
+	 * The wire shape of {@code interactionPairs}: {@code found} above-floor pairs, {@code reported}
+	 * of them shown. {@code null} for an answer whose pairwise check stated no measurement — never
+	 * an empty object and never a zeroed one, because zero is itself a measurement here (a complete
+	 * screen that related no pairs).
+	 */
+	private Map<String, Object> serializePairChipExtent(PairChipExtent extent) {
+		if (extent == null) {
+			return null;
+		}
+		Map<String, Object> map = new LinkedHashMap<String, Object>();
+		map.put("found", extent.getFound());
+		map.put("reported", extent.getReported());
+		return map;
 	}
 
 	/**

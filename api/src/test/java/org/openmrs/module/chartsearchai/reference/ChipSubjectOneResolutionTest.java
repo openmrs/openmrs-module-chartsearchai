@@ -179,20 +179,23 @@ public class ChipSubjectOneResolutionTest {
 	private static final String LOOKUP_DECLARATION = "private static final class SubstanceSubjects {";
 
 	/**
-	 * The one arity of {@code validate} that builds the pass's shared state — the other five delegate
-	 * to it. It spans BOTH lines of the declaration, which is a correction rather than a style: since
-	 * issue #255 the arity above opens with a byte-identical first line, so the first line alone
-	 * matches twice and {@link #uniqueOffsetOf} hard-fails on that; and the second line alone names no
-	 * METHOD, so nothing about it says the body it lands on is {@code validate}'s. What the first line
-	 * buys is that name. Do not read it as "a sibling with the same tail would pass": measured, a
-	 * sibling alone makes TWO matches and fails loudly, because {@code validate}'s own declaration
-	 * still carries the tail. The shape that gets through a tail-only needle is a sibling together
-	 * with a rename or a re-wrap of {@code validate}'s own parameters. It still ends at the body's own
+	 * The one arity of {@code validate} that builds the pass's shared state — the other six delegate
+	 * to it. It spans ALL THREE lines of the declaration, which is a correction rather than a style:
+	 * since issue #255 the arity above opens with a byte-identical first line, and since issue #336
+	 * the five-argument seam it delegates from wraps its own parameters identically, so the first TWO
+	 * lines now match twice and {@link #uniqueOffsetOf} hard-fails on either prefix; the third line,
+	 * the one naming the sink, is what makes the needle unique. The tail alone names no METHOD, so
+	 * nothing about it would say the body it lands on is {@code validate}'s. What the first line buys
+	 * is that name. Do not read it as "a sibling with the same tail would pass": measured, a sibling
+	 * alone makes TWO matches and fails loudly, because {@code validate}'s own declaration still
+	 * carries the tail. The shape that gets through a tail-only needle is a sibling together with a
+	 * rename or a re-wrap of {@code validate}'s own parameters. It still ends at the body's own
 	 * opening brace, which is what {@link #bodyOf} looks for.
 	 */
 	private static final String VALIDATE =
 			"validate(String answer, String question, PatientClinicalContext rawContext,\n"
-					+ "\t\t\tList<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries) {";
+					+ "\t\t\tList<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries,\n"
+					+ "\t\t\tPairChipExtent.Sink pairExtentSink) {";
 
 	@Test
 	public void onlyTheSharedLookupAndThePartnerRungResolveASubjectDirectly() throws IOException {

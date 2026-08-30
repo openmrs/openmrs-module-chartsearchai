@@ -1062,6 +1062,13 @@ public class DrugReferenceService {
 	 *
 	 * <p>Identity de-duplication is sound because both matchers resolve against this bean's shared
 	 * {@link #getAll()} cache (the same reason the drugs-in-play set can dedup by identity).
+	 *
+	 * <p><b>The list is UNMODIFIABLE</b> — adding to it, removing from it or sorting it in place throws
+	 * {@code UnsupportedOperationException}. Said here rather than only where it is returned, because
+	 * this method is public and a caller reads the javadoc: since issue #255 the list one caller holds
+	 * can be the same object another reasons over, and the two production paths that could reach a
+	 * mutation both sit inside a {@code catch (RuntimeException)}, so an undocumented throw degrades to
+	 * no injected records and no chips behind one WARN rather than to a stack trace.
 	 */
 	public List<DrugReference> findForActiveOrders(PatientClinicalContext context) {
 		if (context == null) {

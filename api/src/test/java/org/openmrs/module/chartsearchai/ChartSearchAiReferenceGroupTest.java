@@ -29,9 +29,11 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * Contract of {@link ChartSearchAiUtils#referenceGroup}, the single entry point deciding
  * whether a cited record renders as chart evidence or as module-supplied reference prose —
  * and, since issue #122, of {@link ChartSearchAiUtils#isGroundingDemoteOnly}, the grounding
- * rule derived from it. Both registries are swept off one enumeration of the declared
+ * rule derived from it — and, since issue #229, of {@link ChartSearchAiUtils#referenceSlice}, the
+ * prompt-cost measurement derived from it. Each is swept off one enumeration of the declared
  * {@code RESOURCE_TYPE_*} constants and one recorded set of decisions, because a new type
- * satisfying one registry and silently missing the other is the defect #122 reported.
+ * satisfying one of them and silently missing another is the defect #122 reported. Count the
+ * sweeps below rather than trusting this sentence: it has been wrong once already.
  *
  * <p>Deliberately a plain test rather than a {@code BaseModuleContextSensitiveTest}: the
  * classification is a pure function of the resource type and needs no OpenMRS context, so
@@ -165,6 +167,27 @@ public class ChartSearchAiReferenceGroupTest {
 	 * {@code CitationGroundingVerifierTest.everyDeclaredResourceTypeConstant_isGradedAccordingToItsReferenceGroup};
 	 * it lives there because the verifier's embedder seam is package-private to {@code api.impl}.
 	 */
+	@Test
+	public void everyDeclaredResourceTypeConstant_shouldBeDemoteOnlyForGroundingExactlyWhenItIsReferenceMaterial() {
+		Map<String, String> expected = recordedGroups();
+		for (Map.Entry<String, String> constant : declaredResourceTypeConstants().entrySet()) {
+			String recorded = expected.get(constant.getKey());
+			if (recorded == null) {
+				// An undecided constant is the group guard's failure to report, not this one's.
+				continue;
+			}
+			boolean referenceMaterial = ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE.equals(recorded);
+			assertEquals(referenceMaterial,
+					ChartSearchAiUtils.isGroundingDemoteOnly(constant.getValue()),
+					constant.getKey() + " (\"" + constant.getValue() + "\") is recorded as " + recorded
+							+ " material, so grounding must " + (referenceMaterial ? "" : "NOT ")
+							+ "treat it as demote-only. Module-supplied material cannot be verified by a "
+							+ "cosine pass (#106); the patient's own records must be, however they reached "
+							+ "the chart (#118). Keep the two registries derived from one classification "
+							+ "rather than re-listing type names in either.");
+		}
+	}
+
 	/**
 	 * The FOURTH thing decided off the same classification, swept off the same enumeration and the
 	 * same recorded decisions — issue #229. {@link ChartSearchAiUtils#referenceSlice} measures how much
@@ -178,10 +201,14 @@ public class ChartSearchAiReferenceGroupTest {
 	 * because that pair currently enumerates the reference group exactly. This is the same limit
 	 * {@code CLAUDE.md} already records for {@link ChartSearchAiUtils#isGroundingDemoteOnly}, and
 	 * nothing in this suite closes it. What the sweep DOES reach is the moment the omission starts to
-	 * matter: a fifth resource-type constant recorded as reference material below is counted by the
-	 * delegating implementation and missed by any hardcode, so a hardcode that is invisible today
-	 * fails HERE on the commit that adds that type — rather than shipping a cost figure that silently
-	 * under-reports, which is the #122 shape one consumer along.
+	 * matter. Two types are recorded as reference material below, so a hardcoded pair diverges from the
+	 * classification on the THIRD: such a constant is counted by the delegating implementation and
+	 * missed by the hardcode, so a hardcode that is invisible today fails HERE on the commit that adds
+	 * that type — rather than shipping a cost figure that silently under-reports, which is the #122
+	 * shape one consumer along. Measured both ways: with the hardcode in place the whole suite is
+	 * green, and adding a third reference-material constant reddens this case with
+	 * {@code expected: <1> but was: <0>}. {@code ChartSearchAiReferenceGroundingWithholdingTest} says
+	 * "a third reference-group type" of the same mechanism for its own guard.
 	 *
 	 * <p>Asserted against the group each constant is RECORDED as, for the same reason the demote-only
 	 * sweep is: measuring against {@code referenceGroup}'s own answer would let a classifier bug
@@ -208,27 +235,6 @@ public class ChartSearchAiReferenceGroupTest {
 			assertEquals(referenceMaterial ? "some rendered record text".length() : 0,
 					slice.getCharacters(),
 					constant.getKey() + ": the character total must follow the same decision as the count");
-		}
-	}
-
-	@Test
-	public void everyDeclaredResourceTypeConstant_shouldBeDemoteOnlyForGroundingExactlyWhenItIsReferenceMaterial() {
-		Map<String, String> expected = recordedGroups();
-		for (Map.Entry<String, String> constant : declaredResourceTypeConstants().entrySet()) {
-			String recorded = expected.get(constant.getKey());
-			if (recorded == null) {
-				// An undecided constant is the group guard's failure to report, not this one's.
-				continue;
-			}
-			boolean referenceMaterial = ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE.equals(recorded);
-			assertEquals(referenceMaterial,
-					ChartSearchAiUtils.isGroundingDemoteOnly(constant.getValue()),
-					constant.getKey() + " (\"" + constant.getValue() + "\") is recorded as " + recorded
-							+ " material, so grounding must " + (referenceMaterial ? "" : "NOT ")
-							+ "treat it as demote-only. Module-supplied material cannot be verified by a "
-							+ "cosine pass (#106); the patient's own records must be, however they reached "
-							+ "the chart (#118). Keep the two registries derived from one classification "
-							+ "rather than re-listing type names in either.");
 		}
 	}
 

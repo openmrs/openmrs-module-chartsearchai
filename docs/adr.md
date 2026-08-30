@@ -61,6 +61,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 53: The ANSWER no longer decides what a substance is called, so the two safety passes stop disagreeing](#decision-53-the-answer-no-longer-decides-what-a-substance-is-called-so-the-two-safety-passes-stop-disagreeing)
 - [Decision 54: The patient's co-medications are resolved once per validate pass, and the pairwise cap is not the lever](#decision-54-the-patients-co-medications-are-resolved-once-per-validate-pass-and-the-pairwise-cap-is-not-the-lever)
 - [Decision 55: Each operand of the name scan is folded once where it is produced](#decision-55-each-operand-of-the-name-scan-is-folded-once-where-it-is-produced)
+- [Decision 56: The injected reference slice gets a durable observable, and deliberately no cap](#decision-56-the-injected-reference-slice-gets-a-durable-observable-and-deliberately-no-cap)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 

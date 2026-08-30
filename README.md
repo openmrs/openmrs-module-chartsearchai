@@ -526,6 +526,8 @@ GET /ws/rest/v1/chartsearchai/auditlog?patient=...&user=...&fromDate=...&toDate=
 
 All query parameters are optional. `fromDate` and `toDate` are epoch milliseconds. Returns paginated results ordered by most recent first, with a `totalCount` for pagination. Each entry includes `rating` and `feedbackComment` fields (null if no feedback was submitted).
 
+Each entry also carries `referenceSliceRecords` and `referenceSliceChars` — how much module-supplied reference material (drug-reference entries and safety findings) the prompt behind that answer contained. **This is not `referenceCount`**, which is the number of citations the answer used: most injected reference material is never cited, so these two report the prompt COST and that one reports the answer's use of it. **Null is not zero.** Zero means the question was measured and matched no reference entry; null means the answer stated no measurement, so a rollup that treats null as zero under-reports. Note that on an answer served from the response cache the row states the slice of the request the answer was originally built for, so summing the columns across rows over-counts by every cache hit.
+
 ### Drug-reference status
 
 Which drug-reference dataset the module is **actually** using. Requires the core **"Get Global Properties"** privilege — which the `Authenticated` role holds on a default install, so treat this as readable by any logged-in user. It carries configuration metadata only: no patient data, and no absolute server paths.

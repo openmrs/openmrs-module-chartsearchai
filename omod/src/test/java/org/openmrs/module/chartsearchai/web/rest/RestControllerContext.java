@@ -82,6 +82,19 @@ final class RestControllerContext {
 	}
 
 	/** Installs the context, remembering what was there so {@link #restore()} can put it back. */
+	/**
+	 * The {@code /search} request body the controller tests post — this fixture's own patient uuid and
+	 * a question. Here rather than copied per test file for the reason {@code StubAuditLogService}'s
+	 * javadoc gives about itself: both of its inputs already belong to this class, so a per-file copy
+	 * is a second place that has to change when either does.
+	 */
+	static java.util.Map<String, String> searchBody(String question) {
+		java.util.Map<String, String> body = new java.util.HashMap<String, String>();
+		body.put("patient", PATIENT_UUID);
+		body.put("question", question);
+		return body;
+	}
+
 	void install() {
 		priorPatientService = currentService(PatientService.class);
 		priorAdministrationService = currentService(AdministrationService.class);

@@ -36,8 +36,8 @@ public class ChartSearchAuditLog implements Serializable {
 
 	/**
 	 * How many module-supplied reference records the prompt behind this answer carried, or null when
-	 * the producer stated none (issue #229). Null is not zero: zero is a real measurement — a
-	 * question that matched no reference entry — while null says nothing was measured at all.
+	 * the producer stated none — see {@code ChartSearchService.ChartAnswer.getReferenceSlice()} for
+	 * the null-versus-zero contract (issue #229).
 	 *
 	 * <p>A different population from {@link #referenceCount}, which counts the citations IN the
 	 * answer. Most injected reference material is never cited, so this is the prompt COST and that

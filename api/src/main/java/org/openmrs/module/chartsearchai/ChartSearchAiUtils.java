@@ -236,8 +236,13 @@ public class ChartSearchAiUtils {
 	 * the line.
 	 *
 	 * <p>Characters are the rendered record text, which is what the model reads and what crowds out
-	 * chart records. It excludes the {@code "[N] "} citation prefix and the newline the chart's own
-	 * assembly adds, so the figure is a floor on the bytes spent rather than an exact prompt length.
+	 * chart records, and it excludes the {@code "[N] "} citation prefix and the newline the chart's own
+	 * assembly adds. Scope the reading of that to the injector's records, which is where every
+	 * reference-group record comes from today: there the mapping text and the chart line are
+	 * byte-identical by construction, so the total is a floor on the bytes spent. It is not a general
+	 * property of a {@code RecordMapping} — {@code PatientChartSerializer} carries an inline date and
+	 * group label on the mapping that the chart line run-length-dedups away — so were a reference-group
+	 * type ever to arrive through querystore, its characters could exceed what the prompt spent on it.
 	 *
 	 * @param mappings the assembled chart's mappings, may be null
 	 * @return the slice, never null; zero/zero when nothing reference-group is present, which is a

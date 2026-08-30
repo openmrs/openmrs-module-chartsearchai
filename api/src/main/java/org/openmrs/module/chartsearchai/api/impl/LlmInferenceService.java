@@ -122,9 +122,9 @@ public class LlmInferenceService implements ChartSearchService {
 			// (issue #178). After inject() deliberately: that is the chart the LLM sees.
 			String searchMode = chartBuildingStrategy.searchModeLabel(chart);
 			// And, off the same chart and for the same reason, how much of it is the module's own
-			// reference material (issue #229). After inject() is not incidental here — before it the
-			// answer is always zero, since nothing else mints a reference-group record. Carried on
-			// the answer because by audit-write time this chart is gone.
+			// reference material (issue #229). After inject() is not incidental: that is the chart the
+			// LLM sees, and the injector is what appends the records being measured. Carried on the
+			// answer because by audit-write time this chart is gone.
 			ChartSearchAiUtils.ReferenceSlice referenceSlice =
 					ChartSearchAiUtils.referenceSlice(chart.getMappings());
 			buildMs = System.currentTimeMillis() - buildStart;

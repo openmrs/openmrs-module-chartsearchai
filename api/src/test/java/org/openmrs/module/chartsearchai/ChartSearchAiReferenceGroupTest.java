@@ -16,12 +16,14 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 
 /**
  * Contract of {@link ChartSearchAiUtils#referenceGroup}, the single entry point deciding
@@ -163,6 +165,52 @@ public class ChartSearchAiReferenceGroupTest {
 	 * {@code CitationGroundingVerifierTest.everyDeclaredResourceTypeConstant_isGradedAccordingToItsReferenceGroup};
 	 * it lives there because the verifier's embedder seam is package-private to {@code api.impl}.
 	 */
+	/**
+	 * The FOURTH thing decided off the same classification, swept off the same enumeration and the
+	 * same recorded decisions — issue #229. {@link ChartSearchAiUtils#referenceSlice} measures how much
+	 * of an assembled chart is module-supplied reference material, and that figure is what the audit
+	 * row publishes as this module's share of the prompt.
+	 *
+	 * <p><b>What this sweep does and does not reach — measured, because the obvious reading is wrong.</b>
+	 * It does NOT catch a re-hardcode inside {@code referenceSlice} today: an inline
+	 * {@code RESOURCE_TYPE_DRUG_REFERENCE || RESOURCE_TYPE_SAFETY_FINDING} comparison put back into
+	 * that method leaves this case, {@code InjectedReferenceSliceTest} and the whole build green,
+	 * because that pair currently enumerates the reference group exactly. This is the same limit
+	 * {@code CLAUDE.md} already records for {@link ChartSearchAiUtils#isGroundingDemoteOnly}, and
+	 * nothing in this suite closes it. What the sweep DOES reach is the moment the omission starts to
+	 * matter: a fifth resource-type constant recorded as reference material below is counted by the
+	 * delegating implementation and missed by any hardcode, so a hardcode that is invisible today
+	 * fails HERE on the commit that adds that type — rather than shipping a cost figure that silently
+	 * under-reports, which is the #122 shape one consumer along.
+	 *
+	 * <p>Asserted against the group each constant is RECORDED as, for the same reason the demote-only
+	 * sweep is: measuring against {@code referenceGroup}'s own answer would let a classifier bug
+	 * satisfy every registry at once.
+	 */
+	@Test
+	public void everyDeclaredResourceTypeConstant_isCountedIntoThePromptCostSliceExactlyWhenItIsReferenceMaterial() {
+		Map<String, String> expected = recordedGroups();
+		for (Map.Entry<String, String> constant : declaredResourceTypeConstants().entrySet()) {
+			String recorded = expected.get(constant.getKey());
+			if (recorded == null) {
+				// An undecided constant is the group guard's failure to report, not this one's.
+				continue;
+			}
+			boolean referenceMaterial = ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE.equals(recorded);
+			ChartSearchAiUtils.ReferenceSlice slice = ChartSearchAiUtils.referenceSlice(
+					Collections.singletonList(new RecordMapping(1, constant.getValue(), "uuid", null,
+							"some rendered record text")));
+			assertEquals(referenceMaterial ? 1 : 0, slice.getRecords(),
+					constant.getKey() + " (\"" + constant.getValue() + "\") is recorded as " + recorded
+							+ " material, so the prompt-cost slice must " + (referenceMaterial ? "" : "NOT ")
+							+ "count it. Keep this derived from the one classification rather than "
+							+ "re-listing type names in the measurement.");
+			assertEquals(referenceMaterial ? "some rendered record text".length() : 0,
+					slice.getCharacters(),
+					constant.getKey() + ": the character total must follow the same decision as the count");
+		}
+	}
+
 	@Test
 	public void everyDeclaredResourceTypeConstant_shouldBeDemoteOnlyForGroundingExactlyWhenItIsReferenceMaterial() {
 		Map<String, String> expected = recordedGroups();

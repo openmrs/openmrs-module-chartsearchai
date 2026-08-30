@@ -713,10 +713,12 @@ public class ChartSearchAiRestController {
 		auditLog.setQuestion(question);
 		auditLog.setAnswer(answer.getAnswer());
 		auditLog.setReferenceCount(answer.getReferences().size());
-		// Written from the answer, never re-derived here, for the reason the mode is: by the time
-		// this runs the chart the slice was measured on is gone. A null slice files two nulls rather
-		// than two zeros — zero is a real measurement (a question that matched no reference entry)
-		// and must not be indistinguishable from an answer that measured nothing (issue #229).
+		// Written from the answer, never re-derived here, for the reason the mode is: by the time this
+		// runs the chart the slice was measured on is gone. A null slice files two nulls rather than
+		// two zeros — see ChartAnswer.getReferenceSlice() for what the distinction is and why the
+		// columns are nullable (issue #229). Note that the neighbour two lines below does NOT follow
+		// that rule: inputTokens/outputTokens collapse a measured 0 to null, so this table is not
+		// uniform about it and a reader must not generalise either convention to the other.
 		ChartSearchAiUtils.ReferenceSlice referenceSlice = answer.getReferenceSlice();
 		auditLog.setReferenceSliceRecords(referenceSlice == null ? null : referenceSlice.getRecords());
 		auditLog.setReferenceSliceChars(referenceSlice == null ? null : referenceSlice.getCharacters());

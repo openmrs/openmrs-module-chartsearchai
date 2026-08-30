@@ -385,11 +385,21 @@ public class DrugReferenceInjector {
 		// module's own material spends and the figure the audit row carries. Both are printed and
 		// labelled, so an operator correlating this line with a row is never comparing two
 		// populations under one name — which is what happens if either number replaces the other.
-		ChartSearchAiUtils.ReferenceSlice slice = ChartSearchAiUtils.referenceSlice(mappings);
-		log.debug("Injected {} active-order, {} drug-reference ({} chars) and {} safety-finding "
-				+ "record(s) — reference slice {} record(s), {} chars — into chart for question '{}'",
-				unrepresented.size(), matched.size(), referenceCharacters(mappings), findings.size(),
-				slice.getRecords(), slice.getCharacters(), question);
+		//
+		// Guarded on isDebugEnabled because both totals are full walks of the mapping list evaluated
+		// as ARGUMENTS, i.e. before SLF4J is consulted — one of them already was before this change,
+		// and adding the second doubled it. The cost is small (measured ~0.35 µs per injecting
+		// request on a realistic chart) and the guard is not here for the cost; it is here because
+		// this codebase already uses the idiom where a log argument does real work
+		// (ChartSearchServiceRouter, QueryStoreChartBuilder), and a discarded walk is easier to
+		// notice than to justify.
+		if (log.isDebugEnabled()) {
+			ChartSearchAiUtils.ReferenceSlice slice = ChartSearchAiUtils.referenceSlice(mappings);
+			log.debug("Injected {} active-order, {} drug-reference ({} chars) and {} safety-finding "
+					+ "record(s) — reference slice {} record(s), {} chars — into chart for question '{}'",
+					unrepresented.size(), matched.size(), referenceCharacters(mappings), findings.size(),
+					slice.getRecords(), slice.getCharacters(), question);
+		}
 		PatientChart injected = new PatientChart(text.toString(), Collections.unmodifiableList(mappings),
 				chart.getFocusIndices());
 		// Carry the query-scoped stamp across the reconstruction. LlmInferenceService.searchStreaming
@@ -2588,7 +2598,7 @@ public class DrugReferenceInjector {
 	 * <p>Deliberately narrower than {@code ChartSearchAiUtils.referenceSlice}, which counts every
 	 * reference-group record and is what the audit row carries (issue #229). This one is issue #163's
 	 * question — one near-duplicate entry per route variant — and
-	 * {@code ReferenceRecordSubstanceCollapseTest.theDebugLineReportsTheReferenceSliceCharacterTotalAndOnlyThat}
+	 * {@code ReferenceRecordSubstanceCollapseTest.theDebugLineReportsTheDrugReferenceEntryCharacterTotalAndOnlyThat}
 	 * pins it to exclude the safety findings rendered beside those entries. Keep both; a reader
 	 * replacing either with the other reports one population under the other's name.
 	 *

@@ -15,10 +15,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -76,7 +74,7 @@ public class ChartSearchAiAuditReferenceSliceTest {
 	public void blockingSearch_recordsTheSliceTheAnswerStates() {
 		controller.setChartSearchService(new StubService(slice(4, 5183)));
 
-		controller.search(searchBody());
+		controller.search(RestControllerContext.searchBody("any infections?"));
 
 		assertFalse(audit.saved.isEmpty(), "the handler must have reached the audit write");
 		assertEquals(Integer.valueOf(4), audit.saved.get(0).getReferenceSliceRecords());
@@ -119,7 +117,7 @@ public class ChartSearchAiAuditReferenceSliceTest {
 		// which is the wrong-signal-indistinguishable-from-a-right-one shape #178 was.
 		controller.setChartSearchService(new StubService(null));
 
-		controller.search(searchBody());
+		controller.search(RestControllerContext.searchBody("any infections?"));
 		controller.streamAnswer(out, RestControllerContext.patient(), "any infections?",
 				RestControllerContext.user(), false);
 
@@ -138,7 +136,7 @@ public class ChartSearchAiAuditReferenceSliceTest {
 		// was looked at.
 		controller.setChartSearchService(new StubService(slice(0, 0)));
 
-		controller.search(searchBody());
+		controller.search(RestControllerContext.searchBody("any infections?"));
 
 		assertEquals(Integer.valueOf(0), audit.saved.get(0).getReferenceSliceRecords());
 		assertEquals(Integer.valueOf(0), audit.saved.get(0).getReferenceSliceChars());
@@ -169,39 +167,6 @@ public class ChartSearchAiAuditReferenceSliceTest {
 
 	private static ChartSearchAiUtils.ReferenceSlice slice(int records, int characters) {
 		return new ChartSearchAiUtils.ReferenceSlice(records, characters);
-	}
-
-	private static Map<String, String> searchBody() {
-		Map<String, String> body = new HashMap<String, String>();
-		body.put("patient", RestControllerContext.PATIENT_UUID);
-		body.put("question", "any infections?");
-		return body;
-	}
-
-	/** Retains the rows the controller saved, and serves a listing back to it. */
-	private static final class CapturingAuditLogService extends StubAuditLogService {
-
-		final List<ChartSearchAuditLog> saved = new ArrayList<ChartSearchAuditLog>();
-
-		final List<ChartSearchAuditLog> listed = new ArrayList<ChartSearchAuditLog>();
-
-		@Override
-		public ChartSearchAuditLog saveAuditLog(ChartSearchAuditLog auditLog) {
-			saved.add(auditLog);
-			return super.saveAuditLog(auditLog);
-		}
-
-		@Override
-		public List<ChartSearchAuditLog> getAuditLogs(Patient patient, org.openmrs.User user,
-				java.util.Date fromDate, java.util.Date toDate, Integer startIndex, Integer limit) {
-			return listed;
-		}
-
-		@Override
-		public Long getAuditLogCount(Patient patient, org.openmrs.User user, java.util.Date fromDate,
-				java.util.Date toDate) {
-			return Long.valueOf(listed.size());
-		}
 	}
 
 	/**

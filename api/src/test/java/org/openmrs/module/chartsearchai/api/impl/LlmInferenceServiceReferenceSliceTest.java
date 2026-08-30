@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -50,9 +51,11 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * {@code LlmInferenceService}'s own comment guards ("After inject() deliberately: that is the chart
  * the LLM sees").
  *
- * <p><b>The streaming path's two answers agree.</b> It persists ONE audit row from ONE of two
- * {@link ChartAnswer}s depending on whether async grounding is active, so the two must carry the
- * same slice by construction rather than by two matching derivations.
+ * <p><b>The streaming path's two answers carry the SAME slice object.</b> It persists ONE audit row
+ * from ONE of two {@link ChartAnswer}s depending on whether async grounding is active, so the two
+ * must agree. Identity rather than equality is what pins the mechanism: two independent derivations
+ * over one chart are equal, so an equality check on the numbers stays green under a second
+ * resolution at the ungrounded site — measured — and would state a guard that is not there.
  */
 public class LlmInferenceServiceReferenceSliceTest {
 
@@ -129,9 +132,9 @@ public class LlmInferenceServiceReferenceSliceTest {
 		assertEquals(expected().getRecords(), answer.getReferenceSlice().getRecords());
 		assertEquals(expected().getRecords(), ungrounded.get(0).getRecords(),
 				"the early-done audit row and the classic one must state the same slice");
-		assertEquals(answer.getReferenceSlice().getCharacters(),
-				ungrounded.get(0).getCharacters(),
-				"one resolution for both answers, not two that happen to agree");
+		assertSame(answer.getReferenceSlice(), ungrounded.get(0),
+				"one resolution reaches both answers; equal numbers from two resolutions pass an "
+						+ "equality check and leave the mechanism unpinned");
 	}
 
 	@Test

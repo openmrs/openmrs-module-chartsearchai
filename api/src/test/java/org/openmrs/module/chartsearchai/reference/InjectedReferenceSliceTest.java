@@ -19,8 +19,8 @@ import java.util.regex.Pattern;
 
 import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
-import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
+import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 
@@ -109,16 +109,12 @@ public class InjectedReferenceSliceTest {
 		// is reference material". An implementation reading "what did the injector add" rather than
 		// "what does the classification say" is wrong here and passes every inclusion assertion.
 		PatientChart chart = chartWithAllThreeInjectedKinds();
-		int activeOrders = 0;
+		List<RecordMapping> activeOrderRecords = DrugReferenceTestSupport.injectedActiveOrders(chart);
 		int activeOrderChars = 0;
-		for (RecordMapping mapping : chart.getMappings()) {
-			if (org.openmrs.module.chartsearchai.ChartSearchAiConstants.RESOURCE_TYPE_ACTIVE_DRUG_ORDER
-					.equals(mapping.getResourceType())) {
-				activeOrders++;
-				activeOrderChars += mapping.getText().length();
-			}
+		for (RecordMapping mapping : activeOrderRecords) {
+			activeOrderChars += mapping.getText().length();
 		}
-		assertEquals(1, activeOrders,
+		assertEquals(1, activeOrderRecords.size(),
 				"the arrangement must inject an active-order record or this case asserts nothing: "
 						+ chart.getText());
 
@@ -140,7 +136,7 @@ public class InjectedReferenceSliceTest {
 	 *
 	 * <p>An earlier draft of this change replaced that total with the slice, on the reasoning that a
 	 * log and an audit row must state the same number. The build refuted it:
-	 * {@code ReferenceRecordSubstanceCollapseTest.theDebugLineReportsTheReferenceSliceCharacterTotalAndOnlyThat}
+	 * {@code ReferenceRecordSubstanceCollapseTest.theDebugLineReportsTheDrugReferenceEntryCharacterTotalAndOnlyThat}
 	 * is the specification for that fragment and requires the entries' characters and explicitly not
 	 * the findings', because that is issue #163's question. So the line answers both questions, and
 	 * this case is the half of it #229 added — the other half stays pinned where it already was.

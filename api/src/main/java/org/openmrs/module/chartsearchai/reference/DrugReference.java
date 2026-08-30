@@ -453,9 +453,12 @@ public class DrugReference {
 	 *         {@code Oxymetazoline (nasal)}/{@code (ophthalmic)}/{@code (topical)},
 	 *         {@code Iobenguane (I-123)}/{@code (I-131)} — and in <b>8</b> of the 120 it is NOT the
 	 *         family's first row, which is why the choice cannot be left to dataset order. Those were
-	 *         119/10/7 before the correction. WHICH family accounts for a given delta is stated once, in
-	 *         CLAUDE.md's identity bullet, and deliberately not restated here: two copies of that
-	 *         attribution have been written in this repo and both named the wrong family.
+	 *         119/10/7 before the correction. WHICH family accounts for a given delta is NOT stated here:
+	 *         two copies of that attribution have been written in this repo and both named the wrong
+	 *         family, so re-measure it by diffing the NAMED lists rather than the counts. CLAUDE.md's
+	 *         identity bullet and {@link #canonicalRow}'s own measured paragraph each attribute one of
+	 *         the two deltas; this sentence claimed they were the only home and that claim was itself
+	 *         wrong, which is why it now says where to look instead of how many places say it.
 	 */
 	boolean namesNoRoute() {
 		String normalized = normalizeName(name);

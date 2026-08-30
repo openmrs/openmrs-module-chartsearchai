@@ -6,6 +6,18 @@
 			http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-2.0.xsd">
 
 	<!--
+		BEFORE ANY OF THIS: A NEW CHANGESET DOES NOT RUN ON A SAME-VERSION REDEPLOY, and it fails
+		silently. openmrs-core runs a module's changelog only from
+		AdministrationServiceImpl.runModuleSetupOnVersionChange, gated on
+		isModuleSetupOnVersionChangeNeeded, which compares the module's version against the global
+		property module.<id>.version. Redeploying 1.0.0-SNAPSHOT over 1.0.0-SNAPSHOT therefore logs
+		"chartsearchai module did not change, skipping setup", runs no liquibase, and still reports
+		the module started with a null startup error. Measured live 2026-08-30 for chartsearchai-009:
+		the instance served requests for ten minutes against a table lacking both columns, with
+		nothing anywhere saying so. Bump the version, or delete that global property and restart
+		(core re-runs setup and rewrites the property at the same value). This is core's behaviour
+		and binds every changeset added to any module, not only this one.
+
 		HOW TO ADD A COLUMN HERE. Add a NEW changeset with the next id no instance has ever
 		run, and leave the existing ones alone. Do not fold it into chartsearchai-002, however
 		much the consolidation note below reads like an invitation to: an instance that has

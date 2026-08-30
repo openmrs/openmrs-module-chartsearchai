@@ -73,6 +73,21 @@ public class ActiveOrderResolutionPerPassTest {
 	 *  inject and the vacuity guards below are met. */
 	private static final String QUESTION = "Can I give her simvastatin?";
 
+	/**
+	 * The canonical screening question (issue #113) — and the one the cases below that must observe a
+	 * WRONG list are driven with, which is a measured choice rather than variety.
+	 *
+	 * <p>{@link #QUESTION} cannot observe one. Its findings come from the drug-in-play interaction
+	 * arm, which reads the context's reference names through {@code hasActiveDrug} — and the injector
+	 * has already attached those before it calls in, so handing {@code validate} an EMPTY list leaves
+	 * every one of them standing. Measured by mutating the production call to thread
+	 * {@code Collections.emptyList()}: all three cases here stayed green, the build compiled and the
+	 * cases ran. A screening question is different in exactly the way this needs — it names no drug,
+	 * so its subjects ARE the resolved active orders, straight off the threaded list
+	 * ({@code addActiveOrderPairInteractions}) — and under the same mutation it reddens.
+	 */
+	private static final String SCREENING_QUESTION = DrugReferenceTestSupport.SCREENING_QUESTION;
+
 	private static ResolutionCountingService service() {
 		return DrugReferenceTestSupport.withEntriesAndGroups(new ResolutionCountingService(),
 				DrugReferenceTestSupport.ddinterEntries());
@@ -160,8 +175,8 @@ public class ActiveOrderResolutionPerPassTest {
 		PatientClinicalContext context = chartWithOrders();
 
 		PatientChart injected = injector.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
-				context, QUESTION);
-		List<String> selfResolved = rendered(injector.preAnswerFindings(context, QUESTION));
+				context, SCREENING_QUESTION);
+		List<String> selfResolved = rendered(injector.preAnswerFindings(context, SCREENING_QUESTION));
 
 		assertFalse(selfResolved.isEmpty(), "the arrangement must produce pre-answer findings, or the "
 				+ "comparison below is between two empty lists");
@@ -196,9 +211,9 @@ public class ActiveOrderResolutionPerPassTest {
 		PatientClinicalContext enriched = service.withReferenceNames(raw,
 				service.findForActiveOrders(raw));
 
-		List<SafetyWarning> resolvingForItself = injector.preAnswerFindings(enriched, QUESTION);
-		List<SafetyWarning> handedTheRawResolution = injector.preAnswerFindings(enriched, QUESTION,
-				service.findForActiveOrders(raw));
+		List<SafetyWarning> resolvingForItself = injector.preAnswerFindings(enriched, SCREENING_QUESTION);
+		List<SafetyWarning> handedTheRawResolution = injector.preAnswerFindings(enriched,
+				SCREENING_QUESTION, service.findForActiveOrders(raw));
 
 		assertFalse(resolvingForItself.isEmpty(), "the arrangement must produce pre-answer findings, "
 				+ "or the comparison below is between two empty lists");

@@ -305,6 +305,14 @@ public class DrugSafetyValidator {
 	 *        construction depend on the caller having applied the right step, and a caller that got it
 	 *        wrong would be silent.
 	 *
+	 *        <p>It is READ here and never written — every use below is an iteration or a pass-through,
+	 *        and that is now load-bearing where it was not. The caller does not hand the list over: it
+	 *        goes on rendering from the very same one after this returns ({@code render(ref,
+	 *        orderEntries, …)}), so an arm added here that mutated it would change what the injector
+	 *        puts in the chart, silently and after the fact. No copy is taken — every other list
+	 *        parameter in this class is read-only by the same convention, and a copy at one of them
+	 *        would be a second convention rather than a rule.
+	 *
 	 *        <p>Passing a list resolved from a DIFFERENT context than {@code rawContext} is the one
 	 *        way to misuse this. The injector's own list is resolved from the raw context this then
 	 *        receives enriched, and those answer alike — {@code withReferenceNames} writes only

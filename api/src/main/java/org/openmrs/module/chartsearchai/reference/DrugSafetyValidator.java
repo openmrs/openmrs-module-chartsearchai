@@ -315,8 +315,9 @@ public class DrugSafetyValidator {
 	List<SafetyWarning> validate(String answer, String question, PatientClinicalContext rawContext,
 			List<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries) {
 		List<SafetyWarning> warnings = new ArrayList<SafetyWarning>();
-		// The patient's active orders resolved to their reference entries, ONE dataset sweep per
-		// validate, feeding both things this pass needs from that resolution (issue #136):
+		// The patient's active orders resolved to their reference entries — at most ONE dataset sweep
+		// per validate, and none at all where the caller has already made it (issue #255) — feeding
+		// both things this pass needs from that resolution (issue #136):
 		//
 		//   - the entries themselves, for the three arms that screen or name them — the chip grouping's
 		//     partner identity below, the active-order contraindication subjects (#143) and the

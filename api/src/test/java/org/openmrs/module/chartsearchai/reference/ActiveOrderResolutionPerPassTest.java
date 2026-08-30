@@ -11,9 +11,11 @@ package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -166,6 +168,42 @@ public class ActiveOrderResolutionPerPassTest {
 				+ "list threaded down (issue #255) is not that resolution. A wrong list here changes "
 				+ "which co-medications the class arm reasons about, and reaches the model as citable "
 				+ "safety_finding text.");
+	}
+
+	/**
+	 * The resolved list cannot be mutated by whoever is holding it.
+	 *
+	 * <p>Not defensive programming, and not a property of this list in isolation: since issue #255 the
+	 * list one caller holds is the SAME object another reasons over — {@code injectRecords} hands its
+	 * resolution to the {@code validate} it calls and then goes on rendering from it — so an arm that
+	 * sorted or filtered it in place would change what the injector puts in the chart, after the fact.
+	 *
+	 * <p>Two measurements are why this case exists rather than a comment. The hazard is invisible to
+	 * the suite: a {@code Collections.reverse} placed after {@code validate}'s own reads, where only
+	 * the injector's later rendering is damaged, leaves the whole api suite green. And the remedy was
+	 * invisible too: with {@link DrugReferenceService#findForActiveOrders} returning a bare
+	 * {@code ArrayList} again, the suite is green as well — so before this case the wrapper was a
+	 * contract three comments asserted and nothing enforced, which the next change could delete for
+	 * free.
+	 *
+	 * <p>Through the real service over real parsed data, and {@code Collections.reverse} is here
+	 * because it is the exact mutation that measurement used.
+	 */
+	@Test
+	public void theResolvedActiveOrdersCannotBeMutatedByAHolder() {
+		DrugReferenceService service = service();
+		List<DrugReference> resolved = service.findForActiveOrders(chartWithOrders());
+
+		assertFalse(resolved.isEmpty(), "the arrangement must resolve some active orders, or an "
+				+ "unmodifiable EMPTY list would satisfy this case while saying nothing");
+		assertThrows(UnsupportedOperationException.class, () -> resolved.add(resolved.get(0)),
+			"a caller could add to the resolved active-order list (issue #255). That list is handed "
+					+ "from injectRecords to the validate it calls and is still rendered from after "
+					+ "validate returns, so it must not be mutable by either of them.");
+		assertThrows(UnsupportedOperationException.class, () -> Collections.reverse(resolved),
+			"a caller could reorder the resolved active-order list (issue #255) — the mutation that "
+					+ "was measured to change what the injector renders while leaving the whole api "
+					+ "suite green.");
 	}
 
 	/**

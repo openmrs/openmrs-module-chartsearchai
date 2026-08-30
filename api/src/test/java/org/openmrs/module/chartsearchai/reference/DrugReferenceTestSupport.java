@@ -24,6 +24,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -635,15 +636,33 @@ public final class DrugReferenceTestSupport {
 	 */
 	static PatientClinicalContext contextNaming(DrugReferenceService service, Integer age,
 			Double weightKg, String... displays) {
+		PatientClinicalContext raw = rawContextNaming(age, weightKg, false, displays);
+		return service.withReferenceNames(raw);
+	}
+
+	/**
+	 * The unresolved half of {@link #contextNaming} — the chart as the builder reads it, before either
+	 * production surface attaches the reference data's own names. For a case whose subject IS that
+	 * resolution, so it must hold the raw context and the enriched one apart.
+	 *
+	 * <p>Extracted at the third caller (issue #255), the threshold {@code ModuleSourceRoot}'s javadoc
+	 * records: the two per-pass counting tests had each written this loop out, byte for byte.
+	 *
+	 * @param lowerCaseNames whether the flattened name set is lower-cased, which is the one way the
+	 *        two spellings of this loop in the tree differed. {@link PatientClinicalContextBuilder}
+	 *        lower-cases, so a case about what the chart records should pass {@code true}; the display
+	 *        list itself is carried verbatim either way.
+	 */
+	static PatientClinicalContext rawContextNaming(Integer age, Double weightKg,
+			boolean lowerCaseNames, String... displays) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders =
 				new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
 		Set<String> names = new LinkedHashSet<String>();
 		for (String display : displays) {
 			orders.add(activeOrder("order-" + display, display, display));
-			names.add(display);
+			names.add(lowerCaseNames ? display.toLowerCase(Locale.ROOT) : display);
 		}
-		PatientClinicalContext raw = ctx(age, weightKg, names, null, null, null, orders);
-		return service.withReferenceNames(raw, service.findForActiveOrders(raw));
+		return ctx(age, weightKg, names, null, null, null, orders);
 	}
 
 	/**

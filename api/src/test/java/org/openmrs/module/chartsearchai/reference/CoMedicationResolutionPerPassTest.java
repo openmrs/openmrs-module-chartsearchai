@@ -142,14 +142,8 @@ public class CoMedicationResolutionPerPassTest {
 	}
 
 	private static PatientClinicalContext chartWithOrders() {
-		List<PatientClinicalContext.ActiveDrugOrder> orders =
-				new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
-		Set<String> names = new LinkedHashSet<String>();
-		for (String name : ORDER_NAMES) {
-			orders.add(DrugReferenceTestSupport.activeOrder("order-" + name, name, name));
-			names.add(name.toLowerCase());
-		}
-		return DrugReferenceTestSupport.ctx(60, 70.0, names, null, null, null, orders);
+		return DrugReferenceTestSupport.rawContextNaming(60, 70.0, true,
+				ORDER_NAMES.toArray(new String[0]));
 	}
 
 	private static String questionNaming(int drugs) {
@@ -270,11 +264,14 @@ public class CoMedicationResolutionPerPassTest {
 			"src/main/java/org/openmrs/module/chartsearchai/reference/DrugSafetyValidator.java";
 
 	/** The one arity of {@code validate} that builds the pass's shared state; the others delegate to
-	 *  it. The needle is that declaration's SECOND line, not its first: since issue #255 the arity
-	 *  above it opens with a byte-identical first line, and a needle matching twice is a hard failure
-	 *  in {@link SourceScan#body}. It is still a single line of the file as written. */
+	 *  it. It spans BOTH lines of the declaration: since issue #255 the arity above opens with a
+	 *  byte-identical first line, so the first line alone matches twice and {@link SourceScan#body}
+	 *  hard-fails on that; and the second line alone names no METHOD, so it would delimit whatever
+	 *  body carries that parameter tail — a sibling helper given the same tail takes the guard with
+	 *  it. Two lines keep the name in the needle and keep it unique. */
 	private static final String VALIDATE =
-			"List<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries) {";
+			"validate(String answer, String question, PatientClinicalContext rawContext,\n"
+					+ "\t\t\tList<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries) {";
 
 	private static final String MEMO_DECLARATION = "private final class CoMedications {";
 

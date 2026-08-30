@@ -1074,7 +1074,13 @@ public class DrugReferenceService {
 		for (String name : context.getActiveDrugNames()) {
 			entries.addAll(findImpliedByDrugName(name, impliedByName));
 		}
-		return new ArrayList<DrugReference>(entries);
+		// Unmodifiable, and that is a contract rather than caution (issue #255). Since that change the
+		// list a caller holds can be the SAME object another one reasons over — DrugReferenceInjector
+		// hands its resolution to the validate it calls and then goes on rendering from it — so an arm
+		// that sorted or filtered it in place would change what the injector puts in the chart, after
+		// the fact and silently. The wrapper is O(1) over the copy already being made, it binds every
+		// consumer from the one place the list is produced, and nothing in the module mutates it today.
+		return Collections.unmodifiableList(new ArrayList<DrugReference>(entries));
 	}
 
 	/**

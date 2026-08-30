@@ -19,7 +19,6 @@ import java.util.List;
 import java.util.Set;
 
 import org.junit.jupiter.api.Test;
-import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 
@@ -94,23 +93,17 @@ public class ActiveOrderResolutionPerPassTest {
 	}
 
 	private static PatientClinicalContext chartWithOrders() {
-		List<PatientClinicalContext.ActiveDrugOrder> orders =
-				new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
-		Set<String> names = new LinkedHashSet<String>();
-		for (String name : ORDER_NAMES) {
-			orders.add(DrugReferenceTestSupport.activeOrder("order-" + name, name, name));
-			names.add(name.toLowerCase());
-		}
-		return DrugReferenceTestSupport.ctx(60, 70.0, names, null, null, null, orders);
+		return DrugReferenceTestSupport.rawContextNaming(60, 70.0, true,
+				ORDER_NAMES.toArray(new String[0]));
 	}
 
-	/** The {@code safety_finding} records of {@code chart}, in chart order, as they were rendered. */
-	private static List<String> injectedFindings(PatientChart chart) {
+	/** The {@code safety_finding} records of {@code chart}, in chart order, as they were rendered —
+	 *  over {@link DrugReferenceTestSupport#injectedFindings}, which is the one matcher for what counts
+	 *  as an injected finding, so this file cannot come to count a different set from the others. */
+	private static List<String> findingTexts(PatientChart chart) {
 		List<String> rendered = new ArrayList<String>();
-		for (RecordMapping mapping : chart.getMappings()) {
-			if (ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(mapping.getResourceType())) {
-				rendered.add(mapping.getText());
-			}
+		for (RecordMapping mapping : DrugReferenceTestSupport.injectedFindings(chart)) {
+			rendered.add(mapping.getText());
 		}
 		return rendered;
 	}
@@ -142,7 +135,7 @@ public class ActiveOrderResolutionPerPassTest {
 		PatientChart injected = injector.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
 				chartWithOrders(), QUESTION);
 
-		assertFalse(injectedFindings(injected).isEmpty(), "the arrangement must reach the pre-answer "
+		assertFalse(findingTexts(injected).isEmpty(), "the arrangement must reach the pre-answer "
 				+ "findings pass, or the count below is satisfied by an injection that never calls "
 				+ "validate at all and this case asserts nothing");
 		assertEquals(1, service.resolutions, "one injection pass resolved the patient's active orders "
@@ -180,7 +173,7 @@ public class ActiveOrderResolutionPerPassTest {
 
 		assertFalse(selfResolved.isEmpty(), "the arrangement must produce pre-answer findings, or the "
 				+ "comparison below is between two empty lists");
-		assertEquals(selfResolved, injectedFindings(injected), "the findings the pass injected are not "
+		assertEquals(selfResolved, findingTexts(injected), "the findings the pass injected are not "
 				+ "the ones it produces when validate resolves the patient's orders for itself, so the "
 				+ "list threaded down (issue #255) is not that resolution. A wrong list here changes "
 				+ "which co-medications the class arm reasons about, and reaches the model as citable "
@@ -201,15 +194,16 @@ public class ActiveOrderResolutionPerPassTest {
 	 * the names it attaches. That is the "trap" {@code DrugSafetyValidator} recorded and did not fix.
 	 *
 	 * <p>It pins {@code validate}'s INPUT, not the injector's threading; the case above is what pins
-	 * that. It passes on both sides of the change.
+	 * that. It does not discriminate the change — and it cannot be run against the pre-change code at
+	 * all, since it calls the arity this change adds. It would redden only if {@code withReferenceNames}
+	 * started writing something {@code findForActiveOrders} reads.
 	 */
 	@Test
 	public void theResolutionIsTheSameWhicheverContextItIsAskedOf() {
 		ResolutionCountingService service = service();
 		DrugReferenceInjector injector = DrugReferenceTestSupport.injectorWithSafety(service);
 		PatientClinicalContext raw = chartWithOrders();
-		PatientClinicalContext enriched = service.withReferenceNames(raw,
-				service.findForActiveOrders(raw));
+		PatientClinicalContext enriched = service.withReferenceNames(raw);
 
 		List<SafetyWarning> resolvingForItself = injector.preAnswerFindings(enriched, SCREENING_QUESTION);
 		List<SafetyWarning> handedTheRawResolution = injector.preAnswerFindings(enriched,

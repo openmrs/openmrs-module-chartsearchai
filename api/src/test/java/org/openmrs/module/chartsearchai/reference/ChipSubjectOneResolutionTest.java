@@ -180,13 +180,18 @@ public class ChipSubjectOneResolutionTest {
 
 	/**
 	 * The one arity of {@code validate} that builds the pass's shared state — the other five delegate
-	 * to it. The needle is that declaration's SECOND line, not its first: since issue #255 the arity
-	 * above it opens with a byte-identical first line, and a needle matching twice is a hard failure
-	 * in {@link #uniqueOffsetOf}. It is still a single line of the file as written, and it still ends
-	 * at the body's own opening brace, which is what {@link #bodyOf} looks for.
+	 * to it. It spans BOTH lines of the declaration, which is a correction rather than a style: since
+	 * issue #255 the arity above opens with a byte-identical first line, so the first line alone
+	 * matches twice and {@link #uniqueOffsetOf} hard-fails on that; and the second line alone names no
+	 * METHOD, so it delimits whatever body carries that parameter tail — measured, a sibling helper
+	 * given the same tail took this guard with it and left a per-arm {@code SubstanceSubjects}
+	 * construction green, which is exactly the state the assertion below forbids. Two lines keep the
+	 * name in the needle and keep it unique. It still ends at the body's own opening brace, which is
+	 * what {@link #bodyOf} looks for.
 	 */
 	private static final String VALIDATE =
-			"List<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries) {";
+			"validate(String answer, String question, PatientClinicalContext rawContext,\n"
+					+ "\t\t\tList<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries) {";
 
 	@Test
 	public void onlyTheSharedLookupAndThePartnerRungResolveASubjectDirectly() throws IOException {

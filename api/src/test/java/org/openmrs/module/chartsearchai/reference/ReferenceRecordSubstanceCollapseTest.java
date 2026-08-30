@@ -154,9 +154,13 @@ public class ReferenceRecordSubstanceCollapseTest {
 	}
 
 	@Test
-	public void theDebugLineReportsTheReferenceSliceCharacterTotalAndOnlyThat() throws IOException {
-		// The instrument, tested rather than trusted. Issue #163's cost is INVISIBLE from the REST
-		// response (only cited references come back), so this DEBUG line is the only place an operator or
+	public void theDebugLineReportsTheDrugReferenceEntryCharacterTotalAndOnlyThat() throws IOException {
+		// The instrument, tested rather than trusted. NOTE the name: this pins the drug-reference
+		// ENTRIES' character total, which is issue #163's question and NOT what
+		// ChartSearchAiUtils.ReferenceSlice means — that type counts every reference-group record,
+		// findings included, and is issue #229's. The DEBUG line prints both, labelled.
+		// Issue #163's cost is INVISIBLE from the REST response (only cited references come back), so
+		// this DEBUG line is the only place an operator or
 		// a verification pass can read it — and this PR's own live evidence is quoted off it. A count
 		// alone did not settle #163 either, since what crowds out chart records is characters. Asserted
 		// on the real formatted line, not through a helper that recomputes the number: that would test
@@ -189,14 +193,14 @@ public class ReferenceRecordSubstanceCollapseTest {
 		}
 
 		Matcher line = Pattern.compile("drug-reference \\((\\d+) chars\\)").matcher(String.join("\n", logged));
-		assertTrue(line.find(), "the DEBUG line must report the reference slice's character total, was: "
-				+ logged);
+		assertTrue(line.find(), "the DEBUG line must report the drug-reference ENTRIES' character total, "
+				+ "was: " + logged);
 		int reported = Integer.parseInt(line.group(1));
 		assertEquals(references, reported,
 				"and it must be the injected drug_reference records' own characters");
 		assertTrue(reported < everything,
 				"counting ONLY those — a total that also counted the chart's obs record and the safety "
-						+ "findings would say the reference slice costs more budget than it does, was "
+						+ "findings would say the drug-reference entries cost more budget than they do, was "
 						+ reported + " against " + everything + " for every record in the chart");
 	}
 

@@ -77,9 +77,13 @@ public final class LogCapture implements AutoCloseable {
 
 	/**
 	 * {@link #on(String)} at a level of the caller's choosing, for the outputs whose only surface is a
-	 * line logged BELOW info — issue #163's injected-character total, which exists precisely because the
-	 * REST response cannot show the size of the reference slice, so a test has no other way to observe
-	 * it.
+	 * line logged BELOW info — issue #163's drug-reference ENTRY character total, which exists precisely
+	 * because the REST response returns only CITED references and so cannot show what the injected
+	 * entries cost, leaving a test no other way to observe it. Say "entry total" and not "the reference
+	 * slice": since issue #229 that is a named type ({@code ChartSearchAiUtils.ReferenceSlice}) counting
+	 * a strictly larger population — every reference-group record, findings included — and its size IS
+	 * now readable from REST, on the audit row. The two are printed side by side on that DEBUG line for
+	 * exactly this reason.
 	 *
 	 * <p>{@code INFO} stays the default rather than becoming a parameter everywhere, because the reason
 	 * for it is specific to the assertions this class was built for: see the class javadoc — capturing

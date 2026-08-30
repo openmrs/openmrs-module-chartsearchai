@@ -26,6 +26,7 @@ import java.util.regex.Pattern;
 import org.openmrs.Concept;
 import org.openmrs.ConceptSet;
 import org.openmrs.api.context.Context;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -81,7 +82,7 @@ public class ChartSearchAiUtils {
 	 * injected record are added — three exist already, and they do not all fall on the same side
 	 * (see below).
 	 *
-	 * <p>Three behaviours now hang off this one classification, not just the display grouping. The
+	 * <p>Four behaviours now hang off this one classification, not just the display grouping. The
 	 * demote-only grounding carve-out in {@code CitationGroundingVerifier} is derived from it via
 	 * {@link #isGroundingDemoteOnly}. That gate used to test the {@code drug_reference} type directly,
 	 * so when {@code safety_finding} arrived (#110) it was classified here and NOT registered there,
@@ -94,6 +95,13 @@ public class ChartSearchAiUtils {
 	 * CLIENT can see — swept off its own enumeration in
 	 * {@code ChartSearchAiReferenceGroundingWithholdingTest}, in the omod module, because that is
 	 * where the serializer lives.
+	 *
+	 * <p>The fourth is prompt COST: {@link #referenceSlice} measures how much of an assembled chart is
+	 * reference material, which is the durable observable issue #229 asks for. It reads this
+	 * classification rather than a list of type names for the same reason the other three do — so a
+	 * further injected kind is measured automatically instead of being silently omitted — and the
+	 * fail-safe below means it UNDER-reports an unrecognised type rather than over-reporting it,
+	 * which is the safe direction for a number an operator reads as a floor on prompt spend.
 	 *
 	 * <p>The two groups are exhaustive because exactly two code paths mint a
 	 * {@code RecordMapping}: {@code PatientChartSerializer}, which passes through whatever
@@ -184,7 +192,112 @@ public class ChartSearchAiUtils {
 	 * @return true when a grounding pass may at most demote this record's citation
 	 */
 	public static boolean isGroundingDemoteOnly(String resourceType) {
+		return isReferenceMaterial(resourceType);
+	}
+
+	/**
+	 * The one spelling of "this type is module-supplied reference material", which both
+	 * {@link #isGroundingDemoteOnly} and {@link #referenceSlice} delegate to. Private because it is
+	 * not a third classification: {@link #referenceGroup} decides, and this is the boolean reading of
+	 * its answer. It exists so the comparison is written once — the same argument
+	 * {@code isGroundingDemoteOnly}'s javadoc makes for having no type list of its own, applied one
+	 * level down now that a second view needs the same question.
+	 *
+	 * <p>The size metric deliberately does NOT go through {@code isGroundingDemoteOnly}. That method
+	 * names a GRADING rule, and a caller measuring prompt cost has no business depending on what
+	 * grounding does; were the two ever to diverge, the one that must move is the grading rule.
+	 */
+	private static boolean isReferenceMaterial(String resourceType) {
 		return ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE.equals(referenceGroup(resourceType));
+	}
+
+	/**
+	 * How much of an assembled chart is module-supplied reference material — the record count and the
+	 * character total, together, because they answer different halves of one question and either
+	 * alone is misleading (issue #229).
+	 *
+	 * <p><b>Why this exists.</b> Nothing bounds how many {@code drug_reference} and
+	 * {@code safety_finding} records {@code DrugReferenceInjector} appends;
+	 * {@code MAX_INTERACTION_RENDER_CHARS} is a per-RECORD budget, so N records cost N times it, and
+	 * the only signal that any of it happened was one DEBUG line. On OpenMRS the {@code log.level}
+	 * global property is not applied at startup, so that line is not reachable by configuration
+	 * alone — the prompt slice a clinician's answer was built from could not be measured after the
+	 * fact at all. This is the derivation the durable channel reads:
+	 * {@code ChartAnswer.getReferenceSlice()} carries it to the audit row.
+	 *
+	 * <p><b>What it counts, stated so the number is not read as more than it is.</b> It counts every
+	 * mapping the chart carries whose type {@link #referenceGroup} calls reference material — not
+	 * "everything the injector added", which is a different and wrong set: an
+	 * {@link ChartSearchAiConstants#RESOURCE_TYPE_ACTIVE_DRUG_ORDER} record is injected and is the
+	 * patient's own prescription, so it groups as chart evidence and is outside this number. Nor is
+	 * it a claim about who MINTED the record: {@code PatientChartSerializer} passes through whatever
+	 * type querystore retrieved, so a reference-group type arriving that way would be counted here —
+	 * which is the honest reading for a prompt-cost figure, since the cost is the same whoever wrote
+	 * the line.
+	 *
+	 * <p>Characters are the rendered record text, which is what the model reads and what crowds out
+	 * chart records, and it excludes the {@code "[N] "} citation prefix and the newline the chart's own
+	 * assembly adds. Scope the reading of that to the injector's records, which is where every
+	 * reference-group record comes from today: there the mapping text and the chart line are
+	 * byte-identical by construction, so the total is a floor on the bytes spent. It is not a general
+	 * property of a {@code RecordMapping} — {@code PatientChartSerializer} carries an inline date and
+	 * group label on the mapping that the chart line run-length-dedups away — so were a reference-group
+	 * type ever to arrive through querystore, its characters could exceed what the prompt spent on it.
+	 *
+	 * @param mappings the assembled chart's mappings, may be null
+	 * @return the slice, never null; zero/zero when nothing reference-group is present, which is a
+	 *         real measurement and not the same as "nothing was measured"
+	 */
+	public static ReferenceSlice referenceSlice(List<RecordMapping> mappings) {
+		int records = 0;
+		int characters = 0;
+		if (mappings != null) {
+			for (RecordMapping mapping : mappings) {
+				if (mapping != null && isReferenceMaterial(mapping.getResourceType())) {
+					records++;
+					if (mapping.getText() != null) {
+						characters += mapping.getText().length();
+					}
+				}
+			}
+		}
+		return new ReferenceSlice(records, characters);
+	}
+
+	/**
+	 * How much reference material one assembled chart carried: a record count and a character total,
+	 * held together because a count alone does not say what the slice cost and a character total
+	 * alone does not say how many citations the model was offered.
+	 *
+	 * <p>One type rather than two ints so the pair cannot come apart in transit — it travels from the
+	 * chart, through {@code ChartAnswer}, to two audit columns, and a caller cannot supply one half
+	 * of it.
+	 */
+	public static final class ReferenceSlice {
+
+		private final int records;
+
+		private final int characters;
+
+		public ReferenceSlice(int records, int characters) {
+			this.records = records;
+			this.characters = characters;
+		}
+
+		/** How many reference-group records the chart carried. */
+		public int getRecords() {
+			return records;
+		}
+
+		/** How many characters of rendered reference-record text the chart carried. */
+		public int getCharacters() {
+			return characters;
+		}
+
+		@Override
+		public String toString() {
+			return records + " record(s), " + characters + " chars";
+		}
 	}
 
 	/**

@@ -34,6 +34,25 @@ public class ChartSearchAuditLog implements Serializable {
 
 	private Integer referenceCount;
 
+	/**
+	 * How many module-supplied reference records the prompt behind this answer carried, or null when
+	 * the producer stated none — see {@code ChartSearchService.ChartAnswer.getReferenceSlice()} for
+	 * the null-versus-zero contract (issue #229).
+	 *
+	 * <p>A different population from {@link #referenceCount}, which counts the citations IN the
+	 * answer. Most injected reference material is never cited, so this is the prompt COST and that
+	 * one is the answer's use of it.
+	 */
+	private Integer referenceSliceRecords;
+
+	/**
+	 * How many characters of module-supplied reference-record text that prompt carried, or null when
+	 * the producer stated none. Beside the count rather than instead of it: what crowds a chart
+	 * record out of the context window is characters, and what bounds how many citations the model
+	 * is offered is the count.
+	 */
+	private Integer referenceSliceChars;
+
 	private String searchMode;
 
 	private Long responseTimeMs;
@@ -94,6 +113,22 @@ public class ChartSearchAuditLog implements Serializable {
 
 	public void setReferenceCount(Integer referenceCount) {
 		this.referenceCount = referenceCount;
+	}
+
+	public Integer getReferenceSliceRecords() {
+		return referenceSliceRecords;
+	}
+
+	public void setReferenceSliceRecords(Integer referenceSliceRecords) {
+		this.referenceSliceRecords = referenceSliceRecords;
+	}
+
+	public Integer getReferenceSliceChars() {
+		return referenceSliceChars;
+	}
+
+	public void setReferenceSliceChars(Integer referenceSliceChars) {
+		this.referenceSliceChars = referenceSliceChars;
 	}
 
 	public String getSearchMode() {

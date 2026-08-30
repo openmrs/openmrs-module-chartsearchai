@@ -21,6 +21,10 @@
 
 		<property name="referenceCount" column="reference_count" type="java.lang.Integer"/>
 
+		<property name="referenceSliceRecords" column="reference_slice_records" type="java.lang.Integer"/>
+
+		<property name="referenceSliceChars" column="reference_slice_chars" type="java.lang.Integer"/>
+
 		<property name="searchMode" column="search_mode" type="string" length="20" not-null="true"/>
 
 		<property name="responseTimeMs" column="response_time_ms" type="java.lang.Long"/>

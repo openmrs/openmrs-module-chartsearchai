@@ -242,10 +242,13 @@ public class ChartSearchAiReferenceGroundingWithholdingTest {
 	 *
 	 * <p>Two limits of the mechanism, stated so nobody has to rediscover them. It is a raw byte
 	 * scan, so a wire value that happened to be a SUBSTRING of an unrelated literal would redden
-	 * this on an unrelated change — today's values are safe (the pool already holds
-	 * {@code reference} and {@code chart} inside {@code "references"}, {@code "chartsearchai"} and
-	 * {@code "referenceCount"}, and neither {@code drug_reference} nor {@code safety_finding} occurs
-	 * that way), but a future single-word type name would want word-delimited matching rather than
+	 * this on an unrelated change — today's values are safe, because what the scan forbids is the two
+	 * UNDERSCORED type names and the pool holds no literal containing either, while the bare words
+	 * {@code reference} and {@code chart} it does hold ({@code "references"},
+	 * {@code "chartsearchai"}, {@code "referenceCount"}, {@code "referenceSliceRecords"} … ) are not
+	 * what is searched for. That is the property to check rather than a census of the pool, which
+	 * this javadoc carried until #229 added two more strings to it and left the list two short. But
+	 * a future single-word type name would want word-delimited matching rather than
 	 * this being deleted. And a name computed at runtime would evade it; that is not a plausible
 	 * accidental regression, and the shape this exists to catch — {@code type.equals(CONSTANT)} — is
 	 * not evadable.

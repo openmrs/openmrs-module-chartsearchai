@@ -14,12 +14,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.function.Consumer;
 
 import org.junit.jupiter.api.AfterEach;
@@ -82,7 +79,7 @@ public class ChartSearchAiAuditSearchModeTest {
 		controller.setChartSearchService(
 				new StubService(ChartSearchAiConstants.SEARCH_MODE_QUERY_SCOPED));
 
-		ResponseEntity<Object> response = controller.search(searchBody());
+		ResponseEntity<Object> response = controller.search(RestControllerContext.searchBody("any infections?"));
 
 		assertEquals(HttpStatus.OK, response.getStatusCode(), "the handler must have reached the audit write");
 		assertEquals(ChartSearchAiConstants.SEARCH_MODE_QUERY_SCOPED, savedMode(),
@@ -98,7 +95,7 @@ public class ChartSearchAiAuditSearchModeTest {
 			audit.saved.clear();
 			controller.setChartSearchService(new StubService(mode));
 
-			controller.search(searchBody());
+			controller.search(RestControllerContext.searchBody("any infections?"));
 
 			assertEquals(mode, savedMode());
 		}
@@ -187,7 +184,7 @@ public class ChartSearchAiAuditSearchModeTest {
 		// one that says so rather than one that claims a mode nobody resolved.
 		controller.setChartSearchService(new StubService(null));
 
-		controller.search(searchBody());
+		controller.search(RestControllerContext.searchBody("any infections?"));
 		controller.streamAnswer(out, RestControllerContext.patient(), "any infections?",
 				RestControllerContext.user(), false);
 
@@ -201,25 +198,6 @@ public class ChartSearchAiAuditSearchModeTest {
 	private String savedMode() {
 		assertFalse(audit.saved.isEmpty(), "no audit row was written");
 		return audit.saved.get(0).getSearchMode();
-	}
-
-	private static Map<String, String> searchBody() {
-		Map<String, String> body = new HashMap<String, String>();
-		body.put("patient", RestControllerContext.PATIENT_UUID);
-		body.put("question", "any infections?");
-		return body;
-	}
-
-	/** Retains the rows the controller saved, which is the whole point of this class. */
-	private static final class CapturingAuditLogService extends StubAuditLogService {
-
-		final List<ChartSearchAuditLog> saved = new ArrayList<ChartSearchAuditLog>();
-
-		@Override
-		public ChartSearchAuditLog saveAuditLog(ChartSearchAuditLog auditLog) {
-			saved.add(auditLog);
-			return super.saveAuditLog(auditLog);
-		}
 	}
 
 	/**

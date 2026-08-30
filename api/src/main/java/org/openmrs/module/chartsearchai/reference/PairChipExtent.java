@@ -52,8 +52,9 @@ package org.openmrs.module.chartsearchai.reference;
  * paragraph published a count and each was refuted by the next review: three situations where the
  * list held two, one home where README held a second, and two situations while the async
  * early-{@code done} case below was a third nobody had counted. What is worth stating is the
- * mechanism, so here it is, unnumbered; the first cases are alike to a consumer and the last is told
- * apart by WHERE it is read rather than by this value:
+ * mechanism, so here it is with no count asserted in prose — the list numbers itself, and a number
+ * the list carries cannot disagree with the list. The first cases are alike to a consumer; the last
+ * is told apart by WHERE it is read rather than by this value:
  *
  * <ol>
  *   <li>no pairwise arm enumerated anything — the question named fewer than two reference drugs

@@ -1164,8 +1164,12 @@ public class CitationGroundingVerifierTest {
 	 * <p>The carve-out is now DERIVED from the group
 	 * ({@link ChartSearchAiUtils#isGroundingDemoteOnly}), and this sweep is what keeps it derived:
 	 * re-hardcoding it as a list of type names still passes today — today's list and today's groups
-	 * agree — and fails the moment a fourth injected type is added, which is exactly when the omission
-	 * would otherwise ship again. Its counterpart in {@code ChartSearchAiReferenceGroupTest} asserts
+	 * agree — and fails the moment a third reference-GROUP type is added, which is exactly when the
+	 * omission would otherwise ship again. A third reference-group type and not a fourth injected type
+	 * of any kind, which is what this said until #229 measured it: hardcode the predicate, add a
+	 * fourth declared constant that groups as CHART evidence, and this sweep stays green — the
+	 * hardcode and the classification agree that such a type is not demote-only, so nothing here can
+	 * tell them apart. Classify that same constant as reference material instead and it reddens. Its counterpart in {@code ChartSearchAiReferenceGroupTest} asserts
 	 * the same rule against the group each constant is RECORDED as, so the two registries cannot drift
 	 * together either.
 	 *

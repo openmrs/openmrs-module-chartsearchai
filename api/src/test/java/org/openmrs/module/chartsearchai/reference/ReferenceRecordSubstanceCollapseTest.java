@@ -159,8 +159,8 @@ public class ReferenceRecordSubstanceCollapseTest {
 		// ENTRIES' character total, which is issue #163's question and NOT what
 		// ChartSearchAiUtils.ReferenceSlice means — that type counts every reference-group record,
 		// findings included, and is issue #229's. The DEBUG line prints both, labelled.
-		// Issue #163's cost is INVISIBLE from the REST
-		// response (only cited references come back), so this DEBUG line is the only place an operator or
+		// Issue #163's cost is INVISIBLE from the REST response (only cited references come back), so
+		// this DEBUG line is the only place an operator or
 		// a verification pass can read it — and this PR's own live evidence is quoted off it. A count
 		// alone did not settle #163 either, since what crowds out chart records is characters. Asserted
 		// on the real formatted line, not through a helper that recomputes the number: that would test

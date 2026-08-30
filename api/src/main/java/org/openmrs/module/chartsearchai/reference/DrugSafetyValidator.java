@@ -279,12 +279,17 @@ public class DrugSafetyValidator {
 	/**
 	 * The widest arity, and the one that builds the pass's shared state — every other delegates to it.
 	 *
-	 * <p><b>Two structural guards delimit this body by a literal needle</b> and both name its SECOND
-	 * line, {@code "List<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries) {"},
-	 * because the arity above it opens with a byte-identical first line and a needle matching twice is
-	 * a hard failure in {@code SourceScan.uniqueOffset}. Move this declaration and the needles move
-	 * with it — {@code ChipSubjectOneResolutionTest} and {@code CoMedicationResolutionPerPassTest},
-	 * which say so themselves.
+	 * <p><b>Two structural guards delimit this body by a literal needle, and each spells BOTH lines of
+	 * this declaration.</b> Neither line alone will do, for two different reasons, and both were
+	 * measured: the first line alone matches twice, since the arity above opens with a byte-identical
+	 * one, and a needle matching twice is a hard failure in each guard's own unique-offset check
+	 * ({@code SourceScan.uniqueOffset} for {@code CoMedicationResolutionPerPassTest}, and
+	 * {@code ChipSubjectOneResolutionTest}'s own copy of it, which ADR Decision 54 records as
+	 * deliberately not migrated); and the second line alone names no METHOD, so it delimits whatever
+	 * body carries that parameter tail — a sibling helper given the same tail took the guard with it
+	 * and left the per-arm construction the assertion forbids passing. Move this declaration and the
+	 * needles move with it — {@code ChipSubjectOneResolutionTest} and
+	 * {@code CoMedicationResolutionPerPassTest}, which say so themselves.
 	 *
 	 * @param resolvedOrderEntries the patient's active orders ALREADY resolved to their reference
 	 *        entries by a caller that needed them itself, or {@code null} from a caller that has not
@@ -309,9 +314,13 @@ public class DrugSafetyValidator {
 	 *        and that is now load-bearing where it was not. The caller does not hand the list over: it
 	 *        goes on rendering from the very same one after this returns ({@code render(ref,
 	 *        orderEntries, …)}), so an arm added here that mutated it would change what the injector
-	 *        puts in the chart, silently and after the fact. No copy is taken — every other list
-	 *        parameter in this class is read-only by the same convention, and a copy at one of them
-	 *        would be a second convention rather than a rule.
+	 *        puts in the chart, silently and after the fact — measured, and no test in the module sees
+	 *        it: a {@code Collections.reverse} placed after this method's own reads leaves the whole
+	 *        api suite green. So the contract is enforced at the producer rather than described here —
+	 *        {@link DrugReferenceService#findForActiveOrders} returns an unmodifiable list — and no
+	 *        copy is taken here. Do not read that as a class-wide convention: the
+	 *        {@code List<SafetyWarning> warnings} the arms below take is an ACCUMULATOR and is written
+	 *        by design.
 	 *
 	 *        <p>Passing a list resolved from a DIFFERENT context than {@code rawContext} is the one
 	 *        way to misuse this. The injector's own list is resolved from the raw context this then
@@ -340,9 +349,9 @@ public class DrugSafetyValidator {
 		// #255 per PASS rather than per validate wherever the caller already holds the list: the
 		// pre-answer findings pass reaches this method through DrugReferenceInjector.injectRecords,
 		// which resolves the same orders for its own promotion predicate before calling in, and now
-		// hands that resolution down instead of leaving this one to derive it again. The two answers
-		// were the same — neither leg reads the names withReferenceNames attaches — so removing the
-		// repeat also removes the trap the first widening that DID read them would have sprung.
+		// hands that resolution down instead of leaving this one to derive it again. Why the two
+		// answers were the same, and why the INPUT travels and the enriched context does not, are on
+		// resolvedOrderEntries above; ADR Decision 56 is canonical for both.
 		List<DrugReference> orderEntries = resolvedOrderEntries != null ? resolvedOrderEntries
 				: drugReferenceService.findForActiveOrders(rawContext);
 		PatientClinicalContext context = drugReferenceService.withReferenceNames(rawContext, orderEntries);

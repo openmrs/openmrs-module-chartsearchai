@@ -20,10 +20,8 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.Test;
@@ -142,7 +140,7 @@ public class CoMedicationResolutionPerPassTest {
 	}
 
 	private static PatientClinicalContext chartWithOrders() {
-		return DrugReferenceTestSupport.rawContextNaming(60, 70.0, true,
+		return DrugReferenceTestSupport.rawContextNaming(60, 70.0,
 				ORDER_NAMES.toArray(new String[0]));
 	}
 

@@ -24,7 +24,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -353,6 +352,21 @@ public final class DrugReferenceTestSupport {
 	 * the list rather than the first, because that count is the assertion in every caller but
 	 * {@link #injectedSafetyFinding}, which layers its own throw-on-empty contract on top.
 	 */
+	/**
+	 * The rendered TEXT of {@link #injectedFindings} — the finding-shaped counterpart of
+	 * {@link #referenceTexts}, owned here for the same reason that one is: what a finding's text
+	 * consists of is decided in one place ({@code DrugReferenceInjector.renderFinding} appends the
+	 * strength clause and the uncorroborated-match note), so a file that spells the extraction itself
+	 * silently stops matching the others when that changes.
+	 */
+	static List<String> findingTexts(PatientChart chart) {
+		List<String> texts = new ArrayList<String>();
+		for (RecordMapping mapping : injectedFindings(chart)) {
+			texts.add(mapping.getText());
+		}
+		return texts;
+	}
+
 	static List<RecordMapping> injectedFindings(PatientChart chart) {
 		return chart.getMappings().stream()
 				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(m.getResourceType()))
@@ -636,7 +650,7 @@ public final class DrugReferenceTestSupport {
 	 */
 	static PatientClinicalContext contextNaming(DrugReferenceService service, Integer age,
 			Double weightKg, String... displays) {
-		PatientClinicalContext raw = rawContextNaming(age, weightKg, false, displays);
+		PatientClinicalContext raw = rawContextNaming(age, weightKg, displays);
 		return service.withReferenceNames(raw);
 	}
 
@@ -646,21 +660,21 @@ public final class DrugReferenceTestSupport {
 	 * resolution, so it must hold the raw context and the enriched one apart.
 	 *
 	 * <p>Extracted at the third caller (issue #255), the threshold {@code ModuleSourceRoot}'s javadoc
-	 * records: the two per-pass counting tests had each written this loop out, byte for byte.
-	 *
-	 * @param lowerCaseNames whether the flattened name set is lower-cased, which is the one way the
-	 *        two spellings of this loop in the tree differed. {@link PatientClinicalContextBuilder}
-	 *        lower-cases, so a case about what the chart records should pass {@code true}; the display
-	 *        list itself is carried verbatim either way.
+	 * records: the two per-pass counting tests had each written this loop out, byte for byte. They
+	 * differed in one respect and it is inert — one lower-cased the flattened name set and the other
+	 * did not, and {@link PatientClinicalContext}'s own constructor lower-cases it either way (through
+	 * {@code DrugReference.normalizeName}), so the two spellings never produced different contexts.
+	 * Measured while extracting: with the loop lower-casing, not lower-casing, and doing so under a
+	 * flag, the api suite is green all three ways. So there is no knob here, and the reason there is
+	 * none is stated rather than left for the next author to rediscover.
 	 */
-	static PatientClinicalContext rawContextNaming(Integer age, Double weightKg,
-			boolean lowerCaseNames, String... displays) {
+	static PatientClinicalContext rawContextNaming(Integer age, Double weightKg, String... displays) {
 		List<PatientClinicalContext.ActiveDrugOrder> orders =
 				new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
 		Set<String> names = new LinkedHashSet<String>();
 		for (String display : displays) {
 			orders.add(activeOrder("order-" + display, display, display));
-			names.add(lowerCaseNames ? display.toLowerCase(Locale.ROOT) : display);
+			names.add(display);
 		}
 		return ctx(age, weightKg, names, null, null, null, orders);
 	}

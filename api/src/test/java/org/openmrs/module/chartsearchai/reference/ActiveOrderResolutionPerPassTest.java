@@ -14,13 +14,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
-import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 
 /**
  * The patient's active orders are resolved ONCE per injection pass, not once by the injector and
@@ -93,19 +90,8 @@ public class ActiveOrderResolutionPerPassTest {
 	}
 
 	private static PatientClinicalContext chartWithOrders() {
-		return DrugReferenceTestSupport.rawContextNaming(60, 70.0, true,
+		return DrugReferenceTestSupport.rawContextNaming(60, 70.0,
 				ORDER_NAMES.toArray(new String[0]));
-	}
-
-	/** The {@code safety_finding} records of {@code chart}, in chart order, as they were rendered —
-	 *  over {@link DrugReferenceTestSupport#injectedFindings}, which is the one matcher for what counts
-	 *  as an injected finding, so this file cannot come to count a different set from the others. */
-	private static List<String> findingTexts(PatientChart chart) {
-		List<String> rendered = new ArrayList<String>();
-		for (RecordMapping mapping : DrugReferenceTestSupport.injectedFindings(chart)) {
-			rendered.add(mapping.getText());
-		}
-		return rendered;
 	}
 
 	/** {@code findings} as the injector renders them — its own renderer, not a second expression. */
@@ -135,7 +121,7 @@ public class ActiveOrderResolutionPerPassTest {
 		PatientChart injected = injector.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
 				chartWithOrders(), QUESTION);
 
-		assertFalse(findingTexts(injected).isEmpty(), "the arrangement must reach the pre-answer "
+		assertFalse(DrugReferenceTestSupport.findingTexts(injected).isEmpty(), "the arrangement must reach the pre-answer "
 				+ "findings pass, or the count below is satisfied by an injection that never calls "
 				+ "validate at all and this case asserts nothing");
 		assertEquals(1, service.resolutions, "one injection pass resolved the patient's active orders "
@@ -173,7 +159,7 @@ public class ActiveOrderResolutionPerPassTest {
 
 		assertFalse(selfResolved.isEmpty(), "the arrangement must produce pre-answer findings, or the "
 				+ "comparison below is between two empty lists");
-		assertEquals(selfResolved, findingTexts(injected), "the findings the pass injected are not "
+		assertEquals(selfResolved, DrugReferenceTestSupport.findingTexts(injected), "the findings the pass injected are not "
 				+ "the ones it produces when validate resolves the patient's orders for itself, so the "
 				+ "list threaded down (issue #255) is not that resolution. A wrong list here changes "
 				+ "which co-medications the class arm reasons about, and reaches the model as citable "

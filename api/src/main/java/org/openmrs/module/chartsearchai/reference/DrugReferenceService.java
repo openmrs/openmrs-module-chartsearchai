@@ -882,6 +882,70 @@ public class DrugReferenceService {
 	}
 
 	/**
+	 * The loaded entries indexed by the names they answer {@link DrugReference#isNamed} to — one entry
+	 * of the map per {@link DrugReference#normalizeName}d alias, each holding every row carrying it, in
+	 * dataset order.
+	 *
+	 * <p><b>One walk, so that "which entries does this token name" stops being one.</b>
+	 * {@code DrugSafetyValidator.unambiguouslyNames} collected its rival claimants by walking
+	 * {@link #getAll()}, which was affordable while issue #292 asked it once per FOLDED chip — "the
+	 * rare outcome of the class arm rather than the ordinary one", as that method said. Issue #339 asks
+	 * it once per rule CHIP, and the number of distinct (token, entry) pairs a pass reconciles grows
+	 * with the drugs in play, so a walk per ask breaks the invariant
+	 * {@code CoMedicationResolutionPerPassTest.theCoMedicationResolutionDoesNotGrowWithTheDrugsInPlay}
+	 * states — that the dataset sweeps a chart costs are the SAME at every drug count. A memo over the
+	 * asks cannot restore it (the asks themselves grow); inverting the dataset once can, because one
+	 * walk is one walk however many chips read it.
+	 *
+	 * <p>Built by the caller and HELD BY THE CALLER for its pass — a per-call local threaded through,
+	 * never a field on this bean (CLAUDE.md, issue #172): this map is keyed on the loaded aliases, so
+	 * it is bounded, but the bean is a Spring singleton and an unsynchronised map shared by concurrent
+	 * requests is the first of the two reasons that rule gives. {@code DrugSafetyValidator.CoMedications}
+	 * is the only holder.
+	 *
+	 * @return a fresh index; the caller owns it. Read it back through
+	 *         {@link #entriesNamedBy(String, Map)} rather than by {@code get}, so the token is
+	 *         normalised the one way {@link DrugReference#isNamed} normalises it.
+	 */
+	Map<String, List<DrugReference>> nameIndex() {
+		Map<String, List<DrugReference>> index = new LinkedHashMap<String, List<DrugReference>>();
+		for (DrugReference entry : getAll()) {
+			for (String key : entry.nameKeys()) {
+				List<DrugReference> named = index.get(key);
+				if (named == null) {
+					named = new ArrayList<DrugReference>();
+					index.put(key, named);
+				}
+				named.add(entry);
+			}
+		}
+		return index;
+	}
+
+	/**
+	 * @return every entry of the indexed dataset that {@link DrugReference#isNamed} {@code token} — the
+	 *         same answer a walk asking that predicate of each row would give, in the same order, and
+	 *         empty for a blank token, which names nothing.
+	 *
+	 *         <p>Static and taking the index rather than reading a field, for the reason
+	 *         {@link #nameIndex()} gives about where the index lives. The equality with the walk is a
+	 *         property of {@link DrugReference#nameKeys()} being derived from the same aliases through
+	 *         the same normalisation as the predicate, and it is asked of whole loaded datasets by
+	 *         {@code NameIndexAgreesWithIsNamedTest} rather than argued here.
+	 */
+	static List<DrugReference> entriesNamedBy(String token, Map<String, List<DrugReference>> index) {
+		String key = DrugReference.normalizeName(token);
+		List<DrugReference> named = key == null ? null : index.get(key);
+		// Unmodifiable, and for the reason Decision 58 states of findForActiveOrders: this list is the
+		// index's own, so a consumer that sorted or filtered it in place would change what every later
+		// reader of the pass is told about a token's claimants — and that decides whether one
+		// substance's rated mechanism may be printed under another's name. O(1) over a list the caller
+		// only iterates.
+		return named == null ? Collections.<DrugReference> emptyList()
+				: Collections.unmodifiableList(named);
+	}
+
+	/**
 	 * @return the SUBSTANCE of each row {@link #derivedRows} resolves — {@link #findNamedSubstances}'s
 	 *         third clause, and a view over the very list {@link #findImpliedSubstances} folds into its
 	 *         implied set, so the two cannot disagree about which legs exist or what rank each admits

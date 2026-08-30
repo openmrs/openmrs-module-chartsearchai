@@ -1,0 +1,54 @@
+{
+ "metadata": {
+  "source": "test fixture \u2014 a rule token that names TWO substances, in DDInter shape, with no shared subgroup so nothing folds"
+ },
+ "mechanisms": {
+  "1": {
+   "text": "Esomeprazole competes for CYP2C19 and raises ranitidine exposure.",
+   "categories": []
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInterP1",
+   "name": "Omeprazole",
+   "rxcui": "7646",
+   "rxnorm_name": "esomeprazole",
+   "drugbank_id": "DB00338",
+   "atc": [
+    "A02BC05"
+   ],
+   "ciel": []
+  },
+  {
+   "id": "DDInterP2",
+   "name": "Esomeprazole",
+   "rxcui": "283742",
+   "rxnorm_name": "esomeprazole",
+   "drugbank_id": "DB00736",
+   "atc": [
+    "A02BC05"
+   ],
+   "ciel": []
+  },
+  {
+   "id": "DDInterP3",
+   "name": "Pantoprazole",
+   "rxcui": "40790",
+   "rxnorm_name": "pantoprazole",
+   "drugbank_id": "DB00213",
+   "atc": [
+    "A02BA02"
+   ],
+   "ciel": []
+  }
+ ],
+ "interactions": [
+  [
+   "DDInterP3",
+   "DDInterP2",
+   "Major",
+   "1"
+  ]
+ ]
+}

@@ -38,7 +38,7 @@ import org.junit.jupiter.api.Test;
  * the two arms are provably about one prescription — the rule's own token naming the ladder's ENTRY
  * unambiguously, or naming the very ORDER the label came from — and each arm keeps its own name where
  * they are not. Unfolded rule chips, class-only chips and the grouping keys are untouched — see
- * {@code foldedPartnerLabel}. The injected {@code drug_reference} note list was untouched too, which is
+ * {@code reconciledPartnerName}. The injected {@code drug_reference} note list was untouched too, which is
  * the deviation issue #297 closed: it now takes that same reconciled name in its own vocabulary, and
  * {@code OneNameAcrossChipAndInjectedRecordTest} is where that half is pinned.
  *
@@ -504,7 +504,7 @@ public class FoldedChipOnePartnerNameTest {
 	}
 
 	/**
-	 * The residue {@code foldedPartnerLabel} records as its third case: a rule carrying no match token at
+	 * The residue {@code reconciledPartnerName} records as its third case: a rule carrying no match token at
 	 * all still names its partner by a raw ATC code, so the folded detail keeps two names.
 	 *
 	 * <p>{@code hasActiveDrug} joins such a rule on its ATC code and {@code partnerLabel} then renders
@@ -727,7 +727,7 @@ public class FoldedChipOnePartnerNameTest {
 	 *
 	 * <p>Before issue #292 the same arrangement read {@code as active order [ATC B01AA03, N02BA01]} —
 	 * vague, and true of the prescription. Measured, by returning null unconditionally from
-	 * {@code foldedPartnerLabel}. So this is the trade ADR Decision 39 records as its outcome-1
+	 * {@code reconciledPartnerName}. So this is the trade ADR Decision 39 records as its outcome-1
 	 * trade-off — the class sentence's subject moving from the prescription to whatever the rule's token
 	 * names — and it is pinned here rather than left to that prose. No clean narrowing exists on this
 	 * branch: the ladder holds no entry to put the token to, and a "the token's own substance publishes
@@ -898,7 +898,7 @@ public class FoldedChipOnePartnerNameTest {
 	 * resolves to the code). Before issue #293 this was the one shape in which the order-named branch
 	 * could have said YES about a partner whose label is not a name — unlike {@code namedByCodesOnly} it
 	 * had names for {@code namesNamingOrder} to scan — and it did not get the chance because
-	 * {@code namesADrug} is false for a blank display and {@code foldedPartnerLabel} asks that first.
+	 * {@code namesADrug} is false for a blank display and {@code reconciledPartnerName} asks that first.
 	 * Since #293 the gate reads the DISPLAY instead, which is blank here, so both guards refuse
 	 * independently; what this case still pins is unchanged, that the rule's own token goes
 	 * to both sentences — exactly as for the nameless order in
@@ -908,7 +908,7 @@ public class FoldedChipOnePartnerNameTest {
 	 * wrong.</b> It is NOT a pin on issue #298's single-write-path invariant, and it was written believing
 	 * it was. Under the mutation that motivated it — {@code OrderPartner.recordNameSource} admitting the
 	 * order unconditionally, which is the pre-#298 state — this case still PASSES, because
-	 * {@code foldedPartnerLabel} reaches {@code !namesADrug} before it reaches the order branch and that
+	 * {@code reconciledPartnerName} reaches {@code !namesADrug} before it reaches the order branch and that
 	 * branch order is deliberately kept (see ADR Decision 40). Measured by applying exactly that
 	 * mutation: this class, {@code ClassChipPartnerLabelTest} and
 	 * {@code NamelessActiveOrderPartnerTest} are all green under it. The write path is pinned

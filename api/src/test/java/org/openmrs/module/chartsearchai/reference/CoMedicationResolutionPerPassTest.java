@@ -117,18 +117,27 @@ public class CoMedicationResolutionPerPassTest {
 	 * how the pair is rated, and the order the chips arrive in. Captured from the pre-change code and
 	 * unchanged by the change (verified by diffing the full rendered chip list, all five questions and
 	 * every detail in full, across the two heads).
+	 *
+	 * <p><b>The partner NAMES moved once since, and issue #256's invariant is not what moved them.</b>
+	 * Issue #339 made an unfolded rule chip ask the same reconciliation a folded one asks, so a
+	 * co-medication is named as the dataset names it rather than by the knowledge base's own match
+	 * token — {@code warfarin} became {@code Warfarin}, and so on for all ten. What this list is FOR is
+	 * untouched by that: it still pins which partner each subject is chipped about, what that partner
+	 * is called, the rating and the arrival order, and it still fails if sharing one partner list
+	 * across two subjects disturbs any of them. A rename that made these lower-case again would fail
+	 * {@code OneOrderNameAcrossOneResponseTest} instead.
 	 */
 	private static final List<String> TWO_DRUG_CHIPS = Arrays.asList(
-			"interaction | Minor | Simvastatin interacts with active order warfarin",
-			"interaction | Moderate | Simvastatin interacts with active order ciprofloxacin",
-			"interaction | Major | Simvastatin interacts with active order amiodarone",
-			"interaction | Moderate | Clarithromycin interacts with active order metformin",
-			"interaction | Moderate | Clarithromycin interacts with active order sertraline",
-			"interaction | Moderate | Clarithromycin interacts with active order tramadol",
-			"interaction | Major | Clarithromycin interacts with active order warfarin",
-			"interaction | Moderate | Clarithromycin interacts with active order ciprofloxacin",
-			"interaction | Major | Clarithromycin interacts with active order digoxin",
-			"interaction | Major | Clarithromycin interacts with active order amiodarone",
+			"interaction | Minor | Simvastatin interacts with active order Warfarin",
+			"interaction | Moderate | Simvastatin interacts with active order Ciprofloxacin",
+			"interaction | Major | Simvastatin interacts with active order Amiodarone",
+			"interaction | Moderate | Clarithromycin interacts with active order Metformin",
+			"interaction | Moderate | Clarithromycin interacts with active order Sertraline",
+			"interaction | Moderate | Clarithromycin interacts with active order Tramadol",
+			"interaction | Major | Clarithromycin interacts with active order Warfarin",
+			"interaction | Moderate | Clarithromycin interacts with active order Ciprofloxacin",
+			"interaction | Major | Clarithromycin interacts with active order Digoxin",
+			"interaction | Major | Clarithromycin interacts with active order Amiodarone",
 			"interaction | Major | Simvastatin interacts with Clarithromycin, also named in the question");
 
 	/** A question naming nothing the excerpt classifies, so no arm asks for a co-medication. */

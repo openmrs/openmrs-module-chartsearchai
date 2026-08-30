@@ -345,7 +345,7 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 	 *       and the one surface that would print
 	 *       the partner's own display label, {@code addQuestionPairInteractions}, already declines a pair
 	 *       whose two entries share a name. Since issue #292 a FOLDED drug-in-play chip is a second such
-	 *       surface ({@code DrugSafetyValidator.foldedPartnerLabel} hands out the entry's display label on
+	 *       surface ({@code DrugSafetyValidator.reconciledPartnerName} hands out the entry's display label on
 	 *       its entry path), and since issue #297 that record is a THIRD on that same path, where it
 	 *       prints the entry's {@code getName()} rather than the token. Neither disturbs the conclusion,
 	 *       twice over: this guard drops the rows

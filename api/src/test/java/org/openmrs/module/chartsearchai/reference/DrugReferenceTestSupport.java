@@ -1038,7 +1038,7 @@ public final class DrugReferenceTestSupport {
 	/**
 	 * Issue #292's own arrangement: a NAMELESS order the class arm can only call by its codes, beside a
 	 * curated rule that names the same prescription {@code aspirin} — so the ladder finds no name at all
-	 * and {@code foldedPartnerLabel}'s first rung hands the rule's token to both chip sentences.
+	 * and {@code reconciledPartnerName}'s first rung hands the rule's token to both chip sentences.
 	 *
 	 * <p>Here rather than in a test file because two now read it — the chip side
 	 * ({@code FoldedChipOnePartnerNameTest}) and the record side

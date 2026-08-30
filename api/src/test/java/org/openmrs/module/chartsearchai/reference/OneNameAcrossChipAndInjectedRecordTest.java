@@ -145,30 +145,37 @@ public class OneNameAcrossChipAndInjectedRecordTest {
 	}
 
 	/**
-	 * The change is scoped to a fold that RECONCILED. Where the class arm says nothing about the
-	 * partner there is no fold, the chip's rule sentence is {@code partnerLabel} and the note must
-	 * agree with THAT — moving it would create the divergence in the other direction.
+	 * An UNFOLDED chip and its note name one partner one way too.
 	 *
-	 * <p><b>What it pins is narrower than it reads</b>, said rather than left to look better defended:
-	 * it reddens only on breaking the shared {@code partnerLabel} fallback, which many existing
-	 * note-text cases already catch. Its value is the ARRANGEMENT — a real chip that did not fold, read
-	 * from the record side — not a guard nothing else holds.
+	 * <p>This case used to be called {@code anUnfoldedChipsPartnerKeepsTheRulesOwnTokenInTheNote} and
+	 * asserted the literal token on both surfaces, because issue #297's change was scoped to a fold
+	 * that RECONCILED and everything else stayed on {@code partnerLabel}. Issue #339 removed that
+	 * scoping — the reconciliation is asked at every rule chip, so which name an order gets no longer
+	 * depends on whether the class arm happened to have a sentence to fold — and a case named after the
+	 * old answer would state something false while passing.
+	 *
+	 * <p>So it asserts the PROPERTY rather than the string: whatever the chip calls this prescription,
+	 * the note calls it that too. That is what issue #297 is about, it survives the widening, and it is
+	 * strictly stronger than the pair of literals it replaces — a change moving one surface and not the
+	 * other reddens it whichever direction it moves them. The arrangement is unchanged: a real chip
+	 * that does NOT fold, read from the record side.
 	 */
 	@Test
-	public void anUnfoldedChipsPartnerKeepsTheRulesOwnTokenInTheNote() {
+	public void anUnfoldedChipAndItsNoteNameOnePartnerOneWay() {
 		PatientChart chart = inject(
 			oneOrder("Warfarin 5mg", DrugReferenceTestSupport.set("B01AA03")),
 			"Is methotrexate safe here?");
 
 		String finding = DrugReferenceTestSupport.safetyFindingIn(chart).getText();
-		assertTrue(finding.contains("interacts with active order warfarin"),
-			"precondition: an UNFOLDED chip naming its partner by the rule's token, was: " + finding);
+		assertTrue(finding.contains("interacts with active order Warfarin"),
+			"precondition: an UNFOLDED chip, naming its partner as the dataset names it since issue"
+					+ " #339, was: " + finding);
 		assertFalse(finding.contains("is in the same"),
 			"precondition: nothing may have folded here, was: " + finding);
 
 		String record = recordFor(chart, "Methotrexate");
-		assertTrue(record.contains("warfarin ("),
-			"an unfolded chip's partner keeps the rule's own token in the note, was: " + record);
+		assertTrue(record.contains("Warfarin ("),
+			"an unfolded chip's note names that partner the way the chip does, was: " + record);
 	}
 
 	/**

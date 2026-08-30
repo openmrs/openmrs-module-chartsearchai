@@ -357,8 +357,10 @@ public class SafetyWarning {
 	 * ({@code DrugSafetyChipLabelTest.displayLabelNeverLeaksIntoTheRenderedRecordText}), so the two
 	 * surfaces name one SUBSTANCE in each one's own vocabulary rather than sharing one string —
 	 * {@code Acetylsalicylic acid} in the note beside {@code Acetylsalicylic acid (aspirin)} in the
-	 * chip. Which name that is, per fold outcome, is stated on
-	 * {@code DrugSafetyValidator.foldedPartnerLabel}.
+	 * chip. Which name that is, per reconciliation outcome, is stated on
+	 * {@code DrugSafetyValidator.reconciledPartnerName} — which since issue #339 answers for every rule
+	 * chip and not only for a folded one, so this field is non-null on chips that carry no class
+	 * sentence at all.
 	 *
 	 * <p><b>The rule is an argument and not a convenience.</b> A note may take this name only where it
 	 * is about the very rule the fold was decided on: the record collapses its notes to one per partner

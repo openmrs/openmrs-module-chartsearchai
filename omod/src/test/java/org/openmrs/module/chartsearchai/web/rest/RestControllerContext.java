@@ -112,8 +112,8 @@ final class RestControllerContext {
 	/**
 	 * The {@code /search} request body the controller tests post — this fixture's own patient uuid and
 	 * a question. Here rather than copied per test file for the reason {@code StubAuditLogService}'s
-	 * javadoc gives about itself: both of its inputs already belong to this class, so a per-file copy
-	 * is a second place that has to change when either does.
+	 * javadoc gives about itself: the patient uuid it posts is this class's own, so a per-file copy is
+	 * a second place that has to change when the request shape does.
 	 */
 	static Map<String, String> searchBody(String question) {
 		Map<String, String> body = new HashMap<String, String>();

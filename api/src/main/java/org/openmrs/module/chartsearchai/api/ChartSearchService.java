@@ -349,7 +349,11 @@ public interface ChartSearchService {
 		 *
 		 * <p><b>Null is not zero.</b> Zero is a real measurement — the prompt carried no reference
 		 * material — while null says the producer stated nothing at all, which is what the five
-		 * constructors above do.
+		 * constructors above do. Collapsing null into zero would make an unmeasured row
+		 * indistinguishable from a measured empty one, which is the failure issue #178 fixed for the
+		 * mode column; the audit columns are nullable for exactly this reason. There is no
+		 * {@code UNKNOWN} sentinel to return instead because those columns, unlike
+		 * {@code search_mode}, are not NOT NULL.
 		 *
 		 * <p><b>Zero says what the prompt carried, never why.</b> It is a true reading in every case —
 		 * the prompt really did carry no reference material — which is why no third value is owed here
@@ -357,8 +361,12 @@ public interface ChartSearchService {
 		 * exists because a chart the module could not read is not a chart that records nothing,
 		 * whereas a prompt that carried nothing did carry nothing. What it will not tell you is which
 		 * of several quite different situations produced it — the question matched no reference entry;
-		 * a {@code drugReference} toggle is off ({@code enabled}, {@code injectFromQuery},
-		 * {@code injectFromOrders}, or the {@code validateAnswers} gate on findings);
+		 * {@code chartsearchai.drugReference.enabled} is off, which is the SHIPPED DEFAULT
+		 * ({@link ChartSearchAiConstants#DEFAULT_DRUG_REFERENCE_ENABLED}), so a stock install reads
+		 * 0/0 on every row; some combination of {@code drugReference.injectFromQuery},
+		 * {@code drugReference.injectFromOrders} and {@code drugSafety.validateAnswers} is off — note
+		 * the third is a {@code drugSafety} property rather than a {@code drugReference} one, and that
+		 * none of the three silences this number on its own, each leaving another arm injecting;
 		 * {@code DrugReferenceInjector.inject} threw and returned the chart unmodified, which it does
 		 * deliberately so an enrichment can never break the answer path; or the injector rebuilt the
 		 * chart with active-order records alone, which are the patient's own and outside this number.
@@ -366,11 +374,7 @@ public interface ChartSearchService {
 		 * {@code injectRecords} today, and an earlier version of this javadoc claimed there were three
 		 * when a count was never checked. The operational point does not depend on the count: a column
 		 * of zeros is not evidence a corpus raises no reference material, and the injector's own log
-		 * is the only thing that separates a swallowed failure from an honest miss. Collapsing them would make an unmeasured row
-		 * indistinguishable from a measured empty one, which is the failure issue #178 fixed for the
-		 * mode column; the audit columns are nullable for exactly this reason. There is no
-		 * {@code UNKNOWN} sentinel to return instead because those columns, unlike
-		 * {@code search_mode}, are not NOT NULL.
+		 * is the only thing that separates a swallowed failure from an honest miss.
 		 *
 		 * <p><b>On a cache hit this states the ORIGINAL request's slice.</b>
 		 * {@code ChartSearchServiceRouter} returns the cached {@code ChartAnswer} unchanged, so the

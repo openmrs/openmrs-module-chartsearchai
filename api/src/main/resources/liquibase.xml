@@ -93,12 +93,12 @@
 			history, and 007 and 008 exist in unmerged branches. Liquibase keys a changeset on
 			id + author + filename AND stores its checksum, so reusing an id an instance holds an
 			orphan row for does not skip quietly — the checksums differ and liquibase raises
-			ValidationFailedException, which openmrs-core propagates and which stops the module
-			starting — openmrs-core does not swallow it, though ModuleFactory.runLiquibase catches
-			Exception and rethrows ModuleException, so the type itself does not surface. Measured on
-			liquibase 4.32.0 (the version openmrs-api puts on this module's classpath) against an instance built from the consolidation-era file, which really does
-			leave orphan rows for 001 and 003. A later merge of the two unmerged branches would
-			collide the same way.
+			ValidationFailedException and the module fails to start. Not swallowed, though not
+			surfaced as that type either: ModuleFactory.runLiquibase catches Exception and rethrows
+			ModuleException. Measured on liquibase 4.32.0 (the version openmrs-api puts on this
+			module's classpath) against an instance built from the consolidation-era file, which
+			really does leave orphan rows for 001 and 003. A later merge of the two unmerged branches
+			would collide the same way.
 		</comment>
 		<addColumn tableName="chartsearchai_audit_log">
 			<column name="reference_slice_records" type="int"/>

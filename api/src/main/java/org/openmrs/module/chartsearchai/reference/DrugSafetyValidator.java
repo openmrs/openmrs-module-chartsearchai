@@ -224,10 +224,12 @@ public class DrugSafetyValidator {
 	 * not this one</b> — it also publishes how bounded the pairwise interaction list is, which this
 	 * arity has nowhere to carry. A decorator or a test double that overrides THIS method alone is
 	 * therefore inert on the production path, and inert SILENTLY — it returns, production simply
-	 * never reaches it. Every such stub in this repo was retargeted in that commit, and only the one
-	 * asserting on the seam had gone red; the rest passed while stubbing nothing. Override the
-	 * overload below, and where a test asserts that production reached the validator at all, assert
-	 * WHICH arity it reached ({@code LlmInferenceServiceCitationWiringTest} does).
+	 * never reaches it. Of the stubs in this repo that overrode it, exactly one asserted on the seam
+	 * and went red; the rest passed while stubbing nothing, and two of them were still doing so after
+	 * a review of the commit that added the overload — a sweep of the tree is what finds them, not a
+	 * reading of the diff. Override the overload below, and where a test asserts that production
+	 * reached the validator at all, assert WHICH arity it reached
+	 * ({@code LlmInferenceServiceCitationWiringTest} does).
 	 */
 	public List<SafetyWarning> validate(String answer, String question, Patient patient,
 			List<RecordMapping> mappings) {
@@ -316,15 +318,7 @@ public class DrugSafetyValidator {
 	 * The widest arity, and the one that builds the pass's shared state — every other delegates to it.
 	 *
 	 * <p><b>Two structural guards delimit this body by a literal needle, and each spells ALL THREE
-	 * lines of this declaration.</b> No shorter prefix will do, and each shortening was measured. The
-	 * first line alone matches twice, since the arity above opens with a byte-identical one — and
-	 * since issue #336 that arity matches the first TWO lines byte for byte as well, because the
-	 * five-argument seam it delegates from wraps its own parameters identically, so it is now the
-	 * THIRD line, the one naming the sink, that makes the needle unique. A needle matching twice is a
-	 * hard failure in each guard's own unique-offset check ({@code SourceScan.uniqueOffset} for
-	 * {@code CoMedicationResolutionPerPassTest}, and {@code ChipSubjectOneResolutionTest}'s own copy
-	 * of it, which ADR Decision 54 records as deliberately not migrated). And the tail alone names no
-	 * METHOD, which is what the first line buys. Move this declaration and the needles
+	 * lines of this declaration.</b> No shorter prefix is spelled, and what each buys was measured rather than assumed. The first line alone matches THREE times — this declaration and the two arities above it that open identically — and a needle matching more than once is a hard failure in each guard's own unique-offset check ({@code SourceScan.uniqueOffset} for {@code CoMedicationResolutionPerPassTest}, and {@code ChipSubjectOneResolutionTest}'s own copy of it, which ADR Decision 54 records as deliberately not migrated). The two-line prefix is ALREADY unique, and by one character: the five-argument seam above wraps its parameters identically and ends that line with {@code )} where this one ends with a comma. So the third line is not what buys uniqueness — spelling it is what makes any re-wrap of this declaration re-target both needles loudly instead of leaving one silently landing on the seam. The tail alone names no METHOD, which is what the first line buys. Move this declaration and the needles
 	 * move with it — {@code ChipSubjectOneResolutionTest} and {@code CoMedicationResolutionPerPassTest},
 	 * which say so themselves.
 	 *

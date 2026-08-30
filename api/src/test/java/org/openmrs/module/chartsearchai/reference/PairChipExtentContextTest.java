@@ -10,17 +10,19 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
@@ -49,11 +51,9 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  */
 public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 
-	/** The 16-drug polypharmacy question, the same string {@code PairChipCapContextTest} uses. */
-	private static final String POLYPHARMACY_QUESTION = "Reviewing polypharmacy: lisinopril, metformin,"
-			+ " methotrexate, omeprazole, sertraline, simvastatin, spironolactone, tramadol, warfarin,"
-			+ " aspirin, ciprofloxacin, clarithromycin, digoxin, fluconazole, amiodarone and ibuprofen"
-			+ " — any interactions?";
+	/** The 16-drug polypharmacy question — the shared constant, not a copy of it, so the 72 this
+	 *  class states and the 72 {@code PairChipCapContextTest} shows are one measurement. */
+	private static final String POLYPHARMACY_QUESTION = DrugReferenceTestSupport.POLYPHARMACY_QUESTION;
 
 	private static final String SCREENING_QUESTION = DrugReferenceTestSupport.SCREENING_QUESTION;
 
@@ -94,19 +94,18 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 				DrugReferenceTestSupport.ctx(60, null, null, null, null, null));
 	}
 
-	/** The screening arm over six active orders interacting 15 ways — the same arrangement the cap
-	 *  test and the un-capped screening test use, so the three cannot drift apart. */
+	/** The screening arm over the shared six-order chart — the same OBJECT the cap test and the
+	 *  screening test build, not a copy of it, which is what makes "the three cannot drift apart" a
+	 *  fact rather than an intention. */
 	private Pass screeningPass() {
-		return pass(SCREENING_QUESTION, DrugReferenceTestSupport.ctx(60, null,
-				DrugReferenceTestSupport.set("Simvastatin", "Warfarin", "Ciprofloxacin", "Clarithromycin",
-						"Fluconazole", "Amiodarone"),
-				DrugReferenceTestSupport.set("C10AA01", "B01AA03", "J01MA02", "J01FA09", "J02AC01",
-						"C01BD01"),
-				null, null));
+		return pass(SCREENING_QUESTION, DrugReferenceTestSupport.screenedSixOrderChart());
 	}
 
-	/** Runs the real validate with a sink, exactly as {@code LlmInferenceService} does. The empty
-	 *  answer is the pre-answer production shape ({@code DrugReferenceInjector.preAnswerFindings}). */
+	/** Runs the real validate over an explicit clinical context, which is the arity every other
+	 *  chip test in this package drives — NOT the arity production publishes through. That link, from
+	 *  the public {@code Patient} entry point down to the arm, is its own case below; without it a
+	 *  mutation of the delegation leaves this whole class green (measured). The empty answer is the
+	 *  pre-answer production shape ({@code DrugReferenceInjector.preAnswerFindings}). */
 	private Pass pass(String question, PatientClinicalContext context) {
 		PairChipExtent.Sink sink = new PairChipExtent.Sink();
 		List<SafetyWarning> chips = validator.validate("", question, context, null, null, sink);
@@ -124,8 +123,8 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals(SCREENED_PAIRS, capped.extent.getFound(),
 				"the candidate count must be what the arm enumerated before the cut");
 		assertEquals(3, capped.extent.getReported(), "and the reported count the cap that cut it");
-		assertEquals(12, capped.extent.getWithheld());
-		assertTrue(capped.extent.isBounded(), "a cut list must say it was cut");
+		assertEquals(12, capped.extent.getFound() - capped.extent.getReported(),
+				"so twelve pairs are recoverable from the response that were not before");
 		// Precondition, asserted rather than assumed: this arrangement raises nothing but the screen's
 		// own chips, so the statement can be compared against the whole list.
 		assertEquals(capped.chips.size(), capped.extent.getReported(),
@@ -143,9 +142,8 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 
 		assertNotNull(full.extent);
 		assertEquals(SCREENED_PAIRS, full.extent.getFound());
-		assertEquals(SCREENED_PAIRS, full.extent.getReported());
-		assertEquals(0, full.extent.getWithheld());
-		assertFalse(full.extent.isBounded(), "an uncut list must not claim it was cut");
+		assertEquals(SCREENED_PAIRS, full.extent.getReported(),
+				"an uncut list must state that it reported everything it found");
 	}
 
 	@Test
@@ -194,7 +192,56 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 		assertNotNull(screened.extent, "but the screen ran, so it must still state its extent");
 		assertEquals(0, screened.extent.getFound());
 		assertEquals(0, screened.extent.getReported());
-		assertFalse(screened.extent.isBounded());
+	}
+
+	@Test
+	public void aQuestionPairListThatRelatesNoPairStatesZeroRatherThanNothing() {
+		// The other arm's half of "zero is a measurement". Its own branch is a separate return, and
+		// mutating it to null left the ENTIRE suite green before this case existed — so the contract
+		// held on one arm and was free to be reverted on the other. Two named drugs the excerpt
+		// carries, with the floor raised above the only rating that relates them.
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_MIN_INTERACTION_SEVERITY, "major");
+		Pass none = pass("Do simvastatin and warfarin interact?",
+				DrugReferenceTestSupport.ctx(60, null, null, null, null, null));
+
+		assertTrue(none.chips.isEmpty(),
+				"precondition: the excerpt rates this pair Minor, so a Major floor leaves no candidate: "
+						+ DrugReferenceTestSupport.details(none.chips));
+		assertNotNull(none.extent, "but the arm ran over two named drugs, so it must state its extent");
+		assertEquals(0, none.extent.getFound());
+		assertEquals(0, none.extent.getReported());
+	}
+
+	@Test
+	public void thePublicEntryPointHandsItsCallersSinkToThePassThatFillsIt() {
+		// The one link the cases above cannot see: they drive the clinical-context arity, while
+		// production goes through validate(answer, question, Patient, mappings, sink). Mutating that
+		// delegation to pass null instead left api and omod entirely green (measured), so the feature
+		// was joined end to end nowhere — the silent, one-directional shape issue #151 records.
+		Context.getAdministrationService()
+				.setGlobalProperty(ChartSearchAiConstants.GP_DRUG_REFERENCE_ENABLED, "true");
+		final List<PairChipExtent.Sink> handedDown = new ArrayList<PairChipExtent.Sink>();
+		DrugSafetyValidator spy = new DrugSafetyValidator() {
+
+			@Override
+			List<SafetyWarning> validate(String answer, String question, PatientClinicalContext rawContext,
+					List<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries,
+					PairChipExtent.Sink pairExtentSink) {
+				handedDown.add(pairExtentSink);
+				return super.validate(answer, question, rawContext, mappings, resolvedOrderEntries,
+						pairExtentSink);
+			}
+		};
+		spy.setDrugReferenceService(DrugReferenceTestSupport.ddinterService());
+		PairChipExtent.Sink sink = new PairChipExtent.Sink();
+
+		spy.validate("", POLYPHARMACY_QUESTION, Context.getPatientService().getPatient(7), null, sink);
+
+		assertEquals(1, handedDown.size(), "the public entry point must reach the pass exactly once");
+		assertSame(sink, handedDown.get(0),
+				"and must hand it the CALLER'S sink: a pass given a sink of its own, or none, fills "
+						+ "nothing the caller can read, and no chip or count assertion can see that");
 	}
 
 	@Test

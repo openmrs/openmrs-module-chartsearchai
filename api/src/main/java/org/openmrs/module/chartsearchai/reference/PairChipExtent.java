@@ -15,13 +15,18 @@ package org.openmrs.module.chartsearchai.reference;
  * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/336">#336</a>).
  *
  * <p>Before this existed, a screen that hit {@link DrugSafetyValidator#maxPairChips()} was
- * byte-indistinguishable from a complete one: the withheld pairs were named in a WARN line and
- * nowhere else, so a clinician handed ten chips read a list that was not exhaustive as though it
- * were. Measured on the 3.7.1 standalone against the bundled DDInter knowledge base, a patient on
- * eight anti-inflammatories screened 18 above-floor pairs and reported 10, with every wire field
- * — the answer, the chips and each reference's {@code withheldInteractions} — identical to a
- * complete screen's. Silent truncation in a safety net reads as "nothing else was found", which is
- * the one thing it does not mean.
+ * indistinguishable from a complete one: the withheld pairs were named in a WARN line and nowhere
+ * else, so a clinician handed ten chips read a list that was not exhaustive as though it were.
+ * Measured on the 3.7.1 standalone against the bundled DDInter knowledge base, a patient on eight
+ * anti-inflammatories: 18 above-floor pairs found, 10 reported, and the response carried no trace of
+ * the other eight — the answer text ended in an ordinary enumeration, the chip array simply stopped,
+ * and every reference's {@code withheldInteractions} read {@code 0} (that field counts a cited
+ * record's unshown partners, a different thing). Silent truncation in a safety net reads as "nothing
+ * else was found", which is the one thing it does not mean.
+ *
+ * <p>Not to be confused with {@code DrugSafetyValidator.InteractionPairs}, one case-change away:
+ * that is the cross-arm ledger of which pairs a pass has already chipped, and it has a
+ * {@code reported} of its own meaning something different. This type counts; that one deduplicates.
  *
  * <p><b>It is about the PAIRWISE check and about nothing else.</b> Both arms that report it are
  * quadratic in a list this module does not choose and are the two the cap can truncate — the
@@ -31,17 +36,19 @@ package org.openmrs.module.chartsearchai.reference;
  * ({@link DrugSafetyValidator#addActiveOrderPairInteractions}, issue #113). Their gates are
  * mutually exclusive, so at most one of them runs per question and one extent can speak for both.
  * {@link #getReported()} is therefore <b>not</b> the number of {@code interaction} chips on the
- * response: {@code addInteractionWarnings} raises interaction chips of its own, once per drug in
- * play, and appends them to the same list — so a screening question whose ANSWER names a drug can
- * carry more interaction chips than this states pairs. A client rendering "10 of 18 shown" must
+ * response: {@code addInteractionWarnings} raises interaction chips of its own — one per matched
+ * rule and one per class relationship, so several per drug in play — and appends them to the same
+ * list, so a screening question whose ANSWER names a drug can carry more interaction chips than
+ * this states pairs. A client rendering "10 of 18 shown" must
  * say what it is counting, or it publishes a ratio of two different populations.
  *
  * <p><b>Zero is a measurement and absence is not.</b> An extent stating {@code found == 0} says a
  * pairwise arm ran and the reference data related none of the pairs it enumerated — a complete
  * screen, positively assertable, which is half of what this type exists for. No extent at all
  * ({@code null} on the answer, {@code null} on the wire) says the producer stated no measurement.
- * It covers two situations, deliberately not distinguished because a consumer must treat them
- * alike:
+ * <b>This javadoc is the canonical enumeration of what that covers</b>; everywhere else points here
+ * rather than restating it, because a list restated in several places is one that grows in one of
+ * them. Two situations, deliberately not distinguished because a consumer must treat them alike:
  *
  * <ol>
  *   <li>no pairwise arm enumerated anything — the question named fewer than two reference drugs
@@ -53,8 +60,12 @@ package org.openmrs.module.chartsearchai.reference;
  *       rather than describing chips that were discarded.</li>
  * </ol>
  *
- * <p>That list has two homes, this one and {@code CLAUDE.md}'s bullet on it. Never read absence as
- * completeness, and never re-derive either count from the chip list.
+ * <p>Never read absence as completeness, and never re-derive either count from the chip list.
+ *
+ * <p><b>Two measured counts and no derived one.</b> How many were withheld, and whether anything
+ * was, are subtractions a reader makes — deliberately not accessors and deliberately not wire keys,
+ * because a derived figure published beside a measured one is the defect issue #261 exists to stop,
+ * and one that has no single home cannot go stale.
  */
 public final class PairChipExtent {
 
@@ -83,16 +94,6 @@ public final class PairChipExtent {
 	/** How many of those it reported as chips. Never greater than {@link #getFound()}. */
 	public int getReported() {
 		return reported;
-	}
-
-	/** How many pairs the cap withheld — {@link #getFound()} minus {@link #getReported()}. */
-	public int getWithheld() {
-		return found - reported;
-	}
-
-	/** Whether the cap actually cut this list, i.e. whether anything was withheld. */
-	public boolean isBounded() {
-		return reported < found;
 	}
 
 	@Override
@@ -137,7 +138,7 @@ public final class PairChipExtent {
 
 		/**
 		 * @return what the pairwise check stated, or {@code null} where it stated nothing — see the
-		 *         class javadoc for the three situations that covers
+		 *         class javadoc, which enumerates what that covers
 		 */
 		public PairChipExtent stated() {
 			return stated;

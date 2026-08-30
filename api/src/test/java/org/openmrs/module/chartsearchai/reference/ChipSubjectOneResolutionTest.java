@@ -180,13 +180,15 @@ public class ChipSubjectOneResolutionTest {
 
 	/**
 	 * The one arity of {@code validate} that builds the pass's shared state; the others delegate to
-	 * it. It spans ALL THREE lines of the declaration, which is a correction rather than a style:
-	 * since issue #255 the arity above opens with a byte-identical first line, and since issue #336
-	 * the five-argument seam it delegates from wraps its own parameters identically, so the first TWO
-	 * lines now match twice and {@link #uniqueOffsetOf} hard-fails on either prefix; the third line,
-	 * the one naming the sink, is what makes the needle unique. The tail alone names no METHOD, so
-	 * nothing about it would say the body it lands on is {@code validate}'s. What the first line buys
-	 * is that name. Do not read it as "a sibling with the same tail would pass": measured, a sibling
+	 * it. It spans ALL THREE lines of the declaration, and what each line buys was measured rather
+	 * than assumed. The first line alone matches THREE times — this declaration and the two arities
+	 * above it that open identically — and {@link #uniqueOffsetOf} hard-fails on a needle matching
+	 * more than once. The two-line prefix is already unique, by one character: the five-argument seam
+	 * above wraps identically and ends that line with {@code )} where this one ends with a comma. The
+	 * third line therefore does not buy uniqueness; spelling it is what makes a re-wrap of the
+	 * declaration re-target this needle loudly rather than leave it landing on the seam. The tail
+	 * alone names no METHOD, so nothing about it would say the body it lands on is {@code validate}'s.
+	 * What the first line buys is that name. Do not read it as "a sibling with the same tail would pass": measured, a sibling
 	 * alone makes TWO matches and fails loudly, because {@code validate}'s own declaration still
 	 * carries the tail. The shape that gets through a tail-only needle is a sibling together with a
 	 * rename or a re-wrap of {@code validate}'s own parameters. It still ends at the body's own

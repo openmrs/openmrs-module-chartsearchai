@@ -339,7 +339,7 @@ public class ChartSearchAiStreamingTest {
 	 *
 	 * @return the whole file
 	 */
-	private static String controllerSource() throws java.io.IOException {
+	static String controllerSource() throws java.io.IOException {
 		return new String(java.nio.file.Files.readAllBytes(resolveSourceFile().toPath()),
 				java.nio.charset.StandardCharsets.UTF_8);
 	}
@@ -364,7 +364,7 @@ public class ChartSearchAiStreamingTest {
 	 *
 	 * @return the source file, which exists
 	 */
-	private static java.io.File resolveSourceFile() {
+	static java.io.File resolveSourceFile() {
 		String sourceFile = "omod/src/main/java/org/openmrs/module/chartsearchai"
 				+ "/web/rest/ChartSearchAiRestController.java";
 		java.io.File file = new java.io.File(sourceFile);

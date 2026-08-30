@@ -417,8 +417,8 @@ public interface ChartSearchService {
 		 * them answers a different question.
 		 *
 		 * @return the statement, or {@code null} where the pairwise check made none —
-		 *         {@link PairChipExtent} is canonical for the three situations that covers, and for
-		 *         why {@code null} is not zero
+		 *         {@link PairChipExtent} is canonical for what that covers, and for why {@code null}
+		 *         is not zero
 		 */
 		public PairChipExtent getPairChipExtent() {
 			return pairChipExtent;

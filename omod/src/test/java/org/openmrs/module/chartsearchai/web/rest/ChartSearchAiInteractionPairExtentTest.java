@@ -14,10 +14,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -43,10 +39,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * A bounded pairwise interaction list says so ON THE WIRE (issue
  * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/336">#336</a>).
  *
- * <p>Measured on the 3.7.1 standalone before this change: a screen that found 18 above-floor pairs
- * and reported 10 produced a response whose answer, whose 10 {@code interaction} chips and whose
- * every {@code references[].withheldInteractions} were indistinguishable from a complete screen's.
- * The withheld eight existed in a server-side WARN and nowhere a client could read. So the contract
+ * <p>Measured on the 3.7.1 standalone before this change: a screen found 18 above-floor pairs and
+ * reported 10, and the response carried no trace of the other eight — the answer text ended in an
+ * ordinary enumeration, the chip array simply stopped, and every
+ * {@code references[].withheldInteractions} read {@code 0}. The withheld eight existed in a
+ * server-side WARN and nowhere a client could read. So the contract
  * these cases hold is that {@code interactionPairs} reaches EVERY surface that carries chips —
  * there are three — and that the key is present even when nothing was stated, since a client reads
  * it unconditionally.
@@ -192,18 +189,29 @@ public class ChartSearchAiInteractionPairExtentTest {
 		assertNotNull(pairs, "the grounded event carried no interactionPairs key");
 		assertEquals(FOUND, pairs.get("found").asInt());
 		assertEquals(REPORTED, pairs.get("reported").asInt());
+
+		// And the done event that preceded it states nothing, because the answer behind it carries no
+		// chips yet — the two travel together, which is what stops a client reading a completeness
+		// claim beside an empty list. README documents this shape; nothing else pins it.
+		JsonNode done = eventData("done");
+		assertTrue(done.has("interactionPairs"), "the key must be present on the early done event too");
+		assertTrue(done.get("interactionPairs").isNull(),
+				"the early done event carries no chips, so it may state no extent: " + done);
+		assertEquals(0, done.get("safetyWarnings").size(),
+				"precondition: it is the empty-chip answer, which is why it may state no extent");
 	}
 
 	@Test
-	public void noEmissionSiteCanPublishChipsWithoutSayingHowBoundedTheyAre() throws IOException {
+	public void noEmissionSiteCanPublishChipsWithoutSayingHowBoundedTheyAre() throws Exception {
 		// Structural, and it is what makes the three cases above hold for a site nobody has written
 		// yet: the chips and the statement about them are written by ONE method, so a fourth payload
 		// added later cannot carry one and forget the other. Two payload sites kept in step by hand
 		// is the condition the search_mode column's own comment records as having held one value for
 		// 6036 rows.
-		String source = new String(Files.readAllBytes(Paths.get(
-				"src/main/java/org/openmrs/module/chartsearchai/web/rest/ChartSearchAiRestController.java")),
-				StandardCharsets.UTF_8);
+		// Through ChartSearchAiStreamingTest's resolver, not a second one of our own: it is taught
+		// both layouts and asserts the file was found. A guard that silently cannot read its subject
+		// passes, which is the failure that resolver's own javadoc exists to prevent.
+		String source = ChartSearchAiStreamingTest.controllerSource();
 
 		// The KEY, not the helper, is what a payload actually carries — so this is the assertion that
 		// also catches a site inlining the serialization loop instead of calling the helper.
@@ -252,7 +260,13 @@ public class ChartSearchAiInteractionPairExtentTest {
 				Consumer<ChartAnswer> ungroundedAnswerConsumer) {
 			tokenConsumer.accept("Ten interactions were found [1].");
 			citationsConsumer.accept(answer().getReferences());
-			ungroundedAnswerConsumer.accept(answer());
+			// Production's own early-done shape: built before validation runs, so it carries neither
+			// chips nor a statement about them (LlmInferenceService's seven-argument construction).
+			// A fixture that handed it the full answer would let the async case below pass on a
+			// payload production never emits.
+			ungroundedAnswerConsumer.accept(new ChartSearchService.ChartAnswer(
+					"Ten interactions were found [1].",
+					Collections.<ChartSearchService.RecordReference> emptyList()));
 			return answer();
 		}
 

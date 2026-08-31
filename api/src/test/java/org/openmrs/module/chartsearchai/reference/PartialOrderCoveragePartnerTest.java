@@ -119,7 +119,11 @@ public class PartialOrderCoveragePartnerTest {
 	 * the prompt verbatim as a citable {@code safety_finding}. The case above asserts only that the
 	 * chip names the ORDER, and its arrangement is one where every candidate name happens to be
 	 * truthful — which is why issue #339's review rounds 5 and 6 could step such a chip back to the
-	 * COVERED constituent's name with the whole api suite green.
+	 * COVERED constituent's name with the whole api suite green. That is those rounds' own
+	 * measurement, on a mechanism round 7 removed, so it cannot be reproduced at this head; what CAN
+	 * be, and was at review round 11, is that this case reddens when {@code classPartnerName} elects
+	 * on the ORDER rung and that the folded case below reddens when the ORDER rung reconciles onto
+	 * the rule's token.
 	 *
 	 * <p>Over the shipped knowledge base and over a real product for that reason: one
 	 * {@code Dorzolamide / Timolol} order, the codes a dictionary maps it to being its own combination

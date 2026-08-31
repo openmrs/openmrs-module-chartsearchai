@@ -167,7 +167,8 @@ public class NameIndexAgreesWithIsNamedTest {
 	 * it: before this case existed, dropping the key side of it left the whole api suite green — which
 	 * is why this case exists and is what it closes. Do not read that sentence as current, which an
 	 * earlier form of this javadoc invited: with this case in place, dropping the key-side
-	 * normalisation reddens exactly this one (re-measured at issue #339's review round 10 head).
+	 * normalisation reddens this one (re-measured at issue #339's review round 11 head). Nothing is
+	 * claimed about the rest of the suite under that mutation.
 	 *
 	 * <p>The {@code json} source trims but does not lower-case, so an operator file can spell a name
 	 * ONLY in mixed case — and it has to be a name no OTHER alias of that entry supplies in lower case,

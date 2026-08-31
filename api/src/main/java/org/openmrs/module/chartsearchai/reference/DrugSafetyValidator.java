@@ -3408,8 +3408,11 @@ public class DrugSafetyValidator {
 	 * {@code Prednisolone is in the same ATC class (H02AB) as active order Methylprednisolone} beside
 	 * {@code Warfarin interacts with active order Methylprednisolone (topical)}, one prescription.
 	 * {@code OneOrderNameAcrossOneResponseTest.aClassOnlyChipNamesAPartnerByTheSameRowARuleChipDoes}
-	 * is the pin; reading {@link OrderPartner#label} here reddens it and nothing else in the api suite
-	 * (re-measured at this head).
+	 * is the pin; reading {@link OrderPartner#label} here reddens it (re-measured at issue #339's
+	 * review round 11 head). <b>Nothing is claimed about what that mutation leaves green</b>, here or
+	 * in ADR Decision 63: an exclusivity claim of exactly this shape stood on the neighbouring
+	 * election for several rounds and was false by the time round 11 read it, because a case added
+	 * mid-branch began reddening on it too. Mutate it and read the failures.
 	 *
 	 * <p><b>The election reaches the ENTRY rung and only it, and that is the whole of what this method
 	 * does</b> — a label an ORDER supplied has no row to elect and a bare code or {@code [ATC …]} is the
@@ -3489,11 +3492,17 @@ public class DrugSafetyValidator {
 	 * of this method's own sentence, and
 	 * {@code .aFoldedClassSentenceAboutAPartlyCoveredOrderNamesADrugThatPublishesTheCitedSubgroup} of
 	 * the fold's, that the drug named is filed under the subgroup cited — resolved through the loaded
-	 * dataset rather than against a literal. Electing on the ORDER rung here reddens the first alone in
-	 * that class and reconciling onto the rule's token at {@link #reconciledPartnerName}'s ORDER rung
-	 * reddens the second alone (both measured). {@code theMergedPartnerIsNotNamedAfterHalfOfACombination}
-	 * beside them STATES this rule in a comment and catches neither: it asserts a label, and its
-	 * arrangement is one where every candidate name is truthful.
+	 * dataset rather than against a literal. Both were re-measured at issue #339's review round 11
+	 * head, on the RUNGS themselves rather than on the gated refusals rounds 5 and 6 actually shipped,
+	 * and the two mutations are told apart by the SECOND case rather than by counts: electing on
+	 * the ORDER rung here reddens BOTH of them, while reconciling onto the rule's token at
+	 * {@link #reconciledPartnerName}'s ORDER rung reddens the FOLDED one and leaves the class-ONLY one
+	 * green — so the folded case is not a duplicate of its neighbour. Neither mutation is confined to
+	 * that class and no count is published for either. {@code theMergedPartnerIsNotNamedAfterHalfOfACombination}
+	 * beside them STATES this rule in a comment: it reddens on the first mutation and NOT on the
+	 * second, because it asserts a label, and its arrangement is one where every candidate name is
+	 * truthful — which is also why it survived rounds 5 and 6 themselves, whose refusals its
+	 * arrangement never raises, and why round 7's own cases are stated over the class SENTENCE.
 	 *
 	 * <p>So the display stands. It is the one name true of every code the partner holds, which is what
 	 * this sentence needs and what {@link OrderPartner#nameByOrder} chose it for; the reading it leaves

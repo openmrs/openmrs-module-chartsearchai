@@ -422,8 +422,9 @@ public class OneOrderNameAcrossOneResponseTest {
 	 *
 	 * <p>{@code CoMedications.partnerNaming} lays down a key for each partner's {@code labelEntry}
 	 * substance first and lets no {@code substances} key displace one. Break that — last writer wins,
-	 * or the two loops swapped — and the whole api suite stays green while BOTH chips below read
-	 * {@code active order Isoniazid / Rifapentine}: the isoniazid rule is printed as being about the
+	 * or the two loops swapped — and BOTH chips below read
+	 * {@code active order Isoniazid / Rifapentine}, which is what reddens this case (re-measured at
+	 * issue #339's review round 11 head, on the last-writer-wins form): the isoniazid rule is printed as being about the
 	 * combination product, and the patient's actual standalone isoniazid prescription vanishes from the
 	 * response. That is the #161/#187/#194 mis-attribution, in text {@code renderFinding} copies
 	 * verbatim into the prompt as a citable {@code safety_finding}.
@@ -474,7 +475,12 @@ public class OneOrderNameAcrossOneResponseTest {
 	 * issue #339 made reachable for every rule chip.
 	 *
 	 * <p>Reading {@code partner.labelEntry} instead of the row {@code SubstanceSubjects} elects reddens
-	 * exactly here — the whole api suite is otherwise green on that mutation.
+	 * this case and {@link #aClassOnlyChipNamesAPartnerByTheSameRowARuleChipDoes}, the cross-arm
+	 * agreement below — re-measured at issue #339's review round 11 head. <b>Nothing is claimed about
+	 * what that mutation leaves green.</b> An exclusivity claim stood here for several rounds, went
+	 * stale inside this branch the moment the cross-arm case was added, and would have told the next
+	 * maintainer that the second failure was collateral damage rather than the constraint they had
+	 * just broken. Mutate the election and read the failures.
 	 */
 	@Test
 	public void aPartnerIsNamedByTheRowThisResponseNamesItsSubstanceBy() throws Exception {
@@ -521,7 +527,9 @@ public class OneOrderNameAcrossOneResponseTest {
 	 * {@code ruleAbout} finds no rule for that partner and the class sentence stands alone; warfarin
 	 * shares no subgroup with the steroid, so its Moderate rule chips with no class sentence to fold.
 	 *
-	 * <p>Reading {@code OrderPartner.label} at {@code classPartnerName} reddens exactly here.
+	 * <p>Reading {@code OrderPartner.label} at {@code classPartnerName} reddens this case
+	 * (re-measured at issue #339's review round 11 head). Nothing is claimed about the rest of the
+	 * suite: mutate it and read the failures.
 	 */
 	@Test
 	public void aClassOnlyChipNamesAPartnerByTheSameRowARuleChipDoes() throws IOException {
@@ -572,8 +580,8 @@ public class OneOrderNameAcrossOneResponseTest {
 	 * substance, so nothing dereferenced it; {@code CoMedications.partnerNaming} does, and its
 	 * {@code labelEntry != null} guard is what stands between that walk and an NPE.
 	 *
-	 * <p>Nothing else in the suite reaches that branch — measured, 0 hits over the whole api suite —
-	 * and losing the guard is not a loud failure: the pre-answer path swallows a
+	 * <p>Dropping that guard reddens this case (re-measured at issue #339's review round 11 head),
+	 * and losing it is not a loud failure: the pre-answer path swallows a
 	 * {@code RuntimeException} into no records and no chips, while the post-answer path has no catch
 	 * at all. So this case exists to make the mutation red rather than silent.
 	 */
@@ -708,11 +716,21 @@ public class OneOrderNameAcrossOneResponseTest {
 	 * 3 corrected; this pins the correction. One {@code Lisinopril / Hydrochlorothiazide} order,
 	 * codes {@code C09BA03} (which the shipped data does not cover, so {@code soleSubstanceOf} falls
 	 * through to the covered one) and {@code C03AA03}, asked about one of its own constituents beside
-	 * a third drug. Measured at this head before the fix, the two chips read
+	 * a third drug. The two-name reading it pins against is <b>review round 3's</b>, an intermediate
+	 * state of this branch and not the merge base: under that reading the two chips read
 	 * {@code Lisinopril interacts with active order hydrochlorothiazide} and
 	 * {@code Amiodarone interacts with active order Lisinopril / Hydrochlorothiazide} — one
 	 * prescription, two names, in text {@code DrugReferenceInjector.renderFinding} copies verbatim
 	 * into the prompt as a citable {@code safety_finding}.
+	 *
+	 * <p><b>At the merge base ({@code e9109a58}) both chips read
+	 * {@code active order hydrochlorothiazide}</b>, so this case passes there — measured at issue
+	 * #339's review round 11 by running this class in a worktree at that commit with this branch's
+	 * fixtures copied in (20 run, 13 failures, this case among the 7 that pass). It is not a
+	 * reproduction of the ticket on the shipped data; it is the invariant carried onto that data, so
+	 * that whatever mechanism names a partly-covered prescription cannot name it two ways there. The
+	 * shipped-KB case that DOES redden at the merge base is
+	 * {@link #theTicketsOwnArrangementOverTheShippedKnowledgeBaseNamesOneWay}.
 	 *
 	 * <p>Asserted as agreement rather than against a literal, because which of the two names survives
 	 * is the fixture case's business ({@link #twoSubjectsNameOneCombinationPrescriptionTheSameWay})
@@ -814,8 +832,8 @@ public class OneOrderNameAcrossOneResponseTest {
 	 * case and a good many others across several classes (re-measured at issue #339's review round 10
 	 * head; the count is deliberately not published, because it says only that something reddens):
 	 * that mutation takes the whole rung out rather than one branch of it, so no claim is made here
-	 * about it being this case's own guard. What this case is the ONLY witness of is the LITERAL, the prescription's own display
-	 * in both sentences of one chip. The chip reaches the prompt verbatim through
+	 * about it being this case's own guard. What this case asserts is the LITERAL — the prescription's
+	 * own display in both sentences of one chip. The chip reaches the prompt verbatim through
 	 * {@code DrugReferenceInjector.renderFinding} as a citable {@code safety_finding} carrying
 	 * {@code STRENGTH_WITHHOLD}, which is why the disagreement is not cosmetic.
 	 *

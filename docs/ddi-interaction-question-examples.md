@@ -92,6 +92,15 @@ Read three things off it:
 `findings` is also worth a glance — it reports known defects in the shipped dataset (self-paired
 rows, aliases that name a different substance) at INFO rather than pretending the data is clean.
 
+> **One deployment trap, unrelated to the knowledge base but easy to hit here.** If the log shows
+> `Unknown column 'reference_slice_records' in 'INSERT INTO'` followed by
+> `ChartSearchAiRestController.saveAuditLog Failed to save audit log` after every question, the
+> module's `chartsearchai-009` changeset has not run on that database and **audit logging is
+> silently dead** — the answers are unaffected, but nothing is being recorded. Check with
+> `SELECT id FROM liquibasechangelog WHERE id LIKE 'chartsearchai%'`; if it returns only
+> `chartsearchai-002`, the module was dropped in without an upgrade that runs its liquibase.
+> Nothing in the response tells you this, so look once at the start of a test session.
+
 ## How to ask
 
 Either drive the patient chart's AI search panel in the browser, or POST directly:
@@ -420,6 +429,18 @@ contraindication and class chips that were never pairs. See
 [ADR Decision 60](adr.md). Raise the cap in [section 6](#6-turning-the-knobs) to see the other
 eight.
 
+The server log names them, which is a second way to check the field is telling the truth:
+
+```
+WARN DrugSafetyValidator.addActiveOrderPairInteractions
+  Interaction screening across 17 active-order reference entries found 18 pair(s) above the
+  severity floor; reporting the 10 most severe and WITHHOLDING 8: Celecoxib x Dexamethasone
+  (Moderate); Celecoxib x Diclofenac (Moderate); Celecoxib x Hydrocortisone (Moderate);
+  Dexamethasone x Diclofenac (Moderate); Diclofenac x Methylprednisolone (Moderate);
+  Diclofenac x Prednisone (Moderate); Diclofenac x Budesonide (Moderate);
+  Diclofenac x Hydrocortisone (Moderate)
+```
+
 ### 3e. Nothing found, said honestly
 
 **Patient:** Mark Smith (`de4b0d62-8a47-4c82-8220-1f0a87eafd46`, ID `100004N`) — Chloroquine and
@@ -459,8 +480,12 @@ through their ATC codes and raised the Major anyway. **The deterministic chip ca
 prose could not**, which is the strongest argument in the document for rendering
 `safetyWarnings` in the UI rather than trusting the answer text.
 
-Note also `refs: []`: no `safety_finding` was cited here, and the answer contradicts the chip.
-See [rough edges](#rough-edges-seen-during-this-pass).
+Note `refs: []`: the answer cited nothing and contradicts its own chip. The finding **was** in
+the prompt — the injector's DEBUG line for this exact request reads `Injected 0 active-order,
+0 drug-reference (0 chars) and 1 safety-finding record(s)` — so this is the model discarding a
+finding, not a finding that never arrived. It is discardable because nothing connects the two:
+the finding names *Simvastatin* and *Clarithromycin* while every chart record the model can read
+says *Zolvimix* and *Klarizom*. See [rough edges](#rough-edges-seen-during-this-pass).
 
 ---
 
@@ -633,17 +658,22 @@ or what reaches the model.
   and [3b](#3b-a-moderate-pair) both lead with "should not be given" about a drug the patient is
   already taking. The verdict is correct; the framing suits the "can I give her X?" shape better
   than the screening shape.
-- **In [3f](#3f-local-brand-names--where-the-chip-earns-its-keep) the answer contradicts the
-  chip.** The validator raised a Major through the orders' ATC codes, but no `safety_finding` was
-  cited and the prose says the records do not address interactions. Rendering `safetyWarnings`
-  covers the clinician here; the divergence between what the validator resolved and what reached
-  the prompt is worth a report if you reproduce it.
+- **In [3f](#3f-local-brand-names--where-the-chip-earns-its-keep) the answer contradicts its own
+  chip.** The validator raised a Major through the orders' ATC codes and the injector put the
+  finding in the prompt (confirmed from its DEBUG line — one safety-finding record, 363 chars),
+  yet the prose says the records do not address interactions. This is **not** an
+  injector/validator split: the finding arrived and was dropped, and it is droppable because the
+  finding names substances (`Simvastatin`, `Clarithromycin`) that appear nowhere in the chart the
+  model reads (`Zolvimix`, `Klarizom`). A finding whose subject the chart never spells is one the
+  model cannot reconcile. Render `safetyWarnings` and the clinician is covered either way.
 - **The drug-in-play arm ([section 1](#1-can-i-give-her-x--the-drug-in-play-arm)) is neither
-  severity-sorted nor capped**, so on a long active-order list the model may enumerate the
-  chips it is given and stop before a Major that sits late in the list
-  ([#346](https://github.com/openmrs/openmrs-module-chartsearchai/issues/346)). Prefer the
-  chips over the prose on patients with many active orders, and note that this arm does not set
-  `interactionPairs`, so nothing on the wire flags the truncation.
+  severity-sorted nor capped** ([#346](https://github.com/openmrs/openmrs-module-chartsearchai/issues/346)),
+  so a Major can sit late in the chip list and never reach the prose. Reproduce it with
+  *"Can I give her warfarin?"* on Sarah Taylor: eight interaction chips arrive in knowledge-base
+  row order with the Majors at positions **6** (Diclofenac) and **8** (Ibuprofen), and the answer
+  enumerates 1–7 and stops — so the Major warfarin × ibuprofen **bleeding** interaction is in the
+  chips and absent from the answer. This arm sets no `interactionPairs`, so nothing on the wire
+  flags it. On a patient with many active orders, read the chips.
 
 ## How these were verified
 

@@ -1226,13 +1226,25 @@ public class DrugSafetyValidator {
 		 *         answer every arm gave before there was a group to choose from and keeps a caller holding
 		 *         an ungrouped row honest rather than null.
 		 *
-		 *         <p>That fallback is deliberately NOT memoised, and the difference only shows for a
-		 *         caller this class does not yet have: every arm today asks about a row of a substance
-		 *         {@link #allGroups} groups — that map is the one {@code validate} walks to reach the arms
-		 *         at all — so the branch is unreachable. Were it memoised, the first arm ever added over
-		 *         rows outside that map would cache a POSITIONAL answer under the substance's key and hand
-		 *         it back to every arm that asks afterwards, with the group lookup skipped — issue #206
-		 *         re-created by the class written to prevent it, silently and with no test reddening.
+		 *         <p>That fallback is deliberately NOT memoised, and <b>the caller it was written against
+		 *         arrived with issue #339</b>. It used to say the branch was unreachable, on the ground
+		 *         that every arm asked about a row of a substance {@link #allGroups} groups — that map is
+		 *         the one {@code validate} walks to reach the arms at all. The PARTNER slot is not that:
+		 *         {@link DrugSafetyValidator#classPartnerName} and
+		 *         {@link DrugSafetyValidator#reconciledPartnerName} ask about a co-medication's
+		 *         {@code OrderPartner#labelEntry}, and {@code addPartnersForUnmappedOrders} can resolve
+		 *         one from an ORDER's own names while {@code findForActiveOrders} — the only source
+		 *         {@code allGroups} draws its order rows from — reads the context's FLATTENED name and
+		 *         code sets and reaches nothing. Measured by making this branch throw and running the api
+		 *         suite: 4 cases reach it, every one of them a hand-built context carrying an active order
+		 *         and neither flattened set (production's builder assembles that union out of the
+		 *         per-order names, so it is chiefly a test shape). The answer there is the row the caller
+		 *         was given, which for those callers is the ladder's own label row — exactly the string
+		 *         the chip printed before either of them existed, so the degradation is to the previous
+		 *         behaviour rather than to a wrong one. Were it memoised, that POSITIONAL answer would be
+		 *         cached under the substance's key and handed back to every arm that asks afterwards,
+		 *         with the group lookup skipped — issue #206 re-created by the class written to prevent
+		 *         it, silently and with no test reddening.
 		 *         Note which map that is: a substance MISSING from {@link #namingGroups} is ordinary since
 		 *         issue #238 (one the answer alone named), and {@link #groupOf} answers it from
 		 *         {@code allGroups} rather than falling through to here.
@@ -2286,8 +2298,10 @@ public class DrugSafetyValidator {
 				.entrySet()) {
 			SubjectRule rule = ruleAbout(hit.getKey().codes, rules, coMedications);
 			if (rule == null) {
-				// No rule to reconcile with, so the ladder's own name is the only one there is.
-				classOnly.add(hit.getValue().sentence(ref, hit.getKey().label));
+				// No rule to reconcile with, so the ladder's own name is the only one there is —
+				// but WHICH ROW of the substance it is the display of is still this response's
+				// question and not the ladder's, which is what classPartnerName re-decides.
+				classOnly.add(hit.getValue().sentence(ref, classPartnerName(hit.getKey(), subjects)));
 			} else if (!folded.containsKey(rule)) {
 				// One name for the two sentences about to share a detail — see reconciledPartnerName.
 				// Both are worded from it here rather than each arm wording its own, which is what let
@@ -2300,8 +2314,8 @@ public class DrugSafetyValidator {
 				folded.put(rule, new FoldedClassSentence(
 						reconciled != null ? reconciled.chipName : partnerLabel(rule.rule),
 						reconciled != null ? reconciled.noteName : null,
-						hit.getValue().sentence(ref,
-							reconciled != null ? reconciled.chipName : hit.getKey().label)));
+						hit.getValue().sentence(ref, reconciled != null ? reconciled.chipName
+								: classPartnerName(hit.getKey(), subjects))));
 			}
 			// else: a SECOND co-medication that the same rule is about. The relationship is already
 			// stated on that chip; emitting it again, standalone or appended, would put one pair's
@@ -3056,7 +3070,8 @@ public class DrugSafetyValidator {
 	 * rather than a second independent ladder. Both GROUPING keys ({@link SubjectRule#partnerKey},
 	 * {@code DrugReferenceInjector.onePerPartner}) keep {@link #partnerLabel} — they run before this and
 	 * are unaffected by it — and a class-only chip keeps the ladder's own label, which is what it always
-	 * used. What is no longer true, and was until issue #339, is that "outside a folded chip nothing
+	 * used, {@link #classPartnerName} re-electing only WHICH ROW of the substance that label displays.
+	 * What is no longer true, and was until issue #339, is that "outside a folded chip nothing
 	 * here applies": an unfolded rule chip asks this too, through {@link #reconciledPartnerFor}.
 	 *
 	 * <p><b>Since issue #297 this answers in TWO vocabularies</b> ({@code ReconciledPartner}), because the
@@ -3234,6 +3249,44 @@ public class DrugSafetyValidator {
 		String datasetName = ChartSearchAiUtils.firstNonBlank(named.getName());
 		return new ReconciledPartner(named.displayLabel(),
 			datasetName != null ? datasetName.trim() : partnerLabel(rule));
+	}
+
+	/**
+	 * The name the CLASS arm's own sentence calls an active-order partner by — the ladder's label
+	 * ({@link OrderPartner#label}), with one thing re-decided: WHICH ROW of the substance that label
+	 * is the display of.
+	 *
+	 * <p><b>Why this exists (issue #339, review round 1).</b> Moving a rule chip onto
+	 * {@link #reconciledPartnerName} moved the ROW question with it — that method names the partner by
+	 * {@code subjects.subjectOf(labelEntry)}, because the ladder elects its own row with
+	 * {@link DrugReference#canonicalRow} alone ({@link #sweepForAtcCode}) while every other name slot
+	 * in a response elects with {@link #interactionSubject}, and taking the ladder's answer at a chip
+	 * site is issue #187. Left here, the class arm would go on electing the other way, and the
+	 * two elections disagree on a multi-row substance whose CHARTED presentation is not the canonical
+	 * row — so one response would name one prescription two ways again, in two visibly different
+	 * strings rather than the case difference this issue started from. Measured through the real
+	 * {@link #validate} over the shipped knowledge base, a chart carrying one
+	 * {@code Methylprednisolone (topical)} order asked about prednisolone and warfarin:
+	 * {@code Prednisolone is in the same ATC class (H02AB) as active order Methylprednisolone} beside
+	 * {@code Warfarin interacts with active order Methylprednisolone (topical)}, one prescription.
+	 * {@code OneOrderNameAcrossOneResponseTest.aClassOnlyChipNamesAPartnerByTheSameRowARuleChipDoes}
+	 * is the pin; reading {@link OrderPartner#label} here reddens it and nothing else.
+	 *
+	 * <p><b>Only the ENTRY rung, and that is the whole of the condition.</b> A label an ORDER supplied
+	 * ({@link OrderPartner#namingOrder} non-null, whether the ladder reached an entry first or not) is
+	 * a prescription's own display and has no row to elect; a label the ladder could not name at all is
+	 * the bare code or the {@code [ATC …]} stand-in, and turning either of those into an entry name is
+	 * what issue #155 and issue #290 exist to refuse (ADR Decisions 38 and 39). So both keep
+	 * {@link OrderPartner#label} untouched. The election itself is also a no-op wherever the response
+	 * grouped no rows for that substance — {@link SubstanceSubjects#subjectOf} hands back the row it
+	 * was given — so a single-row substance renders exactly the string it rendered before.
+	 *
+	 * <p>It costs no dataset sweep: {@link SubstanceSubjects} memoises its answer per substance for the
+	 * pass, so {@code CoMedicationResolutionPerPassTest}'s flat-sweep invariant is untouched.
+	 */
+	private static String classPartnerName(OrderPartner partner, SubstanceSubjects subjects) {
+		return partner.labelEntry != null && partner.namingOrder == null
+				? subjects.subjectOf(partner.labelEntry).displayLabel() : partner.label;
 	}
 
 	/**
@@ -5824,9 +5877,12 @@ public class DrugSafetyValidator {
 			this.consequence = consequence;
 		}
 
-		/** @param partnerName what this chip calls the active order — the class arm's own ladder
-		 *        ({@link OrderPartner#label}) for a class-only chip AND for a folded chip whose arms
-		 *        {@link #reconciledPartnerName} refused to reconcile, else that method's answer */
+		/** @param partnerName what this chip calls the active order — {@link #classPartnerName} for a
+		 *        class-only chip AND for a folded chip whose arms {@link #reconciledPartnerName}
+		 *        refused to reconcile, else that method's answer. Both of those are the class arm's own
+		 *        ladder ({@link OrderPartner#label}); what {@link #classPartnerName} adds is that on the
+		 *        ENTRY rung the ROW that label displays is the one this response names the substance by
+		 *        (issue #339), so the two arms cannot elect different rows of one prescription. */
 		String sentence(DrugReference subject, String partnerName) {
 			return subject.displayLabel() + " is in the same " + shared + " as active order "
 					+ partnerName + " — " + consequence;

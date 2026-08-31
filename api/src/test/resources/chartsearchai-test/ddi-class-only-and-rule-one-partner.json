@@ -1,0 +1,261 @@
+{
+ "metadata": {
+  "note": "Verbatim DDInter 2.0 slice for issue #339 review round 1 \u2014 a CLASS-ONLY chip and a RULE chip naming ONE prescription. Rows are field-for-field their shipped-KB rows in KB order, and the interaction rows are every KB pair among these drugs. Methylprednisolone is filed as two rows of one substance (one drugbank_id, one rxnorm_name) publishing the same ATC list, of which DrugReference.canonicalRow elects the unqualified one while a chart recording the topical presentation elects the other \u2014 the issue #187 shape, on the PARTNER slot. Prednisolone shares H02AB with it and their only KB rule is rated Unknown, which the shipped chartsearchai.drugSafety.minInteractionSeverity default filters, so that pair reaches the class arm alone; Warfarin shares no subgroup and its Moderate rule clears the floor, so that pair reaches the rule arm alone. One question naming both therefore produces one chip of each kind about one active order."
+ },
+ "mechanisms": {
+  "-1": {
+   "text": null,
+   "categories": []
+  },
+  "217": {
+   "text": "Corticosteroids and adrenocorticotropic agents may alter the pharmacologic effects of oral anticoagulants. Both increased anticoagulant dosage requirements as well as bleeding and increased anticoagulant sensitivity have been reported during concomitant corticosteroid therapy. Proposed mechanisms include blood hypercoagulability or diminished vascular integrity induced by corticosteroids.",
+   "categories": [
+    "others"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter1191",
+   "name": "Methylprednisolone",
+   "rxcui": "6902",
+   "rxnorm_name": "methylprednisolone",
+   "drugbank_id": "DB00959",
+   "atc": [
+    "D07AA01",
+    "D10AA02",
+    "H02AB04"
+   ],
+   "ciel": [
+    {
+     "code": "104977",
+     "uuid": "104977AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / methylprednisolone"
+    },
+    {
+     "code": "105069",
+     "uuid": "105069AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Methylprednisolone / neomycin"
+    },
+    {
+     "code": "70035",
+     "uuid": "70035AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "6 alpha-methylprednisolone sodium hemisuccinate"
+    },
+    {
+     "code": "79743",
+     "uuid": "79743AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Methylprednisolone"
+    },
+    {
+     "code": "79744",
+     "uuid": "79744AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Methylprednisolone aceponate"
+    },
+    {
+     "code": "79745",
+     "uuid": "79745AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Methylprednisolone acetate"
+    },
+    {
+     "code": "79746",
+     "uuid": "79746AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Methylprednisolone sodium phosphate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1192",
+   "name": "Methylprednisolone (topical)",
+   "rxcui": "6902",
+   "rxnorm_name": "methylprednisolone",
+   "drugbank_id": "DB00959",
+   "atc": [
+    "D07AA01",
+    "D10AA02",
+    "H02AB04"
+   ],
+   "ciel": [
+    {
+     "code": "104977",
+     "uuid": "104977AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / methylprednisolone"
+    },
+    {
+     "code": "105069",
+     "uuid": "105069AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Methylprednisolone / neomycin"
+    },
+    {
+     "code": "70035",
+     "uuid": "70035AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "6 alpha-methylprednisolone sodium hemisuccinate"
+    },
+    {
+     "code": "79743",
+     "uuid": "79743AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Methylprednisolone"
+    },
+    {
+     "code": "79744",
+     "uuid": "79744AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Methylprednisolone aceponate"
+    },
+    {
+     "code": "79745",
+     "uuid": "79745AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Methylprednisolone acetate"
+    },
+    {
+     "code": "79746",
+     "uuid": "79746AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Methylprednisolone sodium phosphate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1513",
+   "name": "Prednisolone",
+   "rxcui": "8638",
+   "rxnorm_name": "prednisolone",
+   "drugbank_id": "DB00860",
+   "atc": [
+    "A01AC04",
+    "A07EA01",
+    "C05AA04",
+    "D07AA03",
+    "D07XA02",
+    "H02AB06",
+    "R01AD02",
+    "S01BA04",
+    "S01CB02",
+    "S02BA03",
+    "S03BA02"
+   ],
+   "ciel": [
+    {
+     "code": "103753",
+     "uuid": "103753AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Atropine / prednisolone"
+    },
+    {
+     "code": "104482",
+     "uuid": "104482AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dibucaine / prednisolone"
+    },
+    {
+     "code": "104707",
+     "uuid": "104707AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Gentamicin sulfate (usp) / prednisolone"
+    },
+    {
+     "code": "105093",
+     "uuid": "105093AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Neomycin / polymyxin B / prednisolone"
+    },
+    {
+     "code": "105094",
+     "uuid": "105094AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Neomycin / prednisolone"
+    },
+    {
+     "code": "105102",
+     "uuid": "105102AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Niacinamide / prednisolone"
+    },
+    {
+     "code": "105162",
+     "uuid": "105162AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Phenylephrine / prednisolone / sulfacetamide"
+    },
+    {
+     "code": "105218",
+     "uuid": "105218AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Prednisolone / sulfacetamide"
+    },
+    {
+     "code": "82446",
+     "uuid": "82446AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Prednisolone"
+    },
+    {
+     "code": "82447",
+     "uuid": "82447AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Prednisolone acetate"
+    },
+    {
+     "code": "82448",
+     "uuid": "82448AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Prednisolone phosphate"
+    },
+    {
+     "code": "82449",
+     "uuid": "82449AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Prednisolone sodium metasulphobenzoate"
+    },
+    {
+     "code": "82450",
+     "uuid": "82450AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Prednisolone sodium phosphate"
+    },
+    {
+     "code": "82451",
+     "uuid": "82451AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Prednisolone sodium succinate"
+    },
+    {
+     "code": "82452",
+     "uuid": "82452AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Prednisolone tebutate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1951",
+   "name": "Warfarin",
+   "rxcui": "11289",
+   "rxnorm_name": "warfarin",
+   "drugbank_id": "DB00682",
+   "atc": [
+    "B01AA03"
+   ],
+   "ciel": [
+    {
+     "code": "86415",
+     "uuid": "86415AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Warfarin"
+    },
+    {
+     "code": "86416",
+     "uuid": "86416AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Warfarin potassium"
+    },
+    {
+     "code": "86417",
+     "uuid": "86417AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Warfarin sodium"
+    }
+   ]
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter1191",
+   "DDInter1513",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1191",
+   "DDInter1951",
+   "Moderate",
+   "217"
+  ],
+  [
+   "DDInter1513",
+   "DDInter1951",
+   "Moderate",
+   "217"
+  ]
+ ]
+}

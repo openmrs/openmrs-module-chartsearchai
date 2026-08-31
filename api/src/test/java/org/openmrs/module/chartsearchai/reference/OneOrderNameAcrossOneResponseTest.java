@@ -56,6 +56,15 @@ public class OneOrderNameAcrossOneResponseTest {
 	private static final String COMBINATION_ORDER_FIXTURE =
 			"chartsearchai-test/drug-reference-combination-order-two-rules.json";
 
+	/** A verbatim shipped-KB slice in which ONE prescription is reached by the class arm from one
+	 *  subject and by the rule arm from another — see the fixture's own note. */
+	private static final String CLASS_ONLY_AND_RULE_FIXTURE =
+			"chartsearchai-test/ddi-class-only-and-rule-one-partner.json";
+
+	/** The presentation that slice's chart records, which is NOT the row {@code canonicalRow} elects
+	 *  for that substance. */
+	private static final String TOPICAL_STEROID_ORDER = "Methylprednisolone (topical)";
+
 	/** ADR Decision 39's own live example, verbatim. */
 	private static final String COMBINATION_DISPLAY = "Isoniazid / Rifapentine";
 
@@ -369,6 +378,68 @@ public class OneOrderNameAcrossOneResponseTest {
 		assertEquals(java.util.Arrays.asList(charted.displayLabel()), orderNames(warnings),
 			"a chip must name its partner by the row the patient's own order names — the ladder's own"
 					+ " canonicalRow answer is a sibling this chart does not record, was: "
+					+ DrugReferenceTestSupport.details(warnings));
+	}
+
+	/**
+	 * A CLASS-ONLY chip names one prescription by the same row a RULE chip about it does.
+	 *
+	 * <p>Issue #339 moved every rule chip onto {@code reconciledPartnerName}, and that method elects
+	 * the row it prints with {@code SubstanceSubjects.subjectOf} — the row this response names the
+	 * substance by — because the ladder elects with {@code canonicalRow} alone and taking the ladder's
+	 * answer at a chip site is issue #187. The class arm's own sentence went on electing the ladder's
+	 * way, so on a multi-row substance whose CHARTED presentation is not the canonical row the two
+	 * arms named one prescription two ways again — and in two visibly different strings rather than
+	 * the case difference the ticket opens with, which is the form it calls the non-cosmetic one.
+	 *
+	 * <p>Measured before the fix through the real {@code validate} over the SHIPPED knowledge base on
+	 * this very arrangement: {@code Prednisolone is in the same ATC class (H02AB) as active order
+	 * Methylprednisolone} beside {@code Warfarin interacts with active order Methylprednisolone
+	 * (topical)}, one prescription, in text {@code DrugReferenceInjector.renderFinding} copies verbatim
+	 * into the prompt as a citable {@code safety_finding}. The slice reproduces it field for field.
+	 *
+	 * <p>Why the two arms split here rather than folding: the KB rates the prednisolone pair
+	 * {@code Unknown}, which the shipped {@code minInteractionSeverity} default filters, so
+	 * {@code ruleAbout} finds no rule for that partner and the class sentence stands alone; warfarin
+	 * shares no subgroup with the steroid, so its Moderate rule chips with no class sentence to fold.
+	 *
+	 * <p>Reading {@code OrderPartner.label} at {@code classPartnerName} reddens exactly here.
+	 */
+	@Test
+	public void aClassOnlyChipNamesAPartnerByTheSameRowARuleChipDoes() throws IOException {
+		List<DrugReference> entries =
+				DrugReferenceTestSupport.ddiFixtureEntries(CLASS_ONLY_AND_RULE_FIXTURE);
+		DrugReference charted = DrugReferenceTestSupport.row(entries, TOPICAL_STEROID_ORDER);
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(entries);
+		java.util.Set<String> codes = charted.normalizedAtcCodes();
+		PatientClinicalContext chart = DrugReferenceTestSupport.ctx(60, null,
+			DrugReferenceTestSupport.set(TOPICAL_STEROID_ORDER), codes, null, null,
+			java.util.Arrays.asList(DrugReferenceTestSupport.activeOrder("order-steroid",
+				TOPICAL_STEROID_ORDER, DrugReferenceTestSupport.set(TOPICAL_STEROID_ORDER), codes)));
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service).validate("",
+			"Can I give her prednisolone and warfarin?", service.withReferenceNames(chart));
+
+		boolean classOnly = false;
+		boolean rule = false;
+		for (SafetyWarning warning : warnings) {
+			String detail = warning.getDetail();
+			if (detail.contains("is in the same") && !detail.contains("interacts with")) {
+				classOnly = true;
+			}
+			if (detail.contains("interacts with active order")) {
+				rule = true;
+			}
+		}
+		assertTrue(classOnly, "precondition: one chip must be a class sentence standing alone, or this"
+				+ " case is about the fold instead, was: " + DrugReferenceTestSupport.details(warnings));
+		assertTrue(rule, "precondition: one chip must be a rule chip about that same order, was: "
+				+ DrugReferenceTestSupport.details(warnings));
+		assertEquals(java.util.Arrays.asList(charted.displayLabel(), charted.displayLabel()),
+			orderNames(warnings),
+			"both arms must name one prescription by the row this response names its substance by —"
+					+ " the class arm electing with canonicalRow while the rule arm elects with"
+					+ " interactionSubject names one order two ways in one response (issue #339), was: "
 					+ DrugReferenceTestSupport.details(warnings));
 	}
 

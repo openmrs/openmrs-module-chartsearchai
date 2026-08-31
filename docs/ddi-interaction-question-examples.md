@@ -649,17 +649,17 @@ or what reaches the model.
   verbatim and correct. `ReferenceProseFidelityCheck` detects this class of divergence and logs
   it at WARN ([#337](https://github.com/openmrs/openmrs-module-chartsearchai/issues/337),
   [ADR Decision 61](adr.md)); it is deliberately not published to the wire.
-- **The prose may name a drug by its chart brand where the chip names the substance.** In
+- **The prose may name a drug by its chart brand where the chip names the substance** ([#347](https://github.com/openmrs/openmrs-module-chartsearchai/issues/347)). In
   [1d](#1d-cross-reactivity-across-atc-branches-the-curated-group) the answer says "active order
   Advil" and the chip says "active order Ibuprofen" — the same order, two names, because the
   chart row is a branded formulation. The chips themselves are internally consistent since
   [#339](https://github.com/openmrs/openmrs-module-chartsearchai/issues/339).
-- **A screening answer can read as a prescribing refusal.** [3a](#3a-one-major-pair-on-a-two-drug-chart)
+- **A screening answer can read as a prescribing refusal** ([#348](https://github.com/openmrs/openmrs-module-chartsearchai/issues/348)). [3a](#3a-one-major-pair-on-a-two-drug-chart)
   and [3b](#3b-a-moderate-pair) both lead with "should not be given" about a drug the patient is
   already taking. The verdict is correct; the framing suits the "can I give her X?" shape better
   than the screening shape.
 - **In [3f](#3f-local-brand-names--where-the-chip-earns-its-keep) the answer contradicts its own
-  chip.** The validator raised a Major through the orders' ATC codes and the injector put the
+  chip** ([#349](https://github.com/openmrs/openmrs-module-chartsearchai/issues/349)). The validator raised a Major through the orders' ATC codes and the injector put the
   finding in the prompt (confirmed from its DEBUG line — one safety-finding record, 363 chars),
   yet the prose says the records do not address interactions. This is **not** an
   injector/validator split: the finding arrived and was dropped, and it is droppable because the

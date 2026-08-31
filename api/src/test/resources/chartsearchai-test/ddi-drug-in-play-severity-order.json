@@ -1,0 +1,89 @@
+{
+ "metadata": {
+  "schema_version": "1.0",
+  "title": "Test fixture: one subject's KB row order for its interaction partners disagrees with severity (issue #346)",
+  "note": "A minimal synthetic slice, not drawn from the real DDInter KB. One subject drug, Coagulon, carries three interaction rows against three distinct partner substances, listed in the interactions array in KB row order Moderate, Minor, Major - deliberately NOT severity-sorted, and with the Major row LAST, mirroring the live reproduction on issue #346 where a Major bleeding interaction sat at the end of an unsorted list and never reached the answer. All three partners are on distinct ATC-4 subgroups from each other and from the subject, so no shared-class relationship is in play here - this fixture isolates the drug-in-play arm's own chip ORDER, nothing else. Parsed by the real DdiDrugReferenceSource.",
+  "source": {
+   "name": "Synthetic test fixture",
+   "url": "n/a",
+   "normalization": "RxNorm (NLM)",
+   "bridge": "n/a"
+  },
+  "format": {
+   "interactions": "[drug_a_id, drug_b_id, severity, group_id]",
+   "note": "Hand-authored for this test."
+  }
+ },
+ "mechanisms": {
+  "moderate1": {
+   "text": "Concurrent use of Coagulon and Alphadrug may moderately increase bleeding risk.",
+   "categories": []
+  },
+  "minor1": {
+   "text": "Concurrent use of Coagulon and Betadrug has a minor pharmacodynamic interaction.",
+   "categories": []
+  },
+  "major1": {
+   "text": "Concurrent use of Coagulon and Gammadrug significantly increases the risk of major bleeding.",
+   "categories": []
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInterTestSubject",
+   "name": "Coagulon",
+   "rxnorm_name": "coagulon",
+   "drugbank_id": "DBTEST00",
+   "atc": [
+    "B01AA99"
+   ]
+  },
+  {
+   "id": "DDInterTestAlpha",
+   "name": "Alphadrug",
+   "rxnorm_name": "alphadrug",
+   "drugbank_id": "DBTESTA1",
+   "atc": [
+    "N02BA99"
+   ]
+  },
+  {
+   "id": "DDInterTestBeta",
+   "name": "Betadrug",
+   "rxnorm_name": "betadrug",
+   "drugbank_id": "DBTESTA2",
+   "atc": [
+    "M01AB99"
+   ]
+  },
+  {
+   "id": "DDInterTestGamma",
+   "name": "Gammadrug",
+   "rxnorm_name": "gammadrug",
+   "drugbank_id": "DBTESTA3",
+   "atc": [
+    "A10BA99"
+   ]
+  }
+ ],
+ "interactions": [
+  [
+   "DDInterTestSubject",
+   "DDInterTestAlpha",
+   "Moderate",
+   "moderate1"
+  ],
+  [
+   "DDInterTestSubject",
+   "DDInterTestBeta",
+   "Minor",
+   "minor1"
+  ],
+  [
+   "DDInterTestSubject",
+   "DDInterTestGamma",
+   "Major",
+   "major1"
+  ]
+ ]
+}

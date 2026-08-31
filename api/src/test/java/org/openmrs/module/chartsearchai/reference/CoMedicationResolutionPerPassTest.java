@@ -126,18 +126,25 @@ public class CoMedicationResolutionPerPassTest {
 	 * is called, the rating and the arrival order, and it still fails if sharing one partner list
 	 * across two subjects disturbs any of them. A rename that made these lower-case again would fail
 	 * {@code OneOrderNameAcrossOneResponseTest} instead.
+	 *
+	 * <p><b>The WITHIN-SUBJECT order moved once more, for issue #346.</b>
+	 * {@code DrugSafetyValidator.addInteractionWarnings} now sorts each subject's own rule chips
+	 * most-severe-first (matching the two pairwise arms, which already sorted) instead of leaving them
+	 * in the knowledge base's own row order, so each subject's block below is reordered accordingly —
+	 * content, partner, name and rating are untouched, and so is the pairwise entry after them, which
+	 * that arm sorts on its own and this fixture never lets exceed one pair.
 	 */
 	private static final List<String> TWO_DRUG_CHIPS = Arrays.asList(
-			"interaction | Minor | Simvastatin interacts with active order Warfarin",
-			"interaction | Moderate | Simvastatin interacts with active order Ciprofloxacin",
 			"interaction | Major | Simvastatin interacts with active order Amiodarone",
+			"interaction | Moderate | Simvastatin interacts with active order Ciprofloxacin",
+			"interaction | Minor | Simvastatin interacts with active order Warfarin",
+			"interaction | Major | Clarithromycin interacts with active order Warfarin",
+			"interaction | Major | Clarithromycin interacts with active order Digoxin",
+			"interaction | Major | Clarithromycin interacts with active order Amiodarone",
 			"interaction | Moderate | Clarithromycin interacts with active order Metformin",
 			"interaction | Moderate | Clarithromycin interacts with active order Sertraline",
 			"interaction | Moderate | Clarithromycin interacts with active order Tramadol",
-			"interaction | Major | Clarithromycin interacts with active order Warfarin",
 			"interaction | Moderate | Clarithromycin interacts with active order Ciprofloxacin",
-			"interaction | Major | Clarithromycin interacts with active order Digoxin",
-			"interaction | Major | Clarithromycin interacts with active order Amiodarone",
 			"interaction | Major | Simvastatin interacts with Clarithromycin, also named in the question");
 
 	/** A question naming nothing the excerpt classifies, so no arm asks for a co-medication. */

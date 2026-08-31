@@ -2367,6 +2367,13 @@ public class DrugSafetyValidator {
 		DrugReference ref = subjects.subjectOf(rows.get(0));
 		List<SubjectRule> rules = new ArrayList<SubjectRule>(
 				bestRulePerPartner(rows, context, severityFloor, orderEntries));
+		// Most severe first, matching addQuestionPairInteractions and addActiveOrderPairInteractions
+		// (issue #346) — this arm used to leave the chips in the knowledge base's own row order, so an
+		// answer that enumerates them and stops partway through could drop the single most severe
+		// finding while stating several milder ones. Collections.sort is stable, so two rules tied on
+		// severity keep the dataset order the loop above produced them in, exactly as the other two
+		// arms already do.
+		Collections.sort(rules, RULE_SEVERITY_DESCENDING);
 		// Which rule row carries which class sentence, decided before anything is emitted: the class
 		// arm is walked per active-order CO-MEDICATION (issue #171 — it used to walk per CODE, so a
 		// substance filed under several codes reached this loop once per code) while the chips are one
@@ -2907,6 +2914,18 @@ public class DrugSafetyValidator {
 		}
 	}
 
+	/** Orders the drug-in-play arm's candidate rules most-severe first (issue #346); see
+	 *  {@link #severityPriority}. The same ordering {@link #PAIR_SEVERITY_DESCENDING} and
+	 *  {@link #SCREENED_PAIR_SEVERITY_DESCENDING} already apply to the other two interaction arms, on
+	 *  {@link SubjectRule} rather than on either of those arms' own candidate types. */
+	private static final Comparator<SubjectRule> RULE_SEVERITY_DESCENDING = new Comparator<SubjectRule>() {
+
+		@Override
+		public int compare(SubjectRule a, SubjectRule b) {
+			return Integer.compare(severityPriority(b.rule.getSeverity()), severityPriority(a.rule.getSeverity()));
+		}
+	};
+
 	/**
 	 * The (substance, partner) pairs an interaction chip has already been raised for in this pass, so the
 	 * screening arm ({@link #addActiveOrderPairInteractions}) can stand down from a pair the drug-in-play
@@ -3095,9 +3114,12 @@ public class DrugSafetyValidator {
 	 *         both name one order: across the full KB exactly one such pair exists, {@code enalapril}
 	 *         and {@code enalaprilat}, two genuinely different entries which that grouping deliberately
 	 *         keeps as two chips — the population that figure counts, and its base, are named at
-	 *         {@link #bestRulePerPartner} (issue #263). The first in dataset order takes the fold; the
-	 *         other keeps its rule chip unfolded, which is the conservative direction, since the
-	 *         alternative is stating one duplicate-therapy relationship twice.
+	 *         {@link #bestRulePerPartner} (issue #263). Since issue #346 {@code rules} arrives sorted
+	 *         most-severe-first ({@link #RULE_SEVERITY_DESCENDING}), so the first of the two to match
+	 *         takes the fold — the more severe of the two against this order where they differ, else
+	 *         whichever the dataset lists first, since the sort is stable. The other keeps its rule
+	 *         chip unfolded, which is the conservative direction, since the alternative is stating one
+	 *         duplicate-therapy relationship twice.
 	 */
 	private SubjectRule ruleAbout(Set<String> orderCodes, List<SubjectRule> rules,
 			CoMedications coMedications) {

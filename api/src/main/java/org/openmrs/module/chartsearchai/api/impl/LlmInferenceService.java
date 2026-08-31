@@ -141,6 +141,8 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getCitations(), chart.getMappings());
 			ClassCodeFidelityCheck.reportClassCodeDefects(patient, question, response.getAnswer(),
 					cited, chart.getMappings());
+			ReferenceProseFidelityCheck.reportUnfaithfulReferenceProse(patient, response.getAnswer(),
+					cited, chart.getMappings());
 			List<RecordReference> references = groundReferences(response.getAnswer(), cited,
 					chart.getMappings());
 			// A per-call sink, never a field: the validator is a Spring singleton, so a field would be
@@ -439,12 +441,17 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getCachedTokens(), Collections.<SafetyWarning> emptyList(), searchMode,
 					referenceSlice));
 
-			// After the user-visible handoff, before grounding: an exact token comparison that
-			// reports an ATC class code no cited record states (issue #142), and the two
-			// malformations of a class-code parenthetical that comparison cannot see (issue #338).
-			// It answers in microseconds and reports only to the log, so nothing downstream — and no
-			// consumer above — waits on it.
+			// After the user-visible handoff, before grounding: two exact comparisons over what the
+			// answer states about the records it cites — the class-code defects a set-membership
+			// comparison can and cannot see (issues #142 and #338), and prose reproduced from a cited
+			// reference record and then rewritten inside the sentence it was copying (issue #337).
+			// Both report only to the log, so nothing downstream — and no consumer above — waits on
+			// them. Not "microseconds", which this comment said and which is true only of the first:
+			// the second is a word-level dynamic program, measured at ~0.7 ms on a realistic chart and
+			// ~1.2 ms at the largest injected record set anyone has swept (ADR Decision 61).
 			ClassCodeFidelityCheck.reportClassCodeDefects(patient, question, response.getAnswer(),
+					cited, chart.getMappings());
+			ReferenceProseFidelityCheck.reportUnfaithfulReferenceProse(patient, response.getAnswer(),
 					cited, chart.getMappings());
 
 			long groundStart = System.currentTimeMillis();

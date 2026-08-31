@@ -54,6 +54,86 @@ public class ChartSearchAiUtils {
 	public static final Pattern INLINE_CITATION = Pattern.compile("\\[(\\d{1,9})\\]");
 
 	/**
+	 * The characters this module reads as the end of a sentence. One home, because
+	 * {@link #SENTENCE_BOUNDARY}, {@link #mayEndASentence} and
+	 * {@code DrugSafetyValidator.endSentence} are three QUESTIONS over one set and a second spelling
+	 * of the set would let them disagree about what a sentence is — which is not hypothetical here:
+	 * {@code ReferenceProseFidelityCheck}'s record-sentence exit is only safe while the character
+	 * {@code endSentence} appends is one this set contains, and that check's own javadoc rests on it.
+	 *
+	 * <p>Public for that third consumer, in another package. A caller does not test a character
+	 * against a literal of its own.
+	 *
+	 * <p>It is interpolated into {@link #SENTENCE_BOUNDARY}'s character class through
+	 * {@link Pattern#quote}, so a member with meaning inside a class — {@code ]}, {@code ^},
+	 * {@code \} or a {@code -} in range position — is a literal rather than a syntax change. Unquoted
+	 * it changes the PATTERN rather than the set: appending {@code ]} makes the lookbehind read
+	 * "a terminator followed by {@code ]}", so the splitter stops splitting on punctuation while
+	 * {@link #mayEndASentence}, which reads this by {@code indexOf}, carries on. That is the
+	 * divergence one set exists to prevent, and it is LOUD rather than silent — that arrangement
+	 * reddens the grounding verifier's own suite wholesale. No count of it is published here: one was,
+	 * and it went stale in the very commit that wrote it, because the case added beside it in that
+	 * commit adds a failure of its own. Append a character and read the failures. The quoting is here
+	 * so the set can be edited as a set, not because the alternative hides.
+	 */
+	public static final String SENTENCE_TERMINATORS = ".!?";
+
+	/**
+	 * Where one sentence of an answer or a record ends and the next begins: a {@code .}, {@code !}
+	 * or {@code ?} followed by whitespace, or a line break. The SPLITTING question over
+	 * {@link #SENTENCE_TERMINATORS}: {@code CitationGroundingVerifier} cuts a text into the units it
+	 * grades on it, and it is strict because a splitter that cut at every dot would halve a sentence
+	 * at {@code Q12H.} or at an abbreviation. {@link #mayEndASentence} is the other question over the
+	 * same set — could a sentence have ended in this GAP — and is deliberately weaker; read its
+	 * javadoc before reaching for either, because they are not interchangeable in either direction.
+	 *
+	 * <p>Two spellings of one terminator set is the shape issue #260 records the cost of: the two
+	 * disagreed in both directions and both silently. So a consumer takes one of these two entry
+	 * points, and never a regex of its own.
+	 *
+	 * <p>The line-break arm is not decoration: the system prompt instructs the model to "use numbered
+	 * lines or simple newlines to structure lists", so a multi-item answer often carries no
+	 * sentence-ending punctuation at all.
+	 */
+	public static final Pattern SENTENCE_BOUNDARY = Pattern.compile(
+			"(?<=[" + Pattern.quote(SENTENCE_TERMINATORS) + "])\\s+|[\\r\\n]+");
+
+	/**
+	 * @return whether a sentence COULD have ended inside {@code between} — the text separating two
+	 *         adjacent words — which is a deliberately weaker question than
+	 *         {@link #SENTENCE_BOUNDARY} asks. Any terminator anywhere in the gap answers yes, and
+	 *         so does a line break; nothing has to follow the terminator.
+	 *
+	 *         <p><b>Weaker on purpose, and the weakness is the correctness.</b> Its caller
+	 *         ({@code ReferenceProseFidelityCheck}) uses the answer only to STAY SILENT, so a gap
+	 *         read as a sentence end can only suppress a report and never cause one — which is what
+	 *         makes that check's "loses recall, never precision" property true. Asking
+	 *         {@code SENTENCE_BOUNDARY} instead was measured wrong in exactly that direction: it
+	 *         requires the terminator to be followed IMMEDIATELY by whitespace, so a quotation the
+	 *         model closed — {@code ."} or {@code .)} , and this module's own reference prose is full
+	 *         of {@code (SSRIs)} and {@code (M1)} — is not a boundary, and a faithful quotation
+	 *         followed by the model's own next sentence was reported as a substitution.
+	 *
+	 *         <p>It must not be used to SPLIT a text into units: {@code Q12H. }-shaped prose and an
+	 *         abbreviation dot both answer yes here, and a splitter that believed them would cut a
+	 *         sentence in half. That is {@link #SENTENCE_BOUNDARY}'s question, and the two are kept
+	 *         apart for the reason issue #260 records — one rule, one terminator set, one named entry
+	 *         point per question, never a second regex at a call site.
+	 */
+	public static boolean mayEndASentence(String between) {
+		if (between == null) {
+			return false;
+		}
+		for (int at = 0; at < between.length(); at++) {
+			char c = between.charAt(at);
+			if (SENTENCE_TERMINATORS.indexOf(c) >= 0 || c == '\r' || c == '\n') {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
 	 * Decodes every inline {@code [N]} citation marker in {@code text} to its record index,
 	 * in first-appearance order. The shared decode step over {@link #INLINE_CITATION} for
 	 * citation extraction ({@code LlmInferenceService}), grounding
@@ -169,8 +249,13 @@ public class ChartSearchAiUtils {
 	 * recitations were judged entailed while the one faithful recitation was judged not (issue #106).
 	 * A passing verdict is therefore false assurance. A FAILING verdict still carries information — it
 	 * says the citation is not about the record at all — so the flag is kept and only the pass is
-	 * withheld. Faithfulness of reference content is checked deterministically by the
-	 * {@code DrugSafetyValidator} chips instead.
+	 * withheld. Faithfulness of reference content is checked deterministically instead, by
+	 * report-only comparisons that run after every answer: {@code ClassCodeFidelityCheck} for an ATC
+	 * class code the answer states that no cited record does (issue #142), and
+	 * {@code ReferenceProseFidelityCheck} for an answer that reproduces a cited reference record's
+	 * prose and then substitutes its own words inside the sentence it was copying (issue #337). NOT
+	 * by the {@code DrugSafetyValidator} chips, which this javadoc said until #337: they carry the
+	 * deterministic text but are an independent list nothing reconciles against the answer.
 	 *
 	 * <p><strong>It follows from provenance, not from being injected.</strong> An
 	 * {@link ChartSearchAiConstants#RESOURCE_TYPE_ACTIVE_DRUG_ORDER} record is injected yet groups as

@@ -101,9 +101,12 @@ import org.springframework.stereotype.Service;
  * claim unit under entailment, the stronger rule below wins and even the fail is withheld — no
  * consumer can see the difference, since #201 withholds every reference-group verdict at the wire.)
  * Faithfulness of reference content is
- * checked deterministically instead: by the {@code DrugSafetyValidator} chips, and — for the one
- * part of a recitation that no semantic check can see, an ATC class code the model edited while
- * citing the record that carries it — by {@link ClassCodeFidelityCheck} (issue #142). Accepted
+ * checked deterministically instead, by report-only comparisons over what the answer states
+ * about the record: {@link ClassCodeFidelityCheck} for an ATC class code the model edited while
+ * citing the record that carries it (issue #142), and {@link ReferenceProseFidelityCheck} for a
+ * recitation the model diverged from inside the sentence it was copying (issue #337). NOT by the
+ * {@code DrugSafetyValidator} chips, which this javadoc named until #337: they carry the
+ * deterministic text but are an independent list nothing reconciles against the answer. Accepted
  * cost: under entailment mode these citations now take the lazy Tier-1 path (up to two
  * embedding passes each) that the amortized Tier-2 batch previously spared them — the
  * off-topic flag is kept mode-uniform at the price of ~one embed pair per reference
@@ -268,10 +271,14 @@ import org.springframework.stereotype.Service;
  * other record's words as well as its own — is PREDICTED to fall below it and re-publish
  * {@code false}, returning #284 for any operator who followed the advice. Predicted and not measured,
  * because under entailment a single-candidate claim defers Tier-1 entirely, so no cosine was computed
- * for #284's cells at any floor. Faithfulness of this
- * answer class is checked deterministically instead, by the {@code DrugSafetyValidator} chips and
- * {@link ClassCodeFidelityCheck} — which is #106's own remedy for material a semantic check cannot
- * grade.
+ * for #284's cells at any floor. NOTHING checks this answer class deterministically. This javadoc
+ * named the {@code DrugSafetyValidator} chips until #337 and they are not it — they carry the
+ * deterministic text but are an independent list nothing reconciles against the answer — and
+ * neither are {@link ClassCodeFidelityCheck} and {@link ReferenceProseFidelityCheck}, which compare
+ * what the answer states about the REFERENCE records it cites, where the cost named here is a CHART
+ * record attached to the wrong sentence. {@code README.md} and ADR Decision 41 say the same of it;
+ * an earlier draft of this correction pasted the reference-content sentence here and made the three
+ * disagree.
  *
  * <p>The verifier never throws into the search path: any failure (embedding
  * error, missing text) degrades to a {@code null} verdict — "could not verify"
@@ -289,8 +296,14 @@ public class CitationGroundingVerifier {
 	 * structure lists", so a multi-item answer often has no sentence-ending
 	 * punctuation — without splitting on newlines every citation would be scored
 	 * against the whole answer instead of its own line.
+	 *
+	 * <p>The rule itself lives in {@link ChartSearchAiUtils#SENTENCE_BOUNDARY} since issue #337 gave
+	 * it a second consumer ({@code ReferenceProseFidelityCheck}, which asks whether a boundary stands
+	 * in one GAP rather than splitting). Two spellings of one boundary rule is the shape #260 records
+	 * the cost of. This name is kept because what this class does with it is SPLIT, which is a
+	 * different operand shape from that one's question.
 	 */
-	private static final Pattern SENTENCE_SPLIT = Pattern.compile("(?<=[.!?])\\s+|[\\r\\n]+");
+	private static final Pattern SENTENCE_SPLIT = ChartSearchAiUtils.SENTENCE_BOUNDARY;
 
 	@Autowired
 	private LlmProvider llmProvider;
@@ -723,8 +736,10 @@ public class CitationGroundingVerifier {
 			} else if (Boolean.TRUE.equals(verdict) && disposition[i] == Disposition.DEMOTE_ONLY) {
 				// Demote-only: a cosine pass on a recited reference record carries no faithfulness
 				// signal, so it renders unverified rather than verified; a fail (an off-topic
-				// citation) still flags. Reference content is verified deterministically by the
-				// DrugSafetyValidator, not by this pass.
+				// citation) still flags. What DOES check reference content is ClassCodeFidelityCheck
+				// and ReferenceProseFidelityCheck, not this pass and not the DrugSafetyValidator
+				// chips — which this comment named until #337, and which are an independent list
+				// nothing reconciles against the answer.
 				verdict = null;
 			}
 			annotated.add(references.get(i).withGrounded(verdict));

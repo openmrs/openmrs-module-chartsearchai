@@ -392,7 +392,7 @@ public class OneOrderNameAcrossOneResponseTest {
 	 * that contains the subject as well as the partner, so it looks like a drug interacting with itself.
 	 * It is not a false claim — the prescription really does hold both drugs, and the mechanism prose
 	 * names the interacting agent — and it is one name for one prescription, invariant across the
-	 * questions that reach it, which is what this issue is about. ADR Decision 61 carries the trade.
+	 * questions that reach it, which is what this issue is about. ADR Decision 62 carries the trade.
 	 */
 	@Test
 	public void aPrescriptionNamingTheSubjectAndThePartnerIsStillNamedOnceByItsOwnDisplay()
@@ -704,7 +704,7 @@ public class OneOrderNameAcrossOneResponseTest {
 	 * The same arrangement over the dataset the module SHIPS, so the case does not rest on a fixture
 	 * alone.
 	 *
-	 * <p>ADR Decision 61 first recorded the self-interaction shape as fixture-only, which review round
+	 * <p>ADR Decision 62 first recorded the self-interaction shape as fixture-only, which review round
 	 * 3 corrected; this pins the correction. One {@code Lisinopril / Hydrochlorothiazide} order,
 	 * codes {@code C09BA03} (which the shipped data does not cover, so {@code soleSubstanceOf} falls
 	 * through to the covered one) and {@code C03AA03}, asked about one of its own constituents beside

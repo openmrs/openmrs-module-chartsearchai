@@ -1515,7 +1515,7 @@ public class DrugReferenceInjector {
 	 *         beside it already contains. That is the half of the union bound that survives issue #339;
 	 *         the wider reading, that the prompt's name union for the partner cannot GROW at all, does
 	 *         not, because the chip's own name moved for rule-only partners (see the paragraph on that
-	 *         issue above, and ADR Decision 61). An
+	 *         issue above, and ADR Decision 62). An
 	 *         ORDER-DRIVEN record, which no interaction chip stands behind (see {@code collect}), is
 	 *         therefore untouched rather than renamed after a chip that does not exist.
 	 *
@@ -1583,7 +1583,7 @@ public class DrugReferenceInjector {
 	 *         lookup on the PARTNER rather than on rule identity, which needs the partner entry to travel
 	 *         beside the name — a change to what a {@link SafetyWarning} carries, not to this scan — and
 	 *         it re-opens the key-dependence question the condition below exists for. Recorded in ADR
-	 *         Decision 61's trade-offs rather than taken here.
+	 *         Decision 62's trade-offs rather than taken here.
 	 *
 	 *         <p>A linear scan of a list bounded by the chips this response raised, and deliberately not
 	 *         a map: the accessor above will not hand out a name without being shown the rule it was

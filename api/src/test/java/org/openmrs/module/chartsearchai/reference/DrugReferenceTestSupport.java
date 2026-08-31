@@ -74,7 +74,7 @@ public final class DrugReferenceTestSupport {
 	 * question once more than one entry is injected — the loose, mapping-returning form of
 	 * {@link #namesDrug} below.
 	 */
-	static RecordMapping injectedReference(PatientChart chart) {
+	public static RecordMapping injectedReference(PatientChart chart) {
 		return injectedReferences(chart).stream().findFirst().orElseThrow(() -> new IllegalStateException(
 				"no drug-reference record was injected into the chart: " + chart.getText()));
 	}

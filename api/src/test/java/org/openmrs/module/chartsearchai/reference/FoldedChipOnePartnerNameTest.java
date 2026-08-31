@@ -455,7 +455,12 @@ public class FoldedChipOnePartnerNameTest {
 	 * <p>So the printed row is the FIRST of (this response's elected row, the ladder's own row) that
 	 * the gate admits. The gate is still asked of the row about to be printed, which is CLAUDE.md's
 	 * rule and what {@link #aRuleTokenTheLaddersRowOnlyTiesKeepsItsOwnToken} pins; nothing is printed
-	 * on a sibling's claim. Removing the fallback reddens this case and nothing else.
+	 * on a sibling's claim. Removing the fallback reddens this case and
+	 * {@link #noFoldedChipNamesOneActiveOrderTwoWays}, which sweeps this arrangement as its tenth run,
+	 * and nothing else in the api suite ({@code Tests run: 1683, Failures: 2}, re-measured at issue
+	 * #339's review round 8 head). There the chip still FOLDS: it names this one order {@code atropine}
+	 * and {@code Atropine (ophthalmic)}, so what fails is that sweep's one-name assertion, not its
+	 * count.
 	 *
 	 * <p>The order here is MAPPED, which is what separates this from that case: it carries
 	 * {@code S01FA01}, so the ladder reaches {@code entryForAtcCode} and the {@code labelEntry} is
@@ -1106,7 +1111,18 @@ public class FoldedChipOnePartnerNameTest {
 	 * {@link #aPaddedAliasNamesTheOneOrderOnce}, where the ranking would have refused had the alias
 	 * reached it untrimmed.
 	 *
-	 * <p><b>Adding it required a second assertion to be worth anything.</b> The one-name property alone
+	 * <p>The tenth is issue #339 review round 3's:
+	 * {@link #aRowTheResponseElectsButTheTokenDoesNotClaimFallsBackToTheLaddersOwn}, the MAPPED order of
+	 * {@link #TIED_TOKEN_FIXTURE} — the slice whose UNMAPPED order is the refusal
+	 * {@link #aRuleTokenTheLaddersRowOnlyTiesKeepsItsOwnToken} above — whose elected row the rule's token
+	 * does not claim and which therefore reconciles on the ladder's own row instead. Adding it to this
+	 * sweep is why dropping that fallback reddens TWO cases in this class rather than that one alone:
+	 * under the mutation the chip still folds and names this order {@code atropine} AND
+	 * {@code Atropine (ophthalmic)}, so the one-name assertion below fails beside it — the count does
+	 * not, the arrangement still being reached.
+	 *
+	 * <p><b>Adding the SIXTH — the blank-display order, whose label is a bare ATC code — required a
+	 * second assertion to be worth anything.</b> The one-name property alone
 	 * does not see the failure that arrangement is about: substituting the CODE for the name leaves
 	 * exactly ONE name in both sentences, so the count below still passes. So the sweep also asserts that
 	 * the name it counted is not ATC-CODE-SHAPED. Measured by making the {@code !namesADrug} branch hand
@@ -1192,7 +1208,7 @@ public class FoldedChipOnePartnerNameTest {
 			}
 		}
 		assertEquals(10, foldedSeen,
-			"precondition: all nine folded chips must have been reached, or this invariant passed by"
+			"precondition: all ten folded chips must have been reached, or this invariant passed by"
 					+ " vacuity — the nameless order, the DDInter formulation, both subjects of the"
 					+ " note-less same-class fixture, the order-named partner the rule's token names, the"
 					+ " blank display whose label is a bare code, the token whose two substances one of"

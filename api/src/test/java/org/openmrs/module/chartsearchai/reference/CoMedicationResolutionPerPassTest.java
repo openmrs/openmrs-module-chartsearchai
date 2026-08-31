@@ -265,14 +265,7 @@ public class CoMedicationResolutionPerPassTest {
 	public void twoSubjectsSharingOneResolutionAreChippedExactlyAsTheyWereWhenEachResolvedItsOwn() {
 		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service())
 				.validate("", questionNaming(2), chartWithOrders());
-		List<String> leads = new ArrayList<String>();
-		for (SafetyWarning warning : warnings) {
-			String detail = warning.getDetail();
-			int dash = detail.indexOf(" — ");
-			leads.add(warning.getType() + " | " + warning.getSeverity() + " | "
-					+ (dash < 0 ? detail : detail.substring(0, dash)));
-		}
-		assertEquals(TWO_DRUG_CHIPS, leads, "the second subject reads the co-medications the first "
+		assertEquals(TWO_DRUG_CHIPS, DrugReferenceTestSupport.chipLeads(warnings), "the second subject reads the co-medications the first "
 				+ "resolved, so a chip's subject, its partner, that partner's NAME, the pair's rating or "
 				+ "the order the chips arrive in must not have moved (issue #256)");
 	}

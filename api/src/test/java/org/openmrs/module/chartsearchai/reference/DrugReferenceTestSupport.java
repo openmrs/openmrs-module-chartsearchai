@@ -411,20 +411,6 @@ public final class DrugReferenceTestSupport {
 	/** Several route variants of one drug sharing a RxCUI — the id/label collision slice. */
 	static final String DDI_RXCUI_COLLISION = "chartsearchai-test/ddi-rxcui-collision.json";
 
-	/** {@code Dolutegravir} against {@code Iron} / {@code Iron (bisglycinate)} and {@code Phenytoin},
-	 *  arranged so a group's winner is replaced AFTER a partner tied with it on severity has opened —
-	 *  the one arrangement in which {@code bestRulePerPartner}'s LinkedHashMap is what decides the chip
-	 *  order, since issue #346's severity sort decides it everywhere the two differ in strength. The
-	 *  ARRANGEMENT is the fixture and the file says so; {@link #DDI_ROUTE_VARIANTS} cannot express it.
-	 *  See {@code DdiDrugReferenceSourceTest.replacingAGroupsWinnerLeavesATiedPartnerBehindIt}. */
-	static final String DDI_TIED_PARTNER_REPLACEMENT =
-			"chartsearchai-test/ddi-tied-partner-replacement.json";
-
-	/** {@code Simvastatin} rated Minor against both {@code Metformin} and {@code Atorvastatin}, the
-	 *  metformin row first — and Atorvastatin shares Simvastatin's {@code C10AA} subgroup, so its chip
-	 *  FOLDS a duplicate-therapy sentence and carries an unrated relationship. The one arrangement in
-	 *  which ordering the drug-in-play arm on the rating and ordering it on the FINDING disagree
-	 *  (issue #346). See {@code DrugInPlayFindingStrengthOrderTest.aFoldedCautionOutranksAPlainOne}. */
 	static final String DDI_FOLDED_CAUTION_ORDER = "chartsearchai-test/ddi-folded-caution-order.json";
 
 	/** The botulinum pair, the enalapril/enalaprilat pair and the typhoid pair — the slices where two rows
@@ -1041,6 +1027,27 @@ public final class DrugReferenceTestSupport {
 			out.add(entry.getName());
 		}
 		return out;
+	}
+
+	/**
+	 * Each warning as {@code type | severity | lead} — the lead being the detail up to its em dash,
+	 * which is the half naming the SUBJECT and the PARTNER, with the mechanism prose deliberately left
+	 * out so a case pinning WHICH chips arrived, and in what order, does not also pin the dataset's
+	 * note text.
+	 *
+	 * <p>Here rather than in each case for the reason {@link #classChipDetails} records: it was written
+	 * out twice, and a shared filter cannot drift into two answers about which chips a case is
+	 * counting.
+	 */
+	static List<String> chipLeads(List<SafetyWarning> warnings) {
+		List<String> leads = new ArrayList<String>();
+		for (SafetyWarning warning : warnings) {
+			String detail = warning.getDetail();
+			int dash = detail.indexOf(" — ");
+			leads.add(warning.getType() + " | " + warning.getSeverity() + " | "
+					+ (dash < 0 ? detail : detail.substring(0, dash)));
+		}
+		return leads;
 	}
 
 	static DrugSafetyValidator validator(DrugReferenceService service) {

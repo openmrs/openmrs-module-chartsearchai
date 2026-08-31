@@ -12,7 +12,7 @@ package org.openmrs.module.chartsearchai.reference;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -35,30 +35,18 @@ import org.junit.jupiter.api.Test;
  */
 public class DrugInPlayFindingStrengthOrderTest {
 
-	/**
-	 * Warfarin's rows in the pinned DDInter excerpt, in the dataset's own order, put every Major after
-	 * every Moderate and Minor — the shape issue #346 was reported on. Reading them here rather than
-	 * asserting them keeps this case's PREMISE and its subject the same dataset (see
-	 * {@link DrugReferenceTestSupport#ddinterEntries}): partner rows 2 Metformin (Moderate), 3
-	 * Methotrexate (Minor), 13 Fluconazole (Major), 14 Amiodarone (Major), 15 Ibuprofen (Major).
-	 *
-	 * <p>Fluconazole and Amiodarone are chosen for the tie rather than any other pair of Majors
-	 * because the dataset files them in the order Fluconazole, Amiodarone while their names sort the
-	 * other way — so a tie broken on anything but the dataset's own order, a partner name included,
-	 * moves them.
-	 */
 	private static final String QUESTION = "Can I give her warfarin?";
 
-	private static List<String> leads(List<SafetyWarning> warnings) {
-		List<String> leads = new ArrayList<String>();
-		for (SafetyWarning warning : warnings) {
-			String detail = warning.getDetail();
-			int dash = detail.indexOf(" — ");
-			leads.add(warning.getSeverity() + " | " + (dash < 0 ? detail : detail.substring(0, dash)));
-		}
-		return leads;
-	}
-
+	/**
+	 * The chips the question raises, over the pinned DDInter excerpt, through the real
+	 * {@code DrugSafetyValidator.validate}.
+	 *
+	 * <p>Warfarin's rows in that excerpt, in the dataset's own order, put every Major after every
+	 * Moderate and Minor — the shape issue #346 was reported on. Reading them from the same dataset the
+	 * validator under test is using, rather than restating them as a premise, is the discipline
+	 * {@link DrugReferenceTestSupport#ddinterEntries} records: partner rows 2 Metformin (Moderate), 3
+	 * Methotrexate (Minor), 13 Fluconazole (Major), 14 Amiodarone (Major), 15 Ibuprofen (Major).
+	 */
 	private static List<SafetyWarning> chips() {
 		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.ddinterService()).validate("",
 			QUESTION,
@@ -75,13 +63,13 @@ public class DrugInPlayFindingStrengthOrderTest {
 	 */
 	@Test
 	public void theArmStatesItsMostSevereFindingFirst() {
-		assertEquals(java.util.Arrays.asList(
-			"Major | Warfarin interacts with active order fluconazole",
-			"Major | Warfarin interacts with active order amiodarone",
-			"Major | Warfarin interacts with active order ibuprofen",
-			"Moderate | Warfarin interacts with active order metformin",
-			"Minor | Warfarin interacts with active order methotrexate"),
-			leads(chips()),
+		assertEquals(Arrays.asList(
+			"interaction | Major | Warfarin interacts with active order fluconazole",
+			"interaction | Major | Warfarin interacts with active order amiodarone",
+			"interaction | Major | Warfarin interacts with active order ibuprofen",
+			"interaction | Moderate | Warfarin interacts with active order metformin",
+			"interaction | Minor | Warfarin interacts with active order methotrexate"),
+			DrugReferenceTestSupport.chipLeads(chips()),
 			"the drug-in-play arm's chips reach the prompt in this order, so the strongest finding must "
 					+ "be the one a truncated answer keeps, not the one the knowledge base filed first "
 					+ "(issue #346)");
@@ -97,9 +85,9 @@ public class DrugInPlayFindingStrengthOrderTest {
 	 */
 	@Test
 	public void partnersTiedOnStrengthKeepTheDatasetsOwnOrder() {
-		List<String> leads = leads(chips());
-		assertTrue(leads.indexOf("Major | Warfarin interacts with active order fluconazole")
-				< leads.indexOf("Major | Warfarin interacts with active order amiodarone"),
+		List<String> leads = DrugReferenceTestSupport.chipLeads(chips());
+		assertTrue(leads.indexOf("interaction | Major | Warfarin interacts with active order fluconazole")
+				< leads.indexOf("interaction | Major | Warfarin interacts with active order amiodarone"),
 			"the dataset files Fluconazole before Amiodarone and rates them alike, so nothing about this "
 					+ "arm's ordering may separate them, was: " + leads);
 	}
@@ -115,10 +103,10 @@ public class DrugInPlayFindingStrengthOrderTest {
 	 * files metformin first, so the ratings cannot separate the two chips and a severity-only sort
 	 * leaves them as they came; only asking {@code licensesWithholding} promotes the finding that is
 	 * actually a reason to withhold. Delete that branch of {@code FINDING_STRENGTH_DESCENDING} and
-	 * this case reddens while the rest of the suite stays green.
+	 * this case reddens.
 	 */
 	@Test
-	public void aFoldedCautionOutranksAPlainOne() throws java.io.IOException {
+	public void aFoldedCautionOutranksAPlainOne() throws Exception {
 		List<SafetyWarning> warnings = DrugReferenceTestSupport
 				.validator(DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport
 						.ddiFixtureEntries(DrugReferenceTestSupport.DDI_FOLDED_CAUTION_ORDER)))

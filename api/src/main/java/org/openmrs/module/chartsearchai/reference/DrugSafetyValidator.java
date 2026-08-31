@@ -684,11 +684,22 @@ public class DrugSafetyValidator {
 	 * curated hand-authored rule is unrated and {@link #clearsSeverityFloor} already treats unrated
 	 * as exempt rather than low — unrated is not low-rated, so wherever a most-severe-wins choice is
 	 * made it must not lose to a rated row. The one definition of that ordering, shared by the chip
-	 * grouping here ({@link #bestRulePerPartner}), the three arms' chip orderings
-	 * ({@link #PAIR_SEVERITY_DESCENDING}, {@link #SCREENED_PAIR_SEVERITY_DESCENDING} and
-	 * {@link #FINDING_STRENGTH_DESCENDING}) and the promoted-note ordering in
-	 * {@link DrugReferenceInjector.InteractionNote}; two copies could drift into ranking the same
-	 * pair of rules oppositely, which is how the chip and the prompt text come to disagree.
+	 * grouping here ({@link #bestRulePerPartner}), the two pairwise arms' chip orderings
+	 * ({@link #PAIR_SEVERITY_DESCENDING} and {@link #SCREENED_PAIR_SEVERITY_DESCENDING}) and the
+	 * promoted-note ordering in {@link DrugReferenceInjector.InteractionNote}; two copies could drift
+	 * into ranking the same pair of rules oppositely, which is how the chip and the prompt text come
+	 * to disagree.
+	 *
+	 * <p><b>{@link #FINDING_STRENGTH_DESCENDING} shares it as a TIEBREAK only</b>, and the difference
+	 * is a real divergence rather than a wording nicety: that comparator asks
+	 * {@link #licensesWithholding(SafetyWarning)} first, and the promoted-note ordering has no such
+	 * key because it ranks RULES, which cannot fold. So one prompt can state a folded pair in one
+	 * order among its {@code safety_finding} records and in the other inside a {@code drug_reference}
+	 * record's note list — measured over {@code ddi-folded-caution-order.json}, where the chips lead
+	 * with the folded Atorvastatin finding and the note list leads with Metformin. That is accepted
+	 * rather than repaired: the two rank different things, and the note order decides only which rule
+	 * keeps its mechanism prose under {@code MAX_INTERACTION_RENDER_CHARS}. Do not close it by giving
+	 * the notes a fold key they have no way to observe.
 	 *
 	 * @return the rank, with null/unrecognized mapped to {@link Integer#MAX_VALUE}
 	 */
@@ -2488,19 +2499,23 @@ public class DrugSafetyValidator {
 	 * RULE's rating while {@link SafetyWarning#carriesUnratedRelationship()} carries the class arm's
 	 * unrated relationship across, so a Minor rule folded with a class join answers
 	 * {@link #licensesWithholding(SafetyWarning)} and states {@code STRENGTH_WITHHOLD} in the record
-	 * the model reads. Ordered on {@link #getSeverity} alone that chip would sit below every caution
-	 * it outranks, in the one list whose order decides what a truncated answer keeps — which is the
-	 * ordering error {@code README.md} tells CLIENTS not to make with the published severity, and it
+	 * the model reads. Ordered on {@link SafetyWarning#getSeverity()} alone that chip would sit below
+	 * every caution it outranks, in the one list whose order decides what a truncated answer keeps —
+	 * which is the ordering error {@code README.md} tells CLIENTS not to make with the published severity, and it
 	 * would be worse made here, where the answer's own strength is what the order is protecting.
 	 * {@link #licensesWithholding(SafetyWarning)} is the one definition of that split precisely so the
 	 * answer's strength and the chip's ordering cannot disagree.
 	 *
 	 * <p><b>Then {@link #severityPriority} within each of the two, which is where unrated sits above
 	 * Major</b> — the same ordering {@link #PAIR_SEVERITY_DESCENDING} and
-	 * {@link #SCREENED_PAIR_SEVERITY_DESCENDING} give the two pairwise arms, so all three now agree
-	 * about what "most severe first" means. A folded Minor therefore sorts LAST among the withholding
-	 * findings and still ahead of every caution — it withholds, so it may not fall below one, and its
-	 * rule is still the weakest rating on that side of the split.
+	 * {@link #SCREENED_PAIR_SEVERITY_DESCENDING} give the two pairwise arms. That is the whole of what
+	 * the three share: those two rank on it alone, because neither can fold, so this arm agrees with
+	 * them on every chip whose strength its rating already states and departs from them on exactly the
+	 * chips where it does not. A folded Minor therefore sorts below every rated
+	 * withholding finding above it and still ahead of every caution — it withholds, so it may not fall
+	 * below one. It is not necessarily the LAST withholding finding: a folded {@code Unknown} row
+	 * withholds on the same OR and ranks below {@code minor}, which an operator reaches by lowering
+	 * {@code minInteractionSeverity} to {@code unknown}.
 	 *
 	 * <p><b>What it deliberately does not order</b>: the unrated class-only chips appended after these.
 	 * They state a relationship the reference data does not rate at all, so by this method's own key —

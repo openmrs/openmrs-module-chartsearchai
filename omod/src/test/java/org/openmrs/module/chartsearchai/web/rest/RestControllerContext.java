@@ -39,13 +39,17 @@ import org.openmrs.api.context.UserContext;
  * run afterwards. What it would cost here is specific — several classes in this package
  * ({@code ChartSearchAiStreamEventOrderTest}, {@code ChartSearchAiReferenceGroupingTest},
  * {@code ChartSearchAiReferenceProvenanceTest}, and the contextless tests of
- * {@code ChartSearchAiReferenceGroundingWithholdingTest}) drive {@code streamAnswer} with NO
+ * {@code ChartSearchAiReferenceGroundingWithholdingTest} and
+ * {@code ChartSearchAiSafetyWarningSeverityWireTest}) drive {@code streamAnswer} with NO
  * context at all, and on the REQUEST thread that is the only thing enforcing its "free of
  * {@code Context} reads" contract: a re-added global-property read throws because nothing is
  * installed. A leaked stub answers instead of throwing, and they go green over exactly the drift
- * issue #178 removed. That last class installs this fixture for its one blocking-endpoint test and
- * restores it in a {@code finally} rather than an {@code @AfterEach}, precisely so its own SSE
- * tests keep running contextless.
+ * issue #178 removed. The last two install this fixture around their blocking-endpoint work and
+ * restore it in a {@code finally} rather than an {@code @AfterEach}, precisely so their own SSE
+ * tests keep running contextless — {@code ChartSearchAiReferenceGroundingWithholdingTest} around its
+ * single such test, and {@code ChartSearchAiSafetyWarningSeverityWireTest} inside the helper every
+ * one of its blocking-endpoint cases calls, so the install and the restore cannot come apart however
+ * many of them there are.
  *
  * <p>"On the REQUEST thread" is a limit rather than a hedge. It does not reach the SSE keep-alive's
  * own thread, whose two catches swallow whatever a {@code Context} read throws there. Measured

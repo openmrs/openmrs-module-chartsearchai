@@ -1192,6 +1192,26 @@ public class ChartSearchAiRestController {
 	 * Serializes the post-answer drug-safety advisories to the wire shape rendered as chips below the
 	 * answer. Empty list when the drug-reference feature is off or nothing was flagged. The key is
 	 * always present (possibly empty) so the frontend can branch on length without a null check.
+	 *
+	 * <p><b>{@code severity} is published because the alternative is a client parsing English</b>
+	 * (issue #340). It is the rating the two PAIRWISE arms order their chips by before
+	 * {@code DrugSafetyValidator.maxPairChips} cuts the list, and until #340 it stopped here — so the
+	 * only way to badge a Major differently from a Minor was to substring-match
+	 * {@link SafetyWarning#getDetail()}, clinician-facing prose this module rewords freely. Not
+	 * hypothetical: {@code eval/drift-metric/score_probe_safety.py} carries such a parse and its own
+	 * comment calls it "the fault issue #207 exists to have removed". What it publishes is the SOURCE
+	 * dataset's rating, not this module's judgment about what may be done — which is the separate
+	 * thing issue #283 deliberately keeps off the wire ({@code DrugSafetyValidator.licensesWithholding}
+	 * and the {@code STRENGTH_*} clauses stay prompt-facing).
+	 *
+	 * <p>Written verbatim and unnormalized, and NOT coerced into a closed vocabulary. See
+	 * {@link SafetyWarning#getSeverity()} for what a reader may and may not conclude from it; the
+	 * short form is that {@code null} says the rule carries no rating and a non-null value is
+	 * whatever the loaded dataset wrote, which the module's own reader
+	 * ({@code DrugSafetyValidator.severityRank}) trims, case-folds, and treats as unrated when it does
+	 * not recognise it. Null rather than an omitted key, for the reason {@link #groundedForWire}
+	 * gives about its own field: the key's unconditional presence is what lets a client read it
+	 * without first asking whether it is there.
 	 */
 	private List<Map<String, Object>> serializeSafetyWarnings(List<SafetyWarning> warnings) {
 		List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
@@ -1203,6 +1223,7 @@ public class ChartSearchAiRestController {
 			map.put("type", warning.getType());
 			map.put("drug", warning.getDrug());
 			map.put("detail", warning.getDetail());
+			map.put("severity", warning.getSeverity());
 			out.add(map);
 		}
 		return out;

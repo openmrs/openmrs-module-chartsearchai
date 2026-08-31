@@ -3125,7 +3125,7 @@ public class DrugSafetyValidator {
 	 * display in both sentences. So the display stands here, refused or not, and the reading it leaves
 	 * is the accepted residue —
 	 * {@code OneOrderNameAcrossOneResponseTest.aPrescriptionNamingTheSubjectAndThePartnerIsStillNamedOnceByItsOwnDisplay}
-	 * asserts it, with the measurement, and ADR Decision 62 carries the trade.
+	 * asserts it, with the measurement, and ADR Decision 63 carries the trade.
 	 *
 	 * <p><b>The defect.</b> Issue #88's fold puts both arms' sentences into one detail and each arm named
 	 * the partner from its own source: the class arm from issue #155/#186/#290's ladder in
@@ -3434,7 +3434,7 @@ public class DrugSafetyValidator {
 	 *
 	 * <p><b>The ENTRY rung's fallback opens a divergence of its own, which is left OPEN and is a
 	 * regression against the merge base on the arrangement below</b> (issue #339, review round 4 —
-	 * recorded here and in ADR Decision 62 rather than closed). Where the rule's token claims the
+	 * recorded here and in ADR Decision 63 rather than closed). Where the rule's token claims the
 	 * ladder's row but not the row this response elects, the rule chip prints the LADDER's row while a
 	 * class-ONLY chip about that same prescription — raised for a different subject, which is what puts
 	 * the two in one response — goes on printing the elected one. Measured at this head through the real
@@ -5705,7 +5705,7 @@ public class DrugSafetyValidator {
 		 * module actually established: there is a recorded allergy to THIS name, and it contraindicates
 		 * THAT drug. It takes the curated rule arm's own shape ("X is contraindicated by an active
 		 * allergy: …") deliberately, because the wire contract requires it — {@code README} and
-		 * {@link SafetyWarning#getDetail()} say a detail is a standalone sentence naming its own drug,
+		 * {@link SafetyWarning#getDetail()} say a detail is standalone prose naming its own drug,
 		 * which clients render alone and key per-finding identity on. A sentence that named only the
 		 * allergen would satisfy neither: the subject would appear nowhere on screen, and two chips
 		 * about different drugs raised by one allergy record would carry byte-identical details (issue

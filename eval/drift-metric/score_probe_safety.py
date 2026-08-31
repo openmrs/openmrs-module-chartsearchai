@@ -312,11 +312,28 @@ _SEVERITY_ALT = "Major|Moderate|Minor|Unknown"
 # both sides or neither; spelled twice, whichever side was missed under-reports in silence.
 ANSWER_SEVERITY = re.compile(r"(?<![A-Za-z])(" + _SEVERITY_ALT + r")(?![A-Za-z])")
 
-# The chip's own rating, which is NOT on the wire: `serializeSafetyWarnings` emits type/drug/detail,
-# and `SafetyWarning.getSeverity()` is not serialized. It is read from the detail, where
-# `DrugSafetyValidator.interactionWarning` puts the rule's note straight after an em dash and
+# The chip's own rating, read from the DETAIL. Since issue #340 `serializeSafetyWarnings` also emits
+# a `severity` key, so the wire is no longer silent — but every capture and every fixture in this
+# tree predates that field, so a wire-based read would be inert on all of them and this parse stays
+# regardless — the argument this comment itself made before the field existed, which is why #340 left
+# the parse alone and corrected only what had become false. It reads the detail,
+# where `DrugSafetyValidator.interactionWarning` puts the rule's note straight after an em dash and
 # `DdiDrugReferenceSource.noteFor` builds that note as `severity + ". " + mechanism` — so the
-# leading token after the dash IS the rating, for `sourceFormat=ddinter`.
+# note therefore carries the rating, for `sourceFormat=ddinter`: measured through the real
+# `DdiDrugReferenceSource.load()`, of its 590,312 links none carries a null or blank note, none is
+# rated with no note, and none has a note that does not start with its own severity word.
+#
+# THAT MEASUREMENT IS ABOUT THE NOTE, AND NOTHING POSITIONAL ABOUT THE RENDERED DETAIL FOLLOWS FROM
+# IT. An earlier revision of this comment said "the leading token after the dash IS the rating" and
+# offered the census above as proof; #340 retracted that, because the detail is assembled from chart
+# text as well as dataset text and the chart's half goes in UNQUOTED — a free-text prescription
+# display can carry the very delimiter the chip appends its note after, which
+# `NonCodedDrugOrderNameTest.aFreeTextDisplayIsPrintedIntoTheChipUnquoted` pins as current behaviour.
+# This parse is unaffected in practice, and not because the positional claim holds: `CHIP_SEVERITY`
+# is applied with `findall` below, so it collects every dash-then-rating in the string rather than
+# resting on the first. A `sourceFormat=json` capture is the case it cannot read at all, note and
+# severity being independently authored there; that is a second reason a future capture should prefer
+# the field where one is present.
 #
 # Two things follow and both are stated rather than hidden. On `sourceFormat=json` the same position
 # holds free operator text, so a curated note opening "Major bleeding risk…" would read as a Major
@@ -326,11 +343,11 @@ ANSWER_SEVERITY = re.compile(r"(?<![A-Za-z])(" + _SEVERITY_ALT + r")(?![A-Za-z])
 # clinician-facing prose the module may reword, which is the fault issue #207 exists to have
 # removed — so `summarise` reports a census of how many cells carry a READABLE chip rating AND flags
 # an arm where that census collapses to zero over interaction chips, because a printed number no
-# exit code reads does not close it. Do not read #207's "not serialized onto the REST response" as
-# licence for the parse: there is no severity field on the wire at ALL — `serializeSafetyWarnings`
-# emits type/drug/detail — so nothing better is available to read today, and even if a field were
-# added every capture and every fixture here predates it, so a wire-based read would be inert on all
-# of them and the prose parse would have to stay as the fallback regardless.
+# exit code reads does not close it. Do not read this parse as evidence the wire is the right place
+# to look: #340 added the `severity` field precisely so a NEW reader does not have to do this, and
+# what keeps the parse here is only that every capture and fixture in this tree predates the field,
+# so a wire-based read would be inert on all of them. A capture taken after #340 should prefer the
+# field and fall back to this.
 CHIP_SEVERITY = re.compile(r"—\s*(" + _SEVERITY_ALT + r")(?![A-Za-z])")
 
 

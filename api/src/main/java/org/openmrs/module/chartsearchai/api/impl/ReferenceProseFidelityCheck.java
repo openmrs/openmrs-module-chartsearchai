@@ -178,9 +178,14 @@ final class ReferenceProseFidelityCheck {
 	 * structurally the same shape as issue #337's second capture. But the sentence it diverges from
 	 * is one this module composed about this patient and the prompt asks the model to carry, not
 	 * knowledge-base prose whose wording is the evidence — and the model restating it in its own
-	 * words is what the prompt asked for. Two cases in {@code ClassCodeFidelityTest} fail on a floor
-	 * of nine, and they are what pins this number; a case here would only be a third copy of that
-	 * arrangement.
+	 * words is what the prompt asked for. What pins this number from below is the sibling check's own
+	 * suite rather than a case here, which would only be a copy of that arrangement: {@code
+	 * ClassCodeFidelityTest}'s silence assertions capture this whole PACKAGE, and its canned answers
+	 * restate that generated headline, so lowering this floor to nine turns several of them red with
+	 * a failure message about class codes. <b>Mutate this constant and read the failures; WHICH of
+	 * them redden is not enumerated here.</b> It was, alongside the counts in {@code
+	 * ClassCodeFidelityTest} and in ADR Decision 61, and one merge into that file falsified all three
+	 * at once — a count replacing a stale count is stale again on the next merge.
 	 *
 	 * <p>It is a floor on EVIDENCE OF COPYING and not a defence against the false alarm that
 	 * matters. That one is legitimate partial quotation — textually identical to the second capture,

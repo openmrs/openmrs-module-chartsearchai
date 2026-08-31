@@ -100,13 +100,17 @@ public class ClassCodeFidelityTest {
 	 *
 	 *  <p><b>Since issue #337 those assertions span a second check.</b> {@code
 	 *  ReferenceProseFidelityCheck} logs into this same package from this same {@code search()} call,
-	 *  and the canned answers below are sliced from the real injected finding — so TWO of the four
-	 *  silence cases in this file also pin that check's {@code MIN_REPRODUCED_WORDS} and drop to red
-	 *  with a failure message about class codes if it is lowered ({@code aDosingFrequencyIsNotAClassCode}
-	 *  and {@code search_shouldStaySilentWhenTheAnswerCopiesTheCodeFaithfully}, measured at a floor of
-	 *  nine; this note said all four until a review counted them). That coupling is deliberate on that side
-	 *  (its constant's javadoc names these cases as what pins it); it is recorded here so a
-	 *  maintainer who reddens them is not left reading the wrong file. */
+	 *  and the canned answers below restate the module-composed headline the cited finding record
+	 *  itself carries — so the PACKAGE-scoped silence cases in this file also pin that check's
+	 *  {@code MIN_REPRODUCED_WORDS}, and lowering it drops some of them to red with a failure message
+	 *  about class codes (measured at a floor of nine). That coupling is deliberate on that side —
+	 *  its constant's javadoc names this file as what pins it from below — and it is recorded here so
+	 *  a maintainer who reddens them is not left reading the wrong file.
+	 *
+	 *  <p><b>WHICH of them redden is deliberately not enumerated, here or there.</b> This note named
+	 *  a count, and so did that javadoc and ADR Decision 61 beside it; the merge that brought issue
+	 *  #338's cases into this file falsified all three in one commit, and a count that replaces a
+	 *  stale count goes stale on the next merge. Mutate the constant and read the failures. */
 	private static final String PACKAGE = "org.openmrs.module.chartsearchai.api.impl";
 
 	private TestableService service;

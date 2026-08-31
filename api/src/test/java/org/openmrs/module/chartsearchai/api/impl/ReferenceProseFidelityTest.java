@@ -435,7 +435,9 @@ public class ReferenceProseFidelityTest {
 
 	@Test
 	public void aReproductionOfExactlyTheFloorIsStillReported() {
-		// The floor is pinned from below by two ClassCodeFidelityTest cases, which redden at nine.
+		// The floor is pinned from below by ClassCodeFidelityTest's package-scoped silence cases,
+		// which redden at nine; neither that file nor the constant's javadoc counts them, because
+		// the count published there went stale on the merge that added cases to that file.
 		// Nothing pinned it from ABOVE until this case: raising it to thirteen left the whole api
 		// suite green, and since the check's only value is recall, a floor raised silently disables
 		// it. This answer reproduces exactly twelve words of the record and then substitutes.

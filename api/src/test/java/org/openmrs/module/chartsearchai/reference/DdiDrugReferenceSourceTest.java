@@ -501,11 +501,21 @@ public class DdiDrugReferenceSourceTest {
 		// Real slice: Dolutegravir's rows in dataset order are phenytoin (Major), iron (Major, the
 		// shorter note), dexamethasone (Minor), iron (Major, the fuller note). With iron AND
 		// dexamethasone both active, iron's group is opened first, dexamethasone's group is opened
-		// next, and only THEN does iron's second row take its group — so this is the arrangement in
-		// which a collapse that re-inserts a replaced winner (a HashMap, or remove-then-put) puts
-		// dexamethasone's chip ahead of iron's. Chip order is first-appearance order and the
-		// clinician reads the list top-down, so the most severe finding must not be demoted by the
-		// mechanics of the collapse.
+		// next, and only THEN does iron's second row takes its group — a winner replacement
+		// (bestRulePerPartner's LinkedHashMap re-put) in between the two groups being opened.
+		//
+		// Before issue #346 this was also the one thing deciding chip order: the arm raised its chips
+		// in whatever order the map's iteration produced, so a collapse that re-inserted a replaced
+		// winner (a plain HashMap, or remove-then-put) would have put dexamethasone's chip ahead of
+		// iron's here. Since #346 the arm sorts most-severe-first
+		// (DrugSafetyValidator.RULE_SEVERITY_DESCENDING), so iron (Major) now precedes dexamethasone
+		// (Minor) for that reason alone, whichever order the map produced them in — this fixture's two
+		// severities differ, so it no longer independently exercises the winner-replacement mechanic
+		// the comment above describes; it only shows that severity governs, which
+		// DrugInPlayInteractionSeverityOrderTest already pins directly and more simply. The
+		// map-mutation regression this case was built for would need two partners TIED on severity to
+		// surface again — untested since #346, and worth a dedicated case if that map ever needs to
+		// change.
 		List<SafetyWarning> warnings = routeVariantValidator().validate(
 				"Dolutegravir could be started.", "Is it safe to start dolutegravir?",
 				DrugReferenceTestSupport.ctx(60, null,
@@ -518,8 +528,8 @@ public class DdiDrugReferenceSourceTest {
 		// business, and pinning its opening words here would couple this case to the note text.
 		assertTrue(warnings.get(0).getDetail()
 				.startsWith("Dolutegravir interacts with active order iron — Major. "),
-				"iron's row appears first in the dataset, so its chip must come first even though its"
-						+ " group's winner was decided last, was: " + warnings.get(0).getDetail());
+				"iron is rated Major and must sort ahead of dexamethasone's Minor, whichever order its "
+						+ "own group's winner was decided in, was: " + warnings.get(0).getDetail());
 		assertTrue(warnings.get(1).getDetail()
 				.startsWith("Dolutegravir interacts with active order dexamethasone — Minor. "),
 				"dexamethasone's chip must stay second, was: " + warnings.get(1).getDetail());

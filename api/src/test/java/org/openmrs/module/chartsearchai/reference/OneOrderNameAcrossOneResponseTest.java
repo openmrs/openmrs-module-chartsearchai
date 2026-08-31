@@ -811,9 +811,10 @@ public class OneOrderNameAcrossOneResponseTest {
 	 * <p>What is pinned either way is that the chip does not contradict itself. Mutating
 	 * {@code reconciledPartnerName}'s ORDER rung to answer null — the fold then words its class
 	 * sentence from {@code classPartnerName} while its rule sentence keeps the token — reddens this
-	 * case, and 13 others across four classes with it (measured at this head): that mutation takes the
-	 * whole rung out rather than one branch of it, so no claim is made here about it being this case's
-	 * own guard. What this case is the ONLY witness of is the LITERAL, the prescription's own display
+	 * case and a good many others across several classes (re-measured at issue #339's review round 10
+	 * head; the count is deliberately not published, because it says only that something reddens):
+	 * that mutation takes the whole rung out rather than one branch of it, so no claim is made here
+	 * about it being this case's own guard. What this case is the ONLY witness of is the LITERAL, the prescription's own display
 	 * in both sentences of one chip. The chip reaches the prompt verbatim through
 	 * {@code DrugReferenceInjector.renderFinding} as a citable {@code safety_finding} carrying
 	 * {@code STRENGTH_WITHHOLD}, which is why the disagreement is not cosmetic.
@@ -1018,9 +1019,12 @@ public class OneOrderNameAcrossOneResponseTest {
 	 * <p><b>It does NOT pin that guard, and review round 6 claimed it did.</b> The order here HAS a
 	 * name, so its partner carries a naming order, and dropping {@code labelEntry != null} leaves the
 	 * surviving {@code namingOrder == null} conjunct answering false — the same label, no dereference,
-	 * this case green (measured at this head). That mutation is caught on the CODE-ONLY shape, where
-	 * both fields are null, by eight cases across as many classes. What this case pins is the
-	 * combination of the two: an order the module CAN name and the dataset cannot.
+	 * this case green (re-measured at issue #339's review round 10 head). That mutation is caught on the
+	 * CODE-ONLY shape, where both fields are null, by the NPE it throws inside
+	 * {@code SubstanceSubjects.subjectOf} — mutate the conjunct and read those failures rather than
+	 * counting them, since they come from a chip-naming site and are not confined to cases about naming
+	 * a partner; a count published here was wrong by 5&times; when round 10 checked it. What this case
+	 * pins is the combination of the two: an order the module CAN name and the dataset cannot.
 	 *
 	 * <p>Review round 6 also read a response-level refusal here and this case pinned that the refusal
 	 * was not honoured on this one sentence; round 7 removed the refusal (see

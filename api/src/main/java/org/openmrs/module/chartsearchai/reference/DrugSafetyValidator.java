@@ -3419,8 +3419,14 @@ public class DrugSafetyValidator {
 	 * with a NAMED order behind it, and it is the only shape either conjunct can be read from
 	 * separately — dropping {@code labelEntry != null} does NOT redden it, since a partner with a
 	 * naming order still takes {@link OrderPartner#label} under the surviving conjunct. What that
-	 * mutation reaches is the CODE-ONLY shape, where both are null: it dereferences null and reddens
-	 * eight cases across as many classes, none of them this one (measured at this head). The election itself is a no-op wherever the response grouped no rows for that
+	 * mutation reaches is the CODE-ONLY shape, where both are null: it dereferences null inside
+	 * {@link SubstanceSubjects#subjectOf}, so what reddens is an NPE thrown from a chip-naming site
+	 * rather than a set of cases about naming a partner — and this case is not among them (re-measured
+	 * at issue #339's review round 10 head). <b>No count of those failures is published, here or in ADR
+	 * Decision 63</b>: one was, and round 10 measured it wrong by 5&times;, most of the failures being
+	 * in a class about answer-versus-class-code fidelity that has nothing to do with partner naming.
+	 * Mutate the conjunct and read the failures; a count here would only invite the next reader to
+	 * treat the surplus as damage they had just done. The election itself is a no-op wherever the response grouped no rows for that
 	 * substance — {@link SubstanceSubjects#subjectOf} hands back the row it was given — so a
 	 * single-row substance renders exactly the string it rendered before.
 	 *
@@ -6810,16 +6816,24 @@ public class DrugSafetyValidator {
 		 * lookup, and the caller keeps its own token. That is why widening the lookup cannot open a
 		 * mis-attribution class — it can only turn a chip that printed the token into one the gate is
 		 * asked about. Mutate that gate and read the failures rather than trusting this — and say WHICH
-		 * mutation, because the gate has two halves and they answer differently. Re-measured at this
-		 * head, both by short-circuiting {@code unambiguouslyNames} itself: made to always permit,
-		 * <b>SEVEN</b> cases redden (an earlier form of this javadoc said six), and
+		 * mutation, because the gate has two halves, they answer differently, and a THIRD mutation a
+		 * reader reaches for is neither of them. All three re-measured at issue #339's review round 10
+		 * head. Short-circuit {@code unambiguouslyNames} itself so that it always permits, and
 		 * {@code FoldedChipOnePartnerNameTest.aRuleAboutAnotherSubstanceSharingTheCodeKeepsItsOwnToken}
 		 * — the one about a token whose two claimants share an ATC code, which is the correlation this
-		 * rung makes — is among them. Mutate only the RANKING half
-		 * ({@link DrugReferenceService#uniqueStrongestClaimant}) and <b>FIVE</b> redden and that case
-		 * is NOT one of them: its token does not name the ladder's entry at all, so it is refused by
-		 * the identity half ({@link #namesEntry}) and a ranking mutation cannot reach it. Quote the
-		 * mutation with the count or the next reader will check the wrong one.
+		 * rung makes — is among the failures. Replace only the RANKING half, the
+		 * {@link DrugReferenceService#uniqueStrongestClaimant} CALL inside that method, and that case is
+		 * NOT: its token does not name the ladder's entry at all, so it is refused by the identity half
+		 * ({@link #namesEntry}) and a ranking mutation cannot reach it. That MEMBERSHIP is the whole of
+		 * what separates the two halves, and it is what to read for. Short-circuiting
+		 * {@code uniqueStrongestClaimant} ITSELF is the third mutation and not the second: that method
+		 * has a second caller in {@link DrugReferenceService#findNamedSubstances} (the recorded-allergen
+		 * path), so it also reddens {@code RecordedAllergenChipNameTest} and
+		 * {@code InjectedContraindicationCorroborationTest}, which say nothing about this rung. <b>No
+		 * case counts are published for any of the three</b> — the count for the first was wrong in this
+		 * javadoc once already, and the count for the second was right for a mutation this sentence did
+		 * not name, which is how review round 10 came to check a different one. Name the mutation and
+		 * read the failures.
 		 */
 		OrderPartner partnerNaming(DrugReference entry) {
 			if (entry == null) {

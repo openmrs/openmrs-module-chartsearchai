@@ -458,7 +458,7 @@ public class FoldedChipOnePartnerNameTest {
 	 * on a sibling's claim. Removing the fallback reddens this case and
 	 * {@link #noFoldedChipNamesOneActiveOrderTwoWays}, which sweeps this arrangement as its tenth run,
 	 * and nothing else in the api suite ({@code Tests run: 1683, Failures: 2}, re-measured at issue
-	 * #339's review round 8 head). There the chip still FOLDS: it names this one order {@code atropine}
+	 * #339's review round 10 head). There the chip still FOLDS: it names this one order {@code atropine}
 	 * and {@code Atropine (ophthalmic)}, so what fails is that sweep's one-name assertion, not its
 	 * count.
 	 *

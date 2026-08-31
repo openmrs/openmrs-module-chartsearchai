@@ -200,9 +200,14 @@ public class OneNameAcrossChipAndInjectedRecordTest {
 	 *
 	 * <p><b>Only its PRECONDITION is falsifiable</b>, and that is worth saying: a refused fold carries no
 	 * name to hand out, so the record assertion below cannot fail while the precondition holds. Break
-	 * {@code unambiguouslyNames} and the precondition reddens, together with three pre-existing
-	 * {@code FoldedChipOnePartnerNameTest} cases. The arrangement is what this case adds — the refusal
-	 * read from the record side — not a guard of its own.
+	 * {@code unambiguouslyNames} — SAY WHICH mutation, because the gate has two halves and its ranking
+	 * half has a second caller: short-circuiting {@code unambiguouslyNames} itself so that it always
+	 * permits is the one this sentence is about, and the precondition then reddens, together with cases
+	 * in {@code FoldedChipOnePartnerNameTest}. Mutate it and read those rather than counting them; a
+	 * count published here would be right for one of the three mutations and wrong for the other two,
+	 * which is how issue #339's review round 10 came to check the wrong one at
+	 * {@code CoMedications.partnerNaming} (re-measured at that round's head). The arrangement is what
+	 * this case adds — the refusal read from the record side — not a guard of its own.
 	 */
 	@Test
 	public void aRefusedFoldLeavesTheNoteOnTheRulesOwnToken() throws IOException {

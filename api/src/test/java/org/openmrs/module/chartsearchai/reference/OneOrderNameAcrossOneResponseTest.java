@@ -73,12 +73,6 @@ public class OneOrderNameAcrossOneResponseTest {
 	private static final String CLASS_ONLY_COMBINATION_FIXTURE =
 			"chartsearchai-test/drug-reference-combination-order-class-only.json";
 
-	/** A partner renamed after an order the rule's token does NOT name, whose display names a subject of
-	 *  the same response — so the fold declines AND the response has refused the display, both at once.
-	 *  See the fixture's note. */
-	private static final String REFUSED_RENAMED_PARTNER_FIXTURE =
-			"chartsearchai-test/drug-reference-renamed-partner-refused-display.json";
-
 	/** The fixture's combination display, which names the partner AND a second drug the question puts
 	 *  in play. */
 	private static final String FOLDED_COMBINATION_DISPLAY = "Paracetamol / Rifapentine";
@@ -352,44 +346,57 @@ public class OneOrderNameAcrossOneResponseTest {
 	}
 
 	/**
-	 * A prescription may not name a chip's partner where that same prescription names a SUBJECT this
-	 * response raises chips about — or the finding reads as a drug interacting with itself and the
-	 * interacting agent is gone from the lead.
+	 * A fixed-dose combination whose display names the chip's own SUBJECT as well as its partner is
+	 * still named ONCE, by that display — the residue issue #339 accepts, stated as an assertion so
+	 * that a change closing it reddens a test rather than leaving this paragraph the only record.
 	 *
-	 * <p><b>Issue #339, review round 3.</b> Widening the ORDER rung to every rule chip made this
-	 * reachable everywhere the rung is, and ADR Decision 61 recorded it as a fixture-only trade-off.
-	 * It is not: measured through the real {@code validate} over
+	 * <p><b>Issue #339, review rounds 3 to 7.</b> Widening the ORDER rung to every rule chip made this
+	 * reachable: measured through the real {@code validate} over
 	 * {@code DrugReferenceTestSupport.shippedEntries()}, a patient on one
 	 * {@code Lisinopril / Hydrochlorothiazide} order (codes {@code C09BA03}, {@code C03AA03}, the first
-	 * of which that data covers no entry for) asked {@code "Can I give her lisinopril?"} was shown
+	 * of which that data covers no entry for) asked {@code "Can I give her lisinopril?"} is shown
 	 * {@code Lisinopril interacts with active order Lisinopril / Hydrochlorothiazide — Moderate}, where
-	 * before issue #339 it read {@code active order hydrochlorothiazide}. Fixed-dose combinations are
-	 * ordinary prescriptions and the shipped knowledge base rules on the constituents of several
-	 * (Isoniazid/Rifampicin, Amlodipine/Atorvastatin, Budesonide/Formoterol).
+	 * the merge base read {@code active order hydrochlorothiazide}. Rounds 3 to 6 refused the display
+	 * for such a prescription and stepped back to a CONSTITUENT name — the rule's own token on a rule
+	 * chip, the dataset's name for {@code soleSubstanceOf}'s substance on a class-only one. Review
+	 * round 7 measured what that costs and reverted it, for two reasons that are both about the class
+	 * arm.
 	 *
-	 * <p>The chip reaches the prompt verbatim through {@code DrugReferenceInjector.renderFinding} as a
-	 * citable {@code safety_finding} carrying {@code STRENGTH_WITHHOLD}, which is why it is refused
-	 * rather than merely noted. Refusing returns the chip to {@code partnerLabel} — the rule's own
-	 * token — which is what it printed before this issue. Since review round 5 it does so as the
-	 * rung's own ANSWER rather than as a decline, so a FOLDED chip's class sentence takes that token
-	 * too instead of keeping {@code classPartnerName}'s label — see
-	 * {@link #aFoldedChipRefusingACombinationDisplayNamesThePrescriptionOnce}. This case is unfolded
-	 * and reads the same either way.
+	 * <p><b>A constituent name cannot carry the class sentence.</b> An ORDER-rung partner is one holding
+	 * a code the loaded dataset can name no entry for, and {@code classRelationships} cites a subgroup
+	 * over ALL of the partner's codes — so where the shared subgroup came from that uncovered code, no
+	 * constituent the dataset CAN name publishes it, and naming one states a class membership that is
+	 * false of the drug named. That is exactly the chip {@code OrderPartner.nameByOrder} exists to
+	 * prevent ("naming the merged partner Rifapentine produces …is in the same ATC class (J04AC) as
+	 * active order Rifapentine"), issue #161's right-finding-wrong-reason shape, and it reaches the
+	 * prompt verbatim through {@code DrugReferenceInjector.renderFinding} as a citable
+	 * {@code safety_finding}. Measured through the real {@code validate} over the shipped knowledge
+	 * base: one {@code Dorzolamide / Timolol} order (codes {@code S01ED51}, uncovered, and
+	 * {@code S01EC03}) asked {@code "Can I give her timolol and levobunolol?"} read
+	 * {@code Levobunolol is in the same ATC class (S01ED) as active order Dorzolamide (ophthalmic)},
+	 * and dorzolamide is a carbonic anhydrase inhibitor, not a beta blocker; one
+	 * {@code Ibuprofen / Famotidine} order ({@code M01AE51}, uncovered, and {@code A02BA03}) named that
+	 * one prescription FOUR ways in one response — {@code famotidine}, {@code ibuprofen},
+	 * {@code Famotidine} and {@code famotidine} again — two of them under an M01AE claim famotidine
+	 * does not answer.
 	 *
-	 * <p>It costs the ticket's own combination case nothing:
-	 * {@link #twoRulesAboutOneCombinationPrescriptionNameItOnce} has subject Carbamazepine, which the
-	 * order's display does not name, so both of its chips still take the display.
+	 * <p><b>And the refusal read the QUESTION, so it made a prescription's name question-dependent</b>
+	 * — the second half of what this class is named for. On that same Cosopt chart,
+	 * {@code "Can I give her levobunolol?"} printed the display in both sentences while
+	 * {@code "Can I give her timolol and levobunolol?"} printed {@code timolol} and
+	 * {@code Dorzolamide (ophthalmic)}, because {@code chipSubjectRows} was built from the question's
+	 * own drugs. {@link #theSamePairIsNamedTheSameWayWhicheverQuestionReachedIt} could not see it: its
+	 * arrangement raises no refusal.
 	 *
-	 * <p><b>The refusal is asked of the RESPONSE and not of this chip</b>, which is review round 4 and
-	 * is why this case no longer stands alone: asked per chip it answered differently for two chips
-	 * about one co-medication, so one response named one prescription two ways — see
-	 * {@link #twoSubjectsNameOneCombinationPrescriptionTheSameWay}. Mutating
-	 * {@code CoMedications.displayNamesAnotherChipSubject} to always permit reddens exactly three cases
-	 * — those two and {@link #aScreeningQuestionRefusesACombinationDisplayThatNamesAnotherOrdersDrug},
-	 * which is the same shape reached through the screening arm — measured at this head.
+	 * <p>So the display stands, and what is given up is the READING below: the lead names a prescription
+	 * that contains the subject as well as the partner, so it looks like a drug interacting with itself.
+	 * It is not a false claim — the prescription really does hold both drugs, and the mechanism prose
+	 * names the interacting agent — and it is one name for one prescription, invariant across the
+	 * questions that reach it, which is what this issue is about. ADR Decision 61 carries the trade.
 	 */
 	@Test
-	public void aPrescriptionThatNamesTheSubjectDoesNotNameThePartner() throws IOException {
+	public void aPrescriptionNamingTheSubjectAndThePartnerIsStillNamedOnceByItsOwnDisplay()
+			throws IOException {
 		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
 			DrugReferenceTestSupport.fixtureEntries(SELF_NAMED_COMBINATION_FIXTURE));
 		java.util.Set<String> codes = DrugReferenceTestSupport.set("J04AC51", "J04AB05");
@@ -402,10 +409,11 @@ public class OneOrderNameAcrossOneResponseTest {
 				.validate("", "Can I give her isoniazid?", chart);
 
 		assertEquals(1, warnings.size(), "one chip, was: " + warnings);
-		assertEquals(java.util.Arrays.asList("rifapentine"), orderNames(warnings),
-			"the chip must name the drug its mechanism is about: a prescription naming the subject as"
-					+ " well as the partner cannot stand in for the partner, or the finding reads as"
-					+ " Isoniazid interacting with itself, was: " + warnings);
+		assertEquals(java.util.Arrays.asList(COMBINATION_DISPLAY), orderNames(warnings),
+			"one prescription, one name, and the name that is true of everything the prescription"
+					+ " contains: stepping back to a constituent is what let a class sentence cite a"
+					+ " subgroup the drug it named does not publish (issue #339 review round 7), was: "
+					+ warnings);
 	}
 
 	/**
@@ -641,37 +649,32 @@ public class OneOrderNameAcrossOneResponseTest {
 	}
 
 	/**
-	 * The ORDER rung's refusal is a property of the PRESCRIPTION and this RESPONSE, never of which
-	 * chip is being worded.
+	 * Whatever a response calls a co-medication, it calls it that for every subject that chips about
+	 * it — never one thing for the chip whose subject the prescription happens to name and another for
+	 * the rest.
 	 *
-	 * <p><b>Issue #339, review round 4.</b> Round 3 gave that rung a second conjunct that read the
-	 * chip's own SUBJECT: a prescription whose display names the subject may not stand in for the
+	 * <p><b>Issue #339, review rounds 4 and 7.</b> Round 3 gave that rung a second conjunct that read
+	 * the chip's own SUBJECT: a prescription whose display names the subject may not stand in for the
 	 * partner, or the chip reads {@code Isoniazid interacts with active order Isoniazid /
 	 * Rifapentine} — a drug interacting with itself. Asked per chip, it answered differently for two
 	 * chips about ONE co-medication: the subject the display happens to name fell back to
 	 * {@link DrugSafetyValidator#partnerLabel} while every other subject kept the display. One
 	 * response then named one prescription two ways, which is the whole of what issue #339 exists to
-	 * remove, and the merge base named it one way.
+	 * remove, and the merge base named it one way. Round 4 made the refusal a property of the
+	 * PRESCRIPTION and this response, and round 7 removed the refusal itself — see
+	 * {@link #aPrescriptionNamingTheSubjectAndThePartnerIsStillNamedOnceByItsOwnDisplay}, which
+	 * carries the measurement — so the display now reaches both chips.
 	 *
-	 * <p>So the question is asked of the RESPONSE's subjects — the substances the QUESTION put in
-	 * play, plus the active-order substances where the screening arm will run — minus the partner's
-	 * own, and the answer is memoised per co-medication for the pass
-	 * ({@code CoMedications.displayNamesAnotherChipSubject}). The chip's subject is no longer an
-	 * operand of {@code reconciledPartnerName} at all, which is what makes this structural rather than
-	 * a second rule to keep in step.
-	 *
-	 * <p>Reachable on the shipped knowledge base with any fixed-dose combination whose constituents
-	 * that data rules on — measured at this head on one {@code Lisinopril / Hydrochlorothiazide} order
+	 * <p>What this case still pins is the invariant either mechanism has to satisfy and round 3's did
+	 * not: whatever a response calls a co-medication, it calls it that for EVERY subject that chips
+	 * about it. Reachable on the shipped knowledge base with any fixed-dose combination whose
+	 * constituents that data rules on — measured on one {@code Lisinopril / Hydrochlorothiazide} order
 	 * (codes {@code C09BA03}, uncovered, and {@code C03AA03}) asked
-	 * {@code Can I give her lisinopril and amiodarone?}, which before the fix printed
+	 * {@code Can I give her lisinopril and amiodarone?}, which under round 3's reading printed
 	 * {@code active order hydrochlorothiazide} beside
 	 * {@code active order Lisinopril / Hydrochlorothiazide}. The fixture reproduces it field for
-	 * field so the case does not depend on a knowledge-base refresh.
-	 *
-	 * <p>Both chips take the TOKEN here rather than the display, which is what the merge base printed:
-	 * the display names a subject of this response, so it stands in for no partner in it. The
-	 * combination case that keeps its display is {@link #twoRulesAboutOneCombinationPrescriptionNameItOnce},
-	 * whose subject is a third drug.
+	 * field so the case does not depend on a knowledge-base refresh, and
+	 * {@link #aCombinationOrderOnTheShippedKnowledgeBaseIsNamedOneWay} runs it over the shipped data.
 	 */
 	@Test
 	public void twoSubjectsNameOneCombinationPrescriptionTheSameWay() throws IOException {
@@ -689,8 +692,9 @@ public class OneOrderNameAcrossOneResponseTest {
 		assertEquals(2, warnings.size(),
 			"precondition: two subjects must chip about the one co-medication, or there are not two"
 					+ " names to reconcile, was: " + DrugReferenceTestSupport.details(warnings));
-		assertEquals(java.util.Arrays.asList("rifapentine", "rifapentine"), orderNames(warnings),
-			"one prescription, one name: a refusal that reads the chip's own subject names it one way"
+		assertEquals(java.util.Arrays.asList(COMBINATION_DISPLAY, COMBINATION_DISPLAY),
+			orderNames(warnings),
+			"one prescription, one name: a rule that reads the chip's own subject names it one way"
 					+ " for the subject the display names and another for every other subject in the"
 					+ " same response (issue #339), was: "
 					+ DrugReferenceTestSupport.details(warnings));
@@ -743,24 +747,25 @@ public class OneOrderNameAcrossOneResponseTest {
 	}
 
 	/**
-	 * The SCREENING arm keeps issue #339's name for an ordinary prescription, which is what the
-	 * response-level refusal's own-substance exclusion is for.
+	 * The SCREENING arm names a partly-covered prescription by its own display, exactly as the
+	 * drug-in-play arm does — one ladder for both arms, which is what issue #339 is about.
 	 *
-	 * <p>{@code CoMedications.displayNamesAnotherChipSubject} refuses an order-supplied display that
-	 * names a substance this response raises chips about — but a prescription names the very drug it
-	 * IS, and in this arm every active-order substance is a chip subject. So the partner's own
-	 * substance is excluded from the comparison; without that exclusion this arm would refuse every
-	 * order whose display names its own drug, i.e. every order, and issue #339 would reach none of the
-	 * screening arm's chips.
-	 *
-	 * <p>Nothing else in the suite sees that exclusion: mutating it away leaves the other 1663 api
-	 * tests green, re-measured at this head after issue #339's review round 6 carried the refusal to
-	 * the class arm's own sentence. This case exists to make it red rather than silent.
+	 * <p>The screening arm reaches {@code reconciledPartnerName} through
+	 * {@code reconciledPartnerFor}, so the ORDER rung applies to it too; before issue #339 its chips
+	 * kept {@code partnerLabel}, the knowledge base's own match token, whatever the class arm printed
+	 * beside them.
 	 *
 	 * <p>The rifapentine order is partly covered — one code the fixture does not carry, one it does —
 	 * so it reaches the ORDER rung at all; a fully covered order is named by the ENTRY rung, where no
 	 * prescription display is in play. The carbamazepine order is covered, so the pair chips from the
 	 * subject the rule is filed on.
+	 *
+	 * <p>Review rounds 3 to 6 gave that rung a refusal keyed on the response's chip subjects, and this
+	 * case was what kept it from firing on every screened order (every prescription names the drug it
+	 * IS, and in this arm every active-order substance was a chip subject). Round 7 removed the
+	 * refusal — see
+	 * {@link #aPrescriptionNamingTheSubjectAndThePartnerIsStillNamedOnceByItsOwnDisplay} — so what is
+	 * left here is the positive statement, which is the one the arm always owed.
 	 */
 	@Test
 	public void theScreeningArmStillNamesAnOrderByItsOwnDisplay() throws IOException {
@@ -783,43 +788,42 @@ public class OneOrderNameAcrossOneResponseTest {
 					service.withReferenceNames(chart));
 
 		assertEquals(java.util.Arrays.asList("Rifapentine 300mg"), orderNames(warnings),
-			"the screening arm must name a prescription by its own display: the refusal that keeps a"
-					+ " combination product from standing in for one of its halves may not fire on an"
-					+ " order that names the drug it IS (issue #339), was: "
+			"the screening arm must name a prescription by the same ladder every other arm names it"
+					+ " by, and not by the knowledge base's own match token (issue #339), was: "
 					+ DrugReferenceTestSupport.details(warnings));
 	}
 
 	/**
-	 * A FOLDED chip whose ORDER rung refuses the prescription's display still names that prescription
-	 * ONCE — issue #292's invariant, held against the refusal reason issue #339 added.
+	 * A FOLDED chip about a partly-covered combination prescription names that prescription ONCE, in
+	 * BOTH of its sentences — issue #292's invariant, on the rung issue #339 widened.
 	 *
-	 * <p><b>Issue #339, review round 5.</b> The round-3/4 conjunct
-	 * ({@code CoMedications.displayNamesAnotherChipSubject}) is applied at
-	 * {@code DrugSafetyValidator.reconciledPartnerName}'s ORDER rung, which the FOLD calls directly.
-	 * Answering null there left the rule sentence on {@code partnerLabel} while the class sentence
-	 * kept {@code classPartnerName}'s label, so ONE detail read
+	 * <p><b>Issue #339, review rounds 5 and 7.</b> Rounds 3 and 4 gave
+	 * {@code DrugSafetyValidator.reconciledPartnerName}'s ORDER rung a refusal, and the FOLD calls that
+	 * rung directly. Answering null there left the rule sentence on {@code partnerLabel} while the
+	 * class sentence kept {@code classPartnerName}'s label, so ONE detail read
 	 * {@code Rifampicin interacts with active order rifapentine … Rifampicin is in the same ATC class
 	 * (J04AB) as active order Paracetamol / Rifapentine} — two names for one prescription, inside one
-	 * chip, where the merge base printed the display in both. That is a refusal reason issue #292
-	 * never had, so arrangements that reconciled before issue #339 had started to split, and the chip
-	 * reaches the prompt verbatim through {@code DrugReferenceInjector.renderFinding} as a citable
-	 * {@code safety_finding} carrying {@code STRENGTH_WITHHOLD}.
+	 * chip. Round 5 reconciled onto the rule's token instead; round 7 removed the refusal, so both
+	 * sentences take the display, which is what the merge base printed and what
+	 * {@link #aPrescriptionNamingTheSubjectAndThePartnerIsStillNamedOnceByItsOwnDisplay} carries the
+	 * measurement for.
 	 *
-	 * <p>The rung therefore reconciles onto the rule's own TOKEN rather than declining — outcome 1's
-	 * shape, reached for a different reason — so both sentences take the one name every UNFOLDED chip
-	 * about this co-medication already prints. Mutating that branch back to {@code null} reddens this
-	 * case, {@link #aFoldedChipOnTheShippedKnowledgeBaseNamesTheCombinationOnce} and — since review
-	 * round 6 carried the same refusal to the class arm's own sentence, so a null here splits that
-	 * case's folded chip the other way about —
-	 * {@link #aClassOnlyChipRefusesTheDisplayTheRuleChipsRefused}, and nothing else in the api suite
-	 * (re-measured at this head).
+	 * <p>What is pinned either way is that the chip does not contradict itself. Mutating
+	 * {@code reconciledPartnerName}'s ORDER rung to answer null — the fold then words its class
+	 * sentence from {@code classPartnerName} while its rule sentence keeps the token — reddens this
+	 * case, and 13 others across four classes with it (measured at this head): that mutation takes the
+	 * whole rung out rather than one branch of it, so no claim is made here about it being this case's
+	 * own guard. What this case is the ONLY witness of is the LITERAL, the prescription's own display
+	 * in both sentences of one chip. The chip reaches the prompt verbatim through
+	 * {@code DrugReferenceInjector.renderFinding} as a citable {@code safety_finding} carrying
+	 * {@code STRENGTH_WITHHOLD}, which is why the disagreement is not cosmetic.
 	 *
 	 * <p>The fixture is built so the arrangement is exactly ONE chip: {@code Paracetamol} carries no
-	 * rule and shares no subgroup with the order's codes, so it is a chip SUBJECT (which is what makes
-	 * the refusal fire) without raising a chip whose own naming could be confused with this one's.
+	 * rule and shares no subgroup with the order's codes, so it raises no chip whose own naming could
+	 * be confused with this one's.
 	 */
 	@Test
-	public void aFoldedChipRefusingACombinationDisplayNamesThePrescriptionOnce() throws IOException {
+	public void aFoldedChipOnACombinationPrescriptionNamesItOnce() throws IOException {
 		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
 			DrugReferenceTestSupport.fixtureEntries(FOLDED_COMBINATION_FIXTURE));
 		java.util.Set<String> codes = DrugReferenceTestSupport.set("J04AC51", "J04AB05");
@@ -837,11 +841,12 @@ public class OneOrderNameAcrossOneResponseTest {
 			"precondition: the class arm must fold onto this chip, or there is only one sentence to"
 					+ " name the order and the case cannot see the defect, was: "
 					+ DrugReferenceTestSupport.details(warnings));
-		assertEquals(java.util.Arrays.asList("rifapentine", "rifapentine"), orderNames(warnings),
-			"one chip must not contradict itself: a refusal reason issue #292 did not have may not"
-					+ " leave the rule sentence on the knowledge base's match token while the folded"
-					+ " class sentence keeps the prescription's display (issue #339), was: "
-					+ DrugReferenceTestSupport.details(warnings));
+		assertEquals(
+			java.util.Arrays.asList(FOLDED_COMBINATION_DISPLAY, FOLDED_COMBINATION_DISPLAY),
+			orderNames(warnings),
+			"one chip must not contradict itself: the rule sentence may not take the knowledge base's"
+					+ " own match token while the folded class sentence keeps the prescription's"
+					+ " display (issue #339), was: " + DrugReferenceTestSupport.details(warnings));
 	}
 
 	/**
@@ -850,15 +855,15 @@ public class OneOrderNameAcrossOneResponseTest {
 	 *
 	 * <p>One {@code Amlodipine / Atorvastatin} order, codes {@code C10BX03} (which the shipped data
 	 * does not cover, so {@code soleSubstanceOf} falls through to the covered one) and {@code C10AA05},
-	 * asked about one of its own constituents beside a third statin. Measured at this head before the
-	 * fix, the FOLDED chip read {@code Simvastatin interacts with active order atorvastatin — Moderate.
-	 * … Simvastatin is in the same ATC class (C10AA) as active order Amlodipine / Atorvastatin}.
+	 * asked about one of its own constituents beside a third statin. Measured under review round 4's
+	 * reading, the FOLDED chip read {@code Simvastatin interacts with active order atorvastatin —
+	 * Moderate. … Simvastatin is in the same ATC class (C10AA) as active order Amlodipine /
+	 * Atorvastatin}.
 	 *
 	 * <p>Asserted as agreement rather than against a literal, for the reason
-	 * {@link #aCombinationOrderOnTheShippedKnowledgeBaseIsNamedOneWay} gives: which of the two names
-	 * survives is the fixture case's business and a knowledge-base refresh may move the row. What may
-	 * not move is that one chip uses one name for one prescription — and that the display, which the
-	 * response has refused for this co-medication, is not one of them.
+	 * {@link #aCombinationOrderOnTheShippedKnowledgeBaseIsNamedOneWay} gives: which name survives is
+	 * the fixture case's business and a knowledge-base refresh may move the row. What may not move is
+	 * that one chip uses one name for one prescription.
 	 */
 	@Test
 	public void aFoldedChipOnTheShippedKnowledgeBaseNamesTheCombinationOnce() throws IOException {
@@ -891,94 +896,35 @@ public class OneOrderNameAcrossOneResponseTest {
 		assertEquals(names.get(0), names.get(1),
 			"one chip, one name for one prescription, on the data an operator actually runs (issue"
 					+ " #339), was: " + folded.getDetail());
-		assertFalse(names.contains(STATIN_COMBINATION_DISPLAY),
-			"the display names a substance this response chips about, so it stands in for no partner"
-					+ " in it — the refusal must still hold, and hold for BOTH sentences (issue #339),"
-					+ " was: " + folded.getDetail());
 	}
 
 	/**
-	 * The SCREENING arm's own subjects are in the refusal's set, or the arm it cannot fold in is the
-	 * one arm that goes on printing a self-interaction.
+	 * A class-ONLY chip and the rule chips of one response name one combination prescription ONE way.
 	 *
-	 * <p>{@code chipSubjectRows} is built from the QUESTION's drugs — the set neither validate pass
-	 * can disagree about — and a screening question resolves none by that arm's own gate. So the
-	 * active-order rows are added where the screen will run, because there the SUBJECTS are the
-	 * patient's own prescriptions. Without them the set is empty for every screening question and the
-	 * refusal is vacuous: this chip then reads {@code Isoniazid interacts with active order Isoniazid
-	 * / Rifapentine}, one drug interacting with itself, which is what review round 3 closed for the
-	 * drug-in-play arm. Mutate the {@code screening ?} conjunct to the empty list and this case is the
-	 * one that reddens — measured at this head, the rest of the api suite stays green on it.
+	 * <p><b>Issue #339, review rounds 6 and 7.</b> Rounds 3 to 5 gave
+	 * {@code reconciledPartnerName}'s ORDER rung a refusal that read the response's chip subjects, and
+	 * the class arm's own sentence ({@code DrugSafetyValidator.classPartnerName}) did not ask it — so a
+	 * class-only chip printed {@code active order Paracetamol / Rifapentine} beside the rule chips'
+	 * {@code active order rifapentine}, one prescription and two names. Round 6 had that method ask the
+	 * refusal and step back to {@code soleSubstanceOf}'s substance; round 7 removed the refusal at both
+	 * sites, because the name it stepped back to is a CONSTITUENT name and a constituent cannot carry a
+	 * class claim matched through the code the dataset could not name — see
+	 * {@link #aPrescriptionNamingTheSubjectAndThePartnerIsStillNamedOnceByItsOwnDisplay}, which carries
+	 * that measurement. All three sentences now take the display, which is what the merge base printed:
+	 * driven through this same fixture in a worktree at {@code abb36813}, all three read
+	 * {@code Paracetamol / Rifapentine}.
 	 *
-	 * <p>The combination order's match tokens name only its covered half, so the isoniazid subject
-	 * resolves from the standalone order alone and {@code activeOrdersOtherThan} leaves the
-	 * combination one to witness the pair. Its DISPLAY still names both halves, which is the whole
-	 * arrangement.
+	 * <p>The invariant survives both mechanisms and is what this case is for. It is not the residue
+	 * {@link #aPartnerIsNamedByTheRowThisResponseNamesItsSubstanceBy}'s neighbourhood records against
+	 * {@code classPartnerName}: that one is the ENTRY rung, where the two elections of one substance
+	 * can pick two ROWS ({@code Atropine} against {@code Atropine (ophthalmic)}) on a condition that is
+	 * per RULE — the rule's token claiming one row and not the other — so no class-only chip can read
+	 * it. The chips reach the prompt verbatim through {@code DrugReferenceInjector.renderFinding} as
+	 * citable {@code safety_finding} records.
 	 */
 	@Test
-	public void aScreeningQuestionRefusesACombinationDisplayThatNamesAnotherOrdersDrug()
+	public void aClassOnlyChipAndTheRuleChipsNameOneCombinationPrescriptionOneWay()
 			throws IOException {
-		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
-			DrugReferenceTestSupport.fixtureEntries(SELF_NAMED_COMBINATION_FIXTURE));
-		java.util.Set<String> isoniazidCodes = DrugReferenceTestSupport.set("J04AC01");
-		java.util.Set<String> combinationCodes = DrugReferenceTestSupport.set("J04AC51", "J04AB05");
-		java.util.Set<String> all = new java.util.LinkedHashSet<String>(isoniazidCodes);
-		all.addAll(combinationCodes);
-		PatientClinicalContext chart = DrugReferenceTestSupport.ctx(60, null,
-			DrugReferenceTestSupport.set("Isoniazid 300mg", COMBINATION_DISPLAY), all, null, null,
-			java.util.Arrays.asList(
-				DrugReferenceTestSupport.activeOrder("order-isoniazid", "Isoniazid 300mg",
-					DrugReferenceTestSupport.set("isoniazid"), isoniazidCodes),
-				DrugReferenceTestSupport.activeOrder("order-combination", COMBINATION_DISPLAY,
-					DrugReferenceTestSupport.set("rifapentine"), combinationCodes)));
-
-		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
-				.validate("", DrugReferenceTestSupport.SCREENING_QUESTION,
-					service.withReferenceNames(chart));
-
-		assertEquals(java.util.Arrays.asList("rifapentine"), orderNames(warnings),
-			"a screened chip must name the drug its mechanism is about: a prescription naming another"
-					+ " order's drug as well as the partner cannot stand in for the partner, or the"
-					+ " finding reads as Isoniazid interacting with itself (issue #339), was: "
-					+ DrugReferenceTestSupport.details(warnings));
-	}
-
-	/**
-	 * A class-ONLY chip about a prescription whose display this response has REFUSED does not go on
-	 * printing that display.
-	 *
-	 * <p><b>Issue #339, review round 6.</b> {@code CoMedications.displayNamesAnotherChipSubject} is a
-	 * property of the PRESCRIPTION and of this RESPONSE — that is what review round 4 restructured it
-	 * to be — and review round 5 carried its refusal to both sentences of a FOLDED chip. What still
-	 * read the display was the class arm's own sentence, {@code DrugSafetyValidator.classPartnerName},
-	 * which no gate asked at all: so a class-only chip about the same co-medication printed
-	 * {@code active order Paracetamol / Rifapentine} beside the rule chips' {@code active order
-	 * rifapentine}. Measured at this head before the fix, this arrangement printed
-	 * {@code [rifapentine, rifapentine, Paracetamol / Rifapentine]} — one prescription, two names, in
-	 * one response, which is a REGRESSION against the merge base: driven through the same fixture in a
-	 * worktree at {@code abb36813}, all three read {@code Paracetamol / Rifapentine}. The chips reach the prompt verbatim through
-	 * {@code DrugReferenceInjector.renderFinding} as citable {@code safety_finding} records.
-	 *
-	 * <p>This is NOT the residue {@link #aPartnerIsNamedByTheRowThisResponseNamesItsSubstanceBy}'s
-	 * neighbourhood records against {@code classPartnerName}: that one is the ENTRY rung, where the two
-	 * elections of one substance can pick two ROWS ({@code Atropine} against
-	 * {@code Atropine (ophthalmic)}) on a condition that is per RULE — the rule's token claiming one row
-	 * and not the other — so no class-only chip can read it. This refusal's condition is the
-	 * prescription's, and every chip in the response can read it.
-	 *
-	 * <p><b>What the class sentence takes instead is the rung the ladder used BEFORE
-	 * {@code OrderPartner.nameByOrder}</b>: the dataset's name for the substance
-	 * {@code soleSubstanceOf} resolved, elected by this response ({@code SubstanceSubjects.subjectOf}),
-	 * which is exactly what {@code classPartnerName} already prints for a partner no order renamed. It
-	 * is not the rule's token, which a class-only chip has none of and which the class arm may not
-	 * borrow from another chip's rule — see {@code reconciledPartnerName}'s last branch. So the two
-	 * surfaces name one SUBSTANCE in the two vocabularies the knowledge base publishes it under, the
-	 * match token and the row's display, which is the same residue an ENTRY-rung refusal leaves
-	 * ({@code classPartnerName}) rather than a new one. The literal below pins that residue on a
-	 * fixture that cannot drift: {@code rifapentine} twice and {@code Rifapentine} once.
-	 */
-	@Test
-	public void aClassOnlyChipRefusesTheDisplayTheRuleChipsRefused() throws IOException {
 		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
 			DrugReferenceTestSupport.fixtureEntries(CLASS_ONLY_COMBINATION_FIXTURE));
 		java.util.Set<String> codes = DrugReferenceTestSupport.set("J04AC51", "J04AB05");
@@ -997,12 +943,12 @@ public class OneOrderNameAcrossOneResponseTest {
 		assertTrue(warnings.get(1).getDetail().startsWith("Rifabutin is in the same ATC class"),
 			"precondition: the second chip must be the class arm's own sentence, was: "
 					+ DrugReferenceTestSupport.details(warnings));
-		assertEquals(java.util.Arrays.asList("rifapentine", "rifapentine", "Rifapentine"),
-			orderNames(warnings),
-			"a display this response has refused for a co-medication may not be printed by the class"
-					+ " arm's own sentence either: the refusal is a property of the prescription, so a"
-					+ " class-only chip steps back to the rung the ladder used before the order renamed"
-					+ " the partner (issue #339), was: " + DrugReferenceTestSupport.details(warnings));
+		assertEquals(java.util.Arrays.asList(FOLDED_COMBINATION_DISPLAY, FOLDED_COMBINATION_DISPLAY,
+			FOLDED_COMBINATION_DISPLAY), orderNames(warnings),
+			"one prescription, one name across a folded chip and a class-ONLY chip of the same"
+					+ " response: the class arm may not print a name the rule chips gave up, and no"
+					+ " chip may print a constituent name in place of the prescription's own (issue"
+					+ " #339), was: " + DrugReferenceTestSupport.details(warnings));
 	}
 
 	/**
@@ -1019,13 +965,15 @@ public class OneOrderNameAcrossOneResponseTest {
 	 *
 	 * <p>Asserted as agreement rather than against literals, for the reason
 	 * {@link #aCombinationOrderOnTheShippedKnowledgeBaseIsNamedOneWay} gives — which name survives is
-	 * the fixture case's business and a knowledge-base refresh may move the row. Agreement here is
-	 * case-INSENSITIVE, and that is the residue the fixture case pins rather than a weakening: the rule
-	 * chips print the knowledge base's match token and the class-only chip the row's own display, and
-	 * no gate can make a class-only chip say the token.
+	 * the fixture case's business and a knowledge-base refresh may move the row. Agreement is
+	 * case-INSENSITIVE because a rule chip that does NOT reach the ORDER rung prints the knowledge
+	 * base's own lower-cased match token, which is issue #292's pre-existing residue and not this
+	 * issue's; review round 7's removal of the round-3 refusal is what brings the three sentences of
+	 * THIS arrangement onto one string.
 	 */
 	@Test
-	public void aClassOnlyChipOnTheShippedKnowledgeBaseRefusesTheRefusedDisplay() throws IOException {
+	public void aClassOnlyChipOnTheShippedKnowledgeBaseNamesTheCombinationOneWay()
+			throws IOException {
 		DrugReferenceService service = DrugReferenceTestSupport
 				.serviceWith(DrugReferenceTestSupport.shippedEntries());
 		java.util.Set<String> codes = DrugReferenceTestSupport.set("J05AR25", "J05AF05");
@@ -1051,34 +999,36 @@ public class OneOrderNameAcrossOneResponseTest {
 				+ " order, was: " + DrugReferenceTestSupport.details(warnings));
 		for (String name : names) {
 			assertEquals(names.get(0).toLowerCase(), name.toLowerCase(),
-				"one prescription, one name, on the data an operator actually runs: a display this"
-						+ " response refused for a co-medication may not survive on the class arm's own"
-						+ " sentence (issue #339), was: " + DrugReferenceTestSupport.details(warnings));
-			assertFalse(ANTIRETROVIRAL_COMBINATION_DISPLAY.equals(name),
-				"the refused display may not be printed at all, was: "
-						+ DrugReferenceTestSupport.details(warnings));
+				"one prescription, one name, on the data an operator actually runs: the class arm's own"
+						+ " sentence and the rule chips beside it must call one co-medication one thing"
+						+ " (issue #339), was: " + DrugReferenceTestSupport.details(warnings));
 		}
 	}
 
 	/**
-	 * An order the loaded dataset covers NO entry for keeps its own display even where this response
-	 * has refused that display, because the only rung behind it is the bare ATC code.
+	 * An order the loaded dataset covers NO entry for keeps its own display, because the only rung
+	 * behind that display is the bare ATC code.
 	 *
-	 * <p>{@code classPartnerName}'s step back to the dataset's name is available only where the ladder
-	 * reached an entry at all. Where it did not — every code of the order uncovered, and
-	 * {@code soleSubstanceOf} answering null with it — {@code OrderPartner.labelEntry} is null and the
-	 * rung behind the display is {@code [ATC …]}, the ABSENCE of a name, which issue #155 and issue
-	 * #290 exist to keep out of a chip (ADR Decisions 38 and 39). So the display stands and the
-	 * response's own refusal is not honoured on this one sentence — the residue review round 6 leaves,
-	 * recorded in ADR Decision 61 beside the ENTRY rung's own.
+	 * <p>{@code classPartnerName}'s row election is available only where the ladder reached an entry at
+	 * all. Where it did not — every code of the order uncovered, and {@code soleSubstanceOf} answering
+	 * null with it — {@code OrderPartner.labelEntry} is null and the rung behind the display is
+	 * {@code [ATC …]}, the ABSENCE of a name, which issue #155 and issue #290 exist to keep out of a
+	 * chip (ADR Decisions 38 and 39).
 	 *
-	 * <p>It also pins the ORDER of {@code classPartnerName}'s two branches: reached with a null
-	 * {@code labelEntry}, the election dereferences it, so removing that guard fails here rather than
-	 * in silence.
+	 * <p><b>It does NOT pin that guard, and review round 6 claimed it did.</b> The order here HAS a
+	 * name, so its partner carries a naming order, and dropping {@code labelEntry != null} leaves the
+	 * surviving {@code namingOrder == null} conjunct answering false — the same label, no dereference,
+	 * this case green (measured at this head). That mutation is caught on the CODE-ONLY shape, where
+	 * both fields are null, by eight cases across as many classes. What this case pins is the
+	 * combination of the two: an order the module CAN name and the dataset cannot.
+	 *
+	 * <p>Review round 6 also read a response-level refusal here and this case pinned that the refusal
+	 * was not honoured on this one sentence; round 7 removed the refusal (see
+	 * {@link #aPrescriptionNamingTheSubjectAndThePartnerIsStillNamedOnceByItsOwnDisplay}), so what is
+	 * left is the positive statement, which held before this issue and holds after it.
 	 */
 	@Test
-	public void anOrderTheDatasetCoversNoEntryForKeepsItsOwnDisplayEvenWhenRefused()
-			throws IOException {
+	public void anOrderTheDatasetCoversNoEntryForKeepsItsOwnDisplay() throws IOException {
 		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
 			DrugReferenceTestSupport.fixtureEntries(CLASS_ONLY_COMBINATION_FIXTURE));
 		java.util.Set<String> codes = DrugReferenceTestSupport.set("J04AB99");
@@ -1091,55 +1041,8 @@ public class OneOrderNameAcrossOneResponseTest {
 				.validate("", "Can I give her rifabutin and paracetamol?", chart);
 
 		assertEquals(java.util.Arrays.asList(FOLDED_COMBINATION_DISPLAY), orderNames(warnings),
-			"an order the dataset covers no entry for has no dataset name to step back to, and the"
-					+ " bare ATC code is the absence of a name rather than a second one, so the refused"
-					+ " display stands (issue #339), was: "
-					+ DrugReferenceTestSupport.details(warnings));
-	}
-
-	/**
-	 * The two reasons COMPOSE: where the fold declines and the response has also refused the display,
-	 * the class sentence prints neither the display nor a name from a rule it could not use.
-	 *
-	 * <p>{@code reconciledPartnerName} answers null on the ORDER rung when the rule's token does not
-	 * name the prescription that supplied the label — the {@code naproxen}-rule-under-a-PPI-order shape
-	 * that rung exists to refuse — and the fold then words its class sentence from
-	 * {@code classPartnerName}. Review round 6 makes that method honour the response's own refusal, so
-	 * the class sentence steps back to the dataset's name for the substance the ladder keyed the partner
-	 * on ({@code Naproxen}) instead of printing {@code Esomeprazole 20mg}, which is the very
-	 * mis-attribution the rule sentence refused one line above — a class relationship found through
-	 * naproxen's own ATC code, printed under a proton-pump inhibitor's prescription.
-	 *
-	 * <p>So this is not the case difference the other round-6 cases pin: the two strings are
-	 * {@code naproxen} and {@code Naproxen}, one substance, where before the fix they were
-	 * {@code naproxen} and {@code Esomeprazole 20mg} — and at the merge base {@code abb36813} too,
-	 * measured through this same fixture in a worktree, so this arrangement is an improvement on both
-	 * heads rather than a regression repaired. Reading {@code OrderPartner.label} in
-	 * {@code classPartnerName} — either by dropping the refusal conjunct or wholesale — reddens this.
-	 */
-	@Test
-	public void aFoldDeclinedForOneReasonStillHonoursTheResponsesRefusal() throws IOException {
-		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
-			DrugReferenceTestSupport.fixtureEntries(REFUSED_RENAMED_PARTNER_FIXTURE));
-		java.util.Set<String> codes = DrugReferenceTestSupport.set("M01AE02", "A02BC99");
-		PatientClinicalContext chart = DrugReferenceTestSupport.ctx(60, null,
-			DrugReferenceTestSupport.set("Esomeprazole 20mg"), codes, null, null,
-			java.util.Arrays.asList(DrugReferenceTestSupport.activeOrder("order-esomeprazole",
-				"Esomeprazole 20mg", DrugReferenceTestSupport.set("esomeprazole 20mg"), codes)));
-
-		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
-				.validate("", "Can I give her ibuprofen and esomeprazole?", chart);
-
-		assertEquals(1, warnings.size(), "one chip, was: "
-				+ DrugReferenceTestSupport.details(warnings));
-		assertTrue(warnings.get(0).getDetail().contains("same ATC class"),
-			"precondition: the class arm must fold onto this chip, or there is no class sentence to"
-					+ " word from classPartnerName and the case cannot see the defect, was: "
-					+ DrugReferenceTestSupport.details(warnings));
-		assertEquals(java.util.Arrays.asList("naproxen", "Naproxen"), orderNames(warnings),
-			"a fold that declined because the rule's token does not name the prescription must still"
-					+ " not let the class sentence print a display this response refused: it names the"
-					+ " substance the ladder keyed the partner on, not the order the label came from"
-					+ " (issue #339), was: " + DrugReferenceTestSupport.details(warnings));
+			"an order the dataset covers no entry for has no dataset row to elect, and the bare ATC"
+					+ " code is the absence of a name rather than a second one, so its own display"
+					+ " stands (issue #339), was: " + DrugReferenceTestSupport.details(warnings));
 	}
 }

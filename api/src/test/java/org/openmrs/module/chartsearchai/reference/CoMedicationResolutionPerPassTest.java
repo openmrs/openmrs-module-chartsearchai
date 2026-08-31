@@ -293,7 +293,7 @@ public class CoMedicationResolutionPerPassTest {
 	/** The pass's one construction, as written — a LOCAL declaration, which is what separates the
 	 *  compliant memo from issue #172's field. */
 	private static final String CONSTRUCTION_STATEMENT =
-			"CoMedications coMedications = new CoMedications(context, chipSubjects);";
+			"CoMedications coMedications = new CoMedications(context);";
 
 	/** The memo's own accessor, which is the only body permitted to call {@code orderPartners}. */
 	private static final String RESOLVED = "List<OrderPartner> resolved() {";

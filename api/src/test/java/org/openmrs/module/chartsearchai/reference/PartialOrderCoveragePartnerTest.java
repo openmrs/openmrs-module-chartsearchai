@@ -34,8 +34,11 @@ import org.junit.jupiter.api.Test;
  * staying TWO.
  *
  * <p>Every scenario runs the REAL production path: a curated fixture parsed by the real
- * {@link JsonDrugReferenceSource}, the real {@code validate} entry point, GP reads on their
- * no-context defaults.
+ * {@link JsonDrugReferenceSource} — except
+ * {@link #everyClassSentenceAboutAPartlyCoveredOrderNamesADrugThatPublishesTheCitedSubgroup} and
+ * {@link #aFoldedClassSentenceAboutAPartlyCoveredOrderNamesADrugThatPublishesTheCitedSubgroup},
+ * which read the dataset the module SHIPS because the invariant they state is about real fixed-dose
+ * products — the real {@code validate} entry point, GP reads on their no-context defaults.
  */
 public class PartialOrderCoveragePartnerTest {
 
@@ -104,6 +107,108 @@ public class PartialOrderCoveragePartnerTest {
 		assertEquals(1, chips.size(), "one order is one co-medication, was: " + chips);
 		assertTrue(chips.get(0).contains("as active order Secnidazole and ornidazole —"),
 				"the chip must name the order, was: " + chips);
+	}
+
+	/**
+	 * The rule the case above NAMES, asserted over the class SENTENCE so that a change cannot satisfy
+	 * it by keeping a label while moving what the sentence prints (issue #339, review round 7).
+	 *
+	 * <p>Whatever a class sentence calls a partly-covered order, that name must denote a drug filed
+	 * under the subgroup the sentence cites — otherwise the chip is issue #161's
+	 * right-finding-wrong-reason shape, and {@code DrugReferenceInjector.renderFinding} copies it into
+	 * the prompt verbatim as a citable {@code safety_finding}. The case above asserts only that the
+	 * chip names the ORDER, and its arrangement is one where every candidate name happens to be
+	 * truthful — which is why issue #339's review rounds 5 and 6 could step such a chip back to the
+	 * COVERED constituent's name with the whole api suite green.
+	 *
+	 * <p>Over the shipped knowledge base and over a real product for that reason: one
+	 * {@code Dorzolamide / Timolol} order, the codes a dictionary maps it to being its own combination
+	 * {@code S01ED51} — which the shipped data covers no entry for, so {@code soleSubstanceOf} falls
+	 * through — and the covered {@code S01EC03} its carbonic anhydrase inhibitor half is filed under.
+	 * The subgroup the sentence cites, {@code S01ED}, is therefore the TIMOLOL half's, and
+	 * {@code Dorzolamide} does not publish it. Measured at head {@code d8db2a90} this read
+	 * {@code Levobunolol is in the same ATC class (S01ED) as active order Dorzolamide (ophthalmic)}.
+	 *
+	 * <p>This arrangement's chip is class-ONLY, so it is worded from {@code classPartnerName}; the
+	 * FOLDED surface has its own case below, and issue #339's review rounds broke one each.
+	 */
+	@Test
+	public void everyClassSentenceAboutAPartlyCoveredOrderNamesADrugThatPublishesTheCitedSubgroup()
+			throws Exception {
+		assertEveryClassSentenceIsTrueOfTheDrugItNames("Dorzolamide / Timolol",
+			DrugReferenceTestSupport.set("S01ED51", "S01EC03"),
+			"Can I give her timolol and levobunolol?", 1);
+	}
+
+	/**
+	 * The same invariant where the class sentence is FOLDED onto a rule chip, so it is worded from the
+	 * name the fold chose rather than from {@code classPartnerName}.
+	 *
+	 * <p>Both surfaces have to answer for it and each was broken by a different review round of issue
+	 * #339 — round 5 at the fold (the rule's own token) and round 6 at {@code classPartnerName}
+	 * ({@code soleSubstanceOf}'s substance). This arrangement raises both in one response: one
+	 * {@code Ibuprofen / Famotidine} order whose combination {@code M01AE51} the shipped data covers no
+	 * entry for and whose {@code A02BA03} half it does, asked about ibuprofen (which puts the display's
+	 * other half in play), ketoprofen (which both rules on famotidine and shares {@code M01AE}, so its
+	 * chip folds) and suprofen (which only shares {@code M01AE}, so its chip is class-only). Measured
+	 * at head {@code d8db2a90} the two read {@code … same ATC class (M01AE) as active order famotidine}
+	 * and {@code … as active order Famotidine}, and famotidine is {@code A02BA03}.
+	 */
+	@Test
+	public void aFoldedClassSentenceAboutAPartlyCoveredOrderNamesADrugThatPublishesTheCitedSubgroup()
+			throws Exception {
+		assertEveryClassSentenceIsTrueOfTheDrugItNames("Ibuprofen / Famotidine",
+			DrugReferenceTestSupport.set("M01AE51", "A02BA03"),
+			"Can I give her ibuprofen, ketoprofen and suprofen?", 2);
+	}
+
+	/**
+	 * Drives the real {@code validate} over the SHIPPED knowledge base for one partly-covered order and
+	 * asserts of every {@code "is in the same ATC class (X) as active order Y"} sentence it raises that
+	 * some loaded entry filed under {@code X} answers to {@code Y}.
+	 *
+	 * <p>Resolved through the dataset rather than compared to a literal, so the invariant holds
+	 * whichever name a future change elects and a knowledge-base refresh moving a row cannot silently
+	 * weaken it. {@code expectedSentences} is a precondition and not the point of the case: without it
+	 * an arrangement that stops raising the chip at all would pass vacuously.
+	 */
+	private static void assertEveryClassSentenceIsTrueOfTheDrugItNames(String display,
+			java.util.Set<String> codes, String question, int expectedSentences) throws Exception {
+		DrugReferenceService service = DrugReferenceTestSupport
+				.serviceWith(DrugReferenceTestSupport.shippedEntries());
+		PatientClinicalContext context = service.withReferenceNames(DrugReferenceTestSupport.ctx(60,
+				null, DrugReferenceTestSupport.set(display), codes, null, null,
+				Arrays.asList(DrugReferenceTestSupport.activeOrder("order-1", display,
+						DrugReferenceTestSupport.set(display), codes))));
+
+		List<String> chips = DrugReferenceTestSupport.classChipDetails(
+				DrugReferenceTestSupport.validator(service).validate("", question, context));
+
+		String lead = "is in the same ATC class (";
+		String tail = "as active order ";
+		int checked = 0;
+		for (String chip : chips) {
+			int at = chip.indexOf(lead);
+			if (at < 0) {
+				continue;
+			}
+			int from = at + lead.length();
+			String subgroup = chip.substring(from, chip.indexOf(')', from));
+			int nameAt = chip.indexOf(tail, from);
+			String named = chip.substring(nameAt + tail.length(), chip.indexOf(" — ", nameAt));
+			boolean publishes = false;
+			for (DrugReference entry : service.getAll()) {
+				publishes = publishes || (entry.atcSubgroups().contains(subgroup)
+						&& (entry.matchesDrugName(named) || named.equalsIgnoreCase(entry.displayLabel())));
+			}
+			assertTrue(publishes, "a class sentence must name a drug the cited subgroup classifies: "
+					+ subgroup + " against \"" + named + "\", was: " + chips);
+			checked++;
+		}
+		assertEquals(expectedSentences, checked,
+			"precondition: the arrangement must raise this many class sentences about the"
+					+ " partly-covered order, or the assertion above sees less than it was written for,"
+					+ " was: " + chips);
 	}
 
 	@Test

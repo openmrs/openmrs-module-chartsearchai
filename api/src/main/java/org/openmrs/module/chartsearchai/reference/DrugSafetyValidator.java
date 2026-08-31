@@ -3074,7 +3074,7 @@ public class DrugSafetyValidator {
 	 * wherever the dataset identifies no partner entry. What issue #292 scoped and issue #339 finished
 	 * scoping is the second half of issue #121's invariant — that the key is also what the surface SAYS
 	 * — which now holds only where the reconciliation does not answer. See
-	 * {@link #reconciledPartnerName} and ADR Decisions 39, 49 and 61.
+	 * {@link #reconciledPartnerName} and ADR Decisions 39, 49 and 63.
 	 *
 	 * @return the label, or null when the rule carries neither — which a rule that matched an active
 	 *         order cannot ({@code hasActiveDrug} needs a non-blank token or a non-blank ATC), so

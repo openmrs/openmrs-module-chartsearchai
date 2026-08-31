@@ -1579,7 +1579,14 @@ public class DrugReferenceInjector {
 	 *         {@code injectRecords} over the pinned excerpt, a patient on Warfarin, Acetylsalicylic acid
 	 *         and Digoxin asked {@code "Can I give her ibuprofen?"}: the in-play {@code Ibuprofen} record
 	 *         lists {@code Warfarin}, the order-driven {@code Acetylsalicylic acid} record lists
-	 *         {@code warfarin}, and before #339 both read {@code warfarin}. Closing it means keying this
+	 *         {@code warfarin}, and before #339 both read {@code warfarin}. <b>It is not a corner, which
+	 *         one example reads as</b> — measured at review round 9 over 200 synthetic arrangements
+	 *         of the shipped knowledge base driven through the real {@code injectRecords} (the first 200
+	 *         entries publishing two interaction tokens that resolve to another substance, each charted
+	 *         as up to three of those partners as active orders): one prompt names one substance two ways
+	 *         in 20 of them, against 2 of 200 at the merge base. None of them is a false claim. ADR
+	 *         Decision 63's trade-off bullet carries the arrangement, the split by shape and the caveat,
+	 *         and this paragraph does not restate them. Closing it means keying this
 	 *         lookup on the PARTNER rather than on rule identity, which needs the partner entry to travel
 	 *         beside the name — a change to what a {@link SafetyWarning} carries, not to this scan — and
 	 *         it re-opens the key-dependence question the condition below exists for. Recorded in ADR

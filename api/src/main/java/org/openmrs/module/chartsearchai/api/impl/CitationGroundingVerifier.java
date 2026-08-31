@@ -271,12 +271,14 @@ import org.springframework.stereotype.Service;
  * other record's words as well as its own — is PREDICTED to fall below it and re-publish
  * {@code false}, returning #284 for any operator who followed the advice. Predicted and not measured,
  * because under entailment a single-candidate claim defers Tier-1 entirely, so no cosine was computed
- * for #284's cells at any floor. Faithfulness of this
- * answer class is checked deterministically instead, by {@link ClassCodeFidelityCheck} and — since
- * issue #337 — {@link ReferenceProseFidelityCheck}, which is #106's own remedy for material a
- * semantic check cannot grade. NOT by the {@code DrugSafetyValidator} chips, which this javadoc
- * named until #337: they carry the deterministic text but are an independent list nothing
- * reconciles against the answer.
+ * for #284's cells at any floor. NOTHING checks this answer class deterministically. This javadoc
+ * named the {@code DrugSafetyValidator} chips until #337 and they are not it — they carry the
+ * deterministic text but are an independent list nothing reconciles against the answer — and
+ * neither are {@link ClassCodeFidelityCheck} and {@link ReferenceProseFidelityCheck}, which compare
+ * what the answer states about the REFERENCE records it cites, where the cost named here is a CHART
+ * record attached to the wrong sentence. {@code README.md} and ADR Decision 41 say the same of it;
+ * an earlier draft of this correction pasted the reference-content sentence here and made the three
+ * disagree.
  *
  * <p>The verifier never throws into the search path: any failure (embedding
  * error, missing text) degrades to a {@code null} verdict — "could not verify"

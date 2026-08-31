@@ -75,16 +75,16 @@ import org.slf4j.LoggerFactory;
  *       excluding it means teaching this check where a finding's own prose ends, which is knowledge
  *       that belongs to {@code renderFinding} and would be a second copy of it here;</li>
  *   <li><b>support is POOLED across the cited records</b>, exactly as {@link ClassCodeFidelityCheck}
- *       pools it for a class code, and here that is what keeps a faithful answer quiet rather than
- *       merely what makes the check generous. One mechanism string is rendered into TWO records
- *       that are routinely cited together — the {@code safety_finding}'s detail and the
- *       {@code drug_reference}'s interaction item — and they lay it out differently: the finding
- *       ends the mechanism's sentence, while in the reference record it is one {@code "; "}-joined
- *       item of a list, so the next partner's name follows with no sentence boundary before it.
- *       Read against that record alone, an answer that reproduced the whole mechanism and welded a
- *       clause on looks exactly like a substitution. So a continuation ANY cited record explains —
- *       by ending, by opening a new sentence, or by simply continuing the same way — is not a
- *       divergence, whatever a second record's layout makes of it. Only the cited REFERENCE records
+ *       pools it for a class code: a continuation ANY cited record explains — by ending, by opening
+ *       a new sentence, or by simply continuing the same way — is not a divergence, whatever a
+ *       second record's layout makes of it. One mechanism string really is rendered into TWO records
+ *       that are cited together (the {@code safety_finding}'s detail and the {@code drug_reference}'s
+ *       {@code "; "}-joined interaction item), which is where this came from — but on that
+ *       arrangement the weak gap question now lets the reference record explain its own continuation,
+ *       so the pooling is not what keeps THAT answer quiet and an earlier draft of this bullet said
+ *       it was. What it still decides is the case where a second cited record ends where the first
+ *       diverges, and the case where one record's own reproduction carries on past the point another
+ *       stops matching; both have cases of their own. Only the cited REFERENCE records
  *       are asked, and widening that to the chart records is refused rather than merely unnecessary:
  *       a chart record is the patient's own charted prose, which this module never asked the answer
  *       to reproduce, and the WARN carries the patient id
@@ -372,8 +372,12 @@ final class ReferenceProseFidelityCheck {
 		/** Answer word positions at which some record's reproduction ended innocently. */
 		private final Set<Integer> explained = new HashSet<Integer>();
 
-		/** Answer word positions strictly inside some record's reproduction — the copy carried on
-		 *  there, so nothing was substituted at them however another record's layout reads. */
+		/** Answer word positions some record's reproduction carried ON past — every position it
+		 *  covers except its LAST, which is where that reproduction stopped agreeing and is the
+		 *  position a divergence is keyed on. The first position IS included: a reproduction that
+		 *  begins there still carried through it, and excluding it would un-pool a divergence another
+		 *  record's run starts at. Nothing was substituted at any of them, however a second record's
+		 *  layout reads. */
 		private final Set<Integer> carriedThrough = new HashSet<Integer>();
 
 		private final Map<Integer, Divergence> diverged = new LinkedHashMap<Integer, Divergence>();

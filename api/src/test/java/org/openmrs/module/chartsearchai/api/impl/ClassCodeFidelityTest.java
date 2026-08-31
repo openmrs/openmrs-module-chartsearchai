@@ -93,9 +93,11 @@ public class ClassCodeFidelityTest {
 	 *
 	 *  <p><b>Since issue #337 those assertions span a second check.</b> {@code
 	 *  ReferenceProseFidelityCheck} logs into this same package from this same {@code search()} call,
-	 *  and the canned answers below are sliced from the real injected finding — so the four silence
-	 *  cases in this file also pin that check's {@code MIN_REPRODUCED_WORDS}, and drop to red with a
-	 *  failure message about class codes if it is lowered. That coupling is deliberate on that side
+	 *  and the canned answers below are sliced from the real injected finding — so TWO of the four
+	 *  silence cases in this file also pin that check's {@code MIN_REPRODUCED_WORDS} and drop to red
+	 *  with a failure message about class codes if it is lowered ({@code aDosingFrequencyIsNotAClassCode}
+	 *  and {@code search_shouldStaySilentWhenTheAnswerCopiesTheCodeFaithfully}, measured at a floor of
+	 *  nine; this note said all four until a review counted them). That coupling is deliberate on that side
 	 *  (its constant's javadoc names these cases as what pins it); it is recorded here so a
 	 *  maintainer who reddens them is not left reading the wrong file. */
 	private static final String PACKAGE = "org.openmrs.module.chartsearchai.api.impl";

@@ -61,6 +61,14 @@ public class ChartSearchAiUtils {
 	 *
 	 * <p>Public for that third consumer, in another package. A caller does not test a character
 	 * against a literal of its own.
+	 *
+	 * <p>It is interpolated into {@link #SENTENCE_BOUNDARY}'s character class through
+	 * {@link Pattern#quote}, so a member with meaning inside a class — {@code ]}, {@code ^},
+	 * {@code \} or a {@code -} in range position — is a literal rather than a syntax change.
+	 * Unquoted it fails SILENTLY and asymmetrically: measured, a set of {@code "]"} appended makes the
+	 * splitter stop splitting at all while {@link #mayEndASentence}, which reads this by
+	 * {@code indexOf}, carries on — the two questions diverging in exactly the way one set exists to
+	 * prevent, with a green build.
 	 */
 	public static final String SENTENCE_TERMINATORS = ".!?";
 
@@ -81,8 +89,8 @@ public class ChartSearchAiUtils {
 	 * lines or simple newlines to structure lists", so a multi-item answer often carries no
 	 * sentence-ending punctuation at all.
 	 */
-	public static final Pattern SENTENCE_BOUNDARY =
-			Pattern.compile("(?<=[" + SENTENCE_TERMINATORS + "])\\s+|[\\r\\n]+");
+	public static final Pattern SENTENCE_BOUNDARY = Pattern.compile(
+			"(?<=[" + Pattern.quote(SENTENCE_TERMINATORS) + "])\\s+|[\\r\\n]+");
 
 	/**
 	 * @return whether a sentence COULD have ended inside {@code between} — the text separating two

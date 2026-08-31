@@ -910,7 +910,11 @@ public class FoldedChipOnePartnerNameTest {
 					DrugReferenceTestSupport.set("M01AE02")))));
 		assertEquals(Arrays.asList("Ibuprofen is in the same ATC class (M01AE) as active order"
 				+ " Naproxen 500mg — possible duplicate therapy"), DrugReferenceTestSupport.classChipDetails(classOnly),
-			"a class-only chip keeps the ladder's own name — there is no rule to borrow a token from");
+			"a class-only chip keeps the ladder's own name where this response has not refused it — there"
+					+ " is no rule to borrow a token from, and the only thing that can take a"
+					+ " prescription's display off such a chip is"
+					+ " CoMedications.displayNamesAnotherChipSubject, which this question's one subject"
+					+ " does not trigger (issue #339 review round 6)");
 	}
 
 	/**

@@ -67,6 +67,18 @@ public class OneOrderNameAcrossOneResponseTest {
 	private static final String FOLDED_COMBINATION_FIXTURE =
 			"chartsearchai-test/drug-reference-combination-order-folded.json";
 
+	/** As above, with a SECOND drug in the partner's ATC subgroup that carries no rule, so the same
+	 *  response raises a FOLDED chip and a class-ONLY chip about ONE co-medication — see the fixture's
+	 *  note. */
+	private static final String CLASS_ONLY_COMBINATION_FIXTURE =
+			"chartsearchai-test/drug-reference-combination-order-class-only.json";
+
+	/** A partner renamed after an order the rule's token does NOT name, whose display names a subject of
+	 *  the same response — so the fold declines AND the response has refused the display, both at once.
+	 *  See the fixture's note. */
+	private static final String REFUSED_RENAMED_PARTNER_FIXTURE =
+			"chartsearchai-test/drug-reference-renamed-partner-refused-display.json";
+
 	/** The fixture's combination display, which names the partner AND a second drug the question puts
 	 *  in play. */
 	private static final String FOLDED_COMBINATION_DISPLAY = "Paracetamol / Rifapentine";
@@ -75,6 +87,11 @@ public class OneOrderNameAcrossOneResponseTest {
 	 *  statin/calcium-channel-blocker product, the reviewer's own arrangement at issue #339 review
 	 *  round 5. */
 	private static final String STATIN_COMBINATION_DISPLAY = "Amlodipine / Atorvastatin";
+
+	/** The shipped-KB product review round 6 was measured on: an ordinary fixed-dose antiretroviral
+	 *  whose covered half the shipped data both rules on and classes with a third drug, so ONE response
+	 *  raises a rule chip and a class-ONLY chip about it. */
+	private static final String ANTIRETROVIRAL_COMBINATION_DISPLAY = "Dolutegravir / Lamivudine";
 
 	/** As above, with a THIRD drug that rules on the same half, so ONE response raises two rule chips
 	 *  about ONE co-medication from two different subjects — see the fixture's note. */
@@ -736,8 +753,9 @@ public class OneOrderNameAcrossOneResponseTest {
 	 * order whose display names its own drug, i.e. every order, and issue #339 would reach none of the
 	 * screening arm's chips.
 	 *
-	 * <p>Nothing else in the suite sees that exclusion: mutating it away leaves all 1656 api tests
-	 * green, measured at this head. This case exists to make it red rather than silent.
+	 * <p>Nothing else in the suite sees that exclusion: mutating it away leaves the other 1663 api
+	 * tests green, re-measured at this head after issue #339's review round 6 carried the refusal to
+	 * the class arm's own sentence. This case exists to make it red rather than silent.
 	 *
 	 * <p>The rifapentine order is partly covered — one code the fixture does not carry, one it does —
 	 * so it reaches the ORDER rung at all; a fully covered order is named by the ENTRY rung, where no
@@ -790,8 +808,11 @@ public class OneOrderNameAcrossOneResponseTest {
 	 * <p>The rung therefore reconciles onto the rule's own TOKEN rather than declining — outcome 1's
 	 * shape, reached for a different reason — so both sentences take the one name every UNFOLDED chip
 	 * about this co-medication already prints. Mutating that branch back to {@code null} reddens this
-	 * case and {@link #aFoldedChipOnTheShippedKnowledgeBaseNamesTheCombinationOnce}, and nothing else
-	 * in the api suite.
+	 * case, {@link #aFoldedChipOnTheShippedKnowledgeBaseNamesTheCombinationOnce} and — since review
+	 * round 6 carried the same refusal to the class arm's own sentence, so a null here splits that
+	 * case's folded chip the other way about —
+	 * {@link #aClassOnlyChipRefusesTheDisplayTheRuleChipsRefused}, and nothing else in the api suite
+	 * (re-measured at this head).
 	 *
 	 * <p>The fixture is built so the arrangement is exactly ONE chip: {@code Paracetamol} carries no
 	 * rule and shares no subgroup with the order's codes, so it is a chip SUBJECT (which is what makes
@@ -920,5 +941,205 @@ public class OneOrderNameAcrossOneResponseTest {
 					+ " order's drug as well as the partner cannot stand in for the partner, or the"
 					+ " finding reads as Isoniazid interacting with itself (issue #339), was: "
 					+ DrugReferenceTestSupport.details(warnings));
+	}
+
+	/**
+	 * A class-ONLY chip about a prescription whose display this response has REFUSED does not go on
+	 * printing that display.
+	 *
+	 * <p><b>Issue #339, review round 6.</b> {@code CoMedications.displayNamesAnotherChipSubject} is a
+	 * property of the PRESCRIPTION and of this RESPONSE — that is what review round 4 restructured it
+	 * to be — and review round 5 carried its refusal to both sentences of a FOLDED chip. What still
+	 * read the display was the class arm's own sentence, {@code DrugSafetyValidator.classPartnerName},
+	 * which no gate asked at all: so a class-only chip about the same co-medication printed
+	 * {@code active order Paracetamol / Rifapentine} beside the rule chips' {@code active order
+	 * rifapentine}. Measured at this head before the fix, this arrangement printed
+	 * {@code [rifapentine, rifapentine, Paracetamol / Rifapentine]} — one prescription, two names, in
+	 * one response, which is a REGRESSION against the merge base: driven through the same fixture in a
+	 * worktree at {@code abb36813}, all three read {@code Paracetamol / Rifapentine}. The chips reach the prompt verbatim through
+	 * {@code DrugReferenceInjector.renderFinding} as citable {@code safety_finding} records.
+	 *
+	 * <p>This is NOT the residue {@link #aPartnerIsNamedByTheRowThisResponseNamesItsSubstanceBy}'s
+	 * neighbourhood records against {@code classPartnerName}: that one is the ENTRY rung, where the two
+	 * elections of one substance can pick two ROWS ({@code Atropine} against
+	 * {@code Atropine (ophthalmic)}) on a condition that is per RULE — the rule's token claiming one row
+	 * and not the other — so no class-only chip can read it. This refusal's condition is the
+	 * prescription's, and every chip in the response can read it.
+	 *
+	 * <p><b>What the class sentence takes instead is the rung the ladder used BEFORE
+	 * {@code OrderPartner.nameByOrder}</b>: the dataset's name for the substance
+	 * {@code soleSubstanceOf} resolved, elected by this response ({@code SubstanceSubjects.subjectOf}),
+	 * which is exactly what {@code classPartnerName} already prints for a partner no order renamed. It
+	 * is not the rule's token, which a class-only chip has none of and which the class arm may not
+	 * borrow from another chip's rule — see {@code reconciledPartnerName}'s last branch. So the two
+	 * surfaces name one SUBSTANCE in the two vocabularies the knowledge base publishes it under, the
+	 * match token and the row's display, which is the same residue an ENTRY-rung refusal leaves
+	 * ({@code classPartnerName}) rather than a new one. The literal below pins that residue on a
+	 * fixture that cannot drift: {@code rifapentine} twice and {@code Rifapentine} once.
+	 */
+	@Test
+	public void aClassOnlyChipRefusesTheDisplayTheRuleChipsRefused() throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
+			DrugReferenceTestSupport.fixtureEntries(CLASS_ONLY_COMBINATION_FIXTURE));
+		java.util.Set<String> codes = DrugReferenceTestSupport.set("J04AC51", "J04AB05");
+		PatientClinicalContext chart = DrugReferenceTestSupport.ctx(60, null,
+			DrugReferenceTestSupport.set(FOLDED_COMBINATION_DISPLAY), codes, null, null,
+			java.util.Arrays.asList(DrugReferenceTestSupport.activeOrder("order-combination",
+				FOLDED_COMBINATION_DISPLAY, DrugReferenceTestSupport.set("rifapentine"), codes)));
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+				.validate("", "Can I give her rifampicin, rifabutin and paracetamol?", chart);
+
+		assertEquals(2, warnings.size(),
+			"precondition: one folded chip and one class-ONLY chip about the one co-medication, or"
+					+ " there is no class-only sentence to disagree with the rule chips, was: "
+					+ DrugReferenceTestSupport.details(warnings));
+		assertTrue(warnings.get(1).getDetail().startsWith("Rifabutin is in the same ATC class"),
+			"precondition: the second chip must be the class arm's own sentence, was: "
+					+ DrugReferenceTestSupport.details(warnings));
+		assertEquals(java.util.Arrays.asList("rifapentine", "rifapentine", "Rifapentine"),
+			orderNames(warnings),
+			"a display this response has refused for a co-medication may not be printed by the class"
+					+ " arm's own sentence either: the refusal is a property of the prescription, so a"
+					+ " class-only chip steps back to the rung the ladder used before the order renamed"
+					+ " the partner (issue #339), was: " + DrugReferenceTestSupport.details(warnings));
+	}
+
+	/**
+	 * The same arrangement over the dataset the module SHIPS, on an ordinary fixed-dose product.
+	 *
+	 * <p>One {@code Dolutegravir / Lamivudine} order — codes {@code J05AR25}, which the shipped data
+	 * does not cover, so {@code soleSubstanceOf} falls through to the covered {@code J05AF05} — asked
+	 * about one of its own constituents beside a rated partner of the other and a third drug that only
+	 * shares the class. Measured at this head before the fix, the response read
+	 * {@code Emtricitabine interacts with active order lamivudine — Major. … Emtricitabine is in the
+	 * same ATC class (J05AF) as active order lamivudine} beside {@code Entecavir is in the same ATC
+	 * class (J05AF) as active order Dolutegravir / Lamivudine}; at the merge base all three sentences
+	 * read {@code Dolutegravir / Lamivudine}.
+	 *
+	 * <p>Asserted as agreement rather than against literals, for the reason
+	 * {@link #aCombinationOrderOnTheShippedKnowledgeBaseIsNamedOneWay} gives — which name survives is
+	 * the fixture case's business and a knowledge-base refresh may move the row. Agreement here is
+	 * case-INSENSITIVE, and that is the residue the fixture case pins rather than a weakening: the rule
+	 * chips print the knowledge base's match token and the class-only chip the row's own display, and
+	 * no gate can make a class-only chip say the token.
+	 */
+	@Test
+	public void aClassOnlyChipOnTheShippedKnowledgeBaseRefusesTheRefusedDisplay() throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport
+				.serviceWith(DrugReferenceTestSupport.shippedEntries());
+		java.util.Set<String> codes = DrugReferenceTestSupport.set("J05AR25", "J05AF05");
+		PatientClinicalContext chart = service.withReferenceNames(DrugReferenceTestSupport.ctx(60, null,
+			DrugReferenceTestSupport.set(ANTIRETROVIRAL_COMBINATION_DISPLAY), codes, null, null,
+			java.util.Arrays.asList(DrugReferenceTestSupport.activeOrder("order-combination",
+				ANTIRETROVIRAL_COMBINATION_DISPLAY,
+				DrugReferenceTestSupport.set(ANTIRETROVIRAL_COMBINATION_DISPLAY), codes))));
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+				.validate("", "Can I give her dolutegravir, emtricitabine and entecavir?", chart);
+
+		boolean classOnly = false;
+		for (SafetyWarning warning : warnings) {
+			classOnly = classOnly || warning.getDetail().startsWith("Entecavir is in the same ATC class");
+		}
+		assertTrue(classOnly,
+			"precondition: the shipped data must raise a class-ONLY chip about this prescription, or"
+					+ " there is no second convention to disagree with the rule chip, was: "
+					+ DrugReferenceTestSupport.details(warnings));
+		List<String> names = orderNames(warnings);
+		assertTrue(names.size() >= 2, "precondition: at least two sentences must name the active"
+				+ " order, was: " + DrugReferenceTestSupport.details(warnings));
+		for (String name : names) {
+			assertEquals(names.get(0).toLowerCase(), name.toLowerCase(),
+				"one prescription, one name, on the data an operator actually runs: a display this"
+						+ " response refused for a co-medication may not survive on the class arm's own"
+						+ " sentence (issue #339), was: " + DrugReferenceTestSupport.details(warnings));
+			assertFalse(ANTIRETROVIRAL_COMBINATION_DISPLAY.equals(name),
+				"the refused display may not be printed at all, was: "
+						+ DrugReferenceTestSupport.details(warnings));
+		}
+	}
+
+	/**
+	 * An order the loaded dataset covers NO entry for keeps its own display even where this response
+	 * has refused that display, because the only rung behind it is the bare ATC code.
+	 *
+	 * <p>{@code classPartnerName}'s step back to the dataset's name is available only where the ladder
+	 * reached an entry at all. Where it did not — every code of the order uncovered, and
+	 * {@code soleSubstanceOf} answering null with it — {@code OrderPartner.labelEntry} is null and the
+	 * rung behind the display is {@code [ATC …]}, the ABSENCE of a name, which issue #155 and issue
+	 * #290 exist to keep out of a chip (ADR Decisions 38 and 39). So the display stands and the
+	 * response's own refusal is not honoured on this one sentence — the residue review round 6 leaves,
+	 * recorded in ADR Decision 61 beside the ENTRY rung's own.
+	 *
+	 * <p>It also pins the ORDER of {@code classPartnerName}'s two branches: reached with a null
+	 * {@code labelEntry}, the election dereferences it, so removing that guard fails here rather than
+	 * in silence.
+	 */
+	@Test
+	public void anOrderTheDatasetCoversNoEntryForKeepsItsOwnDisplayEvenWhenRefused()
+			throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
+			DrugReferenceTestSupport.fixtureEntries(CLASS_ONLY_COMBINATION_FIXTURE));
+		java.util.Set<String> codes = DrugReferenceTestSupport.set("J04AB99");
+		PatientClinicalContext chart = DrugReferenceTestSupport.ctx(60, null,
+			DrugReferenceTestSupport.set(FOLDED_COMBINATION_DISPLAY), codes, null, null,
+			java.util.Arrays.asList(DrugReferenceTestSupport.activeOrder("order-uncovered",
+				FOLDED_COMBINATION_DISPLAY, DrugReferenceTestSupport.set("rifapentine"), codes)));
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+				.validate("", "Can I give her rifabutin and paracetamol?", chart);
+
+		assertEquals(java.util.Arrays.asList(FOLDED_COMBINATION_DISPLAY), orderNames(warnings),
+			"an order the dataset covers no entry for has no dataset name to step back to, and the"
+					+ " bare ATC code is the absence of a name rather than a second one, so the refused"
+					+ " display stands (issue #339), was: "
+					+ DrugReferenceTestSupport.details(warnings));
+	}
+
+	/**
+	 * The two reasons COMPOSE: where the fold declines and the response has also refused the display,
+	 * the class sentence prints neither the display nor a name from a rule it could not use.
+	 *
+	 * <p>{@code reconciledPartnerName} answers null on the ORDER rung when the rule's token does not
+	 * name the prescription that supplied the label — the {@code naproxen}-rule-under-a-PPI-order shape
+	 * that rung exists to refuse — and the fold then words its class sentence from
+	 * {@code classPartnerName}. Review round 6 makes that method honour the response's own refusal, so
+	 * the class sentence steps back to the dataset's name for the substance the ladder keyed the partner
+	 * on ({@code Naproxen}) instead of printing {@code Esomeprazole 20mg}, which is the very
+	 * mis-attribution the rule sentence refused one line above — a class relationship found through
+	 * naproxen's own ATC code, printed under a proton-pump inhibitor's prescription.
+	 *
+	 * <p>So this is not the case difference the other round-6 cases pin: the two strings are
+	 * {@code naproxen} and {@code Naproxen}, one substance, where before the fix they were
+	 * {@code naproxen} and {@code Esomeprazole 20mg} — and at the merge base {@code abb36813} too,
+	 * measured through this same fixture in a worktree, so this arrangement is an improvement on both
+	 * heads rather than a regression repaired. Reading {@code OrderPartner.label} in
+	 * {@code classPartnerName} — either by dropping the refusal conjunct or wholesale — reddens this.
+	 */
+	@Test
+	public void aFoldDeclinedForOneReasonStillHonoursTheResponsesRefusal() throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
+			DrugReferenceTestSupport.fixtureEntries(REFUSED_RENAMED_PARTNER_FIXTURE));
+		java.util.Set<String> codes = DrugReferenceTestSupport.set("M01AE02", "A02BC99");
+		PatientClinicalContext chart = DrugReferenceTestSupport.ctx(60, null,
+			DrugReferenceTestSupport.set("Esomeprazole 20mg"), codes, null, null,
+			java.util.Arrays.asList(DrugReferenceTestSupport.activeOrder("order-esomeprazole",
+				"Esomeprazole 20mg", DrugReferenceTestSupport.set("esomeprazole 20mg"), codes)));
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+				.validate("", "Can I give her ibuprofen and esomeprazole?", chart);
+
+		assertEquals(1, warnings.size(), "one chip, was: "
+				+ DrugReferenceTestSupport.details(warnings));
+		assertTrue(warnings.get(0).getDetail().contains("same ATC class"),
+			"precondition: the class arm must fold onto this chip, or there is no class sentence to"
+					+ " word from classPartnerName and the case cannot see the defect, was: "
+					+ DrugReferenceTestSupport.details(warnings));
+		assertEquals(java.util.Arrays.asList("naproxen", "Naproxen"), orderNames(warnings),
+			"a fold that declined because the rule's token does not name the prescription must still"
+					+ " not let the class sentence print a display this response refused: it names the"
+					+ " substance the ladder keyed the partner on, not the order the label came from"
+					+ " (issue #339), was: " + DrugReferenceTestSupport.details(warnings));
 	}
 }

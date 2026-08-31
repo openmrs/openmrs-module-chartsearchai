@@ -1,0 +1,59 @@
+{
+  "version": "1.0",
+  "source": "test fixture — issue #339 review round 6: the ORDER rung's refusal is a property of the PRESCRIPTION, so a class-ONLY chip about it may not go on printing the display the rule chips refused",
+  "description": "drug-reference-combination-order-folded.json with a SECOND drug in the partner's ATC subgroup that carries no rule, so ONE response raises a FOLDED chip about the combination order (Rifampicin: rule on rifapentine plus the shared J04AB) and a class-ONLY chip about the same co-medication (Rifabutin: J04AB, no rule). The order's own combination code J04AC51 is not in the dataset, so DrugSafetyValidator.orderPartners falls to soleSubstanceOf, resolves J04AB05 to Rifapentine and OrderPartner.nameByOrder renames that partner after the ORDER. The display names Paracetamol, which the question also puts in play, so CoMedications.displayNamesAnotherChipSubject refuses the display for this co-medication — on every RULE chip about it since review round 5, and since round 6 on the class arm's own sentence too, which steps back to the rung the ladder used before nameByOrder (the dataset's name for the substance soleSubstanceOf resolved, elected by this response). Paracetamol carries no rule and shares no subgroup with the order's codes, so it raises no chip of its own and is only there to make the refusal fire.",
+  "entries": [
+    {
+      "id": "rifampicin",
+      "name": "Rifampicin",
+      "aliases": [
+        "rifampicin"
+      ],
+      "atcCodes": [
+        "J04AB02"
+      ],
+      "interactions": [
+        {
+          "token": "rifapentine",
+          "atc": "J04AB05",
+          "severity": "Moderate",
+          "note": "Both are rifamycins and induce CYP3A4."
+        }
+      ],
+      "source": "test fixture"
+    },
+    {
+      "id": "rifabutin",
+      "name": "Rifabutin",
+      "aliases": [
+        "rifabutin"
+      ],
+      "atcCodes": [
+        "J04AB04"
+      ],
+      "source": "test fixture"
+    },
+    {
+      "id": "paracetamol",
+      "name": "Paracetamol",
+      "aliases": [
+        "paracetamol"
+      ],
+      "atcCodes": [
+        "N02BE01"
+      ],
+      "source": "test fixture"
+    },
+    {
+      "id": "rifapentine",
+      "name": "Rifapentine",
+      "aliases": [
+        "rifapentine"
+      ],
+      "atcCodes": [
+        "J04AB05"
+      ],
+      "source": "test fixture"
+    }
+  ]
+}

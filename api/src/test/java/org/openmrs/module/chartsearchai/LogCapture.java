@@ -122,6 +122,28 @@ public final class LogCapture implements AutoCloseable {
 		return out;
 	}
 
+	/**
+	 * @return whether one captured message at {@code level} carries every one of {@code needles}.
+	 *
+	 *         <p>Here rather than copied per suite: every assertion the two fidelity checks make is a
+	 *         {@code contains} over a log line, so a change to how {@link #messagesAt} renders a
+	 *         message, or to the line a check emits, must be able to redden both files at once. Two
+	 *         private copies of this loop is how it would instead leave one of them silently matching
+	 *         nothing — a green test, not a red one.
+	 */
+	public boolean hasMessageAt(Level level, String... needles) {
+		for (String message : messagesAt(level)) {
+			boolean all = true;
+			for (String needle : needles) {
+				all = all && message.contains(needle);
+			}
+			if (all) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	/** @return every captured event rendered as {@code LEVEL message}, for assertion failure text. */
 	public List<String> describeAll() {
 		List<String> out = new ArrayList<String>();

@@ -4324,8 +4324,12 @@ public class DrugSafetyValidator {
 		if (trimmed.isEmpty()) {
 			return trimmed;
 		}
+		// The shared terminator set, not a literal of this method's own: since issue #337
+		// ReferenceProseFidelityCheck's record-sentence exit depends on the character appended here
+		// being one that ChartSearchAiUtils.mayEndASentence recognises, and two spellings of one set
+		// is what lets them come apart silently.
 		char last = trimmed.charAt(trimmed.length() - 1);
-		return last == '.' || last == '!' || last == '?' ? trimmed : trimmed + ".";
+		return ChartSearchAiUtils.SENTENCE_TERMINATORS.indexOf(last) >= 0 ? trimmed : trimmed + ".";
 	}
 
 	/**

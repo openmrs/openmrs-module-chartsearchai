@@ -264,7 +264,7 @@ public class SafetyWarning {
 	 * value should trim and case-fold as {@code severityRank} does, and treat anything it does not
 	 * recognise as unrated rather than as a floor. The shipped DDInter dataset publishes exactly
 	 * {@code Major}, {@code Moderate}, {@code Minor} and {@code Unknown}, none null and none blank,
-	 * and the bundled curated seed rates none of its rules; ADR Decision 61 carries that census and
+	 * and the bundled curated seed rates none of its rules; ADR Decision 62 carries that census and
 	 * the production method that produced it, and is not restated here.
 	 *
 	 * <p><b>Read this field; do not fall back to parsing {@link #getDetail()}.</b> On the bundled

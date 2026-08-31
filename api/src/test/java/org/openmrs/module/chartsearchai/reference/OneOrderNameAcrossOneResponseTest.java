@@ -56,6 +56,11 @@ public class OneOrderNameAcrossOneResponseTest {
 	private static final String COMBINATION_ORDER_FIXTURE =
 			"chartsearchai-test/drug-reference-combination-order-two-rules.json";
 
+	/** As above, with the rule moved onto the {@code Isoniazid} entry, so the prescription that would
+	 *  supply the partner's name also names the chip's own SUBJECT — see the fixture's note. */
+	private static final String SELF_NAMED_COMBINATION_FIXTURE =
+			"chartsearchai-test/drug-reference-combination-order-self-named.json";
+
 	/** A verbatim shipped-KB slice in which ONE prescription is reached by the class arm from one
 	 *  subject and by the rule arm from another — see the fixture's own note. */
 	private static final String CLASS_ONLY_AND_RULE_FIXTURE =
@@ -302,6 +307,52 @@ public class OneOrderNameAcrossOneResponseTest {
 			"precondition: the flattened shape carries no per-order structure");
 		assertEquals(java.util.Arrays.asList("Warfarin"), orderNames(warnings),
 			"the chip reconciles from the flattened code set alone, was: " + warnings);
+	}
+
+	/**
+	 * A prescription may not name a chip's partner where that same prescription names the chip's own
+	 * SUBJECT — or the finding reads as a drug interacting with itself and the interacting agent is
+	 * gone from the lead.
+	 *
+	 * <p><b>Issue #339, review round 3.</b> Widening the ORDER rung to every rule chip made this
+	 * reachable everywhere the rung is, and ADR Decision 61 recorded it as a fixture-only trade-off.
+	 * It is not: measured through the real {@code validate} over
+	 * {@code DrugReferenceTestSupport.shippedEntries()}, a patient on one
+	 * {@code Lisinopril / Hydrochlorothiazide} order (codes {@code C09BA03}, {@code C03AA03}, the first
+	 * of which that data covers no entry for) asked {@code "Can I give her lisinopril?"} was shown
+	 * {@code Lisinopril interacts with active order Lisinopril / Hydrochlorothiazide — Moderate}, where
+	 * before issue #339 it read {@code active order hydrochlorothiazide}. Fixed-dose combinations are
+	 * ordinary prescriptions and the shipped knowledge base rules on the constituents of several
+	 * (Isoniazid/Rifampicin, Amlodipine/Atorvastatin, Budesonide/Formoterol).
+	 *
+	 * <p>The chip reaches the prompt verbatim through {@code DrugReferenceInjector.renderFinding} as a
+	 * citable {@code safety_finding} carrying {@code STRENGTH_WITHHOLD}, which is why it is refused
+	 * rather than merely noted. Refusing returns the chip to {@code partnerLabel} — the rule's own
+	 * token — which is what it printed before this issue.
+	 *
+	 * <p>It costs the ticket's own combination case nothing:
+	 * {@link #twoRulesAboutOneCombinationPrescriptionNameItOnce} has subject Carbamazepine, which the
+	 * order's display does not name, so both of its chips still take the display. Mutating the new
+	 * conjunct to always permit reddens this case alone.
+	 */
+	@Test
+	public void aPrescriptionThatNamesTheSubjectDoesNotNameThePartner() throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
+			DrugReferenceTestSupport.fixtureEntries(SELF_NAMED_COMBINATION_FIXTURE));
+		java.util.Set<String> codes = DrugReferenceTestSupport.set("J04AC51", "J04AB05");
+		PatientClinicalContext chart = DrugReferenceTestSupport.ctx(60, null,
+			DrugReferenceTestSupport.set(COMBINATION_DISPLAY), codes, null, null,
+			java.util.Arrays.asList(DrugReferenceTestSupport.activeOrder("order-combination",
+				COMBINATION_DISPLAY, DrugReferenceTestSupport.set("isoniazid / rifapentine"), codes)));
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+				.validate("", "Can I give her isoniazid?", chart);
+
+		assertEquals(1, warnings.size(), "one chip, was: " + warnings);
+		assertEquals(java.util.Arrays.asList("rifapentine"), orderNames(warnings),
+			"the chip must name the drug its mechanism is about: a prescription naming the subject as"
+					+ " well as the partner cannot stand in for the partner, or the finding reads as"
+					+ " Isoniazid interacting with itself, was: " + warnings);
 	}
 
 	/**

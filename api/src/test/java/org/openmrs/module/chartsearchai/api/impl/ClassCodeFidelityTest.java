@@ -12,6 +12,7 @@ package org.openmrs.module.chartsearchai.api.impl;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -28,6 +29,7 @@ import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
+import org.openmrs.module.chartsearchai.reference.PairChipExtent;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
@@ -51,7 +53,12 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * cites state class codes, every ATC-shaped token in the answer must be one of them — or one the
  * QUESTION states, which is the reader's own word and not a fabrication — and one that is not is
  * reported at WARN carrying both the code the answer states and the codes its cited records state.
- * When they state none, there was nothing to copy and the check says nothing. There is deliberately
+ * When they state none, there was nothing to copy and the check says nothing. Since issue #338 it
+ * also pins what the answer does with a code it copied FAITHFULLY: a code stated more than once
+ * inside one parenthetical, and a citation marker placed inside one, are reported from the shape of
+ * the prose alone, each parenthetical read at its own level — see the block above
+ * {@link #aClassCodeRepeatedInsideOneParentheticalIsReported()} for what that level buys and
+ * what it gives up. There is deliberately
  * no roll-up from a cited substance code to its class: correct as such an answer usually is,
  * accepting it silences this issue's own headline capture, and
  * {@link #generalisingACitedSubstanceCodeToItsClassIsReported()} pins that with the reason. The answer prose
@@ -123,10 +130,12 @@ public class ClassCodeFidelityTest {
 		});
 		created.setDrugSafetyValidator(new DrugSafetyValidator() {
 
-			// the mappings-carrying overload production actually calls (issue #105)
+			// The overload production actually calls: mappings-carrying for echo scoping (issue #105)
+			// and sink-carrying since issue #336. Stubbing the four-argument one instead leaves this
+			// stub INERT — production would not reach it — which is why it names both parameters.
 			@Override
 			public List<SafetyWarning> validate(String answer, String question, Patient patient,
-					List<RecordMapping> mappings) {
+					List<RecordMapping> mappings, PairChipExtent.Sink pairExtentSink) {
 				return Collections.emptyList();
 			}
 		});
@@ -412,6 +421,409 @@ public class ClassCodeFidelityTest {
 			assertTrue(warnStating(capture, "Class-code check failed"),
 					"and the check's own failure must not be silent. Captured: "
 							+ capture.describeAll());
+		}
+	}
+
+
+	// ---------------------------------------------------------------------------------------------
+	// Issue #338: the two malformations of a class-code parenthetical that set membership cannot see.
+	// Both are answer-LOCAL — they are decided by the shape of the prose, not by comparing it against
+	// the records — which is why they need no comparison against the chips the answer was expected to
+	// report, the comparison ADR Decision 35 rejects.
+	// ---------------------------------------------------------------------------------------------
+
+	@Test
+	public void aClassCodeRepeatedInsideOneParentheticalIsReported() {
+		// Issue #338's headline capture, on Sarah Taylor: four cited findings each state H02AB and
+		// the answer fused them into one clause reading "(H02AB, H02AB, H02AB, H02AB)". Every token
+		// is supported, so the membership report stays silent — and a MULTISET reading would call
+		// all four occurrences supported too. What no record licenses is the SHAPE: a LIST has a
+		// source (the injected reference record renders one) and a REPETITION has none — see
+		// ClassCodeFidelityCheck.reportMalformedParentheticals for what was measured and its residue.
+		service.setLlmProvider(answering(sentenceStating(TRUE_CODE + ", " + TRUE_CODE)));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			service.search(patient(), QUESTION);
+			assertTrue(warnStating(capture, "more than once inside one parenthetical",
+					"[" + TRUE_CODE + "]", "patient=1"),
+					"a code repeated inside one parenthetical has to be reported, and the WARN has to "
+							+ "carry the code and the patient or a maintainer reading a log with "
+							+ "concurrent requests in it cannot reconstruct it. Captured: "
+							+ capture.describeAll());
+			assertFalse(warnStating(capture, "no cited record"),
+					"and the premise this case rests on: the membership report has nothing to say "
+							+ "about it, so the repetition is the only thing being reported. Captured: "
+							+ capture.describeAll());
+		}
+	}
+
+	@Test
+	public void searchStreaming_shouldReportARepeatedCodeOnThePrimaryProductionPathToo() {
+		// /search/stream is the path users hit — the same reason
+		// searchStreaming_shouldReportItOnThePrimaryProductionPathToo() exists for the membership
+		// report. A rule wired into search() alone is absent from production traffic.
+		service.setLlmProvider(answering(sentenceStating(TRUE_CODE + ", " + TRUE_CODE)));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			service.searchStreaming(patient(), QUESTION, token -> { });
+			assertTrue(warnStating(capture, "more than once inside one parenthetical",
+					"[" + TRUE_CODE + "]"),
+					"the streaming path must run the same rule. Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void twoDifferentCodesInOneParentheticalAreNotReported() {
+		// The control that discriminates the repetition rule from a rule against parenthesised
+		// lists as such. Both codes come from ONE record — the injected drug-reference record, which
+		// renders ciprofloxacin's own level-5 codes as a round-parenthesised list — so the
+		// membership report has nothing to say either, and the silence belongs to this rule.
+		RecordMapping reference = referenceRecord();
+		List<String> codes = new ArrayList<String>(
+				ClassCodeFidelityCheck.classCodesIn(reference.getText()));
+		assertTrue(codes.size() >= 2,
+				"the premise: the real injected reference record states at least two distinct class "
+						+ "codes, so a two-code parenthetical can be built from one cited record. Was: "
+						+ reference.getText());
+		service.setLlmProvider(answering("Ciprofloxacin is filed under (" + codes.get(0) + ", "
+				+ codes.get(1) + ") [" + reference.getIndex() + "]."));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			service.search(patient(), QUESTION);
+			assertFalse(capture.describeAll().isEmpty(),
+					"the capture must receive the pipeline's own INFO lines, or the assertion below "
+							+ "passes vacuously");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"two DIFFERENT codes in one parenthetical are a list the records do license — one "
+							+ "record states both — and reporting it would make this rule noise. "
+							+ "Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void aCitationMarkerInsideACodeParentheticalIsReported() {
+		// Issue #338's third defect, verbatim from the capture: "(H02AB [12])". The marker belongs
+		// after the clause it attributes; inside the parenthetical it reads as part of the code.
+		service.setLlmProvider(answering("Ciprofloxacin is in the same ATC class (" + TRUE_CODE + " ["
+				+ finding.getIndex() + "]) as the patient's active order."));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			service.search(patient(), QUESTION);
+			assertTrue(warnStating(capture, "inside a parenthetical", "[" + TRUE_CODE + "]",
+					"patient=1"),
+					"a citation marker inside the code's own parenthetical has to be reported, "
+							+ "carrying the code and the patient. Captured: " + capture.describeAll());
+			assertFalse(warnStating(capture, "no cited record"),
+					"and the premise: the code itself is faithful, so the membership report has "
+							+ "nothing to say and the placement is the only thing being reported. "
+							+ "Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void aCitationMarkerImmediatelyAfterTheParentheticalIsNotReported() {
+		// The other half of the pair, and the shape the module's own sentence takes: the marker sits
+		// outside the brackets, attributing the clause. The file's faithful-recitation case puts it
+		// at the end of the sentence; this one puts it as close to the parenthetical as it can go
+		// without being inside it, which is the boundary the rule is drawn at.
+		service.setLlmProvider(answering("Ciprofloxacin is in the same ATC class (" + TRUE_CODE
+				+ ") [" + finding.getIndex() + "] as the patient's active order."));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			service.search(patient(), QUESTION);
+			assertFalse(capture.describeAll().isEmpty(),
+					"the capture must receive the pipeline's own INFO lines, or the assertion below "
+							+ "passes vacuously");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"a marker outside the parenthetical is the well-formed shape and must stay quiet. "
+							+ "Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void anAsideStatingACodeAndCarryingItsOwnMarkerIsReported() {
+		// Pins a residue rather than a defect, at the shape review found it in: an aside that
+		// legitimately states a class code AND carries the marker attributing its own clause. The
+		// marker IS after the clause it attributes — it is only inside the aside's brackets — and the
+		// rule reports it, because the rule is about where a marker sits relative to a code and the
+		// discriminator here would be prose structure, which no shape test can read. Recorded so the
+		// first maintainer to triage one of these lines reads the analysis instead of re-deriving it;
+		// ADR Decision 59 carries it in "what it cannot see". If a corpus ever justifies narrowing the
+		// rule, this case is what has to change, deliberately.
+		service.setLlmProvider(answering("She is already on two fluoroquinolones (levofloxacin and "
+				+ "moxifloxacin, both " + TRUE_CODE + " [" + finding.getIndex() + "]), so "
+				+ "ciprofloxacin would be duplicate therapy."));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			service.search(patient(), QUESTION);
+			assertTrue(warnStating(capture, "inside a parenthetical", "[" + TRUE_CODE + "]"),
+					"today this is reported; the case exists so that stops being a surprise and starts "
+							+ "being a decision. Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void aMarkerInANestedAsideBelongsToTheAsideAndNotToTheCode() {
+		// REPLACES a case added earlier in this same change, which asserted the opposite. That case
+		// read a parenthetical's WHOLE text, nested groups included, and clean-context review
+		// measured what it costs: "(ATC class (J01MA) [3])" — a marker correctly placed after the
+		// clause it attributes — was reported as misplaced, and "(levofloxacin (J01MA) and
+		// moxifloxacin (J01MA))" as a repetition, both on correct prose. Each parenthetical is now
+		// read at its own level, so a nested aside's marker is the aside's. The cost is this shape:
+		// a marker the model really did bury inside the code's brackets, one level down, is not
+		// reported. Silence is the direction this check must fail in.
+		service.setLlmProvider(answering("Ciprofloxacin is in the same ATC class (" + TRUE_CODE
+				+ " (see [" + finding.getIndex() + "])) as the patient's active order."));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			service.search(patient(), QUESTION);
+			assertFalse(capture.describeAll().isEmpty(),
+					"the capture must receive the pipeline's own INFO lines, or the assertion below "
+							+ "passes vacuously");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"a marker one level deeper is the aside's, not the code's. Captured: "
+							+ capture.describeAll());
+		}
+	}
+
+	@Test
+	public void removingANestedSpanDoesNotWeldTheTextEitherSideOfIt() {
+		// The level walk leaves a SPACE where a nested group was, not nothing. Deleting it welds the
+		// text either side into one run, and both rules read tokens off the result: measured, this
+		// answer states J01MA exactly once and was reported as repeating it, the second "occurrence"
+		// manufactured by joining "J01M" to the "A" on the far side of the aside.
+		service.setLlmProvider(answering("Ciprofloxacin is in the same ATC class (" + TRUE_CODE
+				.substring(0, TRUE_CODE.length() - 1) + "(sic)" + TRUE_CODE.substring(TRUE_CODE.length() - 1)
+				+ ", " + TRUE_CODE + ") as the order [" + finding.getIndex() + "]."));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			service.search(patient(), QUESTION);
+			assertFalse(warnStating(capture, "more than once inside one parenthetical"),
+					"the code is stated once; a repetition here is manufactured by the walk. Captured: "
+							+ capture.describeAll());
+		}
+	}
+
+	@Test
+	public void aMarkerManufacturedByRemovingANestedSpanIsNotReported() {
+		// The same weld, on the marker rule and in its worst direction: "[0(sic)3]" carries no
+		// citation marker at all, and joining across the aside makes it "[03]" — an index that
+		// resolves to a real record, so the validated-citation intersection cannot see it either.
+		service.setLlmProvider(answering("Ciprofloxacin is in the same ATC class (" + TRUE_CODE
+				+ " [0(sic)" + finding.getIndex() + "]) as the order [" + finding.getIndex() + "]."));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			service.search(patient(), QUESTION);
+			assertFalse(warnStating(capture, "inside a parenthetical"),
+					"there is no marker inside those brackets; one welded out of two fragments is not "
+							+ "a citation the model placed. Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void aRepetitionSeparatedOnlyByAnEmptyNestedGroupIsStillReported() {
+		// The other direction of the same weld, which the separator also fixes: without it the empty
+		// group's removal joins the two codes into one alphanumeric run and the token boundaries
+		// reject both, so a real repetition went silently unreported.
+		service.setLlmProvider(answering("Ciprofloxacin is in the same ATC class (" + TRUE_CODE + "()"
+				+ TRUE_CODE + ") as the order [" + finding.getIndex() + "]."));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			service.search(patient(), QUESTION);
+			assertTrue(warnStating(capture, "more than once inside one parenthetical",
+					"[" + TRUE_CODE + "]"),
+					"the codes are two, separated by an empty aside. Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void twoClausesWrappedInOneAsideAreStillTwoClauses() {
+		// The false alarm that decided the level semantics. Read whole, the enclosing aside states
+		// the class twice — once from each child — and a correct answer about two partners of one
+		// class is accused of the defect this check exists to report. At its own level the aside
+		// states no code at all.
+		service.setLlmProvider(answering("Two of her orders (levofloxacin (" + TRUE_CODE
+				+ ") and moxifloxacin (" + TRUE_CODE + ")) are fluoroquinolones ["
+				+ finding.getIndex() + "]."));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			service.search(patient(), QUESTION);
+			assertFalse(capture.describeAll().isEmpty(),
+					"the capture must receive the pipeline's own INFO lines, or the assertion below "
+							+ "passes vacuously");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"two clauses inside one aside are two clauses, not a repetition. Captured: "
+							+ capture.describeAll());
+		}
+	}
+
+	@Test
+	public void aRepetitionNestedInsideAnotherParentheticalIsStillReported() {
+		// The other side of the same rule, and what an outermost-or-maximal-only walk loses: the
+		// offending brackets are the INNER ones, and the group enclosing them states no code of its
+		// own. Reading only the outermost group reports nothing here.
+		service.setLlmProvider(answering("Her chart notes (she is in the same ATC class (" + TRUE_CODE
+				+ ", " + TRUE_CODE + ") as the order) throughout [" + finding.getIndex() + "]."));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			service.search(patient(), QUESTION);
+			assertTrue(warnStating(capture, "more than once inside one parenthetical",
+					"[" + TRUE_CODE + "]"),
+					"the inner brackets are the offending ones and must be read on their own. "
+							+ "Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void aBracketedNumberTheChartHasNoRecordForIsNotAMisplacedMarker() {
+		// The marker rule reads the answer's own VALIDATED citations rather than every bracketed
+		// integer in the prose. Named for what it actually pins, because a wider claim was written
+		// here first: extractCitedReferences promotes every IN-RANGE bracket to a citation, so what
+		// this excludes is a number the chart has no record for — [97] on a chart of a few records —
+		// and NOT bracketed clinical values as such. An eGFR of 45 beside a 45-record chart is still
+		// reported; that residue is recorded on ADR Decision 59.
+		service.setLlmProvider(answering("Ciprofloxacin is in the same ATC class (" + TRUE_CODE
+				+ ", dose [97] mg) as the patient's active order — possible duplicate therapy ["
+				+ finding.getIndex() + "]."));
+		// On the PACKAGE so the assertion is not vacuous — the check reports nothing here and a
+		// class-scoped capture would be empty — but asserted on the check's OWN message rather than
+		// on WARN level, because the pipeline legitimately warns about the out-of-range index
+		// itself ("LLM cited record [97] which does not exist"), which is that guard doing its job.
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			service.search(patient(), QUESTION);
+			assertFalse(capture.describeAll().isEmpty(),
+					"the capture must receive the pipeline's own lines, or the assertion below "
+							+ "passes vacuously");
+			assertFalse(warnStating(capture, "inside a parenthetical"),
+					"[97] is a dose, not a citation of record 97. Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void theSameCodeStatedOnceInEachOfTwoParentheticalsIsNotRepetition() {
+		// The rule is "more than once inside ONE parenthetical", and this is the shape that makes the
+		// qualifier load-bearing: two clauses about two partners each state the class once, which is
+		// #142's own (A01AD) (A01AD) capture and is what correct prose about two partners looks like.
+		// Hoisting the per-group set out of the walk turns this into a WARN and nothing else notices.
+		service.setLlmProvider(answering("Ciprofloxacin is in the same ATC class (" + TRUE_CODE
+				+ ") as one active order and in the same ATC class (" + TRUE_CODE + ") as another ["
+				+ finding.getIndex() + "]."));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			service.search(patient(), QUESTION);
+			assertFalse(capture.describeAll().isEmpty(),
+					"the capture must receive the pipeline's own INFO lines, or the assertion below "
+							+ "passes vacuously");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"a code stated once in each of two parentheticals is two clauses, not a repetition, "
+							+ "and this check does not separate that from correct prose. Captured: "
+							+ capture.describeAll());
+		}
+	}
+
+	@Test
+	public void aMarkerInsideAParentheticalThatStatesNoCodeIsNotReported() {
+		// The other qualifier: "inside a parenthetical THAT STATES A CLASS CODE". Without it this
+		// stops being a rule about codes and becomes a rule about brackets — every aside a model
+		// writes with a citation in it would be reported, on an answer that is otherwise faithful.
+		service.setLlmProvider(answering("Ciprofloxacin is in the same ATC class (" + TRUE_CODE
+				+ ") as the patient's active order (see [" + finding.getIndex() + "])."));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			service.search(patient(), QUESTION);
+			assertFalse(capture.describeAll().isEmpty(),
+					"the capture must receive the pipeline's own INFO lines, or the assertion below "
+							+ "passes vacuously");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"an aside carrying a marker and no code is outside this rule's subject matter. "
+							+ "Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void anUnmatchedClosingBracketDoesNotSwallowTheGroupAfterIt() {
+		// An unmatched ')' is ignored rather than treated as closing something. Treated as a close it
+		// would consume the walk's state and the real parenthetical after it would go unexamined —
+		// a silent miss, which is the direction this check must not fail in when it has evidence.
+		service.setLlmProvider(answering("Levofloxacin) is on the chart. Ciprofloxacin is in the same "
+				+ "ATC class (" + TRUE_CODE + ", " + TRUE_CODE + ") as it [" + finding.getIndex()
+				+ "]."));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			service.search(patient(), QUESTION);
+			assertTrue(warnStating(capture, "more than once inside one parenthetical",
+					"[" + TRUE_CODE + "]"),
+					"the stray ')' must not consume the walk. Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void anUnclosedBracketEarlierDoesNotSilenceTheParentheticalAfterIt() {
+		// The failure an outermost-only walk had: with an unclosed '(' still open, no group is ever
+		// at depth zero again, so every malformed parenthetical in the rest of the answer was
+		// invisible — silently, fail-open, on exactly the malformed model prose this rule is about.
+		// Reading every BALANCED group is what closes it; the unclosed bracket itself still yields
+		// nothing, so a paragraph is never pooled into one "parenthetical".
+		service.setLlmProvider(answering("The dose (was raised. Ciprofloxacin is in the same ATC "
+				+ "class (" + TRUE_CODE + ", " + TRUE_CODE + ") as the order [" + finding.getIndex()
+				+ "]."));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			service.search(patient(), QUESTION);
+			assertTrue(warnStating(capture, "more than once inside one parenthetical",
+					"[" + TRUE_CODE + "]"),
+					"a stray '(' earlier in the answer must not blind the rule to what follows. "
+							+ "Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void twoOffendingParentheticalsWithDifferentCodesAreTwoEntries() {
+		// Why the marker report is one entry per PAIRING rather than two pooled lists: with two
+		// offending groups, pooled lists say which codes and which markers occurred and no longer say
+		// which sat with which. Nothing else in this file has two offending groups in one answer.
+		// The line reports distinct placements and not a count of brackets — two groups stating the
+		// same codes with the same markers are one entry, which is what the WARN's wording says and
+		// what aTwiceRepeatedIdenticalPlacementIsOneEntry pins.
+		RecordMapping reference = referenceRecord();
+		List<String> codes = new ArrayList<String>(
+				ClassCodeFidelityCheck.classCodesIn(reference.getText()));
+		assertTrue(codes.size() >= 2,
+				"the premise: the injected reference record states two distinct class codes, so the "
+						+ "two groups can carry different ones. Was: " + reference.getText());
+		service.setLlmProvider(answering("Ciprofloxacin is filed under (" + codes.get(0) + " ["
+				+ reference.getIndex() + "]) and under (" + codes.get(1) + " [" + finding.getIndex()
+				+ "])."));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			service.search(patient(), QUESTION);
+			assertTrue(warnStating(capture, "one entry per distinct code-and-marker pairing",
+					"[" + codes.get(0) + "] with [" + reference.getIndex() + "]",
+					"[" + codes.get(1) + "] with [" + finding.getIndex() + "]"),
+					"each offending parenthetical has to be its own entry, pairing the codes it "
+							+ "states with the markers inside it. Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void aRepeatedCodeIsSilentWhereNoCitedRecordStatesAClassCode() {
+		// The shape rules inherit the membership report's gates rather than re-arguing them, and
+		// this is where that costs something: the repetition is wrong on its own terms, but with no
+		// code-bearing record cited the whole check declines and says nothing about it. ADR Decision
+		// 59 records that as a place a real defect can hide; this pins it so a later change that
+		// moves the rules out from behind the gates has to say so rather than drift there.
+		PatientChart codeless = chartRecordStating("Antibiotic course: ceftriaxone 1 g IV completed");
+		TestableService onCodeless = newService(codeless);
+		onCodeless.setLlmProvider(answering("She had ceftriaxone, ATC class (" + TRUE_CODE + ", "
+				+ TRUE_CODE + ") [1]."));
+		try (LogCapture capture = LogCapture.on(CHECK, Level.DEBUG)) {
+			onCodeless.search(patient(), QUESTION);
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"the shape rules run behind the membership gates, so this declines. Captured: "
+							+ capture.describeAll());
+			assertTrue(debugStating(capture, "no cited record states a class code"),
+					"and which gate declined has to be identifiable, or the silence could be the "
+							+ "rule never having run. Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void aTwiceRepeatedIdenticalPlacementIsOneEntry() {
+		// The other half of the wording: the entries are distinct PLACEMENTS, not offending brackets.
+		// Two parentheticals stating the same code with the same marker inside collapse to one entry,
+		// so a maintainer counting clauses off this line would undercount — which is why the line
+		// does not offer itself as a count.
+		service.setLlmProvider(answering("First (" + TRUE_CODE + " [" + finding.getIndex()
+				+ "]) and second (" + TRUE_CODE + " [" + finding.getIndex() + "])."));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			service.search(patient(), QUESTION);
+			assertTrue(warnStating(capture, "one entry per distinct code-and-marker pairing",
+					"[[" + TRUE_CODE + "] with [" + finding.getIndex() + "]]"),
+					"two identical placements are one entry, and the line says pairing rather than "
+							+ "parenthetical for exactly that reason. Captured: " + capture.describeAll());
 		}
 	}
 

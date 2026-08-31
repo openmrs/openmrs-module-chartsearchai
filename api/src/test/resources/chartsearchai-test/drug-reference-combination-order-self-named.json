@@ -1,0 +1,37 @@
+{
+  "version": "1.0",
+  "source": "test fixture — issue #339 review round 3: a combination prescription that names the chip's own subject",
+  "description": "As drug-reference-combination-order-two-rules.json, with the rule moved onto the Isoniazid entry so the SUBJECT is one half of the combination. The order's own combination code J04AC51 is not in the dataset, so DrugSafetyValidator.orderPartners falls to soleSubstanceOf, resolves the covered J04AB05 to Rifapentine and OrderPartner.nameByOrder renames that partner after the ORDER — and the rule's token `rifapentine` does name that display, so the issue #292 gate admits the displacement. The display also names Isoniazid, so the chip would read `Isoniazid interacts with active order Isoniazid / Rifapentine`: a drug interacting with itself, with the interacting agent gone from the lead. ADR Decision 61 recorded this as a fixture-only trade-off; it is reachable on the shipped knowledge base with any fixed-dose combination whose constituents that data rules on (Lisinopril / Hydrochlorothiazide, measured).",
+  "entries": [
+    {
+      "id": "isoniazid",
+      "name": "Isoniazid",
+      "aliases": [
+        "isoniazid"
+      ],
+      "atcCodes": [
+        "J04AC01"
+      ],
+      "interactions": [
+        {
+          "token": "rifapentine",
+          "atc": "J04AB05",
+          "severity": "Moderate",
+          "note": "Rifapentine induces CYP3A4 and lowers isoniazid exposure."
+        }
+      ],
+      "source": "test fixture"
+    },
+    {
+      "id": "rifapentine",
+      "name": "Rifapentine",
+      "aliases": [
+        "rifapentine"
+      ],
+      "atcCodes": [
+        "J04AB05"
+      ],
+      "source": "test fixture"
+    }
+  ]
+}

@@ -213,15 +213,43 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * Production entry point with the chart's record mappings, which enable echo scoping: an
+	 * Public entry point with the chart's record mappings, which enable echo scoping: an
 	 * answer-named drug that a record cited by the answer already names in its own text (a
 	 * recited reference partner, an allergy reported off the chart) is a mention, not a
 	 * proposal, and is not validated (issue #105). Passing {@code null}/empty mappings disables
 	 * the scoping and keeps every answer-named drug in play (the conservative pre-scoping
 	 * behavior).
+	 *
+	 * <p><b>Since issue #336, {@code LlmInferenceService} calls the five-argument overload below,
+	 * not this one</b> — it also publishes how bounded the pairwise interaction list is, which this
+	 * arity has nowhere to carry. A decorator or a test double that overrides THIS method alone is
+	 * therefore inert on the production path, and inert SILENTLY — it returns, production simply
+	 * never reaches it. Of the stubs in this repo that overrode it, exactly one asserted on the seam
+	 * and went red; the rest passed while stubbing nothing, and two of them were still doing so after
+	 * a review of the commit that added the overload — a sweep of the tree is what finds them, not a
+	 * reading of the diff. Override the overload below, and where a test asserts that production
+	 * reached the validator at all, assert WHICH arity it reached
+	 * ({@code LlmInferenceServiceCitationWiringTest} does).
 	 */
 	public List<SafetyWarning> validate(String answer, String question, Patient patient,
 			List<RecordMapping> mappings) {
+		return validate(answer, question, patient, mappings, null);
+	}
+
+	/**
+	 * The production entry point a caller uses when it intends to PUBLISH how bounded the answer's
+	 * pairwise interaction list is (issue #336). Identical to
+	 * {@link #validate(String, String, Patient, List)} in every other respect.
+	 *
+	 * @param pairExtentSink a caller-supplied one-slot accumulator the pairwise arms state their
+	 *        candidate and reported counts into, or {@code null} from a caller that does not
+	 *        publish it. It is the caller's per-call object and never a field: this bean is a
+	 *        Spring singleton, so a field would be one slot shared by every concurrent request
+	 *        (issue #172). The fail-safe below is what makes the sink's own null honest — a pass
+	 *        that threw states nothing rather than stating a complete screen.
+	 */
+	public List<SafetyWarning> validate(String answer, String question, Patient patient,
+			List<RecordMapping> mappings, PairChipExtent.Sink pairExtentSink) {
 		try {
 			if (!ChartSearchAiUtils.isDrugReferenceEnabled()
 					|| !ChartSearchAiUtils.getBooleanGlobalProperty(
@@ -230,7 +258,7 @@ public class DrugSafetyValidator {
 				return new ArrayList<SafetyWarning>();
 			}
 			PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
-			return validate(answer, question, context, mappings);
+			return validate(answer, question, context, mappings, null, pairExtentSink);
 		}
 		catch (RuntimeException e) {
 			log.warn("Drug-safety validation failed; returning no warnings — the answer path is never broken", e);
@@ -268,8 +296,14 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * Mappings-aware overload — the seam the public entry point delegates to. See
-	 * {@link #validate(String, String, Patient, List)} for the echo-scoping contract.
+	 * Mappings-aware overload, reached from the question- and answer-only seams above it and from
+	 * tests. See {@link #validate(String, String, Patient, List)} for the echo-scoping contract.
+	 *
+	 * <p><b>It is not the seam production reaches</b>, and has not been since issue #336: the public
+	 * {@code Patient} entry point delegates to the widest arity directly, because a sink has to travel
+	 * with it. So overriding THIS overload does not intercept production either — the same trap the
+	 * four-argument entry point above documents, one level down, and the reason that one documents it
+	 * is that a sweep of the tree found two stubs already caught by it.
 	 */
 	List<SafetyWarning> validate(String answer, String question, PatientClinicalContext rawContext,
 			List<RecordMapping> mappings) {
@@ -277,16 +311,20 @@ public class DrugSafetyValidator {
 	}
 
 	/**
+	 * Five-argument seam for a caller that does not publish the pairwise extent — the internal
+	 * mappings-aware overload above and {@code DrugReferenceInjector.preAnswerFindings}, whose
+	 * findings go to the PROMPT rather than to a response. See the widest arity for both parameters.
+	 */
+	List<SafetyWarning> validate(String answer, String question, PatientClinicalContext rawContext,
+			List<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries) {
+		return validate(answer, question, rawContext, mappings, resolvedOrderEntries, null);
+	}
+
+	/**
 	 * The widest arity, and the one that builds the pass's shared state — every other delegates to it.
 	 *
-	 * <p><b>Two structural guards delimit this body by a literal needle, and each spells BOTH lines of
-	 * this declaration.</b> Neither line alone will do, for two different reasons, and both were
-	 * measured: the first line alone matches twice, since the arity above opens with a byte-identical
-	 * one, and a needle matching twice is a hard failure in each guard's own unique-offset check
-	 * ({@code SourceScan.uniqueOffset} for {@code CoMedicationResolutionPerPassTest}, and
-	 * {@code ChipSubjectOneResolutionTest}'s own copy of it, which ADR Decision 54 records as
-	 * deliberately not migrated); and the second line alone names no METHOD, which is what the first
-	 * line buys. Move this declaration and the needles
+	 * <p><b>Two structural guards delimit this body by a literal needle, and each spells ALL THREE
+	 * lines of this declaration.</b> No shorter prefix is spelled, and what each buys was measured rather than assumed. The first line alone matches THREE times — this declaration and the two arities above it that open identically — and a needle matching more than once is a hard failure in each guard's own unique-offset check ({@code SourceScan.uniqueOffset} for {@code CoMedicationResolutionPerPassTest}, and {@code ChipSubjectOneResolutionTest}'s own copy of it, which ADR Decision 54 records as deliberately not migrated). The two-line prefix is ALREADY unique, and by one character: the five-argument seam above wraps its parameters identically and ends that line with {@code )} where this one ends with a comma. So the third line is not what buys uniqueness — spelling it is what makes any re-wrap of this declaration re-target both needles loudly instead of leaving one silently landing on the seam. The tail alone names no METHOD, which is what the first line buys. Move this declaration and the needles
 	 * move with it — {@code ChipSubjectOneResolutionTest} and {@code CoMedicationResolutionPerPassTest},
 	 * which say so themselves.
 	 *
@@ -326,9 +364,18 @@ public class DrugSafetyValidator {
 	 *        {@code activeDrugReferenceNames}, which {@code findForActiveOrders} does not read.
 	 *        {@code ActiveOrderResolutionPerPassTest} pins both halves: that the pass resolves once,
 	 *        and that what it injects is what a self-resolving pass produces.
+	 *
+	 * @param pairExtentSink where the PAIRWISE arms state how many above-floor pairs they found and
+	 *        how many of them {@link #maxPairChips()} let them report, or {@code null} down every
+	 *        path but the one {@code LlmInferenceService} takes to publish it on the answer. It is
+	 *        a caller-supplied per-call object rather than a field for issue #172's reason, the same
+	 *        one {@code resolvedOrderEntries} above gives. Issue #336: without it a capped list was
+	 *        indistinguishable from a complete one everywhere but the log. See
+	 *        {@link PairChipExtent} for what an absent statement does and does not mean.
 	 */
 	List<SafetyWarning> validate(String answer, String question, PatientClinicalContext rawContext,
-			List<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries) {
+			List<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries,
+			PairChipExtent.Sink pairExtentSink) {
 		List<SafetyWarning> warnings = new ArrayList<SafetyWarning>();
 		// The patient's active orders resolved to their reference entries — at most ONE dataset sweep
 		// per validate, and none at all where the caller has already made it (issue #255) — feeding
@@ -562,8 +609,15 @@ public class DrugSafetyValidator {
 		}
 		// LAST, so the patient's own findings lead: a chip about their allergy or their active order
 		// is a fact about them, and outranks a reference lookup about a pair they may not be on.
+		// Held in a local and published to the caller's sink only on the normal return below, so a pass
+		// that degrades cannot leave a statement about chips it did not produce: the public entry
+		// answers a RuntimeException with an EMPTY warning list, and a sink written arm-by-arm would
+		// then say "18 found, 10 reported" beside no chips at all. At most one of the two arms can
+		// assign it — their gates are mutually exclusive, see the screening gate below.
+		PairChipExtent pairExtent = null;
 		if (warnInteractions) {
-			addQuestionPairInteractions(warnings, questionDrugs, subjects, context, severityFloor);
+			pairExtent = addQuestionPairInteractions(warnings, questionDrugs, subjects, context,
+					severityFloor);
 		}
 		// Interaction screening (issue #113). A question that asks to be SCREENED names no drug, so
 		// neither question-driven arm above has an anchor and the whole feature stayed silent for the
@@ -586,12 +640,13 @@ public class DrugSafetyValidator {
 		// drift apart on what a pair is, which of its rows is worth chipping, or how many are shown.
 		if (warnInteractions && questionDrugs.isEmpty()
 				&& QueryScopeRouter.isInteractionScreening(question)) {
-			addActiveOrderPairInteractions(warnings, subjects, context, severityFloor, orderEntries,
-					interactionPairs, coMedications);
+			pairExtent = addActiveOrderPairInteractions(warnings, subjects, context, severityFloor,
+					orderEntries, interactionPairs, coMedications);
 		}
 		if (!warnings.isEmpty()) {
 			log.info("Drug-safety validator raised {} warning(s)", warnings.size());
 		}
+		recordPairExtent(pairExtentSink, pairExtent);
 		return warnings;
 	}
 
@@ -770,11 +825,18 @@ public class DrugSafetyValidator {
 	 * <p><b>What the cap drops, and how it is visible.</b> A count rather than a character budget: a
 	 * chip is a whole sentence a clinician reads, and half a chip is not a smaller chip. Candidates are
 	 * ordered most-severe-first BEFORE the cut, so what goes is the least severe, and every withheld
-	 * pair is named in a WARN — a silent truncation would read to a clinician as "everything is
-	 * covered". That log line is currently the ONLY place the withheld count surfaces: a clinician-facing
-	 * "10 of 72 shown" needs a per-question container the chip API does not have (chips are per-drug
-	 * findings), so it is a frontend change rather than a module one. Recorded here as a decision rather
-	 * than left as an oversight.
+	 * pair is NAMED in a WARN — a silent truncation would read to a clinician as "everything is
+	 * covered". <b>The WARN is no longer the only place the cut surfaces</b> (issue #336): both arms
+	 * now state how many pairs they found beside how many they reported, on the answer as
+	 * {@code ChartAnswer.getPairChipExtent()} and on the wire as {@code interactionPairs}. This
+	 * javadoc used to say a clinician-facing "10 of 72 shown" needed a per-question container the chip
+	 * API does not have and was therefore a frontend change; the premise was half right and the
+	 * conclusion wrong. The CHIP array has no such container — chips are per-drug findings — but the
+	 * RESPONSE is itself the per-question container, and a key beside {@code safetyWarnings} is a
+	 * module change. Rendering "10 of 18 shown" is still the frontend's, in
+	 * {@code openmrs-esm-chartsearchai}; having something to render is not. What the WARN still holds
+	 * alone is WHICH pairs went, and their ratings — the statement is a count, deliberately, because a
+	 * list of withheld pairs on the wire is the uncapped prompt expansion this cap exists to prevent.
 	 *
 	 * <p><b>One honest limit on "most severe first":</b> {@link #severityPriority} sorts an UNRATED rule
 	 * above Major, matching {@code DrugReferenceInjector.InteractionNote} and for the same reason —
@@ -809,6 +871,24 @@ public class DrugSafetyValidator {
 				ChartSearchAiConstants.GP_DRUG_SAFETY_MAX_PAIR_CHIPS,
 				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_MAX_PAIR_CHIPS);
 		return configured > 0 ? configured : ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_MAX_PAIR_CHIPS;
+	}
+
+	/**
+	 * States a pairwise arm's extent into the caller's sink, where there is one and the arm ran.
+	 *
+	 * <p>Called ONCE, on {@code validate}'s normal return, from a local both arms assign — never per
+	 * arm. That is what makes the statement atomic with the chips: the public entry answers a
+	 * RuntimeException with an empty warning list, so a sink written as each arm finished could
+	 * describe a screen whose chips were then discarded (issue #336).
+	 *
+	 * <p>A {@code null} extent means no pairwise arm enumerated anything, which is not the same as an
+	 * arm having enumerated nothing: an arm that ran and found no above-floor pair states
+	 * {@code found == 0}, a complete screen. See {@link PairChipExtent}.
+	 */
+	private static void recordPairExtent(PairChipExtent.Sink sink, PairChipExtent extent) {
+		if (sink != null && extent != null) {
+			sink.record(extent.getFound(), extent.getReported());
+		}
 	}
 
 	/**
@@ -2309,7 +2389,7 @@ public class DrugSafetyValidator {
 				// from reconciledPartnerFor's lookup: this loop already holds the co-medication the
 				// class sentence is ABOUT, and asking for it a second way is how two answers to one
 				// question start to drift.
-				ReconciledPartner reconciled = reconciledPartnerName(hit.getKey(), rule.rule, subjects,
+				ReconciledPartner reconciled = reconciledPartnerName(hit.getKey(), rule.rule, ref, subjects,
 					coMedications);
 				folded.put(rule, new FoldedClassSentence(
 						reconciled != null ? reconciled.chipName : partnerLabel(rule.rule),
@@ -2344,7 +2424,7 @@ public class DrugSafetyValidator {
 				// to say about is named the way a partner it did have something to say about is. Null
 				// where the ladder reached no co-medication, and then this is the two-arg overload's
 				// answer — partnerLabel, which is also the grouping key.
-				ReconciledPartner reconciled = reconciledPartnerFor(rule, subjects, coMedications);
+				ReconciledPartner reconciled = reconciledPartnerFor(rule, ref, subjects, coMedications);
 				warnings.add(reconciled == null ? interactionWarning(ref, rule.rule)
 						: interactionWarning(ref, rule.rule, reconciled.chipName, reconciled.noteName,
 							null));
@@ -2993,7 +3073,7 @@ public class DrugSafetyValidator {
 	 * wherever the dataset identifies no partner entry. What issue #292 scoped and issue #339 finished
 	 * scoping is the second half of issue #121's invariant — that the key is also what the surface SAYS
 	 * — which now holds only where the reconciliation does not answer. See
-	 * {@link #reconciledPartnerName} and ADR Decisions 39, 49 and 59.
+	 * {@link #reconciledPartnerName} and ADR Decisions 39, 49 and 61.
 	 *
 	 * @return the label, or null when the rule carries neither — which a rule that matched an active
 	 *         order cannot ({@code hasActiveDrug} needs a non-blank token or a non-blank ATC), so
@@ -3012,10 +3092,23 @@ public class DrugSafetyValidator {
 	 * to have one call site, inside the {@code classRelationships} loop, so which name an order got was
 	 * decided by whether the class arm happened to have a sentence about it — one response therefore
 	 * used two conventions and the same pair changed name between a drug-in-play question and a
-	 * screening one. Nothing about WHICH displacements are permitted moved with that; the branches
-	 * below are #292's, #293's, #296's and #298's unchanged. What moved is where the question is put.
-	 * {@link #reconciledPartnerFor} is the entry point the two arms use; this one is called directly
-	 * only by the fold, which already holds the co-medication its class sentence is about.
+	 * screening one. {@link #reconciledPartnerFor} is the entry point the two arms use; this one is
+	 * called directly only by the fold, which already holds the co-medication its class sentence is
+	 * about.
+	 *
+	 * <p><b>Which displacements are permitted DID move, twice, and the first version of this change
+	 * said it did not</b> — recorded here because a false "the gate is untouched" is exactly what the
+	 * next change reads instead of re-measuring. The ENTRY rung asks the gate of the row this RESPONSE
+	 * elects and falls back to the ladder's own, so a substance whose charted presentation the token
+	 * does not claim can now reconcile on either row and no longer on neither (issue #339 review round
+	 * 3, at the branch itself). And the ORDER rung carries a second conjunct, {@link #namesTheSubject},
+	 * which REFUSES where the prescription that supplied the label also names the chip's own subject —
+	 * a combination product, where {@link #namesNamingOrder} alone is satisfied and the chip then reads
+	 * as a drug interacting with itself. Both are narrowings of what the widened call sites would
+	 * otherwise print, and each has one case: {@code FoldedChipOnePartnerNameTest}'s
+	 * {@code aRowTheResponseElectsButTheTokenDoesNotClaimFallsBackToTheLaddersOwn} and
+	 * {@code OneOrderNameAcrossOneResponseTest}'s
+	 * {@code aPrescriptionThatNamesTheSubjectDoesNotNameThePartner}.
 	 *
 	 * <p><b>The defect.</b> Issue #88's fold puts both arms' sentences into one detail and each arm named
 	 * the partner from its own source: the class arm from issue #155/#186/#290's ladder in
@@ -3142,7 +3235,8 @@ public class DrugSafetyValidator {
 	 *         token nor code, which a rule inside the matched loop cannot be.
 	 */
 	private ReconciledPartner reconciledPartnerName(OrderPartner partner,
-			DrugReference.Interaction rule, SubstanceSubjects subjects, CoMedications coMedications) {
+			DrugReference.Interaction rule, DrugReference subject, SubstanceSubjects subjects,
+			CoMedications coMedications) {
 		if (!partner.namesADrug) {
 			// The ladder has no name to keep, so the rule's own token is the only one either arm holds —
 			// unless the rule has no token either, when nothing here is a name and neither sentence
@@ -3189,7 +3283,8 @@ public class DrugSafetyValidator {
 			// partners, and that list is quotable by construction
 			// (DrugReferenceInjector.RenderedReference).
 			return namesNamingOrder(rule, partner.namingOrder)
-					? new ReconciledPartner(partner.label, partnerLabel(rule)) : null;
+					&& !namesTheSubject(subject, partner.namingOrder)
+							? new ReconciledPartner(partner.label, partnerLabel(rule)) : null;
 		}
 		// null and NOT the rule's token: where the two arms may be about different co-medications, each
 		// sentence keeps its own name. Making the class sentence adopt the rule's token here would move
@@ -3243,8 +3338,27 @@ public class DrugSafetyValidator {
 		// Of the row about to be PRINTED, which is why the election above comes first: the gate proves
 		// the rule's token names the row whose display the chip will carry, and asking it of a sibling
 		// would license a displacement that row does not (see unambiguouslyNames).
+		//
+		// And the LADDER's own row is what a refused election falls back to, rather than the token —
+		// issue #339's review round 3. The election moves WHICH ROW the gate is asked about, and the two
+		// rows of one substance can answer differently: over the shipped knowledge base a charted
+		// `Atropine (ophthalmic)` order elects that presentation, whose claim on the token `atropine`
+		// merely ties Hyoscyamine's, while canonicalRow's `Atropine` claims it outright. Refusing there
+		// left the rule sentence on partnerLabel while classPartnerName kept the elected row, so ONE
+		// folded detail named one prescription `atropine` AND `Atropine (ophthalmic)` — worse than
+		// before this issue, which printed `Atropine` in both. The gate is still asked of the row about
+		// to be printed, which is the whole of CLAUDE.md's rule here and what
+		// FoldedChipOnePartnerNameTest.aRuleTokenTheLaddersRowOnlyTiesKeepsItsOwnToken pins: nothing is
+		// printed on a sibling's claim, the second ask is about the row the second branch prints. So the
+		// order is a PREFERENCE over two rows the gate may each admit, never a widening of it — refusing
+		// both still refuses, which is the unmapped-order rung's own arrangement, where the two rows
+		// coincide and there is no second ask to make.
 		if (!unambiguouslyNames(rule, named, coMedications.nameIndex())) {
-			return null;
+			if (named == partner.labelEntry
+					|| !unambiguouslyNames(rule, partner.labelEntry, coMedications.nameIndex())) {
+				return null;
+			}
+			named = partner.labelEntry;
 		}
 		String datasetName = ChartSearchAiUtils.firstNonBlank(named.getName());
 		return new ReconciledPartner(named.displayLabel(),
@@ -3271,6 +3385,14 @@ public class DrugSafetyValidator {
 	 * {@code Warfarin interacts with active order Methylprednisolone (topical)}, one prescription.
 	 * {@code OneOrderNameAcrossOneResponseTest.aClassOnlyChipNamesAPartnerByTheSameRowARuleChipDoes}
 	 * is the pin; reading {@link OrderPartner#label} here reddens it and nothing else.
+	 *
+	 * <p><b>Where a folded chip's rule sentence could not take this row, this one still prints it.</b>
+	 * {@link #reconciledPartnerName} answers null when the rule's token claims neither the elected row
+	 * nor the ladder's, and the fold then words the class sentence from here while the rule sentence
+	 * keeps {@link #partnerLabel} — the residue issue #292 records and issue #339 did not close, since
+	 * a class-only chip has no rule token for any gate to read. What issue #339's review round 3 DID
+	 * close is the case where the two rows disagree and the ladder's would have carried the
+	 * displacement; see {@link #reconciledPartnerName}'s ENTRY rung.
 	 *
 	 * <p><b>Only the ENTRY rung, and that is the whole of the condition.</b> A label an ORDER supplied
 	 * ({@link OrderPartner#namingOrder} non-null, whether the ladder reached an entry first or not) is
@@ -3300,8 +3422,9 @@ public class DrugSafetyValidator {
 	 * partner by the knowledge base's own match token. One response therefore used two conventions, and
 	 * the same pair changed name between a drug-in-play question (which can fold) and a screening
 	 * question (which cannot). This is that question asked at every rule chip instead, in both
-	 * active-order arms, through the SAME gate — nothing about which displacements are permitted moves,
-	 * only where the question is put.
+	 * active-order arms, through the SAME gate — one gate and not two, which is the point; what the
+	 * widening cost that gate is recorded on {@link #reconciledPartnerName} itself and is not restated
+	 * here.
 	 *
 	 * <p>The partner is found from {@link SubjectRule#partner}, the entry {@link #activeOrderEntryFor}
 	 * already resolved for this rule and the module's one answer to "which partner is this rule about",
@@ -3315,11 +3438,11 @@ public class DrugSafetyValidator {
 	 * lookup that answered null there left this chip on {@link #partnerLabel} beside another chip about
 	 * the same prescription that reconciled, which is issue #339's own shape (review round 2).
 	 */
-	private ReconciledPartner reconciledPartnerFor(SubjectRule rule, SubstanceSubjects subjects,
-			CoMedications coMedications) {
+	private ReconciledPartner reconciledPartnerFor(SubjectRule rule, DrugReference subject,
+			SubstanceSubjects subjects, CoMedications coMedications) {
 		OrderPartner partner = coMedications.partnerNaming(rule.partner);
 		return partner == null ? null
-				: reconciledPartnerName(partner, rule.rule, subjects, coMedications);
+				: reconciledPartnerName(partner, rule.rule, subject, subjects, coMedications);
 	}
 
 	/**
@@ -3401,6 +3524,55 @@ public class DrugSafetyValidator {
 	}
 
 	/**
+	 * @return whether the prescription that supplied a partner's label also names the chip's own
+	 *         SUBJECT — the second test {@link #reconciledPartnerName}'s ORDER rung needs, and a
+	 *         refusal where {@link #namesNamingOrder} on its own would permit.
+	 *
+	 *         <p><b>Issue #339, review round 3.</b> A fixed-dose combination is an ordinary
+	 *         prescription, and its display names both of its constituents. Where the chip's subject is
+	 *         one of them and the rule's partner is the other, {@code namesNamingOrder} is satisfied —
+	 *         the token really does name that display — and the chip then reads
+	 *         {@code Lisinopril interacts with active order Lisinopril / Hydrochlorothiazide}: a drug
+	 *         interacting with itself, with the interacting agent gone from the lead and only the
+	 *         mechanism prose still naming it. That is the shape
+	 *         {@link DdiDrugReferenceSource}'s own parse-time self-pair guard exists to keep out for a
+	 *         different cause, and the chip reaches the prompt verbatim through
+	 *         {@code DrugReferenceInjector.renderFinding} as a citable {@code safety_finding} carrying
+	 *         {@code STRENGTH_WITHHOLD}. Measured through the real {@link #validate} over the shipped
+	 *         knowledge base with that one order (codes {@code C09BA03}, {@code C03AA03}, the first
+	 *         uncovered so {@code soleSubstanceOf} resolves the second and {@code nameByOrder} renames
+	 *         the partner after the order); ADR Decision 61 recorded it as fixture-only, which was
+	 *         wrong.
+	 *
+	 *         <p>Refusing returns that chip to {@link #partnerLabel}, which is what it printed before
+	 *         issue #339 widened this rung past the fold. It costs a combination case NOTHING where the
+	 *         subject is a third drug — {@code OneOrderNameAcrossOneResponseTest}'s own
+	 *         {@code twoRulesAboutOneCombinationPrescriptionNameItOnce} has subject Carbamazepine, and
+	 *         both its chips still take the display — so this narrows exactly the arrangement in which
+	 *         the displayed name is not a name for the partner at all.
+	 *
+	 *         <p>Asked of the SUBJECT ROW the chip is about to print
+	 *         ({@link SubstanceSubjects#subjectOf}'s answer, which is what
+	 *         {@link #interactionWarning} renders), and through
+	 *         {@link DrugReference#matchesDrugName} — CLAUDE.md's accessor for a clinician-entered drug
+	 *         NAME against a reference entry, which is what an order's display is. Not
+	 *         {@link #namesNamingOrder}'s {@link DrugReference#matchesOrderName}: that one puts a rule
+	 *         TOKEN to a recorded name, and the subject here is an ENTRY with a whole alias list rather
+	 *         than one string. Both rules are the same boundary rule underneath, so the two operands of
+	 *         one display are judged alike.
+	 *
+	 *         <p>Scoped to the ORDER rung deliberately. The ENTRY rung prints a dataset name for ONE
+	 *         substance, which the rule's token has to claim unambiguously
+	 *         ({@link #unambiguouslyNames}) before it is printed at all, and the {@code !namesADrug}
+	 *         rung prints the rule's own token. Neither can put a prescription display in front of a
+	 *         clinician, so neither can carry this shape.
+	 */
+	private static boolean namesTheSubject(DrugReference subject,
+			PatientClinicalContext.ActiveDrugOrder order) {
+		return subject != null && subject.matchesDrugName(order.getDisplay());
+	}
+
+	/**
 	 * @return true when {@code rule}'s own match TOKEN names {@code entry} and names no OTHER substance
 	 *         in the loaded dataset as strongly — the test {@link #reconciledPartnerName} needs before it
 	 *         lets the class arm's label displace that token.
@@ -3438,7 +3610,13 @@ public class DrugSafetyValidator {
 	 *
 	 *         <p><b>{@code entry}'s OWN claim, never its substance's strongest.</b> The label about to be
 	 *         printed is this row's display, so a sibling presentation's stronger claim on the token says
-	 *         nothing about this row — and the rungs differ on which row arrives here:
+	 *         nothing about this row. <b>Since issue #339 one rung can ask this TWICE about one
+	 *         partner</b>, and that is not a relaxation of the sentence just made: the ENTRY rung offers
+	 *         the row the response elects and then, if that row's own claim does not carry it, the
+	 *         ladder's own row — two asks, each about the row the caller would then PRINT, and a refusal
+	 *         of both is still a refusal. What is never done is carrying one row's answer to another
+	 *         row's display, which is what the paragraph below rules out. The rungs also differ on which
+	 *         row arrives here:
 	 *         {@link #entryForAtcCode} hands over {@link DrugReference#canonicalRow}'s pick, while
 	 *         {@link #addPartnersForUnmappedOrders} hands over the row the patient's own chart claims
 	 *         most strongly, deliberately the route-qualified one where the chart named it that way. Over
@@ -3905,10 +4083,13 @@ public class DrugSafetyValidator {
 	 *        in {@code inPlay}, so its substance is always in that lookup's group map and the
 	 *        ungrouped-row fallback is unreachable from here.
 	 */
-	private void addQuestionPairInteractions(List<SafetyWarning> warnings, Set<DrugReference> questionDrugs,
-			SubstanceSubjects subjects, PatientClinicalContext context, int severityFloor) {
+	private PairChipExtent addQuestionPairInteractions(List<SafetyWarning> warnings,
+			Set<DrugReference> questionDrugs, SubstanceSubjects subjects, PatientClinicalContext context,
+			int severityFloor) {
 		if (questionDrugs.size() < 2) {
-			return;
+			// The arm did not run: one drug is not a pair, so there is no candidate list to state the
+			// extent of. Null, never a zero — see PairChipExtent for what the two say differently.
+			return null;
 		}
 		List<DrugReference> drugs = new ArrayList<DrugReference>(questionDrugs);
 		Map<DrugReference, String> names = pairKeyNames(drugs, severityFloor);
@@ -3942,16 +4123,21 @@ public class DrugSafetyValidator {
 		// equally-rated pairs keep the dataset order the entry loop produced them in.
 		if (found.isEmpty()) {
 			// Nothing to order or bound, and no GP read for the common "these two do not interact" case —
-			// the same shape the screening arm's own early return takes.
-			return;
+			// the same shape the screening arm's own early return takes. The extent is still STATED, and
+			// it is the whole reason zero is a measurement here: this pair list is complete, and a
+			// caller that heard nothing could not tell that from an arm that never ran (issue #336).
+			// Math.min(0, cap) is 0 whatever the cap, so stating it still reads no global property.
+			return PairChipExtent.of(0, 0);
 		}
 		Collections.sort(found, PAIR_SEVERITY_DESCENDING);
 		int cap = maxPairChips();
 		int shown = Math.min(found.size(), cap);
 		if (shown < found.size()) {
-			// WARN, not INFO: a clinician reading the chips cannot tell a bounded list from a complete
-			// one, so an operator has to be able to see that this question outran the bound and which
-			// ratings went unshown. Silent truncation in a safety net reads as "nothing else was found".
+			// WARN, not INFO: which pairs went, and at what ratings, is an operator's diagnostic and it
+			// lives only here — the response states the COUNTS (see the extent returned below) and
+			// deliberately not the list, because putting the withheld pairs on the wire is the unbounded
+			// expansion this cap exists to prevent. Silent truncation in a safety net reads as "nothing
+			// else was found", which since issue #336 the response itself no longer says.
 			List<String> withheld = new ArrayList<String>();
 			for (PairFinding finding : found.subList(shown, found.size())) {
 				withheld.add(finding.severity);
@@ -3965,6 +4151,7 @@ public class DrugSafetyValidator {
 		for (PairFinding finding : found.subList(0, shown)) {
 			warnings.add(finding.warning);
 		}
+		return PairChipExtent.of(found.size(), shown);
 	}
 
 	/** Orders candidate pair chips most-severe first; see {@link #severityPriority}. */
@@ -4459,11 +4646,13 @@ public class DrugSafetyValidator {
 	 *        lookup's group map by {@link #resolvedSubstanceRows}, so the ungrouped-row fallback is
 	 *        unreachable from here too.
 	 */
-	private void addActiveOrderPairInteractions(List<SafetyWarning> warnings, SubstanceSubjects subjects,
-			PatientClinicalContext context, int severityFloor, List<DrugReference> orderDrugs,
-			InteractionPairs reportedPairs, CoMedications coMedications) {
+	private PairChipExtent addActiveOrderPairInteractions(List<SafetyWarning> warnings,
+			SubstanceSubjects subjects, PatientClinicalContext context, int severityFloor,
+			List<DrugReference> orderDrugs, InteractionPairs reportedPairs,
+			CoMedications coMedications) {
 		if (context == null) {
-			return;
+			// The arm could not run at all, so it states nothing — not a complete screen of zero pairs.
+			return null;
 		}
 		List<ScreenedPair> pairs = new ArrayList<ScreenedPair>();
 		Set<List<String>> seenPairs = new LinkedHashSet<List<String>>();
@@ -4575,7 +4764,8 @@ public class DrugSafetyValidator {
 				// question names none — but since issue #339 that no longer decides what the order is
 				// called, or one prescription would answer to two names depending on which question
 				// reached it. The same reconciliation, the same gate.
-				ReconciledPartner reconciled = reconciledPartnerFor(matched, subjects, coMedications);
+				ReconciledPartner reconciled =
+						reconciledPartnerFor(matched, subject, subjects, coMedications);
 				// The label names the partner the way the CHIP does, which since issue #339 is the
 				// reconciliation's answer wherever it gave one. It has to: this WARN is the only place
 				// a withheld pair surfaces (see maxPairChips), and an operator grepping it for the
@@ -4592,7 +4782,11 @@ public class DrugSafetyValidator {
 			}
 		}
 		if (pairs.isEmpty()) {
-			return;
+			// Stated, and stated as zero: this screen ran over the patient's orders and the reference
+			// data related none of the pairs it enumerated. That is a COMPLETE screen, and it is the
+			// half of issue #336 a truncation signal alone would leave unsaid — a caller hearing
+			// nothing cannot tell it from a question that never asked to be screened.
+			return PairChipExtent.of(0, 0);
 		}
 		Collections.sort(pairs, SCREENED_PAIR_SEVERITY_DESCENDING);
 		// The same cap the question-pair arm applies, from the same GP — the two gates are mutually
@@ -4600,9 +4794,10 @@ public class DrugSafetyValidator {
 		// arbitrary (issue #131).
 		int reported = Math.min(pairs.size(), maxPairChips());
 		if (pairs.size() > reported) {
-			// Named, not counted: a clinician reading the reported chips has no way to tell a capped
-			// screen from a complete one, so the withheld pairs must at least be recoverable from the
-			// log rather than vanishing.
+			// Named here, counted on the response. A clinician reading the reported chips could not tell
+			// a capped screen from a complete one, which is issue #336 — and the count that closes it is
+			// the extent this method returns, not this line. What the log still holds alone is WHICH
+			// pairs went and at what ratings, an operator's diagnostic that must not go on the wire.
 			List<String> withheld = new ArrayList<String>();
 			for (int n = reported; n < pairs.size(); n++) {
 				withheld.add(pairs.get(n).label);
@@ -4615,6 +4810,7 @@ public class DrugSafetyValidator {
 		for (int n = 0; n < reported; n++) {
 			warnings.add(pairs.get(n).warning);
 		}
+		return PairChipExtent.of(pairs.size(), reported);
 	}
 
 	/**
@@ -6128,14 +6324,20 @@ public class DrugSafetyValidator {
 		 * {@link DrugSafetyValidator#orderPartners} — or null on the order and code rungs, where no
 		 * entry named it.
 		 *
-		 * <p>Read by two things, and only one of them reads it as a NAME.
+		 * <p>Read by three things, and this field is never itself the string printed.
 		 * {@link DrugSafetyValidator#reconciledPartnerName} asks whether the rule about to be printed
-		 * beside this partner NAMES that entry before letting this label displace
-		 * the rule's own token — and only on the branch where {@link #label} is still this entry's own
-		 * display label, because {@link #nameByOrder} does not update this field and a renamed partner's
-		 * label can therefore name a different drug from the one validated here. So a renamed partner is
-		 * validated against {@link #namingOrder} instead, which is the order the label actually came from;
-		 * this field is not consulted there at all. The second reader is
+		 * beside this partner NAMES a row of this entry's substance before letting the class arm's name
+		 * displace the rule's own token — the row this RESPONSE elects
+		 * ({@link SubstanceSubjects#subjectOf}) first and this entry itself as the fallback, since
+		 * issue #339's review round 3; each ask is about the row that would then be printed, and a
+		 * refusal of both is a refusal. Only on the branch where {@link #label} is still this entry's
+		 * own display label, because {@link #nameByOrder} does not update this field and a renamed
+		 * partner's label can therefore name a different drug from the one validated here. So a renamed
+		 * partner is validated against {@link #namingOrder} instead, which is the order the label
+		 * actually came from; this field is not consulted there at all.
+		 * {@link DrugSafetyValidator#classPartnerName} reads it for the same election and on the same
+		 * branch, so the two arms name one prescription by one row wherever the rule arm's gate admits
+		 * the elected one. The third reader is
 		 * {@code CoMedications.partnerNaming}, which reads only its {@code substanceGroupKey()} — to key
 		 * this partner in the pass's substance index — and never its name, so nothing about the
 		 * paragraph above is weakened by it. Not the same question as {@link #substances}, which is

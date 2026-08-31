@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
@@ -80,11 +81,28 @@ public class LlmInferenceServiceCitationWiringTest {
 
 		java.util.List<RecordMapping> mappingsSeen;
 
+		/** Which overload production reached — the sink-carrying one since issue #336. Recorded so a
+		 *  path that reverted to the four-argument overload fails by NAMING that, rather than by the
+		 *  mappings assertion below going quiet: the two arities differ only in what production can
+		 *  publish, so a stub that covers one and not the other is silently inert. */
+		String arityUsed;
+
 		@Override
 		public java.util.List<org.openmrs.module.chartsearchai.reference.SafetyWarning> validate(
 				String answer, String question, org.openmrs.Patient patient,
 				java.util.List<RecordMapping> mappings) {
 			this.mappingsSeen = mappings;
+			this.arityUsed = "four-argument";
+			return java.util.Collections.emptyList();
+		}
+
+		@Override
+		public java.util.List<org.openmrs.module.chartsearchai.reference.SafetyWarning> validate(
+				String answer, String question, org.openmrs.Patient patient,
+				java.util.List<RecordMapping> mappings,
+				org.openmrs.module.chartsearchai.reference.PairChipExtent.Sink pairExtentSink) {
+			this.mappingsSeen = mappings;
+			this.arityUsed = "five-argument";
 			return java.util.Collections.emptyList();
 		}
 	}
@@ -136,6 +154,11 @@ public class LlmInferenceServiceCitationWiringTest {
 	}
 
 	private void assertMappingsSeenIncludeIndex(int index) {
+		// Both overloads are stubbed, so this cannot pass by production having reached neither — which
+		// is exactly what a one-overload stub allows once production prefers the other (issue #336).
+		assertEquals("five-argument", recordingValidator.arityUsed,
+				"production must reach the overload that also lets it publish how bounded the pairwise "
+						+ "interaction list is; the four-argument one cannot carry that statement");
 		assertTrue(recordingValidator.mappingsSeen != null && !recordingValidator.mappingsSeen.isEmpty(),
 				"the validator must receive the chart's record mappings for echo scoping");
 		boolean found = false;

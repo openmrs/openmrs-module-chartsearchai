@@ -411,6 +411,15 @@ public final class DrugReferenceTestSupport {
 	/** Several route variants of one drug sharing a RxCUI — the id/label collision slice. */
 	static final String DDI_RXCUI_COLLISION = "chartsearchai-test/ddi-rxcui-collision.json";
 
+	/** {@code Dolutegravir} against {@code Iron} / {@code Iron (bisglycinate)} and {@code Phenytoin},
+	 *  arranged so a group's winner is replaced AFTER a partner tied with it on severity has opened —
+	 *  the one arrangement in which {@code bestRulePerPartner}'s LinkedHashMap is what decides the chip
+	 *  order, since issue #346's severity sort decides it everywhere the two differ in strength. The
+	 *  ARRANGEMENT is the fixture and the file says so; {@link #DDI_ROUTE_VARIANTS} cannot express it.
+	 *  See {@code DdiDrugReferenceSourceTest.replacingAGroupsWinnerLeavesATiedPartnerBehindIt}. */
+	static final String DDI_TIED_PARTNER_REPLACEMENT =
+			"chartsearchai-test/ddi-tied-partner-replacement.json";
+
 	/** The botulinum pair, the enalapril/enalaprilat pair and the typhoid pair — the slices where two rows
 	 *  are or are not one substance (issues #164/#176/#187). */
 	static final String DDI_SUBSTANCE_IDENTITY = "chartsearchai-test/ddi-substance-identity.json";

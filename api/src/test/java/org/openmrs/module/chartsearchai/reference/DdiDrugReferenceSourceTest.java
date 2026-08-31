@@ -503,9 +503,15 @@ public class DdiDrugReferenceSourceTest {
 		// dexamethasone both active, iron's group is opened first, dexamethasone's group is opened
 		// next, and only THEN does iron's second row take its group — so this is the arrangement in
 		// which a collapse that re-inserts a replaced winner (a HashMap, or remove-then-put) puts
-		// dexamethasone's chip ahead of iron's. Chip order is first-appearance order and the
-		// clinician reads the list top-down, so the most severe finding must not be demoted by the
-		// mechanics of the collapse.
+		// dexamethasone's chip ahead of iron's. The clinician reads the list top-down, so the most
+		// severe finding must not be demoted by the mechanics of the collapse.
+		//
+		// Since issue #346 that outcome is over-determined here: iron is Major and dexamethasone
+		// Minor, so the arm's own ordering puts iron first whatever the collapse does, and this case
+		// no longer reddens on the re-insertion (measured — the whole api suite stays green on it).
+		// What still pins the collapse is replacingAGroupsWinnerLeavesATiedPartnerBehindIt, over a
+		// fixture whose partners the severity ordering cannot separate. This case is kept for the
+		// property it states in its own name, which #346 did not retire: a demoted Major.
 		List<SafetyWarning> warnings = routeVariantValidator().validate(
 				"Dolutegravir could be started.", "Is it safe to start dolutegravir?",
 				DrugReferenceTestSupport.ctx(60, null,
@@ -523,6 +529,44 @@ public class DdiDrugReferenceSourceTest {
 		assertTrue(warnings.get(1).getDetail()
 				.startsWith("Dolutegravir interacts with active order dexamethasone — Minor. "),
 				"dexamethasone's chip must stay second, was: " + warnings.get(1).getDetail());
+	}
+
+	/**
+	 * The collapse's own half of the chip order, over two partners the arm's ordering cannot separate.
+	 *
+	 * <p>Issue #346 made this arm append its findings strongest first, which is what
+	 * {@link #replacingAGroupsWinnerLeavesTheChipsInDatasetOrderOfFirstAppearance} had been standing
+	 * for — that case's iron is Major and its dexamethasone Minor, so the sort now decides their order
+	 * on its own and a re-inserted winner is invisible to it. This case restores the guard on the one
+	 * arrangement where {@code bestRulePerPartner} is still what answers: all three rows Major, the
+	 * iron group opened by its route-qualified row, phenytoin opened after it, and only then the
+	 * unqualified iron row taking the group. A LinkedHashMap keeps a re-put key where it was and chips
+	 * iron first; a HashMap, or a remove-then-put, moves it behind phenytoin.
+	 */
+	@Test
+	public void replacingAGroupsWinnerLeavesATiedPartnerBehindIt() throws Exception {
+		List<SafetyWarning> warnings = DrugReferenceTestSupport
+				.validator(DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport
+						.ddiFixtureEntries(DrugReferenceTestSupport.DDI_TIED_PARTNER_REPLACEMENT)))
+				.validate("Dolutegravir could be started.", "Is it safe to start dolutegravir?",
+					DrugReferenceTestSupport.ctx(60, null,
+						DrugReferenceTestSupport.set("Iron 65mg", "Phenytoin 100mg"), null, null, null));
+
+		assertEquals(2, warnings.size(),
+			"two active partners must raise two chips, was: " + warnings);
+		assertEquals("Major", warnings.get(0).getSeverity(),
+			"both partners are rated Major, so nothing about severity may separate them, was: "
+					+ warnings);
+		assertEquals("Major", warnings.get(1).getSeverity(),
+			"both partners are rated Major, so nothing about severity may separate them, was: "
+					+ warnings);
+		assertTrue(warnings.get(0).getDetail()
+				.startsWith("Dolutegravir interacts with active order iron — Major. "),
+			"iron's group is opened before phenytoin's, so replacing its winner afterwards must not"
+					+ " move it behind phenytoin, was: " + warnings.get(0).getDetail());
+		assertTrue(warnings.get(1).getDetail()
+				.startsWith("Dolutegravir interacts with active order phenytoin — Major. "),
+			"phenytoin's chip must stay second, was: " + warnings.get(1).getDetail());
 	}
 
 	@Test

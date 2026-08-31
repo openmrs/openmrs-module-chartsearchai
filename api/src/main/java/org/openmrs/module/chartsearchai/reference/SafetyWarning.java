@@ -235,8 +235,9 @@ public class SafetyWarning {
 	 * The severity the reference data assigns the rule this warning was raised from — {@code Major},
 	 * {@code Moderate}, {@code Minor} or {@code Unknown} for a rule the shipped DDInter dataset rates,
 	 * though that is what one dataset publishes and not a closed set (see the wire paragraph below) —
-	 * ranked by {@code DrugSafetyValidator.severityPriority}, which is also what
-	 * {@code addQuestionPairInteractions} and the screening arm sort their chips on.
+	 * ranked by {@code DrugSafetyValidator.severityPriority}, which is also what all three interaction
+	 * arms order their chips on — the two pairwise arms directly, and the drug-in-play arm within each
+	 * side of the withholds/cautions split it orders on first (issue #346).
 	 *
 	 * <p><b>Null means the source rates nothing here</b>, which is a real distinction rather than a
 	 * missing value: a hand-authored curated rule is deliberately UNRATED (and outranks {@code Major}

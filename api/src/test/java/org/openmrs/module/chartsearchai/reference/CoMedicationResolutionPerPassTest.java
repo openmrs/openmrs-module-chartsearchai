@@ -118,26 +118,36 @@ public class CoMedicationResolutionPerPassTest {
 	 * unchanged by the change (verified by diffing the full rendered chip list, all five questions and
 	 * every detail in full, across the two heads).
 	 *
-	 * <p><b>The partner NAMES moved once since, and issue #256's invariant is not what moved them.</b>
-	 * Issue #339 made an unfolded rule chip ask the same reconciliation a folded one asks, so a
-	 * co-medication is named as the dataset names it rather than by the knowledge base's own match
-	 * token — {@code warfarin} became {@code Warfarin}, and so on for all ten. What this list is FOR is
-	 * untouched by that: it still pins which partner each subject is chipped about, what that partner
-	 * is called, the rating and the arrival order, and it still fails if sharing one partner list
-	 * across two subjects disturbs any of them. A rename that made these lower-case again would fail
-	 * {@code OneOrderNameAcrossOneResponseTest} instead.
+	 * <p><b>Two things have moved since, and issue #256's invariant is neither of them.</b> Issue #339
+	 * made an unfolded rule chip ask the same reconciliation a folded one asks, so a co-medication is
+	 * named as the dataset names it rather than by the knowledge base's own match token —
+	 * {@code warfarin} became {@code Warfarin}, and so on for all ten. Issue #346 then made the
+	 * drug-in-play arm append its rule chips strongest first rather than in the knowledge base's row
+	 * order, which is what re-grouped each subject's chips into a Major, then Moderate, then Minor run.
+	 *
+	 * <p>What this list is FOR survives both, and the second one is worth spelling out because it
+	 * touches the property that reads as most at risk. Arrival order is still pinned, because the sort
+	 * is stable and separates chips only where the findings differ in strength: WITHIN each run the
+	 * chips arrive in the dataset's own order — Clarithromycin's three Majors as Warfarin, Digoxin,
+	 * Amiodarone and its four Moderates as Metformin, Sertraline, Tramadol, Ciprofloxacin — so sharing
+	 * one partner list across two subjects still cannot disturb which partner a subject is chipped
+	 * about, what that partner is called, the rating, or where it sits among the chips it ties with,
+	 * without failing here. The trailing question-pair chip stays last because that is a different
+	 * arm. A rename that made these lower-case again would fail
+	 * {@code OneOrderNameAcrossOneResponseTest} instead, and a regression in the ORDERING itself would
+	 * fail {@code DrugInPlayFindingStrengthOrderTest}, which is where that behaviour is pinned.
 	 */
 	private static final List<String> TWO_DRUG_CHIPS = Arrays.asList(
-			"interaction | Minor | Simvastatin interacts with active order Warfarin",
-			"interaction | Moderate | Simvastatin interacts with active order Ciprofloxacin",
 			"interaction | Major | Simvastatin interacts with active order Amiodarone",
+			"interaction | Moderate | Simvastatin interacts with active order Ciprofloxacin",
+			"interaction | Minor | Simvastatin interacts with active order Warfarin",
+			"interaction | Major | Clarithromycin interacts with active order Warfarin",
+			"interaction | Major | Clarithromycin interacts with active order Digoxin",
+			"interaction | Major | Clarithromycin interacts with active order Amiodarone",
 			"interaction | Moderate | Clarithromycin interacts with active order Metformin",
 			"interaction | Moderate | Clarithromycin interacts with active order Sertraline",
 			"interaction | Moderate | Clarithromycin interacts with active order Tramadol",
-			"interaction | Major | Clarithromycin interacts with active order Warfarin",
 			"interaction | Moderate | Clarithromycin interacts with active order Ciprofloxacin",
-			"interaction | Major | Clarithromycin interacts with active order Digoxin",
-			"interaction | Major | Clarithromycin interacts with active order Amiodarone",
 			"interaction | Major | Simvastatin interacts with Clarithromycin, also named in the question");
 
 	/** A question naming nothing the excerpt classifies, so no arm asks for a co-medication. */

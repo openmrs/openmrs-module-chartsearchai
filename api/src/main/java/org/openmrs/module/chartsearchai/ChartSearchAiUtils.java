@@ -68,9 +68,11 @@ public class ChartSearchAiUtils {
 	 * it changes the PATTERN rather than the set: appending {@code ]} makes the lookbehind read
 	 * "a terminator followed by {@code ]}", so the splitter stops splitting on punctuation while
 	 * {@link #mayEndASentence}, which reads this by {@code indexOf}, carries on. That is the
-	 * divergence one set exists to prevent, and it is LOUD rather than silent — measured, that
-	 * arrangement fails fifteen tests, fourteen of them in {@code CitationGroundingVerifierTest}. The
-	 * quoting is here so the set can be edited as a set, not because the alternative hides.
+	 * divergence one set exists to prevent, and it is LOUD rather than silent — that arrangement
+	 * reddens the grounding verifier's own suite wholesale. No count of it is published here: one was,
+	 * and it went stale in the very commit that wrote it, because the case added beside it in that
+	 * commit adds a failure of its own. Append a character and read the failures. The quoting is here
+	 * so the set can be edited as a set, not because the alternative hides.
 	 */
 	public static final String SENTENCE_TERMINATORS = ".!?";
 

@@ -5383,7 +5383,7 @@ public class DrugSafetyValidator {
 		 * module actually established: there is a recorded allergy to THIS name, and it contraindicates
 		 * THAT drug. It takes the curated rule arm's own shape ("X is contraindicated by an active
 		 * allergy: …") deliberately, because the wire contract requires it — {@code README} and
-		 * {@link SafetyWarning#getDetail()} say a detail is a standalone sentence naming its own drug,
+		 * {@link SafetyWarning#getDetail()} say a detail is standalone prose naming its own drug,
 		 * which clients render alone and key per-finding identity on. A sentence that named only the
 		 * allergen would satisfy neither: the subject would appear nowhere on screen, and two chips
 		 * about different drugs raised by one allergy record would carry byte-identical details (issue

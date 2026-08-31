@@ -185,29 +185,48 @@ public class SafetyWarning {
 	 * {@code DrugSafetyValidator}'s to state, and {@code SubstanceSubjects}' javadoc states it,
 	 * exemptions and residues included. Do not re-derive that list here — it has moved.
 	 *
-	 * <p>What distinguishes one warning from another is {@link #getDetail()}: of the three fields a
-	 * client receives, it is the one that varies between warnings about a single substance, because it
-	 * names the interacting order, the allergen or the ceiling that particular finding is about. Key
-	 * per-finding identity on {@code detail}, or on the whole warning.
+	 * <p>What distinguishes one warning from another is {@link #getDetail()}: of the four fields a
+	 * client receives, it is the one that tells warnings about a single substance apart, because it
+	 * names the interacting order, the allergen or the ceiling that particular finding is about. Since
+	 * issue #340 {@link #getSeverity()} travels beside it on the wire and may differ too —
+	 * that issue's own capture has a Major and a Minor chip of one drug — but it is no more a key than
+	 * this field is: two findings about one substance commonly share a rating, and every unrated one
+	 * shares null. Key per-finding identity on {@code detail}, or on the whole warning.
 	 */
 	public String getDrug() {
 		return drug;
 	}
 
-	/** The warning as one complete, standalone sentence naming the drug — e.g. "The stated
-	 *  Ibuprofen dose ~2400 mg/day exceeds the 1200 mg/day maximum for ages 2-11" or
-	 *  "Warfarin interacts with active order aspirin — Major. …". <b>Renderers should display
-	 *  this alone</b>; prefixing {@link #getDrug()} duplicates the subject, because every
-	 *  detail already leads with it. It is also this field, not {@link #getDrug()}, that
-	 *  tells one warning from another — see {@link #getDrug()} for why. */
+	/**
+	 * The warning as complete, standalone prose naming its own drug — e.g. "The stated
+	 * Ibuprofen dose ~2400 mg/day exceeds the 1200 mg/day maximum for ages 2-11", or
+	 * "Warfarin interacts with active order aspirin — Major. …".
+	 *
+	 * <p><b>How many SENTENCES it runs to is not part of the contract, and no rule about that
+	 * belongs here.</b> This javadoc read "one complete, standalone sentence" while illustrating it
+	 * with the two-sentence second example above, and a first attempt to correct that put a rule in
+	 * its place ("one for a contraindication, two for a rated interaction, three when folded") which
+	 * measurement refuted as well. What the composition depends on is authored TEXT — a dataset's
+	 * mechanism description is whatever its author wrote — so measure it over the dataset you ship if
+	 * you need a number. {@link #getSeverity()} is canonical for how the dataset builds a rated rule's
+	 * NOTE, which is the part of a detail this field's own contract turns on, and it is not restated
+	 * here. A renderer that splits or truncates at a
+	 * sentence boundary drops the mechanism text, which is the chip's clinical content — and on a
+	 * folded chip the class sentence after it. Render the whole string.
+	 *
+	 * <p><b>Renderers should display this alone</b>; prefixing {@link #getDrug()} duplicates the
+	 * subject, because every detail already names it. It is also this field, not
+	 * {@link #getDrug()}, that tells one warning from another — see {@link #getDrug()} for why.
+	 */
 	public String getDetail() {
 		return detail;
 	}
 
 	/**
-	 * The severity the reference data assigns the rule this warning was raised from — one of
-	 * {@code Major}, {@code Moderate}, {@code Minor}, {@code Unknown} for a DDInter-rated rule, ranked
-	 * by {@code DrugSafetyValidator.severityPriority}, which is also what
+	 * The severity the reference data assigns the rule this warning was raised from — {@code Major},
+	 * {@code Moderate}, {@code Minor} or {@code Unknown} for a rule the shipped DDInter dataset rates,
+	 * though that is what one dataset publishes and not a closed set (see the wire paragraph below) —
+	 * ranked by {@code DrugSafetyValidator.severityPriority}, which is also what
 	 * {@code addQuestionPairInteractions} and the screening arm sort their chips on.
 	 *
 	 * <p><b>Null means the source rates nothing here</b>, which is a real distinction rather than a
@@ -221,7 +240,54 @@ public class SafetyWarning {
 	 * {@link #getDetail()} prose — which meant the ordering could only be asserted by parsing
 	 * clinician-facing text, anchored on a clause the module rewords freely. Measured: rewording that
 	 * clause left {@code thePairChipsAreOrderedBySeverityAndBounded} green while it asserted nothing at
-	 * all. Not serialized onto the REST response; the wire shape is unchanged.
+	 * all.
+	 *
+	 * <p><b>Published on the wire since issue #340</b>, as the {@code severity} key of every
+	 * {@code safetyWarnings} chip — on the blocking {@code /search} response and on both SSE events
+	 * that carry chips, since all three reach
+	 * {@code ChartSearchAiRestController.serializeSafetyWarnings} through the one
+	 * {@code putSafetyChips} payload writer. Verbatim and UNNORMALIZED, which is
+	 * deliberate rather than lazy: the field is the dataset's rating, and coercing it would put the
+	 * wire at odds with the very prose a client is being told to stop parsing. What it publishes is the
+	 * SOURCE's rating, not this module's judgment about what may be done — which is the separate thing
+	 * issue #283 keeps off the wire ({@code DrugSafetyValidator.licensesWithholding} and the
+	 * {@code DrugReferenceInjector.STRENGTH_*} clauses are prompt-facing only).
+	 *
+	 * <p><b>A non-null value is NOT a guarantee the module recognises it, so it does not mean "the
+	 * source rated this".</b> {@code DrugSafetyValidator.severityRank} trims and lower-cases, and maps
+	 * every value it does not recognise — including null — to the same answer, UNRATED: exempt from
+	 * {@code clearsSeverityFloor}, sorted above {@code Major} by {@code severityPriority}, and
+	 * licensing withholding in {@code ratingLicensesWithholding}. So there are three classes on the
+	 * wire and not two, and the third is reachable: {@code DrugReference.Interaction}'s severity is a
+	 * plain Jackson-bound string with no vocabulary check and no {@code DrugReferenceValidity} rule
+	 * over it, so an operator's {@code json} dataset supplies its own words. A reader comparing this
+	 * value should trim and case-fold as {@code severityRank} does, and treat anything it does not
+	 * recognise as unrated rather than as a floor. The shipped DDInter dataset publishes exactly
+	 * {@code Major}, {@code Moderate}, {@code Minor} and {@code Unknown}, none null and none blank,
+	 * and the bundled curated seed rates none of its rules; ADR Decision 62 carries that census and
+	 * the production method that produced it, and is not restated here.
+	 *
+	 * <p><b>Read this field; do not fall back to parsing {@link #getDetail()}.</b> On the bundled
+	 * DDInter dataset the rating is somewhere in that prose: {@code DdiDrugReferenceSource.noteFor}
+	 * builds every note as {@code severity + ". " + mechanism}, or as
+	 * {@code severity + " severity interaction (… no mechanism description on file)."} where the row
+	 * has none, and {@code DrugSafetyValidator.interactionWarning} appends that note. Measured
+	 * 2026-08-30 over the shipped KB's 590,312 links: no note is null or blank, no rated rule carries
+	 * none, and none fails to start with its own severity word.
+	 *
+	 * <p><b>That measurement is about the NOTE, and no claim about where the rating sits in the
+	 * rendered detail follows from it.</b> Three attempts to state one have been refuted, which is why
+	 * none is made here. The detail is assembled from chart text as well as dataset text, and the
+	 * chart's half goes in unquoted — a free-text prescription display can carry the very delimiter
+	 * the chip appends its note after, which
+	 * {@code NonCodedDrugOrderNameTest.aFreeTextDisplayIsPrintedIntoTheChipUnquoted} pins as current
+	 * behaviour. What is left, and is enough, is that {@code detail} is prose this module rewords
+	 * freely and holds out as no contract. And on an operator {@code sourceFormat=json} dataset the
+	 * rating need not be in the detail at all: note and severity are independently authored fields
+	 * there, so a rule may carry no note, in which case {@code interactionWarning} appends none, or
+	 * carry one whose leading word is a different rating.
+	 * {@code ChartSearchAiSafetyWarningSeverityWireTest.theRatingIsPublishedEvenWhereTheProseNamesItNowhere}
+	 * drives both of those.
 	 *
 	 * <p>Since issue #283 this value has a second reader, and it decides more than an order:
 	 * {@code DrugSafetyValidator.ratingLicensesWithholding} splits it into "a reason to withhold" and
@@ -388,7 +454,7 @@ public class SafetyWarning {
 	 * {@code DrugReferenceInjector.onePerPartner} records) and a hand-authored {@code json} dataset
 	 * reaches it immediately. Whoever fixtures it should assert this condition, not assume it.
 	 *
-	 * <p>Not serialized — the wire shape is the three keys
+	 * <p>Not serialized — the wire shape is the four keys
 	 * {@code ChartSearchAiRestController.serializeSafetyWarnings} writes, and the chip's own detail is
 	 * unchanged by this.
 	 */

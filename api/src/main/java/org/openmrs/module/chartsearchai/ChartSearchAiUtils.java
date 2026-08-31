@@ -64,11 +64,13 @@ public class ChartSearchAiUtils {
 	 *
 	 * <p>It is interpolated into {@link #SENTENCE_BOUNDARY}'s character class through
 	 * {@link Pattern#quote}, so a member with meaning inside a class — {@code ]}, {@code ^},
-	 * {@code \} or a {@code -} in range position — is a literal rather than a syntax change.
-	 * Unquoted it fails SILENTLY and asymmetrically: measured, a set of {@code "]"} appended makes the
-	 * splitter stop splitting at all while {@link #mayEndASentence}, which reads this by
-	 * {@code indexOf}, carries on — the two questions diverging in exactly the way one set exists to
-	 * prevent, with a green build.
+	 * {@code \} or a {@code -} in range position — is a literal rather than a syntax change. Unquoted
+	 * it changes the PATTERN rather than the set: appending {@code ]} makes the lookbehind read
+	 * "a terminator followed by {@code ]}", so the splitter stops splitting on punctuation while
+	 * {@link #mayEndASentence}, which reads this by {@code indexOf}, carries on. That is the
+	 * divergence one set exists to prevent, and it is LOUD rather than silent — measured, that
+	 * arrangement fails fifteen tests, fourteen of them in {@code CitationGroundingVerifierTest}. The
+	 * quoting is here so the set can be edited as a set, not because the alternative hides.
 	 */
 	public static final String SENTENCE_TERMINATORS = ".!?";
 

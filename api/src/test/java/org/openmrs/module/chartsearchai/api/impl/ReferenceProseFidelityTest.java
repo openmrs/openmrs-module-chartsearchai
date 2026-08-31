@@ -302,7 +302,9 @@ public class ReferenceProseFidelityTest {
 		// "(SSRIs)" and "(M1)", so ".)" and ".\"" are ordinary here.
 		//
 		// The reproduction deliberately ends MID record sentence, so the record-side exit cannot
-		// stand in: this is the one case in the file that turns on answer.startsSentence.
+		// stand in. It shares the answer-side leg with everyWayASentenceCanEndInTheSharedRule…, which
+		// was added later; both redden when that leg is neutralised, and this comment claimed to be
+		// the only one until a review measured it.
 		service.setLlmProvider(answering("The finding states: \"" + copiedThrough("may")
 				+ ".\" Monitor the patient closely [" + finding.getIndex() + "]."));
 		try (LogCapture capture = LogCapture.on(PACKAGE)) {
@@ -318,19 +320,21 @@ public class ReferenceProseFidelityTest {
 
 	@Test
 	public void everyWayASentenceCanEndInTheSharedRuleEndsAnAnswerSentence() {
-		// The shared rule itself, through the real pipeline, read from the production constant rather
-		// than from a literal of this case's own — a case that spells its own set says nothing about
-		// a member added to the real one while still passing under a name that promises it does.
-		// Nothing else in the module pins either arm: narrowing SENTENCE_TERMINATORS to "." and
-		// deleting mayEndASentence's line-break arm each left the whole api suite green until this
-		// case existed. The line break is not decoration — the system prompt asks for "numbered lines
-		// or simple newlines", so a multi-item answer often carries no terminating punctuation at all.
-		List<String> endings = new ArrayList<String>();
-		for (int at = 0; at < ChartSearchAiUtils.SENTENCE_TERMINATORS.length(); at++) {
-			endings.add(String.valueOf(ChartSearchAiUtils.SENTENCE_TERMINATORS.charAt(at)) + " ");
-		}
-		endings.add("\n");
-		for (String ending : endings) {
+		// The shared rule itself, through the real pipeline, and spelled out as LITERALS rather than
+		// iterated off the constant. Building the list FROM SENTENCE_TERMINATORS was the first
+		// version of this case and it was vacuous in the one direction that matters: narrowing the
+		// set to "." left the whole api suite green, this case included, because it then iterated one
+		// ending and passed under a name promising every member. That is the shape
+		// ChartSearchAiAuditSearchModeTest's four spellings exist to avoid — every other assertion
+		// compares a constant to itself and cannot see it shrink.
+		//
+		// Deleting mayEndASentence's line-break arm reddens this case alone, and the line break is
+		// not decoration: the system prompt asks for "numbered lines or simple newlines", so a
+		// multi-item answer often carries no terminating punctuation at all.
+		assertEquals(".!?", ChartSearchAiUtils.SENTENCE_TERMINATORS,
+				"the members below are literals, so a change to the shared set has to arrive here too "
+						+ "rather than passing silently");
+		for (String ending : new String[] { ". ", "! ", "? ", "\n" }) {
 			service.setLlmProvider(answering(withoutTrailingStop(copiedThrough("may")) + ending
 					+ "Monitor the patient closely [" + finding.getIndex() + "]."));
 			try (LogCapture capture = LogCapture.on(PACKAGE)) {
@@ -494,6 +498,30 @@ public class ReferenceProseFidelityTest {
 					"the second cited record ends exactly where the first diverges, so the answer's "
 							+ "continuation is its own words after a complete reproduction. Captured: "
 							+ capture.describeAll());
+		}
+	}
+
+	@Test
+	public void aDivergenceAtTheFirstWordOfAnotherRecordsReproductionIsNotReported() {
+		// The boundary of Reproductions.carriedThrough: a reproduction covers its first answer word
+		// too, so a divergence another record's run STARTS at is pooled. Its field javadoc asserted
+		// that and nothing held it — tightening the loop to skip the first position left the whole
+		// api suite green. Record [1] stops matching at the thirteenth word while record [2]'s own
+		// reproduction begins exactly there and carries on, so nothing was substituted.
+		String shared = "alfa bravo charlie delta echo foxtrot golf hotel india juliett kilo lima";
+		PatientChart pair = referenceRecordsStating(shared + " zulu quebec romeo",
+				"lima mike november oscar papa quebec romeo sierra tango uniform victor whiskey xray");
+		TestableService onPair = newService(pair);
+		onPair.setLlmProvider(answering(shared
+				+ " mike november oscar papa quebec romeo sierra tango uniform victor whiskey xray "
+				+ "[1], [2]."));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			onPair.search(patient(), QUESTION);
+			assertFalse(capture.describeAll().isEmpty(),
+					"the capture must receive the pipeline's own INFO lines, or this passes vacuously");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"the answer's next word begins the second record's own reproduction, so nothing "
+							+ "was substituted there. Captured: " + capture.describeAll());
 		}
 	}
 

@@ -736,8 +736,10 @@ public class CitationGroundingVerifier {
 			} else if (Boolean.TRUE.equals(verdict) && disposition[i] == Disposition.DEMOTE_ONLY) {
 				// Demote-only: a cosine pass on a recited reference record carries no faithfulness
 				// signal, so it renders unverified rather than verified; a fail (an off-topic
-				// citation) still flags. Reference content is verified deterministically by the
-				// DrugSafetyValidator, not by this pass.
+				// citation) still flags. What DOES check reference content is ClassCodeFidelityCheck
+				// and ReferenceProseFidelityCheck, not this pass and not the DrugSafetyValidator
+				// chips — which this comment named until #337, and which are an independent list
+				// nothing reconciles against the answer.
 				verdict = null;
 			}
 			annotated.add(references.get(i).withGrounded(verdict));

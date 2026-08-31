@@ -48,6 +48,11 @@ So when you learn something worth keeping:
   count OF; where its force depends on a denominator, put it in the ADR with its date instead.
 - **Do not restate an argument that already has a home.** Link the decision instead.
 
+Most of that is enforced: `ProjectInstructionsGuardTest` fails the build on a suite total, an
+elided identifier, a cited symbol, path or ADR decision that does not resolve, an unclosed code
+span, and on this file exceeding its size budget. It cannot check whether a rule is TRUE — only
+that its pointers land and its figures are not of the kind that rot.
+
 # API surface rules — do not bypass these methods
 
 These methods are the ONLY correct entry points for their respective operations. Do not reimplement their logic inline, call their internal helpers directly, or hardcode their output values. Where a bullet cites an ADR decision, that decision is canonical for the reasoning — including for alternatives already measured and rejected, which should not be re-proposed without new evidence.

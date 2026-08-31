@@ -52,6 +52,32 @@ public final class ModuleSourceRoot {
 	 * non-empty and found a file it expects, and the same mutation now reddens it. A new WALKING
 	 * caller owes itself the same check, because nothing here can give it one.
 	 */
+	/**
+	 * @return the repository root — the directory holding {@code CLAUDE.md}, the project
+	 *         instructions, and {@code docs/}. Resolved by walking up from the working
+	 *         directory, which surefire sets to the module directory, so the walk is one
+	 *         or two steps.
+	 *
+	 *         <p>Throws rather than falling back to the working directory. A guard that
+	 *         cannot find the file it guards must fail loudly: silently resolving to a
+	 *         directory with no {@code CLAUDE.md} would make every check in
+	 *         {@code ProjectInstructionsGuardTest} vacuously true, which is the
+	 *         passes-for-the-wrong-reason failure those checks exist to prevent.
+	 */
+	public static Path repoRoot() {
+		Path current = Paths.get("").toAbsolutePath();
+		while (current != null) {
+			if (Files.isRegularFile(current.resolve("CLAUDE.md"))
+					&& Files.isDirectory(current.resolve("docs"))) {
+				return current;
+			}
+			current = current.getParent();
+		}
+		throw new IllegalStateException(
+				"Could not locate the repository root (a directory holding CLAUDE.md and docs/) "
+						+ "walking up from " + Paths.get("").toAbsolutePath());
+	}
+
 	public static Path apiRoot() {
 		Path current = Paths.get("").toAbsolutePath();
 		while (current != null) {

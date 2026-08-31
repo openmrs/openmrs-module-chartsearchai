@@ -3306,6 +3306,14 @@ public class DrugSafetyValidator {
 	 * <p>The partner is found from {@link SubjectRule#partner}, the entry {@link #activeOrderEntryFor}
 	 * already resolved for this rule and the module's one answer to "which partner is this rule about",
 	 * rather than by a second correlation of rules to co-medications.
+	 *
+	 * <p><b>That entry and the co-medication list are two different resolutions of one chart, and
+	 * {@link CoMedications#partnerNaming} is where they are bridged</b> — read its rungs before
+	 * changing what this declines on. {@link DrugReferenceService#findForActiveOrders} is additive (ATC
+	 * ∪ NAME) while {@link #orderPartners} walks the chart's codes and resolves the rest by name, so one
+	 * PRESCRIPTION can resolve to two reference substances with a partner keyed on only one of them; a
+	 * lookup that answered null there left this chip on {@link #partnerLabel} beside another chip about
+	 * the same prescription that reconciled, which is issue #339's own shape (review round 2).
 	 */
 	private ReconciledPartner reconciledPartnerFor(SubjectRule rule, SubstanceSubjects subjects,
 			CoMedications coMedications) {
@@ -6451,6 +6459,12 @@ public class DrugSafetyValidator {
 		/** {@link #partnerNaming}'s index, built at most once for the pass from {@link #resolved()}. */
 		private Map<Object, OrderPartner> partnersBySubstance;
 
+		/** {@link #partnerNaming}'s second index, built in the same pass over {@link #resolved()}: the
+		 *  co-medication each CHART-recorded ATC code was attributed to. Keyed on the code and not on a
+		 *  substance, because it answers for an entry no partner is keyed on at all — see
+		 *  {@link #partnerNaming}. */
+		private Map<String, OrderPartner> partnersByChartedCode;
+
 		/** Taken by {@link DrugSafetyValidator#reconciledPartnerName} at the one branch that needs it,
 		 *  rather than by its callers: the two rungs above that branch — a ladder with no name, and a
 		 *  label an ORDER supplied — answer without asking the dataset anything, so a pass whose folds
@@ -6463,11 +6477,14 @@ public class DrugSafetyValidator {
 		}
 
 		/**
-		 * The co-medication this pass resolved for {@code entry}'s substance, or null where the ladder
-		 * reached none — which is every order the loaded dataset carries no entry for, and every
-		 * context that carries no chart at all.
+		 * The co-medication the patient's chart puts {@code entry} on, or null where the ladder reached
+		 * none — which is every order the loaded dataset carries no entry for, and every context that
+		 * carries no chart at all. Deliberately not "the co-medication resolved for {@code entry}'s
+		 * SUBSTANCE", which is only the first of the three rungs below and was the whole of this method
+		 * until issue #339's review round 2.
 		 *
-		 * <p>Keyed on TWO things, and the second is what reaches the shape issue #339 opens with. A
+		 * <p>Two of those rungs are substance keys, and the second is what reaches the shape issue #339
+		 * opens with. A
 		 * partner's {@link OrderPartner#labelEntry} is the substance the ladder NAMED it after, and for
 		 * a partly-covered combination order that is only one of the substances the prescription
 		 * contains: the rifapentine half of an isoniazid/rifapentine order names the partner, while a
@@ -6481,20 +6498,58 @@ public class DrugSafetyValidator {
 		 * one: a partner that IS a substance speaks for it ahead of one that merely contains it, so a
 		 * combination order cannot take a chip away from the single-substance order of the same drug.
 		 *
+		 * <p><b>And on a THIRD thing, which is not a substance at all</b> (issue #339, review round 2):
+		 * the co-medication this pass attributed a CHART-recorded ATC code that {@code entry} also
+		 * publishes to ({@link #partnerSharingAChartedCode}). The two sets this method bridges are not
+		 * the same set and were never meant to be. {@link SubjectRule#partner} is
+		 * {@link DrugSafetyValidator#activeOrderEntryFor}'s answer over
+		 * {@link DrugReferenceService#findForActiveOrders} — ATC ∪ NAME, additive on purpose — while
+		 * the partners here come from {@link DrugSafetyValidator#orderPartners}, which walks the chart's
+		 * codes and then resolves the orders no code reached BY NAME. So ONE prescription can resolve to
+		 * two reference substances, only one of which a partner is keyed on: the shipped knowledge base
+		 * files {@code Ketoconazole} and {@code Levoketoconazole} as two substances (two
+		 * {@code drugbank_id}s) publishing one {@code rxnorm_name} and one identical ATC list, and a
+		 * chart carrying a single mapped {@code Ketoconazole} order resolves both. Without this rung the
+		 * rule whose partner is the second entry keeps {@link DrugSafetyValidator#partnerLabel} beside a
+		 * chip about that same prescription which reconciled — {@code Abacavir interacts with active
+		 * order Ketoconazole} next to {@code Ketoconazole interacts with active order ketoconazole},
+		 * which is exactly the shape issue #339 exists to remove and which the widening to every rule
+		 * chip introduced. Measured through the real {@link DrugSafetyValidator#validate} over the
+		 * shipped KB: of its 2114 substances, 84 put a SECOND substance into
+		 * {@code findForActiveOrders} for a one-order chart, and sweeping every one of those against up
+		 * to three counterpart drugs (216 responses) the rung removes 6 divergent responses and adds
+		 * none, taking the responses in which two different {@code active order} labels differ only in
+		 * CASE from 6 to 0 — 7 with the reconciliation disabled altogether, so it also closes one the
+		 * pre-#339 code had.
+		 *
 		 * <p>Answering null is not a failure and is the ordinary outcome for an uncovered order — the
 		 * caller then keeps {@link #partnerLabel}, which is what every rule chip printed before this.
 		 *
-		 * <p><b>It cannot hand back a partner the rule is not about, and that is closed by construction
-		 * rather than by a case.</b> The two index passes can only disagree where an entry-rung
-		 * partner's {@link OrderPartner#labelEntry} and its {@link OrderPartner#substances} name
-		 * different substances — and that shape is unreachable: {@code substances} is populated only on
-		 * the branch that also calls {@link OrderPartner#nameByOrder}, where the order gate then
-		 * applies, and {@link DrugSafetyValidator#addPartnersForUnmappedOrders} sets it to its own
-		 * {@code labelEntry}'s substance. Where the label came from an order the gate is
-		 * {@link DrugSafetyValidator#namesNamingOrder} against the display about to be printed; on the
-		 * entry rung it is {@link DrugSafetyValidator#unambiguouslyNames}, which needs the token to NAME
-		 * the row, so an ATC-only correlation (the {@code Omeprazole}/{@code Esomeprazole}
-		 * {@code A02BC05} shape) is refused. Stated because nothing tests it.
+		 * <p><b>It CAN hand back a partner the rule is not about, and the caller's gate is what refuses
+		 * — do not read a bound into this method that it does not hold.</b> An earlier form of this
+		 * javadoc claimed the opposite "by construction", on the premise that
+		 * {@link OrderPartner#substances} is populated only on the branch that also calls
+		 * {@link OrderPartner#nameByOrder}, so the order gate would apply. That premise is false and the
+		 * comment at the write site says so in the opposite direction: since issues #290/#292 the two
+		 * are on one branch but no longer under one condition — {@code nameByOrder} withholds the rename
+		 * for a synthesized or blank display ({@link DrugSafetyValidator#displayNamesADrug}) while the
+		 * {@code substances} leg runs for every carrier — so a partner can hold a null
+		 * {@link OrderPartner#namingOrder}, a non-null {@link OrderPartner#labelEntry} and a
+		 * {@code substances} set naming a different substance, and {@code reconciledPartnerName} then
+		 * takes the ENTRY rung, where {@link DrugSafetyValidator#namesNamingOrder} never runs. The third
+		 * rung above widens it much further still, deliberately: an ATC correlation is not identity, and
+		 * {@link DrugReference#substanceKey()} exists because this knowledge base publishes one
+		 * {@code A02BC05} for {@code Omeprazole} and {@code Esomeprazole} alike.
+		 *
+		 * <p>What actually refuses is {@link DrugSafetyValidator#unambiguouslyNames}, asked of the row
+		 * about to be PRINTED: the rule's token must name that row and outrank every rival claimant, so
+		 * the {@code Omeprazole}/{@code Esomeprazole} pair is refused on the ranking rather than on the
+		 * lookup, and the caller keeps its own token. That is why widening the lookup cannot open a
+		 * mis-attribution class — it can only turn a chip that printed the token into one the gate is
+		 * asked about. Mutate that gate to always permit and read the failures rather than trusting
+		 * this: six cases redden, of which {@code FoldedChipOnePartnerNameTest
+		 * .aRuleAboutAnotherSubstanceSharingTheCodeKeepsItsOwnToken} is the one about a token whose two
+		 * claimants share an ATC code, which is the correlation this rung makes.
 		 */
 		OrderPartner partnerNaming(DrugReference entry) {
 			if (entry == null) {
@@ -6502,9 +6557,17 @@ public class DrugSafetyValidator {
 			}
 			if (partnersBySubstance == null) {
 				partnersBySubstance = new LinkedHashMap<Object, OrderPartner>();
+				partnersByChartedCode = new LinkedHashMap<String, OrderPartner>();
+				Set<String> charted = context == null ? Collections.<String> emptySet()
+						: context.getActiveDrugAtcCodes();
 				for (OrderPartner partner : resolved()) {
 					if (partner.labelEntry != null) {
 						index(partner.labelEntry.substanceGroupKey(), partner);
+					}
+					for (String code : partner.codes) {
+						if (charted.contains(code) && !partnersByChartedCode.containsKey(code)) {
+							partnersByChartedCode.put(code, partner);
+						}
 					}
 				}
 				for (OrderPartner partner : resolved()) {
@@ -6513,7 +6576,49 @@ public class DrugSafetyValidator {
 					}
 				}
 			}
-			return partnersBySubstance.get(entry.substanceGroupKey());
+			OrderPartner named = partnersBySubstance.get(entry.substanceGroupKey());
+			return named != null ? named : partnerSharingAChartedCode(entry);
+		}
+
+		/**
+		 * The co-medication this pass attributed a CHART-recorded ATC code to that {@code entry} also
+		 * publishes, or null where the chart records none of {@code entry}'s codes.
+		 *
+		 * <p>Read {@link #partnerNaming}'s third paragraph for why this rung exists at all. What it is
+		 * NOT is an assertion that the two are one substance — {@link DrugReference#substanceKey()}
+		 * exists because this knowledge base publishes one level-5 code for {@code Omeprazole} and
+		 * {@code Esomeprazole} alike. It asserts only that {@code entry} is on this chart BY THAT CODE,
+		 * which is exactly the predicate {@link DrugReferenceService#findByActiveOrders} used to admit
+		 * it, and it hands the answer to a gate that decides separately whether that co-medication's
+		 * name may be printed for this rule.
+		 *
+		 * <p>Scoped to the codes the CHART records, and that conjunct is the whole of the scoping. A
+		 * partner reached by NAME ({@link DrugSafetyValidator#addPartnersForUnmappedOrders}) carries the
+		 * DATASET's codes for a whole substance rather than a prescription's, so without it an entry
+		 * admitted by some OTHER order's code could be named after that unmapped order's prescription.
+		 * Only codes the chart itself recorded can have admitted anything. <b>Nothing in the suite pins
+		 * that conjunct</b> — measured, removing it leaves the whole api build green — and a reader must
+		 * not delete it expecting a test to object. It is defence in depth: in every arrangement tried
+		 * the caller's gate refuses the same correlation, because the rule's token names the entry and
+		 * not the unmapped order's row, so the conjunct changes no output. It is kept because a
+		 * correlation the CHART never made is not one this method may assert, and because the gate is a
+		 * ranking that a later widening could soften.
+		 *
+		 * <p>Where an entry publishes charted codes attributed to two different prescriptions, the
+		 * entry's own first such code decides — a presentation choice of the same kind
+		 * {@link DrugSafetyValidator#orderCarrying} makes, and one the gate can still refuse.
+		 */
+		private OrderPartner partnerSharingAChartedCode(DrugReference entry) {
+			if (partnersByChartedCode.isEmpty()) {
+				return null;
+			}
+			for (String code : entry.normalizedAtcCodes()) {
+				OrderPartner partner = partnersByChartedCode.get(code);
+				if (partner != null) {
+					return partner;
+				}
+			}
+			return null;
 		}
 
 		/** First writer of a key wins — see {@link #partnerNaming} on why the two passes are ordered. */

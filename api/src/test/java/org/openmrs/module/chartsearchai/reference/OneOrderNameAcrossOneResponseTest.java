@@ -61,6 +61,12 @@ public class OneOrderNameAcrossOneResponseTest {
 	private static final String CLASS_ONLY_AND_RULE_FIXTURE =
 			"chartsearchai-test/ddi-class-only-and-rule-one-partner.json";
 
+	/** A verbatim shipped-KB slice in which ONE prescription resolves to TWO active-order reference
+	 *  entries, only one of which the co-medication ladder keys a partner on — see the fixture's own
+	 *  note. */
+	private static final String ONE_ORDER_TWO_ORDER_ENTRIES_FIXTURE =
+			"chartsearchai-test/ddi-one-order-two-order-entries.json";
+
 	/** The presentation that slice's chart records, which is NOT the row {@code canonicalRow} elects
 	 *  for that substance. */
 	private static final String TOPICAL_STEROID_ORDER = "Methylprednisolone (topical)";
@@ -476,5 +482,57 @@ public class OneOrderNameAcrossOneResponseTest {
 					+ "carries, was: " + warnings);
 		assertEquals(java.util.Arrays.asList("Warfarin"), orderNames(warnings),
 			"and it must still be named, was: " + DrugReferenceTestSupport.details(warnings));
+	}
+
+	/**
+	 * One prescription, TWO active-order reference entries, one name.
+	 *
+	 * <p><b>Issue #339, review round 2.</b> {@code SubjectRule.partner} is
+	 * {@code activeOrderEntryFor}'s answer over {@code DrugReferenceService.findForActiveOrders} — ATC
+	 * ∪ NAME, and deliberately additive — while the co-medication index this chip looks that partner up
+	 * in is built from {@code orderPartners}, which walks the chart's ATC CODES and then resolves the
+	 * orders no code reached by name. The two sets are not the same, and where they differ the
+	 * difference is one PRESCRIPTION resolving to two substances: the shipped knowledge base files
+	 * {@code Ketoconazole} and {@code Levoketoconazole} as two substances (two {@code drugbank_id}s)
+	 * publishing one {@code rxnorm_name} and one identical ATC list, so a chart carrying a single
+	 * mapped {@code Ketoconazole} order resolves both entries while the code walk keys exactly one
+	 * co-medication. A rule whose partner is the second entry found no partner in the index and kept
+	 * {@code partnerLabel} — beside another chip about that same prescription which reconciled. That
+	 * is the ticket's own shape (a), and it did not exist before this change: with the reconciliation
+	 * disabled both chips print the token.
+	 *
+	 * <p>What closes it is the third rung of {@code CoMedications.partnerNaming} — the co-medication
+	 * this pass attributed the CHART-recorded ATC code that admitted the entry to. Mutate
+	 * {@code partnerNaming} to return the substance lookup alone and this case is the one that
+	 * reddens, printing {@code active order ketoconazole} beside {@code active order Ketoconazole}.
+	 *
+	 * <p>The chips are asserted whole rather than counted, because what is being pinned is that the two
+	 * of them agree: the first is subject Abacavir naming the entry the ladder named the co-medication
+	 * after, the second subject Ketoconazole naming the entry it did not.
+	 */
+	@Test
+	public void aPartnerEntryTheLadderKeyedNoCoMedicationOnStillNamesItsPrescriptionOnce()
+			throws IOException {
+		List<DrugReference> entries =
+				DrugReferenceTestSupport.ddiFixtureEntries(ONE_ORDER_TWO_ORDER_ENTRIES_FIXTURE);
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(entries);
+		DrugReference charted = DrugReferenceTestSupport.row(entries, "Ketoconazole");
+		java.util.Set<String> codes = charted.normalizedAtcCodes();
+		PatientClinicalContext chart = service.withReferenceNames(DrugReferenceTestSupport.ctx(60, null,
+			DrugReferenceTestSupport.set("Ketoconazole"), codes, null, null,
+			java.util.Arrays.asList(DrugReferenceTestSupport.activeOrder("order-ketoconazole",
+				"Ketoconazole", DrugReferenceTestSupport.set("Ketoconazole"), codes))));
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+				.validate("", "Can I give her abacavir and ketoconazole?", chart);
+
+		assertEquals(2, warnings.size(),
+			"precondition: two rule chips about the one prescription, or there are not two names to"
+					+ " reconcile, was: " + DrugReferenceTestSupport.details(warnings));
+		assertEquals(java.util.Arrays.asList("Ketoconazole", "Ketoconazole"), orderNames(warnings),
+			"one prescription resolving to two active-order entries must still be named once: a rule"
+					+ " whose partner entry the co-medication ladder keyed no partner on may not keep"
+					+ " the knowledge base's own match token beside a chip that reconciled (issue"
+					+ " #339), was: " + DrugReferenceTestSupport.details(warnings));
 	}
 }

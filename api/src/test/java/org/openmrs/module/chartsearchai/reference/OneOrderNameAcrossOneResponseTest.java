@@ -61,6 +61,21 @@ public class OneOrderNameAcrossOneResponseTest {
 	private static final String SELF_NAMED_COMBINATION_FIXTURE =
 			"chartsearchai-test/drug-reference-combination-order-self-named.json";
 
+	/** As above, with the rule's subject moved INTO the partner's ATC subgroup and the second chip
+	 *  subject moved out of it, so the one chip the arrangement raises is FOLDED — see the fixture's
+	 *  note. */
+	private static final String FOLDED_COMBINATION_FIXTURE =
+			"chartsearchai-test/drug-reference-combination-order-folded.json";
+
+	/** The fixture's combination display, which names the partner AND a second drug the question puts
+	 *  in play. */
+	private static final String FOLDED_COMBINATION_DISPLAY = "Paracetamol / Rifapentine";
+
+	/** The shipped-KB counterpart of {@link #FOLDED_COMBINATION_DISPLAY}: an ordinary fixed-dose
+	 *  statin/calcium-channel-blocker product, the reviewer's own arrangement at issue #339 review
+	 *  round 5. */
+	private static final String STATIN_COMBINATION_DISPLAY = "Amlodipine / Atorvastatin";
+
 	/** As above, with a THIRD drug that rules on the same half, so ONE response raises two rule chips
 	 *  about ONE co-medication from two different subjects — see the fixture's note. */
 	private static final String TWO_SUBJECTS_COMBINATION_FIXTURE =
@@ -338,7 +353,11 @@ public class OneOrderNameAcrossOneResponseTest {
 	 * <p>The chip reaches the prompt verbatim through {@code DrugReferenceInjector.renderFinding} as a
 	 * citable {@code safety_finding} carrying {@code STRENGTH_WITHHOLD}, which is why it is refused
 	 * rather than merely noted. Refusing returns the chip to {@code partnerLabel} — the rule's own
-	 * token — which is what it printed before this issue.
+	 * token — which is what it printed before this issue. Since review round 5 it does so as the
+	 * rung's own ANSWER rather than as a decline, so a FOLDED chip's class sentence takes that token
+	 * too instead of keeping {@code classPartnerName}'s label — see
+	 * {@link #aFoldedChipRefusingACombinationDisplayNamesThePrescriptionOnce}. This case is unfolded
+	 * and reads the same either way.
 	 *
 	 * <p>It costs the ticket's own combination case nothing:
 	 * {@link #twoRulesAboutOneCombinationPrescriptionNameItOnce} has subject Carbamazepine, which the
@@ -750,6 +769,111 @@ public class OneOrderNameAcrossOneResponseTest {
 					+ " combination product from standing in for one of its halves may not fire on an"
 					+ " order that names the drug it IS (issue #339), was: "
 					+ DrugReferenceTestSupport.details(warnings));
+	}
+
+	/**
+	 * A FOLDED chip whose ORDER rung refuses the prescription's display still names that prescription
+	 * ONCE — issue #292's invariant, held against the refusal reason issue #339 added.
+	 *
+	 * <p><b>Issue #339, review round 5.</b> The round-3/4 conjunct
+	 * ({@code CoMedications.displayNamesAnotherChipSubject}) is applied at
+	 * {@code DrugSafetyValidator.reconciledPartnerName}'s ORDER rung, which the FOLD calls directly.
+	 * Answering null there left the rule sentence on {@code partnerLabel} while the class sentence
+	 * kept {@code classPartnerName}'s label, so ONE detail read
+	 * {@code Rifampicin interacts with active order rifapentine … Rifampicin is in the same ATC class
+	 * (J04AB) as active order Paracetamol / Rifapentine} — two names for one prescription, inside one
+	 * chip, where the merge base printed the display in both. That is a refusal reason issue #292
+	 * never had, so arrangements that reconciled before issue #339 had started to split, and the chip
+	 * reaches the prompt verbatim through {@code DrugReferenceInjector.renderFinding} as a citable
+	 * {@code safety_finding} carrying {@code STRENGTH_WITHHOLD}.
+	 *
+	 * <p>The rung therefore reconciles onto the rule's own TOKEN rather than declining — outcome 1's
+	 * shape, reached for a different reason — so both sentences take the one name every UNFOLDED chip
+	 * about this co-medication already prints. Mutating that branch back to {@code null} reddens this
+	 * case and {@link #aFoldedChipOnTheShippedKnowledgeBaseNamesTheCombinationOnce}, and nothing else
+	 * in the api suite.
+	 *
+	 * <p>The fixture is built so the arrangement is exactly ONE chip: {@code Paracetamol} carries no
+	 * rule and shares no subgroup with the order's codes, so it is a chip SUBJECT (which is what makes
+	 * the refusal fire) without raising a chip whose own naming could be confused with this one's.
+	 */
+	@Test
+	public void aFoldedChipRefusingACombinationDisplayNamesThePrescriptionOnce() throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
+			DrugReferenceTestSupport.fixtureEntries(FOLDED_COMBINATION_FIXTURE));
+		java.util.Set<String> codes = DrugReferenceTestSupport.set("J04AC51", "J04AB05");
+		PatientClinicalContext chart = DrugReferenceTestSupport.ctx(60, null,
+			DrugReferenceTestSupport.set(FOLDED_COMBINATION_DISPLAY), codes, null, null,
+			java.util.Arrays.asList(DrugReferenceTestSupport.activeOrder("order-combination",
+				FOLDED_COMBINATION_DISPLAY, DrugReferenceTestSupport.set("rifapentine"), codes)));
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+				.validate("", "Can I give her rifampicin and paracetamol?", chart);
+
+		assertEquals(1, warnings.size(), "one chip, was: "
+				+ DrugReferenceTestSupport.details(warnings));
+		assertTrue(warnings.get(0).getDetail().contains("same ATC class"),
+			"precondition: the class arm must fold onto this chip, or there is only one sentence to"
+					+ " name the order and the case cannot see the defect, was: "
+					+ DrugReferenceTestSupport.details(warnings));
+		assertEquals(java.util.Arrays.asList("rifapentine", "rifapentine"), orderNames(warnings),
+			"one chip must not contradict itself: a refusal reason issue #292 did not have may not"
+					+ " leave the rule sentence on the knowledge base's match token while the folded"
+					+ " class sentence keeps the prescription's display (issue #339), was: "
+					+ DrugReferenceTestSupport.details(warnings));
+	}
+
+	/**
+	 * The same arrangement over the dataset the module SHIPS, and over the ordinary fixed-dose product
+	 * the issue #339 review round 5 finding was measured on.
+	 *
+	 * <p>One {@code Amlodipine / Atorvastatin} order, codes {@code C10BX03} (which the shipped data
+	 * does not cover, so {@code soleSubstanceOf} falls through to the covered one) and {@code C10AA05},
+	 * asked about one of its own constituents beside a third statin. Measured at this head before the
+	 * fix, the FOLDED chip read {@code Simvastatin interacts with active order atorvastatin — Moderate.
+	 * … Simvastatin is in the same ATC class (C10AA) as active order Amlodipine / Atorvastatin}.
+	 *
+	 * <p>Asserted as agreement rather than against a literal, for the reason
+	 * {@link #aCombinationOrderOnTheShippedKnowledgeBaseIsNamedOneWay} gives: which of the two names
+	 * survives is the fixture case's business and a knowledge-base refresh may move the row. What may
+	 * not move is that one chip uses one name for one prescription — and that the display, which the
+	 * response has refused for this co-medication, is not one of them.
+	 */
+	@Test
+	public void aFoldedChipOnTheShippedKnowledgeBaseNamesTheCombinationOnce() throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport
+				.serviceWith(DrugReferenceTestSupport.shippedEntries());
+		java.util.Set<String> codes = DrugReferenceTestSupport.set("C10BX03", "C10AA05");
+		PatientClinicalContext chart = service.withReferenceNames(DrugReferenceTestSupport.ctx(60, null,
+			DrugReferenceTestSupport.set(STATIN_COMBINATION_DISPLAY), codes, null, null,
+			java.util.Arrays.asList(DrugReferenceTestSupport.activeOrder("order-combination",
+				STATIN_COMBINATION_DISPLAY, DrugReferenceTestSupport.set(STATIN_COMBINATION_DISPLAY),
+				codes))));
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+				.validate("", "Can I give her amlodipine and simvastatin?", chart);
+
+		SafetyWarning folded = null;
+		for (SafetyWarning warning : warnings) {
+			if (warning.getDetail().contains("same ATC class")) {
+				folded = warning;
+			}
+		}
+		assertTrue(folded != null,
+			"precondition: the shipped data must fold a class sentence onto a rule chip about this"
+					+ " prescription, or there are not two sentences to disagree, was: "
+					+ DrugReferenceTestSupport.details(warnings));
+		List<String> names = orderNames(java.util.Arrays.asList(folded));
+		assertEquals(2, names.size(),
+			"precondition: both sentences of the folded chip must name the active order, was: "
+					+ folded.getDetail());
+		assertEquals(names.get(0), names.get(1),
+			"one chip, one name for one prescription, on the data an operator actually runs (issue"
+					+ " #339), was: " + folded.getDetail());
+		assertFalse(names.contains(STATIN_COMBINATION_DISPLAY),
+			"the display names a substance this response chips about, so it stands in for no partner"
+					+ " in it — the refusal must still hold, and hold for BOTH sentences (issue #339),"
+					+ " was: " + folded.getDetail());
 	}
 
 	/**

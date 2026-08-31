@@ -261,7 +261,13 @@ public class ReferenceRecordRowAttributionTest {
 		List<SafetyWarning> chips = DrugReferenceTestSupport.validator(service)
 				.validate("", "Is it safe to give her dexamethasone?", context);
 
-		assertEquals(Arrays.asList("Dexamethasone (ophthalmic) interacts with active order phenytoin — "
+		// The partner is named "Phenytoin" and not "phenytoin" since issue #339: an unfolded rule chip
+		// asks the same reconciliation a folded one does, so the co-medication is named as the dataset
+		// names it rather than by the knowledge base's own match token. That is the only thing about
+		// this chip that has moved, and it is the change that issue asks for rather than a #206
+		// regression — the subject row, the rule chosen, the rating and the mechanism prose are all
+		// still the ones #206 settled.
+		assertEquals(Arrays.asList("Dexamethasone (ophthalmic) interacts with active order Phenytoin — "
 				+ "Moderate. Phenytoin and other hydantoins may induce the CYP450 3A4 hepatic metabolism "
 				+ "of corticosteroids and increase their clearance and decrease their half-lives, "
 				+ "possibly reducing their therapeutic efficacy."),

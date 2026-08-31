@@ -185,6 +185,11 @@ public class DuplicateInteractionChipTest {
 		// fold applies to must render byte-identically to what it always did — the fold must not leak a
 		// trailing sentence, or a full stop, into single-arm chips. The one test here that passes
 		// against the pre-fold validator as well, which is exactly what it is for.
+		//
+		// It still does after issue #339, which makes an unfolded chip ask the same reconciliation a
+		// folded one asks: this context carries NO ATC codes and no per-order list, so orderPartners
+		// resolves no co-medication at all and the reconciliation declines. What that issue moved is
+		// the name on a chip whose partner the ladder DID reach; this arrangement is not one.
 		List<SafetyWarning> warnings = foldValidator().validate("Ibuprofen could help with the pain.",
 				"Can I give ibuprofen?", DrugReferenceTestSupport.ctx(60, null,
 						DrugReferenceTestSupport.set("aspirin 81mg"), null, null, null));

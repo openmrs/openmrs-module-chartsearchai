@@ -74,9 +74,10 @@ public class SafetyWarning {
 	private final boolean uncorroboratedChartMatch;
 
 	/** The rule {@link #reconciledPartnerNoteName} was decided on — see that accessor. Null for every
-	 *  warning that carries no reconciled name, which is every warning but a folded interaction chip's
-	 *  whose fold RECONCILED: a folded chip whose fold refused answers null here too, deliberately, so
-	 *  that a refusal and an absent fold are one answer to the record. */
+	 *  warning that carries no reconciled name, which since issue #339 is every warning but an
+	 *  INTERACTION chip whose partner was reconciled — folded or not, and in either active-order arm.
+	 *  A chip whose reconciliation refused, or whose partner the ladder never reached, answers null
+	 *  here too, deliberately, so that a refusal and an absent answer are one answer to the record. */
 	private final DrugReference.Interaction reconciledRule;
 
 	private final String reconciledNoteName;
@@ -131,9 +132,15 @@ public class SafetyWarning {
 	/**
 	 * An INTERACTION chip's warning, and the only shape that can carry
 	 * {@link #reconciledPartnerNoteName} (issue #297). A FACTORY rather than a seventh constructor
-	 * argument, for the reason {@link #contraindication} states of its own flag: only the drug-in-play
-	 * arm folds, so only its chips have a reconciled name at all, and a constructor offering the pair
-	 * beside {@code uncorroboratedChartMatch} would offer a caller a combination that has no meaning.
+	 * argument, for the reason {@link #contraindication} states of its own flag: the two facts travel
+	 * together only for an interaction chip, and a constructor offering the pair beside
+	 * {@code uncorroboratedChartMatch} would offer a caller a combination that has no meaning. They are
+	 * not the same fact and do not arrive together: only the drug-in-play arm can FOLD, so only its
+	 * chips carry {@code unratedRelationship}, while since issue #339 both active-order arms set a
+	 * reconciled name. Only the drug-in-play arm's is READ today — {@code DrugReferenceInjector}
+	 * reaches this accessor from the loop over the entries a question put in play, and a screening
+	 * question puts none in play by its own gate — so the screening arm's is set for the shape rather
+	 * than for a consumer, which is what stops a later reader having to remember to set it.
 	 *
 	 * <p>Package-private, matching the accessors: a caller may set only what it may read back. The
 	 * three- and four-argument constructors above are public because the wire-facing shape is, and
@@ -152,9 +159,11 @@ public class SafetyWarning {
 	 *
 	 * @param unratedRelationship whether this warning also asserts a relationship the source rates
 	 *        nothing for — see {@link #carriesUnratedRelationship()}
-	 * @param reconciledRule the rule this chip's detail was folded on, or null when nothing folded
-	 * @param reconciledNoteName see {@link #reconciledPartnerNoteName} — null when the fold refused, so
-	 *        that a refusal and an absent fold are one answer here, as they are for the chip
+	 * @param reconciledRule the rule this chip's partner was reconciled on, or null when nothing
+	 *        reconciled
+	 * @param reconciledNoteName see {@link #reconciledPartnerNoteName} — null when the reconciliation
+	 *        refused or reached no co-medication, so that a refusal and an absent answer are one answer
+	 *        here, as they are for the chip
 	 */
 	static SafetyWarning interaction(String drug, String detail, String severity,
 			boolean unratedRelationship, DrugReference.Interaction reconciledRule,
@@ -423,8 +432,10 @@ public class SafetyWarning {
 	 * ({@code DrugSafetyChipLabelTest.displayLabelNeverLeaksIntoTheRenderedRecordText}), so the two
 	 * surfaces name one SUBSTANCE in each one's own vocabulary rather than sharing one string —
 	 * {@code Acetylsalicylic acid} in the note beside {@code Acetylsalicylic acid (aspirin)} in the
-	 * chip. Which name that is, per fold outcome, is stated on
-	 * {@code DrugSafetyValidator.foldedPartnerLabel}.
+	 * chip. Which name that is, per reconciliation outcome, is stated on
+	 * {@code DrugSafetyValidator.reconciledPartnerName} — which since issue #339 answers for every rule
+	 * chip and not only for a folded one, so this field is non-null on chips that carry no class
+	 * sentence at all.
 	 *
 	 * <p><b>The rule is an argument and not a convenience.</b> A note may take this name only where it
 	 * is about the very rule the fold was decided on: the record collapses its notes to one per partner

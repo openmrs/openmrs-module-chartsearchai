@@ -162,8 +162,12 @@ public class NonCodedDrugOrderNameTest extends BaseModuleContextSensitiveTest {
 				"the free-text order must be screened like any other — before this change the only name"
 						+ " it carried was its placeholder concept and the Major row was withheld, was: "
 						+ details);
+		// "Warfarin" and not "warfarin" since issue #339: the chip names its co-medication as the
+		// dataset names it rather than by the knowledge base's own match token. What this case is
+		// about — that the drug in play is screened against the text the CLINICIAN typed, and that the
+		// row found is the Major one — is unaffected: the name moves, the row does not.
 		assertTrue(details.get(0)
-				.startsWith("Ibuprofen interacts with active order warfarin — Major."),
+				.startsWith("Ibuprofen interacts with active order Warfarin — Major."),
 				"and the interaction must be the one the dataset rates Major, was: " + details);
 	}
 
@@ -561,12 +565,19 @@ public class NonCodedDrugOrderNameTest extends BaseModuleContextSensitiveTest {
 			leads.add(detail.substring(0, detail.indexOf('.') + 1));
 		}
 
-		assertTrue(leads.contains("Ibuprofen interacts with active order warfarin — Major."),
+		// Both names moved with issue #339 (the dataset's name for the substance, not the rule's token),
+		// and neither pinning moves with them: the warfarin chip is still the one pinned AS WRONG — a
+		// change that stops reporting a stopped drug as active still reddens this line — and the aspirin
+		// chip is still the CORRECT one this change exists to produce. What "Acetylsalicylic acid
+		// (aspirin)" also shows is ADR Decision 39's own recorded cost, now reaching an unfolded chip:
+		// the name a chip prints for an order need not be a string the chart itself carries.
+		assertTrue(leads.contains("Ibuprofen interacts with active order Warfarin — Major."),
 				"pinned AS WRONG: the recorded text says warfarin was STOPPED and the module reports it"
 						+ " as an active co-medication, because the order-name arm is containment over a"
 						+ " string that is now prose. A change that closes this must redden here rather"
 						+ " than leave the javadoc on addDrugName the only record, was: " + leads);
-		assertTrue(leads.contains("Ibuprofen interacts with active order aspirin — Major."),
+		assertTrue(leads.contains("Ibuprofen interacts with active order Acetylsalicylic acid (aspirin)"
+				+ " — Major."),
 				"and the aspirin chip beside it is CORRECT — that drug IS what the order records, and it"
 						+ " is what this change exists to find, was: " + leads);
 	}
@@ -757,9 +768,13 @@ public class NonCodedDrugOrderNameTest extends BaseModuleContextSensitiveTest {
 		assertEquals(2, leads.size(),
 				"one prescription naming two drugs must report both — before this change only the"
 						+ " concept's was reachable, was: " + leads);
-		assertTrue(leads.contains("Methotrexate interacts with active order warfarin — Minor."),
+		// Both partners are named as the dataset names them since issue #339, in place of the rule's own
+		// match token. Which ROW each chip reports — the recorded text's and the concept's, the whole
+		// point of this case — is untouched by that.
+		assertTrue(leads.contains("Methotrexate interacts with active order Warfarin — Minor."),
 				"the recorded text's row, which is the one this change adds, was: " + leads);
-		assertTrue(leads.contains("Methotrexate interacts with active order aspirin — Major."),
+		assertTrue(leads.contains("Methotrexate interacts with active order Acetylsalicylic acid"
+				+ " (aspirin) — Major."),
 				"and the concept's row, which this change must not remove, was: " + leads);
 	}
 }

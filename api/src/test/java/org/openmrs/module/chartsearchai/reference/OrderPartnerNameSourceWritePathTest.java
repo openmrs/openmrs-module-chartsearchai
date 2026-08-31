@@ -36,7 +36,7 @@ import org.junit.jupiter.api.Test;
  * passing {@code displayNamesADrug(order)} as the flag, so a {@code namedByCodesOnly} or blank-display
  * order produced a non-null {@code namingOrder} beside a label that is a bare ATC code or an
  * {@code [ATC …]} stand-in. Nothing observable went wrong, because
- * {@code DrugSafetyValidator.foldedPartnerLabel} asks {@code !namesADrug} first and so never reaches the
+ * {@code DrugSafetyValidator.reconciledPartnerName} asks {@code !namesADrug} first and so never reaches the
  * order branch for such a partner — and that branch order is deliberately KEPT (see that method and ADR
  * Decision 40), which is exactly why the single write path has nothing a behavioural assertion can see.
  * Measured while implementing #298: the write path alone changes no test expectation in the api suite.
@@ -220,7 +220,7 @@ public class OrderPartnerNameSourceWritePathTest {
 							+ " state: the ladder's order"
 							+ " rung then records an order beside a label that is a bare ATC code or an"
 							+ " [ATC …] stand-in, and every reader of " + NAMING_ORDER + " has to know"
-							+ " foldedPartnerLabel's branch order to stay safe. If the expression here is a"
+							+ " reconciledPartnerName's branch order to stay safe. If the expression here is a"
 							+ " deliberate rewrite that means the same thing, update this needle in the same"
 							+ " change — an equivalent form fails here, which is a false alarm and the safe"
 							+ " direction for a rule nothing behavioural can see.");

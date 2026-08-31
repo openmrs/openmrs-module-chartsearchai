@@ -66,7 +66,7 @@ public class ClassChipPartnerLabelTest {
 	 *  <p>Read by ONE case now, and that is issue #292's scope rather than an accident. It used to be
 	 *  shared with the folded case below, whose partner is named after the ORDER — and a folded chip
 	 *  reconciles such a partner where the RULE's own token names that very order
-	 *  ({@code DrugSafetyValidator.foldedPartnerLabel}), which {@code aspirin} does of an
+	 *  ({@code DrugSafetyValidator.reconciledPartnerName}), which {@code aspirin} does of an
 	 *  {@code Aspirin 81mg} order. So that case now words its rule sentence with the order's display and
 	 *  this constant is the unfolded wording only. */
 	private static final String CURATED_ASPIRIN_RULE_SENTENCE =
@@ -97,7 +97,7 @@ public class ClassChipPartnerLabelTest {
 		// order name ("active order Aspirin 81mg"), one prescription under two names in one detail, which
 		// is the defect the ticket opens with. The ladder's name came from the ORDER here — the seed
 		// carries none of the order's three codes — and an order is not a substance, so
-		// DrugSafetyValidator.foldedPartnerLabel hands that name to the rule sentence only where the
+		// DrugSafetyValidator.reconciledPartnerName hands that name to the rule sentence only where the
 		// RULE's own token names that very order. It does: token `aspirin` against the order's DISPLAY
 		// `Aspirin 81mg`, which is the string the gate reads since issue #293 — it read the order's
 		// whole name set before that, and both readings agree here — and the same predicate

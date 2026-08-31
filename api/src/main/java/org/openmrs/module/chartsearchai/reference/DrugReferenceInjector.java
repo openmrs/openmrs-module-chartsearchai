@@ -1340,10 +1340,19 @@ public class DrugReferenceInjector {
 	 * PROMPT text. It is closed by {@link #reconciledPartnerNoteName}, which takes the name off the chip that
 	 * decided it rather than re-deriving it: the two surfaces name one SUBSTANCE, each in its own
 	 * vocabulary, since this record's prose may not carry {@code DrugReference.displayLabel()}. Where the
-	 * fold refuses, and for every unfolded chip, this note is {@code partnerLabel} again exactly as
-	 * before. What still holds either way is that every name this record can carry for that partner is
-	 * one the same prompt already contained — the folded chip reaches it verbatim through
-	 * {@link #renderFinding} — so the prompt's name union for a partner cannot GROW.
+	 * reconciliation refuses or reaches no co-medication, this note is {@code partnerLabel} again
+	 * exactly as before.
+	 *
+	 * <p><b>Since issue #339 that reconciliation is asked of every rule chip and not only of a folded
+	 * one, and one thing this text used to say about it no longer holds.</b> It said the prompt's name
+	 * union for a partner cannot GROW, on the ground that the folded chip's CLASS sentence already
+	 * carried the ladder's name. An unfolded chip has no class sentence, so for a rule-only partner the
+	 * ladder's name was not previously in the prompt at all and the rule's own token can be replaced
+	 * outright — ADR Decision 39 measured 2,406 of 513,026 gate-satisfying rules whose handed-out label
+	 * does not contain the token. What DOES still hold is the weaker and load-bearing half: this note's
+	 * name is always a name the same prompt carries, because the chip that decided it reaches the
+	 * prompt verbatim through {@link #renderFinding} and the note's {@code getName()} is a word of that
+	 * chip's label. So the two surfaces cannot disagree, which is what issue #297 is about.
 	 *
 	 * <p>Scoped to that arm deliberately, and the scope is the correction
 	 * {@link DrugSafetyValidator#addQuestionPairInteractions} asks for: across the whole chip set the
@@ -1411,7 +1420,8 @@ public class DrugReferenceInjector {
 	 *        {@link #onePerPartner} keys a promoted partner on (issue #190 item 2); an empty list falls
 	 *        the grouping back to the label alone, as it was before that issue
 	 * @param findings this injection's pre-answer chips, from which {@link #reconciledPartnerNoteName} takes
-	 *        the name a folded chip gave a partner (issue #297); null or empty leaves every note on
+	 *        the name a rule chip gave a partner (issue #297; since #339 a chip that folded or not);
+	 *        null or empty leaves every note on
 	 *        {@code DrugSafetyValidator.partnerLabel}, which is what the {@code drugSafety} toggles being
 	 *        off produces and what every note-text case in the suite runs on
 	 */
@@ -1484,7 +1494,8 @@ public class DrugReferenceInjector {
 
 	/**
 	 * @return the name this record's interaction note must call {@code rule}'s partner by: the name the
-	 *         FOLDED chip about that same rule gave it where one reconciled the two arms
+	 *         chip about that same rule gave it where the reconciliation answered — a FOLDED chip until
+	 *         issue #339 and any rule chip since
 	 *         ({@link DrugSafetyValidator#partnerLabel}'s counterpart in this record's own vocabulary),
 	 *         else {@code partnerLabel} itself — which is what this list has always printed.
 	 *
@@ -1500,8 +1511,11 @@ public class DrugReferenceInjector {
 	 *         answers could be compared is the two-resolutions-that-agree shape issue #151 forbids, and
 	 *         that failure was silent and one-directional. It also makes the scope right for free: a
 	 *         name can only come from a chip that was actually raised AND injected in this same
-	 *         response, so the prompt's name union for the partner cannot GROW — every name this note
-	 *         can newly carry is one the {@code safety_finding} beside it already contains. An
+	 *         response — so every name this NOTE can newly carry is one the {@code safety_finding}
+	 *         beside it already contains. That is the half of the union bound that survives issue #339;
+	 *         the wider reading, that the prompt's name union for the partner cannot GROW at all, does
+	 *         not, because the chip's own name moved for rule-only partners (see the paragraph on that
+	 *         issue above, and ADR Decision 63). An
 	 *         ORDER-DRIVEN record, which no interaction chip stands behind (see {@code collect}), is
 	 *         therefore untouched rather than renamed after a chip that does not exist.
 	 *
@@ -1512,6 +1526,20 @@ public class DrugReferenceInjector {
 	 *         one partner and the answer there is then null. Falling back leaves the note exactly where
 	 *         it was, which is what makes this change able only to remove a divergence and never to
 	 *         create one.
+	 *
+	 *         <p><b>Issue #339 widened what that costs on the flattened shape, and the guard below is
+	 *         kept anyway.</b> The reconciliation now answers for every rule chip, so on a context
+	 *         carrying only the flattened code set an UNFOLDED chip can be reconciled while this note
+	 *         is not — measured through the real {@code validate} over the pinned excerpt, a chart
+	 *         carrying {@code Warfarin} and {@code B01AA03} and no per-order list chips
+	 *         {@code interacts with active order Warfarin} beside a note reading {@code warfarin}.
+	 *         Before #339 that pair agreed, both being {@code partnerLabel}. It is the residue issue
+	 *         #297 already accepted for a FOLDED chip on that same shape, reaching further; the two
+	 *         surfaces still name one SUBSTANCE, which is what this record's own vocabulary paragraph
+	 *         above says they share. Closing it means dropping the condition below, which is what makes
+	 *         the RECORD key-dependent — the thing
+	 *         {@code OrderDrivenInjectionResolutionTest.oneOrderInjectsOneRecordSetWhicheverWayItResolves}
+	 *         forbids — so the trade is unchanged by #339 and is recorded rather than taken.
 	 *
 	 *         <p><b>And only where the context carries per-order structure</b>, which is every context
 	 *         {@link PatientClinicalContextBuilder} builds for a real patient. On the flattened shape of
@@ -1531,15 +1559,38 @@ public class DrugReferenceInjector {
 	 *         costs production nothing.
 	 *
 	 *         <p><b>The fallback below and the fold's own answer for its non-entry rungs are one method,
-	 *         not two spellings.</b> {@code DrugSafetyValidator.foldedPartnerLabel} hands the note
+	 *         not two spellings.</b> {@code DrugSafetyValidator.reconciledPartnerName} hands the note
 	 *         {@code partnerLabel(rule)} on its NON-entry rungs — the rungs where no dataset name has
 	 *         been PROVED to be this rule's, which is not the same as the dataset having none for the
 	 *         partner — and that is verbatim what this method returns when it finds nothing, so a rule
 	 *         reconciled on those rungs and a rule not reconciled at all print the same string BECAUSE
 	 *         both call {@code partnerLabel}, which is what that method exists to be. Keep it that way:
 	 *         if this fallback ever became something else, those rungs would keep the old string while
-	 *         every unfolded partner took the new one, and one prescription would be named two ways
+	 *         every unreconciled partner took the new one, and one prescription would be named two ways
 	 *         inside one interaction list — issue #297 reopened a rung along.
+	 *
+	 *         <p><b>An ORDER-DRIVEN record's notes are outside all of this, and issue #339 widened what
+	 *         that costs.</b> Such a record is injected because a drug is an active order, with no
+	 *         interaction chip behind it (see {@code collect}), and it renders its OWN entry's rules —
+	 *         {@code Interaction} objects no chip carries — so the identity test above never matches and
+	 *         every one of its notes falls back to {@code partnerLabel}. That was harmless while an
+	 *         unfolded chip printed {@code partnerLabel} too; since #339 it does not, so one prompt can
+	 *         carry one prescription under two names across two records. Measured through the real
+	 *         {@code injectRecords} over the pinned excerpt, a patient on Warfarin, Acetylsalicylic acid
+	 *         and Digoxin asked {@code "Can I give her ibuprofen?"}: the in-play {@code Ibuprofen} record
+	 *         lists {@code Warfarin}, the order-driven {@code Acetylsalicylic acid} record lists
+	 *         {@code warfarin}, and before #339 both read {@code warfarin}. <b>It is not a corner, which
+	 *         one example reads as</b> — measured at review round 9 over 200 synthetic arrangements
+	 *         of the shipped knowledge base driven through the real {@code injectRecords} (the first 200
+	 *         entries publishing two interaction tokens that resolve to another substance, each charted
+	 *         as up to three of those partners as active orders): one prompt names one substance two ways
+	 *         in 20 of them, against 2 of 200 at the merge base. None of them is a false claim. ADR
+	 *         Decision 63's trade-off bullet carries the arrangement, the split by shape and the caveat,
+	 *         and this paragraph does not restate them. Closing it means keying this
+	 *         lookup on the PARTNER rather than on rule identity, which needs the partner entry to travel
+	 *         beside the name — a change to what a {@link SafetyWarning} carries, not to this scan — and
+	 *         it re-opens the key-dependence question the condition below exists for. Recorded in ADR
+	 *         Decision 63's trade-offs rather than taken here.
 	 *
 	 *         <p>A linear scan of a list bounded by the chips this response raised, and deliberately not
 	 *         a map: the accessor above will not hand out a name without being shown the rule it was
@@ -1607,16 +1658,18 @@ public class DrugReferenceInjector {
 	 *               grouping, and issue #121's invariant — the key IS what the RECORD says — is
 	 *               deliberate rather than incidental. <b>Since issue #297 that second half is scoped for
 	 *               this record exactly as issue #292 scoped it for the chip</b>: on the no-entry branch
-	 *               the key is still {@code partnerLabel} case-folded and an unfolded partner's note is
-	 *               still that same string, while a partner a folded chip reconciled can now RENDER the
-	 *               fold's name here too. The grouping is unaffected, running before the note is worded
-	 *               and on that key. (On the other branch {@link #onePerPartner} keys on the ENTRY, and
-	 *               that is the branch the fold's entry rung reconciles on — so it rendered
+	 *               the key is still {@code partnerLabel} case-folded, while a partner the
+	 *               reconciliation answered for can RENDER that answer here. Issue #339 widened which
+	 *               partners those are — every rule chip's, not only a folded one's — so a note
+	 *               rendering this key is now the case where the reconciliation declined rather than the
+	 *               case where no class sentence folded. The grouping is unaffected, running before the
+	 *               note is worded and on that key. (On the other branch {@link #onePerPartner} keys on
+	 *               the ENTRY, and that is the branch the entry rung reconciles on — so it rendered
 	 *               {@code partnerLabel} beside an entry key until issue #297, and now renders the
 	 *               reconciled name there. Which is issue #190 item 2's residue seen from the other side,
-	 *               the paragraph below it.) The chip half of that
-	 *               invariant is scoped since issue #292 (see
-	 *               {@code DrugSafetyValidator.foldedPartnerLabel}); this key is not, and does not
+	 *               the paragraph below it.) The chip half of that invariant is scoped since issue #292
+	 *               and finished by issue #339 (see
+	 *               {@code DrugSafetyValidator.reconciledPartnerName}); this key is not, and does not
 	 *               follow the chip's rendered name — the KEY does not, though since issue #297 the
 	 *               rendered NAME does.</li>
 	 *         </ul>
@@ -1997,7 +2050,7 @@ public class DrugReferenceInjector {
 	 *
 	 * <p>{@code findings} is this injection's pre-answer chips, threaded through to
 	 * {@link #orderedInteractionNotes} so a promoted interaction note can name its partner the way the
-	 * folded chip about that same rule named it (issue #297). It is the caller's own list rather than a
+	 * chip about that same rule named it (issue #297). It is the caller's own list rather than a
 	 * second validation, which is the point — see {@link #reconciledPartnerNoteName}.
 	 */
 	private static RenderedReference render(DrugReference ref, List<DrugReference> orderEntries,

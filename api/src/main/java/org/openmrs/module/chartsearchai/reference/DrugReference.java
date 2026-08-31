@@ -100,6 +100,9 @@ public class DrugReference {
 	 */
 	private List<String> foldedAliases = Collections.emptyList();
 
+	/** {@link #nameKeys()}'s answer, derived where the alias list is stored. */
+	private Set<String> nameKeys = Collections.emptySet();
+
 	private List<String> atcCodes = Collections.emptyList();
 
 	private List<AgeBand> ageBands = Collections.emptyList();
@@ -874,6 +877,28 @@ public class DrugReference {
 	public void setAliases(List<String> aliases) {
 		this.aliases = aliases != null ? trimmedAliases(aliases) : Collections.<String> emptyList();
 		this.foldedAliases = foldedAll(this.aliases);
+		this.nameKeys = normalizedAll(this.aliases);
+	}
+
+	/**
+	 * @return the distinct {@link #normalizeName}d forms of {@code names}, in first-appearance order,
+	 *         unmodifiable, blanks dropped — {@link #nameKeys()}'s derivation, and the inverse of the
+	 *         alias loop in {@link #isNamed}.
+	 *
+	 *         <p>The parameter is {@code names} and not {@code aliases} on purpose:
+	 *         {@code FoldedOperandTest.everyAliasScanReadsTheStoredFoldedList} reads TEXT rather than
+	 *         scopes, so a parameter of that name inside this class reads as the field to it — which
+	 *         is what its own failure message asks a caller to rename.
+	 */
+	private static Set<String> normalizedAll(List<String> names) {
+		Set<String> keys = new LinkedHashSet<String>();
+		for (String name : names) {
+			String key = normalizeName(name);
+			if (key != null) {
+				keys.add(key);
+			}
+		}
+		return Collections.unmodifiableSet(keys);
 	}
 
 	/**
@@ -2285,6 +2310,42 @@ public class DrugReference {
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * The keys under which this entry answers {@link #isNamed} — every alias, {@link #normalizeName}d,
+	 * blanks dropped and duplicates collapsed.
+	 *
+	 * <p><b>The INVERSE of {@link #isNamed}, and it exists so that "every loaded entry this token
+	 * names" can be answered without walking the dataset.</b> That question is asked by
+	 * {@code DrugSafetyValidator.unambiguouslyNames}, which since issue #339 is asked once per rule
+	 * chip rather than once per folded chip, and a {@code getAll()} walk per ask grows with the drugs
+	 * in play — the very thing
+	 * {@code CoMedicationResolutionPerPassTest.theCoMedicationResolutionDoesNotGrowWithTheDrugsInPlay}
+	 * forbids. So {@link DrugReferenceService#nameIndex()} inverts the whole dataset once per pass and
+	 * reads it back through {@link DrugReferenceService#entriesNamedBy}.
+	 *
+	 * <p>Here rather than at the service, and derived from the same field through the same
+	 * normalisation as the predicate directly above, because the two must answer identically: an index
+	 * built from a second reading of what a name IS would silently admit or lose a claimant, and the
+	 * claimant set is what decides whether one substance's rated mechanism may be printed under
+	 * another's name (issue #296). {@code NameIndexAgreesWithIsNamedTest} asks that of whole loaded
+	 * datasets rather than of a hand-written pair.
+	 *
+	 * <p>Derived in {@link #setAliases}, the sole writer, exactly as {@link #foldedAliases} is and for
+	 * the reason CLAUDE.md gives about that field: a value computed where the input is stored is not a
+	 * memo, so issue #172's rule does not reach it. Deriving it per call is not merely wasteful, it is
+	 * forbidden here — {@code FoldedOperandTest.everyAliasScanReadsTheStoredFoldedList} whitelists the
+	 * bodies that may read the RAW alias list, and the whole point of that guard is that a helper
+	 * extracted out of a scan to loop that list is the shape which beat its earlier form.
+	 *
+	 * <p><b>A SET, and so deliberately NOT index-aligned with the alias list</b>, unlike
+	 * {@link #foldedAliases}: two aliases differing only in case or padding are ONE name to
+	 * {@link #isNamed} and must be one key here, or an entry would appear twice among its own
+	 * claimants. Nothing may read a witness out of it by index.
+	 */
+	Set<String> nameKeys() {
+		return nameKeys;
 	}
 
 	/**

@@ -37,8 +37,11 @@ import org.junit.jupiter.api.Test;
  * ladder: a folded chip names the partner by the class arm's label where that ladder found a NAME and
  * the two arms are provably about one prescription — the rule's own token naming the ladder's ENTRY
  * unambiguously, or naming the very ORDER the label came from — and each arm keeps its own name where
- * they are not. Unfolded rule chips, class-only chips and the grouping keys are untouched — see
- * {@code foldedPartnerLabel}. The injected {@code drug_reference} note list was untouched too, which is
+ * they are not. Class-only chips and the grouping keys are untouched — see
+ * {@code reconciledPartnerName}. Unfolded rule chips WERE untouched by #292 and are not since issue
+ * #339, which asks that same method of every rule chip in both active-order arms:
+ * {@code OneOrderNameAcrossOneResponseTest} is where that half lives, and the cases here still say what
+ * they said, because a chip's two SENTENCES naming one order once is what this class is about. The injected {@code drug_reference} note list was untouched too, which is
  * the deviation issue #297 closed: it now takes that same reconciled name in its own vocabulary, and
  * {@code OneNameAcrossChipAndInjectedRecordTest} is where that half is pinned.
  *
@@ -387,7 +390,14 @@ public class FoldedChipOnePartnerNameTest {
 	 * visible at all. {@code canonicalRow} does not rank by claim at all (route-qualification, then
 	 * {@code namesItsSubstance}, then first-seen), but over the shipped KB its pick is never outranked on
 	 * a rule token by another row of its own substance — measured, 0 codes — so the coded rung does not
-	 * reach this arrangement on the data as shipped.
+	 * reach this arrangement <em>through {@code canonicalRow}</em> on the data as shipped.
+	 *
+	 * <p><b>Since issue #339 it reaches it another way</b>, and that is a different arrangement rather
+	 * than a hole in the measurement above: the gate's operand is no longer {@code canonicalRow}'s pick
+	 * but the row this RESPONSE elects, which on a MAPPED order of this same slice is the presentation
+	 * the chart records. {@link #aRowTheResponseElectsButTheTokenDoesNotClaimFallsBackToTheLaddersOwn}
+	 * is that case, and what it asserts is the fallback rather than the refusal — the two are the same
+	 * gate reached with two operands, and only here do the two rows coincide.
 	 *
 	 * <p>The presentation row's own claim merely ties {@code Hyoscyamine}'s, so neither says which
 	 * substance the rule is about and the two sentences keep their own names. Homatropine carries an
@@ -423,6 +433,63 @@ public class FoldedChipOnePartnerNameTest {
 			"the rule's mechanism must stay under the name the RULE names: this row's claim on the token"
 					+ " only TIES Hyoscyamine's, so it cannot tell the fold which substance the rule is"
 					+ " about, and its sibling's stronger claim is not this row's, was: " + detail);
+	}
+
+	/**
+	 * The RESPONSE's elected row is offered first and the LADDER's own row is what the chip falls back
+	 * to — so electing a row the rule's token does not claim cannot cost a chip the one name it had.
+	 *
+	 * <p><b>Issue #339, review round 3.</b> Round 1 made this method name the partner by
+	 * {@code SubstanceSubjects.subjectOf(labelEntry)} rather than by the ladder's own row, because the
+	 * ladder elects with {@code canonicalRow} alone while every other name slot in a response elects
+	 * with {@code interactionSubject} (issue #187/#194). That moved WHICH ROW the issue #292/#296 gate
+	 * is asked about, and on this very slice it moves the answer: {@code canonicalRow} elects
+	 * {@code Atropine}, which claims the token {@code atropine} outright and reconciles, while the row
+	 * the chart records — {@code Atropine (ophthalmic)} — claims it only as an alias and merely ties
+	 * {@code Hyoscyamine}, so the gate refuses. Refusing leaves the rule sentence on
+	 * {@code partnerLabel} while the class sentence keeps the elected row, and this one chip then named
+	 * one prescription {@code atropine} AND {@code Atropine (ophthalmic)} — measured through the real
+	 * {@code validate} over this fixture, and strictly worse than before issue #339, which printed
+	 * {@code Atropine} in both sentences.
+	 *
+	 * <p>So the printed row is the FIRST of (this response's elected row, the ladder's own row) that
+	 * the gate admits. The gate is still asked of the row about to be printed, which is CLAUDE.md's
+	 * rule and what {@link #aRuleTokenTheLaddersRowOnlyTiesKeepsItsOwnToken} pins; nothing is printed
+	 * on a sibling's claim. Removing the fallback reddens this case and
+	 * {@link #noFoldedChipNamesOneActiveOrderTwoWays}, which sweeps this arrangement as its tenth run
+	 * (re-measured at issue #339's review round 11 head); nothing is claimed about what else that
+	 * mutation leaves green. There the chip still FOLDS: it names this one order {@code atropine}
+	 * and {@code Atropine (ophthalmic)}, so what fails is that sweep's one-name assertion, not its
+	 * count.
+	 *
+	 * <p>The order here is MAPPED, which is what separates this from that case: it carries
+	 * {@code S01FA01}, so the ladder reaches {@code entryForAtcCode} and the {@code labelEntry} is
+	 * {@code canonicalRow}'s pick, while the chart's own recorded name elects the presentation row.
+	 */
+	@Test
+	public void aRowTheResponseElectsButTheTokenDoesNotClaimFallsBackToTheLaddersOwn()
+			throws IOException {
+		Set<String> names = DrugReferenceTestSupport.set("Atropine (ophthalmic)");
+		Set<String> codes = DrugReferenceTestSupport.set("S01FA01");
+		DrugSafetyValidator validator = DrugReferenceTestSupport
+				.validator(DrugReferenceTestSupport.serviceWith(
+					DrugReferenceTestSupport.ddiFixtureEntries(TIED_TOKEN_FIXTURE)));
+
+		List<SafetyWarning> warnings = validator.validate("", "Is homatropine safe here?",
+			DrugReferenceTestSupport.ctx(60, null, names, codes, null, null,
+				Arrays.asList(new PatientClinicalContext.ActiveDrugOrder("order-atropine-ophthalmic",
+					"Atropine (ophthalmic) 1% drops", names, codes))));
+
+		List<String> details = DrugReferenceTestSupport.classChipDetails(warnings);
+		assertEquals(1, details.size(), "one class-arm chip, was: " + warnings);
+		String detail = details.get(0);
+		assertTrue(detail.contains("interacts with active order") && detail.contains("is in the same"),
+			"precondition: the two arms must have folded, or there is no second sentence to disagree"
+					+ " with, was: " + detail);
+		assertEquals(DrugReferenceTestSupport.set("Atropine"), orderNamesIn(detail),
+			"one prescription, one name: where the row this response elects does not claim the rule's"
+					+ " token, the chip falls back to the ladder's own row rather than to the token,"
+					+ " which would name this order twice inside one detail, was: " + detail);
 	}
 
 	/**
@@ -504,7 +571,7 @@ public class FoldedChipOnePartnerNameTest {
 	}
 
 	/**
-	 * The residue {@code foldedPartnerLabel} records as its third case: a rule carrying no match token at
+	 * The residue {@code reconciledPartnerName} records as its third case: a rule carrying no match token at
 	 * all still names its partner by a raw ATC code, so the folded detail keeps two names.
 	 *
 	 * <p>{@code hasActiveDrug} joins such a rule on its ATC code and {@code partnerLabel} then renders
@@ -727,7 +794,7 @@ public class FoldedChipOnePartnerNameTest {
 	 *
 	 * <p>Before issue #292 the same arrangement read {@code as active order [ATC B01AA03, N02BA01]} —
 	 * vague, and true of the prescription. Measured, by returning null unconditionally from
-	 * {@code foldedPartnerLabel}. So this is the trade ADR Decision 39 records as its outcome-1
+	 * {@code reconciledPartnerName}. So this is the trade ADR Decision 39 records as its outcome-1
 	 * trade-off — the class sentence's subject moving from the prescription to whatever the rule's token
 	 * names — and it is pinned here rather than left to that prose. No clean narrowing exists on this
 	 * branch: the ladder holds no entry to put the token to, and a "the token's own substance publishes
@@ -805,9 +872,15 @@ public class FoldedChipOnePartnerNameTest {
 	}
 
 	/**
-	 * A chip no fold applies to must be byte-identical to what it always was: the rule arm keeps
-	 * {@code partnerLabel}, which is also the label the injected {@code drug_reference} note and the
-	 * grouping keys read, and the class arm keeps its ladder.
+	 * A chip no fold applies to must be byte-identical to what it always was ON THIS ARRANGEMENT: the
+	 * rule arm keeps {@code partnerLabel}, which is also the label the injected {@code drug_reference}
+	 * note and the grouping keys read.
+	 *
+	 * <p><b>That is a property of the chart this case builds and not of unfolded chips in general
+	 * since issue #339</b>, which asks the same reconciliation of every rule chip. This context carries
+	 * no ATC codes and no per-order list, so {@code orderPartners} resolves no co-medication and
+	 * nothing is reconciled — which is exactly the residue {@code partnerLabel} is still rendered for.
+	 * What the case pins is unchanged, and the class arm keeps its ladder.
 	 *
 	 * <p>Byte-identical for THESE arrangements, which is narrower than the method name reads. The same
 	 * change moved the guard on {@code OrderPartner.nameByOrder} into that method, so an unfolded
@@ -828,7 +901,7 @@ public class FoldedChipOnePartnerNameTest {
 			null, DrugReferenceTestSupport.set("aspirin 81mg"), null, null, null));
 		assertEquals(Arrays.asList("Ibuprofen interacts with active order aspirin"
 				+ " — additive GI and bleeding risk"), DrugReferenceTestSupport.classChipDetails(ruleOnly),
-			"a rule-only chip carries the rule's own token, as it always has");
+			"a rule-only chip carries the rule's own token, as it always has where the ladder reaches no co-medication");
 
 		// The seed carries no naproxen entry, so this exercises the ladder's MIDDLE rung — the order's
 		// own display — which is the rung a folded chip can now displace `partnerLabel` with. Without an
@@ -898,7 +971,7 @@ public class FoldedChipOnePartnerNameTest {
 	 * resolves to the code). Before issue #293 this was the one shape in which the order-named branch
 	 * could have said YES about a partner whose label is not a name — unlike {@code namedByCodesOnly} it
 	 * had names for {@code namesNamingOrder} to scan — and it did not get the chance because
-	 * {@code namesADrug} is false for a blank display and {@code foldedPartnerLabel} asks that first.
+	 * {@code namesADrug} is false for a blank display and {@code reconciledPartnerName} asks that first.
 	 * Since #293 the gate reads the DISPLAY instead, which is blank here, so both guards refuse
 	 * independently; what this case still pins is unchanged, that the rule's own token goes
 	 * to both sentences — exactly as for the nameless order in
@@ -908,7 +981,7 @@ public class FoldedChipOnePartnerNameTest {
 	 * wrong.</b> It is NOT a pin on issue #298's single-write-path invariant, and it was written believing
 	 * it was. Under the mutation that motivated it — {@code OrderPartner.recordNameSource} admitting the
 	 * order unconditionally, which is the pre-#298 state — this case still PASSES, because
-	 * {@code foldedPartnerLabel} reaches {@code !namesADrug} before it reaches the order branch and that
+	 * {@code reconciledPartnerName} reaches {@code !namesADrug} before it reaches the order branch and that
 	 * branch order is deliberately kept (see ADR Decision 40). Measured by applying exactly that
 	 * mutation: this class, {@code ClassChipPartnerLabelTest} and
 	 * {@code NamelessActiveOrderPartnerTest} are all green under it. The write path is pinned
@@ -1038,7 +1111,18 @@ public class FoldedChipOnePartnerNameTest {
 	 * {@link #aPaddedAliasNamesTheOneOrderOnce}, where the ranking would have refused had the alias
 	 * reached it untrimmed.
 	 *
-	 * <p><b>Adding it required a second assertion to be worth anything.</b> The one-name property alone
+	 * <p>The tenth is issue #339 review round 3's:
+	 * {@link #aRowTheResponseElectsButTheTokenDoesNotClaimFallsBackToTheLaddersOwn}, the MAPPED order of
+	 * {@link #TIED_TOKEN_FIXTURE} — the slice whose UNMAPPED order is the refusal
+	 * {@link #aRuleTokenTheLaddersRowOnlyTiesKeepsItsOwnToken} above — whose elected row the rule's token
+	 * does not claim and which therefore reconciles on the ladder's own row instead. Adding it to this
+	 * sweep is why dropping that fallback reddens TWO cases in this class rather than that one alone:
+	 * under the mutation the chip still folds and names this order {@code atropine} AND
+	 * {@code Atropine (ophthalmic)}, so the one-name assertion below fails beside it — the count does
+	 * not, the arrangement still being reached.
+	 *
+	 * <p><b>Adding the SIXTH — the blank-display order, whose label is a bare ATC code — required a
+	 * second assertion to be worth anything.</b> The one-name property alone
 	 * does not see the failure that arrangement is about: substituting the CODE for the name leaves
 	 * exactly ONE name in both sentences, so the count below still passes. So the sweep also asserts that
 	 * the name it counted is not ATC-CODE-SHAPED. Measured by making the {@code !namesADrug} branch hand
@@ -1097,6 +1181,14 @@ public class FoldedChipOnePartnerNameTest {
 				.validate("", "Is acenocoumarol safe here?", DrugReferenceTestSupport.ctx(60, null,
 					DrugReferenceTestSupport.set("warfarin"),
 					DrugReferenceTestSupport.set("B01AA03"), null, null)));
+		Set<String> mappedOphthalmicCodes = DrugReferenceTestSupport.set("S01FA01");
+		runs.add(DrugReferenceTestSupport
+				.validator(DrugReferenceTestSupport.serviceWith(
+					DrugReferenceTestSupport.ddiFixtureEntries(TIED_TOKEN_FIXTURE)))
+				.validate("", "Is homatropine safe here?", DrugReferenceTestSupport.ctx(60, null,
+					ophthalmicNames, mappedOphthalmicCodes, null, null,
+					Arrays.asList(new PatientClinicalContext.ActiveDrugOrder("order-atropine-ophthalmic",
+						"Atropine (ophthalmic) 1% drops", ophthalmicNames, mappedOphthalmicCodes)))));
 
 		int foldedSeen = 0;
 		for (List<SafetyWarning> warnings : runs) {
@@ -1115,12 +1207,13 @@ public class FoldedChipOnePartnerNameTest {
 							+ detail);
 			}
 		}
-		assertEquals(9, foldedSeen,
-			"precondition: all nine folded chips must have been reached, or this invariant passed by"
+		assertEquals(10, foldedSeen,
+			"precondition: all ten folded chips must have been reached, or this invariant passed by"
 					+ " vacuity — the nameless order, the DDInter formulation, both subjects of the"
 					+ " note-less same-class fixture, the order-named partner the rule's token names, the"
 					+ " blank display whose label is a bare code, the token whose two substances one of"
-					+ " them outranks, the presentation whose only contender is its own sibling, and the"
-					+ " padded alias");
+					+ " them outranks, the presentation whose only contender is its own sibling, the"
+					+ " padded alias, and the MAPPED order of that same tied-token slice, whose elected"
+					+ " row the token does not claim and which therefore falls back to the ladder's");
 	}
 }

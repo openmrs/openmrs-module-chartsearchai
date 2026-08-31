@@ -1,0 +1,30 @@
+{
+ "version": "1.0",
+ "source": "test fixture — an operator-authored entry whose only spelling of a name is capitalised",
+ "description": "The json parser trims aliases but does not lower-case them, so an operator file can carry a name spelled ONLY in mixed case. That is the shape in which DrugReference.nameKeys()'s own normalisation is load-bearing: the query side of DrugReferenceService.entriesNamedBy normalises whatever it is asked, so an index keyed on the RAW alias silently loses this entry as a claimant of 'warfarin' while DrugReference.isNamed still finds it. Two entries, because losing a claimant only changes an answer where a second substance claims the same name — and that is exactly what DrugSafetyValidator.unambiguouslyNames is comparing, so the drift is fail-OPEN: fewer rivals means the gate permits a displacement it should refuse (issue #296).",
+ "entries": [
+  {
+   "id": "warfarin-sodium",
+   "name": "Warfarin sodium",
+   "aliases": [
+    "Warfarin sodium",
+    "Warfarin"
+   ],
+   "atcCodes": [
+    "B01AA03"
+   ],
+   "source": "test fixture"
+  },
+  {
+   "id": "warfarin",
+   "name": "warfarin",
+   "aliases": [
+    "warfarin"
+   ],
+   "atcCodes": [
+    "B01AA03"
+   ],
+   "source": "test fixture"
+  }
+ ]
+}

@@ -350,18 +350,17 @@ public class UnmappedOrderAdministrationSiteTest {
 				+ recordedAtTheSkin);
 		assertFalse(recordedAtTheSkin.get(0).contains("cross-reactivity group"),
 				"the curated sentence claims a class this presentation is not in");
-		// The rated sentence survives word for word — with ONE consequence that is worth pinning rather
-		// than smoothing over. Losing the class sentence unfolds the chip, and an unfolded rule chip is
-		// labelled by the rule's own match token (partnerLabel) where a folded one takes the name the
-		// two arms reconciled (foldedPartnerLabel, issue #292). So the co-medication is named
-		// "ketoprofen" here and "Ketoprofen" in the control. One order, one name per chip either way;
-		// what moves is which of the two rules decides it, and it moves because the fold stopped, not
-		// because anything about naming changed.
+		// The rated sentence survives word for word, and since issue #339 that is literally true: this
+		// assertion used to carry a .replace("active order Ketoprofen", "active order ketoprofen"),
+		// because losing the class sentence unfolded the chip and an unfolded chip was labelled by the
+		// rule's own match token where a folded one took the name the two arms reconciled. The
+		// reconciliation is no longer conditional on a class sentence being there to fold, so one
+		// prescription answers to one name whether or not this narrowing removes the curated claim —
+		// which is the property that had to be spelled as a substitution before.
 		assertEquals(withNothingRecorded.get(0)
-				.substring(0, withNothingRecorded.get(0).length() - NSAID_GROUP_SENTENCE.length()).trim()
-				.replace("active order Ketoprofen", "active order ketoprofen"),
+				.substring(0, withNothingRecorded.get(0).length() - NSAID_GROUP_SENTENCE.length()).trim(),
 				recordedAtTheSkin.get(0),
-				"the rated rule's own sentence is untouched but for the label the fold no longer supplies");
+				"the rated rule's own sentence is untouched by the narrowing, its co-medication included");
 	}
 
 	@Test

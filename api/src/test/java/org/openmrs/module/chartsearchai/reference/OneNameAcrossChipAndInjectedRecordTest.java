@@ -37,6 +37,9 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
  */
 public class OneNameAcrossChipAndInjectedRecordTest {
 
+	/** The chip's own lead-in, so a case can read back what the chip called the order. */
+	private static final String ACTIVE_ORDER = "interacts with active order ";
+
 	private static final String QUESTION = "Can I give ibuprofen?";
 
 	/** A DDInter-shaped partner row whose display name is WHITESPACE — see the case that reads it. */
@@ -145,30 +148,49 @@ public class OneNameAcrossChipAndInjectedRecordTest {
 	}
 
 	/**
-	 * The change is scoped to a fold that RECONCILED. Where the class arm says nothing about the
-	 * partner there is no fold, the chip's rule sentence is {@code partnerLabel} and the note must
-	 * agree with THAT — moving it would create the divergence in the other direction.
+	 * An UNFOLDED chip and its note name one partner one way too.
 	 *
-	 * <p><b>What it pins is narrower than it reads</b>, said rather than left to look better defended:
-	 * it reddens only on breaking the shared {@code partnerLabel} fallback, which many existing
-	 * note-text cases already catch. Its value is the ARRANGEMENT — a real chip that did not fold, read
-	 * from the record side — not a guard nothing else holds.
+	 * <p>This case used to be called {@code anUnfoldedChipsPartnerKeepsTheRulesOwnTokenInTheNote} and
+	 * asserted the literal token on both surfaces, because issue #297's change was scoped to a fold
+	 * that RECONCILED and everything else stayed on {@code partnerLabel}. Issue #339 removed that
+	 * scoping — the reconciliation is asked at every rule chip, so which name an order gets no longer
+	 * depends on whether the class arm happened to have a sentence to fold — and a case named after the
+	 * old answer would state something false while passing.
+	 *
+	 * <p>So it asserts the PROPERTY rather than the string: it READS the name out of the chip and
+	 * requires the note to carry that one. That is what issue #297 is about, it survives the widening,
+	 * and it is stronger than the pair of literals it replaces, which a single edit re-casing both
+	 * surfaces would have satisfied. A precondition keeps it honest — the chip's name must not be the
+	 * lower-case token, or the two agree for the reason they always did and the widening is not being
+	 * exercised at all. The arrangement is unchanged: a real chip
+	 * that does NOT fold, read from the record side.
 	 */
 	@Test
-	public void anUnfoldedChipsPartnerKeepsTheRulesOwnTokenInTheNote() {
+	public void anUnfoldedChipAndItsNoteNameOnePartnerOneWay() {
 		PatientChart chart = inject(
 			oneOrder("Warfarin 5mg", DrugReferenceTestSupport.set("B01AA03")),
 			"Is methotrexate safe here?");
 
 		String finding = DrugReferenceTestSupport.safetyFindingIn(chart).getText();
-		assertTrue(finding.contains("interacts with active order warfarin"),
-			"precondition: an UNFOLDED chip naming its partner by the rule's token, was: " + finding);
 		assertFalse(finding.contains("is in the same"),
 			"precondition: nothing may have folded here, was: " + finding);
 
+		// Read out of the chip rather than written down, so the case cannot pass by both surfaces
+		// having been re-cased together in one edit — which is what the pair of literals it replaced
+		// could do.
+		int at = finding.indexOf(ACTIVE_ORDER);
+		assertTrue(at >= 0, "precondition: the chip must name an active order, was: " + finding);
+		String chipName = finding.substring(at + ACTIVE_ORDER.length(),
+			finding.indexOf(" — ", at));
+		assertTrue(!chipName.isEmpty() && !chipName.equals(chipName.toLowerCase(java.util.Locale.ROOT)),
+			"precondition: this chip must have been RECONCILED, or the two surfaces agree for the"
+					+ " reason they always did and nothing about issue #339 is exercised, was: "
+					+ finding);
+
 		String record = recordFor(chart, "Methotrexate");
-		assertTrue(record.contains("warfarin ("),
-			"an unfolded chip's partner keeps the rule's own token in the note, was: " + record);
+		assertTrue(record.contains(chipName + " ("),
+			"an unfolded chip's note names that partner the way the chip does — \"" + chipName
+					+ "\" was: " + record);
 	}
 
 	/**
@@ -178,9 +200,14 @@ public class OneNameAcrossChipAndInjectedRecordTest {
 	 *
 	 * <p><b>Only its PRECONDITION is falsifiable</b>, and that is worth saying: a refused fold carries no
 	 * name to hand out, so the record assertion below cannot fail while the precondition holds. Break
-	 * {@code unambiguouslyNames} and the precondition reddens, together with three pre-existing
-	 * {@code FoldedChipOnePartnerNameTest} cases. The arrangement is what this case adds — the refusal
-	 * read from the record side — not a guard of its own.
+	 * {@code unambiguouslyNames} — SAY WHICH mutation, because the gate has two halves and its ranking
+	 * half has a second caller: short-circuiting {@code unambiguouslyNames} itself so that it always
+	 * permits is the one this sentence is about, and the precondition then reddens, together with cases
+	 * in {@code FoldedChipOnePartnerNameTest}. Mutate it and read those rather than counting them; a
+	 * count published here would be right for one of the three mutations and wrong for the other two,
+	 * which is how issue #339's review round 10 came to check the wrong one at
+	 * {@code CoMedications.partnerNaming} (re-measured at that round's head). The arrangement is what
+	 * this case adds — the refusal read from the record side — not a guard of its own.
 	 */
 	@Test
 	public void aRefusedFoldLeavesTheNoteOnTheRulesOwnToken() throws IOException {

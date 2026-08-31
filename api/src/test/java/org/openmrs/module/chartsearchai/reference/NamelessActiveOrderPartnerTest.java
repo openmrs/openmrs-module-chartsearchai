@@ -178,7 +178,7 @@ public class NamelessActiveOrderPartnerTest extends BaseModuleContextSensitiveTe
 	 * cross-reactivity group (NSAID) as active order [ATC N02BA01, N02BA99]" — the same order named two
 	 * ways in one sentence, because the rule arm then named its partner from the RULE's own token
 	 * ({@code partnerLabel}) and nothing the builder supplies could reach it. Since issue #292 that is no
-	 * longer the mechanism this arrangement sits on: it folds through {@code foldedPartnerLabel}'s entry
+	 * longer the mechanism this arrangement sits on: it folds through {@code reconciledPartnerName}'s entry
 	 * path, so the rule arm names the partner {@code Acetylsalicylic acid (aspirin)} too. What this case
 	 * still pins is unchanged and is the reason it is here — the synthesized {@code [ATC …]} display must
 	 * not displace the dataset's name, whichever arm renders it.

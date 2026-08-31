@@ -82,7 +82,7 @@ import org.openmrs.module.chartsearchai.ModuleSourceRoot;
  *   <li>{@code addPartnersForUnmappedOrders} — the class arm's PARTNER-naming rung (issue #228), a
  *       different question from a chip's SUBJECT and licensed by the same javadoc's "#228 the class
  *       arm's PARTNER too" paragraph. {@code CLAUDE.md} routes partner naming through
- *       {@code partnerLabel}/{@code foldedPartnerLabel}, not through this lookup.</li>
+ *       {@code partnerLabel}/{@code reconciledPartnerName}, not through this lookup.</li>
  * </ul>
  *
  * <p><b>What it does NOT cover, stated so the guard is not credited with more than it has.</b> It reads

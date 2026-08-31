@@ -244,8 +244,9 @@ public class SafetyWarning {
 	 *
 	 * <p><b>Published on the wire since issue #340</b>, as the {@code severity} key of every
 	 * {@code safetyWarnings} chip — on the blocking {@code /search} response and on both SSE events
-	 * that carry chips, since all three go through one
-	 * {@code ChartSearchAiRestController.serializeSafetyWarnings}. Verbatim and UNNORMALIZED, which is
+	 * that carry chips, since all three reach
+	 * {@code ChartSearchAiRestController.serializeSafetyWarnings} through the one
+	 * {@code putSafetyChips} payload writer. Verbatim and UNNORMALIZED, which is
 	 * deliberate rather than lazy: the field is the dataset's rating, and coercing it would put the
 	 * wire at odds with the very prose a client is being told to stop parsing. What it publishes is the
 	 * SOURCE's rating, not this module's judgment about what may be done — which is the separate thing
@@ -263,7 +264,7 @@ public class SafetyWarning {
 	 * value should trim and case-fold as {@code severityRank} does, and treat anything it does not
 	 * recognise as unrated rather than as a floor. The shipped DDInter dataset publishes exactly
 	 * {@code Major}, {@code Moderate}, {@code Minor} and {@code Unknown}, none null and none blank,
-	 * and the bundled curated seed rates none of its rules; ADR Decision 59 carries that census and
+	 * and the bundled curated seed rates none of its rules; ADR Decision 61 carries that census and
 	 * the production method that produced it, and is not restated here.
 	 *
 	 * <p><b>Read this field; do not fall back to parsing {@link #getDetail()}.</b> On the bundled

@@ -420,6 +420,13 @@ public final class DrugReferenceTestSupport {
 	static final String DDI_TIED_PARTNER_REPLACEMENT =
 			"chartsearchai-test/ddi-tied-partner-replacement.json";
 
+	/** {@code Simvastatin} rated Minor against both {@code Metformin} and {@code Atorvastatin}, the
+	 *  metformin row first — and Atorvastatin shares Simvastatin's {@code C10AA} subgroup, so its chip
+	 *  FOLDS a duplicate-therapy sentence and carries an unrated relationship. The one arrangement in
+	 *  which ordering the drug-in-play arm on the rating and ordering it on the FINDING disagree
+	 *  (issue #346). See {@code DrugInPlayFindingStrengthOrderTest.aFoldedCautionOutranksAPlainOne}. */
+	static final String DDI_FOLDED_CAUTION_ORDER = "chartsearchai-test/ddi-folded-caution-order.json";
+
 	/** The botulinum pair, the enalapril/enalaprilat pair and the typhoid pair — the slices where two rows
 	 *  are or are not one substance (issues #164/#176/#187). */
 	static final String DDI_SUBSTANCE_IDENTITY = "chartsearchai-test/ddi-substance-identity.json";

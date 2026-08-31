@@ -1,0 +1,169 @@
+{
+  "metadata": {
+    "schema_version": "1.0",
+    "title": "Test fixture: a folded caution outranks a plain one (issue #346)",
+    "note": "Real drugs and real ATC codes, arranged so the drug-in-play arm has to order two chips their RATINGS cannot separate. Simvastatin is rated Minor against both partners and Metformin is the EARLIER row, so ordering on severity alone leaves the two in dataset order. Atorvastatin shares Simvastatin's C10AA level-4 subgroup (HMG CoA reductase inhibitors), so the class arm folds a duplicate-therapy sentence onto its chip, and a folded chip carries an unrated relationship - a reason to WITHHOLD, where a plain Minor is only a caution. Neither row carries a mechanism, so both notes are the parser's own no-mechanism fallback: this fixture is about the ORDER of two chips and states nothing clinical about either pair beyond the rating."
+  },
+  "mechanisms": {},
+  "drugs": [
+    {
+      "id": "DDInter1675",
+      "name": "Simvastatin",
+      "rxcui": "36567",
+      "rxnorm_name": "simvastatin",
+      "drugbank_id": "DB00641",
+      "atc": [
+        "C10AA01"
+      ],
+      "ciel": [
+        {
+          "code": "104633",
+          "uuid": "104633AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Ezetimibe / simvastatin"
+        },
+        {
+          "code": "83936",
+          "uuid": "83936AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Simvastatin"
+        }
+      ]
+    },
+    {
+      "id": "DDInter1164",
+      "name": "Metformin",
+      "rxcui": "6809",
+      "rxnorm_name": "metformin",
+      "drugbank_id": "DB00331",
+      "atc": [
+        "A10BA02"
+      ],
+      "ciel": [
+        {
+          "code": "104722",
+          "uuid": "104722AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Glipizide / metformin"
+        },
+        {
+          "code": "104747",
+          "uuid": "104747AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Glyburide / metformin"
+        },
+        {
+          "code": "105054",
+          "uuid": "105054AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Metformin / pioglitazone"
+        },
+        {
+          "code": "105055",
+          "uuid": "105055AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Metformin / ropinirole"
+        },
+        {
+          "code": "105056",
+          "uuid": "105056AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Metformin / rosiglitazone"
+        },
+        {
+          "code": "165456",
+          "uuid": "165456AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Linagliptin / metformin"
+        },
+        {
+          "code": "165463",
+          "uuid": "165463AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Metformin / sitagliptin"
+        },
+        {
+          "code": "167910",
+          "uuid": "36b587d7-38c2-467f-ab5c-2b1426e482a3",
+          "name": "Alogliptin / metformin"
+        },
+        {
+          "code": "167912",
+          "uuid": "229af724-b07a-4954-b5cc-209e01c6cdd7",
+          "name": "Canagliflozin / metformin"
+        },
+        {
+          "code": "167922",
+          "uuid": "07f8df29-e291-4113-aa7f-2f0b65a6d6b8",
+          "name": "Empagliflozin / linagliptin / metformin"
+        },
+        {
+          "code": "167923",
+          "uuid": "1672d9f0-f214-422f-995e-a534b9f7a782",
+          "name": "Empagliflozin / metformin"
+        },
+        {
+          "code": "167924",
+          "uuid": "24d51a45-730f-4077-81e1-dc494d0e8257",
+          "name": "Ertugliflozin / metformin"
+        },
+        {
+          "code": "167926",
+          "uuid": "a7ceb840-0e35-41b1-bc8c-e6fac84e06b9",
+          "name": "Metformin / repaglinide"
+        },
+        {
+          "code": "167927",
+          "uuid": "e6d393f4-7bc6-4614-a4e6-ae95fdbc3c42",
+          "name": "Metformin / saxagliptin"
+        },
+        {
+          "code": "167981",
+          "uuid": "62ea33ca-e91b-4710-afa3-430c258115c7",
+          "name": "Metformin / vildagliptin"
+        },
+        {
+          "code": "167982",
+          "uuid": "895cea55-ec68-4892-91c9-fc90b1a38987",
+          "name": "Metformin / remogliflozin etabonate / vildagliptin"
+        },
+        {
+          "code": "168009",
+          "uuid": "caa3c8be-cb6c-4626-b272-eaaa6551d85d",
+          "name": "Glimepiride / metformin"
+        },
+        {
+          "code": "170534",
+          "uuid": "49b805a0-d177-4243-9206-72fcedeeed64",
+          "name": "Dapagliflozin / metformin / sitagliptin"
+        },
+        {
+          "code": "79651",
+          "uuid": "79651AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Metformin"
+        },
+        {
+          "code": "79652",
+          "uuid": "79652AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Metformin hydrochloride"
+        }
+      ]
+    },
+    {
+      "id": "DDInter0129",
+      "name": "Atorvastatin",
+      "rxcui": "83367",
+      "rxnorm_name": "atorvastatin",
+      "drugbank_id": "DB01076",
+      "atc": [
+        "C10AA05"
+      ],
+      "ciel": []
+    }
+  ],
+  "interactions": [
+    [
+      "DDInter1675",
+      "DDInter1164",
+      "Minor",
+      null
+    ],
+    [
+      "DDInter1675",
+      "DDInter0129",
+      "Minor",
+      null
+    ]
+  ]
+}

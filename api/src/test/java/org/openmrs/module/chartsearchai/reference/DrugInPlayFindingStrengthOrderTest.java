@@ -103,4 +103,44 @@ public class DrugInPlayFindingStrengthOrderTest {
 			"the dataset files Fluconazole before Amiodarone and rates them alike, so nothing about this "
 					+ "arm's ordering may separate them, was: " + leads);
 	}
+
+	/**
+	 * The half that decides what "strongest" MEANS, and the only arrangement in which ordering on the
+	 * rating and ordering on the finding disagree.
+	 *
+	 * <p>This is the arm that FOLDS, and a folded chip's rating deliberately understates it: the chip
+	 * goes on reporting the RULE's rating while the class arm's unrated duplicate-therapy relationship
+	 * rides along beside it, so a Minor rule folded with a class join states {@code STRENGTH_WITHHOLD}
+	 * in the record the model reads. Simvastatin is rated Minor against both partners and the dataset
+	 * files metformin first, so the ratings cannot separate the two chips and a severity-only sort
+	 * leaves them as they came; only asking {@code licensesWithholding} promotes the finding that is
+	 * actually a reason to withhold. Delete that branch of {@code FINDING_STRENGTH_DESCENDING} and
+	 * this case reddens while the rest of the suite stays green.
+	 */
+	@Test
+	public void aFoldedCautionOutranksAPlainOne() throws java.io.IOException {
+		List<SafetyWarning> warnings = DrugReferenceTestSupport
+				.validator(DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport
+						.ddiFixtureEntries(DrugReferenceTestSupport.DDI_FOLDED_CAUTION_ORDER)))
+				.validate("", "Can I give her simvastatin?",
+					DrugReferenceTestSupport.rawContextNaming(60, 70.0, "Metformin 500mg",
+						"Atorvastatin 20mg"));
+
+		assertEquals(2, warnings.size(), "two active partners must raise two chips, was: " + warnings);
+		assertEquals("Minor", warnings.get(0).getSeverity(),
+			"the knowledge base rates both pairs Minor, so the RATING cannot be what ordered them, was: "
+					+ warnings);
+		assertEquals("Minor", warnings.get(1).getSeverity(),
+			"the knowledge base rates both pairs Minor, so the RATING cannot be what ordered them, was: "
+					+ warnings);
+		assertTrue(warnings.get(0).getDetail().contains("Atorvastatin"),
+			"the folded chip states a relationship the data does not rate, which is a reason to withhold"
+					+ " rather than a caution, so it leads a plain Minor the dataset files ahead of it,"
+					+ " was: " + warnings.get(0).getDetail());
+		assertTrue(warnings.get(0).carriesUnratedRelationship(),
+			"and it leads BECAUSE of the fold, so the fold must be what this chip carries, was: "
+					+ warnings.get(0).getDetail());
+		assertTrue(warnings.get(1).getDetail().contains("Metformin"),
+			"the plain Minor caution follows it, was: " + warnings.get(1).getDetail());
+	}
 }

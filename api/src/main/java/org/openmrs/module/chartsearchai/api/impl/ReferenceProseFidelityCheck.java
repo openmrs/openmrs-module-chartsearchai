@@ -103,15 +103,27 @@ import org.slf4j.LoggerFactory;
  * <p><b>Which way a boundary misreading fails, and why the gap question is the WEAK one.</b> Both
  * bit-driven conditions are SILENCING, so a gap read as a sentence end can only add silence: on the
  * record side it takes the "reproduced a sentence and moved on" exit, on the answer side the
- * "stopped copying" one. The check therefore loses recall, never precision — but only because the
- * bit is {@link ChartSearchAiUtils#mayEndASentence}, which says yes to a terminator ANYWHERE in the
- * gap. Asking {@link ChartSearchAiUtils#SENTENCE_BOUNDARY} instead makes the property false in the
- * other direction, and that was measured rather than argued: it wants the terminator followed
+ * "stopped copying" one. So a misread boundary costs a REPORT and never causes one — but only
+ * because the bit is {@link ChartSearchAiUtils#mayEndASentence}, which says yes to a terminator
+ * ANYWHERE in the gap. Asking {@link ChartSearchAiUtils#SENTENCE_BOUNDARY} instead makes that false
+ * in the other direction, and it was measured rather than argued: it wants the terminator followed
  * IMMEDIATELY by whitespace, so an answer that quotes the record verbatim, closes the quotation
  * ({@code ."}) and starts its own next sentence has no answer-side boundary, falls through to the
- * report, and is accused of substituting words it did not substitute
+ * report, and is accused of a substitution it did not make
  * ({@code aQuotationTheAnswerClosedBeforeItsOwnNextSentenceIsNotReported}, which reddens under that
  * predicate).
+ *
+ * <p><b>An ELISION is a report, and that is the intended reading rather than a false alarm.</b> An
+ * answer that reproduces a record's opening, marks a cut with {@code …} or an em dash, and resumes
+ * is reported — it states no word the record does not, and it has still dropped content out of a
+ * sentence a clinician reads, which is issue #337's SECOND capture exactly (<em>"neuromuscular
+ * blockers, aminoglycoside antibiotics,"</em> excised from a botulinum toxin warning whose partner
+ * is an aminoglycoside). What that costs is a WARN whose wording — "states different words" — reads
+ * oddly of a marked cut. What it MISSES is the same elision written with three ASCII dots, whose
+ * first dot the weak gap question reads as a sentence end: {@code ...} is silent where {@code …} is
+ * reported. Which elisions are seen therefore depends on the glyph the model chose, and no
+ * arrangement of these two rules removes that — closing it means a gap question that is not
+ * silencing, and then a closed quotation is a false report again.
  *
  * <p><b>What the WARN carries, and what it deliberately does not.</b> The patient, the cited
  * record's index, how many words were reproduced, and the word offset in the record at which the
@@ -130,15 +142,17 @@ import org.slf4j.LoggerFactory;
  * not the progressive-reasoning preview, which resolves no citations, not a cached answer, which
  * was checked when it was produced, and not the model's reasoning, which cites nothing.
  *
- * <p><b>One silencing leg the suite does not pin.</b> {@code Reproductions.carriedThrough} — a
- * divergence at an answer position some record's reproduction CARRIES THROUGH is not reported — is
- * unreachable on the bundled data, and deliberately kept anyway. Reaching it needs two cited
- * reference records whose reproductions of one passage end at different answer positions, and the
- * two the injector produces for a question carry the same mechanism string, so they diverge
- * together. Every other silencing leg here reddens a named case when it is removed; this one
- * reddens nothing, so a later change can delete it for free. What that would cost is a false report
- * and never a missed one, which is the safe direction — said here rather than left for the next
- * reader to infer from a green suite.
+ * <p><b>The two pooling legs are pinned on ASSEMBLED records, and that is deliberate.</b> Neither
+ * {@code Reproductions.explained} (another cited record ended innocently here) nor
+ * {@code carriedThrough} (some reproduction carries on past here) is reachable on the bundled
+ * sixteen-entry excerpt: the two records the injector produces for one question carry the same
+ * mechanism string, so they diverge together, and no record there states one passage twice. Both
+ * shapes are ordinary in the data this runs on — a rendered reference record is a {@code "; "}-joined
+ * list of per-partner items and DDInter partners routinely share a mechanism — so their cases build
+ * the record rather than injecting one. That is the right operand here, because this check is a pure
+ * function of an answer and a record's TEXT and the cases beside them already pin that it runs over
+ * production-rendered records on the real answer path. Both were unpinned when they were written,
+ * and a review's mutation sweep is what said so.
  *
  * <p><b>One regression this file cannot see.</b> Its gate asks
  * {@link ChartSearchAiUtils#referenceGroup} rather than testing {@code resourceType} against a type
@@ -207,8 +221,10 @@ final class ReferenceProseFidelityCheck {
 						+ "reference record", patientId);
 				return;
 			}
-			// Replaced with a space rather than removed: a marker sits between words, and deleting
-			// it would weld its neighbours into one token that matches nothing.
+			// Replaced with a space rather than removed, so a marker can never weld its neighbours
+			// into one token. Every marker this module has been observed to receive already has
+			// whitespace on both sides, so nothing in the suite tells the two apart; the space is the
+			// choice that cannot be wrong rather than the one a measurement demanded.
 			Words answerWords = Words.of(answer == null ? ""
 					: ChartSearchAiUtils.INLINE_CITATION.matcher(answer).replaceAll(" "));
 			Reproductions found = new Reproductions();

@@ -53,10 +53,16 @@ public class ChartSearchAiUtils {
 
 	/**
 	 * The characters this module reads as the end of a sentence. One home, because
-	 * {@link #SENTENCE_BOUNDARY} and {@link #mayEndASentence} are two QUESTIONS over one set and a
-	 * second spelling of the set would let them disagree about what a sentence is.
+	 * {@link #SENTENCE_BOUNDARY}, {@link #mayEndASentence} and
+	 * {@code DrugSafetyValidator.endSentence} are three QUESTIONS over one set and a second spelling
+	 * of the set would let them disagree about what a sentence is — which is not hypothetical here:
+	 * {@code ReferenceProseFidelityCheck}'s record-sentence exit is only safe while the character
+	 * {@code endSentence} appends is one this set contains, and that check's own javadoc rests on it.
+	 *
+	 * <p>Public for that third consumer, in another package. A caller does not test a character
+	 * against a literal of its own.
 	 */
-	private static final String SENTENCE_TERMINATORS = ".!?";
+	public static final String SENTENCE_TERMINATORS = ".!?";
 
 	/**
 	 * Where one sentence of an answer or a record ends and the next begins: a {@code .}, {@code !}

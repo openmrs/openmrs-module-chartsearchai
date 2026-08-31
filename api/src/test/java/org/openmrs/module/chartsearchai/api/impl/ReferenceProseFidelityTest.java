@@ -9,17 +9,22 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
@@ -64,8 +69,9 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  */
 public class ReferenceProseFidelityTest {
 
-	/** A Major interaction whose mechanism is five sentences long — the shape the defect needs, and
-	 *  the only safety finding this arrangement raises (asserted in {@link #setUp}). */
+	/** A Major interaction whose mechanism is five sentences long — the shape the defect needs.
+	 *  {@code safetyFindingIn} takes the FIRST injected finding and asserts nothing about how many
+	 *  there are, so a case here is about whichever finding this arrangement raises first. */
 	private static final String QUESTION = "is it safe to give sertraline?";
 
 	private static final String ACTIVE_DRUG = "tramadol";
@@ -79,7 +85,14 @@ public class ReferenceProseFidelityTest {
 	/** The package, for the assertions whose claim is SILENCE. A class-scoped capture of a silent
 	 *  class receives nothing, which is exactly the state that makes "no WARN was logged" pass
 	 *  vacuously (LogCapture's javadoc); the package capture also receives
-	 *  {@code LlmInferenceService}'s own [timing] INFO line, so the capture can be shown live. */
+	 *  {@code LlmInferenceService}'s own [timing] INFO line, so the capture can be shown live.
+	 *
+	 *  <p><b>It spans the sibling check too.</b> {@code ClassCodeFidelityCheck} logs into this same
+	 *  package from this same {@code search()} call, so every silence case here would also redden on
+	 *  one of ITS reports. That is inert today only because each canned answer below is sliced from
+	 *  the cited record's own text, so any ATC token it carries is supported by that record — write a
+	 *  literal code into one and the failure message will be about class codes.
+	 *  {@code ClassCodeFidelityTest} carries the same note in the other direction. */
 	private static final String PACKAGE = "org.openmrs.module.chartsearchai.api.impl";
 
 	private TestableService service;
@@ -133,6 +146,19 @@ public class ReferenceProseFidelityTest {
 					"the WARN has to carry the record whose prose was degraded AND the patient, or a "
 							+ "maintainer reading a log with concurrent requests in it cannot "
 							+ "reconstruct it. Captured: " + capture.describeAll());
+			// The two numbers are the only handle a maintainer has for locating the divergence in a
+			// record the line deliberately does not quote, and neither is pinned by the assertion
+			// above. This answer starts at the record's own first word, so the record position the
+			// line names must be one past the count it reports — which holds only while the count is
+			// the run's length and the position counts from one.
+			Matcher numbers = Pattern.compile(
+					"reproduces (\\d+) words .*? continues at its word (\\d+), counting from one")
+					.matcher(capture.messagesAt(Level.WARN).get(0));
+			assertTrue(numbers.find(), "the WARN must state both numbers in the documented wording. "
+					+ "Captured: " + capture.describeAll());
+			assertEquals(Integer.parseInt(numbers.group(1)) + 1, Integer.parseInt(numbers.group(2)),
+					"a reproduction starting at the record's first word continues one word past its "
+							+ "length. Captured: " + capture.describeAll());
 		}
 	}
 
@@ -162,11 +188,14 @@ public class ReferenceProseFidelityTest {
 		// next word is the NEXT PARTNER's name and no sentence boundary stands between them: on
 		// that record alone this looks exactly like a substitution.
 		//
-		// Both records are cited, as the live capture on #337 cited both. Support is therefore
-		// pooled across the cited records, as ADR Decision 35 pools it for a class code: a
-		// continuation one cited record explains innocently is not a divergence, whatever a second
-		// record's own layout makes of it. Without the pooling this answer — which copied nothing
-		// wrongly — is reported.
+		// Both records are cited, as the live capture on #337 cited both.
+		//
+		// WHICH leg keeps it quiet moved once, and a reviewer's mutation sweep is what said so. This
+		// case was written for the cross-record pooling and it does not pin that: the gap question is
+		// now ChartSearchAiUtils.mayEndASentence, so the reference record's ".); " item seam carries a
+		// terminator and that record explains its own continuation. The exit it now pins is the
+		// record-sentence one — neutralising record.startsSentence is the mutation that reddens it.
+		// The two pooling legs have cases of their own below.
 		service.setLlmProvider(answering(mechanismWithoutItsFinalStop()
 				+ ", so avoid coadministration [" + reference.getIndex() + "], ["
 				+ finding.getIndex() + "]."));
@@ -284,12 +313,36 @@ public class ReferenceProseFidelityTest {
 	}
 
 	@Test
+	public void everyTerminatorInTheSharedSetEndsAnAnswerSentence() {
+		// The shared set itself, through the real pipeline. Nothing else in the module pins it:
+		// narrowing ChartSearchAiUtils.SENTENCE_TERMINATORS to "." changes what
+		// CitationGroundingVerifier cuts a claim unit on AND what this check reads as an answer
+		// sentence end, and left the whole api suite green until this case existed. Each arm
+		// reproduces the record and then closes its sentence with one member of the set, so an arm
+		// whose terminator the set no longer carries falls through to the report.
+		for (String terminator : new String[] { ".", "!", "?" }) {
+			service.setLlmProvider(answering(copiedThrough("may") + terminator
+					+ " Monitor the patient closely [" + finding.getIndex() + "]."));
+			try (LogCapture capture = LogCapture.on(PACKAGE)) {
+				service.search(patient(), QUESTION);
+				assertFalse(capture.describeAll().isEmpty(),
+						"the capture must receive the pipeline's own INFO lines, or this passes vacuously");
+				assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+						"\"" + terminator + "\" must end an answer sentence, or the answer-side exit "
+								+ "silently stops firing for it. Captured: " + capture.describeAll());
+			}
+		}
+	}
+
+	@Test
 	public void anAnswerThatReproducesTheRecordToItsLastWordIsNotReported() {
 		// The record-exhausted exit, on its own: the answer reproduces the whole record — appended
 		// strength clause included, which the prompt teaches the model verbatim — and then carries on
 		// inside its own sentence. There is no next record word to have substituted for.
-		service.setLlmProvider(answering(finding.getText() + ", so monitor closely ["
-				+ finding.getIndex() + "]."));
+		// The gap the answer carries on through must contain NO terminator, or the answer-side exit
+		// stands in for the one this case is named after and the case is green under either.
+		service.setLlmProvider(answering(withoutTrailingStop(finding.getText())
+				+ ", so monitor closely [" + finding.getIndex() + "]."));
 		try (LogCapture capture = LogCapture.on(PACKAGE)) {
 			service.search(patient(), QUESTION);
 			assertFalse(capture.describeAll().isEmpty(),
@@ -329,6 +382,97 @@ public class ReferenceProseFidelityTest {
 				TestDatasetHelper.toSerializedRecords(
 						new String[] { "Clinical observation: (2026-03-18) " + text }),
 				Collections.<String> emptySet());
+	}
+
+	@Test
+	public void aReproductionOfExactlyTheFloorIsStillReported() {
+		// The floor is pinned from below by two ClassCodeFidelityTest cases, which redden at nine.
+		// Nothing pinned it from ABOVE until this case: raising it to thirteen left the whole api
+		// suite green, and since the check's only value is recall, a floor raised silently disables
+		// it. This answer reproduces exactly twelve words of the record and then substitutes.
+		service.setLlmProvider(answering(twelveWordsFromTheMechanism()
+				+ " agents and other drugs [" + finding.getIndex() + "]."));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			service.search(patient(), QUESTION);
+			assertTrue(warnStating(capture, "reproduces 12 words", "[" + finding.getIndex() + "]"),
+					"a reproduction of exactly MIN_REPRODUCED_WORDS must still be reported, or the "
+							+ "floor can be raised and the check silenced with a green build. Captured: "
+							+ capture.describeAll());
+		}
+	}
+
+	@Test
+	public void aDivergenceARecordsOwnReproductionCarriesThroughIsNotReported() {
+		// Reproductions.carriedThrough, which nothing pinned: a divergence at an answer position that
+		// some reproduction of a record CARRIES ON past is not reported, because at that alignment
+		// the answer's next word is the record's own. It needs a record that states one passage
+		// twice, which the sixteen-entry DDInter excerpt does not — but a rendered reference record
+		// is a "; "-joined list of per-partner interaction items and DDInter partners routinely share
+		// a mechanism string, so the shape is ordinary rather than exotic.
+		//
+		// The record is assembled here rather than injected for that reason, and it is the right
+		// operand: this check is a pure function of an answer and a record's TEXT, and the cases
+		// above already pin that it runs over production-rendered records on the real answer path.
+		String passage = "alfa bravo charlie delta echo foxtrot golf hotel india juliett kilo lima";
+		PatientChart repeated = referenceRecordStating(passage + " quebec. " + passage
+				+ " romeo sierra tango uniform victor whiskey xray yankee zulu oscar papa");
+		TestableService onRepeated = newService(repeated);
+		onRepeated.setLlmProvider(answering(passage
+				+ " romeo sierra tango uniform victor whiskey xray yankee zulu oscar papa mike [1]."));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			onRepeated.search(patient(), QUESTION);
+			assertFalse(capture.describeAll().isEmpty(),
+					"the capture must receive the pipeline's own INFO lines, or this passes vacuously");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"the answer's next word IS the record's own at another alignment, so nothing was "
+							+ "substituted. Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void aDivergenceAnotherCitedRecordEndsInnocentlyAtIsNotReported() {
+		// Reproductions.explained — the cross-record half of the pooling, and the half the pass-2
+		// gap-predicate fix left unreachable on the bundled data: the reference record's own
+		// "; "-joined item seam now reads as a possible sentence end, so it explains its own
+		// continuation and never needs a second record to do it. The leg still decides the case where
+		// a second cited record ends where the first diverges, so it is pinned here rather than
+		// deleted — it can only ever add silence.
+		String passage = "alfa bravo charlie delta echo foxtrot golf hotel india juliett kilo lima";
+		PatientChart pair = referenceRecordsStating(passage + " mike november oscar", passage);
+		TestableService onPair = newService(pair);
+		onPair.setLlmProvider(answering(passage + " papa quebec [1], [2]."));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			onPair.search(patient(), QUESTION);
+			assertFalse(capture.describeAll().isEmpty(),
+					"the capture must receive the pipeline's own INFO lines, or this passes vacuously");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"the second cited record ends exactly where the first diverges, so the answer's "
+							+ "continuation is its own words after a complete reproduction. Captured: "
+							+ capture.describeAll());
+		}
+	}
+
+	@Test
+	public void aCitedReferenceRecordWithNoTextIsSkippedRatherThanRead() {
+		// A record we could not read is one we cannot say the answer diverged from — and without the
+		// guard its null text reaches the tokeniser and the check reports its own failure instead.
+		PatientChart unreadable = new PatientChart(chart.getText(),
+				Collections.<RecordMapping> singletonList(
+						new RecordMapping(1, ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING,
+								"00000000-0000-0000-0000-000000000001", null)),
+				Collections.<Integer> emptyList());
+		TestableService onUnreadable = newService(unreadable);
+		onUnreadable.setLlmProvider(answering("The records address it and the finding is a reason to "
+				+ "withhold it [1]."));
+		try (LogCapture capture = LogCapture.on(CHECK, Level.DEBUG)) {
+			onUnreadable.search(patient(), QUESTION);
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"an unreadable cited record must be skipped, not read. Captured: "
+							+ capture.describeAll());
+			assertTrue(debugStating(capture, "cites no readable reference record"),
+					"and which decline it was has to be identifiable. Captured: "
+							+ capture.describeAll());
+		}
 	}
 
 	@Test
@@ -385,6 +529,46 @@ public class ReferenceProseFidelityTest {
 	private String mechanism() {
 		String text = finding.getText();
 		return text.substring(0, text.indexOf(DrugReferenceInjector.STRENGTH_WITHHOLD));
+	}
+
+	/** Exactly twelve words of the record's mechanism, taken from a fixed anchor inside it so the
+	 *  divergence after them falls mid-sentence on the record's side too. */
+	private String twelveWordsFromTheMechanism() {
+		String from = mechanismFrom("Due");
+		String[] tokens = from.split("\\s+");
+		StringBuilder sb = new StringBuilder();
+		for (int at = 0; at < 12; at++) {
+			sb.append(at == 0 ? "" : " ").append(tokens[at]);
+		}
+		return sb.toString();
+	}
+
+	/** A chart carrying one reference-typed record with {@code text}. Assembled rather than injected
+	 *  because the shapes the pooling legs need do not occur in the bundled excerpt; see the cases
+	 *  that use it for why that is the right operand here. */
+	private static PatientChart referenceRecordStating(String text) {
+		return referenceRecordsStating(text);
+	}
+
+	/** The same, for several records, numbered from one in the order given. */
+	private static PatientChart referenceRecordsStating(String... texts) {
+		List<RecordMapping> mappings = new ArrayList<RecordMapping>();
+		for (int at = 0; at < texts.length; at++) {
+			mappings.add(new RecordMapping(at + 1,
+					ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING,
+					"00000000-0000-0000-0000-00000000000" + (at + 1), null, texts[at]));
+		}
+		return new PatientChart("chart", mappings, Collections.<Integer> emptyList());
+	}
+
+	/** {@code text} without a single trailing sentence terminator, so an answer built from it can
+	 *  carry on inside one sentence. */
+	private static String withoutTrailingStop(String text) {
+		String trimmed = text.trim();
+		return trimmed.isEmpty()
+				|| ChartSearchAiUtils.SENTENCE_TERMINATORS.indexOf(trimmed.charAt(trimmed.length() - 1)) < 0
+						? trimmed
+						: trimmed.substring(0, trimmed.length() - 1);
 	}
 
 	/** The mechanism with its closing full stop replaced by nothing, so an answer can weld a clause

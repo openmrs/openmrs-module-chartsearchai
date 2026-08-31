@@ -110,6 +110,18 @@ public final class LogCapture implements AutoCloseable {
 	}
 
 	/** @return the formatted messages captured at exactly {@code level}, in order. */
+	public List<String> messagesAt(Level level) {
+		List<String> out = new ArrayList<String>();
+		synchronized (events) {
+			for (LogEvent event : events) {
+				if (level.equals(event.getLevel())) {
+					out.add(event.getMessage().getFormattedMessage());
+				}
+			}
+		}
+		return out;
+	}
+
 	/**
 	 * @return whether one captured message at {@code level} carries every one of {@code needles}.
 	 *
@@ -130,18 +142,6 @@ public final class LogCapture implements AutoCloseable {
 			}
 		}
 		return false;
-	}
-
-	public List<String> messagesAt(Level level) {
-		List<String> out = new ArrayList<String>();
-		synchronized (events) {
-			for (LogEvent event : events) {
-				if (level.equals(event.getLevel())) {
-					out.add(event.getMessage().getFormattedMessage());
-				}
-			}
-		}
-		return out;
 	}
 
 	/** @return every captured event rendered as {@code LEVEL message}, for assertion failure text. */

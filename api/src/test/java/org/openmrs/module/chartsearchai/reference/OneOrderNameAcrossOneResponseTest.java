@@ -103,6 +103,16 @@ public class OneOrderNameAcrossOneResponseTest {
 	private static final String ONE_ORDER_TWO_ORDER_ENTRIES_FIXTURE =
 			"chartsearchai-test/ddi-one-order-two-order-entries.json";
 
+	/** A verbatim shipped-KB slice in which ONE combination prescription's TWO constituents each carry
+	 *  a rule against one subject, rated alike and carrying the same class-level mechanism sentence —
+	 *  see the fixture's own note. */
+	private static final String TWO_RULES_ONE_NOTE_FIXTURE =
+			"chartsearchai-test/ddi-combination-two-rules-one-note.json";
+
+	/** That slice's prescription: the marketed fixed-dose product, and the combination ATC code a
+	 *  dictionary maps it to, which the data covers no entry for. */
+	private static final String TWO_CONSTITUENT_DISPLAY = "Emtricitabine / Tenofovir disoproxil";
+
 	/** The presentation that slice's chart records, which is NOT the row {@code canonicalRow} elects
 	 *  for that substance. */
 	private static final String TOPICAL_STEROID_ORDER = "Methylprednisolone (topical)";
@@ -1066,5 +1076,142 @@ public class OneOrderNameAcrossOneResponseTest {
 			"an order the dataset covers no entry for has no dataset row to elect, and the bare ATC"
 					+ " code is the absence of a name rather than a second one, so its own display"
 					+ " stands (issue #339), was: " + DrugReferenceTestSupport.details(warnings));
+	}
+
+	/**
+	 * A response states one relationship about one prescription ONCE, in the words it states it in.
+	 *
+	 * <p><b>Review round 12.</b> Naming every rule chip after the prescription is what this issue is
+	 * for, and it made two chips about a fixed-dose combination indistinguishable wherever the data
+	 * rates the two constituents' rules alike and gives them one class-level mechanism note: the
+	 * constituent was the only thing telling the two apart at the merge base, and it is no longer in
+	 * the text. The chips are still two — {@code bestRulePerPartner} keys them on the two partner
+	 * ENTRIES and keeps them apart deliberately, and {@code CoMedications.partnerNaming} maps both to
+	 * the one order-rung co-medication — so nothing throws, no count looks wrong, and the identical
+	 * sentence reaches the clinician twice and the prompt twice as two numbered, citable
+	 * {@code safety_finding} records.
+	 *
+	 * <p>Measured through the real {@code validate} over the shipped knowledge base before the fixture
+	 * was cut: this arrangement rendered {@code Bedaquiline interacts with active order Emtricitabine /
+	 * Tenofovir disoproxil — Moderate. Coadministration of bedaquiline with other agents known to
+	 * induce hepatotoxicity may potentiate the risk of liver injury.} twice, where the merge base
+	 * ({@code e9109a58}) rendered {@code active order tenofovir disoproxil} and
+	 * {@code active order emtricitabine} — two distinguishable chips.
+	 *
+	 * <p>The collapse is {@code DrugSafetyValidator.StatedInteractionChips}, which is also where the
+	 * information it gives up is recorded (ADR Decision 63). Removing the ledger's gate at
+	 * {@code addInteractionWarnings}' emission — adding the chip unconditionally — reddens this case
+	 * and its prompt-level sibling below.
+	 */
+	@Test
+	public void oneCombinationPrescriptionStatesOneRelationshipOnce() throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
+			DrugReferenceTestSupport.ddiFixtureEntries(TWO_RULES_ONE_NOTE_FIXTURE));
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+				.validate("", "Can I give her bedaquiline?", truvadaChart());
+
+		assertEquals(1, warnings.size(),
+			"two rules about ONE prescription that the reconciliation now names alike, rated alike and"
+					+ " carrying one mechanism note, say one thing — and a clinician shown it twice"
+					+ " cannot tell which constituent interacts nor that two findings were raised"
+					+ " (issue #339 review round 12), was: "
+					+ DrugReferenceTestSupport.details(warnings));
+		assertTrue(warnings.get(0).getDetail()
+				.startsWith("Bedaquiline interacts with active order " + TWO_CONSTITUENT_DISPLAY),
+			"precondition: the surviving chip must be the reconciled one, or this case is passing"
+					+ " because the arrangement never reconciled, was: " + warnings.get(0).getDetail());
+	}
+
+	/**
+	 * The same restatement, at the surface that costs most: the prompt.
+	 *
+	 * <p>A chip reaches the model verbatim as a numbered, citable {@code safety_finding} record
+	 * ({@code DrugReferenceInjector.renderFinding}), and two of them keyed alike
+	 * ({@code ChartSearchAiUtils.resourceKey} over the same type and drug) is one piece of evidence
+	 * counted twice by whatever reads them. Driven through the real {@code injectRecords} with the
+	 * real validator behind it, because {@code preAnswerFindings} is the path the record is built on
+	 * and nothing shorter holds both the chip and the record.
+	 *
+	 * <p>What this case deliberately does NOT assert is that the constituents are gone from the
+	 * prompt: the injected {@code drug_reference} record still lists each partner under the rule's own
+	 * token, which is the prompt-level residue issue #339 records, so both {@code emtricitabine} and
+	 * {@code tenofovir disoproxil} are still named to the model.
+	 */
+	@Test
+	public void oneCombinationPrescriptionInjectsOneCitableFinding() throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
+			DrugReferenceTestSupport.ddiFixtureEntries(TWO_RULES_ONE_NOTE_FIXTURE));
+		org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart chart =
+				DrugReferenceTestSupport.injectorWithSafety(service).injectRecords(
+					DrugReferenceTestSupport.oneRecordChart(), truvadaChart(),
+					"Can I give her bedaquiline?");
+
+		List<String> findings = DrugReferenceTestSupport.findingTexts(chart);
+		assertEquals(1, findings.size(),
+			"one relationship, one citable safety_finding: two records the model cannot tell apart are"
+					+ " one piece of evidence counted twice (issue #339 review round 12), was: "
+					+ findings);
+		assertTrue(findings.get(0).contains("active order " + TWO_CONSTITUENT_DISPLAY),
+			"precondition: the injected finding must be the reconciled chip, was: " + findings);
+	}
+
+	/**
+	 * The same restatement in the SCREENING arm, which reaches a combination prescription the same way
+	 * and cannot fold.
+	 *
+	 * <p>Both arms name their partner through one reconciliation since this issue, so both can create
+	 * this duplicate, and a collapse living in one of them would leave the other's standing —
+	 * {@code ContraindicationChips}' argument for spanning the arms, applied to the interaction chips.
+	 * The screening arm collects candidates, sorts them by severity and caps them, so the collapse is
+	 * applied where the candidate is COLLECTED: a restatement is not a pair that was found and
+	 * withheld, so it must not be counted into the extent this arm states ({@code PairChipExtent},
+	 * issue #336).
+	 *
+	 * <p>Removing the ledger's gate at {@code addActiveOrderPairInteractions}' candidate collection
+	 * reddens this case.
+	 */
+	@Test
+	public void aScreenOfACombinationPrescriptionStatesOneRelationshipOnce() throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
+			DrugReferenceTestSupport.ddiFixtureEntries(TWO_RULES_ONE_NOTE_FIXTURE));
+		java.util.Set<String> codes = DrugReferenceTestSupport.set("J05AR03", "J04AK05");
+		PatientClinicalContext chart = DrugReferenceTestSupport.ctx(60, null,
+			DrugReferenceTestSupport.set(TWO_CONSTITUENT_DISPLAY, "Bedaquiline 100mg"), codes, null,
+			null, java.util.Arrays.asList(
+				DrugReferenceTestSupport.activeOrder("order-truvada", TWO_CONSTITUENT_DISPLAY,
+					DrugReferenceTestSupport.set(
+						TWO_CONSTITUENT_DISPLAY.toLowerCase(java.util.Locale.ROOT)),
+					DrugReferenceTestSupport.set("J05AR03")),
+				DrugReferenceTestSupport.activeOrder("order-bedaquiline", "Bedaquiline 100mg",
+					DrugReferenceTestSupport.set("bedaquiline"),
+					DrugReferenceTestSupport.set("J04AK05"))));
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+				.validate("", DrugReferenceTestSupport.SCREENING_QUESTION, chart);
+
+		assertEquals(1, warnings.size(),
+			"a screen of one prescription against one other order states their one relationship once,"
+					+ " however many of the prescription's constituents carry a rule for it (issue #339"
+					+ " review round 12), was: " + DrugReferenceTestSupport.details(warnings));
+		assertTrue(warnings.get(0).getDetail().contains("active order " + TWO_CONSTITUENT_DISPLAY),
+			"precondition: the surviving chip must be the reconciled one, was: "
+					+ warnings.get(0).getDetail());
+	}
+
+	/**
+	 * The chart review round 12's finding was measured on: ONE order for the marketed fixed-dose
+	 * product, mapped to the combination ATC code alone — which the data covers no entry for, so the
+	 * co-medication ladder reaches it on the ORDER rung and names it by its own display. Its match
+	 * tokens are the display lowercased, which is what {@code PatientClinicalContextBuilder} writes for
+	 * an order whose drug concept publishes one name.
+	 */
+	private static PatientClinicalContext truvadaChart() {
+		java.util.Set<String> codes = DrugReferenceTestSupport.set("J05AR03");
+		return DrugReferenceTestSupport.ctx(60, null,
+			DrugReferenceTestSupport.set(TWO_CONSTITUENT_DISPLAY), codes, null, null,
+			java.util.Arrays.asList(DrugReferenceTestSupport.activeOrder("order-truvada",
+				TWO_CONSTITUENT_DISPLAY,
+				DrugReferenceTestSupport.set(TWO_CONSTITUENT_DISPLAY.toLowerCase(java.util.Locale.ROOT)),
+				codes)));
 	}
 }

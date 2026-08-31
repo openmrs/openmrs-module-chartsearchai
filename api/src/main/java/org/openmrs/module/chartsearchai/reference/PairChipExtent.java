@@ -42,6 +42,14 @@ package org.openmrs.module.chartsearchai.reference;
  * this states pairs. A client rendering "10 of 18 shown" must
  * say what it is counting, or it publishes a ratio of two different populations.
  *
+ * <p><b>A candidate the screening arm cannot tell from one it already collected is not a pair it
+ * found</b> (issue #339 review round 12). That arm collapses a chip whose every published field
+ * repeats one it has already stated — {@code DrugSafetyValidator.StatedInteractionChips}, reachable
+ * because a fixed-dose combination prescription is one co-medication carrying two rule partners —
+ * and it does so where the candidate is COLLECTED, before the sort and before the cap, so the
+ * restatement is absent from BOTH numbers here rather than counted as a pair found and withheld.
+ * Two rules did fire; what {@code found} counts is what a reader could have been shown.
+ *
  * <p><b>Zero is a measurement and absence is not.</b> An extent stating {@code found == 0} says a
  * pairwise arm ran and the reference data related none of the pairs it enumerated — a complete
  * screen, positively assertable, which is half of what this type exists for. No extent at all

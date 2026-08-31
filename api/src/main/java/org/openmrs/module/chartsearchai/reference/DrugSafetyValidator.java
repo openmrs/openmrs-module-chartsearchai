@@ -525,6 +525,11 @@ public class DrugSafetyValidator {
 		// missing one.
 		InteractionPairs interactionPairs = new InteractionPairs();
 
+		// One ledger of the interaction chips this pass has already STATED, in the words it stated them
+		// in, spanning the same two arms — see StatedInteractionChips, which is also where the shape
+		// that needs it lives. A per-pass local for InteractionPairs' own reason, one line above.
+		StatedInteractionChips statedChips = new StatedInteractionChips();
+
 		// The patient's recorded allergies resolved to the SUBSTANCES they name, ONE resolution per pass
 		// (issues #193/#195). Resolved here rather than inside addAllergyContraindications, which is where
 		// it used to happen: that arm runs once per subject, and the answer does not depend on the
@@ -580,7 +585,7 @@ public class DrugSafetyValidator {
 				// the same active order, so the decision of how many chips that pair gets belongs to a
 				// method that sees both (issue #88).
 				addInteractionWarnings(warnings, rows, subjects, context, severityFloor, orderEntries,
-						interactionPairs, coMedications);
+						interactionPairs, coMedications, statedChips);
 			}
 			if (dosePending.remove(substance)) {
 				addOverdose(warnings, rows, subjects, context, lower, all);
@@ -641,7 +646,7 @@ public class DrugSafetyValidator {
 		if (warnInteractions && questionDrugs.isEmpty()
 				&& QueryScopeRouter.isInteractionScreening(question)) {
 			pairExtent = addActiveOrderPairInteractions(warnings, subjects, context, severityFloor,
-					orderEntries, interactionPairs, coMedications);
+					orderEntries, interactionPairs, coMedications, statedChips);
 		}
 		if (!warnings.isEmpty()) {
 			log.info("Drug-safety validator raised {} warning(s)", warnings.size());
@@ -2249,6 +2254,12 @@ public class DrugSafetyValidator {
 	 * ({@link #bestRulePerPartner}) and the class arm ({@link #classRelationships}) — coordinated
 	 * instead of run independently (issue #88).
 	 *
+	 * <p>Per PARTNER, to be exact, and one active order can be several: the rule arm keys on the partner
+	 * ENTRY, so a fixed-dose combination prescription whose constituents both carry a rule is two chips
+	 * about one order — two clinical facts, deliberately kept apart. What is collapsed is only a chip
+	 * that repeats another word for word, which the issue #339 reconciliation made reachable by naming
+	 * both after the prescription; see {@link StatedInteractionChips}.
+	 *
 	 * <p><b>The subject is a substance, not a reference row (issue #162).</b> This ran once per entry in
 	 * the drugs-in-play set, and {@link #bestRulePerPartner} groups per PARTNER within one subject, so the
 	 * subject side was never grouped at all: one clinician word resolves every route/formulation row a KB
@@ -2348,7 +2359,8 @@ public class DrugSafetyValidator {
 	 */
 	private void addInteractionWarnings(List<SafetyWarning> warnings, List<DrugReference> rows,
 			SubstanceSubjects subjects, PatientClinicalContext context, int severityFloor,
-			List<DrugReference> orderEntries, InteractionPairs pairs, CoMedications coMedications) {
+			List<DrugReference> orderEntries, InteractionPairs pairs, CoMedications coMedications,
+			StatedInteractionChips statedChips) {
 		if (context == null) {
 			return;
 		}
@@ -2418,6 +2430,7 @@ public class DrugSafetyValidator {
 			// screening arm does" a single default in the callee instead of two call sites both
 			// remembering to pass the same thing — and that label is also the grouping key, so a drift
 			// there would silently unpick the part of #121's invariant this change leaves standing.
+			SafetyWarning chip;
 			if (fold == null) {
 				// No class sentence to fold, and since issue #339 that no longer decides what the order
 				// is CALLED: the same reconciliation runs here, so a partner the class arm had nothing
@@ -2425,15 +2438,25 @@ public class DrugSafetyValidator {
 				// where the ladder reached no co-medication, and then this is the two-arg overload's
 				// answer — partnerLabel, which is also the grouping key.
 				ReconciledPartner reconciled = reconciledPartnerFor(rule, subjects, coMedications);
-				warnings.add(reconciled == null ? interactionWarning(ref, rule.rule)
+				chip = reconciled == null ? interactionWarning(ref, rule.rule)
 						: interactionWarning(ref, rule.rule, reconciled.chipName, reconciled.noteName,
-							null));
+							null);
 			} else {
-				warnings.add(interactionWarning(ref, rule.rule, fold.partnerName, fold.partnerNoteName,
-					fold.sentence));
+				chip = interactionWarning(ref, rule.rule, fold.partnerName, fold.partnerNoteName,
+					fold.sentence);
+			}
+			// Emitted only if it says something this pass has not already said. Two rules about ONE
+			// prescription are two chips — bestRulePerPartner keys them on the partner ENTRY and keeps
+			// them apart deliberately — but since issue #339 named both after that prescription, two
+			// constituents the knowledge base rates alike and gives one class-level note render byte for
+			// byte the same sentence. See StatedInteractionChips.
+			if (statedChips.isFirstStatementOf(chip)) {
+				warnings.add(chip);
 			}
 			// Recorded as the pair it is, not as the string it renders, so the screening arm can recognise
-			// it whatever either arm calls the substance — see InteractionPairs.
+			// it whatever either arm calls the substance — see InteractionPairs. OUTSIDE the collapse
+			// above, and that is load-bearing: a pair whose statement the surviving chip carries WAS
+			// reported, so the screening arm must go on standing down from it.
 			pairs.add(ref, rule.partnerKey());
 		}
 		for (String detail : classOnly) {
@@ -2890,7 +2913,10 @@ public class DrugSafetyValidator {
 	 * arm ({@link #addInteractionWarnings}) already reported. The interaction counterpart of
 	 * {@link ContraindicationChips}, and keyed the same way: on IDENTITY, never on rendered text.
 	 *
-	 * <p><b>Why not the chip's text.</b> It was, until this ledger: the screen seeded a set with every
+	 * <p><b>Why not the chip's text</b> — and this is about recognising a repeat of the same PAIR, not
+	 * about {@link StatedInteractionChips}, which keys on text for the opposite question (two different
+	 * pairs that render alike) and runs beside this rather than instead of it. It was the text, until
+	 * this ledger: the screen seeded a set with every
 	 * already-raised chip's {@code (type, drug, detail)} triple and dropped any candidate that repeated
 	 * one. That recognises a repeat only while the two arms word one finding identically, and they do not:
 	 * <ul>
@@ -2959,6 +2985,90 @@ public class DrugSafetyValidator {
 		/** @return the substance a reference row stands for; anything else (a partner label) unchanged. */
 		private static Object substance(Object side) {
 			return side instanceof DrugReference ? ((DrugReference) side).substanceGroupKey() : side;
+		}
+	}
+
+	/**
+	 * The interaction chips this pass has already STATED, in the words it stated them in — so one
+	 * relationship worded one way is put in front of a clinician, and into the prompt, once.
+	 *
+	 * <p><b>Why this is not {@link InteractionPairs} and could not be</b> (issue #339, review round
+	 * 12). That ledger answers "has a chip been raised for this PAIR", on identity, and its own javadoc
+	 * says why it must not key on rendered text: two arms word one finding differently, so text
+	 * equality UNDER-recognises a repeat. This one is the other direction and needs no identity at all
+	 * — two chips whose every published field is equal are indistinguishable to every consumer there
+	 * is, so a second copy states nothing a reader did not already have. Both ledgers run: this one
+	 * cannot recognise a repeat the arms word differently, and that one cannot recognise two DIFFERENT
+	 * pairs that render alike.
+	 *
+	 * <p><b>What makes two different pairs render alike is the reconciliation this issue widened.</b>
+	 * A fixed-dose combination prescription resolves to one order-rung co-medication
+	 * ({@link CoMedications#partnerNaming} via {@link OrderPartner#substances}) while
+	 * {@link #bestRulePerPartner} keys a rule on the partner ENTRY, so a subject that rules on two
+	 * constituents produces two chips — and since this issue both are named by the prescription's own
+	 * display rather than by the two rule tokens. Where the knowledge base rates the two rules alike
+	 * and files them under one class-level mechanism note, the two details are then equal byte for
+	 * byte. Measured through the real {@link #validate} over the shipped knowledge base: one
+	 * {@code Emtricitabine / Tenofovir disoproxil} order on {@code J05AR03} asked
+	 * {@code Can I give her bedaquiline?} rendered
+	 * {@code Bedaquiline interacts with active order Emtricitabine / Tenofovir disoproxil — Moderate.
+	 * Coadministration of bedaquiline with other agents known to induce hepatotoxicity may potentiate
+	 * the risk of liver injury.} TWICE, where the merge base rendered
+	 * {@code active order tenofovir disoproxil} and {@code active order emtricitabine}.
+	 *
+	 * <p><b>The information the collapse gives up is WHICH constituent, and it is given up on the chip
+	 * alone.</b> The injected {@code drug_reference} record still lists each partner under the rule's
+	 * own token ({@code DrugReferenceInjector.orderedInteractionNotes}), which is the prompt-level
+	 * residue issue #339 records, so both constituents are still named to the model. What no surface
+	 * states any more is that TWO rules fired; naming the constituent on the chip instead would put new
+	 * clause structure into a sentence {@code DrugSafetyChipLabelTest} and issue #108 constrain and
+	 * that {@code DrugReferenceInjector.renderFinding} copies verbatim into a citable
+	 * {@code safety_finding}, and it would do so conditionally on what OTHER chips the response holds —
+	 * ADR Decision 63 carries that trade.
+	 *
+	 * <p><b>The key is every field a consumer can read</b>, not the detail alone: the wire publishes
+	 * {@code type}, {@code drug}, {@code detail} and {@code severity}
+	 * ({@code ChartSearchAiRestController.serializeSafetyWarnings}) and the prompt adds the two
+	 * booleans {@link #licensesWithholding(SafetyWarning)} and
+	 * {@code DrugReferenceInjector.renderFinding} read. So this can only drop a chip that is equal
+	 * everywhere a chip is looked at.
+	 *
+	 * <p><b>It removes a chip and nothing else.</b> Measured over 610 arrangements built from the
+	 * shipped knowledge base's own CIEL combination names, driven through the real
+	 * {@code DrugReferenceInjector.injectRecords}: every rendered {@code drug_reference} text is
+	 * byte-identical with this ledger and without it (636 records, 0 differing lines), so what a
+	 * collapse costs is one {@code safety_finding}. That was measured rather than argued, because
+	 * {@code DrugReferenceInjector.reconciledPartnerNoteName} finds a chip by RULE IDENTITY and a
+	 * collapsed chip's rule therefore falls back to {@link #partnerLabel} — which on the ORDER rung, the
+	 * rung a combination prescription reaches, is the value {@link #reconciledPartnerName} hands that
+	 * note anyway. ADR Decision 63 carries what that population does and does not establish.
+	 *
+	 * <p><b>It does NOT record the pair</b> — {@link InteractionPairs#add} still runs for the collapsed
+	 * rule, because the pair really was reported (under the surviving chip's words) and the screening
+	 * arm must go on standing down from it. And it does not reach {@link SafetyWarning}'s own equality:
+	 * that class deliberately declares no {@code equals}, so that nothing DOWNSTREAM can collapse two
+	 * chips this module meant to keep apart ({@code InteractionRouteVariantTest}). The decision stays
+	 * here, where the two arms that can create the duplicate are.
+	 *
+	 * <p>A per-pass local and never a field — issue #172's rule, and for {@link InteractionPairs}'
+	 * sharper version of it: a ledger records what THIS pass stated, so a field would go on suppressing
+	 * every chip it had ever seen. Shared by both active-order rule arms for
+	 * {@link ContraindicationChips}' reason — a collapse living inside one arm cannot see the other's
+	 * chips.
+	 */
+	private static final class StatedInteractionChips {
+
+		/** Insertion-ordered only so a debug dump reads in the order the chips were stated. */
+		private final Set<List<Object>> stated = new LinkedHashSet<List<Object>>();
+
+		/**
+		 * @return whether {@code chip} says something this pass has not already said — true the first
+		 *         time each distinct chip is offered, false for a byte-identical restatement of one.
+		 */
+		boolean isFirstStatementOf(SafetyWarning chip) {
+			return stated.add(Arrays.asList(chip.getType(), chip.getDrug(), chip.getDetail(),
+				chip.getSeverity(), chip.carriesUnratedRelationship(),
+				chip.restsOnAnUncorroboratedChartMatch()));
 		}
 	}
 
@@ -3535,7 +3645,8 @@ public class DrugSafetyValidator {
 	 * question (which cannot). This is that question asked at every rule chip instead, in both
 	 * active-order arms, through the SAME gate — one gate and not two, which is the point; what the
 	 * widening cost that gate is recorded on {@link #reconciledPartnerName} itself and is not restated
-	 * here.
+	 * here. What it cost the CHIP LIST is a second thing and lives at {@link StatedInteractionChips}:
+	 * two rules about one prescription, named alike by this method, can now render one sentence twice.
 	 *
 	 * <p>The partner is found from {@link SubjectRule#partner}, the entry {@link #activeOrderEntryFor}
 	 * already resolved for this rule and the module's one answer to "which partner is this rule about",
@@ -3901,8 +4012,9 @@ public class DrugSafetyValidator {
 	 * paragraph and the chip then gives no reason — reachable only in hand-authored data, since every
 	 * DDInter row has a note, and left as it is because the alternative (a note outranking a rating)
 	 * would drop the operator's own rule, which is the thing {@link #severityPriority} exists to
-	 * protect. And two tokens naming two DIFFERENT entries stay two chips even when one order name
-	 * matches both: across the full KB exactly one such pair exists — {@code enalapril} and
+	 * protect. And two tokens naming two DIFFERENT entries stay two RULES here even when one order name
+	 * matches both — two chips too, unless the two render the same sentence once their partner is
+	 * named, which is {@link StatedInteractionChips}' question and not this grouping's: across the full KB exactly one such pair exists — {@code enalapril} and
 	 * {@code enalaprilat}, which 376 entries carry as separate partners, and which a single order
 	 * named "Enalaprilat 1.25 mg" matches through the order-name matcher's inflection tolerance.
 	 * Prodrug and active metabolite are genuinely different DDInter entries, so that pair is reported
@@ -4717,7 +4829,7 @@ public class DrugSafetyValidator {
 	private PairChipExtent addActiveOrderPairInteractions(List<SafetyWarning> warnings,
 			SubstanceSubjects subjects, PatientClinicalContext context, int severityFloor,
 			List<DrugReference> orderDrugs, InteractionPairs reportedPairs,
-			CoMedications coMedications) {
+			CoMedications coMedications, StatedInteractionChips statedChips) {
 		if (context == null) {
 			// The arm could not run at all, so it states nothing — not a complete screen of zero pairs.
 			return null;
@@ -4840,8 +4952,17 @@ public class DrugSafetyValidator {
 				// display where nothing reconciled is what it has always done.
 				String loggedPartner = reconciled != null ? reconciled.chipName
 						: partnerSubject != null ? partnerSubject.displayLabel() : partnerLabel(i);
-				pairs.add(new ScreenedPair(reconciled == null ? interactionWarning(subject, i)
-						: interactionWarning(subject, i, reconciled.chipName, reconciled.noteName, null),
+				SafetyWarning chip = reconciled == null ? interactionWarning(subject, i)
+						: interactionWarning(subject, i, reconciled.chipName, reconciled.noteName, null);
+				// Before the candidate is collected rather than after the cap, so the extent this arm
+				// states counts what a clinician can tell apart: a restatement is not a pair that was
+				// found and withheld, it is a pair already shown. Same ledger as the drug-in-play arm —
+				// see StatedInteractionChips, and note that a combination prescription reaches this arm
+				// with both constituents as partners of one subject exactly as it reaches that one.
+				if (!statedChips.isFirstStatementOf(chip)) {
+					continue;
+				}
+				pairs.add(new ScreenedPair(chip,
 						severityPriority(i.getSeverity()),
 						subject.displayLabel() + " x " + loggedPartner
 								+ " (" + ChartSearchAiUtils.firstNonBlank(i.getSeverity(), "unrated")

@@ -541,11 +541,13 @@ public class DdiDrugReferenceSourceTest {
 	 * same slice under a different SUBJECT.
 	 *
 	 * <p>Sirolimus and Sirolimus (protein-bound) are one substance, so this arm rules over both rows.
-	 * Lapatinib's group is opened by the plain row at Moderate, phenytoin's and voxelotor's open after
-	 * it, and only THEN does the protein-bound row raise lapatinib to Major — so all three partners end
-	 * Major, nothing about severity can separate them, and their order is {@link
-	 * DrugSafetyValidator}'s grouping alone. A LinkedHashMap keeps a re-put key where it was; a
-	 * HashMap, or a remove-then-put, moves lapatinib behind phenytoin.
+	 * The plain row opens lapatinib's group at Moderate, then phenytoin's at Major, then voxelotor's at
+	 * Moderate; the protein-bound row afterwards raises lapatinib and voxelotor to Major, and leaves
+	 * phenytoin's group alone — Major ties Major, and the route step keeps the unqualified row. So all
+	 * three partners end Major, nothing about severity can separate them, and their order is
+	 * {@code bestRulePerPartner}'s grouping alone. Phenytoin is the reference point precisely because
+	 * it is the one group NOT replaced: a LinkedHashMap keeps a re-put key where it was and leaves
+	 * lapatinib ahead of it, while a HashMap or a remove-then-put moves lapatinib behind it.
 	 */
 	@Test
 	public void replacingAGroupsWinnerLeavesATiedPartnerBehindIt() throws Exception {

@@ -71,6 +71,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 63: One response names one active order one way, so the reconciliation stops being the fold's](#decision-63-one-response-names-one-active-order-one-way-so-the-reconciliation-stops-being-the-folds)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
+- [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
 
 ## Problem Statement
 
@@ -4110,3 +4111,59 @@ The index is decisively worth it rather than merely affordable. Same arrangement
 - **−→n/a** ~~**A subject only the ANSWER named can still be named by the prescription its own partner came from, and that chip reads as a self-interaction.** The refusal's subject set is built from the QUESTION's drugs, for `namingRows`' reason.~~ **Moot since review round 7 removed the refusal and its subject set with it.** Every chip about a partly-covered prescription now names it by its display, in both passes and for every subject, so there is no cross-pass disagreement left to trade against — which is one of the reasons round 7 preferred removal to a narrower conjunct.
 - **−** **`README`'s advice to clients — "key per-finding identity on `detail`" — now sees every reconciled interaction chip as new after the upgrade.** The field is rewritten for most rule chips, so a client persisting or de-duplicating on it (an acknowledgement store, a "seen" set) will not recognise a finding it recorded before. Nothing on the wire's SHAPE moves — `resourceType`, `group`, `grounded` and the record text's structure are untouched.
 - **−** The rejected alternative was the ticket's second sanctioned outcome — keep both vocabularies and publish the distinction for a client to render. It is a wire and frontend change (the frontend is `openmrs-esm-chartsearchai`), so it cannot be delivered here, and it leaves the module printing two names for one prescription while asking a client to explain them.
+
+## Appendix A: Measurements whose only home was `CLAUDE.md`
+
+`CLAUDE.md` was trimmed to directives and pointers (2026-08-31); it had grown from 5 KB to 159
+KB in twenty-six days, 94% of it drug-safety narrative, with one bullet at 39,603 characters
+whose bulk was the review rounds of #339. The reasoning it carried is in the decisions above and
+in the javadoc — `DrugSafetyValidator` is 74% comment lines, `DrugReference` 69%. These figures
+were the exception. Every `N of M` / `N → M` ratio in that file was extracted and checked
+against `api/src`, `omod/src`, `eval/` and this document; the six below had no other home, and
+the seventh — the #339 sweep — is recorded only for the two figures Decision 63 does not carry.
+Each sits under the rule it was measured for. The check was pattern-based, so a measurement
+phrased outside those two shapes could have been missed.
+
+**The ATC dictionary is sparse and the reference data is not** (#151, #228; Decisions 54, 58).
+Measured 2026-08-13 by the predicate `PatientClinicalContextBuilder.addAtcCodes` applies (a
+concept-reference-source name containing `ATC`): **27 of the 43** active drug orders on the
+3.7.1 demo instance carry no ATC code at all, while `DrugReference.normalizedAtcCodes()` over
+the real `DdiDrugReferenceSource.parse` of the 19 MB knowledge base publishes codes for 1839
+of its 2283 entries. The sparsity is the dictionary's, never the reference data's — which is
+why `findByActiveOrders` is package-private and `findForActiveOrders` (ATC ∪ name) is the list
+every consumer takes.
+
+**What the name leg of `addPartnersForUnmappedOrders` bought** (#228; Decision 54). Through the
+real `validate` over that knowledge base and the standalone's own order sets: 14 partners → 42,
+and patients with at least one partner **12 of 24 → 24 of 24**.
+
+**Resolving a partner across the whole dataset instead of against the patient's own orders**
+(#188). It merges genuinely distinct partners on **397 of the 2283** entries (`trastuzumab`
+with `trastuzumab deruxtecan`), which in a record costs a partner its name. The bound is what
+makes `activeOrderEntryFor` safe: resolution is against the patient's own orders, so wherever
+it merges two labels the chip merged them first.
+
+**Why `nameMatchStrength` is not re-ranked by alias length** (#192). Longest-alias repairs
+**43 of 54** mis-resolutions and breaks 34 that earliest-match gets right. Preferring
+`canonicalRow` instead renames a charted `Ketorolac (ophthalmic)` allergy and regresses #187.
+
+**How incomplete #161's hand-picked `UNCLASSIFYING_ATC_GROUPS` was** (#263; Decision 34). Its
+hardening reproduced the defect it was fixing: **46 of 1090** ROW pairs named a missing group,
+21 of them moved there by the fix; over SUBSTANCE pairs — the other base `sharedClass` defines
+— that is **19 of 319**, with 2 of those moved there by the fix.
+
+**What Decision 55 measured and declined.** `normalizeName`'s own re-derivation runs 2,141 to
+143,533 calls against 1.42M–1.93M folds, so it was not worth hoisting beside the operand folds.
+
+**The #339 order-rung sweep — the control arm only.** Decision 63 carries this sweep and a
+larger one; what it does not state is the arrangement's base and its disabled-head control, so
+only those are recorded here. Measured through `findForActiveOrders`, **84 of the shipped KB's
+2114 substances** resolve to more than themselves on a one-order chart, and that set of 84 is
+what the sweep's 216 responses were generated from. Against the reconciliation DISABLED the same
+sweep reads **94 divergent responses and 7 case-only divergences** — so the rung removes every
+response the widening added and adds none. See Decision 63 for the head-to-head figures and the
+reproduction method.
+
+**A note on suite-size denominators.** The trimmed file drops the quoted totals (1058, 1171,
+1173, 1192, 1347/1350, 1585) because every one had gone stale against a suite that held about 1596 `@Test` methods when this was written (2026-08-31). Where a measurement's force depends on a denominator, state the
+denominator *and* the date, here rather than in `CLAUDE.md`.

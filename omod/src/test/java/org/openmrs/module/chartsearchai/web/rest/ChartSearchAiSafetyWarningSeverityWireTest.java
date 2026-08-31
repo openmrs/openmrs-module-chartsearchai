@@ -24,6 +24,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Consumer;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -360,12 +361,21 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 	 * is deliberately NOT used: this class names non-wire accessors of its own that carry neither
 	 * prefix, so a prefix rule would stop seeing them the moment one were made public.
 	 *
+	 * <p><b>It asserts the VALUE and not merely the key, and that is not decoration.</b> Asked only
+	 * whether the key is present, the cheapest edit that satisfies it for a newly added accessor is a
+	 * hard-coded placeholder — {@code map.put("partnerMoiety", null)} beside the real puts — which is
+	 * issue #340's own defect shipped green under a test that appears to cover it. Measured by a
+	 * reviewer of this change: with the key-only form, adding a {@code public String getPartnerMoiety()}
+	 * returning a constant AND that placeholder put left this class green. Comparing the accessor's own
+	 * reading against the published value is what closes it.
+	 *
 	 * <p><b>It pins that SHAPE, and not every way the defect can recur.</b> An accessor taking a
 	 * parameter escapes it ({@code reconciledPartnerNoteName(DrugReference.Interaction)} is one
 	 * today), and so does a static one; both are excluded deliberately, because a per-chip wire field
 	 * is per-warning and takes no argument. It is ONE-directional — such an accessor implies a key,
 	 * never the converse — so a serializer is still free to publish something derived that no
-	 * accessor names. And it reflects over whatever {@code SafetyWarning} the omod build resolved:
+	 * accessor names. And it reads each accessor off THIS fixture's warnings, so a serializer that
+	 * agrees with them and diverges on some other warning is outside what it can see. And it reflects over whatever {@code SafetyWarning} the omod build resolved:
 	 * {@code omod/pom.xml} unpacks the RESOLVED api artifact over {@code omod/target/classes}, so
 	 * under {@code mvn -pl omod test} — the natural command for someone who has just edited
 	 * {@code SafetyWarning} — it reads a stale {@code ~/.m2} copy and passes over the very accessor it
@@ -373,10 +383,12 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 	 * reason. Mutate the selection and read the failures rather than trusting this paragraph.
 	 */
 	@Test
-	public void everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire() {
+	public void everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire() throws Exception {
+		List<SafetyWarning> warnings = fixtureWarnings();
 		List<Map<String, Object>> chips = searchChips();
+		assertEquals(warnings.size(), chips.size(), "precondition: the chips are this fixture's, in order");
 
-		List<String> unpublished = new ArrayList<String>();
+		List<String> problems = new ArrayList<String>();
 		for (Method m : SafetyWarning.class.getDeclaredMethods()) {
 			if (!Modifier.isPublic(m.getModifiers()) || Modifier.isStatic(m.getModifiers())
 					|| m.getParameterCount() != 0 || m.getReturnType() == void.class
@@ -384,16 +396,24 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 				continue;
 			}
 			String key = wireKeyOf(m);
-			for (Map<String, Object> chip : chips) {
+			for (int i = 0; i < chips.size(); i++) {
+				Map<String, Object> chip = chips.get(i);
 				if (!chip.containsKey(key)) {
-					unpublished.add(m.getName() + " -> expected key '" + key + "', chip was " + chip);
-					break;
+					problems.add(m.getName() + " names no key '" + key + "' on chip " + i + ": " + chip);
+					continue;
+				}
+				Object published = chip.get(key);
+				Object read = m.invoke(warnings.get(i));
+				if (!Objects.equals(published, read)) {
+					problems.add(m.getName() + " reads " + read + " on chip " + i + " but the wire's '"
+							+ key + "' carries " + published);
 				}
 			}
 		}
-		assertEquals(Collections.emptyList(), unpublished,
-				"every accessor a client can read off a SafetyWarning must name a key the wire carries; "
-						+ "a value the module computes and then drops at serialization is issue #340");
+		assertEquals(Collections.emptyList(), problems,
+				"every accessor a client can read off a SafetyWarning must name a key the wire carries, "
+						+ "AND that key must carry what the accessor reads; a value the module computes "
+						+ "and then drops at serialization is issue #340");
 	}
 
 	/** True where {@code m} redeclares a {@link Object} method — including the protected ones, which

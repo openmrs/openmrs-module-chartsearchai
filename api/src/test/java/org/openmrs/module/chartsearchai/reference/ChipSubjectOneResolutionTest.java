@@ -179,20 +179,25 @@ public class ChipSubjectOneResolutionTest {
 	private static final String LOOKUP_DECLARATION = "private static final class SubstanceSubjects {";
 
 	/**
-	 * The one arity of {@code validate} that builds the pass's shared state — the other five delegate
-	 * to it. It spans BOTH lines of the declaration, which is a correction rather than a style: since
-	 * issue #255 the arity above opens with a byte-identical first line, so the first line alone
-	 * matches twice and {@link #uniqueOffsetOf} hard-fails on that; and the second line alone names no
-	 * METHOD, so nothing about it says the body it lands on is {@code validate}'s. What the first line
-	 * buys is that name. Do not read it as "a sibling with the same tail would pass": measured, a
-	 * sibling alone makes TWO matches and fails loudly, because {@code validate}'s own declaration
-	 * still carries the tail. The shape that gets through a tail-only needle is a sibling together
-	 * with a rename or a re-wrap of {@code validate}'s own parameters. It still ends at the body's own
+	 * The one arity of {@code validate} that builds the pass's shared state; the others delegate to
+	 * it. It spans ALL THREE lines of the declaration, and what each line buys was measured rather
+	 * than assumed. The first line alone matches THREE times — this declaration and the two arities
+	 * above it that open identically — and {@link #uniqueOffsetOf} hard-fails on a needle matching
+	 * more than once. The two-line prefix is already unique, by one character: the five-argument seam
+	 * above wraps identically and ends that line with {@code )} where this one ends with a comma. The
+	 * third line therefore does not buy uniqueness; spelling it is what makes a re-wrap of the
+	 * declaration re-target this needle loudly rather than leave it landing on the seam. The tail
+	 * alone names no METHOD, so nothing about it would say the body it lands on is {@code validate}'s.
+	 * What the first line buys is that name. Do not read it as "a sibling with the same tail would pass": measured, a sibling
+	 * alone makes TWO matches and fails loudly, because {@code validate}'s own declaration still
+	 * carries the tail. The shape that gets through a tail-only needle is a sibling together with a
+	 * rename or a re-wrap of {@code validate}'s own parameters. It still ends at the body's own
 	 * opening brace, which is what {@link #bodyOf} looks for.
 	 */
 	private static final String VALIDATE =
 			"validate(String answer, String question, PatientClinicalContext rawContext,\n"
-					+ "\t\t\tList<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries) {";
+					+ "\t\t\tList<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries,\n"
+					+ "\t\t\tPairChipExtent.Sink pairExtentSink) {";
 
 	@Test
 	public void onlyTheSharedLookupAndThePartnerRungResolveASubjectDirectly() throws IOException {
@@ -284,7 +289,8 @@ public class ChipSubjectOneResolutionTest {
 
 		assertTrue(validateBody.contains(constructions.get(0)),
 			"the one construction of SubstanceSubjects is at line " + lineOf(source, constructions.get(0))
-					+ ", outside the body of validate(String, String, PatientClinicalContext, List, List) — so"
+					+ ", outside the body of validate(String, String, PatientClinicalContext, List, List,"
+					+ " PairChipExtent.Sink) — so"
 					+ " the arms of a pass may no longer share ONE instance even though the file holds one"
 					+ " \"new\": a per-arm helper returning a fresh instance is one construction and many"
 					+ " objects, which is issue #236's split with an extra hop. If the construction moved"

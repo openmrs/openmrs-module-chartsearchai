@@ -26,6 +26,7 @@ import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
+import org.openmrs.module.chartsearchai.reference.PairChipExtent;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
@@ -138,17 +139,23 @@ public class LlmInferenceService implements ChartSearchService {
 
 			List<RecordReference> cited = extractCitedReferences(response.getAnswer(),
 					response.getCitations(), chart.getMappings());
-			ClassCodeFidelityCheck.reportUnsupportedClassCodes(patient, question, response.getAnswer(),
+			ClassCodeFidelityCheck.reportClassCodeDefects(patient, question, response.getAnswer(),
 					cited, chart.getMappings());
 			ReferenceProseFidelityCheck.reportUnfaithfulReferenceProse(patient, response.getAnswer(),
 					cited, chart.getMappings());
 			List<RecordReference> references = groundReferences(response.getAnswer(), cited,
 					chart.getMappings());
+			// A per-call sink, never a field: the validator is a Spring singleton, so a field would be
+			// one slot shared by every concurrent request (issue #172). What it hears is how bounded
+			// the pairwise interaction list behind these chips is — the statement issue #336 exists
+			// for, and one no consumer can re-derive from the chips themselves.
+			PairChipExtent.Sink pairExtent = new PairChipExtent.Sink();
 			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), question,
-					patient, chart.getMappings());
+					patient, chart.getMappings(), pairExtent);
 			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
 					response.getInputTokens(), response.getOutputTokens(),
-					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice);
+					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
+					pairExtent.stated());
 			outcome = "ok";
 			return answer;
 		}
@@ -435,14 +442,14 @@ public class LlmInferenceService implements ChartSearchService {
 					referenceSlice));
 
 			// After the user-visible handoff, before grounding: two exact comparisons over what the
-			// answer states about the records it cites — an ATC class code no cited record states
-			// (issue #142), and prose reproduced from a cited reference record and then rewritten
-			// inside the sentence it was copying (issue #337). Both report only to the log, so
-			// nothing downstream — and no consumer above — waits on them. Not "microseconds", which
-			// this comment said and which is true only of the first: the second is a word-level
-			// dynamic program, measured at ~0.7 ms on a realistic chart and ~1.2 ms at the largest
-			// injected record set anyone has swept (ADR Decision 59).
-			ClassCodeFidelityCheck.reportUnsupportedClassCodes(patient, question, response.getAnswer(),
+			// answer states about the records it cites — the class-code defects a set-membership
+			// comparison can and cannot see (issues #142 and #338), and prose reproduced from a cited
+			// reference record and then rewritten inside the sentence it was copying (issue #337).
+			// Both report only to the log, so nothing downstream — and no consumer above — waits on
+			// them. Not "microseconds", which this comment said and which is true only of the first:
+			// the second is a word-level dynamic program, measured at ~0.7 ms on a realistic chart and
+			// ~1.2 ms at the largest injected record set anyone has swept (ADR Decision 61).
+			ClassCodeFidelityCheck.reportClassCodeDefects(patient, question, response.getAnswer(),
 					cited, chart.getMappings());
 			ReferenceProseFidelityCheck.reportUnfaithfulReferenceProse(patient, response.getAnswer(),
 					cited, chart.getMappings());
@@ -452,11 +459,17 @@ public class LlmInferenceService implements ChartSearchService {
 					chart.getMappings());
 			groundMs = System.currentTimeMillis() - groundStart;
 
+			// A per-call sink, never a field: the validator is a Spring singleton, so a field would be
+			// one slot shared by every concurrent request (issue #172). What it hears is how bounded
+			// the pairwise interaction list behind these chips is — the statement issue #336 exists
+			// for, and one no consumer can re-derive from the chips themselves.
+			PairChipExtent.Sink pairExtent = new PairChipExtent.Sink();
 			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), question,
-					patient, chart.getMappings());
+					patient, chart.getMappings(), pairExtent);
 			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
 					response.getInputTokens(), response.getOutputTokens(),
-					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice);
+					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
+					pairExtent.stated());
 			outcome = "ok";
 			return answer;
 		}

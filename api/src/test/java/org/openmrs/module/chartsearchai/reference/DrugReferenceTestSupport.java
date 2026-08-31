@@ -526,6 +526,36 @@ public final class DrugReferenceTestSupport {
 	 */
 	static final String SCREENING_QUESTION = "Are there any drug interactions with her current medications?";
 
+	/**
+	 * The 16-drug polypharmacy question the QUESTION-PAIR arm's cap and extent cases are measured on
+	 * — every one of the sixteen is an entry of the DDInter excerpt, and among them the excerpt
+	 * relates <b>72</b> pairs above the default severity floor. Shared rather than copied because
+	 * {@code PairChipCapContextTest} and {@code PairChipExtentContextTest} assert about the same 72
+	 * from two directions (what the arm SHOWS and what it SAYS it found), and a per-class copy makes
+	 * that agreement a coincidence: edit one drug and one class measures a different patient while
+	 * its javadoc still claims they measure the same one.
+	 */
+	static final String POLYPHARMACY_QUESTION = "Reviewing polypharmacy: lisinopril, metformin,"
+			+ " methotrexate, omeprazole, sertraline, simvastatin, spironolactone, tramadol, warfarin,"
+			+ " aspirin, ciprofloxacin, clarithromycin, digoxin, fluconazole, amiodarone and ibuprofen"
+			+ " — any interactions?";
+
+	/**
+	 * The six-order chart the SCREENING arm is measured on: six real excerpt drugs the data relates
+	 * <b>15</b> ways, exactly 10 of them Major, so a cap and the severity ordering are both
+	 * observable at once. Shared by {@code DrugSafetyInteractionScreeningTest} (which asserts what is
+	 * chipped), {@code PairChipCapContextTest} (what the cap keeps) and
+	 * {@code PairChipExtentContextTest} (what the pass states about the cut) — three classes whose
+	 * figures only agree because they screen one patient.
+	 */
+	static PatientClinicalContext screenedSixOrderChart() {
+		return ctx(60, null,
+				set("Simvastatin", "Warfarin", "Ciprofloxacin", "Clarithromycin", "Fluconazole",
+						"Amiodarone"),
+				set("C10AA01", "B01AA03", "J01MA02", "J01FA09", "J02AC01", "C01BD01"),
+				null, null);
+	}
+
 	private DrugReferenceTestSupport() {
 	}
 

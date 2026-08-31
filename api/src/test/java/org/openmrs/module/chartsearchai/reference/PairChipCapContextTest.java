@@ -54,11 +54,9 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 
 	/** The 16-drug polypharmacy question, live-measured at 72 above-floor pairs on the full KB and on
-	 *  the DDInter excerpt alike — the shape a cap exists for. */
-	private static final String POLYPHARMACY_QUESTION = "Reviewing polypharmacy: lisinopril, metformin,"
-			+ " methotrexate, omeprazole, sertraline, simvastatin, spironolactone, tramadol, warfarin,"
-			+ " aspirin, ciprofloxacin, clarithromycin, digoxin, fluconazole, amiodarone and ibuprofen"
-			+ " — any interactions?";
+	 *  the DDInter excerpt alike — the shape a cap exists for. Shared with the extent cases, which
+	 *  assert about the same 72 from the other side; see the constant's own javadoc. */
+	private static final String POLYPHARMACY_QUESTION = DrugReferenceTestSupport.POLYPHARMACY_QUESTION;
 
 	private static final String SCREENING_QUESTION = DrugReferenceTestSupport.SCREENING_QUESTION;
 
@@ -91,12 +89,8 @@ public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 	/** The screening arm over six active orders interacting 15 ways, 10 of them Major — the same
 	 *  arrangement the un-capped screening test uses, so the two cannot drift apart. */
 	private List<SafetyWarning> screeningChips() {
-		return validator.validate("", SCREENING_QUESTION, DrugReferenceTestSupport.ctx(60, null,
-				DrugReferenceTestSupport.set("Simvastatin", "Warfarin", "Ciprofloxacin", "Clarithromycin",
-						"Fluconazole", "Amiodarone"),
-				DrugReferenceTestSupport.set("C10AA01", "B01AA03", "J01MA02", "J01FA09", "J02AC01",
-						"C01BD01"),
-				null, null));
+		return validator.validate("", SCREENING_QUESTION,
+				DrugReferenceTestSupport.screenedSixOrderChart());
 	}
 
 	/** Chips whose SOURCE RATING is Major. Matched on the severity segment both arms render ahead of
@@ -210,9 +204,10 @@ public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 
 	@Test
 	public void theQuestionPairWarnNamesTheWithheldPairsAndTheConfiguredCap() {
-		// The withheld pairs exist only in this log line — chips have no per-question container to show
-		// "3 of 72" in — so it is the only thing standing between a capped list and a clinician reading
-		// it as complete. It must report the CAP THAT ACTUALLY CUT, not the compiled-in default.
+		// WHICH pairs went, and at what ratings, exists only in this log line: since issue #336 the
+		// response states the COUNTS (PairChipExtentContextTest) but deliberately not the list, so this
+		// is still the only place an operator can see what was dropped. It must report the CAP THAT
+		// ACTUALLY CUT, not the compiled-in default.
 		configureCap("3");
 		List<String> logged = capturedWarnings(new Runnable() {
 

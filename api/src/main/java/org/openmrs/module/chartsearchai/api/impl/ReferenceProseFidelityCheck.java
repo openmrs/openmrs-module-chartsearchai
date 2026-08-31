@@ -45,7 +45,7 @@ import org.slf4j.LoggerFactory;
  * recitation changes. {@link ClassCodeFidelityCheck} compares one token shape and says nothing
  * about prose. The {@code safetyWarnings} chips carry the true text but are a parallel list that
  * nothing reconciles against the answer — which is what this repository asserted they did, in every
- * place the claim was written; ADR Decision 59 names them and says how they were found.
+ * place the claim was written; ADR Decision 61 names them and says how they were found.
  *
  * <p><b>What it does and does not do.</b> It reports; it never rewrites, and nothing about it
  * reaches the wire. Editing a clinician-facing sentence is a larger decision than this check is
@@ -159,7 +159,7 @@ import org.slf4j.LoggerFactory;
  * name, per CLAUDE.md's rule for a question that is not about grading — so a reference type added
  * later is covered without this class changing. Hardcoding the pair here would leave the whole
  * suite green until a THIRD reference-group type existed; that is measured elsewhere in this
- * module and it holds of this new site too. Nothing here guards it, and ADR Decision 59 says so
+ * module and it holds of this new site too. Nothing here guards it, and ADR Decision 61 says so
  * rather than leaving the next reader to infer coverage.
  */
 final class ReferenceProseFidelityCheck {

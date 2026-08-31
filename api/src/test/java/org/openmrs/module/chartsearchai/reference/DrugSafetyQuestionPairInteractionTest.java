@@ -383,10 +383,7 @@ public class DrugSafetyQuestionPairInteractionTest {
 
 	/** Every drug in the DDInter excerpt, named in one question — the polypharmacy-review shape
 	 *  a clinician can type in one line, and the arm's worst case, since pairs grow as N²/2. */
-	private static final String POLYPHARMACY_QUESTION = "Reviewing polypharmacy: lisinopril, metformin,"
-			+ " methotrexate, omeprazole, sertraline, simvastatin, spironolactone, tramadol, warfarin,"
-			+ " aspirin, ciprofloxacin, clarithromycin, digoxin, fluconazole, amiodarone and ibuprofen"
-			+ " — any interactions?";
+	private static final String POLYPHARMACY_QUESTION = DrugReferenceTestSupport.POLYPHARMACY_QUESTION;
 
 	/**
 	 * The rank the arm ordered this chip on — {@link SafetyWarning#getSeverity()} put through the one

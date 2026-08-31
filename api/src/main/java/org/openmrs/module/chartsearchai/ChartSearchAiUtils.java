@@ -36,9 +36,11 @@ public class ChartSearchAiUtils {
 
 	/**
 	 * Matches an inline {@code [N]} citation marker in LLM answer prose. The
-	 * single source of truth for citation-marker parsing, shared by citation
-	 * extraction ({@code LlmInferenceService}) and grounding
-	 * ({@code CitationGroundingVerifier}) so the two cannot drift apart.
+	 * single source of truth for citation-marker parsing, shared by every consumer
+	 * {@link #citedIndexes} names — citation extraction ({@code LlmInferenceService}),
+	 * grounding ({@code CitationGroundingVerifier}), safety echo-scoping
+	 * ({@code DrugSafetyValidator}) and the class-code parenthetical check
+	 * ({@code ClassCodeFidelityCheck}) — so they cannot drift apart.
 	 *
 	 * <p>Deliberately single-index. Small local models also emit compact shorthand —
 	 * {@code [6, 7]} (measured on the rc.2 standalone, 2026-07-21: the #76 guard read such
@@ -135,10 +137,11 @@ public class ChartSearchAiUtils {
 	 * Decodes every inline {@code [N]} citation marker in {@code text} to its record index,
 	 * in first-appearance order. The shared decode step over {@link #INLINE_CITATION} for
 	 * citation extraction ({@code LlmInferenceService}), grounding
-	 * ({@code CitationGroundingVerifier}) and safety echo-scoping ({@code DrugSafetyValidator})
-	 * so those consumers cannot drift. (The clause-scoped splitter keeps its own matcher — it
-	 * needs each marker's text offset, which a set of indexes cannot carry.) Returns an empty
-	 * set for null/blank text.
+	 * ({@code CitationGroundingVerifier}), safety echo-scoping ({@code DrugSafetyValidator}) and —
+	 * since issue #338 — the check that asks whether a marker sits INSIDE a class-code parenthetical
+	 * ({@code ClassCodeFidelityCheck}), so those consumers cannot drift. (The clause-scoped splitter
+	 * keeps its own matcher — it needs each marker's text offset, which a set of indexes cannot
+	 * carry.) Returns an empty set for null/blank text.
 	 */
 	public static Set<Integer> citedIndexes(String text) {
 		Set<Integer> indexes = new java.util.LinkedHashSet<Integer>();

@@ -48,7 +48,12 @@ package org.openmrs.module.chartsearchai.reference;
  * because a fixed-dose combination prescription is one co-medication carrying two rule partners —
  * and it does so where the candidate is COLLECTED, before the sort and before the cap, so the
  * restatement is absent from BOTH numbers here rather than counted as a pair found and withheld.
- * Two rules did fire; what {@code found} counts is what a reader could have been shown.
+ * Two rules did fire; what {@code found} counts is what a reader could have been shown. * Two rules did fire; what {@code found} counts is what a reader could have been shown.
+ * {@code OneOrderNameAcrossOneResponseTest.aScreenOfACombinationPrescriptionStatesOneRelationshipOnce}
+ * reads this extent through the same {@code Sink} {@code PairChipExtentContextTest} drives, so the
+ * two agree about what the arity publishes: move the collapse to the emission loop and it reports
+ * {@code found=2, reported=2} beside one chip, which is the ratio-of-two-populations claim issue
+ * #336 exists to stop.
  *
  * <p><b>Zero is a measurement and absence is not.</b> An extent stating {@code found == 0} says a
  * pairwise arm ran and the reference data related none of the pairs it enumerated — a complete

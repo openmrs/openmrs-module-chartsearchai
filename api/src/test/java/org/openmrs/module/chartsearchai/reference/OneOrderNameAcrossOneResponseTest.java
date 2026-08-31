@@ -1186,8 +1186,9 @@ public class OneOrderNameAcrossOneResponseTest {
 					DrugReferenceTestSupport.set("bedaquiline"),
 					DrugReferenceTestSupport.set("J04AK05"))));
 
+		PairChipExtent.Sink sink = new PairChipExtent.Sink();
 		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
-				.validate("", DrugReferenceTestSupport.SCREENING_QUESTION, chart);
+				.validate("", DrugReferenceTestSupport.SCREENING_QUESTION, chart, null, null, sink);
 
 		assertEquals(1, warnings.size(),
 			"a screen of one prescription against one other order states their one relationship once,"
@@ -1196,6 +1197,18 @@ public class OneOrderNameAcrossOneResponseTest {
 		assertTrue(warnings.get(0).getDetail().contains("active order " + TWO_CONSTITUENT_DISPLAY),
 			"precondition: the surviving chip must be the reconciled one, was: "
 					+ warnings.get(0).getDetail());
+		// And the EXTENT this screen publishes counts the relationship once too, which is the half
+		// with a wire consequence and the reason the collapse happens where the candidate is
+		// COLLECTED rather than after the cap. Applied after the cap instead, the restatement is a
+		// pair this screen FOUND, so the response says it withheld one — a client renders "2 of 2"
+		// beside a single chip, which is the ratio-of-two-populations claim issue #336 exists to
+		// stop. Read through the same Sink PairChipExtentContextTest drives, so the two agree about
+		// what the arity publishes.
+		PairChipExtent extent = sink.stated();
+		assertEquals(1, extent.getFound(),
+			"the restated pair is not a pair this screen found, was: " + extent);
+		assertEquals(warnings.size(), extent.getReported(),
+			"and what it reports is what it shows, was: " + extent);
 	}
 
 	/**

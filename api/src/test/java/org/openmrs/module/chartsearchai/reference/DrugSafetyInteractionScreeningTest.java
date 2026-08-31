@@ -632,12 +632,7 @@ public class DrugSafetyInteractionScreeningTest {
 		// arm must report 10, and all 10 must be the Major ones. Dataset order would instead keep
 		// simvastatin x warfarin (Minor) and three Moderates.
 		List<SafetyWarning> warnings = screen(ddinterValidator(), SCREENING_QUESTION,
-				DrugReferenceTestSupport.ctx(60, null,
-						DrugReferenceTestSupport.set("Simvastatin", "Warfarin", "Ciprofloxacin",
-								"Clarithromycin", "Fluconazole", "Amiodarone"),
-						DrugReferenceTestSupport.set("C10AA01", "B01AA03", "J01MA02", "J01FA09",
-								"J02AC01", "C01BD01"),
-						null, null));
+				DrugReferenceTestSupport.screenedSixOrderChart());
 
 		assertEquals(ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_MAX_PAIR_CHIPS, warnings.size(),
 				"the screening arm must cap the chips it raises, was: " + warnings.size());

@@ -27,6 +27,7 @@ import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
+import org.openmrs.module.chartsearchai.reference.PairChipExtent;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
@@ -75,10 +76,12 @@ public class LlmInferenceServiceQueryScopedTest {
 		});
 		service.setDrugSafetyValidator(new DrugSafetyValidator() {
 
-			// overrides the mappings-carrying overload production actually calls (issue #105)
+			// The overload production actually calls: mappings-carrying for echo scoping (issue #105)
+			// and sink-carrying since issue #336. Stubbing the four-argument one instead leaves this
+			// stub INERT — production would not reach it — which is why it names both parameters.
 			@Override
 			public List<SafetyWarning> validate(String answer, String question, Patient patient,
-					List<RecordMapping> mappings) {
+					List<RecordMapping> mappings, PairChipExtent.Sink pairExtentSink) {
 				return Collections.emptyList();
 			}
 		});

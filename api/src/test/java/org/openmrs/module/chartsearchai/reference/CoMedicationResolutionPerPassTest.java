@@ -262,15 +262,20 @@ public class CoMedicationResolutionPerPassTest {
 			"src/main/java/org/openmrs/module/chartsearchai/reference/DrugSafetyValidator.java";
 
 	/** The one arity of {@code validate} that builds the pass's shared state; the others delegate to
-	 *  it. It spans BOTH lines of the declaration: since issue #255 the arity above opens with a
-	 *  byte-identical first line, so the first line alone matches twice and {@link SourceScan#body}
-	 *  hard-fails on that; and the second line alone names no METHOD, so nothing about it says the body
-	 *  it lands on is {@code validate}'s. What the first line buys is that name — see
+	 *  it. It spans ALL THREE lines of the declaration, and what each line buys was measured: the
+	 *  first line alone matches THREE times (this declaration and the two arities above it that open
+	 *  identically), on which {@link SourceScan#body} hard-fails; the two-line prefix is already
+	 *  unique, by the one character that separates this line's trailing comma from the five-argument
+	 *  seam's {@code )}. So the third line is not what makes it unique — spelling it is what makes a
+	 *  re-wrap of the declaration re-target the needle loudly. The tail alone names no METHOD, so
+	 *  nothing about it would say the body it lands on is {@code validate}'s. What the first line buys
+	 *  is that name — see
 	 *  {@code ChipSubjectOneResolutionTest}'s copy of this constant for what a tail-only needle does
 	 *  and does not let through, which is not what it first appears. */
 	private static final String VALIDATE =
 			"validate(String answer, String question, PatientClinicalContext rawContext,\n"
-					+ "\t\t\tList<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries) {";
+					+ "\t\t\tList<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries,\n"
+					+ "\t\t\tPairChipExtent.Sink pairExtentSink) {";
 
 	private static final String MEMO_DECLARATION = "private final class CoMedications {";
 
@@ -416,7 +421,8 @@ public class CoMedicationResolutionPerPassTest {
 					+ "(issue #256).");
 		assertTrue(validate.contains(constructions.get(0)),
 			"CoMedications is constructed at line " + scan.lineOf(constructions.get(0)) + ", outside the "
-					+ "body of validate(String, String, PatientClinicalContext, List, List). Built anywhere "
+					+ "body of validate(String, String, PatientClinicalContext, List, List, PairChipExtent.Sink)."
+					+ " Built anywhere "
 					+ "per-subject it memoises nothing; held in a FIELD it is issue #172's trap, which the "
 					+ "counting cases here cannot see for a field REASSIGNED once per pass — that sweeps "
 					+ "exactly as often as a local does.");

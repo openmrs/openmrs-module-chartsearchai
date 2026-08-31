@@ -26,6 +26,7 @@ import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
+import org.openmrs.module.chartsearchai.reference.PairChipExtent;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
@@ -142,11 +143,17 @@ public class LlmInferenceService implements ChartSearchService {
 					cited, chart.getMappings());
 			List<RecordReference> references = groundReferences(response.getAnswer(), cited,
 					chart.getMappings());
+			// A per-call sink, never a field: the validator is a Spring singleton, so a field would be
+			// one slot shared by every concurrent request (issue #172). What it hears is how bounded
+			// the pairwise interaction list behind these chips is — the statement issue #336 exists
+			// for, and one no consumer can re-derive from the chips themselves.
+			PairChipExtent.Sink pairExtent = new PairChipExtent.Sink();
 			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), question,
-					patient, chart.getMappings());
+					patient, chart.getMappings(), pairExtent);
 			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
 					response.getInputTokens(), response.getOutputTokens(),
-					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice);
+					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
+					pairExtent.stated());
 			outcome = "ok";
 			return answer;
 		}
@@ -445,11 +452,17 @@ public class LlmInferenceService implements ChartSearchService {
 					chart.getMappings());
 			groundMs = System.currentTimeMillis() - groundStart;
 
+			// A per-call sink, never a field: the validator is a Spring singleton, so a field would be
+			// one slot shared by every concurrent request (issue #172). What it hears is how bounded
+			// the pairwise interaction list behind these chips is — the statement issue #336 exists
+			// for, and one no consumer can re-derive from the chips themselves.
+			PairChipExtent.Sink pairExtent = new PairChipExtent.Sink();
 			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), question,
-					patient, chart.getMappings());
+					patient, chart.getMappings(), pairExtent);
 			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
 					response.getInputTokens(), response.getOutputTokens(),
-					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice);
+					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
+					pairExtent.stated());
 			outcome = "ok";
 			return answer;
 		}

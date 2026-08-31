@@ -61,6 +61,11 @@ public class OneOrderNameAcrossOneResponseTest {
 	private static final String SELF_NAMED_COMBINATION_FIXTURE =
 			"chartsearchai-test/drug-reference-combination-order-self-named.json";
 
+	/** As above, with a THIRD drug that rules on the same half, so ONE response raises two rule chips
+	 *  about ONE co-medication from two different subjects — see the fixture's note. */
+	private static final String TWO_SUBJECTS_COMBINATION_FIXTURE =
+			"chartsearchai-test/drug-reference-combination-order-two-subjects.json";
+
 	/** A verbatim shipped-KB slice in which ONE prescription is reached by the class arm from one
 	 *  subject and by the rule arm from another — see the fixture's own note. */
 	private static final String CLASS_ONLY_AND_RULE_FIXTURE =
@@ -78,6 +83,11 @@ public class OneOrderNameAcrossOneResponseTest {
 
 	/** ADR Decision 39's own live example, verbatim. */
 	private static final String COMBINATION_DISPLAY = "Isoniazid / Rifapentine";
+
+	/** A fixed-dose combination the SHIPPED knowledge base rules on from both sides, and the codes a
+	 *  dictionary maps it to: the combination's own {@code C09BA03} which that data does not cover,
+	 *  and the covered {@code C03AA03} its diuretic half is filed under. */
+	private static final String COMBINATION_ORDER_ON_SHIPPED_KB = "Lisinopril / Hydrochlorothiazide";
 
 	/** {@code OrderedSubjectRowTest}'s trap arrangement: a multi-row substance whose CHARTED
 	 *  presentation is not the row {@code canonicalRow} elects. */
@@ -310,9 +320,9 @@ public class OneOrderNameAcrossOneResponseTest {
 	}
 
 	/**
-	 * A prescription may not name a chip's partner where that same prescription names the chip's own
-	 * SUBJECT — or the finding reads as a drug interacting with itself and the interacting agent is
-	 * gone from the lead.
+	 * A prescription may not name a chip's partner where that same prescription names a SUBJECT this
+	 * response raises chips about — or the finding reads as a drug interacting with itself and the
+	 * interacting agent is gone from the lead.
 	 *
 	 * <p><b>Issue #339, review round 3.</b> Widening the ORDER rung to every rule chip made this
 	 * reachable everywhere the rung is, and ADR Decision 61 recorded it as a fixture-only trade-off.
@@ -332,8 +342,15 @@ public class OneOrderNameAcrossOneResponseTest {
 	 *
 	 * <p>It costs the ticket's own combination case nothing:
 	 * {@link #twoRulesAboutOneCombinationPrescriptionNameItOnce} has subject Carbamazepine, which the
-	 * order's display does not name, so both of its chips still take the display. Mutating the new
-	 * conjunct to always permit reddens this case alone.
+	 * order's display does not name, so both of its chips still take the display.
+	 *
+	 * <p><b>The refusal is asked of the RESPONSE and not of this chip</b>, which is review round 4 and
+	 * is why this case no longer stands alone: asked per chip it answered differently for two chips
+	 * about one co-medication, so one response named one prescription two ways — see
+	 * {@link #twoSubjectsNameOneCombinationPrescriptionTheSameWay}. Mutating
+	 * {@code CoMedications.displayNamesAnotherChipSubject} to always permit reddens exactly three cases
+	 * — those two and {@link #aScreeningQuestionRefusesACombinationDisplayThatNamesAnotherOrdersDrug},
+	 * which is the same shape reached through the screening arm — measured at this head.
 	 */
 	@Test
 	public void aPrescriptionThatNamesTheSubjectDoesNotNameThePartner() throws IOException {
@@ -585,5 +602,199 @@ public class OneOrderNameAcrossOneResponseTest {
 					+ " whose partner entry the co-medication ladder keyed no partner on may not keep"
 					+ " the knowledge base's own match token beside a chip that reconciled (issue"
 					+ " #339), was: " + DrugReferenceTestSupport.details(warnings));
+	}
+
+	/**
+	 * The ORDER rung's refusal is a property of the PRESCRIPTION and this RESPONSE, never of which
+	 * chip is being worded.
+	 *
+	 * <p><b>Issue #339, review round 4.</b> Round 3 gave that rung a second conjunct that read the
+	 * chip's own SUBJECT: a prescription whose display names the subject may not stand in for the
+	 * partner, or the chip reads {@code Isoniazid interacts with active order Isoniazid /
+	 * Rifapentine} — a drug interacting with itself. Asked per chip, it answered differently for two
+	 * chips about ONE co-medication: the subject the display happens to name fell back to
+	 * {@link DrugSafetyValidator#partnerLabel} while every other subject kept the display. One
+	 * response then named one prescription two ways, which is the whole of what issue #339 exists to
+	 * remove, and the merge base named it one way.
+	 *
+	 * <p>So the question is asked of the RESPONSE's subjects — the substances the QUESTION put in
+	 * play, plus the active-order substances where the screening arm will run — minus the partner's
+	 * own, and the answer is memoised per co-medication for the pass
+	 * ({@code CoMedications.displayNamesAnotherChipSubject}). The chip's subject is no longer an
+	 * operand of {@code reconciledPartnerName} at all, which is what makes this structural rather than
+	 * a second rule to keep in step.
+	 *
+	 * <p>Reachable on the shipped knowledge base with any fixed-dose combination whose constituents
+	 * that data rules on — measured at this head on one {@code Lisinopril / Hydrochlorothiazide} order
+	 * (codes {@code C09BA03}, uncovered, and {@code C03AA03}) asked
+	 * {@code Can I give her lisinopril and amiodarone?}, which before the fix printed
+	 * {@code active order hydrochlorothiazide} beside
+	 * {@code active order Lisinopril / Hydrochlorothiazide}. The fixture reproduces it field for
+	 * field so the case does not depend on a knowledge-base refresh.
+	 *
+	 * <p>Both chips take the TOKEN here rather than the display, which is what the merge base printed:
+	 * the display names a subject of this response, so it stands in for no partner in it. The
+	 * combination case that keeps its display is {@link #twoRulesAboutOneCombinationPrescriptionNameItOnce},
+	 * whose subject is a third drug.
+	 */
+	@Test
+	public void twoSubjectsNameOneCombinationPrescriptionTheSameWay() throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
+			DrugReferenceTestSupport.fixtureEntries(TWO_SUBJECTS_COMBINATION_FIXTURE));
+		java.util.Set<String> codes = DrugReferenceTestSupport.set("J04AC51", "J04AB05");
+		PatientClinicalContext chart = DrugReferenceTestSupport.ctx(60, null,
+			DrugReferenceTestSupport.set(COMBINATION_DISPLAY), codes, null, null,
+			java.util.Arrays.asList(DrugReferenceTestSupport.activeOrder("order-combination",
+				COMBINATION_DISPLAY, DrugReferenceTestSupport.set("isoniazid / rifapentine"), codes)));
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+				.validate("", "Can I give her isoniazid and carbamazepine?", chart);
+
+		assertEquals(2, warnings.size(),
+			"precondition: two subjects must chip about the one co-medication, or there are not two"
+					+ " names to reconcile, was: " + DrugReferenceTestSupport.details(warnings));
+		assertEquals(java.util.Arrays.asList("rifapentine", "rifapentine"), orderNames(warnings),
+			"one prescription, one name: a refusal that reads the chip's own subject names it one way"
+					+ " for the subject the display names and another for every other subject in the"
+					+ " same response (issue #339), was: "
+					+ DrugReferenceTestSupport.details(warnings));
+	}
+
+	/**
+	 * The same arrangement over the dataset the module SHIPS, so the case does not rest on a fixture
+	 * alone.
+	 *
+	 * <p>ADR Decision 61 first recorded the self-interaction shape as fixture-only, which review round
+	 * 3 corrected; this pins the correction. One {@code Lisinopril / Hydrochlorothiazide} order,
+	 * codes {@code C09BA03} (which the shipped data does not cover, so {@code soleSubstanceOf} falls
+	 * through to the covered one) and {@code C03AA03}, asked about one of its own constituents beside
+	 * a third drug. Measured at this head before the fix, the two chips read
+	 * {@code Lisinopril interacts with active order hydrochlorothiazide} and
+	 * {@code Amiodarone interacts with active order Lisinopril / Hydrochlorothiazide} — one
+	 * prescription, two names, in text {@code DrugReferenceInjector.renderFinding} copies verbatim
+	 * into the prompt as a citable {@code safety_finding}.
+	 *
+	 * <p>Asserted as agreement rather than against a literal, because which of the two names survives
+	 * is the fixture case's business ({@link #twoSubjectsNameOneCombinationPrescriptionTheSameWay})
+	 * and a knowledge-base refresh may move the row. What may not move is that the response uses one
+	 * name for one prescription.
+	 */
+	@Test
+	public void aCombinationOrderOnTheShippedKnowledgeBaseIsNamedOneWay() throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport
+				.serviceWith(DrugReferenceTestSupport.shippedEntries());
+		java.util.Set<String> codes = DrugReferenceTestSupport.set("C09BA03", "C03AA03");
+		PatientClinicalContext chart = service.withReferenceNames(DrugReferenceTestSupport.ctx(60, null,
+			DrugReferenceTestSupport.set(COMBINATION_ORDER_ON_SHIPPED_KB), codes, null, null,
+			java.util.Arrays.asList(
+				DrugReferenceTestSupport.activeOrder("order-combination",
+					COMBINATION_ORDER_ON_SHIPPED_KB,
+					DrugReferenceTestSupport.set(COMBINATION_ORDER_ON_SHIPPED_KB), codes))));
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+				.validate("", "Can I give her lisinopril and amiodarone?", chart);
+
+		assertEquals(2, warnings.size(),
+			"precondition: the shipped data must rule on this prescription from both subjects, or"
+					+ " there are not two names to reconcile, was: "
+					+ DrugReferenceTestSupport.details(warnings));
+		List<String> names = orderNames(warnings);
+		assertEquals(2, names.size(), "precondition: both chips must name the active order, was: "
+				+ DrugReferenceTestSupport.details(warnings));
+		assertEquals(names.get(0), names.get(1),
+			"one prescription, one name, on the data an operator actually runs (issue #339), was: "
+					+ DrugReferenceTestSupport.details(warnings));
+	}
+
+	/**
+	 * The SCREENING arm keeps issue #339's name for an ordinary prescription, which is what the
+	 * response-level refusal's own-substance exclusion is for.
+	 *
+	 * <p>{@code CoMedications.displayNamesAnotherChipSubject} refuses an order-supplied display that
+	 * names a substance this response raises chips about — but a prescription names the very drug it
+	 * IS, and in this arm every active-order substance is a chip subject. So the partner's own
+	 * substance is excluded from the comparison; without that exclusion this arm would refuse every
+	 * order whose display names its own drug, i.e. every order, and issue #339 would reach none of the
+	 * screening arm's chips.
+	 *
+	 * <p>Nothing else in the suite sees that exclusion: mutating it away leaves all 1656 api tests
+	 * green, measured at this head. This case exists to make it red rather than silent.
+	 *
+	 * <p>The rifapentine order is partly covered — one code the fixture does not carry, one it does —
+	 * so it reaches the ORDER rung at all; a fully covered order is named by the ENTRY rung, where no
+	 * prescription display is in play. The carbamazepine order is covered, so the pair chips from the
+	 * subject the rule is filed on.
+	 */
+	@Test
+	public void theScreeningArmStillNamesAnOrderByItsOwnDisplay() throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
+			DrugReferenceTestSupport.fixtureEntries(COMBINATION_ORDER_FIXTURE));
+		java.util.Set<String> carbamazepineCodes = DrugReferenceTestSupport.set("N03AF01");
+		java.util.Set<String> rifapentineCodes = DrugReferenceTestSupport.set("J04AC51", "J04AB05");
+		java.util.Set<String> all = new java.util.LinkedHashSet<String>(carbamazepineCodes);
+		all.addAll(rifapentineCodes);
+		PatientClinicalContext chart = DrugReferenceTestSupport.ctx(60, null,
+			DrugReferenceTestSupport.set("Carbamazepine 200mg", "Rifapentine 300mg"), all, null, null,
+			java.util.Arrays.asList(
+				DrugReferenceTestSupport.activeOrder("order-carbamazepine", "Carbamazepine 200mg",
+					DrugReferenceTestSupport.set("carbamazepine"), carbamazepineCodes),
+				DrugReferenceTestSupport.activeOrder("order-rifapentine", "Rifapentine 300mg",
+					DrugReferenceTestSupport.set("rifapentine"), rifapentineCodes)));
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+				.validate("", DrugReferenceTestSupport.SCREENING_QUESTION,
+					service.withReferenceNames(chart));
+
+		assertEquals(java.util.Arrays.asList("Rifapentine 300mg"), orderNames(warnings),
+			"the screening arm must name a prescription by its own display: the refusal that keeps a"
+					+ " combination product from standing in for one of its halves may not fire on an"
+					+ " order that names the drug it IS (issue #339), was: "
+					+ DrugReferenceTestSupport.details(warnings));
+	}
+
+	/**
+	 * The SCREENING arm's own subjects are in the refusal's set, or the arm it cannot fold in is the
+	 * one arm that goes on printing a self-interaction.
+	 *
+	 * <p>{@code chipSubjectRows} is built from the QUESTION's drugs — the set neither validate pass
+	 * can disagree about — and a screening question resolves none by that arm's own gate. So the
+	 * active-order rows are added where the screen will run, because there the SUBJECTS are the
+	 * patient's own prescriptions. Without them the set is empty for every screening question and the
+	 * refusal is vacuous: this chip then reads {@code Isoniazid interacts with active order Isoniazid
+	 * / Rifapentine}, one drug interacting with itself, which is what review round 3 closed for the
+	 * drug-in-play arm. Mutate the {@code screening ?} conjunct to the empty list and this case is the
+	 * one that reddens — measured at this head, the rest of the api suite stays green on it.
+	 *
+	 * <p>The combination order's match tokens name only its covered half, so the isoniazid subject
+	 * resolves from the standalone order alone and {@code activeOrdersOtherThan} leaves the
+	 * combination one to witness the pair. Its DISPLAY still names both halves, which is the whole
+	 * arrangement.
+	 */
+	@Test
+	public void aScreeningQuestionRefusesACombinationDisplayThatNamesAnotherOrdersDrug()
+			throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
+			DrugReferenceTestSupport.fixtureEntries(SELF_NAMED_COMBINATION_FIXTURE));
+		java.util.Set<String> isoniazidCodes = DrugReferenceTestSupport.set("J04AC01");
+		java.util.Set<String> combinationCodes = DrugReferenceTestSupport.set("J04AC51", "J04AB05");
+		java.util.Set<String> all = new java.util.LinkedHashSet<String>(isoniazidCodes);
+		all.addAll(combinationCodes);
+		PatientClinicalContext chart = DrugReferenceTestSupport.ctx(60, null,
+			DrugReferenceTestSupport.set("Isoniazid 300mg", COMBINATION_DISPLAY), all, null, null,
+			java.util.Arrays.asList(
+				DrugReferenceTestSupport.activeOrder("order-isoniazid", "Isoniazid 300mg",
+					DrugReferenceTestSupport.set("isoniazid"), isoniazidCodes),
+				DrugReferenceTestSupport.activeOrder("order-combination", COMBINATION_DISPLAY,
+					DrugReferenceTestSupport.set("rifapentine"), combinationCodes)));
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+				.validate("", DrugReferenceTestSupport.SCREENING_QUESTION,
+					service.withReferenceNames(chart));
+
+		assertEquals(java.util.Arrays.asList("rifapentine"), orderNames(warnings),
+			"a screened chip must name the drug its mechanism is about: a prescription naming another"
+					+ " order's drug as well as the partner cannot stand in for the partner, or the"
+					+ " finding reads as Isoniazid interacting with itself (issue #339), was: "
+					+ DrugReferenceTestSupport.details(warnings));
 	}
 }

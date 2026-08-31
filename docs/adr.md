@@ -3789,6 +3789,8 @@ One depth walk over the answer, no model call, no I/O — the same order as the 
 
 **A compact marker is seen only where the pipeline already repaired it.** `(H02AB [12, 13])` reaches this check unchanged when the structured citations array does not corroborate the group, and `INLINE_CITATION` is deliberately single-index, so nothing is read as a marker there. Where the array does corroborate it, `normalizeSlashCitations` has already rewritten it to `[12], [13]` upstream and both are reported. Both halves are the correct side of that rule, and neither is a decision this one makes.
 
+**An aside that states a code and carries its own marker is reported.** `She is already on two fluoroquinolones (levofloxacin and moxifloxacin, both J01MA [3])` — the marker is after the clause it attributes and only inside the aside's brackets, and rule 2 fires. It is not narrowed, because the discriminator would be prose structure rather than shape and no corpus exists to draw it against; `ClassCodeFidelityTest.anAsideStatingACodeAndCarryingItsOwnMarkerIsReported` pins the behaviour so that narrowing it later is a decision rather than a drift. A dismissible WARN on a class-scoped logger is the failure direction Decision 35 accepts.
+
 **The cross-parenthetical duplication stays undetected.** `(A01AD) (A01AD)`, one of #142's own captures, is what two clauses about two partners legitimately produce, so nothing separates it from correct prose without knowing which clause attributes which record.
 
 **#338's other two defects are not closed by this**, and the change closes none of the four as a clinician reads them — it converts two into WARN lines a maintainer can see.

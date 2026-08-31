@@ -533,6 +533,27 @@ public class ClassCodeFidelityTest {
 	}
 
 	@Test
+	public void anAsideStatingACodeAndCarryingItsOwnMarkerIsReported() {
+		// Pins a residue rather than a defect, at the shape review found it in: an aside that
+		// legitimately states a class code AND carries the marker attributing its own clause. The
+		// marker IS after the clause it attributes — it is only inside the aside's brackets — and the
+		// rule reports it, because the rule is about where a marker sits relative to a code and the
+		// discriminator here would be prose structure, which no shape test can read. Recorded so the
+		// first maintainer to triage one of these lines reads the analysis instead of re-deriving it;
+		// ADR Decision 59 carries it in "what it cannot see". If a corpus ever justifies narrowing the
+		// rule, this case is what has to change, deliberately.
+		service.setLlmProvider(answering("She is already on two fluoroquinolones (levofloxacin and "
+				+ "moxifloxacin, both " + TRUE_CODE + " [" + finding.getIndex() + "]), so "
+				+ "ciprofloxacin would be duplicate therapy."));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			service.search(patient(), QUESTION);
+			assertTrue(warnStating(capture, "inside a parenthetical", "[" + TRUE_CODE + "]"),
+					"today this is reported; the case exists so that stops being a surprise and starts "
+							+ "being a decision. Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
 	public void aMarkerInANestedAsideBelongsToTheAsideAndNotToTheCode() {
 		// REPLACES a case added earlier in this same change, which asserted the opposite. That case
 		// read a parenthetical's WHOLE text, nested groups included, and clean-context review

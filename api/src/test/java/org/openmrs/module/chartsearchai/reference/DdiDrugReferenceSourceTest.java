@@ -501,7 +501,7 @@ public class DdiDrugReferenceSourceTest {
 		// Real slice: Dolutegravir's rows in dataset order are phenytoin (Major), iron (Major, the
 		// shorter note), dexamethasone (Minor), iron (Major, the fuller note). With iron AND
 		// dexamethasone both active, iron's group is opened first, dexamethasone's group is opened
-		// next, and only THEN does iron's second row takes its group — a winner replacement
+		// next, and only THEN does iron's second row take its group — a winner replacement
 		// (bestRulePerPartner's LinkedHashMap re-put) in between the two groups being opened.
 		//
 		// Before issue #346 this was also the one thing deciding chip order: the arm raised its chips

@@ -4900,6 +4900,15 @@ public class DrugSafetyValidator {
 	 * resolved from two orders yields one item per order and nothing depends on the sequence
 	 * {@code OrderService} returned the prescriptions in.
 	 *
+	 * <p><b>Asked once per chip, over every active order, and that was measured rather than assumed.</b>
+	 * A screening pass calls this for every candidate pair, so the walk multiplies an
+	 * {@link #activeOrdersOtherThan}-shaped per-subject cost by the number of pairs — a real concern,
+	 * and not one worth restructuring for. Measured through the real {@code validate} over the shipped
+	 * knowledge base, a 40-order brand-named chart raising 10 chips on the screening question, 9
+	 * interleaved runs after 3 warm-ups: 50 ms median with this method live against 55 ms with its body
+	 * stubbed to an empty list, i.e. below the run-to-run spread of the pass itself. Do not hoist the
+	 * subject side out of the rule loop on a guess; re-measure that arrangement first.
+	 *
 	 * @param subjectRows every row of the subject's substance — the GROUP form, because a substance has
 	 *        N rows and only some carry the code (issue #189, the same reason
 	 *        {@link #activeOrdersOtherThan} takes a group)

@@ -4961,7 +4961,12 @@ public class DrugSafetyValidator {
 	/** @return whether any name {@code order} RECORDS reaches {@code rows}' substance — the name leg of
 	 *          {@link #resolvesFrom}, asked on its own so that "resolved by the ATC code alone" is
 	 *          expressible without a second matcher. Over {@code getNames()} and not the display alone,
-	 *          because a chart record of this order can carry any of them. */
+	 *          because a chart record of this order can carry any of them — the opposite read from
+	 *          {@link #namesNamingOrder}, which narrowed to the display because it LICENSES a name to be
+	 *          printed while this one only silences a clause. The residue: a caller-built order whose
+	 *          display is not among its names could be bridged under a display that already names the
+	 *          substance. {@code PatientClinicalContextBuilder} puts the display among the names, so no
+	 *          order it builds reaches that. */
 	private static boolean recordsANameOf(List<DrugReference> rows,
 			PatientClinicalContext.ActiveDrugOrder order) {
 		for (String name : order.getNames()) {

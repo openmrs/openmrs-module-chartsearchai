@@ -153,6 +153,59 @@ public class InteractionFindingChartOrderBridgeTest {
 	}
 
 	@Test
+	public void aSubstanceTwoOrdersCarryIsAttributedToBothOfThem() throws Exception {
+		// One item per ORDER, which is why the clause is a flat "; "-joined list and not a conjunction:
+		// two brands both mapped to simvastatin's code are two chart records the model must be able to
+		// find, and naming only one of them would leave the other unreachable.
+		String finding = onlyFinding(
+			chartNaming("order-a", "Zolvimix", "order-b", "Statibrand", "order-klarizom", "Klarizom"),
+			DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set("Zolvimix", "Statibrand", "Klarizom"),
+				DrugReferenceTestSupport.set("C10AA01", "J01FA09"), null, null,
+				Arrays.asList(
+					DrugReferenceTestSupport.activeOrder("order-a", "Zolvimix",
+						DrugReferenceTestSupport.set("Zolvimix"),
+						DrugReferenceTestSupport.set("C10AA01")),
+					DrugReferenceTestSupport.activeOrder("order-b", "Statibrand",
+						DrugReferenceTestSupport.set("Statibrand"),
+						DrugReferenceTestSupport.set("C10AA01")),
+					DrugReferenceTestSupport.activeOrder("order-klarizom", "Klarizom",
+						DrugReferenceTestSupport.set("Klarizom"),
+						DrugReferenceTestSupport.set("J01FA09")))),
+			SCREENING_QUESTION);
+
+		assertEquals("Simvastatin from Zolvimix; Simvastatin from Statibrand; "
+				+ "Clarithromycin from Klarizom.", bridgeOf(finding),
+			"every order the pass resolved a substance from is named, was: " + finding);
+	}
+
+	@Test
+	public void twoOrdersOfTheSameDisplayAreNamedOnce() throws Exception {
+		// Two prescriptions of one brand are two Order rows and one string a model can look up, so the
+		// clause states it once — the de-duplication is by VALUE, which is what
+		// SafetyWarning.ChartOrderBridge.equals is for.
+		String finding = onlyFinding(
+			chartNaming("order-a", "Zolvimix", "order-b", "Zolvimix", "order-klarizom", "Klarizom"),
+			DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set("Zolvimix", "Klarizom"),
+				DrugReferenceTestSupport.set("C10AA01", "J01FA09"), null, null,
+				Arrays.asList(
+					DrugReferenceTestSupport.activeOrder("order-a", "Zolvimix",
+						DrugReferenceTestSupport.set("Zolvimix"),
+						DrugReferenceTestSupport.set("C10AA01")),
+					DrugReferenceTestSupport.activeOrder("order-b", "Zolvimix",
+						DrugReferenceTestSupport.set("Zolvimix"),
+						DrugReferenceTestSupport.set("C10AA01")),
+					DrugReferenceTestSupport.activeOrder("order-klarizom", "Klarizom",
+						DrugReferenceTestSupport.set("Klarizom"),
+						DrugReferenceTestSupport.set("J01FA09")))),
+			SCREENING_QUESTION);
+
+		assertEquals("Simvastatin from Zolvimix; Clarithromycin from Klarizom.", bridgeOf(finding),
+			"one display is one item however many orders carry it, was: " + finding);
+	}
+
+	@Test
 	public void theDrugInPlayArmsPartnerIsBridgedToo() throws Exception {
 		// Not the screening arm: the question names the drug, so addInteractionWarnings raises this
 		// chip. The scope is the finding and not one arm.

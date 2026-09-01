@@ -102,8 +102,8 @@ public class SafetyWarning {
 
 	/**
 	 * A contraindication chip's warning, and the only shape that can carry
-	 * {@link #restsOnAnUncorroboratedChartMatch()} (issue #308). A FACTORY rather than a sixth
-	 * constructor argument, for the reason issue #298 states of a label and its source: the two flags
+	 * {@link #restsOnAnUncorroboratedChartMatch()} (issue #308). A FACTORY rather than a wider PUBLIC
+	 * constructor, for the reason issue #298 states of a label and its source: the two flags
 	 * describe relationships that cannot both hold — an interaction never matches a rule against the
 	 * chart's allergy list, and a contraindication carries no rating for a fold to outrun — so a
 	 * constructor taking both would offer a caller a pair that has no meaning. Naming the type here
@@ -148,10 +148,12 @@ public class SafetyWarning {
 
 	/**
 	 * An INTERACTION chip's warning, and the only shape that can carry
-	 * {@link #reconciledPartnerNoteName} (issue #297). A FACTORY rather than a seventh constructor
-	 * argument, for the reason {@link #contraindication} states of its own flag: the two facts travel
-	 * together only for an interaction chip, and a constructor offering the pair beside
-	 * {@code uncorroboratedChartMatch} would offer a caller a combination that has no meaning. They are
+	 * {@link #reconciledPartnerNoteName} (issue #297). A FACTORY rather than a wider PUBLIC
+	 * constructor, for the reason {@link #contraindication} states of its own flag: these facts travel
+	 * together only for an interaction chip, and a constructor offering them beside
+	 * {@code uncorroboratedChartMatch} would offer a caller a combination that has no meaning. No
+	 * ordinal is given for the argument it replaces — the private constructor's width moves whenever a
+	 * fact is added (it did at issue #349), and the point is which SHAPE may set what. They are
 	 * not the same fact and do not arrive together: only the drug-in-play arm can FOLD, so only its
 	 * chips carry {@code unratedRelationship}, while since issue #339 both active-order arms set a
 	 * reconciled name. Only the drug-in-play arm's is READ today — {@code DrugReferenceInjector}

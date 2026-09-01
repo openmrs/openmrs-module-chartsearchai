@@ -5083,7 +5083,7 @@ public class DrugSafetyValidator {
 
 	/** @return every row of {@code row}'s substance that {@code entries} carries, or EMPTY where it
 	 *          carries none — fail-closed, so a partner the resolved order list does not hold states
-	 *          nothing rather than being attributed off one row's codes. Both callers draw
+	 *          nothing rather than being attributed off one row's codes. Its one caller draws
 	 *          {@code row} from {@code entries}. <b>The reachable empty answer is the NULL-PARTNER one</b>,
 	 *          which the {@code @param} on {@link #chartOrderBridges} documents as normal, and it is hot:
 	 *          the folded-chip and nameless-order families reach it (measured by making that branch throw

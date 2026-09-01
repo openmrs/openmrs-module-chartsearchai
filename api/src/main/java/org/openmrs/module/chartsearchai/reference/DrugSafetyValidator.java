@@ -2444,25 +2444,40 @@ public class DrugSafetyValidator {
 		List<SafetyWarning> ruleChips = new ArrayList<SafetyWarning>();
 		for (SubjectRule rule : rules) {
 			FoldedClassSentence fold = folded.get(rule);
-			// Through the two-arg overload where nothing reconciled, rather than passing partnerLabel and
+			// Through the narrow overload where nothing reconciled, rather than passing partnerLabel and
 			// null by hand: that keeps "a chip whose partner was not reconciled names it exactly as the
 			// screening arm does" a single default in the callee instead of two call sites both
 			// remembering to pass the same thing — and that label is also the grouping key, so a drift
 			// there would silently unpick the part of #121's invariant this change leaves standing.
+			// Resolved ONCE for both branches (review, cycle 2): the two calls differed only in the
+			// printed partner name and passed six identical arguments, which is the two-sites-both-
+			// remembering shape the comment above argues against for the overload.
+			ReconciledPartner reconciled =
+					fold == null ? reconciledPartnerFor(rule, subjects, coMedications) : null;
+			// The name this chip is ABOUT to print, so the bridge is asked of that very string and not
+			// of a second answer to the same question (#349).
+			String partnerName = fold != null ? fold.partnerName
+					: reconciled != null ? reconciled.chipName : partnerLabel(rule.rule);
+			// The WHOLE order list as partner witnesses: this arm applies no activeOrdersOtherThan
+			// reduction (see its own note beside classRelationships), so an order that resolves the
+			// subject was allowed to witness the partner here and the bridge must be able to name it.
+			// Passing the screening arm's reduction would leave the partner unbridged on a combination
+			// prescription carrying both substances — issue #349's own defect, one shape along.
+			List<SafetyWarning.ChartOrderBridge> bridges = chartOrderBridges(rows, ref, rule.partner,
+				partnerName, context, context.getActiveDrugOrders(), orderEntries);
 			SafetyWarning chip;
 			if (fold == null) {
 				// No class sentence to fold, and since issue #339 that no longer decides what the order
 				// is CALLED: the same reconciliation runs here, so a partner the class arm had nothing
 				// to say about is named the way a partner it did have something to say about is. Null
-				// where the ladder reached no co-medication, and then this is the two-arg overload's
+				// where the ladder reached no co-medication, and then this is the narrow overload's
 				// answer — partnerLabel, which is also the grouping key.
-				ReconciledPartner reconciled = reconciledPartnerFor(rule, subjects, coMedications);
-				chip = reconciled == null ? interactionWarning(ref, rule.rule)
+				chip = reconciled == null ? interactionWarning(ref, rule.rule, bridges)
 						: interactionWarning(ref, rule.rule, reconciled.chipName, reconciled.noteName,
-							null);
+							null, bridges);
 			} else {
 				chip = interactionWarning(ref, rule.rule, fold.partnerName, fold.partnerNoteName,
-					fold.sentence);
+					fold.sentence, bridges);
 			}
 			// Emitted only if it says something this pass has not already said. Two rules about ONE
 			// prescription are two chips — bestRulePerPartner keys them on the partner ENTRY and keeps
@@ -3116,6 +3131,16 @@ public class DrugSafetyValidator {
 	 * booleans {@link #licensesWithholding(SafetyWarning)} and
 	 * {@code DrugReferenceInjector.renderFinding} read. So this can only drop a chip that is equal
 	 * everywhere a chip is looked at.
+	 *
+	 * <p><b>{@link SafetyWarning#chartOrderBridges()} is the ONE prompt-read value deliberately left
+	 * OUT of that key</b> (issue #349), and it was added here and reverted, so the omission is a
+	 * decision rather than an oversight: this key decides which chips are EMITTED, so it reaches
+	 * {@link PairChipExtent}'s counts — the screening arm collapses where the candidate is collected,
+	 * before the cap — and, through {@code ChartSearchAiUtils.resourceKey}, whether two injected
+	 * findings share one resource uuid. Keying on a prompt-only clause would therefore let it decide
+	 * wire CONTENT. A collapsed chip carries the SURVIVOR's bridge, which is the same residue this
+	 * javadoc already accepts one paragraph up ("what it gives up is WHICH constituent"). ADR
+	 * Decision 64 carries the reasoning; do not "restore" the term.
 	 *
 	 * <p><b>It removes a chip and nothing else.</b> Measured over 610 arrangements built from the
 	 * shipped knowledge base's own CIEL combination names, driven through the real
@@ -4767,12 +4792,13 @@ public class DrugSafetyValidator {
 	 * injected record states rather than its wording alone — see
 	 * {@link SafetyWarning#carriesUnratedRelationship()}.
 	 */
-	private static SafetyWarning interactionWarning(DrugReference ref, DrugReference.Interaction i) {
-		return interactionWarning(ref, i, partnerLabel(i), null, null);
+	private static SafetyWarning interactionWarning(DrugReference ref, DrugReference.Interaction i,
+			List<SafetyWarning.ChartOrderBridge> chartOrderBridges) {
+		return interactionWarning(ref, i, partnerLabel(i), null, null, chartOrderBridges);
 	}
 
 	/**
-	 * As {@link #interactionWarning(DrugReference, DrugReference.Interaction)}, additionally naming the
+	 * As {@link #interactionWarning(DrugReference, DrugReference.Interaction, List)}, additionally naming the
 	 * partner by {@link #reconciledPartnerName}'s answer, and — where the class arm had a finding about
 	 * that SAME active order — folding its sentence into this one chip (issue #88).
 	 *
@@ -4796,7 +4822,8 @@ public class DrugSafetyValidator {
 	 *        byte-identical to what it has always been, so no single-arm chip changes
 	 */
 	private static SafetyWarning interactionWarning(DrugReference ref, DrugReference.Interaction i,
-			String partnerName, String partnerNoteName, String alsoSameClass) {
+			String partnerName, String partnerNoteName, String alsoSameClass,
+			List<SafetyWarning.ChartOrderBridge> chartOrderBridges) {
 		// partnerName is partnerLabel(i) only where reconciledPartnerName did not answer — it is the
 		// label bestRulePerPartner GROUPS on where the dataset identifies no partner entry, and there
 		// #121's grouping is only correct while the key IS the label the chip says. Every other chip
@@ -4825,7 +4852,271 @@ public class DrugSafetyValidator {
 		// is a chip whose partner the ladder did not reach or whose displacement the gate refused,
 		// rather than a chip no class sentence folded onto.
 		return SafetyWarning.interaction(ref.displayLabel(), detail, i.getSeverity(),
-				alsoSameClass != null, partnerNoteName != null ? i : null, partnerNoteName);
+				alsoSameClass != null, partnerNoteName != null ? i : null, partnerNoteName,
+				chartOrderBridges);
+	}
+
+	/**
+	 * Which of this patient's own active orders each substance a chip NAMES was resolved from, where no
+	 * name that order records names it — issue #349, the bridge the injected {@code safety_finding}
+	 * states so that a finding about a brand-named prescription is citeable at all. Empty for every
+	 * chip whose substances the chart already spells, which is the common case.
+	 *
+	 * <p><b>Why it exists.</b> A finding names its substances in the KNOWLEDGE BASE's vocabulary, which
+	 * is right and is issue #339's settlement. Where the module reached a substance from an active order
+	 * through its WHO ATC map alone, every chart record the model can read names that order something
+	 * else, so the finding is unciteable by construction and the model resolves that by disclaiming.
+	 * {@link DrugReferenceInjector#FINDING_CHART_ORDER_LEAD} carries the measurement and the wording
+	 * argument; this method is only about WHICH orders may be named.
+	 *
+	 * <p><b>The SUBJECT against every order; the PARTNER only against the orders its own arm let
+	 * witness it, which the CALLER supplies. That division is the whole of the correctness here, and
+	 * getting it wrong reopened the ticket.</b> {@link #activeOrdersOtherThan} drops the subject's own
+	 * orders before the partner is witnessed, precisely so one prescription cannot report the two halves
+	 * of one tablet as an interacting pair — its javadoc records the measured case, one "Aspirin and
+	 * omeprazole" order reporting "Acetylsalicylic acid (aspirin) interacts with active order
+	 * esomeprazole". So {@link #addActiveOrderPairInteractions} hands {@link #ordersOtherThan}, which is
+	 * that reduction under its own predicate; naming an order it refused would put the suppressed
+	 * witness back into citable text carrying {@link DrugReferenceInjector#STRENGTH_WITHHOLD}.
+	 * {@code InteractionFindingChartOrderBridgeTest.eachSubstanceIsAttributedOnlyToTheOrderThePassResolvedItFrom}
+	 * pins that, on a combination brand carrying BOTH substances' codes.
+	 *
+	 * <p><b>But {@link #addInteractionWarnings} makes no such reduction, so it hands the whole list.</b>
+	 * Its own comment says as much — it runs "ungated, uncapped, and without that arm's
+	 * {@code activeOrdersOtherThan} reduction". The first cut of this method performed the reduction
+	 * ITSELF, for both arms, and that suppressed a witness the drug-in-play arm had not suppressed:
+	 * on ONE prescription carrying both codes, asked about the partner substance, the finding read
+	 * "Clarithromycin interacts with active order Simvastatin" and bridged Clarithromycin alone — issue
+	 * #349's own unciteable finding, inside the clause added to close it, now beside a sentence
+	 * asserting that the module HAS stated its resolutions. Found in review; mutate the call site to
+	 * {@code ordersOtherThan} and {@code .aCombinationOrderCarryingBOTHSubstancesBridgesBothSides}
+	 * reproduces it verbatim. The lesson generalises past this method: a reduction belongs to the arm
+	 * that performed it, and a shared helper that assumes one is asserting something about a caller it
+	 * cannot see.
+	 *
+	 * <p><b>The silence test is the order's RECORDED NAMES against the substance, never the string the
+	 * chip prints.</b> A printed name is USUALLY a {@link DrugReference#displayLabel()}, which is
+	 * multi-word, parenthesized or synonym-suffixed for much of this knowledge base
+	 * ({@code Acetylsalicylic acid (aspirin)}, {@code Hydrocortisone (ophthalmic)}), and
+	 * {@link DrugReference#matchesOrderName} can only answer true where the display carries the WHOLE
+	 * string — so putting the printed label to the display would bridge {@code Aspirin 81mg} as if the
+	 * chart named nothing. {@link #recordsANameOfAny} asks instead whether any name the order records
+	 * reaches the substance, through {@link #matchesDrugNameAny} over that order's names — and
+	 * {@link #resolvesFrom}'s own name leg IS {@link #recordsANameOf}, the single-row form of the same
+	 * fold, so the silence test is exactly "{@code resolvesFrom} is true and its NAME leg is not what
+	 * made it true", i.e. the ATC leg alone. That is why the residue
+	 * is issue #136's alias-spelling shape and not this one:
+	 * {@code .anOrderNamingTheSubstanceOnlyByAnAliasIsNotBridged} is the case that reddens if this ever
+	 * weakens back to a printed-name test.
+	 *
+	 * <p><b>"Usually", because the partner's printed name is {@link #partnerLabel} wherever nothing
+	 * reconciled</b> — the rule's own token, or its bare ATC code where the rule carries no token
+	 * (#121's residue). So the clause can read {@code J01FA09 from Klarizom}: a bare code in the slot
+	 * this method's own reasoning reserves for a substance name, guarded on the ORDER side (#290) and
+	 * not on this one. Left unguarded deliberately — where the chip itself names the partner by a code,
+	 * a bridge is the only thing in the prompt connecting that code to a record, and refusing it would
+	 * lose the connection entirely rather than improve it. Named here rather than left to be found.
+	 *
+	 * <p>An order the module could read no name for contributes nothing: {@code [ATC …]} is the ABSENCE
+	 * of a name (issue #290), so handing it over would put a bare code where the record had a substance
+	 * name. Asked THROUGH {@link #displayNamesADrug}, which is the one place those two conditions are
+	 * written — see its own javadoc for why CLAUDE.md's "never before merely labelling" exemption does
+	 * not reach this caller: nothing here is being labelled, and the refusal is the point. An earlier
+	 * draft of this paragraph said the opposite and wrote the pair inline, which is the third copy
+	 * issue #292 created that method to prevent.
+	 *
+	 * <p>Items are emitted in the context's own order and de-duplicated, so a substance the pass
+	 * resolved from two orders yields one item per order. <b>The SET of items does not depend on the
+	 * sequence {@code OrderService} returned the prescriptions in; their ORDER does</b> — measured, and
+	 * an earlier wording here claimed the stronger thing: reversing that list reverses the rendered
+	 * clause. That is a legibility property and not a safety one, which is why it is stated rather than
+	 * removed; the assertion pinning the whole clause as a literal therefore depends on the fixture's
+	 * own list order.
+	 *
+	 * <p><b>Asked once per chip, over every active order. The cost is real, bounded and measured — and
+	 * a CHIP COUNT does not describe an arrangement here.</b> A screening pass calls this for every
+	 * candidate pair, and {@code maxPairChips} bounds the chips and not the calls — so a chip count does
+	 * not describe an arrangement here, as the three below show at one cap. Measured through the real
+	 * {@code validate} over the shipped knowledge base, 40 brand-named orders, 9 interleaved runs after
+	 * 3 warm-ups, three shapes drawn from that KB's own substances sorted by interaction count: 614
+	 * calls (busiest 40) 96 ms live against 83 ms with this method's body stubbed to an empty list; 118
+	 * calls (median 40) 42 ms against 41 ms; 0 calls (quietest 40) 14 ms against 14 ms. At 80 busiest
+	 * orders, 2405 calls, 355 ms against 272 ms. A request pays the pass TWICE (pre-answer and
+	 * post-answer), so the maximising arrangement is ~+26 ms per request against a request whose
+	 * latency is an LLM call. Measured 2026-09-01 with a bespoke instrumented harness and a
+	 * stubbed-body A/B; NO committed fixture pins any of these, so re-measure rather than re-quote.
+	 *
+	 * <p><b>And HALF of that second payment is dead work, which is the honest denominator.</b>
+	 * {@link SafetyWarning#chartOrderBridges()}'s only production reader is
+	 * {@code DrugReferenceInjector.chartOrderClause}, reached only from {@code preAnswerFindings} — the
+	 * wire serializer writes four keys and does not include it, and the collapse key deliberately does
+	 * not read it. So the post-answer {@code validate} resolves every bridge and discards it. Gating it
+	 * would mean threading a discriminator through {@code validate}, a trade nobody has measured, and it
+	 * is not proposed here; what matters is that the ~13 ms per pass is stated against a reader that
+	 * exists once, not twice. <b>The per-subject hoist was implemented and
+	 * declined</b>, not guessed at: order-preserving, output-identical over the whole suite, and worth
+	 * 2 ms at 40 orders and 27 ms at 80. Do not re-derive it; ADR Decision 64 carries the numbers.
+	 *
+	 * @param subjectRows every row of the subject's substance — the GROUP form, because a substance has
+	 *        N rows and only some carry the code (issue #189, the same reason
+	 *        {@link #activeOrdersOtherThan} takes a group)
+	 * @param subjectRow the row whose {@link DrugReference#displayLabel()} the chip is about to print;
+	 *        taken rather than its name, so this and {@code interactionWarning}'s own detail cannot
+	 *        print two different subject names
+	 * @param partnerRow the partner entry the arm already resolved, or null where the dataset carries
+	 *        none for that order — then the partner side contributes nothing, which is fail-closed
+	 * @param partnerName the name the chip is about to call the partner
+	 * @param orderEntries {@code findForActiveOrders}' own answer, handed down rather than re-resolved
+	 *        (issue #151), and the only source the partner's row group is drawn from
+	 */
+	private static List<SafetyWarning.ChartOrderBridge> chartOrderBridges(
+			List<DrugReference> subjectRows, DrugReference subjectRow, DrugReference partnerRow,
+			String partnerName, PatientClinicalContext context,
+			List<PatientClinicalContext.ActiveDrugOrder> partnerWitnesses,
+			List<DrugReference> orderEntries) {
+		// The null half of this guard is unreachable and defensive only — both arms have already
+		// dereferenced or early-returned on a null context. Said so that the guard does not look
+		// better defended than it is, as addChartOrderBridge's own javadoc does for its blank-name
+		// refusal.
+		if (context == null || context.getActiveDrugOrders().isEmpty()) {
+			return Collections.emptyList();
+		}
+		List<SafetyWarning.ChartOrderBridge> out = new ArrayList<SafetyWarning.ChartOrderBridge>();
+		String subjectName = subjectRow != null ? subjectRow.displayLabel() : null;
+		// The subject against every order, because a subject is whatever the chart says it is; the
+		// partner only against the orders its own arm allowed to witness it. Two walks and not one
+		// branch: an order can be BOTH, and on the arm that made no reduction it must be able to say so.
+		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+			addChartOrderBridge(out, subjectRows, subjectName, order);
+		}
+		List<DrugReference> partnerRows = rowsOfSubstance(orderEntries, partnerRow);
+		for (PatientClinicalContext.ActiveDrugOrder order : partnerWitnesses) {
+			addChartOrderBridge(out, partnerRows, partnerName, order);
+		}
+		return out;
+	}
+
+	/**
+	 * @return the active orders that may witness an interaction PARTNER of the substance
+	 *         {@code subjectRows} are the rows of — every order none of those rows
+	 *         {@link #resolvesFrom}, which is exactly the set {@link #activeOrdersOtherThan} keeps.
+	 *
+	 *         <p>For {@link #chartOrderBridges}, and it shares that reduction's own predicate rather
+	 *         than approximating it, so the orders a bridge may name and the orders the arm let witness
+	 *         the pair cannot come apart. An arm that made NO such reduction —
+	 *         {@link #addInteractionWarnings}, whose own comment records that it runs "ungated,
+	 *         uncapped, and without that arm's {@code activeOrdersOtherThan} reduction" — must hand the
+	 *         whole order list instead, and passing this there would suppress a witness that arm did
+	 *         not suppress.
+	 */
+	private static List<PatientClinicalContext.ActiveDrugOrder> ordersOtherThan(
+			List<DrugReference> subjectRows, PatientClinicalContext context) {
+		List<PatientClinicalContext.ActiveDrugOrder> out =
+				new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
+		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+			if (!resolvesFromAny(subjectRows, order)) {
+				out.add(order);
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * Adds the one bridge {@code order} states about {@code rows}' substance, or nothing.
+	 *
+	 * <p>Every refusal here is a claim this record must not make — no name to print, no row to be
+	 * about, an order the module could read no name for or no display from, an order that did not
+	 * resolve this substance at all, and an order whose own recorded names already reach it, where a
+	 * clause would be noise in a record whose whole budget is evidence. No count is given: mutate a
+	 * conjunct and read the failures — but note that the blank-name refusal yields NOTHING, being
+	 * defensive against the {@code trim()} below on a null {@code subjectName}, and is unreached by any
+	 * arrangement here. Said rather than left to be found, so this list does not look better defended
+	 * than it is. See {@link #chartOrderBridges} for why each of the others is the test it is.
+	 */
+	private static void addChartOrderBridge(List<SafetyWarning.ChartOrderBridge> out,
+			List<DrugReference> rows, String printedName,
+			PatientClinicalContext.ActiveDrugOrder order) {
+		if (ChartSearchAiUtils.isBlank(printedName) || !displayNamesADrug(order)
+				|| !resolvesFromAny(rows, order) || recordsANameOfAny(rows, order)) {
+			return;
+		}
+		SafetyWarning.ChartOrderBridge bridge = new SafetyWarning.ChartOrderBridge(printedName.trim(),
+				order.getDisplay().trim());
+		// De-duplicated by VALUE, so two rows of one substance resolving from one order state it once.
+		if (!out.contains(bridge)) {
+			out.add(bridge);
+		}
+	}
+
+	/** @return whether any name {@code order} RECORDS reaches {@code ref} — {@link DrugReference#matchesDrugName}
+	 *          over the order's own names, and the name leg of
+	 *          {@link #resolvesFrom}, asked on its own so that "resolved by the ATC code alone" is
+	 *          expressible without a second matcher. Over {@code getNames()} and not the display alone,
+	 *          because a chart record of this order can carry any of them — the opposite read from
+	 *          {@link #namesNamingOrder}, which narrowed to the display because it LICENSES a name to be
+	 *          printed while this one only silences a clause. The residue: a caller-built order whose
+	 *          display is not among its names could be bridged under a display that already names the
+	 *          substance. {@code PatientClinicalContextBuilder} puts the display among the names, so no
+	 *          order it builds reaches that. */
+	private static boolean recordsANameOf(DrugReference ref,
+			PatientClinicalContext.ActiveDrugOrder order) {
+		for (String name : order.getNames()) {
+			if (ref.matchesDrugName(name)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** @return the group form of {@link #recordsANameOf}, since a substance has N rows and a recorded
+	 *          name may reach any of them (#189's shape). Through the EXISTING group-form matcher
+	 *          {@link #matchesDrugNameAny} rather than folding over the rows itself: the two are the
+	 *          same existential over one product, so this is output-identical, and a second fold would
+	 *          mean the arm's own order attribution and the bridge's silence test could be tightened
+	 *          apart — which is the direction that starts printing a bridge for an order whose recorded
+	 *          name DOES name the substance, in text carrying
+	 *          {@link DrugReferenceInjector#STRENGTH_WITHHOLD}. */
+	private static boolean recordsANameOfAny(List<DrugReference> rows,
+			PatientClinicalContext.ActiveDrugOrder order) {
+		for (String name : order.getNames()) {
+			if (matchesDrugNameAny(rows, name)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** @return every row of {@code row}'s substance that {@code entries} carries, or EMPTY where it
+	 *          carries none — fail-closed, so a partner the resolved order list does not hold states
+	 *          nothing rather than being attributed off one row's codes. Its one caller draws
+	 *          {@code row} from {@code entries}. <b>The reachable empty answer is the NULL-PARTNER one</b>,
+	 *          which the {@code @param} on {@link #chartOrderBridges} documents as normal, and it is hot:
+	 *          the folded-chip and nameless-order families reach it (measured by making that branch throw
+	 *          — {@code FoldedChipOnePartnerNameTest}, {@code NonCodedDrugOrderNameTest},
+	 *          {@code ClassChipPartnerLabelTest}, {@code OneNameAcrossChipAndInjectedRecordTest}).
+	 *          An earlier draft here said returning empty unconditionally left the build green; it does
+	 *          not, and no count is given in its place — mutate the return and read the failures.
+	 *
+	 *          <p>Not expressed through {@link #substanceRows}, which answers the same question and is
+	 *          the map-building convention {@code groupFor} exists to keep in one place. It builds a map
+	 *          over the WHOLE entry list, and this is called once per chip, which is the term the cost
+	 *          measurement on {@link #chartOrderBridges} identifies as the remaining one. What keeps the
+	 *          three sites in step instead is that all three key on
+	 *          {@link DrugReference#substanceGroupKey()} — the shared identity accessor — so a change to
+	 *          what makes rows one substance moves them together. A change to the map CONVENTION does
+	 *          not reach here, which is the residue. */
+	private static List<DrugReference> rowsOfSubstance(List<DrugReference> entries, DrugReference row) {
+		if (row == null || entries == null) {
+			return Collections.emptyList();
+		}
+		Object key = row.substanceGroupKey();
+		List<DrugReference> out = new ArrayList<DrugReference>();
+		for (DrugReference entry : entries) {
+			if (key.equals(entry.substanceGroupKey())) {
+				out.add(entry);
+			}
+		}
+		return out;
 	}
 
 	/**
@@ -4948,6 +5239,12 @@ public class DrugSafetyValidator {
 			// group as subject, an order any of its rows resolves from is the subject's own order, so a
 			// sibling row may not witness the subject's pair either (see activeOrdersOtherThan).
 			PatientClinicalContext others = activeOrdersOtherThan(substance, orderDrugs, context);
+			// The same reduction as a list of ORDERS, for the bridge (#349). Resolved here beside the
+			// context it mirrors and not at the chip site below, because it is invariant per subject
+			// SUBSTANCE while that site runs once per pair — and this walk calls resolvesFromAny for
+			// every order, which is the term chartOrderBridges' own cost measurement identifies.
+			List<PatientClinicalContext.ActiveDrugOrder> partnerWitnesses =
+					ordersOtherThan(substance, context);
 			// bestRulePerPartner applies the severity floor and the hasActiveDrug join and returns at
 			// most ONE rule per partner label, most severe first (#121) — the same grouping, the same
 			// predicate and now the same subject unit the drug-in-play arm gets, asked of the OTHER
@@ -5036,8 +5333,18 @@ public class DrugSafetyValidator {
 				// display where nothing reconciled is what it has always done.
 				String loggedPartner = reconciled != null ? reconciled.chipName
 						: partnerSubject != null ? partnerSubject.displayLabel() : partnerLabel(i);
-				SafetyWarning chip = reconciled == null ? interactionWarning(subject, i)
-						: interactionWarning(subject, i, reconciled.chipName, reconciled.noteName, null);
+				// Asked of the name the chip is about to print, and of the orders THIS pass used: the
+				// subject's own orders name the subject, and only the orders activeOrdersOtherThan kept
+				// may name the partner (#349 — see chartOrderBridges).
+				String chipPartnerName = reconciled != null ? reconciled.chipName : partnerLabel(i);
+				// Only the orders THIS arm let witness the partner — the same reduction
+				// activeOrdersOtherThan applied to `others` above, through its own predicate, so the
+				// bridge cannot name an order this arm refused as a self-witness.
+				List<SafetyWarning.ChartOrderBridge> bridges = chartOrderBridges(substance, subject,
+					partner, chipPartnerName, context, partnerWitnesses, orderDrugs);
+				SafetyWarning chip = reconciled == null ? interactionWarning(subject, i, bridges)
+						: interactionWarning(subject, i, reconciled.chipName, reconciled.noteName, null,
+							bridges);
 				// Before the candidate is collected rather than after the cap, so the extent this arm
 				// states counts what a clinician can tell apart: a restatement is not a pair that was
 				// found and withheld, it is a pair already shown. Same ledger as the drug-in-play arm —
@@ -5300,6 +5607,15 @@ public class DrugSafetyValidator {
 	 *         <p>So the code leg CAN count a different substance's order as the subject's own, and is
 	 *         kept anyway, because its residue runs the same safe direction as the name leg's below:
 	 *         an over-wide answer withholds a partner, which misses a pair and can never invent one.
+	 *         <b>That last clause stopped being the whole story at issue #349</b>, which asks this
+	 *         predicate a second question — which SIDE a bridge item is attributed to — whose answer is
+	 *         PRINTED into a citable record. There an over-wide code leg states
+	 *         "&lt;subject&gt; from &lt;a different substance's prescription&gt;". The two legs split:
+	 *         the NAME leg's residue is closed by construction, because
+	 *         {@link #recordsANameOf} is that leg, so wherever it is over-wide the bridge's own
+	 *         silence test fires on the same evidence; the CODE leg's is not. No shipped-KB instance is
+	 *         constructed for it (it needs two substances under one level-5 code AND no name match), and
+	 *         it is named here rather than left to be found.
 	 *         That reasoning is this predicate's alone and does not transfer.
 	 *         {@link #classRelationships}'s restating-existing-therapy skip keeps its own exact-code
 	 *         test beside a substance-identity one for the opposite reason — there the code is all a
@@ -5332,7 +5648,10 @@ public class DrugSafetyValidator {
 	}
 
 	/** @return true when ANY row of the subject's substance matches the recorded order name — the group
-	 *          form of {@link DrugReference#matchesDrugName}, for the flattened fallback below. */
+	 *          form of {@link DrugReference#matchesDrugName}, for the flattened fallback below and,
+	 *          since issue #349, for {@link #recordsANameOfAny}. Both readings of one primitive on
+	 *          purpose: a tightening here must move the bridge's silence test with the arm's own
+	 *          attribution, which is why the bridge does not fold over the rows itself. */
 	private static boolean matchesDrugNameAny(List<DrugReference> subjectRows, String name) {
 		for (DrugReference row : subjectRows) {
 			if (row.matchesDrugName(name)) {
@@ -5343,10 +5662,12 @@ public class DrugSafetyValidator {
 	}
 
 	private static boolean resolvesFrom(DrugReference ref, PatientClinicalContext.ActiveDrugOrder order) {
-		for (String name : order.getNames()) {
-			if (ref.matchesDrugName(name)) {
-				return true;
-			}
+		// The name leg is {@link #recordsANameOf}, shared rather than spelled again: since issue #349
+		// the bridge's silence test is "this predicate is true and its NAME leg is not what made it
+		// true", and two copies of the leg would let that stop being so — silently, and in the
+		// direction that reopens #349 for the order concerned.
+		if (recordsANameOf(ref, order)) {
+			return true;
 		}
 		// Emptiness first: most orders carry no ATC map at all, and this way their subject check costs no
 		// allocation (normalizedAtcCodes builds a set per call).
@@ -7342,9 +7663,18 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * @return whether {@code order}'s display is a drug NAME — the one question both
+	 * @return whether {@code order}'s display is a drug NAME — the one question the
 	 *         {@link OrderPartner} write sites ask before letting a display stand as a partner's name,
 	 *         written once so they cannot drift (issue #292).
+	 *
+	 *         <p><b>Since issue #349 there is a third caller, and it asks for a third reason:</b>
+	 *         {@link #addChartOrderBridge}, deciding whether a display is worth PRINTING beside a
+	 *         substance name that stays. {@code CLAUDE.md}'s rule — ask before letting a display
+	 *         DISPLACE a name another source supplied, never before merely labelling something that has
+	 *         no other name — is not violated by it: that rule exists because requiring this test before
+	 *         LABELLING would refuse a code-only order its own label, which is the ladder's last rung.
+	 *         Here the refusal is the point, because {@code [ATC …]} bridges nothing. It calls this
+	 *         rather than writing the two conditions inline, which is what the sentence above is for.
 	 *
 	 *         <p>Two conditions, neither sufficient alone.
 	 *         {@link PatientClinicalContext.ActiveDrugOrder#hasKnownName()} separates a display the order

@@ -1199,6 +1199,69 @@ public class DrugReferenceInjector {
 					+ "not corroborate it as a record of this drug.";
 
 	/**
+	 * How a finding's substances reach THIS patient's chart, stated in the finding itself where the
+	 * orders they were resolved from record no name of them (issue #349) — the lead of a clause whose
+	 * items follow it, {@code "; "}-joined, each reading {@code "<Substance> from <order display>"}.
+	 *
+	 * <p><b>What it is for.</b> A finding names its substances in the KNOWLEDGE BASE's vocabulary,
+	 * which is right and is #339's settlement. Where the module reached those substances from an active
+	 * order through its WHO ATC map alone, every chart record the model can read names that order
+	 * something else — a local brand — so the finding is unciteable by construction: nothing in the
+	 * prompt connects it to any record of this patient, and the model resolves that by disclaiming.
+	 * Measured on the 3.7.1 standalone (issue #349, three runs, identical): a Major
+	 * {@code Simvastatin x Clarithromycin} chip off orders named {@code Zolvimix} and {@code Klarizom}
+	 * beside an answer reading "The records do not address interactions between the patient's current
+	 * medications." Nothing else in that prompt could have supplied the connection — a screening
+	 * question names no drug, so {@link #matchingEntries} scopes in no {@code drug_reference} record,
+	 * and the chart already substantiated both orders, so {@link #unrepresentedActiveOrders} injected
+	 * none either.
+	 *
+	 * <p><b>Why the wording is a RESOLUTION and not an identity.</b> "Clarithromycin from Zolvimix"
+	 * says this module read that substance off that order, which is true of a combination brand
+	 * carrying several substances' codes. It deliberately does not say the prescription IS the
+	 * substance, nor that the substance's class classifies the prescription — the false claim #339's
+	 * reverted rounds 5-6 made by naming a constituent, in this very text, which {@link #renderFinding}
+	 * copies verbatim into a citable record carrying {@link #STRENGTH_WITHHOLD}. So the clause is
+	 * additive beside the printed name rather than a second answer to which name to print, and nothing
+	 * in {@code DrugSafetyValidator}'s naming ladder is consulted or re-decided.
+	 *
+	 * <p><b>The lead ENDS a sentence and the items are their own</b>, which is a fidelity decision
+	 * rather than a style one. {@code ReferenceProseFidelityCheck} treats a record sentence reproduced
+	 * WHOLE as faithful however the answer goes on, and covers the seam and not a clause's interior; the
+	 * lead alone clears that check's {@code MIN_REPRODUCED_WORDS} floor, so joined to the items by a
+	 * colon it would put its own invariant boilerplate inside a sentence whose interior carries order
+	 * displays the live model is on record paraphrasing and misspelling. Ending it restores the exit for
+	 * the half that never varies. The items' own interior is still uncovered, and that is inherent to
+	 * carrying variable content rather than something a wording fixes.
+	 *
+	 * <p><b>Flat, {@code "; "}-joined and number-agnostic.</b> One item and three items read alike, so
+	 * no branch decides between "order" and "orders" — and a substance the pass resolved from two
+	 * orders gets one item per order rather than a conjunction the prose would have to inflect. The
+	 * legibility cost is real and is the same trade #339 settled: on a combination brand two items can
+	 * name one prescription twice, which is a reading rather than a false claim.
+	 *
+	 * <p>Package-private, like the three section leads and unlike {@link #STRENGTH_WITHHOLD}: that
+	 * constant is public because {@code LlmProvider.DEFAULT_SYSTEM_PROMPT} carries it verbatim, and
+	 * this clause has no such consumer. It teaches the prompt no new call — it is evidence inside a
+	 * record the prompt already instructs the model to carry whole, exactly as
+	 * {@link #FINDING_UNCORROBORATED_MATCH} is.
+	 *
+	 * <p><b>Prompt-facing ONLY, and that is why {@code DrugSafetyValidator.StatedInteractionChips}
+	 * does NOT key on it.</b> Adding it to that key was tried and reverted in review: the key decides
+	 * which chips are emitted, so it reaches {@code PairChipExtent}'s counts and, through
+	 * {@code ChartSearchAiUtils.resourceKey}, whether two injected findings share one resource uuid —
+	 * which would make this clause decide wire CONTENT while every claim about it says it does not.
+	 * A collapsed chip therefore carries the survivor's bridge, which is the same residue ADR
+	 * Decision 63 already accepts for that collapse ("what it gives up is WHICH constituent").
+	 * The chip's detail, its rank and the {@code safetyWarnings} wire shape are
+	 * untouched, which is issue #283's own scoping;
+	 * {@code InteractionFindingChartOrderBridgeTest.theChipDetailIsTheWordsItAlwaysWas} pins it, and
+	 * {@code .theClauseIsTheWordsAModelReads} pins these words.
+	 */
+	static final String FINDING_CHART_ORDER_LEAD =
+			" This module resolved the substances named here from this patient's own active orders. ";
+
+	/**
 	 * One deterministic finding as a chart line. The detail text is reused verbatim — it is the same
 	 * string the chip carries, so the prose and the chip cannot describe the same finding differently —
 	 * and the finding then states what it licenses, so the answer's opening
@@ -1225,13 +1288,20 @@ public class DrugReferenceInjector {
 	 * second CALL — the strength clause is unchanged, so everything the paragraph above says about the
 	 * answer's opening call still holds.
 	 *
-	 * <p>The full-stop guard asks about BOTH clauses, and its provenance half cannot fire today: only a
+	 * <p>Since issue #349 an INTERACTION finding whose substances the chart records only under other
+	 * names also states which of this patient's active orders each was resolved from, ahead of both
+	 * clauses above — see {@link #FINDING_CHART_ORDER_LEAD} for why the finding is otherwise unciteable,
+	 * and {@code DrugSafetyValidator.chartOrderBridges} for which orders may be named. It adds words and
+	 * moves no call: the strength clause is unchanged and the chip's own detail is untouched.
+	 *
+	 * <p>The full-stop guard asks about ALL THREE clauses, and TWO of its three halves cannot fire today. Only a
 	 * contraindication can carry provenance and {@link #strengthClause} answers one unconditionally for
-	 * that type, so a provenance clause never arrives without a strength beside it. Said rather than
-	 * left to be rediscovered — mutating the guard to {@code strength.isEmpty()} alone leaves the whole
-	 * api suite green. It is kept because the two clauses are independent by construction, and a type
-	 * carrying one without the other is the shape {@link #strengthClause} already warns a future caller
-	 * it must write for.
+	 * that type, so a provenance clause never arrives without a strength beside it; and only an
+	 * interaction can carry a BRIDGE, for which that method answers one unconditionally too. Said
+	 * rather than left to be rediscovered — mutating the guard to {@code strength.isEmpty()} alone
+	 * leaves the whole api suite green, and so does dropping the bridge term. All three are kept because
+	 * the clauses are independent by construction, and a type carrying one without a strength is the
+	 * shape {@link #strengthClause} already warns a future caller it must write for.
 	 */
 	static String renderFinding(SafetyWarning finding) {
 		String strength = strengthClause(finding);
@@ -1242,9 +1312,48 @@ public class DrugReferenceInjector {
 		String provenance = finding.restsOnAnUncorroboratedChartMatch()
 				? FINDING_UNCORROBORATED_MATCH
 				: "";
-		String detail = strength.isEmpty() && provenance.isEmpty() ? finding.getDetail()
+		// Ahead of provenance, and for a reason rather than by chance: this clause says what the names
+		// INSIDE the detail stand for in this chart, so it reads as a gloss on the sentence it follows,
+		// while provenance qualifies how a rule reached the chart at all. The two cannot co-occur today
+		// (only a contraindication carries provenance and only an interaction carries a bridge), so
+		// nothing behavioural pins the order — measured: swapping these two leaves the whole build
+		// green, while moving either AFTER the strength clause reddens
+		// InteractionFindingChartOrderBridgeTest.theStrengthClauseStaysSentenceFinal and cases in
+		// UncorroboratedFindingProvenanceTest. It survives on this comment.
+		String chartOrders = chartOrderClause(finding);
+		String detail = strength.isEmpty() && provenance.isEmpty() && chartOrders.isEmpty()
+				? finding.getDetail()
 				: DrugSafetyValidator.endSentence(finding.getDetail());
-		return FINDING_PREFIX + finding.getDrug() + ": " + detail + provenance + strength;
+		return FINDING_PREFIX + finding.getDrug() + ": " + detail + chartOrders + provenance + strength;
+	}
+
+	/**
+	 * The bridge clause of one finding, or the empty string — {@link #FINDING_CHART_ORDER_LEAD}
+	 * followed by one {@code "<Substance> from <order display>"} item per attribution, {@code "; "}
+	 * -joined and closed with a full stop (issue #349).
+	 *
+	 * <p>Rendered here and decided in {@code DrugSafetyValidator.chartOrderBridges}, which is where
+	 * both the scoping argument and the silence test live. This method adds no rule of its own: an
+	 * empty list renders nothing, and every list it is handed is one the validator already decided may
+	 * be printed. That division is the same one {@link #FINDING_UNCORROBORATED_MATCH} has — the words
+	 * are the injector's, the answer is the validator's — and it is what stops a second copy of the
+	 * conditions appearing on the render side.
+	 *
+	 * <p>The items carry {@link SafetyWarning.ChartOrderBridge#toString()}'s own spelling rather than a
+	 * second format string, so the pair a debug dump prints and the pair a model reads cannot differ.
+	 */
+	private static String chartOrderClause(SafetyWarning finding) {
+		List<SafetyWarning.ChartOrderBridge> bridges = finding.chartOrderBridges();
+		if (bridges.isEmpty()) {
+			return "";
+		}
+		List<String> items = new ArrayList<String>(bridges.size());
+		for (SafetyWarning.ChartOrderBridge bridge : bridges) {
+			items.add(bridge.toString());
+		}
+		StringBuilder clause = new StringBuilder();
+		appendSection(clause, FINDING_CHART_ORDER_LEAD, items);
+		return clause.toString();
 	}
 
 	/**

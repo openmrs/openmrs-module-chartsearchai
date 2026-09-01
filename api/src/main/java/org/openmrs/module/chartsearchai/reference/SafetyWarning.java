@@ -9,6 +9,10 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 /**
  * A non-blocking advisory raised by {@link DrugSafetyValidator} after the LLM
  * answers. A warning <em>annotates</em> the answer — it never rewrites or
@@ -82,6 +86,9 @@ public class SafetyWarning {
 
 	private final String reconciledNoteName;
 
+	/** @see #chartOrderBridges() */
+	private final List<ChartOrderBridge> chartOrderBridges;
+
 	/** A warning raised from something the reference data assigns no severity to — see
 	 *  {@link #getSeverity()} for which joins those are. */
 	public SafetyWarning(String type, String drug, String detail) {
@@ -89,13 +96,14 @@ public class SafetyWarning {
 	}
 
 	public SafetyWarning(String type, String drug, String detail, String severity) {
-		this(type, drug, detail, severity, false, false, null, null);
+		this(type, drug, detail, severity, false, false, null, null,
+				Collections.<ChartOrderBridge> emptyList());
 	}
 
 	/**
 	 * A contraindication chip's warning, and the only shape that can carry
-	 * {@link #restsOnAnUncorroboratedChartMatch()} (issue #308). A FACTORY rather than a sixth
-	 * constructor argument, for the reason issue #298 states of a label and its source: the two flags
+	 * {@link #restsOnAnUncorroboratedChartMatch()} (issue #308). A FACTORY rather than a wider PUBLIC
+	 * constructor, for the reason issue #298 states of a label and its source: the two flags
 	 * describe relationships that cannot both hold — an interaction never matches a rule against the
 	 * chart's allergy list, and a contraindication carries no rating for a fold to outrun — so a
 	 * constructor taking both would offer a caller a pair that has no meaning. Naming the type here
@@ -113,12 +121,13 @@ public class SafetyWarning {
 	static SafetyWarning contraindication(String drug, String detail,
 			boolean uncorroboratedChartMatch) {
 		return new SafetyWarning(TYPE_CONTRAINDICATION, drug, detail, null, false,
-				uncorroboratedChartMatch, null, null);
+				uncorroboratedChartMatch, null, null, Collections.<ChartOrderBridge> emptyList());
 	}
 
 	private SafetyWarning(String type, String drug, String detail, String severity,
 			boolean unratedRelationship, boolean uncorroboratedChartMatch,
-			DrugReference.Interaction reconciledRule, String reconciledNoteName) {
+			DrugReference.Interaction reconciledRule, String reconciledNoteName,
+			List<ChartOrderBridge> chartOrderBridges) {
 		this.type = type;
 		this.drug = drug;
 		this.detail = detail;
@@ -127,14 +136,23 @@ public class SafetyWarning {
 		this.uncorroboratedChartMatch = uncorroboratedChartMatch;
 		this.reconciledRule = reconciledRule;
 		this.reconciledNoteName = reconciledNoteName;
+		// Copied and wrapped rather than stored as handed: this list travels to
+		// DrugReferenceInjector.renderFinding, so a caller that went on filling its own builder would
+		// change what a record already published. Never null, so no reader branches on absence —
+		// an empty list is the honest answer for every chip whose substances the chart already names.
+		this.chartOrderBridges = chartOrderBridges == null || chartOrderBridges.isEmpty()
+				? Collections.<ChartOrderBridge> emptyList()
+				: Collections.unmodifiableList(new ArrayList<ChartOrderBridge>(chartOrderBridges));
 	}
 
 	/**
 	 * An INTERACTION chip's warning, and the only shape that can carry
-	 * {@link #reconciledPartnerNoteName} (issue #297). A FACTORY rather than a seventh constructor
-	 * argument, for the reason {@link #contraindication} states of its own flag: the two facts travel
-	 * together only for an interaction chip, and a constructor offering the pair beside
-	 * {@code uncorroboratedChartMatch} would offer a caller a combination that has no meaning. They are
+	 * {@link #reconciledPartnerNoteName} (issue #297). A FACTORY rather than a wider PUBLIC
+	 * constructor, for the reason {@link #contraindication} states of its own flag: these facts travel
+	 * together only for an interaction chip, and a constructor offering them beside
+	 * {@code uncorroboratedChartMatch} would offer a caller a combination that has no meaning. No
+	 * ordinal is given for the argument it replaces — the private constructor's width moves whenever a
+	 * fact is added (it did at issue #349), and the point is which SHAPE may set what. They are
 	 * not the same fact and do not arrive together: only the drug-in-play arm can FOLD, so only its
 	 * chips carry {@code unratedRelationship}, while since issue #339 both active-order arms set a
 	 * reconciled name. Only the drug-in-play arm's is READ today — {@code DrugReferenceInjector}
@@ -164,12 +182,16 @@ public class SafetyWarning {
 	 * @param reconciledNoteName see {@link #reconciledPartnerNoteName} — null when the reconciliation
 	 *        refused or reached no co-medication, so that a refusal and an absent answer are one answer
 	 *        here, as they are for the chip
+	 * @param chartOrderBridges see {@link #chartOrderBridges()} — empty where the chart already names
+	 *        every substance this chip names, which is the common case and not a degraded one
 	 */
+	// Three facts travel here, not two: the paragraphs above are worded for the pair issue #297 added
+	// and issue #349 put a third beside them. Read the @param list rather than any count in the prose.
 	static SafetyWarning interaction(String drug, String detail, String severity,
 			boolean unratedRelationship, DrugReference.Interaction reconciledRule,
-			String reconciledNoteName) {
+			String reconciledNoteName, List<ChartOrderBridge> chartOrderBridges) {
 		return new SafetyWarning(TYPE_INTERACTION, drug, detail, severity, unratedRelationship, false,
-				reconciledRule, reconciledNoteName);
+				reconciledRule, reconciledNoteName, chartOrderBridges);
 	}
 
 	/** One of {@link #TYPE_OVERDOSE}, {@link #TYPE_INTERACTION}, {@link #TYPE_CONTRAINDICATION}. */
@@ -331,7 +353,7 @@ public class SafetyWarning {
 	 *
 	 * <p><b>It is scoped to the arm that can fold, and only one of the three can.</b>
 	 * {@code DrugSafetyValidator.classRelationships} runs per IN-PLAY substance, so the interaction
-	 * SCREEN (issue #113), which answers a question naming no drug, builds through the two-argument
+	 * SCREEN (issue #113), which answers a question naming no drug, builds through the narrow
 	 * {@code interactionWarning} and never sets this flag. One Minor-rated pair therefore states
 	 * withholding from the drug-in-play arm and a caution from the screen, on the same two active
 	 * orders: measured through the real {@code injectRecords} over
@@ -472,6 +494,106 @@ public class SafetyWarning {
 	 */
 	String reconciledPartnerNoteName(DrugReference.Interaction rule) {
 		return rule != null && rule == reconciledRule ? reconciledNoteName : null;
+	}
+
+	/**
+	 * Which of this patient's own active orders each substance this chip NAMES was resolved from, where
+	 * no name that order records names it — the bridge {@code DrugReferenceInjector.renderFinding}
+	 * states in the injected {@code safety_finding} (issue #349). Empty, never null, for every chip
+	 * whose substances the chart already spells, for every chip that is not an interaction, and for every
+	 * interaction chip built from a public constructor here rather than through
+	 * {@code DrugSafetyValidator.interactionWarning} — the class-only and question-pair chips, whose
+	 * residue ADR Decision 64 records.
+	 *
+	 * <p><b>Why it travels here.</b> The finding's text is rendered from the chip, and the answer
+	 * decides which of {@code DrugSafetyValidator}'s arms resolved each side; the injector holds
+	 * neither. Deriving it there would mean a second walk over the same orders reaching the same
+	 * answer, which is the two-resolutions-that-agree shape issue #151 forbids — and its failure mode
+	 * is silent and one-directional. Resolved by ONE shared method
+	 * ({@code DrugSafetyValidator.chartOrderBridges}) called at each arm's chip-wording site — not
+	 * inside {@code interactionWarning}, which takes the list as a parameter, so nothing structural
+	 * stops an ARM being wrong or empty. Each arm resolves once and needs its own cases:
+	 * {@code InteractionFindingChartOrderBridgeTest.aFoldedChipsPartnerIsBridgedToo},
+	 * {@code .theDrugInPlayArmsPartnerIsBridgedToo} and
+	 * {@code .aCombinationOrderCarryingBOTHSubstancesBridgesBothSides} all redden TOGETHER on the
+	 * drug-in-play arm, because its folded and unfolded branches share one resolution; the screening
+	 * arm reddens several more. Neuter an arm and read the failures. No count of the sites is given —
+	 * an earlier draft published one and a later fix in the same change falsified it by merging two.
+	 *
+	 * <p><b>It is a RESOLUTION and not an identity</b>, which is what keeps it clear of #339's reverted
+	 * rounds 5-6: {@code DrugReferenceInjector.FINDING_CHART_ORDER_LEAD} carries that argument, and the
+	 * scoping argument — attribution to the orders the PASS used and not to every carrier of the code —
+	 * lives on {@code DrugSafetyValidator.chartOrderBridges}. Not restated here.
+	 *
+	 * <p>Not serialized: the wire shape is the four keys
+	 * {@code ChartSearchAiRestController.serializeSafetyWarnings} writes, and the chip's own detail is
+	 * unchanged by this. Its one reader is {@code DrugReferenceInjector.chartOrderClause}, and
+	 * {@code DrugSafetyValidator.StatedInteractionChips} deliberately does NOT key on it — that key
+	 * decides which chips are emitted, so keying on a prompt-only clause would let it decide wire
+	 * content. See that class's javadoc and ADR Decision 64.
+	 */
+	List<ChartOrderBridge> chartOrderBridges() {
+		return chartOrderBridges;
+	}
+
+	/**
+	 * One substance this chip names, and one active order of this patient's that the module resolved it
+	 * from — the pair {@code DrugReferenceInjector.FINDING_CHART_ORDER_LEAD}'s items are rendered from.
+	 *
+	 * <p>A value class with {@link #equals} and {@link #hashCode}. <b>{@code equals} has one reader</b>,
+	 * {@code DrugSafetyValidator.addChartOrderBridge}'s {@code out.contains(bridge)} — an
+	 * {@code ArrayList}, so that resolves to {@code equals} and never to {@code hashCode}, which has NO
+	 * reader today and is here only to hold the contract with {@code equals}. It is the
+	 * de-duplication that makes two orders of one display state their substance once, pinned by
+	 * {@code InteractionFindingChartOrderBridgeTest.twoOrdersOfTheSameDisplayAreNamedOnce}. Said
+	 * precisely because an earlier draft named the chip COLLAPSE as the reason and that is false (it
+	 * does not key on this list): a maintainer checking that reason, finding it false and deleting these
+	 * methods would leave the list identity-compared and print one substance twice inside a citable
+	 * record. That is also NOT a licence to give {@link SafetyWarning} itself an {@code equals}: it has
+	 * none so that nothing DOWNSTREAM can collapse chips this module meant to keep apart
+	 * ({@code InteractionRouteVariantTest}).
+	 *
+	 * <p>Both fields are strings a record PRINTS. {@code substanceName} is the name the chip already
+	 * says — never a second answer to which name to print — and {@code orderDisplay} is the order's own
+	 * display, which is the string a chart record of that order carries. <b>{@link #toString()} is the
+	 * only reader that PRINTS them</b> ({@code equals} reads both too), and there are deliberately no
+	 * getters beside it: the renderer takes that spelling
+	 * so the pair a debug dump prints and the pair a model reads cannot differ, and a
+	 * {@code getSubstanceName()} here would also shadow {@link DrugReference#getSubstanceName()}, which
+	 * means the dataset's substance-name FIELD and not a printed label.
+	 */
+	static final class ChartOrderBridge {
+
+		private final String substanceName;
+
+		private final String orderDisplay;
+
+		ChartOrderBridge(String substanceName, String orderDisplay) {
+			this.substanceName = substanceName;
+			this.orderDisplay = orderDisplay;
+		}
+
+		@Override
+		public boolean equals(Object other) {
+			if (this == other) {
+				return true;
+			}
+			if (!(other instanceof ChartOrderBridge)) {
+				return false;
+			}
+			ChartOrderBridge that = (ChartOrderBridge) other;
+			return substanceName.equals(that.substanceName) && orderDisplay.equals(that.orderDisplay);
+		}
+
+		@Override
+		public int hashCode() {
+			return 31 * substanceName.hashCode() + orderDisplay.hashCode();
+		}
+
+		@Override
+		public String toString() {
+			return substanceName + " from " + orderDisplay;
+		}
 	}
 
 	@Override

@@ -361,8 +361,9 @@ public final class DrugReferenceTestSupport {
 	/**
 	 * The rendered TEXT of {@link #injectedFindings} — the finding-shaped counterpart of
 	 * {@link #referenceTexts}. What a finding's text consists of is decided in one place
-	 * ({@code DrugReferenceInjector.renderFinding} appends the strength clause and the
-	 * uncorroborated-match note), so this is the shared spelling for the files that take it. It is not
+	 * ({@code DrugReferenceInjector.renderFinding} appends the clauses; read that method rather than
+	 * an enumeration here, which has gone stale once), so this is the shared spelling for the files
+	 * that take it. It is not
 	 * yet the only one: {@code UncorroboratedFindingProvenanceTest} writes the same loop out at ten
 	 * sites, untouched here, and retiring those is a change of its own.
 	 */

@@ -9,6 +9,10 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 /**
  * A non-blocking advisory raised by {@link DrugSafetyValidator} after the LLM
  * answers. A warning <em>annotates</em> the answer — it never rewrites or
@@ -82,6 +86,9 @@ public class SafetyWarning {
 
 	private final String reconciledNoteName;
 
+	/** @see #chartOrderBridges() */
+	private final List<ChartOrderBridge> chartOrderBridges;
+
 	/** A warning raised from something the reference data assigns no severity to — see
 	 *  {@link #getSeverity()} for which joins those are. */
 	public SafetyWarning(String type, String drug, String detail) {
@@ -89,7 +96,8 @@ public class SafetyWarning {
 	}
 
 	public SafetyWarning(String type, String drug, String detail, String severity) {
-		this(type, drug, detail, severity, false, false, null, null);
+		this(type, drug, detail, severity, false, false, null, null,
+				Collections.<ChartOrderBridge> emptyList());
 	}
 
 	/**
@@ -113,12 +121,13 @@ public class SafetyWarning {
 	static SafetyWarning contraindication(String drug, String detail,
 			boolean uncorroboratedChartMatch) {
 		return new SafetyWarning(TYPE_CONTRAINDICATION, drug, detail, null, false,
-				uncorroboratedChartMatch, null, null);
+				uncorroboratedChartMatch, null, null, Collections.<ChartOrderBridge> emptyList());
 	}
 
 	private SafetyWarning(String type, String drug, String detail, String severity,
 			boolean unratedRelationship, boolean uncorroboratedChartMatch,
-			DrugReference.Interaction reconciledRule, String reconciledNoteName) {
+			DrugReference.Interaction reconciledRule, String reconciledNoteName,
+			List<ChartOrderBridge> chartOrderBridges) {
 		this.type = type;
 		this.drug = drug;
 		this.detail = detail;
@@ -127,6 +136,14 @@ public class SafetyWarning {
 		this.uncorroboratedChartMatch = uncorroboratedChartMatch;
 		this.reconciledRule = reconciledRule;
 		this.reconciledNoteName = reconciledNoteName;
+		// Copied and wrapped rather than stored as handed: this list travels to
+		// DrugReferenceInjector.renderFinding and into DrugSafetyValidator.StatedInteractionChips' key,
+		// so a caller that went on filling its own builder would change what a record already published
+		// and which chips a later collapse recognised. Never null, so no reader branches on absence —
+		// an empty list is the honest answer for every chip whose substances the chart already names.
+		this.chartOrderBridges = chartOrderBridges == null || chartOrderBridges.isEmpty()
+				? Collections.<ChartOrderBridge> emptyList()
+				: Collections.unmodifiableList(new ArrayList<ChartOrderBridge>(chartOrderBridges));
 	}
 
 	/**
@@ -164,12 +181,14 @@ public class SafetyWarning {
 	 * @param reconciledNoteName see {@link #reconciledPartnerNoteName} — null when the reconciliation
 	 *        refused or reached no co-medication, so that a refusal and an absent answer are one answer
 	 *        here, as they are for the chip
+	 * @param chartOrderBridges see {@link #chartOrderBridges()} — empty where the chart already names
+	 *        every substance this chip names, which is the common case and not a degraded one
 	 */
 	static SafetyWarning interaction(String drug, String detail, String severity,
 			boolean unratedRelationship, DrugReference.Interaction reconciledRule,
-			String reconciledNoteName) {
+			String reconciledNoteName, List<ChartOrderBridge> chartOrderBridges) {
 		return new SafetyWarning(TYPE_INTERACTION, drug, detail, severity, unratedRelationship, false,
-				reconciledRule, reconciledNoteName);
+				reconciledRule, reconciledNoteName, chartOrderBridges);
 	}
 
 	/** One of {@link #TYPE_OVERDOSE}, {@link #TYPE_INTERACTION}, {@link #TYPE_CONTRAINDICATION}. */
@@ -472,6 +491,93 @@ public class SafetyWarning {
 	 */
 	String reconciledPartnerNoteName(DrugReference.Interaction rule) {
 		return rule != null && rule == reconciledRule ? reconciledNoteName : null;
+	}
+
+	/**
+	 * Which of this patient's own active orders each substance this chip NAMES was resolved from, where
+	 * no name that order records names it — the bridge {@code DrugReferenceInjector.renderFinding}
+	 * states in the injected {@code safety_finding} (issue #349). Empty, never null, for every chip
+	 * whose substances the chart already spells, for every chip that is not an interaction, and for every
+	 * interaction chip built from a public constructor here rather than through
+	 * {@code DrugSafetyValidator.interactionWarning} — the class-only and question-pair chips, whose
+	 * residue ADR Decision 64 records.
+	 *
+	 * <p><b>Why it travels here.</b> The finding's text is rendered from the chip, and the answer
+	 * decides which of {@code DrugSafetyValidator}'s arms resolved each side; the injector holds
+	 * neither. Deriving it there would mean a second walk over the same orders reaching the same
+	 * answer, which is the two-resolutions-that-agree shape issue #151 forbids — and its failure mode
+	 * is silent and one-directional. Decided once, at the one place both active-order arms word this
+	 * chip ({@code DrugSafetyValidator.interactionWarning}), so the two arms cannot answer differently.
+	 *
+	 * <p><b>It is a RESOLUTION and not an identity</b>, which is what keeps it clear of #339's reverted
+	 * rounds 5-6: {@code DrugReferenceInjector.FINDING_CHART_ORDER_LEAD} carries that argument, and the
+	 * scoping argument — attribution to the orders the PASS used and not to every carrier of the code —
+	 * lives on {@code DrugSafetyValidator.chartOrderBridges}. Not restated here.
+	 *
+	 * <p>Not serialized: the wire shape is the four keys
+	 * {@code ChartSearchAiRestController.serializeSafetyWarnings} writes, and the chip's own detail is
+	 * unchanged by this. It IS read by {@code DrugSafetyValidator.StatedInteractionChips}, whose key is
+	 * every field a consumer reads and whose consumer here is the prompt.
+	 */
+	List<ChartOrderBridge> chartOrderBridges() {
+		return chartOrderBridges;
+	}
+
+	/**
+	 * One substance this chip names, and one active order of this patient's that the module resolved it
+	 * from — the pair {@code DrugReferenceInjector.FINDING_CHART_ORDER_LEAD}'s items are rendered from.
+	 *
+	 * <p>A value class with {@link #equals} and {@link #hashCode}, because
+	 * {@code DrugSafetyValidator.StatedInteractionChips} keys a chip on a list of these and a set of
+	 * lists compares by value. That is deliberately NOT a licence to give {@link SafetyWarning} itself
+	 * an {@code equals}: it has none so that nothing DOWNSTREAM can collapse chips this module meant to
+	 * keep apart ({@code InteractionRouteVariantTest}), and the collapse that reads this pair is this
+	 * module's own, upstream of the wire.
+	 *
+	 * <p>Both fields are strings a record PRINTS. {@code substanceName} is the name the chip already
+	 * says — never a second answer to which name to print — and {@code orderDisplay} is the order's own
+	 * display, which is the string a chart record of that order carries.
+	 */
+	static final class ChartOrderBridge {
+
+		private final String substanceName;
+
+		private final String orderDisplay;
+
+		ChartOrderBridge(String substanceName, String orderDisplay) {
+			this.substanceName = substanceName;
+			this.orderDisplay = orderDisplay;
+		}
+
+		String getSubstanceName() {
+			return substanceName;
+		}
+
+		String getOrderDisplay() {
+			return orderDisplay;
+		}
+
+		@Override
+		public boolean equals(Object other) {
+			if (this == other) {
+				return true;
+			}
+			if (!(other instanceof ChartOrderBridge)) {
+				return false;
+			}
+			ChartOrderBridge that = (ChartOrderBridge) other;
+			return substanceName.equals(that.substanceName) && orderDisplay.equals(that.orderDisplay);
+		}
+
+		@Override
+		public int hashCode() {
+			return 31 * substanceName.hashCode() + orderDisplay.hashCode();
+		}
+
+		@Override
+		public String toString() {
+			return substanceName + " from " + orderDisplay;
+		}
 	}
 
 	@Override

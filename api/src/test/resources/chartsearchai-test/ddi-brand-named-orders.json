@@ -1,0 +1,50 @@
+{
+ "metadata": {
+  "schema_version": "1.0",
+  "title": "Test fixture: two Major-related substances an ATC-mapped BRAND order is the only chart record of",
+  "note": "Issue #349. The chart names the orders Zolvimix and Klarizom; only their WHO ATC maps reach Simvastatin (C10AA01) and Clarithromycin (J01FA09), which this file relates Major. Acetylsalicylic acid is here for the other direction: its rxnorm_name diverges from its name, so an order named 'Aspirin 81mg' resolves it through an ALIAS and the chart's own words already carry a name of it."
+ },
+ "mechanisms": {
+  "3401": {
+   "text": "Coadministration with potent inhibitors of CYP450 3A4 may significantly increase the plasma concentrations of simvastatin and lovastatin and their active acid metabolites, all of which are primarily metabolized by the isoenzyme.",
+   "categories": ["pharmacokinetic"]
+  },
+  "3402": {
+   "text": "Concomitant use may prolong the QT interval additively.",
+   "categories": ["synergistic_effect"]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInterB01",
+   "name": "Simvastatin",
+   "rxcui": "36567",
+   "rxnorm_name": "simvastatin",
+   "drugbank_id": "DB00641",
+   "atc": ["C10AA01"],
+   "ciel": []
+  },
+  {
+   "id": "DDInterB02",
+   "name": "Clarithromycin",
+   "rxcui": "21212",
+   "rxnorm_name": "clarithromycin",
+   "drugbank_id": "DB01211",
+   "atc": ["J01FA09"],
+   "ciel": []
+  },
+  {
+   "id": "DDInterB03",
+   "name": "Acetylsalicylic acid",
+   "rxcui": "1191",
+   "rxnorm_name": "aspirin",
+   "drugbank_id": "DB00945",
+   "atc": ["N02BA01"],
+   "ciel": []
+  }
+ ],
+ "interactions": [
+  ["DDInterB01", "DDInterB02", "Major", "3401"],
+  ["DDInterB02", "DDInterB03", "Major", "3402"]
+ ]
+}

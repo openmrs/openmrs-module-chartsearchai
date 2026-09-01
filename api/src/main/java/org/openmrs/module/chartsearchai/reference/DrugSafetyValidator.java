@@ -4935,15 +4935,24 @@ public class DrugSafetyValidator {
 	 *
 	 * <p><b>Asked once per chip, over every active order. The cost is real, bounded and measured — and
 	 * a CHIP COUNT does not describe an arrangement here.</b> A screening pass calls this for every
-	 * candidate pair, and {@code maxPairChips} bounds the chips and not the calls, so two 40-order
-	 * charts both "raising 10 chips" differed by 614x in call count. Measured through the real
+	 * candidate pair, and {@code maxPairChips} bounds the chips and not the calls — so a chip count does
+	 * not describe an arrangement here, as the three below show at one cap. Measured through the real
 	 * {@code validate} over the shipped knowledge base, 40 brand-named orders, 9 interleaved runs after
 	 * 3 warm-ups, three shapes drawn from that KB's own substances sorted by interaction count: 614
 	 * calls (busiest 40) 96 ms live against 83 ms with this method's body stubbed to an empty list; 118
 	 * calls (median 40) 42 ms against 41 ms; 0 calls (quietest 40) 14 ms against 14 ms. At 80 busiest
 	 * orders, 2405 calls, 355 ms against 272 ms. A request pays the pass TWICE (pre-answer and
 	 * post-answer), so the maximising arrangement is ~+26 ms per request against a request whose
-	 * latency is an LLM call. Measured 2026-09-01. <b>The per-subject hoist was implemented and
+	 * latency is an LLM call. Measured 2026-09-01.
+	 *
+	 * <p><b>And HALF of that second payment is dead work, which is the honest denominator.</b>
+	 * {@link SafetyWarning#chartOrderBridges()}'s only production reader is
+	 * {@code DrugReferenceInjector.chartOrderClause}, reached only from {@code preAnswerFindings} — the
+	 * wire serializer writes four keys and does not include it, and the collapse key deliberately does
+	 * not read it. So the post-answer {@code validate} resolves every bridge and discards it. Gating it
+	 * would mean threading a discriminator through {@code validate}, a trade nobody has measured, and it
+	 * is not proposed here; what matters is that the ~13 ms per pass is stated against a reader that
+	 * exists once, not twice. <b>The per-subject hoist was implemented and
 	 * declined</b>, not guessed at: order-preserving, output-identical over the whole suite, and worth
 	 * 2 ms at 40 orders and 27 ms at 80. Do not re-derive it; ADR Decision 64 carries the numbers.
 	 *
@@ -5014,7 +5023,10 @@ public class DrugSafetyValidator {
 	 * about, an order the module could read no name for or no display from, an order that did not
 	 * resolve this substance at all, and an order whose own recorded names already reach it, where a
 	 * clause would be noise in a record whose whole budget is evidence. No count is given: mutate a
-	 * conjunct and read the failures. See {@link #chartOrderBridges} for why each is the test it is.
+	 * conjunct and read the failures — but note that the blank-name refusal yields NOTHING, being
+	 * defensive against the {@code trim()} below on a null {@code subjectName}, and is unreached by any
+	 * arrangement here. Said rather than left to be found, so this list does not look better defended
+	 * than it is. See {@link #chartOrderBridges} for why each of the others is the test it is.
 	 */
 	private static void addChartOrderBridge(List<SafetyWarning.ChartOrderBridge> out,
 			List<DrugReference> rows, String printedName,
@@ -5072,10 +5084,13 @@ public class DrugSafetyValidator {
 	/** @return every row of {@code row}'s substance that {@code entries} carries, or EMPTY where it
 	 *          carries none — fail-closed, so a partner the resolved order list does not hold states
 	 *          nothing rather than being attributed off one row's codes. Both callers draw
-	 *          {@code row} from {@code entries}, so the empty answer is reachable only for a null
-	 *          argument,
-	 *          and nothing pins the empty tail (measured: returning it unconditionally leaves the whole
-	 *          build green, because no arrangement here holds a partner outside the resolved list).
+	 *          {@code row} from {@code entries}. <b>The reachable empty answer is the NULL-PARTNER one</b>,
+	 *          which the {@code @param} on {@link #chartOrderBridges} documents as normal, and it is hot:
+	 *          the folded-chip and nameless-order families reach it (measured by making that branch throw
+	 *          — {@code FoldedChipOnePartnerNameTest}, {@code NonCodedDrugOrderNameTest},
+	 *          {@code ClassChipPartnerLabelTest}, {@code OneNameAcrossChipAndInjectedRecordTest}).
+	 *          An earlier draft here said returning empty unconditionally left the build green; it does
+	 *          not, and no count is given in its place — mutate the return and read the failures.
 	 *
 	 *          <p>Not expressed through {@link #substanceRows}, which answers the same question and is
 	 *          the map-building convention {@code groupFor} exists to keep in one place. It builds a map

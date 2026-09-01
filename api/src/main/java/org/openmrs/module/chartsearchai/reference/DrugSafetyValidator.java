@@ -2522,6 +2522,10 @@ public class DrugSafetyValidator {
 	 * where unrated leads — they would come to head the whole list; they stay where they have always
 	 * been so that the sentences the class arm produces alone do not overtake the rated findings a
 	 * clinician asked about. That is a stated limit of issue #346's fix rather than a property of it.
+	 * <b>Not every unrated finding, which is the misreading to guard against</b>: a RULE the source
+	 * rates nothing for — a hand-authored {@code json} or curated rule — is one of this arm's own rule
+	 * chips, so it is ordered here, and by the paragraph above it leads the withholding side ahead of
+	 * every {@code major}. Only the class-only chips are exempt.
 	 */
 	private static final Comparator<SafetyWarning> FINDING_STRENGTH_DESCENDING =
 			new Comparator<SafetyWarning>() {

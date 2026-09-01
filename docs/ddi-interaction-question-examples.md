@@ -666,14 +666,19 @@ or what reaches the model.
   finding names substances (`Simvastatin`, `Clarithromycin`) that appear nowhere in the chart the
   model reads (`Zolvimix`, `Klarizom`). A finding whose subject the chart never spells is one the
   model cannot reconcile. Render `safetyWarnings` and the clinician is covered either way.
-- **The drug-in-play arm ([section 1](#1-can-i-give-her-x--the-drug-in-play-arm)) is neither
+- **The drug-in-play arm ([section 1](#1-can-i-give-her-x--the-drug-in-play-arm)) was neither
   severity-sorted nor capped** ([#346](https://github.com/openmrs/openmrs-module-chartsearchai/issues/346)),
-  so a Major can sit late in the chip list and never reach the prose. Reproduce it with
-  *"Can I give her warfarin?"* on Sarah Taylor: eight interaction chips arrive in knowledge-base
+  so a Major could sit late in the chip list and never reach the prose. On the build named below,
+  *"Can I give her warfarin?"* on Sarah Taylor returned eight interaction chips in knowledge-base
   row order with the Majors at positions **6** (Diclofenac) and **8** (Ibuprofen), and the answer
-  enumerates 1–7 and stops — so the Major warfarin × ibuprofen **bleeding** interaction is in the
-  chips and absent from the answer. This arm sets no `interactionPairs`, so nothing on the wire
-  flags it. On a patient with many active orders, read the chips.
+  enumerated 1–7 and stopped — so the Major warfarin × ibuprofen **bleeding** interaction was in
+  the chips and absent from the answer. **#346 has since ordered this arm's rule chips**
+  (`DrugSafetyValidator.FINDING_STRENGTH_DESCENDING`: what the finding licenses first, then the same
+  `severityPriority` the two pairwise arms use), so that chip sequence is not what a build carrying
+  the fix produces, and the run above has not been repeated on one. What #346 did not change is
+  still live: this arm applies no `maxPairChips` cap, its unrated class-only sentences are appended
+  after its rule chips rather than ordered among them, and it sets no `interactionPairs`, so nothing
+  on the wire states how much it found. On a patient with many active orders, read the chips.
 
 ## How these were verified
 

@@ -411,6 +411,10 @@ public final class DrugReferenceTestSupport {
 	/** Several route variants of one drug sharing a RxCUI — the id/label collision slice. */
 	static final String DDI_RXCUI_COLLISION = "chartsearchai-test/ddi-rxcui-collision.json";
 
+	/** Simvastatin against two statins and a biguanide — the two arrangements issue #346's ordering is
+	 *  read off: chips their ratings cannot separate, and chips whose ratings order them the wrong way
+	 *  round. Its RATINGS are invented, which the fixture's own {@code metadata.note} says and is the
+	 *  authority on. */
 	static final String DDI_FOLDED_CAUTION_ORDER = "chartsearchai-test/ddi-folded-caution-order.json";
 
 	/** The botulinum pair, the enalapril/enalaprilat pair and the typhoid pair — the slices where two rows

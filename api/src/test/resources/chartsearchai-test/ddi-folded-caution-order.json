@@ -1,8 +1,8 @@
 {
   "metadata": {
     "schema_version": "1.0",
-    "title": "Test fixture: a folded caution outranks a plain one (issue #346)",
-    "note": "Real drugs and real ATC codes, arranged so the drug-in-play arm has to order two chips their RATINGS cannot separate. Simvastatin is rated Minor against both partners and Metformin is the EARLIER row, so ordering on severity alone leaves the two in dataset order. Atorvastatin shares Simvastatin's C10AA level-4 subgroup (HMG CoA reductase inhibitors), so the class arm folds a duplicate-therapy sentence onto its chip, and a folded chip carries an unrated relationship - a reason to WITHHOLD, where a plain Minor is only a caution. Neither row carries a mechanism, so both notes are the parser's own no-mechanism fallback: this fixture is about the ORDER of two chips and states nothing clinical about either pair beyond the rating."
+    "title": "Test fixture: how the drug-in-play arm orders its chips (issue #346)",
+    "note": "Real DDInter drug rows - id, rxcui, drugbank_id and ATC code copied from the shipped knowledge base - arranged so the drug-in-play arm has to order chips their RATINGS cannot separate, and chips whose ratings order them the wrong way round. THE THREE RATINGS BELOW ARE INVENTED and are the one thing in this file that is not source data: the shipped knowledge base rates Metformin x Simvastatin Unknown, Atorvastatin x Simvastatin Moderate and Pravastatin x Simvastatin Moderate, so do not read a pair off this file as a DDInter fact. Atorvastatin's and Pravastatin's CIEL lists are dropped; nothing here reads them. Two arrangements. (1) Simvastatin is rated Minor against Metformin and against Atorvastatin, and Metformin is the EARLIER row, so ordering on severity alone leaves those two in dataset order; Atorvastatin shares Simvastatin's C10AA level-4 subgroup (HMG CoA reductase inhibitors), so the class arm folds a duplicate-therapy sentence onto its chip, and a folded chip carries an unrated relationship - a reason to WITHHOLD, where a plain Minor is only a caution. (2) Pravastatin shares that subgroup too and is rated Unknown, which sorts BELOW Minor on severity: so a comparator keyed on the rating first would put the plain Metformin caution ahead of a folded finding that withholds, which is the arrangement that separates FINDING_STRENGTH_DESCENDING's two keys. It needs minInteractionSeverity lowered to unknown before that Unknown-rated rule raises a chip at all. No row carries a mechanism, so every note is the parser's own no-mechanism fallback: this fixture is about the ORDER of chips and states nothing clinical about any pair."
   },
   "mechanisms": {},
   "drugs": [
@@ -141,13 +141,24 @@
       ]
     },
     {
-      "id": "DDInter0129",
+      "id": "DDInter133",
       "name": "Atorvastatin",
       "rxcui": "83367",
       "rxnorm_name": "atorvastatin",
       "drugbank_id": "DB01076",
       "atc": [
         "C10AA05"
+      ],
+      "ciel": []
+    },
+    {
+      "id": "DDInter1509",
+      "name": "Pravastatin",
+      "rxcui": "42463",
+      "rxnorm_name": "pravastatin",
+      "drugbank_id": "DB00175",
+      "atc": [
+        "C10AA03"
       ],
       "ciel": []
     }
@@ -161,8 +172,14 @@
     ],
     [
       "DDInter1675",
-      "DDInter0129",
+      "DDInter133",
       "Minor",
+      null
+    ],
+    [
+      "DDInter1675",
+      "DDInter1509",
+      "Unknown",
       null
     ]
   ]

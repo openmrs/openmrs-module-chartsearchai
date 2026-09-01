@@ -2517,6 +2517,16 @@ public class DrugSafetyValidator {
 	 * withholds on the same OR and ranks below {@code minor}, which an operator reaches by lowering
 	 * {@code minInteractionSeverity} to {@code unknown}.
 	 *
+	 * <p><b>That shape is also the only one over which the ORDER of the two keys is observable</b>, so
+	 * it is what pins this comparator's central claim rather than an ornament of it. Read off the ranks:
+	 * a withholding finding that was not folded rates {@code moderate}, {@code major} or unrated, each
+	 * of which already sits at or above every caution, and a folded {@code Minor} ties a plain
+	 * {@code Minor} — so in every arrangement but one, asking the rating first and asking the finding
+	 * first agree. The exception is a folded {@code Unknown} against a plain {@code Minor}: it
+	 * withholds and the Minor does not, while the rating ranks it lower.
+	 * {@code DrugInPlayFindingStrengthKeyOrderContextTest} is the guard — swap the two keys here and
+	 * read its failure.
+	 *
 	 * <p><b>What it deliberately does not order</b>: the unrated class-only chips appended after these.
 	 * They state a relationship the reference data does not rate at all, so by this method's own key —
 	 * where unrated leads — they would come to head the whole list; they stay where they have always

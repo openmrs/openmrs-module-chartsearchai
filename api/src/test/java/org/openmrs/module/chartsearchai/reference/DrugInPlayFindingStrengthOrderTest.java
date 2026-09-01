@@ -93,17 +93,22 @@ public class DrugInPlayFindingStrengthOrderTest {
 	}
 
 	/**
-	 * The half that decides what "strongest" MEANS, and the only arrangement in which ordering on the
-	 * rating and ordering on the finding disagree.
+	 * The half that decides what "strongest" MEANS: an arrangement in which ordering on the rating and
+	 * ordering on the finding disagree, because the ratings cannot separate the two chips at all.
 	 *
 	 * <p>This is the arm that FOLDS, and a folded chip's rating deliberately understates it: the chip
 	 * goes on reporting the RULE's rating while the class arm's unrated duplicate-therapy relationship
 	 * rides along beside it, so a Minor rule folded with a class join states {@code STRENGTH_WITHHOLD}
-	 * in the record the model reads. Simvastatin is rated Minor against both partners and the dataset
-	 * files metformin first, so the ratings cannot separate the two chips and a severity-only sort
-	 * leaves them as they came; only asking {@code licensesWithholding} promotes the finding that is
+	 * in the record the model reads. Simvastatin is rated Minor against both of this case's partners
+	 * and the dataset files metformin first, so the ratings cannot separate the two chips and a
+	 * severity-only sort leaves them as they came; only asking {@code licensesWithholding} promotes the finding that is
 	 * actually a reason to withhold. Delete that branch of {@code FINDING_STRENGTH_DESCENDING} and
 	 * this case reddens.
+	 *
+	 * <p><b>What it does not pin is which of the two keys is asked FIRST.</b> The ratings TIE here, so
+	 * a comparator ranking on {@code severityPriority} and consulting the fold only as a tiebreak
+	 * satisfies this case too. That is {@code DrugInPlayFindingStrengthKeyOrderContextTest}'s, over the
+	 * one arrangement in which the two orders disagree.
 	 */
 	@Test
 	public void aFoldedCautionOutranksAPlainOne() throws Exception {

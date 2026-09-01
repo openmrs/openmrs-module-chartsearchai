@@ -497,7 +497,7 @@ public class DdiDrugReferenceSourceTest {
 	}
 
 	@Test
-	public void replacingAGroupsWinnerLeavesTheChipsInDatasetOrderOfFirstAppearance() throws Exception {
+	public void theMostSevereChipLeadsEvenWhereItsGroupsWinnerWasDecidedLast() throws Exception {
 		// Real slice: Dolutegravir's rows in dataset order are phenytoin (Major), iron (Major, the
 		// shorter note), dexamethasone (Minor), iron (Major, the fuller note). With iron AND
 		// dexamethasone both active, iron's group is opened first, dexamethasone's group is opened
@@ -510,8 +510,9 @@ public class DdiDrugReferenceSourceTest {
 		// Minor, so the arm's own ordering puts iron first whatever the collapse does, and this case
 		// no longer reddens on the re-insertion. What still pins the collapse is
 		// replacingAGroupsWinnerLeavesATiedPartnerBehindIt, over partners the severity ordering
-		// cannot separate. This case is kept for the property it states in its own name, which #346
-		// did not retire: a demoted Major.
+		// cannot separate. What this case still states, and what its name now says, is the outcome
+		// rather than the mechanism: the Major chip leads, whichever order the collapse left the two
+		// groups in.
 		List<SafetyWarning> warnings = routeVariantValidator().validate(
 				"Dolutegravir could be started.", "Is it safe to start dolutegravir?",
 				DrugReferenceTestSupport.ctx(60, null,
@@ -524,8 +525,10 @@ public class DdiDrugReferenceSourceTest {
 		// business, and pinning its opening words here would couple this case to the note text.
 		assertTrue(warnings.get(0).getDetail()
 				.startsWith("Dolutegravir interacts with active order iron — Major. "),
-				"iron's row appears first in the dataset, so its chip must come first even though its"
-						+ " group's winner was decided last, was: " + warnings.get(0).getDetail());
+				"iron is Major and dexamethasone Minor, so the arm's ordering must lead with iron even"
+						+ " though iron's group winner was decided last — before issue #346 what kept"
+						+ " it there was the dataset's own order of first appearance, was: "
+						+ warnings.get(0).getDetail());
 		assertTrue(warnings.get(1).getDetail()
 				.startsWith("Dolutegravir interacts with active order dexamethasone — Minor. "),
 				"dexamethasone's chip must stay second, was: " + warnings.get(1).getDetail());
@@ -534,11 +537,12 @@ public class DdiDrugReferenceSourceTest {
 	/**
 	 * The collapse's own half of the chip order, over partners the arm's ordering cannot separate.
 	 *
-	 * <p>Issue #346 made this arm append its findings strongest first, which is what
-	 * {@link #replacingAGroupsWinnerLeavesTheChipsInDatasetOrderOfFirstAppearance} had been standing
-	 * for — that case's iron is Major and its dexamethasone Minor, so the sort now decides their order
-	 * on its own and a re-inserted winner is invisible to it. This case restores the guard, on the
-	 * same slice under a different SUBJECT.
+	 * <p>Issue #346 made this arm append its findings strongest first, which took the collapse's
+	 * positional guard away from
+	 * {@link #theMostSevereChipLeadsEvenWhereItsGroupsWinnerWasDecidedLast} — that case's iron is Major
+	 * and its dexamethasone Minor, so the sort now decides their order on its own and a re-inserted
+	 * winner is invisible to it. This case restores the guard, on the same slice under a different
+	 * SUBJECT.
 	 *
 	 * <p>Sirolimus and Sirolimus (protein-bound) are one substance, so this arm rules over both rows.
 	 * The plain row opens lapatinib's group at Moderate, then phenytoin's at Major, then voxelotor's at

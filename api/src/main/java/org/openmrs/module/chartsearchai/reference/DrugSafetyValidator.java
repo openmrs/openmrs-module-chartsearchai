@@ -5207,6 +5207,12 @@ public class DrugSafetyValidator {
 			// group as subject, an order any of its rows resolves from is the subject's own order, so a
 			// sibling row may not witness the subject's pair either (see activeOrdersOtherThan).
 			PatientClinicalContext others = activeOrdersOtherThan(substance, orderDrugs, context);
+			// The same reduction as a list of ORDERS, for the bridge (#349). Resolved here beside the
+			// context it mirrors and not at the chip site below, because it is invariant per subject
+			// SUBSTANCE while that site runs once per pair — and this walk calls resolvesFromAny for
+			// every order, which is the term chartOrderBridges' own cost measurement identifies.
+			List<PatientClinicalContext.ActiveDrugOrder> partnerWitnesses =
+					ordersOtherThan(substance, context);
 			// bestRulePerPartner applies the severity floor and the hasActiveDrug join and returns at
 			// most ONE rule per partner label, most severe first (#121) — the same grouping, the same
 			// predicate and now the same subject unit the drug-in-play arm gets, asked of the OTHER
@@ -5303,7 +5309,7 @@ public class DrugSafetyValidator {
 				// activeOrdersOtherThan applied to `others` above, through its own predicate, so the
 				// bridge cannot name an order this arm refused as a self-witness.
 				List<SafetyWarning.ChartOrderBridge> bridges = chartOrderBridges(substance, subject,
-					partner, chipPartnerName, context, ordersOtherThan(substance, context), orderDrugs);
+					partner, chipPartnerName, context, partnerWitnesses, orderDrugs);
 				SafetyWarning chip = reconciled == null ? interactionWarning(subject, i, bridges)
 						: interactionWarning(subject, i, reconciled.chipName, reconciled.noteName, null,
 							bridges);

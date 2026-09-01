@@ -497,15 +497,22 @@ public class DdiDrugReferenceSourceTest {
 	}
 
 	@Test
-	public void replacingAGroupsWinnerLeavesTheChipsInDatasetOrderOfFirstAppearance() throws Exception {
+	public void theMostSevereChipLeadsEvenWhereItsGroupsWinnerWasDecidedLast() throws Exception {
 		// Real slice: Dolutegravir's rows in dataset order are phenytoin (Major), iron (Major, the
 		// shorter note), dexamethasone (Minor), iron (Major, the fuller note). With iron AND
 		// dexamethasone both active, iron's group is opened first, dexamethasone's group is opened
 		// next, and only THEN does iron's second row take its group — so this is the arrangement in
 		// which a collapse that re-inserts a replaced winner (a HashMap, or remove-then-put) puts
-		// dexamethasone's chip ahead of iron's. Chip order is first-appearance order and the
-		// clinician reads the list top-down, so the most severe finding must not be demoted by the
-		// mechanics of the collapse.
+		// dexamethasone's chip ahead of iron's. The clinician reads the list top-down, so the most
+		// severe finding must not be demoted by the mechanics of the collapse.
+		//
+		// Since issue #346 that outcome is over-determined here: iron is Major and dexamethasone
+		// Minor, so the arm's own ordering puts iron first whatever the collapse does, and this case
+		// no longer reddens on the re-insertion. What still pins the collapse is
+		// replacingAGroupsWinnerLeavesATiedPartnerBehindIt, over partners the severity ordering
+		// cannot separate. What this case still states, and what its name now says, is the outcome
+		// rather than the mechanism: the Major chip leads, whichever order the collapse left the two
+		// groups in.
 		List<SafetyWarning> warnings = routeVariantValidator().validate(
 				"Dolutegravir could be started.", "Is it safe to start dolutegravir?",
 				DrugReferenceTestSupport.ctx(60, null,
@@ -518,11 +525,55 @@ public class DdiDrugReferenceSourceTest {
 		// business, and pinning its opening words here would couple this case to the note text.
 		assertTrue(warnings.get(0).getDetail()
 				.startsWith("Dolutegravir interacts with active order iron — Major. "),
-				"iron's row appears first in the dataset, so its chip must come first even though its"
-						+ " group's winner was decided last, was: " + warnings.get(0).getDetail());
+				"iron is Major and dexamethasone Minor, so the arm's ordering must lead with iron even"
+						+ " though iron's group winner was decided last — before issue #346 what kept"
+						+ " it there was the dataset's own order of first appearance, was: "
+						+ warnings.get(0).getDetail());
 		assertTrue(warnings.get(1).getDetail()
 				.startsWith("Dolutegravir interacts with active order dexamethasone — Minor. "),
 				"dexamethasone's chip must stay second, was: " + warnings.get(1).getDetail());
+	}
+
+	/**
+	 * The collapse's own half of the chip order, over partners the arm's ordering cannot separate.
+	 *
+	 * <p>Issue #346 made this arm append its findings strongest first, which took the collapse's
+	 * positional guard away from
+	 * {@link #theMostSevereChipLeadsEvenWhereItsGroupsWinnerWasDecidedLast} — that case's iron is Major
+	 * and its dexamethasone Minor, so the sort now decides their order on its own and a re-inserted
+	 * winner is invisible to it. This case restores the guard, on the same slice under a different
+	 * SUBJECT.
+	 *
+	 * <p>Sirolimus and Sirolimus (protein-bound) are one substance, so this arm rules over both rows.
+	 * The plain row opens lapatinib's group at Moderate, then phenytoin's at Major, then voxelotor's at
+	 * Moderate; the protein-bound row afterwards raises lapatinib and voxelotor to Major, and leaves
+	 * phenytoin's group alone — Major ties Major, and the route step keeps the unqualified row. So all
+	 * three partners end Major, nothing about severity can separate them, and their order is
+	 * {@code bestRulePerPartner}'s grouping alone. Phenytoin is the reference point precisely because
+	 * it is the one group NOT replaced: a LinkedHashMap keeps a re-put key where it was and leaves
+	 * lapatinib ahead of it, while a HashMap or a remove-then-put moves lapatinib behind it.
+	 */
+	@Test
+	public void replacingAGroupsWinnerLeavesATiedPartnerBehindIt() throws Exception {
+		List<SafetyWarning> warnings = routeVariantValidator().validate(
+				"Sirolimus could be started.", "Is it safe to start sirolimus?",
+				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport
+						.set("Lapatinib 250mg", "Phenytoin 100mg", "Voxelotor 500mg"), null, null, null));
+
+		assertEquals(3, warnings.size(),
+			"three active partners must raise three chips, was: " + warnings);
+		for (SafetyWarning warning : warnings) {
+			assertEquals("Major", warning.getSeverity(),
+				"all three partners end Major, so nothing about severity may separate them, was: "
+						+ warnings);
+		}
+		assertTrue(warnings.get(0).getDetail()
+				.startsWith("Sirolimus interacts with active order lapatinib — Major. "),
+			"lapatinib's group is opened before phenytoin's, so replacing its winner afterwards must"
+					+ " not move it behind phenytoin, was: " + warnings.get(0).getDetail());
+		assertTrue(warnings.get(1).getDetail()
+				.startsWith("Sirolimus interacts with active order phenytoin — Major. "),
+			"phenytoin's chip must stay second, was: " + warnings.get(1).getDetail());
 	}
 
 	@Test

@@ -257,15 +257,22 @@ public class SafetyVerdictSeverityGradationTest {
 	 * stating {@code STRENGTH_WITHHOLD}. Both antecedents above are then true at once, where the
 	 * single unconditional claim they replaced had nothing to resolve.
 	 *
-	 * <p>The caution is listed FIRST there, and that is not an ordering accident to lean on: the
-	 * drug-in-play arm emits one finding per partner in the entry's own rule order with no severity
-	 * sort (the question-pair arm sorts on {@code PAIR_SEVERITY_DESCENDING} and the screen on
-	 * {@code SCREENED_PAIR_SEVERITY_DESCENDING}; {@code addInteractionWarnings} does not), and 10 of
-	 * that fixture's 16 entries produce an interleaved mix when the patient is on the rest, caution
-	 * before withhold in every one. So both antecedents were true with nothing ranking them, on the
-	 * {@code warfarin × aspirin} pair issue #283 names as the one this arm exists for. What that
-	 * produced on a server was not measured, and this case does not assert it — what is checked is
-	 * the reachability above and the paragraph's silence, which is the gap.
+	 * <p>The caution was listed FIRST there when this was written, and the point was that it is not
+	 * an ordering accident to lean on: the drug-in-play arm emitted one finding per partner in the
+	 * entry's own rule order with no severity sort, and 10 of that fixture's 16 entries produced an
+	 * interleaved mix when the patient is on the rest, caution before withhold in every one. So both
+	 * antecedents were true with nothing ranking them, on the {@code warfarin × aspirin} pair issue
+	 * #283 names as the one this arm exists for. What that produced on a server was not measured, and
+	 * this case does not assert it — what is checked is the reachability above and the paragraph's
+	 * silence, which is the gap.
+	 *
+	 * <p>Issue #346 has since given that arm an ordering ({@code FINDING_STRENGTH_DESCENDING}), so
+	 * the withholding finding is now read first in that arrangement and the measured figure above
+	 * describes the arm as it was. <b>Nothing about this case rests on it</b>, which is why the
+	 * assertions below did not move: they read the prompt PARAGRAPH's wording and never a chip order.
+	 * That independence is the whole argument for keeping the rule — the model is handed a SET whose
+	 * order is not stated to it and which two arms can still interleave, so a lead resting on
+	 * emission ordering rests on something the prompt cannot express, before and after #346 alike.
 	 *
 	 * <p>Keyed on the clause the RECORD carries rather than on a severity word, so the withholding
 	 * half is derived from the constant here for the reason

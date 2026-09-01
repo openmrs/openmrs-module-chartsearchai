@@ -411,6 +411,12 @@ public final class DrugReferenceTestSupport {
 	/** Several route variants of one drug sharing a RxCUI — the id/label collision slice. */
 	static final String DDI_RXCUI_COLLISION = "chartsearchai-test/ddi-rxcui-collision.json";
 
+	/** Simvastatin against two statins and a biguanide — the two arrangements issue #346's ordering is
+	 *  read off: chips their ratings cannot separate, and chips whose ratings order them the wrong way
+	 *  round. Its RATINGS are invented, which the fixture's own {@code metadata.note} says and is the
+	 *  authority on. */
+	static final String DDI_FOLDED_CAUTION_ORDER = "chartsearchai-test/ddi-folded-caution-order.json";
+
 	/** The botulinum pair, the enalapril/enalaprilat pair and the typhoid pair — the slices where two rows
 	 *  are or are not one substance (issues #164/#176/#187). */
 	static final String DDI_SUBSTANCE_IDENTITY = "chartsearchai-test/ddi-substance-identity.json";
@@ -1025,6 +1031,27 @@ public final class DrugReferenceTestSupport {
 			out.add(entry.getName());
 		}
 		return out;
+	}
+
+	/**
+	 * Each warning as {@code type | severity | lead} — the lead being the detail up to its em dash,
+	 * which is the half naming the SUBJECT and the PARTNER, with the mechanism prose deliberately left
+	 * out so a case pinning WHICH chips arrived, and in what order, does not also pin the dataset's
+	 * note text.
+	 *
+	 * <p>Here rather than in each case for the reason {@link #classChipDetails} records: it was written
+	 * out twice, and a shared filter cannot drift into two answers about which chips a case is
+	 * counting.
+	 */
+	static List<String> chipLeads(List<SafetyWarning> warnings) {
+		List<String> leads = new ArrayList<String>();
+		for (SafetyWarning warning : warnings) {
+			String detail = warning.getDetail();
+			int dash = detail.indexOf(" — ");
+			leads.add(warning.getType() + " | " + warning.getSeverity() + " | "
+					+ (dash < 0 ? detail : detail.substring(0, dash)));
+		}
+		return leads;
 	}
 
 	static DrugSafetyValidator validator(DrugReferenceService service) {

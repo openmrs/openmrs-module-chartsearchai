@@ -1,0 +1,186 @@
+{
+  "metadata": {
+    "schema_version": "1.0",
+    "title": "Test fixture: how the drug-in-play arm orders its chips (issue #346)",
+    "note": "Real DDInter drug rows - id, rxcui, drugbank_id and ATC code copied from the shipped knowledge base - arranged so the drug-in-play arm has to order chips their RATINGS cannot separate, and chips whose ratings order them the wrong way round. THE THREE RATINGS BELOW ARE INVENTED and are the one thing in this file that is not source data: the shipped knowledge base rates Metformin x Simvastatin Unknown, Atorvastatin x Simvastatin Moderate and Pravastatin x Simvastatin Moderate, so do not read a pair off this file as a DDInter fact. Atorvastatin's and Pravastatin's CIEL lists are dropped; nothing here reads them. Two arrangements. (1) Simvastatin is rated Minor against Metformin and against Atorvastatin, and Metformin is the EARLIER row, so ordering on severity alone leaves those two in dataset order; Atorvastatin shares Simvastatin's C10AA level-4 subgroup (HMG CoA reductase inhibitors), so the class arm folds a duplicate-therapy sentence onto its chip, and a folded chip carries an unrated relationship - a reason to WITHHOLD, where a plain Minor is only a caution. (2) Pravastatin shares that subgroup too and is rated Unknown, which sorts BELOW Minor on severity: so a comparator keyed on the rating first would put the plain Metformin caution ahead of a folded finding that withholds, which is the arrangement that separates FINDING_STRENGTH_DESCENDING's two keys. It needs minInteractionSeverity lowered to unknown before that Unknown-rated rule raises a chip at all. No row carries a mechanism, so every note is the parser's own no-mechanism fallback: this fixture is about the ORDER of chips and states nothing clinical about any pair."
+  },
+  "mechanisms": {},
+  "drugs": [
+    {
+      "id": "DDInter1675",
+      "name": "Simvastatin",
+      "rxcui": "36567",
+      "rxnorm_name": "simvastatin",
+      "drugbank_id": "DB00641",
+      "atc": [
+        "C10AA01"
+      ],
+      "ciel": [
+        {
+          "code": "104633",
+          "uuid": "104633AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Ezetimibe / simvastatin"
+        },
+        {
+          "code": "83936",
+          "uuid": "83936AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Simvastatin"
+        }
+      ]
+    },
+    {
+      "id": "DDInter1164",
+      "name": "Metformin",
+      "rxcui": "6809",
+      "rxnorm_name": "metformin",
+      "drugbank_id": "DB00331",
+      "atc": [
+        "A10BA02"
+      ],
+      "ciel": [
+        {
+          "code": "104722",
+          "uuid": "104722AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Glipizide / metformin"
+        },
+        {
+          "code": "104747",
+          "uuid": "104747AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Glyburide / metformin"
+        },
+        {
+          "code": "105054",
+          "uuid": "105054AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Metformin / pioglitazone"
+        },
+        {
+          "code": "105055",
+          "uuid": "105055AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Metformin / ropinirole"
+        },
+        {
+          "code": "105056",
+          "uuid": "105056AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Metformin / rosiglitazone"
+        },
+        {
+          "code": "165456",
+          "uuid": "165456AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Linagliptin / metformin"
+        },
+        {
+          "code": "165463",
+          "uuid": "165463AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Metformin / sitagliptin"
+        },
+        {
+          "code": "167910",
+          "uuid": "36b587d7-38c2-467f-ab5c-2b1426e482a3",
+          "name": "Alogliptin / metformin"
+        },
+        {
+          "code": "167912",
+          "uuid": "229af724-b07a-4954-b5cc-209e01c6cdd7",
+          "name": "Canagliflozin / metformin"
+        },
+        {
+          "code": "167922",
+          "uuid": "07f8df29-e291-4113-aa7f-2f0b65a6d6b8",
+          "name": "Empagliflozin / linagliptin / metformin"
+        },
+        {
+          "code": "167923",
+          "uuid": "1672d9f0-f214-422f-995e-a534b9f7a782",
+          "name": "Empagliflozin / metformin"
+        },
+        {
+          "code": "167924",
+          "uuid": "24d51a45-730f-4077-81e1-dc494d0e8257",
+          "name": "Ertugliflozin / metformin"
+        },
+        {
+          "code": "167926",
+          "uuid": "a7ceb840-0e35-41b1-bc8c-e6fac84e06b9",
+          "name": "Metformin / repaglinide"
+        },
+        {
+          "code": "167927",
+          "uuid": "e6d393f4-7bc6-4614-a4e6-ae95fdbc3c42",
+          "name": "Metformin / saxagliptin"
+        },
+        {
+          "code": "167981",
+          "uuid": "62ea33ca-e91b-4710-afa3-430c258115c7",
+          "name": "Metformin / vildagliptin"
+        },
+        {
+          "code": "167982",
+          "uuid": "895cea55-ec68-4892-91c9-fc90b1a38987",
+          "name": "Metformin / remogliflozin etabonate / vildagliptin"
+        },
+        {
+          "code": "168009",
+          "uuid": "caa3c8be-cb6c-4626-b272-eaaa6551d85d",
+          "name": "Glimepiride / metformin"
+        },
+        {
+          "code": "170534",
+          "uuid": "49b805a0-d177-4243-9206-72fcedeeed64",
+          "name": "Dapagliflozin / metformin / sitagliptin"
+        },
+        {
+          "code": "79651",
+          "uuid": "79651AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Metformin"
+        },
+        {
+          "code": "79652",
+          "uuid": "79652AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Metformin hydrochloride"
+        }
+      ]
+    },
+    {
+      "id": "DDInter133",
+      "name": "Atorvastatin",
+      "rxcui": "83367",
+      "rxnorm_name": "atorvastatin",
+      "drugbank_id": "DB01076",
+      "atc": [
+        "C10AA05"
+      ],
+      "ciel": []
+    },
+    {
+      "id": "DDInter1509",
+      "name": "Pravastatin",
+      "rxcui": "42463",
+      "rxnorm_name": "pravastatin",
+      "drugbank_id": "DB00175",
+      "atc": [
+        "C10AA03"
+      ],
+      "ciel": []
+    }
+  ],
+  "interactions": [
+    [
+      "DDInter1675",
+      "DDInter1164",
+      "Minor",
+      null
+    ],
+    [
+      "DDInter1675",
+      "DDInter133",
+      "Minor",
+      null
+    ],
+    [
+      "DDInter1675",
+      "DDInter1509",
+      "Unknown",
+      null
+    ]
+  ]
+}

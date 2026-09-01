@@ -684,9 +684,22 @@ public class DrugSafetyValidator {
 	 * curated hand-authored rule is unrated and {@link #clearsSeverityFloor} already treats unrated
 	 * as exempt rather than low — unrated is not low-rated, so wherever a most-severe-wins choice is
 	 * made it must not lose to a rated row. The one definition of that ordering, shared by the chip
-	 * grouping here ({@link #bestRulePerPartner}) and the promoted-note ordering in
-	 * {@link DrugReferenceInjector.InteractionNote}; two copies could drift into ranking the same
-	 * pair of rules oppositely, which is how the chip and the prompt text come to disagree.
+	 * grouping here ({@link #bestRulePerPartner}), the two pairwise arms' chip orderings
+	 * ({@link #PAIR_SEVERITY_DESCENDING} and {@link #SCREENED_PAIR_SEVERITY_DESCENDING}) and the
+	 * promoted-note ordering in {@link DrugReferenceInjector.InteractionNote}; two copies could drift
+	 * into ranking the same pair of rules oppositely, which is how the chip and the prompt text come
+	 * to disagree.
+	 *
+	 * <p><b>{@link #FINDING_STRENGTH_DESCENDING} shares it as a TIEBREAK only</b>, and the difference
+	 * is a real divergence rather than a wording nicety: that comparator asks
+	 * {@link #licensesWithholding(SafetyWarning)} first, and the promoted-note ordering has no such
+	 * key because it ranks RULES, which cannot fold. So one prompt can state a folded pair in one
+	 * order among its {@code safety_finding} records and in the other inside a {@code drug_reference}
+	 * record's note list — measured over {@code ddi-folded-caution-order.json}, where the chips lead
+	 * with the folded Atorvastatin finding and the note list leads with Metformin. That is accepted
+	 * rather than repaired: the two rank different things, and the note order decides only which rule
+	 * keeps its mechanism prose under {@code MAX_INTERACTION_RENDER_CHARS}. Do not close it by giving
+	 * the notes a fold key they have no way to observe.
 	 *
 	 * @return the rank, with null/unrecognized mapped to {@link Integer#MAX_VALUE}
 	 */
@@ -2422,7 +2435,13 @@ public class DrugSafetyValidator {
 		}
 		// Rule chips first, then the class-only chips, which is the order the two arms produced them in
 		// before they were coordinated — a folded chip therefore keeps the rule chip's position and no
-		// client sees the chip sequence reshuffle.
+		// client sees the class arm's sentences reshuffle into the rated ones.
+		//
+		// Collected here and appended below, because WHICH of two rule chips a truncated answer keeps is
+		// decided by their order in this list and not by anything downstream (issue #346). The
+		// collection stays in dataset order so the collapse and the pair ledger see exactly what they
+		// saw before; only the appending is ordered.
+		List<SafetyWarning> ruleChips = new ArrayList<SafetyWarning>();
 		for (SubjectRule rule : rules) {
 			FoldedClassSentence fold = folded.get(rule);
 			// Through the two-arg overload where nothing reconciled, rather than passing partnerLabel and
@@ -2451,7 +2470,7 @@ public class DrugSafetyValidator {
 			// constituents the knowledge base rates alike and gives one class-level note render byte for
 			// byte the same sentence. See StatedInteractionChips.
 			if (statedChips.isFirstStatementOf(chip)) {
-				warnings.add(chip);
+				ruleChips.add(chip);
 			}
 			// Recorded as the pair it is, not as the string it renders, so the screening arm can recognise
 			// it whatever either arm calls the substance — see InteractionPairs. OUTSIDE the collapse
@@ -2459,6 +2478,11 @@ public class DrugSafetyValidator {
 			// reported, so the screening arm must go on standing down from it.
 			pairs.add(ref, rule.partnerKey());
 		}
+		// Strongest first — see FINDING_STRENGTH_DESCENDING for why the key is the FINDING and not its
+		// rating, and Collections.sort is stable, so partners this ordering cannot separate keep the
+		// dataset's own order exactly as they arrived.
+		Collections.sort(ruleChips, FINDING_STRENGTH_DESCENDING);
+		warnings.addAll(ruleChips);
 		for (String detail : classOnly) {
 			// No rating, and not an omission: a shared-ATC-subgroup or cross-reactivity join is a
 			// relationship the reference data states without severity, which is why these chips are never
@@ -2466,6 +2490,66 @@ public class DrugSafetyValidator {
 			warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.displayLabel(), detail));
 		}
 	}
+
+	/**
+	 * Orders this arm's rule chips strongest first, on the FINDING and not on its rating.
+	 *
+	 * <p><b>Why the finding.</b> This is the only interaction arm that FOLDS, and a folded chip's
+	 * rating deliberately understates it: {@link SafetyWarning#getSeverity()} keeps reporting the
+	 * RULE's rating while {@link SafetyWarning#carriesUnratedRelationship()} carries the class arm's
+	 * unrated relationship across, so a Minor rule folded with a class join answers
+	 * {@link #licensesWithholding(SafetyWarning)} and states {@code STRENGTH_WITHHOLD} in the record
+	 * the model reads. Ordered on {@link SafetyWarning#getSeverity()} alone that chip would sit below
+	 * every caution it outranks, in the one list whose order decides what a truncated answer keeps —
+	 * which is the ordering error {@code README.md} tells CLIENTS not to make with the published severity, and it
+	 * would be worse made here, where the answer's own strength is what the order is protecting.
+	 * {@link #licensesWithholding(SafetyWarning)} is the one definition of that split precisely so the
+	 * answer's strength and the chip's ordering cannot disagree.
+	 *
+	 * <p><b>Then {@link #severityPriority} within each of the two, which is where unrated sits above
+	 * Major</b> — the same ordering {@link #PAIR_SEVERITY_DESCENDING} and
+	 * {@link #SCREENED_PAIR_SEVERITY_DESCENDING} give the two pairwise arms. That is the whole of what
+	 * the three share: those two rank on it alone, because neither can fold, so this arm agrees with
+	 * them on every chip whose strength its rating already states and departs from them on exactly the
+	 * chips where it does not. A folded Minor therefore sorts below every rated
+	 * withholding finding above it and still ahead of every caution — it withholds, so it may not fall
+	 * below one. It is not necessarily the LAST withholding finding: a folded {@code Unknown} row
+	 * withholds on the same OR and ranks below {@code minor}, which an operator reaches by lowering
+	 * {@code minInteractionSeverity} to {@code unknown}.
+	 *
+	 * <p><b>That shape is also the only one over which the ORDER of the two keys is observable</b>, so
+	 * it is what pins this comparator's central claim rather than an ornament of it. Read off the ranks:
+	 * a withholding finding that was not folded rates {@code moderate}, {@code major} or unrated, each
+	 * of which already sits at or above every caution, and a folded {@code Minor} ties a plain
+	 * {@code Minor} — so in every arrangement but one, asking the rating first and asking the finding
+	 * first agree. The exception is a folded {@code Unknown} against a plain {@code Minor}: it
+	 * withholds and the Minor does not, while the rating ranks it lower.
+	 * {@code DrugInPlayFindingStrengthKeyOrderContextTest} is the guard — swap the two keys here and
+	 * read its failure.
+	 *
+	 * <p><b>What it deliberately does not order</b>: the unrated class-only chips appended after these.
+	 * They state a relationship the reference data does not rate at all, so by this method's own key —
+	 * where unrated leads — they would come to head the whole list; they stay where they have always
+	 * been so that the sentences the class arm produces alone do not overtake the rated findings a
+	 * clinician asked about. That is a stated limit of issue #346's fix rather than a property of it.
+	 * <b>Not every unrated finding, which is the misreading to guard against</b>: a RULE the source
+	 * rates nothing for — a hand-authored {@code json} or curated rule — is one of this arm's own rule
+	 * chips, so it is ordered here, and by the paragraph above it leads the withholding side ahead of
+	 * every {@code major}. Only the class-only chips are exempt.
+	 */
+	private static final Comparator<SafetyWarning> FINDING_STRENGTH_DESCENDING =
+			new Comparator<SafetyWarning>() {
+
+				@Override
+				public int compare(SafetyWarning a, SafetyWarning b) {
+					boolean aWithholds = licensesWithholding(a);
+					if (aWithholds != licensesWithholding(b)) {
+						return aWithholds ? -1 : 1;
+					}
+					return Integer.compare(severityPriority(b.getSeverity()),
+						severityPriority(a.getSeverity()));
+				}
+			};
 
 	/**
 	 * The rows of each substance {@code candidates} names, grouped: {@link #substanceRows} over

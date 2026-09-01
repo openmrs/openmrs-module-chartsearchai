@@ -1225,6 +1225,15 @@ public class DrugReferenceInjector {
 	 * additive beside the printed name rather than a second answer to which name to print, and nothing
 	 * in {@code DrugSafetyValidator}'s naming ladder is consulted or re-decided.
 	 *
+	 * <p><b>The lead ENDS a sentence and the items are their own</b>, which is a fidelity decision
+	 * rather than a style one. {@code ReferenceProseFidelityCheck} treats a record sentence reproduced
+	 * WHOLE as faithful however the answer goes on, and covers the seam and not a clause's interior; the
+	 * lead alone clears that check's {@code MIN_REPRODUCED_WORDS} floor, so joined to the items by a
+	 * colon it would put its own invariant boilerplate inside a sentence whose interior carries order
+	 * displays the live model is on record paraphrasing and misspelling. Ending it restores the exit for
+	 * the half that never varies. The items' own interior is still uncovered, and that is inherent to
+	 * carrying variable content rather than something a wording fixes.
+	 *
 	 * <p><b>Flat, {@code "; "}-joined and number-agnostic.</b> One item and three items read alike, so
 	 * no branch decides between "order" and "orders" — and a substance the pass resolved from two
 	 * orders gets one item per order rather than a conjunction the prose would have to inflect. The
@@ -1237,13 +1246,20 @@ public class DrugReferenceInjector {
 	 * record the prompt already instructs the model to carry whole, exactly as
 	 * {@link #FINDING_UNCORROBORATED_MATCH} is.
 	 *
-	 * <p>Prompt-facing ONLY. The chip's detail, its rank and the {@code safetyWarnings} wire shape are
+	 * <p><b>Prompt-facing ONLY, and that is why {@code DrugSafetyValidator.StatedInteractionChips}
+	 * does NOT key on it.</b> Adding it to that key was tried and reverted in review: the key decides
+	 * which chips are emitted, so it reaches {@code PairChipExtent}'s counts and, through
+	 * {@code ChartSearchAiUtils.resourceKey}, whether two injected findings share one resource uuid —
+	 * which would make this clause decide wire CONTENT while every claim about it says it does not.
+	 * A collapsed chip therefore carries the survivor's bridge, which is the same residue ADR
+	 * Decision 63 already accepts for that collapse ("what it gives up is WHICH constituent").
+	 * The chip's detail, its rank and the {@code safetyWarnings} wire shape are
 	 * untouched, which is issue #283's own scoping;
 	 * {@code InteractionFindingChartOrderBridgeTest.theChipDetailIsTheWordsItAlwaysWas} pins it, and
 	 * {@code .theClauseIsTheWordsAModelReads} pins these words.
 	 */
 	static final String FINDING_CHART_ORDER_LEAD =
-			" This module resolved the substances named here from this patient's own active orders: ";
+			" This module resolved the substances named here from this patient's own active orders. ";
 
 	/**
 	 * One deterministic finding as a chart line. The detail text is reused verbatim — it is the same
@@ -1278,13 +1294,14 @@ public class DrugReferenceInjector {
 	 * and {@code DrugSafetyValidator.chartOrderBridges} for which orders may be named. It adds words and
 	 * moves no call: the strength clause is unchanged and the chip's own detail is untouched.
 	 *
-	 * <p>The full-stop guard asks about ALL THREE clauses, and its provenance half cannot fire today: only a
+	 * <p>The full-stop guard asks about ALL THREE clauses, and TWO of its three halves cannot fire today. Only a
 	 * contraindication can carry provenance and {@link #strengthClause} answers one unconditionally for
-	 * that type, so a provenance clause never arrives without a strength beside it. Said rather than
-	 * left to be rediscovered — mutating the guard to {@code strength.isEmpty()} alone leaves the whole
-	 * api suite green. It is kept because the two clauses are independent by construction, and a type
-	 * carrying one without the other is the shape {@link #strengthClause} already warns a future caller
-	 * it must write for.
+	 * that type, so a provenance clause never arrives without a strength beside it; and only an
+	 * interaction can carry a BRIDGE, for which that method answers one unconditionally too. Said
+	 * rather than left to be rediscovered — mutating the guard to {@code strength.isEmpty()} alone
+	 * leaves the whole api suite green, and so does dropping the bridge term. All three are kept because
+	 * the clauses are independent by construction, and a type carrying one without a strength is the
+	 * shape {@link #strengthClause} already warns a future caller it must write for.
 	 */
 	static String renderFinding(SafetyWarning finding) {
 		String strength = strengthClause(finding);
@@ -1299,7 +1316,10 @@ public class DrugReferenceInjector {
 		// INSIDE the detail stand for in this chart, so it reads as a gloss on the sentence it follows,
 		// while provenance qualifies how a rule reached the chart at all. The two cannot co-occur today
 		// (only a contraindication carries provenance and only an interaction carries a bridge), so
-		// nothing behavioural pins the order — it survives on this comment.
+		// nothing behavioural pins the order — measured: swapping these two leaves the whole build
+		// green, while moving either AFTER the strength clause reddens
+		// InteractionFindingChartOrderBridgeTest.theStrengthClauseStaysSentenceFinal and cases in
+		// UncorroboratedFindingProvenanceTest. It survives on this comment.
 		String chartOrders = chartOrderClause(finding);
 		String detail = strength.isEmpty() && provenance.isEmpty() && chartOrders.isEmpty()
 				? finding.getDetail()
@@ -1327,14 +1347,13 @@ public class DrugReferenceInjector {
 		if (bridges.isEmpty()) {
 			return "";
 		}
-		StringBuilder clause = new StringBuilder(FINDING_CHART_ORDER_LEAD);
-		for (int n = 0; n < bridges.size(); n++) {
-			if (n > 0) {
-				clause.append("; ");
-			}
-			clause.append(bridges.get(n));
+		List<String> items = new ArrayList<String>(bridges.size());
+		for (SafetyWarning.ChartOrderBridge bridge : bridges) {
+			items.add(bridge.toString());
 		}
-		return clause.append(".").toString();
+		StringBuilder clause = new StringBuilder();
+		appendSection(clause, FINDING_CHART_ORDER_LEAD, items);
+		return clause.toString();
 	}
 
 	/**

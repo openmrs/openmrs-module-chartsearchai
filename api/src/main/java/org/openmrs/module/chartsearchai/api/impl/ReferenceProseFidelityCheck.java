@@ -71,7 +71,13 @@ import org.slf4j.LoggerFactory;
  *       {@code " This finding is a reason to withhold it."} always opens a new record sentence.
  *       It covers the SEAM and not the clause's interior — a reproduction that runs from the
  *       detail into the clause and diverges inside it is reported, and so is one inside the
- *       thirteen words of {@code STRENGTH_CAUTION}. That residue is accepted rather than excluded:
+ *       thirteen words of {@code STRENGTH_CAUTION}. Since issue #349 a THIRD clause can follow
+ *       the detail, the chart-order bridge, and it is why that clause's own lead ENDS a
+ *       sentence rather than introducing its items with a colon: the lead alone clears
+ *       {@link #MIN_REPRODUCED_WORDS}, so joined to the items it would put invariant
+ *       boilerplate inside a sentence whose interior carries order displays. Its ITEMS are
+ *       still interior, and that is inherent to carrying variable content. That residue is
+ *       accepted rather than excluded:
  *       excluding it means teaching this check where a finding's own prose ends, which is knowledge
  *       that belongs to {@code renderFinding} and would be a second copy of it here;</li>
  *   <li><b>support is POOLED across the cited records</b>, exactly as {@link ClassCodeFidelityCheck}

@@ -46,10 +46,21 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  */
 public class InteractionFindingChartOrderBridgeTest {
 
-	/** Simvastatin ({@code C10AA01}) and Clarithromycin ({@code J01FA09}) related Major, plus
-	 *  Acetylsalicylic acid, whose {@code rxnorm_name} diverges from its name so that an order named
-	 *  {@code Aspirin 81mg} reaches it through an ALIAS. */
-	private static final String BRAND_NAMED_ORDERS = "chartsearchai-test/ddi-brand-named-orders.json";
+	/** The pre-existing VERBATIM DDInter slice, which already carries every row these cases need:
+	 *  Simvastatin ({@code C10AA01}) x Clarithromycin ({@code J01FA09}) Major, Acetylsalicylic acid
+	 *  ({@code N02BA01}) x Warfarin ({@code B01AA03}) Major, and — the reason the alias case can be
+	 *  written at all — an {@code Acetylsalicylic acid} row whose {@code rxnorm_name} is {@code aspirin},
+	 *  so an order named {@code Aspirin 81mg} reaches it through an ALIAS and not through its display
+	 *  label. A fixture of this issue's own would have had to hand-author a severity for a real DDInter
+	 *  pair, and the one it needed (ASA x Clarithromycin) the dataset rates {@code Unknown}. */
+	private static final String BRAND_NAMED_ORDERS = "chartsearchai-test/ddi-alias-drug-names.json";
+
+	/** Issue #283's own verbatim slice: Methylphenidate and Modafinil are Minor-related AND both publish
+	 *  {@code N06BA}, so the drug-in-play arm FOLDS the class arm's duplicate-therapy sentence onto the
+	 *  rated rule's chip. The one call site a mutation could neuter with the whole suite green until
+	 *  {@link #aFoldedChipsPartnerIsBridgedToo} arrived. */
+	private static final String FOLDED_CLASS_PAIR =
+			"chartsearchai-test/ddi-folded-minor-class-pair.json";
 
 	private static final String SCREENING_QUESTION =
 			"Are any of his current medications interacting with each other?";
@@ -61,9 +72,9 @@ public class InteractionFindingChartOrderBridgeTest {
 	private static final String WITHHOLD = DrugReferenceInjector.STRENGTH_WITHHOLD;
 
 	/** Everything the Simvastatin x Clarithromycin chip's detail says after its em dash: the rule's
-	 *  rating and the fixture's mechanism prose. Spelled out rather than read off the fixture, because
-	 *  two cases assert the whole string a model reads and a helper that derived it from the same source
-	 *  the production code reads could not fail. */
+	 *  rating and the dataset's own mechanism prose (DDInter mechanism 2085). Spelled out rather than
+	 *  read off the fixture, because two cases assert the whole string a model reads and a helper that
+	 *  derived it from the same source the production code reads could not fail. */
 	private static final String RATING_AND_MECHANISM =
 			"Major. Coadministration with potent inhibitors of CYP450 3A4 may significantly increase "
 					+ "the plasma concentrations of simvastatin and lovastatin and their active acid "
@@ -97,9 +108,9 @@ public class InteractionFindingChartOrderBridgeTest {
 		return DrugReferenceTestSupport.chartOf(records);
 	}
 
-	private static List<String> findings(PatientChart chart, PatientClinicalContext context,
-			String question) throws IOException {
-		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(BRAND_NAMED_ORDERS);
+	private static List<String> findings(String fixture, PatientChart chart,
+			PatientClinicalContext context, String question) throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(fixture);
 		return DrugReferenceTestSupport.findingTexts(DrugReferenceTestSupport
 				.injectorWithSafety(service).injectRecords(chart, context, question));
 	}
@@ -109,7 +120,12 @@ public class InteractionFindingChartOrderBridgeTest {
 	 *  wrong one answer for it. */
 	private static String onlyFinding(PatientChart chart, PatientClinicalContext context,
 			String question) throws IOException {
-		List<String> findings = findings(chart, context, question);
+		return onlyFinding(BRAND_NAMED_ORDERS, chart, context, question);
+	}
+
+	private static String onlyFinding(String fixture, PatientChart chart,
+			PatientClinicalContext context, String question) throws IOException {
+		List<String> findings = findings(fixture, chart, context, question);
 		assertEquals(1, findings.size(), "one pair is one citable record, was: " + findings);
 		return findings.get(0);
 	}
@@ -250,24 +266,46 @@ public class InteractionFindingChartOrderBridgeTest {
 		// through an ALIAS rather than through its display label — and the chart's own words therefore
 		// DO carry a name of it. The guard is the order's recorded names against the substance, never
 		// the string the finding prints: printed, this substance is "Acetylsalicylic acid (aspirin)",
-		// which no order display contains.
+		// which no order display contains, so a printed-name guard would bridge it as if the chart
+		// named nothing. Its partner here is a brand-named warfarin order, which IS bridged, so the
+		// case reads a clause rather than the absence of one.
 		String finding = onlyFinding(
-			chartNaming("order-aspirin", "Aspirin 81mg", "order-klarizom", "Klarizom"),
+			chartNaming("order-aspirin", "Aspirin 81mg", "order-warf", "Coagubrand"),
 			DrugReferenceTestSupport.ctx(60, null,
-				DrugReferenceTestSupport.set("Aspirin 81mg", "Klarizom"),
-				DrugReferenceTestSupport.set("N02BA01", "J01FA09"), null, null,
+				DrugReferenceTestSupport.set("Aspirin 81mg", "Coagubrand"),
+				DrugReferenceTestSupport.set("N02BA01", "B01AA03"), null, null,
 				Arrays.asList(
 					DrugReferenceTestSupport.activeOrder("order-aspirin", "Aspirin 81mg",
 						DrugReferenceTestSupport.set("Aspirin 81mg"),
 						DrugReferenceTestSupport.set("N02BA01")),
-					DrugReferenceTestSupport.activeOrder("order-klarizom", "Klarizom",
-						DrugReferenceTestSupport.set("Klarizom"),
-						DrugReferenceTestSupport.set("J01FA09")))),
+					DrugReferenceTestSupport.activeOrder("order-warf", "Coagubrand",
+						DrugReferenceTestSupport.set("Coagubrand"),
+						DrugReferenceTestSupport.set("B01AA03")))),
 			SCREENING_QUESTION);
 
-		assertEquals("Clarithromycin from Klarizom.", bridgeOf(finding),
+		assertEquals("Warfarin from Coagubrand.", bridgeOf(finding),
 			"only the brand-named order is bridged; the aspirin order's own name reaches its "
 					+ "substance, was: " + finding);
+	}
+
+	@Test
+	public void aCombinationOrderCarryingBOTHSubstancesBridgesBothSides() throws Exception {
+		// The shape three of the review's blocking findings turned on. ONE prescription carries both
+		// substances' codes, and the drug-in-play arm applies no activeOrdersOtherThan reduction — so
+		// the order that resolves the SUBJECT is also the only witness the PARTNER has. Attributing the
+		// partner only to orders that do NOT resolve the subject left "active order Simvastatin"
+		// unbridged here, which is #349's own defect surviving inside the clause meant to close it.
+		String finding = onlyFinding(chartNaming("order-zolvimix", "Zolvimix"),
+			DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Zolvimix"),
+				DrugReferenceTestSupport.set("C10AA01", "J01FA09"), null, null,
+				Arrays.asList(DrugReferenceTestSupport.activeOrder("order-zolvimix", "Zolvimix",
+					DrugReferenceTestSupport.set("Zolvimix"),
+					DrugReferenceTestSupport.set("C10AA01", "J01FA09")))),
+			"Can I give him clarithromycin?");
+
+		assertEquals("Clarithromycin from Zolvimix; Simvastatin from Zolvimix.", bridgeOf(finding),
+			"both sides of the pair are attributed to the one prescription that holds them, was: "
+					+ finding);
 	}
 
 	@Test
@@ -292,6 +330,58 @@ public class InteractionFindingChartOrderBridgeTest {
 	}
 
 	@Test
+	public void anOrderThatResolvedNEITHERSubstanceIsNotNamedAtAll() throws Exception {
+		// The conjunct that stops a FABRICATED statement about the patient's record. Both walks put
+		// every active order to addChartOrderBridge, so its own resolvesFromAny refusal is the only
+		// thing keeping an unrelated prescription out of a clause the model reads as this chart's own
+		// resolutions — inside citable evidence carrying STRENGTH_WITHHOLD. Nothing pinned it until
+		// this case: drop that conjunct and the third order below is named as one of the two
+		// substances' sources.
+		String finding = onlyFinding(
+			chartNaming("order-zolvimix", "Zolvimix", "order-klarizom", "Klarizom",
+				"order-para", "Paracetamex"),
+			DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set("Zolvimix", "Klarizom", "Paracetamex"),
+				DrugReferenceTestSupport.set("C10AA01", "J01FA09", "N02BE01"), null, null,
+				Arrays.asList(
+					DrugReferenceTestSupport.activeOrder("order-zolvimix", "Zolvimix",
+						DrugReferenceTestSupport.set("Zolvimix"),
+						DrugReferenceTestSupport.set("C10AA01")),
+					DrugReferenceTestSupport.activeOrder("order-klarizom", "Klarizom",
+						DrugReferenceTestSupport.set("Klarizom"),
+						DrugReferenceTestSupport.set("J01FA09")),
+					// A real prescription this dataset relates to neither side.
+					DrugReferenceTestSupport.activeOrder("order-para", "Paracetamex",
+						DrugReferenceTestSupport.set("Paracetamex"),
+						DrugReferenceTestSupport.set("N02BE01")))),
+			SCREENING_QUESTION);
+
+		assertEquals("Simvastatin from Zolvimix; Clarithromycin from Klarizom.", bridgeOf(finding),
+			"an order neither substance resolved from is not this chart's source for either, was: "
+					+ finding);
+	}
+
+	@Test
+	public void aFoldedChipsPartnerIsBridgedToo() throws Exception {
+		// The FOLDED chip is the highest-consequence record here — a rated rule carrying the class
+		// arm's duplicate-therapy sentence and STRENGTH_WITHHOLD — and it is worded at its own call
+		// site. Until this case that site could be neutered to an empty list with the whole build
+		// green, which is the blind spot this module's own probe cells already have for folded chips.
+		String finding = onlyFinding(FOLDED_CLASS_PAIR, chartNaming("order-moda", "Modabrand"),
+			DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Modabrand"),
+				DrugReferenceTestSupport.set("N06BA07"), null, null,
+				Arrays.asList(DrugReferenceTestSupport.activeOrder("order-moda", "Modabrand",
+					DrugReferenceTestSupport.set("Modabrand"),
+					DrugReferenceTestSupport.set("N06BA07")))),
+			"Can I give him methylphenidate?");
+
+		assertTrue(finding.contains("is in the same ATC class (N06BA)"),
+			"the arrangement must actually FOLD or this case pins the unfolded site, was: " + finding);
+		assertEquals("Modafinil from Modabrand.", bridgeOf(finding),
+			"a folded chip's partner is bridged like any other, was: " + finding);
+	}
+
+	@Test
 	public void theStrengthClauseStaysSentenceFinal() throws Exception {
 		String finding = ticketFinding();
 
@@ -306,7 +396,9 @@ public class InteractionFindingChartOrderBridgeTest {
 	@Test
 	public void theClauseIsTheWordsAModelReads() throws Exception {
 		assertEquals(" This module resolved the substances named here from this patient's own active "
-				+ "orders: ", LEAD, "the lead is prompt text; a reword is a behaviour change");
+				+ "orders. ", LEAD,
+			"the lead is prompt text, and it ENDS a sentence so ReferenceProseFidelityCheck's "
+					+ "sentence-whole exit covers its invariant half; a reword is a behaviour change");
 		assertEquals("Safety finding — Simvastatin: Simvastatin interacts with active order "
 				+ "Clarithromycin — " + RATING_AND_MECHANISM + LEAD
 				+ "Simvastatin from Zolvimix; Clarithromycin from Klarizom." + WITHHOLD,

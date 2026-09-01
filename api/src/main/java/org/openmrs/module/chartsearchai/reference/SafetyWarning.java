@@ -186,6 +186,8 @@ public class SafetyWarning {
 	 * @param chartOrderBridges see {@link #chartOrderBridges()} — empty where the chart already names
 	 *        every substance this chip names, which is the common case and not a degraded one
 	 */
+	// Three facts travel here, not two: the paragraphs above are worded for the pair issue #297 added
+	// and issue #349 put a third beside them. Read the @param list rather than any count in the prose.
 	static SafetyWarning interaction(String drug, String detail, String severity,
 			boolean unratedRelationship, DrugReference.Interaction reconciledRule,
 			String reconciledNoteName, List<ChartOrderBridge> chartOrderBridges) {
@@ -352,7 +354,7 @@ public class SafetyWarning {
 	 *
 	 * <p><b>It is scoped to the arm that can fold, and only one of the three can.</b>
 	 * {@code DrugSafetyValidator.classRelationships} runs per IN-PLAY substance, so the interaction
-	 * SCREEN (issue #113), which answers a question naming no drug, builds through the two-argument
+	 * SCREEN (issue #113), which answers a question naming no drug, builds through the narrow
 	 * {@code interactionWarning} and never sets this flag. One Minor-rated pair therefore states
 	 * withholding from the drug-in-play arm and a caution from the screen, on the same two active
 	 * orders: measured through the real {@code injectRecords} over
@@ -508,8 +510,11 @@ public class SafetyWarning {
 	 * decides which of {@code DrugSafetyValidator}'s arms resolved each side; the injector holds
 	 * neither. Deriving it there would mean a second walk over the same orders reaching the same
 	 * answer, which is the two-resolutions-that-agree shape issue #151 forbids — and its failure mode
-	 * is silent and one-directional. Decided once, at the one place both active-order arms word this
-	 * chip ({@code DrugSafetyValidator.interactionWarning}), so the two arms cannot answer differently.
+	 * is silent and one-directional. Resolved by ONE shared method
+	 * ({@code DrugSafetyValidator.chartOrderBridges}) called at each arm's chip-wording site — not
+	 * inside {@code interactionWarning}, which takes the list as a parameter, so nothing structural
+	 * stops one site being wrong or empty. Each site needs its own case; a review pass neutered the
+	 * FOLDED one with the whole build green.
 	 *
 	 * <p><b>It is a RESOLUTION and not an identity</b>, which is what keeps it clear of #339's reverted
 	 * rounds 5-6: {@code DrugReferenceInjector.FINDING_CHART_ORDER_LEAD} carries that argument, and the
@@ -538,7 +543,11 @@ public class SafetyWarning {
 	 *
 	 * <p>Both fields are strings a record PRINTS. {@code substanceName} is the name the chip already
 	 * says — never a second answer to which name to print — and {@code orderDisplay} is the order's own
-	 * display, which is the string a chart record of that order carries.
+	 * display, which is the string a chart record of that order carries. <b>{@link #toString()} is their
+	 * sole reader</b>, and there are deliberately no getters beside it: the renderer takes that spelling
+	 * so the pair a debug dump prints and the pair a model reads cannot differ, and a
+	 * {@code getSubstanceName()} here would also shadow {@link DrugReference#getSubstanceName()}, which
+	 * means the dataset's substance-name FIELD and not a printed label.
 	 */
 	static final class ChartOrderBridge {
 
@@ -549,14 +558,6 @@ public class SafetyWarning {
 		ChartOrderBridge(String substanceName, String orderDisplay) {
 			this.substanceName = substanceName;
 			this.orderDisplay = orderDisplay;
-		}
-
-		String getSubstanceName() {
-			return substanceName;
-		}
-
-		String getOrderDisplay() {
-			return orderDisplay;
 		}
 
 		@Override

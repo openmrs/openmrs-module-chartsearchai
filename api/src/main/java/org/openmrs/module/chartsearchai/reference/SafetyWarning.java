@@ -137,9 +137,8 @@ public class SafetyWarning {
 		this.reconciledRule = reconciledRule;
 		this.reconciledNoteName = reconciledNoteName;
 		// Copied and wrapped rather than stored as handed: this list travels to
-		// DrugReferenceInjector.renderFinding and into DrugSafetyValidator.StatedInteractionChips' key,
-		// so a caller that went on filling its own builder would change what a record already published
-		// and which chips a later collapse recognised. Never null, so no reader branches on absence —
+		// DrugReferenceInjector.renderFinding, so a caller that went on filling its own builder would
+		// change what a record already published. Never null, so no reader branches on absence —
 		// an empty list is the honest answer for every chip whose substances the chart already names.
 		this.chartOrderBridges = chartOrderBridges == null || chartOrderBridges.isEmpty()
 				? Collections.<ChartOrderBridge> emptyList()
@@ -513,8 +512,12 @@ public class SafetyWarning {
 	 * is silent and one-directional. Resolved by ONE shared method
 	 * ({@code DrugSafetyValidator.chartOrderBridges}) called at each arm's chip-wording site — not
 	 * inside {@code interactionWarning}, which takes the list as a parameter, so nothing structural
-	 * stops one site being wrong or empty. Each site needs its own case; a review pass neutered the
-	 * FOLDED one with the whole build green.
+	 * stops one site being wrong or empty — each needs its own case.
+	 * {@code InteractionFindingChartOrderBridgeTest.aFoldedChipsPartnerIsBridgedToo} covers the folded
+	 * drug-in-play site, {@code .theDrugInPlayArmsPartnerIsBridgedToo} and
+	 * {@code .aCombinationOrderCarryingBOTHSubstancesBridgesBothSides} the unfolded one, and the
+	 * screening site is covered several times over. Neuter one to an empty list and read the failures;
+	 * the folded case is the one an earlier draft here reported as UNCOVERED, which it no longer is.
 	 *
 	 * <p><b>It is a RESOLUTION and not an identity</b>, which is what keeps it clear of #339's reverted
 	 * rounds 5-6: {@code DrugReferenceInjector.FINDING_CHART_ORDER_LEAD} carries that argument, and the
@@ -523,8 +526,10 @@ public class SafetyWarning {
 	 *
 	 * <p>Not serialized: the wire shape is the four keys
 	 * {@code ChartSearchAiRestController.serializeSafetyWarnings} writes, and the chip's own detail is
-	 * unchanged by this. It IS read by {@code DrugSafetyValidator.StatedInteractionChips}, whose key is
-	 * every field a consumer reads and whose consumer here is the prompt.
+	 * unchanged by this. Its one reader is {@code DrugReferenceInjector.chartOrderClause}, and
+	 * {@code DrugSafetyValidator.StatedInteractionChips} deliberately does NOT key on it — that key
+	 * decides which chips are emitted, so keying on a prompt-only clause would let it decide wire
+	 * content. See that class's javadoc and ADR Decision 64.
 	 */
 	List<ChartOrderBridge> chartOrderBridges() {
 		return chartOrderBridges;
@@ -534,12 +539,16 @@ public class SafetyWarning {
 	 * One substance this chip names, and one active order of this patient's that the module resolved it
 	 * from — the pair {@code DrugReferenceInjector.FINDING_CHART_ORDER_LEAD}'s items are rendered from.
 	 *
-	 * <p>A value class with {@link #equals} and {@link #hashCode}, because
-	 * {@code DrugSafetyValidator.StatedInteractionChips} keys a chip on a list of these and a set of
-	 * lists compares by value. That is deliberately NOT a licence to give {@link SafetyWarning} itself
-	 * an {@code equals}: it has none so that nothing DOWNSTREAM can collapse chips this module meant to
-	 * keep apart ({@code InteractionRouteVariantTest}), and the collapse that reads this pair is this
-	 * module's own, upstream of the wire.
+	 * <p>A value class with {@link #equals} and {@link #hashCode}, and their ONE reader is
+	 * {@code DrugSafetyValidator.addChartOrderBridge}'s {@code out.contains(bridge)} — the
+	 * de-duplication that makes two orders of one display state their substance once, pinned by
+	 * {@code InteractionFindingChartOrderBridgeTest.twoOrdersOfTheSameDisplayAreNamedOnce}. Said
+	 * precisely because an earlier draft named the chip COLLAPSE as the reason and that is false (it
+	 * does not key on this list): a maintainer checking that reason, finding it false and deleting these
+	 * methods would leave the list identity-compared and print one substance twice inside a citable
+	 * record. That is also NOT a licence to give {@link SafetyWarning} itself an {@code equals}: it has
+	 * none so that nothing DOWNSTREAM can collapse chips this module meant to keep apart
+	 * ({@code InteractionRouteVariantTest}).
 	 *
 	 * <p>Both fields are strings a record PRINTS. {@code substanceName} is the name the chip already
 	 * says — never a second answer to which name to print — and {@code orderDisplay} is the order's own

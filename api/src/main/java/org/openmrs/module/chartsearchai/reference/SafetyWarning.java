@@ -512,12 +512,13 @@ public class SafetyWarning {
 	 * is silent and one-directional. Resolved by ONE shared method
 	 * ({@code DrugSafetyValidator.chartOrderBridges}) called at each arm's chip-wording site — not
 	 * inside {@code interactionWarning}, which takes the list as a parameter, so nothing structural
-	 * stops one site being wrong or empty — each needs its own case.
-	 * {@code InteractionFindingChartOrderBridgeTest.aFoldedChipsPartnerIsBridgedToo} covers the folded
-	 * drug-in-play site, {@code .theDrugInPlayArmsPartnerIsBridgedToo} and
-	 * {@code .aCombinationOrderCarryingBOTHSubstancesBridgesBothSides} the unfolded one, and the
-	 * screening site is covered several times over. Neuter one to an empty list and read the failures;
-	 * the folded case is the one an earlier draft here reported as UNCOVERED, which it no longer is.
+	 * stops an ARM being wrong or empty. Each arm resolves once and needs its own cases:
+	 * {@code InteractionFindingChartOrderBridgeTest.aFoldedChipsPartnerIsBridgedToo},
+	 * {@code .theDrugInPlayArmsPartnerIsBridgedToo} and
+	 * {@code .aCombinationOrderCarryingBOTHSubstancesBridgesBothSides} all redden TOGETHER on the
+	 * drug-in-play arm, because its folded and unfolded branches share one resolution; the screening
+	 * arm reddens several more. Neuter an arm and read the failures. No count of the sites is given —
+	 * an earlier draft published one and a later fix in the same change falsified it by merging two.
 	 *
 	 * <p><b>It is a RESOLUTION and not an identity</b>, which is what keeps it clear of #339's reverted
 	 * rounds 5-6: {@code DrugReferenceInjector.FINDING_CHART_ORDER_LEAD} carries that argument, and the
@@ -539,8 +540,10 @@ public class SafetyWarning {
 	 * One substance this chip names, and one active order of this patient's that the module resolved it
 	 * from — the pair {@code DrugReferenceInjector.FINDING_CHART_ORDER_LEAD}'s items are rendered from.
 	 *
-	 * <p>A value class with {@link #equals} and {@link #hashCode}, and their ONE reader is
-	 * {@code DrugSafetyValidator.addChartOrderBridge}'s {@code out.contains(bridge)} — the
+	 * <p>A value class with {@link #equals} and {@link #hashCode}. <b>{@code equals} has one reader</b>,
+	 * {@code DrugSafetyValidator.addChartOrderBridge}'s {@code out.contains(bridge)} — an
+	 * {@code ArrayList}, so that resolves to {@code equals} and never to {@code hashCode}, which has NO
+	 * reader today and is here only to hold the contract with {@code equals}. It is the
 	 * de-duplication that makes two orders of one display state their substance once, pinned by
 	 * {@code InteractionFindingChartOrderBridgeTest.twoOrdersOfTheSameDisplayAreNamedOnce}. Said
 	 * precisely because an earlier draft named the chip COLLAPSE as the reason and that is false (it
@@ -552,8 +555,9 @@ public class SafetyWarning {
 	 *
 	 * <p>Both fields are strings a record PRINTS. {@code substanceName} is the name the chip already
 	 * says — never a second answer to which name to print — and {@code orderDisplay} is the order's own
-	 * display, which is the string a chart record of that order carries. <b>{@link #toString()} is their
-	 * sole reader</b>, and there are deliberately no getters beside it: the renderer takes that spelling
+	 * display, which is the string a chart record of that order carries. <b>{@link #toString()} is the
+	 * only reader that PRINTS them</b> ({@code equals} reads both too), and there are deliberately no
+	 * getters beside it: the renderer takes that spelling
 	 * so the pair a debug dump prints and the pair a model reads cannot differ, and a
 	 * {@code getSubstanceName()} here would also shadow {@link DrugReference#getSubstanceName()}, which
 	 * means the dataset's substance-name FIELD and not a printed label.

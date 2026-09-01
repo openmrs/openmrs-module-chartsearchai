@@ -4943,7 +4943,8 @@ public class DrugSafetyValidator {
 	 * calls (median 40) 42 ms against 41 ms; 0 calls (quietest 40) 14 ms against 14 ms. At 80 busiest
 	 * orders, 2405 calls, 355 ms against 272 ms. A request pays the pass TWICE (pre-answer and
 	 * post-answer), so the maximising arrangement is ~+26 ms per request against a request whose
-	 * latency is an LLM call. Measured 2026-09-01.
+	 * latency is an LLM call. Measured 2026-09-01 with a bespoke instrumented harness and a
+	 * stubbed-body A/B; NO committed fixture pins any of these, so re-measure rather than re-quote.
 	 *
 	 * <p><b>And HALF of that second payment is dead work, which is the honest denominator.</b>
 	 * {@link SafetyWarning#chartOrderBridges()}'s only production reader is
@@ -4973,6 +4974,10 @@ public class DrugSafetyValidator {
 			String partnerName, PatientClinicalContext context,
 			List<PatientClinicalContext.ActiveDrugOrder> partnerWitnesses,
 			List<DrugReference> orderEntries) {
+		// The null half of this guard is unreachable and defensive only — both arms have already
+		// dereferenced or early-returned on a null context. Said so that the guard does not look
+		// better defended than it is, as addChartOrderBridge's own javadoc does for its blank-name
+		// refusal.
 		if (context == null || context.getActiveDrugOrders().isEmpty()) {
 			return Collections.emptyList();
 		}

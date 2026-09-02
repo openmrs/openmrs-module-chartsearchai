@@ -1167,7 +1167,8 @@ public class CitationGroundingVerifierTest {
 	 * it was to fail the moment a third reference-GROUP type was added. Issue #354 added one
 	 * ({@code drug_class_note}), so that is now live: measured on it, hardcoding
 	 * {@code isGroundingDemoteOnly} to the old pair reddens this case. Which OTHER sites it also
-	 * reddens differs per site; mutate the one being changed rather than reasoning from this one. A third reference-group type and not a fourth injected type
+	 * reddens differs per site; mutate the one being changed rather than reasoning from this one. A
+	 * third reference-group type and not a fourth injected type
 	 * of any kind, which is what this said until #229 measured it: hardcode the predicate, add a
 	 * fourth declared constant that groups as CHART evidence, and this sweep stays green — the
 	 * hardcode and the classification agree that such a type is not demote-only, so nothing here can

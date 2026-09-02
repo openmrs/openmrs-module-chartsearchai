@@ -354,11 +354,12 @@ public class DrugReferenceInjector {
 				ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_INJECT_FROM_QUERY);
 		Map<DrugReference, SubstanceRendering> matched =
 				matchingEntries(orderEntries, question, context, questionDrugs, fromQuery);
-		// The class this question named when it named one and resolved NO substance — issue #354.
-		// Gated on questionDrugs and never on `matched`: with the question leg off, a question that
-		// resolved substances perfectly well collects nothing, and a note raised there would report a
-		// class over a drug the module did know. Gated on fromQuery because the note IS the
-		// question-driven leg's material — it says what that leg found no substance for.
+		// The class this question named when it named one and resolved NO substance — issue #354. One
+		// rule in two conjuncts: the note is the question-driven leg's own material, so it needs both
+		// that the leg RAN and that it resolved nothing. `questionDrugs` and not `matched` because
+		// that is the thing the rule is about; with fromQuery true the two happen to agree (a question
+		// resolving nothing collects nothing on either leg, relatedToAny being false for an empty
+		// list), so nothing observes the difference today and a third collecting leg would end that.
 		String namedClass = fromQuery && questionDrugs.isEmpty()
 				? drugReferenceService.namedDrugClass(question)
 				: null;
@@ -1420,6 +1421,17 @@ public class DrugReferenceInjector {
 	 * reappearing inside citable reference prose. What holds in every arrangement is that the CLASS
 	 * resolved to nothing, and that is the whole of what it says.
 	 *
+	 * <p><b>THREE wider sentences were written here and all three were measured false — do not write
+	 * a fourth.</b> "no interaction screen was run for this class" and "this response carries no
+	 * reference material for it" each fall to a screening question that fires the pairwise arm
+	 * alongside this note; "an interaction screen runs against a named substance, not a class" falls
+	 * to {@code DrugSafetyValidator.classRelationships}, whose {@code interaction} chip screens on a
+	 * shared ATC subgroup or a shared cross-reactivity GROUP and names that group — which is this
+	 * note's own class term. Each was written to correct the one before it. The remedy is not a
+	 * better sentence about what the module does; it is to make no claim of that shape, which is why
+	 * the record now states one fact about the QUESTION and nothing about the response. The reader's
+	 * route to a screen is in sentence two: the data is indexed by substance.
+	 *
 	 * <p><b>It says what was not done, not what the reader should do about this patient.</b> It leads
 	 * with {@link #REFERENCE_PREFIX}, so the system prompt's record-type sentence frames it as
 	 * reference data rather than this patient's own — and the closing sentence deliberately mentions
@@ -1434,8 +1446,7 @@ public class DrugReferenceInjector {
 	 */
 	private static String renderDrugClassNote(String drugClass) {
 		return REFERENCE_PREFIX + "drug class \"" + drugClass + "\". The interaction reference data is "
-				+ "indexed by individual substance, so the class was not resolved to any substance. An "
-				+ "interaction screen runs against a named substance, not a class.";
+				+ "indexed by individual substance, so the class was not resolved to any substance.";
 	}
 
 	/**

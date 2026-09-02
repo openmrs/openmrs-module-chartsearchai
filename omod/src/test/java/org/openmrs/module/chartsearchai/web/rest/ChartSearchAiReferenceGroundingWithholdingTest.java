@@ -237,7 +237,9 @@ public class ChartSearchAiReferenceGroundingWithholdingTest {
 	 * still AGREES with the classifier — which is what a hardcoded pair does for every type it happens
 	 * to enumerate. It can see one that has fallen behind, and since issue #354 added a third
 	 * reference-group type the fixtures here do: mutate {@code groundedForWire} to the old pair and
-	 * read which cases redden. Both halves are wanted; neither subsumes the other. {@code RESOURCE_TYPE_*} are compile-time {@code String} constants, so javac
+	 * read which cases redden. Both halves are wanted; neither subsumes the other.
+	 *
+	 * <p>{@code RESOURCE_TYPE_*} are compile-time {@code String} constants, so javac
 	 * inlines the VALUE into the constant pool of any class that mentions one — whether written as
 	 * the constant, as a bare literal, or as a folded concatenation. Scanning every class file the
 	 * controller compiles to therefore answers "does this class name a resource type".

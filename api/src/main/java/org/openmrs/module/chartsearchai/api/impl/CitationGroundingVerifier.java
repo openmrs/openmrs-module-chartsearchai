@@ -121,7 +121,8 @@ import org.springframework.stereotype.Service;
  * {@link ChartSearchAiConstants#RESOURCE_TYPE_DRUG_REFERENCE}, the case #106 measured, and
  * {@link ChartSearchAiConstants#RESOURCE_TYPE_SAFETY_FINDING}, the deterministic drug-safety join
  * #110 injects as a citable record, with
- * {@link ChartSearchAiConstants#RESOURCE_TYPE_DRUG_CLASS_NOTE} joining them in issue #354. The finding was graded as chart evidence until issue #122,
+ * {@link ChartSearchAiConstants#RESOURCE_TYPE_DRUG_CLASS_NOTE} joining them in issue #354. The
+ * finding was graded as chart evidence until issue #122,
  * because this carve-out named the drug-reference type instead of deriving from the group; its
  * verdicts tracked embedding noise, and it also spent Tier-2 cap slots meant for chart claims. An
  * injected {@link ChartSearchAiConstants#RESOURCE_TYPE_ACTIVE_DRUG_ORDER} record is NOT reference

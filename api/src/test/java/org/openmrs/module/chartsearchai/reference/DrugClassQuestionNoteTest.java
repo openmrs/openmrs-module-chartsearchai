@@ -28,6 +28,7 @@ import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSuppor
 import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport.shippedEntries;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.Collections;
 
 import org.junit.jupiter.api.Test;
@@ -218,6 +219,34 @@ public class DrugClassQuestionNoteTest {
 	}
 
 	/**
+	 * The class arm screens on a CLASS and names it, so the note may not say screening happens only
+	 * against a named substance either. That was the third wider sentence written into this record
+	 * and the third measured false; the case is here so a fourth is not written.
+	 */
+	@Test
+	public void theNoteMakesNoClaimAboutHowTheModuleScreens() {
+		PatientClinicalContext context = ctx(60, null, set("aspirin 81mg"), set("N02BA01"), null, null);
+		DrugSafetyValidator validator = DrugReferenceTestSupport.validator(ddinterServiceWithGroups());
+		List<SafetyWarning> chips = validator.validate("Ibuprofen would be an option.",
+				"Can I give her an NSAID?", context);
+
+		boolean screenedOnTheClass = false;
+		for (SafetyWarning chip : chips) {
+			screenedOnTheClass |= chip.getDetail() != null
+					&& chip.getDetail().contains("cross-reactivity group (NSAID)");
+		}
+		assertTrue(screenedOnTheClass,
+				"the premise: this response really does raise a chip that screened on the NSAID class "
+						+ "and names it. Chips: " + chips);
+
+		RecordMapping note = classNoteIn(inject(ddinterServiceWithGroups(),
+				"Can I give her an NSAID?"));
+		assertFalse(note.getText().contains("not a class"),
+				"so the note must not say a screen runs only against a named substance: "
+						+ note.getText());
+	}
+
+	/**
 	 * The false-claim guard, and the reason the note lists no members: a record the answer may cite
 	 * verbatim must not name a drug. Put back through the production accessor over the SHIPPED
 	 * knowledge base, because a note naming the issue's own {@code Levonorgestrel} would pass
@@ -362,8 +391,12 @@ public class DrugClassQuestionNoteTest {
 	 */
 	@Test
 	public void aPaddedGroupNameStillNamesItsClass() {
-		assertEquals("NSAID",
-				serviceWithCuratedGroups(group("  NSAID  ")).namedDrugClass("Can I give her an NSAID?"),
+		// On a class only the GROUPS name, for the reason the sibling case above gives: NSAID is named
+		// by the code table too, so a fixture built on it answers whether or not the name was trimmed
+		// — measured, the whole tree stays green with the trim reverted.
+		assertEquals("Cephalosporin",
+				serviceWithCuratedGroups(group("  Cephalosporin  "))
+						.namedDrugClass("Can I give her a cephalosporin?"),
 				"a padded curated group name must still be recognised, and reported trimmed");
 	}
 

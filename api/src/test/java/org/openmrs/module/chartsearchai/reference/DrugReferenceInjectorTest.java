@@ -259,14 +259,18 @@ public class DrugReferenceInjectorTest {
 	@Test
 	public void interactionRenderCapStillBoundsTheRenderedSection() {
 		// The cap is load-bearing — Warfarin carries ~934 partners in the full KB — so the
-		// prioritisation must reorder what renders, never widen it without bound. The invariant is
-		// the cap plus at most ONE note: the pre-existing "at least one interaction is always
-		// shown" rule already overshoots by one, and promoting the patient's partners extends that
-		// to one-per-segment (a single promoted note can be long enough to consume the whole
-		// budget — the bundled aspirin x ibuprofen Major note is ~1200 of the 1500 chars — and
-		// dropping the entire dataset tail would leave the model unable to say anything about the
-		// drug beyond this patient's one overlap). Expressed as 2x the cap rather than a magic
-		// margin, so a fixture whose notes get longer cannot make this pass by luck.
+		// prioritisation must reorder what renders, never widen it without bound. What bounds it is the
+		// cap plus the patient's OWN partners, which the two patient-specific segments render without
+		// consulting the budget at all — that is what "never invisible" means, and a single promoted
+		// note can be long enough to consume the whole budget by itself (the bundled aspirin x
+		// ibuprofen Major note is ~1200 of the 1500 chars) while dropping the dataset tail would leave
+		// the model unable to say anything about the drug beyond this patient's overlap. So this
+		// arrangement's bound is the cap plus its ONE active drug's note, which 2x the cap expresses
+		// without a magic margin; a chart with many of an entry's partners on it overshoots further,
+		// by however many those are, and render's own comment carries that measurement.
+		//
+		// Read this case as pinning the DATASET tail's contribution, then: it is the half the budget
+		// governs, and the half a reordering could widen without bound.
 		String section = interactionsSectionFor("Lisinopril", "ibuprofen");
 		assertTrue(section.length() <= 2 * DrugReferenceInjector.MAX_INTERACTION_RENDER_CHARS,
 				"the rendered interactions section must stay bounded by cap + one note: " + section.length());

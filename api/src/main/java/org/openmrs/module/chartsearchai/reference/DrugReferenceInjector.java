@@ -1513,9 +1513,10 @@ public class DrugReferenceInjector {
 	 * <p>Measured over the shipped 19 MB KB (2026-08-07; re-measure before relying on the figures):
 	 * 1876 of its 2283 entries carried at least one repeated partner and 19,316 of the 590,312
 	 * expanded rows were surplus, {@code Ozanimod} carrying the largest single surplus at 49. The cost
-	 * of carrying them was not only tidiness: segment 1 of {@code render} deliberately overrides
-	 * {@link #MAX_INTERACTION_RENDER_CHARS} so that a partner the patient is on is never invisible, so
-	 * a partner filed under three rows spent three notes of budget the budget could not claw back.
+	 * of carrying them was not only tidiness: {@code render}'s two patient-specific segments deliberately
+	 * override {@link #MAX_INTERACTION_RENDER_CHARS} so that a partner the patient is on is never
+	 * invisible, so a partner filed under three rows spent three notes of budget the budget could not
+	 * claw back.
 	 *
 	 * <p>The route vocabulary that is the data-side half of #115 is still missing, and this collapse
 	 * does not need it: it decides which of several rows about ONE partner to SHOW, exactly as the
@@ -2391,11 +2392,13 @@ public class DrugReferenceInjector {
 			List<String> shown = new ArrayList<String>();
 			int used = 0;
 
-			// Segment 1 — the partners this patient is actually on. Never invisible: the full note
-			// while the budget allows, else the compact "name (Severity)" form. Dropping one of
-			// these is how the chip and the prose come to disagree, which is the whole defect this
-			// ordering exists to fix, so the budget yields to them rather than the reverse. Bounded
-			// by the patient's own active-drug list, not by the dataset's breadth.
+			// Segment 1 — the partners this patient is actually on whose rules the floor ADMITS, which
+			// since issue #357 is the qualifier that distinguishes this segment from the next rather
+			// than from the tail. Never invisible: the full note while the budget allows, else the
+			// compact "name (Severity)" form. Dropping one of these is how the chip and the prose come
+			// to disagree, which is the whole defect this ordering exists to fix, so the budget yields
+			// to them rather than the reverse. Bounded by the patient's own active-drug list, not by
+			// the dataset's breadth.
 			for (int i = 0; i < interactions.promotedCount; i++) {
 				InteractionNote n = ordered.get(i);
 				String piece = shown.isEmpty() || used + n.full.length() <= MAX_INTERACTION_RENDER_CHARS

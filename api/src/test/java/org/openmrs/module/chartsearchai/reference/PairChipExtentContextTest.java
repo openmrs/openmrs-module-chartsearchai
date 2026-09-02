@@ -334,10 +334,13 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 
 	@Test
 	public void aDrugInPlayScreenThatRelatesNoActiveOrderStatesZeroRatherThanNothing() {
-		// The ticket's own row. "Can I give this patient X?" names ONE drug, so neither pairwise arm
-		// runs — the question-pair arm needs two and the screen needs none — and until issue #356 the
-		// arm that DID screen X against her medications said so nowhere, so a complete negative screen
-		// and a question nobody screened at all were one value on the wire.
+		// The ticket's own row. "Can I give this patient X?" resolves ONE reference entry here, so
+		// neither pairwise arm runs — the question-pair arm needs two and the screen needs none — and
+		// until issue #356 the arm that DID screen X against her medications said so nowhere, so a
+		// complete negative screen and a question nobody screened at all were one value on the wire.
+		// "Here" is load-bearing: a name resolving to several entries opens the question-pair arm
+		// instead, which is why the metformin and clarithromycin of these cases were each checked
+		// against findImpliedByQuery over the excerpt rather than assumed to be one drug apiece.
 		Pass none = pass("Can I give this patient metformin?", oneSimvastatinOrder());
 
 		assertTrue(none.chips.isEmpty(),

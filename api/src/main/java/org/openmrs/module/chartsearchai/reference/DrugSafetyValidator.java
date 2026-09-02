@@ -683,10 +683,12 @@ public class DrugSafetyValidator {
 					orderEntries, interactionPairs, coMedications, statedChips);
 		}
 		// And where neither of them ran, the arm that DID screen speaks (issue #356). "Can I give this
-		// patient X?" names one drug: too few for the question-pair arm, too many for the screen, so
-		// the drug-in-play arm above is the whole of the interaction check on the canonical prescribing
-		// question — and a completed negative screen was published as `null`, the value PairChipExtent
-		// defines as "the producer stated nothing".
+		// patient X?" typically resolves one drug: too few for the question-pair arm, too many for the
+		// screen, so the drug-in-play arm above is the whole of the interaction check on the canonical
+		// prescribing question — and a completed negative screen was published as `null`, the value
+		// PairChipExtent defines as "the producer stated nothing". Typically and not always: a name
+		// that resolves to several reference entries opens the question-pair arm, which then owns the
+		// field. See PairChipExtent, which is canonical for what that costs a reader.
 		//
 		// LAST and only where pairExtent is still null, never summed. A pairwise statement is about a
 		// BOUNDED list — found and reported can differ, and which is the whole of what a client renders
@@ -2348,9 +2350,11 @@ public class DrugSafetyValidator {
 	 * a substance's chips keep the position they have always had.
 	 *
 	 * <p><b>It reports how many pairs it related, and that is what reaches the wire</b> (issue #356).
-	 * "Can I give this patient X?" names ONE drug, so neither pairwise arm runs — the question-pair
-	 * arm needs two and the screen needs none — and this arm is the whole of the interaction check on
-	 * the canonical prescribing question. Stating nothing published a completed negative screen as
+	 * "Can I give this patient X?" usually resolves ONE drug, so neither pairwise arm runs — the
+	 * question-pair arm needs two and the screen needs none — and this arm is then the whole of the
+	 * interaction check on the canonical prescribing question. Where the name resolves to several
+	 * reference entries the question-pair arm owns the field instead and this count is discarded;
+	 * {@link PairChipExtent} is canonical for what that costs a reader. Stating nothing published a completed negative screen as
 	 * {@code interactionPairs: null}, which {@link PairChipExtent} defines as "the producer stated no
 	 * measurement": a clinician was given an abstention indistinguishable from one where nobody
 	 * looked. The count returned is the RULE chips this call appended, because that is the population

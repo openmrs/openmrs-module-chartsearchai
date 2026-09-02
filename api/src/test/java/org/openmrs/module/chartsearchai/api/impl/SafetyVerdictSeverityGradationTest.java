@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
@@ -325,16 +326,35 @@ public class SafetyVerdictSeverityGradationTest {
 	 */
 	@Test
 	public void bothCurrentMedicationClassesAreTaughtInTheWordsTheInjectedRecordUses() {
+		assertBranchNaming(clauseCore(DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION),
+			"the change-of-therapy class must have a BRANCH of its own, or a screened pair of the "
+					+ "patient's own prescriptions has a clause no branch of the prompt answers and "
+					+ "falls through to whichever lead the model reaches for — which is what #283 "
+					+ "measured");
+		assertBranchNaming(clauseCore(DrugReferenceInjector.STRENGTH_CAUTION_CURRENT_MEDICATION),
+			"and so must its caution counterpart, in the same words");
+	}
+
+	/**
+	 * Asserts that some sentence of the safety paragraph names {@code core} AND tells the model how to
+	 * OPEN — i.e. that the class has a branch of its own, not merely a mention.
+	 *
+	 * <p><b>Why the paragraph-wide containment this replaced was not enough, measured rather than
+	 * argued.</b> The ranking sentence for a mixed set names both current-medication classes in order
+	 * to name the loser, so it satisfies a bare {@code paragraph.contains(core)} on its own: deleting
+	 * the change-of-therapy BRANCH — the sentence that says what to do with such a finding — left the
+	 * whole api suite green. That is the guard-satisfied-by-a-sibling shape, and it is what the
+	 * "open" term closes; the ranking sentence carries no opening instruction.
+	 */
+	private static void assertBranchNaming(String core, String because) {
 		String paragraph = safetyParagraph();
-		assertTrue(paragraph.contains(
-			clauseCore(DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION)),
-			"the change-of-therapy class must be named, or a screened pair of the patient's own "
-					+ "prescriptions has a clause no branch of the prompt answers and falls through "
-					+ "to whichever lead the model reaches for — which is what #283 measured: "
-					+ paragraph);
-		assertTrue(paragraph.contains(
-			clauseCore(DrugReferenceInjector.STRENGTH_CAUTION_CURRENT_MEDICATION)),
-			"and so must its caution counterpart, in the same words: " + paragraph);
+		for (String sentence : paragraph.split("(?<=\\.)\\s+")) {
+			if (sentence.contains(core) && sentence.contains("open")) {
+				return;
+			}
+		}
+		fail(because + ". No sentence of the paragraph both names \"" + core
+				+ "\" and says how to open: " + paragraph);
 	}
 
 	/**

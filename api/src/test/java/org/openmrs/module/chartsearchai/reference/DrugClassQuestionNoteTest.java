@@ -238,6 +238,11 @@ public class DrugClassQuestionNoteTest {
 
 		assertTrue(note.getText().startsWith(DrugReferenceInjector.REFERENCE_PREFIX),
 				"the note must begin with the lead the system prompt names, was: " + note.getText());
+		// The other half — that the lead and the prompt still name the SAME token — is asserted in
+		// ReferenceRecordPromptLeadTest, which lives in the prompt's own package because
+		// LlmProvider.DEFAULT_SYSTEM_PROMPT is package-private there and widening it for a test would
+		// be a production change made for a test's convenience.
+
 	}
 
 	/**

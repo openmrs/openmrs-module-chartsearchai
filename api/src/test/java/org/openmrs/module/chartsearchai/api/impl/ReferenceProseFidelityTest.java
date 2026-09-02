@@ -460,8 +460,8 @@ public class ReferenceProseFidelityTest {
 		// twice, which the sixteen-entry DDInter excerpt does not — but a rendered reference record
 		// whose partner was PROMOTED is a "; "-joined list of per-partner interaction items and
 		// DDInter partners routinely share a mechanism string, so the shape is ordinary rather than
-		// exotic. Promoted is the qualifier issue #355 added: with nothing promoted the record normally
-		// carries names and severities rather than mechanism prose for this check to pool — normally,
+		// exotic. Promoted is the qualifier issue #355 added: with nothing patient-specific to show the
+		// record normally carries names and severities rather than mechanism prose for this check to pool — normally,
 		// not always, since a rule with no token and no ATC has no name to shorten to and renders its
 		// paragraph anyway.
 		//

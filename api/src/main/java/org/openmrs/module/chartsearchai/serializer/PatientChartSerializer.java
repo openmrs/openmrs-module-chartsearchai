@@ -741,7 +741,7 @@ public class PatientChartSerializer {
 		 * render budget; once a partner the patient is actually on is shown, the remaining dataset
 		 * being represented by one partner rather than rendered in full; and, when NO partner the
 		 * patient is on is shown, the rest being represented by a bounded handful of them named with
-		 * their severities ({@code DrugReferenceInjector.MAX_TAIL_PARTNERS_WHEN_NONE_PROMOTED}, issue
+		 * their severities ({@code DrugReferenceInjector.MAX_TAIL_PARTNERS_WHEN_NOTHING_PATIENT_SPECIFIC}, issue
 		 * #355). A large count therefore usually means "not relevant to this patient" rather than
 		 * "did not fit", so it must not be presented to a clinician as an omission for length.
 		 *

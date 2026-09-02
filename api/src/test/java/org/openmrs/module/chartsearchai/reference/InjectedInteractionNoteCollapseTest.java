@@ -74,12 +74,10 @@ public class InjectedInteractionNoteCollapseTest {
 		return references.get(0);
 	}
 
-	/** The lowercased {@code Interactions:} section of a rendered record. */
+	/** The lowercased {@code Interactions:} section of a rendered record — {@link DrugReferenceTestSupport}'s
+	 *  rule, which is where it lives now that a third class wanted it and its own copy had drifted. */
 	private static String interactionsOf(RecordMapping record) {
-		String text = record.getText();
-		int start = text.indexOf("Interactions:");
-		assertTrue(start >= 0, "precondition: the record must render an Interactions section: " + text);
-		return text.substring(start).toLowerCase(Locale.ROOT);
+		return DrugReferenceTestSupport.interactionsSectionOf(record);
 	}
 
 	/**
@@ -87,14 +85,11 @@ public class InjectedInteractionNoteCollapseTest {
 	 * followed by the rendering's own {@code " ("}, not of the bare name, because a mechanism
 	 * paragraph legitimately mentions the drugs it is about ("…exposure to sirolimus, which is
 	 * primarily metabolized…") and counting those would make this assert something else.
+	 * {@link DrugReferenceTestSupport}'s rule, shared with the case that asks WHERE such a note begins
+	 * rather than how many there are.
 	 */
 	private static int notesHeadedBy(String section, String partner) {
-		String needle = partner + " (";
-		int count = 0;
-		for (int at = section.indexOf(needle); at >= 0; at = section.indexOf(needle, at + 1)) {
-			count++;
-		}
-		return count;
+		return DrugReferenceTestSupport.notesHeadedBy(section, partner);
 	}
 
 	@Test
@@ -136,11 +131,12 @@ public class InjectedInteractionNoteCollapseTest {
 	@Test
 	public void theDatasetTailNamesEachPartnerOnceToo() throws Exception {
 		// The same collapse with NOTHING promoted — the common shape, since most patients are on none
-		// of an entry's partners. Before the collapse, segment 2 spent the whole budget on full notes
-		// in dataset order, so a repeated partner was a repeated paragraph: Voxelotor's two sirolimus
-		// rows (Major and Moderate) were two separate mechanism paragraphs about one co-medication.
-		// Since issue #355 that segment names a bounded handful of partners compactly instead. This case
-		// constrains MAX_TAIL_PARTNERS_WHEN_NONE_PROMOTED from below only as far as its own two
+		// of an entry's partners. Before the collapse, the dataset tail spent the whole budget on full
+		// notes in dataset order, so a repeated partner was a repeated paragraph: Voxelotor's two
+		// sirolimus rows (Major and Moderate) were two separate mechanism paragraphs about one
+		// co-medication. Since issue #355 that segment names a bounded handful of partners compactly
+		// instead, where nothing patient-specific was shown. This case
+		// constrains MAX_TAIL_PARTNERS_WHEN_NOTHING_PATIENT_SPECIFIC from below only as far as its own two
 		// assertions reach — sirolimus and dexamethasone, of this entry's four partners — so it is
 		// green at 3, where a partner it does not assert on goes unnamed.
 		RecordMapping record = injectedRecord("is it safe to give voxelotor?",
@@ -258,8 +254,11 @@ public class InjectedInteractionNoteCollapseTest {
 
 	/**
 	 * A curated entry filing ONE partner as two rows carrying the same token and DIFFERENT ATC codes
-	 * — the only shape in which two rows of one partner group answer
-	 * {@link PatientClinicalContext#hasActiveDrug} differently. See the fixture's own description.
+	 * — a shape in which two rows of one partner group answer
+	 * {@link PatientClinicalContext#hasActiveDrug} differently, because sharing a token leaves only the
+	 * ATC arm able to separate them. It used to say "the only shape" and no longer does: the
+	 * order-driven grouping branch was never ruled out, and issue #357's sub-floor sibling of this
+	 * fixture carries the same caveat. See the fixture's own description.
 	 */
 	private static final String ATC_SPLIT_FIXTURE =
 			"chartsearchai-test/drug-reference-partner-atc-split-rows.json";
@@ -277,21 +276,25 @@ public class InjectedInteractionNoteCollapseTest {
 		// (token, ATC) pair that predicate is then asked about. Where two rows of one partner carry
 		// DIFFERENT ATC codes those answers differ, and the most severe row can be the one the
 		// patient does not match — so a wrong choice here costs the partner its place in segment 1,
-		// the segment that overrides MAX_INTERACTION_RENDER_CHARS.
+		// the segment that overrides MAX_INTERACTION_RENDER_CHARS. (Since issue #357 a de-promoted row
+		// of a partner the chart names lands in the segment between segment 1 and the tail instead,
+		// which is why that issue asks this same question of its own boundary; here both warfarin rows
+		// are above the floor, so the tier that moves is still promotion's.)
 		//
-		// Before issue #355, that cost was eviction from the record: with another partner promoted,
-		// segment 2 rendered exactly one tail representative, so a de-promoted partner competing for
+		// Before issue #355, that cost was eviction from the record: with something patient-specific
+		// shown, the tail rendered exactly one representative, so a de-promoted partner competing for
 		// that slot did not merely change wording — it left the record while the chip still warned
 		// about it. Since #355 that branch is unchanged (still one representative where something
-		// else is promoted), but THIS fixture cannot reach it: rifabutin and carbamazepine match
-		// neither row of onAcenocoumarolByAtc(), so nothing but warfarin is ever promotable here, and
-		// a wrong collapse choice (surviving on the unmatched B01AA03 row) would leave nothing
-		// promoted at all. Since #355 that means the compact, severity-ordered tail capped at
-		// MAX_TAIL_PARTNERS_WHEN_NONE_PROMOTED, not budget exhaustion on full paragraphs — so a wrong
-		// choice here would now cost this fixture the WORDS (the wrong, unmatched row's text) rather
-		// than warfarin's presence. Measured on this head: injectRecords over a context that, like the
-		// wrong survivor, matches none of the three rows renders "Interactions: rifabutin (Major);
-		// carbamazepine (Major); warfarin (Major)." — warfarin present, under its wrong row.
+		// patient-specific was shown), but THIS fixture cannot reach it: rifabutin and carbamazepine
+		// match neither row of onAcenocoumarolByAtc(), so nothing but warfarin is ever promotable here,
+		// and a wrong collapse choice (surviving on the unmatched B01AA03 row) would leave the two
+		// patient-specific segments both empty. Since #355 that means the compact, severity-ordered
+		// tail capped at MAX_TAIL_PARTNERS_WHEN_NOTHING_PATIENT_SPECIFIC, not budget exhaustion on full
+		// paragraphs — so a wrong choice here would now cost this fixture the WORDS (the wrong,
+		// unmatched row's text) rather than warfarin's presence. Measured on the merged head
+		// (2026-09-02): injectRecords over a context that, like the wrong survivor, matches none of the
+		// three rows renders "Interactions: rifabutin (Major); carbamazepine (Major); warfarin (Major)."
+		// — 73 characters, warfarin present under its wrong row, withheldInteractions 0.
 		//
 		// bestRulePerPartner cannot reach this shape because it filters on hasActiveDrug BEFORE
 		// grouping, so only rows the patient matches are ever candidates. This asserts the collapse

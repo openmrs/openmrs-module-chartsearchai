@@ -675,8 +675,8 @@ public class DrugSafetyInteractionScreeningTest {
 		// A deliberate scope decision, pinned. Order-driven reference injection stays
 		// relevance-scoped: unscoping it for screening questions would append one full reference
 		// record per active order, and that cost grows with the medication list. The per-record half
-		// of that cost is usually smaller since issue #355 — a record with nothing promoted normally
-		// names a bounded handful of partners with their severities rather than spending
+		// of that cost is usually smaller since issue #355 — a record with nothing patient-specific to
+		// show normally names a bounded handful of partners with their severities rather than spending
 		// MAX_INTERACTION_RENDER_CHARS on the mechanism prose #117 measures the model reciting
 		// verbatim, though a rule with no name to shorten to still renders its paragraph — so this
 		// decision now stands mostly on the record COUNT rather than on both. The deterministic finding already

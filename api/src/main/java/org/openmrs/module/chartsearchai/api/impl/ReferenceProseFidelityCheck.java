@@ -86,8 +86,8 @@ import org.slf4j.LoggerFactory;
  *       second record's layout makes of it. One mechanism string really is rendered into TWO records
  *       that are cited together (the {@code safety_finding}'s detail and the {@code drug_reference}'s
  *       {@code "; "}-joined interaction item) wherever that partner is PROMOTED — since issue #355 a
- *       record with nothing promoted normally carries names and severities rather than mechanism
- *       prose, which leaves this check little to judge on the commonest record. Normally, not always:
+ *       record with nothing patient-specific to show normally carries names and severities rather
+ *       than mechanism prose, which leaves this check little to judge on the commonest record. Normally, not always:
  *       a rule carrying no token and no ATC has no name to shorten to, so an operator-authored
  *       dataset still renders paragraphs there ({@code drug-reference-unpromoted-tail-budget.json} is
  *       one). That is where this came from — but on that
@@ -160,8 +160,8 @@ import org.slf4j.LoggerFactory;
  * mechanism string, so they diverge together, and no record there states one passage twice. Both
  * shapes are ordinary in the data this runs on — a rendered reference record whose partner was
  * PROMOTED is a {@code "; "}-joined list of per-partner items and DDInter partners routinely share a
- * mechanism, and since issue #355 a record with nothing promoted normally carries names and
- * severities instead, per the bullet above — so their cases build the record rather than injecting
+ * mechanism, and since issue #355 a record with nothing patient-specific to show normally carries
+ * names and severities instead, per the bullet above — so their cases build the record rather than injecting
  * one. That is the right operand here, because this check is a pure function of an answer and a
  * record's TEXT and the cases beside them already pin that it runs over production-rendered records
  * on the real answer path. Both were unpinned when they were written,

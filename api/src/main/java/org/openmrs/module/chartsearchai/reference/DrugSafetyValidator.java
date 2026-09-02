@@ -760,7 +760,8 @@ public class DrugSafetyValidator {
 	 * grouping here ({@link #bestRulePerPartner}), the two pairwise arms' chip orderings
 	 * ({@link #PAIR_SEVERITY_DESCENDING} and {@link #SCREENED_PAIR_SEVERITY_DESCENDING}) and the
 	 * note ordering in {@link DrugReferenceInjector.InteractionNote} — which since issue #355 orders
-	 * the dataset TAIL as well as the promoted segment, where nothing was promoted; two copies could
+	 * the dataset TAIL as well as the promoted segment, where nothing patient-specific was shown; two
+	 * copies could
 	 * drift into ranking the same pair of rules oppositely, which is how the chip and the prompt text
 	 * come to disagree.
 	 *
@@ -773,7 +774,8 @@ public class DrugSafetyValidator {
 	 * with the folded Atorvastatin finding and the note list leads with Metformin. That is accepted
 	 * rather than repaired: the two rank different things, and the note order decides which rule keeps
 	 * its mechanism prose under {@code MAX_INTERACTION_RENDER_CHARS} — and, since issue #355, which
-	 * partners a record with nothing promoted NAMES at all, its tail being capped as well as budgeted.
+	 * partners a record with nothing patient-specific to show NAMES at all, its tail being capped as
+	 * well as budgeted.
 	 * Do not close it by giving the notes a fold key they have no way to observe.
 	 *
 	 * @return the rank, with null/unrecognized mapped to {@link Integer#MAX_VALUE}
@@ -942,8 +944,8 @@ public class DrugSafetyValidator {
 	 * dataset carrying both kinds (every DDInter row is rated; every curated rule is unrated, so neither
 	 * bundled source mixes them) AND more above-floor pairs on one chart than the configured cap.
 	 * <b>The injector is a second such cap since issue #355</b> and no longer merely decides who keeps
-	 * mechanism prose: with nothing promoted its tail is truncated at
-	 * {@code DrugReferenceInjector.MAX_TAIL_PARTNERS_WHEN_NONE_PROMOTED}, so five unrated curated rules
+	 * mechanism prose: with nothing patient-specific shown its tail is truncated at
+	 * {@code DrugReferenceInjector.MAX_TAIL_PARTNERS_WHEN_NOTHING_PATIENT_SPECIFIC}, so five unrated curated rules
 	 * on one entry can push a rated partner out of the record entirely, visible only as a withheld
 	 * count. The WARN line is what makes
 	 * it recoverable, and picking the other order would instead discard an operator's own hand-authored

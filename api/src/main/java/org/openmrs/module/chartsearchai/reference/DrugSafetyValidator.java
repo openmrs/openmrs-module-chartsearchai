@@ -1033,10 +1033,12 @@ public class DrugSafetyValidator {
 
 	/**
 	 * @return whether a record of this type is reference material the answer could be RECITING —
-	 *         knowledge-base prose this module rendered into the prompt out of a third-party dataset.
-	 *         Group membership is the classifier's answer and never a type name here, so a reference
-	 *         type added later is admitted without this class changing; what is subtracted from it is
-	 *         one named type, for a reason about PROVENANCE rather than about grouping.
+	 *         prose this module rendered into the prompt rather than a record about this patient.
+	 *         Named for the question the corpus asks rather than for the group, because the two are
+	 *         the same set only until someone has a reason to separate them, and one such reason was
+	 *         tried here and measured wrong (below). Group membership is the classifier's answer and
+	 *         never a type name, so a reference type added later is admitted without this class
+	 *         changing.
 	 *
 	 *         <p><b>A {@code safety_finding} is included, and subtracting it was tried and measured
 	 *         wrong.</b> It is this validator's own conclusion about this patient, so admitting it

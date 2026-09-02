@@ -163,10 +163,11 @@ import org.slf4j.LoggerFactory;
  * <p><b>One regression this file cannot see.</b> Its gate asks
  * {@link ChartSearchAiUtils#referenceGroup} rather than testing {@code resourceType} against a type
  * name, per CLAUDE.md's rule for a question that is not about grading — so a reference type added
- * later is covered without this class changing. Hardcoding the pair here would leave the whole
- * suite green until a THIRD reference-group type existed; that is measured elsewhere in this
- * module and it holds of this new site too. Nothing here guards it, and ADR Decision 61 says so
- * rather than leaving the next reader to infer coverage.
+ * later is covered without this class changing. Nothing guards that: hardcoding the pair here leaves
+ * the whole suite green. The sentence this replaces said a THIRD reference-group type would close
+ * it; issue #354 added one ({@code drug_class_note}) and re-measured — the hardcode still ships
+ * green, because no case drives a record of that type through this check. What would close it is a
+ * case that does, not another type. ADR Decision 61 carries the same residue.
  */
 final class ReferenceProseFidelityCheck {
 

@@ -36,7 +36,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * <p><b>What these cases pin is that the slice is decided by the PROVENANCE CLASSIFICATION and not
  * by a list of type names</b>, which is the direction a plausible wrong implementation goes: "count
  * every record the injector added" satisfies a case that only checks a {@code drug_reference} and a
- * {@code safety_finding} are included. The injector writes three kinds and they do not all fall on
+ * {@code safety_finding} are included. The injector writes several kinds and they do not all fall on
  * the same side — an {@code active_drug_order} is the patient's own prescription and groups as chart
  * evidence — so the arrangement here produces all three and the exclusion is asserted beside the
  * inclusions. Mutate {@code referenceSlice}'s predicate in either direction and read the failures.

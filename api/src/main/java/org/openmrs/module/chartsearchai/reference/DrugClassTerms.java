@@ -11,7 +11,6 @@ package org.openmrs.module.chartsearchai.reference;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -39,14 +38,20 @@ import java.util.Set;
  * is no honest prefix set to add at all; the measurement that establishes it is at
  * {@link DrugReferenceService#namedDrugClass}, and is not repeated here.
  *
- * <p><b>Why a further spelling has to live here rather than in that file.</b> The boundary rule is
- * {@link DrugReference#containsWord}, whose prose allowance is zero trailing letters, so
- * {@code NSAIDs} is not the term {@code NSAID}; and a group publishes one {@code name}. Carrying the
- * plural here adds a SPELLING of a class that file still names, not a second registry of classes —
- * and "still names" is enforced rather than intended: a spelling listed in
- * {@link #SPELLINGS_OF_A_CURATED_CLASS} answers only while some loaded group publishes exactly the
- * class name it reports, so removing or renaming that group loses the class outright instead of
- * leaving the code table answering for data the deployment no longer has.
+ * <p><b>The two sources are independent, and neither is subordinate to the other.</b> Each names the
+ * classes it names; the answer is the union. In particular the table below names {@code NSAID}
+ * OUTRIGHT rather than as a spelling of the shipped group, and that is a decision with a measured
+ * reason: {@code chartsearchai.drugReference.crossReactivityGroupsFilePath} is a supported
+ * configuration, so making the class conditional on some loaded group publishing that exact name
+ * returned the issue's own {@code an NSAID} case to pre-#354 silence — with nothing logged — on any
+ * deployment that curates its own groups file. The groups leg is there to honour a vocabulary an
+ * operator has already curated, not to license this one.
+ *
+ * <p>What the boundary rule forces either way is that a class needs its SPELLINGS enumerated:
+ * {@link DrugReference#containsWord}'s prose allowance is zero trailing letters, so {@code NSAIDs} is
+ * not the term {@code NSAID}, and a group publishes one {@code name}. A class an operator's file
+ * names is therefore recognised in that one spelling; one named here is recognised in as many as are
+ * written out.
  *
  * <p><b>What may be admitted, stated so it can be re-applied.</b> A term is admitted only when
  * <ol>
@@ -76,27 +81,15 @@ final class DrugClassTerms {
 	 * genuine spellings beside it. Insertion-ordered; where two terms of the same length are both
 	 * carried the order does decide, which is the residue {@link #namedIn} states.
 	 *
-	 * <p>Two classes, and both are the issue's. The contraceptive terms are here because no ATC
-	 * subtree expresses that class (above). The NSAID terms are spellings only — the class itself is
-	 * named by the shipped curated group, so {@code nsaid} is deliberately absent from this table and
-	 * a deployment whose groups file drops that group loses the class rather than keeping a copy of
-	 * it here.
+	 * <p>Three classes, all of them the issue's: the two contraceptive ones, which no ATC subtree
+	 * expresses, and NSAID, which the shipped curated group also names — deliberately both, for the
+	 * reason the class javadoc gives.
 	 *
 	 * <p>Lower-cased at the source rather than at the scan: {@link DrugReference#containsWord} folds
 	 * and lower-cases both operands for itself, so these are written in the form a reader compares
 	 * against the question, not in a form this class has to normalise.
 	 */
 	private static final Map<String, String> TERMS;
-
-	/**
-	 * The subset of {@link #TERMS} whose class the CURATED GROUPS name, keyed the same way. A term in
-	 * here is a further spelling of a class that file owns, so it answers only while that file still
-	 * names the class — otherwise the code table would keep a copy of a class name the deployment's
-	 * data no longer publishes, which is the thing having two sources must not do. Removing the
-	 * shipped {@code NSAID} group therefore loses the class outright rather than leaving these three
-	 * spellings answering for it.
-	 */
-	private static final Set<String> SPELLINGS_OF_A_CURATED_CLASS;
 
 	static {
 		Map<String, String> terms = new LinkedHashMap<String, String>();
@@ -108,16 +101,11 @@ final class DrugClassTerms {
 		terms.put("birth control pills", "oral contraceptive");
 		terms.put("hormonal contraceptive", "hormonal contraceptive");
 		terms.put("hormonal contraceptives", "hormonal contraceptive");
+		terms.put("nsaid", "NSAID");
 		terms.put("nsaids", "NSAID");
 		terms.put("non-steroidal anti-inflammatory", "NSAID");
 		terms.put("nonsteroidal anti-inflammatory", "NSAID");
 		TERMS = Collections.unmodifiableMap(terms);
-
-		Set<String> spellings = new LinkedHashSet<String>();
-		spellings.add("nsaids");
-		spellings.add("non-steroidal anti-inflammatory");
-		spellings.add("nonsteroidal anti-inflammatory");
-		SPELLINGS_OF_A_CURATED_CLASS = Collections.unmodifiableSet(spellings);
 	}
 
 	private DrugClassTerms() {
@@ -170,37 +158,12 @@ final class DrugClassTerms {
 			}
 		}
 		for (Map.Entry<String, String> term : TERMS.entrySet()) {
-			if (!longerThan(term.getKey(), bestTerm) || !DrugReference.containsWord(prose, term.getKey())) {
-				continue;
+			if (longerThan(term.getKey(), bestTerm) && DrugReference.containsWord(prose, term.getKey())) {
+				bestTerm = term.getKey();
+				bestClass = term.getValue();
 			}
-			if (SPELLINGS_OF_A_CURATED_CLASS.contains(term.getKey())
-					&& !namesALoadedGroup(term.getValue(), groups)) {
-				// A spelling of a class the groups file owns, on a deployment whose file no longer
-				// names it. Declining is what keeps that file the sole registry of the CLASS: answering
-				// here would report a class name this deployment's data does not publish, and would
-				// give one question two answers where an operator had renamed the group.
-				continue;
-			}
-			bestTerm = term.getKey();
-			bestClass = term.getValue();
 		}
 		return bestClass;
-	}
-
-	/** @return whether some loaded group publishes exactly {@code className} as its name — the check
-	 *          that keeps a {@link #SPELLINGS_OF_A_CURATED_CLASS} entry from outliving the data that
-	 *          owns its class. Exact equality on the stored name, which
-	 *          {@link CrossReactivityGroup#setName} has already trimmed. */
-	private static boolean namesALoadedGroup(String className, List<CrossReactivityGroup> groups) {
-		if (groups == null) {
-			return false;
-		}
-		for (CrossReactivityGroup group : groups) {
-			if (group != null && className.equals(group.getName())) {
-				return true;
-			}
-		}
-		return false;
 	}
 
 	/** Whether {@code candidate} is longer than the term already matched, {@code null} counting as no

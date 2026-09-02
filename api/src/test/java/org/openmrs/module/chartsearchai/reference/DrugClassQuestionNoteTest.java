@@ -66,7 +66,6 @@ public class DrugClassQuestionNoteTest {
 		return injector(service).injectRecords(oneRecordChart(), oneActiveOrder(), question);
 	}
 
-
 	/**
 	 * The issue's headline case. The class term resolves to no substance, so nothing is injected
 	 * today and the chart comes back unmodified; what must be there instead is a record naming the
@@ -238,7 +237,7 @@ public class DrugClassQuestionNoteTest {
 	/**
 	 * The note carries a NEW resource type but the OLD prompt-facing lead, deliberately: the system
 	 * prompt's record-type rule keys on the text a record begins with, and reusing that lead is what
-	 * lets a third injected kind read under the right framing without touching a prompt span another
+	 * lets a further injected kind read under the right framing without touching a prompt span another
 	 * test pins.
 	 */
 	@Test
@@ -256,36 +255,38 @@ public class DrugClassQuestionNoteTest {
 	}
 
 	/**
-	 * A class the CURATED cross-reactivity groups name is recognised from that data rather than from
-	 * any table in this module's code — the property that keeps one registry of class names. The
-	 * groups are pinned empty by the {@code setEntries} seam, so the same question raises nothing on
-	 * a service built without them, and that difference IS the assertion.
+	 * A class the CURATED cross-reactivity groups name is recognised from that data alone. Asserted on
+	 * a class the code table does NOT carry, because a class both sources name cannot tell them apart:
+	 * the shipped group is {@code NSAID}, which this module's own table also names, so a case built on
+	 * it would pass with the groups leg deleted.
 	 */
 	@Test
-	public void aClassTheCuratedGroupsNameIsRecognisedFromThatDataAndNotFromCode() {
-		assertEquals("NSAID", ddinterServiceWithGroups().namedDrugClass("Can I give her an NSAID?"),
-				"the shipped curated group's own name must be a recognised class term");
-		assertEquals(null, ddinterService().namedDrugClass("Can I give her an NSAID?"),
-				"and with no curated groups loaded there is no code table naming that class");
+	public void aClassOnlyTheCuratedGroupsNameIsStillRecognised() {
+		assertEquals("Cephalosporin",
+				serviceWithCuratedGroups(group("Cephalosporin"))
+						.namedDrugClass("Can I give her a cephalosporin?"),
+				"an operator's own group name must be a recognised class term");
+		assertEquals(null, ddinterService().namedDrugClass("Can I give her a cephalosporin?"),
+				"and with no curated groups loaded, nothing in code names that class");
 	}
 
 	/**
-	 * And the code table does not keep a COPY of that class either: its three further spellings of it
-	 * answer only while the curated file still publishes the name they report. Otherwise removing the
-	 * group would leave the module asserting a class the deployment's own data no longer names, and
-	 * renaming it would give one question two answers depending on which spelling it used.
+	 * The class the issue reports is named by BOTH sources, and it survives a deployment that curates
+	 * its own groups file. Making it conditional on some loaded group publishing that exact name
+	 * returned this case to pre-#354 silence — with nothing logged — on any install that sets
+	 * {@code crossReactivityGroupsFilePath}, which is a supported configuration.
 	 */
 	@Test
-	public void aSpellingOfACuratedClassDoesNotOutliveTheGroupThatNamesIt() {
-		assertEquals("NSAID", ddinterServiceWithGroups().namedDrugClass("Any NSAIDs on her list?"),
-				"the premise: with the shipped group loaded, the plural spelling answers");
+	public void theClassTheIssueReportsSurvivesAnOperatorsOwnGroupsFile() {
+		assertEquals("NSAID", ddinterServiceWithGroups().namedDrugClass("Can I give her an NSAID?"),
+				"the premise: the shipped group names it");
 
-		assertEquals(null, ddinterService().namedDrugClass("Any NSAIDs on her list?"),
-				"with no curated group naming NSAID, the plural spelling must decline too");
-		assertEquals(null,
-				serviceWithCuratedGroups(group("NSAIDs")).namedDrugClass(
-						"Any nonsteroidal anti-inflammatory on her list?"),
-				"and a RENAMED group does not lend its old name to a spelling of it");
+		assertEquals("NSAID",
+				serviceWithCuratedGroups(group("Cephalosporin")).namedDrugClass(
+						"Can I give her an NSAID?"),
+				"a groups file that does not name NSAID must not lose the class");
+		assertEquals("NSAID", ddinterService().namedDrugClass("Any NSAIDs on her list?"),
+				"and neither must a deployment with no curated groups at all");
 	}
 
 	/**

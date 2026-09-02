@@ -47,7 +47,6 @@ public class DrugClassNoteInjectionToggleTest extends BaseModuleContextSensitive
 				ctx(34, null, set("warfarin 5mg"), set("B01AA03"), null, null), CLASS_QUESTION);
 	}
 
-
 	@Test
 	public void theNoteIsRaisedWhileTheQuestionDrivenLegIsOn() {
 		assertFalse(injectedClassNotes(injectWithQueryLeg("true")).isEmpty(),

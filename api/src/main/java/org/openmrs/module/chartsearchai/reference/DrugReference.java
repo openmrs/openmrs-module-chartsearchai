@@ -22,6 +22,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 /**
@@ -924,7 +925,16 @@ public class DrugReference {
 	/**
 	 * @return the dictionary concepts this entry is bridged to, unmodifiable and never null — see
 	 *         {@link #bridgedConcepts}. Empty for every source but {@code ddinter}.
+	 *
+	 *         <p><b>Not bindable from the curated {@code json} format</b>, and the {@code @JsonIgnore}
+	 *         is on both accessors deliberately. That format declares no bridge, and the class's
+	 *         {@code ignoreUnknown} only covers properties Jackson does not KNOW: a setter here would
+	 *         make {@code bridgedConcepts} known, so an authored file carrying one — a row copied out
+	 *         of a DDInter export, say — would fail to bind, {@code MAPPER.readValue} would throw, and
+	 *         {@code JsonDrugReferenceSource.load} would degrade the WHOLE dataset to empty. That is
+	 *         issue #149's inert safety layer, arriving from one unrecognised key.
 	 */
+	@JsonIgnore
 	public List<BridgedConcept> getBridgedConcepts() {
 		return Collections.unmodifiableList(bridgedConcepts);
 	}
@@ -933,6 +943,7 @@ public class DrugReference {
 	 * The sole writer of {@link #bridgedConcepts}. Rows with a blank uuid or a blank name are dropped:
 	 * the pair is what the join needs and half of one answers neither question.
 	 */
+	@JsonIgnore
 	public void setBridgedConcepts(List<BridgedConcept> bridgedConcepts) {
 		if (bridgedConcepts == null) {
 			this.bridgedConcepts = Collections.emptyList();

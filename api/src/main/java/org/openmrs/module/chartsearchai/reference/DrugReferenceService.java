@@ -1164,8 +1164,8 @@ public class DrugReferenceService {
 	 * subjects {@code addActiveOrderContraindications} checks against the patient's own allergy and
 	 * condition records, the candidate set {@code DrugReferenceInjector.matchingEntries} scopes
 	 * order-driven injection over (issue #151), and the source of the names {@link #withReferenceNames}
-	 * attaches. The union of the documented order-driven matcher ({@link #findByActiveOrders}, which
-	 * keys on ATC codes) and a name resolution of every name the patient's active orders carry
+	 * attaches. It unions the documented order-driven matcher ({@link #findByActiveOrders}, which
+	 * keys on ATC codes) with a name resolution of every name the patient's active orders carry
 	 * ({@link #findImpliedByDrugName} over {@link PatientClinicalContext#getActiveDrugNames()}, the
 	 * flattened union of each order's {@code ActiveDrugOrder.getNames()} — since issue #293 a display
 	 * name, the free text a clinician typed, and a concept name, not the display alone). One definition, so those consumers cannot come to disagree

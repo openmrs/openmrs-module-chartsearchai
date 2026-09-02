@@ -173,20 +173,13 @@ public class BridgedConceptOrderResolutionTest {
 	}
 
 	/**
-	 * The leg is RANKED, and this is the case that says so. {@code findImpliedByDrugName} keeps only
-	 * the entries making the STRONGEST claim on a recorded name, and the identity leg is bounded by
-	 * that same answer: an entry the bridge files under this concept but whose claim on the bridge's
-	 * own name is weaker than another's must NOT be admitted. Unranked, the leg would be wider than
-	 * the name leg it stands in for — issue #209's widening, arriving by a new route, and into two
-	 * consumers where a superset SILENCES a chip rather than adding one.
-	 *
-	 * <p>Driven through the fixture's own second bridge row: DDInter1874 also carries CIEL 105145,
-	 * {@code Phenazopyridine / sulfamethoxazole / trimethoprim}. That name's strongest claimant in
-	 * this dataset is Trimethoprim by containment, so the leg admits it; what it must never do is
-	 * admit an entry the bridge does not file under the concept asked about.
+	 * A concept the bridge does not record at all joins to nothing. The negative control for the cases
+	 * above and for {@code BridgedConceptLegBoundsTest}, which is where the two bounds that NARROW a
+	 * non-empty answer are pinned — an empty result here would also be produced by a leg that did
+	 * nothing whatever, and those are what rule that out.
 	 */
 	@Test
-	public void theLegAdmitsNoEntryTheBridgeDoesNotFileUnderThatConcept() throws Exception {
+	public void aConceptTheBridgeDoesNotRecordJoinsToNothing() throws Exception {
 		DrugReferenceService service = service();
 		PatientClinicalContext.ActiveDrugOrder unbridged = PatientClinicalContext.ActiveDrugOrder.named(
 			"order-unknown", "Produit inconnu", DrugReferenceTestSupport.set("Produit inconnu"), null,

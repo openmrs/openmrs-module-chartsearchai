@@ -4579,11 +4579,30 @@ Together they make the leg's answer a SUBSET of what a session electing the brid
 already gets. So it states nothing the reference data does not already state about that concept; what
 it removes is the dependence on which spelling the session elects.
 
-**What it inherits, stated rather than left to be found.** Decision 33 records ~10 stray `ciel[]`
+**Both bounds bite on real data.** Measured 2026-09-02 through `findByBridgedConcept` and
+`findImpliedByDrugName` themselves — asserted, not printed, by
+`BridgedConceptLegBoundsTest.bothBoundsNarrowRealConceptsOfTheShippedKnowledgeBase`, so a refresh that
+moves them reddens rather than going unread. Of the shipped knowledge base's 4251 distinct bridged
+concepts, the ranking drops an entry the bridge files there on 16, and on 243 the ranked resolution of
+the bridge's own name reaches an entry the bridge does not file there. Mutate either bound and read the
+failures: dropping the ranking reddens the Trastuzumab case, dropping the intersection reddens the
+Ketorolac one, and each also moves its own figure.
+
+**What it inherits, stated rather than left to be found.** Decision 36 records ~10 stray `ciel[]`
 cross-walk rows in the shipped knowledge base (a rival product wrongly attached to a row). Those are
 already reachable — an order elected to that spelling resolves them today — and this leg makes them
 locale-independent too. The correct rows and the stray ones are the same field, so locale-independence
 cannot be had one way round. The knowledge base's own validity channel already reports the collisions.
+
+The one such link the two bounds were measured against does not survive them: CIEL 166154, recorded as
+`Moderna COVID-19 vaccine` and filed on six Pfizer/Tozinameran rows and on no Moderna row, resolves to
+nothing — it is the single bridged concept of the 4251 that does
+(`BridgedConceptLegBoundsTest.aStrayLinkWhoseRecordedNameNamesNoneOfItsRowsResolvesNothing`). Nothing is
+claimed about the others. **And that case is the strongest argument against the intersection, so it is
+answered rather than left out**: without it, the leg resolves that stray link to the entry the bridge's
+own name actually names — which looks like a repair and is the leg silently disagreeing with the
+bridge it is reading. It would also readmit `Tromethamine` for a Ketorolac order. The leg reports what
+the bridge says; correcting the bridge is the knowledge base's job and a different change.
 
 **UUID and not the CIEL reference-map code.** Measured against the 3.7.1 reference-application demo
 dictionary (2026-09-02, raw `SELECT`s over `concept` and `concept_reference_map`): of the knowledge

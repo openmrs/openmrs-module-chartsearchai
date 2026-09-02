@@ -407,7 +407,8 @@ public class DrugSafetyValidator {
 		List<DrugReference> orderEntries = resolvedOrderEntries != null ? resolvedOrderEntries
 				: drugReferenceService.findForActiveOrders(rawContext);
 		PatientClinicalContext context = drugReferenceService.withReferenceNames(rawContext, orderEntries);
-		// The bridged-concept leg's answer for this pass, resolved ONCE and passed down (issue #353).
+		// The bridged-concept leg's holder for this pass, resolved lazily and ONCE, and passed down
+		// (issue #353).
 		// A per-call LOCAL and never a field — this bean is a Spring singleton (issue #172) — and a
 		// parameter rather than a memo, which is issue #255's shape: the one resolution travels to
 		// every site that asks whether an order accounts for an entry, so no two of them can answer
@@ -5772,8 +5773,8 @@ public class DrugSafetyValidator {
 		if (!context.getActiveDrugOrders().isEmpty()) {
 			// Per ORDER, not per name — issue #118 / #124 put the orders themselves on the context, and
 			// #132 put their ATC codes there too. An order is ref's own when ref resolves from it by
-			// EITHER matcher that could have made ref a subject (a name alias, or a shared code), and
-			// then everything that order contributes goes: its other names (a brand the aliases do not
+			// ANY matcher that could have made ref a subject (a name alias, a shared code, or the concept
+			// the bridge files it under), and then everything that order contributes goes: its other names (a brand the aliases do not
 			// cover is still that order) and its codes (a co-formulation's second constituent, or the
 			// second of two codes on one concept). What remains is every OTHER order, whole — so a
 			// subject can still pair by name even when nothing names the subject itself, which is what
@@ -5939,9 +5940,17 @@ public class DrugSafetyValidator {
 	 * {@link DrugReferenceService#findByBridgedConcept} for why an unranked one is unsafe here — and
 	 * ranking costs a dataset resolution per concept. Asked at {@link #resolvesFrom}, which runs once
 	 * per (row, order) pair inside two nested loops, that would be a resolution per comparison. So it
-	 * is resolved once for the pass, in {@code validate}, and travels as a parameter: a per-call LOCAL
-	 * and never a field, this bean being a Spring singleton (issue #172), and the same shape issue #255
-	 * gave the resolved order list.
+	 * is resolved once for the pass and travels as a parameter: a per-call LOCAL and never a field,
+	 * this bean being a Spring singleton (issue #172), and the same shape issue #255 gave the resolved
+	 * order list.
+	 *
+	 * <p><b>Resolved LAZILY</b>, on the first arm that asks — {@code CoMedications}' rule and for its
+	 * reason. Every consumer of this is inside an interaction arm, so a pass whose toggles are off, or
+	 * whose question and answer put no substance in play, resolves nothing; an eager hoist in
+	 * {@code validate} would make the commonest question pay for a leg no chip in it can reach. The
+	 * work it defers is one dataset walk per active order plus one ranked resolution per distinct
+	 * bridged concept, which {@code DrugReferenceService.findForActiveOrders} has already performed for
+	 * its own candidate set — so the pass pays it twice or not at all, and this is which.
 	 *
 	 * <p>Keyed by object IDENTITY on the order, not by its uuid: an order's uuid may be null, and the
 	 * same {@code ActiveDrugOrder} objects are shared by the contexts
@@ -5954,44 +5963,65 @@ public class DrugSafetyValidator {
 
 		/** No order is bridged to anything — what a pass over a chart the module could not read gets,
 		 *  and what every order built through {@code ActiveDrugOrder}'s public constructors gets. */
-		static final BridgedOrders NONE = new BridgedOrders(
-				Collections.<PatientClinicalContext.ActiveDrugOrder, List<DrugReference>> emptyMap());
+		static final BridgedOrders NONE = new BridgedOrders(null, null);
 
-		private final Map<PatientClinicalContext.ActiveDrugOrder, List<DrugReference>> byOrder;
+		private final DrugReferenceService service;
 
-		private BridgedOrders(
-				Map<PatientClinicalContext.ActiveDrugOrder, List<DrugReference>> byOrder) {
-			this.byOrder = byOrder;
+		private final PatientClinicalContext context;
+
+		private Map<PatientClinicalContext.ActiveDrugOrder, List<DrugReference>> byOrder;
+
+		private BridgedOrders(DrugReferenceService service, PatientClinicalContext context) {
+			this.service = service;
+			this.context = context;
 		}
 
 		/**
-		 * Resolves the leg for every active order {@code context} carries, through the one accessor
-		 * that defines it. One resolution cache across the whole walk, so two orders written against
-		 * one concept — or two concepts the bridge records under one name — cost one dataset pass
-		 * between them.
+		 * The pass's holder — it resolves nothing yet. {@link #NONE} where there is no chart to read,
+		 * so a caller that would resolve an empty walk does not allocate one.
 		 */
 		static BridgedOrders of(DrugReferenceService service, PatientClinicalContext context) {
 			if (service == null || context == null || context.getActiveDrugOrders().isEmpty()) {
 				return NONE;
 			}
-			Map<PatientClinicalContext.ActiveDrugOrder, List<DrugReference>> byOrder =
-					new IdentityHashMap<PatientClinicalContext.ActiveDrugOrder, List<DrugReference>>();
-			Map<Object, Set<Object>> impliedByName = new HashMap<Object, Set<Object>>();
-			for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
-				List<DrugReference> entries =
-						service.findByBridgedConcept(order.getConceptUuid(), impliedByName);
-				if (!entries.isEmpty()) {
-					byOrder.put(order, entries);
-				}
+			return new BridgedOrders(service, context);
+		}
+
+		/**
+		 * Resolves the leg for every active order the context carries, through the one accessor that
+		 * defines it, at most once per pass. One resolution cache across the whole walk, so two orders
+		 * written against one concept — or two concepts the bridge records under one name — cost one
+		 * ranked resolution between them.
+		 */
+		private Map<PatientClinicalContext.ActiveDrugOrder, List<DrugReference>> resolved() {
+			// NONE resolves nothing and, being a shared static, must MEMOISE nothing: it is reachable
+			// from every request at once, and a lazy field written on first use would be an
+			// unsynchronized write to state shared across them. Every other instance is one pass's own.
+			if (service == null) {
+				return Collections
+						.<PatientClinicalContext.ActiveDrugOrder, List<DrugReference>> emptyMap();
 			}
-			return byOrder.isEmpty() ? NONE : new BridgedOrders(byOrder);
+			if (byOrder == null) {
+				Map<PatientClinicalContext.ActiveDrugOrder, List<DrugReference>> resolved =
+						new IdentityHashMap<PatientClinicalContext.ActiveDrugOrder, List<DrugReference>>();
+				Map<Object, Set<Object>> impliedByName = new HashMap<Object, Set<Object>>();
+				for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+					List<DrugReference> entries =
+							service.findByBridgedConcept(order.getConceptUuid(), impliedByName);
+					if (!entries.isEmpty()) {
+						resolved.put(order, entries);
+					}
+				}
+				byOrder = resolved;
+			}
+			return byOrder;
 		}
 
 		/** @return true when the dataset's bridge attributes {@code ref} to {@code order}'s own concept.
 		 *          Identity comparison on the entry, as every other dedup over this bean's shared
 		 *          {@code getAll()} cache is. */
 		boolean joins(DrugReference ref, PatientClinicalContext.ActiveDrugOrder order) {
-			List<DrugReference> entries = byOrder.get(order);
+			List<DrugReference> entries = resolved().get(order);
 			if (entries == null) {
 				return false;
 			}
@@ -6045,10 +6075,12 @@ public class DrugSafetyValidator {
 				&& !Collections.disjoint(order.getAtcCodes(), ref.normalizedAtcCodes())) {
 			return true;
 		}
-		// The bridged-concept leg (issue #353), asked LAST because it is the only one that needs the
-		// pass's own resolution. Same rule as the candidate set's third leg and resolved by the same
-		// method, so this predicate and DrugReferenceService.findForActiveOrders cannot come to
-		// disagree about which orders resolved a substance — the disagreement issue #151 records.
+		// The bridged-concept leg (issue #353). Same rule as the candidate set's third leg and resolved
+		// by the same method, so this predicate and DrugReferenceService.findForActiveOrders cannot come
+		// to disagree about which orders resolved a substance — the disagreement issue #151 records.
+		// Its position is an ordering and not part of the contract: all three arms are pure and each
+		// returns true on its own, so which one answers is immaterial (the same reading
+		// PatientClinicalContext.hasActiveDrug's own arm ordering carries).
 		return bridged.joins(ref, order);
 	}
 

@@ -362,7 +362,8 @@ public class ActiveOrderReconciliationTest {
 			}
 		}
 		assertTrue(activeOrder > 0 && reference > 0 && finding > 0,
-				"precondition: this question must inject all three kinds of record, else the ordering "
+				"precondition: this question must inject all three of the kinds whose ordering this "
+						+ "asserts, else the ordering "
 						+ "claim is untested (activeOrder=" + activeOrder + " reference=" + reference
 						+ " finding=" + finding + ")");
 		assertTrue(activeOrder < reference && reference < finding,

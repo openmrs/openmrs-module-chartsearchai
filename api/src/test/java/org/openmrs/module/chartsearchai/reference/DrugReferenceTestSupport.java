@@ -338,6 +338,27 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/**
+	 * The whole chart the REAL pipeline produces for a question naming a drug CLASS the reference
+	 * data resolves no substance for (issue #354) — the DDInter excerpt and the shipped
+	 * cross-reactivity groups behind the real injector, so the {@code drug_class_note} mapping in it
+	 * is production's own.
+	 *
+	 * <p>Public for the cross-package reason {@link #injectedSafetyFindingChart} is: the inference
+	 * tests assert that the statement the wire publishes was read off the chart the model was given,
+	 * and a hand-built mapping would let a consumer that re-asked the question pass.
+	 *
+	 * @throws IllegalStateException when the question raises no class note, so a test cannot silently
+	 *         assert nothing — {@link #classNoteIn} is what raises it
+	 */
+	public static PatientChart injectedDrugClassNoteChart(String question) {
+		DrugReferenceService service = ddinterServiceWithGroups();
+		PatientChart chart = injectorWithSafety(service).injectRecords(oneRecordChart(),
+				ctx(34, null, set("warfarin 5mg"), set("B01AA03"), null, null), question);
+		classNoteIn(chart);
+		return chart;
+	}
+
+	/**
 	 * The first injected {@code safety_finding} in a chart a caller already holds — {@link
 	 * #injectedFindings}' single-record form, public for the same cross-package reason
 	 * {@link #injectedSafetyFindingChart} is: a test that serves a chart and cites a record out of
@@ -362,6 +383,19 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/**
+	 * Every injected {@code drug_class_note} mapping in {@code chart}, in injection order — the
+	 * class-note counterpart of {@link #injectedReferences} and {@link #injectedFindings}, and here
+	 * for the reason those two are: one matcher per injected type, so the filter cannot drift between
+	 * the test files that use it. Two files did grow their own copy of this one before it moved here.
+	 */
+	static List<RecordMapping> injectedClassNotes(PatientChart chart) {
+		return chart.getMappings().stream()
+				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_DRUG_CLASS_NOTE
+						.equals(m.getResourceType()))
+				.collect(Collectors.toList());
+	}
+
+	/**
 	 * Every injected RECITABLE record in {@code chart}, in injection order — the union
 	 * {@link #injectedReferences} and {@link #injectedFindings} each see only half of, and the one a
 	 * case asserting that the corpus {@code DrugSafetyValidator} attributes an uncited answer mention
@@ -379,6 +413,21 @@ public final class DrugReferenceTestSupport {
 				.filter(m -> ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE.equals(
 						ChartSearchAiUtils.referenceGroup(m.getResourceType())))
 				.collect(Collectors.toList());
+	}
+
+	/**
+	 * The one injected {@code drug_class_note} in {@code chart}, failing where there is not exactly
+	 * one — the single-record form of {@link #injectedClassNotes}. Exactly one and not "the first",
+	 * because a second note would mean one question reported two classes, which is the thing
+	 * {@code DrugClassTerms.namedIn}'s longest-match rule exists to prevent.
+	 */
+	static RecordMapping classNoteIn(PatientChart chart) {
+		List<RecordMapping> notes = injectedClassNotes(chart);
+		if (notes.size() != 1) {
+			throw new IllegalStateException("expected exactly one drug-class note, found " + notes.size()
+					+ " in the chart: " + chart.getText());
+		}
+		return notes.get(0);
 	}
 
 	/**

@@ -69,8 +69,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <p><strong>How this test resists the regression it exists to prevent.</strong> The forbidden shape
  * is a hardcoded list of type names — testing {@code resourceType} against {@code drug_reference} is
  * exactly how {@code safety_finding} was graded as chart evidence for two releases (#122), and
- * re-hardcoding such a carve-out is invisible to a behavioural suite until a third
- * {@code reference}-group type exists. So the withholding is pinned twice, in two different ways:
+ * re-hardcoding such a carve-out is invisible to a behavioural suite while the hardcoded names still
+ * AGREE with the classifier. So the withholding is pinned twice, in two different ways:
  *
  * <ol>
  * <li><em>Behaviourally, off an enumeration rather than a literal.</em> The fixture cites EVERY
@@ -78,7 +78,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * {@code FALSE} — and the expectation for each is derived by asking
  * {@link ChartSearchAiUtils#isGroundingDemoteOnly}. No type name appears in the expectation, so a
  * newly declared reference-group constant is swept automatically, and a serializer that agreed with
- * today's two names would fail the moment one is added.
+ * the names it happens to enumerate fails the moment one is added — measured on issue #354, which
+ * added a third: the old pair reddens five of the cases below on a {@code drug_class_note} citation.
  * <p>The cost of deriving rather than enumerating, stated so it is not mistaken for coverage this
  * class does not have: both halves ask the same classifier production asks, so if
  * {@code referenceGroup} itself regressed — classifying {@code drug_reference} as chart — every
@@ -233,9 +234,13 @@ public class ChartSearchAiReferenceGroundingWithholdingTest {
 	 * {@code safety_finding} from the grounding carve-out for two releases (#122), and is the same
 	 * mistake the client in #201 made.
 	 *
-	 * <p>No behavioural test can catch that regression today: with exactly two reference-group types,
-	 * a hardcoded pair agrees with the classifier on every input that exists. So this asserts the
-	 * property directly. {@code RESOURCE_TYPE_*} are compile-time {@code String} constants, so javac
+	 * <p>This asserts the property directly, because a behavioural case cannot see a hardcode that
+	 * still AGREES with the classifier — which is what a hardcoded pair does for every type it happens
+	 * to enumerate. It can see one that has fallen behind, and since issue #354 added a third
+	 * reference-group type the fixtures here do: mutate {@code groundedForWire} to the old pair and
+	 * read which cases redden. Both halves are wanted; neither subsumes the other.
+	 *
+	 * <p>{@code RESOURCE_TYPE_*} are compile-time {@code String} constants, so javac
 	 * inlines the VALUE into the constant pool of any class that mentions one — whether written as
 	 * the constant, as a bare literal, or as a folded concatenation. Scanning every class file the
 	 * controller compiles to therefore answers "does this class name a resource type".
@@ -282,8 +287,9 @@ public class ChartSearchAiReferenceGroundingWithholdingTest {
 								+ "grounding withholding and its group discriminator must both be derived from "
 								+ "ChartSearchAiUtils.isGroundingDemoteOnly / referenceGroup, never from a list "
 								+ "of type names: an enumerated list is what left safety_finding out of the "
-								+ "grounding carve-out for two releases (#122), and the suite cannot see that "
-								+ "mistake behaviourally until a third reference-group type exists. Scanned "
+								+ "grounding carve-out for two releases (#122). A behavioural case cannot see "
+								+ "a hardcode that still agrees with the classifier, which is why this scan "
+								+ "exists beside them. Scanned "
 								+ compiled.keySet());
 			}
 		}

@@ -42,7 +42,12 @@ import org.junit.jupiter.api.Test;
  * Measured while implementing #298: the write path alone changes no test expectation in the api suite.
  * A rule that is behaviour-neutral by construction is either pinned structurally or not pinned at all,
  * and this repo already takes that route once — {@code ChartSearchAiReferenceGroundingWithholdingTest}
- * scans the controller's compiled class files for a hardcoded resource-type name for the same reason.
+ * scans the controller's compiled class files for a hardcoded resource-type name. The reason there is
+ * one step narrower than this one, and was overstated until issue #354: that rule is NOT
+ * behaviour-neutral by construction, and since a third reference-group type exists its behavioural
+ * sweep does catch a hardcode that has fallen behind the classifier. What no behavioural assertion
+ * there can see is a hardcode that still AGREES with the classifier — which is the same shape as this
+ * write path, and is why the precedent holds.
  *
  * <p><b>Mechanism: the Java SOURCE, not the class files.</b> The precedent reads bytecode because its
  * needle is a string CONSTANT, which javac inlines into the constant pool. The needle here is the

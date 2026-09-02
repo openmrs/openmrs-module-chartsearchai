@@ -4247,8 +4247,9 @@ The issue names two outcomes that count as fixed: resolve the class to its membe
 or state that the question named a class and ask for a specific drug.
 
 **Decision.** The second. A question that names a recognised drug class and resolves **no**
-substance injects one `drug_class_note` record naming the class and stating that no interaction
-screen was run for it. It names no member of the class. Nothing else changes: no chip arm, no
+substance injects one `drug_class_note` record naming the class and stating that the class was not
+resolved to any substance. It names no member of the class, and it denies nothing about what the
+response does carry — see the residues below. Nothing else changes: no chip arm, no
 candidate-set accessor, no prompt sentence.
 
 **Why not resolve the class — measured, not argued.** The issue proposes the ATC hierarchy ("every

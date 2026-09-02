@@ -164,7 +164,7 @@ public class DrugClassQuestionNoteTest {
 	 * collapsing two classes into one name.
 	 */
 	@Test
-	public void theClassReportedIsTheClassTheQuestionNamedAndNotAWiderOne() {
+	public void theClassReportedIsTheClassTheQuestionNamedAndNotANeighbouringOne() {
 		DrugReferenceService service = ddinterService();
 
 		assertEquals("hormonal contraceptive",
@@ -177,6 +177,15 @@ public class DrugClassQuestionNoteTest {
 				"the note must name the class asked about: " + note.getText());
 		assertFalse(note.getText().contains("\"oral contraceptive\""),
 				"and must not report it as the narrower class: " + note.getText());
+
+		// And the other direction, which the name promises and an earlier version did not assert: an
+		// oral question must not be widened either.
+		RecordMapping oral = classNoteIn(inject(service,
+				"Can I start this patient on an oral contraceptive?"));
+		assertTrue(oral.getText().contains("\"oral contraceptive\""),
+				"the oral question must be reported as the oral class: " + oral.getText());
+		assertFalse(oral.getText().contains("hormonal contraceptive"),
+				"and must not be widened to the hormonal one: " + oral.getText());
 	}
 
 	/**
@@ -198,6 +207,11 @@ public class DrugClassQuestionNoteTest {
 		RecordMapping note = classNoteIn(chart);
 		assertFalse(note.getText().contains("no interaction screen was run"),
 				"the note must not deny a screen that ran one record earlier: " + note.getText());
+		// The finding beside it IS reference material by referenceGroup, and its prose names the
+		// class, so a note claiming the response carries none for the class is false here too. Both
+		// wordings were written and both were measured against this arrangement.
+		assertFalse(note.getText().contains("no reference material"),
+				"nor may it deny reference material the response is carrying: " + note.getText());
 		assertTrue(note.getText().contains("not resolved to any substance"),
 				"it states what is true in every arrangement — the class resolved to nothing: "
 						+ note.getText());

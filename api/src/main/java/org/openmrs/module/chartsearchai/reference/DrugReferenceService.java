@@ -1212,10 +1212,18 @@ public class DrugReferenceService {
 	}
 
 	/**
-	 * Which drug CLASS this question names, when it names one and this dataset can resolve none of
-	 * its members by name — {@code "oral contraceptive"}, {@code "NSAID"} — or {@code null} where it
-	 * names no class (issue #354). The vocabulary and the two sources behind it are
-	 * {@link DrugClassTerms}; what belongs HERE is what the answer may and may not be used for.
+	 * Which drug CLASS this question names, when it names one — {@code "oral contraceptive"},
+	 * {@code "NSAID"} — or {@code null} where it names none (issue #354). The vocabulary and the two
+	 * sources behind it are {@link DrugClassTerms}; what belongs HERE is what the answer may and may
+	 * not be used for.
+	 *
+	 * <p><b>It asks nothing of the dataset's ENTRIES, so it is not self-gating.</b> A question naming
+	 * both a class and a drug this dataset resolves answers with the class, and the caller is what
+	 * decides whether that matters: {@code DrugReferenceInjector.injectRecords} raises its note only
+	 * where {@code findImpliedByQuery} came back empty. A second caller written as though this method
+	 * had asked that question would report a class over a drug the module did resolve —
+	 * {@code DrugClassQuestionNoteTest.aQuestionNamingAClassAndAResolvableDrugRaisesNoNote} is that
+	 * case, and it drives the injector rather than this method for exactly that reason.
 	 *
 	 * <p><b>It answers with a class NAME and never a member set, deliberately.</b> A caller may report
 	 * that the question named a class; it may NOT read the answer as putting substances in play. The

@@ -217,8 +217,10 @@ public class DrugSafetyValidatorEchoScopingTest {
 		// already exempted an answer that BOTH cited a record naming the drug AND proposed it.
 		//
 		// What is given up is systematic rather than incidental: an injected drug_reference record
-		// renders the question drug's own partner list, so the drugs this cannot chip from the answer
-		// side are that drug's KB partners — which is also the set an answer draws alternatives from.
+		// renders the question drug's partner list AND each partner's mechanism paragraph, so the
+		// drugs this cannot chip from the answer side are that drug's KB partners and every substance
+		// those paragraphs name — which is also the set an answer draws alternatives from. The case
+		// below pins the mechanism-prose half.
 		// The bound is NOT the order-driven contraindication arm, which restores contraindications and
 		// only for a drug the patient is already on; what stays withheld here is an INTERACTION finding
 		// about a drug she is not on. Deciding it any other way needs evidence the answer RECITED the

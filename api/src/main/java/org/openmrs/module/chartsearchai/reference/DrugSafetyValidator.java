@@ -935,8 +935,9 @@ public class DrugSafetyValidator {
 	 * <p>{@link #cited} is the records the answer cites INLINE — what {@link SubjectMatter} is
 	 * scoped to, unchanged since issue #143. {@link #attributable} is those PLUS every RECITABLE
 	 * reference record in the chart whether the answer cited it or not — the echo test's corpus, and
-	 * only the echo test's. Recitable is narrower than reference-group; see
-	 * {@link #isRecitableReferenceMaterial} for the one type it subtracts and why.
+	 * only the echo test's. Recitable is every reference-group record today; see
+	 * {@link #isRecitableReferenceMaterial} for why it is asked as its own question anyway, and for
+	 * the narrowing that was tried there and measured wrong.
 	 *
 	 * <p><b>Why they are separately allocated rather than one list the wider consumer extends.</b>
 	 * The order-driven contraindication arm's gate asks whether either SIDE of a chip is what the
@@ -1150,8 +1151,12 @@ public class DrugSafetyValidator {
 	 *         measured on the bundled curated dataset, an active ibuprofen order plus an ibuprofen
 	 *         allergy, a question naming no drug and an answer citing the {@code drug_order} record
 	 *         gave 0 chips where the same call with null mappings gave 2. What this exemption still
-	 *         withholds is an INTERACTION or OVERDOSE finding about an echoed drug, which is exactly
-	 *         what #105 measured and fixed.
+	 *         withholds is a finding about an echoed drug from any arm that iterates the drugs-in-play
+	 *         set — interaction, overdose, and the drug-in-play contraindication arms alike. This used
+	 *         to say "an INTERACTION or OVERDOSE finding", which reads as a bound and is not one: the
+	 *         contraindication arm restored above is the ACTIVE-ORDER one, so a drug that is neither
+	 *         question-named nor ordered loses its contraindication check too. The paragraph on
+	 *         {@link #isEchoOfAttributableRecord} states that residue in full.
 	 */
 	private static boolean isEchoOfAttributableRecord(DrugReference ref, List<String> attributableTextsLower) {
 		return namesAnyOf(attributableTextsLower, ref);

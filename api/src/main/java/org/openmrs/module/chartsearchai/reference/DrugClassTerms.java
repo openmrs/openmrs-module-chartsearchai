@@ -115,6 +115,12 @@ final class DrugClassTerms {
 	 *         was consulted first, which would otherwise make the answer depend on the order the
 	 *         operator's groups file happens to list its groups in.
 	 *
+	 *         <p>The residue, named rather than claimed away: the comparison is strict, so two terms
+	 *         of EQUAL length that a question carries at once are still decided by order — the curated
+	 *         groups ahead of the table below, and within the groups the order the operator's file
+	 *         lists them in. Nothing pins that, because nothing distinguishes the two answers on any
+	 *         ground this method has: both are class names the question really does carry.
+	 *
 	 * @param prose the question text; {@code null} carries no term
 	 * @param groups the curated cross-reactivity groups, whose {@code name}s are the first source —
 	 *        never null in production ({@code DrugReferenceService.getCrossReactivityGroups} answers a

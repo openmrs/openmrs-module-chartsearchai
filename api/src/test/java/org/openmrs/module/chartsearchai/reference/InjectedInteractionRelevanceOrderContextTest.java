@@ -96,4 +96,39 @@ public class InjectedInteractionRelevanceOrderContextTest extends BaseModuleCont
 				"the segment the floor filtered keeps the entry's own partner order, and the note that "
 						+ "carries the source's sentence is the one that order puts first: " + interactions);
 	}
+
+	@Test
+	public void anOrderDrivenRecordIsTieredLikeAnyOther() {
+		// A record injected because its SUBJECT is one of the patient's own active orders, rather than
+		// because a question named it: no interaction chip stands behind it, and it reaches `render`
+		// through the order-driven leg, which is gated on the subject being clinically related to a
+		// drug the question DOES name. `render` branches on nothing about why a record was collected,
+		// so it must be tiered exactly as an in-play record is — and this case is here because the
+		// decision behind #357 twice asserted a reason why that could not be shown, and a review pass
+		// falsified it twice. It is cheaper to pin the behaviour than to keep explaining its absence.
+		//
+		// The arrangement is OrderDrivenInjectionResolutionTest's — an aspirin order known only by
+		// name, an ibuprofen question, bridged by the curated NSAID cross-reactivity family — with two
+		// more of the excerpt's drugs prescribed alongside it that Acetylsalicylic acid rates Moderate
+		// against. Raised to `major` both are filtered, so they are the record's middle segment, and
+		// two members is what makes first-full-rest-compact visible at all.
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_MIN_INTERACTION_SEVERITY, "major");
+
+		PatientChart chart = DrugReferenceTestSupport
+				.injectorWithSafety(DrugReferenceTestSupport.ddinterServiceWithGroups())
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+						DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set(
+								"Acetylsalicylic acid 81mg", "Lisinopril", "Sertraline"), null, null, null),
+						"Is it safe to give ibuprofen?");
+		String interactions = DrugReferenceTestSupport.interactionsSectionOf(
+				DrugReferenceTestSupport.referenceMappingNaming(chart, "Acetylsalicylic acid"));
+
+		assertTrue(interactions.contains("lisinopril (moderate. "),
+				"the first partner of the filtered segment carries its note, on a record no question "
+						+ "asked for: " + interactions);
+		assertTrue(interactions.contains("sertraline (moderate);"),
+				"and the second is named with its rating alone — the same rule an in-play record's "
+						+ "filtered segment follows: " + interactions);
+	}
 }

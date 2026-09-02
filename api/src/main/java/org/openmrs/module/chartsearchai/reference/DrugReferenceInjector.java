@@ -1660,6 +1660,13 @@ public class DrugReferenceInjector {
 			// of the cited record). Reordering that representative is a change issue #355 does not
 			// ask for. The residue is stated rather than closed: where a partner IS promoted, the one
 			// tail representative is still whichever partner the dataset listed first.
+			//
+			// Drop the condition and read the failures rather than trusting that list: measured
+			// 2026-09-02, sorting unconditionally reddens cases in five files, among them
+			// InjectedInteractionNoteCollapseTest.aSinglePartnerRecordIsUnchanged (byte for byte),
+			// DrugSafetyValidatorEchoScopingTest.echoedReferencePartnerIsNotValidatedAsAProposal and
+			// ActiveOrderContraindicationTest.aRecitedPartnerThePatientIsNotTakingGainsNoContraindicationCheck,
+			// which is wider than the three this comment first named.
 			Collections.sort(rest, SEVERITY_DESCENDING);
 		}
 		// `promoted` becomes the whole ordered list from here — the count above is what keeps the two
@@ -1933,7 +1940,8 @@ public class DrugReferenceInjector {
 	}
 
 	/**
-	 * Orders promoted interactions most-severe first. An unrated rule sorts ahead of Major: every
+	 * Orders interaction notes most-severe first — the promoted segment always, and since issue #355
+	 * the dataset tail as well where nothing was promoted. An unrated rule sorts ahead of Major: every
 	 * curated hand-authored rule is unrated, and {@link DrugSafetyValidator#clearsSeverityFloor}
 	 * already treats unrated as exempt rather than low — unrated is not low-rated, so it must not be
 	 * the one abbreviated.
@@ -2202,9 +2210,10 @@ public class DrugReferenceInjector {
 	 * {@link #orderedInteractionNotes} — and it splits the contraindication list into what this patient's
 	 * chart records, what it does not, and (issue #269) what it matched but nothing corroborates (issue
 	 * #208 item 2, {@link #contraindicationSections}). It may be null, which is "nothing known about the
-	 * patient": the interactions section then keeps dataset order and the contraindication list is
-	 * rendered with no reading at all, because a record that cannot see the chart must not report an
-	 * absence.
+	 * patient": nothing is then promoted, so the interactions section is entirely the tail — most
+	 * severe first and bounded by {@link #MAX_UNPROMOTED_TAIL_PARTNERS} since issue #355 — and the
+	 * contraindication list is rendered with no reading at all, because a record that cannot see the
+	 * chart must not report an absence.
 	 *
 	 * <p>{@code orderEntries} stays a parameter and is NOT a counter-example to that: the context is
 	 * BUILT from it ({@code withReferenceNames} at the call site), so there is nothing to re-derive here

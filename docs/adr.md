@@ -4228,3 +4228,86 @@ Additive, prompt-facing only, and monotone: it adds words and moves no call. The
 - **The per-subject hoist was implemented, measured and declined**, recorded so the next reader does not re-derive it. The subject-side gate answer is invariant across every chip of one subject and is already computed once per subject inside `activeOrdersOtherThan`; at the busiest 40-order arrangement `resolvesFromAny` runs 24,560 times for it and returns true 614. An order-preserving hoist (a per-call `boolean[]` plus a `ChartOrderBridge[]` indexed by order, with `rowsOfSubstance` made lazy — a local, so #172 is met by shape) was proven output-identical across ten arrangements and the whole suite, and buys 12→12 ms at 10 orders, 23→22 at 20, 81→79 at 40 and 342→315 at 80. Declined: 2 ms on a 40-order chart for a struct threaded through two arms. The remaining two-thirds of the cost is the partner side, which is genuinely per-chip.
 - **Half the second payment is dead work.** `SafetyWarning.chartOrderBridges()`'s only production reader is `DrugReferenceInjector.chartOrderClause`, reached only from `preAnswerFindings`; the wire serializer does not write it and the collapse key deliberately does not read it. So the post-answer `validate` resolves every bridge and discards it — ~13 ms of the ~26. Not gated: the discriminator would have to be threaded through `validate` and that trade is unmeasured. Recorded because it is the honest denominator for both that figure and the declined hoist.
 - **The cost's real denominator is the request, not the pass**, and the first version of this measurement argued from the pass's own spread. A request pays the pass twice — `LlmInferenceService` calls `injectRecords`/`preAnswerFindings` before the answer and `validate` after it — so the maximising arrangement is ~+26 ms per request, and 80 busiest orders ~+166 ms, against a request whose latency is an LLM call (this module's own record has production TTFT in minutes). Neither figure includes the knowledge-base parse, which is outside the timed region in both arms, so neither says anything about a cold first request.
+
+## Decision 65: A question naming a drug CLASS is told so, rather than resolved to members the classification cannot honestly supply
+
+**Context.** Issue #354. Question-driven resolution is substance-name matching end to end
+(`DrugReferenceService.findImpliedByQuery` → `findByQuery` → `DrugReference.matchesFoldedText` over
+each entry's aliases). A question naming a drug *class* — *"an oral contraceptive"*, *"a combined
+oral contraceptive pill"*, *"an NSAID"* — therefore resolves to nothing. `matchingEntries` collects
+nothing on either leg (`relatedToAny` is false for an empty `questionDrugs`, so the order leg is
+skipped too), `injectRecords` returns the chart unmodified, and the response carries
+`referenceSliceRecords: 0`. The module falls **silent** — indistinguishable, to a reader of the
+prompt, from a question that is not about drugs at all — while the knowledge base rates a Moderate
+Nevirapine pair against every oral-contraceptive substance it holds.
+
+The issue names two outcomes that count as fixed: resolve the class to its members and screen them,
+or state that the question named a class and ask for a specific drug.
+
+**Decision.** The second. A question that names a recognised drug class and resolves **no**
+substance injects one `drug_class_note` record naming the class and stating that no interaction
+screen was run for it. It names no member of the class. Nothing else changes: no chip arm, no
+candidate-set accessor, no prompt sentence.
+
+**Why not resolve the class — measured, not argued.** The issue proposes the ATC hierarchy ("every
+substance above sits under `G03A*`"). Read off the shipped `ddi-knowledge-base.json` (2026-09-02,
+taking each entry's `atc` array directly rather than through any production predicate) that is wrong
+in both directions:
+
+- `Ethinylestradiol` (DDInter692), one of the three substances the issue itself names, is filed
+  `["G03CA01", "L02AA03"]`. It is not under `G03A`.
+- `G03A*` holds 8 entries, among them `Megestrol acetate` (`G03AC05`), whose indications are
+  oncological.
+
+So no ATC subtree expresses this class. A class resolved that way would put a substance's own label
+into a `safety_finding` that `DrugReferenceInjector.renderFinding` copies verbatim into citable
+evidence carrying `STRENGTH_WITHHOLD`, asserting a class membership false of the drug named — the
+shape Decision 63 records as reverted in issue #339's rounds 5-6.
+
+The sound alternative is a hand-curated clinical **membership** list per class. That is a
+knowledge-base deliverable rather than a module one, and Decision 34's criterion records what
+hand-picking such a list cost the last time it was tried here (issue #161's list, incomplete in a way
+that reproduced the defect it was fixing — issue #263). It would also inject one reference record per
+member against a budget that bounds no record **count**: `MAX_INTERACTION_RENDER_CHARS` is
+per-record, so N members cost N times it, which is the sibling complaint on issue #355.
+
+**The vocabulary: two sources, each because the other cannot serve its case.** A class the curated
+cross-reactivity groups already name is read from **that data** — `cross-reactivity-groups.json` is
+an operator-extensible class-name table with its own load-validity channel (Decision 48, issue #266),
+and the shipped seed's one group is named `NSAID`, which is one of the two classes this issue
+reports. `DrugClassTerms`' in-code table carries only what that file cannot: a class it does not name
+at all, and a further **spelling** of one it does. A group is not a label — its `atcPrefixes` drive
+cross-reactivity contraindication chips and duplicate-class-therapy chips — so adding a group to make
+a word recognisable would assert pharmacological cross-reactivity across those prefixes; and for the
+contraceptive class there is no honest prefix set to add, which is the measurement above. The
+spellings are needed because the prose boundary rule allows zero trailing letters, so `NSAIDs` is not
+the term `NSAID`, and a group publishes one `name`.
+
+Admission to the code table is: it designates a class rather than any single substance; it resolves
+to no entry of the shipped knowledge base (a data guard through `findImpliedByQuery`, not a claim);
+and it is not a spelling a curated group already publishes. Incompleteness is **monotone** — an
+unrecognised class term leaves the module exactly as silent as before — which is what makes a partial
+vocabulary safe, while a wrongly admitted term would have the module call a drug a class.
+
+**Why a third reference-group resource type.** `drug_class_note` stands for no reference *entry*, and
+`DrugReferenceInjector.referenceCharacters` is issue #163's per-entry character total; a note counted
+into it would inflate the figure that defect is read from with nothing failing. Its **text** still
+leads with `DrugReferenceInjector.REFERENCE_PREFIX`, so the system prompt's existing record-type
+sentence frames it without a clause of its own — which matters because the span between that sentence
+and the `Safety finding` one is pinned by `EndedOrderAnswerRuleTest`. The lead is a constant since
+this issue for the reason `FINDING_PREFIX` is one.
+
+**What this does NOT do, and what it is not evidence of.** The class is still not resolved, so the
+issue stays open: no chips, no `interactionPairs`. And what is deterministic here is the
+**injection**. Whether the answer relays a record it was given is the model's; this module asserts
+nothing about it, and `MEMORY`'s open note on the live model paraphrasing injected mechanism text is
+the reason not to.
+
+**Residues, named rather than claimed away.** The prose boundary rule does not collapse whitespace,
+so a question spelling a term with a double space or across a line break carries none. The note joins
+`ReferenceProseFidelityCheck`'s comparison set on the intended-success path, so a model that relays
+it and rewords the middle of a sentence WARNs — report-only, never reaching the wire. And the note
+fires on any recognised class term that resolved nothing, with no question-shape gate: a
+non-prescribing question naming a class ("is she on any NSAIDs?") gets one too. A gate on "the
+question proposes giving a drug" would be a second hand-picked vocabulary with nothing measured
+behind it, and was declined on that ground.

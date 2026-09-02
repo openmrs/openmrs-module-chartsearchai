@@ -45,6 +45,12 @@ import org.springframework.stereotype.Service;
  * opposite, carrying the patient's real {@code Order} uuid precisely so a client CAN navigate to
  * it like any other chart citation (see below).
  *
+ * <p>Since issue #354 one injected kind stands for no record at ALL — a
+ * {@link ChartSearchAiConstants#RESOURCE_TYPE_DRUG_CLASS_NOTE} reports that the QUESTION named a
+ * drug class this dataset is not indexed by, so there is nothing for a client to navigate to and its
+ * {@code resourceUuid} names the class rather than a row. It is raised only where the question
+ * resolved no substance, so it never appears beside a {@code drug_reference} record.
+ *
  * <p><strong>Adding another kind of injected record?</strong> Its resource type must also be
  * classified by {@link org.openmrs.module.chartsearchai.ChartSearchAiUtils#referenceGroup}, which
  * decides whether a client presents a citation as evidence about the patient or as module-supplied

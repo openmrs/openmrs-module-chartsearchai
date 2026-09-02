@@ -689,7 +689,8 @@ public class ChartSearchAiConstants {
 
 	/**
 	 * Wire value of a serialized reference's {@code group}: module-supplied reference prose (a drug
-	 * knowledge-base entry, or a finding derived from one), not a record about this patient. Kept
+	 * knowledge-base entry, a finding derived from one, or this module's statement that the question
+	 * named a drug CLASS it holds no entry for), not a record about this patient. Kept
 	 * visible precisely so a client can disclose that provenance rather than let it read as chart
 	 * evidence. A citation in this group is additionally never grounding-verified as {@code true},
 	 * being demote-only (see {@code CitationGroundingVerifier}) — a property of the GROUP since issue

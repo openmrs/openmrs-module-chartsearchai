@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport.activeOrder;
 import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport.ctx;
 import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport.ddinterService;
 import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport.ddinterServiceWithGroups;
@@ -25,6 +26,7 @@ import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSuppor
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -173,6 +175,36 @@ public class DrugClassQuestionNoteTest {
 		assertTrue(shipped.findImpliedByQuery(note.getText()).isEmpty(),
 				"the class note must name no substance of the shipped knowledge base, was: "
 						+ note.getText());
+	}
+
+	/**
+	 * Where the note appears among the other injected records. It is appended LAST — after the
+	 * patient's own active-order records — so no citation index an existing record holds moves, and
+	 * the reader reaches what the response could not screen after everything it did.
+	 *
+	 * <p>Asserted on a chart that carries both, because the note's own cases carry only the note:
+	 * with no substance resolved there is no {@code drug_reference} record to sit beside, but an
+	 * active order the retrieved chart does not substantiate still produces one (issue #118).
+	 */
+	@Test
+	public void theNoteIsAppendedAfterTheRecordsTheResponseDidProduce() {
+		PatientClinicalContext context = ctx(34, null, set("warfarin 5mg"), set("B01AA03"), null, null,
+				Collections.singletonList(activeOrder("order-warfarin", "Warfarin 5mg")));
+		PatientChart chart = injector(ddinterService()).injectRecords(oneRecordChart(), context,
+				"Can I start this patient on an oral contraceptive?");
+
+		RecordMapping order = chart.getMappings().stream()
+				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_ACTIVE_DRUG_ORDER
+						.equals(m.getResourceType()))
+				.findFirst().orElseThrow(() -> new IllegalStateException(
+						"the premise: this chart must carry an unsubstantiated active order: "
+								+ chart.getText()));
+		RecordMapping note = theClassNote(chart);
+
+		assertEquals(2, order.getIndex(), "the chart's own record is [1], so the order is [2]");
+		assertEquals(3, note.getIndex(), "and the note follows it, taking the next index");
+		assertTrue(chart.getText().indexOf(order.getText()) < chart.getText().indexOf(note.getText()),
+				"and reads after it in the chart the model sees: " + chart.getText());
 	}
 
 	/**

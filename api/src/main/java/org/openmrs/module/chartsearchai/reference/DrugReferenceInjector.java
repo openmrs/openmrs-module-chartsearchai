@@ -1648,7 +1648,10 @@ public class DrugReferenceInjector {
 		// the floor rather than below it (DrugSafetyValidator.clearsSeverityFloor), so the only rating
 		// a rule in `namedByTheChart` can carry there is Unknown and a sort over it has nothing to
 		// order. Under a raised floor the list can hold several ratings and keeps dataset order among
-		// them, which is what the tail has always done.
+		// them, which is what the tail has always done — and that is the only arrangement in which the
+		// absence of a sort here is observable at all, which is why
+		// InjectedInteractionRelevanceOrderContextTest.theFilteredSegmentKeepsDatasetOrderRatherThanReSortingOnSeverity
+		// raises the floor to pin it. Adding the sort was green against the whole suite before it.
 		int chartNamedCount = namedByTheChart.size();
 		promoted.addAll(namedByTheChart);
 		promoted.addAll(rest);

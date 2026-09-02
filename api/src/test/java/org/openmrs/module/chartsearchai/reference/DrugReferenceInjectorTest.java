@@ -234,9 +234,11 @@ public class DrugReferenceInjectorTest {
 		// The rendered Interactions: section is capped at MAX_INTERACTION_RENDER_CHARS and was
 		// filled in DATASET order, so which partners a clinician's model can cite was decided by
 		// the dataset's ordering rather than by the patient. In the real DDInter excerpt
-		// Lisinopril carries 15 partners and the 1500-char cut falls after seven of them, so
-		// Ibuprofen — the LAST one, and a Moderate NSAID x ACE-inhibitor interaction that
-		// attenuates the antihypertensive effect — was truncated out entirely.
+		// Lisinopril carries 15 partners and, before issue #117, the 1500-char cut fell after seven of
+		// them, so Ibuprofen — the LAST one, and a Moderate NSAID x ACE-inhibitor interaction that
+		// attenuates the antihypertensive effect — was truncated out entirely. (No branch cuts there
+		// any more: since #355 an unpromoted tail stops at the partner cap, and a promoted one at its
+		// single representative. The figure is the record of what #84 and #117 were about.)
 		//
 		// Measured on the 3.7.1 standalone (2026-07-30, full 19MB KB): Clarithromycin has 898
 		// partners with Simvastatin (Major) at index 324 and Ivosidenib at index 0, so asked
@@ -393,9 +395,10 @@ public class DrugReferenceInjectorTest {
 		// tail names five better-rated partners before it would reach this one, and a promoted
 		// warfarin would render in segment 1, which overrides the budget. (Before that issue the
 		// budget excluded it instead, as the first partner to fall past the render cap in dataset
-		// order.) So its presence can only come from promotion. Promoting on relevance alone pulled rows like it to the front of the
-		// prompt, and measured on the 3.7.1 standalone the model then answered from them: two probe
-		// cells that correctly abstained on the baseline began reporting "an Unknown severity
+		// order.) So its presence can only come from promotion. Promoting on relevance alone pulled rows
+		// like it to the front of the prompt, and measured on the 3.7.1 standalone the model then
+		// answered from them: two probe cells that correctly abstained on the baseline began
+		// reporting "an Unknown severity
 		// interaction between Erythromycin and Lisinopril", so the render path was bypassing a
 		// safety decision the chip path enforces. Above-floor promotion still works
 		// (renderedInteractionsMustNameThePartnerThePatientIsActuallyOn covers the Moderate case).
@@ -403,7 +406,8 @@ public class DrugReferenceInjectorTest {
 		assertFalse(section.contains("warfarin"),
 				"an Unknown-severity rule must not be promoted past the render cap: " + section);
 		assertTrue(section.contains("metformin"),
-				"precondition: the section still renders its above-floor dataset-order partners: " + section);
+				"precondition: the section still renders its above-floor partners, which since issue "
+						+ "#355 it names most severe first rather than in dataset order: " + section);
 
 		// The other half of the contract, on the same row. The floor's whole point is that the chips
 		// and the rendered prose agree about which rules count, and that now rests on both paths
@@ -614,7 +618,9 @@ public class DrugReferenceInjectorTest {
 		// cost #355 exists to remove, so the budget stays in the loop beside the cap.
 		//
 		// Measured 2026-09-02: deleting that condition leaves the whole api suite green without this
-		// case, because no other fixture puts more than one nameless rule in an unpromoted tail.
+		// case. Not because no other fixture carries two nameless rules — drug-reference-malformed.json
+		// does — but because every other such note is far too short to reach the budget (that entry's
+		// are 0 and 21 characters). Lengthen one of those and this case stops being the only witness.
 		//
 		// Every row is unrated, so severityPriority ties them and the stable sort leaves dataset order
 		// — which keeps this case about the budget rather than about the ordering beside it.
@@ -624,7 +630,12 @@ public class DrugReferenceInjectorTest {
 				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
 						DrugReferenceTestSupport.ctx(60, null, null, null, null, null),
 						"is it safe to give budgetstub?")).get(0);
-		String section = record.getText().substring(record.getText().indexOf("Interactions:"));
+		int start = record.getText().indexOf("Interactions:");
+		assertTrue(start >= 0,
+				"precondition: the record must render an Interactions section, else the slice below "
+						+ "dies on a negative index and names neither the premise nor the record: "
+						+ record.getText());
+		String section = record.getText().substring(start);
 
 		assertTrue(section.contains("ALPHA"),
 				"precondition: the first nameless rule always renders, however long it is: " + section);
@@ -636,8 +647,54 @@ public class DrugReferenceInjectorTest {
 						+ "rules are five mechanism paragraphs, which is the cost #355 removes: " + section);
 		assertEquals(3, record.getWithheldInteractions(),
 				"and the rows the budget cut must be reported as withheld: " + section);
-		assertTrue(section.length() <= 2 * DrugReferenceInjector.MAX_INTERACTION_RENDER_CHARS,
-				"the overshoot stays bounded by one note: " + section.length());
+		assertTrue(section.length() <= DrugReferenceInjector.MAX_INTERACTION_RENDER_CHARS,
+				"and what the budget bounds here is the section itself: the first note is inside the "
+						+ "budget on this fixture, so nothing overshoots and the whole section must fit, "
+						+ "was " + section.length() + " chars: " + section);
+	}
+
+	@Test
+	public void aTailRuleWithNoPartnerToNameDoesNotDisplaceOneThatDoes() throws Exception {
+		// Issue #355's own regression, found by measuring the change rather than reading it. Ordering
+		// the tail by severity alone interacts with two facts that are individually fine: an UNRATED
+		// rule ranks above Major (severityPriority — every curated hand-authored rule is unrated), and
+		// a rule carrying no token and no ATC has no name to shorten to, so its compact form IS its
+		// mechanism paragraph. Together they hoist a nameless paragraph into the one slot the
+		// character budget cannot refuse — the first — wherever the dataset put it, and it then
+		// crowds out the row that actually names a partner.
+		//
+		// Measured on this fixture before the ordering was given its first key: the record went from
+		// naming metformin in 78 characters to spending 2027 on a paragraph about a partner nobody can
+		// identify, which is the cost #355 exists to remove and the prose #117 records this model
+		// garbling. So the tail asks first whether a note NAMES its partner: the tail's job is breadth,
+		// a rule that names nobody states none, and it may not outrank one that does.
+		String section = tailSectionOf("chartsearchai-test/drug-reference-unpromoted-tail-nameless.json",
+				"is it safe to give namelessmix?");
+
+		assertTrue(section.toLowerCase().contains("metformin (moderate)"),
+				"the row that names a partner leads the tail, whatever the nameless row is rated: "
+						+ section);
+		assertFalse(section.contains("LONGSTUB"),
+				"and the nameless paragraph does not take the slot the budget cannot refuse: " + section);
+	}
+
+	/** The {@code Interactions:} section of the only record a curated {@code fixture} injects for
+	 *  {@code question}, for a patient on nothing — the arrangement in which nothing is promoted and
+	 *  the section is entirely the dataset tail. Case is preserved, so a caller may assert on a marker
+	 *  the record prints verbatim. */
+	private String tailSectionOf(String fixture, String question) throws Exception {
+		RecordMapping record = DrugReferenceTestSupport.injectedReferences(DrugReferenceTestSupport
+				.injector(DrugReferenceTestSupport
+						.serviceWith(DrugReferenceTestSupport.fixtureEntries(fixture)))
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+						DrugReferenceTestSupport.ctx(60, null, null, null, null, null), question))
+				.get(0);
+		int start = record.getText().indexOf("Interactions:");
+		assertTrue(start >= 0,
+				"precondition: the record must render an Interactions section, else the slice below "
+						+ "dies on a negative index and names neither the premise nor the record: "
+						+ record.getText());
+		return record.getText().substring(start);
 	}
 
 	/** The injected drug-reference mapping (not just its text) whose rendering names {@code drug}. */
@@ -654,9 +711,10 @@ public class DrugReferenceInjectorTest {
 
 	/**
 	 * The lowercased {@code Interactions:} section of the injected {@code entry} record, for a
-	 * patient on {@code activeDrugs} asking about {@code entry}. The seven interaction-rendering
-	 * tests differ only in the drug set and which claim they make about the section, so the
-	 * inject-then-locate-then-slice plumbing lives here rather than in each of them.
+	 * patient on {@code activeDrugs} asking about {@code entry}. The interaction-rendering tests that
+	 * use it differ only in the drug set and which claim they make about the section, so the
+	 * inject-then-locate-then-slice plumbing lives here rather than in each of them. It lowercases,
+	 * so a case asserting on a marker the record prints verbatim uses {@code tailSectionOf} instead.
 	 */
 	private String interactionsSectionFor(String entry, String... activeDrugs) {
 		String record = injectedMappingFor(entry, activeDrugs).getText();

@@ -139,9 +139,10 @@ public class InjectedInteractionNoteCollapseTest {
 		// of an entry's partners. Before the collapse, segment 2 spent the whole budget on full notes
 		// in dataset order, so a repeated partner was a repeated paragraph: Voxelotor's two sirolimus
 		// rows (Major and Moderate) were two separate mechanism paragraphs about one co-medication.
-		// Since issue #355 that segment names a bounded handful of partners compactly instead, which
-		// is why this case also constrains MAX_UNPROMOTED_TAIL_PARTNERS from below: every partner of
-		// this entry must still be named for the count below to mean anything.
+		// Since issue #355 that segment names a bounded handful of partners compactly instead. This case
+		// constrains MAX_TAIL_PARTNERS_WHEN_NONE_PROMOTED from below only as far as its own two
+		// assertions reach — sirolimus and dexamethasone, of this entry's four partners — so it is
+		// green at 3, where a partner it does not assert on goes unnamed.
 		RecordMapping record = injectedRecord("is it safe to give voxelotor?",
 				DrugReferenceTestSupport.ctx(60, null, null, null, null, null));
 		String interactions = interactionsOf(record);

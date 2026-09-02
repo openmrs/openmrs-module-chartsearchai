@@ -698,9 +698,10 @@ public class DrugSafetyValidator {
 	 * order among its {@code safety_finding} records and in the other inside a {@code drug_reference}
 	 * record's note list — measured over {@code ddi-folded-caution-order.json}, where the chips lead
 	 * with the folded Atorvastatin finding and the note list leads with Metformin. That is accepted
-	 * rather than repaired: the two rank different things, and the note order decides only which rule
-	 * keeps its mechanism prose under {@code MAX_INTERACTION_RENDER_CHARS}. Do not close it by giving
-	 * the notes a fold key they have no way to observe.
+	 * rather than repaired: the two rank different things, and the note order decides which rule keeps
+	 * its mechanism prose under {@code MAX_INTERACTION_RENDER_CHARS} — and, since issue #355, which
+	 * partners a record with nothing promoted NAMES at all, its tail being capped as well as budgeted.
+	 * Do not close it by giving the notes a fold key they have no way to observe.
 	 *
 	 * @return the rank, with null/unrecognized mapped to {@link Integer#MAX_VALUE}
 	 */
@@ -860,11 +861,15 @@ public class DrugSafetyValidator {
 	 * <p><b>One honest limit on "most severe first":</b> {@link #severityPriority} sorts an UNRATED rule
 	 * above Major, matching {@code DrugReferenceInjector.InteractionNote} and for the same reason —
 	 * {@link #clearsSeverityFloor} treats unrated as exempt rather than low, so unrated is not rankable
-	 * below a rated tier. Where that convention only decides who keeps mechanism prose it drops nothing;
-	 * composed with a cap that DISCARDS, it means a dataset mixing unrated and rated rules can withhold
-	 * a Major pair while reporting an unrated one. That needs an operator-authored dataset carrying both
-	 * kinds (every DDInter row is rated; every curated rule is unrated, so neither bundled source mixes
-	 * them) AND more above-floor pairs on one chart than the configured cap. The WARN line is what makes
+	 * below a rated tier. Composed with a cap that DISCARDS, it means a dataset mixing unrated and rated
+	 * rules can withhold a Major pair while reporting an unrated one. That needs an operator-authored
+	 * dataset carrying both kinds (every DDInter row is rated; every curated rule is unrated, so neither
+	 * bundled source mixes them) AND more above-floor pairs on one chart than the configured cap.
+	 * <b>The injector is a second such cap since issue #355</b> and no longer merely decides who keeps
+	 * mechanism prose: with nothing promoted its tail is truncated at
+	 * {@code DrugReferenceInjector.MAX_TAIL_PARTNERS_WHEN_NONE_PROMOTED}, so five unrated curated rules
+	 * on one entry can push a rated partner out of the record entirely, visible only as a withheld
+	 * count. The WARN line is what makes
 	 * it recoverable, and picking the other order would instead discard an operator's own hand-authored
 	 * rule in favour of a third-party rating — which is why the convention is shared with the injector
 	 * rather than reversed here.

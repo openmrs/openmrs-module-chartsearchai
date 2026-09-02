@@ -103,14 +103,14 @@ public class DrugReferenceInjector {
 	 * the model recited into answers (issue #117). Note that this budget is not the only reason a
 	 * partner goes unnamed, nor usually the main one: segment 2 of {@code render} represents the
 	 * whole dataset tail with a single partner whenever a patient-relevant one was promoted, and with
-	 * at most {@link #MAX_UNPROMOTED_TAIL_PARTNERS} of them when none was, so most of that count is
+	 * at most {@link #MAX_TAIL_PARTNERS_WHEN_NONE_PROMOTED} of them when none was, so most of that count is
 	 * normally "not relevant to this patient" rather than "did not fit".
 	 *
 	 * <p>Two guarantees override the budget, so the rendered length is the cap plus a bounded
 	 * overshoot rather than a hard ceiling — see {@code render}: every partner the patient is
 	 * actually on is represented (full note, or a compact {@code name (Severity)} form when the
 	 * note will not fit), and the dataset tail renders alongside them in that same compact form —
-	 * one partner where a relevant one was promoted, up to {@link #MAX_UNPROMOTED_TAIL_PARTNERS}
+	 * one partner where a relevant one was promoted, up to {@link #MAX_TAIL_PARTNERS_WHEN_NONE_PROMOTED}
 	 * where none was (issue #355). Breadth is all the tail is there for either way.
 	 *
 	 * <p><b>Per record, and nothing bounds how many records there are.</b> N records cost N times
@@ -152,15 +152,30 @@ public class DrugReferenceInjector {
 	 * {@code InjectedInteractionNoteCollapseTest.theDatasetTailNamesEachPartnerOnceToo} and
 	 * {@code .twoCuratedRowsIdentifyingOnePartnerByAtcAlsoRenderOnce},
 	 * {@code DrugReferenceInjectorTest.aSubFloorInteractionIsNotPromotedEvenWhenThePatientIsOnThatDrug}
-	 * and {@code .withNoPatientRelevantPartnerTheDatasetTailStatesBreadthCompactlyMostSevereFirst}, and
+	 * {@code .withNoPatientRelevantPartnerTheDatasetTailStatesBreadthCompactlyMostSevereFirst} and
+	 * {@code .theUnpromotedTailStillPaysTheCharacterBudgetForRulesThatHaveNoNameToShortenTo}, and
 	 * {@code ReferenceRecordSubstanceCollapseTest.aSubstanceFiledAsFourRowsCostsNoMoreRecordsThanASingleRowDrug}
-	 * — a lower bound, and the entry-stripping argument above made concrete. At 3 the api suite is
-	 * green, so nothing in it distinguishes 3 from 5: do not read the value as pinned.
+	 * — a lower bound, and the entry-stripping argument above made concrete. That list was written
+	 * naming five of them and a re-run found six; read the failures rather than the list. At 3 the api
+	 * suite is green, so nothing in it distinguishes 3 from 5: do not read the value as pinned.
 	 *
 	 * <p>A COUNT and not a budget, because the budget is still applied beside it: see {@code render}
 	 * for why both are needed.
+	 *
+	 * <p><b>A consequence outside this class, measured and not closed.</b> The compact form fits MORE
+	 * partner names into a much smaller record — on the bundled excerpt an unpromoted Ibuprofen record
+	 * went from naming 2 partners in 1432 characters to naming 5 in 193 — and every name in a cited
+	 * record is part of the corpus {@code DrugSafetyValidator.isEchoOfCitedRecord} treats as something
+	 * the model may merely have repeated back (issue #105). So a mention that used to be read as a
+	 * proposal can now be read as an echo: measured on that excerpt, a patient allergic to warfarin
+	 * asked "Can she take ibuprofen?" with the answer "Ibuprofen interacts with warfarin [2]" raised a
+	 * recorded-allergy contraindication chip before this change and raises none after, because the
+	 * tail now names warfarin. That is what issue #105 asks for — the mention IS attributable to the
+	 * record — and it is the direction issue #360 wants, but it is a safety surface losing a chip and
+	 * no test pins it either way. Recorded here rather than decided; #360 owns the question of what a
+	 * recited name should raise.
 	 */
-	static final int MAX_UNPROMOTED_TAIL_PARTNERS = 5;
+	static final int MAX_TAIL_PARTNERS_WHEN_NONE_PROMOTED = 5;
 
 	/** The lead of the reading's first section: a clause this patient's chart records. */
 	static final String RECORDED_READING_LEAD = " Recorded for this patient: ";
@@ -1618,7 +1633,7 @@ public class DrugReferenceInjector {
 			// It has a SECOND consumer, and in the common case the primary one: segment 2 renders the
 			// dataset tail compact unconditionally, with budget still to spare — one partner where one
 			// was promoted (issue #117 — mechanism prose about a drug the patient is not on is what
-			// the model recited) and up to MAX_UNPROMOTED_TAIL_PARTNERS where none was (issue #355).
+			// the model recited) and up to MAX_TAIL_PARTNERS_WHEN_NONE_PROMOTED where none was (issue #355).
 			// So do not assume reaching this form means the budget ran out; it also means "breadth is
 			// all this partner is here for".
 			String severity = ChartSearchAiUtils.firstNonBlank(i.getSeverity());
@@ -1632,7 +1647,7 @@ public class DrugReferenceInjector {
 				compact = rendered;
 			}
 			(promotable(i, context, floor) ? promoted : rest)
-					.add(new InteractionNote(rendered, compact, i.getSeverity()));
+					.add(new InteractionNote(rendered, compact, i.getSeverity(), label != null));
 		}
 		// Within the promoted segment, severity — not dataset position — decides who keeps their
 		// mechanism prose when the budget can only afford one full note (see render). Measured on the
@@ -1941,11 +1956,26 @@ public class DrugReferenceInjector {
 	}
 
 	/**
-	 * Orders interaction notes most-severe first — the promoted segment always, and since issue #355
-	 * the dataset tail as well where nothing was promoted. An unrated rule sorts ahead of Major: every
-	 * curated hand-authored rule is unrated, and {@link DrugSafetyValidator#clearsSeverityFloor}
-	 * already treats unrated as exempt rather than low — unrated is not low-rated, so it must not be
-	 * the one abbreviated.
+	 * Orders interaction notes by whether they NAME a partner, then most-severe first — the promoted
+	 * segment always, and since issue #355 the dataset tail as well where nothing was promoted. An
+	 * unrated rule sorts ahead of Major: every curated hand-authored rule is unrated, and
+	 * {@link DrugSafetyValidator#clearsSeverityFloor} already treats unrated as exempt rather than low
+	 * — unrated is not low-rated, so it must not be the one abbreviated. In the tail the stake is
+	 * higher than abbreviation: the loser there is not shortened but DROPPED, since {@code render}
+	 * caps how many tail partners it names.
+	 *
+	 * <p><b>Why naming is asked FIRST, and why the key is not visible in the promoted segment.</b> A
+	 * rule carrying no token and no ATC has no name to shorten to, so {@link InteractionNote#compact}
+	 * falls back to its whole mechanism paragraph — and being operator-authored it is normally
+	 * unrated, which this comparator ranks above Major. Ordering the tail on severity alone therefore
+	 * hoisted such a paragraph into the first slot, the one {@code render} lets past the character
+	 * budget so that at least one interaction is always shown, and it crowded out the row that named a
+	 * partner: measured on {@code drug-reference-unpromoted-tail-nameless.json}, 78 characters naming
+	 * metformin became 2027 characters about a partner nobody can identify — the cost issue #355
+	 * exists to remove, reintroduced by its own fix. The tail's job is breadth; a rule that names
+	 * nobody states none, so it may not outrank one that does. In the PROMOTED segment the key cannot
+	 * fire: {@link #promotable} requires {@link PatientClinicalContext#hasActiveDrug}, which is false
+	 * when both the token and the ATC are absent, so a promoted note always has a name.
 	 *
 	 * <p>Which source a rule came from decides whether that branch is reachable at all: DDInter rates
 	 * every row (all 295,184 in the full KB are Major/Moderate/Minor/Unknown — none unrecognised), so
@@ -1957,6 +1987,9 @@ public class DrugReferenceInjector {
 
 		@Override
 		public int compare(InteractionNote a, InteractionNote b) {
+			if (a.namesItsPartner != b.namesItsPartner) {
+				return a.namesItsPartner ? -1 : 1;
+			}
 			return Integer.compare(b.severityPriority, a.severityPriority);
 		}
 	};
@@ -1972,10 +2005,19 @@ public class DrugReferenceInjector {
 		 *  above Major; see {@link #SEVERITY_DESCENDING}. */
 		final int severityPriority;
 
-		InteractionNote(String full, String compact, String severity) {
+		/** Whether {@link DrugSafetyValidator#partnerLabel} gave this rule a name — a token, else an
+		 *  ATC code. False only for an operator-authored rule carrying neither, which is also the only
+		 *  rule whose {@link #compact} form is its whole mechanism paragraph. Recorded here rather
+		 *  than re-derived by comparing {@code compact} to {@code full}, which coincide for a second
+		 *  reason as well: a row carrying a severity but no mechanism text renders full as just its
+		 *  name, and that row DOES name its partner. See {@link #SEVERITY_DESCENDING}. */
+		final boolean namesItsPartner;
+
+		InteractionNote(String full, String compact, String severity, boolean namesItsPartner) {
 			this.full = full;
 			this.compact = compact;
 			this.severityPriority = DrugSafetyValidator.severityPriority(severity);
+			this.namesItsPartner = namesItsPartner;
 		}
 	}
 
@@ -2014,7 +2056,7 @@ public class DrugReferenceInjector {
 
 		/** Interaction partners the text does not name — dropped by the budget or, more often, by
 		 *  segment 2 representing the dataset tail with one partner where one was promoted and with at
-		 *  most {@link DrugReferenceInjector#MAX_UNPROMOTED_TAIL_PARTNERS} where none was (issue #355);
+		 *  most {@link DrugReferenceInjector#MAX_TAIL_PARTNERS_WHEN_NONE_PROMOTED} where none was (issue #355);
 		 *  0 when it names them all.
 		 *
 		 *  <p>Partners, not rows, since issue #174 site 2: the entry's rules are collapsed to one per
@@ -2214,7 +2256,7 @@ public class DrugReferenceInjector {
 	 * chart records, what it does not, and (issue #269) what it matched but nothing corroborates (issue
 	 * #208 item 2, {@link #contraindicationSections}). It may be null, which is "nothing known about the
 	 * patient": nothing is then promoted, so the interactions section is entirely the tail — most
-	 * severe first and bounded by {@link #MAX_UNPROMOTED_TAIL_PARTNERS} since issue #355 — and the
+	 * severe first and bounded by {@link #MAX_TAIL_PARTNERS_WHEN_NONE_PROMOTED} since issue #355 — and the
 	 * contraindication list is rendered with no reading at all, because a record that cannot see the
 	 * chart must not report an absence.
 	 *
@@ -2382,7 +2424,7 @@ public class DrugReferenceInjector {
 			// to), so such a row can still land a full paragraph in this slot. That stays inside the
 			// same one-note overshoot the budget already tolerates; it just is not always ~20 chars.
 			//
-			// With NONE promoted the same form is used, for up to MAX_UNPROMOTED_TAIL_PARTNERS of them
+			// With NONE promoted the same form is used, for up to MAX_TAIL_PARTNERS_WHEN_NONE_PROMOTED of them
 			// (issue #355). Until it this branch spent the whole budget on full notes, on the
 			// rationale that the general material IS the record's content when nothing is
 			// patient-specific — which the reproduction on that issue falsifies: "Can I give this
@@ -2392,7 +2434,8 @@ public class DrugReferenceInjector {
 			// one name would read as this drug's only interaction; see that constant.
 			//
 			// The budget still bounds the loop, because the operator-authored exception above applies
-			// to each of those rows too — five labelless rules are five paragraphs, not five names.
+			// to each of those rows too: a labelless rule contributes a paragraph rather than a name, and
+			// the cap counts rules rather than characters.
 			// And the first piece still renders however long it is: the pre-existing "at least one
 			// interaction is always shown" guarantee, which is why the explicit re-add this replaced
 			// could only ever fire in the promoted case, and that case now always shows one.
@@ -2400,7 +2443,7 @@ public class DrugReferenceInjector {
 			// and a compact representative shrinks that overshoot rather than widening it.
 			int restStart = interactions.promotedCount;
 			if (restStart == 0) {
-				for (int i = 0; i < ordered.size() && shown.size() < MAX_UNPROMOTED_TAIL_PARTNERS; i++) {
+				for (int i = 0; i < ordered.size() && shown.size() < MAX_TAIL_PARTNERS_WHEN_NONE_PROMOTED; i++) {
 					String n = ordered.get(i).compact;
 					if (!shown.isEmpty() && used + n.length() > MAX_INTERACTION_RENDER_CHARS) {
 						break;

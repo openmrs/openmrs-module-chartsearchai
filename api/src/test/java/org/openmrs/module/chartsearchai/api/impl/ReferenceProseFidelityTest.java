@@ -458,8 +458,10 @@ public class ReferenceProseFidelityTest {
 		// some reproduction of a record CARRIES ON past is not reported, because at that alignment
 		// the answer's next word is the record's own. It needs a record that states one passage
 		// twice, which the sixteen-entry DDInter excerpt does not — but a rendered reference record
-		// is a "; "-joined list of per-partner interaction items and DDInter partners routinely share
-		// a mechanism string, so the shape is ordinary rather than exotic.
+		// whose partner was PROMOTED is a "; "-joined list of per-partner interaction items and
+		// DDInter partners routinely share a mechanism string, so the shape is ordinary rather than
+		// exotic. Promoted is the qualifier issue #355 added: with nothing promoted the record carries
+		// no mechanism prose for this check to pool.
 		//
 		// The record is assembled here rather than injected for that reason, and it is the right
 		// operand: this check is a pure function of an answer and a record's TEXT, and the cases

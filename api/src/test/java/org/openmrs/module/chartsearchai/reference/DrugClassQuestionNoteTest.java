@@ -220,8 +220,10 @@ public class DrugClassQuestionNoteTest {
 
 	/**
 	 * The class arm screens on a CLASS and names it, so the note may not say screening happens only
-	 * against a named substance either. That was the third wider sentence written into this record
-	 * and the third measured false; the case is here so a fourth is not written.
+	 * against a named substance — nor that the interaction reference DATA has no class index, since
+	 * the curated groups file is exactly that. Those were the third and fourth wider sentences
+	 * written into this record and the third and fourth measured false; the case is here so a fifth
+	 * is not written.
 	 */
 	@Test
 	public void theNoteMakesNoClaimAboutHowTheModuleScreens() {
@@ -243,6 +245,16 @@ public class DrugClassQuestionNoteTest {
 				"Can I give her an NSAID?"));
 		assertFalse(note.getText().contains("not a class"),
 				"so the note must not say a screen runs only against a named substance: "
+						+ note.getText());
+		// Nor may it widen from the SCREEN to the DATA. cross-reactivity-groups.json is reference data
+		// this module loads, keyed by ATC prefix under a class NAME, and in the shipped configuration
+		// it is where the class name printed above was read from — so "the interaction reference data
+		// is indexed by individual substance" is false one field away from the chip asserted here.
+		// That was the fourth wider sentence written into this record and the fourth refuted.
+		assertFalse(note.getText().contains("interaction reference data"),
+				"nor may it claim the interaction reference data has no class index: " + note.getText());
+		assertTrue(note.getText().contains("Reference entries are indexed by individual substance name"),
+				"what survives is a claim about ENTRIES, which is what DrugReference is: "
 						+ note.getText());
 	}
 

@@ -41,8 +41,11 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * evidence — so the arrangement here produces three of them and the exclusion is asserted beside the
  * inclusions. Mutate {@code referenceSlice}'s predicate in either direction and read the failures.
  * The fourth, the {@code drug_class_note} issue #354 added, cannot join this arrangement: it is
- * raised only where the question resolved no substance, which is exactly when the other two
- * reference-group kinds are not produced. {@code DrugClassQuestionNoteTest} covers it on its own.
+ * raised only where the question resolved no substance, which is exactly when no
+ * {@code drug_reference} record is produced. It is NOT exclusive of the other reference-group kind —
+ * a {@code safety_finding} can be raised beside it, the screening arm being gated on the same
+ * emptiness, and {@code DrugClassQuestionNoteTest.theNoteDeniesNoScreenWhereTheScreeningArmRanBesideIt}
+ * is that arrangement. {@code DrugClassQuestionNoteTest} covers the note's own slice contribution.
  */
 public class InjectedReferenceSliceTest {
 

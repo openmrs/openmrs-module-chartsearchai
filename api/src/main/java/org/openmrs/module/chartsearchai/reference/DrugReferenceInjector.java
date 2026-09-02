@@ -1421,16 +1421,19 @@ public class DrugReferenceInjector {
 	 * reappearing inside citable reference prose. What holds in every arrangement is that the CLASS
 	 * resolved to nothing, and that is the whole of what it says.
 	 *
-	 * <p><b>THREE wider sentences were written here and all three were measured false — do not write
-	 * a fourth.</b> "no interaction screen was run for this class" and "this response carries no
+	 * <p><b>FOUR wider sentences were written here and all four were measured false — do not write a
+	 * fifth.</b> "no interaction screen was run for this class" and "this response carries no
 	 * reference material for it" each fall to a screening question that fires the pairwise arm
-	 * alongside this note; "an interaction screen runs against a named substance, not a class" falls
+	 * alongside this note. "An interaction screen runs against a named substance, not a class" falls
 	 * to {@code DrugSafetyValidator.classRelationships}, whose {@code interaction} chip screens on a
 	 * shared ATC subgroup or a shared cross-reactivity GROUP and names that group — which is this
-	 * note's own class term. Each was written to correct the one before it. The remedy is not a
-	 * better sentence about what the module does; it is to make no claim of that shape, which is why
-	 * the record now states one fact about the QUESTION and nothing about the response. The reader's
-	 * route to a screen is in sentence two: the data is indexed by substance.
+	 * note's own class term. And "the interaction reference DATA is indexed by individual substance"
+	 * falls to {@code cross-reactivity-groups.json}, which is reference data this module loads, is
+	 * keyed by ATC prefix under a CLASS NAME, and in the shipped configuration is where the class
+	 * name this note prints was read from. Each was written to correct the one before it, and the
+	 * last widened from the screen to the data rather than narrowing. What survives says only that
+	 * ENTRIES are indexed by substance name — which is what {@code DrugReference} is — and that this
+	 * class resolved to none of them.
 	 *
 	 * <p><b>It says what was not done, not what the reader should do about this patient.</b> It leads
 	 * with {@link #REFERENCE_PREFIX}, so the system prompt's record-type sentence frames it as
@@ -1445,8 +1448,8 @@ public class DrugReferenceInjector {
 	 * @param drugClass the class name {@link DrugReferenceService#namedDrugClass} answered with
 	 */
 	private static String renderDrugClassNote(String drugClass) {
-		return REFERENCE_PREFIX + "drug class \"" + drugClass + "\". The interaction reference data is "
-				+ "indexed by individual substance, so the class was not resolved to any substance.";
+		return REFERENCE_PREFIX + "drug class \"" + drugClass + "\". Reference entries are indexed by "
+				+ "individual substance name, so the class was not resolved to any substance.";
 	}
 
 	/**

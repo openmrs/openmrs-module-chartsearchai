@@ -17,8 +17,10 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 import org.junit.jupiter.api.Test;
@@ -868,6 +870,121 @@ public class DrugReferenceInjectorTest {
 		assertEquals(1, record.getWithheldInteractions(),
 				"precondition: the budget cuts one of the two rows here, so a row losing its place is "
 						+ "a row LOST from the record rather than one merely reordered: " + section);
+	}
+
+	/** Every rule shape {@link DrugReferenceInjector.InteractionNote#namesItsPartner} distinguishes,
+	 *  as one entry each in {@link #NAME_SHAPES_FIXTURE} — {@code {alias, the string the record must
+	 *  print for its probe row}}. The shapes that DO name a partner; {@link #NAMELESS_SHAPES} holds
+	 *  the ones that do not, and the two together must account for every entry of the fixture, which
+	 *  {@link #everyRuleShapeThatNamesAPartnerLeadsANamelessParagraphAndEveryOtherShapeTrailsIt}
+	 *  asserts. */
+	private static final String[][] NAMING_SHAPES = {
+			{ "tailtokenshape", "warfarin" },
+			{ "tailatcshape", "B01AA03" },
+			{ "tailbothnamedshape", "warfarin" },
+			{ "tailbaretokenshape", "warfarin" },
+			{ "tailbareatcshape", "B01AA03" },
+			{ "tailbarebothshape", "warfarin" },
+	};
+
+	/** The shapes that name NO partner — see {@link #NAMING_SHAPES}. Each probe row renders as its own
+	 *  mechanism paragraph, marked {@link #PROBE_PARAGRAPH_MARKER}. */
+	private static final String[] NAMELESS_SHAPES = {
+			"tailblanktokenshape",
+			"tailblankatcshape",
+			"tailbothblankshape",
+			"tailneithershape",
+	};
+
+	private static final String NAME_SHAPES_FIXTURE =
+			"chartsearchai-test/drug-reference-unpromoted-tail-name-shapes.json";
+
+	/** The marker a probe row that names nobody renders under: its own note, which is its compact form
+	 *  too, because there is no name to shorten to. */
+	private static final String PROBE_PARAGRAPH_MARKER = "PROBEPARAGRAPH";
+
+	/** The marker of the nameless unrated paragraph every entry of the fixture lists FIRST. */
+	private static final String NAMELESS_PARAGRAPH_MARKER = "LONGSTUB";
+
+	@Test
+	public void everyRuleShapeThatNamesAPartnerLeadsANamelessParagraphAndEveryOtherShapeTrailsIt()
+			throws Exception {
+		// Issue #355, review round 6. The five cases above each discriminate
+		// InteractionNote.namesItsPartner from ONE re-derivation somebody wrote in its place, and each
+		// was added because that re-derivation had been written and the whole build had accepted it.
+		// Five rounds, five cases, and round 6 found a sixth — getAtc() != null ||
+		// firstNonBlank(getToken()) != null, the raw-presence reading applied to the ATC arm alone,
+		// which no fixture in this repository could see because none carried a blank-but-present atc.
+		// So this case answers a different question from the five: rather than pinning one more
+		// substitution, it enumerates the rule SHAPES the predicate can distinguish at all, so a
+		// re-derivation nobody has thought of has nowhere left to differ silently.
+		//
+		// partnerLabel is firstNonBlank(token, atc), so its answer is decided by two fields each of
+		// which is absent, blank or non-blank; the shapes that matter are therefore token-only,
+		// atc-only, blank token with no atc, blank atc with no token, both blank, both absent and both
+		// present — plus, for the three naming shapes, a NOTELESS repeat, since without a note a
+		// naming row's compact and full texts are one string and comparing them cannot tell it from a
+		// nameless row. (A nameless shape with no note renders blank and orderedInteractionNotes drops
+		// it before an InteractionNote exists, so those have no noteless counterpart.)
+		//
+		// One arrangement, one entry per shape: the nameless unrated LONGSTUB paragraph FIRST in
+		// dataset order, then the probe row, which carries no severity — so severityPriority ties the
+		// two and only the naming key can order them, and where it cannot, dataset order leaves the
+		// paragraph in front. The paragraph alone exceeds MAX_INTERACTION_RENDER_CHARS, so exactly one
+		// of the two rows renders and the loser leaves the record as a withheld count: a naming shape
+		// must be the row shown, a nameless one must not be. Write any re-derivation into the
+		// constructor and read the failures.
+		List<String> covered = new ArrayList<String>();
+		for (String[] shape : NAMING_SHAPES) {
+			covered.add(shape[0]);
+			RecordMapping record = tailRecordOf(NAME_SHAPES_FIXTURE,
+					"is it safe to give " + shape[0] + "?");
+			String section = tailSectionOf(record);
+
+			assertTrue(record.getText().toLowerCase(Locale.ROOT).contains(shape[0]),
+					"precondition: the question must inject the entry it names, else the assertions "
+							+ "below are about another shape's record: " + record.getText());
+			assertTrue(section.contains(shape[1]),
+					shape[0] + " names its partner, so it is the row the record shows: " + section);
+			assertFalse(section.contains(NAMELESS_PARAGRAPH_MARKER),
+					shape[0] + " names its partner, so the nameless paragraph the dataset lists "
+							+ "FIRST does not take the one slot the character budget cannot refuse: "
+							+ section);
+			assertEquals(1, record.getWithheldInteractions(),
+					"precondition: exactly one of the two rows fits, so a row losing its place is a "
+							+ "row LOST from the record rather than one merely reordered: " + section);
+		}
+		for (String shape : NAMELESS_SHAPES) {
+			covered.add(shape);
+			RecordMapping record = tailRecordOf(NAME_SHAPES_FIXTURE, "is it safe to give " + shape + "?");
+			String section = tailSectionOf(record);
+
+			assertTrue(record.getText().toLowerCase(Locale.ROOT).contains(shape),
+					"precondition: the question must inject the entry it names, else the assertions "
+							+ "below are about another shape's record: " + record.getText());
+			assertTrue(section.contains(NAMELESS_PARAGRAPH_MARKER),
+					shape + " names no partner, so it may not displace the paragraph ahead of it — "
+							+ "and being unrated it outranks Major on severity alone, so nothing but "
+							+ "the naming key holds it back: " + section);
+			assertFalse(section.contains(PROBE_PARAGRAPH_MARKER),
+					shape + " names no partner, so its own paragraph is what the budget cuts: "
+							+ section);
+			assertEquals(1, record.getWithheldInteractions(),
+					"precondition: exactly one of the two rows fits, so a row losing its place is a "
+							+ "row LOST from the record rather than one merely reordered: " + section);
+		}
+
+		// A shape added to the fixture and not to either table above would be an unasserted shape,
+		// which is the hole this case exists to close. Every entry must be claimed by one of them.
+		List<String> inFixture = new ArrayList<String>();
+		for (DrugReference entry : DrugReferenceTestSupport.fixtureEntries(NAME_SHAPES_FIXTURE)) {
+			inFixture.add(entry.getName().toLowerCase(Locale.ROOT));
+		}
+		Collections.sort(inFixture);
+		Collections.sort(covered);
+		assertEquals(inFixture, covered,
+				"every rule shape the fixture files must be asserted here, and every shape asserted "
+						+ "here must be in the fixture");
 	}
 
 	/** The only record a curated {@code fixture} injects for {@code question}, for a patient on

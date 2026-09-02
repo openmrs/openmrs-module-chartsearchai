@@ -1819,8 +1819,12 @@ public class DrugReferenceInjector {
 			// methotrexate (Moderate), esomeprazole (Unknown), sertraline (Unknown) and simvastatin
 			// (Unknown) while the entry's only MAJOR partner, spironolactone, sits at index 5. Capping in
 			// dataset order would evict it — dataset accident deciding which partner keeps the room,
-			// which is exactly what SEVERITY_DESCENDING exists to stop. With the sort, the same record is
-			// 124 characters and leads with spironolactone (Major).
+			// which is exactly what SEVERITY_DESCENDING exists to stop. With the sort, and re-measured
+			// 2026-09-02 on this head over the same excerpt, patient and question, the same record is
+			// 167 characters with withheldInteractions 10 and leads with spironolactone (Major) — a
+			// RECORD length, like the seven-partner figure above it, and not the 124 characters of its
+			// Interactions: section alone, which is what an earlier wording of this line quoted under
+			// the word "record".
 			//
 			// CONDITIONAL, and not because one rule would be untidy: with anything patient-specific
 			// shown, render() names ONE tail representative, and which partner that is is pinned in
@@ -2241,12 +2245,31 @@ public class DrugReferenceInjector {
 		 *  arrived at the same way {@link #severityPriority} is, so the construction site passes no
 		 *  boolean and no name for it and has nothing to derive. It WAS a {@code boolean} parameter,
 		 *  and each review round of issue #355 found one more re-derivation written in its place that
-		 *  the whole build accepted — the five listed below, each a different question. What ends that
-		 *  is not a sixth case: with the flag read off the rule, none of the five can be written at
-		 *  the construction site, which now passes only the two rendered texts and the rule. Do not
+		 *  the whole build accepted — the five listed below, each a different question. Do not
 		 *  reintroduce a caller-supplied flag, and do not hand the label over as a {@code String}
 		 *  instead: the severity local sits beside it at the call site and is type-compatible with
 		 *  such a parameter, so the last of the five would still be expressible there.
+		 *
+		 *  <p><b>Moving the read here removed the CALL-site re-derivations and not the family</b>, and
+		 *  the paragraph above claimed otherwise until review round 6 falsified it: none of the five
+		 *  can be written where the note is constructed any more, but each can still be written on
+		 *  the line below, and round 6 found a sixth that was —
+		 *  {@code rule.getAtc() != null || firstNonBlank(rule.getToken()) != null}, the raw-presence
+		 *  reading applied to the ATC arm alone. Written into the constructor it left the whole build
+		 *  green, measured in that round and again here; the JSON fixture corpus carried no
+		 *  blank-but-present {@code atc} for it to differ on. So what bounds the family is not
+		 *  a case per substitution but a case over the rule SHAPES this predicate can distinguish:
+		 *  {@code DrugReferenceInjectorTest.everyRuleShapeThatNamesAPartnerLeadsANamelessParagraphAndEveryOtherShapeTrailsIt},
+		 *  over {@code drug-reference-unpromoted-tail-name-shapes.json}, which files one entry per
+		 *  shape of the two fields {@code partnerLabel} reads — token only, ATC only, blank token with
+		 *  no ATC, blank ATC with no token, both blank, both absent, both present, and the three
+		 *  naming shapes again with no note — and asserts of each whether its row or a nameless
+		 *  unrated paragraph is the one the record shows. The five cases below are NOT subsumed by it
+		 *  and stay: every probe row in the matrix is UNRATED, so that only the naming key can order
+		 *  it against the paragraph, and a re-derivation admitting a NAMELESS but RATED row — {@code
+		 *  partnerLabel(rule) != null || firstNonBlank(rule.getSeverity()) != null}, measured to leave
+		 *  the matrix green — differs on a shape no probe here carries. What holds that shape is
+		 *  {@code .aNamelessRuleCarryingASeverityStillDoesNotDisplaceARowThatNamesItsPartner}.
 		 *
 		 *  <p><b>Why the rule answers exactly what the call site used to.</b>
 		 *  {@link #orderedInteractionNotes} renders under {@code reconciledPartnerNoteName}, which is a
@@ -2275,8 +2298,9 @@ public class DrugReferenceInjector {
 		 *  ({@code api/src/main/resources/chartsearchai/drug-reference.json}, each carrying a token, an
 		 *  ATC code and no {@code severity}) and the normal shape of a hand-authored rule. Each of
 		 *  those either loses a named partner out of the record or lands a paragraph naming nobody in
-		 *  the slot the character budget cannot refuse. Write each one into the constructor and read
-		 *  the failures, among them
+		 *  the slot the character budget cannot refuse — as does the sixth reading named above, which
+		 *  is the raw-presence one applied to the ATC arm and only to it. Write each one into the
+		 *  constructor and read the failures, among them
 		 *  {@code DrugReferenceInjectorTest.aRatedRowWithNoMechanismTextStillCountsAsNamingItsPartner},
 		 *  {@code .anAtcNamedRowWithNoMechanismTextStillCountsAsNamingItsPartner},
 		 *  {@code .aNamelessRuleCarryingASeverityStillDoesNotDisplaceARowThatNamesItsPartner},

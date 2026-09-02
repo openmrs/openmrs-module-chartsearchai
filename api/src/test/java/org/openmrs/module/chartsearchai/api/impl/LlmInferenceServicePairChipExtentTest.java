@@ -35,14 +35,15 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
 
 /**
  * Issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/336">#336</a> — how
- * bounded the pairwise interaction list is travelling from the validator that cut it to the answer
- * the REST layer serializes.
+ * bounded the interaction list is travelling from the validator that measured it to the answer the
+ * REST layer serializes.
  *
  * <p><b>What these cases pin, stated plainly, because a reader will otherwise expect more of them.</b>
  * They pin the WIRING and not the counts: that the sink {@code LlmInferenceService} creates is the
  * one it hands to {@code validate}, that whatever the validator states into it reaches the answer,
  * and that an answer whose producer stated nothing carries nothing. The counts themselves are a fact
- * about the pairwise arms and are pinned through the real {@code validate} over the real DDInter
+ * about the arms that state them — the two pairwise ones and, since issue #356, the drug-in-play arm
+ * where neither of those ran — and are pinned through the real {@code validate} over the real DDInter
  * excerpt by {@code PairChipExtentContextTest}; a stub here could only restate them.
  *
  * <p>The validator seam is therefore deliberately a stub that states a fixed extent — it is

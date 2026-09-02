@@ -573,6 +573,12 @@ public class DrugSafetyValidator {
 		// called on. What this does NOT buy is row-level independence: resolvedRows is built over
 		// inPlay, so a row the answer names widens the group this arm rules over (issue #175's measured
 		// shape) and can change which rule survives for a question substance.
+		//
+		// It also leans on inPlay's ORDER, which is why that order is a LinkedHashSet seeded from
+		// questionDrugs: statedChips spans the whole pass, so an answer-side substance reached FIRST
+		// could collapse a byte-identical chip a question-side substance was about to state, and the
+		// count would then move with the answer after all. Question substances lead, so the collapse
+		// can only ever drop a later answer-side chip, which this counts nowhere.
 		Set<Object> questionSubstances = new HashSet<Object>();
 		for (DrugReference questionDrug : questionDrugs) {
 			questionSubstances.add(questionDrug.substanceGroupKey());

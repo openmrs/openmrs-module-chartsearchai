@@ -92,12 +92,15 @@ package org.openmrs.module.chartsearchai.reference;
  * is told apart by WHERE it is read rather than by this value:
  *
  * <ol>
- *   <li>no arm enumerated anything — the question resolved no reference drug at all, or it
- *       resolved one and the chart records no medication to screen it against, or a global
- *       property gating those arms is off (the drug-reference feature, the answer validator,
- *       {@code warnOnInteractions}). A question resolving no drug is the one #356 calls the row to
- *       get right: {@code found == 0} must mean SCREENED and related nothing, never "the drug
- *       could not be resolved", so a drug only the ANSWER named states nothing on its own;</li>
+ *   <li>no arm enumerated anything — the question resolved no reference drug AND did not ask to be
+ *       screened, which is the ordinary case for most questions, or it resolved one and the chart
+ *       records no medication to screen it against, or a global property gating those arms is off
+ *       (the drug-reference feature, the answer validator, {@code warnOnInteractions}). Both halves
+ *       of the first are needed: a question resolving no drug that DOES ask to be screened runs
+ *       {@link DrugSafetyValidator#addActiveOrderPairInteractions}, which states {@code of(0, 0)}
+ *       even over no orders at all. What #356 calls the row to get right is the other direction:
+ *       {@code found == 0} must mean SCREENED and related nothing, never "the drug could not be
+ *       resolved", so a drug only the ANSWER named states nothing on its own;</li>
  *   <li>{@code validate} threw and degraded to no warnings, its documented fail-safe — and the
  *       statement is published only on the normal return, so a degraded pass states nothing
  *       rather than describing chips that were discarded.</li>

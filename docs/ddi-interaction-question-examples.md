@@ -117,7 +117,7 @@ Four fields of the response matter for these tests:
 |---|---|
 | `answer` | the LLM's prose. **Not** the safety output — it is what the model made of the chart plus the injected findings |
 | `safetyWarnings` | the **deterministic** chips. Computed by `DrugSafetyValidator` from the chart and the knowledge base, with no model involvement. Each carries `type`, `drug`, `detail` and — since [#340](https://github.com/openmrs/openmrs-module-chartsearchai/issues/340) — a `severity` |
-| `interactionPairs` | `{"found": N, "reported": M}` — how many above-floor rule pairs the interaction check related and how many survived the chip cap ([#336](https://github.com/openmrs/openmrs-module-chartsearchai/issues/336)); the drug-in-play arm states it too since [#356](https://github.com/openmrs/openmrs-module-chartsearchai/issues/356) and is not capped, so its two numbers are always equal. `null` means no arm ran — the question resolved no reference drug, or it resolved one and the chart records no medication to screen it against; `{"found":0}` means one ran and related nothing. **`null` is not completeness** |
+| `interactionPairs` | `{"found": N, "reported": M}` — how many above-floor rule pairs the interaction check related and how many survived the chip cap ([#336](https://github.com/openmrs/openmrs-module-chartsearchai/issues/336)); the drug-in-play arm states it too since [#356](https://github.com/openmrs/openmrs-module-chartsearchai/issues/356) and is not capped, so its two numbers are always equal. `{"found":0}` means an arm ran and related nothing. **`null` is not completeness** — what it does cover is enumerated in `PairChipExtent`'s class javadoc and in `README.md`, and deliberately nowhere else, so read it there rather than inferring it from the cells below |
 | `references` | the records the answer actually **cited** — `drug_order`, `allergy`, `condition`, `safety_finding`, `drug_reference` |
 
 > **Judge the chips, not only the prose.** The chips are the tested, deterministic layer; the
@@ -144,10 +144,12 @@ other's cap. Where neither ran, the **drug-in-play** arm states it instead
 ([#356](https://github.com/openmrs/openmrs-module-chartsearchai/issues/356)), which is what a
 plain "can I give her X?" now reports: before that fix it reported `null` even while raising
 seven interaction chips, so a completed screen that related nothing was indistinguishable from
-one nobody ran. Two things that arm's number does **not** include, because neither pairwise arm
-has them either: its unrated class-only sentences, and chips it raised for a drug only the
-*answer* named. And it states nothing at all where the chart records no active medication — there
-was no population to screen. One consequence worth knowing before you read a `{"found": 0}` as odd: a question
+one nobody ran. Two things that arm's number does **not** include, for two different reasons. Its
+unrated class-only sentences are out because neither pairwise arm has a class leg, and one wire key
+must not mean two things by question shape. Chips it raised for a drug only the *answer* named are
+out because the statement is the **question's**: counted over the answer as well, the same question
+and chart would report differently according to what the model happened to write. And it states
+nothing at all where the chart records no active medication — there was no population to screen. One consequence worth knowing before you read a `{"found": 0}` as odd: a question
 naming what looks like *one* drug can still resolve to several reference entries (route variants
 such as `Dexamethasone` / `Dexamethasone (ophthalmic)`), which opens the question-pair arm, and
 it then honestly reports `found: 0` because route variants of one substance are not a clinical

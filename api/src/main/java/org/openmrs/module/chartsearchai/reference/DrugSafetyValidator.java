@@ -1160,8 +1160,8 @@ public class DrugSafetyValidator {
 	 *         set — interaction, overdose, and the drug-in-play contraindication arms alike. This used
 	 *         to say "an INTERACTION or OVERDOSE finding", which reads as a bound and is not one: the
 	 *         contraindication arm restored above is the ACTIVE-ORDER one, so a drug that is neither
-	 *         question-named nor ordered loses its contraindication check too. The paragraph on
-	 *         {@link #isEchoOfAttributableRecord} states that residue in full.
+	 *         question-named nor ordered loses its contraindication check too. The accepted-trade-off
+	 *         paragraph earlier in this same javadoc states that residue in full.
 	 */
 	private static boolean isEchoOfAttributableRecord(DrugReference ref, List<String> attributableTextsLower) {
 		return namesAnyOf(attributableTextsLower, ref);

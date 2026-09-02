@@ -219,8 +219,8 @@ public class DrugSafetyValidatorEchoScopingTest {
 		// What is given up is systematic rather than incidental: an injected drug_reference record
 		// renders the question drug's partner list AND each partner's mechanism paragraph, so the
 		// drugs this cannot chip from the answer side are that drug's KB partners and every substance
-		// those paragraphs name — which is also the set an answer draws alternatives from. The case
-		// below pins the mechanism-prose half.
+		// those paragraphs name — which is also the set an answer draws alternatives from.
+		// aSubstanceNamedOnlyInsideARenderedMechanismParagraphIsWithheldToo pins that second half.
 		// The bound is NOT the order-driven contraindication arm, which restores contraindications and
 		// only for a drug the patient is already on; what stays withheld here is an INTERACTION finding
 		// about a drug she is not on. Deciding it any other way needs evidence the answer RECITED the
@@ -290,8 +290,8 @@ public class DrugSafetyValidatorEchoScopingTest {
 	@Test
 	public void anUncitedChartRecordNamingTheDrugDoesNotExemptIt() {
 		// The boundary issue #360 stops at: the chart half of the attribution corpus still requires an
-		// inline marker. Same fixture as the panadol case
-		// above with the [230] taken off — the record still names Aspirin, and the answer still says
+		// inline marker. Same fixture as allergyEchoedOffTheChartDoesNotChipItself with the [230]
+		// taken off — the record still names Aspirin, and the answer still says
 		// it, but nothing attributes the mention to the record, so aspirin stays in play and chips.
 		//
 		// A chart record is the patient's own data: a drug named in one is by construction about this

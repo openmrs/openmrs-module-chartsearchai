@@ -33,6 +33,7 @@ import org.openmrs.ConceptReferenceTerm;
 import org.openmrs.ConceptSource;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.openmrs.util.OpenmrsUtil;
@@ -355,6 +356,26 @@ public final class DrugReferenceTestSupport {
 	static List<RecordMapping> injectedFindings(PatientChart chart) {
 		return chart.getMappings().stream()
 				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(m.getResourceType()))
+				.collect(Collectors.toList());
+	}
+
+	/**
+	 * Every injected RECITABLE record in {@code chart}, in injection order — the union
+	 * {@link #injectedReferences} and {@link #injectedFindings} each see only half of, and the one a
+	 * case asserting that the corpus {@code DrugSafetyValidator} attributes an uncited answer mention
+	 * to has NOTHING in it must use. Either type-shaped filter alone reads as that claim and is not
+	 * it: a screening question injects no {@code drug_reference} record at all, so
+	 * {@link #injectedReferences} is empty there whatever findings the pre-answer pass rendered.
+	 *
+	 * <p>Selected by the production classifier ({@code ChartSearchAiUtils.referenceGroup} against
+	 * {@code REFERENCE_GROUP_REFERENCE}) rather than by naming the two types, which is the same
+	 * question {@code DrugSafetyValidator.isRecitableReferenceMaterial} asks and is why a reference
+	 * type added later is carried here without this method changing.
+	 */
+	static List<RecordMapping> injectedReferenceGroupRecords(PatientChart chart) {
+		return chart.getMappings().stream()
+				.filter(m -> ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE.equals(
+						ChartSearchAiUtils.referenceGroup(m.getResourceType())))
 				.collect(Collectors.toList());
 	}
 

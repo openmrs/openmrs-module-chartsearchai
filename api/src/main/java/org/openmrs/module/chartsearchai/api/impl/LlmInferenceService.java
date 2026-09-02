@@ -147,8 +147,9 @@ public class LlmInferenceService implements ChartSearchService {
 					chart.getMappings());
 			// A per-call sink, never a field: the validator is a Spring singleton, so a field would be
 			// one slot shared by every concurrent request (issue #172). What it hears is how bounded
-			// the pairwise interaction list behind these chips is — the statement issue #336 exists
-			// for, and one no consumer can re-derive from the chips themselves.
+			// the interaction list behind these chips is — the statement issue #336 exists for, widened
+			// by #356 to the prescribing question, where neither pairwise arm ran, and one no
+			// consumer can re-derive from the chips themselves.
 			PairChipExtent.Sink pairExtent = new PairChipExtent.Sink();
 			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), question,
 					patient, chart.getMappings(), pairExtent);
@@ -461,8 +462,9 @@ public class LlmInferenceService implements ChartSearchService {
 
 			// A per-call sink, never a field: the validator is a Spring singleton, so a field would be
 			// one slot shared by every concurrent request (issue #172). What it hears is how bounded
-			// the pairwise interaction list behind these chips is — the statement issue #336 exists
-			// for, and one no consumer can re-derive from the chips themselves.
+			// the interaction list behind these chips is — the statement issue #336 exists for, widened
+			// by #356 to the prescribing question, where neither pairwise arm ran, and one no
+			// consumer can re-derive from the chips themselves.
 			PairChipExtent.Sink pairExtent = new PairChipExtent.Sink();
 			List<SafetyWarning> safetyWarnings = drugSafetyValidator.validate(response.getAnswer(), question,
 					patient, chart.getMappings(), pairExtent);

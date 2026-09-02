@@ -55,7 +55,9 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * assert an absence, one is carried by the drug-in-play arm — so do not read them as evidence for any
  * single leg.
  *
- * <p>{@code isEchoOfCitedRecord} justified that residual risk by asserting a proposal-worthy drug is
+ * <p>{@code isEchoOfAttributableRecord} — {@code isEchoOfCitedRecord} when this was written, renamed
+ * by issue #360 along with the corpus it reads — justified that residual risk by asserting a
+ * proposal-worthy drug is
  * "usually question-named (always validated) or actively ordered (checked directly by the
  * order-driven arms)". The second half was false: counted over the whole class, the order-driven arms
  * ({@code addInteractionWarnings}, {@code addQuestionPairInteractions},

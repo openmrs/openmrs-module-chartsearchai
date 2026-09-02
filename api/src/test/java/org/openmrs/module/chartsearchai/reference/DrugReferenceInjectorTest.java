@@ -616,10 +616,13 @@ public class DrugReferenceInjectorTest {
 		// the compact form IS the mechanism paragraph. Five of those are five paragraphs, which is the
 		// cost #355 exists to remove, so the budget stays in the loop beside the cap.
 		//
-		// Measured 2026-09-02: deleting that condition leaves the whole api suite green without this
-		// case. Not because no other fixture carries two nameless rules — drug-reference-malformed.json
-		// does — but because every other such note is far too short to reach the budget (that entry's
-		// are 0 and 21 characters). Lengthen one of those and this case stops being the only witness.
+		// The clause was left undiscriminated by #355 until this case: before it, deleting the condition
+		// kept the whole api suite green. Not because no other fixture carries two nameless rules —
+		// drug-reference-malformed.json does — but because every other such note is far too short to
+		// reach the budget (that entry's are 0 and 21 characters). Mutate the condition and read the
+		// failures rather than trusting a count of them: this case was the sole witness when it was
+		// written and is not any more, the nameless-tail fixture beside it having since grown a note
+		// long enough to reach the budget too.
 		//
 		// Every row is unrated, so severityPriority ties them and the stable sort leaves dataset order
 		// — which keeps this case about the budget rather than about the ordering beside it.

@@ -228,6 +228,32 @@ public class DrugSafetyValidatorEchoScopingTest {
 	}
 
 	@Test
+	public void anUncitedChartRecordNamingTheDrugDoesNotExemptIt() {
+		// The boundary issue #360 stops at, and the only case that discriminates it: the chart half of
+		// the attribution corpus still requires an inline marker. Same fixture as the panadol case
+		// below with the [230] taken off — the record still names Aspirin, and the answer still says
+		// it, but nothing attributes the mention to the record, so aspirin stays in play and chips.
+		//
+		// A chart record is the patient's own data: a drug named in one is by construction about this
+		// patient, so the marker is doing real work there — it is the evidence the answer was REPORTING
+		// the record rather than proposing on its own authority. Widening this half as well would
+		// exempt a genuine proposal whenever her own notes happen to name the drug. Neuter
+		// isModuleSuppliedReferenceRecord to a constant true and read this failure.
+		List<RecordMapping> mappings = Arrays.asList(
+				new RecordMapping(230, "allergy", "allergy-uuid-1", null, "Allergy: Aspirin (severity unknown)"));
+		String answer = "The patient has a recorded allergy to Aspirin.";
+		assertTrue(ChartSearchAiUtils.citedIndexes(answer).isEmpty(),
+				"precondition: this answer must carry no inline citation marker at all");
+
+		List<SafetyWarning> warnings = validator().validate(answer, "Is it safe to give her panadol?",
+				simvastatinWithAspirinAllergyCtx(), mappings);
+
+		assertFalse(warnings.isEmpty(),
+				"an UNCITED chart record must not attribute the answer's mention to itself, was: "
+						+ warnings);
+	}
+
+	@Test
 	public void uncitedAnswerProposalIsStillValidated() {
 		// The net this scoping must not weaken: a question that names no drug, answered by a
 		// bare recommendation with no citation. The proposal keeps the full check and still

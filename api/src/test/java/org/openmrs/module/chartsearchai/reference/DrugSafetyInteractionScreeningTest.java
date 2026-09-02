@@ -423,9 +423,10 @@ public class DrugSafetyInteractionScreeningTest {
 		// play beside it. When the answer names a subject the screen also reaches, both arms run the
 		// same rule join over the same active orders and produce a byte-identical chip: measured, this
 		// arrangement raised the "Simvastatin interacts with active order clarithromycin — Major" chip
-		// TWICE in one safetyWarnings array. The answer here cites nothing, which is the shape that
-		// reaches this — echo scoping (#105) exempts an answer-named drug only when a CITED record
-		// already names it, so an uncited answer keeps every drug it names in play.
+		// TWICE in one safetyWarnings array. What reaches this is the MAPPINGS-LESS overload below:
+		// echo scoping has no records to attribute a mention to, so every drug the answer names stays
+		// in play. Not "the answer cites nothing" — since issue #360 an uncited answer is still scoped
+		// against the reference records the chart carries, and only an absent chart exempts nothing.
 		List<SafetyWarning> warnings = ddinterValidator().validate(
 				"Yes — simvastatin and clarithromycin interact at a major level.", SCREENING_QUESTION,
 				interactingPairContext());
@@ -481,10 +482,10 @@ public class DrugSafetyInteractionScreeningTest {
 				"precondition: both orders must resolve, and the ROUTE-QUALIFIED chloroprocaine row must "
 						+ "come first — that is what makes the two arms disagree");
 
-		// The answer names chloroprocaine and cites nothing, which is what puts the substance in play
-		// beside the screen (echo scoping exempts an answer-named drug only when a CITED record already
-		// names it). It must not name lidocaine: that would put the reverse direction in play too, which
-		// is a different subject and a legitimately separate chip.
+		// The answer names chloroprocaine, and the MAPPINGS-LESS overload below is what puts the
+		// substance in play beside the screen: with no records at all, echo scoping can attribute the
+		// mention to nothing. It must not name lidocaine: that would put the reverse direction in play
+		// too, which is a different subject and a legitimately separate chip.
 		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service).validate(
 				"Yes — she is on chloroprocaine, and the reference data flags a methemoglobinemia risk.",
 				SCREENING_QUESTION, context);

@@ -59,7 +59,13 @@ import java.util.Set;
  * the name of any single substance;</li>
  * <li>it resolves to no entry of the shipped knowledge base, which is a DATA GUARD
  * ({@code DrugClassQuestionNoteTest.everyCuratedClassTermResolvesToNoSubstanceInTheShippedKnowledgeBase},
- * through {@link DrugReferenceService#findImpliedByQuery}) and not a claim made here; and</li>
+ * through {@link DrugReferenceService#findImpliedByQuery}) and not a claim made here. It binds BOTH
+ * columns: the term is what a question is matched against, and the class name beside it is what the
+ * record PRINTS, so the second is guarded by
+ * {@code DrugClassQuestionNoteTest.everyClassNameTheTableCanReportNamesNoSubstanceOfTheShippedKnowledgeBase},
+ * which drives a question per term through the injector and puts the rendered note back through the
+ * same accessor. Guarding the keys alone left the value column unguarded: measured 2026-09-02 with
+ * that case deleted, a term whose value is a drug name ships with the whole build green;</li>
  * <li>where a curated cross-reactivity group already publishes the same class, the duplication is
  * DELIBERATE rather than forbidden — see the paragraph above on why {@code NSAID} is named here
  * outright.</li>
@@ -115,7 +121,9 @@ final class DrugClassTerms {
 	private DrugClassTerms() {
 	}
 
-	/** The code table's terms, for the data guard that enforces admission criterion (2). It is the
+	/** The code table's terms, for the two data guards that enforce admission criterion (2) — one
+	 *  putting the term itself to the dataset, the other the note the term makes the injector render,
+	 *  which is how the class NAME each term reports is reached (every value has a key). It is the
 	 *  code table alone: a group's name comes from operator data, which no test in this module can
 	 *  speak for. */
 	static Set<String> terms() {

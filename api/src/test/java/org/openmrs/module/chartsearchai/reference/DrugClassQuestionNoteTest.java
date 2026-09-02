@@ -443,4 +443,93 @@ public class DrugClassQuestionNoteTest {
 							+ "knowledge base, so it is a drug name and not a class term");
 		}
 	}
+
+	/**
+	 * The same criterion asked of the class name the note actually PRINTS, which is the table's value
+	 * column and not its keys. The sibling case above iterates {@code DrugClassTerms.terms()}, which
+	 * is the key set, and {@code theNoteNamesNoSubstanceTheReferenceDataCarries} renders one class —
+	 * so a term whose VALUE is a drug name shipped a drug into citable reference prose with the whole
+	 * build green. Measured 2026-09-02 on {@code terms.put("coxib", "Celecoxib")} with this case
+	 * deleted: both of those stay green and so does the whole build, while the rendered note names
+	 * Celecoxib — and since issue #363 put every reference-group record into the recitable echo
+	 * corpus, that drug's own safety chips go with it.
+	 *
+	 * <p>Asked through the real injector rather than of the value column directly, so what is put
+	 * back through {@link DrugReferenceService#findImpliedByQuery} is the rendered RECORD: the class
+	 * name and the sentences around it, which is the string an answer may reproduce. Every value is
+	 * reachable from some key, so driving one question per key reaches every class name this table
+	 * can report.
+	 */
+	@Test
+	public void everyClassNameTheTableCanReportNamesNoSubstanceOfTheShippedKnowledgeBase() {
+		DrugReferenceService shipped = serviceWith(shippedEntries());
+
+		for (String term : DrugClassTerms.terms()) {
+			RecordMapping note = classNoteIn(inject(ddinterService(),
+					"Can I start this patient on " + term + "?"));
+
+			assertTrue(shipped.findImpliedByQuery(note.getText()).isEmpty(),
+					"the note the class term \"" + term + "\" produces names a substance of the "
+							+ "shipped knowledge base: " + note.getText());
+		}
+	}
+
+	/**
+	 * The other half of the outcome issue #354 blesses — "an answer that explicitly says the question
+	 * named a class AND ASKS FOR A SPECIFIC DRUG". Stating only that the class resolved to nothing
+	 * leaves the clinician who asked the issue's headline question with no indication that naming a
+	 * member reaches the Moderate nevirapine pair the knowledge base holds against every member of
+	 * it.
+	 *
+	 * <p>The third arrangement is the one that refuted four earlier sentences: a screening question
+	 * that fires the pairwise arm beside the note. The clause is an imperative about the QUESTION, so
+	 * that arrangement cannot falsify it — which is exactly why it is asserted there rather than only
+	 * on the note standing alone.
+	 */
+	@Test
+	public void theNoteAsksTheQuestionToNameASpecificDrug() {
+		assertNoteAsksForADrug(inject(ddinterService(),
+				"Can I start this patient on an oral contraceptive?"));
+		assertNoteAsksForADrug(inject(ddinterServiceWithGroups(),
+				"Can I start this patient on an NSAID?"));
+
+		PatientClinicalContext screened = ctx(60, null, set("warfarin 5mg", "ibuprofen 400mg"),
+				set("B01AA03", "M01AE01"), null, null);
+		PatientChart chart = injectorWithSafety(ddinterServiceWithGroups()).injectRecords(
+				oneRecordChart(), screened, "Do any of her medications interact with an NSAID?");
+		assertFalse(DrugReferenceTestSupport.injectedFindings(chart).isEmpty(),
+				"the premise: this question does run the screening arm beside the note: "
+						+ chart.getText());
+		assertNoteAsksForADrug(chart);
+	}
+
+	private static void assertNoteAsksForADrug(PatientChart chart) {
+		RecordMapping note = classNoteIn(chart);
+		assertTrue(note.getText().contains("Ask about a specific drug by name."),
+				"the note must ask for a specific drug: " + note.getText());
+	}
+
+	/**
+	 * The note's words, in full and as a literal.
+	 *
+	 * <p>Every other case here asserts a SUBSTRING — a refuted sentence is absent, the class name is
+	 * present — and a substring guard is defeated by rewording rather than by deleting anything:
+	 * measured, appending a reworded version of the first two refuted sentences leaves all of them
+	 * green. This is citable reference prose an answer may reproduce, so any change to it has to be
+	 * SEEN. Spelled out rather than composed from {@link DrugReferenceInjector#REFERENCE_PREFIX},
+	 * which would compare a constant to itself.
+	 *
+	 * <p>A failure here is not by itself a defect — it means the record's words changed. Read the
+	 * four refuted sentences recorded on {@code DrugReferenceInjector.renderDrugClassNote} before
+	 * updating this literal, because they are what a fifth wider sentence would have to survive.
+	 */
+	@Test
+	public void theRenderedNoteIsExactlyTheseWords() {
+		RecordMapping note = classNoteIn(inject(ddinterService(),
+				"Can I start this patient on an oral contraceptive?"));
+
+		assertEquals("Drug reference — drug class \"oral contraceptive\". Reference entries are "
+				+ "indexed by individual substance name, so the class was not resolved to any "
+				+ "substance. Ask about a specific drug by name.", note.getText());
+	}
 }

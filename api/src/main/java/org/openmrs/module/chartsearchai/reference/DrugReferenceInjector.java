@@ -1436,11 +1436,25 @@ public class DrugReferenceInjector {
 	 * ENTRIES are indexed by substance name — which is what {@code DrugReference} is — and that this
 	 * class resolved to none of them.
 	 *
-	 * <p><b>It says what was not done, not what the reader should do about this patient.</b> It leads
-	 * with {@link #REFERENCE_PREFIX}, so the system prompt's record-type sentence frames it as
-	 * reference data rather than this patient's own — and the closing sentence deliberately mentions
-	 * no patient, because a record declared not to be about this patient should not carry a clause
-	 * that reads as one.
+	 * <p><b>It closes by asking for a specific drug, which is the other half of the outcome issue
+	 * #354 blesses</b> — "an answer that explicitly says the question named a class and asks for a
+	 * specific drug". Read the two sentences together: the first says what the class did, the second
+	 * says what a question would have to name for an entry to be reached at all.
+	 *
+	 * <p><b>Why that clause survives the scrutiny the four above failed.</b> It is an IMPERATIVE
+	 * about the QUESTION, so no arrangement of this response can falsify it: it states nothing about
+	 * what was screened, what the response carries, or how the module or its data is indexed, which
+	 * is what each of the four refuted sentences did. And it stays inside the two rules the rest of
+	 * the record is written under — it names no substance (the guard below reaches it, since it is
+	 * part of the rendered text that goes back through {@code findImpliedByQuery}) and it mentions no
+	 * patient, so a record declared not to be about this patient still carries no clause reading as
+	 * one. What it must NOT become is the promise a member-resolving version would make — "name a
+	 * specific drug and it resolves" is false for any drug the loaded dataset does not carry, and the
+	 * dataset is configurable.
+	 *
+	 * <p><b>It says what was not done and what to ask instead, never what to do about this
+	 * patient.</b> It leads with {@link #REFERENCE_PREFIX}, so the system prompt's record-type
+	 * sentence frames it as reference data rather than this patient's own.
 	 *
 	 * <p>What it CANNOT do is make the answer say any of this. The deterministic half is the
 	 * injection; whether the model relays a record it was given is the model's, and this module
@@ -1450,7 +1464,8 @@ public class DrugReferenceInjector {
 	 */
 	private static String renderDrugClassNote(String drugClass) {
 		return REFERENCE_PREFIX + "drug class \"" + drugClass + "\". Reference entries are indexed by "
-				+ "individual substance name, so the class was not resolved to any substance.";
+				+ "individual substance name, so the class was not resolved to any substance. "
+				+ "Ask about a specific drug by name.";
 	}
 
 	/**

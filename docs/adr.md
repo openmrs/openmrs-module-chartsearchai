@@ -4286,11 +4286,30 @@ Nevirapine pair against every oral-contraceptive substance it holds.
 The issue names two outcomes that count as fixed: resolve the class to its members and screen them,
 or state that the question named a class and ask for a specific drug.
 
-**Decision.** The second. A question that names a recognised drug class and resolves **no**
-substance injects one `drug_class_note` record naming the class and stating that the class was not
-resolved to any substance. It names no member of the class, and it denies nothing about what the
-response does carry — see the residues below. Nothing else changes: no chip arm, no
-candidate-set accessor, no prompt sentence.
+**Decision.** The second, in both its halves. A question that names a recognised drug class and
+resolves **no** substance injects one `drug_class_note` record naming the class, stating that the
+class was not resolved to any substance, and closing by asking that the question name a specific
+drug — the issue's own second half ("says the question named a class and asks for a specific drug"),
+without which a clinician asking the headline question is told only that the class reached nothing.
+It names
+no member of the class, and it denies nothing about what the response does carry — see the residues
+below. Nothing else changes: no chip arm, no candidate-set accessor, no prompt sentence.
+
+**Why the closing clause survives the scrutiny four earlier sentences failed** (they are recorded,
+with what refutes each, on `DrugReferenceInjector.renderDrugClassNote`). It is an IMPERATIVE about
+the QUESTION: it asserts nothing about what was screened, what the response carries, or how the
+module or its data is indexed, which is what each refuted sentence did, so no arrangement of this
+response can falsify it. It stops short of the promise a member-resolving version would make — "name
+a specific drug and it resolves" is false for any drug the loaded dataset does not carry, and the
+dataset is configurable. And it stays inside the record's two standing rules: it names no substance
+and it mentions no patient.
+
+**The note's words are pinned as a literal**, by
+`DrugClassQuestionNoteTest.theRenderedNoteIsExactlyTheseWords`. Every other case over this record
+asserts a substring — a refuted sentence absent, the class name present — and a substring guard is
+defeated by rewording rather than by deleting: measured 2026-09-02, appending a reworded version of
+the first two refuted sentences left all of them, and the whole build, green. A failure of that case
+means the record's citable prose changed and has to be read.
 
 **Why not resolve the class — measured, not argued.** The issue proposes the ATC hierarchy ("every
 substance above sits under `G03A*`"). Read off the shipped `ddi-knowledge-base.json` (2026-09-02,
@@ -4333,7 +4352,11 @@ spellings are needed because the prose boundary rule allows zero trailing letter
 the term `NSAID`, and a group publishes one `name`.
 
 Admission to the code table is: it designates a class rather than any single substance; it resolves
-to no entry of the shipped knowledge base (a data guard through `findImpliedByQuery`, not a claim);
+to no entry of the shipped knowledge base (a data guard through `findImpliedByQuery`, not a claim —
+binding the term the question is matched against AND the class name the record prints, the second by
+rendering the note the term produces and putting that back through the same accessor; guarding the
+terms alone left the printed column unguarded, and measured 2026-09-02 a value that is a drug name
+passes the whole build);
 and, where a curated group already publishes the same class, the duplication is deliberate rather
 than forbidden, for the reason above. Incompleteness is **monotone** — an
 unrecognised class term leaves the module exactly as silent as before — which is what makes a partial

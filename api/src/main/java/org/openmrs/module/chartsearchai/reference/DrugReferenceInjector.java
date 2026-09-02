@@ -336,12 +336,30 @@ public class DrugReferenceInjector {
 		// currently indistinguishable (measured by mutation, 2026-08-14: the whole suite stays green),
 		// and the reason to pass this one is that a later change to what the ranking reads must not have
 		// to notice that the injector was feeding it a different context from everything else.
-		Map<DrugReference, SubstanceRendering> matched = matchingEntries(orderEntries, question, context);
+		// Resolved ONCE for the pass and handed down, never derived twice (issue #151): matchingEntries
+		// scopes both its legs with this list, and since issue #354 this method also reads its
+		// EMPTINESS — a question that resolves no substance is the one that may have named a class.
+		List<DrugReference> questionDrugs = drugReferenceService.findImpliedByQuery(question);
+		// Read once for the whole chart, beside the other once-per-injection global-property reads
+		// below, rather than inside the loop-bearing method it gates.
+		boolean fromQuery = ChartSearchAiUtils.getBooleanGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_REFERENCE_INJECT_FROM_QUERY,
+				ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_INJECT_FROM_QUERY);
+		Map<DrugReference, SubstanceRendering> matched =
+				matchingEntries(orderEntries, question, context, questionDrugs, fromQuery);
+		// The class this question named when it named one and resolved NO substance — issue #354.
+		// Gated on questionDrugs and never on `matched`: with the question leg off, a question that
+		// resolved substances perfectly well collects nothing, and a note raised there would report a
+		// class over a drug the module did know. Gated on fromQuery because the note IS the
+		// question-driven leg's material — it says what that leg found no substance for.
+		String namedClass = fromQuery && questionDrugs.isEmpty()
+				? drugReferenceService.namedDrugClass(question)
+				: null;
 		// Handed the resolution above rather than left to derive it again (issue #255): validate used to
 		// resolve the same orders again, and this method already holds that answer.
 		List<SafetyWarning> findings = preAnswerFindings(context, question, orderEntries);
 		List<PatientClinicalContext.ActiveDrugOrder> unrepresented = unrepresentedActiveOrders(chart, context);
-		if (matched.isEmpty() && findings.isEmpty() && unrepresented.isEmpty()) {
+		if (matched.isEmpty() && findings.isEmpty() && unrepresented.isEmpty() && namedClass == null) {
 			return chart;
 		}
 
@@ -384,6 +402,21 @@ public class DrugReferenceInjector {
 			String rendered = renderFinding(finding);
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING,
 					ChartSearchAiUtils.resourceKey(finding.getType(), finding.getDrug()), null, rendered));
+			text.append("[").append(index).append("] ").append(rendered).append("\n");
+			index++;
+		}
+
+		// LAST, after the findings: the note is about what this response could NOT screen, so it reads
+		// after everything it did, and appending here moves no existing citation index. It can only
+		// stand alone or beside the order-driven records — namedClass is non-null only where
+		// questionDrugs is empty, and with no question drugs neither injection leg collects anything
+		// (relatedToAny is false for an empty questionDrugs), so `matched` is empty whenever this fires.
+		if (namedClass != null) {
+			String rendered = renderDrugClassNote(namedClass);
+			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_DRUG_CLASS_NOTE,
+					ChartSearchAiUtils.resourceKey(
+							ChartSearchAiConstants.RESOURCE_TYPE_DRUG_CLASS_NOTE, namedClass),
+					null, rendered));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;
 		}
@@ -796,6 +829,21 @@ public class DrugReferenceInjector {
 	 *        instead ({@code OrderDrivenInjectionResolutionTest
 	 *        .aNullClinicalContextStillInjectsTheQuestionsOwnDrug})
 	 * @param question the clinician's query, which drives the question leg and scopes the order leg
+	 * @param questionDrugs the reference entries {@code question} puts in play, resolved ONCE by
+	 *        {@link #injectRecords} and handed down rather than derived again here — issue #151's
+	 *        rule, taken for this leg since issue #354 because the caller now needs the same answer
+	 *        to decide whether the question named a drug CLASS instead. Through
+	 *        {@link DrugReferenceService#findImpliedByQuery} and not the bare {@code findByQuery}
+	 *        (issue #209), and through the same accessor {@code DrugSafetyValidator}'s drugs-in-play
+	 *        set uses, so a record can never be injected for a substance no chip arm is checking:
+	 *        prose carrying one alias of two substances injected a citable record for each, so a
+	 *        question about hydrocortisone injected {@code Hydrocortisone butyrate} as well, an ester
+	 *        nobody named. It is needed whatever {@code fromQuery} says, because it also scopes the
+	 *        order leg
+	 * @param fromQuery whether the question-driven leg is enabled
+	 *        ({@code GP_DRUG_REFERENCE_INJECT_FROM_QUERY}), read ONCE per injection by the caller for
+	 *        the reason the contraindication reading is: a flag that flipped mid-injection would
+	 *        leave one record carrying a different reading from the next
 	 * @param context the patient's clinical context AFTER
 	 *        {@link DrugReferenceService#withReferenceNames}, whose active-order NAMES anchor which row
 	 *        this response names each substance by. May be null — "nothing known about the patient",
@@ -810,7 +858,7 @@ public class DrugReferenceInjector {
 	 *         because every citation index in the injected chart depends on it.
 	 */
 	Map<DrugReference, SubstanceRendering> matchingEntries(List<DrugReference> orderEntries, String question,
-			PatientClinicalContext context) {
+			PatientClinicalContext context, List<DrugReference> questionDrugs, boolean fromQuery) {
 		// One record per SUBSTANCE, not per reference row (issue #163). A per-call local, never a field —
 		// issue #172's rule, for the reasons DrugReferenceService's class javadoc gives, NOT the
 		// getAll() hot-reload this used to cite, which does not exist. The one that applies here is the
@@ -824,19 +872,6 @@ public class DrugReferenceInjector {
 		// time is a local variant of a decision CLAUDE.md says has exactly one definition.
 		Map<Object, List<DrugReference>> bySubstance = new LinkedHashMap<Object, List<DrugReference>>();
 
-		// The reference drugs the question itself names — drives question-driven injection AND scopes
-		// the order-driven injection below, so it is computed regardless of the injectFromQuery toggle.
-		//
-		// findImpliedByQuery, not the bare findByQuery, since issue #209 — and through the same accessor
-		// DrugSafetyValidator's drugs-in-play set uses, so a record can never be injected for a substance
-		// no chip arm is checking. Prose carrying one alias of two substances injected a citable reference
-		// record for each: a question about hydrocortisone injected `Hydrocortisone butyrate` as well, an
-		// ester nobody named, spending prompt budget on a drug no chip stood behind.
-		List<DrugReference> questionDrugs = drugReferenceService.findImpliedByQuery(question);
-
-		boolean fromQuery = ChartSearchAiUtils.getBooleanGlobalProperty(
-				ChartSearchAiConstants.GP_DRUG_REFERENCE_INJECT_FROM_QUERY,
-				ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_INJECT_FROM_QUERY);
 		if (fromQuery) {
 			for (DrugReference ref : questionDrugs) {
 				collect(bySubstance, ref);
@@ -1136,6 +1171,23 @@ public class DrugReferenceInjector {
 	public static final String FINDING_PREFIX = "Safety finding — ";
 
 	/**
+	 * The prefix every injected reference-material chart line carries — the token
+	 * {@code LlmProvider.DEFAULT_SYSTEM_PROMPT}'s other record-type rule keys on ({@code Records
+	 * beginning with "Drug reference" are clinical reference data, not this patient's data}).
+	 *
+	 * <p>A constant since issue #354, and for the reason {@link #FINDING_PREFIX} is one: the lead is
+	 * now spelled at more than one site — the entry renderer and the drug-class note — and those two
+	 * records must read under the same prompt sentence or one of them arrives framed as the patient's
+	 * own data. javac inlines the constant, so no behavioural assertion can tell a copy from a
+	 * reference; {@code DrugClassQuestionNoteTest.theNoteReadsUnderThePromptsReferenceMaterialRule}
+	 * asserts the note begins with it, and the prompt's own sentence names the same token.
+	 *
+	 * <p>It is the LEAD and not the TYPE: a record wearing it may carry any reference-group resource
+	 * type, and since #354 two do.
+	 */
+	public static final String REFERENCE_PREFIX = "Drug reference — ";
+
+	/**
 	 * What an injected finding licenses, stated in the record itself (issue #283) — the clause for a
 	 * finding that is a reason to withhold the drug, which is every contraindication and every
 	 * interaction {@link DrugSafetyValidator#licensesWithholding} answers for. Public, and shared with
@@ -1325,6 +1377,36 @@ public class DrugReferenceInjector {
 				? finding.getDetail()
 				: DrugSafetyValidator.endSentence(finding.getDetail());
 		return FINDING_PREFIX + finding.getDrug() + ": " + detail + chartOrders + provenance + strength;
+	}
+
+	/**
+	 * The record a question that named a drug CLASS gets instead of silence (issue #354).
+	 *
+	 * <p><b>It names the class and no member of it.</b> That is the constraint the whole issue turns
+	 * on, and it is not caution: this text is reference material an answer may cite and reproduce, so
+	 * a member named here would be a class-membership claim about a drug — and no membership list
+	 * this module can author is sound, for the reason {@link DrugReferenceService#namedDrugClass}
+	 * records. {@code DrugClassQuestionNoteTest.theNoteNamesNoSubstanceTheReferenceDataCarries} puts
+	 * the rendered text back through {@link DrugReferenceService#findImpliedByQuery} over the SHIPPED
+	 * knowledge base and fails if it names one.
+	 *
+	 * <p><b>It says what was not done, not what the reader should do about this patient.</b> It leads
+	 * with {@link #REFERENCE_PREFIX}, so the system prompt's record-type sentence frames it as
+	 * reference data rather than this patient's own — and the closing sentence deliberately mentions
+	 * no patient, because a record declared not to be about this patient should not carry a clause
+	 * that reads as one.
+	 *
+	 * <p>What it CANNOT do is make the answer say any of this. The deterministic half is the
+	 * injection; whether the model relays a record it was given is the model's, and this module
+	 * asserts nothing about it.
+	 *
+	 * @param drugClass the class name {@link DrugReferenceService#namedDrugClass} answered with
+	 */
+	private static String renderDrugClassNote(String drugClass) {
+		return REFERENCE_PREFIX + "drug class \"" + drugClass + "\". The interaction reference data is "
+				+ "indexed by individual substance, so no interaction screen was run for this class and "
+				+ "no reference material for it is included. Name a specific drug in that class to have "
+				+ "it screened.";
 	}
 
 	/**
@@ -2167,7 +2249,7 @@ public class DrugReferenceInjector {
 			List<SafetyWarning> findings) {
 		PatientClinicalContext context = reading.context();
 		Integer age = context != null ? context.getAgeYears() : null;
-		StringBuilder sb = new StringBuilder("Drug reference — ").append(ref.getName());
+		StringBuilder sb = new StringBuilder(REFERENCE_PREFIX).append(ref.getName());
 		StringBuilder paren = new StringBuilder();
 		if (ref.getDrugClass() != null && !ref.getDrugClass().isEmpty()) {
 			paren.append(ref.getDrugClass());

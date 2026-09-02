@@ -284,6 +284,11 @@ public class ChartSearchAiReferenceGroupTest {
 		// (which is why it is not a drug_reference record — the system prompt tells the model those are
 		// NOT the patient's data), but it is still module-supplied material, so it presents as reference.
 		expected.put("RESOURCE_TYPE_SAFETY_FINDING", ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE);
+
+		// Issue #354. Module-supplied prose about the QUESTION — it names a drug class the reference
+		// data is not indexed by — so it points at no record of this patient and is reference material
+		// for the same reason a knowledge-base entry is.
+		expected.put("RESOURCE_TYPE_DRUG_CLASS_NOTE", ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE);
 		// Module-INJECTED but NOT module-supplied, the one combination this classification has to get
 		// right in both directions: an active_drug_order record is the patient's own active order,
 		// read from OrderService when the retrieved chart carries no drug-order record for it

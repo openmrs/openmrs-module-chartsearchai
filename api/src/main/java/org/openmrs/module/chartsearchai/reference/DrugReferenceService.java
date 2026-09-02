@@ -1212,6 +1212,50 @@ public class DrugReferenceService {
 	}
 
 	/**
+	 * Which drug CLASS this question names, when it names one and this dataset can resolve none of
+	 * its members by name — {@code "oral contraceptive"}, {@code "NSAID"} — or {@code null} where it
+	 * names no class (issue #354). The vocabulary and the two sources behind it are
+	 * {@link DrugClassTerms}; what belongs HERE is what the answer may and may not be used for.
+	 *
+	 * <p><b>It answers with a class NAME and never a member set, deliberately.</b> A caller may report
+	 * that the question named a class; it may NOT read the answer as putting substances in play. The
+	 * candidate-set accessors are {@link #findImpliedByQuery} and {@link #findImpliedByDrugName} and
+	 * this is not a third one — it resolves nothing, so a chip arm handed its answer has no subject,
+	 * no severity and no partner.
+	 *
+	 * <p><b>Why the class is not resolved to its members, which is the whole of issue #354's design
+	 * decision.</b> The issue proposes the ATC hierarchy ("every substance above sits under
+	 * {@code G03A*}"), and that is measurably wrong in both directions on the shipped knowledge base
+	 * (2026-09-02, reading each entry's {@code atc} array rather than re-expressing any predicate
+	 * here): {@code Ethinylestradiol} — one of the three substances the issue itself names — is filed
+	 * {@code G03CA01}/{@code L02AA03} and is not under {@code G03A} at all, while {@code G03A} holds
+	 * {@code Megestrol acetate}, whose indications are oncological. A class resolved that way would
+	 * put a substance's own label into a {@code safety_finding} that
+	 * {@code DrugReferenceInjector.renderFinding} copies verbatim into citable evidence carrying
+	 * {@code STRENGTH_WITHHOLD}, asserting a class membership false of the drug named — the shape
+	 * CLAUDE.md records as reverted in issue #339's rounds 5-6.
+	 *
+	 * <p>The sound alternative is a hand-curated clinical MEMBERSHIP list per class, and that is a
+	 * knowledge-base deliverable rather than a module one: the KB is a reproducible build from its own
+	 * sources, and CLAUDE.md's ATC-subgroup bullet records what hand-picking such a list cost last time
+	 * ("#161's list was hand-picked and its hardening found it incomplete in a way that reproduced the
+	 * defect it was fixing"). It would also inject one reference record per member against a
+	 * per-record budget that bounds no record COUNT — on the shipped dataset {@code G03A} files 8
+	 * entries and {@code M01A} 27, and neither number is the contraceptive class's, which is the
+	 * point of the paragraph above.
+	 *
+	 * <p><b>Why it lives here and not in {@code QueryScopeRouter}.</b> That class owns enumeration
+	 * INTENT and forbids a second drug vocabulary for it. This is not intent: what a question's drug
+	 * words denote is already resolved here, by {@link #findImpliedByQuery}, and this is that same
+	 * question asked one rung wider — the rung at which the answer is a class rather than a substance.
+	 *
+	 * @param question the clinician's query; {@code null} or blank names no class
+	 */
+	public String namedDrugClass(String question) {
+		return DrugClassTerms.namedIn(question, getCrossReactivityGroups());
+	}
+
+	/**
 	 * @return the outcome of the cross-reactivity groups load that is IN FORCE — see
 	 *         {@link CrossReactivityGroupsLoad}. Triggers the (lazy) load when the feature is enabled and
 	 *         nothing has loaded yet; reports {@link CrossReactivityGroupsLoad#notLoaded()} without

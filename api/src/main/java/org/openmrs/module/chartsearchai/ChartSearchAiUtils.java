@@ -162,7 +162,7 @@ public class ChartSearchAiUtils {
 	 * module-supplied reference prose. This is the single entry point for the PROVENANCE decision:
 	 * code that labels or orders references for a client must ask here rather than
 	 * compare {@code resourceType} itself, so the split stays in one place as further kinds of
-	 * injected record are added — three exist already, and they do not all fall on the same side
+	 * injected record are added — several exist already, and they do not all fall on the same side
 	 * (see below).
 	 *
 	 * <p>Four behaviours now hang off this one classification, not just the display grouping. The
@@ -189,7 +189,8 @@ public class ChartSearchAiUtils {
 	 * <p>The two groups are exhaustive because exactly two code paths mint a
 	 * {@code RecordMapping}: {@code PatientChartSerializer}, which passes through whatever
 	 * type querystore retrieved, and {@code DrugReferenceInjector}, which writes
-	 * {@code drug_reference}, {@code safety_finding} and {@code active_drug_order}. Not everything
+	 * {@code drug_reference}, {@code safety_finding}, {@code drug_class_note} and
+	 * {@code active_drug_order}. Not everything
 	 * injected is reference material: an {@code active_drug_order} record is the patient's own
 	 * active order, read from {@code OrderService} when the retrieved chart cannot substantiate it,
 	 * so it groups as chart evidence — which is also what the fallback below yields, deliberately
@@ -206,6 +207,7 @@ public class ChartSearchAiUtils {
 	public static String referenceGroup(String resourceType) {
 		return ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(resourceType)
 				|| ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(resourceType)
+				|| ChartSearchAiConstants.RESOURCE_TYPE_DRUG_CLASS_NOTE.equals(resourceType)
 						? ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE
 						: ChartSearchAiConstants.REFERENCE_GROUP_CHART;
 	}

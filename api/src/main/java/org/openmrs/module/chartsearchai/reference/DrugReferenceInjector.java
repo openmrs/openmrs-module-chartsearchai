@@ -101,15 +101,19 @@ public class DrugReferenceInjector {
 	 * every interaction off the entry, so nothing is lost from safety checking. How many the record
 	 * does not name is reported on the {@link RecordMapping} as a field — never as a text tail, which
 	 * the model recited into answers (issue #117). Note that this budget is not the only reason a
-	 * partner goes unnamed, nor usually the main one: segment 2 of {@code render} represents the
-	 * whole dataset tail with a single partner whenever a patient-relevant one was promoted, so most
+	 * partner goes unnamed, nor usually the main one: the last segment of {@code render} represents the
+	 * whole dataset tail with a single partner whenever anything patient-specific was shown, so most
 	 * of that count is normally "not relevant to this patient" rather than "did not fit".
 	 *
 	 * <p>Two guarantees override the budget, so the rendered length is the cap plus a bounded
 	 * overshoot rather than a hard ceiling — see {@code render}: every partner the patient is
-	 * actually on is represented (full note, or a compact {@code name (Severity)} form when the
-	 * note will not fit), and one dataset-order partner renders alongside them — compact when the
-	 * patient has a relevant partner (breadth is all it is there for), in full when they do not.
+	 * actually on is represented, and one dataset-order partner renders alongside them — compact when
+	 * the patient has a relevant partner (breadth is all it is there for), in full when they do not.
+	 * <b>Represented is not the same as rendered in full</b>, and the two segments that represent her
+	 * own partners differ in how: a PROMOTED note takes its full text while the budget allows and the
+	 * compact {@code name (Severity)} form when it will not fit, while a note the floor filtered takes
+	 * its full text only if it is the first of its segment (issue #357 — the rest state the rating
+	 * alone, because at the shipped floor they would otherwise all state one sentence).
 	 *
 	 * <p><b>Per record, and nothing bounds how many records there are.</b> N records cost N times
 	 * this. That is a deliberate standing decision rather than an omission — issue #229 asked for a
@@ -1560,7 +1564,18 @@ public class DrugReferenceInjector {
 		// safety decision the chip path enforces.
 		//
 		// That measurement stands and PROMOTION is still exactly what it was: a sub-floor rule takes
-		// no place in segment 1, no share of the budget override, and no chip. What issue #357
+		// no place in segment 1, no share of the budget override, and no chip.
+		//
+		// Say plainly what that does NOT cover, because the probe varied exactly the thing the three
+		// clauses above leave out. Its finding was about POSITION — such a row reaching "the front of
+		// the prompt", and the model then answering from it — and the front of the record is precisely
+		// where this change puts one whenever nothing clears the floor. So the containment is over what
+		// promotion buys and not over where the sentence lands, and the position half is UNMEASURED
+		// here: no test in this repo can settle it, because it is a fact about the model. Issue #357
+		// asks for it on a live reproduction and its acceptance criterion is that the answer name one
+		// of these partners, so it is the requested outcome rather than the regression — but a
+		// maintainer reordering this tail should re-run the two probe cells rather than read the #84
+		// measurement as still bounding this path. What issue #357
 		// re-decided, on its own live reproduction, is the SECOND thing the two-bucket partition was
 		// deciding by accident — where such a rule then sits among the drugs the chart does not name
 		// at all. It sat among them in dataset order, so on a real regimen the module rendered
@@ -1843,9 +1858,15 @@ public class DrugReferenceInjector {
 	 *         promoted and only one tail representative rendered, out of the record altogether. That
 	 *         is {@link DrugSafetyValidator#bestRulePerPartner}'s behaviour reproduced rather than a
 	 *         rule of its own: it never sees a non-matching row at all, having filtered on
-	 *         {@code hasActiveDrug} before it groups. Within each half the order is
+	 *         {@code hasActiveDrug} before it groups. Within a TIER the order is
 	 *         {@link DrugSafetyValidator#outranksOnRule}, so the promoted note is the row the chip
-	 *         quotes, and a partner with no promotable row keeps its most severe one in the tail.
+	 *         quotes. <b>Across tiers it is not, and since issue #357 that is visible rather than
+	 *         vacuous</b>: where a partner's rows split so that the chart names one and not another,
+	 *         this elects the row the chart names even when a sibling the chart does not name is rated
+	 *         MORE severely — the less severe row wins, because the question this collapse answers is
+	 *         which row decides where the partner sits, and a row about a drug nobody is taking cannot
+	 *         answer it. {@code InjectedInteractionRelevanceOrderTest.theCollapseKeepsTheRowTheChartNamesEvenWhereTheFloorFilteredBoth}
+	 *         is that case.
 	 *         The floor cannot change a winner on its own — a group's most severe row clears the floor
 	 *         whenever any of its rows does, since {@code severityPriority} ranks unrated highest and
 	 *         is otherwise monotone in the rank the floor compares — so it is the
@@ -1990,6 +2011,10 @@ public class DrugReferenceInjector {
 
 		final List<InteractionNote> ordered;
 
+		/** How many of {@code ordered} lead it as {@link #TIER_PROMOTED} — segment 1 of {@code render},
+		 *  and DELIBERATELY not "how many of these concern the patient", which since issue #357 is this
+		 *  plus {@link #chartNamedCount}. A consumer reading it as the patient-relevant prefix
+		 *  under-counts by the whole middle segment. */
 		final int promotedCount;
 
 		/** How many notes after the promoted ones are {@link #TIER_NAMED_BY_THE_CHART} — the second

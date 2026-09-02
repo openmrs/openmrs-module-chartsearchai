@@ -4277,11 +4277,14 @@ per-record, so N members cost N times it, which is the sibling complaint on issu
 cross-reactivity groups already name is read from **that data** — `cross-reactivity-groups.json` is
 an operator-extensible class-name table with its own load-validity channel (Decision 48, issue #266),
 and the shipped seed's one group is named `NSAID`, which is one of the two classes this issue
-reports. `DrugClassTerms`' in-code table carries only what that file cannot: a class it does not name
-at all, and a further **spelling** of one it does — and the second kind is *enforced*, not merely
-intended: such a spelling answers only while some loaded group publishes exactly the class name it
-reports, so removing or renaming the shipped `NSAID` group loses that class rather than leaving the
-code table asserting a name the deployment's data no longer publishes. A group is not a label — its `atcPrefixes` drive
+reports. `DrugClassTerms`' in-code table is the second source, and the two are INDEPENDENT rather
+than one being subordinate: it carries a class that file does not name at all, further **spellings**
+of one it does, and — deliberately — `NSAID` outright, the class the shipped group also names. Making
+that class conditional on some loaded group publishing the name was implemented and reverted within
+this change: `crossReactivityGroupsFilePath` is a supported configuration, so the condition returned
+this issue's own `an NSAID` case to pre-#354 silence, with nothing logged, on any deployment that
+curates its own groups file. The groups leg honours a vocabulary an operator has already curated; it
+does not license this one. A group is not a label — its `atcPrefixes` drive
 cross-reactivity contraindication chips and duplicate-class-therapy chips — so adding a group to make
 a word recognisable would assert pharmacological cross-reactivity across those prefixes; and for the
 contraceptive class there is no honest prefix set to add, which is the measurement above. The
@@ -4290,7 +4293,8 @@ the term `NSAID`, and a group publishes one `name`.
 
 Admission to the code table is: it designates a class rather than any single substance; it resolves
 to no entry of the shipped knowledge base (a data guard through `findImpliedByQuery`, not a claim);
-and it is not a spelling a curated group already publishes. Incompleteness is **monotone** — an
+and, where a curated group already publishes the same class, the duplication is deliberate rather
+than forbidden, for the reason above. Incompleteness is **monotone** — an
 unrecognised class term leaves the module exactly as silent as before — which is what makes a partial
 vocabulary safe, while a wrongly admitted term would have the module call a drug a class.
 

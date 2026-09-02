@@ -38,8 +38,11 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * every record the injector added" satisfies a case that only checks a {@code drug_reference} and a
  * {@code safety_finding} are included. The injector writes several kinds and they do not all fall on
  * the same side — an {@code active_drug_order} is the patient's own prescription and groups as chart
- * evidence — so the arrangement here produces all three and the exclusion is asserted beside the
+ * evidence — so the arrangement here produces three of them and the exclusion is asserted beside the
  * inclusions. Mutate {@code referenceSlice}'s predicate in either direction and read the failures.
+ * The fourth, the {@code drug_class_note} issue #354 added, cannot join this arrangement: it is
+ * raised only where the question resolved no substance, which is exactly when the other two
+ * reference-group kinds are not produced. {@code DrugClassQuestionNoteTest} covers it on its own.
  */
 public class InjectedReferenceSliceTest {
 
@@ -47,13 +50,14 @@ public class InjectedReferenceSliceTest {
 	private static final String SIMVASTATIN_ORDER_UUID = "11111111-2222-3333-4444-555555555555";
 
 	/**
-	 * One injection producing all three of the injector's record kinds, through the real
+	 * One injection producing three of the injector's record kinds — every one that can co-occur —
+	 * through the real
 	 * load → parse → {@code injectRecords} → render chain: a question naming a drug that interacts
 	 * with the patient's simvastatin (a {@code drug_reference} entry and the {@code safety_finding}
 	 * derived from it), against a chart carrying no drug-order record for the simvastatin order
 	 * (an {@code active_drug_order} record, issue #118).
 	 */
-	private PatientChart chartWithAllThreeInjectedKinds() {
+	private PatientChart chartWithTheThreeCoOccurringInjectedKinds() {
 		return DrugReferenceTestSupport
 				.injectorWithSafety(DrugReferenceTestSupport.ddinterServiceWithGroups())
 				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
@@ -67,7 +71,7 @@ public class InjectedReferenceSliceTest {
 
 	@Test
 	public void theSliceCountsEveryReferenceGroupRecordTheChartCarries() {
-		PatientChart chart = chartWithAllThreeInjectedKinds();
+		PatientChart chart = chartWithTheThreeCoOccurringInjectedKinds();
 		int references = DrugReferenceTestSupport.injectedReferences(chart).size();
 		int findings = DrugReferenceTestSupport.injectedFindings(chart).size();
 		assertTrue(references > 0 && findings > 0,
@@ -88,7 +92,7 @@ public class InjectedReferenceSliceTest {
 		// only looks at the entries, and it silently under-reports the prompt budget by every
 		// finding rendered beside them. Findings are uncapped at every layer (#229's own comment),
 		// so that is the half most likely to grow.
-		PatientChart chart = chartWithAllThreeInjectedKinds();
+		PatientChart chart = chartWithTheThreeCoOccurringInjectedKinds();
 		int entryChars = 0;
 		for (RecordMapping mapping : DrugReferenceTestSupport.injectedReferences(chart)) {
 			entryChars += mapping.getText().length();
@@ -108,7 +112,7 @@ public class InjectedReferenceSliceTest {
 		// referenceGroup's own javadoc calls this the surprising direction: "Not everything injected
 		// is reference material". An implementation reading "what did the injector add" rather than
 		// "what does the classification say" is wrong here and passes every inclusion assertion.
-		PatientChart chart = chartWithAllThreeInjectedKinds();
+		PatientChart chart = chartWithTheThreeCoOccurringInjectedKinds();
 		List<RecordMapping> activeOrderRecords = DrugReferenceTestSupport.injectedActiveOrders(chart);
 		int activeOrderChars = 0;
 		for (RecordMapping mapping : activeOrderRecords) {
@@ -150,7 +154,7 @@ public class InjectedReferenceSliceTest {
 		List<String> logged;
 		PatientChart chart;
 		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER, Level.DEBUG)) {
-			chart = chartWithAllThreeInjectedKinds();
+			chart = chartWithTheThreeCoOccurringInjectedKinds();
 			logged = capture.messagesAt(Level.DEBUG);
 		}
 		String line = String.join("\n", logged);

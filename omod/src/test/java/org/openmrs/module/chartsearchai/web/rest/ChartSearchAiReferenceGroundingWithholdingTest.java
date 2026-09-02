@@ -233,9 +233,11 @@ public class ChartSearchAiReferenceGroundingWithholdingTest {
 	 * {@code safety_finding} from the grounding carve-out for two releases (#122), and is the same
 	 * mistake the client in #201 made.
 	 *
-	 * <p>No behavioural test can catch that regression today: with exactly two reference-group types,
-	 * a hardcoded pair agrees with the classifier on every input that exists. So this asserts the
-	 * property directly. {@code RESOURCE_TYPE_*} are compile-time {@code String} constants, so javac
+	 * <p>No behavioural test in this module catches that regression, and issue #354 is why that is
+	 * worth restating rather than deleting: the sentence here used to say the blindness would end
+	 * "when a third reference-group type exists", and one now does ({@code drug_class_note}) without
+	 * ending it. The reason was never the type count — it is that no fixture here cites a record of a
+	 * type a hardcoded pair would miss. So this asserts the property directly. {@code RESOURCE_TYPE_*} are compile-time {@code String} constants, so javac
 	 * inlines the VALUE into the constant pool of any class that mentions one — whether written as
 	 * the constant, as a bare literal, or as a folded concatenation. Scanning every class file the
 	 * controller compiles to therefore answers "does this class name a resource type".
@@ -282,8 +284,9 @@ public class ChartSearchAiReferenceGroundingWithholdingTest {
 								+ "grounding withholding and its group discriminator must both be derived from "
 								+ "ChartSearchAiUtils.isGroundingDemoteOnly / referenceGroup, never from a list "
 								+ "of type names: an enumerated list is what left safety_finding out of the "
-								+ "grounding carve-out for two releases (#122), and the suite cannot see that "
-								+ "mistake behaviourally until a third reference-group type exists. Scanned "
+								+ "grounding carve-out for two releases (#122), and no behavioural case here "
+								+ "sees that mistake — a third reference-group type arrived in #354 and did "
+								+ "not change it, because no fixture cites one. Scanned "
 								+ compiled.keySet());
 			}
 		}

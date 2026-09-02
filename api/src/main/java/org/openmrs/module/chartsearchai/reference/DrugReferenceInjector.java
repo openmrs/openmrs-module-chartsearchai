@@ -413,8 +413,10 @@ public class DrugReferenceInjector {
 			index++;
 		}
 
-		// LAST, after the findings: the note is about what this response could NOT screen, so it reads
-		// after everything it did, and appending here moves no existing citation index. It can only
+		// LAST, after the findings: the note is about what this response could not RESOLVE, so it reads
+		// after everything it did — including a finding the screening arm may have raised on this same
+		// question, which is why the note's wording denies no screen. Appending here moves no existing
+		// citation index. It can only
 		// stand alone or beside the order-driven records — namedClass is non-null only where
 		// questionDrugs is empty, and with no question drugs neither injection leg collects anything
 		// (relatedToAny is false for an empty questionDrugs), so `matched` is empty whenever this fires.
@@ -1406,6 +1408,15 @@ public class DrugReferenceInjector {
 	 * the rendered text back through {@link DrugReferenceService#findImpliedByQuery} over the SHIPPED
 	 * knowledge base and fails if it names one.
 	 *
+	 * <p><b>It says the class was not RESOLVED, and deliberately not that no screen ran.</b> Those are
+	 * different claims and the second is sometimes false: the pairwise screening arm is gated on the
+	 * same {@code questionDrugs.isEmpty()} this note is, so a screening question that also carries a
+	 * class term fires both, and the module can raise a Major finding about one of the patient's own
+	 * orders in the same injection. A note denying a screen would then sit one record after the
+	 * finding that answers the question — the chip-versus-prose divergence issues #151 and #349 exist
+	 * to prevent, reappearing inside citable reference prose. What is true in every arrangement is
+	 * that the CLASS resolved to nothing, which is what it says.
+	 *
 	 * <p><b>It says what was not done, not what the reader should do about this patient.</b> It leads
 	 * with {@link #REFERENCE_PREFIX}, so the system prompt's record-type sentence frames it as
 	 * reference data rather than this patient's own — and the closing sentence deliberately mentions
@@ -1420,9 +1431,9 @@ public class DrugReferenceInjector {
 	 */
 	private static String renderDrugClassNote(String drugClass) {
 		return REFERENCE_PREFIX + "drug class \"" + drugClass + "\". The interaction reference data is "
-				+ "indexed by individual substance, so no interaction screen was run for this class and "
-				+ "no reference material for it is included. An interaction screen runs against a named "
-				+ "substance, not a class.";
+				+ "indexed by individual substance, so the class was not resolved to any substance and "
+				+ "this response carries no reference material for it. An interaction screen runs "
+				+ "against a named substance, not a class.";
 	}
 
 	/**

@@ -60,7 +60,9 @@ import java.util.Set;
  * <li>it resolves to no entry of the shipped knowledge base, which is a DATA GUARD
  * ({@code DrugClassQuestionNoteTest.everyCuratedClassTermResolvesToNoSubstanceInTheShippedKnowledgeBase},
  * through {@link DrugReferenceService#findImpliedByQuery}) and not a claim made here; and</li>
- * <li>it is not a spelling a curated cross-reactivity group already publishes as its {@code name}.</li>
+ * <li>where a curated cross-reactivity group already publishes the same class, the duplication is
+ * DELIBERATE rather than forbidden — see the paragraph above on why {@code NSAID} is named here
+ * outright.</li>
  * </ol>
  * Incompleteness is MONOTONE and that is what makes a partial vocabulary safe: an unrecognised class
  * term leaves the module exactly as silent as it is today, while a wrongly admitted one would have
@@ -81,9 +83,11 @@ final class DrugClassTerms {
 	 * genuine spellings beside it. Insertion-ordered; where two terms of the same length are both
 	 * carried the order does decide, which is the residue {@link #namedIn} states.
 	 *
-	 * <p>Three classes, all of them the issue's: the two contraceptive ones, which no ATC subtree
-	 * expresses, and NSAID, which the shipped curated group also names — deliberately both, for the
-	 * reason the class javadoc gives.
+	 * <p>Three classes. Two are the issue's — {@code oral contraceptive}, which no ATC subtree
+	 * expresses, and {@code NSAID}, which the shipped curated group also names, deliberately both for
+	 * the reason the class javadoc gives. The third, {@code hormonal contraceptive}, is not the
+	 * issue's: it is here because reporting a hormonal question as the narrower oral class would state
+	 * something false about the question in a record the answer may cite.
 	 *
 	 * <p>Lower-cased at the source rather than at the scan: {@link DrugReference#containsWord} folds
 	 * and lower-cases both operands for itself, so these are written in the form a reader compares

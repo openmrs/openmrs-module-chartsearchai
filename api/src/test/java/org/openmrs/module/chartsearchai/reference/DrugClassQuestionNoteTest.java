@@ -19,6 +19,7 @@ import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSuppor
 import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport.ddinterService;
 import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport.ddinterServiceWithGroups;
 import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport.injector;
+import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport.injectorWithSafety;
 import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport.injectedClassNotes;
 import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport.injectedReferences;
 import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport.oneRecordChart;
@@ -28,7 +29,6 @@ import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSuppor
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
@@ -123,9 +123,19 @@ public class DrugClassQuestionNoteTest {
 						+ chart.getText());
 	}
 
-	/** Every phrasing the issue reports, each on a service that can reach the term's source. */
+	/**
+	 * Every question in the issue's own reproduction table, each on a service that can reach the
+	 * term's source.
+	 *
+	 * <p>Its prose also names {@code the pill} as how the question gets asked, and that is a stated
+	 * omission rather than an oversight: admission criterion (1) is that a term designates a CLASS,
+	 * and {@code the pill} names any tablet at least as readily as it names a contraceptive, so
+	 * reporting it as the class {@code oral contraceptive} would be the same false statement about
+	 * the question that {@code hormonal contraceptive} was fixed for. The module stays silent on it,
+	 * exactly as before.
+	 */
 	@Test
-	public void everyPhrasingTheIssueReportsIsRecognised() {
+	public void everyQuestionTheIssuesReproductionTableListsIsRecognised() {
 		assertEquals("oral contraceptive", theClassNoteClass(ddinterService(),
 				"Can I start this patient on an oral contraceptive?"));
 		assertEquals("oral contraceptive", theClassNoteClass(ddinterService(),
@@ -167,6 +177,30 @@ public class DrugClassQuestionNoteTest {
 				"the note must name the class asked about: " + note.getText());
 		assertFalse(note.getText().contains("\"oral contraceptive\""),
 				"and must not report it as the narrower class: " + note.getText());
+	}
+
+	/**
+	 * A screening question that also names a class fires BOTH the note and the pairwise screening arm
+	 * — they are gated on the same emptiness — so the note must not deny a screen. Reproduced on the
+	 * real injector: the screen runs, relates two of the patient's own orders, and renders a finding
+	 * the note would otherwise contradict one record later, inside citable reference prose.
+	 */
+	@Test
+	public void theNoteDeniesNoScreenWhereTheScreeningArmRanBesideIt() {
+		PatientClinicalContext context = ctx(60, null, set("warfarin 5mg", "ibuprofen 400mg"),
+				set("B01AA03", "M01AE01"), null, null);
+		PatientChart chart = injectorWithSafety(ddinterServiceWithGroups()).injectRecords(
+				oneRecordChart(), context, "Do any of her medications interact with an NSAID?");
+
+		assertFalse(DrugReferenceTestSupport.injectedFindings(chart).isEmpty(),
+				"the premise: this question does run the screening arm and render its finding: "
+						+ chart.getText());
+		RecordMapping note = classNoteIn(chart);
+		assertFalse(note.getText().contains("no interaction screen was run"),
+				"the note must not deny a screen that ran one record earlier: " + note.getText());
+		assertTrue(note.getText().contains("not resolved to any substance"),
+				"it states what is true in every arrangement — the class resolved to nothing: "
+						+ note.getText());
 	}
 
 	/**

@@ -173,7 +173,7 @@ public class SubjectMatterScopedContraindicationTest {
 
 	@Test
 	public void anUncitedReferenceRecordNamingHerPrescriptionIsNotSubjectMatter() {
-		// The case above, with one thing added: an UNCITED drug_reference record whose text names the
+		// aResponseAboutSomethingElseRaisesNoChipAboutHerPrescriptions, with one thing added: an UNCITED drug_reference record whose text names the
 		// drug she is on. Issue #360 widened the ECHO test's attribution corpus to take in every
 		// reference-group record whether or not the answer cited it; this arm's corpus was deliberately
 		// left where it was. Handing this arm the wider list widens issue #143's gate, and this is the

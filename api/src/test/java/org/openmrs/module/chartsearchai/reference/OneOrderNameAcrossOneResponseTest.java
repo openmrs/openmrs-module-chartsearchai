@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -1102,13 +1103,22 @@ public class OneOrderNameAcrossOneResponseTest {
 	 * information it gives up is recorded (ADR Decision 63). Removing the ledger's gate at
 	 * {@code addInteractionWarnings}' emission — adding the chip unconditionally — reddens this case
 	 * and its prompt-level sibling below.
+	 *
+	 * <p><b>And the EXTENT this arm states counts the relationship once too</b> (issue #356), which is
+	 * why the count is read off the collapsed list rather than off the rules the arm matched. Returning
+	 * {@code rules.size()} instead — or counting inside the emission loop, before the ledger's gate —
+	 * publishes {@code found=2, reported=2} beside a single chip, which is the ratio-of-two-populations
+	 * claim issue #336 exists to stop. Read through the same {@code Sink}
+	 * {@code PairChipExtentContextTest} drives, so the two agree about what the arity publishes; the
+	 * screening arm's half of this is {@link #aScreenOfACombinationPrescriptionStatesOneRelationshipOnce}.
 	 */
 	@Test
 	public void oneCombinationPrescriptionStatesOneRelationshipOnce() throws IOException {
 		DrugReferenceService service = DrugReferenceTestSupport.serviceWithGroups(
 			DrugReferenceTestSupport.ddiFixtureEntries(TWO_RULES_ONE_NOTE_FIXTURE));
+		PairChipExtent.Sink sink = new PairChipExtent.Sink();
 		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
-				.validate("", "Can I give her bedaquiline?", truvadaChart());
+				.validate("", "Can I give her bedaquiline?", truvadaChart(), null, null, sink);
 
 		assertEquals(1, warnings.size(),
 			"two rules about ONE prescription that the reconciliation now names alike, rated alike and"
@@ -1120,6 +1130,12 @@ public class OneOrderNameAcrossOneResponseTest {
 				.startsWith("Bedaquiline interacts with active order " + TWO_CONSTITUENT_DISPLAY),
 			"precondition: the surviving chip must be the reconciled one, or this case is passing"
 					+ " because the arrangement never reconciled, was: " + warnings.get(0).getDetail());
+		PairChipExtent extent = sink.stated();
+		assertNotNull(extent, "the drug-in-play arm screened bedaquiline, so it states its extent");
+		assertEquals(warnings.size(), extent.getFound(),
+			"the restated rule is not a second pair this screen found, was: " + extent);
+		assertEquals(extent.getFound(), extent.getReported(),
+			"and this arm applies no cap, so it reports everything it found, was: " + extent);
 	}
 
 	/**

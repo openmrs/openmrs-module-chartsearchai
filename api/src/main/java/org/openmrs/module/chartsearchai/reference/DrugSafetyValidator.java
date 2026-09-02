@@ -2444,12 +2444,15 @@ public class DrugSafetyValidator {
 	 * fallback), where nothing says which order contributed which code: there each code is its own
 	 * partner again and the two chips stand. {@code ClassChipPartnerLabelTest} pins both halves.
 	 *
-	 * @return how many of the patient's own medications this call related {@code rows}' substance to —
-	 *         the rule chips it appended, after {@code statedChips} has dropped any that restate one
-	 *         this pass already made, and never the class-only sentences. On the flattened context of
-	 *         the paragraph above, where one prescription is several partners, it counts what a reader
-	 *         was shown rather than what the chart prescribed, which is the same residue those chips
-	 *         carry.
+	 * @return the rule chips this call appended: one per partner {@link #bestRulePerPartner} kept,
+	 *         after {@code statedChips} has dropped any that restate one this pass already made, and
+	 *         never the class-only sentences. Read as "how many of the patient's own medications this
+	 *         related the substance to" it is an over-count in the same places those chips are, and
+	 *         the flattened context of the paragraph above is only one of them: the grouping key is
+	 *         the partner ENTRY, so a combination prescription whose constituents both carry a rule is
+	 *         two partners on an ordinary per-order chart too, and the ledger collapses them only where
+	 *         they render byte for byte alike. It counts what a reader was shown, which is the residue
+	 *         those chips carry.
 	 */
 	private int addInteractionWarnings(List<SafetyWarning> warnings, List<DrugReference> rows,
 			SubstanceSubjects subjects, PatientClinicalContext context, int severityFloor,

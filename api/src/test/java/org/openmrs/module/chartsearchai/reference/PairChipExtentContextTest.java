@@ -72,9 +72,20 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 
 	private DrugSafetyValidator validator;
 
+	/** The same service object the validator resolves through, so a case asserting what a question
+	 *  RESOLVES and a case asserting what the pass then STATES cannot be reading two datasets. */
+	private DrugReferenceService service;
+
 	@BeforeEach
 	public void setUp() {
-		validator = DrugReferenceTestSupport.validator(DrugReferenceTestSupport.ddinterService());
+		service = DrugReferenceTestSupport.ddinterService();
+		validator = DrugReferenceTestSupport.validator(service);
+	}
+
+	/** @return how many reference entries {@code question} puts in play — the number the two
+	 *          question-driven gates gate on, asserted where a case's whole point is which arm ran. */
+	private int entriesResolvedBy(String question) {
+		return service.findImpliedByQuery(question).size();
 	}
 
 	private void configureCap(String value) {
@@ -343,6 +354,12 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 		// against findImpliedByQuery over the excerpt rather than assumed to be one drug apiece.
 		Pass none = pass("Can I give this patient metformin?", oneSimvastatinOrder());
 
+		// Asserted, not assumed: on TWO entries the question-pair arm runs instead and returns
+		// of(0, 0) for a pair it does not relate, so every assertion below would go on holding while
+		// the arm this case exists for never ran. Its sibling below is immune because it asserts a
+		// found of 1, which that arm could not produce there.
+		assertEquals(1, entriesResolvedBy("Can I give this patient metformin?"),
+				"precondition: one entry, so neither pairwise arm is even reachable");
 		assertTrue(none.chips.isEmpty(),
 				"precondition: the excerpt rates Simvastatin x Metformin Unknown, below the default "
 						+ "minor floor, and C10AA/A10BA share no subgroup, so nothing is raised: "

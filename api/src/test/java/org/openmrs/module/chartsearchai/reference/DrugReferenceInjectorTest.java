@@ -402,19 +402,24 @@ public class DrugReferenceInjectorTest {
 		// promotion". That premise is what #357 retired, deliberately and on its own live
 		// reproduction: a rule the floor filtered now leads the dataset TAIL when the chart names its
 		// partner, so presence no longer implies promotion and absence was silencing the patient's
-		// own drugs while the identical sentence rendered for strangers. So the question is put to
-		// what promotion actually buys — a place in segment 1, which overrides the character budget
-		// to keep a full note. With ibuprofen (Moderate) promoted, segment 2 renders exactly ONE
-		// representative and in the compact form, so a sub-floor rule that had been promoted would
-		// take the lead with its own note instead of trailing in "warfarin (Unknown)".
-		String section = interactionsSectionFor("Lisinopril", "warfarin", "ibuprofen");
+		// own drugs while the identical sentence rendered for strangers.
+		//
+		// So the question is put to what promotion actually buys, which is a place in segment 1 —
+		// where the budget yields to every member and each renders in full while it allows. The
+		// segment behind it renders the FIRST in full and the rest compact, so it takes TWO sub-floor
+		// partners to tell the two rules apart: promoted, warfarin and amiodarone would both carry
+		// their own note; filtered, the second is named with its rating alone. One would not
+		// discriminate, because a promoted Unknown sorts last among the promoted anyway.
+		String section = interactionsSectionFor("Lisinopril", "warfarin", "amiodarone", "ibuprofen");
 		assertTrue(section.startsWith("interactions: ibuprofen (moderate. "),
 				"the promoted segment is the above-floor rule's, and it keeps its mechanism prose: "
 						+ section);
-		assertTrue(section.endsWith("; warfarin (unknown)."),
-				"the sub-floor rule is named, in the compact tail slot behind it — with the rating "
-						+ "the source gives it and no mechanism it does not have: " + section);
-		assertFalse(section.contains("warfarin (unknown severity interaction"),
+		assertTrue(section.contains("; warfarin (unknown severity interaction (ddinter 2.0; no "
+				+ "mechanism description on file).); amiodarone (unknown); "),
+				"the two sub-floor rules follow it stating the source's sentence ONCE and then just a "
+						+ "name and a rating — neither of them promoted, and no mechanism invented for "
+						+ "a pair the source describes as nothing: " + section);
+		assertFalse(section.contains("amiodarone (unknown severity interaction"),
 				"a rule the floor filtered must never take a promoted full-note slot: " + section);
 
 		// The other half of the contract, on the same row. The floor's whole point is that the chips

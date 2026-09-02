@@ -74,12 +74,10 @@ public class InjectedInteractionNoteCollapseTest {
 		return references.get(0);
 	}
 
-	/** The lowercased {@code Interactions:} section of a rendered record. */
+	/** The lowercased {@code Interactions:} section of a rendered record — {@link DrugReferenceTestSupport}'s
+	 *  rule, which is where it lives now that a third class wanted it and its own copy had drifted. */
 	private static String interactionsOf(RecordMapping record) {
-		String text = record.getText();
-		int start = text.indexOf("Interactions:");
-		assertTrue(start >= 0, "precondition: the record must render an Interactions section: " + text);
-		return text.substring(start).toLowerCase(Locale.ROOT);
+		return DrugReferenceTestSupport.interactionsSectionOf(record);
 	}
 
 	/**
@@ -87,14 +85,11 @@ public class InjectedInteractionNoteCollapseTest {
 	 * followed by the rendering's own {@code " ("}, not of the bare name, because a mechanism
 	 * paragraph legitimately mentions the drugs it is about ("…exposure to sirolimus, which is
 	 * primarily metabolized…") and counting those would make this assert something else.
+	 * {@link DrugReferenceTestSupport}'s rule, shared with the case that asks WHERE such a note begins
+	 * rather than how many there are.
 	 */
 	private static int notesHeadedBy(String section, String partner) {
-		String needle = partner + " (";
-		int count = 0;
-		for (int at = section.indexOf(needle); at >= 0; at = section.indexOf(needle, at + 1)) {
-			count++;
-		}
-		return count;
+		return DrugReferenceTestSupport.notesHeadedBy(section, partner);
 	}
 
 	@Test

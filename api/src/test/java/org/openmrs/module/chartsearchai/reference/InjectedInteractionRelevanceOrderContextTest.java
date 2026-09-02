@@ -11,13 +11,10 @@ package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.Locale;
-
 import org.junit.jupiter.api.Test;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
-import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
@@ -37,31 +34,36 @@ public class InjectedInteractionRelevanceOrderContextTest extends BaseModuleCont
 	@Test
 	public void aRaisedFloorMovesAPartnerFromThePromotedSegmentToTheHeadOfTheTail() {
 		// Both of these partners are drugs the chart records, and at the shipped floor both are
-		// promoted — segment 1 renders each of them, the Moderate one with its full mechanism
-		// paragraph. Raised to `major` the Moderate rule is filtered, so it must keep its place ahead
-		// of every stranger while losing everything promotion buys: it becomes the single compact
-		// representative segment 2 renders behind the Major one.
+		// PROMOTED — segment 1 yields the budget to every member and renders each in full while it
+		// allows, which for this pair it does (Metformin's note is ~215 chars and Ibuprofen's ~910,
+		// against a 1500-char budget). Raised to `major` both rules are filtered, so they move to the
+		// segment behind it, which renders the first in full and the rest compact.
+		//
+		// That difference is the whole assertion, and it is why the case needs TWO filtered partners
+		// rather than one: the two segments render a single note identically, and they order their
+		// members identically too, since anything the floor admits outranks anything it filters. Only
+		// the second member tells them apart. A renderTier that hardcoded the shipped floor, or tested
+		// the rating instead of asking DrugSafetyValidator.configuredSeverityFloor, promotes both here
+		// and gives Ibuprofen its mechanism paragraph.
 		Context.getAdministrationService().setGlobalProperty(
 				ChartSearchAiConstants.GP_DRUG_SAFETY_MIN_INTERACTION_SEVERITY, "major");
 
 		PatientChart chart = DrugReferenceTestSupport.injector(DrugReferenceTestSupport.ddinterService())
 				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
 						DrugReferenceTestSupport.ctx(60, null,
-								DrugReferenceTestSupport.set("Spironolactone", "Ibuprofen"), null, null,
-								null),
+								DrugReferenceTestSupport.set("Metformin", "Ibuprofen"), null, null, null),
 						"is it safe to give lisinopril?");
-		RecordMapping record = DrugReferenceTestSupport.injectedReferences(chart).stream()
-				.filter(m -> m.getText().startsWith("Drug reference — Lisinopril ")).findFirst()
-				.orElseThrow(() -> new IllegalStateException(
-						"no Lisinopril record was injected: " + chart.getText()));
-		String text = record.getText();
-		String interactions = text.substring(text.indexOf("Interactions:")).toLowerCase(Locale.ROOT);
+		String interactions = DrugReferenceTestSupport.interactionsSectionOf(
+				DrugReferenceTestSupport.referenceMappingNaming(chart, "Lisinopril"));
 
-		assertTrue(interactions.startsWith("interactions: spironolactone (major. "),
-				"only the rule the raised floor still admits is promoted: " + interactions);
-		assertTrue(interactions.endsWith("; ibuprofen (moderate)."),
-				"and the rule it filtered keeps the head of the tail, ahead of every partner the chart "
-						+ "does not name, in the compact form promotion would have spared it: "
+		assertTrue(interactions.startsWith("interactions: metformin (moderate. limited data"),
+				"the raised floor promotes neither, so the first partner the chart names leads the tail "
+						+ "with its own note: " + interactions);
+		assertTrue(interactions.contains("; ibuprofen (moderate); "),
+				"and the second is named with the rating alone — the mechanism paragraph promotion "
+						+ "would have kept is what the raised floor gives up: " + interactions);
+		assertTrue(interactions.endsWith("; methotrexate (moderate)."),
+				"while the dataset tail still states breadth with its own representative: "
 						+ interactions);
 	}
 }

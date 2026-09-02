@@ -1630,9 +1630,10 @@ public class DrugReferenceInjector {
 		// a rule in `namedByTheChart` can carry there is Unknown and a sort over it has nothing to
 		// order. Under a raised floor the list can hold several ratings and keeps dataset order among
 		// them, which is what the tail has always done.
+		int chartNamedCount = namedByTheChart.size();
 		promoted.addAll(namedByTheChart);
 		promoted.addAll(rest);
-		return new OrderedInteractions(promoted, promotedCount);
+		return new OrderedInteractions(promoted, promotedCount, chartNamedCount);
 	}
 
 	/**
@@ -1991,9 +1992,17 @@ public class DrugReferenceInjector {
 
 		final int promotedCount;
 
-		OrderedInteractions(List<InteractionNote> ordered, int promotedCount) {
+		/** How many notes after the promoted ones are {@link #TIER_NAMED_BY_THE_CHART} — the second
+		 *  segment {@code render} renders (issue #357). Its own count and not a derived one, because
+		 *  {@code render} has to tell that segment from the dataset tail behind it: they are rendered
+		 *  by different rules, and the tail's "one representative states breadth" slot belongs to the
+		 *  tail rather than to whichever note happens to sit at its start. */
+		final int chartNamedCount;
+
+		OrderedInteractions(List<InteractionNote> ordered, int promotedCount, int chartNamedCount) {
 			this.ordered = ordered;
 			this.promotedCount = promotedCount;
+			this.chartNamedCount = chartNamedCount;
 		}
 	}
 
@@ -2365,15 +2374,33 @@ public class DrugReferenceInjector {
 				used += piece.length() + 2;
 			}
 
-			// Segment 2 — the dataset tail. It exists because this entry is also the only reference
+			// Segment 2 — the partners the chart names whose rules the severity floor filtered
+			// (issue #357). Never invisible, for the reason segment 1 is not: the record's job here is
+			// to say which of the patient's own drugs this entry is filed against, and the floor's
+			// judgement is about the CHIPS rather than about whether her chart is worth naming.
+			//
+			// The FIRST carries its full note and the rest are compact, which is not the budget rule
+			// segment 1 uses and is not a smaller version of it. At the shipped floor every note in
+			// this segment is the same sentence — DDInter rates 42,415 of the knowledge base's rows
+			// Unknown and files no mechanism for any of them, so each renders "<name> (Unknown
+			// severity interaction (DDInter 2.0; no mechanism description on file).)" — and repeating
+			// it is how a real polypharmacy record spent its whole budget saying one thing: measured
+			// through the real injectRecords over the SHIPPED knowledge base, a patient on 25 of
+			// Metformin's Unknown partners rendered 16 identical copies of that sentence, 1530
+			// characters carrying no mechanism prose at all and still withholding 9 of her own
+			// partners. Full once states what the source says; compact after it states which drugs it
+			// says it about, which is the part that differs.
+			int tailStart = interactions.promotedCount + interactions.chartNamedCount;
+			for (int i = interactions.promotedCount; i < tailStart; i++) {
+				InteractionNote n = ordered.get(i);
+				String piece = i == interactions.promotedCount ? n.full : n.compact;
+				shown.add(piece);
+				used += piece.length() + 2;
+			}
+
+			// Segment 3 — the dataset tail. It exists because this entry is also the only reference
 			// material the model has about the drug in general, so the record must not read as if
-			// the patient's own overlap were the drug's only interaction. Since issue #357 its HEAD is
-			// not general material: orderedInteractionNotes puts the partners the chart names whose
-			// rules the floor filtered ahead of the drugs the chart says nothing about, so the one
-			// representative this branch renders, and the notes the branch below spends the budget on,
-			// are this patient's own wherever she has any. That is an ordering and not a promotion —
-			// the compact form below and the budget are unchanged, and the rules stay sub-floor for
-			// every other purpose, chips included. What it does NOT need to
+			// the patient's own overlap were the drug's only interaction. What it does NOT need to
 			// do is put mechanism prose for drugs this patient has nothing to do with in front of a
 			// model that reports what it can see: measured live (issue #117), a patient on
 			// simvastatin asked about erythromycin got the correct simvastatin finding in sentence
@@ -2384,20 +2411,24 @@ public class DrugReferenceInjector {
 			// this quantised model garbling long verbatim copies, so every irrelevant paragraph
 			// offered is a paragraph of mangled clinical prose a clinician may be shown.
 			//
-			// So: with a promoted partner present, exactly one representative, in the compact
-			// "name (Severity)" form — with one operator-authored exception, since InteractionNote
-			// keeps the full text for a rule carrying no token and no ATC (there is no name to shorten
-			// to), so such a row can still land a full paragraph in this slot. That stays inside the
-			// same one-note overshoot the budget already tolerates; it just is not always ~20 chars.
-			// With none, the record has nothing patient-specific to say and
-			// the general material IS its content, so the budget is spent on full notes exactly as
-			// before, the first always rendering however long it is — the pre-existing "at least one
-			// interaction is always shown" guarantee, which is why the explicit re-add this replaced
-			// could only ever fire in the promoted case, and that case now always shows one.
-			// MAX_INTERACTION_RENDER_CHARS stays a soft budget whose overshoot is at most one note,
-			// and a compact representative shrinks that overshoot rather than widening it.
-			int restStart = interactions.promotedCount;
-			if (restStart == 0) {
+			// So: with anything patient-specific already shown, exactly one representative, in the
+			// compact "name (Severity)" form — with one operator-authored exception, since
+			// InteractionNote keeps the full text for a rule carrying no token and no ATC (there is no
+			// name to shorten to), so such a row can still land a full paragraph in this slot. That
+			// stays inside the same one-note overshoot the budget already tolerates; it just is not
+			// always ~20 chars. With none, the record has nothing patient-specific to say and the
+			// general material IS its content, so the budget is spent on full notes exactly as before,
+			// the first always rendering however long it is — the pre-existing "at least one
+			// interaction is always shown" guarantee.
+			//
+			// The condition is "anything patient-specific", not "anything promoted", and issue #357 is
+			// why it has to be: with the promoted count alone, a record whose only chart-named partner
+			// was floor-filtered spent this segment's whole budget walking a segment that is entirely
+			// about the patient, and the breadth this segment exists to supply was never rendered at
+			// all. MAX_INTERACTION_RENDER_CHARS stays a soft budget whose overshoot is at most one
+			// note per segment, and a compact representative shrinks that overshoot rather than
+			// widening it.
+			if (tailStart == 0) {
 				for (int i = 0; i < ordered.size(); i++) {
 					String n = ordered.get(i).full;
 					if (!shown.isEmpty() && used + n.length() > MAX_INTERACTION_RENDER_CHARS) {
@@ -2406,8 +2437,8 @@ public class DrugReferenceInjector {
 					shown.add(n);
 					used += n.length() + 2;
 				}
-			} else if (restStart < ordered.size()) {
-				shown.add(ordered.get(restStart).compact);
+			} else if (tailStart < ordered.size()) {
+				shown.add(ordered.get(tailStart).compact);
 			}
 
 			appendSection(sb, " Interactions: ", shown);

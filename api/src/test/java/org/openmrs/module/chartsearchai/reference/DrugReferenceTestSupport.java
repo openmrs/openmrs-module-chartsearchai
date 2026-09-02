@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -24,6 +25,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -953,6 +955,61 @@ public final class DrugReferenceTestSupport {
 	 *         rule rather than restating it. A selector written as a bare {@code startsWith(name)} also
 	 *         accepts a route-qualified SIBLING, which is the whole reason that rule lives in one place.
 	 */
+	/**
+	 * The {@code Interactions:} section of a rendered record, lowercased — everything from the header
+	 * to the end of the text, which is where the section sits.
+	 *
+	 * <p>Here rather than in each file for the reason {@link #classChipDetails} records, and this one
+	 * had already been copied verbatim between two classes with a third copy drifting: the third had
+	 * dropped the precondition below, so a rename of the header would have failed it with a bare
+	 * {@code StringIndexOutOfBoundsException} instead of saying what was missing.
+	 */
+	static String interactionsSectionOf(RecordMapping record) {
+		String text = record.getText();
+		int start = text.indexOf("Interactions:");
+		assertTrue(start >= 0, "precondition: the record must render an Interactions section: " + text);
+		return text.substring(start).toLowerCase(Locale.ROOT);
+	}
+
+	/**
+	 * @return where the note HEADED BY {@code partner} begins in {@code section}, or -1. Headed by,
+	 *         not merely mentioned: a mechanism paragraph legitimately names the drugs it is about
+	 *         ("…exposure to sirolimus, which is primarily metabolized…"), so a bare name search would
+	 *         make an absence assertion unfailable. One spelling of that rule, shared with
+	 *         {@link #notesHeadedBy}, which counts what this one locates.
+	 */
+	static int noteAt(String section, String partner) {
+		return section.indexOf(partner + " (");
+	}
+
+	/** How many notes in {@code section} are headed by {@code partner} — see {@link #noteAt}. */
+	static int notesHeadedBy(String section, String partner) {
+		String needle = partner + " (";
+		int count = 0;
+		for (int at = section.indexOf(needle); at >= 0; at = section.indexOf(needle, at + 1)) {
+			count++;
+		}
+		return count;
+	}
+
+	/**
+	 * The injected {@code drug_reference} MAPPING whose rendering names {@code name} — the mapping-shaped
+	 * sibling of {@link #referenceTextNaming}, selecting by the same rule so a case that needs the
+	 * mapping's citation metadata cannot select a record the text-shaped accessor would reject. Both
+	 * terminators, for the reason {@link #namesDrug} gives: a bare {@code startsWith(name)} also accepts
+	 * a route-qualified sibling, and over the shipped knowledge base it accepts an entry whose name is
+	 * another's plus a word ({@code Iron} / {@code Iron Dextran}).
+	 */
+	static RecordMapping referenceMappingNaming(PatientChart chart, String name) {
+		for (RecordMapping mapping : injectedReferences(chart)) {
+			if (namesDrug(Collections.singletonList(mapping.getText()), name)) {
+				return mapping;
+			}
+		}
+		throw new IllegalStateException("no drug-reference record names " + name + ": "
+				+ referenceTexts(chart));
+	}
+
 	static String referenceTextNaming(PatientChart chart, String name) {
 		for (String text : referenceTexts(chart)) {
 			if (namesDrug(Collections.singletonList(text), name)) {

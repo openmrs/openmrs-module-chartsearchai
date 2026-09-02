@@ -15,11 +15,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Locale;
 
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
-import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 
 /**
  * Issue #357 — a partner the patient is ACTUALLY ON, whose row the severity floor filtered, was
@@ -59,42 +57,23 @@ public class InjectedInteractionRelevanceOrderTest {
 	/** The excerpt rates Metformin x Warfarin {@code Moderate}, so it is promoted. */
 	private static final String ABOVE_FLOOR_PARTNER = "warfarin";
 
-	/** The lowercased {@code Interactions:} section of the record rendered for {@code drug}. */
-	private static String interactionsFor(String question, PatientClinicalContext context, String drug)
-			throws IOException {
+	/** The lowercased {@code Interactions:} section of the record rendered for {@code drug} — selected
+	 *  by name and never assumed, because a question about one drug can inject an order-driven record
+	 *  for another. Both the selector and the extraction are {@link DrugReferenceTestSupport}'s, which
+	 *  is where this project's instructions require a test helper of this kind to live. */
+	private static String interactionsFor(String question, PatientClinicalContext context, String drug) {
 		PatientChart chart = DrugReferenceTestSupport.injector(DrugReferenceTestSupport.ddinterService())
 				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context, question);
-		return interactionsOf(recordFor(chart, drug));
+		return DrugReferenceTestSupport.interactionsSectionOf(
+				DrugReferenceTestSupport.referenceMappingNaming(chart, drug));
 	}
 
-	/** The injected reference record for the entry NAMED {@code drug} — a question about one drug can
-	 *  inject an order-driven record for another, so the record under test is selected, never assumed. */
-	private static RecordMapping recordFor(PatientChart chart, String drug) {
-		for (RecordMapping mapping : DrugReferenceTestSupport.injectedReferences(chart)) {
-			if (mapping.getText().startsWith("Drug reference — " + drug + " ")
-					|| mapping.getText().startsWith("Drug reference — " + drug + ".")) {
-				return mapping;
-			}
-		}
-		throw new IllegalStateException("no drug-reference record was injected for " + drug + ": "
-				+ DrugReferenceTestSupport.referenceTexts(chart));
-	}
-
-	private static String interactionsOf(RecordMapping record) {
-		String text = record.getText();
-		int start = text.indexOf("Interactions:");
-		assertTrue(start >= 0, "precondition: the record must render an Interactions section: " + text);
-		return text.substring(start).toLowerCase(Locale.ROOT);
-	}
-
-	/** Where the note headed by {@code partner} begins, or -1. Headed by, not merely mentioned: a
-	 *  mechanism paragraph legitimately names the drugs it is about. */
 	private static int noteAt(String section, String partner) {
-		return section.indexOf(partner + " (");
+		return DrugReferenceTestSupport.noteAt(section, partner);
 	}
 
 	@Test
-	public void aPartnerThePatientIsOnIsNamedEvenWhereTheFloorFilteredItsRule() throws IOException {
+	public void aPartnerThePatientIsOnIsNamedEvenWhereTheFloorFilteredItsRule() {
 		// The ticket's own shape on the pinned excerpt. Nothing is promoted — the only rule about a
 		// drug this patient is on is Unknown, below the default minor floor — so before this fix the
 		// record spent its whole budget walking the dataset from the head and stopped short of her.
@@ -109,7 +88,7 @@ public class InjectedInteractionRelevanceOrderTest {
 	}
 
 	@Test
-	public void thePartnerThePatientIsOnLeadsTheStrangersRatherThanTrailingThem() throws IOException {
+	public void thePartnerThePatientIsOnLeadsTheStrangersRatherThanTrailingThem() {
 		// Naming her partner somewhere is not the fix: the ticket's second criterion is that the
 		// Unknown STRANGERS must not be named ahead of her own drugs. The budget is finite, so a
 		// partner ordered behind fifteen strangers is a partner the cut removes again the moment the
@@ -125,7 +104,7 @@ public class InjectedInteractionRelevanceOrderTest {
 	}
 
 	@Test
-	public void theFloorFilteredRuleStillRaisesNoChip() throws IOException {
+	public void theFloorFilteredRuleStillRaisesNoChip() {
 		// The control the ticket says must not be got wrong: "the module must NOT invent a rating or
 		// a mechanism for a row the source rates and describes as nothing". Ordering the record is a
 		// statement about which of the KB's own sentences reach the prompt; it is not a promotion,
@@ -141,27 +120,55 @@ public class InjectedInteractionRelevanceOrderTest {
 	}
 
 	@Test
-	public void aRatedPartnerKeepsItsMechanismProseAndTheFilteredOneIsOnlyNamed() throws IOException {
-		// The two segments in one record, and the pin that the filtered row was NOT promoted: a
-		// promoted partner takes a full note and overrides the budget to keep it, while this one
-		// takes the single compact tail slot behind it. Whichever way the ordering is read, the
-		// floor still decides which of the two a clinician's model can quote a mechanism for.
+	public void allThreeSegmentsRenderWhenThePatientHasAPartnerInEach() {
+		// The whole shape in one record: the rated partner leads with the mechanism prose the budget
+		// override exists for, the filtered partner follows with the source's own sentence about it,
+		// and the dataset tail still gets its one compact representative — which is the breadth this
+		// record owes the model about the drug in general, and which is lost the moment the middle
+		// segment is allowed to spend the tail's slot.
 		String interactions = interactionsFor(METFORMIN_QUESTION,
 				DrugReferenceTestSupport.ctx(60, null,
 						DrugReferenceTestSupport.set("Warfarin", "Fluconazole"), null, null, null),
 				"Metformin");
 
 		assertTrue(interactions.startsWith("interactions: warfarin (moderate. coadministration"),
-				"the rated partner still leads, in the promoted segment: " + interactions);
+				"the rated partner leads, in the promoted segment: " + interactions);
 		assertTrue(interactions.contains("vitamin k antagonists"),
-				"and still keeps the mechanism prose the budget override exists for: " + interactions);
-		assertTrue(interactions.endsWith("; " + SUB_FLOOR_PARTNER + " (unknown)."),
-				"while the filtered partner takes the single COMPACT tail slot behind it — named, with "
-						+ "no rating invented and no mechanism it does not have: " + interactions);
+				"and keeps the mechanism prose the budget override exists for: " + interactions);
+		assertTrue(interactions.contains("; " + SUB_FLOOR_PARTNER
+				+ " (unknown severity interaction (ddinter 2.0; no mechanism description on file).); "),
+				"the filtered partner follows it with what the source actually says about the pair — a "
+						+ "rating and an admission that no mechanism is on file: " + interactions);
+		assertTrue(interactions.endsWith("; lisinopril (moderate)."),
+				"and the dataset tail keeps its own representative behind both: " + interactions);
 	}
 
 	@Test
-	public void aRecordAboutNoOneInParticularKeepsDatasetOrder() throws IOException {
+	public void severalFilteredPartnersStateTheSharedSentenceOnceAndThenJustTheirNames() {
+		// What promotion still buys, and the case that makes it observable. Segment 1 renders every
+		// promoted note in full while the budget allows; this segment renders the FIRST in full and
+		// the rest compact, because at the shipped floor every note in it is the same sentence and
+		// repeating it is how a real polypharmacy record spent its whole budget saying one thing —
+		// measured over the SHIPPED knowledge base, sixteen identical copies, 1530 characters, no
+		// mechanism prose at all. Sertraline sits ahead of Fluconazole in the entry's own partner
+		// order, so it is the one that carries the sentence.
+		String interactions = interactionsFor(METFORMIN_QUESTION,
+				DrugReferenceTestSupport.ctx(60, null,
+						DrugReferenceTestSupport.set("Warfarin", "Sertraline", "Fluconazole"), null, null,
+						null),
+				"Metformin");
+
+		assertTrue(interactions.contains(
+				"; sertraline (unknown severity interaction (ddinter 2.0; no mechanism description on "
+						+ "file).); " + SUB_FLOOR_PARTNER + " (unknown); "),
+				"the first filtered partner states the shared sentence and the next is named with its "
+						+ "rating alone: " + interactions);
+		assertEquals(1, interactions.split("no mechanism description on file", -1).length - 1,
+				"and the sentence they share is stated once, not once per partner: " + interactions);
+	}
+
+	@Test
+	public void aRecordAboutNoOneInParticularKeepsDatasetOrder() {
 		// The control for everything this must not move. With no partner the chart names, all three
 		// segments but the last are empty and the record is what it always was.
 		String interactions = interactionsFor(METFORMIN_QUESTION,
@@ -202,7 +209,8 @@ public class InjectedInteractionRelevanceOrderTest {
 				.injector(DrugReferenceTestSupport.serviceWith(entries))
 				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context,
 						"is it safe to give voriconazole?");
-		String interactions = interactionsOf(recordFor(chart, "Voriconazole"));
+		String interactions = DrugReferenceTestSupport.interactionsSectionOf(
+				DrugReferenceTestSupport.referenceMappingNaming(chart, "Voriconazole"));
 
 		assertEquals(0, noteAt(interactions, "warfarin") - "interactions: ".length(),
 				"the partner must be led by the row whose drug the chart records, not dropped because "
@@ -224,7 +232,8 @@ public class InjectedInteractionRelevanceOrderTest {
 		PatientChart chart = DrugReferenceTestSupport
 				.injector(DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport.shippedEntries()))
 				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context, METFORMIN_QUESTION);
-		String interactions = interactionsOf(recordFor(chart, "Metformin"));
+		String interactions = DrugReferenceTestSupport.interactionsSectionOf(
+				DrugReferenceTestSupport.referenceMappingNaming(chart, "Metformin"));
 
 		int lastHers = -1;
 		for (String hers : new String[] { "lamivudine", "nevirapine", "stavudine" }) {

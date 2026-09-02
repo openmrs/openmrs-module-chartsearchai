@@ -3211,8 +3211,9 @@ public class DrugSafetyValidator {
 	 * <p><b>{@link SafetyWarning#chartOrderBridges()} is the ONE prompt-read value deliberately left
 	 * OUT of that key</b> (issue #349), and it was added here and reverted, so the omission is a
 	 * decision rather than an oversight: this key decides which chips are EMITTED, so it reaches
-	 * {@link PairChipExtent}'s counts — the screening arm collapses where the candidate is collected,
-	 * before the cap — and, through {@code ChartSearchAiUtils.resourceKey}, whether two injected
+	 * {@link PairChipExtent}'s counts from BOTH arms that consult it — the screening arm collapses
+	 * where the candidate is collected, before the cap, and since issue #356 the drug-in-play arm
+	 * counts the rule chips that survived this ledger — and, through {@code ChartSearchAiUtils.resourceKey}, whether two injected
 	 * findings share one resource uuid. Keying on a prompt-only clause would therefore let it decide
 	 * wire CONTENT. A collapsed chip carries the SURVIVOR's bridge, which is the same residue this
 	 * javadoc already accepts one paragraph up ("what it gives up is WHICH constituent"). ADR
@@ -4447,7 +4448,9 @@ public class DrugSafetyValidator {
 			int severityFloor) {
 		if (questionDrugs.size() < 2) {
 			// The arm did not run: one drug is not a pair, so there is no candidate list to state the
-			// extent of. Null, never a zero — see PairChipExtent for what the two say differently.
+			// extent of. Null, never a zero — see PairChipExtent for what the two say differently. It is
+			// this arm's answer and no longer the response's: on a question naming exactly one drug the
+			// drug-in-play arm states one instead, from validate's own fallback (issue #356).
 			return null;
 		}
 		List<DrugReference> drugs = new ArrayList<DrugReference>(questionDrugs);

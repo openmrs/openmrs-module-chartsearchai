@@ -617,12 +617,13 @@ public class DrugReferenceInjectorTest {
 		// cost #355 exists to remove, so the budget stays in the loop beside the cap.
 		//
 		// The clause was left undiscriminated by #355 until this case: before it, deleting the condition
-		// kept the whole api suite green. Not because no other fixture carries two nameless rules —
-		// drug-reference-malformed.json does — but because every other such note is far too short to
-		// reach the budget (that entry's are 0 and 21 characters). Mutate the condition and read the
-		// failures rather than trusting a count of them: this case was the sole witness when it was
-		// written and is not any more, the nameless-tail fixture beside it having since grown a note
-		// long enough to reach the budget too.
+		// kept the whole api suite green. Not because no other fixture carries a nameless rule —
+		// drug-reference-malformed.json's `mangled` entry carries two nameless ROWS — but because
+		// neither can spend the budget: one is blank, which orderedInteractionNotes drops outright
+		// before an InteractionNote is built for it, and the other's note is 21 characters. Mutate
+		// the condition and read the failures rather than trusting a count of them: this case was
+		// the sole witness when it was written and is not any more, the nameless-tail fixture beside
+		// it having since grown a note long enough to reach the budget too.
 		//
 		// Every row is unrated, so severityPriority ties them and the stable sort leaves dataset order
 		// — which keeps this case about the budget rather than about the ordering beside it.
@@ -703,6 +704,68 @@ public class DrugReferenceInjectorTest {
 				"precondition: the budget cuts exactly one of the four rows here, so a row losing its "
 						+ "place is a row LOST from the record rather than one merely reordered: "
 						+ section);
+	}
+
+	@Test
+	public void anAtcNamedRowWithNoMechanismTextStillCountsAsNamingItsPartner() throws Exception {
+		// Issue #355, the other arm of the same key. DrugSafetyValidator.partnerLabel is
+		// firstNonBlank(token, atc), so a rule the dataset identifies by an ATC code and nothing else
+		// names its partner exactly as a tokened one does — and the flag InteractionNote records is
+		// that method's answer, not its first argument's. The case beside this one contrasts a
+		// TOKENED row with a row carrying neither, which both a token-only reading and the real
+		// predicate answer alike; measured 2026-09-02, writing the constructor argument as
+		// firstNonBlank(i.getToken()) != null left the whole api suite green.
+		//
+		// What that reading costs is this fixture's record: the nameless unrated paragraphs beside
+		// the ATC-named row outrank it under severityPriority (unrated sorts above Major), and the
+		// character budget then drops the Major partner out of the citable record — reported only as
+		// a withheld count. Mutate the constructor argument to the token-only form and read the
+		// failures.
+		RecordMapping record = tailRecordOf(
+				"chartsearchai-test/drug-reference-unpromoted-tail-atc-named.json",
+				"is it safe to give atcnamedstub?");
+		String section = tailSectionOf(record);
+
+		assertTrue(section.contains("B01AA03"),
+				"the row the dataset identifies by an ATC code and no token still names its partner, "
+						+ "so it leads the tail: " + section);
+		assertTrue(section.indexOf("B01AA03") < section.indexOf("ALPHA"),
+				"and it leads it rather than merely surviving: a nameless unrated paragraph ranks "
+						+ "above Major on severity alone, so nothing but the naming key puts this row "
+						+ "in front of one: " + section);
+		assertEquals(1, record.getWithheldInteractions(),
+				"precondition: the budget cuts one of the four rows here, so a row losing its place "
+						+ "is a row LOST from the record rather than one merely reordered: " + section);
+	}
+
+	@Test
+	public void aNamelessRuleCarryingASeverityStillDoesNotDisplaceARowThatNamesItsPartner()
+			throws Exception {
+		// Issue #355. The naming key is independent of the rating, and this is the arrangement in
+		// which that is observable: the nameless paragraph here carries Major while the row that
+		// names a partner carries Moderate. Every other tail fixture leaves the nameless rows
+		// unrated, so on them "names a partner" and "carries a severity" answer alike for every row
+		// and reading the flag off the severity is indistinguishable from reading it off the name.
+		// Measured 2026-09-02, writing the constructor argument as severity != null — the local two
+		// lines above it in orderedInteractionNotes — left the whole api suite green.
+		//
+		// Under that reading the paragraph is promoted to the head of the tail on a rating that
+		// names nobody, taking the one slot the character budget cannot refuse, and metformin leaves
+		// the record. Mutate the constructor argument to the severity and read the failures.
+		RecordMapping record = tailRecordOf(
+				"chartsearchai-test/drug-reference-unpromoted-tail-rated-nameless.json",
+				"is it safe to give ratednamelessmix?");
+		String section = tailSectionOf(record);
+
+		assertTrue(section.toLowerCase().contains("metformin (moderate)"),
+				"the row that names a partner leads the tail even though the nameless row beside it "
+						+ "is rated HIGHER: a rule that names nobody states no interaction, whatever "
+						+ "its rating: " + section);
+		assertFalse(section.contains("LONGSTUB"),
+				"and the nameless paragraph does not take the slot the budget cannot refuse: " + section);
+		assertEquals(1, record.getWithheldInteractions(),
+				"precondition: the budget cuts one of the two rows here, so a row losing its place is "
+						+ "a row LOST from the record rather than one merely reordered: " + section);
 	}
 
 	/** The only record a curated {@code fixture} injects for {@code question}, for a patient on

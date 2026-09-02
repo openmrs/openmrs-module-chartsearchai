@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
@@ -35,6 +36,12 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * citation: this module put it in the prompt and does not need the model to say so. Requiring one was
  * issue #360 — an answer that emitted no bracket had the whole of #105's scoping skipped, and recited
  * partners raised Major chips about drugs neither charted nor asked about.
+ *
+ * <p>The reference half is TWO record types and each has its own case, because the membership test is
+ * the GROUP rather than a type name and the drug_reference-only narrowing of it is what the
+ * predicate's javadoc records as tried and reverted. The finding half is pinned on the SCREENING arm
+ * deliberately: a screening question injects no {@code drug_reference} record at all, so there that
+ * narrowing is not a partial loss but the reported defect back in full.
  *
  * <p>All scenarios run the real pipeline: entries parsed from the real DDInter excerpt,
  * charts built by the real injector, and the real {@code validate} overload that production
@@ -123,6 +130,62 @@ public class DrugSafetyValidatorEchoScopingTest {
 	}
 
 	@Test
+	public void anUncitedRecitationOfAnInjectedSafetyFindingIsNotValidatedAsAProposalEither() {
+		// The other half of what "recitable" admits, and the half a type-name narrowing takes away.
+		// isRecitableReferenceMaterial asks the GROUP, so a safety_finding is attributable uncited for
+		// the same reason a drug_reference is — this module rendered it into the prompt. Narrowing the
+		// method to RESOURCE_TYPE_DRUG_REFERENCE.equals(resourceType), the alternative its own javadoc
+		// records as tried and reverted, is invisible in every other case here: mutate that line and
+		// read THIS failure.
+		//
+		// The screening arm is where the narrowing is not marginal but the reported defect itself. A
+		// screening question names no drug, so it injects no drug_reference record at all and every
+		// recitable record in the chart is a finding — the corpus would collapse back to the cited one
+		// and issue #360's fix would be a no-op for the whole arm.
+		//
+		// Real pipeline throughout: the shipped knowledge base, the shared six-order screening chart,
+		// and the real injectorWithSafety, so the answer recites a record production actually rendered.
+		// The finding it recites spells out lovastatin inside its mechanism prose (a statin this
+		// patient is not on and nobody asked about), and lovastatin has above-floor rows against her
+		// orders — so the chips are available and only attribution withholds them.
+		DrugReferenceService shipped = DrugReferenceTestSupport.serviceWith(
+				DrugReferenceTestSupport.shippedEntries());
+		PatientClinicalContext screened = DrugReferenceTestSupport.screenedSixOrderChart();
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(shipped).injectRecords(
+				DrugReferenceTestSupport.oneRecordChart(), screened,
+				DrugReferenceTestSupport.SCREENING_QUESTION);
+		assertTrue(DrugReferenceTestSupport.injectedReferences(chart).isEmpty(),
+				"precondition: a screening question injects no drug_reference record, so a finding is "
+						+ "the only recitable record this case can be attributed to, was: "
+						+ DrugReferenceTestSupport.referenceTexts(chart));
+		RecordMapping recited = null;
+		for (RecordMapping finding : DrugReferenceTestSupport.injectedFindings(chart)) {
+			if (finding.getText().toLowerCase().contains("lovastatin")) {
+				recited = finding;
+				break;
+			}
+		}
+		assertNotNull(recited, "precondition: the pre-answer pass must render a finding whose mechanism "
+				+ "prose names lovastatin, or this case asserts nothing — findings were: "
+				+ DrugReferenceTestSupport.findingTexts(chart));
+
+		String answer = recited.getText();
+		assertTrue(ChartSearchAiUtils.citedIndexes(answer).isEmpty(),
+				"precondition: this answer must carry no inline citation marker at all");
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(shipped).validate(answer,
+				DrugReferenceTestSupport.SCREENING_QUESTION, screened, chart.getMappings());
+
+		assertFalse(DrugReferenceTestSupport.has(warnings, SafetyWarning.TYPE_INTERACTION, "lovastatin"),
+				"a substance named only inside a recited safety_finding must not chip as a proposal — "
+						+ "it is neither charted nor asked about, was: "
+						+ DrugReferenceTestSupport.chipLeads(warnings));
+		assertTrue(DrugReferenceTestSupport.has(warnings, SafetyWarning.TYPE_INTERACTION, "simvastatin"),
+				"and the screening arm still chips the patient's own interacting orders, so the "
+						+ "assertion above is not satisfied by an empty list, was: "
+						+ DrugReferenceTestSupport.chipLeads(warnings));
+	}
+
+	@Test
 	public void aDrugNoInjectedRecordNamesIsStillValidatedWhenTheAnswerProposesItUncited() {
 		// The net issue #360's widening must not swallow, and the case that makes the assertion above
 		// non-vacuous: the chart carries a REAL injected reference record, the answer cites nothing,
@@ -152,18 +215,22 @@ public class DrugSafetyValidatorEchoScopingTest {
 		// positive above for a real miss, which is what the issue forbids.
 		//
 		// Clarithromycin x Simvastatin (Major) is the pinned excerpt's macrolide analogue of #105's own
-		// erythromycin x simvastatin. Run through the REAL injector so whatever the pre-answer pass
-		// injects for a drug-less question is in the corpus this asserts against, rather than assumed
-		// to be nothing.
+		// erythromycin x simvastatin. Run through the injector WITH the validator behind it, so what
+		// the pre-answer pass injects for a drug-less question is measured rather than assumed: with
+		// the plain injector the validator is unset and preAnswerFindings returns empty whatever the
+		// question is, so no safety_finding could exist in the fixture and the precondition below
+		// would be structural.
 		String question = "what other drugs are contraindicated with clarithromicin?";
-		PatientChart chart = DrugReferenceTestSupport.injector(DrugReferenceTestSupport.ddinterService())
+		PatientChart chart = DrugReferenceTestSupport
+				.injectorWithSafety(DrugReferenceTestSupport.ddinterService())
 				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), simvastatinOrderCtx(), question);
 		String answer = "Clarithromycin should be avoided.";
 		assertTrue(ChartSearchAiUtils.citedIndexes(answer).isEmpty(),
 				"precondition: this answer must carry no inline citation marker at all");
-		assertTrue(DrugReferenceTestSupport.injectedReferences(chart).isEmpty(),
-				"precondition: a question naming no drug must inject no reference record, or the "
-						+ "corpus would have something to attribute the answer's mention to");
+		assertTrue(DrugReferenceTestSupport.injectedReferenceGroupRecords(chart).isEmpty(),
+				"precondition: a question naming no drug must inject no RECITABLE record — neither a "
+						+ "drug_reference nor a safety_finding — or the corpus would have something to "
+						+ "attribute the answer's mention to, was: " + chart.getMappings());
 
 		List<SafetyWarning> warnings = validator().validate(answer, question, simvastatinOrderCtx(),
 				chart.getMappings());

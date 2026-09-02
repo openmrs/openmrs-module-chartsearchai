@@ -1064,7 +1064,12 @@ public class DrugSafetyValidator {
 	 *         an answer reciting one injected finding verbatim raised 22 chips with no marker and 10
 	 *         with a single {@code [2]} added, six of the difference (three of them Major) naming
 	 *         {@code lovastatin}, a drug this patient is not on and nobody asked about. That is the
-	 *         reported defect itself, so the subtraction was reverted.
+	 *         reported defect itself, so the subtraction was reverted. Pinned rather than only
+	 *         recorded, since the javadoc naming the alternative is also what advertises it:
+	 *         {@code DrugSafetyValidatorEchoScopingTest
+	 *         .anUncitedRecitationOfAnInjectedSafetyFindingIsNotValidatedAsAProposalEither} drives the
+	 *         real injector and this {@code validate} over that same arrangement — write the
+	 *         subtraction into this body and read its failure.
 	 *
 	 *         <p>Named for what it asks rather than after {@code ChartSearchAiUtils}' own private
 	 *         {@code isReferenceMaterial} — see

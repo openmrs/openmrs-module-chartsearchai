@@ -2452,8 +2452,7 @@ public class DrugReferenceInjector {
 			// compact "name (Severity)" form — with one operator-authored exception, since
 			// InteractionNote keeps the full text for a rule carrying no token and no ATC (there is no
 			// name to shorten to), so such a row can still land a full paragraph in this slot. That
-			// stays inside the same one-note overshoot the budget already tolerates; it just is not
-			// always ~20 chars. With none, the record has nothing patient-specific to say and the
+			// stays inside this segment's own one-note overshoot; it just is not always ~20 chars. With none, the record has nothing patient-specific to say and the
 			// general material IS its content, so the budget is spent on full notes exactly as before,
 			// the first always rendering however long it is — the pre-existing "at least one
 			// interaction is always shown" guarantee.

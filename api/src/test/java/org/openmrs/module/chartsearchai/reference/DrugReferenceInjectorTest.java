@@ -603,6 +603,43 @@ public class DrugReferenceInjectorTest {
 						+ section.length() + " chars: " + section);
 	}
 
+	@Test
+	public void theUnpromotedTailStillPaysTheCharacterBudgetForRulesThatHaveNoNameToShortenTo()
+			throws Exception {
+		// The clause issue #355 kept rather than added, and the one shape that still discriminates it.
+		// InteractionNote's compact form is `label (Severity)`, so for almost every row the cap on
+		// partners is what bounds the tail and the character budget never bites. It bites for a rule
+		// carrying no token and no ATC: partnerLabel returns null, there is no name to shorten to, and
+		// the compact form IS the mechanism paragraph. Five of those are five paragraphs, which is the
+		// cost #355 exists to remove, so the budget stays in the loop beside the cap.
+		//
+		// Measured 2026-09-02: deleting that condition leaves the whole api suite green without this
+		// case, because no other fixture puts more than one nameless rule in an unpromoted tail.
+		//
+		// Every row is unrated, so severityPriority ties them and the stable sort leaves dataset order
+		// — which keeps this case about the budget rather than about the ordering beside it.
+		RecordMapping record = DrugReferenceTestSupport.injectedReferences(DrugReferenceTestSupport
+				.injector(DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport
+						.fixtureEntries("chartsearchai-test/drug-reference-unpromoted-tail-budget.json")))
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+						DrugReferenceTestSupport.ctx(60, null, null, null, null, null),
+						"is it safe to give budgetstub?")).get(0);
+		String section = record.getText().substring(record.getText().indexOf("Interactions:"));
+
+		assertTrue(section.contains("ALPHA"),
+				"precondition: the first nameless rule always renders, however long it is: " + section);
+		assertTrue(section.contains("BRAVO"),
+				"precondition: and a second one fits the budget, so the cut below is the budget's and "
+						+ "not the first row's: " + section);
+		assertFalse(section.contains("CHARLIE"),
+				"a third does not fit, and the partner cap alone would have admitted it — five nameless "
+						+ "rules are five mechanism paragraphs, which is the cost #355 removes: " + section);
+		assertEquals(3, record.getWithheldInteractions(),
+				"and the rows the budget cut must be reported as withheld: " + section);
+		assertTrue(section.length() <= 2 * DrugReferenceInjector.MAX_INTERACTION_RENDER_CHARS,
+				"the overshoot stays bounded by one note: " + section.length());
+	}
+
 	/** The injected drug-reference mapping (not just its text) whose rendering names {@code drug}. */
 	private RecordMapping referenceMappingFor(PatientChart chart, String drug) {
 		for (RecordMapping m : chart.getMappings()) {

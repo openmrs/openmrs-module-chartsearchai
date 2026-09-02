@@ -1,0 +1,35 @@
+{
+  "version": "1.0",
+  "description": "Test fixture (issue #355): ONE curated entry whose interaction rows carry no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for each and InteractionNote's compact form falls back to the full note — there is no name to shorten to. It is the only shape in which the unpromoted dataset tail can still spend a mechanism paragraph per partner, and so the only shape that discriminates the character budget DrugReferenceInjector.render keeps in that loop beside MAX_UNPROMOTED_TAIL_PARTNERS. Five rows, each long enough that three of them exceed MAX_INTERACTION_RENDER_CHARS between them. Every row is UNRATED so severityPriority ties them all and the tail's sort is stable, which keeps WHICH rows render decided by the budget alone rather than by the ordering this fixture is not about.",
+  "entries": [
+    {
+      "id": "budgetstub-curated",
+      "name": "Budgetstub",
+      "drugClass": "Test fixture substance",
+      "aliases": [
+        "budgetstub"
+      ],
+      "atcCodes": [
+        "V99AA01"
+      ],
+      "interactions": [
+        {
+          "note": "Locally curated rule ALPHA. This operator-authored row carries no token and no ATC code, so DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to and its compact form IS its full text. That is the one shape in which the dataset tail can still cost a mechanism paragraph per partner, which is why the character budget stays in the loop beside the partner cap. The paragraph is padded to a realistic mechanism length so that a handful of these rows exceeds the budget between them, exactly as several real DDInter mechanism notes do."
+        },
+        {
+          "note": "Locally curated rule BRAVO. This operator-authored row carries no token and no ATC code, so DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to and its compact form IS its full text. That is the one shape in which the dataset tail can still cost a mechanism paragraph per partner, which is why the character budget stays in the loop beside the partner cap. The paragraph is padded to a realistic mechanism length so that a handful of these rows exceeds the budget between them, exactly as several real DDInter mechanism notes do."
+        },
+        {
+          "note": "Locally curated rule CHARLIE. This operator-authored row carries no token and no ATC code, so DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to and its compact form IS its full text. That is the one shape in which the dataset tail can still cost a mechanism paragraph per partner, which is why the character budget stays in the loop beside the partner cap. The paragraph is padded to a realistic mechanism length so that a handful of these rows exceeds the budget between them, exactly as several real DDInter mechanism notes do."
+        },
+        {
+          "note": "Locally curated rule DELTA. This operator-authored row carries no token and no ATC code, so DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to and its compact form IS its full text. That is the one shape in which the dataset tail can still cost a mechanism paragraph per partner, which is why the character budget stays in the loop beside the partner cap. The paragraph is padded to a realistic mechanism length so that a handful of these rows exceeds the budget between them, exactly as several real DDInter mechanism notes do."
+        },
+        {
+          "note": "Locally curated rule ECHO. This operator-authored row carries no token and no ATC code, so DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to and its compact form IS its full text. That is the one shape in which the dataset tail can still cost a mechanism paragraph per partner, which is why the character budget stays in the loop beside the partner cap. The paragraph is padded to a realistic mechanism length so that a handful of these rows exceeds the budget between them, exactly as several real DDInter mechanism notes do."
+        }
+      ],
+      "source": "Test fixture"
+    }
+  ]
+}

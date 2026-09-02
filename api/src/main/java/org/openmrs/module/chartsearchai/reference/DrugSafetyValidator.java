@@ -1042,7 +1042,8 @@ public class DrugSafetyValidator {
 	 *         prose this module rendered into the prompt rather than a record about this patient.
 	 *         Named for the question the corpus asks rather than for the group, because the two are
 	 *         the same set only until someone has a reason to separate them, and one such reason was
-	 *         tried here and measured wrong (below). Group membership is the classifier's answer and
+	 *         tried here and measured wrong — the {@code safety_finding} subtraction this javadoc
+	 *         records. Group membership is the classifier's answer and
 	 *         never a type name, so a reference type added later is admitted without this class
 	 *         changing.
 	 *

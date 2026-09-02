@@ -62,8 +62,19 @@ public class ProjectInstructionsGuardTest {
 	 * 2026-08-31 trim; this allows roughly 20% of headroom for ordinary additions and fires
 	 * well before the file is back to a size nobody reads. Raising it is a decision: do it
 	 * here, in one commit, and say in the message what earned the space.
+	 *
+	 * <p><b>Raised from 85,000 to 86,000 for issue #348</b> (September 2026). The file stood at
+	 * 84,780 bytes, so ANY new rule tripped it, and #348 adds one: the REFERENT axis of a safety
+	 * finding's strength clause, plus the unit correction that keeps a sibling row from making a
+	 * proposed drug read as current therapy. What was paid for it first, rather than instead: the
+	 * EVIDENCE was pruned from four bullets of the same section — the caution-lead anchor's measured
+	 * division of labour, #283's contraindication-flip figures, the premise/conclusion history —
+	 * every sentence of it already carried verbatim by ADR Decision 37, which those bullets point at.
+	 * Measured: the file is 85,144 bytes at that commit, so the NET addition for two rules is 364.
+	 * Shaving further would have meant deleting DIRECTIVES, which is what this budget exists to
+	 * protect.
 	 */
-	private static final int MAX_INSTRUCTION_BYTES = 85_000;
+	private static final int MAX_INSTRUCTION_BYTES = 86_000;
 
 	/**
 	 * Where a cited symbol may be found. {@code eval/} is not decoration — the safety-probe

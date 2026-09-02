@@ -148,16 +148,16 @@ public class DrugReferenceInjector {
 	 * the order of a hundred characters against the 1500 this branch used to spend.
 	 *
 	 * <p><b>What the suite does and does not decide about it</b> (measured 2026-09-02 by mutating this
-	 * line and running {@code mvn -o clean test -pl api}). At 1 it reddens
-	 * {@code InjectedInteractionNoteCollapseTest.theDatasetTailNamesEachPartnerOnceToo} and
-	 * {@code .twoCuratedRowsIdentifyingOnePartnerByAtcAlsoRenderOnce},
-	 * {@code DrugReferenceInjectorTest.aSubFloorInteractionIsNotPromotedEvenWhenThePatientIsOnThatDrug}
-	 * {@code .withNoPatientRelevantPartnerTheDatasetTailStatesBreadthCompactlyMostSevereFirst} and
-	 * {@code .theUnpromotedTailStillPaysTheCharacterBudgetForRulesThatHaveNoNameToShortenTo}, and
-	 * {@code ReferenceRecordSubstanceCollapseTest.aSubstanceFiledAsFourRowsCostsNoMoreRecordsThanASingleRowDrug}
-	 * — a lower bound, and the entry-stripping argument above made concrete. That list was written
-	 * naming five of them and a re-run found six; read the failures rather than the list. At 3 the api
-	 * suite is green, so nothing in it distinguishes 3 from 5: do not read the value as pinned.
+	 * line and running {@code mvn -o clean test -pl api} from clean). At 1 the suite reddens — the
+	 * entry-stripping argument above, made concrete. At 3, 4 and 5 it is green. So the suite bounds
+	 * the value from below somewhere under 3 and does not distinguish 3 from 5: do not read 5 as
+	 * pinned.
+	 *
+	 * <p><b>Mutate the line and read the failures; do not trust a list of them.</b> An earlier version
+	 * of this paragraph enumerated the cases, and the enumeration went stale inside this very change —
+	 * giving {@link #SEVERITY_DESCENDING} its naming key moved a nameless rule to the back of the
+	 * tail, so a case that reddened at 1 before the key stopped reddening after it, while the comment
+	 * still named it.
 	 *
 	 * <p>A COUNT and not a budget, because the budget is still applied beside it: see {@code render}
 	 * for why both are needed.

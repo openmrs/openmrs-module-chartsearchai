@@ -10,9 +10,11 @@
 package org.openmrs.module.chartsearchai.reference;
 
 /**
- * How many drug pairs one question's PAIRWISE interaction check found, and how many of them it
- * reported — the statement a bounded safety list owes about its own bounds (issue
- * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/336">#336</a>).
+ * How many drug pairs one question's interaction check found, and how many of them it reported —
+ * the statement a bounded safety list owes about its own bounds (issue
+ * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/336">#336</a>), and the
+ * statement a COMPLETE one owes about being complete (issue
+ * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/356">#356</a>).
  *
  * <p>Before this existed, a screen that hit {@link DrugSafetyValidator#maxPairChips()} was
  * indistinguishable from a complete one: the withheld pairs were named in a WARN line and nowhere
@@ -28,19 +30,49 @@ package org.openmrs.module.chartsearchai.reference;
  * that is the cross-arm ledger of which pairs a pass has already chipped, and it has a
  * {@code reported} of its own meaning something different. This type counts; that one deduplicates.
  *
- * <p><b>It is about the PAIRWISE check and about nothing else.</b> Both arms that report it are
- * quadratic in a list this module does not choose and are the two the cap can truncate — the
- * question's own drugs checked against each other
+ * <p><b>THREE arms state it, one per question shape, and the population is one population.</b> Two
+ * of them are PAIRWISE, quadratic in a list this module does not choose, and are the two a cap can
+ * truncate — the question's own drugs checked against each other
  * ({@link DrugSafetyValidator#addQuestionPairInteractions}, issue #114) and, for a question that
  * names no drug and asks to be screened, the patient's active orders checked against each other
- * ({@link DrugSafetyValidator#addActiveOrderPairInteractions}, issue #113). Their gates are
- * mutually exclusive, so at most one of them runs per question and one extent can speak for both.
- * {@link #getReported()} is therefore <b>not</b> the number of {@code interaction} chips on the
- * response: {@code addInteractionWarnings} raises interaction chips of its own — one per matched
- * rule and one per class relationship, so several per drug in play — and appends them to the same
- * list, so a screening question whose ANSWER names a drug can carry more interaction chips than
- * this states pairs. A client rendering "10 of 18 shown" must
- * say what it is counting, or it publishes a ratio of two different populations.
+ * ({@link DrugSafetyValidator#addActiveOrderPairInteractions}, issue #113). The third is the
+ * drug-in-play arm ({@code DrugSafetyValidator.addInteractionWarnings}, issue #356), which checks a
+ * drug the QUESTION put in play against the patient's own medications — the canonical prescribing
+ * question, "can I give this patient X?". Until #356 that shape published no statement at all, so a
+ * completed negative screen and a question nobody screened were one value on the wire.
+ *
+ * <p><b>Which arm owns the field is decided by how many reference entries the question RESOLVED,
+ * not by how many drugs a clinician would say it named</b>, and the two come apart on the shipped
+ * knowledge base. A name that resolves to SEVERAL reference entries — a substance filed under more
+ * than one row, {@code Dexamethasone} beside
+ * {@code Dexamethasone (ophthalmic)}, or an alias family sharing an {@code rxnorm_name} — opens the
+ * question-pair arm, which then owns this field and states its own pair count. The drug-in-play arm
+ * still raises its chips, and they are not in that number. So a response CAN carry an above-floor
+ * interaction chip beside {@code found: 0}: the zero is honest about the check that stated it, and
+ * a client must not read it as a count of the chips beside it — which is the same warning
+ * {@link #getReported()} carries for the other direction.
+ *
+ * <p>What every one of them counts is the same thing: above-floor interaction RULES relating one
+ * drug to another. The drug-in-play arm's unrated class relationships — a shared ATC subgroup, a
+ * curated cross-reactivity group — are chips and are deliberately NOT counted here, because neither
+ * pairwise arm has a class leg at all and one wire key must not mean two things by question shape.
+ * The three differ in what they draw pairs FROM, exactly as the two pairwise arms already did.
+ *
+ * <p><b>Precedence, never a sum.</b> The two pairwise gates are mutually exclusive, so at most one
+ * of THEM runs per question; the drug-in-play arm can run beside either, and where a pairwise arm
+ * stated anything its statement stands alone. A pairwise statement is about a BOUNDED list, where
+ * {@code found} and {@code reported} may differ; the drug-in-play arm applies no cap and reports
+ * everything it relates. Summing the two into these two integers is the ratio of two different
+ * populations this type exists to stop, published by the producer instead of by the client.
+ *
+ * <p>{@link #getReported()} is therefore <b>not</b> the number of {@code interaction} chips on the
+ * response, and #356 widened rather than narrowed that gap: {@code addInteractionWarnings} raises
+ * interaction chips of its own — one per matched rule and one per class relationship, so several
+ * per drug in play — and appends them to the same list, while what it counts here is its rule chips
+ * for the QUESTION's own substances alone. So a response can carry interaction chips raised for a
+ * drug only the ANSWER named, class chips counted nowhere, and, on a screening question, chips from
+ * two arms while one of them speaks. A client rendering "10 of 18 shown" must say what it is
+ * counting, or it publishes a ratio of two different populations.
  *
  * <p><b>A candidate the screening arm cannot tell from one it already collected is not a pair it
  * found</b> (issue #339 review round 12). That arm collapses a chip whose every published field
@@ -48,16 +80,16 @@ package org.openmrs.module.chartsearchai.reference;
  * because a fixed-dose combination prescription is one co-medication carrying two rule partners —
  * and it does so where the candidate is COLLECTED, before the sort and before the cap, so the
  * restatement is absent from BOTH numbers here rather than counted as a pair found and withheld.
- * Two rules did fire; what {@code found} counts is what a reader could have been shown. * Two rules did fire; what {@code found} counts is what a reader could have been shown.
+ * Two rules did fire; what {@code found} counts is what a reader could have been shown.
  * {@code OneOrderNameAcrossOneResponseTest.aScreenOfACombinationPrescriptionStatesOneRelationshipOnce}
  * reads this extent through the same {@code Sink} {@code PairChipExtentContextTest} drives, so the
  * two agree about what the arity publishes: move the collapse to the emission loop and it reports
  * {@code found=2, reported=2} beside one chip, which is the ratio-of-two-populations claim issue
  * #336 exists to stop.
  *
- * <p><b>Zero is a measurement and absence is not.</b> An extent stating {@code found == 0} says a
- * pairwise arm ran and the reference data related none of the pairs it enumerated — a complete
- * screen, positively assertable, which is half of what this type exists for. No extent at all
+ * <p><b>Zero is a measurement and absence is not.</b> An extent stating {@code found == 0} says an
+ * arm ran and the reference data related none of the pairs it enumerated — a complete screen,
+ * positively assertable, which is half of what this type exists for. No extent at all
  * ({@code null} on the answer, {@code null} on the wire) says the producer stated no measurement.
  * This javadoc and {@code README.md}'s client-facing paragraph carry that list — the second because
  * it is the only one a frontend author reads — and everything else points here rather than
@@ -70,10 +102,15 @@ package org.openmrs.module.chartsearchai.reference;
  * is told apart by WHERE it is read rather than by this value:
  *
  * <ol>
- *   <li>no pairwise arm enumerated anything — the question named fewer than two reference drugs
- *       and did not ask to be screened, which is the ordinary case for most questions, or a
- *       global property gating those arms is off (the drug-reference feature, the answer
- *       validator, {@code warnOnInteractions});</li>
+ *   <li>no arm enumerated anything — the question resolved no reference drug AND did not ask to be
+ *       screened, which is the ordinary case for most questions, or it resolved one and the chart
+ *       records no medication to screen it against, or a global property gating those arms is off
+ *       (the drug-reference feature, the answer validator, {@code warnOnInteractions}). Both halves
+ *       of the first are needed: a question resolving no drug that DOES ask to be screened runs
+ *       {@link DrugSafetyValidator#addActiveOrderPairInteractions}, which states {@code of(0, 0)}
+ *       even over no orders at all. What #356 calls the row to get right is the other direction:
+ *       {@code found == 0} must mean SCREENED and related nothing, never "the drug could not be
+ *       resolved", so a drug only the ANSWER named states nothing on its own;</li>
  *   <li>{@code validate} threw and degraded to no warnings, its documented fail-safe — and the
  *       statement is published only on the normal return, so a degraded pass states nothing
  *       rather than describing chips that were discarded.</li>
@@ -103,21 +140,24 @@ public final class PairChipExtent {
 
 	/**
 	 * @param found how many above-floor candidate pairs the arm enumerated, before the cap cut
-	 * @param reported how many of them became chips, i.e. {@code min(found, maxPairChips())}
+	 * @param reported how many of them became chips — {@code min(found, maxPairChips())} from a
+	 *        pairwise arm, and equal to {@code found} from the uncapped drug-in-play arm
 	 */
 	static PairChipExtent of(int found, int reported) {
 		return new PairChipExtent(found, reported);
 	}
 
-	/** How many above-floor pairs the pairwise check found, before {@code maxPairChips()} cut. */
+	/** How many above-floor rule pairs the interaction check found, before {@code maxPairChips()}
+	 *  cut — nothing cuts the drug-in-play arm's, which is why its {@link #getReported()} equals it. */
 	public int getFound() {
 		return found;
 	}
 
 	/**
 	 * How many of those it reported as chips. For an extent a pairwise arm produced this is
-	 * {@code min(found, maxPairChips())} and so never greater than {@link #getFound()} — a property of
-	 * those two arms, not one this type enforces: {@link Sink#record} takes the two numbers it is
+	 * {@code min(found, maxPairChips())} and so never greater than {@link #getFound()}; for the
+	 * drug-in-play arm, which applies no cap, it is {@link #getFound()} itself. Either way a property
+	 * of the ARMS and not one this type enforces: {@link Sink#record} takes the two numbers it is
 	 * given. Stated this way because the type cannot keep the stronger promise, and an accessor
 	 * promising what nothing checks is how a client comes to render "1000 of 72 shown".
 	 */
@@ -131,7 +171,7 @@ public final class PairChipExtent {
 	}
 
 	/**
-	 * The one-slot accumulator a caller supplies to hear what the pairwise check found — the same
+	 * The one-slot accumulator a caller supplies to hear what the interaction check found — the same
 	 * idiom as the {@code List<SafetyWarning> warnings} accumulator
 	 * {@link DrugSafetyValidator#validate} already threads through its arms, one level up.
 	 *
@@ -139,34 +179,37 @@ public final class PairChipExtent {
 	 * so a field would be one slot shared by every concurrent request (issue #172). A pass with no
 	 * sink records nothing and costs nothing.
 	 *
-	 * <p><b>At most one record per pass</b>, because the two arms' gates are mutually exclusive
-	 * (see the class javadoc). A second record would mean two pairwise arms ran for one question,
-	 * which no gate allows; it overwrites rather than throwing, because {@code validate} is an
-	 * additive net whose failure mode is "no warnings" and an exception thrown here would drop
-	 * every chip on the request rather than one statement.
+	 * <p><b>At most one record per pass</b>, and that is a property of the CALLER rather than of the
+	 * gates: {@code validate} holds one local, the two mutually-exclusive pairwise arms assign it and
+	 * the drug-in-play arm assigns it only where they did not, and
+	 * {@code DrugSafetyValidator.recordPairExtent} writes it once on the normal return. A second
+	 * record would mean two arms spoke for one question; it overwrites rather than throwing, because
+	 * {@code validate} is an additive net whose failure mode is "no warnings" and an exception thrown
+	 * here would drop every chip on the request rather than one statement.
 	 */
 	public static final class Sink {
 
 		private PairChipExtent stated;
 
 		/**
-		 * States what the pairwise check found and reported. Public for the same reason the
+		 * States what the interaction check found and reported. Public for the same reason the
 		 * {@code List<SafetyWarning> warnings} accumulator one level up is a plain public list: the
 		 * sink belongs to the CALLER, which creates it and reads it back, and the arms merely write
 		 * into it. Production has exactly one writer — {@code DrugSafetyValidator.recordPairExtent},
-		 * which both pairwise arms go through — and a second producer anywhere would be the
+		 * which all three arms go through — and a second producer anywhere would be the
 		 * two-derivations-that-agree shape issue #151 records as failing silently and in one
 		 * direction.
 		 *
 		 * @param found how many above-floor candidate pairs the arm enumerated, before the cap cut
-		 * @param reported how many of them became chips, i.e. {@code min(found, maxPairChips())}
+		 * @param reported how many of them became chips — {@code min(found, maxPairChips())} from a
+		 *        pairwise arm, and equal to {@code found} from the uncapped drug-in-play arm
 		 */
 		public void record(int found, int reported) {
 			stated = PairChipExtent.of(found, reported);
 		}
 
 		/**
-		 * @return what the pairwise check stated, or {@code null} where it stated nothing — see the
+		 * @return what the interaction check stated, or {@code null} where it stated nothing — see the
 		 *         class javadoc, which enumerates what that covers
 		 */
 		public PairChipExtent stated() {

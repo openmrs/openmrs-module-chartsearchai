@@ -72,6 +72,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 64: A finding states which of this patient's own orders each substance it names was resolved from](#decision-64-a-finding-states-which-of-this-patients-own-orders-each-substance-it-names-was-resolved-from)
 - [Decision 65: The interaction check that runs on the prescribing question states its extent too](#decision-65-the-interaction-check-that-runs-on-the-prescribing-question-states-its-extent-too)
 - [Decision 66: A partner the chart names leads the injected record's dataset tail, whatever the source rates it](#decision-66-a-partner-the-chart-names-leads-the-injected-records-dataset-tail-whatever-the-source-rates-it)
+- [Decision 67: A question naming a drug CLASS is told so, rather than resolved to members the classification cannot honestly supply](#decision-67-a-question-naming-a-drug-class-is-told-so-rather-than-resolved-to-members-the-classification-cannot-honestly-supply)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -2651,7 +2652,7 @@ Three things this deliberately is not.
 
 **And `reconciledPartnerName`'s branch order is deliberately unchanged: `!namesADrug` is still asked first.** So this decision ADDS a guard and retires none. The two are independent and reach the same conclusion from different premises — the statement order makes an inconsistent pair harmless whatever produced it, the write path makes such a pair unconstructible — and Decision 39's condition list and `reconciledPartnerName`'s `<ol>` are both still in code order, so nothing here needs renumbering.
 
-**The reversal was implemented and then reverted, which is worth recording because the argument for it looked sound.** The reasoning was that with the branches as they are the write path changes nothing observable through the public pipeline (measured: the whole api suite, 0 failures, no expectation moved), so reversing them was what would make the invariant load-bearing and therefore testable at all. Review refuted both halves. The cost, as measured then (issue #293 has since retired it — `namesNamingOrder` now reads the naming order's DISPLAY, which a bare code fails, so the reversed state costs a code in the class sentence alone; re-measured, both sentences needs the pre-#293 predicate too, and the branch order stays on the defence-in-depth reason): reversed, an inconsistent pair reaches `namesNamingOrder` and can hand a bare ATC code to BOTH sentences of a folded chip — through `DrugReferenceInjector.renderFinding` into the prompt as citable `safety_finding` text — so the reversal spends a working defence-in-depth guard to buy coverage. And the coverage argument is false, because a behaviour-neutral rule can be pinned STRUCTURALLY: this repo already does exactly that in `ChartSearchAiReferenceGroundingWithholdingTest`, which reads every class file the controller compiles to and fails the build on a hardcoded resource-type name, "precisely because no behavioural assertion can see the rule it guards". So the write path is pinned the same way — see below — and the branch order stays.
+**The reversal was implemented and then reverted, which is worth recording because the argument for it looked sound.** The reasoning was that with the branches as they are the write path changes nothing observable through the public pipeline (measured: the whole api suite, 0 failures, no expectation moved), so reversing them was what would make the invariant load-bearing and therefore testable at all. Review refuted both halves. The cost, as measured then (issue #293 has since retired it — `namesNamingOrder` now reads the naming order's DISPLAY, which a bare code fails, so the reversed state costs a code in the class sentence alone; re-measured, both sentences needs the pre-#293 predicate too, and the branch order stays on the defence-in-depth reason): reversed, an inconsistent pair reaches `namesNamingOrder` and can hand a bare ATC code to BOTH sentences of a folded chip — through `DrugReferenceInjector.renderFinding` into the prompt as citable `safety_finding` text — so the reversal spends a working defence-in-depth guard to buy coverage. And the coverage argument is false, because a behaviour-neutral rule can be pinned STRUCTURALLY: this repo already does exactly that in `ChartSearchAiReferenceGroundingWithholdingTest`, which reads every class file the controller compiles to and fails the build on a hardcoded resource-type name. (The reason given here was that no behavioural assertion can see the rule it guards — stated as a quotation the test does not carry, and half true even then. Since [#354](https://github.com/openmrs/openmrs-module-chartsearchai/issues/354) added a third reference-group type, that test's behavioural sweep DOES see a hardcode that has fallen behind the classifier — measured, five of its cases redden on a `drug_class_note` citation; what stays invisible to it is a hardcode that still agrees with the classifier, which is what the scan is for.) So the write path is pinned the same way — see below — and the branch order stays.
 
 **How it is pinned.** `OrderPartnerNameSourceWritePathTest` (api, `…reference`) scans `DrugSafetyValidator.java`'s own source, with comments and string literals blanked out, and fails the build on two things: an assignment to `namingOrder` or `namesADrug` anywhere but inside `recordNameSource` (or a third assignment added beside the two expected ones, wherever it sits), and either of `recordNameSource`'s two statements assigning anything but the expression it must be — `namesADrug ? order : null` for the order, the parameter itself for the flag, compared with whitespace removed and nothing else normalized. The SOURCE and not the class files, unlike the precedent: that one's needle is a string constant, which javac inlines into the constant pool, whereas this needle is the LOCATION of an assignment — which method it sits in — and a class file answers that only through a bytecode parser this module does not have on its test classpath. `ArchitectureGuardTest` already establishes source scanning as the second structural mechanism here. Proved by mutation rather than by reasoning: adding a write in `nameByOrder` reddens the count assertion, which names the offending line; MOVING the `namingOrder` write out of `recordNameSource` while keeping the count at two reddens both the location assertion and the gate case's exactly-one precondition; and each of `this.namingOrder = order`, `order != null || namesADrug ? order : null`, `namesADrug || true ? order : null`, the inverted `namesADrug ? null : order` and a flag write that ignores its parameter (`this.namesADrug = true`) reddens a shape assertion. **A token check is not enough, and the first version of this guard used one.** It asserted only that the recorded order's expression NAMED `namesADrug`, which the second and third of those five satisfy while meaning `this.namingOrder = order` for every non-null order — the pre-#298 state, restored with a green build. Measured in round 2 of the PR's review, on `38b5b508`: api 1350 tests, 0 failures, for both. Which shape each channel catches is in the trade-offs below and in the guard's own javadoc; the short version is that the three shapes making the recorded order unconditional are seen by that class and by nothing else.
 
@@ -3935,7 +3936,7 @@ The answer is tokenised only after at least one cited reference record has been 
 
 ### What this cannot see
 
-- **A hardcode of the reference-group pair inside this check's own gate.** The gate asks `ChartSearchAiUtils.referenceGroup` rather than a type name, so a reference type added later is covered without this class changing. But two types enumerate the group exactly today, so an inline pair would leave the whole suite green until a THIRD reference-group type existed — the same measured blindness this repository already records of `isGroundingDemoteOnly` and `referenceSlice`. Nothing guards it here. Said rather than left to be inferred.
+- **A hardcode of the reference-group pair inside this check's own gate.** The gate asks `ChartSearchAiUtils.referenceGroup` rather than a type name, so a reference type added later is covered without this class changing. Nothing guards that, and — unlike `isGroundingDemoteOnly` and `referenceSlice`, whose blindness a third type did close — a third type did **not** close this one: issue #354 added `drug_class_note` and re-measured, and the inline pair still ships green, because no case drives a record of that type through this check. What would close it is such a case, not another type. Said rather than left to be inferred.
 - **A gap read as a sentence end.** An abbreviation dot, and under `mayEndASentence` any terminator at all, reads as one. Both bit-driven conditions are SILENCING, so it can only add silence — on the record side the "reproduced a sentence and moved on" exit, on the answer side the "stopped copying" one. A misread boundary therefore costs a report and never causes one. That argument rests on two things and neither is decoration: the predicate must be the weak one (above), and the boundary bit must NOT be part of word equality — were it, a record writing `"(e.g. chloroquine"` against an answer writing `"(e.g., chloroquine"` would break the reproduction and then report two IDENTICAL words as a substitution.
 - **A divergence inside the clauses `renderFinding` appends.** The record-sentence exit covers the SEAM, not the clause's interior: a reproduction running from the detail into the clause, or one inside the thirteen words of `STRENGTH_CAUTION`, is reported. Excluding it means teaching this check where a finding's own prose ends, which is `renderFinding`'s knowledge and would be a second copy of it. The first draft of this change proposed exactly that accessor and deleted it.
 - **A substitution inside a reproduction shorter than twelve words**, wherever it sits.
@@ -4333,3 +4334,205 @@ First-full-rest-compact states the source's sentence once and then states which 
 - **Whether the model then uses what the record now carries is not settled by any test here.** Every case runs the deterministic path — the real `injectRecords` over the pinned excerpt and over the shipped knowledge base — and the ticket's first two criteria are about the ANSWER. The record is the evidence; #337's own measurement history and the module's memory of mechanism text being paraphrased on a real chart are why that gap is named rather than closed by assertion.
 - **A record whose lead names a partner no chip stands behind is now reachable**, wherever nothing clears the floor. The promoted SET still corresponds exactly to the drug-in-play chips; what no longer follows from that correspondence is a claim about the record's first sentence. `orderedInteractionNotes`' own javadoc says so where it used to say the stronger thing.
 - **An ORDER-DRIVEN record is tiered like any other, and it is pinned rather than argued.** Such a record is injected because its subject is one of the patient's own active orders, with no interaction chip behind it, and `render` branches on nothing about why a record was collected. This decision twice stated a REASON why that could not be shown on the pinned excerpt — first that the order-driven leg was not reachable, then that the excerpt could not yield a filtered segment with enough members for the tiering to be visible — and a review pass falsified each in turn, the second by constructing the arrangement. So the explanation is gone and the case is here: `InjectedInteractionRelevanceOrderContextTest.anOrderDrivenRecordIsTieredLikeAnyOther`, which takes `OrderDrivenInjectionResolutionTest`'s own recipe, adds two of the excerpt's drugs that the subject rates Moderate against, and raises the floor so both are filtered. The general lesson is the cheaper one: after a second refuted claim of a kind, stop making claims of that kind.
+
+## Decision 67: A question naming a drug CLASS is told so, rather than resolved to members the classification cannot honestly supply
+
+**Context.** Issue #354. Question-driven resolution is substance-name matching end to end
+(`DrugReferenceService.findImpliedByQuery` → `findByQuery` → `DrugReference.matchesFoldedText` over
+each entry's aliases). A question naming a drug *class* — *"an oral contraceptive"*, *"a combined
+oral contraceptive pill"*, *"an NSAID"* — therefore resolves to nothing. `matchingEntries` collects
+nothing on either leg (`relatedToAny` is false for an empty `questionDrugs`, so the order leg is
+skipped too), `injectRecords` returns the chart unmodified, and the response carries
+`referenceSliceRecords: 0`. The module falls **silent** — indistinguishable, to a reader of the
+prompt, from a question that is not about drugs at all — while the knowledge base rates a Moderate
+Nevirapine pair against every oral-contraceptive substance it holds.
+
+The issue names two outcomes that count as fixed: resolve the class to its members and screen them,
+or state that the question named a class and ask for a specific drug.
+
+**Decision.** The second, in both its halves. A question that names a recognised drug class and
+resolves **no** substance injects one `drug_class_note` record naming the class, stating that the
+class was not resolved to any substance, and closing by asking that the question name a specific
+drug — the issue's own second half ("says the question named a class and asks for a specific drug"),
+without which a clinician asking the headline question is told only that the class reached nothing.
+It names
+no member of the class, and it denies nothing about what the response does carry — see the residues
+below. Nothing else changes: no chip arm, no candidate-set accessor, no prompt sentence.
+
+**Why the closing clause survives the scrutiny four earlier sentences failed** (they are recorded,
+with what refutes each, on `DrugReferenceInjector.renderDrugClassNote`). It is an IMPERATIVE about
+the QUESTION: it asserts nothing about what was screened, what the response carries, or how the
+module or its data is indexed, which is what each refuted sentence did, so no arrangement of this
+response can falsify it. It stops short of the promise a member-resolving version would make — "name
+a specific drug and it resolves" is false for any drug the loaded dataset does not carry, and the
+dataset is configurable. And it stays inside the record's two standing rules: it names no substance
+and it mentions no patient.
+
+**The note's words are pinned as a literal**, by
+`DrugClassQuestionNoteTest.theRenderedNoteIsExactlyTheseWords`. Every other case over this record
+asserts a substring — a refuted sentence absent, the class name present — and a substring guard is
+defeated by rewording rather than by deleting: measured 2026-09-02, appending a reworded version of
+the first two refuted sentences left all of them, and the whole build, green. A failure of that case
+means the record's citable prose changed and has to be read.
+
+**Why not resolve the class — measured, not argued.** The issue proposes the ATC hierarchy ("every
+substance above sits under `G03A*`"). Read off the shipped `ddi-knowledge-base.json` (2026-09-02,
+taking each entry's `atc` array directly rather than through any production predicate) that is wrong
+in both directions:
+
+- `Ethinylestradiol` (DDInter692), one of the three substances the issue itself names, is filed
+  `["G03CA01", "L02AA03"]`. It is not under `G03A`.
+- `G03A*` holds 8 entries, among them `Megestrol acetate` (`G03AC05`), whose indications are
+  oncological.
+
+So no ATC subtree expresses this class. A class resolved that way would put a substance's own label
+into a `safety_finding` that `DrugReferenceInjector.renderFinding` copies verbatim into citable
+evidence carrying `STRENGTH_WITHHOLD`, asserting a class membership false of the drug named — the
+shape Decision 63 records as reverted in issue #339's rounds 5-6.
+
+The sound alternative is a hand-curated clinical **membership** list per class. That is a
+knowledge-base deliverable rather than a module one, and Decision 34's criterion records what
+hand-picking such a list cost the last time it was tried here (issue #161's list, incomplete in a way
+that reproduced the defect it was fixing — issue #263). It would also inject one reference record per
+member against a budget that bounds no record **count**: `MAX_INTERACTION_RENDER_CHARS` is
+per-record, so N members cost N times it, which is the sibling complaint on issue #355.
+
+**The vocabulary: two sources, each because the other cannot serve its case.** A class the curated
+cross-reactivity groups already name is read from **that data** — `cross-reactivity-groups.json` is
+an operator-extensible class-name table with its own load-validity channel (Decision 48, issue #266),
+and the shipped seed's one group is named `NSAID`, which is one of the two classes this issue
+reports. `DrugClassTerms`' in-code table is the second source, and the two are INDEPENDENT rather
+than one being subordinate: it carries a class that file does not name at all, further **spellings**
+of one it does, and — deliberately — `NSAID` outright, the class the shipped group also names. Making
+that class conditional on some loaded group publishing the name was implemented and reverted within
+this change: `crossReactivityGroupsFilePath` is a supported configuration, so the condition returned
+this issue's own `an NSAID` case to pre-#354 silence, with nothing logged, on any deployment that
+curates its own groups file. The groups leg honours a vocabulary an operator has already curated; it
+does not license this one. A group is not a label — its `atcPrefixes` drive
+cross-reactivity contraindication chips and duplicate-class-therapy chips — so adding a group to make
+a word recognisable would assert pharmacological cross-reactivity across those prefixes; and for the
+contraceptive class there is no honest prefix set to add, which is the measurement above. The
+spellings are needed because the prose boundary rule allows zero trailing letters, so `NSAIDs` is not
+the term `NSAID`, and a group publishes one `name`.
+
+Admission to the code table is: it designates a class rather than any single substance; it resolves
+to no entry of the shipped knowledge base (a data guard through `findImpliedByQuery`, not a claim —
+binding the term the question is matched against AND the class name the record prints, the second by
+rendering the note the term produces and putting that back through the same accessor; guarding the
+terms alone left the printed column unguarded, and measured 2026-09-02 a value that is a drug name
+passes the whole build);
+and, where a curated group already publishes the same class, the duplication is deliberate rather
+than forbidden, for the reason above. Incompleteness is **monotone** — an
+unrecognised class term leaves the module exactly as silent as before — which is what makes a partial
+vocabulary safe, while a wrongly admitted term would have the module call a drug a class.
+
+**Why a third reference-group resource type.** `drug_class_note` stands for no reference *entry*, and
+`DrugReferenceInjector.referenceCharacters` is issue #163's per-entry character total; a note counted
+into it would inflate the figure that defect is read from with nothing failing. Its **text** still
+leads with `DrugReferenceInjector.REFERENCE_PREFIX`, so the system prompt's existing record-type
+sentence frames it without a clause of its own — which matters because the span between that sentence
+and the `Safety finding` one is pinned by `EndedOrderAnswerRuleTest`. The lead is a constant since
+this issue for the reason `FINDING_PREFIX` is one.
+
+**The statement is also published on the wire, and that was not the first plan.** The prompt record
+alone was, and it was measured insufficient: an injected record reaches a `/search` consumer only if
+the MODEL cites it — the response returns cited references and nothing else — and on the issue's own
+reproduction the model cited nothing and answered *"The records do not address starting an oral
+contraceptive for this patient."* Nothing a `/search` consumer reads reported the class at all; the
+only delta was `referenceSliceRecords 0 → 1` in the audit row, which that consumer cannot see. A partial fix invisible in production is also unverifiable in
+production, and the issue's own verification section says its criteria key off the **deterministic**
+parts of the response "never the answer's wording". So `ChartAnswer.getUnresolvedDrugClass()` carries
+the class name to a response key of the same name, present on the `/search` body and on both terminal
+SSE events — the surface [Decision 60](#decision-60-a-bounded-pairwise-interaction-list-states-its-own-bounds-on-the-response)
+established for the sibling failure, where a bounded chip list was indistinguishable from a complete
+one because nothing but the prose said so. The two remedies are not alternatives: the record is what
+lets the ANSWER say it, the key is what makes the module's own statement observable when the answer
+does not.
+
+**Read off the injected chart, never by asking the question again.** `ChartSearchAiUtils
+.unresolvedDrugClass(mappings)` returns the class note's `resourceUuid`, so the key is non-null
+exactly when the prompt carries the note — by construction rather than by two resolutions agreeing,
+which is the shape [Decision 58](#decision-58-the-pre-answer-pass-resolves-the-patients-active-orders-once-and-the-post-answer-pass-is-a-different-question)
+records issue #151 as. Re-asking `namedDrugClass` at a consumer would
+also be wrong on its own terms: that accessor is not self-gating, so it answers for a question that
+named a class AND resolved a substance, and it knows nothing about `injectFromQuery` being off.
+`LlmInferenceService` resolves it once per method, beside the reference slice and for the same
+reason, and sets it on every answer the method produces — the ungrounded one included, because under
+`grounding.async` the early `done` is the event a user sees. Unlike `interactionPairs`, which is
+legitimately `null` on that event because validation has not run, this is known before the model is
+called, so its absence there would be a defect.
+
+**Why one method writes it beside the chips.** `ChartSearchAiRestController.putModuleStatements`
+composes `putSafetyChips` with this key, and every emission surface calls it — the structural
+condition Decision 60 records, one payload site added later carrying the answer while dropping a
+deterministic safety statement. It composes rather than growing a third key inside `putSafetyChips`,
+which is named for the CHIPS and the completeness statement that must travel with them; the class
+note is neither. `ChartSearchAiUnresolvedDrugClassTest` fails the build on a second call to
+`putSafetyChips`, which is what forces the composition.
+
+**What this does NOT do, and what it is not evidence of.** The class is still not resolved, so the
+issue stays open: no chips, no `interactionPairs`, and the key names a class rather than putting
+substances in play. What the module publishes is what IT did; whether the answer PROSE relays the
+same thing is the model's, and `MEMORY`'s open note on the live model paraphrasing injected mechanism
+text is the reason not to assert it. So a client that renders only the answer text still sees what
+the issue's run saw: rendering the key is a change in `openmrs-esm-chartsearchai`, which this repo
+does not make — the same division of labour the client half of issue #201 is still waiting on.
+
+**Residues, named rather than claimed away.** The prose boundary rule does not collapse whitespace,
+so a question spelling a term with a double space or across a line break carries none. The note joins
+`ReferenceProseFidelityCheck`'s comparison set on the intended-success path, so a model that relays
+it and rewords the middle of a sentence WARNs — report-only, never reaching the wire. And the note
+fires on any recognised class term that resolved nothing, with no question-shape gate: a
+non-prescribing question naming a class ("is she on any NSAIDs?") gets one too. A gate on "the
+question proposes giving a drug" would be a second hand-picked vocabulary with nothing measured
+behind it, and was declined on that ground.
+
+**And that last residue has a consequence outside this feature, measured rather than reasoned.**
+[Decision 41's](#decision-41-a-composite-claims-negative-says-nothing-about-the-citation)
+composite-claim rule — a chart citation whose claim rests on a reference-group record has its
+entailment NEGATIVE withheld — is keyed on the reference **group**, so the note joins its trigger
+set. What is new is not that a reference-group record can be injected on a question resolving no
+substance: the order-driven contraindication arm (#143) has done that since it shipped, pinned by
+`ActiveOrderContraindicationTest.theFindingReachesThePromptAsACitableRecord`, whose question is
+*"What are her current medications?"*. Nor is a reference-group record on a question raising no chip: a
+plain dose question already injects a `drug_reference` and raises none. What is new is the two
+together — a record on a question that resolves no substance AND raises no chip. Driving the real `CitationGroundingVerifier.verify` with entailment on and the judge answering
+"no": a chart citation reads `grounded=false` with no note in the chart, and `null` both when the
+note is co-cited in the same sentence and when it is cited only through the structured array with no
+inline marker — the unanchored path, which counts toward every claim. So a mis-attributed chart
+citation on a question containing a class term renders unverified rather than *Unsupported*. Not
+re-keyed on a type name, which is the #122 mistake; stated in `CitationGroundingVerifier`'s own
+"what the rule does and does not reach" list so the reader of such a verdict knows what put it
+there.
+
+**Two further residues, both of the one gate.** The note is raised only where `questionDrugs` is
+empty — the question-driven leg RAN and resolved nothing — and that single conjunct leaves two
+arrangements reporting nothing about the class.
+
+- *A question naming a class **and** a resolvable drug.* *"Can I give her an NSAID with her
+  warfarin?"* resolves `warfarin`, so no note is injected and `unresolvedDrugClass` is `null`: this
+  issue's own silence, surviving on the class half of a realistic prescribing question. Pinned by
+  `DrugClassQuestionNoteTest.aQuestionNamingAClassAndAResolvableDrugRaisesNoNote`, whose argument
+  covers only why the class must not DISPLACE the resolved drug — not why the module stays silent
+  about it. Widening is not a loosened conjunct but a contract change in two places, which is why it
+  is not taken here: the wire key's published contract makes `null` cover "a question that named one
+  *and* resolved a substance" (README's `unresolvedDrugClass` section), so a non-null key beside
+  resolved substances is a new reading a client has not been told to expect; and the note's own words
+  — "the class was not resolved to any substance" — would then sit one record after a
+  `drug_reference` for the drug that DID resolve, where a reader takes "not resolved" for a statement
+  about the response rather than about the class alone, which is the failure mode the four refuted
+  sentences above all had. Fail-closed in the meantime: the module says less, never something false.
+
+- *An inert or failed entry dataset.* `findImpliedByQuery` returns empty for every question in that
+  state — the issue #149 state `getLoadStatus()` exists to report — so a class-term question raises
+  the note and publishes the key there too, attributing the miss to the class when nothing at all
+  could have resolved. The statement stays true (no entries, so the class was resolved to none of
+  them), but its first clause is then a non-sequitur rather than an answer: this is the one
+  arrangement where the record's wording is weak without being false. Not gated on load status,
+  because that gate returns a class question to pre-#354 silence in exactly the state #149 exists to
+  make LOUD, and the loader's own channel (`DrugReferenceLoad.getFindings()`, `GET
+  /chartsearchai/drugreferencestatus`, Decision 48) is where the real cause is already reported —
+  reporting it a second time in citable reference prose would be this module telling a model about
+  its own configuration.
+  `DrugClassQuestionNoteTest.aClassQuestionStillGetsItsNoteWhereTheEntryDatasetIsInert` pins the
+  arrangement, so a gate added later reddens against this paragraph rather than passing unread.

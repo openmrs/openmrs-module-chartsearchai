@@ -128,6 +128,13 @@ public class LlmInferenceService implements ChartSearchService {
 			// answer because by audit-write time this chart is gone.
 			ChartSearchAiUtils.ReferenceSlice referenceSlice =
 					ChartSearchAiUtils.referenceSlice(chart.getMappings());
+			// And, off the same chart, the drug class the module reports as named-but-unresolved
+			// (issue #354). Read off the injected chart rather than by asking the question again, so
+			// the wire statement and the prompt record cannot disagree — the reason is at
+			// ChartSearchAiUtils.unresolvedDrugClass. It is carried because a prompt record only
+			// reaches a client if the model cites it, which on the issue's own reproduction it did
+			// not.
+			String unresolvedDrugClass = ChartSearchAiUtils.unresolvedDrugClass(chart.getMappings());
 			buildMs = System.currentTimeMillis() - buildStart;
 
 			long llmStart = System.currentTimeMillis();
@@ -156,7 +163,7 @@ public class LlmInferenceService implements ChartSearchService {
 			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
-					pairExtent.stated());
+					pairExtent.stated(), unresolvedDrugClass);
 			outcome = "ok";
 			return answer;
 		}
@@ -402,6 +409,11 @@ public class LlmInferenceService implements ChartSearchService {
 			// point of the number — see the same pair in search() above.
 			ChartSearchAiUtils.ReferenceSlice referenceSlice =
 					ChartSearchAiUtils.referenceSlice(chart.getMappings());
+			// The class statement too, one resolution for both answers this method produces and for
+			// the same reason (issue #354). Both need it, and the ungrounded one especially: with
+			// async grounding the early "done" is emitted from THAT answer, so a statement set only
+			// on the returned one would be absent from the event the user actually sees.
+			String unresolvedDrugClass = ChartSearchAiUtils.unresolvedDrugClass(chart.getMappings());
 			buildMs = System.currentTimeMillis() - buildStart;
 
 			// Progressive reasoning: stream a fast preview reasoning from the focused top-K chart to
@@ -440,7 +452,7 @@ public class LlmInferenceService implements ChartSearchService {
 			ungroundedAnswerConsumer.accept(new ChartAnswer(response.getAnswer(), cited,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), Collections.<SafetyWarning> emptyList(), searchMode,
-					referenceSlice));
+					referenceSlice, null, unresolvedDrugClass));
 
 			// After the user-visible handoff, before grounding: two exact comparisons over what the
 			// answer states about the records it cites — the class-code defects a set-membership
@@ -471,7 +483,7 @@ public class LlmInferenceService implements ChartSearchService {
 			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
-					pairExtent.stated());
+					pairExtent.stated(), unresolvedDrugClass);
 			outcome = "ok";
 			return answer;
 		}

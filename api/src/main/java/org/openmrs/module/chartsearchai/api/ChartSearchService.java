@@ -226,6 +226,8 @@ public interface ChartSearchService {
 
 		private final PairChipExtent pairChipExtent;
 
+		private final String unresolvedDrugClass;
+
 		public ChartAnswer(String answer, List<RecordReference> references) {
 			this(answer, references, 0, 0, 0);
 		}
@@ -266,6 +268,15 @@ public interface ChartSearchService {
 				int inputTokens, int outputTokens, int cachedTokens,
 				List<SafetyWarning> safetyWarnings, String searchMode,
 				ChartSearchAiUtils.ReferenceSlice referenceSlice, PairChipExtent pairChipExtent) {
+			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, searchMode,
+					referenceSlice, pairChipExtent, null);
+		}
+
+		public ChartAnswer(String answer, List<RecordReference> references,
+				int inputTokens, int outputTokens, int cachedTokens,
+				List<SafetyWarning> safetyWarnings, String searchMode,
+				ChartSearchAiUtils.ReferenceSlice referenceSlice, PairChipExtent pairChipExtent,
+				String unresolvedDrugClass) {
 			this.answer = answer;
 			this.references = java.util.Collections.unmodifiableList(
 					new java.util.ArrayList<>(references));
@@ -278,6 +289,7 @@ public interface ChartSearchService {
 			this.searchMode = searchMode;
 			this.referenceSlice = referenceSlice;
 			this.pairChipExtent = pairChipExtent;
+			this.unresolvedDrugClass = unresolvedDrugClass;
 		}
 
 		/**
@@ -425,6 +437,41 @@ public interface ChartSearchService {
 		 */
 		public PairChipExtent getPairChipExtent() {
 			return pairChipExtent;
+		}
+
+		/**
+		 * The drug CLASS this answer's question named and that the module resolved to no substance —
+		 * what the {@code unresolvedDrugClass} key on the {@code /search} response and on the
+		 * {@code done} and {@code grounded} SSE events publishes (issue
+		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/354">#354</a>).
+		 *
+		 * <p><b>Why the module states it rather than leaving it to the answer.</b> #354's second
+		 * blessed outcome is that the module says the question named a class and asks for a specific
+		 * drug, and the deterministic half of that is a {@code drug_class_note} record in the prompt.
+		 * A prompt record reaches a client only if the model cites it, and on the issue's own
+		 * reproduction it did not: the injection was real, the answer relayed none of it, and the only
+		 * delta anywhere was an audit-log column no {@code /search} consumer can read.
+		 * A safety statement that is only as reliable as the wording of a generated answer is the
+		 * failure {@code getPairChipExtent()} exists for, one surface over; this is the same remedy.
+		 *
+		 * <p>The producer states it and no consumer derives it: {@code LlmInferenceService} reads it
+		 * once per method off the post-inject chart, through
+		 * {@link ChartSearchAiUtils#unresolvedDrugClass}, and sets it on every answer that method
+		 * produces — the ungrounded one included, because the early {@code done} event is emitted from
+		 * that answer and is what the user sees. Re-asking
+		 * {@code DrugReferenceService.namedDrugClass} at a consumer would be a second resolution that
+		 * can disagree with the prompt; that argument is at the accessor.
+		 *
+		 * <p><b>Null is the absence of a statement and not a denial.</b> It covers a question naming
+		 * no class, a question that named one AND resolved a substance (where there is nothing
+		 * unresolved to report), and the drug-reference feature being off. Unlike
+		 * {@link #getReferenceSlice()} there is no measured zero to distinguish from it, because the
+		 * statement here is purely positive.
+		 *
+		 * @return the class name the module could not resolve, or null where it states none
+		 */
+		public String getUnresolvedDrugClass() {
+			return unresolvedDrugClass;
 		}
 	}
 

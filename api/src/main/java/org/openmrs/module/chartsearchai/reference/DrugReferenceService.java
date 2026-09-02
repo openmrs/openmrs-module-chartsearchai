@@ -1212,6 +1212,56 @@ public class DrugReferenceService {
 	}
 
 	/**
+	 * Which drug CLASS this question names, when it names one — {@code "oral contraceptive"},
+	 * {@code "NSAID"} — or {@code null} where it names none (issue #354). The vocabulary and the two
+	 * sources behind it are {@link DrugClassTerms}; what belongs HERE is what the answer may and may
+	 * not be used for.
+	 *
+	 * <p><b>It asks nothing of the dataset's ENTRIES, so it is not self-gating.</b> A question naming
+	 * both a class and a drug this dataset resolves answers with the class, and the caller is what
+	 * decides whether that matters: {@code DrugReferenceInjector.injectRecords} raises its note only
+	 * where {@code findImpliedByQuery} came back empty. A second caller written as though this method
+	 * had asked that question would report a class over a drug the module did resolve —
+	 * {@code DrugClassQuestionNoteTest.aQuestionNamingAClassAndAResolvableDrugRaisesNoNote} is that
+	 * case, and it drives the injector rather than this method for exactly that reason.
+	 *
+	 * <p><b>And a CONSUMER of the response never asks it.</b> What the {@code unresolvedDrugClass}
+	 * response key states is read off the injected chart by
+	 * {@link org.openmrs.module.chartsearchai.ChartSearchAiUtils#unresolvedDrugClass}, precisely
+	 * because this method is not self-gating and knows nothing of {@code injectFromQuery}: asking it
+	 * again at the wire would publish a class for a question the module did resolve a substance for,
+	 * and would be a second resolution of one question that can disagree with the prompt (issue
+	 * #151's shape). The sole production caller stays {@code DrugReferenceInjector.injectRecords}.
+	 *
+	 * <p><b>It answers with a class NAME and never a member set, deliberately.</b> A caller may report
+	 * that the question named a class; it may NOT read the answer as putting substances in play. The
+	 * candidate-set accessors are {@link #findImpliedByQuery} and {@link #findImpliedByDrugName} and
+	 * this is not a third one — it resolves nothing, so a chip arm handed its answer has no subject,
+	 * no severity and no partner.
+	 *
+	 * <p><b>Why the class is not resolved to its members, which is the whole of issue #354's design
+	 * decision.</b> The ATC hierarchy the issue proposes does not express these classes — measured in
+	 * both directions on the shipped knowledge base, and recorded ONCE, with its figures and its date,
+	 * in ADR Decision 67 rather than restated here. A class resolved that way would put a substance's
+	 * own label into a {@code safety_finding} that {@code DrugReferenceInjector.renderFinding} copies
+	 * verbatim into citable evidence carrying {@code STRENGTH_WITHHOLD}, asserting a class membership
+	 * false of the drug named — the shape CLAUDE.md records as reverted in issue #339's rounds 5-6.
+	 * The sound alternative, a hand-curated clinical MEMBERSHIP list, is a knowledge-base deliverable
+	 * rather than a module one, and CLAUDE.md's ATC-subgroup bullet records what hand-picking one cost
+	 * last time.
+	 *
+	 * <p><b>Why it lives here and not in {@code QueryScopeRouter}.</b> That class owns enumeration
+	 * INTENT and forbids a second drug vocabulary for it. This is not intent: what a question's drug
+	 * words denote is already resolved here, by {@link #findImpliedByQuery}, and this is that same
+	 * question asked one rung wider — the rung at which the answer is a class rather than a substance.
+	 *
+	 * @param question the clinician's query; {@code null} or blank names no class
+	 */
+	public String namedDrugClass(String question) {
+		return DrugClassTerms.namedIn(question, getCrossReactivityGroups());
+	}
+
+	/**
 	 * @return the outcome of the cross-reactivity groups load that is IN FORCE — see
 	 *         {@link CrossReactivityGroupsLoad}. Triggers the (lazy) load when the feature is enabled and
 	 *         nothing has loaded yet; reports {@link CrossReactivityGroupsLoad#notLoaded()} without

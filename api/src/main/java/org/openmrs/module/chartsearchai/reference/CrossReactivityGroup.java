@@ -42,8 +42,20 @@ public class CrossReactivityGroup {
 		return name;
 	}
 
+	/**
+	 * Stores the name TRIMMED, since issue #354 — the sole writer, so a padded operator-authored name
+	 * cannot reach any reader.
+	 *
+	 * <p>At the producer and not at each reader, which is the same placement and the same reason
+	 * {@link DrugReference#setAliases} trims: this name is PRINTED by the chip arms
+	 * ({@code DrugSafetyValidator}'s cross-reactivity and duplicate-class sentences) and, since #354,
+	 * REPORTED as a class by {@code DrugClassTerms}, and those two surfaces co-occur in one response.
+	 * Trimming at one reader would have named one family two ways in one answer; trimming at each
+	 * reader is the same rule written twice. The loader's own blank check is unaffected — a
+	 * whitespace-only name trims to the empty string, which it still rejects.
+	 */
 	public void setName(String name) {
-		this.name = name;
+		this.name = name == null ? null : name.trim();
 	}
 
 	public String getNote() {

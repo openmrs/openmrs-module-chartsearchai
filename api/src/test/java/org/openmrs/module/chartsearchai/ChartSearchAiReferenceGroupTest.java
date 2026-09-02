@@ -194,21 +194,15 @@ public class ChartSearchAiReferenceGroupTest {
 	 * of an assembled chart is module-supplied reference material, and that figure is what the audit
 	 * row publishes as this module's share of the prompt.
 	 *
-	 * <p><b>What this sweep does and does not reach — measured, because the obvious reading is wrong.</b>
-	 * It does NOT catch a re-hardcode inside {@code referenceSlice} today: an inline
-	 * {@code RESOURCE_TYPE_DRUG_REFERENCE || RESOURCE_TYPE_SAFETY_FINDING} comparison put back into
-	 * that method leaves this case, {@code InjectedReferenceSliceTest} and the whole build green,
-	 * because that pair currently enumerates the reference group exactly. This is the same limit
-	 * {@code CLAUDE.md} already records for {@link ChartSearchAiUtils#isGroundingDemoteOnly}, and
-	 * nothing in this suite closes it. What the sweep DOES reach is the moment the omission starts to
-	 * matter. Two types are recorded as reference material below, so a hardcoded pair diverges from the
-	 * classification on the THIRD: such a constant is counted by the delegating implementation and
-	 * missed by the hardcode, so a hardcode that is invisible today fails HERE on the commit that adds
-	 * that type — rather than shipping a cost figure that silently under-reports, which is the #122
-	 * shape one consumer along. Measured both ways: with the hardcode in place the whole suite is
-	 * green, and adding a third reference-material constant reddens this case with
-	 * {@code expected: <1> but was: <0>}. {@code ChartSearchAiReferenceGroundingWithholdingTest} says
-	 * "a third reference-group type" of the same mechanism for its own guard.
+	 * <p><b>What this sweep reaches — and it reaches more since issue #354 than when it was written.</b>
+	 * It was written against a knowledge base with exactly two reference-material types, where an
+	 * inline {@code RESOURCE_TYPE_DRUG_REFERENCE || RESOURCE_TYPE_SAFETY_FINDING} comparison put back
+	 * into {@code referenceSlice} enumerated the group exactly and so left the whole build green; the
+	 * paragraph here said as much, and said this case would fail on the commit that added a third.
+	 * #354 added one ({@code drug_class_note}) and that is what happened: measured on it, the inline
+	 * pair reddens this case with {@code expected: <1> but was: <0>}. Do not read that as covering the
+	 * neighbouring sites too — what each hardcode reddens differs, and the honest instruction is to
+	 * mutate the site being changed and read the failures.
 	 *
 	 * <p>Asserted against the group each constant is RECORDED as, for the same reason the demote-only
 	 * sweep is: measuring against {@code referenceGroup}'s own answer would let a classifier bug
@@ -284,6 +278,11 @@ public class ChartSearchAiReferenceGroupTest {
 		// (which is why it is not a drug_reference record — the system prompt tells the model those are
 		// NOT the patient's data), but it is still module-supplied material, so it presents as reference.
 		expected.put("RESOURCE_TYPE_SAFETY_FINDING", ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE);
+
+		// Issue #354. Module-supplied prose about the QUESTION — it names a drug class the reference
+		// ENTRIES are not indexed by — so it points at no record of this patient and is reference material
+		// for the same reason a knowledge-base entry is.
+		expected.put("RESOURCE_TYPE_DRUG_CLASS_NOTE", ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE);
 		// Module-INJECTED but NOT module-supplied, the one combination this classification has to get
 		// right in both directions: an active_drug_order record is the patient's own active order,
 		// read from OrderService when the retrieved chart carries no drug-order record for it

@@ -664,6 +664,24 @@ public class ChartSearchAiConstants {
 	public static final String RESOURCE_TYPE_ACTIVE_DRUG_ORDER = "active_drug_order";
 
 	/**
+	 * The module's statement that the QUESTION named a drug CLASS no reference ENTRY is indexed by,
+	 * injected pre-answer so the prompt carries what was NOT screened rather than nothing at all
+	 * (issue #354).
+	 *
+	 * <p>Module-supplied reference prose like {@link #RESOURCE_TYPE_DRUG_REFERENCE}, and grouped with
+	 * it for the same reason — it points at no record of this patient, and a cosine pass comparing
+	 * module-rendered prose against itself can vouch for nothing. Its own type rather than
+	 * {@code drug_reference} because it stands for no reference ENTRY:
+	 * {@code DrugReferenceInjector.referenceCharacters} is issue #163's per-entry character total, and
+	 * a note counted into it would inflate the figure that defect is read from with nothing failing.
+	 *
+	 * <p>What it shares with {@code drug_reference} is the prompt-facing LEAD
+	 * ({@code DrugReferenceInjector.REFERENCE_PREFIX}) and not the type, so the system prompt's
+	 * record-type sentence covers it without a clause of its own.
+	 */
+	public static final String RESOURCE_TYPE_DRUG_CLASS_NOTE = "drug_class_note";
+
+	/**
 	 * Wire value of a serialized reference's {@code group}: a record retrieved from THIS
 	 * patient's chart. Evidence about the patient, citable as such.
 	 */
@@ -671,7 +689,8 @@ public class ChartSearchAiConstants {
 
 	/**
 	 * Wire value of a serialized reference's {@code group}: module-supplied reference prose (a drug
-	 * knowledge-base entry, or a finding derived from one), not a record about this patient. Kept
+	 * knowledge-base entry, a finding derived from one, or this module's statement that the question
+	 * named a drug CLASS it holds no entry for), not a record about this patient. Kept
 	 * visible precisely so a client can disclose that provenance rather than let it read as chart
 	 * evidence. A citation in this group is additionally never grounding-verified as {@code true},
 	 * being demote-only (see {@code CitationGroundingVerifier}) — a property of the GROUP since issue

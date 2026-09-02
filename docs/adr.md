@@ -4311,3 +4311,18 @@ fires on any recognised class term that resolved nothing, with no question-shape
 non-prescribing question naming a class ("is she on any NSAIDs?") gets one too. A gate on "the
 question proposes giving a drug" would be a second hand-picked vocabulary with nothing measured
 behind it, and was declined on that ground.
+
+**And that last residue has a consequence outside this feature, measured rather than reasoned.**
+[Decision 41's](#decision-41-a-composite-claims-negative-says-nothing-about-the-citation)
+composite-claim rule — a chart citation whose claim rests on a reference-group record has its
+entailment NEGATIVE withheld — is keyed on the reference **group**, so the note joins its trigger
+set. Until now every reference-group record required a question that resolved a substance, i.e. the
+drug-safety answer that rule was measured on; the note is raised on plain retrospective questions
+too. Driving the real `CitationGroundingVerifier.verify` with entailment on and the judge answering
+"no": a chart citation reads `grounded=false` with no note in the chart, and `null` both when the
+note is co-cited in the same sentence and when it is cited only through the structured array with no
+inline marker — the unanchored path, which counts toward every claim. So a mis-attributed chart
+citation on a question containing a class term renders unverified rather than *Unsupported*. Not
+re-keyed on a type name, which is the #122 mistake; stated in `CitationGroundingVerifier`'s own
+"what the rule does and does not reach" list so the reader of such a verdict knows what put it
+there.

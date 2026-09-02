@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport.ctx;
 import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport.ddinterService;
+import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport.injectedClassNotes;
 import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport.injector;
 import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport.oneRecordChart;
 import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport.set;
@@ -21,7 +22,6 @@ import org.junit.jupiter.api.Test;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
-import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
@@ -47,24 +47,16 @@ public class DrugClassNoteInjectionToggleTest extends BaseModuleContextSensitive
 				ctx(34, null, set("warfarin 5mg"), set("B01AA03"), null, null), CLASS_QUESTION);
 	}
 
-	private static boolean carriesAClassNote(PatientChart chart) {
-		for (RecordMapping mapping : chart.getMappings()) {
-			if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_CLASS_NOTE.equals(mapping.getResourceType())) {
-				return true;
-			}
-		}
-		return false;
-	}
 
 	@Test
 	public void theNoteIsRaisedWhileTheQuestionDrivenLegIsOn() {
-		assertTrue(carriesAClassNote(injectWithQueryLeg("true")),
+		assertTrue(!injectedClassNotes(injectWithQueryLeg("true")).isEmpty(),
 				"the premise: with the question leg on, this question raises the note");
 	}
 
 	@Test
 	public void theNoteIsNotRaisedWhereTheQuestionDrivenLegIsOff() {
-		assertFalse(carriesAClassNote(injectWithQueryLeg("false")),
+		assertFalse(!injectedClassNotes(injectWithQueryLeg("false")).isEmpty(),
 				"the note is the question leg's own material, so it must stand down with that leg");
 	}
 }

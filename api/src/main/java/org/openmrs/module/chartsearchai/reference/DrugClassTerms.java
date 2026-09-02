@@ -35,10 +35,8 @@ import java.util.Set;
  * duplicate-class-therapy chips, through {@link CrossReactivityGroup#groupsOf} and
  * {@link CrossReactivityGroup#sharedGroup} — so adding a group to make a word recognisable asserts
  * pharmacological cross-reactivity across those prefixes. And for the issue's headline class there
- * is no honest prefix set to add: measured over the shipped knowledge base (2026-09-02, reading each
- * entry's {@code atc} array), {@code Ethinylestradiol} is filed {@code G03CA01}/{@code L02AA03} and
- * so sits OUTSIDE {@code G03A}, while {@code G03A} holds {@code Megestrol acetate}, whose
- * indications are oncological. No ATC subtree expresses "oral contraceptive".
+ * is no honest prefix set to add at all; the measurement that establishes it is at
+ * {@link DrugReferenceService#namedDrugClass}, and is not repeated here.
  *
  * <p><b>Why a further spelling has to live here rather than in that file.</b> The boundary rule is
  * {@link DrugReference#containsWord}, whose prose allowance is zero trailing letters, so
@@ -67,8 +65,11 @@ import java.util.Set;
 final class DrugClassTerms {
 
 	/**
-	 * Term → the class name a note reports it as. Insertion-ordered for readability only; the
-	 * resolution below takes the LONGEST match, so order decides nothing.
+	 * Term → the class name a note reports it as, which is the class the QUESTION named and never a
+	 * wider or narrower one: {@code hormonal contraceptive} is not a spelling of {@code oral
+	 * contraceptive} but a different class, so it reports itself. The value column exists for the
+	 * genuine spellings beside it. Insertion-ordered; where two terms of the same length are both
+	 * carried the order does decide, which is the residue {@link #namedIn} states.
 	 *
 	 * <p>Two classes, and both are the issue's. The contraceptive terms are here because no ATC
 	 * subtree expresses that class (above). The NSAID terms are spellings only — the class itself is
@@ -90,8 +91,8 @@ final class DrugClassTerms {
 		terms.put("contraceptive pills", "oral contraceptive");
 		terms.put("birth control pill", "oral contraceptive");
 		terms.put("birth control pills", "oral contraceptive");
-		terms.put("hormonal contraceptive", "oral contraceptive");
-		terms.put("hormonal contraceptives", "oral contraceptive");
+		terms.put("hormonal contraceptive", "hormonal contraceptive");
+		terms.put("hormonal contraceptives", "hormonal contraceptive");
 		terms.put("nsaids", "NSAID");
 		terms.put("non-steroidal anti-inflammatory", "NSAID");
 		terms.put("nonsteroidal anti-inflammatory", "NSAID");
@@ -124,9 +125,10 @@ final class DrugClassTerms {
 	 * @param prose the question text; {@code null} carries no term
 	 * @param groups the curated cross-reactivity groups, whose {@code name}s are the first source —
 	 *        never null in production ({@code DrugReferenceService.getCrossReactivityGroups} answers a
-	 *        list), and tolerated as null here so the rule can be read without one. A BLANK name is
-	 *        not guarded against for the same reason: {@code CrossReactivityGroupsLoader} drops a
-	 *        group whose name is blank before it can reach this list
+	 *        list), and tolerated as null here so the rule can be read without one. A name is TRIMMED
+	 *        before it is matched: {@code CrossReactivityGroupsLoader} rejects only a blank one, so a
+	 *        padded name reaches this list and would otherwise be unmatchable under the prose rule's
+	 *        left boundary while driving chips everywhere else
 	 */
 	static String namedIn(String prose, List<CrossReactivityGroup> groups) {
 		if (prose == null || prose.trim().isEmpty()) {
@@ -136,7 +138,11 @@ final class DrugClassTerms {
 		String bestClass = null;
 		if (groups != null) {
 			for (CrossReactivityGroup group : groups) {
-				String name = group == null ? null : group.getName();
+				// Trimmed: the loader rejects only a BLANK name, so " NSAID" loads and drives chips
+				// everywhere else while the prose rule's left boundary makes it unmatchable here — the
+				// same shape issue #296's alias trim closed. Untrimmed, an operator sees the group work
+				// and never gets a class note for it, with nothing logged.
+				String name = group == null ? null : trimmedToNull(group.getName());
 				if (name != null && longerThan(name, bestTerm) && DrugReference.containsWord(prose, name)) {
 					bestTerm = name;
 					bestClass = name;
@@ -157,5 +163,15 @@ final class DrugClassTerms {
 	 *  loops above cannot express it differently. */
 	private static boolean longerThan(String candidate, String matched) {
 		return matched == null || candidate.length() > matched.length();
+	}
+
+	/** @return {@code value} without leading or trailing whitespace, or {@code null} where nothing is
+	 *          left — what the group loop takes an operator-supplied name as. */
+	private static String trimmedToNull(String value) {
+		if (value == null) {
+			return null;
+		}
+		String trimmed = value.trim();
+		return trimmed.isEmpty() ? null : trimmed;
 	}
 }

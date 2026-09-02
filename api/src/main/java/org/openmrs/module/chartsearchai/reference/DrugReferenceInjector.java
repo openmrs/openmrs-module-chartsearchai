@@ -74,13 +74,14 @@ import org.springframework.stereotype.Service;
  * are the reference-group ones — so classifying a new injected type here also puts it into the
  * figure an operator reads as this module's share of the context window.
  *
- * <p>Three kinds are injected today, and they are not all module-supplied: a
- * {@code drug_reference} entry and a {@code safety_finding} present as reference material, while an
- * {@link ChartSearchAiConstants#RESOURCE_TYPE_ACTIVE_DRUG_ORDER} record is the patient's own active
- * order (read from {@code OrderService} when the chart cannot substantiate it — see
- * {@link #unrepresentedActiveOrders}) and so deliberately presents as chart evidence. For that one
- * the fail-safe default happens to be the correct classification; the decision is recorded
- * explicitly in the guard test rather than left to the default.
+ * <p>The kinds injected today are not all module-supplied: a {@code drug_reference} entry, a
+ * {@code safety_finding} and, since issue #354, a {@code drug_class_note} present as reference
+ * material, while an {@link ChartSearchAiConstants#RESOURCE_TYPE_ACTIVE_DRUG_ORDER} record is the
+ * patient's own active order (read from {@code OrderService} when the chart cannot substantiate it —
+ * see {@link #unrepresentedActiveOrders}) and so deliberately presents as chart evidence. For that
+ * one the fail-safe default happens to be the correct classification; the decision is recorded
+ * explicitly in the guard test rather than left to the default. Read the list off that guard's own
+ * recorded decisions rather than off this sentence, which is prose and can go stale.
  *
  * <p>Matching is deterministic and age-gated:
  * <ul>
@@ -453,10 +454,15 @@ public class DrugReferenceInjector {
 		// notice than to justify.
 		if (log.isDebugEnabled()) {
 			ChartSearchAiUtils.ReferenceSlice slice = ChartSearchAiUtils.referenceSlice(mappings);
-			log.debug("Injected {} active-order, {} drug-reference ({} chars) and {} safety-finding "
-					+ "record(s) — reference slice {} record(s), {} chars — into chart for question '{}'",
+			// The class note is enumerated beside the other three since issue #354, for the reason the
+			// paragraph above gives: it is counted into the SLICE, so leaving it out of the enumeration
+			// leaves an operator reading a non-zero slice with every named count at zero and no name for
+			// the difference.
+			log.debug("Injected {} active-order, {} drug-reference ({} chars), {} safety-finding and {} "
+					+ "drug-class-note record(s) — reference slice {} record(s), {} chars — into chart "
+					+ "for question '{}'",
 					unrepresented.size(), matched.size(), referenceCharacters(mappings), findings.size(),
-					slice.getRecords(), slice.getCharacters(), question);
+					namedClass == null ? 0 : 1, slice.getRecords(), slice.getCharacters(), question);
 		}
 		PatientChart injected = new PatientChart(text.toString(), Collections.unmodifiableList(mappings),
 				chart.getFocusIndices());

@@ -14,17 +14,18 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport.activeOrder;
+import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport.classNoteIn;
 import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport.ctx;
 import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport.ddinterService;
 import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport.ddinterServiceWithGroups;
 import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport.injector;
+import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport.injectedClassNotes;
 import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport.injectedReferences;
 import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport.oneRecordChart;
 import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport.serviceWith;
 import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport.set;
 import static org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport.shippedEntries;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -65,22 +66,6 @@ public class DrugClassQuestionNoteTest {
 		return injector(service).injectRecords(oneRecordChart(), oneActiveOrder(), question);
 	}
 
-	private static List<RecordMapping> classNotes(PatientChart chart) {
-		List<RecordMapping> out = new ArrayList<RecordMapping>();
-		for (RecordMapping mapping : chart.getMappings()) {
-			if (ChartSearchAiConstants.RESOURCE_TYPE_DRUG_CLASS_NOTE.equals(mapping.getResourceType())) {
-				out.add(mapping);
-			}
-		}
-		return out;
-	}
-
-	private static RecordMapping theClassNote(PatientChart chart) {
-		List<RecordMapping> notes = classNotes(chart);
-		assertEquals(1, notes.size(),
-				"exactly one drug-class note was expected in: " + chart.getText());
-		return notes.get(0);
-	}
 
 	/**
 	 * The issue's headline case. The class term resolves to no substance, so nothing is injected
@@ -92,7 +77,7 @@ public class DrugClassQuestionNoteTest {
 		PatientChart chart = inject(ddinterService(),
 				"Can I start this patient on an oral contraceptive?");
 
-		RecordMapping note = theClassNote(chart);
+		RecordMapping note = classNoteIn(chart);
 		assertTrue(note.getText().contains("oral contraceptive"),
 				"the note must name the class the question used, was: " + note.getText());
 		assertTrue(chart.getText().contains(note.getText()),
@@ -113,7 +98,7 @@ public class DrugClassQuestionNoteTest {
 
 		assertFalse(injectedReferences(chart).isEmpty(),
 				"the substance control must still inject its reference record: " + chart.getText());
-		assertTrue(classNotes(chart).isEmpty(),
+		assertTrue(injectedClassNotes(chart).isEmpty(),
 				"a question the reference data resolves must raise no class note: " + chart.getText());
 	}
 
@@ -134,7 +119,7 @@ public class DrugClassQuestionNoteTest {
 
 		assertFalse(injectedReferences(chart).isEmpty(),
 				"the premise: the drug in that same question does resolve: " + chart.getText());
-		assertTrue(classNotes(chart).isEmpty(),
+		assertTrue(injectedClassNotes(chart).isEmpty(),
 				"a question the reference data resolved a substance for must raise no class note: "
 						+ chart.getText());
 	}
@@ -153,11 +138,36 @@ public class DrugClassQuestionNoteTest {
 	private static String theClassNoteClass(DrugReferenceService service, String question) {
 		String named = service.namedDrugClass(question);
 		assertNotNull(named, "no drug class was recognised in: " + question);
-		RecordMapping note = theClassNote(inject(service, question));
+		RecordMapping note = classNoteIn(inject(service, question));
 		assertTrue(note.getText().contains(named),
 				"the note must name the class the service recognised (" + named + "): "
 						+ note.getText());
 		return named;
+	}
+
+	/**
+	 * The class the note reports is the class the QUESTION named, never a wider or narrower one.
+	 * Hormonal contraception is strictly wider than oral contraception — the shipped knowledge base
+	 * files {@code Etonogestrel}, an implant moiety, and {@code Medroxyprogesterone acetate} — and
+	 * route is exactly what the issue's nevirapine scenario turns on, so reporting a hormonal question
+	 * as {@code oral contraceptive} would put a false statement about the question into a record the
+	 * answer may cite. The value column of the term table exists for genuine SPELLINGS, not for
+	 * collapsing two classes into one name.
+	 */
+	@Test
+	public void theClassReportedIsTheClassTheQuestionNamedAndNotAWiderOne() {
+		DrugReferenceService service = ddinterService();
+
+		assertEquals("hormonal contraceptive",
+				service.namedDrugClass("Can she use a hormonal contraceptive implant?"));
+		assertEquals("oral contraceptive",
+				service.namedDrugClass("Can I start this patient on an oral contraceptive?"));
+
+		RecordMapping note = classNoteIn(inject(service, "Is a hormonal contraceptive safe for her?"));
+		assertTrue(note.getText().contains("hormonal contraceptive"),
+				"the note must name the class asked about: " + note.getText());
+		assertFalse(note.getText().contains("\"oral contraceptive\""),
+				"and must not report it as the narrower class: " + note.getText());
 	}
 
 	/**
@@ -169,7 +179,7 @@ public class DrugClassQuestionNoteTest {
 	@Test
 	public void theNoteNamesNoSubstanceTheReferenceDataCarries() {
 		DrugReferenceService shipped = serviceWith(shippedEntries());
-		RecordMapping note = theClassNote(inject(ddinterService(),
+		RecordMapping note = classNoteIn(inject(ddinterService(),
 				"Can I start this patient on an oral contraceptive?"));
 
 		assertTrue(shipped.findImpliedByQuery(note.getText()).isEmpty(),
@@ -199,7 +209,7 @@ public class DrugClassQuestionNoteTest {
 				.findFirst().orElseThrow(() -> new IllegalStateException(
 						"the premise: this chart must carry an unsubstantiated active order: "
 								+ chart.getText()));
-		RecordMapping note = theClassNote(chart);
+		RecordMapping note = classNoteIn(chart);
 
 		assertEquals(2, order.getIndex(), "the chart's own record is [1], so the order is [2]");
 		assertEquals(3, note.getIndex(), "and the note follows it, taking the next index");
@@ -216,7 +226,7 @@ public class DrugClassQuestionNoteTest {
 	public void aClassNoteIsCountedIntoThePromptCostSlice() {
 		PatientChart chart = inject(ddinterService(),
 				"Can I start this patient on an oral contraceptive?");
-		RecordMapping note = theClassNote(chart);
+		RecordMapping note = classNoteIn(chart);
 
 		ChartSearchAiUtils.ReferenceSlice slice = ChartSearchAiUtils.referenceSlice(chart.getMappings());
 		assertEquals(1, slice.getRecords(),
@@ -233,7 +243,7 @@ public class DrugClassQuestionNoteTest {
 	 */
 	@Test
 	public void theNoteReadsUnderThePromptsReferenceMaterialRule() {
-		RecordMapping note = theClassNote(inject(ddinterService(),
+		RecordMapping note = classNoteIn(inject(ddinterService(),
 				"Can I start this patient on an oral contraceptive?"));
 
 		assertTrue(note.getText().startsWith(DrugReferenceInjector.REFERENCE_PREFIX),
@@ -276,6 +286,19 @@ public class DrugClassQuestionNoteTest {
 				serviceWithCuratedGroups(longer, shorter).namedDrugClass(question));
 	}
 
+	/**
+	 * An operator-supplied group name is TRIMMED before it is matched. The loader rejects only a
+	 * BLANK name, so a padded one loads and drives cross-reactivity and duplicate-therapy chips
+	 * everywhere else — while the prose rule's left boundary makes it unmatchable here, so the class
+	 * would go unrecognised with nothing logged.
+	 */
+	@Test
+	public void aPaddedGroupNameStillNamesItsClass() {
+		assertEquals("NSAID",
+				serviceWithCuratedGroups(group("  NSAID  ")).namedDrugClass("Can I give her an NSAID?"),
+				"a padded curated group name must still be recognised, and reported trimmed");
+	}
+
 	private static CrossReactivityGroup group(String name) {
 		CrossReactivityGroup group = new CrossReactivityGroup();
 		group.setName(name);
@@ -292,7 +315,7 @@ public class DrugClassQuestionNoteTest {
 	}
 
 	/**
-	 * Criterion (b) of what may be admitted to the code table, asked of the shipped knowledge base
+	 * Criterion (2) of what may be admitted to the code table, asked of the shipped knowledge base
 	 * through the production accessor: a term that resolved to a substance would make the module
 	 * call a drug a class. It reaches the code table only — a group name comes from operator data
 	 * this test cannot speak for.

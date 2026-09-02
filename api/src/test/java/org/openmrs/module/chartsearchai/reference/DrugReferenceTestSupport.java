@@ -359,6 +359,34 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/**
+	 * Every injected {@code drug_class_note} mapping in {@code chart}, in injection order — the
+	 * class-note counterpart of {@link #injectedReferences} and {@link #injectedFindings}, and here
+	 * for the reason those two are: one matcher per injected type, so the filter cannot drift between
+	 * the test files that use it. Two files did grow their own copy of this one before it moved here.
+	 */
+	static List<RecordMapping> injectedClassNotes(PatientChart chart) {
+		return chart.getMappings().stream()
+				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_DRUG_CLASS_NOTE
+						.equals(m.getResourceType()))
+				.collect(Collectors.toList());
+	}
+
+	/**
+	 * The one injected {@code drug_class_note} in {@code chart}, failing where there is not exactly
+	 * one — the single-record form of {@link #injectedClassNotes}. Exactly one and not "the first",
+	 * because a second note would mean one question reported two classes, which is the thing
+	 * {@code DrugClassTerms.namedIn}'s longest-match rule exists to prevent.
+	 */
+	static RecordMapping classNoteIn(PatientChart chart) {
+		List<RecordMapping> notes = injectedClassNotes(chart);
+		if (notes.size() != 1) {
+			throw new IllegalStateException("expected exactly one drug-class note, found " + notes.size()
+					+ " in the chart: " + chart.getText());
+		}
+		return notes.get(0);
+	}
+
+	/**
 	 * The rendered TEXT of {@link #injectedFindings} — the finding-shaped counterpart of
 	 * {@link #referenceTexts}. What a finding's text consists of is decided in one place
 	 * ({@code DrugReferenceInjector.renderFinding} appends the clauses; read that method rather than

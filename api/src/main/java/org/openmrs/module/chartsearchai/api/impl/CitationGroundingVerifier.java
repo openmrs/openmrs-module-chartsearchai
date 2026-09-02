@@ -228,6 +228,15 @@ import org.springframework.stereotype.Service;
  * <p>What the rule does and does not reach:
  *
  * <ul>
+ * <li><strong>The trigger set is wider than the drug-safety answer this rule was measured on</strong>
+ * (issue #354). It is membership in the reference GROUP, and since that issue a third type is in it:
+ * a {@link ChartSearchAiConstants#RESOURCE_TYPE_DRUG_CLASS_NOTE} is injected wherever the QUESTION
+ * carries a curated drug-class term and resolves no substance, which includes a plain retrospective
+ * chart question ("is she on any NSAIDs?") that raises no chip at all. So a chart citation on such a
+ * question now has its entailment negative withheld too, and — the note being an ordinary cited
+ * record — the unanchored path below reaches every claim in that answer. The remedy is NOT to re-key
+ * this on a type name, which is the #122 mistake; it is stated here so a reader of a {@code null}
+ * verdict on a non-prescribing question knows what put it there. See ADR Decision 65.</li>
  * <li><strong>Only the negative.</strong> The composition guarantees the "no"; it does not guarantee
  * the "yes", so a positive verdict still verifies the citation. That is the check the demote-only
  * carve-out is deliberately NOT extended to for

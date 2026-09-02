@@ -602,8 +602,12 @@ public class DrugSafetyValidator {
 			if (warnContra) {
 				// Ungated: a drug in play IS the subject matter — the question resolved it or the
 				// answer proposed it — so a subject-matter gate has nothing left to decide here.
-				addContraindications(contraindications, ref, context, null, allergicSubstanceSupplier);
-				addAllergyContraindications(contraindications, ref, recordedAllergens);
+				// FALSE at both, and not because the drug cannot also be a current medication — it often
+				// is. The question or the answer PROPOSED it, so what this finding licenses is a
+				// decision about that proposal (issue #348).
+				addContraindications(contraindications, ref, context, null, allergicSubstanceSupplier,
+					false);
+				addAllergyContraindications(contraindications, ref, recordedAllergens, false);
 			}
 			// The rows this pass resolved for ref's substance, and the null/empty check the two-map form
 			// used to get for free from remove(). It cannot fire: the map is seeded by substanceRows(inPlay)
@@ -2016,7 +2020,7 @@ public class DrugSafetyValidator {
 
 	private void addContraindications(ContraindicationChips chips, DrugReference ref,
 			PatientClinicalContext context, SubjectMatter askedAbout,
-			Supplier<Set<Object>> allergicSubstances) {
+			Supplier<Set<Object>> allergicSubstances, boolean subjectIsACurrentMedication) {
 		if (context == null) {
 			return;
 		}
@@ -2184,7 +2188,7 @@ public class DrugSafetyValidator {
 					SafetyWarning.contraindication(subject.displayLabel(),
 							subject.displayLabel() + " is contraindicated by an " + recorded + ": "
 									+ ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken()),
-							uncorroborated));
+							uncorroborated, subjectIsACurrentMedication));
 		}
 	}
 
@@ -2749,12 +2753,12 @@ public class DrugSafetyValidator {
 				// to say about is named the way a partner it did have something to say about is. Null
 				// where the ladder reached no co-medication, and then this is the narrow overload's
 				// answer — partnerLabel, which is also the grouping key.
-				chip = reconciled == null ? interactionWarning(ref, rule.rule, bridges)
+				chip = reconciled == null ? interactionWarning(ref, rule.rule, bridges, false)
 						: interactionWarning(ref, rule.rule, reconciled.chipName, reconciled.noteName,
-							null, bridges);
+							null, bridges, false);
 			} else {
 				chip = interactionWarning(ref, rule.rule, fold.partnerName, fold.partnerNoteName,
-					fold.sentence, bridges);
+					fold.sentence, bridges, false);
 			}
 			// Emitted only if it says something this pass has not already said. Two rules about ONE
 			// prescription are two chips — bestRulePerPartner keys them on the partner ENTRY and keeps
@@ -5074,8 +5078,9 @@ public class DrugSafetyValidator {
 	 * {@link SafetyWarning#carriesUnratedRelationship()}.
 	 */
 	private static SafetyWarning interactionWarning(DrugReference ref, DrugReference.Interaction i,
-			List<SafetyWarning.ChartOrderBridge> chartOrderBridges) {
-		return interactionWarning(ref, i, partnerLabel(i), null, null, chartOrderBridges);
+			List<SafetyWarning.ChartOrderBridge> chartOrderBridges, boolean aboutACurrentMedication) {
+		return interactionWarning(ref, i, partnerLabel(i), null, null, chartOrderBridges,
+			aboutACurrentMedication);
 	}
 
 	/**
@@ -5104,7 +5109,8 @@ public class DrugSafetyValidator {
 	 */
 	private static SafetyWarning interactionWarning(DrugReference ref, DrugReference.Interaction i,
 			String partnerName, String partnerNoteName, String alsoSameClass,
-			List<SafetyWarning.ChartOrderBridge> chartOrderBridges) {
+			List<SafetyWarning.ChartOrderBridge> chartOrderBridges,
+			boolean aboutACurrentMedication) {
 		// partnerName is partnerLabel(i) only where reconciledPartnerName did not answer — it is the
 		// label bestRulePerPartner GROUPS on where the dataset identifies no partner entry, and there
 		// #121's grouping is only correct while the key IS the label the chip says. Every other chip
@@ -5134,7 +5140,7 @@ public class DrugSafetyValidator {
 		// rather than a chip no class sentence folded onto.
 		return SafetyWarning.interaction(ref.displayLabel(), detail, i.getSeverity(),
 				alsoSameClass != null, partnerNoteName != null ? i : null, partnerNoteName,
-				chartOrderBridges);
+				chartOrderBridges, aboutACurrentMedication);
 	}
 
 	/**
@@ -5623,9 +5629,14 @@ public class DrugSafetyValidator {
 				// bridge cannot name an order this arm refused as a self-witness.
 				List<SafetyWarning.ChartOrderBridge> bridges = chartOrderBridges(substance, subject,
 					partner, chipPartnerName, context, partnerWitnesses, orderDrugs);
-				SafetyWarning chip = reconciled == null ? interactionWarning(subject, i, bridges)
+				// TRUE, and this is the ONE arm of the three that says so: both of this pair's drugs are
+				// the patient's own prescriptions, so the finding licenses a call about her current
+				// therapy and never a refusal of a proposal nobody made (issue #348). Established here
+				// rather than derived downstream — see SafetyWarning.isAboutACurrentMedication.
+				SafetyWarning chip = reconciled == null
+						? interactionWarning(subject, i, bridges, true)
 						: interactionWarning(subject, i, reconciled.chipName, reconciled.noteName, null,
-							bridges);
+							bridges, true);
 				// Before the candidate is collected rather than after the cap, so the extent this arm
 				// states counts what a clinician can tell apart: a restatement is not a pair that was
 				// found and withheld, it is a pair already shown. Same ledger as the drug-in-play arm —
@@ -6127,7 +6138,7 @@ public class DrugSafetyValidator {
 	 * {@code PresentationMoietyAllergenTest} for the bound pinned as a test.
 	 */
 	private void addAllergyContraindications(ContraindicationChips chips, DrugReference ref,
-			List<RecordedAllergen> recordedAllergens) {
+			List<RecordedAllergen> recordedAllergens, boolean subjectIsACurrentMedication) {
 		if (recordedAllergens.isEmpty()) {
 			return;
 		}
@@ -6187,8 +6198,8 @@ public class DrugSafetyValidator {
 				// recordedAllergen decides between them — see DrugReferenceService.findNamedSubstances
 				// for the three ways a name names a row and for what the second form gives up.
 				chips.add(sameSubstance, sameSubstance.substanceGroupKey(), ContraindicationChips.IDENTITY,
-						new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION,
-								sameSubstance.displayLabel(), recorded.identitySentence(sameSubstance)),
+						SafetyWarning.recordedAllergenContraindication(sameSubstance.displayLabel(),
+								recorded.identitySentence(sameSubstance), subjectIsACurrentMedication),
 						recorded.names(sameSubstance));
 				continue;
 			}
@@ -6204,10 +6215,10 @@ public class DrugSafetyValidator {
 				String shared = sharedCrossReactivityClass(refClasses, implied);
 				if (shared != null) {
 					chips.add(subject, implied.substanceGroupKey(), ContraindicationChips.SAME_CLASS,
-							new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, subject.displayLabel(),
+							SafetyWarning.recordedAllergenContraindication(subject.displayLabel(),
 									subject.displayLabel() + " is in the same ATC class (" + shared
 											+ ") as the patient's allergy to " + recorded.allergenName(implied)
-											+ " — possible cross-reactivity"),
+											+ " — possible cross-reactivity", subjectIsACurrentMedication),
 							recorded.names(implied));
 					chipped = true;
 					break;
@@ -6220,10 +6231,11 @@ public class DrugSafetyValidator {
 				CrossReactivityGroup group = CrossReactivityGroup.sharedGroup(refGroups, implied);
 				if (group != null) {
 					chips.add(subject, implied.substanceGroupKey(), ContraindicationChips.SAME_GROUP,
-							new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, subject.displayLabel(),
+							SafetyWarning.recordedAllergenContraindication(subject.displayLabel(),
 									subject.displayLabel() + " is in the same cross-reactivity group ("
 											+ group.getName() + ") as the patient's allergy to "
-											+ recorded.allergenName(implied) + " — possible cross-reactivity"),
+											+ recorded.allergenName(implied) + " — possible cross-reactivity",
+									subjectIsACurrentMedication),
 							recorded.names(implied));
 					break;
 				}
@@ -6715,8 +6727,8 @@ public class DrugSafetyValidator {
 			// Where it does not hold, only the findings the response is itself about may speak — which
 			// is what stops a cancer question carrying chips about her local anaesthetics.
 			if (askedAbout.names(ref)) {
-				addContraindications(chips, ref, context, null, allergicSubstances);
-				addAllergyContraindications(chips, ref, recordedAllergens);
+				addContraindications(chips, ref, context, null, allergicSubstances, true);
+				addAllergyContraindications(chips, ref, recordedAllergens, true);
 				continue;
 			}
 			if (allergensAskedAbout == null) {
@@ -6728,8 +6740,11 @@ public class DrugSafetyValidator {
 			// strength of the question's wording — hedging a clause a recorded allergy really does
 			// support. The narrowing below is about which allergy records may SPEAK in this response;
 			// this is about what the chart holds, and the two are different questions.
-			addContraindications(chips, ref, context, askedAbout, allergicSubstances);
-			addAllergyContraindications(chips, ref, allergensAskedAbout);
+			// TRUE on both legs of this arm, whichever side of the contraindication the response is
+			// about: `ref` is drawn from orderEntries either way, so the subject is a prescription the
+			// patient already holds and nothing here proposed it (issue #348).
+			addContraindications(chips, ref, context, askedAbout, allergicSubstances, true);
+			addAllergyContraindications(chips, ref, allergensAskedAbout, true);
 		}
 	}
 

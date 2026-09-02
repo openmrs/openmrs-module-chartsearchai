@@ -312,4 +312,100 @@ public class SafetyVerdictSeverityGradationTest {
 				"the strongest of the two is the withholding one, so the lead it governs is the "
 						+ "refusal: " + sentence);
 	}
+
+	/**
+	 * The two CURRENT-MEDICATION classes are taught in the record's own words too (issue #348).
+	 *
+	 * <p>This is the property ADR Decision 44 measured the absence of, on this very record type: an
+	 * additive clause nothing in the prompt keys on left the answer byte-identical across six runs,
+	 * and the decision's own reasoning names why — "The clause introduces no new call for
+	 * {@code DEFAULT_SYSTEM_PROMPT} to teach". So a counterpart clause that the paragraph does not
+	 * quote is not a smaller version of this change; it is the inert one. Derived from the constants
+	 * for the reason {@link #theRuleNamesTheClauseTheRecordActuallyCarries} gives.
+	 */
+	@Test
+	public void bothCurrentMedicationClassesAreTaughtInTheWordsTheInjectedRecordUses() {
+		String paragraph = safetyParagraph();
+		assertTrue(paragraph.contains(
+			clauseCore(DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION)),
+			"the change-of-therapy class must be named, or a screened pair of the patient's own "
+					+ "prescriptions has a clause no branch of the prompt answers and falls through "
+					+ "to whichever lead the model reaches for — which is what #283 measured: "
+					+ paragraph);
+		assertTrue(paragraph.contains(
+			clauseCore(DrugReferenceInjector.STRENGTH_CAUTION_CURRENT_MEDICATION)),
+			"and so must its caution counterpart, in the same words: " + paragraph);
+	}
+
+	/**
+	 * A set of findings mixing a PROPOSAL call with a CURRENT-MEDICATION call has one lead, and the
+	 * paragraph decides it (issue #348).
+	 *
+	 * <p>Reachable and not a corner: the order-driven contraindication arm (issue #143) walks the
+	 * patient's own prescriptions on any question that asks about her medications, allergies or
+	 * conditions, so it can raise a finding beside a drug-in-play arm's on a question that DID
+	 * propose a drug. Without this rule the two antecedents are both true and nothing chooses.
+	 *
+	 * <p>It names the losers as well as the winner, for the reason
+	 * {@link #aSetOfFindingsStatingDifferentStrengthsIsLedByTheStrongest} states of the older pair.
+	 */
+	@Test
+	public void aSetMixingAProposalCallAndACurrentMedicationCallIsLedByTheStrongest() {
+		String paragraph = safetyParagraph();
+		int at = paragraph.indexOf("calls of both kinds");
+		assertTrue(at > 0,
+				"the paragraph must decide the lead where a proposal call and a current-medication "
+						+ "call are stated in one response: " + paragraph);
+
+		String sentence = sentenceAround(paragraph, at);
+		assertTrue(sentence.contains(clauseCore(DrugReferenceInjector.STRENGTH_WITHHOLD)),
+				"the winner is the proposal refusal, named by the clause the record carries rather "
+						+ "than by a severity word: " + sentence);
+		assertTrue(sentence.contains(
+			clauseCore(DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION)),
+			"and the ranking must name what it outranks: " + sentence);
+	}
+
+	/**
+	 * Across the FOUR strength classes there is exactly ONE phrase that sits inside another's words,
+	 * and it is the one ADR Decision 37 already handles (issue #348).
+	 *
+	 * <p>The hazard is that decision's own: "a reason to withhold it" occurs inside
+	 * {@code STRENGTH_CAUTION} too, negated, so a branch whose antecedent is that bare phrase is
+	 * satisfied by a caution read SHALLOWLY. What Decision 37 did about it is name the loser in the
+	 * ranking sentence, which {@link #aSetOfFindingsStatingDifferentStrengthsIsLedByTheStrongest}
+	 * pins; the containment itself is left standing, deliberately, because the clauses read as
+	 * English.
+	 *
+	 * <p>Adding two more classes turns 2 ordered pairs into 12, and no behavioural test can see a
+	 * shallow read — the MODEL is what reads shallowly. So the whole product is walked and the one
+	 * admitted pair is named rather than skipped: a reword that introduced a SECOND containment
+	 * reddens here, and so does one that removed the admitted one without this case being re-read.
+	 */
+	@Test
+	public void theOnlyStrengthClassNamedInsideAnothersWordsIsTheOneDecision37Handles() {
+		String withhold = clauseCore(DrugReferenceInjector.STRENGTH_WITHHOLD);
+		String caution = clauseCore(DrugReferenceInjector.STRENGTH_CAUTION);
+		String[] cores = { withhold, caution,
+			clauseCore(DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION),
+			clauseCore(DrugReferenceInjector.STRENGTH_CAUTION_CURRENT_MEDICATION) };
+
+		assertTrue(caution.contains(withhold),
+				"precondition: the admitted pair is the withholding class named inside the caution "
+						+ "class, negated. If this ever fails, the exemption below has become a hole "
+						+ "and this case is the one to re-read: " + caution);
+
+		for (String inner : cores) {
+			for (String outer : cores) {
+				if (inner.equals(outer) || (inner.equals(withhold) && outer.equals(caution))) {
+					continue;
+				}
+				assertFalse(outer.contains(inner),
+						"no other class's own words may sit inside another's, or a branch gated on "
+								+ "the first is satisfied by a finding stating the second — and only "
+								+ "the withholding-inside-caution pair has a ranking sentence written "
+								+ "for it: \"" + inner + "\" occurs in \"" + outer + "\"");
+			}
+		}
+	}
 }

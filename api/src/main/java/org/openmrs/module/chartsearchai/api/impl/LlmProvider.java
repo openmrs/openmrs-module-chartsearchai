@@ -254,9 +254,29 @@ public class LlmProvider {
 			+ "drug: open by stating that the drug can be given, and name the caution in the same "
 			+ "sentence so it is never dropped. Where more than one finding names the drug and they "
 			+ "state different strengths, the strongest governs: a finding that is a reason to "
-			+ "withhold it outranks one that is only a caution to note, so open with \"No\". The "
-			+ "finding's mechanism is the evidence for either call: it belongs after the call, not "
-			+ "in place of it. Never open such an answer with \"Yes\".\n"
+			+ "withhold it outranks one that is only a caution to note, so open with \"No\". "
+			// ISSUE #348. Two branches for the two clauses a finding about a medication the patient
+			// is ALREADY TAKING states, quoting each clause in the words the record uses — which is
+			// the property SafetyVerdictSeverityGradationTest already holds the older two to, and
+			// what ADR Decision 44 measured the absence of: a clause the prompt keys on nothing at
+			// all is inert, six runs byte-identical. INSIDE this paragraph and never a paragraph of
+			// its own: #112 proposed a lead rule beside it and that was ruled out, on the measured
+			// history that added instructions in this area regress (see the comment above the
+			// "Safety finding" record-type sentence). Positively gated and carrying no fallback
+			// clause, because LlmProviderTest fails this paragraph on the substring "otherwise" in
+			// any casing (#107 arm D). Neither branch asks for "Yes", so the never-"Yes" token that
+			// closes the paragraph stays true of every branch in it.
+			+ "A finding that says it is a reason to change a medication this patient is already "
+			+ "taking is not about a drug anything proposed: open by naming that medication and what "
+			+ "the finding relates it to, carry the finding's severity, and never open by refusing to "
+			+ "give a drug. A finding that says it is a caution about a medication this patient is "
+			+ "already taking, not a reason to change it, is not evidence against that medication: "
+			+ "open by naming it and the caution in the same sentence, and never open by refusing to "
+			+ "give a drug. Where findings state calls of both kinds, the strongest still governs: a "
+			+ "finding that is a reason to withhold it leads, then one that is a reason to change a "
+			+ "medication this patient is already taking, then a caution. "
+			+ "The finding's mechanism is the evidence for the call it states: it belongs after the "
+			+ "call, not in place of it. Never open such an answer with \"Yes\".\n"
 			+ "Your answer must not vary based on the punctuation or phrasing of the query "
 			+ "— focus only on its semantic meaning.\n\n"
 			+ "The following is a FORMAT DEMONSTRATION ONLY using fake non-medical data. "

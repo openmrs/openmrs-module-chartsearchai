@@ -89,6 +89,9 @@ public class SafetyWarning {
 	/** @see #chartOrderBridges() */
 	private final List<ChartOrderBridge> chartOrderBridges;
 
+	/** @see #isAboutACurrentMedication() */
+	private final boolean aboutACurrentMedication;
+
 	/** A warning raised from something the reference data assigns no severity to — see
 	 *  {@link #getSeverity()} for which joins those are. */
 	public SafetyWarning(String type, String drug, String detail) {
@@ -97,7 +100,7 @@ public class SafetyWarning {
 
 	public SafetyWarning(String type, String drug, String detail, String severity) {
 		this(type, drug, detail, severity, false, false, null, null,
-				Collections.<ChartOrderBridge> emptyList());
+				Collections.<ChartOrderBridge> emptyList(), false);
 	}
 
 	/**
@@ -117,17 +120,46 @@ public class SafetyWarning {
 	 * form, so they answer false by construction rather than by remembering to.
 	 *
 	 * @param uncorroboratedChartMatch see {@link #restsOnAnUncorroboratedChartMatch()}
+	 * @param aboutACurrentMedication see {@link #isAboutACurrentMedication()} — true where the arm
+	 *        walking the patient's own active orders raised it (issue #348)
 	 */
 	static SafetyWarning contraindication(String drug, String detail,
-			boolean uncorroboratedChartMatch) {
+			boolean uncorroboratedChartMatch, boolean aboutACurrentMedication) {
 		return new SafetyWarning(TYPE_CONTRAINDICATION, drug, detail, null, false,
-				uncorroboratedChartMatch, null, null, Collections.<ChartOrderBridge> emptyList());
+				uncorroboratedChartMatch, null, null, Collections.<ChartOrderBridge> emptyList(),
+				aboutACurrentMedication);
+	}
+
+	/**
+	 * A recorded-allergen contraindication chip's warning — the allergen arm's three sentences, which
+	 * are built from a {@code RecordedAllergen} rather than from a curated rule matched against the
+	 * chart (issue #348).
+	 *
+	 * <p>A FACTORY rather than the public three-argument constructor those sentences used before,
+	 * and it hardcodes {@code uncorroboratedChartMatch} false rather than taking it: that arm has no
+	 * rule to have matched by containment, so it answered false BY CONSTRUCTION, and the whole point
+	 * of naming it here is to keep answering false by construction while the one fact it does have to
+	 * carry — whether its subject is one of the patient's own prescriptions — becomes settable. A
+	 * fourth argument on {@link #contraindication} would have offered that arm a flag it can never
+	 * legitimately set.
+	 *
+	 * <p>Package-private, matching the accessor: a caller may set only what it may read back. Its one
+	 * caller is {@code DrugSafetyValidator.addAllergyContraindications}, which is reached from BOTH
+	 * the drug-in-play loop (false — the drug was proposed) and
+	 * {@code addActiveOrderContraindications} (true — the subject is an active order).
+	 *
+	 * @param aboutACurrentMedication see {@link #isAboutACurrentMedication()}
+	 */
+	static SafetyWarning recordedAllergenContraindication(String drug, String detail,
+			boolean aboutACurrentMedication) {
+		return new SafetyWarning(TYPE_CONTRAINDICATION, drug, detail, null, false, false, null, null,
+				Collections.<ChartOrderBridge> emptyList(), aboutACurrentMedication);
 	}
 
 	private SafetyWarning(String type, String drug, String detail, String severity,
 			boolean unratedRelationship, boolean uncorroboratedChartMatch,
 			DrugReference.Interaction reconciledRule, String reconciledNoteName,
-			List<ChartOrderBridge> chartOrderBridges) {
+			List<ChartOrderBridge> chartOrderBridges, boolean aboutACurrentMedication) {
 		this.type = type;
 		this.drug = drug;
 		this.detail = detail;
@@ -143,6 +175,7 @@ public class SafetyWarning {
 		this.chartOrderBridges = chartOrderBridges == null || chartOrderBridges.isEmpty()
 				? Collections.<ChartOrderBridge> emptyList()
 				: Collections.unmodifiableList(new ArrayList<ChartOrderBridge>(chartOrderBridges));
+		this.aboutACurrentMedication = aboutACurrentMedication;
 	}
 
 	/**
@@ -184,14 +217,17 @@ public class SafetyWarning {
 	 *        here, as they are for the chip
 	 * @param chartOrderBridges see {@link #chartOrderBridges()} — empty where the chart already names
 	 *        every substance this chip names, which is the common case and not a degraded one
+	 * @param aboutACurrentMedication see {@link #isAboutACurrentMedication()} — true only from the
+	 *        screening arm, whose two drugs are both the patient's own active orders (issue #348)
 	 */
 	// Three facts travel here, not two: the paragraphs above are worded for the pair issue #297 added
 	// and issue #349 put a third beside them. Read the @param list rather than any count in the prose.
 	static SafetyWarning interaction(String drug, String detail, String severity,
 			boolean unratedRelationship, DrugReference.Interaction reconciledRule,
-			String reconciledNoteName, List<ChartOrderBridge> chartOrderBridges) {
+			String reconciledNoteName, List<ChartOrderBridge> chartOrderBridges,
+			boolean aboutACurrentMedication) {
 		return new SafetyWarning(TYPE_INTERACTION, drug, detail, severity, unratedRelationship, false,
-				reconciledRule, reconciledNoteName, chartOrderBridges);
+				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication);
 	}
 
 	/** One of {@link #TYPE_OVERDOSE}, {@link #TYPE_INTERACTION}, {@link #TYPE_CONTRAINDICATION}. */
@@ -534,6 +570,41 @@ public class SafetyWarning {
 	 */
 	List<ChartOrderBridge> chartOrderBridges() {
 		return chartOrderBridges;
+	}
+
+	/**
+	 * Whether this warning is about a medication the patient is ALREADY TAKING rather than about a
+	 * drug something proposed (issue #348) — which decides which of the two strength clauses
+	 * {@code DrugReferenceInjector.strengthClause} states, and so which call the answer opens with.
+	 *
+	 * <p><b>Established by the arm that raised the warning, never re-derived.</b> The two ORDER-DRIVEN
+	 * arms answer true and nothing else does: {@code DrugSafetyValidator.addActiveOrderPairInteractions}
+	 * (issue #113), whose subject is drawn from the resolved active-order entries and whose partner is
+	 * admitted only by {@code hasActiveDrug} against a DIFFERENT active order, and
+	 * {@code addActiveOrderContraindications} (issue #143), which walks those same entries. The
+	 * drug-in-play arms and the question-pair arm answer false by construction, because their subject
+	 * is the drug the question or the answer named — which may well ALSO be a current medication, and
+	 * that is not this question: what a finding licenses there is a decision about a proposal, because
+	 * a proposal is what was put to the module.
+	 *
+	 * <p>It is not derivable from anything else the warning carries, which is why it travels. In
+	 * particular it is NOT {@link #chartOrderBridges()}: that answers whether the ORDER records a name
+	 * of the substance (issue #349) and is empty for the common case where it does — including on this
+	 * issue's own reproduction, where both orders are named as the reference data names them.
+	 *
+	 * <p><b>Prompt-facing only.</b> Nothing on the wire moves and the chip's own detail is untouched,
+	 * so {@code DrugSafetyValidator.StatedInteractionChips} deliberately does NOT key on it, for the
+	 * reason stated at {@link #chartOrderBridges()}: that key decides which chips are emitted, so
+	 * keying on a prompt-only fact would let it decide wire content. Leaving it out costs nothing
+	 * observable, and that is worth saying rather than leaving to be re-derived: the flag is constant
+	 * within an arm, and where the two interaction arms can both run in one pass — the POST-answer
+	 * pass, where a drug the ANSWER named is in play beside a screening question —
+	 * {@code InteractionPairs.alreadyReported} already stops the screening arm restating a pair the
+	 * drug-in-play arm reported, before this ledger sees it. So no two chips of one pass can differ by
+	 * this flag alone.
+	 */
+	boolean isAboutACurrentMedication() {
+		return aboutACurrentMedication;
 	}
 
 	/**

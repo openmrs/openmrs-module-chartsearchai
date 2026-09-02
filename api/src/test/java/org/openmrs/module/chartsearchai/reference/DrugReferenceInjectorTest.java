@@ -663,10 +663,11 @@ public class DrugReferenceInjectorTest {
 		// character budget cannot refuse — the first — wherever the dataset put it, and it then
 		// crowds out the row that actually names a partner.
 		//
-		// Measured on this fixture before the ordering was given its first key: the record went from
-		// naming metformin in 78 characters to spending 2027 on a paragraph about a partner nobody can
-		// identify, which is the cost #355 exists to remove and the prose #117 records this model
-		// garbling. So the tail asks first whether a note NAMES its partner: the tail's job is breadth,
+		// Measured by removing that first key and running this case: the interactions section is 35
+		// characters with it and 1548 without, all of them a paragraph about a partner nobody can
+		// identify — the cost #355 exists to remove and the prose #117 records this model garbling.
+		// (The shape was found on a differently sized fixture, so those two figures are this one's
+		// alone.) So the tail asks first whether a note NAMES its partner: the tail's job is breadth,
 		// a rule that names nobody states none, and it may not outrank one that does.
 		String section = tailSectionOf("chartsearchai-test/drug-reference-unpromoted-tail-nameless.json",
 				"is it safe to give namelessmix?");

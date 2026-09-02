@@ -163,8 +163,9 @@ public class DrugReferenceInjector {
 	 * for why both are needed.
 	 *
 	 * <p><b>A consequence outside this class, measured and not closed.</b> The compact form fits MORE
-	 * partner names into a much smaller record — on the bundled excerpt an unpromoted Ibuprofen record
-	 * went from naming 2 partners in 1432 characters to naming 5 in 193 — and every name in a cited
+	 * partner names into a much smaller record — measured through the real {@code injectRecords} over
+	 * the bundled 16-drug DDInter excerpt, an unpromoted Ibuprofen record went from naming 2 partners
+	 * in 1432 characters to naming 5 in 193 — and every name in a cited
 	 * record is part of the corpus {@code DrugSafetyValidator.isEchoOfCitedRecord} treats as something
 	 * the model may merely have repeated back (issue #105). So a mention that used to be read as a
 	 * proposal can now be read as an echo: measured on that excerpt, a patient allergic to warfarin
@@ -1970,9 +1971,13 @@ public class DrugReferenceInjector {
 	 * unrated, which this comparator ranks above Major. Ordering the tail on severity alone therefore
 	 * hoisted such a paragraph into the first slot, the one {@code render} lets past the character
 	 * budget so that at least one interaction is always shown, and it crowded out the row that named a
-	 * partner: measured on {@code drug-reference-unpromoted-tail-nameless.json}, 78 characters naming
-	 * metformin became 2027 characters about a partner nobody can identify — the cost issue #355
-	 * exists to remove, reintroduced by its own fix. The tail's job is breadth; a rule that names
+	 * partner. Measured by removing this first key and running
+	 * {@code DrugReferenceInjectorTest.aTailRuleWithNoPartnerToNameDoesNotDisplaceOneThatDoes} over
+	 * {@code drug-reference-unpromoted-tail-nameless.json}: the rendered interactions section is
+	 * <b>35</b> characters naming metformin with the key and <b>1548</b> without it, all of them a
+	 * paragraph about a partner nobody can identify — the cost issue #355 exists to remove,
+	 * reintroduced by its own fix. Both figures are that one fixture's; the shape was first found on a
+	 * differently sized one, so re-measure rather than carrying either number across. The tail's job is breadth; a rule that names
 	 * nobody states none, so it may not outrank one that does. In the PROMOTED segment the key cannot
 	 * fire: {@link #promotable} requires {@link PatientClinicalContext#hasActiveDrug}, which is false
 	 * when both the token and the ATC are absent, so a promoted note always has a name.

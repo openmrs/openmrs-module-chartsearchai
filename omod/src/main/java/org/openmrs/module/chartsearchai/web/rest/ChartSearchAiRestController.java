@@ -252,7 +252,7 @@ public class ChartSearchAiRestController {
 		// verdict (withheld for reference material, see groundedForWire) and the `group`
 		// discriminator; see serializeReferences.
 		response.put("references", serializeReferences(chartAnswer.getReferences()));
-		putSafetyChips(response, chartAnswer);
+		putModuleStatements(response, chartAnswer);
 		if (questionId != null) {
 			response.put("questionId", questionId);
 		}
@@ -621,7 +621,7 @@ public class ChartSearchAiRestController {
 				// replace its reference list wholesale; questionId correlates the two events.
 				Map<String, Object> groundedData = new HashMap<String, Object>();
 				groundedData.put("references", serializeReferences(chartAnswer.getReferences()));
-				putSafetyChips(groundedData, chartAnswer);
+				putModuleStatements(groundedData, chartAnswer);
 				if (earlyQuestionId[0] != null) {
 					groundedData.put("questionId", earlyQuestionId[0]);
 				}
@@ -739,13 +739,15 @@ public class ChartSearchAiRestController {
 		return auditLog.getAuditLogId() != null ? String.valueOf(auditLog.getAuditLogId()) : null;
 	}
 
-	/** Serializes the {@code done} event payload: answer, disclaimer, references, questionId. */
+	/** Serializes the {@code done} event payload: the answer, the disclaimer, the references, the
+	 *  questionId, and every statement {@link #putModuleStatements} writes — named rather than
+	 *  enumerated, so this comment cannot fall behind that method's keys, which it already had. */
 	private String doneEventJson(ChartAnswer answer, String questionId) throws IOException {
 		Map<String, Object> doneData = new HashMap<String, Object>();
 		doneData.put("answer", answer.getAnswer());
 		doneData.put("disclaimer", DISCLAIMER);
 		doneData.put("references", serializeReferences(answer.getReferences()));
-		putSafetyChips(doneData, answer);
+		putModuleStatements(doneData, answer);
 		if (questionId != null) {
 			doneData.put("questionId", questionId);
 		}
@@ -1236,7 +1238,9 @@ public class ChartSearchAiRestController {
 
 	/**
 	 * Writes an answer's drug-safety chips AND the statement of how bounded the interaction list
-	 * behind them is, into one payload map. Every emission surface goes through here.
+	 * behind them is, into one payload map. Every emission surface goes through here, since
+	 * issue #354 by way of {@link #putModuleStatements} — which composes this with the class
+	 * statement, and is this method's only caller.
 	 *
 	 * <p>Named for the CHIPS and not for "findings", deliberately: {@code safety_finding} is a
 	 * reference resource type — the citable record form of a chip — and this method has nothing to
@@ -1261,6 +1265,37 @@ public class ChartSearchAiRestController {
 	private void putSafetyChips(Map<String, Object> target, ChartAnswer answer) {
 		target.put("safetyWarnings", serializeSafetyWarnings(answer.getSafetyWarnings()));
 		target.put("interactionPairs", serializePairChipExtent(answer.getPairChipExtent()));
+	}
+
+	/**
+	 * Writes every statement this module makes about a response OF ITS OWN — as distinct from the
+	 * answer text, which is the model's. Each emission surface calls this one method.
+	 *
+	 * <p><b>One entry point for the same reason {@link #putSafetyChips} is one</b> (issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/336">#336</a>): a
+	 * payload site added later must not be able to carry the answer while dropping a deterministic
+	 * safety statement beside it. {@code putSafetyChips} keeps its own identity — it is named for the
+	 * CHIPS and the completeness statement that must travel with them, and the class note is neither
+	 * — so this composes the two rather than growing a third key inside it.
+	 * {@code ChartSearchAiUnresolvedDrugClassTest} fails the build on a second call to
+	 * {@code putSafetyChips}, which is what forces every surface through here.
+	 *
+	 * <p>{@code unresolvedDrugClass} is always present and is {@code null} where the module states no
+	 * class — see {@code ChartAnswer.getUnresolvedDrugClass()}, which is canonical for what that
+	 * covers and for why there is no zero to tell it from. It is a bare class NAME rather than an
+	 * object: it carries one datum, and a client renders its own sentence from it rather than the
+	 * record's prose, which is prompt-facing.
+	 *
+	 * <p>Why the key exists at all: the deterministic half of issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/354">#354</a> is a
+	 * {@code drug_class_note} record in the prompt, and a prompt record reaches a client only if the
+	 * model cites it — measured on that issue's own reproduction, it did not, so nothing a
+	 * {@code /search} consumer reads reported the class at all. The module states what it did;
+	 * whether the answer relays it stays the model's.
+	 */
+	private void putModuleStatements(Map<String, Object> target, ChartAnswer answer) {
+		putSafetyChips(target, answer);
+		target.put("unresolvedDrugClass", answer.getUnresolvedDrugClass());
 	}
 
 	/**

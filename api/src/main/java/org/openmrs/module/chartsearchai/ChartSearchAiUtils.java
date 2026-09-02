@@ -391,6 +391,54 @@ public class ChartSearchAiUtils {
 	}
 
 	/**
+	 * The drug CLASS one assembled chart reports as named-but-unresolved, or {@code null} where it
+	 * reports none — the wire-facing half of issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/354">#354</a>, carried
+	 * to the response as {@code ChartAnswer.getUnresolvedDrugClass()}.
+	 *
+	 * <p><b>Why the chart is asked rather than the question.</b> The statement and the injected
+	 * {@link ChartSearchAiConstants#RESOURCE_TYPE_DRUG_CLASS_NOTE} record must never disagree, and a
+	 * consumer that re-asked {@code DrugReferenceService.namedDrugClass} would be a second resolution
+	 * of one question — the shape issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/151">#151</a> records as
+	 * having let two layers disagree about the patient's own orders, silently and in one direction.
+	 * That accessor is also not enough on its own: the note is raised only where the question resolved
+	 * NO substance, and only where question-driven injection is enabled at all, neither of which it
+	 * asks. Reading the injector's own output makes the wire statement true exactly when the prompt
+	 * carries the note, by construction rather than by agreement.
+	 *
+	 * <p><b>It names the ONE type deliberately, and that is not the hardcode
+	 * {@link #referenceGroup} forbids.</b> That rule is about GROUPING questions — asking whether a
+	 * citation is reference material by naming a type is how {@code safety_finding} was graded as
+	 * chart evidence (issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/122">#122</a>). This
+	 * asks which record states a class, and exactly one type does; a fourth reference-group type
+	 * added later states nothing about a class and must not be picked up here.
+	 *
+	 * <p>The value is the note's {@code resourceUuid}, which for this type is the class name and not
+	 * a row — see {@code DrugReferenceInjector.injectRecords}, which is the sole writer of it, and the
+	 * {@code README} section that tells a client the same thing. The FIRST such record wins; the
+	 * injector appends at most one, so nothing here picks between two.
+	 *
+	 * @param mappings the assembled chart's mappings, may be null
+	 * @return the class name, or null where the chart carries no class note — which covers a question
+	 *         naming no class, a question that resolved a substance, and the drug-reference feature
+	 *         being off, and deliberately does not distinguish them: what a client renders is the
+	 *         positive statement, and there is no negative one to make
+	 */
+	public static String unresolvedDrugClass(List<RecordMapping> mappings) {
+		if (mappings != null) {
+			for (RecordMapping mapping : mappings) {
+				if (mapping != null && ChartSearchAiConstants.RESOURCE_TYPE_DRUG_CLASS_NOTE
+						.equals(mapping.getResourceType())) {
+					return mapping.getResourceUuid();
+				}
+			}
+		}
+		return null;
+	}
+
+	/**
 	 * Builds a composite key from a resource type and resource UUID.
 	 * This is the single canonical format for resource keys used across
 	 * retrieval pipelines, filter methods, and result sets.

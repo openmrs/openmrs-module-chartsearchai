@@ -53,7 +53,11 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * does not express these classes, and no membership list this module could author would be sound.
  *
  * <p>So every case here asserts the deterministic half — the record the injector appends. Whether
- * an ANSWER relays it is the model's, and nothing in this module can assert it.
+ * an ANSWER relays it is the model's, and nothing in this module can assert it. That is also why the
+ * record is not the only channel: the class is published on the response itself as
+ * {@code unresolvedDrugClass}, read off this same note — {@code
+ * LlmInferenceServiceUnresolvedDrugClassTest} and {@code ChartSearchAiUnresolvedDrugClassTest} pin
+ * that half.
  */
 public class DrugClassQuestionNoteTest {
 

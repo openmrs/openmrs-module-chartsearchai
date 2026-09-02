@@ -49,8 +49,11 @@ import org.springframework.stereotype.Service;
  * {@link ChartSearchAiConstants#RESOURCE_TYPE_DRUG_CLASS_NOTE} reports that the QUESTION named a
  * drug class no ENTRY of this dataset is indexed by, so there is nothing for a client to navigate to
  * and its
- * {@code resourceUuid} names the class rather than a row. It is raised only where the question
- * resolved no substance, so it never appears beside a {@code drug_reference} record.
+ * {@code resourceUuid} names the class rather than a row. That field is LOAD-BEARING and not merely
+ * a label: {@link org.openmrs.module.chartsearchai.ChartSearchAiUtils#unresolvedDrugClass} reads the
+ * response's own {@code unresolvedDrugClass} statement out of it, so writing anything but the bare
+ * class name there changes what a client is told. It is raised only where the question resolved no
+ * substance, so it never appears beside a {@code drug_reference} record.
  *
  * <p><strong>Adding another kind of injected record?</strong> Its resource type must also be
  * classified by {@link org.openmrs.module.chartsearchai.ChartSearchAiUtils#referenceGroup}, which
@@ -432,7 +435,10 @@ public class DrugReferenceInjector {
 					// The CLASS, bare. Not a resourceKey composite: the mapping already publishes
 					// `drug_class_note` as its resourceType, so prefixing the type again would put
 					// `drug_class_note:NSAID` in front of a client rendering this field as a label. It
-					// names no row, deliberately — there is nothing here to navigate to.
+					// names no row, deliberately — there is nothing here to navigate to. And it is what
+					// ChartSearchAiUtils.unresolvedDrugClass publishes as the response's own statement
+					// of the class, so this string reaches a client whether or not the model cites the
+					// record: keep it the bare class name.
 					namedClass, null, rendered));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;
@@ -1460,9 +1466,14 @@ public class DrugReferenceInjector {
 	 * patient.</b> It leads with {@link #REFERENCE_PREFIX}, so the system prompt's record-type
 	 * sentence frames it as reference data rather than this patient's own.
 	 *
-	 * <p>What it CANNOT do is make the answer say any of this. The deterministic half is the
-	 * injection; whether the model relays a record it was given is the model's, and this module
-	 * asserts nothing about it.
+	 * <p>What it CANNOT do is make the answer say any of this: whether the model relays a record it
+	 * was given is the model's, and this module asserts nothing about it. Measured on the issue's own
+	 * reproduction, it did not relay it — which is why the class does not travel by this record
+	 * alone. The class this note names is also published deterministically on the response, as the
+	 * {@code unresolvedDrugClass} key; that statement is read off the injected chart by
+	 * {@link org.openmrs.module.chartsearchai.ChartSearchAiUtils#unresolvedDrugClass}, so it is
+	 * non-null exactly when this record is in the prompt. Do not restate the class in a second
+	 * mapping field or a second key to serve it.
 	 *
 	 * @param drugClass the class name {@link DrugReferenceService#namedDrugClass} answered with
 	 */

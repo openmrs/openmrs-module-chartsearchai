@@ -4434,11 +4434,49 @@ sentence frames it without a clause of its own — which matters because the spa
 and the `Safety finding` one is pinned by `EndedOrderAnswerRuleTest`. The lead is a constant since
 this issue for the reason `FINDING_PREFIX` is one.
 
+**The statement is also published on the wire, and that was not the first plan.** The prompt record
+alone was, and it was measured insufficient: an injected record reaches a `/search` consumer only if
+the MODEL cites it — the response returns cited references and nothing else — and on the issue's own
+reproduction the model cited nothing and answered *"The records do not address starting an oral
+contraceptive for this patient."* Nothing a `/search` consumer reads reported the class at all; the
+only delta was `referenceSliceRecords 0 → 1` in the audit row, which that consumer cannot see. A partial fix invisible in production is also unverifiable in
+production, and the issue's own verification section says its criteria key off the **deterministic**
+parts of the response "never the answer's wording". So `ChartAnswer.getUnresolvedDrugClass()` carries
+the class name to a response key of the same name, present on the `/search` body and on both terminal
+SSE events — the surface [Decision 60](#decision-60-a-bounded-pairwise-interaction-list-states-its-own-bounds-on-the-response)
+established for the sibling failure, where a bounded chip list was indistinguishable from a complete
+one because nothing but the prose said so. The two remedies are not alternatives: the record is what
+lets the ANSWER say it, the key is what makes the module's own statement observable when the answer
+does not.
+
+**Read off the injected chart, never by asking the question again.** `ChartSearchAiUtils
+.unresolvedDrugClass(mappings)` returns the class note's `resourceUuid`, so the key is non-null
+exactly when the prompt carries the note — by construction rather than by two resolutions agreeing,
+which is the shape [Decision 58](#decision-58-the-pre-answer-pass-resolves-the-patients-active-orders-once-and-the-post-answer-pass-is-a-different-question)
+records issue #151 as. Re-asking `namedDrugClass` at a consumer would
+also be wrong on its own terms: that accessor is not self-gating, so it answers for a question that
+named a class AND resolved a substance, and it knows nothing about `injectFromQuery` being off.
+`LlmInferenceService` resolves it once per method, beside the reference slice and for the same
+reason, and sets it on every answer the method produces — the ungrounded one included, because under
+`grounding.async` the early `done` is the event a user sees. Unlike `interactionPairs`, which is
+legitimately `null` on that event because validation has not run, this is known before the model is
+called, so its absence there would be a defect.
+
+**Why one method writes it beside the chips.** `ChartSearchAiRestController.putModuleStatements`
+composes `putSafetyChips` with this key, and every emission surface calls it — the structural
+condition Decision 60 records, one payload site added later carrying the answer while dropping a
+deterministic safety statement. It composes rather than growing a third key inside `putSafetyChips`,
+which is named for the CHIPS and the completeness statement that must travel with them; the class
+note is neither. `ChartSearchAiUnresolvedDrugClassTest` fails the build on a second call to
+`putSafetyChips`, which is what forces the composition.
+
 **What this does NOT do, and what it is not evidence of.** The class is still not resolved, so the
-issue stays open: no chips, no `interactionPairs`. And what is deterministic here is the
-**injection**. Whether the answer relays a record it was given is the model's; this module asserts
-nothing about it, and `MEMORY`'s open note on the live model paraphrasing injected mechanism text is
-the reason not to.
+issue stays open: no chips, no `interactionPairs`, and the key names a class rather than putting
+substances in play. What the module publishes is what IT did; whether the answer PROSE relays the
+same thing is the model's, and `MEMORY`'s open note on the live model paraphrasing injected mechanism
+text is the reason not to assert it. So a client that renders only the answer text still sees what
+the issue's run saw: rendering the key is a change in `openmrs-esm-chartsearchai`, which this repo
+does not make — the same division of labour the client half of issue #201 is still waiting on.
 
 **Residues, named rather than claimed away.** The prose boundary rule does not collapse whitespace,
 so a question spelling a term with a double space or across a line break carries none. The note joins

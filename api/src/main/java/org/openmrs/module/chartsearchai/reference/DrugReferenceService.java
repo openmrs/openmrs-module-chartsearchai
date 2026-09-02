@@ -1225,6 +1225,14 @@ public class DrugReferenceService {
 	 * {@code DrugClassQuestionNoteTest.aQuestionNamingAClassAndAResolvableDrugRaisesNoNote} is that
 	 * case, and it drives the injector rather than this method for exactly that reason.
 	 *
+	 * <p><b>And a CONSUMER of the response never asks it.</b> What the {@code unresolvedDrugClass}
+	 * response key states is read off the injected chart by
+	 * {@link org.openmrs.module.chartsearchai.ChartSearchAiUtils#unresolvedDrugClass}, precisely
+	 * because this method is not self-gating and knows nothing of {@code injectFromQuery}: asking it
+	 * again at the wire would publish a class for a question the module did resolve a substance for,
+	 * and would be a second resolution of one question that can disagree with the prompt (issue
+	 * #151's shape). The sole production caller stays {@code DrugReferenceInjector.injectRecords}.
+	 *
 	 * <p><b>It answers with a class NAME and never a member set, deliberately.</b> A caller may report
 	 * that the question named a class; it may NOT read the answer as putting substances in play. The
 	 * candidate-set accessors are {@link #findImpliedByQuery} and {@link #findImpliedByDrugName} and

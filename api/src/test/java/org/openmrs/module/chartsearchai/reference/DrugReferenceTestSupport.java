@@ -338,6 +338,27 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/**
+	 * The whole chart the REAL pipeline produces for a question naming a drug CLASS the reference
+	 * data resolves no substance for (issue #354) — the DDInter excerpt and the shipped
+	 * cross-reactivity groups behind the real injector, so the {@code drug_class_note} mapping in it
+	 * is production's own.
+	 *
+	 * <p>Public for the cross-package reason {@link #injectedSafetyFindingChart} is: the inference
+	 * tests assert that the statement the wire publishes was read off the chart the model was given,
+	 * and a hand-built mapping would let a consumer that re-asked the question pass.
+	 *
+	 * @throws IllegalStateException when the question raises no class note, so a test cannot silently
+	 *         assert nothing — {@link #classNoteIn} is what raises it
+	 */
+	public static PatientChart injectedDrugClassNoteChart(String question) {
+		DrugReferenceService service = ddinterServiceWithGroups();
+		PatientChart chart = injectorWithSafety(service).injectRecords(oneRecordChart(),
+				ctx(34, null, set("warfarin 5mg"), set("B01AA03"), null, null), question);
+		classNoteIn(chart);
+		return chart;
+	}
+
+	/**
 	 * The first injected {@code safety_finding} in a chart a caller already holds — {@link
 	 * #injectedFindings}' single-record form, public for the same cross-package reason
 	 * {@link #injectedSafetyFindingChart} is: a test that serves a chart and cites a record out of

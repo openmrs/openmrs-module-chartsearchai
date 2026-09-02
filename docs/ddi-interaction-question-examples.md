@@ -111,7 +111,7 @@ curl -s -u admin:Admin123 -H 'Content-Type: application/json' \
   http://localhost:8081/openmrs/ws/rest/v1/chartsearchai/search | jq
 ```
 
-Four fields of the response matter for these tests:
+Five fields of the response matter for these tests:
 
 | Field | What it is |
 |---|---|
@@ -119,6 +119,7 @@ Four fields of the response matter for these tests:
 | `safetyWarnings` | the **deterministic** chips. Computed by `DrugSafetyValidator` from the chart and the knowledge base, with no model involvement. Each carries `type`, `drug`, `detail` and — since [#340](https://github.com/openmrs/openmrs-module-chartsearchai/issues/340) — a `severity` |
 | `interactionPairs` | `{"found": N, "reported": M}` — how many above-floor rule pairs the interaction check related and how many survived the chip cap ([#336](https://github.com/openmrs/openmrs-module-chartsearchai/issues/336)); the drug-in-play arm states it too since [#356](https://github.com/openmrs/openmrs-module-chartsearchai/issues/356) and is not capped, so its two numbers are always equal. `{"found":0}` means an arm ran and related nothing. **`null` is not completeness** — what it does cover is enumerated in `PairChipExtent`'s class javadoc and in `README.md`, and deliberately nowhere else, so read it there rather than inferring it from the cells below |
 | `references` | the records the answer actually **cited** — `drug_order`, `allergy`, `condition`, `safety_finding`, `drug_reference`, and since [#354](https://github.com/openmrs/openmrs-module-chartsearchai/issues/354) `drug_class_note` for a question that names a drug class no reference entry is indexed by |
+| `unresolvedDrugClass` | the drug **class** the question named and the module resolved to no substance, or `null` where it states none ([#354](https://github.com/openmrs/openmrs-module-chartsearchai/issues/354)). Deterministic like the chips: the same statement is injected as a citable `drug_class_note` record, but that reaches the response only if the model cites it — so this is what a test on a class-term question reads. `null` is the absence of a statement, never a denial |
 
 > **Judge the chips, not only the prose.** The chips are the tested, deterministic layer; the
 > prose is a small local model's rendering of it. Several examples below are cases where the

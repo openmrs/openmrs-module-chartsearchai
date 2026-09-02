@@ -14,7 +14,9 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
 
 /**
  * Issue #349: an injected {@code safety_finding} states which of this patient's own active orders
- * each substance it names was resolved from, where no name that order records names it.
+ * each substance it names was resolved from, where the name that order DISPLAYS does not name it —
+ * the silence test #349 shipped was every name the order RECORDS, and issue #347 narrowed it; see
+ * {@code OneOrderNameAcrossAnswerAndChipTest}.
  *
  * <p>The reported shape: two active orders whose only chart names are the local brands
  * {@code Zolvimix} and {@code Klarizom}, resolved to Simvastatin and Clarithromycin through their WHO
@@ -414,6 +416,7 @@ public class InteractionFindingChartOrderBridgeTest {
 		assertEquals(1, chips.size(), "one pair is one chip, was: " + chips);
 		assertEquals("Simvastatin interacts with active order Clarithromycin — " + RATING_AND_MECHANISM,
 			chips.get(0).getDetail(),
-			"the clause is prompt-facing only: the chip a clinician reads is unchanged");
+			"the chip's own detail is unchanged by the clause — since #347 the attributions reach a "
+					+ "client as the chip's chartOrderBridges key, and its detail still must not");
 	}
 }

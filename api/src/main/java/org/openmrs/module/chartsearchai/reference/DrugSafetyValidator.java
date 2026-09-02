@@ -5141,10 +5141,11 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * Which of this patient's own active orders each substance a chip NAMES was resolved from, where no
-	 * name that order records names it — issue #349, the bridge the injected {@code safety_finding}
-	 * states so that a finding about a brand-named prescription is citeable at all. Empty for every
-	 * chip whose substances the chart already spells, which is the common case.
+	 * Which of this patient's own active orders each substance a chip NAMES was resolved from, where
+	 * the name that order DISPLAYS does not name it — issue #349, the bridge the injected
+	 * {@code safety_finding} states so that a finding about a brand-named prescription is citeable at
+	 * all, and published as that chip's {@code chartOrderBridges} since issue #347. Empty for every
+	 * chip whose substances their own orders display, which is the common case.
 	 *
 	 * <p><b>Why it exists.</b> A finding names its substances in the KNOWLEDGE BASE's vocabulary, which
 	 * is right and is issue #339's settlement. Where the module reached a substance from an active order
@@ -5924,13 +5925,22 @@ public class DrugSafetyValidator {
 	 *         an over-wide answer withholds a partner, which misses a pair and can never invent one.
 	 *         <b>That last clause stopped being the whole story at issue #349</b>, which asks this
 	 *         predicate a second question — which SIDE a bridge item is attributed to — whose answer is
-	 *         PRINTED into a citable record. There an over-wide code leg states
-	 *         "&lt;subject&gt; from &lt;a different substance's prescription&gt;". The two legs split:
-	 *         the NAME leg's residue is closed by construction, because
-	 *         {@link #recordsANameOf} is that leg, so wherever it is over-wide the bridge's own
-	 *         silence test fires on the same evidence; the CODE leg's is not. No shipped-KB instance is
-	 *         constructed for it (it needs two substances under one level-5 code AND no name match), and
-	 *         it is named here rather than left to be found.
+	 *         PRINTED into a citable record. There an over-wide leg states
+	 *         "&lt;subject&gt; from &lt;a different substance's prescription&gt;".
+	 *         <b>Both legs are exposed to that since issue #347, and this paragraph said otherwise
+	 *         until then.</b> It read "the NAME leg's residue is closed by construction, because
+	 *         {@link #recordsANameOf} is that leg, so wherever it is over-wide the bridge's own silence
+	 *         test fires on the same evidence" — true only while the silence test was this same fold.
+	 *         It is now {@link #displaysANameOfAny}, over the one name a chart record displays, so an
+	 *         over-wide NAME match reached through some OTHER recorded name — the order's concept name,
+	 *         its free text — no longer silences itself. What the printed clause claims is still true of
+	 *         the module: it states a RESOLUTION this pass performed, not a fact about the drug, and
+	 *         that same resolution already decides the pair suppression this javadoc is about. So #347
+	 *         makes an over-wide resolution VISIBLE rather than creating one. No shipped-KB instance is
+	 *         constructed for either leg (the code leg needs two substances under one level-5 code AND
+	 *         no name match; the name leg needs an entry whose alias is a bounded token inside another
+	 *         substance's recorded name, the {@code insulin}/{@code insulin glargine} shape, which this
+	 *         repo's fixtures do not carry), and both are named here rather than left to be found.
 	 *         That reasoning is this predicate's alone and does not transfer.
 	 *         {@link #classRelationships}'s restating-existing-therapy skip keeps its own exact-code
 	 *         test beside a substance-identity one for the opposite reason — there the code is all a
@@ -5962,11 +5972,12 @@ public class DrugSafetyValidator {
 		return false;
 	}
 
-	/** @return true when ANY row of the subject's substance matches the recorded order name — the group
-	 *          form of {@link DrugReference#matchesDrugName}, for the flattened fallback below and,
-	 *          since issue #349, for {@link #recordsANameOfAny}. Both readings of one primitive on
-	 *          purpose: a tightening here must move the bridge's silence test with the arm's own
-	 *          attribution, which is why the bridge does not fold over the rows itself. */
+	/** @return true when ANY row of the subject's substance matches one order name — the group form of
+	 *          {@link DrugReference#matchesDrugName}, for the flattened fallback below, for
+	 *          the bridge's silence test {@link #displaysANameOfAny} (issue #347) and for
+	 *          the arm's own attribution. Every reading goes through this one primitive on purpose, so
+	 *          a tightening of the MATCHER moves them together; what they no longer share is the
+	 *          OPERAND, which is that issue's own subject. */
 	private static boolean matchesDrugNameAny(List<DrugReference> subjectRows, String name) {
 		for (DrugReference row : subjectRows) {
 			if (row.matchesDrugName(name)) {
@@ -5977,10 +5988,10 @@ public class DrugSafetyValidator {
 	}
 
 	private static boolean resolvesFrom(DrugReference ref, PatientClinicalContext.ActiveDrugOrder order) {
-		// The name leg is {@link #recordsANameOf}, shared rather than spelled again: since issue #349
-		// the bridge's silence test is "this predicate is true and its NAME leg is not what made it
-		// true", and two copies of the leg would let that stop being so — silently, and in the
-		// direction that reopens #349 for the order concerned.
+		// The name leg is recordsANameOf, shared rather than spelled again so that one matcher decides
+		// both what an order is attributed to and what a printed bridge may say about it. Until issue
+		// #347 it was more than that — the bridge's silence test WAS this leg negated — and the
+		// javadoc above records what changed and what it exposes.
 		if (recordsANameOf(ref, order)) {
 			return true;
 		}

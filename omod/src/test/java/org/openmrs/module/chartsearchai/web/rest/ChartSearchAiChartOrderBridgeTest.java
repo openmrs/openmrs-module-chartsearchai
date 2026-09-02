@@ -165,11 +165,19 @@ public class ChartSearchAiChartOrderBridgeTest {
 	}
 
 	@Test
-	public void theTwoHalvesAreSeparateFieldsAndNotASentenceToParse() {
+	public void theTwoHalvesAreSeparateFieldsAndNotASentenceToParse() throws Exception {
 		// The reason issue #340 publishes `severity` rather than leaving a client to substring-match
 		// the detail. A rendered "Ibuprofen from Advil 400mg" would put this module's prose in a slot
 		// a client has to take apart, and this module rewords its prose freely.
-		JsonNode bridge = chartOrderBridgesOfOnlyChip(searchPayload()).get(0);
+		//
+		// Read off the STREAM rather than the /search payload, because this is the one case about the
+		// JSON a client receives: the payload map carries the module's own list, so its field names
+		// come from whatever mapper serializes it later, while the SSE path writes real bytes through
+		// the controller's own ObjectMapper. The /search cases assert what the payload carries; this
+		// one asserts what comes out.
+		controller.streamAnswer(out, patient(), "Is aspirin safe for her?", new User(3), false);
+		JsonNode bridge = eventData("done").get("safetyWarnings").get(0)
+				.get("chartOrderBridges").get(0);
 
 		assertEquals(2, bridge.size(),
 				"exactly the two fields, so neither side needs parsing out of the other, and a public "

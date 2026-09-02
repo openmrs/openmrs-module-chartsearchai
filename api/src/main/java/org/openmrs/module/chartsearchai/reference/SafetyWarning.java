@@ -157,7 +157,8 @@ public class SafetyWarning {
 		// Copied and wrapped rather than stored as handed: this list travels to
 		// DrugReferenceInjector.renderFinding, so a caller that went on filling its own builder would
 		// change what a record already published. Never null, so no reader branches on absence —
-		// an empty list is the honest answer for every chip whose substances the chart already names.
+		// an empty list is the honest answer for every chip whose substances the orders they came from
+		// already display.
 		this.chartOrderBridges = chartOrderBridges == null || chartOrderBridges.isEmpty()
 				? Collections.<ChartOrderBridge> emptyList()
 				: Collections.unmodifiableList(new ArrayList<ChartOrderBridge>(chartOrderBridges));
@@ -200,8 +201,9 @@ public class SafetyWarning {
 	 * @param reconciledNoteName see {@link #reconciledPartnerNoteName} — null when the reconciliation
 	 *        refused or reached no co-medication, so that a refusal and an absent answer are one answer
 	 *        here, as they are for the chip
-	 * @param chartOrderBridges see {@link #chartOrderBridges()} — empty where the chart already names
-	 *        every substance this chip names, which is the common case and not a degraded one
+	 * @param chartOrderBridges see {@link #chartOrderBridges()} — empty where every substance this chip
+	 *        names is displayed by the order it came from, which is the common case and not a
+	 *        degraded one
 	 */
 	// Three facts travel here, not two: the paragraphs above are worded for the pair issue #297 added
 	// and issue #349 put a third beside them. Read the @param list rather than any count in the prose.
@@ -517,9 +519,11 @@ public class SafetyWarning {
 
 	/**
 	 * Which of this patient's own active orders each substance this chip NAMES was resolved from, where
-	 * no name that order records names it — the bridge {@code DrugReferenceInjector.renderFinding}
-	 * states in the injected {@code safety_finding} (issue #349). Empty, never null, for every chip
-	 * whose substances the chart already spells, for every chip that is not an interaction, and for every
+	 * the name that order DISPLAYS does not name it — the bridge
+	 * {@code DrugReferenceInjector.renderFinding} states in the injected {@code safety_finding} (issue
+	 * #349; the silence test became the display at issue #347, and
+	 * {@code DrugSafetyValidator.displaysANameOfAny} records why). Empty, never null, for every chip
+	 * whose substances their own orders display, for every chip that is not an interaction, and for every
 	 * interaction chip built from a public constructor here rather than through
 	 * {@code DrugSafetyValidator.interactionWarning} — the class-only and question-pair chips, whose
 	 * residue ADR Decision 64 records.
@@ -567,10 +571,13 @@ public class SafetyWarning {
 	 * One substance this chip names, and one active order of this patient's that the module resolved it
 	 * from — the pair {@code DrugReferenceInjector.FINDING_CHART_ORDER_LEAD}'s items are rendered from.
 	 *
-	 * <p>A value class with {@link #equals} and {@link #hashCode}. <b>{@code equals} has one reader</b>,
-	 * {@code DrugSafetyValidator.addChartOrderBridge}'s {@code out.contains(bridge)} — an
-	 * {@code ArrayList}, so that resolves to {@code equals} and never to {@code hashCode}, which has NO
-	 * reader today and is here only to hold the contract with {@code equals}. It is the
+	 * <p>A value class with {@link #equals} and {@link #hashCode}. <b>{@code equals} has two readers</b>
+	 * — {@code DrugSafetyValidator.addChartOrderBridge}'s {@code out.contains(bridge)}, an
+	 * {@code ArrayList}, so that resolves to {@code equals} and never to {@code hashCode}; and, since
+	 * issue #347 published this list, the {@code List.equals} inside
+	 * {@code ChartSearchAiSafetyWarningSeverityWireTest}'s accessor-versus-key comparison.
+	 * {@code hashCode} has NO reader (Jackson serializes through the getters below, not through
+	 * either) and is here only to hold the contract with {@code equals}. The first reader is the
 	 * de-duplication that makes two orders of one display state their substance once, pinned by
 	 * {@code InteractionFindingChartOrderBridgeTest.twoOrdersOfTheSameDisplayAreNamedOnce}. Said
 	 * precisely because an earlier draft named the chip COLLAPSE as the reason and that is false (it
@@ -580,7 +587,7 @@ public class SafetyWarning {
 	 * none so that nothing DOWNSTREAM can collapse chips this module meant to keep apart
 	 * ({@code InteractionRouteVariantTest}).
 	 *
-	 * <p>Both fields are strings a record PRINTS. {@code substanceName} is the name the chip already
+	 * <p>Both fields are strings a record PRINTS. {@code substance} is the name the chip already
 	 * says — never a second answer to which name to print — and {@code orderDisplay} is the order's own
 	 * display, which is the string a chart record of that order carries wherever the order has a drug
 	 * row ({@code DrugSafetyValidator.displaysANameOfAny} records the one shape where it does not).
@@ -597,22 +604,28 @@ public class SafetyWarning {
 	 */
 	public static final class ChartOrderBridge {
 
-		private final String substanceName;
+		private final String substance;
 
 		private final String orderDisplay;
 
 		/** Both arguments are required: {@link #equals} and {@link #hashCode} dereference them, and a
 		 *  bridge with nothing to name is the absence of one. {@code DrugSafetyValidator} refuses that
 		 *  case before reaching here rather than by a check in this constructor, so a caller building
-		 *  one by hand owes the same. */
-		public ChartOrderBridge(String substanceName, String orderDisplay) {
-			this.substanceName = substanceName;
+		 *  one by hand owes the same.
+		 *
+		 *  <p>The two fields are NAMED for their getters rather than for what they hold
+		 *  ({@code substance}, not {@code substanceName}) so that this class serializes to the same two
+		 *  keys under a getter-based mapper and under a field-based one — those key names are issue
+		 *  #347's contract, documented in README, and the {@code /search} payload carries this object
+		 *  for a mapper the module does not configure. */
+		public ChartOrderBridge(String substance, String orderDisplay) {
+			this.substance = substance;
 			this.orderDisplay = orderDisplay;
 		}
 
 		/** @return the substance name the chip prints — the {@code substance} half of the wire pair. */
 		public String getSubstance() {
-			return substanceName;
+			return substance;
 		}
 
 		/** @return the patient's own order it was resolved from, as that order displays — the
@@ -630,17 +643,17 @@ public class SafetyWarning {
 				return false;
 			}
 			ChartOrderBridge that = (ChartOrderBridge) other;
-			return substanceName.equals(that.substanceName) && orderDisplay.equals(that.orderDisplay);
+			return substance.equals(that.substance) && orderDisplay.equals(that.orderDisplay);
 		}
 
 		@Override
 		public int hashCode() {
-			return 31 * substanceName.hashCode() + orderDisplay.hashCode();
+			return 31 * substance.hashCode() + orderDisplay.hashCode();
 		}
 
 		@Override
 		public String toString() {
-			return substanceName + " from " + orderDisplay;
+			return substance + " from " + orderDisplay;
 		}
 	}
 

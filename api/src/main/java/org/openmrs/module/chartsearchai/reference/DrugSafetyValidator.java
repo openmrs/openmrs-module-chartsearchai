@@ -16,6 +16,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -406,6 +407,13 @@ public class DrugSafetyValidator {
 		List<DrugReference> orderEntries = resolvedOrderEntries != null ? resolvedOrderEntries
 				: drugReferenceService.findForActiveOrders(rawContext);
 		PatientClinicalContext context = drugReferenceService.withReferenceNames(rawContext, orderEntries);
+		// The bridged-concept leg's answer for this pass, resolved ONCE and passed down (issue #353).
+		// A per-call LOCAL and never a field — this bean is a Spring singleton (issue #172) — and a
+		// parameter rather than a memo, which is issue #255's shape: the one resolution travels to
+		// every site that asks whether an order accounts for an entry, so no two of them can answer
+		// differently. Resolved here, beside the context it is about, because every consumer of it is
+		// downstream of this line.
+		BridgedOrders bridgedOrders = BridgedOrders.of(drugReferenceService, context);
 
 		boolean warnDose = toggle(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_DOSE_EXCESS,
 				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_WARN_ON_DOSE_EXCESS);
@@ -624,7 +632,7 @@ public class DrugSafetyValidator {
 				// the same active order, so the decision of how many chips that pair gets belongs to a
 				// method that sees both (issue #88).
 				int related = addInteractionWarnings(warnings, rows, subjects, context, severityFloor,
-						orderEntries, interactionPairs, coMedications, statedChips);
+						orderEntries, interactionPairs, coMedications, statedChips, bridgedOrders);
 				if (questionSubstances.contains(substance)) {
 					questionDrugScreened = true;
 					questionDrugPairs += related;
@@ -695,7 +703,7 @@ public class DrugSafetyValidator {
 		if (warnInteractions && questionDrugs.isEmpty()
 				&& QueryScopeRouter.isInteractionScreening(question)) {
 			pairExtent = addActiveOrderPairInteractions(warnings, subjects, context, severityFloor,
-					orderEntries, interactionPairs, coMedications, statedChips);
+					orderEntries, interactionPairs, coMedications, statedChips, bridgedOrders);
 		}
 		// And where neither of them ran, the arm that DID screen speaks (issue #356). "Can I give this
 		// patient X?" typically resolves one drug: too few for the question-pair arm, too many for the
@@ -2650,7 +2658,7 @@ public class DrugSafetyValidator {
 	private int addInteractionWarnings(List<SafetyWarning> warnings, List<DrugReference> rows,
 			SubstanceSubjects subjects, PatientClinicalContext context, int severityFloor,
 			List<DrugReference> orderEntries, InteractionPairs pairs, CoMedications coMedications,
-			StatedInteractionChips statedChips) {
+			StatedInteractionChips statedChips, BridgedOrders bridgedOrders) {
 		if (context == null) {
 			return 0;
 		}
@@ -2741,7 +2749,7 @@ public class DrugSafetyValidator {
 			// Passing the screening arm's reduction would leave the partner unbridged on a combination
 			// prescription carrying both substances — issue #349's own defect, one shape along.
 			List<SafetyWarning.ChartOrderBridge> bridges = chartOrderBridges(rows, ref, rule.partner,
-				partnerName, context, context.getActiveDrugOrders(), orderEntries);
+				partnerName, context, context.getActiveDrugOrders(), orderEntries, bridgedOrders);
 			SafetyWarning chip;
 			if (fold == null) {
 				// No class sentence to fold, and since issue #339 that no longer decides what the order
@@ -5185,7 +5193,8 @@ public class DrugSafetyValidator {
 	 * reaches the substance, through {@link #matchesDrugNameAny} over that order's names — and
 	 * {@link #resolvesFrom}'s own name leg IS {@link #recordsANameOf}, the single-row form of the same
 	 * fold, so the silence test is exactly "{@code resolvesFrom} is true and its NAME leg is not what
-	 * made it true", i.e. the ATC leg alone. That is why the residue
+	 * made it true" — which since issue #353 is the ATC leg or the bridged-concept leg, and the
+	 * negation is what the test is stated on rather than any list of the others. That is why the residue
 	 * is issue #136's alias-spelling shape and not this one:
 	 * {@code .anOrderNamingTheSubstanceOnlyByAnAliasIsNotBridged} is the case that reddens if this ever
 	 * weakens back to a printed-name test.
@@ -5254,7 +5263,7 @@ public class DrugSafetyValidator {
 			List<DrugReference> subjectRows, DrugReference subjectRow, DrugReference partnerRow,
 			String partnerName, PatientClinicalContext context,
 			List<PatientClinicalContext.ActiveDrugOrder> partnerWitnesses,
-			List<DrugReference> orderEntries) {
+			List<DrugReference> orderEntries, BridgedOrders bridged) {
 		// The null half of this guard is unreachable and defensive only — both arms have already
 		// dereferenced or early-returned on a null context. Said so that the guard does not look
 		// better defended than it is, as addChartOrderBridge's own javadoc does for its blank-name
@@ -5268,11 +5277,11 @@ public class DrugSafetyValidator {
 		// partner only against the orders its own arm allowed to witness it. Two walks and not one
 		// branch: an order can be BOTH, and on the arm that made no reduction it must be able to say so.
 		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
-			addChartOrderBridge(out, subjectRows, subjectName, order);
+			addChartOrderBridge(out, subjectRows, subjectName, order, bridged);
 		}
 		List<DrugReference> partnerRows = rowsOfSubstance(orderEntries, partnerRow);
 		for (PatientClinicalContext.ActiveDrugOrder order : partnerWitnesses) {
-			addChartOrderBridge(out, partnerRows, partnerName, order);
+			addChartOrderBridge(out, partnerRows, partnerName, order, bridged);
 		}
 		return out;
 	}
@@ -5291,11 +5300,11 @@ public class DrugSafetyValidator {
 	 *         not suppress.
 	 */
 	private static List<PatientClinicalContext.ActiveDrugOrder> ordersOtherThan(
-			List<DrugReference> subjectRows, PatientClinicalContext context) {
+			List<DrugReference> subjectRows, PatientClinicalContext context, BridgedOrders bridged) {
 		List<PatientClinicalContext.ActiveDrugOrder> out =
 				new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
 		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
-			if (!resolvesFromAny(subjectRows, order)) {
+			if (!resolvesFromAny(subjectRows, order, bridged)) {
 				out.add(order);
 			}
 		}
@@ -5316,9 +5325,9 @@ public class DrugSafetyValidator {
 	 */
 	private static void addChartOrderBridge(List<SafetyWarning.ChartOrderBridge> out,
 			List<DrugReference> rows, String printedName,
-			PatientClinicalContext.ActiveDrugOrder order) {
+			PatientClinicalContext.ActiveDrugOrder order, BridgedOrders bridged) {
 		if (ChartSearchAiUtils.isBlank(printedName) || !displayNamesADrug(order)
-				|| !resolvesFromAny(rows, order) || recordsANameOfAny(rows, order)) {
+				|| !resolvesFromAny(rows, order, bridged) || recordsANameOfAny(rows, order)) {
 			return;
 		}
 		SafetyWarning.ChartOrderBridge bridge = new SafetyWarning.ChartOrderBridge(printedName.trim(),
@@ -5485,7 +5494,8 @@ public class DrugSafetyValidator {
 	private PairChipExtent addActiveOrderPairInteractions(List<SafetyWarning> warnings,
 			SubstanceSubjects subjects, PatientClinicalContext context, int severityFloor,
 			List<DrugReference> orderDrugs, InteractionPairs reportedPairs,
-			CoMedications coMedications, StatedInteractionChips statedChips) {
+			CoMedications coMedications, StatedInteractionChips statedChips,
+			BridgedOrders bridgedOrders) {
 		if (context == null) {
 			// The arm could not run at all, so it states nothing — not a complete screen of zero pairs.
 			return null;
@@ -5519,13 +5529,14 @@ public class DrugSafetyValidator {
 			// Resolved once per subject SUBSTANCE, not per rule, and reduced by the whole group: with the
 			// group as subject, an order any of its rows resolves from is the subject's own order, so a
 			// sibling row may not witness the subject's pair either (see activeOrdersOtherThan).
-			PatientClinicalContext others = activeOrdersOtherThan(substance, orderDrugs, context);
+			PatientClinicalContext others = activeOrdersOtherThan(substance, orderDrugs, context,
+					bridgedOrders);
 			// The same reduction as a list of ORDERS, for the bridge (#349). Resolved here beside the
 			// context it mirrors and not at the chip site below, because it is invariant per subject
 			// SUBSTANCE while that site runs once per pair — and this walk calls resolvesFromAny for
 			// every order, which is the term chartOrderBridges' own cost measurement identifies.
 			List<PatientClinicalContext.ActiveDrugOrder> partnerWitnesses =
-					ordersOtherThan(substance, context);
+					ordersOtherThan(substance, context, bridgedOrders);
 			// bestRulePerPartner applies the severity floor and the hasActiveDrug join and returns at
 			// most ONE rule per partner label, most severe first (#121) — the same grouping, the same
 			// predicate and now the same subject unit the drug-in-play arm gets, asked of the OTHER
@@ -5622,7 +5633,7 @@ public class DrugSafetyValidator {
 				// activeOrdersOtherThan applied to `others` above, through its own predicate, so the
 				// bridge cannot name an order this arm refused as a self-witness.
 				List<SafetyWarning.ChartOrderBridge> bridges = chartOrderBridges(substance, subject,
-					partner, chipPartnerName, context, partnerWitnesses, orderDrugs);
+					partner, chipPartnerName, context, partnerWitnesses, orderDrugs, bridgedOrders);
 				SafetyWarning chip = reconciled == null ? interactionWarning(subject, i, bridges)
 						: interactionWarning(subject, i, reconciled.chipName, reconciled.noteName, null,
 							bridges);
@@ -5749,7 +5760,7 @@ public class DrugSafetyValidator {
 	 *         no order identity there is nothing to attribute an entry to.
 	 */
 	private static PatientClinicalContext activeOrdersOtherThan(List<DrugReference> subjectRows,
-			List<DrugReference> orderDrugs, PatientClinicalContext context) {
+			List<DrugReference> orderDrugs, PatientClinicalContext context, BridgedOrders bridged) {
 		Set<String> names = new LinkedHashSet<String>();
 		Set<String> referenceNames = new LinkedHashSet<String>();
 		Set<String> codes = new LinkedHashSet<String>(context.getActiveDrugAtcCodes());
@@ -5770,14 +5781,15 @@ public class DrugSafetyValidator {
 			Set<String> ownCodes = new LinkedHashSet<String>();
 			Set<String> otherCodes = new LinkedHashSet<String>();
 			for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
-				if (!resolvesFromAny(subjectRows, order)) {
+				if (!resolvesFromAny(subjectRows, order, bridged)) {
 					names.addAll(order.getNames());
 					otherCodes.addAll(order.getAtcCodes());
 					// And the reference names of the entries THIS order resolves to, so the #136 leg of
 					// the join is witnessed by this order too — never by the subject's own rows, which is
 					// why it is collected here rather than taken whole off the context.
 					for (DrugReference coResolved : orderDrugs) {
-						if (!subjectRows.contains(coResolved) && resolvesFrom(coResolved, order)) {
+						if (!subjectRows.contains(coResolved)
+								&& resolvesFrom(coResolved, order, bridged)) {
 							referenceNames.addAll(coResolved.getAliases());
 						}
 					}
@@ -5801,7 +5813,7 @@ public class DrugSafetyValidator {
 				// code outside it means a hand-built context supplied one — this branch
 				// only runs when the order list is non-empty, so #118's flattened-only shape is not it.
 				for (DrugReference coResolved : orderDrugs) {
-					if (!subjectRows.contains(coResolved) && resolvesFrom(coResolved, order)) {
+					if (!subjectRows.contains(coResolved) && resolvesFrom(coResolved, order, bridged)) {
 						ownCodes.addAll(coResolved.normalizedAtcCodes());
 					}
 				}
@@ -5861,13 +5873,16 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * @return true when {@code ref} resolves from {@code order} — through either of the two matchers
+	 * @return true when {@code ref} resolves from {@code order} — through any of the three matchers
 	 *         that could have made {@code ref} a subject in
 	 *         {@link DrugReferenceService#findForActiveOrders}, asked of this
 	 *         one order: a drug-name alias match on one of its names
 	 *         ({@link DrugReference#matchesDrugName}, the primitive under
-	 *         {@link DrugReferenceService#findImpliedByDrugName}) or one of its ATC codes
-	 *         ({@link DrugReferenceService#findByActiveOrders}). So "which order is this subject's own"
+	 *         {@link DrugReferenceService#findImpliedByDrugName}), one of its ATC codes
+	 *         ({@link DrugReferenceService#findByActiveOrders}), or the concept it was written against
+	 *         ({@link DrugReferenceService#findByBridgedConcept}, issue #353 — carried into this
+	 *         method as {@link BridgedOrders} rather than resolved here, because it is ranked and
+	 *         ranking costs a dataset pass). So "which order is this subject's own"
 	 *         is answered by the matchers that chose it, and every arm of
 	 *         {@link PatientClinicalContext#hasActiveDrug} is thereby attributed — the reference-name
 	 *         arm too, since #136's names are collected per order through this same predicate. The
@@ -5916,12 +5931,85 @@ public class DrugSafetyValidator {
 	 *         ester outright) AND a rule between the two — unmeasured on the shipped KB, so narrowing it
 	 *         would be a change without a case.
 	 */
+	/**
+	 * The bridged-concept leg's answer for ONE pass: which reference entries the dataset's dictionary
+	 * bridge attributes to each of this patient's active orders (issue #353).
+	 *
+	 * <p><b>Why it is carried rather than asked.</b> The leg is RANKED — see
+	 * {@link DrugReferenceService#findByBridgedConcept} for why an unranked one is unsafe here — and
+	 * ranking costs a dataset resolution per concept. Asked at {@link #resolvesFrom}, which runs once
+	 * per (row, order) pair inside two nested loops, that would be a resolution per comparison. So it
+	 * is resolved once for the pass, in {@code validate}, and travels as a parameter: a per-call LOCAL
+	 * and never a field, this bean being a Spring singleton (issue #172), and the same shape issue #255
+	 * gave the resolved order list.
+	 *
+	 * <p>Keyed by object IDENTITY on the order, not by its uuid: an order's uuid may be null, and the
+	 * same {@code ActiveDrugOrder} objects are shared by the contexts
+	 * {@link #activeOrdersOtherThan} builds, so identity is both available and exactly the right
+	 * grain. {@link #NONE} is the answer for a pass with no chart to read and for a caller-built
+	 * context whose orders record no concept — the ordinary state of a hand-built one — and it makes
+	 * the leg contribute nothing rather than throw.
+	 */
+	static final class BridgedOrders {
+
+		/** No order is bridged to anything — what a pass over a chart the module could not read gets,
+		 *  and what every order built through {@code ActiveDrugOrder}'s public constructors gets. */
+		static final BridgedOrders NONE = new BridgedOrders(
+				Collections.<PatientClinicalContext.ActiveDrugOrder, List<DrugReference>> emptyMap());
+
+		private final Map<PatientClinicalContext.ActiveDrugOrder, List<DrugReference>> byOrder;
+
+		private BridgedOrders(
+				Map<PatientClinicalContext.ActiveDrugOrder, List<DrugReference>> byOrder) {
+			this.byOrder = byOrder;
+		}
+
+		/**
+		 * Resolves the leg for every active order {@code context} carries, through the one accessor
+		 * that defines it. One resolution cache across the whole walk, so two orders written against
+		 * one concept — or two concepts the bridge records under one name — cost one dataset pass
+		 * between them.
+		 */
+		static BridgedOrders of(DrugReferenceService service, PatientClinicalContext context) {
+			if (service == null || context == null || context.getActiveDrugOrders().isEmpty()) {
+				return NONE;
+			}
+			Map<PatientClinicalContext.ActiveDrugOrder, List<DrugReference>> byOrder =
+					new IdentityHashMap<PatientClinicalContext.ActiveDrugOrder, List<DrugReference>>();
+			Map<Object, Set<Object>> impliedByName = new HashMap<Object, Set<Object>>();
+			for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+				List<DrugReference> entries =
+						service.findByBridgedConcept(order.getConceptUuid(), impliedByName);
+				if (!entries.isEmpty()) {
+					byOrder.put(order, entries);
+				}
+			}
+			return byOrder.isEmpty() ? NONE : new BridgedOrders(byOrder);
+		}
+
+		/** @return true when the dataset's bridge attributes {@code ref} to {@code order}'s own concept.
+		 *          Identity comparison on the entry, as every other dedup over this bean's shared
+		 *          {@code getAll()} cache is. */
+		boolean joins(DrugReference ref, PatientClinicalContext.ActiveDrugOrder order) {
+			List<DrugReference> entries = byOrder.get(order);
+			if (entries == null) {
+				return false;
+			}
+			for (DrugReference entry : entries) {
+				if (entry == ref) {
+					return true;
+				}
+			}
+			return false;
+		}
+	}
+
 	/** @return true when ANY row of the subject's substance {@link #resolvesFrom} {@code order} — the
 	 *          group form of that test, since the screening arm's subject is a substance (issue #189). */
 	private static boolean resolvesFromAny(List<DrugReference> subjectRows,
-			PatientClinicalContext.ActiveDrugOrder order) {
+			PatientClinicalContext.ActiveDrugOrder order, BridgedOrders bridged) {
 		for (DrugReference row : subjectRows) {
-			if (resolvesFrom(row, order)) {
+			if (resolvesFrom(row, order, bridged)) {
 				return true;
 			}
 		}
@@ -5942,7 +6030,8 @@ public class DrugSafetyValidator {
 		return false;
 	}
 
-	private static boolean resolvesFrom(DrugReference ref, PatientClinicalContext.ActiveDrugOrder order) {
+	private static boolean resolvesFrom(DrugReference ref, PatientClinicalContext.ActiveDrugOrder order,
+			BridgedOrders bridged) {
 		// The name leg is {@link #recordsANameOf}, shared rather than spelled again: since issue #349
 		// the bridge's silence test is "this predicate is true and its NAME leg is not what made it
 		// true", and two copies of the leg would let that stop being so — silently, and in the
@@ -5952,8 +6041,15 @@ public class DrugSafetyValidator {
 		}
 		// Emptiness first: most orders carry no ATC map at all, and this way their subject check costs no
 		// allocation (normalizedAtcCodes builds a set per call).
-		return !order.getAtcCodes().isEmpty()
-				&& !Collections.disjoint(order.getAtcCodes(), ref.normalizedAtcCodes());
+		if (!order.getAtcCodes().isEmpty()
+				&& !Collections.disjoint(order.getAtcCodes(), ref.normalizedAtcCodes())) {
+			return true;
+		}
+		// The bridged-concept leg (issue #353), asked LAST because it is the only one that needs the
+		// pass's own resolution. Same rule as the candidate set's third leg and resolved by the same
+		// method, so this predicate and DrugReferenceService.findForActiveOrders cannot come to
+		// disagree about which orders resolved a substance — the disagreement issue #151 records.
+		return bridged.joins(ref, order);
 	}
 
 	/**

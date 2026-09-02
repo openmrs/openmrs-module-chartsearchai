@@ -306,6 +306,10 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 				ref.setGenericName(row.rxnormName.toLowerCase(Locale.ROOT));
 			}
 			ref.setAliases(row.aliases);
+			// The identity beside the names (issue #353). Kept rather than folded into the aliases,
+			// because which CONCEPT a name came from is what the order-to-entry join needs and a flat
+			// alias list cannot say.
+			ref.setBridgedConcepts(row.bridgedConcepts);
 			ref.setAtcCodes(row.atc);
 			ref.setInteractions(interactionsFor(links, byId));
 			ref.setSource(SOURCE);
@@ -544,8 +548,12 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 
 		final List<String> aliases;
 
+		/** The {@code ciel[]} rows, uuid and name together — see {@link DrugReference#getBridgedConcepts()}. */
+		final List<DrugReference.BridgedConcept> bridgedConcepts;
+
 		private DrugRow(String id, String name, String rxcui, String rxnormName, String drugbankId,
-				List<String> atc, List<String> aliases) {
+				List<String> atc, List<String> aliases,
+				List<DrugReference.BridgedConcept> bridgedConcepts) {
 			this.id = id;
 			this.name = name;
 			this.rxcui = rxcui;
@@ -553,6 +561,7 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 			this.drugbankId = drugbankId;
 			this.atc = atc;
 			this.aliases = aliases;
+			this.bridgedConcepts = bridgedConcepts;
 		}
 
 		static DrugRow of(JsonNode d) {
@@ -577,12 +586,20 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 			if (d.path("rxnorm_name").isTextual()) {
 				addAlias(aliases, d.get("rxnorm_name").asText());
 			}
+			// One pass over the bridge, feeding both readings of it: the NAME goes on as an alias, as it
+			// always has, and the (uuid, name) pair is kept whole so the order-to-entry join can ask
+			// which concept a name belongs to (issue #353). Reading it twice would let the two drift.
+			List<DrugReference.BridgedConcept> bridgedConcepts = new ArrayList<DrugReference.BridgedConcept>();
 			for (JsonNode c : d.path("ciel")) {
 				if (c.path("name").isTextual()) {
 					addAlias(aliases, c.get("name").asText());
 				}
+				if (c.path("uuid").isTextual() && c.path("name").isTextual()) {
+					bridgedConcepts.add(new DrugReference.BridgedConcept(c.get("uuid").asText(),
+							c.get("name").asText()));
+				}
 			}
-			return new DrugRow(id, name, rxcui, rxnormName, drugbankId, atc, aliases);
+			return new DrugRow(id, name, rxcui, rxnormName, drugbankId, atc, aliases, bridgedConcepts);
 		}
 
 		private static void addAlias(List<String> aliases, String value) {

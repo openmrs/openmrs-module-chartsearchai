@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -533,6 +534,88 @@ public class DrugReferenceService {
 			}
 		}
 		return out;
+	}
+
+	/**
+	 * The entries the reference dataset's own dictionary bridge files under {@code conceptUuid} — the
+	 * THIRD key of the order-to-entry join, beside {@link #findByActiveOrders}' ATC codes and
+	 * {@link #findImpliedByDrugName}'s recorded names (issue #353).
+	 *
+	 * <p><b>Why a third key.</b> The other two are both defeated by one shape, and the shape is
+	 * ordinary: a dictionary concept the bridge records under one name while the deployment's locale
+	 * elects another. CIEL 105281 is {@code Sulfamethoxazole / trimethoprim} in the bridge and in an
+	 * {@code en} session, and {@code Cotrimoxazole} in an {@code fr} one; the knowledge base carries no
+	 * spelling of the second, and the concept's ATC code {@code J01EE01} is on no entry at all. So the
+	 * whole interaction screen for the commonest co-prescription in HIV care disappeared in one locale
+	 * and not the other, with no exception and no log line. The concept the order was written against
+	 * is the one key that does not depend on which of its names a session elects.
+	 *
+	 * <p><b>RANKED, and that is not decoration.</b> The answer is the entries the bridge files under
+	 * the concept INTERSECTED with the ones {@link #findImpliedByDrugName} answers for the name the
+	 * bridge records for it. Both bounds are load-bearing and they fail in opposite directions. Without
+	 * the ranking the leg is WIDER than the name leg it stands in for — a bridged uuid can reach
+	 * several entries that are not one substance ({@code Trastuzumab}, {@code Trastuzumab deruxtecan}
+	 * and {@code Trastuzumab emtansine} share one bridged concept and share no ATC code), which is
+	 * issue #209's widening arriving by a new route; and two consumers of this leg are SUPPRESSIONS —
+	 * {@code DrugSafetyValidator.activeOrdersOtherThan} withholds an order from witnessing an
+	 * interaction, {@code OrderPartner.substances} silences a duplicate-therapy chip — where a superset
+	 * removes a warning with no chip and no log line to notice it by (see
+	 * {@link #findImpliedByDrugName(String, Map)}'s own constraint). Without the intersection the leg
+	 * could reach an entry the bridge does not file under this concept at all, on the strength of a
+	 * name it merely shares.
+	 *
+	 * <p>What the two bounds buy together: the answer is a SUBSET of what a session electing the
+	 * bridge's own spelling already gets today, so this leg states nothing the reference data does not
+	 * already state about that concept — it removes the dependence on WHICH spelling the session
+	 * elects. What it inherits with that is the bridge's own defects: ADR Decision 33 records ~10 stray
+	 * cross-walk rows in the shipped knowledge base, and this leg makes those locale-independent too.
+	 * That is the trade and it cannot be had one way round — the correct rows and the stray ones are
+	 * the same field.
+	 *
+	 * <p>Package-private, like {@link #findByActiveOrders} and for the same reason: it is a LEG and not
+	 * an answer. "Which reference entries are this patient's active orders" is
+	 * {@link #findForActiveOrders}, and nothing else may build a candidate set from this one.
+	 *
+	 * @param conceptUuid the uuid of the concept an active order was written against, or null
+	 * @param impliedByName the caller's per-call resolution cache — a LOCAL, never a field (issue #172)
+	 * @return the bridged entries in dataset order, deduplicated, unmodifiable; empty for a null or
+	 *         unbridged concept, and empty on every source but {@code ddinter}, which is the only one
+	 *         whose format carries a dictionary bridge
+	 */
+	List<DrugReference> findByBridgedConcept(String conceptUuid,
+			Map<Object, Set<Object>> impliedByName) {
+		if (conceptUuid == null || conceptUuid.trim().isEmpty()) {
+			return Collections.emptyList();
+		}
+		String uuid = conceptUuid.trim();
+		// One pass for both halves — which entries the bridge files here, and the name it files them
+		// under — because asking twice would walk the whole dataset twice for one order.
+		List<DrugReference> bridged = new ArrayList<DrugReference>();
+		Set<String> bridgeNames = new LinkedHashSet<String>();
+		for (DrugReference ref : getAll()) {
+			String bridgeName = ref.bridgedConceptName(uuid);
+			if (bridgeName != null) {
+				bridged.add(ref);
+				bridgeNames.add(bridgeName);
+			}
+		}
+		if (bridged.isEmpty()) {
+			return Collections.emptyList();
+		}
+		// Identity, as findForActiveOrders' own dedup is and for the same reason: every row here came
+		// out of this bean's shared getAll() cache.
+		Set<DrugReference> ranked = Collections.newSetFromMap(
+				new IdentityHashMap<DrugReference, Boolean>());
+		for (String bridgeName : bridgeNames) {
+			ranked.addAll(findImpliedByDrugName(bridgeName, impliedByName));
+		}
+		List<DrugReference> out = new ArrayList<DrugReference>();
+		for (DrugReference ref : bridged) {
+			if (ranked.contains(ref)) {
+				out.add(ref);
+			}
+		}
+		return Collections.unmodifiableList(out);
 	}
 
 	/**
@@ -1093,10 +1176,10 @@ public class DrugReferenceService {
 	 * introduced, so the chips and the prompt behind them were computed over different sets of orders.
 	 * It now takes the list its caller already resolved rather than calling this a second time.
 	 *
-	 * <p>Both keys are needed because {@link PatientClinicalContext#hasActiveDrug} — the join that
-	 * decides whether a rule concerns this patient — matches on name OR ATC, so a subject set resolved
-	 * on only one of them cannot be the subject of every chip that join can raise. Neither key can be
-	 * assumed present: measured on the 3.7.1 standalone's demo dictionary (2026-08-04), ATC coverage is
+	 * <p>Both of those keys are needed because {@link PatientClinicalContext#hasActiveDrug} — the join
+	 * that decides whether a rule concerns this patient — matches on name OR ATC, so a subject set
+	 * resolved on only one of them cannot be the subject of every chip that join can raise. Neither key
+	 * can be assumed present: measured on the 3.7.1 standalone's demo dictionary (2026-08-04), ATC coverage is
 	 * sparse but real — 85 of 616 Drug-class concepts carry a map from an ATC-named source
 	 * ({@code Torasemide} → {@code C03CA04}, {@code Heparin sodium} → {@code B01AB01}) and 158 carry a
 	 * {@code concept_reference_map} of any kind, so {@link PatientClinicalContextBuilder} yields ATC
@@ -1125,7 +1208,18 @@ public class DrugReferenceService {
 	 * as cross-reactive with her dexamethasone allergy — a chip about a drug she is not prescribed. Her
 	 * whole order list resolved 18 entries and 9 substances from 8 orders; ranked, 17 and 8.
 	 *
-	 * <p>Identity de-duplication is sound because both matchers resolve against this bean's shared
+	 * <p><b>And a THIRD key since issue #353: the CONCEPT each order was written against</b>
+	 * ({@link #findByBridgedConcept}). The two above are both defeated by one ordinary shape — a
+	 * dictionary concept the reference data's bridge records under one name while the deployment's
+	 * locale elects another — and for CIEL 105281 that took the whole cotrimoxazole interaction screen
+	 * out in {@code fr} while leaving it standing in {@code en}, with no exception and no log line.
+	 * That leg needs no analogue in {@link PatientClinicalContext#hasActiveDrug} and must not be given
+	 * one: it reaches that join the way the ATC leg already does, through
+	 * {@link #withReferenceNames}, which copies the resolved entries' own aliases into the context's
+	 * {@code activeDrugReferenceNames}. A rule has no concept to be keyed on, so a leg there would be
+	 * a second spelling of a fact this one already carries.
+	 *
+	 * <p>Identity de-duplication is sound because all three matchers resolve against this bean's shared
 	 * {@link #getAll()} cache (the same reason the drugs-in-play set can dedup by identity).
 	 *
 	 * <p><b>The list is UNMODIFIABLE</b> — adding to it, removing from it or sorting it in place throws
@@ -1145,6 +1239,13 @@ public class DrugReferenceService {
 		Map<Object, Set<Object>> impliedByName = new HashMap<Object, Set<Object>>();
 		for (String name : context.getActiveDrugNames()) {
 			entries.addAll(findImpliedByDrugName(name, impliedByName));
+		}
+		// The third key (issue #353): the CONCEPT each order was written against, through the reference
+		// dataset's own dictionary bridge. Sharing the resolution cache above, because that leg resolves
+		// the bridge's recorded name through the very same ranked accessor. Contributes nothing where the
+		// context carries no per-order structure and nothing on a dataset whose format has no bridge.
+		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+			entries.addAll(findByBridgedConcept(order.getConceptUuid(), impliedByName));
 		}
 		// Unmodifiable, and that is a contract rather than caution (issue #255). Since that change the
 		// list a caller holds can be the SAME object another one reasons over — DrugReferenceInjector

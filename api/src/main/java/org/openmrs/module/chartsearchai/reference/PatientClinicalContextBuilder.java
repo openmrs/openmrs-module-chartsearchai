@@ -160,9 +160,15 @@ final class PatientClinicalContextBuilder {
 				// neighbouring reconciliation WARN (DrugReferenceInjector) repeats on the same terms:
 				// its condition, a querystore index behind the OrderService read, also persists until
 				// someone acts on it.
+				// The concept the order was written against, read off the SAME resolved local the ATC
+				// codes above came from and never off drugOrder.getConcept() again (issue #353): where
+				// the order carries a coded Drug those two differ, and keying one join on each would
+				// let two layers disagree about which concept one prescription is — issue #151's shape.
+				String orderConceptUuid = concept != null ? concept.getUuid() : null;
 				if (!orderNames.isEmpty()) {
-					activeOrders.add(new PatientClinicalContext.ActiveDrugOrder(drugOrder.getUuid(),
-							orderNames.iterator().next(), orderNames, orderAtcCodes, orderAdministration));
+					activeOrders.add(PatientClinicalContext.ActiveDrugOrder.named(drugOrder.getUuid(),
+							orderNames.iterator().next(), orderNames, orderAtcCodes, orderAdministration,
+							orderConceptUuid));
 				} else if (!normalizedCodes.isEmpty()) {
 					String codeOnlyDisplay = codeOnlyDisplay(normalizedCodes);
 					log.warn("Active drug order {} has no readable name; it will be identified by its ATC "
@@ -170,7 +176,8 @@ final class PatientClinicalContextBuilder {
 							+ "data can name one of those codes, and the order cannot be matched against "
 							+ "chart text at all.", drugOrder.getUuid(), codeOnlyDisplay);
 					activeOrders.add(PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly(
-							drugOrder.getUuid(), codeOnlyDisplay, orderAtcCodes, orderAdministration));
+							drugOrder.getUuid(), codeOnlyDisplay, orderAtcCodes, orderAdministration,
+							orderConceptUuid));
 				}
 			}
 		}

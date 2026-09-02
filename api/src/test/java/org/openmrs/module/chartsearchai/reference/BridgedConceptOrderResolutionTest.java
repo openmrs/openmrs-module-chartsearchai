@@ -1,0 +1,216 @@
+/**
+ * This Source Code Form is subject to the terms of the Mozilla Public License,
+ * v. 2.0. If a copy of the MPL was not distributed with this file, You can
+ * obtain one at http://mozilla.org/MPL/2.0/. OpenMRS is also distributed under
+ * the terms of the Healthcare Disclaimer located at http://openmrs.org/license.
+ *
+ * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
+ * graphic logo is a trademark of OpenMRS Inc.
+ */
+package org.openmrs.module.chartsearchai.reference;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
+
+import org.junit.jupiter.api.Test;
+
+/**
+ * Issue #353: an active order joins the reference data through the CONCEPT it was written against, and
+ * not only through whichever of that concept's names the deployment's locale elects.
+ *
+ * <p><b>The reported failure.</b> The knowledge base's CIEL bridge keeps ONE name per code — the
+ * {@code en} locale-preferred fully specified name — so CIEL 105281 reaches the dataset as
+ * {@code Sulfamethoxazole / trimethoprim} and as nothing else. No entry in the shipped 19 MB knowledge
+ * base carries any spelling of {@code cotrimoxazole}. The order-to-entry join had two keys and both
+ * fail for that concept: the ATC leg because the concept maps to {@code J01EE01}, which the knowledge
+ * base publishes on no entry at all, and the NAME leg because
+ * {@code PatientClinicalContextBuilder.addConceptName} reads {@code Concept.getName()}, the single
+ * locale-PREFERRED spelling. In an {@code en} session that spelling happens to be the one the bridge
+ * carries and the screen works; the ticket measured the same order in {@code fr}, where the preferred
+ * name is {@code Cotrimoxazole}, returning no chips at all — with no exception and no log line.
+ *
+ * <p><b>What these cases pin, and why the order name they use has no spelling in the dataset.</b>
+ * Every case here gives the order a display and names that appear nowhere in the fixture, which is
+ * what makes the NAME leg provably not the thing that resolved it. The concept uuid is the real one
+ * the shipped bridge records for CIEL 105281, and the fixture is a VERBATIM slice of the shipped
+ * knowledge base ({@code ddi-bridged-concept.json}: DDInter1874 Trimethoprim and its one partner in
+ * the ticket's regimen, DDInter1019 Lamivudine, with the interaction row and mechanism they share).
+ * A slice rather than the whole 19 MB dataset for the reason
+ * {@code DrugReferenceTestSupport.shippedEntries} records — a case asserting chip TEXT must not
+ * depend on a knowledge-base refresh leaving one family alone.
+ */
+public class BridgedConceptOrderResolutionTest {
+
+	/** The uuid the shipped bridge records for CIEL 105281, {@code Sulfamethoxazole / trimethoprim}. */
+	private static final String COTRIMOXAZOLE_CONCEPT = "105281AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+	/**
+	 * How a francophone dictionary spells that concept. Deliberately a string the knowledge base
+	 * carries in no field of any entry — the ticket measured that, and it is what makes every
+	 * assertion below a statement about the concept key rather than about a name.
+	 */
+	private static final String COTRIMOXAZOLE_ORDER = "Cotrimoxazole 960mg";
+
+	private static final String LAMIVUDINE_ORDER = "Lamivudine 150mg";
+
+	private static List<DrugReference> entries() throws Exception {
+		return DrugReferenceTestSupport.ddiFixtureEntries(DrugReferenceTestSupport.DDI_BRIDGED_CONCEPT);
+	}
+
+	private static DrugReferenceService service() throws Exception {
+		return DrugReferenceTestSupport.ddiFixtureService(DrugReferenceTestSupport.DDI_BRIDGED_CONCEPT);
+	}
+
+	/** The order the dictionary spells in a locale the bridge does not carry, carrying the concept it
+	 *  was written against — {@code PatientClinicalContextBuilder}'s own shape, minus the ATC codes
+	 *  the concept does not usefully map to. */
+	private static PatientClinicalContext.ActiveDrugOrder cotrimoxazoleOrder() {
+		return PatientClinicalContext.ActiveDrugOrder.named("order-cotrimoxazole", COTRIMOXAZOLE_ORDER,
+			DrugReferenceTestSupport.set(COTRIMOXAZOLE_ORDER), DrugReferenceTestSupport.set("J01EE01"),
+			null, COTRIMOXAZOLE_CONCEPT);
+	}
+
+	private static PatientClinicalContext.ActiveDrugOrder lamivudineOrder() {
+		return PatientClinicalContext.ActiveDrugOrder.named("order-lamivudine", LAMIVUDINE_ORDER,
+			DrugReferenceTestSupport.set(LAMIVUDINE_ORDER, "lamivudine"), null, null, null);
+	}
+
+	private static PatientClinicalContext chart(PatientClinicalContext.ActiveDrugOrder... orders) {
+		Set<String> names = DrugReferenceTestSupport.set();
+		Set<String> codes = DrugReferenceTestSupport.set();
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			names.addAll(order.getNames());
+			codes.addAll(order.getAtcCodes());
+		}
+		return DrugReferenceTestSupport.ctx(38, null, names, codes, null, null,
+			Arrays.asList(orders));
+	}
+
+	private static List<String> displayNames(List<DrugReference> resolved) {
+		List<String> names = new ArrayList<String>();
+		for (DrugReference entry : resolved) {
+			names.add(entry.getName());
+		}
+		return names;
+	}
+
+	/**
+	 * The candidate-set leg, on its own. The order names nothing the dataset carries and its one ATC
+	 * code is on no entry, so before issue #353 this list was empty — which is why nothing was
+	 * screened and why the answer read as an absence of records.
+	 */
+	@Test
+	public void anOrderNamedOnlyInALocaleTheBridgeDoesNotCarryStillResolvesItsSubstance()
+			throws Exception {
+		DrugReferenceService service = service();
+		List<DrugReference> resolved = service.findForActiveOrders(chart(cotrimoxazoleOrder()));
+
+		assertEquals(Arrays.asList("Trimethoprim"), displayNames(resolved),
+			"the bridge records CIEL 105281 as this entry's concept, so an order written against that"
+					+ " concept is this substance whatever the session's locale spells it");
+	}
+
+	/**
+	 * The composed path, and the ticket's own reproduction: the same order screened by the real
+	 * {@code validate}, asked the question the ticket asked. Asserted through the CHIP rather than the
+	 * candidate set, because a resolution nothing reports on is not the fix.
+	 *
+	 * <p>The expected text is the one the ticket measured on the standalone in an {@code en} session,
+	 * word for word — which is the point of the case. The locale is the only thing that differs here,
+	 * and the answer must not.
+	 */
+	@Test
+	public void theInteractionWithTheCoPrescriptionIsScreenedAndNamesTheOtherOrder() throws Exception {
+		DrugReferenceService service = service();
+		PatientClinicalContext chart = chart(cotrimoxazoleOrder());
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+				.validate("", "Can I give this patient Lamivudine?", service.withReferenceNames(chart));
+
+		assertEquals(1, warnings.size(),
+			"an order the dataset can only be joined to by its concept must still be screened, was: "
+					+ DrugReferenceTestSupport.details(warnings));
+		assertTrue(warnings.get(0).getDetail()
+				.startsWith("Lamivudine interacts with active order trimethoprim \u2014 Minor."),
+			"the chip the ticket measured in an en session, in a locale that spells the order"
+					+ " differently, was: " + warnings.get(0).getDetail());
+	}
+
+	/**
+	 * The finding says which of the patient's own orders the substance came from (issue #349), and an
+	 * order joined ONLY by its concept is exactly the shape that clause is for: the chart's own words
+	 * for the prescription are {@code Cotrimoxazole 960mg}, which name the substance
+	 * {@code trimethoprim} nowhere, so without the bridge a clinician reading the chip has no way to
+	 * connect it to anything on the medication list.
+	 *
+	 * <p>{@code addChartOrderBridge} refuses an order whose own recorded names already reach the
+	 * substance, so this clause appears for the concept-joined order and would NOT appear for the same
+	 * prescription in an {@code en} session — the two locales differ in the bridge clause and agree on
+	 * the finding, which is the honest reading of what each one's chart records.
+	 */
+	@Test
+	public void theFindingSaysWhichPrescriptionTheSubstanceCameFrom() throws Exception {
+		DrugReferenceService service = service();
+		PatientClinicalContext chart = chart(cotrimoxazoleOrder());
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+				.validate("", "Can I give this patient Lamivudine?", service.withReferenceNames(chart));
+
+		assertEquals(1, warnings.size(), "precondition: the pair must chip at all");
+		List<String> bridged = new ArrayList<String>();
+		for (SafetyWarning.ChartOrderBridge bridge : warnings.get(0).chartOrderBridges()) {
+			bridged.add(bridge.toString());
+		}
+		assertEquals(Arrays.asList("trimethoprim from " + COTRIMOXAZOLE_ORDER), bridged,
+			"the prescription the concept key resolved must be named as the substance's source");
+	}
+
+	/**
+	 * The leg is RANKED, and this is the case that says so. {@code findImpliedByDrugName} keeps only
+	 * the entries making the STRONGEST claim on a recorded name, and the identity leg is bounded by
+	 * that same answer: an entry the bridge files under this concept but whose claim on the bridge's
+	 * own name is weaker than another's must NOT be admitted. Unranked, the leg would be wider than
+	 * the name leg it stands in for — issue #209's widening, arriving by a new route, and into two
+	 * consumers where a superset SILENCES a chip rather than adding one.
+	 *
+	 * <p>Driven through the fixture's own second bridge row: DDInter1874 also carries CIEL 105145,
+	 * {@code Phenazopyridine / sulfamethoxazole / trimethoprim}. That name's strongest claimant in
+	 * this dataset is Trimethoprim by containment, so the leg admits it; what it must never do is
+	 * admit an entry the bridge does not file under the concept asked about.
+	 */
+	@Test
+	public void theLegAdmitsNoEntryTheBridgeDoesNotFileUnderThatConcept() throws Exception {
+		DrugReferenceService service = service();
+		PatientClinicalContext.ActiveDrugOrder unbridged = PatientClinicalContext.ActiveDrugOrder.named(
+			"order-unknown", "Produit inconnu", DrugReferenceTestSupport.set("Produit inconnu"), null,
+			null, "not-a-uuid-the-bridge-records");
+
+		assertEquals(Collections.<DrugReference> emptyList(),
+			service.findForActiveOrders(chart(unbridged)),
+			"a concept the bridge does not record joins to nothing at all");
+	}
+
+	/**
+	 * An order the module could read no NAME for is exactly the population this join exists for, and it
+	 * reaches the per-order list on its own rung (issue #290). Its {@code getNames()} is empty by
+	 * design, so the name leg cannot help it and the concept key is the only one left.
+	 */
+	@Test
+	public void anOrderNoNameCouldBeReadForIsStillJoinedByItsConcept() throws Exception {
+		DrugReferenceService service = service();
+		PatientClinicalContext.ActiveDrugOrder nameless = PatientClinicalContext.ActiveDrugOrder
+				.namedByCodesOnly("order-nameless", "[ATC J01EE01]",
+					DrugReferenceTestSupport.set("J01EE01"), null, COTRIMOXAZOLE_CONCEPT);
+
+		assertEquals(Arrays.asList("Trimethoprim"),
+			displayNames(service.findForActiveOrders(chart(nameless))),
+			"an order with no readable name is the population the concept key exists for");
+	}
+}

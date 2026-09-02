@@ -672,6 +672,39 @@ public class DrugReferenceInjectorTest {
 				"and the nameless paragraph does not take the slot the budget cannot refuse: " + section);
 	}
 
+	@Test
+	public void aRatedRowWithNoMechanismTextStillCountsAsNamingItsPartner() throws Exception {
+		// Issue #355. InteractionNote.namesItsPartner is recorded at construction, from whether
+		// DrugSafetyValidator.partnerLabel gave the rule a name, rather than re-derived by comparing
+		// the compact form to the full one. This case is why it cannot be re-derived: the two
+		// coincide for a SECOND reason. A row carrying a token and a severity but no mechanism text
+		// renders full as just the token, and `token (Severity)` is longer than that, so
+		// orderedInteractionNotes' own never-grow guard resets compact to the full text — while the
+		// row plainly does name its partner.
+		//
+		// So a derived flag reports false for it, the nameless unrated paragraphs beside it outrank
+		// it under severityPriority (unrated sorts above Major), and the character budget then drops
+		// the named Major partner out of the citable record altogether — issue #355's own cost,
+		// reinstated. Mutate the constructor argument to the derived form and read the failures.
+		RecordMapping record = tailRecordOf(
+				"chartsearchai-test/drug-reference-unpromoted-tail-rated-noteless.json",
+				"is it safe to give notelessstub?");
+		String section = tailSectionOf(record);
+
+		assertTrue(section.contains("warfarin"),
+				"the row that names a partner leads the tail even though its severity-bearing short "
+						+ "form would be LONGER than the name it renders, so its compact and full "
+						+ "texts are the same string: " + section);
+		assertTrue(section.indexOf("warfarin") < section.indexOf("ALPHA"),
+				"and it leads it rather than merely surviving: a nameless unrated paragraph ranks "
+						+ "above Major on severity alone, so nothing but the naming key puts this row "
+						+ "in front of one: " + section);
+		assertEquals(1, record.getWithheldInteractions(),
+				"precondition: the budget cuts exactly one of the four rows here, so a row losing its "
+						+ "place is a row LOST from the record rather than one merely reordered: "
+						+ section);
+	}
+
 	/** The only record a curated {@code fixture} injects for {@code question}, for a patient on
 	 *  nothing — the arrangement in which nothing is promoted and the interactions section is entirely
 	 *  the dataset tail. The record rather than its text, because a case about the tail's bounds also

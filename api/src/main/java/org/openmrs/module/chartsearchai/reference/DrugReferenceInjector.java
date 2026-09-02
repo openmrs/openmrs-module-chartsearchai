@@ -2033,7 +2033,12 @@ public class DrugReferenceInjector {
 		 *  rule whose {@link #compact} form is its whole mechanism paragraph. Recorded here rather
 		 *  than re-derived by comparing {@code compact} to {@code full}, which coincide for a second
 		 *  reason as well: a row carrying a severity but no mechanism text renders full as just its
-		 *  name, and that row DOES name its partner. See {@link #SEVERITY_DESCENDING}. */
+		 *  name, and {@code name (Severity)} is longer than that, so the never-grow guard in
+		 *  {@link #orderedInteractionNotes} resets {@code compact} to it — while the row DOES name its
+		 *  partner. The derived form is therefore wrong in the direction that loses a named partner
+		 *  out of the record; make the substitution and read the failures, of which
+		 *  {@code DrugReferenceInjectorTest.aRatedRowWithNoMechanismTextStillCountsAsNamingItsPartner}
+		 *  is one. See {@link #SEVERITY_DESCENDING}. */
 		final boolean namesItsPartner;
 
 		InteractionNote(String full, String compact, String severity, boolean namesItsPartner) {

@@ -158,11 +158,13 @@ import org.slf4j.LoggerFactory;
  * {@code carriedThrough} (some reproduction carries on past here) is reachable on the bundled
  * sixteen-entry excerpt: the two records the injector produces for one question carry the same
  * mechanism string, so they diverge together, and no record there states one passage twice. Both
- * shapes are ordinary in the data this runs on — a rendered reference record is a {@code "; "}-joined
- * list of per-partner items and DDInter partners routinely share a mechanism — so their cases build
- * the record rather than injecting one. That is the right operand here, because this check is a pure
- * function of an answer and a record's TEXT and the cases beside them already pin that it runs over
- * production-rendered records on the real answer path. Both were unpinned when they were written,
+ * shapes are ordinary in the data this runs on — a rendered reference record whose partner was
+ * PROMOTED is a {@code "; "}-joined list of per-partner items and DDInter partners routinely share a
+ * mechanism, and since issue #355 a record with nothing promoted normally carries names and
+ * severities instead, per the bullet above — so their cases build the record rather than injecting
+ * one. That is the right operand here, because this check is a pure function of an answer and a
+ * record's TEXT and the cases beside them already pin that it runs over production-rendered records
+ * on the real answer path. Both were unpinned when they were written,
  * and a review's mutation sweep is what said so.
  *
  * <p><b>One regression this file cannot see.</b> Its gate asks

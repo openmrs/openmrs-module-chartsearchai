@@ -101,6 +101,24 @@ public class SafetyWarning {
 	}
 
 	/**
+	 * As the constructor above, for a chip that also states which of the patient's own orders its
+	 * substances were resolved from — see {@link #chartOrderBridges()}, which is published as this
+	 * chip's {@code chartOrders} wire key (issue #347).
+	 *
+	 * <p>Public because this class is the DTO a {@code /search} consumer reads, carried on
+	 * {@code ChartSearchService.ChartAnswer}, and this is the one field of it a caller could not
+	 * otherwise set. It is not the production path: {@code DrugSafetyValidator.interactionWarning}
+	 * builds a chip that also carries a reconciled partner name and a folded relationship, so it takes
+	 * the private constructor below. Nothing here is an impossible pair — the reason issue #298 gave a
+	 * FACTORY to the contraindication shape rather than widening a constructor does not reach this
+	 * one, since a chip of any type may in principle have been resolved from an order.
+	 */
+	public SafetyWarning(String type, String drug, String detail, String severity,
+			List<ChartOrderBridge> chartOrderBridges) {
+		this(type, drug, detail, severity, false, false, null, null, chartOrderBridges);
+	}
+
+	/**
 	 * A contraindication chip's warning, and the only shape that can carry
 	 * {@link #restsOnAnUncorroboratedChartMatch()} (issue #308). A FACTORY rather than a wider PUBLIC
 	 * constructor, for the reason issue #298 states of a label and its source: the two flags
@@ -488,9 +506,10 @@ public class SafetyWarning {
 	 * {@code DrugReferenceInjector.onePerPartner} records) and a hand-authored {@code json} dataset
 	 * reaches it immediately. Whoever fixtures it should assert this condition, not assume it.
 	 *
-	 * <p>Not serialized — the wire shape is the four keys
-	 * {@code ChartSearchAiRestController.serializeSafetyWarnings} writes, and the chip's own detail is
-	 * unchanged by this.
+	 * <p>Not serialized — the note name is the injected record's, and no key
+	 * {@code ChartSearchAiRestController.serializeSafetyWarnings} writes carries it; the chip's own
+	 * detail is unchanged by this. Unlike {@link #chartOrderBridges()}, which since issue #347 IS
+	 * published, for the reason that accessor gives.
 	 */
 	String reconciledPartnerNoteName(DrugReference.Interaction rule) {
 		return rule != null && rule == reconciledRule ? reconciledNoteName : null;
@@ -525,14 +544,22 @@ public class SafetyWarning {
 	 * scoping argument — attribution to the orders the PASS used and not to every carrier of the code —
 	 * lives on {@code DrugSafetyValidator.chartOrderBridges}. Not restated here.
 	 *
-	 * <p>Not serialized: the wire shape is the four keys
-	 * {@code ChartSearchAiRestController.serializeSafetyWarnings} writes, and the chip's own detail is
-	 * unchanged by this. Its one reader is {@code DrugReferenceInjector.chartOrderClause}, and
-	 * {@code DrugSafetyValidator.StatedInteractionChips} deliberately does NOT key on it — that key
-	 * decides which chips are emitted, so keying on a prompt-only clause would let it decide wire
-	 * content. See that class's javadoc and ADR Decision 64.
+	 * <p><b>Serialized since issue #347, as each chip's own {@code chartOrders} key</b>, and that
+	 * issue is why: a prompt record reaches a client only if the MODEL cites it, so the correspondence
+	 * between the name a chip prints and the prescription it came from has to be stated
+	 * deterministically as well — the settlement issue #354 reached for the class note, one step
+	 * along. The chip's own {@code detail} is untouched, which is #283's and #339's scoping;
+	 * {@code InteractionFindingChartOrderBridgeTest.theChipDetailIsTheWordsItAlwaysWas} pins it.
+	 *
+	 * <p><b>{@code DrugSafetyValidator.StatedInteractionChips} still does NOT key on it, and the reason
+	 * is not that this is unpublished.</b> That key decides which chips are EMITTED and, through
+	 * {@code ChartSearchAiUtils.resourceKey}, whether two injected findings share one resource uuid —
+	 * so a bridge must not be able to change which chips exist, whether or not a client can read it.
+	 * The consequence is that a COLLAPSED chip publishes the survivor's bridge, which is the same
+	 * residue ADR Decision 63 already accepts for that collapse ("what it gives up is WHICH
+	 * constituent"). See that class's javadoc and ADR Decisions 64 and 68.
 	 */
-	List<ChartOrderBridge> chartOrderBridges() {
+	public List<ChartOrderBridge> chartOrderBridges() {
 		return chartOrderBridges;
 	}
 
@@ -555,22 +582,43 @@ public class SafetyWarning {
 	 *
 	 * <p>Both fields are strings a record PRINTS. {@code substanceName} is the name the chip already
 	 * says — never a second answer to which name to print — and {@code orderDisplay} is the order's own
-	 * display, which is the string a chart record of that order carries. <b>{@link #toString()} is the
-	 * only reader that PRINTS them</b> ({@code equals} reads both too), and there are deliberately no
-	 * getters beside it: the renderer takes that spelling
-	 * so the pair a debug dump prints and the pair a model reads cannot differ, and a
-	 * {@code getSubstanceName()} here would also shadow {@link DrugReference#getSubstanceName()}, which
-	 * means the dataset's substance-name FIELD and not a printed label.
+	 * display, which is the string a chart record of that order carries wherever the order has a drug
+	 * row ({@code DrugSafetyValidator.displaysANameOfAny} records the one shape where it does not).
+	 *
+	 * <p><b>{@link #toString()} is the only reader that PRINTS them as one string</b>, and the
+	 * PROMPT-side renderer must keep taking that spelling, so that the pair a debug dump prints and
+	 * the pair a model reads cannot differ. The two getters beside it are the WIRE's (issue #347) and
+	 * exist so that a client is handed two fields rather than a sentence to parse — the same reason
+	 * issue #340 publishes {@code severity} instead of leaving a client to substring-match
+	 * {@link SafetyWarning#getDetail()}. They are named {@code getSubstance} rather than
+	 * {@code getSubstanceName} deliberately: the latter would shadow
+	 * {@link DrugReference#getSubstanceName()}, which means the dataset's substance-name FIELD and not
+	 * a printed label.
 	 */
-	static final class ChartOrderBridge {
+	public static final class ChartOrderBridge {
 
 		private final String substanceName;
 
 		private final String orderDisplay;
 
-		ChartOrderBridge(String substanceName, String orderDisplay) {
+		/** Both arguments are required: {@link #equals} and {@link #hashCode} dereference them, and a
+		 *  bridge with nothing to name is the absence of one. {@code DrugSafetyValidator} refuses that
+		 *  case before reaching here rather than by a check in this constructor, so a caller building
+		 *  one by hand owes the same. */
+		public ChartOrderBridge(String substanceName, String orderDisplay) {
 			this.substanceName = substanceName;
 			this.orderDisplay = orderDisplay;
+		}
+
+		/** @return the substance name the chip prints — the {@code substance} half of the wire pair. */
+		public String getSubstance() {
+			return substanceName;
+		}
+
+		/** @return the patient's own order it was resolved from, as that order displays — the
+		 *          {@code orderDisplay} half of the wire pair. */
+		public String getOrderDisplay() {
+			return orderDisplay;
 		}
 
 		@Override

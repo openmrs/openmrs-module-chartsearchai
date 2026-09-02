@@ -1475,14 +1475,16 @@ public class DrugReferenceInjector {
 	 * record the prompt already instructs the model to carry whole, exactly as
 	 * {@link #FINDING_UNCORROBORATED_MATCH} is.
 	 *
-	 * <p><b>Prompt-facing ONLY, and that is why {@code DrugSafetyValidator.StatedInteractionChips}
-	 * does NOT key on it.</b> Adding it to that key was tried and reverted in review: the key decides
-	 * which chips are emitted, so it reaches {@code PairChipExtent}'s counts and, through
-	 * {@code ChartSearchAiUtils.resourceKey}, whether two injected findings share one resource uuid —
-	 * which would make this clause decide wire CONTENT while every claim about it says it does not.
-	 * A collapsed chip therefore carries the survivor's bridge, which is the same residue ADR
-	 * Decision 63 already accepts for that collapse ("what it gives up is WHICH constituent").
-	 * The chip's detail, its rank and the {@code safetyWarnings} wire shape are
+	 * <p><b>{@code DrugSafetyValidator.StatedInteractionChips} does NOT key on it.</b> Adding it to
+	 * that key was tried and reverted in review: the key decides which chips are emitted, so it
+	 * reaches {@code PairChipExtent}'s counts and, through {@code ChartSearchAiUtils.resourceKey},
+	 * whether two injected findings share one resource uuid — a bridge must not be able to change
+	 * which chips exist. That reason used to be stated as "this clause is prompt-facing, and keying on
+	 * it would let it decide wire content"; since issue #347 the bridges ARE published, as each chip's
+	 * {@code chartOrders} key, and the reason above is the one that survives it. A collapsed chip
+	 * therefore carries the survivor's bridge, on the wire as well as here, which is the same residue
+	 * ADR Decision 63 already accepts for that collapse ("what it gives up is WHICH constituent").
+	 * The chip's detail and its rank are
 	 * untouched, which is issue #283's own scoping;
 	 * {@code InteractionFindingChartOrderBridgeTest.theChipDetailIsTheWordsItAlwaysWas} pins it, and
 	 * {@code .theClauseIsTheWordsAModelReads} pins these words.

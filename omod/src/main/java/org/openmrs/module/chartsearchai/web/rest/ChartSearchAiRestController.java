@@ -1219,6 +1219,42 @@ public class ChartSearchAiRestController {
 	 * not recognise it. Null rather than an omitted key, for the reason {@link #groundedForWire}
 	 * gives about its own field: the key's unconditional presence is what lets a client read it
 	 * without first asking whether it is there.
+	 *
+	 * <p><b>{@code chartOrderBridges} names which of the patient's own active orders each substance
+	 * the chip NAMES was resolved from</b>, where the order's own displayed name does not reach that
+	 * substance (issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/347">#347</a>). Each
+	 * entry serializes as {@code {substance, orderDisplay}} — the two public getters of
+	 * {@link SafetyWarning.ChartOrderBridge}, and nothing else on that class is a getter.
+	 *
+	 * <p><b>Why the key exists.</b> One response named one prescription two ways — the answer prose
+	 * called it {@code Advil} after the {@code drug_order} record it cited, every chip called it
+	 * {@code Ibuprofen} after the knowledge base — and a clinician reading a chip list beside an
+	 * answer then has to decide whether those are one prescription or two. The chip side must not be
+	 * re-decided (#339's reverted rounds 5-6, and CLAUDE.md), and the module's own statement of the
+	 * correspondence is a clause inside the injected {@code safety_finding}, which reaches a client
+	 * only if the model cites it — measured on #354's reproduction, it did not. So the module states
+	 * it here as well. A client renders it as the order this chip's substance came FROM; it asserts a
+	 * RESOLUTION this module performed and no identity of the prescription, which is precisely what
+	 * #339's reverted rounds could not say.
+	 *
+	 * <p><b>Published VERBATIM, not remapped, and that is the contract rather than a shortcut.</b>
+	 * {@code ChartSearchAiSafetyWarningSeverityWireTest.everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire}
+	 * requires every public accessor of a chip to name a key carrying what that accessor READS — a
+	 * value the module computes and then reshapes at serialization is the shape of issue #340's own
+	 * defect. So the key is named after the accessor and carries its list; the JSON field names come
+	 * from {@code ChartOrderBridge}'s getters, which means a public getter added there becomes a wire
+	 * field. {@code ChartSearchAiChartOrderBridgeTest.theTwoHalvesAreSeparateFieldsAndNotASentenceToParse}
+	 * pins the field set for that reason.
+	 *
+	 * <p>Two fields rather than a rendered sentence, for the same reason {@code severity} above is
+	 * published at all: the alternative is a client parsing English. The list is always
+	 * present and is EMPTY where the module bridged nothing — which is a statement ("every substance
+	 * this chip names is one the chart's own records spell"), not an absence, because
+	 * {@link SafetyWarning#chartOrderBridges()} is resolved for every chip and never null. A chip that
+	 * is not an interaction, and an interaction chip built outside
+	 * {@code DrugSafetyValidator.interactionWarning}, bridge nothing at all — that residue is ADR
+	 * Decision 64's, unchanged by publishing it.
 	 */
 	private List<Map<String, Object>> serializeSafetyWarnings(List<SafetyWarning> warnings) {
 		List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
@@ -1231,6 +1267,7 @@ public class ChartSearchAiRestController {
 			map.put("drug", warning.getDrug());
 			map.put("detail", warning.getDetail());
 			map.put("severity", warning.getSeverity());
+			map.put("chartOrderBridges", warning.chartOrderBridges());
 			out.add(map);
 		}
 		return out;

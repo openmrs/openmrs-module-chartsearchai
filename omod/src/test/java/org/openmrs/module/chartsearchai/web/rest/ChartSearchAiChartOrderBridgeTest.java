@@ -1,0 +1,265 @@
+/**
+ * This Source Code Form is subject to the terms of the Mozilla Public License,
+ * v. 2.0. If a copy of the MPL was not distributed with this file, You can
+ * obtain one at http://mozilla.org/MPL/2.0/. OpenMRS is also distributed under
+ * the terms of the Healthcare Disclaimer located at http://openmrs.org/license.
+ *
+ * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
+ * graphic logo is a trademark of OpenMRS Inc.
+ */
+package org.openmrs.module.chartsearchai.web.rest;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.ByteArrayOutputStream;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Consumer;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.openmrs.Patient;
+import org.openmrs.User;
+import org.openmrs.module.chartsearchai.api.ChartSearchService;
+import org.openmrs.module.chartsearchai.reference.SafetyWarning;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+/**
+ * A chip says which of the patient's own prescriptions its substance came from, ON THE WIRE (issue
+ * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/347">#347</a>).
+ *
+ * <p>Measured on the 3.7.1 standalone before this change: one response named one active order two
+ * ways. The answer prose called it {@code active order Advil} — the brand its cited
+ * {@code drug_order} record renders — while every chip called it {@code active order Ibuprofen},
+ * the knowledge base's substance. Neither name is false, and the chip side must not be re-decided
+ * (#339's reverted rounds 5-6, and CLAUDE.md), so what the response was missing is the
+ * CORRESPONDENCE. A clinician reading the chip list beside the answer had to decide whether
+ * {@code Advil} and {@code Ibuprofen} were one prescription or two, and on that chart the wrong
+ * answer was available — she was also on {@code Aspirin 81mg}, so "three NSAIDs" read as plausible.
+ *
+ * <p>The module states the correspondence in the prompt too, as a clause inside the injected
+ * {@code safety_finding} ({@code DrugReferenceInjector.FINDING_CHART_ORDER_LEAD}, and
+ * {@code OneOrderNameAcrossAnswerAndChipTest} is that half). That is not enough on its own and the
+ * repo has already measured why: a prompt record reaches a client only if the MODEL cites it, and on
+ * #354's own reproduction it did not, so nothing a {@code /search} consumer read reported the fact
+ * at all. Hence this key — the same settlement {@code unresolvedDrugClass} reached, one issue along.
+ *
+ * <p>It rides INSIDE each chip rather than beside the chip array, which is what makes "it reaches
+ * every emission surface" true by construction: {@code putSafetyChips} is already the one writer of
+ * {@code safetyWarnings} and {@code ChartSearchAiInteractionPairExtentTest} fails the build on a
+ * second one. The last case here holds the other half of that — that the key is written from the
+ * chip's own bridges at one place, so a site building the chip array for itself cannot omit it.
+ */
+public class ChartSearchAiChartOrderBridgeTest {
+
+	private static final ObjectMapper MAPPER = new ObjectMapper();
+
+	/** The ticket's own pair, in its own words: the chip names the substance, the chart names the
+	 *  prescription, and neither string appears where the other one does. */
+	private static final String SUBSTANCE = "Ibuprofen";
+
+	private static final String ORDER_DISPLAY = "Advil 400mg";
+
+	private ChartSearchAiRestController controller;
+
+	private ByteArrayOutputStream out;
+
+	private final RestControllerContext openmrsContext = new RestControllerContext();
+
+	/** The chip's attributions; emptied by the case that asks what a chip with none publishes. */
+	private List<SafetyWarning.ChartOrderBridge> bridges;
+
+	@BeforeEach
+	public void setUp() {
+		bridges = Arrays.asList(new SafetyWarning.ChartOrderBridge(SUBSTANCE, ORDER_DISPLAY));
+		controller = new ChartSearchAiRestController();
+		controller.setAuditLogService(new StubAuditLogService());
+		controller.setChartSearchService(new BridgedChipStubService());
+		controller.setPatientAccessCheck((user, patient) -> true);
+		out = new ByteArrayOutputStream();
+		openmrsContext.install();
+	}
+
+	@AfterEach
+	public void restoreContext() {
+		openmrsContext.restore();
+	}
+
+	private static Patient patient() {
+		Patient p = new Patient();
+		p.setPatientId(7);
+		p.setUuid("uuid-7");
+		return p;
+	}
+
+	/** The ticket's chip: it names the KB substance, and the answer beside it names the brand. */
+	private ChartSearchService.ChartAnswer answer() {
+		return new ChartSearchService.ChartAnswer(
+				"Acetylsalicylic acid (aspirin) interacts with active order Advil [2].",
+				Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
+				Arrays.asList(new SafetyWarning("interaction", "Acetylsalicylic acid (aspirin)",
+						"Acetylsalicylic acid (aspirin) interacts with active order Ibuprofen — Major.",
+						"Major", bridges)),
+				null, null, null);
+	}
+
+	/** The {@code /search} response body. */
+	@SuppressWarnings("unchecked")
+	private Map<String, Object> searchPayload() {
+		Map<String, String> body = new HashMap<String, String>();
+		body.put("patient", RestControllerContext.PATIENT_UUID);
+		body.put("question", "Is aspirin safe for her?");
+
+		ResponseEntity<Object> response = controller.search(body);
+		assertEquals(HttpStatus.OK, response.getStatusCode(), "the handler must have reached serialization");
+		Map<String, Object> payload = (Map<String, Object>) response.getBody();
+		assertNotNull(payload, "no response body");
+		return payload;
+	}
+
+	/** The attributions of the payload's one chip, AS JSON — the payload map carries the module's own
+	 *  list verbatim (see {@code serializeSafetyWarnings}), so the field names a client actually reads
+	 *  are Jackson's view of {@code ChartOrderBridge} and must be asserted through it rather than off
+	 *  the map. */
+	private JsonNode chartOrderBridgesOfOnlyChip(Map<String, Object> payload) {
+		JsonNode chips = MAPPER.valueToTree(payload).get("safetyWarnings");
+		assertNotNull(chips, "no safetyWarnings key");
+		assertEquals(1, chips.size(), "one chip is what this arrangement raises, was: " + chips);
+		JsonNode bridges = chips.get(0).get("chartOrderBridges");
+		assertNotNull(bridges,
+				"every chip states which of the patient's orders its substances came from: " + chips);
+		return bridges;
+	}
+
+	private JsonNode eventData(String eventType) throws Exception {
+		SseEvent event = SseEvents.ofType(out, eventType);
+		assertNotNull(event, "no '" + eventType + "' event was emitted");
+		return MAPPER.readTree(event.data);
+	}
+
+	@Test
+	public void theChipSaysWhichPrescriptionItsSubstanceCameFrom() {
+		Map<String, Object> payload = searchPayload();
+
+		JsonNode bridges = chartOrderBridgesOfOnlyChip(payload);
+		assertEquals(1, bridges.size(), "one attribution was resolved, was: " + bridges);
+		assertEquals(SUBSTANCE, bridges.get(0).get("substance").asText());
+		assertEquals(ORDER_DISPLAY, bridges.get(0).get("orderDisplay").asText());
+
+		// The defect itself: the two names the response carries appear nowhere near each other, and
+		// before this key nothing on the wire said they were one prescription.
+		assertTrue(payload.get("answer").toString().contains("Advil"),
+				"precondition: the answer names the prescription by the chart's brand");
+		assertTrue(payload.get("answer").toString().indexOf(SUBSTANCE) < 0,
+				"precondition: and never by the substance the chip names");
+	}
+
+	@Test
+	public void theTwoHalvesAreSeparateFieldsAndNotASentenceToParse() {
+		// The reason issue #340 publishes `severity` rather than leaving a client to substring-match
+		// the detail. A rendered "Ibuprofen from Advil 400mg" would put this module's prose in a slot
+		// a client has to take apart, and this module rewords its prose freely.
+		JsonNode bridge = chartOrderBridgesOfOnlyChip(searchPayload()).get(0);
+
+		assertEquals(2, bridge.size(),
+				"exactly the two fields, so neither side needs parsing out of the other, and a public "
+						+ "getter added to ChartOrderBridge does not silently become a third: " + bridge);
+		assertTrue(bridge.has("substance") && bridge.has("orderDisplay"), "was: " + bridge);
+	}
+
+	@Test
+	public void aChipWithNothingToReconcileStatesAnEmptyListRatherThanNothing() {
+		// Empty is a statement — every substance this chip names is one the chart's own records spell
+		// — and it is not absence: chartOrderBridges() is resolved for every chip and is never null.
+		// Present-and-empty rather than omitted, so a client reads one field unconditionally.
+		bridges = Collections.<SafetyWarning.ChartOrderBridge> emptyList();
+
+		JsonNode published = chartOrderBridgesOfOnlyChip(searchPayload());
+		assertTrue(published.isArray(), "an empty statement is still an array, was: " + published);
+		assertEquals(0, published.size(), "was: " + published);
+	}
+
+	@Test
+	public void theDoneEventSaysItToo() throws Exception {
+		controller.streamAnswer(out, patient(), "Is aspirin safe for her?", new User(3), false);
+
+		JsonNode chips = eventData("done").get("safetyWarnings");
+		assertNotNull(chips, "the done event carried no safetyWarnings key");
+		assertEquals(ORDER_DISPLAY,
+				chips.get(0).get("chartOrderBridges").get(0).get("orderDisplay").asText());
+	}
+
+	@Test
+	public void theTrailingGroundedEventSaysItToo() throws Exception {
+		// With async grounding the chips arrive on `grounded`, so that is the event a client rendering
+		// chips has to read — the same reason ChartSearchAiInteractionPairExtentTest checks it.
+		controller.streamAnswer(out, patient(), "Is aspirin safe for her?", new User(3), true);
+
+		JsonNode chips = eventData("grounded").get("safetyWarnings");
+		assertNotNull(chips, "the grounded event carried no safetyWarnings key");
+		assertEquals(SUBSTANCE,
+				chips.get(0).get("chartOrderBridges").get(0).get("substance").asText());
+	}
+
+	@Test
+	public void noEmissionSiteCanPublishAChipWithoutSayingWhereItsSubstanceCameFrom() throws Exception {
+		// Structural, and it is what makes the cases above hold for a site nobody has written yet. The
+		// chips array is already written in exactly one place (issue #336, pinned next door); this
+		// asserts the attribution is written from the chip's own bridges in exactly one place too, so
+		// a site that built the per-chip map for itself would be caught rather than silently dropping
+		// the correspondence for whichever surface it serves.
+		String source = ChartSearchAiStreamingTest.controllerSource();
+
+		int keys = ChartSearchAiStreamingTest.occurrences(source, "\"chartOrderBridges\"");
+		assertEquals(1, keys,
+				"the chartOrderBridges key must be written in exactly one place, inside the one method "
+						+ "that builds a chip's wire map (issue #347). Found " + keys + " writes of it.");
+		int reads = ChartSearchAiStreamingTest.occurrences(source, "warning.chartOrderBridges()");
+		assertEquals(1, reads,
+				"and it must be read straight off the chip, once — a second reader is a site reshaping "
+						+ "or re-deriving the attributions. Found " + reads + ". (The needle carries its "
+						+ "receiver so that a javadoc {@link} to the accessor does not count as a read.)");
+	}
+
+	private class BridgedChipStubService implements ChartSearchService {
+
+		@Override
+		public ChartAnswer search(Patient patient, String question) {
+			return answer();
+		}
+
+		@Override
+		public ChartAnswer searchStreaming(Patient patient, String question,
+				Consumer<String> tokenConsumer) {
+			return searchStreaming(patient, question, tokenConsumer, r -> { }, c -> { }, a -> { });
+		}
+
+		@Override
+		public ChartAnswer searchStreaming(Patient patient, String question,
+				Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
+				Consumer<List<RecordReference>> citationsConsumer,
+				Consumer<ChartAnswer> ungroundedAnswerConsumer) {
+			tokenConsumer.accept("Acetylsalicylic acid (aspirin) interacts with active order Advil [2].");
+			citationsConsumer.accept(answer().getReferences());
+			// Production's own early-done shape: built before validation runs, so it carries no chips.
+			ungroundedAnswerConsumer.accept(new ChartSearchService.ChartAnswer(
+					"Acetylsalicylic acid (aspirin) interacts with active order Advil [2].",
+					Collections.<ChartSearchService.RecordReference> emptyList()));
+			return answer();
+		}
+
+		@Override
+		public void warmup(Patient patient) {
+		}
+	}
+}

@@ -3410,14 +3410,17 @@ public class DrugSafetyValidator {
 	 * {@code DrugReferenceInjector.renderFinding} read. So this can only drop a chip that is equal
 	 * everywhere a chip is looked at.
 	 *
-	 * <p><b>{@link SafetyWarning#chartOrderBridges()} is the ONE prompt-read value deliberately left
-	 * OUT of that key</b> (issue #349), and it was added here and reverted, so the omission is a
-	 * decision rather than an oversight: this key decides which chips are EMITTED, so it reaches
+	 * <p><b>{@link SafetyWarning#chartOrderBridges()} is deliberately left OUT of that key</b> (issue
+	 * #349), and it was added here and reverted, so the omission is a decision rather than an
+	 * oversight: this key decides which chips are EMITTED, so it reaches
 	 * {@link PairChipExtent}'s counts from BOTH arms that consult it — the screening arm collapses
 	 * where the candidate is collected, before the cap, and since issue #356 the drug-in-play arm
 	 * counts the rule chips that survived this ledger — and, through {@code ChartSearchAiUtils.resourceKey}, whether two injected
-	 * findings share one resource uuid. Keying on a prompt-only clause would therefore let it decide
-	 * wire CONTENT. A collapsed chip carries the SURVIVOR's bridge, which is the same residue this
+	 * findings share one resource uuid. A bridge must not be able to decide which chips EXIST. That
+	 * reason used to be stated as "keying on a prompt-only clause would let it decide wire content",
+	 * which issue #347 falsified by publishing the bridges as each chip's {@code chartOrders} key; the
+	 * emission argument is the one that survives it. A collapsed chip carries the SURVIVOR's bridge,
+	 * which is the same residue this
 	 * javadoc already accepts one paragraph up ("what it gives up is WHICH constituent"). ADR
 	 * Decision 64 carries the reasoning; do not "restore" the term.
 	 *
@@ -5175,20 +5178,22 @@ public class DrugSafetyValidator {
 	 * that performed it, and a shared helper that assumes one is asserting something about a caller it
 	 * cannot see.
 	 *
-	 * <p><b>The silence test is the order's RECORDED NAMES against the substance, never the string the
+	 * <p><b>The silence test is the name a chart record of the order DISPLAYS, never the string the
 	 * chip prints.</b> A printed name is USUALLY a {@link DrugReference#displayLabel()}, which is
 	 * multi-word, parenthesized or synonym-suffixed for much of this knowledge base
 	 * ({@code Acetylsalicylic acid (aspirin)}, {@code Hydrocortisone (ophthalmic)}), and
 	 * {@link DrugReference#matchesOrderName} can only answer true where the display carries the WHOLE
 	 * string — so putting the printed label to the display would bridge {@code Aspirin 81mg} as if the
-	 * chart named nothing. {@link #recordsANameOfAny} asks instead whether any name the order records
-	 * reaches the substance, through {@link #matchesDrugNameAny} over that order's names — and
-	 * {@link #resolvesFrom}'s own name leg IS {@link #recordsANameOf}, the single-row form of the same
-	 * fold, so the silence test is exactly "{@code resolvesFrom} is true and its NAME leg is not what
-	 * made it true", i.e. the ATC leg alone. That is why the residue
-	 * is issue #136's alias-spelling shape and not this one:
-	 * {@code .anOrderNamingTheSubstanceOnlyByAnAliasIsNotBridged} is the case that reddens if this ever
+	 * chart named nothing. {@link #displaysANameOfAny} asks instead whether the order's own displayed
+	 * name reaches the substance, through {@link #matchesDrugNameAny}, and
+	 * {@code .anOrderNamingTheSubstanceOnlyByAnAliasIsNotBridged} is the case that reddens if it ever
 	 * weakens back to a printed-name test.
+	 *
+	 * <p><b>It was every name the order RECORDS until issue #347, and the change is that method's own
+	 * subject.</b> The short of it: the module records a concept name the chart's record never
+	 * renders, so the old test was satisfied by a name no reader could see, and the clause fell silent
+	 * on the brand-named prescription it exists for. What that leaves standing is issue #136's
+	 * alias-spelling shape, unpinned as before.
 	 *
 	 * <p><b>"Usually", because the partner's printed name is {@link #partnerLabel} wherever nothing
 	 * reconciled</b> — the rule's own token, or its bare ATC code where the rule carries no token
@@ -5227,16 +5232,16 @@ public class DrugSafetyValidator {
 	 * latency is an LLM call. Measured 2026-09-01 with a bespoke instrumented harness and a
 	 * stubbed-body A/B; NO committed fixture pins any of these, so re-measure rather than re-quote.
 	 *
-	 * <p><b>And HALF of that second payment is dead work, which is the honest denominator.</b>
-	 * {@link SafetyWarning#chartOrderBridges()}'s only production reader is
-	 * {@code DrugReferenceInjector.chartOrderClause}, reached only from {@code preAnswerFindings} — the
-	 * wire serializer writes four keys and does not include it, and the collapse key deliberately does
-	 * not read it. So the post-answer {@code validate} resolves every bridge and discards it. Gating it
-	 * would mean threading a discriminator through {@code validate}, a trade nobody has measured, and it
-	 * is not proposed here; what matters is that the ~13 ms per pass is stated against a reader that
-	 * exists once, not twice. <b>The per-subject hoist was implemented and
-	 * declined</b>, not guessed at: order-preserving, output-identical over the whole suite, and worth
-	 * 2 ms at 40 orders and 27 ms at 80. Do not re-derive it; ADR Decision 64 carries the numbers.
+	 * <p><b>Both payments have a reader since issue #347, and that sentence used to say otherwise.</b>
+	 * It read "HALF of that second payment is dead work" on the grounds that
+	 * {@link SafetyWarning#chartOrderBridges()}'s only production reader was
+	 * {@code DrugReferenceInjector.chartOrderClause}, reached only from {@code preAnswerFindings}. The
+	 * POST-answer pass's bridges are now what {@code ChartSearchAiRestController} publishes as each
+	 * chip's {@code chartOrders}, so the ~13 ms per pass is spent twice and read twice. The collapse
+	 * key still deliberately does not read it, for the reason that accessor gives. <b>The per-subject
+	 * hoist was implemented and declined</b>, not guessed at: order-preserving, output-identical over
+	 * the whole suite, and worth 2 ms at 40 orders and 27 ms at 80. Do not re-derive it; ADR Decision
+	 * 64 carries the numbers.
 	 *
 	 * @param subjectRows every row of the subject's substance — the GROUP form, because a substance has
 	 *        N rows and only some carry the code (issue #189, the same reason
@@ -5307,7 +5312,7 @@ public class DrugSafetyValidator {
 	 *
 	 * <p>Every refusal here is a claim this record must not make — no name to print, no row to be
 	 * about, an order the module could read no name for or no display from, an order that did not
-	 * resolve this substance at all, and an order whose own recorded names already reach it, where a
+	 * resolve this substance at all, and an order whose own DISPLAYED name already reaches it, where a
 	 * clause would be noise in a record whose whole budget is evidence. No count is given: mutate a
 	 * conjunct and read the failures — but note that the blank-name refusal yields NOTHING, being
 	 * defensive against the {@code trim()} below on a null {@code subjectName}, and is unreached by any
@@ -5318,7 +5323,7 @@ public class DrugSafetyValidator {
 			List<DrugReference> rows, String printedName,
 			PatientClinicalContext.ActiveDrugOrder order) {
 		if (ChartSearchAiUtils.isBlank(printedName) || !displayNamesADrug(order)
-				|| !resolvesFromAny(rows, order) || recordsANameOfAny(rows, order)) {
+				|| !resolvesFromAny(rows, order) || displaysANameOfAny(rows, order)) {
 			return;
 		}
 		SafetyWarning.ChartOrderBridge bridge = new SafetyWarning.ChartOrderBridge(printedName.trim(),
@@ -5332,13 +5337,12 @@ public class DrugSafetyValidator {
 	/** @return whether any name {@code order} RECORDS reaches {@code ref} — {@link DrugReference#matchesDrugName}
 	 *          over the order's own names, and the name leg of
 	 *          {@link #resolvesFrom}, asked on its own so that "resolved by the ATC code alone" is
-	 *          expressible without a second matcher. Over {@code getNames()} and not the display alone,
-	 *          because a chart record of this order can carry any of them — the opposite read from
-	 *          {@link #namesNamingOrder}, which narrowed to the display because it LICENSES a name to be
-	 *          printed while this one only silences a clause. The residue: a caller-built order whose
-	 *          display is not among its names could be bridged under a display that already names the
-	 *          substance. {@code PatientClinicalContextBuilder} puts the display among the names, so no
-	 *          order it builds reaches that. */
+	 *          expressible without a second matcher. Over {@code getNames()} and not the display alone
+	 *          because ATTRIBUTION is the question here: an order is this substance's however it was
+	 *          recorded, and narrowing that would lose a pair rather than a clause. Since issue #347
+	 *          the bridge's silence test is no longer this predicate's group form —
+	 *          {@link #displaysANameOfAny} asks the narrower question, of the one name a chart record
+	 *          carries, and that method records why the two questions are not the same one. */
 	private static boolean recordsANameOf(DrugReference ref,
 			PatientClinicalContext.ActiveDrugOrder order) {
 		for (String name : order.getNames()) {
@@ -5349,22 +5353,52 @@ public class DrugSafetyValidator {
 		return false;
 	}
 
-	/** @return the group form of {@link #recordsANameOf}, since a substance has N rows and a recorded
-	 *          name may reach any of them (#189's shape). Through the EXISTING group-form matcher
-	 *          {@link #matchesDrugNameAny} rather than folding over the rows itself: the two are the
-	 *          same existential over one product, so this is output-identical, and a second fold would
-	 *          mean the arm's own order attribution and the bridge's silence test could be tightened
-	 *          apart — which is the direction that starts printing a bridge for an order whose recorded
-	 *          name DOES name the substance, in text carrying
-	 *          {@link DrugReferenceInjector#STRENGTH_WITHHOLD}. */
-	private static boolean recordsANameOfAny(List<DrugReference> rows,
+	/**
+	 * @return whether the one name a chart record of {@code order} carries reaches {@code rows}'
+	 *         substance — {@link #matchesDrugNameAny} over {@link
+	 *         PatientClinicalContext.ActiveDrugOrder#getDisplay()}, and the bridge's silence test
+	 *         since issue #347.
+	 *
+	 *         <p><b>It was every name the order RECORDS until then, and that was measurably the wrong
+	 *         set.</b> The reason given for it — "a chart record of this order can carry any of them"
+	 *         — is false of the record the model actually reads. querystore's
+	 *         {@code DrugOrderRecordSerializer.buildText} renders exactly ONE name into a
+	 *         {@code drug_order} record: the drug row's where it is non-blank, else the concept's
+	 *         preferred name, never both and never {@code drugNonCoded}; the concept name reaches its
+	 *         {@code QueryDocument} METADATA, which {@code QueryStoreChartBuilder} does not carry into
+	 *         prompt text. {@code QuerystoreDrugOrderDisplayedNameTest} pins that against the real
+	 *         serializer rather than against a reading of it. Meanwhile
+	 *         {@code PatientClinicalContextBuilder.addDrugName} puts the order's CONCEPT name into
+	 *         {@code getNames()} beside its drug-row name — so an order displayed {@code Advil 400mg}
+	 *         on concept {@code Ibuprofen} satisfied the old test through a name that reaches no
+	 *         prompt text at all, and the clause stayed silent on exactly the shape where the
+	 *         correspondence is missing. That is issue #347: the answer named the prescription
+	 *         {@code Advil} after the record it cited while every chip named it {@code Ibuprofen}.
+	 *
+	 *         <p><b>What this gives up, deliberately.</b> {@link #recordsANameOf} is still
+	 *         {@link #resolvesFrom}'s name leg, so the silence test is no longer that leg's negation
+	 *         and the two can now be tightened apart — the coupling the old javadoc kept, for a
+	 *         consequence ("a bridge for an order whose recorded name DOES name the substance") that
+	 *         is now the intended behaviour rather than the hazard. The clause's TRUTH never rested on
+	 *         it: {@link #resolvesFromAny} beside it is what makes the attribution true, and this
+	 *         conjunct only ever decided whether saying it was worth the record's budget.
+	 *
+	 *         <p><b>Residue, in the one shape where the display is not what a record renders.</b>
+	 *         {@code PatientClinicalContextBuilder} reads the drug row's name, then
+	 *         {@code drugNonCoded}, then the concept's, and the display is the first of those it
+	 *         found (issue #293) — so for an order with no drug row and free text written in its
+	 *         place, the display is that free text while querystore renders the concept's preferred
+	 *         name. A bridge can then name the order by a string its {@code drug_order} record does
+	 *         not show. The claim stays true, and the substance stays citable in that shape because
+	 *         the record spells it; what the reader may not find is the right-hand side. Named rather
+	 *         than machined around: the alternative is a second field mirroring another module's
+	 *         choice of display name, and {@link
+	 *         PatientClinicalContext.ActiveDrugOrder#getDisplay()} already documents itself as the
+	 *         name "a record renders".
+	 */
+	private static boolean displaysANameOfAny(List<DrugReference> rows,
 			PatientClinicalContext.ActiveDrugOrder order) {
-		for (String name : order.getNames()) {
-			if (matchesDrugNameAny(rows, name)) {
-				return true;
-			}
-		}
-		return false;
+		return matchesDrugNameAny(rows, order.getDisplay());
 	}
 
 	/** @return every row of {@code row}'s substance that {@code entries} carries, or EMPTY where it

@@ -50,13 +50,13 @@ public class DrugClassNoteInjectionToggleTest extends BaseModuleContextSensitive
 
 	@Test
 	public void theNoteIsRaisedWhileTheQuestionDrivenLegIsOn() {
-		assertTrue(!injectedClassNotes(injectWithQueryLeg("true")).isEmpty(),
+		assertFalse(injectedClassNotes(injectWithQueryLeg("true")).isEmpty(),
 				"the premise: with the question leg on, this question raises the note");
 	}
 
 	@Test
 	public void theNoteIsNotRaisedWhereTheQuestionDrivenLegIsOff() {
-		assertFalse(!injectedClassNotes(injectWithQueryLeg("false")).isEmpty(),
+		assertTrue(injectedClassNotes(injectWithQueryLeg("false")).isEmpty(),
 				"the note is the question leg's own material, so it must stand down with that leg");
 	}
 }

@@ -69,6 +69,8 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 61: Prose the answer reproduces from a cited reference record must be reproduced faithfully](#decision-61-prose-the-answer-reproduces-from-a-cited-reference-record-must-be-reproduced-faithfully)
 - [Decision 62: The chip publishes the rating it was ordered on, verbatim, and says what a client may not conclude from it](#decision-62-the-chip-publishes-the-rating-it-was-ordered-on-verbatim-and-says-what-a-client-may-not-conclude-from-it)
 - [Decision 63: One response names one active order one way, so the reconciliation stops being the fold's](#decision-63-one-response-names-one-active-order-one-way-so-the-reconciliation-stops-being-the-folds)
+- [Decision 64: A finding states which of this patient's own orders each substance it names was resolved from](#decision-64-a-finding-states-which-of-this-patients-own-orders-each-substance-it-names-was-resolved-from)
+- [Decision 65: A question naming a drug CLASS is told so, rather than resolved to members the classification cannot honestly supply](#decision-65-a-question-naming-a-drug-class-is-told-so-rather-than-resolved-to-members-the-classification-cannot-honestly-supply)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -4276,7 +4278,10 @@ cross-reactivity groups already name is read from **that data** — `cross-react
 an operator-extensible class-name table with its own load-validity channel (Decision 48, issue #266),
 and the shipped seed's one group is named `NSAID`, which is one of the two classes this issue
 reports. `DrugClassTerms`' in-code table carries only what that file cannot: a class it does not name
-at all, and a further **spelling** of one it does. A group is not a label — its `atcPrefixes` drive
+at all, and a further **spelling** of one it does — and the second kind is *enforced*, not merely
+intended: such a spelling answers only while some loaded group publishes exactly the class name it
+reports, so removing or renaming the shipped `NSAID` group loses that class rather than leaving the
+code table asserting a name the deployment's data no longer publishes. A group is not a label — its `atcPrefixes` drive
 cross-reactivity contraindication chips and duplicate-class-therapy chips — so adding a group to make
 a word recognisable would assert pharmacological cross-reactivity across those prefixes; and for the
 contraceptive class there is no honest prefix set to add, which is the measurement above. The
@@ -4316,9 +4321,11 @@ behind it, and was declined on that ground.
 [Decision 41's](#decision-41-a-composite-claims-negative-says-nothing-about-the-citation)
 composite-claim rule — a chart citation whose claim rests on a reference-group record has its
 entailment NEGATIVE withheld — is keyed on the reference **group**, so the note joins its trigger
-set. Until now every reference-group record required a question that resolved a substance, i.e. the
-drug-safety answer that rule was measured on; the note is raised on plain retrospective questions
-too. Driving the real `CitationGroundingVerifier.verify` with entailment on and the judge answering
+set. What is new is not that a reference-group record can be injected on a question resolving no
+substance: the order-driven contraindication arm (#143) has done that since it shipped, pinned by
+`ActiveOrderContraindicationTest.theFindingReachesThePromptAsACitableRecord`, whose question is
+*"What are her current medications?"*. What is new is that one can now be injected on a question
+raising **no chip at all**. Driving the real `CitationGroundingVerifier.verify` with entailment on and the judge answering
 "no": a chart citation reads `grounded=false` with no note in the chart, and `null` both when the
 note is co-cited in the same sentence and when it is cited only through the structured array with no
 inline marker — the unanchored path, which counts toward every claim. So a mis-attributed chart

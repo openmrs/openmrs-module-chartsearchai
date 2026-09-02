@@ -230,9 +230,11 @@ import org.springframework.stereotype.Service;
  * <ul>
  * <li><strong>The trigger set is wider than the drug-safety answer this rule was measured on</strong>
  * (issue #354). It is membership in the reference GROUP, and since that issue a third type is in it:
- * a {@link ChartSearchAiConstants#RESOURCE_TYPE_DRUG_CLASS_NOTE} is injected wherever the QUESTION
- * carries a curated drug-class term and resolves no substance, which includes a plain retrospective
- * chart question ("is she on any NSAIDs?") that raises no chip at all. So a chart citation on such a
+ * a {@link ChartSearchAiConstants#RESOURCE_TYPE_DRUG_CLASS_NOTE} is injected where the QUESTION
+ * carries a curated drug-class term, resolves no substance, and the question-driven injection toggle
+ * is on — which includes a plain retrospective chart question ("is she on any NSAIDs?") raising no
+ * chip at all. A reference-group record on a question resolving no substance is not itself new (the
+ * #143 order-driven arm injects one); a record on a question raising no chip is. So a chart citation on such a
  * question now has its entailment negative withheld too, and — the note being an ordinary cited
  * record — the unanchored path below reaches every claim in that answer. The remedy is NOT to re-key
  * this on a type name, which is the #122 mistake; it is stated here so a reader of a {@code null}

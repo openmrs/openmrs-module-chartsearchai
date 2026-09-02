@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.reference;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -41,7 +42,11 @@ import java.util.Set;
  * <p><b>Why a further spelling has to live here rather than in that file.</b> The boundary rule is
  * {@link DrugReference#containsWord}, whose prose allowance is zero trailing letters, so
  * {@code NSAIDs} is not the term {@code NSAID}; and a group publishes one {@code name}. Carrying the
- * plural here adds a SPELLING of a class that file still names, not a second registry of classes.
+ * plural here adds a SPELLING of a class that file still names, not a second registry of classes —
+ * and "still names" is enforced rather than intended: a spelling listed in
+ * {@link #SPELLINGS_OF_A_CURATED_CLASS} answers only while some loaded group publishes exactly the
+ * class name it reports, so removing or renaming that group loses the class outright instead of
+ * leaving the code table answering for data the deployment no longer has.
  *
  * <p><b>What may be admitted, stated so it can be re-applied.</b> A term is admitted only when
  * <ol>
@@ -83,6 +88,16 @@ final class DrugClassTerms {
 	 */
 	private static final Map<String, String> TERMS;
 
+	/**
+	 * The subset of {@link #TERMS} whose class the CURATED GROUPS name, keyed the same way. A term in
+	 * here is a further spelling of a class that file owns, so it answers only while that file still
+	 * names the class — otherwise the code table would keep a copy of a class name the deployment's
+	 * data no longer publishes, which is the thing having two sources must not do. Removing the
+	 * shipped {@code NSAID} group therefore loses the class outright rather than leaving these three
+	 * spellings answering for it.
+	 */
+	private static final Set<String> SPELLINGS_OF_A_CURATED_CLASS;
+
 	static {
 		Map<String, String> terms = new LinkedHashMap<String, String>();
 		terms.put("oral contraceptive", "oral contraceptive");
@@ -97,6 +112,12 @@ final class DrugClassTerms {
 		terms.put("non-steroidal anti-inflammatory", "NSAID");
 		terms.put("nonsteroidal anti-inflammatory", "NSAID");
 		TERMS = Collections.unmodifiableMap(terms);
+
+		Set<String> spellings = new LinkedHashSet<String>();
+		spellings.add("nsaids");
+		spellings.add("non-steroidal anti-inflammatory");
+		spellings.add("nonsteroidal anti-inflammatory");
+		SPELLINGS_OF_A_CURATED_CLASS = Collections.unmodifiableSet(spellings);
 	}
 
 	private DrugClassTerms() {
@@ -125,10 +146,10 @@ final class DrugClassTerms {
 	 * @param prose the question text; {@code null} carries no term
 	 * @param groups the curated cross-reactivity groups, whose {@code name}s are the first source —
 	 *        never null in production ({@code DrugReferenceService.getCrossReactivityGroups} answers a
-	 *        list), and tolerated as null here so the rule can be read without one. A name is TRIMMED
-	 *        before it is matched: {@code CrossReactivityGroupsLoader} rejects only a blank one, so a
-	 *        padded name reaches this list and would otherwise be unmatchable under the prose rule's
-	 *        left boundary while driving chips everywhere else
+	 *        list), and tolerated as null here so the rule can be read without one. Whitespace is not
+	 *        stripped here: {@link CrossReactivityGroup#setName} trims at the writer, so a padded
+	 *        operator-authored name — which the loader accepts, rejecting only a blank one — is
+	 *        already trimmed by the time any reader, this one or the chip arms, sees it
 	 */
 	static String namedIn(String prose, List<CrossReactivityGroup> groups) {
 		if (prose == null || prose.trim().isEmpty()) {
@@ -138,11 +159,10 @@ final class DrugClassTerms {
 		String bestClass = null;
 		if (groups != null) {
 			for (CrossReactivityGroup group : groups) {
-				// Trimmed: the loader rejects only a BLANK name, so " NSAID" loads and drives chips
-				// everywhere else while the prose rule's left boundary makes it unmatchable here — the
-				// same shape issue #296's alias trim closed. Untrimmed, an operator sees the group work
-				// and never gets a class note for it, with nothing logged.
-				String name = group == null ? null : trimmedToNull(group.getName());
+				// Not trimmed here: CrossReactivityGroup.setName trims at the sole WRITER, so every
+				// reader — this one and the chip arms that PRINT the name — sees one spelling. A trim
+				// at this reader alone named one family two ways in one response.
+				String name = group == null ? null : group.getName();
 				if (name != null && longerThan(name, bestTerm) && DrugReference.containsWord(prose, name)) {
 					bestTerm = name;
 					bestClass = name;
@@ -150,12 +170,37 @@ final class DrugClassTerms {
 			}
 		}
 		for (Map.Entry<String, String> term : TERMS.entrySet()) {
-			if (longerThan(term.getKey(), bestTerm) && DrugReference.containsWord(prose, term.getKey())) {
-				bestTerm = term.getKey();
-				bestClass = term.getValue();
+			if (!longerThan(term.getKey(), bestTerm) || !DrugReference.containsWord(prose, term.getKey())) {
+				continue;
 			}
+			if (SPELLINGS_OF_A_CURATED_CLASS.contains(term.getKey())
+					&& !namesALoadedGroup(term.getValue(), groups)) {
+				// A spelling of a class the groups file owns, on a deployment whose file no longer
+				// names it. Declining is what keeps that file the sole registry of the CLASS: answering
+				// here would report a class name this deployment's data does not publish, and would
+				// give one question two answers where an operator had renamed the group.
+				continue;
+			}
+			bestTerm = term.getKey();
+			bestClass = term.getValue();
 		}
 		return bestClass;
+	}
+
+	/** @return whether some loaded group publishes exactly {@code className} as its name — the check
+	 *          that keeps a {@link #SPELLINGS_OF_A_CURATED_CLASS} entry from outliving the data that
+	 *          owns its class. Exact equality on the stored name, which
+	 *          {@link CrossReactivityGroup#setName} has already trimmed. */
+	private static boolean namesALoadedGroup(String className, List<CrossReactivityGroup> groups) {
+		if (groups == null) {
+			return false;
+		}
+		for (CrossReactivityGroup group : groups) {
+			if (group != null && className.equals(group.getName())) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** Whether {@code candidate} is longer than the term already matched, {@code null} counting as no
@@ -165,13 +210,4 @@ final class DrugClassTerms {
 		return matched == null || candidate.length() > matched.length();
 	}
 
-	/** @return {@code value} without leading or trailing whitespace, or {@code null} where nothing is
-	 *          left — what the group loop takes an operator-supplied name as. */
-	private static String trimmedToNull(String value) {
-		if (value == null) {
-			return null;
-		}
-		String trimmed = value.trim();
-		return trimmed.isEmpty() ? null : trimmed;
-	}
 }

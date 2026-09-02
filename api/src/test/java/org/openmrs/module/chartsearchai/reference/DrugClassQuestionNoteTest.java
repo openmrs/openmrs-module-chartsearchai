@@ -270,6 +270,25 @@ public class DrugClassQuestionNoteTest {
 	}
 
 	/**
+	 * And the code table does not keep a COPY of that class either: its three further spellings of it
+	 * answer only while the curated file still publishes the name they report. Otherwise removing the
+	 * group would leave the module asserting a class the deployment's own data no longer names, and
+	 * renaming it would give one question two answers depending on which spelling it used.
+	 */
+	@Test
+	public void aSpellingOfACuratedClassDoesNotOutliveTheGroupThatNamesIt() {
+		assertEquals("NSAID", ddinterServiceWithGroups().namedDrugClass("Any NSAIDs on her list?"),
+				"the premise: with the shipped group loaded, the plural spelling answers");
+
+		assertEquals(null, ddinterService().namedDrugClass("Any NSAIDs on her list?"),
+				"with no curated group naming NSAID, the plural spelling must decline too");
+		assertEquals(null,
+				serviceWithCuratedGroups(group("NSAIDs")).namedDrugClass(
+						"Any nonsteroidal anti-inflammatory on her list?"),
+				"and a RENAMED group does not lend its old name to a spelling of it");
+	}
+
+	/**
 	 * The rule that keeps the answer independent of the order an operator listed their groups in: the
 	 * LONGEST term a question carries decides, not the first source consulted. Asserted from both
 	 * file orders, because a first-match rule passes one of them by luck.

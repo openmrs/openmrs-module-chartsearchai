@@ -1224,25 +1224,15 @@ public class DrugReferenceService {
 	 * no severity and no partner.
 	 *
 	 * <p><b>Why the class is not resolved to its members, which is the whole of issue #354's design
-	 * decision.</b> The issue proposes the ATC hierarchy ("every substance above sits under
-	 * {@code G03A*}"), and that is measurably wrong in both directions on the shipped knowledge base
-	 * (2026-09-02, reading each entry's {@code atc} array rather than re-expressing any predicate
-	 * here): {@code Ethinylestradiol} — one of the three substances the issue itself names — is filed
-	 * {@code G03CA01}/{@code L02AA03} and is not under {@code G03A} at all, while {@code G03A} holds
-	 * {@code Megestrol acetate}, whose indications are oncological. A class resolved that way would
-	 * put a substance's own label into a {@code safety_finding} that
-	 * {@code DrugReferenceInjector.renderFinding} copies verbatim into citable evidence carrying
-	 * {@code STRENGTH_WITHHOLD}, asserting a class membership false of the drug named — the shape
-	 * CLAUDE.md records as reverted in issue #339's rounds 5-6.
-	 *
-	 * <p>The sound alternative is a hand-curated clinical MEMBERSHIP list per class, and that is a
-	 * knowledge-base deliverable rather than a module one: the KB is a reproducible build from its own
-	 * sources, and CLAUDE.md's ATC-subgroup bullet records what hand-picking such a list cost last time
-	 * ("#161's list was hand-picked and its hardening found it incomplete in a way that reproduced the
-	 * defect it was fixing"). It would also inject one reference record per member against a
-	 * per-record budget that bounds no record COUNT — on the shipped dataset {@code G03A} files 8
-	 * entries and {@code M01A} 27, and neither number is the contraceptive class's, which is the
-	 * point of the paragraph above.
+	 * decision.</b> The ATC hierarchy the issue proposes does not express these classes — measured in
+	 * both directions on the shipped knowledge base, and recorded ONCE, with its figures and its date,
+	 * in ADR Decision 65 rather than restated here. A class resolved that way would put a substance's
+	 * own label into a {@code safety_finding} that {@code DrugReferenceInjector.renderFinding} copies
+	 * verbatim into citable evidence carrying {@code STRENGTH_WITHHOLD}, asserting a class membership
+	 * false of the drug named — the shape CLAUDE.md records as reverted in issue #339's rounds 5-6.
+	 * The sound alternative, a hand-curated clinical MEMBERSHIP list, is a knowledge-base deliverable
+	 * rather than a module one, and CLAUDE.md's ATC-subgroup bullet records what hand-picking one cost
+	 * last time.
 	 *
 	 * <p><b>Why it lives here and not in {@code QueryScopeRouter}.</b> That class owns enumeration
 	 * INTENT and forbids a second drug vocabulary for it. This is not intent: what a question's drug

@@ -421,9 +421,11 @@ public class DrugReferenceInjector {
 		if (namedClass != null) {
 			String rendered = renderDrugClassNote(namedClass);
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_DRUG_CLASS_NOTE,
-					ChartSearchAiUtils.resourceKey(
-							ChartSearchAiConstants.RESOURCE_TYPE_DRUG_CLASS_NOTE, namedClass),
-					null, rendered));
+					// The CLASS, bare. Not a resourceKey composite: the mapping already publishes
+					// `drug_class_note` as its resourceType, so prefixing the type again would put
+					// `drug_class_note:NSAID` in front of a client rendering this field as a label. It
+					// names no row, deliberately — there is nothing here to navigate to.
+					namedClass, null, rendered));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;
 		}
@@ -1183,7 +1185,7 @@ public class DrugReferenceInjector {
 	public static final String FINDING_PREFIX = "Safety finding — ";
 
 	/**
-	 * The prefix every injected reference-material chart line carries — the token
+	 * The prefix the injected knowledge-base entry and the drug-class note carry — the token
 	 * {@code LlmProvider.DEFAULT_SYSTEM_PROMPT}'s other record-type rule keys on ({@code Records
 	 * beginning with "Drug reference" are clinical reference data, not this patient's data}).
 	 *
@@ -1195,7 +1197,9 @@ public class DrugReferenceInjector {
 	 * asserts the note begins with it, and the prompt's own sentence names the same token.
 	 *
 	 * <p>It is the LEAD and not the TYPE: a record wearing it may carry any reference-group resource
-	 * type, and since #354 two do.
+	 * type, and since #354 two do. Not every reference-material record wears it — a
+	 * {@code safety_finding} is reference material and carries {@link #FINDING_PREFIX} instead,
+	 * because the prompt says the opposite thing about the two.
 	 */
 	public static final String REFERENCE_PREFIX = "Drug reference — ";
 
@@ -1417,8 +1421,8 @@ public class DrugReferenceInjector {
 	private static String renderDrugClassNote(String drugClass) {
 		return REFERENCE_PREFIX + "drug class \"" + drugClass + "\". The interaction reference data is "
 				+ "indexed by individual substance, so no interaction screen was run for this class and "
-				+ "no reference material for it is included. Name a specific drug in that class to have "
-				+ "it screened.";
+				+ "no reference material for it is included. An interaction screen runs against a named "
+				+ "substance, not a class.";
 	}
 
 	/**

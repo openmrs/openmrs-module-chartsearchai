@@ -4265,7 +4265,15 @@ Additive to what the record SAYS about any partner, and no new claim: the senten
 
 Compact-only was raised by the refutation gate against the tail's own recorded rationale, "the tail's job is breadth, and one partner named with its severity states breadth". It is wrong here because at the shipped floor the only rating this segment can hold is `Unknown` (an unrated rule is EXEMPT from the floor, not below it), whose full note IS the "no mechanism description on file" sentence and whose compact form drops exactly the clause that makes the statement honest. The ticket asks for that sentence by name — "the sentence the module already writes just goes to a relevant partner".
 
-Full-for-every-member is what this change first shipped, by letting the segment fall through to the `restStart == 0` branch's budget loop, and a clean-context review agent measured what it costs on the data the module actually ships. Through the real `injectRecords` over the shipped knowledge base, a patient on 25 of Metformin's `Unknown` partners: **16 notes, 1530 characters, every one of them the identical string** `"<name> (Unknown severity interaction (DDInter 2.0; no mechanism description on file).)"` — no mechanism prose at all, no general material at all, and 9 of her own partners still withheld. Against the merge base the same arrangement rendered 5 notes in 1512 characters, three of them full Moderate mechanism paragraphs. The honest clause is a fixed 76 characters that does not vary between members, so repeating it spends the budget saying one thing.
+Full-for-every-member is what this change first shipped, by letting the segment fall through to the old budget loop, and a clean-context review agent found it. Measured here through the real `injectRecords` over the shipped knowledge base, on one arrangement stated so it can be re-run — a patient on the **first 25 of Metformin's 310 `Unknown`-rated partners**, asked *"is it safe to give metformin?"*:
+
+| | notes | characters | copies of the no-mechanism sentence |
+|---|---:|---:|---:|
+| merge base `33c70d48` | 2 | 452 | 0 |
+| full for every member | 26 | 2663 | 24 |
+| shipped: first full, rest compact | 26 | 1053 | 1 |
+
+The merge-base row is this issue's own defect: 24 of the 25 drugs she is on are unnamed. The middle row is the over-correction — the sentence does not vary between members, so repeating it spends the budget saying one thing. No per-note character figure is published for it, because an earlier draft of this paragraph gave one and it was wrong by a character.
 
 First-full-rest-compact states the source's sentence once and then states which drugs it is about, which is the part that differs. What it gives up is a second mechanism paragraph under a RAISED floor, where the segment can hold several rated rows with real and different mechanism text; those rows are sub-floor by the operator's own configuration, and `InjectedInteractionRelevanceOrderContextTest` pins that trade rather than leaving it implied.
 

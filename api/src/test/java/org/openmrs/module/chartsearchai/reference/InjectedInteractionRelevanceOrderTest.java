@@ -148,10 +148,10 @@ public class InjectedInteractionRelevanceOrderTest {
 		// What promotion still buys, and the case that makes it observable. Segment 1 renders every
 		// promoted note in full while the budget allows; this segment renders the FIRST in full and
 		// the rest compact, because at the shipped floor every note in it is the same sentence and
-		// repeating it is how a real polypharmacy record spent its whole budget saying one thing —
-		// measured over the SHIPPED knowledge base, sixteen identical copies, 1530 characters, no
-		// mechanism prose at all. Sertraline sits ahead of Fluconazole in the entry's own partner
-		// order, so it is the one that carries the sentence.
+		// repeating it is how a real polypharmacy record spends its whole budget saying one thing —
+		// ADR Decision 65 carries the measurement and the arrangement it was taken on. Sertraline sits
+		// ahead of Fluconazole in the entry's own partner order, so it is the one that carries the
+		// sentence.
 		String interactions = interactionsFor(METFORMIN_QUESTION,
 				DrugReferenceTestSupport.ctx(60, null,
 						DrugReferenceTestSupport.set("Warfarin", "Sertraline", "Fluconazole"), null, null,
@@ -187,6 +187,28 @@ public class InjectedInteractionRelevanceOrderTest {
 	 */
 	private static final String SUB_FLOOR_ATC_SPLIT_FIXTURE =
 			"chartsearchai-test/drug-reference-partner-atc-split-subfloor-rows.json";
+
+	@Test
+	public void withNothingPromotedTheWholeSectionIsHerPartnersAndOneRepresentative() {
+		// The crux of this issue, asserted as the WHOLE section rather than as a position. When the
+		// floor admits none of her rules the record still owes two different things — which of her own
+		// drugs this entry is filed against, and enough breadth that it does not read as if her
+		// overlap were the drug's only interaction — and they come from two different segments. Keying
+		// the tail on the promoted count instead of on "anything patient-specific was shown" sends
+		// this arrangement back through the full-note budget loop, which renders her two partners a
+		// second time and then walks the dataset; every position-shaped assertion in this class stays
+		// green through that, because her partner is still at the front.
+		String interactions = interactionsFor(METFORMIN_QUESTION,
+				DrugReferenceTestSupport.ctx(60, null,
+						DrugReferenceTestSupport.set("Sertraline", "Fluconazole"), null, null, null),
+				"Metformin");
+
+		assertEquals("interactions: sertraline (unknown severity interaction (ddinter 2.0; no mechanism "
+				+ "description on file).); " + SUB_FLOOR_PARTNER + " (unknown); lisinopril (moderate).",
+				interactions,
+				"her two partners once each, the source's sentence once, and one representative of "
+						+ "everything else: " + interactions);
+	}
 
 	@Test
 	public void theCollapseKeepsTheRowTheChartNamesEvenWhereTheFloorFilteredBoth() throws IOException {

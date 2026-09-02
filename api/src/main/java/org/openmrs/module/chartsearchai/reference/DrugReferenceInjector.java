@@ -1604,11 +1604,14 @@ public class DrugReferenceInjector {
 			// clinician needs when the mechanism prose has to go; a labelless rule has nothing
 			// shorter to fall back to, so it keeps its full text.
 			//
-			// It has a SECOND consumer, and in the common case the primary one: segment 2 renders the
-			// dataset-tail representative compact unconditionally whenever a partner was promoted,
-			// with budget still to spare (issue #117 — mechanism prose about a drug the patient is not
-			// on is what the model recited). So do not assume reaching this form means the budget ran
-			// out; it also means "breadth is all this partner is here for".
+			// It has TWO further consumers, and in the common case they are the primary ones. The last
+			// segment renders the dataset-tail representative compact unconditionally whenever
+			// anything patient-specific was shown, with budget still to spare (issue #117 — mechanism
+			// prose about a drug the patient is not on is what the model recited); and since issue
+			// #357 the segment before it renders every member but its first compact, however much
+			// budget is left. So do not assume reaching this form means the budget ran out: it also
+			// means "breadth is all this partner is here for", and "the source's sentence about this
+			// partner has already been stated once".
 			String severity = ChartSearchAiUtils.firstNonBlank(i.getSeverity());
 			String compact = (label == null ? rendered
 					: (severity != null ? label + " (" + severity + ")" : label)).trim();
@@ -2051,8 +2054,10 @@ public class DrugReferenceInjector {
 		/** Dataset attribution, or null when the entry declares none. */
 		final String source;
 
-		/** Interaction partners the text does not name — dropped by the budget or, more often, by
-		 *  segment 2 representing the dataset tail with one partner; 0 when it names them all.
+		/** Interaction partners the text does not name — dropped by the budget or, more often, by the
+		 *  last segment representing the whole dataset tail with one partner; 0 when it names them all.
+		 *  Never a partner the CHART names, since issue #357: both patient-specific segments render
+		 *  every member, so this counts drugs this patient has nothing to do with.
 		 *
 		 *  <p>Partners, not rows, since issue #174 site 2: the entry's rules are collapsed to one per
 		 *  partner before anything is rendered, so this counts what the field has always claimed to
@@ -2409,12 +2414,16 @@ public class DrugReferenceInjector {
 			// this segment is the same sentence — DDInter rates 42,415 of the knowledge base's rows
 			// Unknown and files no mechanism for any of them, so each renders "<name> (Unknown
 			// severity interaction (DDInter 2.0; no mechanism description on file).)" — and repeating
-			// it is how a real polypharmacy record spent its whole budget saying one thing: measured
-			// through the real injectRecords over the SHIPPED knowledge base, a patient on 25 of
-			// Metformin's Unknown partners rendered 16 identical copies of that sentence, 1530
-			// characters carrying no mechanism prose at all and still withholding 9 of her own
-			// partners. Full once states what the source says; compact after it states which drugs it
-			// says it about, which is the part that differs.
+			// it is how a real polypharmacy record spends its whole budget saying one thing. Measured
+			// through the real injectRecords over the SHIPPED knowledge base, a patient on the first 25
+			// of Metformin's 310 Unknown-rated partners asked "is it safe to give metformin?": the
+			// section is 1053 characters and states that sentence ONCE, against 2663 characters and 24
+			// copies of it if every member renders full. Full once states what the source says; compact
+			// after it states which drugs it says it about, which is the part that differs.
+			//
+			// Every member of this segment has a token or an ATC by construction — that is what made
+			// namesActiveDrug true of it — so unlike the tail below it can never hold a rule with no
+			// name to shorten to, and "compact" here is always the short form.
 			int tailStart = interactions.promotedCount + interactions.chartNamedCount;
 			for (int i = interactions.promotedCount; i < tailStart; i++) {
 				InteractionNote n = ordered.get(i);
@@ -2450,9 +2459,16 @@ public class DrugReferenceInjector {
 			// why it has to be: with the promoted count alone, a record whose only chart-named partner
 			// was floor-filtered spent this segment's whole budget walking a segment that is entirely
 			// about the patient, and the breadth this segment exists to supply was never rendered at
-			// all. MAX_INTERACTION_RENDER_CHARS stays a soft budget whose overshoot is at most one
-			// note per segment, and a compact representative shrinks that overshoot rather than
-			// widening it.
+			// all.
+			//
+			// MAX_INTERACTION_RENDER_CHARS is a soft budget, and say what actually bounds the
+			// overshoot rather than counting notes: the two patient-specific segments are bounded by
+			// the patient's own active-drug list and NOT by the budget — neither drops a member, which
+			// is what "never invisible" means — and this one adds at most one note on top. So a chart
+			// with many of an entry's own partners on it overshoots by however many those are: measured
+			// over the shipped knowledge base, a (synthetic) patient on all 310 of Metformin's
+			// Unknown-rated partners renders 7560 characters, none withheld. What is bounded by the
+			// budget is the general material, which is this segment's business alone.
 			if (tailStart == 0) {
 				for (int i = 0; i < ordered.size(); i++) {
 					String n = ordered.get(i).full;

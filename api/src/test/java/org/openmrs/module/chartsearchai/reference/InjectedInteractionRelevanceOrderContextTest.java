@@ -35,8 +35,8 @@ public class InjectedInteractionRelevanceOrderContextTest extends BaseModuleCont
 	public void aRaisedFloorMovesAPartnerFromThePromotedSegmentToTheHeadOfTheTail() {
 		// Both of these partners are drugs the chart records, and at the shipped floor both are
 		// PROMOTED — segment 1 yields the budget to every member and renders each in full while it
-		// allows, which for this pair it does (Metformin's note is ~215 chars and Ibuprofen's ~910,
-		// against a 1500-char budget). Raised to `major` both rules are filtered, so they move to the
+		// allows, which for this pair it does, both notes fitting the budget between them. Raised to
+		// `major` both rules are filtered, so they move to the
 		// segment behind it, which renders the first in full and the rest compact.
 		//
 		// That difference is the whole assertion, and it is why the case needs TWO filtered partners

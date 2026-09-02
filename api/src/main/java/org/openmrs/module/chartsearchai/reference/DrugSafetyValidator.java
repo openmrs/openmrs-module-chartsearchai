@@ -686,9 +686,10 @@ public class DrugSafetyValidator {
 	 * made it must not lose to a rated row. The one definition of that ordering, shared by the chip
 	 * grouping here ({@link #bestRulePerPartner}), the two pairwise arms' chip orderings
 	 * ({@link #PAIR_SEVERITY_DESCENDING} and {@link #SCREENED_PAIR_SEVERITY_DESCENDING}) and the
-	 * promoted-note ordering in {@link DrugReferenceInjector.InteractionNote}; two copies could drift
-	 * into ranking the same pair of rules oppositely, which is how the chip and the prompt text come
-	 * to disagree.
+	 * note ordering in {@link DrugReferenceInjector.InteractionNote} — which since issue #355 orders
+	 * the dataset TAIL as well as the promoted segment, where nothing was promoted; two copies could
+	 * drift into ranking the same pair of rules oppositely, which is how the chip and the prompt text
+	 * come to disagree.
 	 *
 	 * <p><b>{@link #FINDING_STRENGTH_DESCENDING} shares it as a TIEBREAK only</b>, and the difference
 	 * is a real divergence rather than a wording nicety: that comparator asks

@@ -388,10 +388,12 @@ public class DrugReferenceInjectorTest {
 	public void aSubFloorInteractionIsNotPromotedEvenWhenThePatientIsOnThatDrug() {
 		// Promotion must honour the interaction-severity floor the chips honour (issue #84).
 		// Lisinopril x warfarin is an Unknown-severity DDInter row with no mechanism text — exactly
-		// what the default `minor` floor exists to keep out of the clinician's way — and it is the
-		// first partner to fall PAST the render cap in dataset order (index 7; the cumulative
-		// rendered length reaches 1546 there against a 1500-char budget), so its presence can only
-		// come from promotion. Promoting on relevance alone pulled rows like it to the front of the
+		// what the default `minor` floor exists to keep out of the clinician's way — and nothing but
+		// promotion can put it in this section: an Unknown rating ranks LAST, so since issue #355 the
+		// tail names five better-rated partners before it would reach this one, and a promoted
+		// warfarin would render in segment 1, which overrides the budget. (Before that issue the
+		// budget excluded it instead, as the first partner to fall past the render cap in dataset
+		// order.) So its presence can only come from promotion. Promoting on relevance alone pulled rows like it to the front of the
 		// prompt, and measured on the 3.7.1 standalone the model then answered from them: two probe
 		// cells that correctly abstained on the baseline began reporting "an Unknown severity
 		// interaction between Erythromycin and Lisinopril", so the render path was bypassing a
@@ -557,26 +559,48 @@ public class DrugReferenceInjectorTest {
 	}
 
 	@Test
-	public void withNoPatientRelevantPartnerTheDatasetTailStillRendersFullNotesToTheBudget() {
-		// The other side of the branch the test above pins, and the reason segment 2 is a branch at
-		// all rather than one rule. A compact representative is the right cut only when a promoted
-		// partner already carries the patient-specific content; with nothing promoted the general
-		// material IS the record's content, so the budget is spent on full notes exactly as it was
-		// before #117 — same entry, same question, and the ONLY difference is whether the patient is
-		// on one of the partners.
+	public void withNoPatientRelevantPartnerTheDatasetTailStatesBreadthCompactlyMostSevereFirst() {
+		// Issue #355, the residue of #117 on the other side of segment 2's branch. Until it, this
+		// branch spent the whole MAX_INTERACTION_RENDER_CHARS budget on FULL mechanism paragraphs for
+		// whichever partners sat at the head of the entry's dataset order, on the rationale that with
+		// nothing promoted "the general material IS its content". Measured live on the 3.7.1
+		// standalone (2026-09-01, full 19MB KB): a patient on three ARVs asked "Can I give this
+		// patient Metformin for diabetes?" and got a 1512-character Metformin record that was nothing
+		// but mechanism prose about ketoconazole, ketoprofen, ketorolac, ketotifen and labetalol —
+		// the head of that entry's partner list, an alphabetical accident — which the model recited.
+		// The question was patient-specific; what the record answered with was dataset position.
 		//
-		// Nothing else distinguishes the two sides: renderCapBoundsBroadInteractionSets and
-		// aSubFloorInteractionIsNotPromotedEvenWhenThePatientIsOnThatDrug both still pass if the
-		// branch is collapsed to the single compact representative, and collapsing it is the obvious
-		// simplification to reach for. It would strip every entry the patient has no overlap with —
-		// the common case, since a question naming a drug the patient is not on is the ordinary
-		// question — down to one bare partner name, with no failing test to say so.
+		// The tail's job is breadth either way (see render), and breadth is stated by naming partners
+		// with their severities. What must not survive is the mechanism text: it is actionable only
+		// for a partner the patient is on, and #117 records this model garbling long verbatim copies
+		// while reciting them.
+		//
+		// Still a branch rather than one rule, and the COUNT is what distinguishes the two sides: the
+		// promoted case renders ONE representative because segment 1 already carried the
+		// patient-specific content, while here the tail is the whole record and a single name would
+		// read as this drug's only interaction — which is what the version of this test before #355
+		// warned the obvious simplification would do to every entry the patient has no overlap with,
+		// the common case.
 		String section = interactionsSectionFor("Lisinopril");
-		assertTrue(section.contains("metformin (moderate. limited data suggest"),
-				"with nothing promoted the first dataset-order partner keeps its mechanism note, "
-						+ "not the compact form the promoted case uses: " + section);
-		assertTrue(section.contains("methotrexate"),
-				"and the budget keeps admitting further partners rather than stopping at one: " + section);
+		assertTrue(section.contains("spironolactone (major)"),
+				"the entry's Major partner leads the tail, in the compact name (severity) form: "
+						+ section);
+		assertTrue(section.indexOf("spironolactone") < section.indexOf("metformin"),
+				"severity and not dataset position decides which partners a capped tail spends its "
+						+ "room on — the same decision SEVERITY_DESCENDING already makes for the "
+						+ "promoted segment, for the same measured reason: " + section);
+		assertTrue(section.contains("metformin (moderate)"),
+				"and every other named partner is compact too, not a mechanism paragraph: " + section);
+		assertFalse(section.contains("limited data suggest"),
+				"the mechanism prose for a partner this patient has nothing to do with must go: "
+						+ section);
+		assertFalse(section.contains("sertraline"),
+				"and the tail is a handful, not a budget's worth: sertraline is one of the Unknown "
+						+ "rows that rendered before #355 purely because they sit early in the "
+						+ "dataset: " + section);
+		assertTrue(4 * section.length() <= DrugReferenceInjector.MAX_INTERACTION_RENDER_CHARS,
+				"the section now costs a fraction of the budget this branch used to spend, was "
+						+ section.length() + " chars: " + section);
 	}
 
 	/** The injected drug-reference mapping (not just its text) whose rendering names {@code drug}. */

@@ -136,9 +136,12 @@ public class InjectedInteractionNoteCollapseTest {
 	@Test
 	public void theDatasetTailNamesEachPartnerOnceToo() throws Exception {
 		// The same collapse with NOTHING promoted — the common shape, since most patients are on none
-		// of an entry's partners. Segment 2 then spends the whole budget on full notes in dataset
-		// order, so a repeated partner is a repeated paragraph: Voxelotor's two sirolimus rows
-		// (Major and Moderate) are two separate mechanism paragraphs about one co-medication.
+		// of an entry's partners. Before the collapse, segment 2 spent the whole budget on full notes
+		// in dataset order, so a repeated partner was a repeated paragraph: Voxelotor's two sirolimus
+		// rows (Major and Moderate) were two separate mechanism paragraphs about one co-medication.
+		// Since issue #355 that segment names a bounded handful of partners compactly instead, which
+		// is why this case also constrains MAX_UNPROMOTED_TAIL_PARTNERS from below: every partner of
+		// this entry must still be named for the count below to mean anything.
 		RecordMapping record = injectedRecord("is it safe to give voxelotor?",
 				DrugReferenceTestSupport.ctx(60, null, null, null, null, null));
 		String interactions = interactionsOf(record);
@@ -246,8 +249,10 @@ public class InjectedInteractionNoteCollapseTest {
 		assertEquals(1, notesHeadedBy(interactions, "b01aa03"),
 				"one ATC-identified partner is one note whatever case and padding it carries: "
 						+ interactions);
-		assertTrue(interactions.contains("b01aa03 (major."),
-				"and the surviving row is the Major one: " + interactions);
+		assertTrue(interactions.contains("b01aa03 (major)"),
+				"and the surviving row is the Major one — named in the compact form the dataset tail "
+						+ "takes since issue #355, the severity being what a name can still carry: "
+						+ interactions);
 	}
 
 	/**

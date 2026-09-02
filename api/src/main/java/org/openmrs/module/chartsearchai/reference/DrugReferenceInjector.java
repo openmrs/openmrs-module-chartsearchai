@@ -171,10 +171,16 @@ public class DrugReferenceInjector {
 	 * proposal can now be read as an echo: measured on that excerpt, a patient allergic to warfarin
 	 * asked "Can she take ibuprofen?" with the answer "Ibuprofen interacts with warfarin [2]" raised a
 	 * recorded-allergy contraindication chip before this change and raises none after, because the
-	 * tail now names warfarin. That is what issue #105 asks for — the mention IS attributable to the
-	 * record — and it is the direction issue #360 wants, but it is a safety surface losing a chip and
-	 * no test pins it either way. Recorded here rather than decided; #360 owns the question of what a
-	 * recited name should raise.
+	 * tail now names warfarin. That is issue #105's contract rather than a gap opened here, and it IS
+	 * pinned — {@code ActiveOrderContraindicationTest.aRecitedPartnerThePatientIsNotTakingGainsNoContraindicationCheck}
+	 * asserts exactly that shape, a drug the patient is allergic to but not taking, recited out of the
+	 * cited record, raising no chip. What issue #355 changes is only which drugs the record names, so
+	 * the contract reaches more of them. Recorded because the widening is this change's, and because
+	 * issue #360 owns what a recited name should raise; do not read it as an unpinned loss.
+	 *
+	 * <p>One more consequence for a reader of the audit table: {@code reference_slice_chars} falls
+	 * sharply for an unpromoted record, so rows either side of this change are not comparable in that
+	 * column.
 	 */
 	static final int MAX_TAIL_PARTNERS_WHEN_NONE_PROMOTED = 5;
 

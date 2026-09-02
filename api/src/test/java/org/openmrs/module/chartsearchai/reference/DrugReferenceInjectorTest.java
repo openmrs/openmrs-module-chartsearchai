@@ -567,12 +567,11 @@ public class DrugReferenceInjectorTest {
 		// Issue #355, the residue of #117 on the other side of segment 2's branch. Until it, this
 		// branch spent the whole MAX_INTERACTION_RENDER_CHARS budget on FULL mechanism paragraphs for
 		// whichever partners sat at the head of the entry's dataset order, on the rationale that with
-		// nothing promoted "the general material IS its content". Measured live on the 3.7.1
-		// standalone (2026-09-01, full 19MB KB): a patient on three ARVs asked "Can I give this
-		// patient Metformin for diabetes?" and got a 1512-character Metformin record that was nothing
-		// but mechanism prose about ketoconazole, ketoprofen, ketorolac, ketotifen and labetalol —
-		// the head of that entry's partner list, an alphabetical accident — which the model recited.
-		// The question was patient-specific; what the record answered with was dataset position.
+		// nothing promoted "the general material IS its content". The live reproduction that falsified
+		// it — the 1512-character Metformin record whose whole content was mechanism prose about the
+		// head of an alphabetical list — is recorded once, on MAX_TAIL_PARTNERS_WHEN_NONE_PROMOTED,
+		// rather than restated here where the two copies would drift apart. The question it was asked
+		// was patient-specific; what the record answered with was dataset position.
 		//
 		// The tail's job is breadth either way (see render), and breadth is stated by naming partners
 		// with their severities. What must not survive is the mechanism text: it is actionable only
@@ -624,18 +623,10 @@ public class DrugReferenceInjectorTest {
 		//
 		// Every row is unrated, so severityPriority ties them and the stable sort leaves dataset order
 		// — which keeps this case about the budget rather than about the ordering beside it.
-		RecordMapping record = DrugReferenceTestSupport.injectedReferences(DrugReferenceTestSupport
-				.injector(DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport
-						.fixtureEntries("chartsearchai-test/drug-reference-unpromoted-tail-budget.json")))
-				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
-						DrugReferenceTestSupport.ctx(60, null, null, null, null, null),
-						"is it safe to give budgetstub?")).get(0);
-		int start = record.getText().indexOf("Interactions:");
-		assertTrue(start >= 0,
-				"precondition: the record must render an Interactions section, else the slice below "
-						+ "dies on a negative index and names neither the premise nor the record: "
-						+ record.getText());
-		String section = record.getText().substring(start);
+		RecordMapping record = tailRecordOf(
+				"chartsearchai-test/drug-reference-unpromoted-tail-budget.json",
+				"is it safe to give budgetstub?");
+		String section = tailSectionOf(record);
 
 		assertTrue(section.contains("ALPHA"),
 				"precondition: the first nameless rule always renders, however long it is: " + section);
@@ -663,14 +654,13 @@ public class DrugReferenceInjectorTest {
 		// character budget cannot refuse — the first — wherever the dataset put it, and it then
 		// crowds out the row that actually names a partner.
 		//
-		// Measured by removing that first key and running this case: the interactions section is 35
-		// characters with it and 1548 without, all of them a paragraph about a partner nobody can
-		// identify — the cost #355 exists to remove and the prose #117 records this model garbling.
-		// (The shape was found on a differently sized fixture, so those two figures are this one's
-		// alone.) So the tail asks first whether a note NAMES its partner: the tail's job is breadth,
-		// a rule that names nobody states none, and it may not outrank one that does.
-		String section = tailSectionOf("chartsearchai-test/drug-reference-unpromoted-tail-nameless.json",
-				"is it safe to give namelessmix?");
+		// The measurement lives with the rule, in SEVERITY_DESCENDING's javadoc, rather than being
+		// restated here where the two copies would drift apart. What this case pins is the rule
+		// itself: the tail asks first whether a note NAMES its partner, because the tail's job is
+		// breadth, a rule that names nobody states none, and it may not outrank one that does.
+		String section = tailSectionOf(tailRecordOf(
+				"chartsearchai-test/drug-reference-unpromoted-tail-nameless.json",
+				"is it safe to give namelessmix?"));
 
 		assertTrue(section.toLowerCase().contains("metformin (moderate)"),
 				"the row that names a partner leads the tail, whatever the nameless row is rated: "
@@ -679,17 +669,23 @@ public class DrugReferenceInjectorTest {
 				"and the nameless paragraph does not take the slot the budget cannot refuse: " + section);
 	}
 
-	/** The {@code Interactions:} section of the only record a curated {@code fixture} injects for
-	 *  {@code question}, for a patient on nothing — the arrangement in which nothing is promoted and
-	 *  the section is entirely the dataset tail. Case is preserved, so a caller may assert on a marker
-	 *  the record prints verbatim. */
-	private String tailSectionOf(String fixture, String question) throws Exception {
-		RecordMapping record = DrugReferenceTestSupport.injectedReferences(DrugReferenceTestSupport
+	/** The only record a curated {@code fixture} injects for {@code question}, for a patient on
+	 *  nothing — the arrangement in which nothing is promoted and the interactions section is entirely
+	 *  the dataset tail. The record rather than its text, because a case about the tail's bounds also
+	 *  asks it for {@code getWithheldInteractions()}. */
+	private RecordMapping tailRecordOf(String fixture, String question) throws Exception {
+		return DrugReferenceTestSupport.injectedReferences(DrugReferenceTestSupport
 				.injector(DrugReferenceTestSupport
 						.serviceWith(DrugReferenceTestSupport.fixtureEntries(fixture)))
 				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
 						DrugReferenceTestSupport.ctx(60, null, null, null, null, null), question))
 				.get(0);
+	}
+
+	/** {@code record}'s {@code Interactions:} section, case PRESERVED so a caller may assert on a
+	 *  marker the record prints verbatim — which is what separates this from
+	 *  {@link #interactionsSectionFor}, and why the two are not one method. */
+	private String tailSectionOf(RecordMapping record) {
 		int start = record.getText().indexOf("Interactions:");
 		assertTrue(start >= 0,
 				"precondition: the record must render an Interactions section, else the slice below "

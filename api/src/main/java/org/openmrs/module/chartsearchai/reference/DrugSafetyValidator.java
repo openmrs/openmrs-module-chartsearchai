@@ -987,8 +987,14 @@ public class DrugSafetyValidator {
 	 *         measured on the bundled curated dataset, an active ibuprofen order plus an ibuprofen
 	 *         allergy, a question naming no drug and an answer citing the {@code drug_order} record
 	 *         gave 0 chips where the same call with null mappings gave 2. What this exemption still
-	 *         withholds is an INTERACTION or OVERDOSE finding about an echoed drug, which is exactly
-	 *         what #105 measured and fixed.
+	 *         withholds is a finding about an echoed drug the patient is not ON — an interaction or an
+	 *         overdose, and a CONTRAINDICATION too, which an earlier wording of this sentence excluded
+	 *         and the code does not: the exemption drops the drug from {@code inPlay}, and
+	 *         {@link #addContraindications} and {@link #addAllergyContraindications} iterate that same
+	 *         list. That is issue #105's intent rather than a gap —
+	 *         {@code ActiveOrderContraindicationTest.aRecitedPartnerThePatientIsNotTakingGainsNoContraindicationCheck}
+	 *         pins it — and issue #355 widened the drugs it reaches by naming more partners in the
+	 *         cited record.
 	 */
 	private static boolean isEchoOfCitedRecord(DrugReference ref, List<String> citedTextsLower) {
 		return namesAnyOf(citedTextsLower, ref);

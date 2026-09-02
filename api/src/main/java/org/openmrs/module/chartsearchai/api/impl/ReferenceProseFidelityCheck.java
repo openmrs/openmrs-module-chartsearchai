@@ -86,9 +86,11 @@ import org.slf4j.LoggerFactory;
  *       second record's layout makes of it. One mechanism string really is rendered into TWO records
  *       that are cited together (the {@code safety_finding}'s detail and the {@code drug_reference}'s
  *       {@code "; "}-joined interaction item) wherever that partner is PROMOTED — since issue #355 a
- *       record with nothing promoted carries names and severities and no mechanism prose at all,
- *       which leaves this check with nothing reproduced to judge on the commonest record. That is
- *       where this came from — but on that
+ *       record with nothing promoted normally carries names and severities rather than mechanism
+ *       prose, which leaves this check little to judge on the commonest record. Normally, not always:
+ *       a rule carrying no token and no ATC has no name to shorten to, so an operator-authored
+ *       dataset still renders paragraphs there ({@code drug-reference-unpromoted-tail-budget.json} is
+ *       one). That is where this came from — but on that
  *       arrangement the weak gap question now lets the reference record explain its own continuation,
  *       so the pooling is not what keeps THAT answer quiet and an earlier draft of this bullet said
  *       it was. What it still decides is the case where a second cited record ends where the first

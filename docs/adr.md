@@ -4504,3 +4504,35 @@ citation on a question containing a class term renders unverified rather than *U
 re-keyed on a type name, which is the #122 mistake; stated in `CitationGroundingVerifier`'s own
 "what the rule does and does not reach" list so the reader of such a verdict knows what put it
 there.
+
+**Two further residues, both of the one gate.** The note is raised only where `questionDrugs` is
+empty — the question-driven leg RAN and resolved nothing — and that single conjunct leaves two
+arrangements reporting nothing about the class.
+
+- *A question naming a class **and** a resolvable drug.* *"Can I give her an NSAID with her
+  warfarin?"* resolves `warfarin`, so no note is injected and `unresolvedDrugClass` is `null`: this
+  issue's own silence, surviving on the class half of a realistic prescribing question. Pinned by
+  `DrugClassQuestionNoteTest.aQuestionNamingAClassAndAResolvableDrugRaisesNoNote`, whose argument
+  covers only why the class must not DISPLACE the resolved drug — not why the module stays silent
+  about it. Widening is not a loosened conjunct but a contract change in two places, which is why it
+  is not taken here: the wire key's published contract makes `null` cover "a question that named one
+  *and* resolved a substance" (README's `unresolvedDrugClass` section), so a non-null key beside
+  resolved substances is a new reading a client has not been told to expect; and the note's own words
+  — "the class was not resolved to any substance" — would then sit one record after a
+  `drug_reference` for the drug that DID resolve, where a reader takes "not resolved" for a statement
+  about the response rather than about the class alone, which is the failure mode the four refuted
+  sentences above all had. Fail-closed in the meantime: the module says less, never something false.
+
+- *An inert or failed entry dataset.* `findImpliedByQuery` returns empty for every question in that
+  state — the issue #149 state `getLoadStatus()` exists to report — so a class-term question raises
+  the note and publishes the key there too, attributing the miss to the class when nothing at all
+  could have resolved. The statement stays true (no entries, so the class was resolved to none of
+  them), but its first clause is then a non-sequitur rather than an answer: this is the one
+  arrangement where the record's wording is weak without being false. Not gated on load status,
+  because that gate returns a class question to pre-#354 silence in exactly the state #149 exists to
+  make LOUD, and the loader's own channel (`DrugReferenceLoad.getFindings()`, `GET
+  /chartsearchai/drugreferencestatus`, Decision 48) is where the real cause is already reported —
+  reporting it a second time in citable reference prose would be this module telling a model about
+  its own configuration.
+  `DrugClassQuestionNoteTest.aClassQuestionStillGetsItsNoteWhereTheEntryDatasetIsInert` pins the
+  arrangement, so a gate added later reddens against this paragraph rather than passing unread.

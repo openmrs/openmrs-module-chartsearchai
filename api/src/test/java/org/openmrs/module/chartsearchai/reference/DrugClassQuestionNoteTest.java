@@ -514,6 +514,41 @@ public class DrugClassQuestionNoteTest {
 	}
 
 	/**
+	 * The arrangement nothing covered: the entry dataset is INERT.
+	 *
+	 * <p>The note is gated on {@code findImpliedByQuery} returning empty, and an empty or failed load
+	 * returns empty for every question — the issue #149 state {@code
+	 * DrugReferenceService.getLoadStatus()} exists to report. So a class-term question raises the note
+	 * and publishes {@code unresolvedDrugClass} here too, attributing the miss to the class when
+	 * nothing at all could have resolved. What the note SAYS stays true — there are no entries, so
+	 * the class was resolved to none of them — but its first clause is a non-sequitur rather than an
+	 * answer, and that is a named residue of ADR Decision 67 rather than a claim this case defends.
+	 *
+	 * <p>It is pinned rather than fixed because the fix would be a load-status gate inside the
+	 * injector, which returns a class question to pre-#354 silence in exactly the state issue #149
+	 * exists to make LOUD, while the loader's own channel ({@code DrugReferenceLoad.getFindings()},
+	 * {@code GET /chartsearchai/drugreferencestatus}) already reports the real cause. Add such a gate
+	 * and this case reddens: read Decision 67's residue paragraph before changing it.
+	 */
+	@Test
+	public void aClassQuestionStillGetsItsNoteWhereTheEntryDatasetIsInert() {
+		DrugReferenceService inert = serviceWith(Collections.<DrugReference> emptyList());
+		assertTrue(inert.findImpliedByQuery("Can I start this patient on ibuprofen?").isEmpty(),
+				"the premise: with no entries loaded, a question naming a DRUG resolves nothing either");
+
+		PatientChart chart = inject(inert, "Can I start this patient on an oral contraceptive?");
+
+		RecordMapping note = classNoteIn(chart);
+		assertTrue(note.getText().contains("oral contraceptive"),
+				"the class term is still recognised from the in-code table, which no load touches: "
+						+ note.getText());
+		assertTrue(injectedReferences(chart).isEmpty(),
+				"and an inert dataset still invents no entry: " + chart.getText());
+		assertEquals("oral contraceptive", ChartSearchAiUtils.unresolvedDrugClass(chart.getMappings()),
+				"the wire statement is read off that same note, so it is published here too");
+	}
+
+	/**
 	 * The note's words, in full and as a literal.
 	 *
 	 * <p>Every other case here asserts a SUBSTRING — a refuted sentence is absent, the class name is

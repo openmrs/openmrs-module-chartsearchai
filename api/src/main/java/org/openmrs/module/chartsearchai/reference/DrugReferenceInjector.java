@@ -130,9 +130,9 @@ public class DrugReferenceInjector {
 	/**
 	 * How many dataset-tail partners the record NAMES when nothing patient-specific was shown — when no
 	 * partner of this entry is one the patient is on at all, whether by a rule the severity floor
-	 * admits or by one it filtered. That is {@code render}'s {@code tailStart == 0}, the condition
-	 * issue #357 put in place of "nothing promoted", and this is the arrangement that issue left to
-	 * issue #355 (see {@link #renderTier} for the partition and CLAUDE.md for the division).
+	 * admits or by one it filtered. That is {@link OrderedInteractions#nothingPatientSpecific()}, the
+	 * condition issue #357 put in place of "nothing promoted", and this is the arrangement that issue
+	 * left to issue #355 (see {@link #renderTier} for the partition and CLAUDE.md for the division).
 	 *
 	 * <p><b>Issue #355.</b> Until it, that case spent the whole {@link #MAX_INTERACTION_RENDER_CHARS}
 	 * budget on FULL mechanism paragraphs for whichever partners sat at the head of the entry's
@@ -1807,8 +1807,13 @@ public class DrugReferenceInjector {
 		// InjectedInteractionRelevanceOrderContextTest.theFilteredSegmentKeepsDatasetOrderRatherThanReSortingOnSeverity
 		// raises the floor to pin it. Adding the sort was green against the whole suite before it.
 		int chartNamedCount = namedByTheChart.size();
-		if (promotedCount + chartNamedCount == 0) {
-			// Issue #355 — the same condition render() computes as `tailStart == 0`, so the segment this
+		// Built before the tail is appended so that this method and render() ask ONE accessor whether
+		// anything patient-specific was shown, rather than each doing the same arithmetic over the same
+		// two fields (review round 7 of issue #355). `ordered` is this very list, which the two addAll
+		// calls below fill in place; the two counts it is given are already final.
+		OrderedInteractions result = new OrderedInteractions(promoted, promotedCount, chartNamedCount);
+		if (result.nothingPatientSpecific()) {
+			// Issue #355 — the same accessor render()'s capped branch gates on, so the segment this
 			// sorts is the whole of what that branch renders. The same decision the sort above makes for
 			// the promoted segment, made in the tail for the same measured reason, and reachable only
 			// once render() caps how many tail partners it names. Re-measured 2026-09-02 by driving the
@@ -1841,7 +1846,7 @@ public class DrugReferenceInjector {
 		}
 		promoted.addAll(namedByTheChart);
 		promoted.addAll(rest);
-		return new OrderedInteractions(promoted, promotedCount, chartNamedCount);
+		return result;
 	}
 
 	/**
@@ -2260,11 +2265,23 @@ public class DrugReferenceInjector {
 		 *  blank-but-present {@code atc} for it to differ on. So what bounds the family is not
 		 *  a case per substitution but a case over the rule SHAPES this predicate can distinguish:
 		 *  {@code DrugReferenceInjectorTest.everyRuleShapeThatNamesAPartnerLeadsANamelessParagraphAndEveryOtherShapeTrailsIt},
-		 *  over {@code drug-reference-unpromoted-tail-name-shapes.json}, which files one entry per
-		 *  shape of the two fields {@code partnerLabel} reads — token only, ATC only, blank token with
-		 *  no ATC, blank ATC with no token, both blank, both absent, both present, and the three
-		 *  naming shapes again with no note — and asserts of each whether its row or a nameless
-		 *  unrated paragraph is the one the record shows. The five cases below are NOT subsumed by it
+		 *  over {@code drug-reference-unpromoted-tail-name-shapes.json}. {@code partnerLabel} is a
+		 *  {@code firstNonBlank} over two fields, so what it can distinguish is the 3×3 product of
+		 *  {absent, blank, non-blank} over them; the fixture files one entry per cell — the nine are
+		 *  enumerated in that case's own comment — plus the three naming cells with no blank field
+		 *  again with no note, and the case asserts of each whether its row or a nameless unrated
+		 *  paragraph is the one the record shows.
+		 *
+		 *  <p><b>Review round 7 found that matrix filing seven of the nine cells</b>, both MIXED cells
+		 *  missing, and each of the two admitted an inlining of {@code partnerLabel} the whole build
+		 *  accepted: the "take the first PRESENT field, then blank-check it" reading differs from
+		 *  {@code partnerLabel} exactly on (blank token, non-blank ATC), and the same reading with its
+		 *  arms swapped exactly on (non-blank token, blank ATC). Both were measured on this branch
+		 *  with the nine cells filed: red, and the only failing case in the whole build is that one, at
+		 *  the newly-filed cell — so nothing else in the build sees either reading. That case now also
+		 *  asserts every cell of the product is FILED, not merely that every filed cell is asserted —
+		 *  the latter is structurally silent on a cell nobody wrote, which is how round 6 came to claim
+		 *  a closed family over an open one. The five cases below are NOT subsumed by it
 		 *  and stay: every probe row in the matrix is UNRATED, so that only the naming key can order
 		 *  it against the paragraph, and a re-derivation admitting a NAMELESS but RATED row — {@code
 		 *  partnerLabel(rule) != null || firstNonBlank(rule.getSeverity()) != null}, measured to leave
@@ -2346,6 +2363,44 @@ public class DrugReferenceInjector {
 			this.ordered = ordered;
 			this.promotedCount = promotedCount;
 			this.chartNamedCount = chartNamedCount;
+		}
+
+		/**
+		 * @return how many notes lead {@link #ordered} as the two PATIENT-SPECIFIC segments — the
+		 *         promoted ones plus the chart-named ones behind them — which is the index at which
+		 *         {@code render}'s dataset tail begins
+		 *         <p>The arithmetic lives here and nowhere else. {@code render} reads it to bound its
+		 *         middle segment and, through {@link #nothingPatientSpecific}, to decide whether the
+		 *         tail is CAPPED and compact, while {@link DrugReferenceInjector#orderedInteractionNotes}
+		 *         reads the same accessor to decide whether that tail is SORTED most severe first —
+		 *         two decisions that must not be able to disagree. They were the same expression
+		 *         written in two methods until review round 7 of issue #355, and issue #357 has
+		 *         already changed once what this counts, by adding the chart-named segment, so a
+		 *         maintainer changing it again had to remember a condition in another method.
+		 *         <p><b>The suite is not blind to that drift, and the round-7 finding said it was.</b>
+		 *         Measured on this branch by making the sort read {@code promotedCount == 0} — #357's
+		 *         predecessor — while the cap read the accessor: red at
+		 *         {@code InjectedInteractionRelevanceOrderContextTest.theFilteredSegmentKeepsDatasetOrderRatherThanReSortingOnSeverity}
+		 *         and {@code .aRaisedFloorMovesAPartnerFromThePromotedSegmentToTheHeadOfTheTail},
+		 *         which both RAISE the severity floor, that being the arrangement in which the middle
+		 *         segment can hold a rated rule at all. So the argument for one accessor is that one
+		 *         question has one name, not that the alternative was unguarded.
+		 *         {@code renderTier}'s own javadoc forbids this shape.
+		 */
+		int tailStart() {
+			return promotedCount + chartNamedCount;
+		}
+
+		/**
+		 * @return whether NOTHING patient-specific reached this record — no promoted note and none
+		 *         named by the chart
+		 *         <p>The arrangement in which the dataset tail IS the record, so it is both sorted
+		 *         most severe first and capped at
+		 *         {@link DrugReferenceInjector#MAX_TAIL_PARTNERS_WHEN_NOTHING_PATIENT_SPECIFIC}
+		 *         partners (issue #355). One name for one question; see {@link #tailStart}.
+		 */
+		boolean nothingPatientSpecific() {
+			return tailStart() == 0;
 		}
 	}
 
@@ -2745,7 +2800,7 @@ public class DrugReferenceInjector {
 			// Every member of this segment has a token or an ATC by construction — that is what made
 			// namesActiveDrug true of it — so unlike the tail below it can never hold a rule with no
 			// name to shorten to, and "compact" here is always the short form.
-			int tailStart = interactions.promotedCount + interactions.chartNamedCount;
+			int tailStart = interactions.tailStart();
 			for (int i = interactions.promotedCount; i < tailStart; i++) {
 				InteractionNote n = ordered.get(i);
 				String piece = i == interactions.promotedCount ? n.full : n.compact;
@@ -2807,7 +2862,7 @@ public class DrugReferenceInjector {
 			// second segment. ADR Decision 66 carries the measurement and the arrangement it was taken
 			// on. What is bounded by the budget is the general material, which is this segment's
 			// business alone.
-			if (tailStart == 0) {
+			if (interactions.nothingPatientSpecific()) {
 				for (int i = 0; i < ordered.size()
 						&& shown.size() < MAX_TAIL_PARTNERS_WHEN_NOTHING_PATIENT_SPECIFIC; i++) {
 					String n = ordered.get(i).compact;

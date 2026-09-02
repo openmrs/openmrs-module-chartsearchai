@@ -22,6 +22,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.TreeSet;
 
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
@@ -882,6 +883,8 @@ public class DrugReferenceInjectorTest {
 			{ "tailtokenshape", "warfarin" },
 			{ "tailatcshape", "B01AA03" },
 			{ "tailbothnamedshape", "warfarin" },
+			{ "tailblanktokennamedatcshape", "B01AA03" },
+			{ "tailnamedtokenblankatcshape", "warfarin" },
 			{ "tailbaretokenshape", "warfarin" },
 			{ "tailbareatcshape", "B01AA03" },
 			{ "tailbarebothshape", "warfarin" },
@@ -917,15 +920,36 @@ public class DrugReferenceInjectorTest {
 		// which no fixture in this repository could see because none carried a blank-but-present atc.
 		// So this case answers a different question from the five: rather than pinning one more
 		// substitution, it enumerates the rule SHAPES the predicate can distinguish at all, so a
-		// re-derivation nobody has thought of has nowhere left to differ silently.
+		// re-derivation nobody has thought of that reads THOSE TWO FIELDS has nowhere left to differ
+		// silently. One reading a field partnerLabel does not read is a different family and is not
+		// covered here; the last paragraph below says which case holds the one that has been written.
 		//
-		// partnerLabel is firstNonBlank(token, atc), so its answer is decided by two fields each of
-		// which is absent, blank or non-blank; the shapes that matter are therefore token-only,
-		// atc-only, blank token with no atc, blank atc with no token, both blank, both absent and both
-		// present — plus, for the three naming shapes, a NOTELESS repeat, since without a note a
-		// naming row's compact and full texts are one string and comparing them cannot tell it from a
-		// nameless row. (A nameless shape with no note renders blank and orderedInteractionNotes drops
-		// it before an InteractionNote exists, so those have no noteless counterpart.)
+		// partnerLabel is firstNonBlank(token, atc), so its answer is decided by the 3x3 product of
+		// {absent, blank, non-blank} over those two fields. Nine cells, one fixture entry each, listed
+		// as (token state, atc state): tailtokenshape (non-blank, absent), tailatcshape (absent,
+		// non-blank), tailbothnamedshape (non-blank, non-blank), tailblanktokennamedatcshape (blank,
+		// non-blank), tailnamedtokenblankatcshape (non-blank, blank), tailblanktokenshape (blank,
+		// absent), tailblankatcshape (absent, blank), tailbothblankshape (blank, blank) and
+		// tailneithershape (absent, absent) — the first five naming a partner and the last four naming
+		// none. The three naming cells with no blank field are filed a SECOND time with no note
+		// (tailbaretokenshape, tailbareatcshape, tailbarebothshape), since without a note a naming
+		// row's compact and full texts are one string and comparing them cannot tell it from a
+		// nameless row; a nameless shape with no note renders blank and orderedInteractionNotes drops
+		// it before an InteractionNote exists, so those have no noteless counterpart.
+		//
+		// The two MIXED cells are review round 7's, and the claim they falsified was round 6's own:
+		// this matrix filed seven of the nine and said it covered the product. Each unfiled cell
+		// admitted an inlining of partnerLabel that the whole build accepted — "take the first PRESENT
+		// field, then blank-check it" (String l = rule.getToken() != null ? rule.getToken() :
+		// rule.getAtc(); l != null && !l.trim().isEmpty()) differs from partnerLabel exactly on (blank,
+		// non-blank), and the same reading with its arms swapped (rule.getAtc() != null ?
+		// firstNonBlank(rule.getAtc()) != null : firstNonBlank(rule.getToken()) != null) exactly on
+		// (non-blank, blank). Both were measured on this branch with the two cells filed: mvn -o clean
+		// install from the root fails, and the ONLY failing case in the whole build is this one, at the
+		// newly-filed cell — so nothing else in the build sees either reading, which is what let the
+		// seven-cell fixture accept both. Which is why this case ends by asserting that every cell
+		// of the product is FILED and not only that every filed cell is asserted: the second check is
+		// silent on a cell nobody wrote, which is the hole round 6 left.
 		//
 		// One arrangement, one entry per shape: the nameless unrated LONGSTUB paragraph FIRST in
 		// dataset order, then the probe row, which carries no severity — so severityPriority ties the
@@ -985,6 +1009,58 @@ public class DrugReferenceInjectorTest {
 		assertEquals(inFixture, covered,
 				"every rule shape the fixture files must be asserted here, and every shape asserted "
 						+ "here must be in the fixture");
+
+		// The check above reddens on a shape FILED and left unasserted; this one reddens on a cell of
+		// the product nobody filed, which the check above cannot see. It classifies the fixture's own
+		// literal field values through the production blank test, so it states which cell each probe
+		// row occupies without re-expressing what partnerLabel then makes of it — whether a cell NAMES
+		// a partner is what the two tables above assert, by hand, one row at a time.
+		Set<String> product = new TreeSet<String>();
+		for (String tokenState : FIELD_STATES) {
+			for (String atcState : FIELD_STATES) {
+				product.add("token " + tokenState + ", atc " + atcState);
+			}
+		}
+		Set<String> filed = new TreeSet<String>();
+		for (DrugReference entry : DrugReferenceTestSupport.fixtureEntries(NAME_SHAPES_FIXTURE)) {
+			DrugReference.Interaction probe = probeRowOf(entry);
+			filed.add("token " + fieldState(probe.getToken()) + ", atc " + fieldState(probe.getAtc()));
+		}
+		assertEquals(product, filed,
+				"partnerLabel is a firstNonBlank over two fields, so every cell of the 3x3 product of "
+						+ "{absent, blank, non-blank} over them must be filed by a probe row here — a "
+						+ "cell left empty is a cell a re-derivation can differ on silently, which is "
+						+ "how two of them did until review round 7");
+	}
+
+	/** The three states either field {@code DrugSafetyValidator.partnerLabel} reads can be in. A field
+	 *  present but BLANK is its own state and not a spelling of either neighbour, which is the whole
+	 *  reason the product has nine cells rather than four: {@code firstNonBlank} treats it as the
+	 *  absent one while every re-derivation reading raw presence treats it as the non-blank one. */
+	private static final String[] FIELD_STATES = { "absent", "blank", "non-blank" };
+
+	/** Which of {@link #FIELD_STATES} {@code value} is, through the production blank test rather than
+	 *  a local one. */
+	private static String fieldState(String value) {
+		return value == null ? "absent" : ChartSearchAiUtils.isBlank(value) ? "blank" : "non-blank";
+	}
+
+	/** The probe row of a {@link #NAME_SHAPES_FIXTURE} entry — the one interaction whose token/atc
+	 *  shape that entry exists to vary, which is the row marked {@link #PROBE_PARAGRAPH_MARKER} or, in
+	 *  the three noteless entries, the row with no note at all. Recognised by that marker and NOT by
+	 *  the absence of {@link #NAMELESS_PARAGRAPH_MARKER}: the probe note names the paragraph it is
+	 *  filed against, so "does not mention LONGSTUB" matches neither row. Asserted to be exactly one,
+	 *  because an entry filing two would make the cell it realises ambiguous. */
+	private static DrugReference.Interaction probeRowOf(DrugReference entry) {
+		List<DrugReference.Interaction> probes = new ArrayList<DrugReference.Interaction>();
+		for (DrugReference.Interaction i : entry.getInteractions()) {
+			if (i.getNote() == null || i.getNote().contains(PROBE_PARAGRAPH_MARKER)) {
+				probes.add(i);
+			}
+		}
+		assertEquals(1, probes.size(), entry.getName() + " must file one probe row beside the "
+				+ NAMELESS_PARAGRAPH_MARKER + " paragraph, else the cell it realises is ambiguous");
+		return probes.get(0);
 	}
 
 	/** The only record a curated {@code fixture} injects for {@code question}, for a patient on

@@ -244,7 +244,7 @@ import org.springframework.stereotype.Service;
  * question now has its entailment negative withheld too, and — the note being an ordinary cited
  * record — the unanchored path below reaches every claim in that answer. The remedy is NOT to re-key
  * this on a type name, which is the #122 mistake; it is stated here so a reader of a {@code null}
- * verdict on a non-prescribing question knows what put it there. See ADR Decision 65.</li>
+ * verdict on a non-prescribing question knows what put it there. See ADR Decision 66.</li>
  * <li><strong>Only the negative.</strong> The composition guarantees the "no"; it does not guarantee
  * the "yes", so a positive verdict still verifies the citation. That is the check the demote-only
  * carve-out is deliberately NOT extended to for

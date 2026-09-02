@@ -206,8 +206,9 @@ public class DuplicateInteractionChipTest {
 		// and a folded chip is that arm's chip PLUS a sentence, so an exact-string test stops
 		// recognising it and the screen re-reports the pair. #88's duplicate would come straight back,
 		// now in two wordings, one folded and one not. A screening question names no drug, so the
-		// subject reaches "in play" through the ANSWER (uncited, so echo scoping does not exempt it) —
-		// the shape #127 measured this suppression against.
+		// subject reaches "in play" through the ANSWER (the mappings-less overload below, so echo
+		// scoping has no record to attribute the mention to — not "uncited", which since issue #360 is
+		// no longer the same thing) — the shape #127 measured this suppression against.
 		List<SafetyWarning> warnings = foldValidator().validate("Ibuprofen is on the list.",
 				DrugReferenceTestSupport.SCREENING_QUESTION,
 				DrugReferenceTestSupport.ctx(60, null,

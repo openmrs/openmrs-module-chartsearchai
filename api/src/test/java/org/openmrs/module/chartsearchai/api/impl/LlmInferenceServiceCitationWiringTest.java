@@ -157,7 +157,7 @@ public class LlmInferenceServiceCitationWiringTest {
 		// Both overloads are stubbed, so this cannot pass by production having reached neither — which
 		// is exactly what a one-overload stub allows once production prefers the other (issue #336).
 		assertEquals("five-argument", recordingValidator.arityUsed,
-				"production must reach the overload that also lets it publish how bounded the pairwise "
+				"production must reach the overload that also lets it publish how bounded the answer's "
 						+ "interaction list is; the four-argument one cannot carry that statement");
 		assertTrue(recordingValidator.mappingsSeen != null && !recordingValidator.mappingsSeen.isEmpty(),
 				"the validator must receive the chart's record mappings for echo scoping");

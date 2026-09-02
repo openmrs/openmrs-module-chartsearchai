@@ -1234,7 +1234,7 @@ public class DrugReferenceService {
 	 * <p><b>Why the class is not resolved to its members, which is the whole of issue #354's design
 	 * decision.</b> The ATC hierarchy the issue proposes does not express these classes — measured in
 	 * both directions on the shipped knowledge base, and recorded ONCE, with its figures and its date,
-	 * in ADR Decision 65 rather than restated here. A class resolved that way would put a substance's
+	 * in ADR Decision 66 rather than restated here. A class resolved that way would put a substance's
 	 * own label into a {@code safety_finding} that {@code DrugReferenceInjector.renderFinding} copies
 	 * verbatim into citable evidence carrying {@code STRENGTH_WITHHOLD}, asserting a class membership
 	 * false of the drug named — the shape CLAUDE.md records as reverted in issue #339's rounds 5-6.

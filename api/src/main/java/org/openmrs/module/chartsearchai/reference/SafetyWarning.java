@@ -116,8 +116,10 @@ public class SafetyWarning {
 	 * <p>Package-private, matching the accessor: a caller may set only what it may read back. The one
 	 * caller is {@code DrugSafetyValidator.addContraindications} — the curated-rule arm, the only arm
 	 * whose warning is derived from a rule matched against the chart at all. The allergen arm's own
-	 * three sentences are built from a {@code RecordedAllergen} and keep the public three-argument
-	 * form, so they answer false by construction rather than by remembering to.
+	 * three sentences go through {@link #recordedAllergenContraindication} instead, which hardcodes
+	 * this flag false rather than taking it, so they still answer false by construction rather than
+	 * by remembering to. They used the public three-argument constructor until issue #348 gave them a
+	 * fact of their own to carry.
 	 *
 	 * @param uncorroboratedChartMatch see {@link #restsOnAnUncorroboratedChartMatch()}
 	 * @param aboutACurrentMedication see {@link #isAboutACurrentMedication()} — true where the arm
@@ -220,8 +222,9 @@ public class SafetyWarning {
 	 * @param aboutACurrentMedication see {@link #isAboutACurrentMedication()} — true only from the
 	 *        screening arm, whose two drugs are both the patient's own active orders (issue #348)
 	 */
-	// Three facts travel here, not two: the paragraphs above are worded for the pair issue #297 added
-	// and issue #349 put a third beside them. Read the @param list rather than any count in the prose.
+	// The paragraphs above are worded for the PAIR issue #297 added, and facts have been put beside
+	// them since — issue #349's bridge, issue #348's referent. Read the @param list rather than any
+	// count in the prose; a count here has already gone stale once.
 	static SafetyWarning interaction(String drug, String detail, String severity,
 			boolean unratedRelationship, DrugReference.Interaction reconciledRule,
 			String reconciledNoteName, List<ChartOrderBridge> chartOrderBridges,

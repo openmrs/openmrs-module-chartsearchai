@@ -264,8 +264,19 @@ public class LlmProvider {
 			// history that added instructions in this area regress (see the comment above the
 			// "Safety finding" record-type sentence). Positively gated and carrying no fallback
 			// clause, because LlmProviderTest fails this paragraph on the substring "otherwise" in
-			// any casing (#107 arm D). Neither branch asks for "Yes", so the never-"Yes" token that
-			// closes the paragraph stays true of every branch in it.
+			// any casing (#107 arm D).
+			//
+			// Placed BEFORE the never-"Yes" token that closes the paragraph, so that token's "such an
+			// answer" reaches these two branches as well. That is deliberate and it is what they ask
+			// for: neither branch wants a VERDICT at all — the lead is a statement about medications
+			// already prescribed, which is the sentence #348 says the chip carries and the answer does
+			// not — so being denied "Yes" costs them nothing, and being denied it explicitly is worth
+			// more than the alternative. What the alternative would cost is measured: a lead
+			// instruction in a paragraph of its own is #112's refuted shape, and putting these after
+			// the token would make the token's own scope the thing a reader has to infer.
+			// The residue is real and belongs to the measurement rather than to this comment: on the
+			// charts that already answered correctly the lead was "Yes, there are documented
+			// interactions …", and these branches ask for a statement instead.
 			+ "A finding that says it is a reason to change a medication this patient is already "
 			+ "taking is not about a drug anything proposed: open by naming that medication and what "
 			+ "the finding relates it to, carry the finding's severity, and never open by refusing to "

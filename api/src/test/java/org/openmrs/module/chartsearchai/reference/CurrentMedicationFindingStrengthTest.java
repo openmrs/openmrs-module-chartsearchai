@@ -210,6 +210,31 @@ public class CurrentMedicationFindingStrengthTest {
 		}
 	}
 
+	/**
+	 * The QUESTION-PAIR arm (issue #114) states the proposal call too — its two drugs are both drugs
+	 * the question named, so the clinician put them to the module and a call about a proposal is what
+	 * a finding there licenses.
+	 *
+	 * <p>Its own test class asserts nothing about the strength clause, so before this case the arm's
+	 * answer to the referent question was pinned by nothing at all: it answers false by construction
+	 * (it builds through a public constructor, which cannot set the flag), and "by construction" is
+	 * a claim about today's code rather than a guard. A future arm reaching for the package-private
+	 * factory reddens here.
+	 */
+	@Test
+	public void aQuestionPairFindingStatesTheProposalCall() throws IOException {
+		String finding = onlyFinding(
+			DrugReferenceTestSupport.ctx(40, null, null, null, null, null),
+			"Do simvastatin and clarithromycin interact?");
+
+		assertTrue(finding.toLowerCase().contains("major"),
+				"precondition: the question named both drugs of the Major pair and neither is an "
+						+ "active order, so this is the question-pair arm: " + finding);
+		assertTrue(finding.endsWith(WITHHOLD),
+				"nothing the patient is taking is involved, so the call is about the proposal: "
+						+ finding);
+	}
+
 	@Test
 	public void theTwoClausesAreTheWordsAModelReads() {
 		assertEquals(" " + CHANGE_CURRENT, DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION,

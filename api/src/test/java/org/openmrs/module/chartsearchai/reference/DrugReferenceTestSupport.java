@@ -950,12 +950,6 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/**
-	 * @return the injected drug-reference record rendered for the entry NAMED {@code name}, or null when
-	 *         no record names it — the text-returning form of {@link #namesDrug}, sharing its terminator
-	 *         rule rather than restating it. A selector written as a bare {@code startsWith(name)} also
-	 *         accepts a route-qualified SIBLING, which is the whole reason that rule lives in one place.
-	 */
-	/**
 	 * The {@code Interactions:} section of a rendered record, lowercased — everything from the header
 	 * to the end of the text, which is where the section sits.
 	 *
@@ -1010,6 +1004,14 @@ public final class DrugReferenceTestSupport {
 				+ referenceTexts(chart));
 	}
 
+	/**
+	 * @return the injected drug-reference record rendered for the entry NAMED {@code name}, or null when
+	 *         no record names it — the text-returning form of {@link #namesDrug}, sharing its terminator
+	 *         rule rather than restating it. A selector written as a bare {@code startsWith(name)} also
+	 *         accepts a route-qualified SIBLING, which is the whole reason that rule lives in one place.
+	 *         {@link #referenceMappingNaming} is the MAPPING-returning sibling, and throws where this
+	 *         one answers null.
+	 */
 	static String referenceTextNaming(PatientChart chart, String name) {
 		for (String text : referenceTexts(chart)) {
 			if (namesDrug(Collections.singletonList(text), name)) {

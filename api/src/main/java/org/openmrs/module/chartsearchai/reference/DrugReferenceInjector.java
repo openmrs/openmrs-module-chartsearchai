@@ -2432,6 +2432,10 @@ public class DrugReferenceInjector {
 				InteractionNote n = ordered.get(i);
 				String piece = i == interactions.promotedCount ? n.full : n.compact;
 				shown.add(piece);
+				// Kept in step even though nothing downstream reads it on this path — the only reader
+				// of `used` is the branch below that runs when this loop did not, so this is a running
+				// total maintained for the next reader rather than a live one. Stop maintaining it and
+				// every test still passes, which is why it says so here.
 				used += piece.length() + 2;
 			}
 
@@ -2467,10 +2471,11 @@ public class DrugReferenceInjector {
 			// overshoot rather than counting notes: the two patient-specific segments are bounded by
 			// the patient's own active-drug list and NOT by the budget — neither drops a member, which
 			// is what "never invisible" means — and this one adds at most one note on top. So a chart
-			// with many of an entry's own partners on it overshoots by however many those are: measured
-			// over the shipped knowledge base, a (synthetic) patient on all 310 of Metformin's
-			// Unknown-rated partners renders 7560 characters, none withheld. What is bounded by the
-			// budget is the general material, which is this segment's business alone.
+			// with many of an entry's own partners on it overshoots by however many those are, and none
+			// of them is withheld — that is the same trade segment 1 has always made, extended to a
+			// second segment. ADR Decision 65 carries the measurement and the arrangement it was taken
+			// on. What is bounded by the budget is the general material, which is this segment's
+			// business alone.
 			if (tailStart == 0) {
 				for (int i = 0; i < ordered.size(); i++) {
 					String n = ordered.get(i).full;

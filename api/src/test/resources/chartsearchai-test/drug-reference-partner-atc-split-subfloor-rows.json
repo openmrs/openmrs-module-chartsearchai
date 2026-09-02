@@ -1,9 +1,9 @@
 {
   "version": "1.0",
-  "description": "Test fixture (issue #174 site 2, hardening): a curated entry filing ONE partner as two rows that carry the SAME match token and DIFFERENT ATC codes. That is a shape in which the two halves of PatientClinicalContext.hasActiveDrug disagree between two rows of one partner group — they share a token, so only the ATC arm can separate them. Whether the order-driven grouping branch (activeOrderEntryFor) admits a second shape is not settled here, and this file does not claim to be the only one; drug-reference-partner-atc-split-subfloor-rows.json poses the sub-floor version of it and carries the same caveat — the token arm answers the same for both, the ATC arm does not — so the row that wins DrugSafetyValidator.outranksOnRule on severity can be a row the patient does not match while a discarded sibling is the row that raises the chip. The curated source is the only one that can pose it: DdiDrugReferenceSource writes each rule's ATC from its partner row, so every rule of one partner in the shipped 19 MB KB carries an identical (token, atc) pair (measured 2026-08-07 through the real parser: 0 label groups whose rules differ on either field). The two filler partners ahead of warfarin are long on purpose — together they exceed DrugReferenceInjector.MAX_INTERACTION_RENDER_CHARS, so a warfarin note that is not PROMOTED is pushed out of the record entirely rather than merely reworded, which is the damage this shape does. Parsed by the real JsonDrugReferenceSource parser.",
+  "description": "Test fixture (issue #357): the sub-floor counterpart of drug-reference-partner-atc-split-rows.json. One partner filed as two rows carrying the SAME match token and DIFFERENT ATC codes, both rated Unknown so the severity floor filters both — a shape in which two rows of one partner group answer PatientClinicalContext.hasActiveDrug differently while neither is promotable: they share a token, so only the ATC arm can separate them. Whether the order-driven grouping branch (activeOrderEntryFor) admits a second shape is not settled here, and this file does not claim to be the only one. DrugSafetyValidator.outranksOnRule then decides on note length alone, so the longer row wins, and that row is deliberately the one the patient is NOT on: with the collapse blind to relevance the partner leaves the tail's head and the two long filler partners ahead of it push it out of the record entirely. The curated source is the only one that can pose it; DdiDrugReferenceSource writes each rule's ATC from its partner row, so every rule of one partner in the shipped knowledge base carries an identical (token, atc) pair. Parsed by the real JsonDrugReferenceSource parser.",
   "entries": [
     {
-      "id": "voriconazole-curated",
+      "id": "voriconazole-curated-subfloor",
       "name": "Voriconazole",
       "drugClass": "Triazole antifungal",
       "aliases": [
@@ -26,14 +26,14 @@
         {
           "token": "warfarin",
           "atc": "B01AA03",
-          "severity": "Major",
-          "note": "Major. This row identifies its partner by the ATC code of racemic warfarin, which THIS patient is not on. It is the more severe of the two rows, so it wins the survivor rule on severity alone."
+          "severity": "Unknown",
+          "note": "Unknown severity interaction. This row identifies its partner by the ATC code of racemic warfarin, which THIS patient is not on. Both rows are rated Unknown, so the survivor rule falls through to note length and this longer one wins it."
         },
         {
           "token": "warfarin",
           "atc": "B01AA07",
-          "severity": "Moderate",
-          "note": "Moderate. This row identifies its partner by the ATC code of acenocoumarol, which the patient IS on, so it is the row that raises the chip and the row the record must quote."
+          "severity": "Unknown",
+          "note": "Unknown severity interaction. The patient IS on this row's drug."
         }
       ],
       "source": "Test fixture"

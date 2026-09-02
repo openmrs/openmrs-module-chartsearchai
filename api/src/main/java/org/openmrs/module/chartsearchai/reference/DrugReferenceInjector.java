@@ -109,15 +109,19 @@ public class DrugReferenceInjector {
 	 * every interaction off the entry, so nothing is lost from safety checking. How many the record
 	 * does not name is reported on the {@link RecordMapping} as a field — never as a text tail, which
 	 * the model recited into answers (issue #117). Note that this budget is not the only reason a
-	 * partner goes unnamed, nor usually the main one: segment 2 of {@code render} represents the
-	 * whole dataset tail with a single partner whenever a patient-relevant one was promoted, so most
+	 * partner goes unnamed, nor usually the main one: the last segment of {@code render} represents the
+	 * whole dataset tail with a single partner whenever anything patient-specific was shown, so most
 	 * of that count is normally "not relevant to this patient" rather than "did not fit".
 	 *
 	 * <p>Two guarantees override the budget, so the rendered length is the cap plus a bounded
 	 * overshoot rather than a hard ceiling — see {@code render}: every partner the patient is
-	 * actually on is represented (full note, or a compact {@code name (Severity)} form when the
-	 * note will not fit), and one dataset-order partner renders alongside them — compact when the
-	 * patient has a relevant partner (breadth is all it is there for), in full when they do not.
+	 * actually on is represented, and one dataset-order partner renders alongside them — compact when
+	 * the patient has a relevant partner (breadth is all it is there for), in full when they do not.
+	 * <b>Represented is not the same as rendered in full</b>, and the two segments that represent her
+	 * own partners differ in how: a PROMOTED note takes its full text while the budget allows and the
+	 * compact {@code name (Severity)} form when it will not fit, while a note the floor filtered takes
+	 * its full text only if it is the first of its segment (issue #357 — the rest state the rating
+	 * alone, because at the shipped floor they would otherwise all state one sentence).
 	 *
 	 * <p><b>Per record, and nothing bounds how many records there are.</b> N records cost N times
 	 * this. That is a deliberate standing decision rather than an omission — issue #229 asked for a
@@ -1564,8 +1568,11 @@ public class DrugReferenceInjector {
 	}
 
 	/**
-	 * The entry's interaction notes, ordered so the partners this patient is actually on come first —
-	 * most severe of those first, see {@link #SEVERITY_DESCENDING} — then the rest in dataset order.
+	 * The entry's interaction notes, in three segments (see {@link #renderTier}): the partners this
+	 * patient is actually on whose rules the severity floor admits, most severe of those first (see
+	 * {@link #SEVERITY_DESCENDING}); then the partners she is on whose rules it filtered; then the rest
+	 * in dataset order. Only the first segment is PROMOTED — {@code promotedCount} counts it and
+	 * nothing else — and the two behind it are the dataset tail {@code render} walks in order.
 	 *
 	 * <p>This ordering is what makes the {@link #MAX_INTERACTION_RENDER_CHARS} cut meaningful.
 	 * Rendering in dataset order let the dataset's own sequence decide which partners a clinician's
@@ -1579,9 +1586,18 @@ public class DrugReferenceInjector {
 	 *
 	 * <p>Relevance uses {@link PatientClinicalContext#hasActiveDrug} — deliberately the same
 	 * predicate {@link DrugSafetyValidator} uses to decide an interaction concerns this patient (see
-	 * {@link #promotable}, which is that predicate and the severity floor together, applied both here
+	 * {@link #renderTier}, which is that predicate and the severity floor together, applied both here
 	 * and inside the collapse below) — so a partner that raises a DRUG-IN-PLAY chip is exactly a
-	 * partner promoted here, and WHICH partners this text names cannot drift from that chip.
+	 * partner PROMOTED here, and which partners the promoted segment names cannot drift from the chips.
+	 *
+	 * <p><b>Read that as a claim about the promoted segment and not about the record's lead, which
+	 * since issue #357 they are no longer the same sentence.</b> A rule the floor filtered about a drug
+	 * the chart DOES name now heads the tail, so where nothing is promoted the record's first note is a
+	 * partner no chip stands behind. That is not the divergence this ordering exists to remove: the
+	 * chips and this text still agree about which rules COUNT, because promotion still resolves the
+	 * floor through {@link DrugSafetyValidator#configuredSeverityFloor} and nothing below re-decides it.
+	 * What changed is only where a rule they already agree to be sub-floor sits among the rules about
+	 * drugs the chart says nothing about at all.
 	 *
 	 * <p>Which is a claim about the SET, and since issue #297 about the NAME again. Issue #292 let a
 	 * folded chip name the partner by the class arm's ladder while the note below kept
@@ -1638,9 +1654,10 @@ public class DrugReferenceInjector {
 	 * <p>Measured over the shipped 19 MB KB (2026-08-07; re-measure before relying on the figures):
 	 * 1876 of its 2283 entries carried at least one repeated partner and 19,316 of the 590,312
 	 * expanded rows were surplus, {@code Ozanimod} carrying the largest single surplus at 49. The cost
-	 * of carrying them was not only tidiness: segment 1 of {@code render} deliberately overrides
-	 * {@link #MAX_INTERACTION_RENDER_CHARS} so that a partner the patient is on is never invisible, so
-	 * a partner filed under three rows spent three notes of budget the budget could not claw back.
+	 * of carrying them was not only tidiness: {@code render}'s two patient-specific segments deliberately
+	 * override {@link #MAX_INTERACTION_RENDER_CHARS} so that a partner the patient is on is never
+	 * invisible, so a partner filed under three rows spent three notes of budget the budget could not
+	 * claw back.
 	 *
 	 * <p>The route vocabulary that is the data-side half of #115 is still missing, and this collapse
 	 * does not need it: it decides which of several rows about ONE partner to SHOW, exactly as the
@@ -1678,6 +1695,7 @@ public class DrugReferenceInjector {
 	static OrderedInteractions orderedInteractionNotes(DrugReference ref, PatientClinicalContext context,
 			List<DrugReference> orderEntries, List<SafetyWarning> findings) {
 		List<InteractionNote> promoted = new ArrayList<InteractionNote>();
+		List<InteractionNote> namedByTheChart = new ArrayList<InteractionNote>();
 		List<InteractionNote> rest = new ArrayList<InteractionNote>();
 		// Promotion honours the SAME severity floor the chips do (issue #84). Measured on the 3.7.1
 		// standalone (2026-07-30): promoting on relevance alone surfaced DDInter's Unknown-severity
@@ -1685,8 +1703,28 @@ public class DrugReferenceInjector {
 		// chips — into the front of the prompt, and the model then answered from them. Two probe
 		// cells that correctly abstained on the baseline started reporting "an Unknown severity
 		// interaction between Erythromycin and Lisinopril", i.e. the render path was bypassing a
-		// safety decision the chip path enforces. A sub-floor rule is not promoted; it keeps its
-		// dataset position, exactly as before promotion existed.
+		// safety decision the chip path enforces.
+		//
+		// That measurement stands and PROMOTION is still exactly what it was: a sub-floor rule takes
+		// no place in segment 1, no share of the budget override, and no chip.
+		//
+		// Say plainly what that does NOT cover, because the probe varied exactly the thing the three
+		// clauses above leave out. Its finding was about POSITION — such a row reaching "the front of
+		// the prompt", and the model then answering from it — and the front of the record is precisely
+		// where this change puts one whenever nothing clears the floor. So the containment is over what
+		// promotion buys and not over where the sentence lands, and the position half is UNMEASURED
+		// here: no test in this repo can settle it, because it is a fact about the model. Issue #357
+		// asks for it on a live reproduction and its acceptance criterion is that the answer name one
+		// of these partners, so it is the requested outcome rather than the regression — but a
+		// maintainer reordering this tail should re-run the two probe cells rather than read the #84
+		// measurement as still bounding this path. What issue #357
+		// re-decided, on its own live reproduction, is the SECOND thing the two-bucket partition was
+		// deciding by accident — where such a rule then sits among the drugs the chart does not name
+		// at all. It sat among them in dataset order, so on a real regimen the module rendered
+		// "ketotifen (Unknown severity interaction (DDinter 2.0; no mechanism description on file).)"
+		// about a drug the patient was not on while withholding the identical sentence about the
+		// three she was. Relevance and rating are two questions; asking only the second is what made
+		// the answer to the first arbitrary.
 		int floor = DrugSafetyValidator.configuredSeverityFloor();
 		for (DrugReference.Interaction i : onePerPartner(ref, context, floor, orderEntries)) {
 			String label = reconciledPartnerNoteName(findings, context, i);
@@ -1708,11 +1746,14 @@ public class DrugReferenceInjector {
 			// clinician needs when the mechanism prose has to go; a labelless rule has nothing
 			// shorter to fall back to, so it keeps its full text.
 			//
-			// It has a SECOND consumer, and in the common case the primary one: segment 2 renders the
-			// dataset-tail representative compact unconditionally whenever a partner was promoted,
-			// with budget still to spare (issue #117 — mechanism prose about a drug the patient is not
-			// on is what the model recited). So do not assume reaching this form means the budget ran
-			// out; it also means "breadth is all this partner is here for".
+			// It has TWO further consumers, and in the common case they are the primary ones. The last
+			// segment renders the dataset-tail representative compact unconditionally whenever
+			// anything patient-specific was shown, with budget still to spare (issue #117 — mechanism
+			// prose about a drug the patient is not on is what the model recited); and since issue
+			// #357 the segment before it renders every member but its first compact, however much
+			// budget is left. So do not assume reaching this form means the budget ran out: it also
+			// means "breadth is all this partner is here for", and "the source's sentence about this
+			// partner has already been stated once".
 			String severity = ChartSearchAiUtils.firstNonBlank(i.getSeverity());
 			String compact = (label == null ? rendered
 					: (severity != null ? label + " (" + severity + ")" : label)).trim();
@@ -1723,8 +1764,10 @@ public class DrugReferenceInjector {
 			if (compact.length() >= rendered.length()) {
 				compact = rendered;
 			}
-			(promotable(i, context, floor) ? promoted : rest)
-					.add(new InteractionNote(rendered, compact, i.getSeverity()));
+			InteractionNote entry = new InteractionNote(rendered, compact, i.getSeverity());
+			int tier = renderTier(i, context, floor);
+			(tier == TIER_PROMOTED ? promoted : tier == TIER_NAMED_BY_THE_CHART ? namedByTheChart : rest)
+					.add(entry);
 		}
 		// Within the promoted segment, severity — not dataset position — decides who keeps their
 		// mechanism prose when the budget can only afford one full note (see render). Measured on the
@@ -1736,10 +1779,24 @@ public class DrugReferenceInjector {
 		// keep dataset order.
 		Collections.sort(promoted, SEVERITY_DESCENDING);
 		int promotedCount = promoted.size();
-		// `promoted` becomes the whole ordered list from here — the count above is what keeps the two
-		// segments distinguishable to render().
+		// `promoted` becomes the whole ordered list from here — the count above is what keeps the
+		// PROMOTED segment distinguishable to render(), and it deliberately does not move, so nothing
+		// below changes which rules render() treats as segment 1.
+		//
+		// The dataset tail is what the two lists below are, in the order render() walks it: the rules
+		// naming a drug the chart records, then the rules naming drugs it does not. Neither is sorted
+		// on severity, and at the shipped floor that is not a choice — an UNRATED rule is exempt from
+		// the floor rather than below it (DrugSafetyValidator.clearsSeverityFloor), so the only rating
+		// a rule in `namedByTheChart` can carry there is Unknown and a sort over it has nothing to
+		// order. Under a raised floor the list can hold several ratings and keeps dataset order among
+		// them, which is what the tail has always done — and that is the only arrangement in which the
+		// absence of a sort here is observable at all, which is why
+		// InjectedInteractionRelevanceOrderContextTest.theFilteredSegmentKeepsDatasetOrderRatherThanReSortingOnSeverity
+		// raises the floor to pin it. Adding the sort was green against the whole suite before it.
+		int chartNamedCount = namedByTheChart.size();
+		promoted.addAll(namedByTheChart);
 		promoted.addAll(rest);
-		return new OrderedInteractions(promoted, promotedCount);
+		return new OrderedInteractions(promoted, promotedCount, chartNamedCount);
 	}
 
 	/**
@@ -1934,34 +1991,46 @@ public class DrugReferenceInjector {
 	 *         and the record now agrees with it — which is the invariant, not a cost.
 	 *
 	 *         <p>Applied over EVERY rule rather than only over the promoted ones, deliberately: the
-	 *         floor decides which rules are worth PROMOTING, while a sub-floor row keeps its dataset
-	 *         position in the tail (see the caller), so collapsing only the promoted half would leave
+	 *         floor decides which rules are worth PROMOTING, while a sub-floor row stays in the tail
+	 *         (see the caller — at its head where the chart names the partner, in dataset position
+	 *         where it does not, since issue #357), so collapsing only the promoted half would leave
 	 *         a sub-floor row of a partner in the tail beside that partner's promoted row — the same
 	 *         partner twice, which is what this removes. (The survivor rule below does READ the floor,
-	 *         through {@link #promotable}; what it does not do is filter the input by it.)
+	 *         through {@link #renderTier}; what it does not do is filter the input by it.)
 	 *
-	 *         <p><b>Which row wins, and why promotability is asked FIRST.</b> Running before the floor
-	 *         means the survivor rule decides which row's {@code (token, ATC)} pair the caller's
-	 *         promotion predicate is then asked about — so the survivor must be a row that predicate
-	 *         says yes to wherever the group has one, or the collapse can push a partner OUT of the
+	 *         <p><b>Which row wins, and why the render tier is asked FIRST.</b> Running before the
+	 *         segments are built means the survivor rule decides which row's {@code (token, ATC)} pair
+	 *         {@link #renderTier} is then asked about — so the survivor must be a row of the earliest
+	 *         tier the group can reach, or the collapse can push a partner OUT of the
 	 *         segment that overrides {@link #MAX_INTERACTION_RENDER_CHARS} and, with another partner
 	 *         promoted and only one tail representative rendered, out of the record altogether. That
 	 *         is {@link DrugSafetyValidator#bestRulePerPartner}'s behaviour reproduced rather than a
 	 *         rule of its own: it never sees a non-matching row at all, having filtered on
-	 *         {@code hasActiveDrug} before it groups. Within each half the order is
+	 *         {@code hasActiveDrug} before it groups. Within a TIER the order is
 	 *         {@link DrugSafetyValidator#outranksOnRule}, so the promoted note is the row the chip
-	 *         quotes, and a partner with no promotable row keeps its most severe one in the tail.
-	 *         The floor half of {@link #promotable} cannot change a winner on its own — a group's
-	 *         most severe row clears the floor whenever any of its rows does, since
-	 *         {@code severityPriority} ranks unrated highest and is otherwise monotone in the rank the
-	 *         floor compares — so only the {@code hasActiveDrug} half is doing work here. No shipped
-	 *         dataset can make it: {@code ddinter} writes every rule's ATC from its partner row, and
-	 *         measured 2026-08-07 through the real parser, 0 of the 19 MB KB's label groups hold rows
-	 *         differing on either field. A hand-authored file reaches it immediately, which is the
-	 *         same latency issue #174 site 4 is guarded at.
+	 *         quotes. <b>Across tiers it is not, and since issue #357 that is visible rather than
+	 *         vacuous</b>: where a partner's rows split so that the chart names one and not another,
+	 *         this elects the row the chart names even when a sibling the chart does not name is rated
+	 *         MORE severely — the less severe row wins, because the question this collapse answers is
+	 *         which row decides where the partner sits, and a row about a drug nobody is taking cannot
+	 *         answer it. {@code InjectedInteractionRelevanceOrderTest.theCollapseKeepsTheRowTheChartNamesEvenWhereTheFloorFilteredBoth}
+	 *         is that case.
+	 *         The floor cannot change a winner on its own — a group's most severe row clears the floor
+	 *         whenever any of its rows does, since {@code severityPriority} ranks unrated highest and
+	 *         is otherwise monotone in the rank the floor compares — so it is the
+	 *         {@code hasActiveDrug} half of {@link #renderTier} that does the work, at BOTH of the
+	 *         boundaries that half now draws: promoted against everything, since issue #174 site 2,
+	 *         and, since issue #357, the head of the tail against the rest of it, where two sub-floor
+	 *         rows of one partner answer it differently and the loser would take the partner out of
+	 *         the record. No shipped dataset can make either: {@code ddinter} writes every rule's ATC
+	 *         from its partner row, and measured 2026-08-07 through the real parser, 0 of the 19 MB
+	 *         KB's label groups hold rows differing on either field. A hand-authored file reaches it
+	 *         immediately, which is the same latency issue #174 site 4 is guarded at.
 	 *
 	 *         <p>A {@link LinkedHashMap}, so replacing a group's winner does not move the partner's
-	 *         position — the tail's dataset order is what the caller's javadoc guarantees.
+	 *         position — dataset order within each of the caller's two tail segments is what its
+	 *         javadoc guarantees, and the segments themselves are a partition of this iteration order
+	 *         rather than a re-sort of it.
 	 */
 	private static Collection<DrugReference.Interaction> onePerPartner(DrugReference ref,
 			PatientClinicalContext context, int floor, List<DrugReference> orderEntries) {
@@ -1981,26 +2050,70 @@ public class DrugReferenceInjector {
 	}
 
 	/** @return true when {@code candidate} is the row this record should show for a partner
-	 *          {@code incumbent} already covers: the row the patient is on before one they are not,
-	 *          then {@link DrugSafetyValidator#outranksOnRule}. See {@link #onePerPartner}. */
+	 *          {@code incumbent} already covers: the row that sits in the earlier of
+	 *          {@link #renderTier}'s segments, then {@link DrugSafetyValidator#outranksOnRule}. See
+	 *          {@link #onePerPartner}.
+	 *
+	 *          <p>The whole tier and not promotability alone since issue #357, because promotability
+	 *          stopped being the whole of where a row puts its partner. Two sub-floor rows of one
+	 *          partner answer the promotion predicate identically while answering
+	 *          {@link #namesActiveDrug} differently, so the survivor fell through to
+	 *          {@code outranksOnRule} — note length, at equal severity — and could be the row the
+	 *          chart does not name, which sends the partner to the dataset tail and, behind notes that
+	 *          exhaust the budget, out of the record: this issue's own defect surviving inside the
+	 *          ordering added to close it. */
 	private static boolean outranksForRendering(DrugReference.Interaction candidate,
 			DrugReference.Interaction incumbent, PatientClinicalContext context, int floor) {
-		boolean candidatePromotable = promotable(candidate, context, floor);
-		if (candidatePromotable != promotable(incumbent, context, floor)) {
-			return candidatePromotable;
+		int candidateTier = renderTier(candidate, context, floor);
+		int incumbentTier = renderTier(incumbent, context, floor);
+		if (candidateTier != incumbentTier) {
+			return candidateTier < incumbentTier;
 		}
 		return DrugSafetyValidator.outranksOnRule(candidate, incumbent);
 	}
 
-	/** @return whether {@code i} names a drug this patient is on by a rule the severity floor admits
-	 *          — the promotion predicate of {@link #orderedInteractionNotes}, shared with
-	 *          {@link #onePerPartner} so the collapse cannot discard the very row that would have been
-	 *          promoted. Both arms are the ones {@link DrugSafetyValidator#bestRulePerPartner} applies
-	 *          before it groups. */
-	private static boolean promotable(DrugReference.Interaction i, PatientClinicalContext context,
+	/** Segment 1 of {@code render}: the chart names this partner and the floor admits the rule — the
+	 *  PROMOTION predicate, whose two arms are the ones
+	 *  {@link DrugSafetyValidator#bestRulePerPartner} applies before it groups. It was a named
+	 *  predicate of its own until issue #357 gave the partition a third tier; keeping it beside
+	 *  {@link #renderTier} would have been a second way to ask one question, which is what that
+	 *  method exists to stop. */
+	private static final int TIER_PROMOTED = 0;
+
+	/** The head of the dataset tail (issue #357): the chart names this partner, and the floor filtered
+	 *  the rule. Behind {@link #TIER_PROMOTED} because promotion is what buys a full note and the
+	 *  budget override; ahead of {@link #TIER_DATASET_TAIL} because a drug this patient is taking is
+	 *  not breadth material, and ordering it as breadth is what let the module render an entry's
+	 *  "listed but unrated" sentence about strangers while withholding it about her own regimen. */
+	private static final int TIER_NAMED_BY_THE_CHART = 1;
+
+	/** The rest of the dataset tail, in dataset order — the drugs this chart says nothing about. */
+	private static final int TIER_DATASET_TAIL = 2;
+
+	/** @return which of {@code render}'s three segments {@code i} belongs in, lowest first. The ONE
+	 *          definition of that partition, asked by {@link #orderedInteractionNotes} to build the
+	 *          segments and by {@link #outranksForRendering} so the collapse cannot discard the very
+	 *          row that decides which segment a partner lands in — the invariant that half of this
+	 *          predicate has held since issue #174 site 2, over the tier it now ranks whole. */
+	private static int renderTier(DrugReference.Interaction i, PatientClinicalContext context,
 			int floor) {
-		return context != null && context.hasActiveDrug(i.getToken(), i.getAtc())
-				&& DrugSafetyValidator.clearsSeverityFloor(i, floor);
+		if (!namesActiveDrug(i, context)) {
+			return TIER_DATASET_TAIL;
+		}
+		return DrugSafetyValidator.clearsSeverityFloor(i, floor) ? TIER_PROMOTED
+				: TIER_NAMED_BY_THE_CHART;
+	}
+
+	/** @return whether {@code i} names a drug this patient is on, whatever the source rates the rule
+	 *          — the relevance half of {@link #renderTier}, named because issue #357 made the two
+	 *          halves answer two different questions: together they decide PROMOTION, and this
+	 *          arm alone decides where a rule the floor filtered sits in the dataset tail. One
+	 *          spelling of the relevance question rather than two, for the reason
+	 *          {@code PatientClinicalContext.hasActiveDrug} is one predicate shared with
+	 *          {@link DrugSafetyValidator}: a second copy could drift into disagreeing about which
+	 *          partners concern this patient, which is the divergence the ordering exists to remove. */
+	private static boolean namesActiveDrug(DrugReference.Interaction i, PatientClinicalContext context) {
+		return context != null && context.hasActiveDrug(i.getToken(), i.getAtc());
 	}
 
 	/**
@@ -2046,11 +2159,23 @@ public class DrugReferenceInjector {
 
 		final List<InteractionNote> ordered;
 
+		/** How many of {@code ordered} lead it as {@link #TIER_PROMOTED} — segment 1 of {@code render},
+		 *  and DELIBERATELY not "how many of these concern the patient", which since issue #357 is this
+		 *  plus {@link #chartNamedCount}. A consumer reading it as the patient-relevant prefix
+		 *  under-counts by the whole middle segment. */
 		final int promotedCount;
 
-		OrderedInteractions(List<InteractionNote> ordered, int promotedCount) {
+		/** How many notes after the promoted ones are {@link #TIER_NAMED_BY_THE_CHART} — the second
+		 *  segment {@code render} renders (issue #357). Its own count and not a derived one, because
+		 *  {@code render} has to tell that segment from the dataset tail behind it: they are rendered
+		 *  by different rules, and the tail's "one representative states breadth" slot belongs to the
+		 *  tail rather than to whichever note happens to sit at its start. */
+		final int chartNamedCount;
+
+		OrderedInteractions(List<InteractionNote> ordered, int promotedCount, int chartNamedCount) {
 			this.ordered = ordered;
 			this.promotedCount = promotedCount;
+			this.chartNamedCount = chartNamedCount;
 		}
 	}
 
@@ -2074,8 +2199,10 @@ public class DrugReferenceInjector {
 		/** Dataset attribution, or null when the entry declares none. */
 		final String source;
 
-		/** Interaction partners the text does not name — dropped by the budget or, more often, by
-		 *  segment 2 representing the dataset tail with one partner; 0 when it names them all.
+		/** Interaction partners the text does not name — dropped by the budget or, more often, by the
+		 *  last segment representing the whole dataset tail with one partner; 0 when it names them all.
+		 *  Never a partner the CHART names, since issue #357: both patient-specific segments render
+		 *  every member, so this counts drugs this patient has nothing to do with.
 		 *
 		 *  <p>Partners, not rows, since issue #174 site 2: the entry's rules are collapsed to one per
 		 *  partner before anything is rendered, so this counts what the field has always claimed to
@@ -2409,11 +2536,13 @@ public class DrugReferenceInjector {
 			List<String> shown = new ArrayList<String>();
 			int used = 0;
 
-			// Segment 1 — the partners this patient is actually on. Never invisible: the full note
-			// while the budget allows, else the compact "name (Severity)" form. Dropping one of
-			// these is how the chip and the prose come to disagree, which is the whole defect this
-			// ordering exists to fix, so the budget yields to them rather than the reverse. Bounded
-			// by the patient's own active-drug list, not by the dataset's breadth.
+			// Segment 1 — the partners this patient is actually on whose rules the floor ADMITS, which
+			// since issue #357 is the qualifier that distinguishes this segment from the next rather
+			// than from the tail. Never invisible: the full note while the budget allows, else the
+			// compact "name (Severity)" form. Dropping one of these is how the chip and the prose come
+			// to disagree, which is the whole defect this ordering exists to fix, so the budget yields
+			// to them rather than the reverse. Bounded by the patient's own active-drug list, not by
+			// the dataset's breadth.
 			for (int i = 0; i < interactions.promotedCount; i++) {
 				InteractionNote n = ordered.get(i);
 				String piece = shown.isEmpty() || used + n.full.length() <= MAX_INTERACTION_RENDER_CHARS
@@ -2422,7 +2551,39 @@ public class DrugReferenceInjector {
 				used += piece.length() + 2;
 			}
 
-			// Segment 2 — the dataset tail. It exists because this entry is also the only reference
+			// Segment 2 — the partners the chart names whose rules the severity floor filtered
+			// (issue #357). Never invisible, for the reason segment 1 is not: the record's job here is
+			// to say which of the patient's own drugs this entry is filed against, and the floor's
+			// judgement is about the CHIPS rather than about whether her chart is worth naming.
+			//
+			// The FIRST carries its full note and the rest are compact, which is not the budget rule
+			// segment 1 uses and is not a smaller version of it. At the shipped floor every note in
+			// this segment is the same sentence — DDInter rates 42,415 of the knowledge base's rows
+			// Unknown and files no mechanism for any of them, so each renders "<name> (Unknown
+			// severity interaction (DDInter 2.0; no mechanism description on file).)" — and repeating
+			// it is how a real polypharmacy record spends its whole budget saying one thing. Measured
+			// through the real injectRecords over the SHIPPED knowledge base, a patient on the first 25
+			// of Metformin's 310 Unknown-rated partners asked "is it safe to give metformin?": the
+			// section is 1053 characters and states that sentence ONCE, against 2663 characters and 24
+			// copies of it if every member renders full. Full once states what the source says; compact
+			// after it states which drugs it says it about, which is the part that differs.
+			//
+			// Every member of this segment has a token or an ATC by construction — that is what made
+			// namesActiveDrug true of it — so unlike the tail below it can never hold a rule with no
+			// name to shorten to, and "compact" here is always the short form.
+			int tailStart = interactions.promotedCount + interactions.chartNamedCount;
+			for (int i = interactions.promotedCount; i < tailStart; i++) {
+				InteractionNote n = ordered.get(i);
+				String piece = i == interactions.promotedCount ? n.full : n.compact;
+				shown.add(piece);
+				// Kept in step even though nothing downstream reads it on this path — the only reader
+				// of `used` is the branch below that runs when this loop did not, so this is a running
+				// total maintained for the next reader rather than a live one. Stop maintaining it and
+				// every test still passes, which is why it says so here.
+				used += piece.length() + 2;
+			}
+
+			// Segment 3 — the dataset tail. It exists because this entry is also the only reference
 			// material the model has about the drug in general, so the record must not read as if
 			// the patient's own overlap were the drug's only interaction. What it does NOT need to
 			// do is put mechanism prose for drugs this patient has nothing to do with in front of a
@@ -2435,20 +2596,31 @@ public class DrugReferenceInjector {
 			// this quantised model garbling long verbatim copies, so every irrelevant paragraph
 			// offered is a paragraph of mangled clinical prose a clinician may be shown.
 			//
-			// So: with a promoted partner present, exactly one representative, in the compact
-			// "name (Severity)" form — with one operator-authored exception, since InteractionNote
-			// keeps the full text for a rule carrying no token and no ATC (there is no name to shorten
-			// to), so such a row can still land a full paragraph in this slot. That stays inside the
-			// same one-note overshoot the budget already tolerates; it just is not always ~20 chars.
-			// With none, the record has nothing patient-specific to say and
-			// the general material IS its content, so the budget is spent on full notes exactly as
-			// before, the first always rendering however long it is — the pre-existing "at least one
-			// interaction is always shown" guarantee, which is why the explicit re-add this replaced
-			// could only ever fire in the promoted case, and that case now always shows one.
-			// MAX_INTERACTION_RENDER_CHARS stays a soft budget whose overshoot is at most one note,
-			// and a compact representative shrinks that overshoot rather than widening it.
-			int restStart = interactions.promotedCount;
-			if (restStart == 0) {
+			// So: with anything patient-specific already shown, exactly one representative, in the
+			// compact "name (Severity)" form — with one operator-authored exception, since
+			// InteractionNote keeps the full text for a rule carrying no token and no ATC (there is no
+			// name to shorten to), so such a row can still land a full paragraph in this slot. That
+			// stays inside this segment's own one-note overshoot; it just is not always ~20 chars. With none, the record has nothing patient-specific to say and the
+			// general material IS its content, so the budget is spent on full notes exactly as before,
+			// the first always rendering however long it is — the pre-existing "at least one
+			// interaction is always shown" guarantee.
+			//
+			// The condition is "anything patient-specific", not "anything promoted", and issue #357 is
+			// why it has to be: with the promoted count alone, a record whose only chart-named partner
+			// was floor-filtered spent this segment's whole budget walking a segment that is entirely
+			// about the patient, and the breadth this segment exists to supply was never rendered at
+			// all.
+			//
+			// MAX_INTERACTION_RENDER_CHARS is a soft budget, and say what actually bounds the
+			// overshoot rather than counting notes: the two patient-specific segments are bounded by
+			// the patient's own active-drug list and NOT by the budget — neither drops a member, which
+			// is what "never invisible" means — and this one adds at most one note on top. So a chart
+			// with many of an entry's own partners on it overshoots by however many those are, and none
+			// of them is withheld — that is the same trade segment 1 has always made, extended to a
+			// second segment. ADR Decision 66 carries the measurement and the arrangement it was taken
+			// on. What is bounded by the budget is the general material, which is this segment's
+			// business alone.
+			if (tailStart == 0) {
 				for (int i = 0; i < ordered.size(); i++) {
 					String n = ordered.get(i).full;
 					if (!shown.isEmpty() && used + n.length() > MAX_INTERACTION_RENDER_CHARS) {
@@ -2457,8 +2629,8 @@ public class DrugReferenceInjector {
 					shown.add(n);
 					used += n.length() + 2;
 				}
-			} else if (restStart < ordered.size()) {
-				shown.add(ordered.get(restStart).compact);
+			} else if (tailStart < ordered.size()) {
+				shown.add(ordered.get(tailStart).compact);
 			}
 
 			appendSection(sb, " Interactions: ", shown);

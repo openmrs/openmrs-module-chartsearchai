@@ -426,7 +426,8 @@ public class DrugSafetyInteractionScreeningTest {
 		// TWICE in one safetyWarnings array. What reaches this is the MAPPINGS-LESS overload below:
 		// echo scoping has no records to attribute a mention to, so every drug the answer names stays
 		// in play. Not "the answer cites nothing" — since issue #360 an uncited answer is still scoped
-		// against the reference records the chart carries, and only an absent chart exempts nothing.
+		// against the recitable reference records the chart carries, and here there is no chart at all,
+		// so nothing can attribute the mention.
 		List<SafetyWarning> warnings = ddinterValidator().validate(
 				"Yes — simvastatin and clarithromycin interact at a major level.", SCREENING_QUESTION,
 				interactingPairContext());

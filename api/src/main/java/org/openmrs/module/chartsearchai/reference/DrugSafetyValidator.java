@@ -45,7 +45,8 @@ import org.springframework.stereotype.Service;
  * <p>For every reference drug in play — those the question asks about, plus those the answer
  * names on its own authority (a drug the answer mentions only by echoing the text of a record the
  * mention is attributable to is a mention, not a proposal, and is excluded — see
- * {@code isEchoOfAttributableRecord}, issues #105 and #360) — it checks three things against the patient's clinical context and the reference table.
+ * {@code isEchoOfAttributableRecord}, issues #105 and #360) — it checks three things against the
+ * patient's clinical context and the reference table.
  * One check departs from that framing deliberately: the question-named PAIR arm reads the reference
  * table alone, and covers the drugs the QUESTION resolved to rather than all of those in play, so it
  * answers "does A interact with B?" for a patient on neither — see {@link #addQuestionPairInteractions}.
@@ -932,28 +933,41 @@ public class DrugSafetyValidator {
 	 * corpus until issue #360 and must never be one again.
 	 *
 	 * <p>{@link #cited} is the records the answer cites INLINE — what {@link SubjectMatter} is
-	 * scoped to, unchanged since issue #143. {@link #attributable} is those PLUS every
-	 * reference-group record in the chart whether the answer cited it or not — the echo test's
-	 * corpus, and only the echo test's.
+	 * scoped to, unchanged since issue #143. {@link #attributable} is those PLUS every RECITABLE
+	 * reference record in the chart whether the answer cited it or not — the echo test's corpus, and
+	 * only the echo test's. Recitable is narrower than reference-group; see
+	 * {@link #isRecitableReferenceMaterial} for the one type it subtracts and why.
 	 *
 	 * <p><b>Why they are separately allocated rather than one list the wider consumer extends.</b>
-	 * The order-driven contraindication arm's gate reads this corpus with {@code containsToken}
-	 * against a RULE's own token ({@link SubjectMatter#names(DrugReference.Contraindication)}), and an
-	 * injected {@code drug_reference} record renders this module's own contraindication clauses into
-	 * its text — so a corpus shared by widening would let the module's own injected prose satisfy the
-	 * FINDING side of a gate that exists to keep this arm on what the RESPONSE is about (issue #143).
-	 * Nothing else in the suite separates the two: every other case that hands real mappings to
-	 * {@code validate} carries either no reference-group record or one the answer cites, which is why
+	 * The order-driven contraindication arm's gate asks whether either SIDE of a chip is what the
+	 * response is about (issue #143), and the DRUG side ({@link SubjectMatter#names(DrugReference)})
+	 * is the half a shared corpus breaks first: an injected record names the patient's own
+	 * prescriptions, so widening the arm's corpus would make her prescription subject matter on a
+	 * question about her cancer. Alias the two lists and read that failure —
 	 * {@code SubjectMatterScopedContraindicationTest
-	 * .anUncitedReferenceRecordNamingHerPrescriptionIsNotSubjectMatter} exists and why aliasing the
-	 * two lists here would go green.
+	 * .anUncitedReferenceRecordNamingHerPrescriptionIsNotSubjectMatter}. The FINDING side
+	 * ({@link SubjectMatter#names(DrugReference.Contraindication)}, {@code containsToken} against a
+	 * rule's own token) is exposed by the same widening — a rule with no note renders its token
+	 * verbatim into the record's contraindication clauses — and nothing pins that half.
+	 */
+	/*
+	 * Folded per comparison rather than once, deliberately and measured. namesAnyOf goes through
+	 * DrugReference.matchesText, which folds its prose argument on every call, so the corpus is
+	 * re-folded once per candidate drug: measured through the real validate on the six-order
+	 * screening fixture, that fold is ~87% of the sweep's 70us, and pre-folding would save ~56us.
+	 * Declined because namesAnyOf is SHARED with SubjectMatter, whose texts additionally reach
+	 * PatientClinicalContext.containsToken -> containsFolded, which folds the haystack itself — and
+	 * DrugReference.foldedLower is documented non-idempotent (issue #330). Both lists here are
+	 * List<String> inside one carrier, which is exactly the confusion FoldedName exists to prevent.
+	 * Taking it would need its own entry point off the shared matcher, a name stating the fold state
+	 * and a source guard; 56us does not buy that.
 	 */
 	private static final class AttributionTexts {
 
 		/** Cited records only. Never mutated after construction, and never handed to the echo test. */
 		private final List<String> cited;
 
-		/** Cited records UNION every reference-group record. Never handed to {@link SubjectMatter}. */
+		/** Cited records UNION every recitable reference record. Never handed to {@link SubjectMatter}. */
 		private final List<String> attributable;
 
 		private AttributionTexts(List<String> cited, List<String> attributable) {
@@ -981,9 +995,9 @@ public class DrugSafetyValidator {
 	 * marker and raised none. A clinician-facing Major warning cannot turn on whether the model wrote
 	 * "[7]".
 	 *
-	 * <p><b>Why a reference-group record needs no citation to be attributable, and a chart record
-	 * still does.</b> This module PUT the reference-group records in the prompt; it does not need the
-	 * model to tell it they were there. A chart record is the patient's own data, and a drug named in
+	 * <p><b>Why a recitable reference record needs no citation to be attributable, and a chart record
+	 * still does.</b> This module PUT those records in the prompt; it does not need the model to tell
+	 * it they were there. A chart record is the patient's own data, and a drug named in
 	 * one is by construction about this patient, so there the inline marker is doing real work — it is
 	 * the evidence that the answer was REPORTING the record rather than proposing on its own
 	 * authority. Widening the chart half as well would exempt a genuine proposal whenever her own
@@ -1005,7 +1019,7 @@ public class DrugSafetyValidator {
 				continue;
 			}
 			boolean isCited = citedIndexes.contains(Integer.valueOf(mapping.getIndex()));
-			if (!isCited && !isModuleSuppliedReferenceRecord(mapping.getResourceType())) {
+			if (!isCited && !isRecitableReferenceMaterial(mapping.getResourceType())) {
 				continue;
 			}
 			String lower = mapping.getText().toLowerCase(Locale.ROOT);
@@ -1018,23 +1032,41 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * @return whether a record of this type is this module's own reference material — the classifier
-	 *         and never a type name, so a reference type added later is covered without this class
-	 *         changing (CLAUDE.md: for a question that is not about grading, ask
-	 *         {@code referenceGroup} directly rather than borrowing the grounding view of it, and
-	 *         issue #122 is what happens when a call site tests {@code resourceType} against
-	 *         {@code drug_reference}).
+	 * @return whether a record of this type is reference material the answer could be RECITING —
+	 *         knowledge-base prose this module rendered into the prompt out of a third-party dataset.
+	 *         Group membership is the classifier's answer and never a type name here, so a reference
+	 *         type added later is admitted without this class changing; what is subtracted from it is
+	 *         one named type, for a reason about PROVENANCE rather than about grouping.
+	 *
+	 *         <p><b>A {@code safety_finding} is reference-group and is deliberately NOT recitable.</b>
+	 *         It is this validator's own conclusion about this patient, rendered by
+	 *         {@code DrugReferenceInjector.renderFinding} from the pre-answer pass's chips — so
+	 *         admitting it uncited would let one pass's OUTPUT silence the next pass's check of the
+	 *         same drug. And a finding names more than its own two drugs: {@code renderFinding} copies
+	 *         the rule's MECHANISM paragraph verbatim, which spells out further substances — read off
+	 *         the real injector's output for the six-order screening chart, its findings' texts carry
+	 *         {@code lovastatin}, {@code erythromycin} and eight quinolones, none of them this
+	 *         patient's. Those resolve to entries on the shipped knowledge base; on the 16-entry test
+	 *         excerpt they do not, which is why {@code DrugSafetyValidatorEchoScopingTest
+	 *         .anUncitedSafetyFindingOfThisModulesOwnDoesNotExemptTheDrugItNames} PLACES a real
+	 *         rendered finding line rather than injecting one. A CITED {@code safety_finding} is still
+	 *         attributable, exactly as before this rule: there the answer said it was quoting.
+	 *
+	 *         <p>Do not read the exclusion as "test the type" generally — issue #122 is what happens
+	 *         when a call site asks a GROUP question by naming {@code drug_reference}, and this asks a
+	 *         provenance question the group cannot answer. A third reference-group type is admitted by
+	 *         default, which is right for anything the module renders from a dataset and wrong only
+	 *         for another conclusion of its own; whoever adds one decides which it is.
 	 *
 	 *         <p>Named for what it asks rather than after {@code ChartSearchAiUtils}' own private
-	 *         {@code isReferenceMaterial}, which it deliberately does NOT reach — the same choice
-	 *         {@code ReferenceProseFidelityCheck.isModuleSuppliedReferenceProse} made and for the
-	 *         reason recorded there: that one is the shared body under {@code isGroundingDemoteOnly}
-	 *         and {@code referenceSlice}, and borrowing a named view of the classification couples a
-	 *         caller to what that view is for.
+	 *         {@code isReferenceMaterial} — see
+	 *         {@code ReferenceProseFidelityCheck.isModuleSuppliedReferenceProse}, which records the
+	 *         argument for not borrowing that one.
 	 */
-	private static boolean isModuleSuppliedReferenceRecord(String resourceType) {
+	private static boolean isRecitableReferenceMaterial(String resourceType) {
 		return ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE.equals(
-				ChartSearchAiUtils.referenceGroup(resourceType));
+				ChartSearchAiUtils.referenceGroup(resourceType))
+				&& !ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(resourceType);
 	}
 
 	/**
@@ -1062,18 +1094,28 @@ public class DrugSafetyValidator {
 	 *         .aPartnerTheAnswerProposesRatherThanRecitesIsWithheldToo} pins it so it reads as a
 	 *         decision rather than a discovery.
 	 *
-	 *         <p><b>Two of the three bounds below do NOT cover that class, and reciting all three as
-	 *         if they did is the error to avoid.</b> A question-named X never reaches this method
-	 *         ({@code questionDrugs.contains(ref) -> continue}), and an actively-ordered X keeps its
-	 *         CONTRAINDICATION check through {@link #addActiveOrderContraindications} — but the
-	 *         newly-exempted drug is by construction neither, and what stays withheld for it is an
-	 *         INTERACTION finding. The bound that does hold is that the alternative is worse: deciding
-	 *         it any other way needs evidence the answer RECITED the name rather than proposed it, and
+	 *         <p><b>Say what the two bounds do and do not reach, because reciting them as if they
+	 *         covered the class is the error to avoid.</b> A question-named X never reaches this
+	 *         method ({@code questionDrugs.contains(ref) -> continue}), and an actively-ordered X
+	 *         keeps its CONTRAINDICATION check through {@link #addActiveOrderContraindications} —
+	 *         and an exempted drug may well be actively ordered, since an injected record names the
+	 *         patient's own prescriptions. What NEITHER bound reaches is a drug that is neither, and
+	 *         there the exemption takes the drug out of {@code inPlay} altogether: the interaction,
+	 *         overdose AND drug-in-play contraindication arms all iterate that set, so an uncited
+	 *         answer proposing a drug she is allergic to raises no chip where the drug is one an
+	 *         injected record names. That is issue #105's settled trade rather than a new one —
+	 *         {@code ActiveOrderContraindicationTest
+	 *         .aRecitedPartnerThePatientIsNotTakingGainsNoContraindicationCheck} pins the same
+	 *         withholding for a CITED record as the desired behaviour, since chipping there would be
+	 *         a contraindication about a drug nobody proposed. What issue #360 changes is that it no
+	 *         longer depends on a bracket. The bound that does hold is that the alternative is worse:
+	 *         deciding it any other way needs evidence the answer RECITED the name rather than
+	 *         proposed it, and
 	 *         the one such signal available — text the answer reproduces from the record — is refuted
 	 *         by measurement on the real chart, where the model paraphrases and misspells the very
 	 *         reference prose it is copying. {@code ReferenceProseFidelityCheck} (issue #337) exists
-	 *         because reproduce-then-rewrite is the normal case; a rule resting on verbatim
-	 *         reproduction would be green in this suite and dead on the rig.
+	 *         because reproduce-then-rewrite is a shape the model actually produces; a rule resting on
+	 *         verbatim reproduction would be green in this suite and dead on the rig.
 	 *
 	 *         <p><b>The containment with {@link SubjectMatter} survives the widening, by a different
 	 *         argument.</b> It used to rest on {@code validate} handing this method's own corpus to the
@@ -1085,9 +1127,9 @@ public class DrugSafetyValidator {
 	 *         {@code DrugReferenceService.findImpliedByQuery(answer)}, documented as returning "a
 	 *         subset of {@code findByQuery}", so the ANSWER names it — and {@code SubjectMatter}'s
 	 *         texts always contain the answer. So this returning true still implies
-	 *         {@code SubjectMatter.names(ref)}, and a later change has to preserve THAT: narrowing what
-	 *         {@code findImpliedByQuery} may return to entries the prose does not name would reopen
-	 *         issue #143 with nothing going red.
+	 *         {@code SubjectMatter.names(ref)}, and a later change has to preserve THAT: WIDENING
+	 *         {@code findImpliedByQuery} to return entries the prose does not name would reopen issue
+	 *         #143 with nothing going red.
 	 *
 	 *         <p>The second half of the bound USED to be asserted here of "the order-driven arms", and
 	 *         was false (issue #143). Counted over this class, those arms — {@link #addInteractionWarnings},
@@ -6433,7 +6475,8 @@ public class DrugSafetyValidator {
 	 * <p><b>The defect.</b> Both contraindication arms were keyed on a drug IN PLAY, and echo scoping
 	 * ({@link #isEchoOfAttributableRecord}, issue #105) removes an answer-named drug from that set
 	 * whenever a record the mention is attributable to already names it — a record the answer cites,
-	 * or, since issue #360, any of this module's own injected reference records. A drug the patient is PRESCRIBED appears in a
+	 * or, since issue #360, any of this module's own recitable reference records. A drug the patient
+	 * is PRESCRIBED appears in a
 	 * {@code drug_order} chart record — which is exactly the record a good answer cites when asked
 	 * about medications — so the scoping fired on the one shape where the finding matters most.
 	 * Measured on the bundled curated dataset ({@code sourceFormat=json}, the production default when this

@@ -51,6 +51,12 @@ public class DrugSafetyValidatorEchoScopingTest {
 				DrugReferenceTestSupport.set("B01AC06"), null, null);
 	}
 
+	/** Context: one active Amiodarone order — Simvastatin x Amiodarone is Major in the excerpt. */
+	private static PatientClinicalContext amiodaroneOrderCtx() {
+		return DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Amiodarone"),
+				null, null, null);
+	}
+
 	/** Context: one active Simvastatin order and nothing else — the typo control's patient. */
 	private static PatientClinicalContext simvastatinOrderCtx() {
 		return DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Simvastatin"),
@@ -74,13 +80,6 @@ public class DrugSafetyValidatorEchoScopingTest {
 				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), aspirinOrderCtx(), QUESTION_IBUPROFEN);
 	}
 
-	private static RecordMapping firstDrugReferenceMapping(PatientChart chart) {
-		return chart.getMappings().stream()
-				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(m.getResourceType()))
-				.findFirst().orElseThrow(() -> new IllegalStateException(
-						"no drug-reference record was injected into the chart"));
-	}
-
 	@Test
 	public void echoedReferencePartnerIsNotValidatedAsAProposal() {
 		// The erythromycin-cascade shape: the answer recites a partner (lisinopril) out of the
@@ -88,7 +87,7 @@ public class DrugSafetyValidatorEchoScopingTest {
 		// echo scoping the recitation raised a Lisinopril chip against the aspirin order even
 		// though nobody proposed lisinopril.
 		PatientChart chart = injectedIbuprofenChart();
-		RecordMapping refMapping = firstDrugReferenceMapping(chart);
+		RecordMapping refMapping = DrugReferenceTestSupport.injectedReference(chart);
 		assertTrue(refMapping.getText().toLowerCase().contains("lisinopril"),
 				"precondition: the real rendered ibuprofen record names lisinopril");
 
@@ -112,7 +111,7 @@ public class DrugSafetyValidatorEchoScopingTest {
 		// happened to end in a marker and raised none. Whether a clinician saw three spurious Major
 		// warnings was decided by whether the model wrote "[7]".
 		PatientChart chart = injectedIbuprofenChart();
-		RecordMapping refMapping = firstDrugReferenceMapping(chart);
+		RecordMapping refMapping = DrugReferenceTestSupport.injectedReference(chart);
 		assertTrue(refMapping.getText().toLowerCase().contains("lisinopril"),
 				"precondition: the real rendered ibuprofen record names lisinopril");
 
@@ -138,7 +137,7 @@ public class DrugSafetyValidatorEchoScopingTest {
 		// row, so the chip is available; only attribution can withhold it, and nothing attributes this
 		// mention to anything.
 		PatientChart chart = injectedIbuprofenChart();
-		RecordMapping refMapping = firstDrugReferenceMapping(chart);
+		RecordMapping refMapping = DrugReferenceTestSupport.injectedReference(chart);
 		assertFalse(refMapping.getText().toLowerCase().contains("sertraline"),
 				"precondition: the rendered ibuprofen record must NOT name sertraline, or this case "
 						+ "asserts nothing — it was: " + refMapping.getText());
@@ -169,6 +168,9 @@ public class DrugSafetyValidatorEchoScopingTest {
 		String answer = "Clarithromycin should be avoided.";
 		assertTrue(ChartSearchAiUtils.citedIndexes(answer).isEmpty(),
 				"precondition: this answer must carry no inline citation marker at all");
+		assertTrue(DrugReferenceTestSupport.injectedReferences(chart).isEmpty(),
+				"precondition: a question naming no drug must inject no reference record, or the "
+						+ "corpus would have something to attribute the answer's mention to");
 
 		List<SafetyWarning> warnings = validator().validate(answer, question, simvastatinOrderCtx(),
 				chart.getMappings());
@@ -176,6 +178,38 @@ public class DrugSafetyValidatorEchoScopingTest {
 		assertTrue(DrugReferenceTestSupport.has(warnings, SafetyWarning.TYPE_INTERACTION,
 				"clarithromycin"), "the spelling the ANSWER got right must still be checked against "
 						+ "her simvastatin order, was: " + warnings);
+	}
+
+	@Test
+	public void anUncitedSafetyFindingOfThisModulesOwnDoesNotExemptTheDrugItNames() {
+		// The one reference-group type the uncited half subtracts. A safety_finding is this validator's
+		// own conclusion about this patient, rendered back into the prompt by the pre-answer pass — so
+		// admitting it uncited lets one pass's OUTPUT silence the next pass's check of the same drug.
+		//
+		// The record's text is a real rendered finding line, taken verbatim from what the real injector
+		// produces for the six-order screening chart, and placed on a chart whose question and orders
+		// leave its subject neither question-named nor actively ordered. It is placed rather than
+		// injected because that arrangement is what the predicate is about, and because the 16-entry
+		// test excerpt cannot produce it on its own: measured through findImpliedByQuery over the real
+		// injected findings, each one names only its own subject and partner, since the further drugs a
+		// mechanism paragraph spells out ("lovastatin", "erythromycin", eight quinolones) are not
+		// entries of that excerpt. On the shipped knowledge base they are.
+		//
+		// Neuter the safety_finding subtraction in isRecitableReferenceMaterial and read this failure.
+		RecordMapping finding = new RecordMapping(2,
+				ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING, "interaction:Simvastatin", null,
+				"Safety finding — Simvastatin: Simvastatin interacts with active order Clarithromycin "
+						+ "— Major.");
+		String answer = "Simvastatin would be a reasonable choice.";
+		assertTrue(ChartSearchAiUtils.citedIndexes(answer).isEmpty(),
+				"precondition: this answer must carry no inline citation marker at all");
+
+		List<SafetyWarning> warnings = validator().validate(answer, "What should we watch for?",
+				amiodaroneOrderCtx(), Arrays.asList(finding));
+
+		assertTrue(DrugReferenceTestSupport.has(warnings, SafetyWarning.TYPE_INTERACTION, "simvastatin"),
+				"this module's own finding must not attribute the answer's mention to itself, was: "
+						+ warnings);
 	}
 
 	@Test
@@ -196,7 +230,7 @@ public class DrugSafetyValidatorEchoScopingTest {
 		// refuted by measurement on the real chart, where the model paraphrases and misspells the very
 		// prose it is copying.
 		PatientChart chart = injectedIbuprofenChart();
-		RecordMapping refMapping = firstDrugReferenceMapping(chart);
+		RecordMapping refMapping = DrugReferenceTestSupport.injectedReference(chart);
 		assertTrue(refMapping.getText().toLowerCase().contains("lisinopril"),
 				"precondition: the real rendered ibuprofen record names lisinopril");
 
@@ -207,6 +241,34 @@ public class DrugSafetyValidatorEchoScopingTest {
 		assertFalse(DrugReferenceTestSupport.has(warnings, SafetyWarning.TYPE_INTERACTION, "lisinopril"),
 				"a proposal of a drug an injected record names is withheld too — the accepted residue, "
 						+ "was: " + warnings);
+	}
+
+	@Test
+	public void theWithheldResidueIsNotOnlyAnInteractionFinding() {
+		// The residue's shape, stated where it can go stale otherwise. The exemption removes the drug
+		// from inPlay ALTOGETHER, and the interaction, overdose and drug-in-play contraindication arms
+		// all iterate that set — so an uncited answer proposing a drug she is ALLERGIC to raises no
+		// contraindication chip either, where that drug is one an injected record names. This is issue
+		// #105's settled trade rather than a new one: ActiveOrderContraindicationTest
+		// .aRecitedPartnerThePatientIsNotTakingGainsNoContraindicationCheck pins the same withholding
+		// for a CITED record as the DESIRED behaviour, because chipping there would announce a
+		// contraindication about a drug nobody proposed. What #360 changes is that it no longer turns
+		// on whether the model emitted a bracket.
+		PatientChart chart = injectedIbuprofenChart();
+		RecordMapping refMapping = DrugReferenceTestSupport.injectedReference(chart);
+		assertTrue(refMapping.getText().toLowerCase().contains("lisinopril"),
+				"precondition: the real rendered ibuprofen record names lisinopril");
+		PatientClinicalContext allergicToLisinopril = DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set("Aspirin"), DrugReferenceTestSupport.set("B01AC06"),
+				DrugReferenceTestSupport.set("lisinopril"), null);
+
+		List<SafetyWarning> warnings = validator().validate(
+				"Her hypertension is untreated; consider starting lisinopril.", QUESTION_IBUPROFEN,
+				allergicToLisinopril, chart.getMappings());
+
+		assertFalse(DrugReferenceTestSupport.has(warnings, SafetyWarning.TYPE_CONTRAINDICATION,
+				"lisinopril"), "the contraindication is withheld too, not only the interaction — the "
+						+ "residue in the shape it actually has, was: " + warnings);
 	}
 
 	@Test
@@ -229,8 +291,8 @@ public class DrugSafetyValidatorEchoScopingTest {
 
 	@Test
 	public void anUncitedChartRecordNamingTheDrugDoesNotExemptIt() {
-		// The boundary issue #360 stops at, and the only case that discriminates it: the chart half of
-		// the attribution corpus still requires an inline marker. Same fixture as the panadol case
+		// The boundary issue #360 stops at: the chart half of the attribution corpus still requires an
+		// inline marker. Same fixture as the panadol case
 		// below with the [230] taken off — the record still names Aspirin, and the answer still says
 		// it, but nothing attributes the mention to the record, so aspirin stays in play and chips.
 		//
@@ -248,9 +310,9 @@ public class DrugSafetyValidatorEchoScopingTest {
 		List<SafetyWarning> warnings = validator().validate(answer, "Is it safe to give her panadol?",
 				simvastatinWithAspirinAllergyCtx(), mappings);
 
-		assertFalse(warnings.isEmpty(),
-				"an UNCITED chart record must not attribute the answer's mention to itself, was: "
-						+ warnings);
+		assertTrue(DrugReferenceTestSupport.has(warnings, SafetyWarning.TYPE_CONTRAINDICATION, "aspirin"),
+				"an UNCITED chart record must not attribute the answer's mention to itself, so the "
+						+ "aspirin allergy she has is still chipped, was: " + warnings);
 	}
 
 	@Test
@@ -286,7 +348,7 @@ public class DrugSafetyValidatorEchoScopingTest {
 		// Question-side naming always wins: even when every answer mention of the drug is an
 		// echo of the cited reference record, the clinician asked about it, so it is checked.
 		PatientChart chart = injectedIbuprofenChart();
-		RecordMapping refMapping = firstDrugReferenceMapping(chart);
+		RecordMapping refMapping = DrugReferenceTestSupport.injectedReference(chart);
 
 		String answer = "Record [" + refMapping.getIndex() + "] lists interactions for Ibuprofen.";
 		List<SafetyWarning> warnings = validator().validate(answer, QUESTION_IBUPROFEN,

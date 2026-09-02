@@ -259,14 +259,18 @@ public class DrugReferenceInjectorTest {
 	@Test
 	public void interactionRenderCapStillBoundsTheRenderedSection() {
 		// The cap is load-bearing — Warfarin carries ~934 partners in the full KB — so the
-		// prioritisation must reorder what renders, never widen it without bound. The invariant is
-		// the cap plus at most ONE note: the pre-existing "at least one interaction is always
-		// shown" rule already overshoots by one, and promoting the patient's partners extends that
-		// to one-per-segment (a single promoted note can be long enough to consume the whole
-		// budget — the bundled aspirin x ibuprofen Major note is ~1200 of the 1500 chars — and
-		// dropping the entire dataset tail would leave the model unable to say anything about the
-		// drug beyond this patient's one overlap). Expressed as 2x the cap rather than a magic
-		// margin, so a fixture whose notes get longer cannot make this pass by luck.
+		// prioritisation must reorder what renders, never widen it without bound. What bounds it is the
+		// cap plus the patient's OWN partners, which the two patient-specific segments render without
+		// consulting the budget at all — that is what "never invisible" means, and a single promoted
+		// note can be long enough to consume the whole budget by itself (the bundled aspirin x
+		// ibuprofen Major note is ~1200 of the 1500 chars) while dropping the dataset tail would leave
+		// the model unable to say anything about the drug beyond this patient's overlap. So this
+		// arrangement's bound is the cap plus its ONE active drug's note, which 2x the cap expresses
+		// without a magic margin; a chart with many of an entry's partners on it overshoots further,
+		// by however many those are, and render's own comment carries that measurement.
+		//
+		// Read this case as pinning the DATASET tail's contribution, then: it is the half the budget
+		// governs, and the half a reordering could widen without bound.
 		String section = interactionsSectionFor("Lisinopril", "ibuprofen");
 		assertTrue(section.length() <= 2 * DrugReferenceInjector.MAX_INTERACTION_RENDER_CHARS,
 				"the rendered interactions section must stay bounded by cap + one note: " + section.length());
@@ -388,20 +392,39 @@ public class DrugReferenceInjectorTest {
 	public void aSubFloorInteractionIsNotPromotedEvenWhenThePatientIsOnThatDrug() {
 		// Promotion must honour the interaction-severity floor the chips honour (issue #84).
 		// Lisinopril x warfarin is an Unknown-severity DDInter row with no mechanism text — exactly
-		// what the default `minor` floor exists to keep out of the clinician's way — and it is the
-		// first partner to fall PAST the render cap in dataset order (index 7; the cumulative
-		// rendered length reaches 1546 there against a 1500-char budget), so its presence can only
-		// come from promotion. Promoting on relevance alone pulled rows like it to the front of the
-		// prompt, and measured on the 3.7.1 standalone the model then answered from them: two probe
-		// cells that correctly abstained on the baseline began reporting "an Unknown severity
-		// interaction between Erythromycin and Lisinopril", so the render path was bypassing a
-		// safety decision the chip path enforces. Above-floor promotion still works
-		// (renderedInteractionsMustNameThePartnerThePatientIsActuallyOn covers the Moderate case).
-		String section = interactionsSectionFor("Lisinopril", "warfarin");
-		assertFalse(section.contains("warfarin"),
-				"an Unknown-severity rule must not be promoted past the render cap: " + section);
-		assertTrue(section.contains("metformin"),
-				"precondition: the section still renders its above-floor dataset-order partners: " + section);
+		// what the default `minor` floor exists to keep out of the chips. Promoting on relevance
+		// alone pulled rows like it to the front of the prompt, and measured on the 3.7.1 standalone
+		// the model then answered from them: two probe cells that correctly abstained on the baseline
+		// began reporting "an Unknown severity interaction between Erythromycin and Lisinopril", so
+		// the render path was bypassing a safety decision the chip path enforces. Above-floor
+		// promotion still works (renderedInteractionsMustNameThePartnerThePatientIsActuallyOn covers
+		// the Moderate case).
+		//
+		// This case asked that question of the row's PRESENCE until issue #357, on the ground that
+		// warfarin is the first partner to fall past the render cap in dataset order (index 7,
+		// cumulative length 1546 against a 1500-char budget) "so its presence can only come from
+		// promotion". That premise is what #357 retired, deliberately and on its own live
+		// reproduction: a rule the floor filtered now leads the dataset TAIL when the chart names its
+		// partner, so presence no longer implies promotion and absence was silencing the patient's
+		// own drugs while the identical sentence rendered for strangers.
+		//
+		// So the question is put to what promotion actually buys, which is a place in segment 1 —
+		// where the budget yields to every member and each renders in full while it allows. The
+		// segment behind it renders the FIRST in full and the rest compact, so it takes TWO sub-floor
+		// partners to tell the two rules apart: promoted, warfarin and amiodarone would both carry
+		// their own note; filtered, the second is named with its rating alone. One would not
+		// discriminate, because a promoted Unknown sorts last among the promoted anyway.
+		String section = interactionsSectionFor("Lisinopril", "warfarin", "amiodarone", "ibuprofen");
+		assertTrue(section.startsWith("interactions: ibuprofen (moderate. "),
+				"the promoted segment is the above-floor rule's, and it keeps its mechanism prose: "
+						+ section);
+		assertTrue(section.contains("; warfarin (unknown severity interaction (ddinter 2.0; no "
+				+ "mechanism description on file).); amiodarone (unknown); "),
+				"the two sub-floor rules follow it stating the source's sentence ONCE and then just a "
+						+ "name and a rating — neither of them promoted, and no mechanism invented for "
+						+ "a pair the source describes as nothing: " + section);
+		assertFalse(section.contains("amiodarone (unknown severity interaction"),
+				"a rule the floor filtered must never take a promoted full-note slot: " + section);
 
 		// The other half of the contract, on the same row. The floor's whole point is that the chips
 		// and the rendered prose agree about which rules count, and that now rests on both paths
@@ -466,13 +489,13 @@ public class DrugReferenceInjectorTest {
 
 	@Test
 	public void whenThePatientIsOnEveryPartnerThereIsNoDatasetTailLeftAndNothingIsWithheld() {
-		// Segment 2's third case: the patient is on ALL of this entry's above-floor partners, so the
-		// dataset tail is empty and the representative must simply not render. It is the only arm of
+		// The dataset tail's third case: the patient is on ALL of this entry's above-floor partners, so
+		// the tail is empty and the representative must simply not render. It is the only arm of
 		// that branch nothing else reaches — the two tests either side of this one cover "a tail
 		// exists alongside a promoted partner" and "nothing was promoted".
 		//
 		// It is worth its own test because the guard protecting it is the kind that reads redundant:
-		// `restStart < ordered.size()` looks like a bound check on a list you just measured, and
+		// `tailStart < ordered.size()` looks like a bound check on a list you just measured, and
 		// relaxing it to <= throws IndexOutOfBoundsException out of render. DrugReferenceInjector.inject
 		// catches every RuntimeException and returns the chart unmodified, so the failure would not
 		// surface as an error — the entire drug-reference feature, including the deterministic
@@ -480,7 +503,9 @@ public class DrugReferenceInjectorTest {
 		// log.warn, for exactly the polypharmacy patients it matters most for.
 		//
 		// The bundled curated entry Paracetamol carries exactly one interaction (warfarin, unrated —
-		// and unrated is floor-exempt, so it promotes), which makes promotedCount == ordered.size().
+		// and unrated is floor-exempt, so it promotes), which makes tailStart == ordered.size() with
+		// the chart-named segment (issue #357) empty, since the only rule the chart names cleared the
+		// floor.
 		PatientChart result = injector().injectRecords(oneRecordChart(),
 				DrugReferenceTestSupport.ctx(60, null, set("warfarin"), null, null, null),
 				"is it safe to give paracetamol?");
@@ -532,8 +557,8 @@ public class DrugReferenceInjectorTest {
 	public void theDatasetTailRepresentativeDropsItsProseWhenAPatientRelevantPartnerIsRendered() {
 		// The other half of #117: the answer's bulk was two full interaction notes for drugs the
 		// patient has nothing to do with (ivosidenib, ixabepilone), which the model reported
-		// alongside the real finding as though equally actionable. They were there because segment 2
-		// spends whatever the budget has left on dataset-order partners in FULL — so a short
+		// alongside the real finding as though equally actionable. They were there because the dataset
+		// tail spends whatever the budget has left on dataset-order partners in FULL — so a short
 		// promoted note buys several irrelevant mechanism paragraphs.
 		//
 		// The tail's purpose (see render) is that the record is also the only general reference
@@ -558,9 +583,10 @@ public class DrugReferenceInjectorTest {
 
 	@Test
 	public void withNoPatientRelevantPartnerTheDatasetTailStillRendersFullNotesToTheBudget() {
-		// The other side of the branch the test above pins, and the reason segment 2 is a branch at
-		// all rather than one rule. A compact representative is the right cut only when a promoted
-		// partner already carries the patient-specific content; with nothing promoted the general
+		// The other side of the branch the test above pins, and the reason the dataset tail is a branch
+		// at all rather than one rule. A compact representative is the right cut only when something
+		// already carries the patient-specific content — a promoted partner, or since issue #357 a
+		// partner the chart names whose rule the floor filtered; with neither, the general
 		// material IS the record's content, so the budget is spent on full notes exactly as it was
 		// before #117 — same entry, same question, and the ONLY difference is whether the patient is
 		// on one of the partners.

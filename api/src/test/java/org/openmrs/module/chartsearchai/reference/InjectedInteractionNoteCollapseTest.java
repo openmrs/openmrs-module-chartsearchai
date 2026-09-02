@@ -74,12 +74,10 @@ public class InjectedInteractionNoteCollapseTest {
 		return references.get(0);
 	}
 
-	/** The lowercased {@code Interactions:} section of a rendered record. */
+	/** The lowercased {@code Interactions:} section of a rendered record — {@link DrugReferenceTestSupport}'s
+	 *  rule, which is where it lives now that a third class wanted it and its own copy had drifted. */
 	private static String interactionsOf(RecordMapping record) {
-		String text = record.getText();
-		int start = text.indexOf("Interactions:");
-		assertTrue(start >= 0, "precondition: the record must render an Interactions section: " + text);
-		return text.substring(start).toLowerCase(Locale.ROOT);
+		return DrugReferenceTestSupport.interactionsSectionOf(record);
 	}
 
 	/**
@@ -87,14 +85,11 @@ public class InjectedInteractionNoteCollapseTest {
 	 * followed by the rendering's own {@code " ("}, not of the bare name, because a mechanism
 	 * paragraph legitimately mentions the drugs it is about ("…exposure to sirolimus, which is
 	 * primarily metabolized…") and counting those would make this assert something else.
+	 * {@link DrugReferenceTestSupport}'s rule, shared with the case that asks WHERE such a note begins
+	 * rather than how many there are.
 	 */
 	private static int notesHeadedBy(String section, String partner) {
-		String needle = partner + " (";
-		int count = 0;
-		for (int at = section.indexOf(needle); at >= 0; at = section.indexOf(needle, at + 1)) {
-			count++;
-		}
-		return count;
+		return DrugReferenceTestSupport.notesHeadedBy(section, partner);
 	}
 
 	@Test
@@ -136,8 +131,9 @@ public class InjectedInteractionNoteCollapseTest {
 	@Test
 	public void theDatasetTailNamesEachPartnerOnceToo() throws Exception {
 		// The same collapse with NOTHING promoted — the common shape, since most patients are on none
-		// of an entry's partners. Segment 2 then spends the whole budget on full notes in dataset
-		// order, so a repeated partner is a repeated paragraph: Voxelotor's two sirolimus rows
+		// of an entry's partners. With nothing patient-specific to show, the dataset tail then spends
+		// the whole budget on full notes in dataset order, so a repeated partner is a repeated
+		// paragraph: Voxelotor's two sirolimus rows
 		// (Major and Moderate) are two separate mechanism paragraphs about one co-medication.
 		RecordMapping record = injectedRecord("is it safe to give voxelotor?",
 				DrugReferenceTestSupport.ctx(60, null, null, null, null, null));
@@ -252,8 +248,11 @@ public class InjectedInteractionNoteCollapseTest {
 
 	/**
 	 * A curated entry filing ONE partner as two rows carrying the same token and DIFFERENT ATC codes
-	 * — the only shape in which two rows of one partner group answer
-	 * {@link PatientClinicalContext#hasActiveDrug} differently. See the fixture's own description.
+	 * — a shape in which two rows of one partner group answer
+	 * {@link PatientClinicalContext#hasActiveDrug} differently, because sharing a token leaves only the
+	 * ATC arm able to separate them. It used to say "the only shape" and no longer does: the
+	 * order-driven grouping branch was never ruled out, and issue #357's sub-floor sibling of this
+	 * fixture carries the same caveat. See the fixture's own description.
 	 */
 	private static final String ATC_SPLIT_FIXTURE =
 			"chartsearchai-test/drug-reference-partner-atc-split-rows.json";
@@ -271,9 +270,12 @@ public class InjectedInteractionNoteCollapseTest {
 		// (token, ATC) pair that predicate is then asked about. Where two rows of one partner carry
 		// DIFFERENT ATC codes those answers differ, and the most severe row can be the one the
 		// patient does not match — so the partner loses its place in segment 1, which is the segment
-		// that overrides MAX_INTERACTION_RENDER_CHARS. With another partner promoted, segment 2
+		// that overrides MAX_INTERACTION_RENDER_CHARS. With another partner promoted, the dataset tail
 		// renders exactly ONE representative, so the de-promoted partner does not merely change
-		// wording: it leaves the record while the chip still warns about it.
+		// wording: it leaves the record while the chip still warns about it. (Since issue #357 a
+		// de-promoted row of a partner the chart names lands in the segment between the two instead,
+		// which is why that issue asks this same question of its own boundary; here both warfarin rows
+		// are above the floor, so the tier that moves is still promotion's.)
 		//
 		// bestRulePerPartner cannot reach this shape because it filters on hasActiveDrug BEFORE
 		// grouping, so only rows the patient matches are ever candidates. This asserts the collapse

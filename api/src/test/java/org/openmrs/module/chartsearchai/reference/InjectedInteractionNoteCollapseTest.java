@@ -248,8 +248,11 @@ public class InjectedInteractionNoteCollapseTest {
 
 	/**
 	 * A curated entry filing ONE partner as two rows carrying the same token and DIFFERENT ATC codes
-	 * — the only shape in which two rows of one partner group answer
-	 * {@link PatientClinicalContext#hasActiveDrug} differently. See the fixture's own description.
+	 * — a shape in which two rows of one partner group answer
+	 * {@link PatientClinicalContext#hasActiveDrug} differently, because sharing a token leaves only the
+	 * ATC arm able to separate them. It used to say "the only shape" and no longer does: the
+	 * order-driven grouping branch was never ruled out, and issue #357's sub-floor sibling of this
+	 * fixture carries the same caveat. See the fixture's own description.
 	 */
 	private static final String ATC_SPLIT_FIXTURE =
 			"chartsearchai-test/drug-reference-partner-atc-split-rows.json";

@@ -117,7 +117,7 @@ Four fields of the response matter for these tests:
 |---|---|
 | `answer` | the LLM's prose. **Not** the safety output — it is what the model made of the chart plus the injected findings |
 | `safetyWarnings` | the **deterministic** chips. Computed by `DrugSafetyValidator` from the chart and the knowledge base, with no model involvement. Each carries `type`, `drug`, `detail` and — since [#340](https://github.com/openmrs/openmrs-module-chartsearchai/issues/340) — a `severity` |
-| `interactionPairs` | `{"found": N, "reported": M}` — how many pairs the *pairwise* arms related and how many survived the chip cap ([#336](https://github.com/openmrs/openmrs-module-chartsearchai/issues/336)). `null` means no pairwise arm ran; `{"found":0}` means one ran and related nothing. **`null` is not completeness** |
+| `interactionPairs` | `{"found": N, "reported": M}` — how many above-floor rule pairs the interaction check related and how many survived the chip cap ([#336](https://github.com/openmrs/openmrs-module-chartsearchai/issues/336)); the drug-in-play arm states it too since [#356](https://github.com/openmrs/openmrs-module-chartsearchai/issues/356) and is not capped, so its two numbers are always equal. `{"found":0}` means an arm ran and related nothing. **`null` is not completeness** — what it does cover is enumerated in `PairChipExtent`'s class javadoc and in `README.md`, and deliberately nowhere else, so read it there rather than inferring it from the cells below |
 | `references` | the records the answer actually **cited** — `drug_order`, `allergy`, `condition`, `safety_finding`, `drug_reference` |
 
 > **Judge the chips, not only the prose.** The chips are the tested, deterministic layer; the
@@ -129,7 +129,7 @@ Four fields of the response matter for these tests:
 
 | Arm | Fires when | What it checks | States `interactionPairs`? |
 |---|---|---|---|
-| **Drug-in-play** | the question names a drug | that drug × every active order | no |
+| **Drug-in-play** | the question names a drug | that drug × every active order | yes, since [#356](https://github.com/openmrs/openmrs-module-chartsearchai/issues/356), where neither pairwise arm ran |
 | **Question-pair** | the question resolves **≥2** reference entries | those drugs against each other | yes |
 | **Screening** | the question names **no** drug *and* reads as a screening request | every active order × every other | yes |
 | **Class / allergy** | always, scoped to what the response is about | ATC class and cross-reactivity-group joins against allergies, conditions and other orders | no |
@@ -137,12 +137,19 @@ Four fields of the response matter for these tests:
 They are **not** equivalent and they do not cover for each other, which is why the sections
 below are separate.
 
-**Where `interactionPairs` comes from.** Only the two *pairwise* arms state it, and their gates
-are mutually exclusive — the question-pair arm needs two or more resolved drugs, the screening
-arm needs none — so at most one runs per question and neither can be suppressed by the other's
-cap. If neither runs the field is `null`, which is why a plain "can I give her X?" reports `null`
-even when it raises seven interaction chips: those come from the drug-in-play arm, which states
-no extent. One consequence worth knowing before you read a `{"found": 0}` as odd: a question
+**Where `interactionPairs` comes from.** Three arms state it. The two *pairwise* ones have
+mutually exclusive gates — the question-pair arm needs two or more resolved drugs, the screening
+arm needs none — so at most one of those runs per question and neither can be suppressed by the
+other's cap. Where neither ran, the **drug-in-play** arm states it instead
+([#356](https://github.com/openmrs/openmrs-module-chartsearchai/issues/356)), which is what a
+plain "can I give her X?" now reports: before that fix it reported `null` even while raising
+seven interaction chips, so a completed screen that related nothing was indistinguishable from
+one nobody ran. Two things that arm's number does **not** include, for two different reasons. Its
+unrated class-only sentences are out because neither pairwise arm has a class leg, and one wire key
+must not mean two things by question shape. Chips it raised for a drug only the *answer* named are
+out because the statement is the **question's**: counted over the answer as well, the same question
+and chart would report differently according to what the model happened to write. And it states
+nothing at all where the chart records no active medication — there was no population to screen. One consequence worth knowing before you read a `{"found": 0}` as odd: a question
 naming what looks like *one* drug can still resolve to several reference entries (route variants
 such as `Dexamethasone` / `Dexamethasone (ophthalmic)`), which opens the question-pair arm, and
 it then honestly reports `found: 0` because route variants of one substance are not a clinical
@@ -187,6 +194,12 @@ answer:  The records do not address the safety of starting Clarithromycin.
 chips:   0
 pairs:   null
 ```
+
+**Recorded before [#356](https://github.com/openmrs/openmrs-module-chartsearchai/issues/356).** On
+a build carrying that fix this cell reports `pairs: {"found":0,"reported":0}` instead: her active
+Bupivacaine and Lidocaine orders are a population, the drug-in-play arm screened clarithromycin
+against them and related none of them above the floor, and it now says so. The chip count is what
+this example is about and it is unchanged.
 
 **What to check:** **no** Major chip. This is the interesting half of the pair — run 1a and 1b
 back to back. An order that lapses by `auto_expire_date` renders no "stopped" prose at all, so
@@ -676,9 +689,11 @@ or what reaches the model.
   (`DrugSafetyValidator.FINDING_STRENGTH_DESCENDING`: what the finding licenses first, then the same
   `severityPriority` the two pairwise arms use), so that chip sequence is not what a build carrying
   the fix produces, and the run above has not been repeated on one. What #346 did not change is
-  still live: this arm applies no `maxPairChips` cap, its unrated class-only sentences are appended
-  after its rule chips rather than ordered among them, and it sets no `interactionPairs`, so nothing
-  on the wire states how much it found. On a patient with many active orders, read the chips.
+  still live: this arm applies no `maxPairChips` cap, and its unrated class-only sentences are
+  appended after its rule chips rather than ordered among them. It does now set `interactionPairs`
+  ([#356](https://github.com/openmrs/openmrs-module-chartsearchai/issues/356), counting the rule
+  chips it appended), but that count says how many pairs it related, not which of them a truncated
+  answer kept. On a patient with many active orders, read the chips.
 
 ## How these were verified
 

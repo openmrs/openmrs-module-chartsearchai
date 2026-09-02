@@ -155,7 +155,7 @@ public class InjectedInteractionRelevanceOrderTest {
 		// promoted note in full while the budget allows; this segment renders the FIRST in full and
 		// the rest compact, because at the shipped floor every note in it is the same sentence and
 		// repeating it is how a real polypharmacy record spends its whole budget saying one thing —
-		// ADR Decision 65 carries the measurement and the arrangement it was taken on. Sertraline sits
+		// ADR Decision 66 carries the measurement and the arrangement it was taken on. Sertraline sits
 		// ahead of Fluconazole in the entry's own partner order, so it is the one that carries the
 		// sentence.
 		String interactions = interactionsFor(METFORMIN_QUESTION,
@@ -288,7 +288,7 @@ public class InjectedInteractionRelevanceOrderTest {
 	 * The middle segment's "never invisible" guarantee, pinned the way segment 1's already is
 	 * ({@code DrugReferenceInjectorTest.promotingThePatientsPartnerStillRendersSomeOfTheDatasetTail}
 	 * and neighbours) — segment 2's twin claim is made three times (this class's own header comment,
-	 * {@code render}'s "Never invisible, for the reason segment 1 is not", ADR Decision 65's "the two
+	 * {@code render}'s "Never invisible, for the reason segment 1 is not", ADR Decision 66's "the two
 	 * patient-specific segments consult no budget") and was, before this case, enforced by nothing:
 	 * inserting a budget test ahead of {@code shown.add(piece)} in the segment-2 loop left the whole
 	 * suite green. Built from the real shipped knowledge base rather than a fixed name list, so a KB

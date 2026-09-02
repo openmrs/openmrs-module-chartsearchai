@@ -2476,7 +2476,7 @@ public class DrugReferenceInjector {
 			// is what "never invisible" means — and this one adds at most one note on top. So a chart
 			// with many of an entry's own partners on it overshoots by however many those are, and none
 			// of them is withheld — that is the same trade segment 1 has always made, extended to a
-			// second segment. ADR Decision 65 carries the measurement and the arrangement it was taken
+			// second segment. ADR Decision 66 carries the measurement and the arrangement it was taken
 			// on. What is bounded by the budget is the general material, which is this segment's
 			// business alone.
 			if (tailStart == 0) {

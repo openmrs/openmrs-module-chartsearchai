@@ -49,8 +49,8 @@ public class InjectedInteractionRelevanceOrderTest {
 
 	/**
 	 * The excerpt's Metformin x Fluconazole row is {@code Unknown} with mechanism id {@code -1}, i.e.
-	 * no mechanism text — the shape the ticket is about — and it sits at dataset position 13 of
-	 * Metformin's fifteen partners, behind six Moderate rows carrying full mechanism paragraphs.
+	 * no mechanism text — the shape the ticket is about — and the entry's own partner order puts it
+	 * behind six Moderate rows carrying full mechanism paragraphs, near the end of Metformin's fifteen.
 	 */
 	private static final String SUB_FLOOR_PARTNER = "fluconazole";
 

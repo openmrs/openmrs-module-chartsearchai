@@ -77,7 +77,7 @@ public class InjectedInteractionRelevanceOrderContextTest extends BaseModuleCont
 		// is the only arrangement that can tell the two apart, and without this case adding the sort
 		// leaves the whole suite green while the javadoc says it is absent.
 		//
-		// Lisinopril files Sertraline (Unknown) at dataset position 3 and Digoxin (Moderate) at 11, so
+		// Lisinopril's own partner order puts Sertraline (Unknown) ahead of Digoxin (Moderate), so
 		// dataset order and severity order disagree about which of them comes first. Sertraline leads
 		// and therefore carries the full note; a severity re-sort would hand both to Digoxin.
 		Context.getAdministrationService().setGlobalProperty(

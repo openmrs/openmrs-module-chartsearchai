@@ -41,9 +41,10 @@ package org.openmrs.module.chartsearchai.reference;
  * question, "can I give this patient X?". Until #356 that shape published no statement at all, so a
  * completed negative screen and a question nobody screened were one value on the wire.
  *
- * <p><b>"One drug" is what the clinician typed, not what the dataset resolved</b>, and the two come
- * apart on the shipped knowledge base. A name that resolves to SEVERAL reference entries — a
- * substance filed under more than one row, {@code Dexamethasone} beside
+ * <p><b>Which arm owns the field is decided by how many reference entries the question RESOLVED,
+ * not by how many drugs a clinician would say it named</b>, and the two come apart on the shipped
+ * knowledge base. A name that resolves to SEVERAL reference entries — a substance filed under more
+ * than one row, {@code Dexamethasone} beside
  * {@code Dexamethasone (ophthalmic)}, or an alias family sharing an {@code rxnorm_name} — opens the
  * question-pair arm, which then owns this field and states its own pair count. The drug-in-play arm
  * still raises its chips, and they are not in that number. So a response CAN carry an above-floor

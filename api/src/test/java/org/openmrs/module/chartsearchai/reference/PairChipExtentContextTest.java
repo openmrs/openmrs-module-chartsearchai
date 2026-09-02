@@ -317,8 +317,8 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void aQuestionThatRunsNeitherPairwiseArmStatesNothing() {
 		// Absence means the producer measured nothing, never that the screen was complete. This
-		// question names one reference drug — too few for the question-pair arm — and does not ask to
-		// be screened, so neither pairwise arm enumerates a candidate list to state the extent of.
+		// question resolves too few reference entries for the question-pair arm and does not ask to be
+		// screened, so neither pairwise arm enumerates a candidate list to state the extent of.
 		// Since issue #356 the drug-in-play arm can state one on this question shape, and what keeps
 		// this arrangement silent is the chart: it records no medication, so there was nothing to
 		// screen warfarin against. See aDrugInPlayArmWithNoMedicationToScreenAgainstStatesNothing,

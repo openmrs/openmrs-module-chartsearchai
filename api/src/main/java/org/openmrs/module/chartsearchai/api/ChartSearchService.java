@@ -417,7 +417,7 @@ public interface ChartSearchService {
 		 * ANSWER named and class chips this counts nowhere, so counting them answers a different
 		 * question. That arm states this too since issue
 		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/356">#356</a>, for
-		 * the one-drug prescribing question neither pairwise arm runs on.
+		 * the prescribing question, where neither pairwise arm ran.
 		 *
 		 * @return the statement, or {@code null} where the interaction check made none —
 		 *         {@link PairChipExtent} is canonical for what that covers, and for why {@code null}

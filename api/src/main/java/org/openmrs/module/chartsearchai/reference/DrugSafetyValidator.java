@@ -6725,9 +6725,11 @@ public class DrugSafetyValidator {
 		// stronger RANK across its rows — so a sibling row's higher-ranked sentence replaces the
 		// in-play row's and, keyed on the row, would bring "a medication this patient is already
 		// taking" into a finding about a drug the question PROPOSED. Reproduced through the real
-		// injectRecords over drug-reference-rule-rows-rank-crossing.json; the chip's unit is the
-		// substance (issues #162, #206), so the referent's is too. A per-call local for issue #172's
-		// reason, and computed once rather than per order.
+		// injectRecords over drug-reference-rule-rows-rank-crossing.json and pinned by
+		// CurrentMedicationFindingStrengthTest
+		// .aSiblingRowOfAProposedSubstanceDoesNotMakeItsFindingAboutCurrentTherapy; the chip's unit is
+		// the substance (issues #162, #206), so the referent's is too. A per-call local for issue
+		// #172's reason, and computed once rather than per order.
 		Set<Object> inPlaySubstances = new HashSet<Object>();
 		for (DrugReference played : inPlay) {
 			inPlaySubstances.add(played.substanceGroupKey());
@@ -6758,8 +6760,6 @@ public class DrugSafetyValidator {
 			// strength of the question's wording — hedging a clause a recorded allergy really does
 			// support. The narrowing below is about which allergy records may SPEAK in this response;
 			// this is about what the chart holds, and the two are different questions.
-			// The same answer on both legs of this arm, whichever side of the contraindication the
-			// response is about: `ref` is drawn from orderEntries either way (issue #348).
 			addContraindications(chips, ref, context, askedAbout, allergicSubstances, currentMedication);
 			addAllergyContraindications(chips, ref, allergensAskedAbout, currentMedication);
 		}

@@ -447,6 +447,26 @@ public final class DrugReferenceTestSupport {
 		return texts;
 	}
 
+	/**
+	 * The chart-order bridge clause of one rendered finding, without its lead — or null where the
+	 * finding carries none (issues #349, #347).
+	 *
+	 * <p>Shared rather than declared per file, for the reason {@link #findingTexts} gives about
+	 * itself: WHERE the clause sits inside a finding is {@code DrugReferenceInjector.renderFinding}'s
+	 * decision, so two extractors would have to be moved together, and the one left behind would go
+	 * on asserting against a slice that is no longer the clause. Read off the production constants at
+	 * both ends, so this cannot pass against a clause no record carries.
+	 */
+	static String bridgeOf(String finding) {
+		String lead = DrugReferenceInjector.FINDING_CHART_ORDER_LEAD;
+		int at = finding.indexOf(lead);
+		if (at < 0) {
+			return null;
+		}
+		int end = finding.indexOf(DrugReferenceInjector.STRENGTH_WITHHOLD, at);
+		return finding.substring(at + lead.length(), end < 0 ? finding.length() : end);
+	}
+
 	/** The real WHO ATC sample fixture (parsed by the real {@link AtcDrugReferenceSource#parse}). */
 	static final String ATC_SAMPLE = "atc/atc-sample.tsv";
 

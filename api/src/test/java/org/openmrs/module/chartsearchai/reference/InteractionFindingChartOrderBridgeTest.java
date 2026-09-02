@@ -140,12 +140,7 @@ public class InteractionFindingChartOrderBridgeTest {
 
 	/** @return the bridge clause of {@code finding}, without its lead — or null where it carries none. */
 	private static String bridgeOf(String finding) {
-		int at = finding.indexOf(LEAD);
-		if (at < 0) {
-			return null;
-		}
-		int end = finding.indexOf(WITHHOLD, at);
-		return finding.substring(at + LEAD.length(), end < 0 ? finding.length() : end);
+		return DrugReferenceTestSupport.bridgeOf(finding);
 	}
 
 	@Test

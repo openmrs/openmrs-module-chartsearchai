@@ -103,11 +103,13 @@ public class SafetyWarning {
 	/**
 	 * As the constructor above, for a chip that also states which of the patient's own orders its
 	 * substances were resolved from — see {@link #chartOrderBridges()}, which is published as this
-	 * chip's {@code chartOrders} wire key (issue #347).
+	 * chip's {@code chartOrderBridges} wire key (issue #347).
 	 *
-	 * <p>Public because this class is the DTO a {@code /search} consumer reads, carried on
-	 * {@code ChartSearchService.ChartAnswer}, and this is the one field of it a caller could not
-	 * otherwise set. It is not the production path: {@code DrugSafetyValidator.interactionWarning}
+	 * <p>Public because the bridges are now a WIRE field and the test that pins their serialization
+	 * lives in the {@code web.rest} package, which cannot reach {@code interaction(..)} below — that
+	 * factory already answers "build a chip carrying bridges" but is package-private in this one. The
+	 * reason is the caller's PACKAGE, not that a consumer READS the DTO, which an earlier draft of this
+	 * paragraph gave and which does not carry a constructor. It is not the production path: {@code DrugSafetyValidator.interactionWarning}
 	 * builds a chip that also carries a reconciled partner name and a folded relationship, so it takes
 	 * the private constructor below. Nothing here is an impossible pair — the reason issue #298 gave a
 	 * FACTORY to the contraindication shape rather than widening a constructor does not reach this
@@ -236,7 +238,7 @@ public class SafetyWarning {
 	 * {@code DrugSafetyValidator}'s to state, and {@code SubstanceSubjects}' javadoc states it,
 	 * exemptions and residues included. Do not re-derive that list here — it has moved.
 	 *
-	 * <p>What distinguishes one warning from another is {@link #getDetail()}: of the four fields a
+	 * <p>What distinguishes one warning from another is {@link #getDetail()}: of the fields a
 	 * client receives, it is the one that tells warnings about a single substance apart, because it
 	 * names the interacting order, the allergen or the ceiling that particular finding is about. Since
 	 * issue #340 {@link #getSeverity()} travels beside it on the wire and may differ too —
@@ -548,7 +550,9 @@ public class SafetyWarning {
 	 * scoping argument — attribution to the orders the PASS used and not to every carrier of the code —
 	 * lives on {@code DrugSafetyValidator.chartOrderBridges}. Not restated here.
 	 *
-	 * <p><b>Serialized since issue #347, as each chip's own {@code chartOrders} key</b>, and that
+	 * <p><b>Serialized since issue #347, as each chip's own {@code chartOrderBridges} key</b> — named
+	 * for this accessor because the wire guard requires it, see
+	 * {@code ChartSearchAiRestController.serializeSafetyWarnings} — and that
 	 * issue is why: a prompt record reaches a client only if the MODEL cites it, so the correspondence
 	 * between the name a chip prints and the prescription it came from has to be stated
 	 * deterministically as well — the settlement issue #354 reached for the class note, one step
@@ -571,13 +575,17 @@ public class SafetyWarning {
 	 * One substance this chip names, and one active order of this patient's that the module resolved it
 	 * from — the pair {@code DrugReferenceInjector.FINDING_CHART_ORDER_LEAD}'s items are rendered from.
 	 *
-	 * <p>A value class with {@link #equals} and {@link #hashCode}. <b>{@code equals} has two readers</b>
-	 * — {@code DrugSafetyValidator.addChartOrderBridge}'s {@code out.contains(bridge)}, an
-	 * {@code ArrayList}, so that resolves to {@code equals} and never to {@code hashCode}; and, since
-	 * issue #347 published this list, the {@code List.equals} inside
-	 * {@code ChartSearchAiSafetyWarningSeverityWireTest}'s accessor-versus-key comparison.
-	 * {@code hashCode} has NO reader (Jackson serializes through the getters below, not through
-	 * either) and is here only to hold the contract with {@code equals}. The first reader is the
+	 * <p>A value class with {@link #equals} and {@link #hashCode}. <b>{@code equals} has ONE reader
+	 * that is exercised</b>: {@code DrugSafetyValidator.addChartOrderBridge}'s
+	 * {@code out.contains(bridge)} — an {@code ArrayList}, so that resolves to {@code equals} and never
+	 * to {@code hashCode}. Since issue #347 published this list there is a second POTENTIAL reader,
+	 * {@code ChartSearchAiSafetyWarningSeverityWireTest}'s accessor-versus-key comparison, whose
+	 * {@code Objects.equals} falls through to {@code AbstractList.equals}; it is NOT exercised, because
+	 * every chip in that test's fixture bridges nothing and two empty lists compare equal without
+	 * touching an element. Said this way round because an earlier draft of this paragraph claimed the
+	 * second reader and a mutation refuted it. {@code hashCode} has NO reader (Jackson serializes
+	 * through the getters below, not through either) and is here only to hold the contract with
+	 * {@code equals}. The exercised reader is the
 	 * de-duplication that makes two orders of one display state their substance once, pinned by
 	 * {@code InteractionFindingChartOrderBridgeTest.twoOrdersOfTheSameDisplayAreNamedOnce}. Said
 	 * precisely because an earlier draft named the chip COLLAPSE as the reason and that is false (it
@@ -590,7 +598,8 @@ public class SafetyWarning {
 	 * <p>Both fields are strings a record PRINTS. {@code substance} is the name the chip already
 	 * says — never a second answer to which name to print — and {@code orderDisplay} is the order's own
 	 * display, which is the string a chart record of that order carries wherever the order has a drug
-	 * row ({@code DrugSafetyValidator.displaysANameOfAny} records the one shape where it does not).
+	 * row WITH A NON-BLANK NAME — querystore falls back to the concept where it does not, and
+	 * {@code DrugSafetyValidator.displaysANameOfAny} records the shapes that diverge there.
 	 *
 	 * <p><b>{@link #toString()} is the only reader that PRINTS them as one string</b>, and the
 	 * PROMPT-side renderer must keep taking that spelling, so that the pair a debug dump prints and

@@ -1249,12 +1249,17 @@ public class ChartSearchAiRestController {
 	 *
 	 * <p>Two fields rather than a rendered sentence, for the same reason {@code severity} above is
 	 * published at all: the alternative is a client parsing English. The list is always
-	 * present and is EMPTY where the module bridged nothing — which is a statement ("every substance
-	 * this chip names is one the chart's own records spell"), not an absence, because
-	 * {@link SafetyWarning#chartOrderBridges()} is resolved for every chip and never null. A chip that
-	 * is not an interaction, and an interaction chip built outside
-	 * {@code DrugSafetyValidator.interactionWarning}, bridge nothing at all — that residue is ADR
-	 * Decision 64's, unchanged by publishing it.
+	 * present and is EMPTY where the module bridged nothing. <b>Empty says "no attribution to show",
+	 * and NOT "the chart records these substances"</b> — an earlier draft of this paragraph and of
+	 * README said the latter, and it is false in the commonest case: on the prescribing question the
+	 * chip is about a drug the QUESTION named, which resolves from no active order, so
+	 * {@code DrugSafetyValidator.addChartOrderBridge}'s {@code resolvesFromAny} conjunct refuses every
+	 * order and the array is empty for a substance the chart spells nowhere. Rendering that as "the
+	 * chart already records it" would tell a clinician she is on a drug she is not — issue #347's own
+	 * confusion inverted, inside the field added to fix it. Other empty cases exist (a chip that is
+	 * not an interaction, a class-only or question-pair chip, an order the module could read no name
+	 * for, a chart with no active medication), and the list is deliberately not offered as
+	 * exhaustive.
 	 */
 	private List<Map<String, Object>> serializeSafetyWarnings(List<SafetyWarning> warnings) {
 		List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
@@ -1267,7 +1272,18 @@ public class ChartSearchAiRestController {
 			map.put("drug", warning.getDrug());
 			map.put("detail", warning.getDetail());
 			map.put("severity", warning.getSeverity());
-			map.put("chartOrderBridges", warning.chartOrderBridges());
+			// Copied into an ArrayList, and that is a correctness requirement rather than caution —
+			// serializeReferences above copies for its own reason and this is a second one. The
+			// blocking /search response is a ResponseEntity<Object> served by openmrs-core's two
+			// converters (webservices.rest leaves <mvc:annotation-driven/> commented out), and for
+			// `Accept: application/xml` the second one is selected: an XStreamMarshaller, which cannot
+			// marshal java.util.Collections' immutable wrappers under a modular JDK ("module java.base
+			// does not opens java.util"). chartOrderBridges() returns an unmodifiableList, or
+			// Collections$EmptyList in the common empty case, so publishing it as handed turned every
+			// chip-carrying XML response into a 500 — the empty case included.
+			// ChartSearchAiChartOrderBridgeTest.theWholePayloadStillMarshalsForAnXmlClient pins it.
+			map.put("chartOrderBridges",
+				new ArrayList<SafetyWarning.ChartOrderBridge>(warning.chartOrderBridges()));
 			out.add(map);
 		}
 		return out;

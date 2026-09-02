@@ -14,9 +14,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
+import java.io.StringWriter;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -30,6 +30,9 @@ import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.oxm.xstream.XStreamMarshaller;
+
+import javax.xml.transform.stream.StreamResult;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -95,13 +98,6 @@ public class ChartSearchAiChartOrderBridgeTest {
 		openmrsContext.restore();
 	}
 
-	private static Patient patient() {
-		Patient p = new Patient();
-		p.setPatientId(7);
-		p.setUuid("uuid-7");
-		return p;
-	}
-
 	/** The ticket's chip: it names the KB substance, and the answer beside it names the brand. */
 	private ChartSearchService.ChartAnswer answer() {
 		return new ChartSearchService.ChartAnswer(
@@ -116,11 +112,8 @@ public class ChartSearchAiChartOrderBridgeTest {
 	/** The {@code /search} response body. */
 	@SuppressWarnings("unchecked")
 	private Map<String, Object> searchPayload() {
-		Map<String, String> body = new HashMap<String, String>();
-		body.put("patient", RestControllerContext.PATIENT_UUID);
-		body.put("question", "Is aspirin safe for her?");
-
-		ResponseEntity<Object> response = controller.search(body);
+		ResponseEntity<Object> response =
+				controller.search(RestControllerContext.searchBody("Is aspirin safe for her?"));
 		assertEquals(HttpStatus.OK, response.getStatusCode(), "the handler must have reached serialization");
 		Map<String, Object> payload = (Map<String, Object>) response.getBody();
 		assertNotNull(payload, "no response body");
@@ -190,7 +183,7 @@ public class ChartSearchAiChartOrderBridgeTest {
 		// come from whatever mapper serializes it later, while the SSE path writes real bytes through
 		// the controller's own ObjectMapper. The /search cases assert what the payload carries; this
 		// one asserts what comes out.
-		controller.streamAnswer(out, patient(), "Is aspirin safe for her?", new User(3), false);
+		controller.streamAnswer(out, RestControllerContext.patient(), "Is aspirin safe for her?", new User(3), false);
 		JsonNode bridge = streamedChartOrderBridges("done").get(0);
 
 		assertEquals(2, bridge.size(),
@@ -213,7 +206,7 @@ public class ChartSearchAiChartOrderBridgeTest {
 
 	@Test
 	public void theDoneEventSaysItToo() throws Exception {
-		controller.streamAnswer(out, patient(), "Is aspirin safe for her?", new User(3), false);
+		controller.streamAnswer(out, RestControllerContext.patient(), "Is aspirin safe for her?", new User(3), false);
 
 		assertEquals(ORDER_DISPLAY,
 				streamedChartOrderBridges("done").get(0).get("orderDisplay").asText());
@@ -223,10 +216,46 @@ public class ChartSearchAiChartOrderBridgeTest {
 	public void theTrailingGroundedEventSaysItToo() throws Exception {
 		// With async grounding the chips arrive on `grounded`, so that is the event a client rendering
 		// chips has to read — the same reason ChartSearchAiInteractionPairExtentTest checks it.
-		controller.streamAnswer(out, patient(), "Is aspirin safe for her?", new User(3), true);
+		controller.streamAnswer(out, RestControllerContext.patient(), "Is aspirin safe for her?", new User(3), true);
 
 		assertEquals(SUBSTANCE,
 				streamedChartOrderBridges("grounded").get(0).get("substance").asText());
+	}
+
+	@Test
+	public void theWholePayloadStillMarshalsForAnXmlClient() throws Exception {
+		// The one break this change introduced, and the only path no other test in this repo covers.
+		// The blocking /search response is a ResponseEntity<Object> served by openmrs-core's two
+		// converters (webservices.rest leaves <mvc:annotation-driven/> commented out), so for
+		// `Accept: application/xml` the selected one is an XStreamMarshaller — and XStream cannot
+		// marshal java.util.Collections' immutable wrappers under a modular JDK ("module java.base
+		// does not opens java.util"). chartOrderBridges() returns an unmodifiableList, or
+		// Collections$EmptyList in the common empty case, so publishing it AS HANDED turned every
+		// chip-carrying XML response into a 500 — the empty case included, which is most of them.
+		//
+		// Driven through the REAL marshaller rather than an imitation of it, for the reason
+		// QuerystoreOrderTextMarkerTest gives about querystore's serializer: keying a wire contract on
+		// another component's behaviour is fragile in the worst way if nothing here exercises it.
+		// Mutate the controller back to publishing the accessor's list and this reddens; nothing else
+		// does.
+		assertMarshals(searchPayload(), "a populated chip");
+
+		bridges = Collections.<SafetyWarning.ChartOrderBridge> emptyList();
+		assertMarshals(searchPayload(), "a chip with no attributions, which is the common case");
+	}
+
+	private static void assertMarshals(Map<String, Object> payload, String what) throws Exception {
+		XStreamMarshaller marshaller = new XStreamMarshaller();
+		marshaller.afterPropertiesSet();
+		try {
+			marshaller.marshal(payload, new StreamResult(new StringWriter()));
+		}
+		catch (Exception e) {
+			throw new AssertionError("the /search payload must marshal to XML for " + what
+					+ " — an XStreamMarshaller is the converter openmrs-core selects for "
+					+ "Accept: application/xml, and it cannot marshal Collections' immutable wrappers "
+					+ "(issue #347). Publish a copy, not the accessor's list. Cause: " + e, e);
+		}
 	}
 
 	@Test

@@ -3418,7 +3418,8 @@ public class DrugSafetyValidator {
 	 * counts the rule chips that survived this ledger — and, through {@code ChartSearchAiUtils.resourceKey}, whether two injected
 	 * findings share one resource uuid. A bridge must not be able to decide which chips EXIST. That
 	 * reason used to be stated as "keying on a prompt-only clause would let it decide wire content",
-	 * which issue #347 falsified by publishing the bridges as each chip's {@code chartOrders} key; the
+	 * which issue #347 falsified by publishing the bridges as each chip's {@code chartOrderBridges}
+	 * key; the
 	 * emission argument is the one that survives it. A collapsed chip carries the SURVIVOR's bridge,
 	 * which is the same residue this
 	 * javadoc already accepts one paragraph up ("what it gives up is WHICH constituent"). ADR
@@ -5238,7 +5239,7 @@ public class DrugSafetyValidator {
 	 * {@link SafetyWarning#chartOrderBridges()}'s only production reader was
 	 * {@code DrugReferenceInjector.chartOrderClause}, reached only from {@code preAnswerFindings}. The
 	 * POST-answer pass's bridges are now what {@code ChartSearchAiRestController} publishes as each
-	 * chip's {@code chartOrders}, so the ~13 ms per pass is spent twice and read twice. The collapse
+	 * chip's {@code chartOrderBridges}, so the ~13 ms per pass is spent twice and read twice. The collapse
 	 * key still deliberately does not read it, for the reason that accessor gives. <b>The per-subject
 	 * hoist was implemented and declined</b>, not guessed at: order-preserving, output-identical over
 	 * the whole suite, and worth 2 ms at 40 orders and 27 ms at 80. Do not re-derive it; ADR Decision
@@ -5384,16 +5385,23 @@ public class DrugSafetyValidator {
 	 *         it: {@link #resolvesFromAny} beside it is what makes the attribution true, and this
 	 *         conjunct only ever decided whether saying it was worth the record's budget.
 	 *
-	 *         <p><b>Residue, in the one shape where the display is not what a record renders.</b>
+	 *         <p><b>Residue: TWO shapes where the display is not what a record renders, both on the
+	 *         rungs below a drug row with a non-blank name.</b>
 	 *         {@code PatientClinicalContextBuilder} reads the drug row's name, then
 	 *         {@code drugNonCoded}, then the concept's, and the display is the first of those it
-	 *         found (issue #293) — so for an order with no drug row and free text written in its
-	 *         place, the display is that free text while querystore renders the concept's preferred
-	 *         name. A bridge can then name the order by a string its {@code drug_order} record does
-	 *         not show. The claim stays true, and the substance stays citable in that shape because
-	 *         the record spells it; what the reader may not find is the right-hand side. Named rather
-	 *         than machined around: the alternative is a second field mirroring another module's
-	 *         choice of display name, and {@link
+	 *         found (issue #293); querystore takes the drug row's name where non-blank and otherwise
+	 *         the concept's. So (a) an order with no drug-row name and free text written in its place
+	 *         is displayed by that free text here and by the concept's preferred name there; and
+	 *         (b) on the CONCEPT rung the two modules read the concept name through DIFFERENT
+	 *         accessors resolved in different contexts — {@code Concept.getName()} under the
+	 *         requesting user's session here, querystore's {@code ConceptNameUtil.getPreferredName}
+	 *         at index time there — so a multi-locale deployment can diverge with no free text
+	 *         involved at all. An earlier draft of this paragraph said "the one shape" and named only
+	 *         (a). In both, a bridge can name the order by a string its {@code drug_order} record does
+	 *         not show. The claim stays true, and the substance stays citable because the record
+	 *         spells the SUBSTANCE either way; what the reader may not find is the right-hand side.
+	 *         Named rather than machined around: the alternative is a second field mirroring another
+	 *         module's choice of display name, and {@link
 	 *         PatientClinicalContext.ActiveDrugOrder#getDisplay()} already documents itself as the
 	 *         name "a record renders".
 	 */

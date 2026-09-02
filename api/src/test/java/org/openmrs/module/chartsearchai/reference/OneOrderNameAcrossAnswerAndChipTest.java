@@ -63,16 +63,12 @@ public class OneOrderNameAcrossAnswerAndChipTest {
 	private static final String SCREENING_QUESTION =
 			"Are any of his current medications interacting with each other?";
 
-	/** Read off production, so no case here can pass against a clause no record carries. */
-	private static final String LEAD = DrugReferenceInjector.FINDING_CHART_ORDER_LEAD;
-
-	private static final String WITHHOLD = DrugReferenceInjector.STRENGTH_WITHHOLD;
-
 	/**
-	 * The ticket's chart. One order the chart names only by its brand, whose CONCEPT name is a
-	 * substance name the module records — {@code Advil 400mg} on concept {@code Ibuprofen} — and one
-	 * whose own display reaches its substance, {@code Aspirin 81mg} on concept
-	 * {@code Acetylsalicylate sodium}.
+	 * The ticket's chart in this fixture's own vocabulary — the class javadoc above says what stands
+	 * in for what. One order the chart names only by its brand, whose CONCEPT name is a substance name
+	 * the module records ({@code Coagubrand} on concept {@code Warfarin}, standing in for the ticket's
+	 * {@code Advil 400mg} on {@code Ibuprofen}), and one whose own display reaches its substance
+	 * ({@code Aspirin 81mg}, which is the ticket's own order).
 	 */
 	private static PatientClinicalContext ticketChart() {
 		return DrugReferenceTestSupport.ctx(60, null,
@@ -111,16 +107,6 @@ public class OneOrderNameAcrossAnswerAndChipTest {
 		return findings.get(0);
 	}
 
-	/** @return the bridge clause of {@code finding} without its lead, or null where it carries none. */
-	private static String bridgeOf(String finding) {
-		int at = finding.indexOf(LEAD);
-		if (at < 0) {
-			return null;
-		}
-		int end = finding.indexOf(WITHHOLD, at);
-		return finding.substring(at + LEAD.length(), end < 0 ? finding.length() : end);
-	}
-
 	@Test
 	public void aSubstanceTheChartNamesOnlyByABrandIsBridgedToTheOrderItCameFrom() throws Exception {
 		// #347 itself. The finding names Warfarin; every chart record of that prescription says
@@ -129,7 +115,7 @@ public class OneOrderNameAcrossAnswerAndChipTest {
 		// answer-versus-chip split.
 		String finding = onlyFinding();
 
-		assertEquals("Warfarin from Coagubrand.", bridgeOf(finding),
+		assertEquals("Warfarin from Coagubrand.", DrugReferenceTestSupport.bridgeOf(finding),
 			"the brand-named order must be bridged to the substance the chip names it by, was: "
 					+ finding);
 	}
@@ -155,7 +141,7 @@ public class OneOrderNameAcrossAnswerAndChipTest {
 		// states: Acetylsalicylic acid's rxnorm_name is aspirin, so the display "Aspirin 81mg" reaches
 		// it and the chart's own words therefore carry a name of it. A clause here would be noise in a
 		// record whose whole budget is evidence.
-		String bridge = bridgeOf(onlyFinding());
+		String bridge = DrugReferenceTestSupport.bridgeOf(onlyFinding());
 
 		assertNotNull(bridge, "the brand-named order is bridged, so there is a clause to bound");
 		assertFalse(bridge.contains("Aspirin"),

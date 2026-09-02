@@ -1481,7 +1481,7 @@ public class DrugReferenceInjector {
 	 * whether two injected findings share one resource uuid — a bridge must not be able to change
 	 * which chips exist. That reason used to be stated as "this clause is prompt-facing, and keying on
 	 * it would let it decide wire content"; since issue #347 the bridges ARE published, as each chip's
-	 * {@code chartOrders} key, and the reason above is the one that survives it. A collapsed chip
+	 * {@code chartOrderBridges} key, and the reason above is the one that survives it. A collapsed chip
 	 * therefore carries the survivor's bridge, on the wire as well as here, which is the same residue
 	 * ADR Decision 63 already accepts for that collapse ("what it gives up is WHICH constituent").
 	 * The chip's detail and its rank are

@@ -42,12 +42,13 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * which point #347's shape no longer exists and the silence test can widen back.
  *
  * <p><b>What it does not claim.</b> That the module's own {@code ActiveDrugOrder.getDisplay()} is
- * always the string rendered below. It is wherever the order has a drug row with a name, which is
- * this fixture's shape and the ticket's; the one divergence — an order with no drug-row name and
- * free text written in its place, where the module displays the free text and querystore renders the
- * concept's preferred name — is recorded as a residue on {@code displaysANameOfAny} and is not
- * pinned anywhere. The last case below is why that residue exists rather than being a second
- * rendering rule to mirror.
+ * always the string rendered below. It is wherever the order has a drug row with a non-blank name,
+ * which is this fixture's shape and the ticket's. Below that rung they can diverge in more than one
+ * way — free text the module can display and querystore never renders, and, on the concept rung, two
+ * different concept-name accessors resolved in different contexts — and
+ * {@code DrugSafetyValidator.displaysANameOfAny} records both as residues. Neither is pinned. The
+ * last two cases below are why those residues exist rather than being a second rendering rule to
+ * mirror.
  *
  * <p>The order is mutated in memory and never saved, exactly as
  * {@link QuerystoreOrderTextMarkerTest} does for the end-marker states.

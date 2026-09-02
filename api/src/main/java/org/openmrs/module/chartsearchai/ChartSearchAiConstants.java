@@ -664,8 +664,8 @@ public class ChartSearchAiConstants {
 	public static final String RESOURCE_TYPE_ACTIVE_DRUG_ORDER = "active_drug_order";
 
 	/**
-	 * The module's statement that the QUESTION named a drug CLASS the reference data is not indexed
-	 * by, injected pre-answer so the prompt carries what was NOT screened rather than nothing at all
+	 * The module's statement that the QUESTION named a drug CLASS no reference ENTRY is indexed by,
+	 * injected pre-answer so the prompt carries what was NOT screened rather than nothing at all
 	 * (issue #354).
 	 *
 	 * <p>Module-supplied reference prose like {@link #RESOURCE_TYPE_DRUG_REFERENCE}, and grouped with

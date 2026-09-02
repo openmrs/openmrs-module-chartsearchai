@@ -274,7 +274,7 @@
 	<globalProperty>
 		<property>chartsearchai.drugReference.injectFromQuery</property>
 		<defaultValue>true</defaultValue>
-		<description>Question-driven injection: when true, a reference entry whose alias appears in the clinician's query is injected into the chart. Requires chartsearchai.drugReference.enabled. Numeric dosing is rendered only when the patient's age falls in a published age band, so a pediatric maximum is never surfaced for an adult query; contraindication and interaction facts are rendered regardless of age. Since #354 this leg also covers the case where it resolves NOTHING: a query naming a drug class the reference data is not indexed by ("an oral contraceptive", "an NSAID") injects one drug_class_note record naming the class and stating that the class was not resolved to any substance, rather than leaving the module silent. Default: true.</description>
+		<description>Question-driven injection: when true, a reference entry whose alias appears in the clinician's query is injected into the chart. Requires chartsearchai.drugReference.enabled. Numeric dosing is rendered only when the patient's age falls in a published age band, so a pediatric maximum is never surfaced for an adult query; contraindication and interaction facts are rendered regardless of age. Since #354 this leg also covers the case where it resolves NOTHING: a query naming a drug class no reference entry is indexed by ("an oral contraceptive", "an NSAID") injects one drug_class_note record naming the class and stating that the class was not resolved to any substance, rather than leaving the module silent. Default: true.</description>
 	</globalProperty>
 
 	<globalProperty>

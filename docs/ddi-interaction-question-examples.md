@@ -118,7 +118,7 @@ Four fields of the response matter for these tests:
 | `answer` | the LLM's prose. **Not** the safety output — it is what the model made of the chart plus the injected findings |
 | `safetyWarnings` | the **deterministic** chips. Computed by `DrugSafetyValidator` from the chart and the knowledge base, with no model involvement. Each carries `type`, `drug`, `detail` and — since [#340](https://github.com/openmrs/openmrs-module-chartsearchai/issues/340) — a `severity` |
 | `interactionPairs` | `{"found": N, "reported": M}` — how many pairs the *pairwise* arms related and how many survived the chip cap ([#336](https://github.com/openmrs/openmrs-module-chartsearchai/issues/336)). `null` means no pairwise arm ran; `{"found":0}` means one ran and related nothing. **`null` is not completeness** |
-| `references` | the records the answer actually **cited** — `drug_order`, `allergy`, `condition`, `safety_finding`, `drug_reference`, and since [#354](https://github.com/openmrs/openmrs-module-chartsearchai/issues/354) `drug_class_note` for a question that names a drug class the reference data is not indexed by |
+| `references` | the records the answer actually **cited** — `drug_order`, `allergy`, `condition`, `safety_finding`, `drug_reference`, and since [#354](https://github.com/openmrs/openmrs-module-chartsearchai/issues/354) `drug_class_note` for a question that names a drug class no reference entry is indexed by |
 
 > **Judge the chips, not only the prose.** The chips are the tested, deterministic layer; the
 > prose is a small local model's rendering of it. Several examples below are cases where the

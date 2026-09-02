@@ -47,7 +47,8 @@ import org.springframework.stereotype.Service;
  *
  * <p>Since issue #354 one injected kind stands for no record at ALL — a
  * {@link ChartSearchAiConstants#RESOURCE_TYPE_DRUG_CLASS_NOTE} reports that the QUESTION named a
- * drug class this dataset is not indexed by, so there is nothing for a client to navigate to and its
+ * drug class no ENTRY of this dataset is indexed by, so there is nothing for a client to navigate to
+ * and its
  * {@code resourceUuid} names the class rather than a row. It is raised only where the question
  * resolved no substance, so it never appears beside a {@code drug_reference} record.
  *

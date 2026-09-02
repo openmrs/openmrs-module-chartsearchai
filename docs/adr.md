@@ -4329,8 +4329,9 @@ entailment NEGATIVE withheld — is keyed on the reference **group**, so the not
 set. What is new is not that a reference-group record can be injected on a question resolving no
 substance: the order-driven contraindication arm (#143) has done that since it shipped, pinned by
 `ActiveOrderContraindicationTest.theFindingReachesThePromptAsACitableRecord`, whose question is
-*"What are her current medications?"*. What is new is that one can now be injected on a question
-raising **no chip at all**. Driving the real `CitationGroundingVerifier.verify` with entailment on and the judge answering
+*"What are her current medications?"*. Nor is a reference-group record on a question raising no chip: a
+plain dose question already injects a `drug_reference` and raises none. What is new is the two
+together — a record on a question that resolves no substance AND raises no chip. Driving the real `CitationGroundingVerifier.verify` with entailment on and the judge answering
 "no": a chart citation reads `grounded=false` with no note in the chart, and `null` both when the
 note is co-cited in the same sentence and when it is cited only through the structured array with no
 inline marker — the unanchored path, which counts toward every claim. So a mis-attributed chart

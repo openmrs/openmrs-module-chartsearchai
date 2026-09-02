@@ -280,7 +280,7 @@ public class ChartSearchAiReferenceGroupTest {
 		expected.put("RESOURCE_TYPE_SAFETY_FINDING", ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE);
 
 		// Issue #354. Module-supplied prose about the QUESTION — it names a drug class the reference
-		// data is not indexed by — so it points at no record of this patient and is reference material
+		// ENTRIES are not indexed by — so it points at no record of this patient and is reference material
 		// for the same reason a knowledge-base entry is.
 		expected.put("RESOURCE_TYPE_DRUG_CLASS_NOTE", ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE);
 		// Module-INJECTED but NOT module-supplied, the one combination this classification has to get

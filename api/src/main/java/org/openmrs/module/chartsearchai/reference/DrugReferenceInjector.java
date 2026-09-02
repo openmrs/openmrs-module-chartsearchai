@@ -148,10 +148,11 @@ public class DrugReferenceInjector {
 	 * the order of a hundred characters against the 1500 this branch used to spend.
 	 *
 	 * <p><b>What the suite does and does not decide about it</b> (measured 2026-09-02 by mutating this
-	 * line and running {@code mvn -o clean test -pl api} from clean). At 1 the suite reddens — the
-	 * entry-stripping argument above, made concrete. At 3, 4 and 5 it is green. So the suite bounds
-	 * the value from below somewhere under 3 and does not distinguish 3 from 5: do not read 5 as
-	 * pinned.
+	 * line and running {@code mvn -o clean install} from the repository root, from clean, once per
+	 * value). At 1 and at 2 the suite reddens — the entry-stripping argument above, made concrete. At
+	 * 3, 4 and 5 it is green. So the lowest value the suite admits is 3, and it does not distinguish 3
+	 * from 5: do not read 5 as pinned. An earlier wording of this paragraph put the bound "somewhere
+	 * under 3", inferred from the one value between 1 and 3 that it had not run.
 	 *
 	 * <p><b>Mutate the line and read the failures; do not trust a list of them.</b> An earlier version
 	 * of this paragraph enumerated the cases, and the enumeration went stale inside this very change —
@@ -165,18 +166,24 @@ public class DrugReferenceInjector {
 	 * <p><b>A consequence outside this class, measured and not closed.</b> The compact form fits MORE
 	 * partner names into a much smaller record — measured through the real {@code injectRecords} over
 	 * the bundled 16-drug DDInter excerpt, an unpromoted Ibuprofen record went from naming 2 partners
-	 * in 1432 characters to naming 5 in 193 — and every name in a cited
-	 * record is part of the corpus {@code DrugSafetyValidator.isEchoOfCitedRecord} treats as something
-	 * the model may merely have repeated back (issue #105). So a mention that used to be read as a
-	 * proposal can now be read as an echo: measured on that excerpt, a patient allergic to warfarin
+	 * in 1432 characters to naming 5 in 193 — and every name in a record this module INJECTED is part
+	 * of the corpus {@code DrugSafetyValidator.isEchoOfAttributableRecord} treats as something the
+	 * model may merely have repeated back (issue #105). <b>That corpus is not citation-gated</b>:
+	 * since issue #360 it is every recitable reference record in the chart whether the answer cited it
+	 * or not ({@code DrugSafetyValidator.isRecitableReferenceMaterial}), so the widening recorded here
+	 * reaches an uncited answer too. So a mention that used to be read as a proposal can now be read
+	 * as an echo: measured on that excerpt, a patient allergic to warfarin and on no active order
 	 * asked "Can she take ibuprofen?" with the answer "Ibuprofen interacts with warfarin [2]" raised a
 	 * recorded-allergy contraindication chip before this change and raises none after, because the
-	 * tail now names warfarin. That is issue #105's contract rather than a gap opened here, and it IS
-	 * pinned — {@code ActiveOrderContraindicationTest.aRecitedPartnerThePatientIsNotTakingGainsNoContraindicationCheck}
-	 * asserts exactly that shape, a drug the patient is allergic to but not taking, recited out of the
-	 * cited record, raising no chip. What issue #355 changes is only which drugs the record names, so
-	 * the contract reaches more of them. Recorded because the widening is this change's, and because
-	 * issue #360 owns what a recited name should raise; do not read it as an unpinned loss.
+	 * tail now names warfarin — and re-measured on the merged head (2026-09-02), the answer without
+	 * the bracket raises none either, which is issue #360's doing rather than this change's. That is
+	 * issue #105's contract rather than a gap opened here, and it IS pinned —
+	 * {@code ActiveOrderContraindicationTest.aRecitedPartnerThePatientIsNotTakingGainsNoContraindicationCheck}
+	 * asserts exactly that shape, a drug the patient is allergic to but not taking, recited out of an
+	 * injected record, raising no chip. What issue #355 changes is only which drugs the record names,
+	 * so the contract reaches more of them. Recorded because the widening is this change's; issue #360
+	 * is closed and its fix is on main, so this is a settled contract rather than a deferral — do not
+	 * read it as an unpinned loss.
 	 *
 	 * <p>One more consequence for a reader of the audit table: {@code reference_slice_chars} falls
 	 * sharply for an unpromoted record, so rows either side of this change are not comparable in that
@@ -2018,7 +2025,8 @@ public class DrugReferenceInjector {
 	 * fire, and the two ends of that argument read the SAME pair of fields: the flag is
 	 * {@code reconciledPartnerNoteName != null}, which falls back to
 	 * {@link DrugSafetyValidator#partnerLabel} — a {@code firstNonBlank(token, atc)}, so null exactly
-	 * when both are absent — while {@link #promotable} requires
+	 * when neither field yields a non-blank string, which is a BLANK one as much as an absent one —
+	 * while {@link #promotable} requires
 	 * {@link PatientClinicalContext#hasActiveDrug}, whose name arm skips a blank token and whose last
 	 * line is an ATC lookup that fails on an absent code. A rule this key demotes is therefore one
 	 * {@code hasActiveDrug} answers false for, so it was never promotable, and it can carry no chip
@@ -2059,16 +2067,30 @@ public class DrugReferenceInjector {
 		final int severityPriority;
 
 		/** Whether {@link DrugSafetyValidator#partnerLabel} gave this rule a name — a token, else an
-		 *  ATC code. False only for an operator-authored rule carrying neither, which is also the only
-		 *  rule whose {@link #compact} form is its whole mechanism paragraph. Recorded here rather
-		 *  than re-derived by comparing {@code compact} to {@code full}, which coincide for a second
-		 *  reason as well: a row carrying a severity but no mechanism text renders full as just its
-		 *  name, and {@code name (Severity)} is longer than that, so the never-grow guard in
-		 *  {@link #orderedInteractionNotes} resets {@code compact} to it — while the row DOES name its
-		 *  partner. The derived form is therefore wrong in the direction that loses a named partner
-		 *  out of the record; make the substitution and read the failures, of which
-		 *  {@code DrugReferenceInjectorTest.aRatedRowWithNoMechanismTextStillCountsAsNamingItsPartner}
-		 *  is one. See {@link #SEVERITY_DESCENDING}. */
+		 *  ATC code. False for a rule that method yields no name for, which is also the rule whose
+		 *  {@link #compact} form is its whole mechanism paragraph. That is a
+		 *  {@code firstNonBlank}, so it covers a token or code present but BLANK as much as an absent
+		 *  one — {@code DrugReference.Interaction.setToken} normalises nothing, so a JSON
+		 *  {@code "token": " "} arrives blank.
+		 *
+		 *  <p>Recorded here rather than re-derived, and the re-derivations that survive the whole
+		 *  build are the reason. Comparing {@code compact} to {@code full} fails because the two
+		 *  coincide for a SECOND reason: a row carrying a severity but no mechanism text renders full
+		 *  as just its name, and {@code name (Severity)} is longer than that, so the never-grow guard
+		 *  in {@link #orderedInteractionNotes} resets {@code compact} to it — while the row DOES name
+		 *  its partner. Reading one field of the pair ({@code firstNonBlank(i.getToken()) != null})
+		 *  drops the ATC arm, and reading their raw presence
+		 *  ({@code i.getToken() != null || i.getAtc() != null} — the inlining of {@code partnerLabel}
+		 *  minus its blank handling) reports a name for a row that method gives none for. So does the
+		 *  severity beside it ({@code severity != null}), which asks a different question entirely.
+		 *  Each of those either loses a named partner out of the record or lands a paragraph naming
+		 *  nobody in the slot the character budget cannot refuse. Make each substitution and read the
+		 *  failures, among them
+		 *  {@code DrugReferenceInjectorTest.aRatedRowWithNoMechanismTextStillCountsAsNamingItsPartner},
+		 *  {@code .anAtcNamedRowWithNoMechanismTextStillCountsAsNamingItsPartner},
+		 *  {@code .aNamelessRuleCarryingASeverityStillDoesNotDisplaceARowThatNamesItsPartner} and
+		 *  {@code .aBlankButPresentTokenStillDoesNotDisplaceARowThatNamesItsPartner}.
+		 *  See {@link #SEVERITY_DESCENDING}. */
 		final boolean namesItsPartner;
 
 		InteractionNote(String full, String compact, String severity, boolean namesItsPartner) {

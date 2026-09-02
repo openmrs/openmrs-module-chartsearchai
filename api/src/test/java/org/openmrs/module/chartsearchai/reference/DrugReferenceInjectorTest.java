@@ -768,6 +768,42 @@ public class DrugReferenceInjectorTest {
 						+ "a row LOST from the record rather than one merely reordered: " + section);
 	}
 
+	@Test
+	public void aBlankButPresentTokenStillDoesNotDisplaceARowThatNamesItsPartner() throws Exception {
+		// Issue #355, the fourth arm of the same key and the one review found last. The three cases
+		// above discriminate InteractionNote.namesItsPartner from !compact.equals(rendered), from
+		// firstNonBlank(i.getToken()) != null and from severity != null. This one discriminates it
+		// from the obvious inlining of DrugSafetyValidator.partnerLabel MINUS firstNonBlank's blank
+		// handling — i.getToken() != null || i.getAtc() != null — which, measured 2026-09-02 before
+		// this case existed, left the whole build green.
+		//
+		// partnerLabel is firstNonBlank(token, atc), so a token that is nothing but a space gives the
+		// rule NO name: compact falls back to the whole mechanism paragraph, exactly as for a row
+		// carrying no token field at all. A presence test on the raw fields answers true for it, so
+		// the paragraph is not demoted, and being unrated it outranks Major under severityPriority —
+		// it then takes the one slot the character budget cannot refuse and metformin leaves the
+		// record.
+		//
+		// Blank-but-present is a shape this module treats as real rather than as a typo:
+		// DrugReference.Interaction.setToken normalises nothing and drug-reference-malformed.json
+		// ships nameless rows, so a JSON "token": " " reaches partnerLabel as written. Mutate the
+		// constructor argument to the presence test and read the failures.
+		RecordMapping record = tailRecordOf(
+				"chartsearchai-test/drug-reference-unpromoted-tail-blank-token.json",
+				"is it safe to give blanktokenmix?");
+		String section = tailSectionOf(record);
+
+		assertTrue(section.toLowerCase().contains("metformin (moderate)"),
+				"the row that names a partner leads the tail: a token that is only whitespace names "
+						+ "nobody, and partnerLabel says so: " + section);
+		assertFalse(section.contains("LONGSTUB"),
+				"and the blank-tokened paragraph does not take the slot the budget cannot refuse: "
+						+ section);
+		assertEquals(1, record.getWithheldInteractions(),
+				"precondition: the budget cuts one of the two rows here, so a row losing its place is "
+						+ "a row LOST from the record rather than one merely reordered: " + section);
+	}
+
 	/** The only record a curated {@code fixture} injects for {@code question}, for a patient on
 	 *  nothing — the arrangement in which nothing is promoted and the interactions section is entirely
 	 *  the dataset tail. The record rather than its text, because a case about the tail's bounds also

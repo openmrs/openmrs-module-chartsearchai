@@ -1,0 +1,29 @@
+{
+  "version": "1.0",
+  "description": "Test fixture (issue #355): the BLANK-but-present half of DrugReferenceInjector.InteractionNote.namesItsPartner. It is drug-reference-unpromoted-tail-nameless.json with the nameless LONGSTUB row's token set to a single space. DrugSafetyValidator.partnerLabel is firstNonBlank(token, atc), which skips a blank, so the row still names no partner and its compact form is still its whole mechanism paragraph — but a presence test on the raw fields (token != null || atc != null) answers TRUE for it. Under that reading the unrated paragraph is hoisted to the head of the tail, where severityPriority already ranks unrated above Major, so it takes the one slot the character budget cannot refuse and the row that does name a partner leaves the record. DrugReference.Interaction.setToken performs no normalisation, so the blank reaches partnerLabel as written here. The two rows are deliberately of very different lengths so the substitution is visible in the record's own size.",
+  "entries": [
+    {
+      "id": "blanktokenmix-curated",
+      "name": "Blanktokenmix",
+      "drugClass": "Test fixture substance",
+      "aliases": [
+        "blanktokenmix"
+      ],
+      "atcCodes": [
+        "V99AA06"
+      ],
+      "interactions": [
+        {
+          "token": "metformin",
+          "severity": "Moderate",
+          "note": "Moderate. A short mechanism note about metformin."
+        },
+        {
+          "note": "Locally curated rule LONGSTUB. This operator-authored row carries a token that is nothing but a space, so ChartSearchAiUtils.firstNonBlank skips it and DrugSafetyValidator.partnerLabel returns null exactly as it does for a row carrying no token field at all; the row therefore names no partner and can never match one of the patient's own orders. Locally curated rule LONGSTUB. This operator-authored row carries a token that is nothing but a space, so ChartSearchAiUtils.firstNonBlank skips it and DrugSafetyValidator.partnerLabel returns null exactly as it does for a row carrying no token field at all; the row therefore names no partner and can never match one of the patient's own orders. Locally curated rule LONGSTUB. This operator-authored row carries a token that is nothing but a space, so ChartSearchAiUtils.firstNonBlank skips it and DrugSafetyValidator.partnerLabel returns null exactly as it does for a row carrying no token field at all; the row therefore names no partner and can never match one of the patient's own orders. Locally curated rule LONGSTUB. This operator-authored row carries a token that is nothing but a space, so ChartSearchAiUtils.firstNonBlank skips it and DrugSafetyValidator.partnerLabel returns null exactly as it does for a row carrying no token field at all; the row therefore names no partner and can never match one of the patient's own orders. Locally curated rule LONGSTUB. This operator-authored row carries a token that is nothing but a space, so ChartSearchAiUtils.firstNonBlank skips it and DrugSafetyValidator.partnerLabel returns null exactly as it does for a row carrying no token field at all; the row therefore names no partner and can never match one of the patient's own orders. Locally curated rule LONGSTUB. This operator-authored row carries a token that is nothing but a space, so ChartSearchAiUtils.firstNonBlank skips it and DrugSafetyValidator.partnerLabel returns null exactly as it does for a row carrying no token field at all; the row therefore names no partner and can never match one of the patient's own orders. Locally curated rule LONGSTUB. This operator-authored row carries a token that is nothing but a space, so ChartSearchAiUtils.firstNonBlank skips it and DrugSafetyValidator.partnerLabel returns null exactly as it does for a row carrying no token field at all; the row therefore names no partner and can never match one of the patient's own orders. Locally curated rule LONGSTUB. This operator-authored row carries a token that is nothing but a space, so ChartSearchAiUtils.firstNonBlank skips it and DrugSafetyValidator.partnerLabel returns null exactly as it does for a row carrying no token field at all; the row therefore names no partner and can never match one of the patient's own orders. Locally curated rule LONGSTUB. This operator-authored row carries a token that is nothing but a space, so ChartSearchAiUtils.firstNonBlank skips it and DrugSafetyValidator.partnerLabel returns null exactly as it does for a row carrying no token field at all; the row therefore names no partner and can never match one of the patient's own orders. ",
+          "token": " "
+        }
+      ],
+      "source": "Test fixture"
+    }
+  ]
+}

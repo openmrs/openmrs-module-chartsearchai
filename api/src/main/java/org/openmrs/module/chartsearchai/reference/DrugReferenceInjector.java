@@ -181,6 +181,36 @@ public class DrugReferenceInjector {
 	 * <p>One more consequence for a reader of the audit table: {@code reference_slice_chars} falls
 	 * sharply for an unpromoted record, so rows either side of this change are not comparable in that
 	 * column.
+	 *
+	 * <p><b>A pre-existing naming collision (issue #196) that this change makes harder to see for
+	 * one reproduction of issue #355 and not for another — recorded here, not fixed.</b> The shipped
+	 * KB files two different DrugBank substances, {@code Ketoconazole} and {@code Levoketoconazole},
+	 * under one {@code rxnorm_name} ({@code ketoconazole}) — one of the families
+	 * {@code DdiDrugReferenceSource.substanceIds} withholds a substance id for, because more than one
+	 * DrugBank id shares the name; that method's javadoc carries the measurement over the shipped KB. {@code DdiDrugReferenceSource} builds each row's match
+	 * token from that shared {@code rxnorm_name}, so {@code DrugSafetyValidator.partnerLabel} names
+	 * both rows alike and {@code DrugReferenceInjector.onePerPartner} folds them onto whichever is
+	 * rated more severely — repairing that is issue #196's, and neither {@code partnerLabel} nor
+	 * {@code onePerPartner} nor {@code DdiDrugReferenceSource} was touched to record this.
+	 *
+	 * <p>Issue #355's own verify-table row (d) reproduces this on Metformin, where DDInter rates the
+	 * fold's survivor Moderate; that rating sits behind five Major partners in the entry's own
+	 * dataset order, so this class's severity-descending tail drops it and row (d)'s "fixed absent"
+	 * holds — <b>for that one instance, not for the class it was written to stand for</b>. Measured
+	 * through the real {@code DdiDrugReferenceSource} parse of the shipped KB and the real
+	 * {@code injectRecords} (2026-09-02, a patient on Lamivudine 150mg / Nevirapine 200mg / Stavudine
+	 * 30mg asking "Can I give this patient Lisinopril?"), the fold's survivor for {@code Lisinopril}'s
+	 * {@code ketoconazole} partner is rated Major (DDInter rates the real {@code Ketoconazole} row
+	 * Unknown against lisinopril and only {@code Levoketoconazole} Major), so it lands inside the top
+	 * five and the injected record reads in part: {@code Interactions: ketoconazole (Major); …}. That
+	 * is {@code Levoketoconazole}'s rating printed under {@code ketoconazole}'s name. A mechanism
+	 * paragraph naming {@code levoketoconazole} by itself, distinct from {@code ketoconazole}, is a
+	 * place such a swap could show; the compact {@code name (Severity)} form this class prints for a
+	 * partner that lands inside the cap carries no such paragraph. So the record ends up with nothing
+	 * that distinguishes the two rows the fold collapsed — the same absence issue #355's row (d)
+	 * records for Metformin, reached here by a different partner and a different rating. Issue #355
+	 * changes which drugs get named and in what form; it does not touch the rating a fold prints — so
+	 * this is a consequence of the widening, not a new defect, and it is issue #196's to repair.
 	 */
 	static final int MAX_TAIL_PARTNERS_WHEN_NONE_PROMOTED = 5;
 

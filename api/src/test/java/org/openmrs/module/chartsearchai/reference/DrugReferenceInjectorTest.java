@@ -485,13 +485,13 @@ public class DrugReferenceInjectorTest {
 
 	@Test
 	public void whenThePatientIsOnEveryPartnerThereIsNoDatasetTailLeftAndNothingIsWithheld() {
-		// Segment 2's third case: the patient is on ALL of this entry's above-floor partners, so the
-		// dataset tail is empty and the representative must simply not render. It is the only arm of
+		// The dataset tail's third case: the patient is on ALL of this entry's above-floor partners, so
+		// the tail is empty and the representative must simply not render. It is the only arm of
 		// that branch nothing else reaches — the two tests either side of this one cover "a tail
 		// exists alongside a promoted partner" and "nothing was promoted".
 		//
 		// It is worth its own test because the guard protecting it is the kind that reads redundant:
-		// `restStart < ordered.size()` looks like a bound check on a list you just measured, and
+		// `tailStart < ordered.size()` looks like a bound check on a list you just measured, and
 		// relaxing it to <= throws IndexOutOfBoundsException out of render. DrugReferenceInjector.inject
 		// catches every RuntimeException and returns the chart unmodified, so the failure would not
 		// surface as an error — the entire drug-reference feature, including the deterministic
@@ -499,7 +499,9 @@ public class DrugReferenceInjectorTest {
 		// log.warn, for exactly the polypharmacy patients it matters most for.
 		//
 		// The bundled curated entry Paracetamol carries exactly one interaction (warfarin, unrated —
-		// and unrated is floor-exempt, so it promotes), which makes promotedCount == ordered.size().
+		// and unrated is floor-exempt, so it promotes), which makes tailStart == ordered.size() with
+		// the chart-named segment (issue #357) empty, since the only rule the chart names cleared the
+		// floor.
 		PatientChart result = injector().injectRecords(oneRecordChart(),
 				DrugReferenceTestSupport.ctx(60, null, set("warfarin"), null, null, null),
 				"is it safe to give paracetamol?");
@@ -551,8 +553,8 @@ public class DrugReferenceInjectorTest {
 	public void theDatasetTailRepresentativeDropsItsProseWhenAPatientRelevantPartnerIsRendered() {
 		// The other half of #117: the answer's bulk was two full interaction notes for drugs the
 		// patient has nothing to do with (ivosidenib, ixabepilone), which the model reported
-		// alongside the real finding as though equally actionable. They were there because segment 2
-		// spends whatever the budget has left on dataset-order partners in FULL — so a short
+		// alongside the real finding as though equally actionable. They were there because the dataset
+		// tail spends whatever the budget has left on dataset-order partners in FULL — so a short
 		// promoted note buys several irrelevant mechanism paragraphs.
 		//
 		// The tail's purpose (see render) is that the record is also the only general reference
@@ -577,9 +579,10 @@ public class DrugReferenceInjectorTest {
 
 	@Test
 	public void withNoPatientRelevantPartnerTheDatasetTailStillRendersFullNotesToTheBudget() {
-		// The other side of the branch the test above pins, and the reason segment 2 is a branch at
-		// all rather than one rule. A compact representative is the right cut only when a promoted
-		// partner already carries the patient-specific content; with nothing promoted the general
+		// The other side of the branch the test above pins, and the reason the dataset tail is a branch
+		// at all rather than one rule. A compact representative is the right cut only when something
+		// already carries the patient-specific content — a promoted partner, or since issue #357 a
+		// partner the chart names whose rule the floor filtered; with neither, the general
 		// material IS the record's content, so the budget is spent on full notes exactly as it was
 		// before #117 — same entry, same question, and the ONLY difference is whether the patient is
 		// on one of the partners.

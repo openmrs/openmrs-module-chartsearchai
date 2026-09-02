@@ -131,8 +131,9 @@ public class InjectedInteractionNoteCollapseTest {
 	@Test
 	public void theDatasetTailNamesEachPartnerOnceToo() throws Exception {
 		// The same collapse with NOTHING promoted — the common shape, since most patients are on none
-		// of an entry's partners. Segment 2 then spends the whole budget on full notes in dataset
-		// order, so a repeated partner is a repeated paragraph: Voxelotor's two sirolimus rows
+		// of an entry's partners. With nothing patient-specific to show, the dataset tail then spends
+		// the whole budget on full notes in dataset order, so a repeated partner is a repeated
+		// paragraph: Voxelotor's two sirolimus rows
 		// (Major and Moderate) are two separate mechanism paragraphs about one co-medication.
 		RecordMapping record = injectedRecord("is it safe to give voxelotor?",
 				DrugReferenceTestSupport.ctx(60, null, null, null, null, null));
@@ -266,9 +267,12 @@ public class InjectedInteractionNoteCollapseTest {
 		// (token, ATC) pair that predicate is then asked about. Where two rows of one partner carry
 		// DIFFERENT ATC codes those answers differ, and the most severe row can be the one the
 		// patient does not match — so the partner loses its place in segment 1, which is the segment
-		// that overrides MAX_INTERACTION_RENDER_CHARS. With another partner promoted, segment 2
+		// that overrides MAX_INTERACTION_RENDER_CHARS. With another partner promoted, the dataset tail
 		// renders exactly ONE representative, so the de-promoted partner does not merely change
-		// wording: it leaves the record while the chip still warns about it.
+		// wording: it leaves the record while the chip still warns about it. (Since issue #357 a
+		// de-promoted row of a partner the chart names lands in the segment between the two instead,
+		// which is why that issue asks this same question of its own boundary; here both warfarin rows
+		// are above the floor, so the tier that moves is still promotion's.)
 		//
 		// bestRulePerPartner cannot reach this shape because it filters on hasActiveDrug BEFORE
 		// grouping, so only rows the patient matches are ever candidates. This asserts the collapse

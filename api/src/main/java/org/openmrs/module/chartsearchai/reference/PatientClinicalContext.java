@@ -270,9 +270,11 @@ public class PatientClinicalContext {
 	/**
 	 * @return true when any active-order name, any reference name of a drug those orders resolve to,
 	 *         or any active-order ATC code matches the given interaction rule. Both callers — the chip
-	 *         decision in {@link DrugSafetyValidator} and the prompt-promotion predicate in
-	 *         {@link DrugReferenceInjector} — reach every one of those arms only through here, which is
-	 *         what keeps the chips and the promoted prose agreeing about which orders a rule matches.
+	 *         decision in {@link DrugSafetyValidator} and, since issue #357, the relevance predicate in
+	 *         {@link DrugReferenceInjector} that now decides TWO boundaries (which rules are promoted,
+	 *         and which of the rest the chart still names ahead of the dataset tail) rather than one —
+	 *         reach every one of those arms only through here, which is what keeps the chips and the
+	 *         rendered prose agreeing about which orders a rule matches.
 	 *
 	 *         <p><b>The order-name arm</b> goes through {@link DrugReference#matchesOrderName}'s rule —
 	 *         since issue #330 through its folded arity {@link DrugReference#matchesFoldedOrderName},

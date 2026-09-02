@@ -14,7 +14,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
@@ -276,5 +282,65 @@ public class InjectedInteractionRelevanceOrderTest {
 		assertTrue(lastHers < firstStranger,
 				"every partner this patient is on must be named ahead of every partner she is not: "
 						+ interactions);
+	}
+
+	/**
+	 * The middle segment's "never invisible" guarantee, pinned the way segment 1's already is
+	 * ({@code DrugReferenceInjectorTest.promotingThePatientsPartnerStillRendersSomeOfTheDatasetTail}
+	 * and neighbours) — segment 2's twin claim is made three times (this class's own header comment,
+	 * {@code render}'s "Never invisible, for the reason segment 1 is not", ADR Decision 65's "the two
+	 * patient-specific segments consult no budget") and was, before this case, enforced by nothing:
+	 * inserting a budget test ahead of {@code shown.add(piece)} in the segment-2 loop left the whole
+	 * suite green. Built from the real shipped knowledge base rather than a fixed name list, so a KB
+	 * refresh cannot make the case assert nothing: every partner Metformin's own data rates Unknown
+	 * and ONLY Unknown (so none of them can be promoted — Unknown never clears the default floor —
+	 * and all of them land in the middle segment) is put on this patient's chart, and every one of
+	 * them must still be named in the rendered record, however many there are.
+	 */
+	@Test
+	public void theFloorFilteredSegmentNamesEveryOneOfHerPartnersWithNoBudgetCutoff() {
+		List<DrugReference> entries = DrugReferenceTestSupport.shippedEntries();
+		DrugReference metformin = DrugReferenceTestSupport.row(entries, "Metformin");
+
+		Map<String, Set<String>> severitiesByToken = new HashMap<String, Set<String>>();
+		for (DrugReference.Interaction interaction : metformin.getInteractions()) {
+			Set<String> severities = severitiesByToken.get(interaction.getToken());
+			if (severities == null) {
+				severities = new HashSet<String>();
+				severitiesByToken.put(interaction.getToken(), severities);
+			}
+			severities.add(String.valueOf(interaction.getSeverity()));
+		}
+		Set<String> unknownOnlyPartners = new LinkedHashSet<String>();
+		for (Map.Entry<String, Set<String>> entry : severitiesByToken.entrySet()) {
+			if (entry.getValue().size() == 1 && entry.getValue().contains("Unknown")) {
+				unknownOnlyPartners.add(entry.getKey());
+			}
+		}
+		// A sanity floor on the fixture the case reads, not a count anyone must maintain: fails loudly
+		// if a knowledge-base refresh ever leaves Metformin with only a handful of Unknown-only rows,
+		// rather than silently exercising a segment too small to be interesting.
+		assertTrue(unknownOnlyPartners.size() > 250,
+				"expected the shipped KB's large Metformin Unknown-only partner list, was only: "
+						+ unknownOnlyPartners.size());
+
+		PatientChart chart = DrugReferenceTestSupport
+				.injector(DrugReferenceTestSupport.serviceWith(entries))
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+						DrugReferenceTestSupport.ctx(60, null, unknownOnlyPartners, null, null, null),
+						METFORMIN_QUESTION);
+		String interactions = DrugReferenceTestSupport.interactionsSectionOf(
+				DrugReferenceTestSupport.referenceMappingNaming(chart, "Metformin"));
+
+		List<String> missing = new ArrayList<String>();
+		for (String partner : unknownOnlyPartners) {
+			if (noteAt(interactions, partner) < 0) {
+				missing.add(partner);
+			}
+		}
+		assertTrue(missing.isEmpty(),
+				"the middle segment must name every partner the chart names, whatever the count — it "
+						+ "consults no budget — but " + missing.size() + " of "
+						+ unknownOnlyPartners.size() + " are missing: " + missing);
 	}
 }

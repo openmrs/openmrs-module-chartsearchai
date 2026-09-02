@@ -1151,10 +1151,15 @@ public class ChartSearchAiRestController {
 	 * type names — the enumerated form is what left {@code safety_finding} out of the grounding
 	 * carve-out for two releases (#122), and it is the same mistake the client above made. So the
 	 * group this withholding is keyed on is the same one the {@code group} field publishes, and a
-	 * reference type added later is withheld without anyone remembering this method. A hardcoded
-	 * pair would agree with the classifier on every type that exists today, so it is
-	 * {@code ChartSearchAiReferenceGroundingWithholdingTest}'s compiled-class guard, not its
-	 * behavioural sweep, that would catch it.
+	 * reference type added later is withheld without anyone remembering this method.
+	 *
+	 * <p>Both halves of {@code ChartSearchAiReferenceGroundingWithholdingTest} guard this, and
+	 * neither subsumes the other. Its behavioural sweep catches a hardcoded pair that has fallen
+	 * BEHIND the classifier — measured on issue #354, which added a third reference-group type: the
+	 * old pair reddens five of its cases on a {@code drug_class_note} citation. Its compiled-class
+	 * scan catches one that still AGREES with the classifier, which no behavioural case can see. The
+	 * sentence here used to name only the scan, on the premise that a hardcode always agrees; that
+	 * premise died with the third type.
 	 */
 	private static Boolean groundedForWire(RecordReference ref) {
 		return ChartSearchAiUtils.isGroundingDemoteOnly(ref.getResourceType())

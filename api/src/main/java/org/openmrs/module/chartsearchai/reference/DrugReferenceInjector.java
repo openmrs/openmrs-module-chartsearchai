@@ -1423,8 +1423,11 @@ public class DrugReferenceInjector {
 	}
 
 	/**
-	 * The entry's interaction notes, ordered so the partners this patient is actually on come first —
-	 * most severe of those first, see {@link #SEVERITY_DESCENDING} — then the rest in dataset order.
+	 * The entry's interaction notes, in three segments (see {@link #renderTier}): the partners this
+	 * patient is actually on whose rules the severity floor admits, most severe of those first (see
+	 * {@link #SEVERITY_DESCENDING}); then the partners she is on whose rules it filtered; then the rest
+	 * in dataset order. Only the first segment is PROMOTED — {@code promotedCount} counts it and
+	 * nothing else — and the two behind it are the dataset tail {@code render} walks in order.
 	 *
 	 * <p>This ordering is what makes the {@link #MAX_INTERACTION_RENDER_CHARS} cut meaningful.
 	 * Rendering in dataset order let the dataset's own sequence decide which partners a clinician's
@@ -1438,9 +1441,18 @@ public class DrugReferenceInjector {
 	 *
 	 * <p>Relevance uses {@link PatientClinicalContext#hasActiveDrug} — deliberately the same
 	 * predicate {@link DrugSafetyValidator} uses to decide an interaction concerns this patient (see
-	 * {@link #promotable}, which is that predicate and the severity floor together, applied both here
+	 * {@link #renderTier}, which is that predicate and the severity floor together, applied both here
 	 * and inside the collapse below) — so a partner that raises a DRUG-IN-PLAY chip is exactly a
-	 * partner promoted here, and WHICH partners this text names cannot drift from that chip.
+	 * partner PROMOTED here, and which partners the promoted segment names cannot drift from the chips.
+	 *
+	 * <p><b>Read that as a claim about the promoted segment and not about the record's lead, which
+	 * since issue #357 they are no longer the same sentence.</b> A rule the floor filtered about a drug
+	 * the chart DOES name now heads the tail, so where nothing is promoted the record's first note is a
+	 * partner no chip stands behind. That is not the divergence this ordering exists to remove: the
+	 * chips and this text still agree about which rules COUNT, because promotion still resolves the
+	 * floor through {@link DrugSafetyValidator#configuredSeverityFloor} and nothing below re-decides it.
+	 * What changed is only where a rule they already agree to be sub-floor sits among the rules about
+	 * drugs the chart says nothing about at all.
 	 *
 	 * <p>Which is a claim about the SET, and since issue #297 about the NAME again. Issue #292 let a
 	 * folded chip name the partner by the class arm's ladder while the note below kept
@@ -1537,6 +1549,7 @@ public class DrugReferenceInjector {
 	static OrderedInteractions orderedInteractionNotes(DrugReference ref, PatientClinicalContext context,
 			List<DrugReference> orderEntries, List<SafetyWarning> findings) {
 		List<InteractionNote> promoted = new ArrayList<InteractionNote>();
+		List<InteractionNote> namedByTheChart = new ArrayList<InteractionNote>();
 		List<InteractionNote> rest = new ArrayList<InteractionNote>();
 		// Promotion honours the SAME severity floor the chips do (issue #84). Measured on the 3.7.1
 		// standalone (2026-07-30): promoting on relevance alone surfaced DDInter's Unknown-severity
@@ -1544,8 +1557,17 @@ public class DrugReferenceInjector {
 		// chips — into the front of the prompt, and the model then answered from them. Two probe
 		// cells that correctly abstained on the baseline started reporting "an Unknown severity
 		// interaction between Erythromycin and Lisinopril", i.e. the render path was bypassing a
-		// safety decision the chip path enforces. A sub-floor rule is not promoted; it keeps its
-		// dataset position, exactly as before promotion existed.
+		// safety decision the chip path enforces.
+		//
+		// That measurement stands and PROMOTION is still exactly what it was: a sub-floor rule takes
+		// no place in segment 1, no share of the budget override, and no chip. What issue #357
+		// re-decided, on its own live reproduction, is the SECOND thing the two-bucket partition was
+		// deciding by accident — where such a rule then sits among the drugs the chart does not name
+		// at all. It sat among them in dataset order, so on a real regimen the module rendered
+		// "ketotifen (Unknown severity interaction (DDinter 2.0; no mechanism description on file).)"
+		// about a drug the patient was not on while withholding the identical sentence about the
+		// three she was. Relevance and rating are two questions; asking only the second is what made
+		// the answer to the first arbitrary.
 		int floor = DrugSafetyValidator.configuredSeverityFloor();
 		for (DrugReference.Interaction i : onePerPartner(ref, context, floor, orderEntries)) {
 			String label = reconciledPartnerNoteName(findings, context, i);
@@ -1582,8 +1604,10 @@ public class DrugReferenceInjector {
 			if (compact.length() >= rendered.length()) {
 				compact = rendered;
 			}
-			(promotable(i, context, floor) ? promoted : rest)
-					.add(new InteractionNote(rendered, compact, i.getSeverity()));
+			InteractionNote entry = new InteractionNote(rendered, compact, i.getSeverity());
+			int tier = renderTier(i, context, floor);
+			(tier == TIER_PROMOTED ? promoted : tier == TIER_NAMED_BY_THE_CHART ? namedByTheChart : rest)
+					.add(entry);
 		}
 		// Within the promoted segment, severity — not dataset position — decides who keeps their
 		// mechanism prose when the budget can only afford one full note (see render). Measured on the
@@ -1595,8 +1619,18 @@ public class DrugReferenceInjector {
 		// keep dataset order.
 		Collections.sort(promoted, SEVERITY_DESCENDING);
 		int promotedCount = promoted.size();
-		// `promoted` becomes the whole ordered list from here — the count above is what keeps the two
-		// segments distinguishable to render().
+		// `promoted` becomes the whole ordered list from here — the count above is what keeps the
+		// PROMOTED segment distinguishable to render(), and it deliberately does not move, so nothing
+		// below changes which rules render() treats as segment 1.
+		//
+		// The dataset tail is what the two lists below are, in the order render() walks it: the rules
+		// naming a drug the chart records, then the rules naming drugs it does not. Neither is sorted
+		// on severity, and at the shipped floor that is not a choice — an UNRATED rule is exempt from
+		// the floor rather than below it (DrugSafetyValidator.clearsSeverityFloor), so the only rating
+		// a rule in `namedByTheChart` can carry there is Unknown and a sort over it has nothing to
+		// order. Under a raised floor the list can hold several ratings and keeps dataset order among
+		// them, which is what the tail has always done.
+		promoted.addAll(namedByTheChart);
 		promoted.addAll(rest);
 		return new OrderedInteractions(promoted, promotedCount);
 	}
@@ -1793,16 +1827,17 @@ public class DrugReferenceInjector {
 	 *         and the record now agrees with it — which is the invariant, not a cost.
 	 *
 	 *         <p>Applied over EVERY rule rather than only over the promoted ones, deliberately: the
-	 *         floor decides which rules are worth PROMOTING, while a sub-floor row keeps its dataset
-	 *         position in the tail (see the caller), so collapsing only the promoted half would leave
+	 *         floor decides which rules are worth PROMOTING, while a sub-floor row stays in the tail
+	 *         (see the caller — at its head where the chart names the partner, in dataset position
+	 *         where it does not, since issue #357), so collapsing only the promoted half would leave
 	 *         a sub-floor row of a partner in the tail beside that partner's promoted row — the same
 	 *         partner twice, which is what this removes. (The survivor rule below does READ the floor,
-	 *         through {@link #promotable}; what it does not do is filter the input by it.)
+	 *         through {@link #renderTier}; what it does not do is filter the input by it.)
 	 *
-	 *         <p><b>Which row wins, and why promotability is asked FIRST.</b> Running before the floor
-	 *         means the survivor rule decides which row's {@code (token, ATC)} pair the caller's
-	 *         promotion predicate is then asked about — so the survivor must be a row that predicate
-	 *         says yes to wherever the group has one, or the collapse can push a partner OUT of the
+	 *         <p><b>Which row wins, and why the render tier is asked FIRST.</b> Running before the
+	 *         segments are built means the survivor rule decides which row's {@code (token, ATC)} pair
+	 *         {@link #renderTier} is then asked about — so the survivor must be a row of the earliest
+	 *         tier the group can reach, or the collapse can push a partner OUT of the
 	 *         segment that overrides {@link #MAX_INTERACTION_RENDER_CHARS} and, with another partner
 	 *         promoted and only one tail representative rendered, out of the record altogether. That
 	 *         is {@link DrugSafetyValidator#bestRulePerPartner}'s behaviour reproduced rather than a
@@ -1810,14 +1845,17 @@ public class DrugReferenceInjector {
 	 *         {@code hasActiveDrug} before it groups. Within each half the order is
 	 *         {@link DrugSafetyValidator#outranksOnRule}, so the promoted note is the row the chip
 	 *         quotes, and a partner with no promotable row keeps its most severe one in the tail.
-	 *         The floor half of {@link #promotable} cannot change a winner on its own — a group's
-	 *         most severe row clears the floor whenever any of its rows does, since
-	 *         {@code severityPriority} ranks unrated highest and is otherwise monotone in the rank the
-	 *         floor compares — so only the {@code hasActiveDrug} half is doing work here. No shipped
-	 *         dataset can make it: {@code ddinter} writes every rule's ATC from its partner row, and
-	 *         measured 2026-08-07 through the real parser, 0 of the 19 MB KB's label groups hold rows
-	 *         differing on either field. A hand-authored file reaches it immediately, which is the
-	 *         same latency issue #174 site 4 is guarded at.
+	 *         The floor cannot change a winner on its own — a group's most severe row clears the floor
+	 *         whenever any of its rows does, since {@code severityPriority} ranks unrated highest and
+	 *         is otherwise monotone in the rank the floor compares — so it is the
+	 *         {@code hasActiveDrug} half of {@link #renderTier} that does the work, at BOTH of the
+	 *         boundaries that half now draws: promoted against everything, since issue #174 site 2,
+	 *         and, since issue #357, the head of the tail against the rest of it, where two sub-floor
+	 *         rows of one partner answer it differently and the loser would take the partner out of
+	 *         the record. No shipped dataset can make either: {@code ddinter} writes every rule's ATC
+	 *         from its partner row, and measured 2026-08-07 through the real parser, 0 of the 19 MB
+	 *         KB's label groups hold rows differing on either field. A hand-authored file reaches it
+	 *         immediately, which is the same latency issue #174 site 4 is guarded at.
 	 *
 	 *         <p>A {@link LinkedHashMap}, so replacing a group's winner does not move the partner's
 	 *         position — the tail's dataset order is what the caller's javadoc guarantees.
@@ -1840,26 +1878,70 @@ public class DrugReferenceInjector {
 	}
 
 	/** @return true when {@code candidate} is the row this record should show for a partner
-	 *          {@code incumbent} already covers: the row the patient is on before one they are not,
-	 *          then {@link DrugSafetyValidator#outranksOnRule}. See {@link #onePerPartner}. */
+	 *          {@code incumbent} already covers: the row that sits in the earlier of
+	 *          {@link #renderTier}'s segments, then {@link DrugSafetyValidator#outranksOnRule}. See
+	 *          {@link #onePerPartner}.
+	 *
+	 *          <p>The whole tier and not promotability alone since issue #357, because promotability
+	 *          stopped being the whole of where a row puts its partner. Two sub-floor rows of one
+	 *          partner answer the promotion predicate identically while answering
+	 *          {@link #namesActiveDrug} differently, so the survivor fell through to
+	 *          {@code outranksOnRule} — note length, at equal severity — and could be the row the
+	 *          chart does not name, which sends the partner to the dataset tail and, behind notes that
+	 *          exhaust the budget, out of the record: this issue's own defect surviving inside the
+	 *          ordering added to close it. */
 	private static boolean outranksForRendering(DrugReference.Interaction candidate,
 			DrugReference.Interaction incumbent, PatientClinicalContext context, int floor) {
-		boolean candidatePromotable = promotable(candidate, context, floor);
-		if (candidatePromotable != promotable(incumbent, context, floor)) {
-			return candidatePromotable;
+		int candidateTier = renderTier(candidate, context, floor);
+		int incumbentTier = renderTier(incumbent, context, floor);
+		if (candidateTier != incumbentTier) {
+			return candidateTier < incumbentTier;
 		}
 		return DrugSafetyValidator.outranksOnRule(candidate, incumbent);
 	}
 
-	/** @return whether {@code i} names a drug this patient is on by a rule the severity floor admits
-	 *          — the promotion predicate of {@link #orderedInteractionNotes}, shared with
-	 *          {@link #onePerPartner} so the collapse cannot discard the very row that would have been
-	 *          promoted. Both arms are the ones {@link DrugSafetyValidator#bestRulePerPartner} applies
-	 *          before it groups. */
-	private static boolean promotable(DrugReference.Interaction i, PatientClinicalContext context,
+	/** Segment 1 of {@code render}: the chart names this partner and the floor admits the rule — the
+	 *  PROMOTION predicate, whose two arms are the ones
+	 *  {@link DrugSafetyValidator#bestRulePerPartner} applies before it groups. It was a named
+	 *  predicate of its own until issue #357 gave the partition a third tier; keeping it beside
+	 *  {@link #renderTier} would have been a second way to ask one question, which is what that
+	 *  method exists to stop. */
+	private static final int TIER_PROMOTED = 0;
+
+	/** The head of the dataset tail (issue #357): the chart names this partner, and the floor filtered
+	 *  the rule. Behind {@link #TIER_PROMOTED} because promotion is what buys a full note and the
+	 *  budget override; ahead of {@link #TIER_DATASET_TAIL} because a drug this patient is taking is
+	 *  not breadth material, and ordering it as breadth is what let the module render an entry's
+	 *  "listed but unrated" sentence about strangers while withholding it about her own regimen. */
+	private static final int TIER_NAMED_BY_THE_CHART = 1;
+
+	/** The rest of the dataset tail, in dataset order — the drugs this chart says nothing about. */
+	private static final int TIER_DATASET_TAIL = 2;
+
+	/** @return which of {@code render}'s three segments {@code i} belongs in, lowest first. The ONE
+	 *          definition of that partition, asked by {@link #orderedInteractionNotes} to build the
+	 *          segments and by {@link #outranksForRendering} so the collapse cannot discard the very
+	 *          row that decides which segment a partner lands in — the invariant that half of this
+	 *          predicate has held since issue #174 site 2, over the tier it now ranks whole. */
+	private static int renderTier(DrugReference.Interaction i, PatientClinicalContext context,
 			int floor) {
-		return context != null && context.hasActiveDrug(i.getToken(), i.getAtc())
-				&& DrugSafetyValidator.clearsSeverityFloor(i, floor);
+		if (!namesActiveDrug(i, context)) {
+			return TIER_DATASET_TAIL;
+		}
+		return DrugSafetyValidator.clearsSeverityFloor(i, floor) ? TIER_PROMOTED
+				: TIER_NAMED_BY_THE_CHART;
+	}
+
+	/** @return whether {@code i} names a drug this patient is on, whatever the source rates the rule
+	 *          — the relevance half of {@link #renderTier}, named because issue #357 made the two
+	 *          halves answer two different questions: together they decide PROMOTION, and this
+	 *          arm alone decides where a rule the floor filtered sits in the dataset tail. One
+	 *          spelling of the relevance question rather than two, for the reason
+	 *          {@code PatientClinicalContext.hasActiveDrug} is one predicate shared with
+	 *          {@link DrugSafetyValidator}: a second copy could drift into disagreeing about which
+	 *          partners concern this patient, which is the divergence the ordering exists to remove. */
+	private static boolean namesActiveDrug(DrugReference.Interaction i, PatientClinicalContext context) {
+		return context != null && context.hasActiveDrug(i.getToken(), i.getAtc());
 	}
 
 	/**
@@ -2283,7 +2365,13 @@ public class DrugReferenceInjector {
 
 			// Segment 2 — the dataset tail. It exists because this entry is also the only reference
 			// material the model has about the drug in general, so the record must not read as if
-			// the patient's own overlap were the drug's only interaction. What it does NOT need to
+			// the patient's own overlap were the drug's only interaction. Since issue #357 its HEAD is
+			// not general material: orderedInteractionNotes puts the partners the chart names whose
+			// rules the floor filtered ahead of the drugs the chart says nothing about, so the one
+			// representative this branch renders, and the notes the branch below spends the budget on,
+			// are this patient's own wherever she has any. That is an ordering and not a promotion —
+			// the compact form below and the budget are unchanged, and the rules stay sub-floor for
+			// every other purpose, chips included. What it does NOT need to
 			// do is put mechanism prose for drugs this patient has nothing to do with in front of a
 			// model that reports what it can see: measured live (issue #117), a patient on
 			// simvastatin asked about erythromycin got the correct simvastatin finding in sentence

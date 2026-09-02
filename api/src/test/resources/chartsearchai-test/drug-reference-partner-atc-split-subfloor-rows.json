@@ -1,0 +1,42 @@
+{
+  "version": "1.0",
+  "description": "Test fixture (issue #357): the sub-floor counterpart of drug-reference-partner-atc-split-rows.json. One partner filed as two rows carrying the SAME match token and DIFFERENT ATC codes, both rated Unknown so the severity floor filters both — the only shape in which two rows of one partner group answer PatientClinicalContext.hasActiveDrug differently while neither is promotable. DrugSafetyValidator.outranksOnRule then decides on note length alone, so the longer row wins, and that row is deliberately the one the patient is NOT on: with the collapse blind to relevance the partner leaves the tail's head and the two long filler partners ahead of it push it out of the record entirely. The curated source is the only one that can pose it; DdiDrugReferenceSource writes each rule's ATC from its partner row, so every rule of one partner in the shipped knowledge base carries an identical (token, atc) pair. Parsed by the real JsonDrugReferenceSource parser.",
+  "entries": [
+    {
+      "id": "voriconazole-curated-subfloor",
+      "name": "Voriconazole",
+      "drugClass": "Triazole antifungal",
+      "aliases": [
+        "voriconazole"
+      ],
+      "atcCodes": [
+        "J02AC03"
+      ],
+      "interactions": [
+        {
+          "token": "rifabutin",
+          "severity": "Major",
+          "note": "Major. Rifabutin induces CYP450 3A4 and CYP2C19 and markedly reduces voriconazole plasma concentrations, while voriconazole inhibits rifabutin metabolism and raises rifabutin exposure enough to precipitate uveitis, leukopenia and arthralgia. Concomitant use is generally avoided. Where the combination cannot be avoided the voriconazole maintenance dose is doubled and the patient is monitored with full blood counts and for rifabutin toxicity throughout, with slit-lamp examination if visual symptoms appear. The interaction is bidirectional, so neither dose adjustment on its own restores both exposures, and the effect persists for a period after rifabutin is withdrawn because enzyme induction resolves only as the induced protein turns over. Therapeutic drug monitoring of voriconazole trough concentrations is recommended wherever it is available."
+        },
+        {
+          "token": "carbamazepine",
+          "severity": "Major",
+          "note": "Major. Carbamazepine is a potent inducer of CYP450 3A4 and substantially lowers voriconazole plasma concentrations, to a degree that has produced breakthrough invasive fungal infection during treatment. The reduction is not reliably overcome by increasing the voriconazole dose, because the extent of induction varies between patients and cannot be predicted from the carbamazepine dose alone. Coadministration is contraindicated in most labelling. Where antifungal therapy is required in a patient established on carbamazepine, an agent that is not a CYP450 3A4 substrate should be selected instead, and where carbamazepine is being started in a patient on voriconazole the antifungal regimen should be reviewed before the inducer is introduced rather than after breakthrough infection is observed."
+        },
+        {
+          "token": "warfarin",
+          "atc": "B01AA03",
+          "severity": "Unknown",
+          "note": "Unknown severity interaction. This row identifies its partner by the ATC code of racemic warfarin, which THIS patient is not on. Both rows are rated Unknown, so the survivor rule falls through to note length and this longer one wins it."
+        },
+        {
+          "token": "warfarin",
+          "atc": "B01AA07",
+          "severity": "Unknown",
+          "note": "Unknown severity interaction. The patient IS on this row's drug."
+        }
+      ],
+      "source": "Test fixture"
+    }
+  ]
+}

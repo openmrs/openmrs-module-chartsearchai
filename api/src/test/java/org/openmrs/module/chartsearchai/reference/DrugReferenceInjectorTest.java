@@ -388,20 +388,34 @@ public class DrugReferenceInjectorTest {
 	public void aSubFloorInteractionIsNotPromotedEvenWhenThePatientIsOnThatDrug() {
 		// Promotion must honour the interaction-severity floor the chips honour (issue #84).
 		// Lisinopril x warfarin is an Unknown-severity DDInter row with no mechanism text — exactly
-		// what the default `minor` floor exists to keep out of the clinician's way — and it is the
-		// first partner to fall PAST the render cap in dataset order (index 7; the cumulative
-		// rendered length reaches 1546 there against a 1500-char budget), so its presence can only
-		// come from promotion. Promoting on relevance alone pulled rows like it to the front of the
-		// prompt, and measured on the 3.7.1 standalone the model then answered from them: two probe
-		// cells that correctly abstained on the baseline began reporting "an Unknown severity
-		// interaction between Erythromycin and Lisinopril", so the render path was bypassing a
-		// safety decision the chip path enforces. Above-floor promotion still works
-		// (renderedInteractionsMustNameThePartnerThePatientIsActuallyOn covers the Moderate case).
-		String section = interactionsSectionFor("Lisinopril", "warfarin");
-		assertFalse(section.contains("warfarin"),
-				"an Unknown-severity rule must not be promoted past the render cap: " + section);
-		assertTrue(section.contains("metformin"),
-				"precondition: the section still renders its above-floor dataset-order partners: " + section);
+		// what the default `minor` floor exists to keep out of the chips. Promoting on relevance
+		// alone pulled rows like it to the front of the prompt, and measured on the 3.7.1 standalone
+		// the model then answered from them: two probe cells that correctly abstained on the baseline
+		// began reporting "an Unknown severity interaction between Erythromycin and Lisinopril", so
+		// the render path was bypassing a safety decision the chip path enforces. Above-floor
+		// promotion still works (renderedInteractionsMustNameThePartnerThePatientIsActuallyOn covers
+		// the Moderate case).
+		//
+		// This case asked that question of the row's PRESENCE until issue #357, on the ground that
+		// warfarin is the first partner to fall past the render cap in dataset order (index 7,
+		// cumulative length 1546 against a 1500-char budget) "so its presence can only come from
+		// promotion". That premise is what #357 retired, deliberately and on its own live
+		// reproduction: a rule the floor filtered now leads the dataset TAIL when the chart names its
+		// partner, so presence no longer implies promotion and absence was silencing the patient's
+		// own drugs while the identical sentence rendered for strangers. So the question is put to
+		// what promotion actually buys — a place in segment 1, which overrides the character budget
+		// to keep a full note. With ibuprofen (Moderate) promoted, segment 2 renders exactly ONE
+		// representative and in the compact form, so a sub-floor rule that had been promoted would
+		// take the lead with its own note instead of trailing in "warfarin (Unknown)".
+		String section = interactionsSectionFor("Lisinopril", "warfarin", "ibuprofen");
+		assertTrue(section.startsWith("interactions: ibuprofen (moderate. "),
+				"the promoted segment is the above-floor rule's, and it keeps its mechanism prose: "
+						+ section);
+		assertTrue(section.endsWith("; warfarin (unknown)."),
+				"the sub-floor rule is named, in the compact tail slot behind it — with the rating "
+						+ "the source gives it and no mechanism it does not have: " + section);
+		assertFalse(section.contains("warfarin (unknown severity interaction"),
+				"a rule the floor filtered must never take a promoted full-note slot: " + section);
 
 		// The other half of the contract, on the same row. The floor's whole point is that the chips
 		// and the rendered prose agree about which rules count, and that now rests on both paths

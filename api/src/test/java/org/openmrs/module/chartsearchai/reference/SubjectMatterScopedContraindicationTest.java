@@ -176,10 +176,8 @@ public class SubjectMatterScopedContraindicationTest {
 		// The case above, with one thing added: an UNCITED drug_reference record whose text names the
 		// drug she is on. Issue #360 widened the ECHO test's attribution corpus to take in every
 		// reference-group record whether or not the answer cited it; this arm's corpus was deliberately
-		// left where it was, and nothing else in the suite can tell the two apart — every other case
-		// that hands real mappings to validate carries either no reference-group record at all or one
-		// the answer cites, so handing this arm the wider list would widen issue #143's gate with the
-		// build staying green. Here it cannot: the record is the only thing naming the drug, the
+		// left where it was. Handing this arm the wider list widens issue #143's gate, and this is the
+		// case that says so: the record is the only thing naming the drug, the
 		// question is about her cancer, and a chip would mean the module's own injected material had
 		// become what the response is about.
 		RecordMapping uncitedReference = new RecordMapping(5,

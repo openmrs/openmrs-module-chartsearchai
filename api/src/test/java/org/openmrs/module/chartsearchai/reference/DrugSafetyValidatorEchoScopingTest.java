@@ -17,7 +17,6 @@ import java.util.Collections;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
-import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
@@ -49,12 +48,6 @@ public class DrugSafetyValidatorEchoScopingTest {
 	private static PatientClinicalContext aspirinOrderCtx() {
 		return DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Aspirin"),
 				DrugReferenceTestSupport.set("B01AC06"), null, null);
-	}
-
-	/** Context: one active Amiodarone order — Simvastatin x Amiodarone is Major in the excerpt. */
-	private static PatientClinicalContext amiodaroneOrderCtx() {
-		return DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Amiodarone"),
-				null, null, null);
 	}
 
 	/** Context: one active Simvastatin order and nothing else — the typo control's patient. */
@@ -181,35 +174,38 @@ public class DrugSafetyValidatorEchoScopingTest {
 	}
 
 	@Test
-	public void anUncitedSafetyFindingOfThisModulesOwnDoesNotExemptTheDrugItNames() {
-		// The one reference-group type the uncited half subtracts. A safety_finding is this validator's
-		// own conclusion about this patient, rendered back into the prompt by the pre-answer pass — so
-		// admitting it uncited lets one pass's OUTPUT silence the next pass's check of the same drug.
+	public void aSubstanceNamedOnlyInsideARenderedMechanismParagraphIsWithheldToo() {
+		// The residue's true SHAPE, and the half that is easy to state wrongly: an injected record
+		// renders each partner's mechanism paragraph verbatim, and those paragraphs name substances the
+		// record never claims as partners. So the withheld set is not "the question drug's KB
+		// partners" — it reaches every name the rendered prose carries.
 		//
-		// The record's text is a real rendered finding line, taken verbatim from what the real injector
-		// produces for the six-order screening chart, and placed on a chart whose question and orders
-		// leave its subject neither question-named nor actively ordered. It is placed rather than
-		// injected because that arrangement is what the predicate is about, and because the 16-entry
-		// test excerpt cannot produce it on its own: measured through findImpliedByQuery over the real
-		// injected findings, each one names only its own subject and partner, since the further drugs a
-		// mechanism paragraph spells out ("lovastatin", "erythromycin", eight quinolones) are not
-		// entries of that excerpt. On the shipped knowledge base they are.
-		//
-		// Neuter the safety_finding subtraction in isRecitableReferenceMaterial and read this failure.
-		RecordMapping finding = new RecordMapping(2,
-				ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING, "interaction:Simvastatin", null,
-				"Safety finding — Simvastatin: Simvastatin interacts with active order Clarithromycin "
-						+ "— Major.");
-		String answer = "Simvastatin would be a reasonable choice.";
+		// On the SHIPPED knowledge base, for this question against an aspirin order, the record's
+		// rendered partners are aspirin and kanamycin; naproxen appears only inside the aspirin
+		// mechanism sentence ("...others including indomethacin, naproxen, and tiaprofenic acid may
+		// also interact"). Naproxen x acetylsalicylic acid is a Moderate row, so the chip is available
+		// and only attribution withholds it — which means "try a different NSAID", the commonest
+		// alternative-proposal shape after an NSAID question, is inside the residue. Pinned rather than
+		// argued, so a later reader meets a decision instead of discovering it. The shipped KB is used
+		// deliberately: the 16-entry excerpt carries no naproxen, so this shape is unconstructible
+		// there.
+		DrugReferenceService shipped = DrugReferenceTestSupport.serviceWith(
+				DrugReferenceTestSupport.shippedEntries());
+		PatientChart chart = DrugReferenceTestSupport.injector(shipped).injectRecords(
+				DrugReferenceTestSupport.oneRecordChart(), aspirinOrderCtx(), QUESTION_IBUPROFEN);
+		RecordMapping refMapping = DrugReferenceTestSupport.injectedReference(chart);
+		assertTrue(refMapping.getText().toLowerCase().contains("naproxen"),
+				"precondition: the rendered record must carry naproxen in its mechanism prose");
+		String answer = "Naproxen would be a reasonable alternative.";
 		assertTrue(ChartSearchAiUtils.citedIndexes(answer).isEmpty(),
 				"precondition: this answer must carry no inline citation marker at all");
 
-		List<SafetyWarning> warnings = validator().validate(answer, "What should we watch for?",
-				amiodaroneOrderCtx(), Arrays.asList(finding));
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(shipped).validate(answer,
+				QUESTION_IBUPROFEN, aspirinOrderCtx(), chart.getMappings());
 
-		assertTrue(DrugReferenceTestSupport.has(warnings, SafetyWarning.TYPE_INTERACTION, "simvastatin"),
-				"this module's own finding must not attribute the answer's mention to itself, was: "
-						+ warnings);
+		assertFalse(DrugReferenceTestSupport.has(warnings, SafetyWarning.TYPE_INTERACTION, "naproxen"),
+				"a name the record carries only as mechanism prose is withheld too — the residue is "
+						+ "wider than the partner list, was: " + warnings);
 	}
 
 	@Test
@@ -293,14 +289,14 @@ public class DrugSafetyValidatorEchoScopingTest {
 	public void anUncitedChartRecordNamingTheDrugDoesNotExemptIt() {
 		// The boundary issue #360 stops at: the chart half of the attribution corpus still requires an
 		// inline marker. Same fixture as the panadol case
-		// below with the [230] taken off — the record still names Aspirin, and the answer still says
+		// above with the [230] taken off — the record still names Aspirin, and the answer still says
 		// it, but nothing attributes the mention to the record, so aspirin stays in play and chips.
 		//
 		// A chart record is the patient's own data: a drug named in one is by construction about this
 		// patient, so the marker is doing real work there — it is the evidence the answer was REPORTING
 		// the record rather than proposing on its own authority. Widening this half as well would
 		// exempt a genuine proposal whenever her own notes happen to name the drug. Neuter
-		// isModuleSuppliedReferenceRecord to a constant true and read this failure.
+		// isRecitableReferenceMaterial to a constant true and read this failure.
 		List<RecordMapping> mappings = Arrays.asList(
 				new RecordMapping(230, "allergy", "allergy-uuid-1", null, "Allergy: Aspirin (severity unknown)"));
 		String answer = "The patient has a recorded allergy to Aspirin.";

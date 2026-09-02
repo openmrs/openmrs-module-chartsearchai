@@ -436,7 +436,7 @@ public class DrugSafetyValidator {
 		//
 		// ONE sweep, TWO corpora, and the consumers do not share one (issue #360): the echo test reads
 		// the attributable half, the arm below reads the cited half, and neither list is the other. See
-		// AttributionTexts for why aliasing them would widen issue #143's gate with the build green.
+		// AttributionTexts for why aliasing them would widen issue #143's gate.
 		AttributionTexts attribution = null;
 		for (DrugReference ref : drugReferenceService.findImpliedByQuery(answer)) {
 			if (questionDrugs.contains(ref)) {
@@ -1038,25 +1038,23 @@ public class DrugSafetyValidator {
 	 *         type added later is admitted without this class changing; what is subtracted from it is
 	 *         one named type, for a reason about PROVENANCE rather than about grouping.
 	 *
-	 *         <p><b>A {@code safety_finding} is reference-group and is deliberately NOT recitable.</b>
-	 *         It is this validator's own conclusion about this patient, rendered by
-	 *         {@code DrugReferenceInjector.renderFinding} from the pre-answer pass's chips — so
-	 *         admitting it uncited would let one pass's OUTPUT silence the next pass's check of the
-	 *         same drug. And a finding names more than its own two drugs: {@code renderFinding} copies
-	 *         the rule's MECHANISM paragraph verbatim, which spells out further substances — read off
-	 *         the real injector's output for the six-order screening chart, its findings' texts carry
-	 *         {@code lovastatin}, {@code erythromycin} and eight quinolones, none of them this
-	 *         patient's. Those resolve to entries on the shipped knowledge base; on the 16-entry test
-	 *         excerpt they do not, which is why {@code DrugSafetyValidatorEchoScopingTest
-	 *         .anUncitedSafetyFindingOfThisModulesOwnDoesNotExemptTheDrugItNames} PLACES a real
-	 *         rendered finding line rather than injecting one. A CITED {@code safety_finding} is still
-	 *         attributable, exactly as before this rule: there the answer said it was quoting.
-	 *
-	 *         <p>Do not read the exclusion as "test the type" generally — issue #122 is what happens
-	 *         when a call site asks a GROUP question by naming {@code drug_reference}, and this asks a
-	 *         provenance question the group cannot answer. A third reference-group type is admitted by
-	 *         default, which is right for anything the module renders from a dataset and wrong only
-	 *         for another conclusion of its own; whoever adds one decides which it is.
+	 *         <p><b>A {@code safety_finding} is included, and subtracting it was tried and measured
+	 *         wrong.</b> It is this validator's own conclusion about this patient, so admitting it
+	 *         uncited looks like letting one pass's OUTPUT silence the next pass's check of the same
+	 *         drug — but that cannot happen for the drug a finding is ABOUT: the pre-answer pass calls
+	 *         {@code validate} with an EMPTY answer, so its in-play set is the question's drugs alone
+	 *         and every rendered finding's subject is either question-named (and a question-named drug
+	 *         never reaches this method) or an active order (which
+	 *         {@link #addActiveOrderContraindications} and {@link #addActiveOrderPairInteractions}
+	 *         check from the chart). What subtracting the type DID do was make issue #360's fix a
+	 *         no-op for every question that names no drug: such a question injects no
+	 *         {@code drug_reference} record at all, so on the screening arm every reference-group
+	 *         record is a finding and the corpus collapsed back to the cited one. Measured on the
+	 *         six-order screening chart over the shipped knowledge base — an answer reciting one
+	 *         finding verbatim raised 22 chips with no marker and 10 with a single {@code [2]} added,
+	 *         six of the difference (three of them Major) naming {@code lovastatin}, a drug this
+	 *         patient is not on and nobody asked about. That is the reported defect itself, so the
+	 *         subtraction was reverted.
 	 *
 	 *         <p>Named for what it asks rather than after {@code ChartSearchAiUtils}' own private
 	 *         {@code isReferenceMaterial} — see
@@ -1065,16 +1063,16 @@ public class DrugSafetyValidator {
 	 */
 	private static boolean isRecitableReferenceMaterial(String resourceType) {
 		return ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE.equals(
-				ChartSearchAiUtils.referenceGroup(resourceType))
-				&& !ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(resourceType);
+				ChartSearchAiUtils.referenceGroup(resourceType));
 	}
 
 	/**
 	 * @return true when a record the answer's mention is ATTRIBUTABLE to names {@code ref} in its own
 	 *         text — a recited drug-reference partner, an allergy reported off the chart — rather than
 	 *         the drug being a proposal on the answer's own authority (issue #105). The corpus is
-	 *         {@link AttributionTexts#attributable}: every reference-group record in the chart, plus
-	 *         the chart records the answer cites inline. Attribution is deliberately answer-global,
+	 *         {@link AttributionTexts#attributable}: every recitable reference record in the chart
+	 *         ({@link #isRecitableReferenceMaterial}), plus every record the answer cites inline,
+	 *         whatever its type. Attribution is deliberately answer-global,
 	 *         not sentence-scoped, and since issue #360 that is the weaker of two reasons rather than
 	 *         the only one — recited record text carries its own sentence punctuation ("… (Moderate.
 	 *         NSAIDs may …) [14]"), so sentence splitting routinely separated a recited drug name from
@@ -1087,12 +1085,21 @@ public class DrugSafetyValidator {
 	 *         independently proposed X; the measured alternative was worse (7 of 8 chips about
 	 *         unproposed drugs on one enumeration answer). Dropping the marker requirement for a
 	 *         reference-group record makes that exemption unconditional for the drugs those records
-	 *         name, and what they name is not arbitrary: an injected {@code drug_reference} record
-	 *         renders the question drug's own INTERACTION-PARTNER list, so what can no longer be
-	 *         chipped from the answer side is systematically that drug's KB partners — which is also
-	 *         the set an answer draws alternatives from. {@code DrugSafetyValidatorEchoScopingTest
-	 *         .aPartnerTheAnswerProposesRatherThanRecitesIsWithheldToo} pins it so it reads as a
-	 *         decision rather than a discovery.
+	 *         name, and what they name is wider than the partner list. An injected
+	 *         {@code drug_reference} record renders the question drug's INTERACTION PARTNERS <b>and
+	 *         each partner's mechanism paragraph verbatim</b>, and those paragraphs spell out further
+	 *         substances the record never claims as partners at all. Measured through the real
+	 *         injector and the real {@code validate} over the SHIPPED knowledge base: for
+	 *         {@code "Can she take ibuprofen for pain?"} on an aspirin order, the rendered partners
+	 *         are {@code aspirin} and {@code kanamycin}, while {@code naproxen} occurs only inside the
+	 *         aspirin mechanism sentence — and an uncited answer proposing naproxen, which raises a
+	 *         Moderate chip against that order with this widening reverted, raises none with it. So
+	 *         "try a different NSAID", the commonest alternative-proposal shape after an NSAID
+	 *         question, is inside the residue. Two cases pin the two shapes so both read as decisions
+	 *         rather than discoveries: {@code DrugSafetyValidatorEchoScopingTest
+	 *         .aPartnerTheAnswerProposesRatherThanRecitesIsWithheldToo} for a rendered partner, and
+	 *         {@code .aSubstanceNamedOnlyInsideARenderedMechanismParagraphIsWithheldToo} for a name
+	 *         the record carries only as mechanism prose.
 	 *
 	 *         <p><b>Say what the two bounds do and do not reach, because reciting them as if they
 	 *         covered the class is the error to avoid.</b> A question-named X never reaches this

@@ -1238,28 +1238,40 @@ public class ChartSearchAiRestController {
 	 * RESOLUTION this module performed and no identity of the prescription, which is precisely what
 	 * #339's reverted rounds could not say.
 	 *
-	 * <p><b>Published VERBATIM, not remapped, and that is the contract rather than a shortcut.</b>
+	 * <p><b>Published VERBATIM, not remapped.</b>
 	 * {@code ChartSearchAiSafetyWarningSeverityWireTest.everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire}
-	 * requires every public accessor of a chip to name a key carrying what that accessor READS — a
-	 * value the module computes and then reshapes at serialization is the shape of issue #340's own
-	 * defect. So the key is named after the accessor and carries its list; the JSON field names come
-	 * from {@code ChartOrderBridge}'s getters, which means a public getter added there becomes a wire
-	 * field. {@code ChartSearchAiChartOrderBridgeTest.theTwoHalvesAreSeparateFieldsAndNotASentenceToParse}
-	 * pins the field set for that reason.
+	 * compares each public accessor's own reading against the key it names, so its CONTRACT is that
+	 * the published value equals what the accessor returns — a value the module computes and then
+	 * reshapes is indistinguishable there from issue #340's own defect, a value computed and dropped.
+	 * Stated as the contract and not as something the suite currently exercises: every chip in that
+	 * test's fixture bridges nothing, so a reshape into maps passes it today, and it would redden the
+	 * moment anyone gives that fixture a bridged chip. Do not take the blind spot.
+	 *
+	 * <p>Two consequences of publishing the object, both measured and neither hidden. The JSON field
+	 * names come from {@code ChartOrderBridge}'s getters, so a public getter added there becomes a
+	 * wire field — {@code ChartSearchAiChartOrderBridgeTest.theTwoHalvesAreSeparateFieldsAndNotASentenceToParse}
+	 * pins the JSON field set. And this is the only value on the payload that is not a JDK type, so
+	 * XStream names its element after the CLASS
+	 * ({@code org.openmrs.module.chartsearchai.reference.SafetyWarning_-ChartOrderBridge}) where every
+	 * other element is a {@code map}/{@code list}/{@code string}; README scopes the documented field
+	 * names to JSON for that reason. XStream marshals FIELDS, so a PRIVATE field added to that class
+	 * also reaches an XML client, and no test sees it — the JSON guard reads getters and the
+	 * marshalling guard only catches a field XStream refuses. Named rather than left to be found.
 	 *
 	 * <p>Two fields rather than a rendered sentence, for the same reason {@code severity} above is
 	 * published at all: the alternative is a client parsing English. The list is always
 	 * present and is EMPTY where the module bridged nothing. <b>Empty says "no attribution to show",
-	 * and NOT "the chart records these substances"</b> — an earlier draft of this paragraph and of
-	 * README said the latter, and it is false in the commonest case: on the prescribing question the
-	 * chip is about a drug the QUESTION named, which resolves from no active order, so
-	 * {@code DrugSafetyValidator.addChartOrderBridge}'s {@code resolvesFromAny} conjunct refuses every
-	 * order and the array is empty for a substance the chart spells nowhere. Rendering that as "the
-	 * chart already records it" would tell a clinician she is on a drug she is not — issue #347's own
-	 * confusion inverted, inside the field added to fix it. Other empty cases exist (a chip that is
-	 * not an interaction, a class-only or question-pair chip, an order the module could read no name
-	 * for, a chart with no active medication), and the list is deliberately not offered as
-	 * exhaustive.
+	 * and NOT "the chart records these substances."</b> The mechanism, rather than a rule about which
+	 * case is commonest — two drafts of that rule were written here and both were measured false:
+	 * {@code DrugSafetyValidator.chartOrderBridges} walks the SUBJECT against every order and the
+	 * PARTNER against the orders its arm allowed, and each item needs
+	 * {@code addChartOrderBridge}'s {@code resolvesFromAny} AND a display that does not already name
+	 * the substance. So a chip about a drug the QUESTION named contributes nothing on its subject side
+	 * — that drug resolves from no order — while its partner side can still bridge, which is exactly
+	 * what {@code InteractionFindingChartOrderBridgeTest.theDrugInPlayArmsPartnerIsBridgedToo}
+	 * asserts. Rendering empty as "the chart already records it" would tell a clinician she is on a
+	 * drug she is not, which is issue #347's own confusion inverted inside the field added to fix
+	 * it.
 	 */
 	private List<Map<String, Object>> serializeSafetyWarnings(List<SafetyWarning> warnings) {
 		List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();

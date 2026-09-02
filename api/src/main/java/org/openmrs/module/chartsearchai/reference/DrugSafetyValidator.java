@@ -5983,11 +5983,14 @@ public class DrugSafetyValidator {
 	}
 
 	/** @return true when ANY row of the subject's substance matches one order name — the group form of
-	 *          {@link DrugReference#matchesDrugName}, for the flattened fallback below, for
-	 *          the bridge's silence test {@link #displaysANameOfAny} (issue #347) and for
-	 *          the arm's own attribution. Every reading goes through this one primitive on purpose, so
-	 *          a tightening of the MATCHER moves them together; what they no longer share is the
-	 *          OPERAND, which is that issue's own subject. */
+	 *          {@link DrugReference#matchesDrugName}. TWO call sites: the flattened fallback below, and
+	 *          the bridge's silence test {@link #displaysANameOfAny} (issue #347). The arm's own name
+	 *          leg is NOT one of them — {@link #recordsANameOf} calls the single-row
+	 *          {@code DrugReference.matchesDrugName} directly — so what all three readings share is
+	 *          that primitive and not this fold. Until #347 the bridge's silence test WAS this fold
+	 *          over the attribution's own operand, and the guarantee that a tightening moved them
+	 *          together came from that; it no longer does, and {@link #displaysANameOfAny} records
+	 *          what the decoupling exposes. */
 	private static boolean matchesDrugNameAny(List<DrugReference> subjectRows, String name) {
 		for (DrugReference row : subjectRows) {
 			if (row.matchesDrugName(name)) {

@@ -105,11 +105,12 @@ public class SafetyWarning {
 	 * substances were resolved from — see {@link #chartOrderBridges()}, which is published as this
 	 * chip's {@code chartOrderBridges} wire key (issue #347).
 	 *
-	 * <p>Public because the bridges are now a WIRE field and the test that pins their serialization
-	 * lives in the {@code web.rest} package, which cannot reach {@code interaction(..)} below — that
-	 * factory already answers "build a chip carrying bridges" but is package-private in this one. The
-	 * reason is the caller's PACKAGE, not that a consumer READS the DTO, which an earlier draft of this
-	 * paragraph gave and which does not carry a constructor. It is not the production path: {@code DrugSafetyValidator.interactionWarning}
+	 * <p>Public for the reason the three- and four-argument constructors above are: the wire-facing
+	 * shape is public, and since issue #347 the bridges are part of it. (What made it NECESSARY is
+	 * narrower — the test that pins their serialization lives in {@code web.rest} and cannot reach
+	 * {@code interaction(..)} below, which already answers "build a chip carrying bridges" but is
+	 * package-private here. Stated second because the policy sentence is the stronger reason and the
+	 * neighbouring factory's javadoc gives it for the others.) It is not the production path: {@code DrugSafetyValidator.interactionWarning}
 	 * builds a chip that also carries a reconciled partner name and a folded relationship, so it takes
 	 * the private constructor below. Nothing here is an impossible pair — the reason issue #298 gave a
 	 * FACTORY to the contraindication shape rather than widening a constructor does not reach this
@@ -182,7 +183,7 @@ public class SafetyWarning {
 	 * than for a consumer, which is what stops a later reader having to remember to set it.
 	 *
 	 * <p>Package-private, matching the accessors: a caller may set only what it may read back. The
-	 * three- and four-argument constructors above are public because the wire-facing shape is, and
+	 * public constructors above are public because the wire-facing shape is, and
 	 * neither of these two facts is part of it — public here would offer an outside caller a way to
 	 * govern the injected record's strength, and the name of a partner in it, with no way to observe
 	 * either assertion from where it was made. The one caller is

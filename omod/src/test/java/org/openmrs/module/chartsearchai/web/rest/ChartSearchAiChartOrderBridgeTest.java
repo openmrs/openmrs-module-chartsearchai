@@ -79,7 +79,7 @@ public class ChartSearchAiChartOrderBridgeTest {
 
 	private final RestControllerContext openmrsContext = new RestControllerContext();
 
-	/** The chip's attributions; emptied by the case that asks what a chip with none publishes. */
+	/** The chip's attributions; emptied by the cases that ask what a chip with none publishes. */
 	private List<SafetyWarning.ChartOrderBridge> bridges;
 
 	@BeforeEach
@@ -121,9 +121,9 @@ public class ChartSearchAiChartOrderBridgeTest {
 	}
 
 	/** The attributions of the payload's one chip, AS JSON — the payload map carries the module's own
-	 *  list verbatim (see {@code serializeSafetyWarnings}), so the field names a client actually reads
-	 *  are Jackson's view of {@code ChartOrderBridge} and must be asserted through it rather than off
-	 *  the map. */
+	 *  {@code ChartOrderBridge} objects (in a copy, see {@code serializeSafetyWarnings}), so the field
+	 *  names a client actually reads come from the MAPPER's view of that class and must be asserted
+	 *  through a mapper rather than off the map. */
 	private JsonNode chartOrderBridgesOfOnlyChip(Map<String, Object> payload) {
 		JsonNode chips = MAPPER.valueToTree(payload).get("safetyWarnings");
 		assertNotNull(chips, "no safetyWarnings key");
@@ -179,10 +179,12 @@ public class ChartSearchAiChartOrderBridgeTest {
 		// a client has to take apart, and this module rewords its prose freely.
 		//
 		// Read off the STREAM rather than the /search payload, because this is the one case about the
-		// JSON a client receives: the payload map carries the module's own list, so its field names
-		// come from whatever mapper serializes it later, while the SSE path writes real bytes through
-		// the controller's own ObjectMapper. The /search cases assert what the payload carries; this
-		// one asserts what comes out.
+		// JSON a client receives: the payload map carries the module's own ChartOrderBridge objects, so
+		// its field names come from whatever mapper serializes it later, while the SSE path writes real
+		// bytes through the controller's own ObjectMapper. The /search cases assert what the payload
+		// carries; this one asserts what comes out. It pins the JSON field set only — XStream marshals
+		// FIELDS, so a private field added to ChartOrderBridge reaches an XML client without reddening
+		// this; theWholePayloadStillMarshalsForAnXmlClient catches only a field XStream REFUSES.
 		controller.streamAnswer(out, RestControllerContext.patient(), "Is aspirin safe for her?", new User(3), false);
 		JsonNode bridge = streamedChartOrderBridges("done").get(0);
 
@@ -194,9 +196,10 @@ public class ChartSearchAiChartOrderBridgeTest {
 
 	@Test
 	public void aChipWithNothingToReconcileStatesAnEmptyListRatherThanNothing() {
-		// Empty is a statement — every substance this chip names is one the chart's own records spell
-		// — and it is not absence: chartOrderBridges() is resolved for every chip and is never null.
-		// Present-and-empty rather than omitted, so a client reads one field unconditionally.
+		// Empty says there was no attribution to show. It is NOT a statement that the chart records
+		// those substances — SafetyWarning.chartOrderBridges() is canonical for what empty covers, and
+		// this comment said the refuted thing until it was swept. What this case pins is that empty is
+		// present rather than omitted, so a client reads one field unconditionally.
 		bridges = Collections.<SafetyWarning.ChartOrderBridge> emptyList();
 
 		JsonNode published = chartOrderBridgesOfOnlyChip(searchPayload());

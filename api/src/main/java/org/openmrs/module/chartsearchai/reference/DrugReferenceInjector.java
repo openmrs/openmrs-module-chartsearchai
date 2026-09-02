@@ -1985,8 +1985,20 @@ public class DrugReferenceInjector {
 	 * reintroduced by its own fix. Both figures are that one fixture's; the shape was first found on a
 	 * differently sized one, so re-measure rather than carrying either number across. The tail's job is breadth; a rule that names
 	 * nobody states none, so it may not outrank one that does. In the PROMOTED segment the key cannot
-	 * fire: {@link #promotable} requires {@link PatientClinicalContext#hasActiveDrug}, which is false
-	 * when both the token and the ATC are absent, so a promoted note always has a name.
+	 * fire, and the two ends of that argument read the SAME pair of fields: the flag is
+	 * {@code reconciledPartnerNoteName != null}, which falls back to
+	 * {@link DrugSafetyValidator#partnerLabel} — a {@code firstNonBlank(token, atc)}, so null exactly
+	 * when both are absent — while {@link #promotable} requires
+	 * {@link PatientClinicalContext#hasActiveDrug}, whose name arm skips a blank token and whose last
+	 * line is an ATC lookup that fails on an absent code. A rule this key demotes is therefore one
+	 * {@code hasActiveDrug} answers false for, so it was never promotable, and it can carry no chip
+	 * either — {@link DrugSafetyValidator#bestRulePerPartner} gates on that same conjunction. Nothing
+	 * this key drops is a partner a chip could name.
+	 *
+	 * <p>Two keys, and the composition is still a total order — lexicographic over a boolean and an
+	 * {@code int} — so no input can make {@code Collections.sort} raise
+	 * {@code "Comparison method violates its general contract!"} on the large partner lists the shipped
+	 * knowledge base carries.
 	 *
 	 * <p>Which source a rule came from decides whether that branch is reachable at all: DDInter rates
 	 * every row (all 295,184 in the full KB are Major/Moderate/Minor/Unknown — none unrecognised), so

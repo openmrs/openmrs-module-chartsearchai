@@ -592,6 +592,16 @@ public class SafetyWarning {
 	 * that is not this question: what a finding licenses there is a decision about a proposal, because
 	 * a proposal is what was put to the module.
 	 *
+	 * <p><b>It can answer differently in the two {@code validate} passes of one request, and nothing
+	 * reads the second answer.</b> The pre-answer pass validates with an EMPTY answer, so the drugs in
+	 * play there are the QUESTION's — which is the right base for a record the model reads before it
+	 * answers. The post-answer pass also has the drugs the ANSWER named in play, so a substance the
+	 * answer proposed can flip this to false there. That pass renders no clause
+	 * ({@code DrugReferenceInjector.renderFinding} has one caller, {@code injectRecords}, and it uses
+	 * the pre-answer findings), this flag is on neither the wire nor either collapse key, and nothing
+	 * compares the two passes' warnings — so the divergence is unobservable rather than tolerated.
+	 * Said here because a reader checking for pass-stability will look for it.
+	 *
 	 * <p>It is not derivable from anything else the warning carries, which is why it travels. In
 	 * particular it is NOT {@link #chartOrderBridges()}: that answers whether the ORDER records a name
 	 * of the substance (issue #349) and is empty for the common case where it does — including on this

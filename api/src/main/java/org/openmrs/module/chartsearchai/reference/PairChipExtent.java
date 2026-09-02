@@ -158,7 +158,7 @@ public final class PairChipExtent {
 	}
 
 	/**
-	 * The one-slot accumulator a caller supplies to hear what the pairwise check found — the same
+	 * The one-slot accumulator a caller supplies to hear what the interaction check found — the same
 	 * idiom as the {@code List<SafetyWarning> warnings} accumulator
 	 * {@link DrugSafetyValidator#validate} already threads through its arms, one level up.
 	 *

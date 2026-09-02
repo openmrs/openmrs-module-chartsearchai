@@ -406,7 +406,7 @@ public interface ChartSearchService {
 		}
 
 		/**
-		 * How many drug pairs this answer's PAIRWISE interaction check found and how many of them it
+		 * How many drug pairs this answer's interaction check found and how many of them it
 		 * reported — what the {@code interactionPairs} key on the {@code /search} response and on the
 		 * {@code done} and {@code grounded} SSE events publishes (issue
 		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/336">#336</a>).

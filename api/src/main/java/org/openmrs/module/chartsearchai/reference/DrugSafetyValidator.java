@@ -365,8 +365,10 @@ public class DrugSafetyValidator {
 	 *        {@code ActiveOrderResolutionPerPassTest} pins both halves: that the pass resolves once,
 	 *        and that what it injects is what a self-resolving pass produces.
 	 *
-	 * @param pairExtentSink where the PAIRWISE arms state how many above-floor pairs they found and
-	 *        how many of them {@link #maxPairChips()} let them report, or {@code null} down every
+	 * @param pairExtentSink where the arm that ran states how many above-floor rule pairs it found
+	 *        and how many of them it reported — {@link #maxPairChips()}'s cut for either PAIRWISE arm,
+	 *        and everything it found for the uncapped drug-in-play arm, which states it where neither
+	 *        of those ran (issue #356) — or {@code null} down every
 	 *        path but the one {@code LlmInferenceService} takes to publish it on the answer. It is
 	 *        a caller-supplied per-call object rather than a field for issue #172's reason, the same
 	 *        one {@code resolvedOrderEntries} above gives. Issue #336: without it a capped list was
@@ -6577,7 +6579,11 @@ public class DrugSafetyValidator {
 	 *         rule; the rule leg matches tokens against this context and enumerates no partner list
 	 *         that could be compared with it). All three shapes a context can carry the information in,
 	 *         because issue #118 deliberately keeps the flattened-only fallback beside the per-order
-	 *         list: either can be the only one populated.
+	 *         list: either can be the only one populated. The rule leg joins through
+	 *         {@link PatientClinicalContext#hasActiveDrug}, which reads a FOURTH set — the reference
+	 *         names {@code withReferenceNames} derives from these three — so it is not tested here;
+	 *         a change that populated that set independently of them would gate off a screen that
+	 *         really ran.
 	 *
 	 *         <p>Read by {@code validate} alone, to decide whether that arm states a
 	 *         {@link PairChipExtent} (issue #356). An empty answer here is why a prescribing question

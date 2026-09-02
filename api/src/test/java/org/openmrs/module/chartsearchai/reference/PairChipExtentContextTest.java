@@ -16,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -107,20 +108,31 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 		return pass(SCREENING_QUESTION, DrugReferenceTestSupport.screenedSixOrderChart());
 	}
 
+	/** One active order, related to nothing the questions below name above the floor. Called by the
+	 *  SCREENING case that relates no pair and by the drug-in-play cases at the bottom, so "the two
+	 *  arms are measured on one patient" is a fact about this method rather than about two copies of
+	 *  a chart that can be edited apart. */
+	private static PatientClinicalContext oneSimvastatinOrder() {
+		return DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Simvastatin"),
+				DrugReferenceTestSupport.set("C10AA01"), null, null);
+	}
+
 	/** Runs the real validate over an explicit clinical context, which is the arity every other
 	 *  chip test in this package drives — NOT the arity production publishes through. That link, from
 	 *  the public {@code Patient} entry point down to the arm, is its own case below; without it a
 	 *  mutation of the delegation leaves this whole class green (measured). The empty answer is the
 	 *  pre-answer production shape ({@code DrugReferenceInjector.preAnswerFindings}). */
 	private Pass pass(String question, PatientClinicalContext context) {
-		return pass("", question, context);
+		return passWithAnswer("", question, context);
 	}
 
 	/** As {@link #pass(String, PatientClinicalContext)}, over an explicit ANSWER — the post-answer
 	 *  production shape, and the only one that can put a drug in play the question did not name
 	 *  ({@code inPlay} is the question's drugs UNION the answer's, echo-scoped). Every case above
-	 *  drives the empty answer, so none of them can express an answer-side drug at all. */
-	private Pass pass(String answer, String question, PatientClinicalContext context) {
+	 *  drives the empty answer, so none of them can express an answer-side drug at all. Named apart
+	 *  from {@link #pass(String, PatientClinicalContext)} rather than overloading it: both take a
+	 *  leading {@code String} and a reader cannot see from a call site which of the two it is. */
+	private Pass passWithAnswer(String answer, String question, PatientClinicalContext context) {
 		PairChipExtent.Sink sink = new PairChipExtent.Sink();
 		List<SafetyWarning> chips = validator.validate(answer, question, context, null, null, sink);
 		return new Pass(chips, sink.stated());
@@ -210,9 +222,7 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 		// Zero is a measurement: this screen ran over the patient's orders and the reference data
 		// related none of the pairs it enumerated. A caller told nothing at all could not tell that
 		// COMPLETE result from a question that never asked to be screened.
-		Pass screened = pass(SCREENING_QUESTION, DrugReferenceTestSupport.ctx(60, null,
-				DrugReferenceTestSupport.set("Simvastatin"),
-				DrugReferenceTestSupport.set("C10AA01"), null, null));
+		Pass screened = pass(SCREENING_QUESTION, oneSimvastatinOrder());
 
 		assertTrue(screened.chips.isEmpty(),
 				"precondition: one order relates to nothing, so no pair chip is raised");
@@ -316,18 +326,11 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 		Pass none = pass("What is warfarin used for?",
 				DrugReferenceTestSupport.ctx(60, null, null, null, null, null));
 
-		assertNull(none.extent, "no pairwise arm ran, so nothing may be stated on the answer's behalf");
+		assertNull(none.extent,
+				"no arm screened anything, so nothing may be stated on the answer's behalf");
 	}
 
 	// --- The drug-in-play arm's own screen (issue #356) ---
-
-	/** The one-order chart the prescribing questions below are screened against — the same
-	 *  arrangement {@code aScreenThatRelatesNoPairStatesZeroRatherThanNothing} drives the screening
-	 *  arm over, so the two arms are measured on one patient. */
-	private static PatientClinicalContext oneSimvastatinOrder() {
-		return DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Simvastatin"),
-				DrugReferenceTestSupport.set("C10AA01"), null, null);
-	}
 
 	@Test
 	public void aDrugInPlayScreenThatRelatesNoActiveOrderStatesZeroRatherThanNothing() {
@@ -371,10 +374,14 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 				DrugReferenceTestSupport.ctx(60, null,
 						DrugReferenceTestSupport.set("Atorvastatin 20mg"),
 						DrugReferenceTestSupport.set("C10AA05"), null, null,
-						java.util.Arrays.asList(DrugReferenceTestSupport.activeOrder("order-atorvastatin",
+						Arrays.asList(DrugReferenceTestSupport.activeOrder("order-atorvastatin",
 								"Atorvastatin 20mg", DrugReferenceTestSupport.set("atorvastatin"),
 								DrugReferenceTestSupport.set("C10AA05")))));
 
+		// What this arrangement cannot express, stated rather than left to be assumed: the excerpt
+		// carries no Atorvastatin entry at all, so bestRulePerPartner has no rule to return and no
+		// rule chip is reachable here. It separates "count the class chips too" from correct; that
+		// rule chips ARE counted is pinned by aDrugInPlayScreenThatRelatesAnActiveOrderStatesWhatItRelated.
 		assertEquals(1, classOnly.chips.size(), "precondition: the shared C10AA subgroup raises a chip: "
 				+ DrugReferenceTestSupport.details(classOnly.chips));
 		assertNull(classOnly.chips.get(0).getSeverity(),
@@ -409,8 +416,8 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 		// no reference drug and carries no interaction cue, so no arm is anchored on anything the
 		// clinician asked about — but the ANSWER names one, which reaches the drug-in-play arm. The
 		// statement is the question's, so there is none.
-		Pass none = pass("Clarithromycin would be a reasonable choice.", "What should I watch out for?",
-				oneSimvastatinOrder());
+		Pass none = passWithAnswer("Clarithromycin would be a reasonable choice.",
+				"What should I watch out for?", oneSimvastatinOrder());
 
 		assertEquals(1, none.chips.size(),
 				"precondition: the arm ran on the answer's own drug and related the order, so this case "
@@ -425,7 +432,7 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 		// cannot speak for. One question drug that relates nothing and one answer drug that relates
 		// the order: accumulated over inPlay this reads {1, 1} and describes a screen of a drug
 		// nobody asked about.
-		Pass mixed = pass("Clarithromycin would be a reasonable choice.",
+		Pass mixed = passWithAnswer("Clarithromycin would be a reasonable choice.",
 				"Can I give this patient metformin?", oneSimvastatinOrder());
 
 		assertEquals(1, mixed.chips.size(),

@@ -1230,8 +1230,8 @@ public class ChartSearchAiRestController {
 	}
 
 	/**
-	 * Writes an answer's drug-safety chips AND the statement of how bounded the pairwise interaction
-	 * list behind them is, into one payload map. Every emission surface goes through here.
+	 * Writes an answer's drug-safety chips AND the statement of how bounded the interaction list
+	 * behind them is, into one payload map. Every emission surface goes through here.
 	 *
 	 * <p>Named for the CHIPS and not for "findings", deliberately: {@code safety_finding} is a
 	 * reference resource type — the citable record form of a chip — and this method has nothing to

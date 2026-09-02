@@ -413,10 +413,13 @@ public interface ChartSearchService {
 		 *
 		 * <p>The producer states it, so no consumer derives it. A capped list was otherwise
 		 * indistinguishable from a complete one everywhere but a server-side WARN, and the chip count
-		 * cannot stand in for it: interaction chips also come from the drug-in-play arm, so counting
-		 * them answers a different question.
+		 * cannot stand in for it: the drug-in-play arm raises interaction chips for drugs only the
+		 * ANSWER named and class chips this counts nowhere, so counting them answers a different
+		 * question. That arm states this too since issue
+		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/356">#356</a>, for
+		 * the one-drug prescribing question neither pairwise arm runs on.
 		 *
-		 * @return the statement, or {@code null} where the pairwise check made none —
+		 * @return the statement, or {@code null} where the interaction check made none —
 		 *         {@link PairChipExtent} is canonical for what that covers, and for why {@code null}
 		 *         is not zero
 		 */

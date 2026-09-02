@@ -1247,11 +1247,11 @@ public class ChartSearchAiRestController {
 	 * {@code ChartSearchAiInteractionPairExtentTest} fails the build on a call to
 	 * {@link #serializeSafetyWarnings} outside this method.
 	 *
-	 * <p>{@code interactionPairs} is always present and is {@code null} where the pairwise check
+	 * <p>{@code interactionPairs} is always present and is {@code null} where the interaction check
 	 * stated nothing — see {@code PairChipExtent}, which is canonical for what that does and does
 	 * not mean. It is deliberately NOT the count of {@code interaction} chips beside it: the
-	 * drug-in-play arm raises those too, so a client must render this as a ratio of pairs, not of
-	 * chips.
+	 * drug-in-play arm raises chips for drugs only the ANSWER named and unrated class chips this
+	 * counts nowhere, so a client must render this as a ratio of pairs, not of chips.
 	 */
 	private void putSafetyChips(Map<String, Object> target, ChartAnswer answer) {
 		target.put("safetyWarnings", serializeSafetyWarnings(answer.getSafetyWarnings()));
@@ -1260,7 +1260,7 @@ public class ChartSearchAiRestController {
 
 	/**
 	 * The wire shape of {@code interactionPairs}: {@code found} above-floor pairs, {@code reported}
-	 * of them shown. {@code null} for an answer whose pairwise check stated no measurement — never
+	 * of them shown. {@code null} for an answer whose interaction check stated no measurement — never
 	 * an empty object and never a zeroed one, because zero is itself a measurement here (a complete
 	 * screen that related no pairs).
 	 */

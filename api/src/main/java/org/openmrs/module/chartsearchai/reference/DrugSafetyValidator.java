@@ -221,7 +221,7 @@ public class DrugSafetyValidator {
 	 * behavior).
 	 *
 	 * <p><b>Since issue #336, {@code LlmInferenceService} calls the five-argument overload below,
-	 * not this one</b> — it also publishes how bounded the pairwise interaction list is, which this
+	 * not this one</b> — it also publishes how bounded the answer's interaction list is, which this
 	 * arity has nowhere to carry. A decorator or a test double that overrides THIS method alone is
 	 * therefore inert on the production path, and inert SILENTLY — it returns, production simply
 	 * never reaches it. Of the stubs in this repo that overrode it, exactly one asserted on the seam
@@ -238,10 +238,10 @@ public class DrugSafetyValidator {
 
 	/**
 	 * The production entry point a caller uses when it intends to PUBLISH how bounded the answer's
-	 * pairwise interaction list is (issue #336). Identical to
+	 * interaction list is (issue #336). Identical to
 	 * {@link #validate(String, String, Patient, List)} in every other respect.
 	 *
-	 * @param pairExtentSink a caller-supplied one-slot accumulator the pairwise arms state their
+	 * @param pairExtentSink a caller-supplied one-slot accumulator the interaction arms state their
 	 *        candidate and reported counts into, or {@code null} from a caller that does not
 	 *        publish it. It is the caller's per-call object and never a field: this bean is a
 	 *        Spring singleton, so a field would be one slot shared by every concurrent request
@@ -311,7 +311,7 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * Five-argument seam for a caller that does not publish the pairwise extent — the internal
+	 * Five-argument seam for a caller that does not publish the interaction extent — the internal
 	 * mappings-aware overload above and {@code DrugReferenceInjector.preAnswerFindings}, whose
 	 * findings go to the PROMPT rather than to a response. See the widest arity for both parameters.
 	 */
@@ -559,6 +559,27 @@ public class DrugSafetyValidator {
 		// says why it is lazy rather than resolved here and now.
 		CoMedications coMedications = new CoMedications(context);
 
+		// The screen the drug-in-play arm performs for the drugs the QUESTION put in play, so that it
+		// can state its own extent below (issue #356). Two things are accumulated and both are needed:
+		// whether the arm was reached for a question-side substance at all, and how many of the
+		// patient's own medications it related one to.
+		//
+		// The QUESTION's substances and never inPlay's, which is what makes the statement
+		// answer-independent at the level the pairwise arms are: inPlay is the question's drugs UNION
+		// the ones the ANSWER names, and the sink exists only on the post-answer pass, so a count over
+		// inPlay would publish the model's prose as the clinician's question — and would state an
+		// extent for a question that resolved no drug at all, which is the one row issue #356 says must
+		// stay null. Keyed on the substance rather than the entry because that is the unit the arm is
+		// called on. What this does NOT buy is row-level independence: resolvedRows is built over
+		// inPlay, so a row the answer names widens the group this arm rules over (issue #175's measured
+		// shape) and can change which rule survives for a question substance.
+		Set<Object> questionSubstances = new HashSet<Object>();
+		for (DrugReference questionDrug : questionDrugs) {
+			questionSubstances.add(questionDrug.substanceGroupKey());
+		}
+		boolean questionDrugScreened = false;
+		int questionDrugPairs = 0;
+
 		for (DrugReference ref : inPlay) {
 			if (warnContra) {
 				// Ungated: a drug in play IS the subject matter — the question resolved it or the
@@ -584,8 +605,12 @@ public class DrugSafetyValidator {
 				// One call, not one per arm: the rule arm and the class arm can both raise a chip about
 				// the same active order, so the decision of how many chips that pair gets belongs to a
 				// method that sees both (issue #88).
-				addInteractionWarnings(warnings, rows, subjects, context, severityFloor, orderEntries,
-						interactionPairs, coMedications, statedChips);
+				int related = addInteractionWarnings(warnings, rows, subjects, context, severityFloor,
+						orderEntries, interactionPairs, coMedications, statedChips);
+				if (questionSubstances.contains(substance)) {
+					questionDrugScreened = true;
+					questionDrugPairs += related;
+				}
 			}
 			if (dosePending.remove(substance)) {
 				addOverdose(warnings, rows, subjects, context, lower, all);
@@ -617,8 +642,9 @@ public class DrugSafetyValidator {
 		// Held in a local and published to the caller's sink only on the normal return below, so a pass
 		// that degrades cannot leave a statement about chips it did not produce: the public entry
 		// answers a RuntimeException with an EMPTY warning list, and a sink written arm-by-arm would
-		// then say "18 found, 10 reported" beside no chips at all. At most one of the two arms can
-		// assign it — their gates are mutually exclusive, see the screening gate below.
+		// then say "18 found, 10 reported" beside no chips at all. At most one of the two PAIRWISE arms
+		// can assign it — their gates are mutually exclusive, see the screening gate below — and the
+		// drug-in-play arm assigns it after both, only where neither did (issue #356).
 		PairChipExtent pairExtent = null;
 		if (warnInteractions) {
 			pairExtent = addQuestionPairInteractions(warnings, questionDrugs, subjects, context,
@@ -647,6 +673,28 @@ public class DrugSafetyValidator {
 				&& QueryScopeRouter.isInteractionScreening(question)) {
 			pairExtent = addActiveOrderPairInteractions(warnings, subjects, context, severityFloor,
 					orderEntries, interactionPairs, coMedications, statedChips);
+		}
+		// And where neither of them ran, the arm that DID screen speaks (issue #356). "Can I give this
+		// patient X?" names one drug: too few for the question-pair arm, too many for the screen, so
+		// the drug-in-play arm above is the whole of the interaction check on the canonical prescribing
+		// question — and a completed negative screen was published as `null`, the value PairChipExtent
+		// defines as "the producer stated nothing".
+		//
+		// LAST and only where pairExtent is still null, never summed. A pairwise statement is about a
+		// BOUNDED list — found and reported can differ, and which is the whole of what a client renders
+		// — while this arm applies no cap and reports everything it relates. Adding the two populations
+		// into two integers is the ratio of two different populations PairChipExtent's own javadoc
+		// forbids, so where a pairwise arm has spoken its statement stands alone, exactly as it did
+		// before this arm could speak at all.
+		//
+		// hasActiveMedicationRecords, and not merely "the arm ran": this arm is gated on no question
+		// shape at all — it runs for any question that mentions a drug — so on a chart recording no
+		// medication there is neither a population to screen nor a request to screen one, and a zero
+		// would answer a question nobody asked. That is a deliberate difference from
+		// addActiveOrderPairInteractions, which states of(0, 0) on the same chart because the clinician
+		// asked it for a screen and "no pairs" is a direct answer to that; ADR Decision 65 carries it.
+		if (pairExtent == null && questionDrugScreened && hasActiveMedicationRecords(context)) {
+			pairExtent = PairChipExtent.of(questionDrugPairs, questionDrugPairs);
 		}
 		if (!warnings.isEmpty()) {
 			log.info("Drug-safety validator raised {} warning(s)", warnings.size());
@@ -835,17 +883,20 @@ public class DrugSafetyValidator {
 	 * <p><b>One property for both arms</b>, deliberately: their gates are mutually exclusive — the pair
 	 * arm needs the question to resolve two or more reference drugs, the screen needs it to resolve none
 	 * — so at most one of them runs per question and no question can be subject to both. Two separately
-	 * tunable limits for one concept would be arbitrary. Fail-safe like {@code weightMaxAgeDays} and
-	 * {@code minInteractionSeverity}: an unparseable or non-positive value falls back to the default
-	 * rather than disabling the cap, because a typo'd GP must not turn a bounded safety net into an
-	 * unbounded question-controlled prompt expansion.
+	 * tunable limits for one concept would be arbitrary. It bounds those two and nothing else: the
+	 * drug-in-play arm raises one chip per partner it relates and has never been capped, which is why
+	 * the extent it states (issue #356) always reports everything it found. Fail-safe like
+	 * {@code weightMaxAgeDays} and {@code minInteractionSeverity}: an unparseable or non-positive
+	 * value falls back to the default rather than disabling the cap, because a typo'd GP must not turn
+	 * a bounded safety net into an unbounded question-controlled prompt expansion.
 	 *
 	 * <p><b>What the cap drops, and how it is visible.</b> A count rather than a character budget: a
 	 * chip is a whole sentence a clinician reads, and half a chip is not a smaller chip. Candidates are
 	 * ordered most-severe-first BEFORE the cut, so what goes is the least severe, and every withheld
 	 * pair is NAMED in a WARN — a silent truncation would read to a clinician as "everything is
 	 * covered". <b>The WARN is no longer the only place the cut surfaces</b> (issue #336): both arms
-	 * now state how many pairs they found beside how many they reported, on the answer as
+	 * now state how many pairs they found beside how many they reported — and since issue #356 so does
+	 * the uncapped drug-in-play arm, where neither of these ran — on the answer as
 	 * {@code ChartAnswer.getPairChipExtent()} and on the wire as {@code interactionPairs}. This
 	 * javadoc used to say a clinician-facing "10 of 72 shown" needed a per-question container the chip
 	 * API does not have and was therefore a frontend change; the premise was half right and the
@@ -892,14 +943,14 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * States a pairwise arm's extent into the caller's sink, where there is one and the arm ran.
+	 * States an interaction arm's extent into the caller's sink, where there is one and an arm ran.
 	 *
-	 * <p>Called ONCE, on {@code validate}'s normal return, from a local both arms assign — never per
+	 * <p>Called ONCE, on {@code validate}'s normal return, from a local the arms assign — never per
 	 * arm. That is what makes the statement atomic with the chips: the public entry answers a
 	 * RuntimeException with an empty warning list, so a sink written as each arm finished could
 	 * describe a screen whose chips were then discarded (issue #336).
 	 *
-	 * <p>A {@code null} extent means no pairwise arm enumerated anything, which is not the same as an
+	 * <p>A {@code null} extent means no arm enumerated anything, which is not the same as an
 	 * arm having enumerated nothing: an arm that ran and found no above-floor pair states
 	 * {@code found == 0}, a complete screen. See {@link PairChipExtent}.
 	 */
@@ -2288,6 +2339,17 @@ public class DrugSafetyValidator {
 	 * groups the rows ({@link #resolvedSubstanceRows}) and hands them here at the group's first row, so
 	 * a substance's chips keep the position they have always had.
 	 *
+	 * <p><b>It reports how many pairs it related, and that is what reaches the wire</b> (issue #356).
+	 * "Can I give this patient X?" names ONE drug, so neither pairwise arm runs — the question-pair
+	 * arm needs two and the screen needs none — and this arm is the whole of the interaction check on
+	 * the canonical prescribing question. Stating nothing published a completed negative screen as
+	 * {@code interactionPairs: null}, which {@link PairChipExtent} defines as "the producer stated no
+	 * measurement": a clinician was given an abstention indistinguishable from one where nobody
+	 * looked. The count returned is the RULE chips this call appended, because that is the population
+	 * both pairwise arms count; the class-only sentences below are chips and are deliberately not
+	 * among them. {@code validate} decides from it, and only for the substances the QUESTION put in
+	 * play — see the fallback beside the two pairwise arms.
+	 *
 	 * <p><b>The defect.</b> A co-medication that is BOTH an explicit interaction partner AND
 	 * class-related raised TWO {@code TYPE_INTERACTION} chips for one clinical fact, because neither
 	 * arm could see the other. Measured live on the 3.7.1 standalone against {@code main} at
@@ -2369,13 +2431,20 @@ public class DrugSafetyValidator {
 	 * made available, taken. What is left is a context carrying only the flattened union (issue #118's
 	 * fallback), where nothing says which order contributed which code: there each code is its own
 	 * partner again and the two chips stand. {@code ClassChipPartnerLabelTest} pins both halves.
+	 *
+	 * @return how many of the patient's own medications this call related {@code rows}' substance to —
+	 *         the rule chips it appended, after {@code statedChips} has dropped any that restate one
+	 *         this pass already made, and never the class-only sentences. On the flattened context of
+	 *         the paragraph above, where one prescription is several partners, it counts what a reader
+	 *         was shown rather than what the chart prescribed, which is the same residue those chips
+	 *         carry.
 	 */
-	private void addInteractionWarnings(List<SafetyWarning> warnings, List<DrugReference> rows,
+	private int addInteractionWarnings(List<SafetyWarning> warnings, List<DrugReference> rows,
 			SubstanceSubjects subjects, PatientClinicalContext context, int severityFloor,
 			List<DrugReference> orderEntries, InteractionPairs pairs, CoMedications coMedications,
 			StatedInteractionChips statedChips) {
 		if (context == null) {
-			return;
+			return 0;
 		}
 		DrugReference ref = subjects.subjectOf(rows.get(0));
 		List<SubjectRule> rules = new ArrayList<SubjectRule>(
@@ -2504,6 +2573,7 @@ public class DrugSafetyValidator {
 			// floor-filtered either. See SafetyWarning.getSeverity on why null is the correct value.
 			warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.displayLabel(), detail));
 		}
+		return ruleChips.size();
 	}
 
 	/**
@@ -6489,6 +6559,27 @@ public class DrugSafetyValidator {
 	private static boolean hasContraindicationRecords(PatientClinicalContext context) {
 		return context != null
 				&& !(context.getAllergyTokens().isEmpty() && context.getConditionTokens().isEmpty());
+	}
+
+	/**
+	 * @return whether the chart records any active drug for the drug-in-play arm to screen a drug in
+	 *         play AGAINST — the population both of that arm's legs draw their partners from, read off
+	 *         the context that supplies them rather than re-derived from a partner list (issue #151's
+	 *         rule; the rule leg matches tokens against this context and enumerates no partner list
+	 *         that could be compared with it). All three shapes a context can carry the information in,
+	 *         because issue #118 deliberately keeps the flattened-only fallback beside the per-order
+	 *         list: either can be the only one populated.
+	 *
+	 *         <p>Read by {@code validate} alone, to decide whether that arm states a
+	 *         {@link PairChipExtent} (issue #356). An empty answer here is why a prescribing question
+	 *         asked of a patient taking nothing states nothing rather than a complete screen of zero
+	 *         pairs — see the call site, and ADR Decision 65 for why this arm and the screening arm
+	 *         differ on that chart.
+	 */
+	private static boolean hasActiveMedicationRecords(PatientClinicalContext context) {
+		return context != null && !(context.getActiveDrugNames().isEmpty()
+				&& context.getActiveDrugAtcCodes().isEmpty()
+				&& context.getActiveDrugOrders().isEmpty());
 	}
 
 	/**

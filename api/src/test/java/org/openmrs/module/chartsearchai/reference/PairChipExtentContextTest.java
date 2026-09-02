@@ -46,8 +46,14 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * is {@code LlmInferenceServicePairChipExtentTest} (answer) and
  * {@code ChartSearchAiInteractionPairExtentTest} (response). And {@code getReported()} is asserted
  * against the chips raised only in arrangements whose whole warning list is the arm's own — stated
- * as a precondition in each case, because interaction chips also come from the drug-in-play arm and
- * the two populations are not the same one.
+ * as a precondition in each case, because the drug-in-play arm raises interaction chips for drugs
+ * only the ANSWER named and unrated class chips the extent counts nowhere, and those populations
+ * are not this one.
+ *
+ * <p><b>The drug-in-play arm's own cases are at the bottom</b> (issue #356), kept in this class
+ * rather than a new one for the reason the paragraph above gives about the two pairwise arms: what
+ * one pass STATES about its screen is one question, and three arms answering it in three classes is
+ * three chances to answer it differently.
  */
 public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 
@@ -107,8 +113,16 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 	 *  mutation of the delegation leaves this whole class green (measured). The empty answer is the
 	 *  pre-answer production shape ({@code DrugReferenceInjector.preAnswerFindings}). */
 	private Pass pass(String question, PatientClinicalContext context) {
+		return pass("", question, context);
+	}
+
+	/** As {@link #pass(String, PatientClinicalContext)}, over an explicit ANSWER — the post-answer
+	 *  production shape, and the only one that can put a drug in play the question did not name
+	 *  ({@code inPlay} is the question's drugs UNION the answer's, echo-scoped). Every case above
+	 *  drives the empty answer, so none of them can express an answer-side drug at all. */
+	private Pass pass(String answer, String question, PatientClinicalContext context) {
 		PairChipExtent.Sink sink = new PairChipExtent.Sink();
-		List<SafetyWarning> chips = validator.validate("", question, context, null, null, sink);
+		List<SafetyWarning> chips = validator.validate(answer, question, context, null, null, sink);
 		return new Pass(chips, sink.stated());
 	}
 
@@ -294,10 +308,149 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 	public void aQuestionThatRunsNeitherPairwiseArmStatesNothing() {
 		// Absence means the producer measured nothing, never that the screen was complete. This
 		// question names one reference drug — too few for the question-pair arm — and does not ask to
-		// be screened, so neither arm enumerates a candidate list to state the extent of.
+		// be screened, so neither pairwise arm enumerates a candidate list to state the extent of.
+		// Since issue #356 the drug-in-play arm can state one on this question shape, and what keeps
+		// this arrangement silent is the chart: it records no medication, so there was nothing to
+		// screen warfarin against. See aDrugInPlayArmWithNoMedicationToScreenAgainstStatesNothing,
+		// which asks the same of a prescribing question.
 		Pass none = pass("What is warfarin used for?",
 				DrugReferenceTestSupport.ctx(60, null, null, null, null, null));
 
 		assertNull(none.extent, "no pairwise arm ran, so nothing may be stated on the answer's behalf");
+	}
+
+	// --- The drug-in-play arm's own screen (issue #356) ---
+
+	/** The one-order chart the prescribing questions below are screened against — the same
+	 *  arrangement {@code aScreenThatRelatesNoPairStatesZeroRatherThanNothing} drives the screening
+	 *  arm over, so the two arms are measured on one patient. */
+	private static PatientClinicalContext oneSimvastatinOrder() {
+		return DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Simvastatin"),
+				DrugReferenceTestSupport.set("C10AA01"), null, null);
+	}
+
+	@Test
+	public void aDrugInPlayScreenThatRelatesNoActiveOrderStatesZeroRatherThanNothing() {
+		// The ticket's own row. "Can I give this patient X?" names ONE drug, so neither pairwise arm
+		// runs — the question-pair arm needs two and the screen needs none — and until issue #356 the
+		// arm that DID screen X against her medications said so nowhere, so a complete negative screen
+		// and a question nobody screened at all were one value on the wire.
+		Pass none = pass("Can I give this patient metformin?", oneSimvastatinOrder());
+
+		assertTrue(none.chips.isEmpty(),
+				"precondition: the excerpt rates Simvastatin x Metformin Unknown, below the default "
+						+ "minor floor, and C10AA/A10BA share no subgroup, so nothing is raised: "
+						+ DrugReferenceTestSupport.details(none.chips));
+		assertNotNull(none.extent, "but the screen ran, so it must state that it related nothing");
+		assertEquals(0, none.extent.getFound());
+		assertEquals(0, none.extent.getReported());
+	}
+
+	@Test
+	public void aDrugInPlayScreenThatRelatesAnActiveOrderStatesWhatItRelated() {
+		// The other half: zero has to be a value in a range, not the only thing this arm can say. The
+		// excerpt rates Clarithromycin x Simvastatin Major.
+		Pass related = pass("Can I give this patient clarithromycin?", oneSimvastatinOrder());
+
+		assertEquals(1, related.chips.size(), "precondition: one order, one rated relationship: "
+				+ DrugReferenceTestSupport.details(related.chips));
+		assertNotNull(related.extent, "a screen that related a pair must state it too");
+		assertEquals(1, related.extent.getFound());
+		assertEquals(1, related.extent.getReported(),
+				"this arm applies no cap, so it reports everything it relates");
+	}
+
+	@Test
+	public void aClassOnlyRelationshipIsNotCountedAsAPairFound() {
+		// What `found` counts has to be the population the other two arms count, or one wire key means
+		// two things by question shape. Neither pairwise arm has a class leg at all — the screen's own
+		// comment says so, and the question-pair arm has no such branch — so an unrated
+		// shared-subgroup relationship is a chip and not a pair found. An order the excerpt cannot
+		// name, carrying a C10AA code Simvastatin's own subgroup covers.
+		Pass classOnly = pass("Can I give this patient simvastatin?",
+				DrugReferenceTestSupport.ctx(60, null,
+						DrugReferenceTestSupport.set("Atorvastatin 20mg"),
+						DrugReferenceTestSupport.set("C10AA05"), null, null,
+						java.util.Arrays.asList(DrugReferenceTestSupport.activeOrder("order-atorvastatin",
+								"Atorvastatin 20mg", DrugReferenceTestSupport.set("atorvastatin"),
+								DrugReferenceTestSupport.set("C10AA05")))));
+
+		assertEquals(1, classOnly.chips.size(), "precondition: the shared C10AA subgroup raises a chip: "
+				+ DrugReferenceTestSupport.details(classOnly.chips));
+		assertNull(classOnly.chips.get(0).getSeverity(),
+				"precondition: and it is the class arm's unrated sentence, not a rule");
+		assertNotNull(classOnly.extent, "the screen still ran, so it still states its extent");
+		assertEquals(0, classOnly.extent.getFound(),
+				"an unrated class relationship is not a pair the reference data RATED, and counting it "
+						+ "would make this key mean one thing on a one-drug question and another on the "
+						+ "two arms that have no class leg");
+		assertEquals(0, classOnly.extent.getReported());
+	}
+
+	@Test
+	public void aDrugInPlayArmWithNoMedicationToScreenAgainstStatesNothing() {
+		// A prescribing question on a patient taking nothing. There is no population to screen and no
+		// request to screen one, so nothing is stated — absence, which README tells a client not to
+		// read as completeness. Unlike the case above it, this asks it of the question shape the
+		// ticket is about, so a gate that read the question's INTENT instead would part them.
+		Pass none = pass("Can I give this patient clarithromycin?",
+				DrugReferenceTestSupport.ctx(60, null, null, null, null, null));
+
+		assertTrue(none.chips.isEmpty(), "precondition: nothing to relate her to: "
+				+ DrugReferenceTestSupport.details(none.chips));
+		assertNull(none.extent, "a chart recording no medication was not screened, and a zero here "
+				+ "would say it was");
+	}
+
+	@Test
+	public void aDrugOnlyTheAnswerNamedStatesNothingOnItsOwn() {
+		// The ticket's last row, and the one it says is the one to get right: found: 0 must mean
+		// "screened and related nothing", never "could not resolve the drug". This question resolves
+		// no reference drug and carries no interaction cue, so no arm is anchored on anything the
+		// clinician asked about — but the ANSWER names one, which reaches the drug-in-play arm. The
+		// statement is the question's, so there is none.
+		Pass none = pass("Clarithromycin would be a reasonable choice.", "What should I watch out for?",
+				oneSimvastatinOrder());
+
+		assertEquals(1, none.chips.size(),
+				"precondition: the arm ran on the answer's own drug and related the order, so this case "
+						+ "is not vacuous: " + DrugReferenceTestSupport.details(none.chips));
+		assertNull(none.extent, "the question resolved no drug, so nothing was screened on its behalf "
+				+ "and a zero would report the model's prose as the clinician's question");
+	}
+
+	@Test
+	public void aDrugTheAnswerAddsIsNotCountedIntoTheQuestionsOwnScreen() {
+		// The gate above is satisfied by an empty questionDrugs; this is the COUNT, which the gate
+		// cannot speak for. One question drug that relates nothing and one answer drug that relates
+		// the order: accumulated over inPlay this reads {1, 1} and describes a screen of a drug
+		// nobody asked about.
+		Pass mixed = pass("Clarithromycin would be a reasonable choice.",
+				"Can I give this patient metformin?", oneSimvastatinOrder());
+
+		assertEquals(1, mixed.chips.size(),
+				"precondition: the answer's drug relates the order and the question's does not: "
+						+ DrugReferenceTestSupport.details(mixed.chips));
+		assertNotNull(mixed.extent, "the question's own drug was screened, so an extent is stated");
+		assertEquals(0, mixed.extent.getFound(),
+				"and it counts that screen, not the one the answer's drug brought with it");
+		assertEquals(0, mixed.extent.getReported());
+	}
+
+	@Test
+	public void aPairwiseArmsStatementIsNotDisplacedByTheDrugInPlayScreen() {
+		// Two question drugs, so the question-pair arm runs — and the drug-in-play arm runs beside it,
+		// relating each of the two to the order. The pairwise statement is about a BOUNDED list and
+		// this one is not, so summing them into two integers publishes a ratio over two populations.
+		// The pairwise arm keeps the field.
+		Pass both = pass("Do clarithromycin and warfarin interact?", oneSimvastatinOrder());
+
+		assertTrue(both.chips.size() > 1,
+				"precondition: the drug-in-play arm relates the order too, so a sum would be visible: "
+						+ DrugReferenceTestSupport.details(both.chips));
+		assertNotNull(both.extent);
+		assertEquals(1, both.extent.getFound(),
+				"the one question-named pair the excerpt relates, and nothing the other arm added");
+		assertEquals(1, both.extent.getReported());
 	}
 }

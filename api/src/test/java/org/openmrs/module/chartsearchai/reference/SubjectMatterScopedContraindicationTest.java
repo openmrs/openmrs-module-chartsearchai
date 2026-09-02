@@ -172,6 +172,31 @@ public class SubjectMatterScopedContraindicationTest {
 	}
 
 	@Test
+	public void anUncitedReferenceRecordNamingHerPrescriptionIsNotSubjectMatter() {
+		// The case above, with one thing added: an UNCITED drug_reference record whose text names the
+		// drug she is on. Issue #360 widened the ECHO test's attribution corpus to take in every
+		// reference-group record whether or not the answer cited it; this arm's corpus was deliberately
+		// left where it was, and nothing else in the suite can tell the two apart — every other case
+		// that hands real mappings to validate carries either no reference-group record at all or one
+		// the answer cites, so handing this arm the wider list would widen issue #143's gate with the
+		// build staying green. Here it cannot: the record is the only thing naming the drug, the
+		// question is about her cancer, and a chip would mean the module's own injected material had
+		// become what the response is about.
+		RecordMapping uncitedReference = new RecordMapping(5,
+				ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE, "ibuprofen", null,
+				"Drug reference — Ibuprofen (ATC M01AE01). Interactions: aspirin (Major).");
+
+		List<SafetyWarning> warnings = validator().validate(
+				"Yes — the patient has a Malignant tumor of base of tongue [1].", "Does she have cancer?",
+				ctx(DrugReferenceTestSupport.set("ibuprofen"), null),
+				chart(TUMOUR_RECORD, ORDER_RECORD, uncitedReference).getMappings());
+
+		assertEquals(0, contraindications(warnings).size(),
+				"an injected reference record the answer never cited must not put her prescription in "
+						+ "subject matter, was: " + warnings);
+	}
+
+	@Test
 	public void theDrugSideStillFiresWhenTheAnswerCitesTheOrderRecord() {
 		// Issue #143's real case, preserved: the answer names the drug only by reciting the cited
 		// drug_order record, so #105's echo rule keeps it out of the in-play set and this arm is the

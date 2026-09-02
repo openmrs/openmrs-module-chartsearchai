@@ -102,8 +102,9 @@ public class DrugReferenceInjector {
 	 * does not name is reported on the {@link RecordMapping} as a field — never as a text tail, which
 	 * the model recited into answers (issue #117). Note that this budget is not the only reason a
 	 * partner goes unnamed, nor usually the main one: segment 2 of {@code render} represents the
-	 * whole dataset tail with a single partner whenever a patient-relevant one was promoted, so most
-	 * of that count is normally "not relevant to this patient" rather than "did not fit".
+	 * whole dataset tail with a single partner whenever a patient-relevant one was promoted, and with
+	 * at most {@link #MAX_UNPROMOTED_TAIL_PARTNERS} of them when none was, so most of that count is
+	 * normally "not relevant to this patient" rather than "did not fit".
 	 *
 	 * <p>Two guarantees override the budget, so the rendered length is the cap plus a bounded
 	 * overshoot rather than a hard ceiling — see {@code render}: every partner the patient is
@@ -2012,7 +2013,9 @@ public class DrugReferenceInjector {
 		final String source;
 
 		/** Interaction partners the text does not name — dropped by the budget or, more often, by
-		 *  segment 2 representing the dataset tail with one partner; 0 when it names them all.
+		 *  segment 2 representing the dataset tail with one partner where one was promoted and with at
+		 *  most {@link DrugReferenceInjector#MAX_UNPROMOTED_TAIL_PARTNERS} where none was (issue #355);
+		 *  0 when it names them all.
 		 *
 		 *  <p>Partners, not rows, since issue #174 site 2: the entry's rules are collapsed to one per
 		 *  partner before anything is rendered, so this counts what the field has always claimed to

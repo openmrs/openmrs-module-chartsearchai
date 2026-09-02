@@ -370,8 +370,10 @@ public class DrugSafetyValidatorEchoScopingTest {
 
 	@Test
 	public void withoutMappingsEveryAnswerMentionIsValidated() {
-		// The mappings-less overloads keep the pre-scoping behavior: with no citation targets to
-		// attribute an echo to, every answer-named drug is validated (conservative direction).
+		// The mappings-less overloads keep the pre-scoping behavior: with no RECORDS to attribute an
+		// echo to, every answer-named drug is validated (conservative direction). The reason is the
+		// absent chart and not the absent citation — since issue #360 those are no longer the same
+		// thing, and the case above pins the uncited-but-attributable half.
 		List<SafetyWarning> warnings = validator().validate(
 				"The patient has a recorded allergy to Aspirin [230].", "Is it safe to give her panadol?",
 				simvastatinWithAspirinAllergyCtx(), Collections.<RecordMapping> emptyList());

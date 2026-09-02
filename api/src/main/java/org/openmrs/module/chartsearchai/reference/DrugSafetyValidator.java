@@ -215,11 +215,14 @@ public class DrugSafetyValidator {
 
 	/**
 	 * Public entry point with the chart's record mappings, which enable echo scoping: an
-	 * answer-named drug that a record cited by the answer already names in its own text (a
-	 * recited reference partner, an allergy reported off the chart) is a mention, not a
-	 * proposal, and is not validated (issue #105). Passing {@code null}/empty mappings disables
-	 * the scoping and keeps every answer-named drug in play (the conservative pre-scoping
-	 * behavior).
+	 * answer-named drug that a record the mention is ATTRIBUTABLE to already names in its own text (a
+	 * recited reference partner, an allergy reported off the chart) is a mention, not a proposal, and
+	 * is not validated (issues #105 and #360). Attributable is two things and the difference is
+	 * load-bearing: a CHART record must be cited inline, while a reference record this module itself
+	 * put in the prompt needs no citation — see {@link #attributionTexts}, which builds both corpora,
+	 * and {@link #isEchoOfAttributableRecord} for the residue the second half accepts. Passing
+	 * {@code null}/empty mappings disables the scoping and keeps every answer-named drug in play (the
+	 * conservative pre-scoping behavior).
 	 *
 	 * <p><b>Since issue #336, {@code LlmInferenceService} calls the five-argument overload below,
 	 * not this one</b> — it also publishes how bounded the pairwise interaction list is, which this
@@ -415,10 +418,12 @@ public class DrugSafetyValidator {
 		// Drugs in play = those the QUESTION resolves to UNION those the ANSWER names — both via the same
 		// DrugReferenceService.findImpliedByQuery the injector uses, so question/answer/injector matching
 		// can never drift, and identity-dedup holds (it resolves against the shared getAll() cache).
-		// Answer-side drugs are echo-scoped (issue #105): a drug the answer names while a record the
-		// answer cites already names it in its own text is an echo of that record (a recited reference
-		// partner, an allergy reported off the chart), not a proposal — validating it produced chips
-		// about drugs nobody suggested giving. Question-named drugs are always validated.
+		// Answer-side drugs are echo-scoped (issues #105 and #360): a drug the answer names while a
+		// record the mention is ATTRIBUTABLE to already names it in its own text is an echo of that
+		// record (a recited reference partner, an allergy reported off the chart), not a proposal —
+		// validating it produced chips about drugs nobody suggested giving. Attributable is a cited
+		// chart record OR any of the reference records this module put in the prompt; see
+		// attributionTexts. Question-named drugs are always validated.
 		//
 		// findImpliedByQuery, not the bare findByQuery, since issue #209: what this set is is the drugs
 		// in PLAY, and prose carrying one alias of two substances put both in play — so a question about
@@ -1046,8 +1051,8 @@ public class DrugSafetyValidator {
 	 *         uncited looks like letting one pass's OUTPUT silence the next pass's check of the same
 	 *         drug — but that cannot happen for the drug a finding is ABOUT: the pre-answer pass calls
 	 *         {@code validate} with an EMPTY answer, so its in-play set is the question's drugs alone
-	 *         and every rendered finding's subject is either question-named (and a question-named drug
-	 *         never reaches this method) or an active order (which
+	 *         and every rendered finding's subject is either question-named (and {@code validate}
+	 *         skips a question-named drug before the echo test) or an active order (which
 	 *         {@link #addActiveOrderContraindications} and {@link #addActiveOrderPairInteractions}
 	 *         check from the chart). What subtracting the type DID do was make issue #360's fix a
 	 *         no-op for every question that names no drug: such a question injects no

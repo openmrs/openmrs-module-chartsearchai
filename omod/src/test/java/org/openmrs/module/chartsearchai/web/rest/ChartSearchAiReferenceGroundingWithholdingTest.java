@@ -69,8 +69,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <p><strong>How this test resists the regression it exists to prevent.</strong> The forbidden shape
  * is a hardcoded list of type names — testing {@code resourceType} against {@code drug_reference} is
  * exactly how {@code safety_finding} was graded as chart evidence for two releases (#122), and
- * re-hardcoding such a carve-out is invisible to a behavioural suite until a third
- * {@code reference}-group type exists. So the withholding is pinned twice, in two different ways:
+ * re-hardcoding such a carve-out is invisible to a behavioural suite while the hardcoded names still
+ * AGREE with the classifier. So the withholding is pinned twice, in two different ways:
  *
  * <ol>
  * <li><em>Behaviourally, off an enumeration rather than a literal.</em> The fixture cites EVERY
@@ -78,7 +78,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * {@code FALSE} — and the expectation for each is derived by asking
  * {@link ChartSearchAiUtils#isGroundingDemoteOnly}. No type name appears in the expectation, so a
  * newly declared reference-group constant is swept automatically, and a serializer that agreed with
- * today's two names would fail the moment one is added.
+ * the names it happens to enumerate fails the moment one is added — measured on issue #354, which
+ * added a third: the old pair reddens five of the cases below on a {@code drug_class_note} citation.
  * <p>The cost of deriving rather than enumerating, stated so it is not mistaken for coverage this
  * class does not have: both halves ask the same classifier production asks, so if
  * {@code referenceGroup} itself regressed — classifying {@code drug_reference} as chart — every

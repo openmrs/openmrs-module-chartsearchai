@@ -97,8 +97,8 @@ public class DrugSafetyValidatorEchoScopingTest {
 
 	@Test
 	public void uncitedRecitationOfAnInjectedRecordIsNotValidatedAsAProposal() {
-		// Issue #360, the reported shape: the same recitation as the case above with the citation
-		// marker taken off. Live, one Metformin-interactions answer that emitted no bracket recited six
+		// Issue #360, the reported shape: echoedReferencePartnerIsNotValidatedAsAProposal's recitation
+		// with the citation marker taken off. Live, one Metformin-interactions answer that emitted no bracket recited six
 		// partner names out of the injected record and raised four chips — a Moderate and three Majors
 		// — about drugs neither charted nor asked about, while the same question about another drug
 		// happened to end in a marker and raised none. Whether a clinician saw three spurious Major
@@ -373,7 +373,8 @@ public class DrugSafetyValidatorEchoScopingTest {
 		// The mappings-less overloads keep the pre-scoping behavior: with no RECORDS to attribute an
 		// echo to, every answer-named drug is validated (conservative direction). The reason is the
 		// absent chart and not the absent citation — since issue #360 those are no longer the same
-		// thing, and the case above pins the uncited-but-attributable half.
+		// thing — uncitedRecitationOfAnInjectedRecordIsNotValidatedAsAProposal pins the
+		// uncited-but-attributable half.
 		List<SafetyWarning> warnings = validator().validate(
 				"The patient has a recorded allergy to Aspirin [230].", "Is it safe to give her panadol?",
 				simvastatinWithAspirinAllergyCtx(), Collections.<RecordMapping> emptyList());

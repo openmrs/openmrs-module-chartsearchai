@@ -141,6 +141,21 @@ public class ChartSearchAiChartOrderBridgeTest {
 		return bridges;
 	}
 
+	/** The one chip's attributions as the named SSE event actually serialized them — asserted
+	 *  non-empty here rather than dereferenced blind, so a serializer that publishes the key with an
+	 *  empty placeholder under it (the issue #340 shape, which the accessor-versus-key guard next door
+	 *  cannot see because its own fixture bridges nothing) fails with a message. */
+	private JsonNode streamedChartOrderBridges(String eventType) throws Exception {
+		JsonNode chips = eventData(eventType).get("safetyWarnings");
+		assertNotNull(chips, "the " + eventType + " event carried no safetyWarnings key");
+		JsonNode bridges = chips.get(0).get("chartOrderBridges");
+		assertNotNull(bridges, "the " + eventType + " event's chip stated no attributions key");
+		assertEquals(1, bridges.size(),
+				"the one attribution this chip carries must reach the " + eventType + " event, was: "
+						+ bridges);
+		return bridges;
+	}
+
 	private JsonNode eventData(String eventType) throws Exception {
 		SseEvent event = SseEvents.ofType(out, eventType);
 		assertNotNull(event, "no '" + eventType + "' event was emitted");
@@ -176,8 +191,7 @@ public class ChartSearchAiChartOrderBridgeTest {
 		// the controller's own ObjectMapper. The /search cases assert what the payload carries; this
 		// one asserts what comes out.
 		controller.streamAnswer(out, patient(), "Is aspirin safe for her?", new User(3), false);
-		JsonNode bridge = eventData("done").get("safetyWarnings").get(0)
-				.get("chartOrderBridges").get(0);
+		JsonNode bridge = streamedChartOrderBridges("done").get(0);
 
 		assertEquals(2, bridge.size(),
 				"exactly the two fields, so neither side needs parsing out of the other, and a public "
@@ -201,10 +215,8 @@ public class ChartSearchAiChartOrderBridgeTest {
 	public void theDoneEventSaysItToo() throws Exception {
 		controller.streamAnswer(out, patient(), "Is aspirin safe for her?", new User(3), false);
 
-		JsonNode chips = eventData("done").get("safetyWarnings");
-		assertNotNull(chips, "the done event carried no safetyWarnings key");
 		assertEquals(ORDER_DISPLAY,
-				chips.get(0).get("chartOrderBridges").get(0).get("orderDisplay").asText());
+				streamedChartOrderBridges("done").get(0).get("orderDisplay").asText());
 	}
 
 	@Test
@@ -213,10 +225,8 @@ public class ChartSearchAiChartOrderBridgeTest {
 		// chips has to read — the same reason ChartSearchAiInteractionPairExtentTest checks it.
 		controller.streamAnswer(out, patient(), "Is aspirin safe for her?", new User(3), true);
 
-		JsonNode chips = eventData("grounded").get("safetyWarnings");
-		assertNotNull(chips, "the grounded event carried no safetyWarnings key");
 		assertEquals(SUBSTANCE,
-				chips.get(0).get("chartOrderBridges").get(0).get("substance").asText());
+				streamedChartOrderBridges("grounded").get(0).get("substance").asText());
 	}
 
 	@Test

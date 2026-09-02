@@ -1858,7 +1858,9 @@ public class DrugReferenceInjector {
 	 *         immediately, which is the same latency issue #174 site 4 is guarded at.
 	 *
 	 *         <p>A {@link LinkedHashMap}, so replacing a group's winner does not move the partner's
-	 *         position — the tail's dataset order is what the caller's javadoc guarantees.
+	 *         position — dataset order within each of the caller's two tail segments is what its
+	 *         javadoc guarantees, and the segments themselves are a partition of this iteration order
+	 *         rather than a re-sort of it.
 	 */
 	private static Collection<DrugReference.Interaction> onePerPartner(DrugReference ref,
 			PatientClinicalContext context, int floor, List<DrugReference> orderEntries) {

@@ -5341,8 +5341,10 @@ public class DrugSafetyValidator {
 
 	/** @return whether any name {@code order} RECORDS reaches {@code ref} — {@link DrugReference#matchesDrugName}
 	 *          over the order's own names, and the name leg of
-	 *          {@link #resolvesFrom}, asked on its own so that "resolved by the ATC code alone" is
-	 *          expressible without a second matcher. Over {@code getNames()} and not the display alone,
+	 *          {@link #resolvesFrom}, asked on its own so that "resolved without its NAME leg" is
+	 *          expressible without a second matcher — which since issue #353 is the ATC leg or the
+	 *          bridged-concept one, and is why the condition is stated as that negation rather than as
+	 *          a list. Over {@code getNames()} and not the display alone,
 	 *          because a chart record of this order can carry any of them — the opposite read from
 	 *          {@link #namesNamingOrder}, which narrowed to the display because it LICENSES a name to be
 	 *          printed while this one only silences a clause. The residue: a caller-built order whose
@@ -5952,12 +5954,16 @@ public class DrugSafetyValidator {
 	 * bridged concept, which {@code DrugReferenceService.findForActiveOrders} has already performed for
 	 * its own candidate set — so the pass pays it twice or not at all, and this is which.
 	 *
-	 * <p>Keyed by object IDENTITY on the order, not by its uuid: an order's uuid may be null, and the
-	 * same {@code ActiveDrugOrder} objects are shared by the contexts
-	 * {@link #activeOrdersOtherThan} builds, so identity is both available and exactly the right
-	 * grain. {@link #NONE} is the answer for a pass with no chart to read and for a caller-built
-	 * context whose orders record no concept — the ordinary state of a hand-built one — and it makes
-	 * the leg contribute nothing rather than throw.
+	 * <p>Keyed by object IDENTITY on the order, not by its uuid, which may be null. What makes that
+	 * grain right is that every site asking {@link #resolvesFrom} iterates the OUTER
+	 * {@code context.getActiveDrugOrders()} — the same list this holder was built from, carried
+	 * through {@link DrugReferenceService#withReferenceNames} as the same objects. It is NOT that the
+	 * contexts {@link #activeOrdersOtherThan} derives share them: those carry no orders at all. A
+	 * change that gave them orders would have to keep the objects, or this holder answers false for
+	 * every one of them and the leg silently contributes nothing at the suppression sites.
+	 * {@link #NONE} is the answer for a pass with no chart to read and for a caller-built context whose
+	 * orders record no concept — the ordinary state of a hand-built one — and it makes the leg
+	 * contribute nothing rather than throw.
 	 */
 	static final class BridgedOrders {
 

@@ -164,7 +164,7 @@ final class PatientClinicalContextBuilder {
 				// codes above came from and never off drugOrder.getConcept() again (issue #353): where
 				// the order carries a coded Drug those two differ, and keying one join on each would
 				// let two layers disagree about which concept one prescription is — issue #151's shape.
-				String orderConceptUuid = concept != null ? concept.getUuid() : null;
+				String orderConceptUuid = conceptUuid(concept);
 				if (!orderNames.isEmpty()) {
 					activeOrders.add(PatientClinicalContext.ActiveDrugOrder.named(drugOrder.getUuid(),
 							orderNames.iterator().next(), orderNames, orderAtcCodes, orderAdministration,
@@ -410,6 +410,35 @@ final class PatientClinicalContextBuilder {
 		}
 		addRaw(names, drugOrder.getDrugNonCoded());
 		addConceptName(names, drugOrder.getConcept());
+	}
+
+	/**
+	 * @return {@code concept}'s uuid, or null when there is no concept or the read throws — the same
+	 *         degrade-to-nothing every other concept read in the active-order loop takes
+	 *         ({@link #addConceptName}, {@link #addConceptNames}, {@link #addAtcCodes} each open their
+	 *         own {@code try} for it).
+	 *
+	 *         <p><b>Its own {@code try}, and that is the point of the method</b> (issue #353). The
+	 *         association is a Hibernate proxy and it is the property read that initialises it, so an
+	 *         order whose concept cannot be loaded throws HERE. The loop's own {@code catch} is outside
+	 *         the {@code for}, so an unguarded read would abandon the whole active-order list at the
+	 *         first such order — every later order dropped, the flattened name and code sets left
+	 *         half-built, and nothing but a {@code log.debug} to say so. That is worse than the state
+	 *         before this leg existed, where the same failure cost that one order its ATC codes and
+	 *         left the order itself on the list. A missing uuid costs exactly the bridged-concept leg
+	 *         for one order, which is the degradation the rest of this loop is built for.
+	 */
+	private static String conceptUuid(Concept concept) {
+		if (concept == null) {
+			return null;
+		}
+		try {
+			return concept.getUuid();
+		}
+		catch (RuntimeException e) {
+			log.debug("Could not read the concept uuid of an active drug order", e);
+			return null;
+		}
 	}
 
 	private static void addConceptName(Set<String> tokens, Concept concept) {

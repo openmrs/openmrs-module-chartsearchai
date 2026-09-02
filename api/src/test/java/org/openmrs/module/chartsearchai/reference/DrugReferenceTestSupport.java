@@ -494,11 +494,6 @@ public final class DrugReferenceTestSupport {
 	 *  are or are not one substance (issues #164/#176/#187). */
 	static final String DDI_SUBSTANCE_IDENTITY = "chartsearchai-test/ddi-substance-identity.json";
 
-	/** A verbatim slice of the shipped knowledge base for issue #353 — DDInter1874 Trimethoprim, whose
-	 *  CIEL bridge is the only place the dataset records concept 105281, and DDInter1019 Lamivudine,
-	 *  its one partner in the ticket's regimen. */
-	static final String DDI_BRIDGED_CONCEPT = "chartsearchai-test/ddi-bridged-concept.json";
-
 	/** The two PPIs filed under one substance name plus the four hydrocortisone rows — the
 	 *  contraindication arm's route-variant and must-not-collapse slice. */
 	static final String DDI_CONTRA_ROUTE_VARIANTS = "chartsearchai-test/ddi-contra-route-variants.json";

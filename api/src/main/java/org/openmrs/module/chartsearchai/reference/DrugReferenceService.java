@@ -541,36 +541,47 @@ public class DrugReferenceService {
 	 * THIRD key of the order-to-entry join, beside {@link #findByActiveOrders}' ATC codes and
 	 * {@link #findImpliedByDrugName}'s recorded names (issue #353).
 	 *
-	 * <p><b>Why a third key.</b> The other two are both defeated by one shape, and the shape is
-	 * ordinary: a dictionary concept the bridge records under one name while the deployment's locale
-	 * elects another. CIEL 105281 is {@code Sulfamethoxazole / trimethoprim} in the bridge and in an
-	 * {@code en} session, and {@code Cotrimoxazole} in an {@code fr} one; the knowledge base carries no
-	 * spelling of the second, and the concept's ATC code {@code J01EE01} is on no entry at all. So the
-	 * whole interaction screen for the commonest co-prescription in HIV care disappeared in one locale
-	 * and not the other, with no exception and no log line. The concept the order was written against
-	 * is the one key that does not depend on which of its names a session elects.
+	 * <p><b>Why a third key.</b> The other two are both defeated by one ordinary shape — a dictionary
+	 * concept the bridge records under one name while the deployment's locale elects another — and the
+	 * concept the order was written against is the one key that does not depend on which of its names
+	 * a session elects. ADR Decision 68 carries the case, its measurements and the alternatives that
+	 * were rejected; it is not restated here.
 	 *
 	 * <p><b>RANKED, and that is not decoration.</b> The answer is the entries the bridge files under
 	 * the concept INTERSECTED with the ones {@link #findImpliedByDrugName} answers for the name the
-	 * bridge records for it. Both bounds are load-bearing and they fail in opposite directions. Without
-	 * the ranking the leg is WIDER than the name leg it stands in for — a bridged uuid can reach
-	 * several entries that are not one substance ({@code Trastuzumab}, {@code Trastuzumab deruxtecan}
-	 * and {@code Trastuzumab emtansine} share one bridged concept and share no ATC code), which is
-	 * issue #209's widening arriving by a new route; and two consumers of this leg are SUPPRESSIONS —
-	 * {@code DrugSafetyValidator.activeOrdersOtherThan} withholds an order from witnessing an
-	 * interaction, {@code OrderPartner.substances} silences a duplicate-therapy chip — where a superset
-	 * removes a warning with no chip and no log line to notice it by (see
-	 * {@link #findImpliedByDrugName(String, Map)}'s own constraint). Without the intersection the leg
-	 * could reach an entry the bridge does not file under this concept at all, on the strength of a
-	 * name it merely shares.
+	 * bridge records for it. Both bounds are load-bearing and they fail in opposite directions.
 	 *
-	 * <p>What the two bounds buy together: the answer is a SUBSET of what a session electing the
-	 * bridge's own spelling already gets today, so this leg states nothing the reference data does not
-	 * already state about that concept — it removes the dependence on WHICH spelling the session
-	 * elects. What it inherits with that is the bridge's own defects: ADR Decision 33 records ~10 stray
-	 * cross-walk rows in the shipped knowledge base, and this leg makes those locale-independent too.
-	 * That is the trade and it cannot be had one way round — the correct rows and the stray ones are
-	 * the same field.
+	 * <p><b>What the ranking does.</b> It keeps only the entries making the STRONGEST claim on the
+	 * bridge's own name. Where one entry's DISPLAY name is that name, that entry alone survives and the
+	 * others are dropped — CIEL 85300 is filed on {@code Trastuzumab}, {@code Trastuzumab deruxtecan}
+	 * and {@code Trastuzumab emtansine}, three drugbank ids sharing no ATC code, and resolves to the
+	 * first. Unranked, that order would be the patient's own order for all three, and one consumer of
+	 * this leg is a SUPPRESSION — {@code DrugSafetyValidator.activeOrdersOtherThan} withholds an order
+	 * from witnessing an interaction — where a superset removes a warning with no chip and no log line
+	 * to notice it by (see {@link #findImpliedByDrugName(String, Map)}'s own constraint).
+	 *
+	 * <p><b>What the ranking does NOT do, and the residue it leaves.</b> Where the bridge's name is
+	 * only an ALIAS of its entries, {@link DrugReference#nameMatchStrength} TIES and
+	 * {@link #findImpliedByDrugName} admits them all — so the leg can still answer with more than one
+	 * substance. Measured over the shipped knowledge base through this method and
+	 * {@link DrugReference#substanceGroupKey()}, excluding every bridge name that is a combination:
+	 * 46 of the 4251 bridged concepts answer with more than one substance, among them CIEL 77719
+	 * ({@code Hydrocortisone acetate} → Hydrocortisone AND Hydrocortisone butyrate) and CIEL 75876
+	 * ({@code Esomeprazole magnesium} → Esomeprazole AND Omeprazole). That is issue #209's own shape,
+	 * and it is not narrowed here for the reason the next paragraph gives.
+	 *
+	 * <p>Without the intersection the leg could reach an entry the bridge does not file under this
+	 * concept at all, on the strength of a name it merely shares.
+	 *
+	 * <p><b>What the two bounds buy together, and why the residue above is not narrowed further:</b>
+	 * the answer is a SUBSET of what a session electing the bridge's own spelling already gets today.
+	 * So this leg states nothing the reference data does not already state about that concept — the 46
+	 * are what an {@code en} session gets for those orders now — and it removes the dependence on WHICH
+	 * spelling the session elects. Narrowing past that would make the leg answer LESS than the name leg
+	 * it stands in for, which is the property that makes it defensible at all. What it inherits with
+	 * that is the bridge's own defects: ADR Decision 36 records ~10 stray cross-walk rows in the
+	 * shipped knowledge base, and this leg makes those locale-independent too. That is the trade and it
+	 * cannot be had one way round — the correct rows and the stray ones are the same field.
 	 *
 	 * <p>Package-private, like {@link #findByActiveOrders} and for the same reason: it is a LEG and not
 	 * an answer. "Which reference entries are this patient's active orders" is
@@ -1209,15 +1220,12 @@ public class DrugReferenceService {
 	 * whole order list resolved 18 entries and 9 substances from 8 orders; ranked, 17 and 8.
 	 *
 	 * <p><b>And a THIRD key since issue #353: the CONCEPT each order was written against</b>
-	 * ({@link #findByBridgedConcept}). The two above are both defeated by one ordinary shape — a
-	 * dictionary concept the reference data's bridge records under one name while the deployment's
-	 * locale elects another — and for CIEL 105281 that took the whole cotrimoxazole interaction screen
-	 * out in {@code fr} while leaving it standing in {@code en}, with no exception and no log line.
-	 * That leg needs no analogue in {@link PatientClinicalContext#hasActiveDrug} and must not be given
-	 * one: it reaches that join the way the ATC leg already does, through
-	 * {@link #withReferenceNames}, which copies the resolved entries' own aliases into the context's
-	 * {@code activeDrugReferenceNames}. A rule has no concept to be keyed on, so a leg there would be
-	 * a second spelling of a fact this one already carries.
+	 * ({@link #findByBridgedConcept}, which carries the case and its bounds). What belongs HERE is the
+	 * one rule about the union: that leg needs no analogue in
+	 * {@link PatientClinicalContext#hasActiveDrug} and must not be given one. It reaches that join the
+	 * way the ATC leg already does, through {@link #withReferenceNames}, which copies the resolved
+	 * entries' own aliases into the context's {@code activeDrugReferenceNames}. A rule has no concept
+	 * to be keyed on, so a leg there would be a second spelling of a fact this one already carries.
 	 *
 	 * <p>Identity de-duplication is sound because all three matchers resolve against this bean's shared
 	 * {@link #getAll()} cache (the same reason the drugs-in-play set can dedup by identity).

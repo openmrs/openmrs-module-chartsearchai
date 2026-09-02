@@ -112,14 +112,11 @@ public class DrugReference {
 	 * the DDInter knowledge base, each carrying the concept's uuid and the one name the bridge records
 	 * for it. Empty for every other source, and empty for an entry a caller built by hand.
 	 *
-	 * <p><b>Why the entry keeps the uuid at all</b> (issue #353). The bridge is the only place the
-	 * reference data says which SUBSTANCES a dictionary concept is, and until #353 the parser read
-	 * {@code ciel[].name} into the alias list and dropped the identity beside it. That left the
-	 * order-to-entry join with two keys, a NAME and an ATC code, and for a concept the bridge names one
-	 * way while the deployment's dictionary elects another — CIEL 105281, whose {@code en} preferred
-	 * name is {@code Sulfamethoxazole / trimethoprim} and whose {@code fr} preferred name is
-	 * {@code Cotrimoxazole} — both keys fail and the whole interaction screen goes silent with no error
-	 * and no log line. See {@link DrugReferenceService#findByBridgedConcept}.
+	 * <p><b>Why the entry keeps the uuid at all</b> (issue #353): the bridge is the only place the
+	 * reference data says which SUBSTANCES a dictionary concept is, and the parser used to read
+	 * {@code ciel[].name} into the alias list and drop the identity beside it. What that cost, and what
+	 * the join does with it, are on {@link DrugReferenceService#findByBridgedConcept} and in ADR
+	 * Decision 68.
 	 *
 	 * <p>The NAME is kept beside the uuid rather than derived from the aliases, because an entry's
 	 * alias list is a flat union of every bridge row's name and cannot say which name came from which
@@ -926,13 +923,21 @@ public class DrugReference {
 	 * @return the dictionary concepts this entry is bridged to, unmodifiable and never null — see
 	 *         {@link #bridgedConcepts}. Empty for every source but {@code ddinter}.
 	 *
-	 *         <p><b>Not bindable from the curated {@code json} format</b>, and the {@code @JsonIgnore}
-	 *         is on both accessors deliberately. That format declares no bridge, and the class's
-	 *         {@code ignoreUnknown} only covers properties Jackson does not KNOW: a setter here would
-	 *         make {@code bridgedConcepts} known, so an authored file carrying one — a row copied out
-	 *         of a DDInter export, say — would fail to bind, {@code MAPPER.readValue} would throw, and
-	 *         {@code JsonDrugReferenceSource.load} would degrade the WHOLE dataset to empty. That is
-	 *         issue #149's inert safety layer, arriving from one unrecognised key.
+	 *         <p><b>Not bindable from the curated {@code json} format.</b> That format declares no
+	 *         bridge, and the class's {@code ignoreUnknown} only covers properties Jackson does not
+	 *         KNOW — a public accessor here makes {@code bridgedConcepts} known, so an authored file
+	 *         carrying one binds it or fails. What that costs was MEASURED rather than assumed, and it
+	 *         is not the load going silently empty: {@code MAPPER.readValue} throws,
+	 *         {@code ReferenceDataFiles.loadWithClasspathFallback} catches it and falls back to the
+	 *         BUNDLED curated file, so the operator's own entries vanish and four unrelated ones stand
+	 *         in their place — under a {@code configured-data-file-not-read} finding, which is a
+	 *         CONFIGURATION rule and therefore LOUD whatever the origin. So the failure is reported,
+	 *         and what it costs is the operator's dataset, silently swapped for another. Not issue
+	 *         #149's inert layer; do not cite it as one.
+	 *
+	 *         <p>The annotation is on both accessors, and only the GETTER's is load-bearing — Jackson
+	 *         ignores a property annotated on either side, so removing the setter's alone changes
+	 *         nothing. Both are kept so that neither reads as the one that may go.
 	 */
 	@JsonIgnore
 	public List<BridgedConcept> getBridgedConcepts() {

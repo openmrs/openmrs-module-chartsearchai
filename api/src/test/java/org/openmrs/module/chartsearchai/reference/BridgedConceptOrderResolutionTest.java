@@ -39,12 +39,16 @@ import org.junit.jupiter.api.Test;
  * <p><b>What these cases pin, and why the order name they use has no spelling in the dataset.</b>
  * Every case here gives the order a display and names that appear nowhere in the fixture, which is
  * what makes the NAME leg provably not the thing that resolved it. The concept uuid is the real one
- * the shipped bridge records for CIEL 105281, and the fixture is a VERBATIM slice of the shipped
- * knowledge base ({@code ddi-bridged-concept.json}: DDInter1874 Trimethoprim and its one partner in
- * the ticket's regimen, DDInter1019 Lamivudine, with the interaction row and mechanism they share).
- * A slice rather than the whole 19 MB dataset for the reason
- * {@code DrugReferenceTestSupport.shippedEntries} records — a case asserting chip TEXT must not
- * depend on a knowledge-base refresh leaving one family alone.
+ * the shipped bridge records for CIEL 105281, and the fixture is {@code ddi-combination-allergen.json}
+ * — a verbatim slice of the shipped knowledge base that already carries DDInter1874 Trimethoprim with
+ * that bridge, DDInter1019 Lamivudine, and the {@code Minor} interaction row they share. Shared rather
+ * than sliced again for this issue: a second file carrying the same verbatim bridge is a second place
+ * to update when the knowledge base is refreshed, and only one of them would be.
+ *
+ * <p>A slice rather than the whole 19 MB dataset for the reason
+ * {@code DrugReferenceTestSupport.shippedEntries} records — a case asserting chip TEXT must not depend
+ * on a knowledge-base refresh leaving one family alone. {@code BridgedConceptLegBoundsTest} is the
+ * opposite choice, and says why it has to be.
  */
 public class BridgedConceptOrderResolutionTest {
 
@@ -58,14 +62,8 @@ public class BridgedConceptOrderResolutionTest {
 	 */
 	private static final String COTRIMOXAZOLE_ORDER = "Cotrimoxazole 960mg";
 
-	private static final String LAMIVUDINE_ORDER = "Lamivudine 150mg";
-
-	private static List<DrugReference> entries() throws Exception {
-		return DrugReferenceTestSupport.ddiFixtureEntries(DrugReferenceTestSupport.DDI_BRIDGED_CONCEPT);
-	}
-
 	private static DrugReferenceService service() throws Exception {
-		return DrugReferenceTestSupport.ddiFixtureService(DrugReferenceTestSupport.DDI_BRIDGED_CONCEPT);
+		return DrugReferenceTestSupport.ddiFixtureService(DrugReferenceTestSupport.DDI_COMBINATION_ALLERGEN);
 	}
 
 	/** The order the dictionary spells in a locale the bridge does not carry, carrying the concept it
@@ -77,9 +75,10 @@ public class BridgedConceptOrderResolutionTest {
 			null, COTRIMOXAZOLE_CONCEPT);
 	}
 
+	/** A second prescription the fixture DOES name, so the screening arm has a pair to find. */
 	private static PatientClinicalContext.ActiveDrugOrder lamivudineOrder() {
-		return PatientClinicalContext.ActiveDrugOrder.named("order-lamivudine", LAMIVUDINE_ORDER,
-			DrugReferenceTestSupport.set(LAMIVUDINE_ORDER, "lamivudine"), null, null, null);
+		return PatientClinicalContext.ActiveDrugOrder.named("order-lamivudine", "Lamivudine 150mg",
+			DrugReferenceTestSupport.set("Lamivudine 150mg", "lamivudine"), null, null, null);
 	}
 
 	private static PatientClinicalContext chart(PatientClinicalContext.ActiveDrugOrder... orders) {
@@ -173,6 +172,43 @@ public class BridgedConceptOrderResolutionTest {
 	}
 
 	/**
+	 * The SCREENING arm reaches the leg too, and this is what pins the two sites where a wrong answer
+	 * SILENCES rather than adds — {@code activeOrdersOtherThan} and {@code ordersOtherThan}, which
+	 * withhold an order from witnessing a pair. ADR Decision 68 rests the whole "the leg must be
+	 * RANKED" argument on those two, and until this case they were reachable only through the
+	 * drug-in-play arm's own consumer: passing {@code BridgedOrders.NONE} at both left the entire
+	 * suite green.
+	 *
+	 * <p>What the mutation moves, measured rather than theorised: with the leg, the pair is reported
+	 * from the LAMIVUDINE side and the partner is the bridged substance, so the chip names the
+	 * prescription the concept key resolved. With {@code NONE} at those two sites the same pair is
+	 * reported from the other side — {@code "Trimethoprim interacts with active order Lamivudine"} —
+	 * because the subject's own bridged prescription is no longer withheld from witnessing it. One
+	 * pair either way; which drug the clinician is told to look at changes. Nothing here claims the
+	 * mutation reddens only this case.
+	 */
+	@Test
+	public void theScreeningArmWithholdsTheBridgedOrderFromWitnessingItsOwnPair() throws Exception {
+		DrugReferenceService service = service();
+		PatientClinicalContext chart = chart(cotrimoxazoleOrder(), lamivudineOrder());
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+				.validate("", "Do any of her medications interact?", service.withReferenceNames(chart));
+
+		assertEquals(1, warnings.size(), "one pair, was: " + DrugReferenceTestSupport.details(warnings));
+		assertTrue(warnings.get(0).getDetail()
+				.startsWith("Lamivudine interacts with active order trimethoprim \u2014 Minor."),
+			"the pair must be reported from the side whose own prescription is not the bridged one,"
+					+ " was: " + warnings.get(0).getDetail());
+		List<String> bridged = new ArrayList<String>();
+		for (SafetyWarning.ChartOrderBridge bridge : warnings.get(0).chartOrderBridges()) {
+			bridged.add(bridge.toString());
+		}
+		assertEquals(Arrays.asList("trimethoprim from " + COTRIMOXAZOLE_ORDER), bridged,
+			"and the bridged substance must be attributed to the prescription the concept resolved");
+	}
+
+	/**
 	 * A concept the bridge does not record at all joins to nothing. The negative control for the cases
 	 * above and for {@code BridgedConceptLegBoundsTest}, which is where the two bounds that NARROW a
 	 * non-empty answer are pinned — an empty result here would also be produced by a leg that did
@@ -188,6 +224,33 @@ public class BridgedConceptOrderResolutionTest {
 		assertEquals(Collections.<DrugReference> emptyList(),
 			service.findForActiveOrders(chart(unbridged)),
 			"a concept the bridge does not record joins to nothing at all");
+	}
+
+	/**
+	 * The curated {@code json} format declares no bridge, and an authored file that carried one anyway
+	 * must not be read as one.
+	 *
+	 * <p>{@code DrugReference}'s {@code ignoreUnknown} covers only properties Jackson does not KNOW,
+	 * and a public accessor makes this one known — so such a file fails to BIND and
+	 * {@code MAPPER.readValue} throws. What that costs the operator is measured on
+	 * {@link DrugReference#getBridgedConcepts()}: not a silent empty load, but their whole dataset
+	 * replaced by the bundled fallback under a loud {@code configured-data-file-not-read} finding.
+	 * This case pins the PARSER, which is where the throw happens; it drives the real
+	 * {@code JsonDrugReferenceSource.parse} on a file whose {@code bridgedConcepts} value is not even
+	 * the right SHAPE, so it reddens if the property is ever made bindable.
+	 */
+	@Test
+	public void aCuratedFileCarryingABridgeStillLoadsTheEntriesBesideIt() throws Exception {
+		String authored = "{\"entries\":[{\"id\":\"a\",\"name\":\"Aspirin\","
+				+ "\"aliases\":[\"aspirin\"],\"bridgedConcepts\":\"not even a list\"}]}";
+		List<DrugReference> loaded = JsonDrugReferenceSource.parse(
+			new java.io.ByteArrayInputStream(authored.getBytes("UTF-8")),
+			new DrugReferenceValidity());
+
+		assertEquals(Arrays.asList("Aspirin"), displayNames(loaded),
+			"an unrecognised bridge key must cost the key and never the entries beside it");
+		assertTrue(loaded.get(0).getBridgedConcepts().isEmpty(),
+			"and it must not be read as a bridge either");
 	}
 
 	/**

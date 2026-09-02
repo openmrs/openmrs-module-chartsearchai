@@ -60,7 +60,7 @@ public class BridgedConceptResolutionPerPassTest {
 	private static LegCountingService service() throws Exception {
 		LegCountingService counting = new LegCountingService();
 		counting.setEntries(DrugReferenceTestSupport
-				.ddiFixtureEntries(DrugReferenceTestSupport.DDI_BRIDGED_CONCEPT));
+				.ddiFixtureEntries(DrugReferenceTestSupport.DDI_COMBINATION_ALLERGEN));
 		return counting;
 	}
 

@@ -172,12 +172,19 @@ public class DrugReferenceInjector {
 	 * since issue #360 it is every recitable reference record in the chart whether the answer cited it
 	 * or not ({@code DrugSafetyValidator.isRecitableReferenceMaterial}), so the widening recorded here
 	 * reaches an uncited answer too. So a mention that used to be read as a proposal can now be read
-	 * as an echo: measured on that excerpt, a patient allergic to warfarin and on no active order
-	 * asked "Can she take ibuprofen?" with the answer "Ibuprofen interacts with warfarin [2]" raised a
-	 * recorded-allergy contraindication chip before this change and raises none after, because the
-	 * tail now names warfarin — and re-measured on the merged head (2026-09-02), the answer without
-	 * the bracket raises none either, which is issue #360's doing rather than this change's. That is
-	 * issue #105's contract rather than a gap opened here, and it IS pinned —
+	 * as an echo, and <b>this change is what silences it, on the CITED answer and on the uncited one
+	 * alike.</b> Measured 2026-09-02 through the real {@code injectRecords} and the real
+	 * {@code DrugSafetyValidator.validate}, with the real bundled cross-reactivity groups, over that
+	 * excerpt: a patient allergic to warfarin and on no active order asked "Can she take ibuprofen?"
+	 * raises a recorded-allergy contraindication chip on the merge base and none on this head — and
+	 * the two answer shapes, "Ibuprofen interacts with warfarin [2]" and the same sentence without the
+	 * bracket, move together in both trees. What moved is which partners the record names: the base's
+	 * record names lisinopril and metformin, this head's names warfarin among five. Issue #360 is why
+	 * the BRACKET no longer makes a difference — it is what stopped that corpus being citation-gated,
+	 * two sentences above — and it is not why the chip is gone; an earlier wording of this paragraph
+	 * attributed the uncited half to it, which would tell a reader that half was settled upstream and
+	 * needed no checking here. That is issue #105's contract rather than a gap opened here, and it IS
+	 * pinned —
 	 * {@code ActiveOrderContraindicationTest.aRecitedPartnerThePatientIsNotTakingGainsNoContraindicationCheck}
 	 * asserts exactly that shape, a drug the patient is allergic to but not taking, recited out of an
 	 * injected record, raising no chip. What issue #355 changes is only which drugs the record names,
@@ -1691,7 +1698,7 @@ public class DrugReferenceInjector {
 				compact = rendered;
 			}
 			(promotable(i, context, floor) ? promoted : rest)
-					.add(new InteractionNote(rendered, compact, i.getSeverity(), label != null));
+					.add(new InteractionNote(rendered, compact, i));
 		}
 		// Within the promoted segment, severity — not dataset position — decides who keeps their
 		// mechanism prose when the budget can only afford one full note (see render). Measured on the
@@ -1927,11 +1934,15 @@ public class DrugReferenceInjector {
 	 *         and the record now agrees with it — which is the invariant, not a cost.
 	 *
 	 *         <p>Applied over EVERY rule rather than only over the promoted ones, deliberately: the
-	 *         floor decides which rules are worth PROMOTING, while a sub-floor row keeps its dataset
-	 *         position in the tail (see the caller), so collapsing only the promoted half would leave
-	 *         a sub-floor row of a partner in the tail beside that partner's promoted row — the same
-	 *         partner twice, which is what this removes. (The survivor rule below does READ the floor,
-	 *         through {@link #promotable}; what it does not do is filter the input by it.)
+	 *         floor decides which rules are worth PROMOTING, while a sub-floor row still STAYS in the
+	 *         tail, so collapsing only the promoted half would leave a sub-floor row of a partner in
+	 *         the tail beside that partner's promoted row — the same partner twice, which is what this
+	 *         removes. Staying is the whole of the premise, and it is all the premise needs: such a row
+	 *         does not keep its dataset POSITION there any more, because since issue #355 the caller
+	 *         orders the tail most severe first wherever nothing was promoted and an Unknown rating
+	 *         ranks last, so a sub-floor row moves backwards rather than staying put. (The survivor
+	 *         rule below does READ the floor, through {@link #promotable}; what it does not do is
+	 *         filter the input by it.)
 	 *
 	 *         <p><b>Which row wins, and why promotability is asked FIRST.</b> Running before the floor
 	 *         means the survivor rule decides which row's {@code (token, ATC)} pair the caller's
@@ -2023,10 +2034,9 @@ public class DrugReferenceInjector {
 	 * differently sized one, so re-measure rather than carrying either number across. The tail's job is breadth; a rule that names
 	 * nobody states none, so it may not outrank one that does. In the PROMOTED segment the key cannot
 	 * fire, and the two ends of that argument read the SAME pair of fields: the flag is
-	 * {@code reconciledPartnerNoteName != null}, which falls back to
-	 * {@link DrugSafetyValidator#partnerLabel} — a {@code firstNonBlank(token, atc)}, so null exactly
-	 * when neither field yields a non-blank string, which is a BLANK one as much as an absent one —
-	 * while {@link #promotable} requires
+	 * {@link DrugSafetyValidator#partnerLabel}'s answer about the rule — a
+	 * {@code firstNonBlank(token, atc)}, so null exactly when neither field yields a non-blank string,
+	 * which is a BLANK one as much as an absent one — while {@link #promotable} requires
 	 * {@link PatientClinicalContext#hasActiveDrug}, whose name arm skips a blank token and whose last
 	 * line is an ATC lookup that fails on an absent code. A rule this key demotes is therefore one
 	 * {@code hasActiveDrug} answers false for, so it was never promotable, and it can carry no chip
@@ -2073,31 +2083,67 @@ public class DrugReferenceInjector {
 		 *  one — {@code DrugReference.Interaction.setToken} normalises nothing, so a JSON
 		 *  {@code "token": " "} arrives blank.
 		 *
-		 *  <p>Recorded here rather than re-derived, and the re-derivations that survive the whole
-		 *  build are the reason. Comparing {@code compact} to {@code full} fails because the two
-		 *  coincide for a SECOND reason: a row carrying a severity but no mechanism text renders full
-		 *  as just its name, and {@code name (Severity)} is longer than that, so the never-grow guard
-		 *  in {@link #orderedInteractionNotes} resets {@code compact} to it — while the row DOES name
-		 *  its partner. Reading one field of the pair ({@code firstNonBlank(i.getToken()) != null})
-		 *  drops the ATC arm, and reading their raw presence
-		 *  ({@code i.getToken() != null || i.getAtc() != null} — the inlining of {@code partnerLabel}
-		 *  minus its blank handling) reports a name for a row that method gives none for. So does the
-		 *  severity beside it ({@code severity != null}), which asks a different question entirely.
-		 *  Each of those either loses a named partner out of the record or lands a paragraph naming
-		 *  nobody in the slot the character budget cannot refuse. Make each substitution and read the
-		 *  failures, among them
+		 *  <p><b>Asked of the RULE in the constructor, not handed in.</b> The property stated
+		 *  positively: this flag is {@code partnerLabel}'s own answer about the rule this note renders,
+		 *  arrived at the same way {@link #severityPriority} is, so the construction site passes no
+		 *  boolean and no name for it and has nothing to derive. It WAS a {@code boolean} parameter,
+		 *  and each review round of issue #355 found one more re-derivation written in its place that
+		 *  the whole build accepted — the five listed below, each a different question. What ends that
+		 *  is not a sixth case: with the flag read off the rule, none of the five can be written at
+		 *  the construction site, which now passes only the two rendered texts and the rule. Do not
+		 *  reintroduce a caller-supplied flag, and do not hand the label over as a {@code String}
+		 *  instead: the severity local sits beside it at the call site and is type-compatible with
+		 *  such a parameter, so the last of the five would still be expressible there.
+		 *
+		 *  <p><b>Why the rule answers exactly what the call site used to.</b>
+		 *  {@link #orderedInteractionNotes} renders under {@code reconciledPartnerNoteName}, which is a
+		 *  chip's own name for the partner where one reconciled and {@code partnerLabel} otherwise — so
+		 *  it is non-null wherever {@code partnerLabel} is. It is also null wherever
+		 *  {@code partnerLabel} is: a rule that method names nothing for is one
+		 *  {@link PatientClinicalContext#hasActiveDrug} answers false for — its name arm skips a blank
+		 *  token and its last line is an ATC lookup that fails on an absent code — so no chip about it
+		 *  can exist to carry a reconciled name, which is the same conjunction
+		 *  {@link #SEVERITY_DESCENDING} reads for the other half of its own argument. The two are
+		 *  therefore null together, which is what keeps this flag false exactly where {@link #compact}
+		 *  falls back to the whole mechanism paragraph for want of a name to shorten to.
+		 *
+		 *  <p><b>The five re-derivations, and what each costs.</b> Comparing {@code compact} to
+		 *  {@code full} fails because the two coincide for a SECOND reason: a row carrying a severity
+		 *  but no mechanism text renders full as just its name, and {@code name (Severity)} is longer
+		 *  than that, so the never-grow guard in {@link #orderedInteractionNotes} resets
+		 *  {@code compact} to it — while the row DOES name its partner. Reading one field of the pair
+		 *  ({@code firstNonBlank(i.getToken()) != null}) drops the ATC arm, and reading their raw
+		 *  presence ({@code i.getToken() != null || i.getAtc() != null} — the inlining of
+		 *  {@code partnerLabel} minus its blank handling) reports a name for a row that method gives
+		 *  none for. So does the severity beside it ({@code severity != null}), which asks a different
+		 *  question entirely; and that same severity test conjoined with the name reports FALSE for a
+		 *  row that names a partner and carries no rating — the shape of all five interaction rows of
+		 *  the curated dataset this module itself ships
+		 *  ({@code api/src/main/resources/chartsearchai/drug-reference.json}, each carrying a token, an
+		 *  ATC code and no {@code severity}) and the normal shape of a hand-authored rule. Each of
+		 *  those either loses a named partner out of the record or lands a paragraph naming nobody in
+		 *  the slot the character budget cannot refuse. Write each one into the constructor and read
+		 *  the failures, among them
 		 *  {@code DrugReferenceInjectorTest.aRatedRowWithNoMechanismTextStillCountsAsNamingItsPartner},
 		 *  {@code .anAtcNamedRowWithNoMechanismTextStillCountsAsNamingItsPartner},
-		 *  {@code .aNamelessRuleCarryingASeverityStillDoesNotDisplaceARowThatNamesItsPartner} and
-		 *  {@code .aBlankButPresentTokenStillDoesNotDisplaceARowThatNamesItsPartner}.
+		 *  {@code .aNamelessRuleCarryingASeverityStillDoesNotDisplaceARowThatNamesItsPartner},
+		 *  {@code .aBlankButPresentTokenStillDoesNotDisplaceARowThatNamesItsPartner} and
+		 *  {@code .anUnratedRowNamingItsPartnerStillLeadsANamelessRowAheadOfItInTheDataset}.
 		 *  See {@link #SEVERITY_DESCENDING}. */
 		final boolean namesItsPartner;
 
-		InteractionNote(String full, String compact, String severity, boolean namesItsPartner) {
+		/**
+		 * Both facts this note keeps ABOUT its rule are asked OF the rule here — its severity rank and
+		 * whether it names a partner — so that a caller has no answer to either to supply, and cannot
+		 * supply the two inconsistently. The rule is read, never retained: this class holds rendered
+		 * text and two derived facts, and a consumer that wanted the rule would be asking the dataset a
+		 * question the rendering has already answered. See {@link #namesItsPartner}.
+		 */
+		InteractionNote(String full, String compact, DrugReference.Interaction rule) {
 			this.full = full;
 			this.compact = compact;
-			this.severityPriority = DrugSafetyValidator.severityPriority(severity);
-			this.namesItsPartner = namesItsPartner;
+			this.severityPriority = DrugSafetyValidator.severityPriority(rule.getSeverity());
+			this.namesItsPartner = DrugSafetyValidator.partnerLabel(rule) != null;
 		}
 	}
 

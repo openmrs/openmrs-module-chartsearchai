@@ -675,8 +675,8 @@ public class DrugReferenceInjectorTest {
 
 	@Test
 	public void aRatedRowWithNoMechanismTextStillCountsAsNamingItsPartner() throws Exception {
-		// Issue #355. InteractionNote.namesItsPartner is recorded at construction, from whether
-		// DrugSafetyValidator.partnerLabel gave the rule a name, rather than re-derived by comparing
+		// Issue #355. InteractionNote.namesItsPartner is asked of the RULE in the constructor — it is
+		// DrugSafetyValidator.partnerLabel's answer about it — rather than re-derived by comparing
 		// the compact form to the full one. This case is why it cannot be re-derived: the two
 		// coincide for a SECOND reason. A row carrying a token and a severity but no mechanism text
 		// renders full as just the token, and `token (Severity)` is longer than that, so
@@ -686,7 +686,7 @@ public class DrugReferenceInjectorTest {
 		// So a derived flag reports false for it, the nameless unrated paragraphs beside it outrank
 		// it under severityPriority (unrated sorts above Major), and the character budget then drops
 		// the named Major partner out of the citable record altogether — issue #355's own cost,
-		// reinstated. Mutate the constructor argument to the derived form and read the failures.
+		// reinstated. Write the derived form into the constructor and read the failures.
 		RecordMapping record = tailRecordOf(
 				"chartsearchai-test/drug-reference-unpromoted-tail-rated-noteless.json",
 				"is it safe to give notelessstub?");
@@ -713,13 +713,13 @@ public class DrugReferenceInjectorTest {
 		// names its partner exactly as a tokened one does — and the flag InteractionNote records is
 		// that method's answer, not its first argument's. The case beside this one contrasts a
 		// TOKENED row with a row carrying neither, which both a token-only reading and the real
-		// predicate answer alike; measured 2026-09-02, writing the constructor argument as
+		// predicate answer alike; measured 2026-09-02, deriving the flag as
 		// firstNonBlank(i.getToken()) != null left the whole api suite green.
 		//
 		// What that reading costs is this fixture's record: the nameless unrated paragraphs beside
 		// the ATC-named row outrank it under severityPriority (unrated sorts above Major), and the
 		// character budget then drops the Major partner out of the citable record — reported only as
-		// a withheld count. Mutate the constructor argument to the token-only form and read the
+		// a withheld count. Write the token-only form into the constructor and read the
 		// failures.
 		RecordMapping record = tailRecordOf(
 				"chartsearchai-test/drug-reference-unpromoted-tail-atc-named.json",
@@ -746,12 +746,12 @@ public class DrugReferenceInjectorTest {
 		// names a partner carries Moderate. Every other tail fixture leaves the nameless rows
 		// unrated, so on them "names a partner" and "carries a severity" answer alike for every row
 		// and reading the flag off the severity is indistinguishable from reading it off the name.
-		// Measured 2026-09-02, writing the constructor argument as severity != null — the local two
-		// lines above it in orderedInteractionNotes — left the whole api suite green.
+		// Measured 2026-09-02, deriving the flag as severity != null — which was the local two lines
+		// above the construction site while the flag was passed in — left the whole api suite green.
 		//
 		// Under that reading the paragraph is promoted to the head of the tail on a rating that
 		// names nobody, taking the one slot the character budget cannot refuse, and metformin leaves
-		// the record. Mutate the constructor argument to the severity and read the failures.
+		// the record. Write the severity reading into the constructor and read the failures.
 		RecordMapping record = tailRecordOf(
 				"chartsearchai-test/drug-reference-unpromoted-tail-rated-nameless.json",
 				"is it safe to give ratednamelessmix?");
@@ -786,8 +786,8 @@ public class DrugReferenceInjectorTest {
 		//
 		// Blank-but-present is a shape this module treats as real rather than as a typo:
 		// DrugReference.Interaction.setToken normalises nothing and drug-reference-malformed.json
-		// ships nameless rows, so a JSON "token": " " reaches partnerLabel as written. Mutate the
-		// constructor argument to the presence test and read the failures.
+		// ships nameless rows, so a JSON "token": " " reaches partnerLabel as written. Write the
+		// presence test into the constructor and read the failures.
 		RecordMapping record = tailRecordOf(
 				"chartsearchai-test/drug-reference-unpromoted-tail-blank-token.json",
 				"is it safe to give blanktokenmix?");
@@ -799,6 +799,44 @@ public class DrugReferenceInjectorTest {
 		assertFalse(section.contains("LONGSTUB"),
 				"and the blank-tokened paragraph does not take the slot the budget cannot refuse: "
 						+ section);
+		assertEquals(1, record.getWithheldInteractions(),
+				"precondition: the budget cuts one of the two rows here, so a row losing its place is "
+						+ "a row LOST from the record rather than one merely reordered: " + section);
+	}
+
+	@Test
+	public void anUnratedRowNamingItsPartnerStillLeadsANamelessRowAheadOfItInTheDataset()
+			throws Exception {
+		// Issue #355, the re-derivation of the same key that review round 4 found: a row that NAMES
+		// its partner and is UNRATED, with a nameless unrated paragraph AHEAD of it in dataset order.
+		// Every case above gives its naming row a RATING, so on each of them "names a partner" and
+		// "carries a severity" answer alike for that row, and the conjunction of the two — label !=
+		// null && severity != null — answers exactly as the real predicate does. Here it does not: it
+		// reports FALSE for the metformin row, which then ties the nameless paragraph on the naming
+		// key AND on severityPriority (both unrated), so the stable sort leaves the dataset order
+		// that puts the paragraph first. It takes the one slot the character budget cannot refuse and
+		// metformin leaves the record.
+		//
+		// That is not an exotic shape: every interaction row of the curated dataset this module
+		// itself ships carries a token, an ATC code and no severity, and an operator-authored rule
+		// normally does too — DDInter rates every row, so unrated arises from curated JSON, which is
+		// where a token-bearing unrated row comes from.
+		//
+		// Since that round the flag is no longer a constructor argument at all — InteractionNote asks
+		// DrugSafetyValidator.partnerLabel about the rule it is given — so this substitution and the
+		// ones the cases above name can only be written inside that constructor. Write it there and
+		// read the failures.
+		RecordMapping record = tailRecordOf(
+				"chartsearchai-test/drug-reference-unpromoted-tail-unrated-named.json",
+				"is it safe to give unratednamedmix?");
+		String section = tailSectionOf(record);
+
+		assertTrue(section.contains("metformin"),
+				"the row that names a partner leads the tail even though NEITHER row carries a "
+						+ "rating, so nothing but the naming key can separate them: " + section);
+		assertFalse(section.contains("LONGSTUB"),
+				"and the nameless paragraph the dataset lists FIRST does not take the slot the budget "
+						+ "cannot refuse: " + section);
 		assertEquals(1, record.getWithheldInteractions(),
 				"precondition: the budget cuts one of the two rows here, so a row losing its place is "
 						+ "a row LOST from the record rather than one merely reordered: " + section);

@@ -85,7 +85,12 @@ import org.slf4j.LoggerFactory;
  *       a new sentence, or by simply continuing the same way — is not a divergence, whatever a
  *       second record's layout makes of it. One mechanism string really is rendered into TWO records
  *       that are cited together (the {@code safety_finding}'s detail and the {@code drug_reference}'s
- *       {@code "; "}-joined interaction item), which is where this came from — but on that
+ *       {@code "; "}-joined interaction item) wherever that partner is PROMOTED — since issue #355 a
+ *       record with nothing patient-specific to show normally carries names and severities rather
+ *       than mechanism prose, which leaves this check little to judge on the commonest record. Normally, not always:
+ *       a rule carrying no token and no ATC has no name to shorten to, so an operator-authored
+ *       dataset still renders paragraphs there ({@code drug-reference-unpromoted-tail-budget.json} is
+ *       one). That is where this came from — but on that
  *       arrangement the weak gap question now lets the reference record explain its own continuation,
  *       so the pooling is not what keeps THAT answer quiet and an earlier draft of this bullet said
  *       it was. What it still decides is the case where a second cited record ends where the first
@@ -153,11 +158,13 @@ import org.slf4j.LoggerFactory;
  * {@code carriedThrough} (some reproduction carries on past here) is reachable on the bundled
  * sixteen-entry excerpt: the two records the injector produces for one question carry the same
  * mechanism string, so they diverge together, and no record there states one passage twice. Both
- * shapes are ordinary in the data this runs on — a rendered reference record is a {@code "; "}-joined
- * list of per-partner items and DDInter partners routinely share a mechanism — so their cases build
- * the record rather than injecting one. That is the right operand here, because this check is a pure
- * function of an answer and a record's TEXT and the cases beside them already pin that it runs over
- * production-rendered records on the real answer path. Both were unpinned when they were written,
+ * shapes are ordinary in the data this runs on — a rendered reference record whose partner was
+ * PROMOTED is a {@code "; "}-joined list of per-partner items and DDInter partners routinely share a
+ * mechanism, and since issue #355 a record with nothing patient-specific to show normally carries
+ * names and severities instead, per the bullet above — so their cases build the record rather than injecting
+ * one. That is the right operand here, because this check is a pure function of an answer and a
+ * record's TEXT and the cases beside them already pin that it runs over production-rendered records
+ * on the real answer path. Both were unpinned when they were written,
  * and a review's mutation sweep is what said so.
  *
  * <p><b>One regression this file cannot see.</b> Its gate asks

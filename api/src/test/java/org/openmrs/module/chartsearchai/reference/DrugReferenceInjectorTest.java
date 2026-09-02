@@ -17,9 +17,12 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
+import java.util.TreeSet;
 
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
@@ -234,9 +237,11 @@ public class DrugReferenceInjectorTest {
 		// The rendered Interactions: section is capped at MAX_INTERACTION_RENDER_CHARS and was
 		// filled in DATASET order, so which partners a clinician's model can cite was decided by
 		// the dataset's ordering rather than by the patient. In the real DDInter excerpt
-		// Lisinopril carries 15 partners and the 1500-char cut falls after seven of them, so
-		// Ibuprofen — the LAST one, and a Moderate NSAID x ACE-inhibitor interaction that
-		// attenuates the antihypertensive effect — was truncated out entirely.
+		// Lisinopril carries 15 partners and, before issue #117, the 1500-char cut fell after seven of
+		// them, so Ibuprofen — the LAST one, and a Moderate NSAID x ACE-inhibitor interaction that
+		// attenuates the antihypertensive effect — was truncated out entirely. (No branch cuts there
+		// any more: since #355 a tail with nothing patient-specific ahead of it stops at the partner
+		// cap, and one with something ahead of it at its single representative. The figure is the record of what #84 and #117 were about.)
 		//
 		// Measured on the 3.7.1 standalone (2026-07-30, full 19MB KB): Clarithromycin has 898
 		// partners with Simvastatin (Major) at index 324 and Ivosidenib at index 0, so asked
@@ -492,7 +497,7 @@ public class DrugReferenceInjectorTest {
 		// The dataset tail's third case: the patient is on ALL of this entry's above-floor partners, so
 		// the tail is empty and the representative must simply not render. It is the only arm of
 		// that branch nothing else reaches — the two tests either side of this one cover "a tail
-		// exists alongside a promoted partner" and "nothing was promoted".
+		// exists alongside a promoted partner" and "nothing patient-specific was shown".
 		//
 		// It is worth its own test because the guard protecting it is the kind that reads redundant:
 		// `tailStart < ordered.size()` looks like a bound check on a list you just measured, and
@@ -582,27 +587,508 @@ public class DrugReferenceInjectorTest {
 	}
 
 	@Test
-	public void withNoPatientRelevantPartnerTheDatasetTailStillRendersFullNotesToTheBudget() {
-		// The other side of the branch the test above pins, and the reason the dataset tail is a branch
-		// at all rather than one rule. A compact representative is the right cut only when something
-		// already carries the patient-specific content — a promoted partner, or since issue #357 a
-		// partner the chart names whose rule the floor filtered; with neither, the general
-		// material IS the record's content, so the budget is spent on full notes exactly as it was
-		// before #117 — same entry, same question, and the ONLY difference is whether the patient is
-		// on one of the partners.
+	public void withNoPatientRelevantPartnerTheDatasetTailStatesBreadthCompactlyMostSevereFirst() {
+		// Issue #355, the residue of #117 on the other side of the dataset tail's branch — the arm
+		// issue #357 explicitly left to it, where nothing patient-specific was shown at all: no
+		// promoted partner, and none the chart names whose rule the floor filtered. Until #355, this
+		// branch spent the whole MAX_INTERACTION_RENDER_CHARS budget on FULL mechanism paragraphs for
+		// whichever partners sat at the head of the entry's dataset order, on the rationale that with
+		// nothing patient-specific "the general material IS its content". The live reproduction that
+		// falsified it — the 1512-character Metformin record whose whole content was mechanism prose
+		// about the head of an alphabetical list — is recorded once, on
+		// MAX_TAIL_PARTNERS_WHEN_NOTHING_PATIENT_SPECIFIC, rather than restated here where the two
+		// copies would drift apart. The question it was asked was patient-specific; what the record
+		// answered with was dataset position.
 		//
-		// Nothing else distinguishes the two sides: renderCapBoundsBroadInteractionSets and
-		// aSubFloorInteractionIsNotPromotedEvenWhenThePatientIsOnThatDrug both still pass if the
-		// branch is collapsed to the single compact representative, and collapsing it is the obvious
-		// simplification to reach for. It would strip every entry the patient has no overlap with —
-		// the common case, since a question naming a drug the patient is not on is the ordinary
-		// question — down to one bare partner name, with no failing test to say so.
+		// This case replaces withNoPatientRelevantPartnerTheDatasetTailStillRendersFullNotesToTheBudget,
+		// which asserted the behaviour above of this same entry and question: it is the spec #355
+		// changes, not a case dropped.
+		//
+		// The tail's job is breadth either way (see render), and breadth is stated by naming partners
+		// with their severities. What must not survive is the mechanism text: it is actionable only
+		// for a partner the patient is on, and #117 records this model garbling long verbatim copies
+		// while reciting them.
+		//
+		// Still a branch rather than one rule, and the COUNT is what distinguishes the two sides: the
+		// promoted case renders ONE representative because segment 1 already carried the
+		// patient-specific content, while here the tail is the whole record and a single name would
+		// read as this drug's only interaction — which is what the version of this test before #355
+		// warned the obvious simplification would do to every entry the patient has no overlap with,
+		// the common case.
 		String section = interactionsSectionFor("Lisinopril");
-		assertTrue(section.contains("metformin (moderate. limited data suggest"),
-				"with nothing promoted the first dataset-order partner keeps its mechanism note, "
-						+ "not the compact form the promoted case uses: " + section);
-		assertTrue(section.contains("methotrexate"),
-				"and the budget keeps admitting further partners rather than stopping at one: " + section);
+		assertTrue(section.contains("spironolactone (major)"),
+				"the entry's Major partner leads the tail, in the compact name (severity) form: "
+						+ section);
+		assertTrue(section.indexOf("spironolactone") < section.indexOf("metformin"),
+				"severity and not dataset position decides which partners a capped tail spends its "
+						+ "room on — the same decision SEVERITY_DESCENDING already makes for the "
+						+ "promoted segment, for the same measured reason: " + section);
+		assertTrue(section.contains("metformin (moderate)"),
+				"and every other named partner is compact too, not a mechanism paragraph: " + section);
+		assertFalse(section.contains("limited data suggest"),
+				"the mechanism prose for a partner this patient has nothing to do with must go: "
+						+ section);
+		assertFalse(section.contains("sertraline"),
+				"and the tail is a handful, not a budget's worth: sertraline is one of the Unknown "
+						+ "rows that rendered before #355 purely because they sit early in the "
+						+ "dataset: " + section);
+		assertTrue(4 * section.length() <= DrugReferenceInjector.MAX_INTERACTION_RENDER_CHARS,
+				"the section now costs a fraction of the budget this branch used to spend, was "
+						+ section.length() + " chars: " + section);
+	}
+
+	@Test
+	public void theUnpromotedTailStillPaysTheCharacterBudgetForRulesThatHaveNoNameToShortenTo()
+			throws Exception {
+		// The clause issue #355 kept rather than added, and the one shape that still discriminates it.
+		// API-ONLY BY CONSTRUCTION, so do not read its absence from a standalone run as a gap: the
+		// clause bites only for a rule carrying no token and no ATC, and the shipped DDInter knowledge
+		// base names and rates every row, so no live chart can reach it.
+		// InteractionNote's compact form is `label (Severity)`, so for almost every row the cap on
+		// partners is what bounds the tail and the character budget never bites. It bites for a rule
+		// carrying no token and no ATC: partnerLabel returns null, there is no name to shorten to, and
+		// the compact form IS the mechanism paragraph. Five of those are five paragraphs, which is the
+		// cost #355 exists to remove, so the budget stays in the loop beside the cap.
+		//
+		// The clause was left undiscriminated by #355 until this case: before it, deleting the condition
+		// kept the whole api suite green. Not because no other fixture carries a nameless rule —
+		// drug-reference-malformed.json's `mangled` entry carries two nameless ROWS — but because
+		// neither can spend the budget: one is blank, which orderedInteractionNotes drops outright
+		// before an InteractionNote is built for it, and the other's note is 21 characters. Mutate
+		// the condition and read the failures rather than trusting a count of them: this case was
+		// the sole witness when it was written and is not any more, the nameless-tail fixture beside
+		// it having since grown a note long enough to reach the budget too.
+		//
+		// Every row is unrated, so severityPriority ties them and the stable sort leaves dataset order
+		// — which keeps this case about the budget rather than about the ordering beside it.
+		RecordMapping record = tailRecordOf(
+				"chartsearchai-test/drug-reference-unpromoted-tail-budget.json",
+				"is it safe to give budgetstub?");
+		String section = tailSectionOf(record);
+
+		assertTrue(section.contains("ALPHA"),
+				"precondition: the first nameless rule always renders, however long it is: " + section);
+		assertTrue(section.contains("BRAVO"),
+				"precondition: and a second one fits the budget, so the cut below is the budget's and "
+						+ "not the first row's: " + section);
+		assertFalse(section.contains("CHARLIE"),
+				"a third does not fit, and the partner cap alone would have admitted it — five nameless "
+						+ "rules are five mechanism paragraphs, which is the cost #355 removes: " + section);
+		assertEquals(3, record.getWithheldInteractions(),
+				"and the rows the budget cut must be reported as withheld: " + section);
+		assertTrue(section.length() <= DrugReferenceInjector.MAX_INTERACTION_RENDER_CHARS,
+				"and what the budget bounds here is the section itself: the first note is inside the "
+						+ "budget on this fixture, so nothing overshoots and the whole section must fit, "
+						+ "was " + section.length() + " chars: " + section);
+	}
+
+	@Test
+	public void aTailRuleWithNoPartnerToNameDoesNotDisplaceOneThatDoes() throws Exception {
+		// Issue #355's own regression, found by measuring the change rather than reading it. Ordering
+		// the tail by severity alone interacts with two facts that are individually fine: an UNRATED
+		// rule ranks above Major (severityPriority — every curated hand-authored rule is unrated), and
+		// a rule carrying no token and no ATC has no name to shorten to, so its compact form IS its
+		// mechanism paragraph. Together they hoist a nameless paragraph into the one slot the
+		// character budget cannot refuse — the first — wherever the dataset put it, and it then
+		// crowds out the row that actually names a partner.
+		//
+		// The measurement lives with the rule, in SEVERITY_DESCENDING's javadoc, rather than being
+		// restated here where the two copies would drift apart. What this case pins is the rule
+		// itself: the tail asks first whether a note NAMES its partner, because the tail's job is
+		// breadth, a rule that names nobody states none, and it may not outrank one that does.
+		String section = tailSectionOf(tailRecordOf(
+				"chartsearchai-test/drug-reference-unpromoted-tail-nameless.json",
+				"is it safe to give namelessmix?"));
+
+		assertTrue(section.toLowerCase().contains("metformin (moderate)"),
+				"the row that names a partner leads the tail, whatever the nameless row is rated: "
+						+ section);
+		assertFalse(section.contains("LONGSTUB"),
+				"and the nameless paragraph does not take the slot the budget cannot refuse: " + section);
+	}
+
+	@Test
+	public void aRatedRowWithNoMechanismTextStillCountsAsNamingItsPartner() throws Exception {
+		// Issue #355. InteractionNote.namesItsPartner is asked of the RULE in the constructor — it is
+		// DrugSafetyValidator.partnerLabel's answer about it — rather than re-derived by comparing
+		// the compact form to the full one. This case is why it cannot be re-derived: the two
+		// coincide for a SECOND reason. A row carrying a token and a severity but no mechanism text
+		// renders full as just the token, and `token (Severity)` is longer than that, so
+		// orderedInteractionNotes' own never-grow guard resets compact to the full text — while the
+		// row plainly does name its partner.
+		//
+		// So a derived flag reports false for it, the nameless unrated paragraphs beside it outrank
+		// it under severityPriority (unrated sorts above Major), and the character budget then drops
+		// the named Major partner out of the citable record altogether — issue #355's own cost,
+		// reinstated. Write the derived form into the constructor and read the failures.
+		RecordMapping record = tailRecordOf(
+				"chartsearchai-test/drug-reference-unpromoted-tail-rated-noteless.json",
+				"is it safe to give notelessstub?");
+		String section = tailSectionOf(record);
+
+		assertTrue(section.contains("warfarin"),
+				"the row that names a partner leads the tail even though its severity-bearing short "
+						+ "form would be LONGER than the name it renders, so its compact and full "
+						+ "texts are the same string: " + section);
+		assertTrue(section.indexOf("warfarin") < section.indexOf("ALPHA"),
+				"and it leads it rather than merely surviving: a nameless unrated paragraph ranks "
+						+ "above Major on severity alone, so nothing but the naming key puts this row "
+						+ "in front of one: " + section);
+		assertEquals(1, record.getWithheldInteractions(),
+				"precondition: the budget cuts exactly one of the four rows here, so a row losing its "
+						+ "place is a row LOST from the record rather than one merely reordered: "
+						+ section);
+	}
+
+	@Test
+	public void anAtcNamedRowWithNoMechanismTextStillCountsAsNamingItsPartner() throws Exception {
+		// Issue #355, the other arm of the same key. DrugSafetyValidator.partnerLabel is
+		// firstNonBlank(token, atc), so a rule the dataset identifies by an ATC code and nothing else
+		// names its partner exactly as a tokened one does — and the flag InteractionNote records is
+		// that method's answer, not its first argument's. The case beside this one contrasts a
+		// TOKENED row with a row carrying neither, which both a token-only reading and the real
+		// predicate answer alike; measured 2026-09-02, deriving the flag as
+		// firstNonBlank(i.getToken()) != null left the whole api suite green.
+		//
+		// What that reading costs is this fixture's record: the nameless unrated paragraphs beside
+		// the ATC-named row outrank it under severityPriority (unrated sorts above Major), and the
+		// character budget then drops the Major partner out of the citable record — reported only as
+		// a withheld count. Write the token-only form into the constructor and read the
+		// failures.
+		RecordMapping record = tailRecordOf(
+				"chartsearchai-test/drug-reference-unpromoted-tail-atc-named.json",
+				"is it safe to give atcnamedstub?");
+		String section = tailSectionOf(record);
+
+		assertTrue(section.contains("B01AA03"),
+				"the row the dataset identifies by an ATC code and no token still names its partner, "
+						+ "so it leads the tail: " + section);
+		assertTrue(section.indexOf("B01AA03") < section.indexOf("ALPHA"),
+				"and it leads it rather than merely surviving: a nameless unrated paragraph ranks "
+						+ "above Major on severity alone, so nothing but the naming key puts this row "
+						+ "in front of one: " + section);
+		assertEquals(1, record.getWithheldInteractions(),
+				"precondition: the budget cuts one of the four rows here, so a row losing its place "
+						+ "is a row LOST from the record rather than one merely reordered: " + section);
+	}
+
+	@Test
+	public void aNamelessRuleCarryingASeverityStillDoesNotDisplaceARowThatNamesItsPartner()
+			throws Exception {
+		// Issue #355. The naming key is independent of the rating, and this is the arrangement in
+		// which that is observable: the nameless paragraph here carries Major while the row that
+		// names a partner carries Moderate. Every other tail fixture leaves the nameless rows
+		// unrated, so on them "names a partner" and "carries a severity" answer alike for every row
+		// and reading the flag off the severity is indistinguishable from reading it off the name.
+		// Measured 2026-09-02, deriving the flag as severity != null — which was the local two lines
+		// above the construction site while the flag was passed in — left the whole api suite green.
+		//
+		// Under that reading the paragraph is promoted to the head of the tail on a rating that
+		// names nobody, taking the one slot the character budget cannot refuse, and metformin leaves
+		// the record. Write the severity reading into the constructor and read the failures.
+		RecordMapping record = tailRecordOf(
+				"chartsearchai-test/drug-reference-unpromoted-tail-rated-nameless.json",
+				"is it safe to give ratednamelessmix?");
+		String section = tailSectionOf(record);
+
+		assertTrue(section.toLowerCase().contains("metformin (moderate)"),
+				"the row that names a partner leads the tail even though the nameless row beside it "
+						+ "is rated HIGHER: a rule that names nobody states no interaction, whatever "
+						+ "its rating: " + section);
+		assertFalse(section.contains("LONGSTUB"),
+				"and the nameless paragraph does not take the slot the budget cannot refuse: " + section);
+		assertEquals(1, record.getWithheldInteractions(),
+				"precondition: the budget cuts one of the two rows here, so a row losing its place is "
+						+ "a row LOST from the record rather than one merely reordered: " + section);
+	}
+
+	@Test
+	public void aBlankButPresentTokenStillDoesNotDisplaceARowThatNamesItsPartner() throws Exception {
+		// Issue #355, the fourth arm of the same key and the one review found last. The three cases
+		// above discriminate InteractionNote.namesItsPartner from !compact.equals(rendered), from
+		// firstNonBlank(i.getToken()) != null and from severity != null. This one discriminates it
+		// from the obvious inlining of DrugSafetyValidator.partnerLabel MINUS firstNonBlank's blank
+		// handling — i.getToken() != null || i.getAtc() != null — which, measured 2026-09-02 before
+		// this case existed, left the whole build green.
+		//
+		// partnerLabel is firstNonBlank(token, atc), so a token that is nothing but a space gives the
+		// rule NO name: compact falls back to the whole mechanism paragraph, exactly as for a row
+		// carrying no token field at all. A presence test on the raw fields answers true for it, so
+		// the paragraph is not demoted, and being unrated it outranks Major under severityPriority —
+		// it then takes the one slot the character budget cannot refuse and metformin leaves the
+		// record.
+		//
+		// Blank-but-present is a shape this module treats as real rather than as a typo:
+		// DrugReference.Interaction.setToken normalises nothing and drug-reference-malformed.json
+		// ships nameless rows, so a JSON "token": " " reaches partnerLabel as written. Write the
+		// presence test into the constructor and read the failures.
+		RecordMapping record = tailRecordOf(
+				"chartsearchai-test/drug-reference-unpromoted-tail-blank-token.json",
+				"is it safe to give blanktokenmix?");
+		String section = tailSectionOf(record);
+
+		assertTrue(section.toLowerCase().contains("metformin (moderate)"),
+				"the row that names a partner leads the tail: a token that is only whitespace names "
+						+ "nobody, and partnerLabel says so: " + section);
+		assertFalse(section.contains("LONGSTUB"),
+				"and the blank-tokened paragraph does not take the slot the budget cannot refuse: "
+						+ section);
+		assertEquals(1, record.getWithheldInteractions(),
+				"precondition: the budget cuts one of the two rows here, so a row losing its place is "
+						+ "a row LOST from the record rather than one merely reordered: " + section);
+	}
+
+	@Test
+	public void anUnratedRowNamingItsPartnerStillLeadsANamelessRowAheadOfItInTheDataset()
+			throws Exception {
+		// Issue #355, the re-derivation of the same key that review round 4 found: a row that NAMES
+		// its partner and is UNRATED, with a nameless unrated paragraph AHEAD of it in dataset order.
+		// Every case above gives its naming row a RATING, so on each of them "names a partner" and
+		// "carries a severity" answer alike for that row, and the conjunction of the two — label !=
+		// null && severity != null — answers exactly as the real predicate does. Here it does not: it
+		// reports FALSE for the metformin row, which then ties the nameless paragraph on the naming
+		// key AND on severityPriority (both unrated), so the stable sort leaves the dataset order
+		// that puts the paragraph first. It takes the one slot the character budget cannot refuse and
+		// metformin leaves the record.
+		//
+		// That is not an exotic shape: every interaction row of the curated dataset this module
+		// itself ships carries a token, an ATC code and no severity, and an operator-authored rule
+		// normally does too — DDInter rates every row, so unrated arises from curated JSON, which is
+		// where a token-bearing unrated row comes from.
+		//
+		// Since that round the flag is no longer a constructor argument at all — InteractionNote asks
+		// DrugSafetyValidator.partnerLabel about the rule it is given — so this substitution and the
+		// ones the cases above name can only be written inside that constructor. Write it there and
+		// read the failures.
+		RecordMapping record = tailRecordOf(
+				"chartsearchai-test/drug-reference-unpromoted-tail-unrated-named.json",
+				"is it safe to give unratednamedmix?");
+		String section = tailSectionOf(record);
+
+		assertTrue(section.contains("metformin"),
+				"the row that names a partner leads the tail even though NEITHER row carries a "
+						+ "rating, so nothing but the naming key can separate them: " + section);
+		assertFalse(section.contains("LONGSTUB"),
+				"and the nameless paragraph the dataset lists FIRST does not take the slot the budget "
+						+ "cannot refuse: " + section);
+		assertEquals(1, record.getWithheldInteractions(),
+				"precondition: the budget cuts one of the two rows here, so a row losing its place is "
+						+ "a row LOST from the record rather than one merely reordered: " + section);
+	}
+
+	/** Every rule shape {@link DrugReferenceInjector.InteractionNote#namesItsPartner} distinguishes,
+	 *  as one entry each in {@link #NAME_SHAPES_FIXTURE} — {@code {alias, the string the record must
+	 *  print for its probe row}}. The shapes that DO name a partner; {@link #NAMELESS_SHAPES} holds
+	 *  the ones that do not, and the two together must account for every entry of the fixture, which
+	 *  {@link #everyRuleShapeThatNamesAPartnerLeadsANamelessParagraphAndEveryOtherShapeTrailsIt}
+	 *  asserts. */
+	private static final String[][] NAMING_SHAPES = {
+			{ "tailtokenshape", "warfarin" },
+			{ "tailatcshape", "B01AA03" },
+			{ "tailbothnamedshape", "warfarin" },
+			{ "tailblanktokennamedatcshape", "B01AA03" },
+			{ "tailnamedtokenblankatcshape", "warfarin" },
+			{ "tailbaretokenshape", "warfarin" },
+			{ "tailbareatcshape", "B01AA03" },
+			{ "tailbarebothshape", "warfarin" },
+	};
+
+	/** The shapes that name NO partner — see {@link #NAMING_SHAPES}. Each probe row renders as its own
+	 *  mechanism paragraph, marked {@link #PROBE_PARAGRAPH_MARKER}. */
+	private static final String[] NAMELESS_SHAPES = {
+			"tailblanktokenshape",
+			"tailblankatcshape",
+			"tailbothblankshape",
+			"tailneithershape",
+	};
+
+	private static final String NAME_SHAPES_FIXTURE =
+			"chartsearchai-test/drug-reference-unpromoted-tail-name-shapes.json";
+
+	/** The marker a probe row that names nobody renders under: its own note, which is its compact form
+	 *  too, because there is no name to shorten to. */
+	private static final String PROBE_PARAGRAPH_MARKER = "PROBEPARAGRAPH";
+
+	/** The marker of the nameless unrated paragraph every entry of the fixture lists FIRST. */
+	private static final String NAMELESS_PARAGRAPH_MARKER = "LONGSTUB";
+
+	@Test
+	public void everyRuleShapeThatNamesAPartnerLeadsANamelessParagraphAndEveryOtherShapeTrailsIt()
+			throws Exception {
+		// Issue #355, review round 6. The five cases above each discriminate
+		// InteractionNote.namesItsPartner from ONE re-derivation somebody wrote in its place, and each
+		// was added because that re-derivation had been written and the whole build had accepted it.
+		// Five rounds, five cases, and round 6 found a sixth — getAtc() != null ||
+		// firstNonBlank(getToken()) != null, the raw-presence reading applied to the ATC arm alone,
+		// which no fixture in this repository could see because none carried a blank-but-present atc.
+		// So this case answers a different question from the five: rather than pinning one more
+		// substitution, it enumerates the rule SHAPES the predicate can distinguish at all, so a
+		// re-derivation nobody has thought of that reads THOSE TWO FIELDS has nowhere left to differ
+		// silently. One reading a field partnerLabel does not read is a different family and is not
+		// covered here; the last paragraph below says which case holds the one that has been written.
+		//
+		// partnerLabel is firstNonBlank(token, atc), so its answer is decided by the 3x3 product of
+		// {absent, blank, non-blank} over those two fields. Nine cells, one fixture entry each, listed
+		// as (token state, atc state): tailtokenshape (non-blank, absent), tailatcshape (absent,
+		// non-blank), tailbothnamedshape (non-blank, non-blank), tailblanktokennamedatcshape (blank,
+		// non-blank), tailnamedtokenblankatcshape (non-blank, blank), tailblanktokenshape (blank,
+		// absent), tailblankatcshape (absent, blank), tailbothblankshape (blank, blank) and
+		// tailneithershape (absent, absent) — the first five naming a partner and the last four naming
+		// none. The three naming cells with no blank field are filed a SECOND time with no note
+		// (tailbaretokenshape, tailbareatcshape, tailbarebothshape), since without a note a naming
+		// row's compact and full texts are one string and comparing them cannot tell it from a
+		// nameless row; a nameless shape with no note renders blank and orderedInteractionNotes drops
+		// it before an InteractionNote exists, so those have no noteless counterpart.
+		//
+		// The two MIXED cells are review round 7's, and the claim they falsified was round 6's own:
+		// this matrix filed seven of the nine and said it covered the product. Each unfiled cell
+		// admitted an inlining of partnerLabel that the whole build accepted — "take the first PRESENT
+		// field, then blank-check it" (String l = rule.getToken() != null ? rule.getToken() :
+		// rule.getAtc(); l != null && !l.trim().isEmpty()) differs from partnerLabel exactly on (blank,
+		// non-blank), and the same reading with its arms swapped (rule.getAtc() != null ?
+		// firstNonBlank(rule.getAtc()) != null : firstNonBlank(rule.getToken()) != null) exactly on
+		// (non-blank, blank). Both were measured on this branch with the two cells filed: mvn -o clean
+		// install from the root fails, and the ONLY failing case in the whole build is this one, at the
+		// newly-filed cell — so nothing else in the build sees either reading, which is what let the
+		// seven-cell fixture accept both. Which is why this case ends by asserting that every cell
+		// of the product is FILED and not only that every filed cell is asserted: the second check is
+		// silent on a cell nobody wrote, which is the hole round 6 left.
+		//
+		// One arrangement, one entry per shape: the nameless unrated LONGSTUB paragraph FIRST in
+		// dataset order, then the probe row, which carries no severity — so severityPriority ties the
+		// two and only the naming key can order them, and where it cannot, dataset order leaves the
+		// paragraph in front. The paragraph alone exceeds MAX_INTERACTION_RENDER_CHARS, so exactly one
+		// of the two rows renders and the loser leaves the record as a withheld count: a naming shape
+		// must be the row shown, a nameless one must not be. Write any re-derivation into the
+		// constructor and read the failures.
+		List<String> covered = new ArrayList<String>();
+		for (String[] shape : NAMING_SHAPES) {
+			covered.add(shape[0]);
+			RecordMapping record = tailRecordOf(NAME_SHAPES_FIXTURE,
+					"is it safe to give " + shape[0] + "?");
+			String section = tailSectionOf(record);
+
+			assertTrue(record.getText().toLowerCase(Locale.ROOT).contains(shape[0]),
+					"precondition: the question must inject the entry it names, else the assertions "
+							+ "below are about another shape's record: " + record.getText());
+			assertTrue(section.contains(shape[1]),
+					shape[0] + " names its partner, so it is the row the record shows: " + section);
+			assertFalse(section.contains(NAMELESS_PARAGRAPH_MARKER),
+					shape[0] + " names its partner, so the nameless paragraph the dataset lists "
+							+ "FIRST does not take the one slot the character budget cannot refuse: "
+							+ section);
+			assertEquals(1, record.getWithheldInteractions(),
+					"precondition: exactly one of the two rows fits, so a row losing its place is a "
+							+ "row LOST from the record rather than one merely reordered: " + section);
+		}
+		for (String shape : NAMELESS_SHAPES) {
+			covered.add(shape);
+			RecordMapping record = tailRecordOf(NAME_SHAPES_FIXTURE, "is it safe to give " + shape + "?");
+			String section = tailSectionOf(record);
+
+			assertTrue(record.getText().toLowerCase(Locale.ROOT).contains(shape),
+					"precondition: the question must inject the entry it names, else the assertions "
+							+ "below are about another shape's record: " + record.getText());
+			assertTrue(section.contains(NAMELESS_PARAGRAPH_MARKER),
+					shape + " names no partner, so it may not displace the paragraph ahead of it — "
+							+ "and being unrated it outranks Major on severity alone, so nothing but "
+							+ "the naming key holds it back: " + section);
+			assertFalse(section.contains(PROBE_PARAGRAPH_MARKER),
+					shape + " names no partner, so its own paragraph is what the budget cuts: "
+							+ section);
+			assertEquals(1, record.getWithheldInteractions(),
+					"precondition: exactly one of the two rows fits, so a row losing its place is a "
+							+ "row LOST from the record rather than one merely reordered: " + section);
+		}
+
+		// A shape added to the fixture and not to either table above would be an unasserted shape,
+		// which is the hole this case exists to close. Every entry must be claimed by one of them.
+		List<String> inFixture = new ArrayList<String>();
+		for (DrugReference entry : DrugReferenceTestSupport.fixtureEntries(NAME_SHAPES_FIXTURE)) {
+			inFixture.add(entry.getName().toLowerCase(Locale.ROOT));
+		}
+		Collections.sort(inFixture);
+		Collections.sort(covered);
+		assertEquals(inFixture, covered,
+				"every rule shape the fixture files must be asserted here, and every shape asserted "
+						+ "here must be in the fixture");
+
+		// The check above reddens on a shape FILED and left unasserted; this one reddens on a cell of
+		// the product nobody filed, which the check above cannot see. It classifies the fixture's own
+		// literal field values through the production blank test, so it states which cell each probe
+		// row occupies without re-expressing what partnerLabel then makes of it — whether a cell NAMES
+		// a partner is what the two tables above assert, by hand, one row at a time.
+		Set<String> product = new TreeSet<String>();
+		for (String tokenState : FIELD_STATES) {
+			for (String atcState : FIELD_STATES) {
+				product.add("token " + tokenState + ", atc " + atcState);
+			}
+		}
+		Set<String> filed = new TreeSet<String>();
+		for (DrugReference entry : DrugReferenceTestSupport.fixtureEntries(NAME_SHAPES_FIXTURE)) {
+			DrugReference.Interaction probe = probeRowOf(entry);
+			filed.add("token " + fieldState(probe.getToken()) + ", atc " + fieldState(probe.getAtc()));
+		}
+		assertEquals(product, filed,
+				"partnerLabel is a firstNonBlank over two fields, so every cell of the 3x3 product of "
+						+ "{absent, blank, non-blank} over them must be filed by a probe row here — a "
+						+ "cell left empty is a cell a re-derivation can differ on silently, which is "
+						+ "how two of them did until review round 7");
+	}
+
+	/** The three states either field {@code DrugSafetyValidator.partnerLabel} reads can be in. A field
+	 *  present but BLANK is its own state and not a spelling of either neighbour, which is the whole
+	 *  reason the product has nine cells rather than four: {@code firstNonBlank} treats it as the
+	 *  absent one while every re-derivation reading raw presence treats it as the non-blank one. */
+	private static final String[] FIELD_STATES = { "absent", "blank", "non-blank" };
+
+	/** Which of {@link #FIELD_STATES} {@code value} is, through the production blank test rather than
+	 *  a local one. */
+	private static String fieldState(String value) {
+		return value == null ? "absent" : ChartSearchAiUtils.isBlank(value) ? "blank" : "non-blank";
+	}
+
+	/** The probe row of a {@link #NAME_SHAPES_FIXTURE} entry — the one interaction whose token/atc
+	 *  shape that entry exists to vary, which is the row marked {@link #PROBE_PARAGRAPH_MARKER} or, in
+	 *  the three noteless entries, the row with no note at all. Recognised by that marker and NOT by
+	 *  the absence of {@link #NAMELESS_PARAGRAPH_MARKER}: the probe note names the paragraph it is
+	 *  filed against, so "does not mention LONGSTUB" matches neither row. Asserted to be exactly one,
+	 *  because an entry filing two would make the cell it realises ambiguous. */
+	private static DrugReference.Interaction probeRowOf(DrugReference entry) {
+		List<DrugReference.Interaction> probes = new ArrayList<DrugReference.Interaction>();
+		for (DrugReference.Interaction i : entry.getInteractions()) {
+			if (i.getNote() == null || i.getNote().contains(PROBE_PARAGRAPH_MARKER)) {
+				probes.add(i);
+			}
+		}
+		assertEquals(1, probes.size(), entry.getName() + " must file one probe row beside the "
+				+ NAMELESS_PARAGRAPH_MARKER + " paragraph, else the cell it realises is ambiguous");
+		return probes.get(0);
+	}
+
+	/** The only record a curated {@code fixture} injects for {@code question}, for a patient on
+	 *  nothing — the arrangement in which nothing is promoted and the interactions section is entirely
+	 *  the dataset tail. The record rather than its text, because a case about the tail's bounds also
+	 *  asks it for {@code getWithheldInteractions()}. */
+	private RecordMapping tailRecordOf(String fixture, String question) throws Exception {
+		return DrugReferenceTestSupport.injectedReferences(DrugReferenceTestSupport
+				.injector(DrugReferenceTestSupport
+						.serviceWith(DrugReferenceTestSupport.fixtureEntries(fixture)))
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+						DrugReferenceTestSupport.ctx(60, null, null, null, null, null), question))
+				.get(0);
+	}
+
+	/** {@code record}'s {@code Interactions:} section, case PRESERVED so a caller may assert on a
+	 *  marker the record prints verbatim — which is what separates this from
+	 *  {@link #interactionsSectionFor}, and why the two are not one method. */
+	private String tailSectionOf(RecordMapping record) {
+		int start = record.getText().indexOf("Interactions:");
+		assertTrue(start >= 0,
+				"precondition: the record must render an Interactions section, else the slice below "
+						+ "dies on a negative index and names neither the premise nor the record: "
+						+ record.getText());
+		return record.getText().substring(start);
 	}
 
 	/** The injected drug-reference mapping (not just its text) whose rendering names {@code drug}. */
@@ -619,9 +1105,10 @@ public class DrugReferenceInjectorTest {
 
 	/**
 	 * The lowercased {@code Interactions:} section of the injected {@code entry} record, for a
-	 * patient on {@code activeDrugs} asking about {@code entry}. The seven interaction-rendering
-	 * tests differ only in the drug set and which claim they make about the section, so the
-	 * inject-then-locate-then-slice plumbing lives here rather than in each of them.
+	 * patient on {@code activeDrugs} asking about {@code entry}. The interaction-rendering tests that
+	 * use it differ only in the drug set and which claim they make about the section, so the
+	 * inject-then-locate-then-slice plumbing lives here rather than in each of them. It lowercases,
+	 * so a case asserting on a marker the record prints verbatim uses {@code tailSectionOf} instead.
 	 */
 	private String interactionsSectionFor(String entry, String... activeDrugs) {
 		String record = injectedMappingFor(entry, activeDrugs).getText();

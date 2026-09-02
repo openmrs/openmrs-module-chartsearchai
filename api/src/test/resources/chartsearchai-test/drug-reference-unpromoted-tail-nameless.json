@@ -1,0 +1,28 @@
+{
+  "version": "1.0",
+  "description": "Test fixture (issue #355): a curated entry mixing a rule that NAMES its partner with one that cannot. The nameless row carries neither token nor ATC, so DrugSafetyValidator.partnerLabel returns null, InteractionNote's compact form falls back to the whole mechanism paragraph, and — being unrated — DrugSafetyValidator.severityPriority ranks it ABOVE Major. Ordering the unpromoted tail by severity alone would therefore hoist it into the one slot the character budget cannot refuse, and its paragraph would displace the row that actually names a partner. The two rows are deliberately of very different lengths so the substitution is visible in the record's own size.",
+  "entries": [
+    {
+      "id": "namelessmix-curated",
+      "name": "Namelessmix",
+      "drugClass": "Test fixture substance",
+      "aliases": [
+        "namelessmix"
+      ],
+      "atcCodes": [
+        "V99AA02"
+      ],
+      "interactions": [
+        {
+          "token": "metformin",
+          "severity": "Moderate",
+          "note": "Moderate. A short mechanism note about metformin."
+        },
+        {
+          "note": "Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so it names no partner and can never match one of the patient's own orders; it is prose and nothing else. This operator-authored row carries no token and no ATC code, so it names no partner and can never match one of the patient's own orders; it is prose and nothing else. This operator-authored row carries no token and no ATC code, so it names no partner and can never match one of the patient's own orders; it is prose and nothing else. This operator-authored row carries no token and no ATC code, so it names no partner and can never match one of the patient's own orders; it is prose and nothing else. This operator-authored row carries no token and no ATC code, so it names no partner and can never match one of the patient's own orders; it is prose and nothing else. This operator-authored row carries no token and no ATC code, so it names no partner and can never match one of the patient's own orders; it is prose and nothing else. This operator-authored row carries no token and no ATC code, so it names no partner and can never match one of the patient's own orders; it is prose and nothing else. This operator-authored row carries no token and no ATC code, so it names no partner and can never match one of the patient's own orders; it is prose and nothing else. This operator-authored row carries no token and no ATC code, so it names no partner and can never match one of the patient's own orders; it is prose and nothing else. "
+        }
+      ],
+      "source": "Test fixture"
+    }
+  ]
+}

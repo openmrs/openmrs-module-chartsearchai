@@ -737,11 +737,13 @@ public class PatientChartSerializer {
 		 * that the citation shows a subset. 0 when it shows them all, and for every record that has
 		 * no interactions to withhold.
 		 *
-		 * <p>Two rules withhold, and outside a broad dataset the second dominates: the per-record
-		 * render budget, and — once a partner the patient is actually on is shown — the remaining
-		 * dataset being represented by one partner rather than rendered in full. A large count
-		 * therefore usually means "not relevant to this patient" rather than "did not fit", so it
-		 * must not be presented to a clinician as an omission for length.
+		 * <p>Three rules withhold, and the render budget is rarely the one that bites: the per-record
+		 * render budget; once a partner the patient is actually on is shown, the remaining dataset
+		 * being represented by one partner rather than rendered in full; and, when NO partner the
+		 * patient is on is shown, the rest being represented by a bounded handful of them named with
+		 * their severities ({@code DrugReferenceInjector.MAX_TAIL_PARTNERS_WHEN_NOTHING_PATIENT_SPECIFIC}, issue
+		 * #355). A large count therefore usually means "not relevant to this patient" rather than
+		 * "did not fit", so it must not be presented to a clinician as an omission for length.
 		 *
 		 * <p>Structural for the same reason as {@link #getSource()}: as a text tail ("and 824 more
 		 * interactions on file") the model recited it as though it were clinical content. The

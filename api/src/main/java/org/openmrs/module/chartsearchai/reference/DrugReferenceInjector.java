@@ -113,13 +113,16 @@ public class DrugReferenceInjector {
 	 * does not name is reported on the {@link RecordMapping} as a field — never as a text tail, which
 	 * the model recited into answers (issue #117). Note that this budget is not the only reason a
 	 * partner goes unnamed, nor usually the main one: the last segment of {@code render} represents the
-	 * whole dataset tail with a single partner whenever anything patient-specific was shown, so most
-	 * of that count is normally "not relevant to this patient" rather than "did not fit".
+	 * whole dataset tail with a single partner whenever anything patient-specific was shown, and with at
+	 * most {@link #MAX_TAIL_PARTNERS_WHEN_NOTHING_PATIENT_SPECIFIC} of them when nothing was, so most of
+	 * that count is normally "not relevant to this patient" rather than "did not fit".
 	 *
 	 * <p>Two guarantees override the budget, so the rendered length is the cap plus a bounded
 	 * overshoot rather than a hard ceiling — see {@code render}: every partner the patient is
-	 * actually on is represented, and one dataset-order partner renders alongside them — compact when
-	 * the patient has a relevant partner (breadth is all it is there for), in full when they do not.
+	 * actually on is represented, and the dataset tail renders alongside them in the compact
+	 * {@code name (Severity)} form — one partner where anything patient-specific was shown, up to
+	 * {@link #MAX_TAIL_PARTNERS_WHEN_NOTHING_PATIENT_SPECIFIC} where nothing was (issue #355). Breadth
+	 * is all the tail is there for either way.
 	 * <b>Represented is not the same as rendered in full</b>, and the two segments that represent her
 	 * own partners differ in how: a PROMOTED note takes its full text while the budget allows and the
 	 * compact {@code name (Severity)} form when it will not fit, while a note the floor filtered takes
@@ -134,6 +137,150 @@ public class DrugReferenceInjector {
 	 * figure reaches the audit row, so the cost is readable per answer without a log level.
 	 */
 	static final int MAX_INTERACTION_RENDER_CHARS = 1500;
+
+	/**
+	 * How many dataset-tail partners the record NAMES when nothing patient-specific was shown — when no
+	 * partner of this entry is one the patient is on at all, whether by a rule the severity floor
+	 * admits or by one it filtered. That is {@link OrderedInteractions#nothingPatientSpecific()}, the
+	 * condition issue #357 put in place of "nothing promoted", and this is the arrangement that issue
+	 * left to issue #355 (see {@link #renderTier} for the partition and CLAUDE.md for the division).
+	 *
+	 * <p><b>A note on the provenance labels below and in this change's other measurements.</b> Where one
+	 * names {@code origin/main at 85da86fb}, that is the tree it was TAKEN on — issue #357's fix, the
+	 * base this change was re-based onto. {@code origin/main} has advanced since (issue #354's fix,
+	 * {@code a2c73956}), and each figure was re-run there and is unchanged, because #354 touches
+	 * neither {@code render}'s interaction segments nor {@code orderedInteractionNotes}. Re-measure
+	 * rather than trusting that where a later base touches either.
+	 *
+	 * <p><b>Issue #355.</b> Until it, that case spent the whole {@link #MAX_INTERACTION_RENDER_CHARS}
+	 * budget on FULL mechanism paragraphs for whichever partners sat at the head of the entry's
+	 * dataset order, on the rationale that with nothing patient-specific "the general material IS its
+	 * content". Measured live on the 3.7.1 standalone (2026-09-01, full 19 MB KB): a patient on three
+	 * ARVs asked "Can I give this patient Metformin for diabetes?" and got a 1512-character Metformin
+	 * record that was nothing but mechanism prose about ketoconazole, ketoprofen, ketorolac,
+	 * ketotifen and labetalol — the head of that entry's partner list, an alphabetical accident —
+	 * which the model recited. The question was patient-specific; what the record answered with was
+	 * dataset position. The mechanism text is the actionable half only for a partner the patient is
+	 * actually on, and issue #117 records this model garbling long verbatim copies while reciting
+	 * them, so every irrelevant paragraph offered is a paragraph of mangled clinical prose a
+	 * clinician may be shown.
+	 *
+	 * <p><b>That live chart no longer reaches this branch, and the defect it showed is still live on
+	 * one that does.</b> Re-measured 2026-09-02 through the real {@code DdiDrugReferenceSource.parse}
+	 * of the shipped knowledge base and the real {@code injectRecords} on {@code origin/main} at
+	 * {@code 85da86fb}: DDInter files all three ARVs as {@code Unknown}-rated partners of Metformin, so
+	 * since issue #357 they are the chart-named segment, {@code tailStart} is 3, and that record is 215
+	 * characters. The reproduction above stands as the record of what was seen; what closes that
+	 * particular chart is #357. The defect this constant addresses is what remains: a chart naming NO
+	 * partner of the entry, which is the ordinary case, since a question about a drug the patient is not
+	 * on is the ordinary question. Its witness, measured the same day through the real
+	 * {@code injectRecords} over the bundled 16-drug DDInter excerpt for a patient on no active order
+	 * asking about Ibuprofen: 1432 characters on {@code origin/main}, two full mechanism paragraphs
+	 * about lisinopril and metformin, neither of them hers, against 193 characters naming five partners
+	 * on this head.
+	 *
+	 * <p><b>Why a handful rather than the ONE the other branch renders.</b> There, a patient-specific
+	 * segment has already carried the patient-specific content and the tail only has to say that
+	 * others exist.
+	 * Here the tail IS the record, and a single name reads as this drug's only interaction — which is
+	 * what the test replaced by issue #355 warned the obvious simplification would do to every entry
+	 * the patient has no overlap with, the common case. The value is a judgement and not a
+	 * measurement: enough that the section reads as an open list, few enough that the tail costs on
+	 * the order of a hundred characters against the 1500 this branch used to spend.
+	 *
+	 * <p><b>What the suite does and does not decide about it</b> (re-measured 2026-09-02 on the tree
+	 * that merges issue #357's three-segment partition, by mutating this line and running
+	 * {@code mvn -o clean install} from the repository root, from clean, once per value). At 1 and at 2
+	 * the suite reddens — the entry-stripping argument above, made concrete. At 3, 4, 5 and 6 it is
+	 * green. So the lowest value the suite admits is 3, it does not distinguish 3 from 5, and no case
+	 * bounds it from above at 5 either: do not read 5 as pinned. An earlier wording of this paragraph
+	 * put the bound "somewhere under 3", inferred from the one value between 1 and 3 that it had not
+	 * run.
+	 *
+	 * <p><b>Mutate the line and read the failures; do not trust a list of them.</b> An earlier version
+	 * of this paragraph enumerated the cases, and the enumeration went stale inside this very change —
+	 * giving {@link #SEVERITY_DESCENDING} its naming key moved a nameless rule to the back of the
+	 * tail, so a case that reddened at 1 before the key stopped reddening after it, while the comment
+	 * still named it.
+	 *
+	 * <p>A COUNT and not a budget, because the budget is still applied beside it: see {@code render}
+	 * for why both are needed.
+	 *
+	 * <p><b>A consequence outside this class, measured and not closed.</b> The compact form fits MORE
+	 * partner names into a much smaller record — re-measured 2026-09-02 through the real
+	 * {@code injectRecords} over the bundled 16-drug DDInter excerpt, for a patient on no active order
+	 * asking about Ibuprofen: the record names 2 partners in 1432 characters on {@code origin/main} at
+	 * {@code 85da86fb} and 5 in 193 on this head, with {@code withheldInteractions} 13 and 10 — and
+	 * every name in a record this module INJECTED is part
+	 * of the corpus {@code DrugSafetyValidator.isEchoOfAttributableRecord} treats as something the
+	 * model may merely have repeated back (issue #105). <b>That corpus is not citation-gated</b>:
+	 * since issue #360 it is every recitable reference record in the chart whether the answer cited it
+	 * or not ({@code DrugSafetyValidator.isRecitableReferenceMaterial}), so the widening recorded here
+	 * reaches an uncited answer too. So a mention that used to be read as a proposal can now be read
+	 * as an echo, and <b>this change is what silences it, on the CITED answer and on the uncited one
+	 * alike.</b> Measured 2026-09-02 through the real {@code injectRecords} and the real
+	 * {@code DrugSafetyValidator.validate}, with the real bundled cross-reactivity groups, over that
+	 * excerpt: a patient allergic to warfarin and on no active order asked "Can she take ibuprofen?"
+	 * raises a recorded-allergy contraindication chip on the merge base and none on this head — and
+	 * the two answer shapes, "Ibuprofen interacts with warfarin [2]" and the same sentence without the
+	 * bracket, move together in both trees — chip raised in both shapes on {@code origin/main} at
+	 * {@code 85da86fb}, in neither on this head. What moved is which partners the record names: the
+	 * base's record names lisinopril and metformin, this head's names methotrexate, warfarin, aspirin,
+	 * lisinopril and metformin. Issue #360 is why
+	 * the BRACKET no longer makes a difference — it is what stopped that corpus being citation-gated,
+	 * two sentences above — and it is not why the chip is gone; an earlier wording of this paragraph
+	 * attributed the uncited half to it, which would tell a reader that half was settled upstream and
+	 * needed no checking here. That is issue #105's contract rather than a gap opened here, and it IS
+	 * pinned —
+	 * {@code ActiveOrderContraindicationTest.aRecitedPartnerThePatientIsNotTakingGainsNoContraindicationCheck}
+	 * asserts exactly that shape, a drug the patient is allergic to but not taking, recited out of an
+	 * injected record, raising no chip. What issue #355 changes is only which drugs the record names,
+	 * so the contract reaches more of them. Recorded because the widening is this change's; issue #360
+	 * is closed and its fix is on main, so this is a settled contract rather than a deferral — do not
+	 * read it as an unpinned loss.
+	 *
+	 * <p>One more consequence for a reader of the audit table: {@code reference_slice_chars} falls
+	 * sharply for a record with nothing patient-specific to show, so rows either side of this change are
+	 * not comparable in that column.
+	 *
+	 * <p><b>A pre-existing naming collision (issue #196) that issue #355's own verify table read as
+	 * closed by this constant, and is not — recorded here, not fixed.</b> The shipped
+	 * KB files two different DrugBank substances, {@code Ketoconazole} and {@code Levoketoconazole},
+	 * under one {@code rxnorm_name} ({@code ketoconazole}) — one of the families
+	 * {@code DdiDrugReferenceSource.substanceIds} withholds a substance id for, because more than one
+	 * DrugBank id shares the name; that method's javadoc carries the measurement over the shipped KB. {@code DdiDrugReferenceSource} builds each row's match
+	 * token from that shared {@code rxnorm_name}, so {@code DrugSafetyValidator.partnerLabel} names
+	 * both rows alike and {@code DrugReferenceInjector.onePerPartner} folds them onto whichever is
+	 * rated more severely — repairing that is issue #196's, and neither {@code partnerLabel} nor
+	 * {@code onePerPartner} nor {@code DdiDrugReferenceSource} was touched to record this.
+	 *
+	 * <p>Issue #355's own verify-table row (d) called that collision "fixed absent" on Metformin, on the
+	 * reasoning that DDInter rates the fold's survivor Moderate and five Major partners sit ahead of it,
+	 * so a severity-descending capped tail would drop it. <b>That reasoning does not reach the
+	 * arrangement row (d) was taken on, and the merge with issue #357 is where that became visible.</b>
+	 * Re-measured 2026-09-02 through the real {@code DdiDrugReferenceSource.parse} of the shipped
+	 * knowledge base (2283 entries) and the real {@code injectRecords}, for a patient on Lamivudine
+	 * 150mg / Nevirapine 200mg / Stavudine 30mg — the three drugs the ticket's own reproduction puts on
+	 * the chart — asking "Can I give this patient Metformin?", the record is 215 characters with
+	 * {@code withheldInteractions} 662 and reads
+	 * {@code Interactions: lamivudine (Unknown severity interaction (DDInter 2.0; no mechanism
+	 * description on file).); nevirapine (Unknown); stavudine (Unknown); ketoconazole (Moderate).} The
+	 * same question about Lisinopril gives 213 characters, {@code withheldInteractions} 728, and
+	 * {@code ketoconazole (Major)} in the same slot. Both outputs are BYTE-IDENTICAL on
+	 * {@code origin/main} at {@code 85da86fb} and on this head.
+	 *
+	 * <p>So on that chart the three ARVs are the CHART-NAMED segment issue #357 added, {@code tailStart}
+	 * is 3, and the tail renders its single dataset-order representative — this constant is not consulted
+	 * and neither is the severity ordering beside it. {@code ketoconazole} is named, at
+	 * {@code Levoketoconazole}'s rating under {@code ketoconazole}'s name, which is the collision. What
+	 * the compact form still withholds is a mechanism paragraph naming {@code levoketoconazole} by
+	 * itself: {@code name (Severity)} carries no such paragraph, so the record ends up with nothing that
+	 * distinguishes the two rows the fold collapsed. That absence is what row (d) recorded; it is
+	 * reached by the one-representative rule rather than by this cap. Issue #355 changes which drugs get
+	 * named where nothing patient-specific was shown, and does not touch the rating a fold prints — so
+	 * this is issue #196's to repair, and the arrangement is issue #357's.
+	 */
+	static final int MAX_TAIL_PARTNERS_WHEN_NOTHING_PATIENT_SPECIFIC = 5;
 
 	/** The lead of the reading's first section: a clause this patient's chart records. */
 	static final String RECORDED_READING_LEAD = " Recorded for this patient: ";
@@ -1582,7 +1729,9 @@ public class DrugReferenceInjector {
 	 * The entry's interaction notes, in three segments (see {@link #renderTier}): the partners this
 	 * patient is actually on whose rules the severity floor admits, most severe of those first (see
 	 * {@link #SEVERITY_DESCENDING}); then the partners she is on whose rules it filtered; then the rest
-	 * in dataset order. Only the first segment is PROMOTED — {@code promotedCount} counts it and
+	 * in dataset order — EXCEPT that where the first two segments are both empty the third is ordered
+	 * most severe first as well (issue #355; see the sort below for why the exception is conditional).
+	 * Only the first segment is PROMOTED — {@code promotedCount} counts it and
 	 * nothing else — and the two behind it are the dataset tail {@code render} walks in order.
 	 *
 	 * <p>This ordering is what makes the {@link #MAX_INTERACTION_RENDER_CHARS} cut meaningful.
@@ -1693,7 +1842,8 @@ public class DrugReferenceInjector {
 	 * rather than a hard ceiling — bounded by the patient's own active-drug count, not the dataset's
 	 * breadth, and paid in the compact {@code name (Severity)} form rather than in full notes.
 	 *
-	 * @param context may be null (nothing to prioritise by) — the section then keeps dataset order
+	 * @param context may be null (nothing to prioritise by) — nothing is then promoted, so the whole
+	 *        section is the tail and is ordered most severe first (issue #355)
 	 * @param orderEntries the reference entries the patient's active orders resolve to, which
 	 *        {@link #onePerPartner} keys a promoted partner on (issue #190 item 2); an empty list falls
 	 *        the grouping back to the label alone, as it was before that issue
@@ -1736,6 +1886,14 @@ public class DrugReferenceInjector {
 		// about a drug the patient was not on while withholding the identical sentence about the
 		// three she was. Relevance and rating are two questions; asking only the second is what made
 		// the answer to the first arbitrary.
+		//
+		// Issue #355 orders the LAST of the three segments most severe first where the two ahead of it
+		// are empty, which is a third thing the two-bucket partition was deciding by accident. That
+		// ordering is not promotion either: an Unknown rating ranks LAST under severityPriority, so a
+		// sub-floor row of a drug the chart does not name is further from the front of the record than
+		// dataset position put it, not nearer. It does not reach the arrangement the paragraph above
+		// describes, because a rule in `namedByTheChart` makes that segment non-empty and the sort
+		// below is then not applied at all.
 		int floor = DrugSafetyValidator.configuredSeverityFloor();
 		for (DrugReference.Interaction i : onePerPartner(ref, context, floor, orderEntries)) {
 			String label = reconciledPartnerNoteName(findings, context, i);
@@ -1758,10 +1916,11 @@ public class DrugReferenceInjector {
 			// shorter to fall back to, so it keeps its full text.
 			//
 			// It has TWO further consumers, and in the common case they are the primary ones. The last
-			// segment renders the dataset-tail representative compact unconditionally whenever
-			// anything patient-specific was shown, with budget still to spare (issue #117 — mechanism
-			// prose about a drug the patient is not on is what the model recited); and since issue
-			// #357 the segment before it renders every member but its first compact, however much
+			// segment renders the dataset tail compact unconditionally — one partner where anything
+			// patient-specific was shown, with budget still to spare (issue #117 — mechanism prose about
+			// a drug the patient is not on is what the model recited), and up to
+			// MAX_TAIL_PARTNERS_WHEN_NOTHING_PATIENT_SPECIFIC where nothing was (issue #355); and since
+			// issue #357 the segment before it renders every member but its first compact, however much
 			// budget is left. So do not assume reaching this form means the budget ran out: it also
 			// means "breadth is all this partner is here for", and "the source's sentence about this
 			// partner has already been stated once".
@@ -1775,7 +1934,7 @@ public class DrugReferenceInjector {
 			if (compact.length() >= rendered.length()) {
 				compact = rendered;
 			}
-			InteractionNote entry = new InteractionNote(rendered, compact, i.getSeverity());
+			InteractionNote entry = new InteractionNote(rendered, compact, i);
 			int tier = renderTier(i, context, floor);
 			(tier == TIER_PROMOTED ? promoted : tier == TIER_NAMED_BY_THE_CHART ? namedByTheChart : rest)
 					.add(entry);
@@ -1795,19 +1954,58 @@ public class DrugReferenceInjector {
 		// below changes which rules render() treats as segment 1.
 		//
 		// The dataset tail is what the two lists below are, in the order render() walks it: the rules
-		// naming a drug the chart records, then the rules naming drugs it does not. Neither is sorted
-		// on severity, and at the shipped floor that is not a choice — an UNRATED rule is exempt from
-		// the floor rather than below it (DrugSafetyValidator.clearsSeverityFloor), so the only rating
-		// a rule in `namedByTheChart` can carry there is Unknown and a sort over it has nothing to
-		// order. Under a raised floor the list can hold several ratings and keeps dataset order among
-		// them, which is what the tail has always done — and that is the only arrangement in which the
-		// absence of a sort here is observable at all, which is why
+		// naming a drug the chart records, then the rules naming drugs it does not.
+		//
+		// `namedByTheChart` is not sorted on severity, and at the shipped floor that is not a choice —
+		// an UNRATED rule is exempt from the floor rather than below it
+		// (DrugSafetyValidator.clearsSeverityFloor), so the only rating a rule in it can carry there is
+		// Unknown and a sort over it has nothing to order. Under a raised floor the list can hold
+		// several ratings and keeps dataset order among them, which is what the tail has always done —
+		// and that is the only arrangement in which the absence of a sort here is observable at all,
+		// which is why
 		// InjectedInteractionRelevanceOrderContextTest.theFilteredSegmentKeepsDatasetOrderRatherThanReSortingOnSeverity
 		// raises the floor to pin it. Adding the sort was green against the whole suite before it.
 		int chartNamedCount = namedByTheChart.size();
+		// Built before the tail is appended so that this method and render() ask ONE accessor whether
+		// anything patient-specific was shown, rather than each doing the same arithmetic over the same
+		// two fields (review round 7 of issue #355). `ordered` is this very list, which the two addAll
+		// calls below fill in place; the two counts it is given are already final.
+		OrderedInteractions result = new OrderedInteractions(promoted, promotedCount, chartNamedCount);
+		if (result.nothingPatientSpecific()) {
+			// Issue #355 — the same accessor render()'s capped branch gates on, so the segment this
+			// sorts is the whole of what that branch renders. The same decision the sort above makes for
+			// the promoted segment, made in the tail for the same measured reason, and reachable only
+			// once render() caps how many tail partners it names. Re-measured 2026-09-02 by driving the
+			// real injectRecords over the bundled excerpt on origin/main at 85da86fb, for a patient on no
+			// active order asking about Lisinopril: the record named the first SEVEN of the entry's 15
+			// collapsed partners in dataset order (withheldInteractions 8), and reading that same
+			// iteration order off orderedInteractionNotes there, the first five are metformin (Moderate),
+			// methotrexate (Moderate), esomeprazole (Unknown), sertraline (Unknown) and simvastatin
+			// (Unknown) while the entry's only MAJOR partner, spironolactone, sits at index 5. Capping in
+			// dataset order would evict it — dataset accident deciding which partner keeps the room,
+			// which is exactly what SEVERITY_DESCENDING exists to stop. With the sort, and re-measured
+			// 2026-09-02 on this head over the same excerpt, patient and question, the same record is
+			// 167 characters with withheldInteractions 10 and leads with spironolactone (Major) — a
+			// RECORD length, like the seven-partner figure above it, and not the 124 characters of its
+			// Interactions: section alone, which is what an earlier wording of this line quoted under
+			// the word "record".
+			//
+			// CONDITIONAL, and not because one rule would be untidy: with anything patient-specific
+			// shown, render() names ONE tail representative, and which partner that is is pinned in
+			// three places
+			// (DrugReferenceInjectorTest.promotingThePatientsPartnerStillRendersSomeOfTheDatasetTail,
+			// InjectedInteractionNoteCollapseTest.aSinglePartnerRecordIsUnchanged byte for byte, and
+			// DrugSafetyValidatorEchoScopingTest's premise that a non-patient partner is recitable out
+			// of the cited record). Reordering that representative is a change issue #355 does not
+			// ask for. The residue is stated rather than closed: where anything patient-specific IS
+			// shown, the one tail representative is still whichever partner the dataset listed first.
+			//
+			// Drop the condition and read the failures rather than trusting a list of them.
+			Collections.sort(rest, SEVERITY_DESCENDING);
+		}
 		promoted.addAll(namedByTheChart);
 		promoted.addAll(rest);
-		return new OrderedInteractions(promoted, promotedCount, chartNamedCount);
+		return result;
 	}
 
 	/**
@@ -2004,10 +2202,13 @@ public class DrugReferenceInjector {
 	 *         <p>Applied over EVERY rule rather than only over the promoted ones, deliberately: the
 	 *         floor decides which rules are worth PROMOTING, while a sub-floor row stays in the tail
 	 *         (see the caller — at its head where the chart names the partner, in dataset position
-	 *         where it does not, since issue #357), so collapsing only the promoted half would leave
-	 *         a sub-floor row of a partner in the tail beside that partner's promoted row — the same
-	 *         partner twice, which is what this removes. (The survivor rule below does READ the floor,
-	 *         through {@link #renderTier}; what it does not do is filter the input by it.)
+	 *         where it does not, since issue #357; and in SEVERITY order rather than dataset order
+	 *         where the chart names no partner of this entry at all, since issue #355), so collapsing
+	 *         only the promoted half would leave a sub-floor row of a partner in the tail beside that
+	 *         partner's promoted row — the same partner twice, which is what this removes. Staying is
+	 *         the whole of the premise, and it is all the premise needs. (The survivor rule below does
+	 *         READ the floor, through {@link #renderTier}; what it does not do is filter the input by
+	 *         it.)
 	 *
 	 *         <p><b>Which row wins, and why the render tier is asked FIRST.</b> Running before the
 	 *         segments are built means the survivor rule decides which row's {@code (token, ATC)} pair
@@ -2041,7 +2242,9 @@ public class DrugReferenceInjector {
 	 *         <p>A {@link LinkedHashMap}, so replacing a group's winner does not move the partner's
 	 *         position — dataset order within each of the caller's two tail segments is what its
 	 *         javadoc guarantees, and the segments themselves are a partition of this iteration order
-	 *         rather than a re-sort of it.
+	 *         rather than a re-sort of it. The one exception is issue #355's sort of the LAST segment
+	 *         where the two ahead of it are empty; that sort is STABLE, so this order is still what
+	 *         decides partners tied on severity there.
 	 */
 	private static Collection<DrugReference.Interaction> onePerPartner(DrugReference ref,
 			PatientClinicalContext context, int floor, List<DrugReference> orderEntries) {
@@ -2128,10 +2331,43 @@ public class DrugReferenceInjector {
 	}
 
 	/**
-	 * Orders promoted interactions most-severe first. An unrated rule sorts ahead of Major: every
-	 * curated hand-authored rule is unrated, and {@link DrugSafetyValidator#clearsSeverityFloor}
-	 * already treats unrated as exempt rather than low — unrated is not low-rated, so it must not be
-	 * the one abbreviated.
+	 * Orders interaction notes by whether they NAME a partner, then most-severe first — the promoted
+	 * segment always, and since issue #355 the dataset tail as well where nothing was promoted. An
+	 * unrated rule sorts ahead of Major: every curated hand-authored rule is unrated, and
+	 * {@link DrugSafetyValidator#clearsSeverityFloor} already treats unrated as exempt rather than low
+	 * — unrated is not low-rated, so it must not be the one abbreviated. In the tail the stake is
+	 * higher than abbreviation: the loser there is not shortened but DROPPED, since {@code render}
+	 * caps how many tail partners it names.
+	 *
+	 * <p><b>Why naming is asked FIRST, and why the key is not visible in the promoted segment.</b> A
+	 * rule carrying no token and no ATC has no name to shorten to, so {@link InteractionNote#compact}
+	 * falls back to its whole mechanism paragraph — and being operator-authored it is normally
+	 * unrated, which this comparator ranks above Major. Ordering the tail on severity alone therefore
+	 * hoisted such a paragraph into the first slot, the one {@code render} lets past the character
+	 * budget so that at least one interaction is always shown, and it crowded out the row that named a
+	 * partner. Measured by removing this first key and running
+	 * {@code DrugReferenceInjectorTest.aTailRuleWithNoPartnerToNameDoesNotDisplaceOneThatDoes} over
+	 * {@code drug-reference-unpromoted-tail-nameless.json}, re-measured 2026-09-02 on the tree that
+	 * merges issue #357's three-segment partition: the rendered interactions section is <b>35</b>
+	 * characters naming metformin with the key ({@code withheldInteractions} 1) and <b>1548</b> without
+	 * it, all of them a paragraph about a partner nobody can identify — the cost issue #355 exists to
+	 * remove, reintroduced by its own fix. Both figures are that one fixture's; the shape was first found
+	 * on a differently sized one, so re-measure rather than carrying either number across. The tail's job is breadth; a rule that names
+	 * nobody states none, so it may not outrank one that does. In the PROMOTED segment the key cannot
+	 * fire, and the two ends of that argument read the SAME pair of fields: the flag is
+	 * {@link DrugSafetyValidator#partnerLabel}'s answer about the rule — a
+	 * {@code firstNonBlank(token, atc)}, so null exactly when neither field yields a non-blank string,
+	 * which is a BLANK one as much as an absent one — while {@link #renderTier}'s promoted tier requires
+	 * {@link PatientClinicalContext#hasActiveDrug}, whose name arm skips a blank token and whose last
+	 * line is an ATC lookup that fails on an absent code. A rule this key demotes is therefore one
+	 * {@code hasActiveDrug} answers false for, so it was never promoted, and it can carry no chip
+	 * either — {@link DrugSafetyValidator#bestRulePerPartner} gates on that same conjunction. Nothing
+	 * this key drops is a partner a chip could name.
+	 *
+	 * <p>Two keys, and the composition is still a total order — lexicographic over a boolean and an
+	 * {@code int} — so no input can make {@code Collections.sort} raise
+	 * {@code "Comparison method violates its general contract!"} on the large partner lists the shipped
+	 * knowledge base carries.
 	 *
 	 * <p>Which source a rule came from decides whether that branch is reachable at all: DDInter rates
 	 * every row (all 295,184 in the full KB are Major/Moderate/Minor/Unknown — none unrecognised), so
@@ -2143,6 +2379,9 @@ public class DrugReferenceInjector {
 
 		@Override
 		public int compare(InteractionNote a, InteractionNote b) {
+			if (a.namesItsPartner != b.namesItsPartner) {
+				return a.namesItsPartner ? -1 : 1;
+			}
 			return Integer.compare(b.severityPriority, a.severityPriority);
 		}
 	};
@@ -2158,10 +2397,106 @@ public class DrugReferenceInjector {
 		 *  above Major; see {@link #SEVERITY_DESCENDING}. */
 		final int severityPriority;
 
-		InteractionNote(String full, String compact, String severity) {
+		/** Whether {@link DrugSafetyValidator#partnerLabel} gave this rule a name — a token, else an
+		 *  ATC code. False for a rule that method yields no name for, which is also the rule whose
+		 *  {@link #compact} form is its whole mechanism paragraph. That is a
+		 *  {@code firstNonBlank}, so it covers a token or code present but BLANK as much as an absent
+		 *  one — {@code DrugReference.Interaction.setToken} normalises nothing, so a JSON
+		 *  {@code "token": " "} arrives blank.
+		 *
+		 *  <p><b>Asked of the RULE in the constructor, not handed in.</b> The property stated
+		 *  positively: this flag is {@code partnerLabel}'s own answer about the rule this note renders,
+		 *  arrived at the same way {@link #severityPriority} is, so the construction site passes no
+		 *  boolean and no name for it and has nothing to derive. It WAS a {@code boolean} parameter,
+		 *  and each review round of issue #355 found one more re-derivation written in its place that
+		 *  the whole build accepted — the five listed below, each a different question. Do not
+		 *  reintroduce a caller-supplied flag, and do not hand the label over as a {@code String}
+		 *  instead: the severity local sits beside it at the call site and is type-compatible with
+		 *  such a parameter, so the last of the five would still be expressible there.
+		 *
+		 *  <p><b>Moving the read here removed the CALL-site re-derivations and not the family</b>, and
+		 *  the paragraph above claimed otherwise until review round 6 falsified it: none of the five
+		 *  can be written where the note is constructed any more, but each can still be written on
+		 *  the line below, and round 6 found a sixth that was —
+		 *  {@code rule.getAtc() != null || firstNonBlank(rule.getToken()) != null}, the raw-presence
+		 *  reading applied to the ATC arm alone. Written into the constructor it left the whole build
+		 *  green, measured in that round and again here; the JSON fixture corpus carried no
+		 *  blank-but-present {@code atc} for it to differ on. So what bounds the family is not
+		 *  a case per substitution but a case over the rule SHAPES this predicate can distinguish:
+		 *  {@code DrugReferenceInjectorTest.everyRuleShapeThatNamesAPartnerLeadsANamelessParagraphAndEveryOtherShapeTrailsIt},
+		 *  over {@code drug-reference-unpromoted-tail-name-shapes.json}. {@code partnerLabel} is a
+		 *  {@code firstNonBlank} over two fields, so what it can distinguish is the 3×3 product of
+		 *  {absent, blank, non-blank} over them; the fixture files one entry per cell — the nine are
+		 *  enumerated in that case's own comment — plus the three naming cells with no blank field
+		 *  again with no note, and the case asserts of each whether its row or a nameless unrated
+		 *  paragraph is the one the record shows.
+		 *
+		 *  <p><b>Review round 7 found that matrix filing seven of the nine cells</b>, both MIXED cells
+		 *  missing, and each of the two admitted an inlining of {@code partnerLabel} the whole build
+		 *  accepted: the "take the first PRESENT field, then blank-check it" reading differs from
+		 *  {@code partnerLabel} exactly on (blank token, non-blank ATC), and the same reading with its
+		 *  arms swapped exactly on (non-blank token, blank ATC). Both were measured on this branch
+		 *  with the nine cells filed: red, and the only failing case in the whole build is that one, at
+		 *  the newly-filed cell — so nothing else in the build sees either reading. That case now also
+		 *  asserts every cell of the product is FILED, not merely that every filed cell is asserted —
+		 *  the latter is structurally silent on a cell nobody wrote, which is how round 6 came to claim
+		 *  a closed family over an open one. The five cases below are NOT subsumed by it
+		 *  and stay: every probe row in the matrix is UNRATED, so that only the naming key can order
+		 *  it against the paragraph, and a re-derivation admitting a NAMELESS but RATED row — {@code
+		 *  partnerLabel(rule) != null || firstNonBlank(rule.getSeverity()) != null}, measured to leave
+		 *  the matrix green — differs on a shape no probe here carries. What holds that shape is
+		 *  {@code .aNamelessRuleCarryingASeverityStillDoesNotDisplaceARowThatNamesItsPartner}.
+		 *
+		 *  <p><b>Why the rule answers exactly what the call site used to.</b>
+		 *  {@link #orderedInteractionNotes} renders under {@code reconciledPartnerNoteName}, which is a
+		 *  chip's own name for the partner where one reconciled and {@code partnerLabel} otherwise — so
+		 *  it is non-null wherever {@code partnerLabel} is. It is also null wherever
+		 *  {@code partnerLabel} is: a rule that method names nothing for is one
+		 *  {@link PatientClinicalContext#hasActiveDrug} answers false for — its name arm skips a blank
+		 *  token and its last line is an ATC lookup that fails on an absent code — so no chip about it
+		 *  can exist to carry a reconciled name, which is the same conjunction
+		 *  {@link #SEVERITY_DESCENDING} reads for the other half of its own argument. The two are
+		 *  therefore null together, which is what keeps this flag false exactly where {@link #compact}
+		 *  falls back to the whole mechanism paragraph for want of a name to shorten to.
+		 *
+		 *  <p><b>The five re-derivations, and what each costs.</b> Comparing {@code compact} to
+		 *  {@code full} fails because the two coincide for a SECOND reason: a row carrying a severity
+		 *  but no mechanism text renders full as just its name, and {@code name (Severity)} is longer
+		 *  than that, so the never-grow guard in {@link #orderedInteractionNotes} resets
+		 *  {@code compact} to it — while the row DOES name its partner. Reading one field of the pair
+		 *  ({@code firstNonBlank(i.getToken()) != null}) drops the ATC arm, and reading their raw
+		 *  presence ({@code i.getToken() != null || i.getAtc() != null} — the inlining of
+		 *  {@code partnerLabel} minus its blank handling) reports a name for a row that method gives
+		 *  none for. So does the severity beside it ({@code severity != null}), which asks a different
+		 *  question entirely; and that same severity test conjoined with the name reports FALSE for a
+		 *  row that names a partner and carries no rating — the shape of all five interaction rows of
+		 *  the curated dataset this module itself ships
+		 *  ({@code api/src/main/resources/chartsearchai/drug-reference.json}, each carrying a token, an
+		 *  ATC code and no {@code severity}) and the normal shape of a hand-authored rule. Each of
+		 *  those either loses a named partner out of the record or lands a paragraph naming nobody in
+		 *  the slot the character budget cannot refuse — as does the sixth reading named above, which
+		 *  is the raw-presence one applied to the ATC arm and only to it. Write each one into the
+		 *  constructor and read the failures, among them
+		 *  {@code DrugReferenceInjectorTest.aRatedRowWithNoMechanismTextStillCountsAsNamingItsPartner},
+		 *  {@code .anAtcNamedRowWithNoMechanismTextStillCountsAsNamingItsPartner},
+		 *  {@code .aNamelessRuleCarryingASeverityStillDoesNotDisplaceARowThatNamesItsPartner},
+		 *  {@code .aBlankButPresentTokenStillDoesNotDisplaceARowThatNamesItsPartner} and
+		 *  {@code .anUnratedRowNamingItsPartnerStillLeadsANamelessRowAheadOfItInTheDataset}.
+		 *  See {@link #SEVERITY_DESCENDING}. */
+		final boolean namesItsPartner;
+
+		/**
+		 * Both facts this note keeps ABOUT its rule are asked OF the rule here — its severity rank and
+		 * whether it names a partner — so that a caller has no answer to either to supply, and cannot
+		 * supply the two inconsistently. The rule is read, never retained: this class holds rendered
+		 * text and two derived facts, and a consumer that wanted the rule would be asking the dataset a
+		 * question the rendering has already answered. See {@link #namesItsPartner}.
+		 */
+		InteractionNote(String full, String compact, DrugReference.Interaction rule) {
 			this.full = full;
 			this.compact = compact;
-			this.severityPriority = DrugSafetyValidator.severityPriority(severity);
+			this.severityPriority = DrugSafetyValidator.severityPriority(rule.getSeverity());
+			this.namesItsPartner = DrugSafetyValidator.partnerLabel(rule) != null;
 		}
 	}
 
@@ -2188,6 +2523,44 @@ public class DrugReferenceInjector {
 			this.promotedCount = promotedCount;
 			this.chartNamedCount = chartNamedCount;
 		}
+
+		/**
+		 * @return how many notes lead {@link #ordered} as the two PATIENT-SPECIFIC segments — the
+		 *         promoted ones plus the chart-named ones behind them — which is the index at which
+		 *         {@code render}'s dataset tail begins
+		 *         <p>The arithmetic lives here and nowhere else. {@code render} reads it to bound its
+		 *         middle segment and, through {@link #nothingPatientSpecific}, to decide whether the
+		 *         tail is CAPPED and compact, while {@link DrugReferenceInjector#orderedInteractionNotes}
+		 *         reads the same accessor to decide whether that tail is SORTED most severe first —
+		 *         two decisions that must not be able to disagree. They were the same expression
+		 *         written in two methods until review round 7 of issue #355, and issue #357 has
+		 *         already changed once what this counts, by adding the chart-named segment, so a
+		 *         maintainer changing it again had to remember a condition in another method.
+		 *         <p><b>The suite is not blind to that drift, and the round-7 finding said it was.</b>
+		 *         Measured on this branch by making the sort read {@code promotedCount == 0} — #357's
+		 *         predecessor — while the cap read the accessor: red at
+		 *         {@code InjectedInteractionRelevanceOrderContextTest.theFilteredSegmentKeepsDatasetOrderRatherThanReSortingOnSeverity}
+		 *         and {@code .aRaisedFloorMovesAPartnerFromThePromotedSegmentToTheHeadOfTheTail},
+		 *         which both RAISE the severity floor, that being the arrangement in which the middle
+		 *         segment can hold a rated rule at all. So the argument for one accessor is that one
+		 *         question has one name, not that the alternative was unguarded.
+		 *         {@code renderTier}'s own javadoc forbids this shape.
+		 */
+		int tailStart() {
+			return promotedCount + chartNamedCount;
+		}
+
+		/**
+		 * @return whether NOTHING patient-specific reached this record — no promoted note and none
+		 *         named by the chart
+		 *         <p>The arrangement in which the dataset tail IS the record, so it is both sorted
+		 *         most severe first and capped at
+		 *         {@link DrugReferenceInjector#MAX_TAIL_PARTNERS_WHEN_NOTHING_PATIENT_SPECIFIC}
+		 *         partners (issue #355). One name for one question; see {@link #tailStart}.
+		 */
+		boolean nothingPatientSpecific() {
+			return tailStart() == 0;
+		}
 	}
 
 	/**
@@ -2211,7 +2584,10 @@ public class DrugReferenceInjector {
 		final String source;
 
 		/** Interaction partners the text does not name — dropped by the budget or, more often, by the
-		 *  last segment representing the whole dataset tail with one partner; 0 when it names them all.
+		 *  last segment representing the dataset tail with one partner where anything patient-specific
+		 *  was shown and with at most
+		 *  {@link DrugReferenceInjector#MAX_TAIL_PARTNERS_WHEN_NOTHING_PATIENT_SPECIFIC} where nothing
+		 *  was (issue #355); 0 when it names them all.
 		 *  Never a partner the CHART names, since issue #357: both patient-specific segments render
 		 *  every member, so this counts drugs this patient has nothing to do with.
 		 *
@@ -2411,9 +2787,10 @@ public class DrugReferenceInjector {
 	 * {@link #orderedInteractionNotes} — and it splits the contraindication list into what this patient's
 	 * chart records, what it does not, and (issue #269) what it matched but nothing corroborates (issue
 	 * #208 item 2, {@link #contraindicationSections}). It may be null, which is "nothing known about the
-	 * patient": the interactions section then keeps dataset order and the contraindication list is
-	 * rendered with no reading at all, because a record that cannot see the chart must not report an
-	 * absence.
+	 * patient": nothing is then promoted, so the interactions section is entirely the tail — most
+	 * severe first and bounded by {@link #MAX_TAIL_PARTNERS_WHEN_NOTHING_PATIENT_SPECIFIC} since issue #355 — and the
+	 * contraindication list is rendered with no reading at all, because a record that cannot see the
+	 * chart must not report an absence.
 	 *
 	 * <p>{@code orderEntries} stays a parameter and is NOT a counter-example to that: the context is
 	 * BUILT from it ({@code withReferenceNames} at the call site), so there is nothing to re-derive here
@@ -2582,7 +2959,7 @@ public class DrugReferenceInjector {
 			// Every member of this segment has a token or an ATC by construction — that is what made
 			// namesActiveDrug true of it — so unlike the tail below it can never hold a rule with no
 			// name to shorten to, and "compact" here is always the short form.
-			int tailStart = interactions.promotedCount + interactions.chartNamedCount;
+			int tailStart = interactions.tailStart();
 			for (int i = interactions.promotedCount; i < tailStart; i++) {
 				InteractionNote n = ordered.get(i);
 				String piece = i == interactions.promotedCount ? n.full : n.compact;
@@ -2611,16 +2988,29 @@ public class DrugReferenceInjector {
 			// compact "name (Severity)" form — with one operator-authored exception, since
 			// InteractionNote keeps the full text for a rule carrying no token and no ATC (there is no
 			// name to shorten to), so such a row can still land a full paragraph in this slot. That
-			// stays inside this segment's own one-note overshoot; it just is not always ~20 chars. With none, the record has nothing patient-specific to say and the
-			// general material IS its content, so the budget is spent on full notes exactly as before,
-			// the first always rendering however long it is — the pre-existing "at least one
+			// stays inside this segment's own one-note overshoot; it just is not always ~20 chars.
+			//
+			// With NOTHING patient-specific the same compact form is used, for up to
+			// MAX_TAIL_PARTNERS_WHEN_NOTHING_PATIENT_SPECIFIC of them (issue #355). Until it this branch
+			// spent the whole budget on full notes, on the rationale that the general material IS the
+			// record's content when nothing is patient-specific — which the reproduction on that issue
+			// falsifies: "Can I give this patient Metformin for diabetes?" is patient-specific, and what
+			// 1500 characters bought was mechanism prose about the head of an alphabetical list, which
+			// the model recited. The count differs from the other branch's ONE because the tail is then
+			// the whole record and one name would read as this drug's only interaction; see that
+			// constant. The rules are ordered most severe first for this branch and only this one, in
+			// orderedInteractionNotes, so the cap does not evict the entry's worst partner.
+			//
+			// The budget still bounds the loop, because the operator-authored exception above applies
+			// to each of those rows too: a labelless rule contributes a paragraph rather than a name, and
+			// the cap counts rules rather than characters.
+			// And the first piece still renders however long it is: the pre-existing "at least one
 			// interaction is always shown" guarantee.
 			//
 			// The condition is "anything patient-specific", not "anything promoted", and issue #357 is
 			// why it has to be: with the promoted count alone, a record whose only chart-named partner
-			// was floor-filtered spent this segment's whole budget walking a segment that is entirely
-			// about the patient, and the breadth this segment exists to supply was never rendered at
-			// all.
+			// was floor-filtered took the branch meant for a record with nothing patient-specific to
+			// say, and the breadth this segment exists to supply was never rendered at all.
 			//
 			// MAX_INTERACTION_RENDER_CHARS is a soft budget, and say what actually bounds the
 			// overshoot rather than counting notes: the two patient-specific segments are bounded by
@@ -2631,9 +3021,10 @@ public class DrugReferenceInjector {
 			// second segment. ADR Decision 66 carries the measurement and the arrangement it was taken
 			// on. What is bounded by the budget is the general material, which is this segment's
 			// business alone.
-			if (tailStart == 0) {
-				for (int i = 0; i < ordered.size(); i++) {
-					String n = ordered.get(i).full;
+			if (interactions.nothingPatientSpecific()) {
+				for (int i = 0; i < ordered.size()
+						&& shown.size() < MAX_TAIL_PARTNERS_WHEN_NOTHING_PATIENT_SPECIFIC; i++) {
+					String n = ordered.get(i).compact;
 					if (!shown.isEmpty() && used + n.length() > MAX_INTERACTION_RENDER_CHARS) {
 						break;
 					}

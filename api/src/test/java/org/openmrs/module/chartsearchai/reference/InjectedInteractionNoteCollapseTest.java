@@ -276,10 +276,22 @@ public class InjectedInteractionNoteCollapseTest {
 		// The collapse runs BEFORE the promotion predicate, so the survivor rule decides which row's
 		// (token, ATC) pair that predicate is then asked about. Where two rows of one partner carry
 		// DIFFERENT ATC codes those answers differ, and the most severe row can be the one the
-		// patient does not match — so the partner loses its place in segment 1, which is the segment
-		// that overrides MAX_INTERACTION_RENDER_CHARS. With another partner promoted, segment 2
-		// renders exactly ONE representative, so the de-promoted partner does not merely change
-		// wording: it leaves the record while the chip still warns about it.
+		// patient does not match — so a wrong choice here costs the partner its place in segment 1,
+		// the segment that overrides MAX_INTERACTION_RENDER_CHARS.
+		//
+		// Before issue #355, that cost was eviction from the record: with another partner promoted,
+		// segment 2 rendered exactly one tail representative, so a de-promoted partner competing for
+		// that slot did not merely change wording — it left the record while the chip still warned
+		// about it. Since #355 that branch is unchanged (still one representative where something
+		// else is promoted), but THIS fixture cannot reach it: rifabutin and carbamazepine match
+		// neither row of onAcenocoumarolByAtc(), so nothing but warfarin is ever promotable here, and
+		// a wrong collapse choice (surviving on the unmatched B01AA03 row) would leave nothing
+		// promoted at all. Since #355 that means the compact, severity-ordered tail capped at
+		// MAX_TAIL_PARTNERS_WHEN_NONE_PROMOTED, not budget exhaustion on full paragraphs — so a wrong
+		// choice here would now cost this fixture the WORDS (the wrong, unmatched row's text) rather
+		// than warfarin's presence. Measured on this head: injectRecords over a context that, like the
+		// wrong survivor, matches none of the three rows renders "Interactions: rifabutin (Major);
+		// carbamazepine (Major); warfarin (Major)." — warfarin present, under its wrong row.
 		//
 		// bestRulePerPartner cannot reach this shape because it filters on hasActiveDrug BEFORE
 		// grouping, so only rows the patient matches are ever candidates. This asserts the collapse

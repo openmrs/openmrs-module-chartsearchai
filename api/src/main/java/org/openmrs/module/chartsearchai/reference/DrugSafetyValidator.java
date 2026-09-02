@@ -1049,12 +1049,13 @@ public class DrugSafetyValidator {
 	 *         check from the chart). What subtracting the type DID do was make issue #360's fix a
 	 *         no-op for every question that names no drug: such a question injects no
 	 *         {@code drug_reference} record at all, so on the screening arm every reference-group
-	 *         record is a finding and the corpus collapsed back to the cited one. Measured on the
-	 *         six-order screening chart over the shipped knowledge base — an answer reciting one
-	 *         finding verbatim raised 22 chips with no marker and 10 with a single {@code [2]} added,
-	 *         six of the difference (three of them Major) naming {@code lovastatin}, a drug this
-	 *         patient is not on and nobody asked about. That is the reported defect itself, so the
-	 *         subtraction was reverted.
+	 *         record is a finding and the corpus collapsed back to the cited one. Measured by driving
+	 *         the real {@code DrugReferenceInjector.injectRecords} and this {@code validate} over the
+	 *         shipped knowledge base and the six-order screening chart, with the subtraction applied:
+	 *         an answer reciting one injected finding verbatim raised 22 chips with no marker and 10
+	 *         with a single {@code [2]} added, six of the difference (three of them Major) naming
+	 *         {@code lovastatin}, a drug this patient is not on and nobody asked about. That is the
+	 *         reported defect itself, so the subtraction was reverted.
 	 *
 	 *         <p>Named for what it asks rather than after {@code ChartSearchAiUtils}' own private
 	 *         {@code isReferenceMaterial} — see

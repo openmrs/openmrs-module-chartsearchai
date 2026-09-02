@@ -641,6 +641,9 @@ public class DrugReferenceInjectorTest {
 	public void theUnpromotedTailStillPaysTheCharacterBudgetForRulesThatHaveNoNameToShortenTo()
 			throws Exception {
 		// The clause issue #355 kept rather than added, and the one shape that still discriminates it.
+		// API-ONLY BY CONSTRUCTION, so do not read its absence from a standalone run as a gap: the
+		// clause bites only for a rule carrying no token and no ATC, and the shipped DDInter knowledge
+		// base names and rates every row, so no live chart can reach it.
 		// InteractionNote's compact form is `label (Severity)`, so for almost every row the cap on
 		// partners is what bounds the tail and the character budget never bites. It bites for a rule
 		// carrying no token and no ATC: partnerLabel returns null, there is no name to shorten to, and

@@ -145,6 +145,13 @@ public class DrugReferenceInjector {
 	 * condition issue #357 put in place of "nothing promoted", and this is the arrangement that issue
 	 * left to issue #355 (see {@link #renderTier} for the partition and CLAUDE.md for the division).
 	 *
+	 * <p><b>A note on the provenance labels below and in this change's other measurements.</b> Where one
+	 * names {@code origin/main at 85da86fb}, that is the tree it was TAKEN on — issue #357's fix, the
+	 * base this change was re-based onto. {@code origin/main} has advanced since (issue #354's fix,
+	 * {@code a2c73956}), and each figure was re-run there and is unchanged, because #354 touches
+	 * neither {@code render}'s interaction segments nor {@code orderedInteractionNotes}. Re-measure
+	 * rather than trusting that where a later base touches either.
+	 *
 	 * <p><b>Issue #355.</b> Until it, that case spent the whole {@link #MAX_INTERACTION_RENDER_CHARS}
 	 * budget on FULL mechanism paragraphs for whichever partners sat at the head of the entry's
 	 * dataset order, on the rationale that with nothing patient-specific "the general material IS its

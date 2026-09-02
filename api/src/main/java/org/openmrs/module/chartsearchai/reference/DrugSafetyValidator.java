@@ -6717,18 +6717,36 @@ public class DrugSafetyValidator {
 		// bean is a Spring singleton, so a field here is one unsynchronized structure shared by every
 		// concurrent request, and this one is keyed on nothing at all.
 		List<RecordedAllergen> allergensAskedAbout = null;
+		// The SUBSTANCES in play, which is a different question from the row skip below and has to be
+		// asked separately (issue #348). The skip decides which chips are RAISED and is row-scoped
+		// deliberately: since issue #206 a substance only the orders resolved gets a group of its own,
+		// so a SIBLING row of an in-play substance still reaches this arm. What must NOT be row-scoped
+		// is the REFERENT, because ContraindicationChips folds on the substance and keeps the strictly
+		// stronger RANK across its rows — so a sibling row's higher-ranked sentence replaces the
+		// in-play row's and, keyed on the row, would bring "a medication this patient is already
+		// taking" into a finding about a drug the question PROPOSED. Reproduced through the real
+		// injectRecords over drug-reference-rule-rows-rank-crossing.json; the chip's unit is the
+		// substance (issues #162, #206), so the referent's is too. A per-call local for issue #172's
+		// reason, and computed once rather than per order.
+		Set<Object> inPlaySubstances = new HashSet<Object>();
+		for (DrugReference played : inPlay) {
+			inPlaySubstances.add(played.substanceGroupKey());
+		}
 		for (DrugReference ref : orderEntries) {
 			if (inPlay.contains(ref)) {
 				continue;
 			}
+			// FALSE where a sibling row put this substance in play: something proposed this drug, and a
+			// call about a proposal is what its finding licenses however this arm reached the row.
+			boolean currentMedication = !inPlaySubstances.contains(ref.substanceGroupKey());
 			// Either side of a contraindication can be what was asked about, so the drug side is tried
 			// first and, where it holds, the whole of the patient's own record is fair game: a response
 			// ABOUT one of her prescriptions may report anything her chart says contraindicates it.
 			// Where it does not hold, only the findings the response is itself about may speak — which
 			// is what stops a cancer question carrying chips about her local anaesthetics.
 			if (askedAbout.names(ref)) {
-				addContraindications(chips, ref, context, null, allergicSubstances, true);
-				addAllergyContraindications(chips, ref, recordedAllergens, true);
+				addContraindications(chips, ref, context, null, allergicSubstances, currentMedication);
+				addAllergyContraindications(chips, ref, recordedAllergens, currentMedication);
 				continue;
 			}
 			if (allergensAskedAbout == null) {
@@ -6740,11 +6758,10 @@ public class DrugSafetyValidator {
 			// strength of the question's wording — hedging a clause a recorded allergy really does
 			// support. The narrowing below is about which allergy records may SPEAK in this response;
 			// this is about what the chart holds, and the two are different questions.
-			// TRUE on both legs of this arm, whichever side of the contraindication the response is
-			// about: `ref` is drawn from orderEntries either way, so the subject is a prescription the
-			// patient already holds and nothing here proposed it (issue #348).
-			addContraindications(chips, ref, context, askedAbout, allergicSubstances, true);
-			addAllergyContraindications(chips, ref, allergensAskedAbout, true);
+			// The same answer on both legs of this arm, whichever side of the contraindication the
+			// response is about: `ref` is drawn from orderEntries either way (issue #348).
+			addContraindications(chips, ref, context, askedAbout, allergicSubstances, currentMedication);
+			addAllergyContraindications(chips, ref, allergensAskedAbout, currentMedication);
 		}
 	}
 

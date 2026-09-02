@@ -580,11 +580,13 @@ public class SafetyWarning {
 	 * drug something proposed (issue #348) — which decides which of the two strength clauses
 	 * {@code DrugReferenceInjector.strengthClause} states, and so which call the answer opens with.
 	 *
-	 * <p><b>Established by the arm that raised the warning, never re-derived.</b> The two ORDER-DRIVEN
-	 * arms answer true and nothing else does: {@code DrugSafetyValidator.addActiveOrderPairInteractions}
+	 * <p><b>Established by the arm that raised the warning, never re-derived.</b> Only the two
+	 * ORDER-DRIVEN arms ever answer true: {@code DrugSafetyValidator.addActiveOrderPairInteractions}
 	 * (issue #113), whose subject is drawn from the resolved active-order entries and whose partner is
 	 * admitted only by {@code hasActiveDrug} against a DIFFERENT active order, and
-	 * {@code addActiveOrderContraindications} (issue #143), which walks those same entries. The
+	 * {@code addActiveOrderContraindications} (issue #143), which walks those same entries — and that
+	 * second arm answers true only where no SIBLING ROW put the substance in play, because its chips
+	 * fold on the substance while its own skip is row-scoped. See that arm for the reproduction. The
 	 * drug-in-play arms and the question-pair arm answer false by construction, because their subject
 	 * is the drug the question or the answer named — which may well ALSO be a current medication, and
 	 * that is not this question: what a finding licenses there is a decision about a proposal, because

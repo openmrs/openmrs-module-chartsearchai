@@ -235,6 +235,50 @@ public class CurrentMedicationFindingStrengthTest {
 						+ finding);
 	}
 
+	/**
+	 * A SIBLING ROW of a substance the question proposed does not turn that substance's finding into a
+	 * statement about current therapy.
+	 *
+	 * <p>Found by mutation-and-probe while hardening this change, not by the plan. The row skip that
+	 * keeps this arm off a drug already in play is row-scoped on purpose — since issue #206 a
+	 * substance only the orders resolved gets a group of its own — so a SIBLING row of an in-play
+	 * substance still reaches the arm. {@code ContraindicationChips} then folds on the SUBSTANCE and
+	 * keeps the strictly stronger RANK across its rows, so that sibling's sentence replaces the
+	 * in-play row's; keyed on the ROW, the referent travelled with it and the record stated "a
+	 * medication this patient is already taking" about a drug the clinician had just proposed. That is
+	 * the fail-open direction — a refusal became a change-of-therapy statement — and it is ADR
+	 * Decision 44's cross-row residue arriving on the referent axis, which that decision warns about
+	 * in those words: adding a clause where the two channels agreed is how a disagreement gets made.
+	 *
+	 * <p>The arrangement is {@code UncorroboratedFindingProvenanceTest}'s rank-crossing fixture with
+	 * the higher-ranked row made an ACTIVE ORDER, and a question that both proposes the drug and asks
+	 * about medications — the second half is what opens {@code SubjectMatter}'s gate so this arm runs
+	 * at all.
+	 */
+	@Test
+	public void aSiblingRowOfAProposedSubstanceDoesNotMakeItsFindingAboutCurrentTherapy()
+			throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
+			DrugReferenceTestSupport.fixtureEntries(
+				"chartsearchai-test/drug-reference-rule-rows-rank-crossing.json"));
+		List<String> findings = DrugReferenceTestSupport.findingTexts(
+			DrugReferenceTestSupport.injectorWithSafety(service).injectRecords(
+				DrugReferenceTestSupport.oneRecordChart(),
+				DrugReferenceTestSupport.ctx(60, null,
+					DrugReferenceTestSupport.set("Levoketoconazole (gel)"), null,
+					DrugReferenceTestSupport.set("Ketoconazole", "Levocetirizine"), null),
+				"Is it safe to give her levo, and what other medications is she on?"));
+
+		assertEquals(1, findings.size(),
+				"one substance is one chip and one finding, was: " + findings);
+		assertTrue(findings.get(0).contains("documented ketoconazole allergy"),
+				"precondition: the ORDER row's higher-ranked sentence is the one that survived the "
+						+ "fold — without that this case is about nothing: " + findings);
+		assertTrue(findings.get(0).endsWith(WITHHOLD),
+				"the question proposed this substance, so its finding states the proposal call however "
+						+ "this arm reached the row whose sentence survived: " + findings);
+	}
+
 	@Test
 	public void theTwoClausesAreTheWordsAModelReads() {
 		assertEquals(" " + CHANGE_CURRENT, DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION,

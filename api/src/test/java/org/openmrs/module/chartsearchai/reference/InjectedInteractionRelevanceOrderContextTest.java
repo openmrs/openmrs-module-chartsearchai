@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
@@ -65,5 +66,34 @@ public class InjectedInteractionRelevanceOrderContextTest extends BaseModuleCont
 		assertTrue(interactions.endsWith("; methotrexate (moderate)."),
 				"while the dataset tail still states breadth with its own representative: "
 						+ interactions);
+	}
+
+	@Test
+	public void theFilteredSegmentKeepsDatasetOrderRatherThanReSortingOnSeverity() {
+		// The promoted segment is sorted most-severe-first, because there the budget can force a
+		// choice about who keeps their mechanism prose. This segment is not, and at the shipped floor
+		// that is unobservable — an UNRATED rule is exempt from the floor rather than below it, so the
+		// segment can only hold Unknown rows there and a sort over them orders nothing. A raised floor
+		// is the only arrangement that can tell the two apart, and without this case adding the sort
+		// leaves the whole suite green while the javadoc says it is absent.
+		//
+		// Lisinopril files Sertraline (Unknown) at dataset position 3 and Digoxin (Moderate) at 11, so
+		// dataset order and severity order disagree about which of them comes first. Sertraline leads
+		// and therefore carries the full note; a severity re-sort would hand both to Digoxin.
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_MIN_INTERACTION_SEVERITY, "major");
+
+		PatientChart chart = DrugReferenceTestSupport.injector(DrugReferenceTestSupport.ddinterService())
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+						DrugReferenceTestSupport.ctx(60, null,
+								DrugReferenceTestSupport.set("Sertraline", "Digoxin"), null, null, null),
+						"is it safe to give lisinopril?");
+		String interactions = DrugReferenceTestSupport.interactionsSectionOf(
+				DrugReferenceTestSupport.referenceMappingNaming(chart, "Lisinopril"));
+
+		assertEquals("interactions: sertraline (unknown severity interaction (ddinter 2.0; no mechanism "
+				+ "description on file).); digoxin (moderate); metformin (moderate).", interactions,
+				"the segment the floor filtered keeps the entry's own partner order, and the note that "
+						+ "carries the source's sentence is the one that order puts first: " + interactions);
 	}
 }

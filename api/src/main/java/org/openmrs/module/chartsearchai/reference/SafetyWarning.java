@@ -158,9 +158,9 @@ public class SafetyWarning {
 		this.reconciledNoteName = reconciledNoteName;
 		// Copied and wrapped rather than stored as handed: this list travels to
 		// DrugReferenceInjector.renderFinding, so a caller that went on filling its own builder would
-		// change what a record already published. Never null, so no reader branches on absence —
-		// an empty list is the honest answer for every chip whose substances the orders they came from
-		// already display.
+		// change what a record already published. Never null, so no reader branches on absence — an
+		// empty list is the honest answer wherever nothing needed reconciling, which is most chips.
+		// chartOrderBridges()'s javadoc is the one place that says what empty covers.
 		this.chartOrderBridges = chartOrderBridges == null || chartOrderBridges.isEmpty()
 				? Collections.<ChartOrderBridge> emptyList()
 				: Collections.unmodifiableList(new ArrayList<ChartOrderBridge>(chartOrderBridges));
@@ -203,9 +203,8 @@ public class SafetyWarning {
 	 * @param reconciledNoteName see {@link #reconciledPartnerNoteName} — null when the reconciliation
 	 *        refused or reached no co-medication, so that a refusal and an absent answer are one answer
 	 *        here, as they are for the chip
-	 * @param chartOrderBridges see {@link #chartOrderBridges()} — empty where every substance this chip
-	 *        names is displayed by the order it came from, which is the common case and not a
-	 *        degraded one
+	 * @param chartOrderBridges see {@link #chartOrderBridges()}, which is canonical for what empty
+	 *        covers — empty is most chips and is not a degraded state
 	 */
 	// Three facts travel here, not two: the paragraphs above are worded for the pair issue #297 added
 	// and issue #349 put a third beside them. Read the @param list rather than any count in the prose.
@@ -524,11 +523,15 @@ public class SafetyWarning {
 	 * the name that order DISPLAYS does not name it — the bridge
 	 * {@code DrugReferenceInjector.renderFinding} states in the injected {@code safety_finding} (issue
 	 * #349; the silence test became the display at issue #347, and
-	 * {@code DrugSafetyValidator.displaysANameOfAny} records why). Empty, never null, for every chip
-	 * whose substances their own orders display, for every chip that is not an interaction, and for every
-	 * interaction chip built from a public constructor here rather than through
-	 * {@code DrugSafetyValidator.interactionWarning} — the class-only and question-pair chips, whose
-	 * residue ADR Decision 64 records.
+	 * {@code DrugSafetyValidator.displaysANameOfAny} records why). Empty, never null, and <b>empty says
+	 * "no attribution to show" rather than "the chart records these substances"</b> — the commonest
+	 * empty case is a chip about a drug the QUESTION named, which resolves from no active order at
+	 * all. Others: a chip whose substances their own orders already display; a chip that is not an
+	 * interaction; an interaction chip built from a public constructor here rather than through
+	 * {@code DrugSafetyValidator.interactionWarning} (the class-only and question-pair chips, whose
+	 * residue ADR Decision 64 records); an order the module could read no name for; and a chart with
+	 * no active medication. Not offered as exhaustive, and the client contract in README's
+	 * {@code safetyWarnings} section says why an exhaustive reading of it is the costly mistake.
 	 *
 	 * <p><b>Why it travels here.</b> The finding's text is rendered from the chip, and the answer
 	 * decides which of {@code DrugSafetyValidator}'s arms resolved each side; the injector holds

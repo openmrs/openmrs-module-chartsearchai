@@ -5145,8 +5145,10 @@ public class DrugSafetyValidator {
 	 * Which of this patient's own active orders each substance a chip NAMES was resolved from, where
 	 * the name that order DISPLAYS does not name it — issue #349, the bridge the injected
 	 * {@code safety_finding} states so that a finding about a brand-named prescription is citeable at
-	 * all, and published as that chip's {@code chartOrderBridges} since issue #347. Empty for every
-	 * chip whose substances their own orders display, which is the common case.
+	 * all, and published as that chip's {@code chartOrderBridges} since issue #347. Empty wherever
+	 * nothing needed reconciling — which is most chips, and which is NOT a claim that the chart
+	 * records the substance: see {@link SafetyWarning#chartOrderBridges()} for what empty covers, and
+	 * do not restate that list here.
 	 *
 	 * <p><b>Why it exists.</b> A finding names its substances in the KNOWLEDGE BASE's vocabulary, which
 	 * is right and is issue #339's settlement. Where the module reached a substance from an active order

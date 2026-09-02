@@ -211,8 +211,15 @@ public class DrugSafetyValidatorEchoScopingTest {
 		// Issue #105's own typo control, which issue #360 requires unchanged: the question misspells
 		// the drug so it resolves to nothing and NOTHING reference-group is injected for it, the answer
 		// spells it right and cites nothing, and the answer-side match is the only thing that can raise
-		// the chip. A fix that widened attribution far enough to reach this would trade the false
-		// positive above for a real miss, which is what the issue forbids.
+		// the chip.
+		//
+		// Read it as the EMPTY-CORPUS base case rather than as a net under attribution generally, which
+		// is what it used to claim to be. The precondition below asserts this chart carries no recitable
+		// record at all, so the echo test here is answered by an empty corpus however it decides what a
+		// corpus NAMES: widen isEchoOfAttributableRecord to return whether that corpus is non-empty —
+		// attribution by a record's presence rather than by what it names — and this case stays green.
+		// aQuestionMisspellingItsDrugStillValidatesItWhereARecitableRecordIsInTheCorpus is the same
+		// rescue with a record in the corpus, and it reddens under that mutation.
 		//
 		// Clarithromycin x Simvastatin (Major) is the pinned excerpt's macrolide analogue of #105's own
 		// erythromycin x simvastatin. Run through the injector WITH the validator behind it, so what
@@ -238,6 +245,48 @@ public class DrugSafetyValidatorEchoScopingTest {
 		assertTrue(DrugReferenceTestSupport.has(warnings, SafetyWarning.TYPE_INTERACTION,
 				"clarithromycin"), "the spelling the ANSWER got right must still be checked against "
 						+ "her simvastatin order, was: " + warnings);
+	}
+
+	@Test
+	public void aQuestionMisspellingItsDrugStillValidatesItWhereARecitableRecordIsInTheCorpus() {
+		// Issue #105's typo rescue in the shape a WIDENING of attribution can reach, and the reason the
+		// control above is not that shape: there the corpus is empty, so the echo test is decided before
+		// it looks at any record. Here the question misspells one drug and names another correctly, so
+		// the real injector renders a drug_reference record for the one it resolved and the attributable
+		// corpus is NOT empty — the answer's corrected spelling survives only because no record in that
+		// corpus NAMES it. Widen isEchoOfAttributableRecord to return whether the corpus is non-empty
+		// and read this failure.
+		//
+		// Clarithromycin x Simvastatin (Major) is the row, as in the control. What keeps clarithromycin
+		// out of the ibuprofen record is MAX_INTERACTION_RENDER_CHARS: the rendered partners and their
+		// mechanism prose spend that budget before the macrolide is reached. Asserted rather than
+		// assumed, because a KB or budget change that put the name in would silently turn this case into
+		// a restatement of the residue aPartnerTheAnswerProposesRatherThanRecitesIsWithheldToo pins.
+		String question = "Is clarithromicin safe with her ibuprofen?";
+		PatientChart chart = DrugReferenceTestSupport
+				.injectorWithSafety(DrugReferenceTestSupport.ddinterService())
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), simvastatinOrderCtx(), question);
+		List<RecordMapping> recitable = DrugReferenceTestSupport.injectedReferenceGroupRecords(chart);
+		assertFalse(recitable.isEmpty(),
+				"precondition: the correctly-spelled drug must put a recitable record in the corpus, or "
+						+ "this case is the empty-corpus control again, was: " + chart.getMappings());
+		for (RecordMapping record : recitable) {
+			assertFalse(record.getText().toLowerCase().contains("clarithromycin"),
+					"precondition: no recitable record may name the spelling the answer gets right, or "
+							+ "the rescue below is withheld as the accepted residue instead, was: "
+							+ record.getText());
+		}
+
+		String answer = "Clarithromycin should be avoided.";
+		assertTrue(ChartSearchAiUtils.citedIndexes(answer).isEmpty(),
+				"precondition: this answer must carry no inline citation marker at all");
+		List<SafetyWarning> warnings = validator().validate(answer, question, simvastatinOrderCtx(),
+				chart.getMappings());
+
+		assertTrue(DrugReferenceTestSupport.has(warnings, SafetyWarning.TYPE_INTERACTION,
+				"clarithromycin"), "a corpus with a record in it that does not name the answer's drug "
+						+ "attributes nothing, so the spelling the ANSWER got right is still checked "
+						+ "against her simvastatin order, was: " + warnings);
 	}
 
 	@Test

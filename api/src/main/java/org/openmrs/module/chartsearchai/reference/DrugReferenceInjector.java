@@ -1722,8 +1722,9 @@ public class DrugReferenceInjector {
 	 * cross-reactivity chip and no interaction finding: <em>"No — ibuprofen should not be taken"</em>
 	 * became <em>"Ibuprofen can be given, with one caution"</em>, 3 of 3, on the caution
 	 * demonstration's own wording. The chip was identical on both sides; only the answer's call moved.
-	 * So a contraindication states {@link #STRENGTH_WITHHOLD} — it is never a caution, and the record
-	 * is where this module says so, per {@link DrugSafetyValidator#licensesWithholding(SafetyWarning)}.
+	 * So a contraindication states a WITHHOLDING-class clause and never a caution: {@link
+	 * #STRENGTH_WITHHOLD}, or since issue #348 {@link #STRENGTH_CHANGE_CURRENT_MEDICATION} where the
+	 * referent is a current medication. The record says so, per {@link DrugSafetyValidator#licensesWithholding(SafetyWarning)}.
 	 *
 	 * <p><b>A new type may not reach this renderer silently.</b> An OVERDOSE finding cannot arrive
 	 * today — {@link #preAnswerFindings} validates with an EMPTY answer and the dose arm parses a
@@ -1745,9 +1746,8 @@ public class DrugReferenceInjector {
 	 * {@link #preAnswerFindings} validating against a stated dose instead of the empty string, the
 	 * premise case reddens and names the record that would reach the model ("The stated Amoxicillin
 	 * dose ~4000 mg/day exceeds …", no clause on it) while
-	 * {@code everyInjectedFindingStatesExactlyOneStrengthClause} stays green. A caller that renders
-	 * findings after an answer
-	 * exists is a new path neither case runs; it writes its own clause with no test to lean on.
+	 * {@code everyInjectedFindingStatesExactlyOneStrengthClause} stays green. A caller that renders findings
+	 * after an answer exists is a new path neither case runs; it writes its own clause with no test to lean on.
 	 *
 	 * <p>The interaction split is {@link DrugSafetyValidator#licensesWithholding(SafetyWarning)},
 	 * never a local reading of the rating, and never {@code ratingLicensesWithholding} underneath it:

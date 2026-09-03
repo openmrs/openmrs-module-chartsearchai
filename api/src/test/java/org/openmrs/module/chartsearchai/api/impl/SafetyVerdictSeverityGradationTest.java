@@ -386,36 +386,47 @@ public class SafetyVerdictSeverityGradationTest {
 	 * <p><b>What these three do NOT catch</b>, since a guard over text has a gap between the property
 	 * it means and the string it matches: they are literals, so a semantically equivalent reword —
 	 * <em>"do not open by refusing"</em>, or a lead that names the medication in other words — reddens
-	 * them and must be re-read here deliberately rather than repaired by editing the literal. And they
-	 * read the FIRST sentence naming the class that also says "open", so what they assert of a branch
-	 * they assert of one sentence; a second sentence of the paragraph instructing a refusal for this
-	 * class is out of their reach.
+	 * them and must be re-read here deliberately rather than repaired by editing the literal.
+	 *
+	 * <p><b>They are asserted of EVERY matching sentence, not the first.</b> They read the first one
+	 * until round 2 of this PR's hardening, which meant a second sentence instructing a refusal for
+	 * the same class was invisible — the #348 defect ADDED rather than substituted. Measured by
+	 * appending one such sentence after the change-of-therapy branch — <em>"… is evidence against
+	 * giving it: open with \"No\" and what to avoid."</em>, the pre-#348 instruction again: the whole
+	 * api module was green on {@code 026613de} and it now reddens, reported (as such a mutation always
+	 * is here) against the FIRST of the three, {@code "open by naming"}, since it violates all three.
+	 * It costs nothing today because exactly one sentence per class carries both terms: the two
+	 * RANKING sentences name
+	 * a class core and contain no "open", which is what the loop's second term excludes and what
+	 * {@link #aSetMixingAProposalCallAndACurrentMedicationCallIsLedByTheStrongest} guards instead.
+	 * What is still out of reach is a refusal instruction that names no class core at all;
+	 * {@link #everyRefusalInstructionInTheParagraphIsGatedOnTheWithholdingClause} is that one.
 	 */
 	private static void assertCurrentMedicationBranch(String core, String because) {
 		String paragraph = safetyParagraph();
-		String sentence = null;
-		for (String candidate : paragraph.split("(?<=\\.)\\s+")) {
-			if (candidate.contains(core) && candidate.contains("open")) {
-				sentence = candidate;
-				break;
+		int matched = 0;
+		for (String sentence : paragraph.split("(?<=\\.)\\s+")) {
+			if (!sentence.contains(core) || !sentence.contains("open")) {
+				continue;
 			}
+			matched++;
+			assertTrue(sentence.contains("open by naming"),
+					because + ". The branch must open by NAMING the medication — the statement #348 "
+							+ "says the chip carries and the answer does not — and not with a verdict "
+							+ "about giving a drug: " + sentence);
+			assertFalse(sentence.contains("\"No\""),
+					because + ". And it must not instruct a refusal: that lead belongs to the "
+							+ "withholding branch and to the ranking sentence, and reattaching it "
+							+ "here is issue #348 itself: " + sentence);
+			assertTrue(sentence.contains("never open by refusing to give a drug"),
+					because + ". And it must forbid the refusal outright, because the withholding "
+							+ "branch the model reads two sentences earlier is what it fell through "
+							+ "to: " + sentence);
 		}
-		if (sentence == null) {
+		if (matched == 0) {
 			fail(because + ". No sentence of the paragraph both names \"" + core
 					+ "\" and says how to open: " + paragraph);
 		}
-		assertTrue(sentence.contains("open by naming"),
-				because + ". The branch must open by NAMING the medication — the statement #348 says "
-						+ "the chip carries and the answer does not — and not with a verdict about "
-						+ "giving a drug: " + sentence);
-		assertFalse(sentence.contains("\"No\""),
-				because + ". And it must not instruct a refusal: that lead belongs to the withholding "
-						+ "branch and to the ranking sentence, and reattaching it here is issue #348 "
-						+ "itself: " + sentence);
-		assertTrue(sentence.contains("never open by refusing to give a drug"),
-				because + ". And it must forbid the refusal outright, because the withholding branch "
-						+ "the model reads two sentences earlier is what it fell through to: "
-						+ sentence);
 	}
 
 	/**
@@ -429,6 +440,24 @@ public class SafetyVerdictSeverityGradationTest {
 	 *
 	 * <p>It names the losers as well as the winner, for the reason
 	 * {@link #aSetOfFindingsStatingDifferentStrengthsIsLedByTheStrongest} states of the older pair.
+	 *
+	 * <p><b>And it asserts the ORDER they are named in, which naming them does not.</b> Until round 2
+	 * of this PR's hardening this case checked only that the sentence names both classes, and naming
+	 * is not ranking: the sentence inverted — <em>"a finding that is a reason to change a medication
+	 * this patient is already taking leads, then one that is a reason to withhold it, then a
+	 * caution"</em> — still names both, so it was green, while telling the model to demote a proposal
+	 * refusal below a change-of-therapy statement whenever one response states both. Reachable for the
+	 * reason above. So the positions are read: withholding call, then change-of-therapy call, then the
+	 * caution.
+	 *
+	 * <p>What the order assertions do NOT catch, stated rather than argued away: a reword that keeps
+	 * the order and drops the RANKING. <em>"… a finding that is a reason to withhold it may be stated
+	 * before one that is a reason to change a medication this patient is already taking, then a
+	 * caution"</em> passes every line here, because the anchor this case opens on is the antecedent
+	 * ({@code "calls of both kinds"}) and nothing reads the verb that governs — the older sibling's
+	 * {@code "the strongest governs"} anchor does not match this sentence's <em>"strongest STILL
+	 * governs"</em>. Nor is a caution named by some other word caught, the third term being the
+	 * literal the paragraph uses.
 	 */
 	@Test
 	public void aSetMixingAProposalCallAndACurrentMedicationCallIsLedByTheStrongest() {
@@ -445,6 +474,69 @@ public class SafetyVerdictSeverityGradationTest {
 		assertTrue(sentence.contains(
 			clauseCore(DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION)),
 			"and the ranking must name what it outranks: " + sentence);
+
+		// ORDER, which is the only property this sentence exists to state and which the two
+		// assertions above cannot see. Witness for this line: the sentence inverted so the
+		// change-of-therapy call leads and the withholding one follows. Both cores are still named,
+		// so both assertions above still pass and only this one reddens (measured on 026613de).
+		int withholdAt = sentence.indexOf(clauseCore(DrugReferenceInjector.STRENGTH_WITHHOLD));
+		int changeAt = sentence
+				.indexOf(clauseCore(DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION));
+		assertTrue(withholdAt < changeAt,
+				"the proposal refusal must LEAD: a set stating calls of both kinds takes the "
+						+ "strongest, and inverted this sentence demotes a refusal below a "
+						+ "change-of-therapy statement: " + sentence);
+		// And the caution trails BOTH, which the line above cannot see: moving the caution term
+		// between the two — "… is a reason to withhold it leads, then a caution, then one that is a
+		// reason to change a medication this patient is already taking" — keeps withhold ahead of
+		// change and reddens only here. Matched on the short form the ranking actually uses rather
+		// than on either caution CLAUSE, neither of which the sentence spells out; a term that is
+		// absent altogether is -1 and reddens here too, so this line carries its own existence
+		// check.
+		int cautionAt = sentence.indexOf("a caution");
+		assertTrue(cautionAt > changeAt,
+				"and the caution must be named LAST — omitted or promoted, the ranking states an "
+						+ "order the two branches above contradict: " + sentence);
+	}
+
+	/**
+	 * Nothing in the paragraph puts the refusal lead in front of the model unless the withholding
+	 * clause licenses it — or unless the sentence is the paragraph's own prohibition on a verdict
+	 * (issue #348).
+	 *
+	 * <p>{@link #assertCurrentMedicationBranch} closes the same hole one branch at a time, and only
+	 * for a sentence that names a class core: a refusal instruction naming no class at all —
+	 * <em>"Where the interaction is serious, open with \"No\"."</em> — is invisible to it. Measured:
+	 * appended to the paragraph, that sentence reddens this case and no other in this class, so before
+	 * this case existed nothing saw it. So the question is asked of every
+	 * sentence that carries the token instead, positively: a sentence putting {@code "No"} in front of
+	 * the model must either be gated on the clause that LICENSES a refusal, or be the paragraph's own
+	 * prohibition on one.
+	 *
+	 * <p>Two things it does not reach. A refusal worded without that literal — <em>"open by
+	 * refusing"</em> — matches nothing here (the branch prohibition is what stands against that). And
+	 * a sentence that does name the withholding clause while instructing a refusal for a DIFFERENT
+	 * class passes, since naming it is all this case asks; that is the content the per-branch
+	 * assertions cover.
+	 */
+	@Test
+	public void everyRefusalInstructionInTheParagraphIsGatedOnTheWithholdingClause() {
+		String paragraph = safetyParagraph();
+		String withhold = clauseCore(DrugReferenceInjector.STRENGTH_WITHHOLD);
+		int carrying = 0;
+		for (String sentence : paragraph.split("(?<=\\.)\\s+")) {
+			if (!sentence.contains("\"No\"")) {
+				continue;
+			}
+			carrying++;
+			assertTrue(sentence.contains(withhold) || sentence.contains("never \"Yes\" or \"No\""),
+					"this sentence instructs the refusal lead without being gated on the clause "
+							+ "that licenses it, so it can refuse a drug the patient is already "
+							+ "taking — which is issue #348: " + sentence);
+		}
+		assertTrue(carrying > 0,
+				"and the paragraph must still instruct the refusal somewhere, or this case passes "
+						+ "by having nothing to check: " + paragraph);
 	}
 
 	/**

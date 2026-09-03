@@ -577,7 +577,7 @@ public class SafetyWarning {
 
 	/**
 	 * Whether this warning is about a medication the patient is ALREADY TAKING rather than about a
-	 * drug something proposed (issue #348) — which decides which of the two strength clauses
+	 * drug something proposed (issue #348) — which decides which COLUMN of the four strength clauses
 	 * {@code DrugReferenceInjector.strengthClause} states, and so which call the answer opens with.
 	 *
 	 * <p><b>Established by the arm that raised the warning, never re-derived.</b> Only the two

@@ -244,9 +244,9 @@ public class LlmProvider {
 			// are gated on the FINDING's clause and never on the question, and the screening shape
 			// they exist for ("Does she have any drug interactions I should know about?") is not one
 			// of the shapes listed. The scope reaches it in practice — the reproduction IS this
-			// paragraph's withholding branch applied to that question — so adding the screening
-			// shape to this list is an ARM of the measurement ADR Decision 69 records as owed, and
-			// not a wording change to take on reasoning ahead of it.
+			// paragraph's withholding branch applied to that question. Adding the screening shape
+			// here was RUN as an arm of ADR Decision 69's A/B and refuted: it produced the cleanest
+			// two-order leads of the three arms and dropped a finding from the eight-order cell. Do not re-propose it.
 			+ "The same rules apply to safety and suitability questions (\"is it safe to give "
 			+ "X\", \"can we start X\"): when no record addresses the drug or intervention asked "
 			+ "about, the whole answer is one sentence stating that the records do not address "
@@ -282,13 +282,13 @@ public class LlmProvider {
 			// more than the alternative. What the alternative would cost is measured: a lead
 			// instruction in a paragraph of its own is #112's refuted shape, and putting these after
 			// the token would make the token's own scope the thing a reader has to infer.
-			// The residue is real and belongs to the measurement rather than to this comment: on the
-			// charts that already answered correctly the lead was "Yes, there are documented
-			// interactions …", and these branches ask for a statement instead. That measurement is
-			// OWED and not waived — ADR Decision 69's "The measurement this change still owes" names
-			// the instrument, the two builds, the four screening patients and what would count as a
-			// regression. Nothing in this repository can see what the model produces from these two
-			// sentences; SafetyVerdictSeverityGradationTest pins what they SAY.
+			// The residue that belongs to the measurement rather than to this comment: on the charts
+			// that already answered correctly the lead was "Yes, there are documented interactions
+			// …", and these branches ask for a statement instead. Measured — both several-finding
+			// cells KEEP that Yes lead with every finding, severity and citation, and ADR Decision
+			// 69's "The measurement" section records the run, its three residues and the arm above.
+			// Nothing in this repository can see what the model produces from these two sentences;
+			// SafetyVerdictSeverityGradationTest pins what they SAY.
 			+ "A finding that says it is a reason to change a medication this patient is already "
 			+ "taking is not about a drug anything proposed: open by naming that medication and what "
 			+ "the finding relates it to, carry the finding's severity, and never open by refusing to "

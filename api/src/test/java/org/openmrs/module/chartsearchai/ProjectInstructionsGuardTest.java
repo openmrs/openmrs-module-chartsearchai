@@ -71,15 +71,22 @@ public class ProjectInstructionsGuardTest {
 	 * premise/conclusion history — every sentence of it already carried verbatim by ADR Decision 37,
 	 * which those bullets point at.
 	 *
-	 * <p><b>Re-measured after merging {@code origin/main} at {@code fce8dc61}</b>, which landed
-	 * issue #353's own rule and its own prune. {@code wc -c CLAUDE.md} on that merge reads
-	 * <b>85,325</b> bytes — 325 over the old tripwire, so the raise is still what the file needs and
-	 * not a leftover of the pre-merge measurement. The merge kept BOTH sides' prunes (#348's of the
-	 * two strength bullets, #353's of the chart-order-bridge ones), so that figure is the file with
-	 * every reduction either change made already applied. Closing the remaining 325 means deleting
-	 * DIRECTIVES: #348's own rule bullet is 704 bytes, so the smallest single thing that would fit
-	 * is the rule this raise exists for. Re-measure these figures rather than differencing them;
-	 * they move with the file.
+	 * <p><b>The raise still holds, and its two figures are re-measured rather than differenced.</b>
+	 * Both move with the file and both had already gone stale once: this javadoc first quoted the
+	 * merge at {@code fce8dc61} (85,325 bytes, and a 704-byte rule bullet), and the review rounds on
+	 * this same PR moved both — the file by their own additions, the bullet by the content rule and
+	 * the test pointer round 1 put in it. So the figures are stated with the commands that produce
+	 * them rather than as arithmetic on each other. As of the round-2 hardening commit on this
+	 * branch, {@code wc -c CLAUDE.md} reads <b>85,702</b> bytes, leaving <b>298</b> under this
+	 * tripwire; and the #348 rule bullet — measured as
+	 * {@code grep 'STRENGTH and REFERENT' CLAUDE.md | wc -c}, which names the line by its own words
+	 * rather than by a line number that moves — is <b>1,081</b> bytes.
+	 *
+	 * <p>The CONCLUSION is what does not move: the bullet is larger than the headroom, so closing
+	 * the gap under the old 85,000 tripwire means deleting DIRECTIVES, and the smallest single thing
+	 * that would fit is the rule this raise exists for. Re-run those two commands before quoting
+	 * either number again. The 85,325 was not wrong when it was written — it was measured at
+	 * {@code 86a5a4c0}, and the next commit on the branch falsified it.
 	 */
 	private static final int MAX_INSTRUCTION_BYTES = 86_000;
 

@@ -1377,10 +1377,29 @@ public class ChartSearchAiRestController {
 	 * model cites it — measured on that issue's own reproduction, it did not, so nothing a
 	 * {@code /search} consumer reads reported the class at all. The module states what it did;
 	 * whether the answer relays it stays the model's.
+	 *
+	 * <p>{@code unfaithfullyRenderedCitations} is the same remedy for the same failure, one issue
+	 * later (<a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/337">#337</a>):
+	 * the citations whose rendering in the answer the module found unfaithful to the record they
+	 * point at. Until it, that finding was a {@code WARN} and nothing a consumer could see, so a
+	 * degraded safety sentence reached a clinician carrying a citation marker with nothing saying the
+	 * marker's own record reads otherwise. {@code ChartAnswer.getUnfaithfullyRenderedCitations()} is
+	 * canonical for what it states, for why no prose travels with it, and for the difference between
+	 * {@code null} and an empty list — a difference this method preserves rather than flattening.
+	 *
+	 * <p><b>The copy is a correctness requirement</b>, the same one {@code serializeSafetyWarnings}
+	 * spells out over {@code chartOrderBridges}: XStreamMarshaller refuses
+	 * {@code Collections$UnmodifiableRandomAccessList} and {@code Collections$EmptyList}, and this
+	 * accessor returns exactly those. Guarded on null rather than copied blindly, because unlike
+	 * {@code chartOrderBridges()} this accessor can return null and {@code new ArrayList<>(null)}
+	 * throws — a 500 on every request whose check failed.
 	 */
 	private void putModuleStatements(Map<String, Object> target, ChartAnswer answer) {
 		putSafetyChips(target, answer);
 		target.put("unresolvedDrugClass", answer.getUnresolvedDrugClass());
+		List<Integer> unfaithful = answer.getUnfaithfullyRenderedCitations();
+		target.put("unfaithfullyRenderedCitations",
+			unfaithful == null ? null : new ArrayList<Integer>(unfaithful));
 	}
 
 	/**

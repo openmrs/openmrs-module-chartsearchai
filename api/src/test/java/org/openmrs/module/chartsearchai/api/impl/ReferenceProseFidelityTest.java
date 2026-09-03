@@ -11,6 +11,8 @@ package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -27,6 +29,7 @@ import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.LogCapture;
+import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport;
@@ -56,7 +59,9 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * sides, states different words, that is reported at WARN. Everything else is silence — an answer
  * that reproduces nothing, one that stops copying and ends its sentence, one that reproduces a
  * record sentence whole and moves on, and one whose continuation ANOTHER cited record explains.
- * The answer prose is never rewritten and nothing reaches the wire.
+ * The answer prose is never rewritten. What DOES reach the wire, since the second round of #337, is
+ * the citation the check named — not a word of either text; the cases at the top of this file pin
+ * that statement and {@code ChartSearchAiUnfaithfulRenderingTest} pins its wire shape.
  *
  * <p>Every case runs through the real {@link LlmInferenceService#search}/{@code searchStreaming}
  * orchestration, and the ones about the defect run over REAL production-rendered records: the cited
@@ -165,6 +170,102 @@ public class ReferenceProseFidelityTest {
 					"a reproduction starting at the record's first word continues one word past its "
 							+ "length. Captured: " + capture.describeAll());
 		}
+	}
+
+	/**
+	 * Issue #337's remaining half: the divergence the check finds has to reach a client, or the
+	 * clinician reads the degraded sentence with nothing anywhere in the response saying so. Same
+	 * answer as the case above — this one asks what the response STATES rather than what the log
+	 * says.
+	 */
+	@Test
+	public void search_statesTheCitationWhoseRenderingItFoundUnfaithful() {
+		service.setLlmProvider(answering(copiedThrough("may") + " increase the risk of complications ["
+				+ finding.getIndex() + "]."));
+
+		ChartAnswer answer = service.search(patient(), QUESTION);
+
+		assertEquals(Collections.singletonList(Integer.valueOf(finding.getIndex())),
+				answer.getUnfaithfullyRenderedCitations(),
+				"the response has to name the citation whose rendering diverged from the record, or "
+						+ "the only thing that knows is the server log");
+	}
+
+	/**
+	 * A record the answer diverges from TWICE is ONE unfaithful citation. The issue's own comment
+	 * records that shape live — two WARNs on record [253] from a single answer — and what a client
+	 * can act on is "this citation's rendering is not the record's words", once.
+	 */
+	@Test
+	public void aRecordDivergedFromTwiceIsStatedOnce() {
+		// Two maximal reproductions of the SAME record, each diverging mid-sentence: twelve words
+		// from the record's third sentence, then the record's own opening carried through to its
+		// first "may". Both are reported — the WARNs stay per divergence — and the statement is one.
+		service.setLlmProvider(answering(wordsFrom("Symptoms", 12) + " nothing at all. "
+				+ copiedThrough("may") + " increase the risk of complications ["
+				+ finding.getIndex() + "]."));
+
+		ChartAnswer answer;
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			answer = service.search(patient(), QUESTION);
+			// The premise, or this case is a second copy of the one above: TWO divergences were
+			// reported, and it is the STATEMENT that collapses them rather than the check.
+			assertEquals(2, capture.messagesAt(Level.WARN).size(),
+					"the premise: this answer diverges from the record twice. Captured: "
+							+ capture.describeAll());
+		}
+
+		assertEquals(Collections.singletonList(Integer.valueOf(finding.getIndex())),
+				answer.getUnfaithfullyRenderedCitations(),
+				"one record is one unfaithful citation however many times the answer diverged from "
+						+ "it, or a client renders the same mark twice");
+	}
+
+	/**
+	 * Empty is a measurement and null is not — the distinction {@code getReferenceSlice()} and
+	 * {@code PairChipExtent} already draw. A faithful answer must state that the check RAN and
+	 * related nothing, not that nobody looked.
+	 */
+	@Test
+	public void aFaithfulAnswerStatesAnEmptyListRatherThanNothing() {
+		service.setLlmProvider(answering(copiedThrough("may") + " potentiate the risk of serotonin "
+				+ "syndrome [" + finding.getIndex() + "]."));
+
+		ChartAnswer answer = service.search(patient(), QUESTION);
+
+		assertNotNull(answer.getUnfaithfullyRenderedCitations(),
+				"null says the producer stated no measurement; a check that ran and found nothing "
+						+ "has made one");
+		assertTrue(answer.getUnfaithfullyRenderedCitations().isEmpty(),
+				"a faithful recitation names no citation. Was: "
+						+ answer.getUnfaithfullyRenderedCitations());
+	}
+
+	/**
+	 * The statement is a POST-answer measurement, so it is absent from the early {@code done} the
+	 * async-grounding path emits — the check runs after the user-visible handoff, deliberately, and
+	 * moving it ahead would put a word-level dynamic program in front of that event. This pins the
+	 * boundary rather than papering over it: {@code interactionPairs} behaves the same way and
+	 * {@code unresolvedDrugClass}, known before the model is called, does not.
+	 */
+	@Test
+	public void searchStreaming_statesItOnTheAnswerItReturnsAndNotOnTheEarlyOne() {
+		service.setLlmProvider(answering(copiedThrough("may") + " increase the risk of complications ["
+				+ finding.getIndex() + "]."));
+		final List<List<Integer>> early = new ArrayList<List<Integer>>();
+
+		ChartAnswer answer = service.searchStreaming(patient(), QUESTION, token -> { },
+				reasoning -> { }, citations -> { },
+				ungrounded -> early.add(ungrounded.getUnfaithfullyRenderedCitations()));
+
+		assertEquals(1, early.size(), "the early-done consumer must have fired");
+		assertNull(early.get(0),
+				"the check runs after the user-visible handoff, so the early answer has no "
+						+ "measurement to state — and null says exactly that, where an empty list "
+						+ "would claim the answer was checked and found faithful");
+		assertEquals(Collections.singletonList(Integer.valueOf(finding.getIndex())),
+				answer.getUnfaithfullyRenderedCitations(),
+				"and the answer the classic shape emits carries it");
 	}
 
 	@Test

@@ -251,11 +251,12 @@ public class ChartSearchAiUtils {
 	 * recitations were judged entailed while the one faithful recitation was judged not (issue #106).
 	 * A passing verdict is therefore false assurance. A FAILING verdict still carries information — it
 	 * says the citation is not about the record at all — so the flag is kept and only the pass is
-	 * withheld. Faithfulness of reference content is checked deterministically instead, by
-	 * report-only comparisons that run after every answer: {@code ClassCodeFidelityCheck} for an ATC
-	 * class code the answer states that no cited record does (issue #142), and
+	 * withheld. Faithfulness of reference content is checked deterministically instead, by two exact
+	 * comparisons that run after every answer: {@code ClassCodeFidelityCheck} for an ATC class code
+	 * the answer states that no cited record does (issue #142), report-only, and
 	 * {@code ReferenceProseFidelityCheck} for an answer that reproduces a cited reference record's
-	 * prose and then substitutes its own words inside the sentence it was copying (issue #337). NOT
+	 * prose and then substitutes its own words inside the sentence it was copying (issue #337), whose
+	 * answer is also published as {@code unfaithfullyRenderedCitations}. NOT
 	 * by the {@code DrugSafetyValidator} chips, which this javadoc said until #337: they carry the
 	 * deterministic text but are an independent list nothing reconciles against the answer.
 	 *

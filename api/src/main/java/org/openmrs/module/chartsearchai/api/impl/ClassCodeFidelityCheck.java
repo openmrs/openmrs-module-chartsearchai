@@ -66,7 +66,10 @@ import org.slf4j.LoggerFactory;
  * is not more grounding: it is an exact token comparison, which is the only thing that separates
  * {@code J01CA} from {@code J01MA}.
  *
- * <p><b>What it does and does not do.</b> It reports; it never rewrites. Editing a
+ * <p><b>What it does and does not do.</b> It reports; it never rewrites, and unlike its prose
+ * sibling it states nothing on the wire — issue #337's second round published that one's answer and
+ * left this one where Decision 35 point 4 put it, deliberately rather than by oversight; ADR
+ * Decision 74 says why. Editing a
  * clinician-facing sentence to remove a token is a larger decision than this check is licensed to
  * make, and a silent edit would be worse than a visible flag. The verdict reaches maintainers as a
  * WARN carrying the code the answer states, the records it cites and the codes those records

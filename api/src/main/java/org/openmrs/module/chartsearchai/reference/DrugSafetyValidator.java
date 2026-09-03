@@ -954,7 +954,8 @@ public class DrugSafetyValidator {
 	 * pair is NAMED in a WARN — a silent truncation would read to a clinician as "everything is
 	 * covered". <b>The WARN is no longer the only place the cut surfaces</b> (issue #336): both arms
 	 * now state how many pairs they found beside how many they reported — and since issue #356 so does
-	 * the uncapped drug-in-play arm, where neither of these stated one — on the answer as
+	 * the uncapped drug-in-play arm, where neither of these stated one AND the question resolved a drug
+	 * it could screen (issue #370, ADR Decision 70) — on the answer as
 	 * {@code ChartAnswer.getPairChipExtent()} and on the wire as {@code interactionPairs}. This
 	 * javadoc used to say a clinician-facing "10 of 72 shown" needed a per-question container the chip
 	 * API does not have and was therefore a frontend change; the premise was half right and the

@@ -66,7 +66,7 @@ public class ProjectInstructionsGuardTest {
 	 * <p><b>Raised from 85,000 to 86,000 for issue #348</b> (September 2026). #348 adds a rule: the
 	 * REFERENT axis of a safety finding's strength clause, plus the unit correction that keeps a
 	 * sibling row from making a proposed drug read as current therapy. What was paid for it first,
-	 * rather than instead: the EVIDENCE was pruned from four bullets of the same section — the
+	 * rather than instead: the EVIDENCE was pruned from several bullets of the same section — the
 	 * caution-lead anchor's measured division of labour, #283's contraindication-flip figures, the
 	 * premise/conclusion history — every sentence of it already carried verbatim by ADR Decision 37,
 	 * which those bullets point at.

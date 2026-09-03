@@ -546,8 +546,12 @@ public class PatientClinicalContext {
 	 * "The curated condition population" below means the one this repo SHIPS; an
 	 * operator's own file is by definition unmeasured, which is what the loader-rule paragraph is about.
 	 * The four condition tokens the bundled seed publishes ({@code gi bleed}, {@code peptic
-	 * ulcer}, {@code severe hepatic}, {@code renal impairment} — the TOKENS, which #309's own body
-	 * misquoted as the {@code note} fields) match 1 value over the recorded corpus and 5 over the
+	 * ulcer}, {@code severe hepatic}, {@code renal impairment} — the TOKENS, and not the four strings
+	 * #309's own body names in their place: two of those are these rules' {@code note} fields
+	 * ({@code active gastrointestinal bleeding}, {@code active peptic ulcer disease}) and the other two
+	 * ({@code avoid in CKD stage 4 or worse}, {@code avoid in severe hepatic impairment}) are neither a
+	 * token nor a note of any rule the seed ships, so a token set re-derived from the ticket finds two
+	 * of its four strings nowhere) match 1 value over the recorded corpus and 5 over the
 	 * candidate one, and every one of those matched values carries its token as a whole word.
 	 * Per token, and this is the part the aggregate hides: {@code peptic ulcer} accounts for ALL of
 	 * them — 5 candidate, 1 recorded, none mid-word — while {@code gi bleed}, {@code severe hepatic}

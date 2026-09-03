@@ -7240,7 +7240,10 @@ public class DrugSafetyValidator {
 	 *         fourth injected-record question, and since issue #308 the question BOTH injected
 	 *         channels ask. Asked only of a rule that has already matched.
 	 *
-	 *         <p>The union of two questions, and neither half will do: everything about WHY is on
+	 *         <p><b>Three legs, and which one is asked is decided by the rule's TYPE.</b> An ALLERGY
+	 *         rule takes the union of two questions, and neither half will do; a CONDITION rule takes a
+	 *         third leg, outside that union and outside the self-naming scope stated below. Everything
+	 *         about WHY the allergy union is a union is on
 	 *         {@code DrugReferenceInjector.corroborated}, which is where the reasoning has lived since
 	 *         issue #269 and which now delegates here. What moved is only the body, and it moved for
 	 *         one reason — the injected {@code drug_reference} section and the injected
@@ -7281,7 +7284,8 @@ public class DrugSafetyValidator {
 	 *         the ledger's RANK is not the same thing, and the difference is reachable — see issue
 	 *         #308 and ADR Decision 44, which record three ways of getting the unit wrong.
 	 *
-	 *         <p>Scoped to a SELF-NAMED allergy rule, which is load-bearing rather than incidental —
+	 *         <p><b>The two allergy legs are scoped to a SELF-NAMED allergy rule</b> — the scope is the
+	 *         union's and not the method's — and it is load-bearing rather than incidental:
 	 *         a rule whose token is not one of its entry's names is asking about a class or about a
 	 *         fragment of free text, which is what the bare match exists for, and neither of the ALLERGY
 	 *         corroborating questions can speak to it. Mutate the scope out and read the failures.

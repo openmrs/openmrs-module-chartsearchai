@@ -5406,10 +5406,10 @@ public class DrugSafetyValidator {
 	 *         one {@code substanceGroupKey}" cannot tell {@code Esomeprazole magnesium} → Esomeprazole
 	 *         AND Omeprazole, where the module cannot say which the prescription is, from
 	 *         {@code Abacavir / lamivudine} → Abacavir AND Lamivudine, where the prescription contains
-	 *         both and the clause is true of each. Measured over the shipped knowledge base, 990 of the
-	 *         1112 multi-substance bridged concepts are of the second kind, and the count refused every
-	 *         one of them — silently, on exactly the fixed-dose-combination medication lists issue #353
-	 *         is written for. Those two figures are the difference of the two
+	 *         both and the clause is true of each. Measured over the shipped knowledge base, 990 of the 1112
+	 *         multi-substance bridged concepts have a recorded name that NAMES every substance they resolve — what the
+	 *         figure counts, and not a clinical class — and the count refused every one of them, silently, the
+	 *         combination lists issue #353 is written for among them. Those two figures are the difference of the two
 	 *         {@code BridgedConceptLegBoundsTest.theRefusalsReachOverTheShippedKnowledgeBase} asserts,
 	 *         so a knowledge-base refresh that moves either reddens rather than leaving this stale. Naming separates them and is asked PER SUBSTANCE, so
 	 *         {@code Esomeprazole from Inexium 40mg} stands where {@code Omeprazole from Inexium 40mg}
@@ -6218,9 +6218,9 @@ public class DrugSafetyValidator {
 	 *         {@code Esomeprazole magnesium} among them — and the part of it that is a false claim is
 	 *         refused at the printing site by {@link #restsOnAnAmbiguousBridge} rather than here, so
 	 *         the leg keeps resolving and only the sentence naming a prescription is withheld. Part,
-	 *         not all: 990 of the 1112 are fixed-dose combinations whose recorded name names every
-	 *         substance they resolve, and those state their clause. ADR Decision 68 carries both
-	 *         figures and what each is a count OF.</li>
+	 *         not all: 990 of the 1112 have a recorded name that names every substance they resolve, and
+	 *         those state their clause. ADR Decision 68 carries both figures, what each is a count OF, and
+	 *         why that population is not the combinations in it.</li>
 	 *         </ul>
 	 *         That reasoning is this predicate's alone and does not transfer.
 	 *         {@link #classRelationships}'s restating-existing-therapy skip keeps its own exact-code
@@ -6310,11 +6310,11 @@ public class DrugSafetyValidator {
 	 *         did not return before and cannot fail to return one where it returned something. Two
 	 *         consequences worth stating rather than leaving to be found. A candidate
 	 *         {@link #identifies} by the rule's ATC CODE alone scores
-	 *         {@link DrugReference#NAME_NO_MATCH} and therefore now loses to any candidate the token
-	 *         NAMES, which it could previously beat by arriving first. And the ranking cannot separate
-	 *         two entries that each carry the token as an alias while neither is CALLED it — there the
-	 *         first is still kept, so for that shape the answer is the dataset's own order exactly as it
-	 *         always was, and the residue is a clause withheld rather than one misattributed.
+	 *         {@link DrugReference#NAME_NO_MATCH} and therefore now loses to any candidate the token NAMES, which it could
+	 *         previously beat by arriving first. And the ranking cannot separate two entries that each carry the token as an alias
+	 *         while neither is CALLED it — there the first is still kept, so for that shape the answer is the dataset's own order
+	 *         exactly as it always was, and the residue is a clause withheld rather than one misattributed. Pinned since review
+	 *         round 4 by {@code BridgedConceptOrderResolutionTest.aTiedTokenIsAnsweredByTheFirstOfTheTiedRowsFromEitherRowOrder}.
 	 *
 	 *         <p>It no longer stops at the first admitted candidate, so the scan is the whole
 	 *         order-entry list rather than a prefix of it. That list is the patient's own resolved
@@ -6354,7 +6354,7 @@ public class DrugSafetyValidator {
 			int claim = candidate.nameMatchStrength(token);
 			// Strictly greater, so candidates the ranking cannot separate keep the incumbent and the
 			// answer for a tied group is the dataset's first row among them — exactly what this scan
-			// answered for every group before issue #353's round 3.
+			// answered before #353's round 3; >= answers with the file's LAST row instead and reddens BridgedConceptOrderResolutionTest.aTiedTokenIsAnsweredByTheFirstOfTheTiedRowsFromEitherRowOrder.
 			if (elected == null || claim > strongest) {
 				elected = candidate;
 				strongest = claim;

@@ -658,10 +658,10 @@ public class DrugReferenceService {
 	 * prescription is one of these and cannot say which" ({@code Esomeprazole magnesium} →
 	 * Esomeprazole AND Omeprazole) from "the prescription genuinely CONTAINS all of these"
 	 * ({@code Abacavir / lamivudine} → Abacavir AND Lamivudine). Measured over the shipped knowledge
-	 * base, 990 of the 1112 multi-substance bridged concepts are the second kind — fixed-dose
-	 * combinations, which is what a francophone ARV medication list is mostly made of — and the count
-	 * refused every one of them. Naming separates the two, and does it PER SUBSTANCE: for CIEL 75876 it
-	 * admits Esomeprazole and refuses Omeprazole out of one answer.
+	 * base, 990 of the 1112 multi-substance bridged concepts have a recorded name that NAMES every substance they
+	 * resolve, and the count refused every one of them — what the figure counts, and not a count of combinations: a
+	 * derivative name naming its parent moiety satisfies it too (ADR Decision 68 has both shares). Naming separates
+	 * the two PER SUBSTANCE: for CIEL 75876 it admits Esomeprazole and refuses Omeprazole out of one answer.
 	 *
 	 * <p><b>{@link #findNamedSubstances} is the accessor for that question</b> — CLAUDE.md designates
 	 * it "ask it before PRINTING a substance's own label in a sentence reporting the patient's record"

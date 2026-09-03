@@ -4770,12 +4770,32 @@ for.** It refused the clause wherever the order's bridged answer spanned more th
 `substanceGroupKey`, which cannot tell "the module knows the prescription is one of these and cannot
 say which" (`Esomeprazole magnesium` → Esomeprazole AND Omeprazole) from "the prescription genuinely
 contains all of these" (`Abacavir / lamivudine` → Abacavir AND Lamivudine). Measured, **990 of the 1112
-multi-substance bridged concepts are the second kind** — fixed-dose combinations, which is what a
-francophone ARV medication list is mostly made of — and the count refused every one. That reopened
-#349's own defect for the bridged population, silently: a Major chip naming a substance nowhere on the
-medication list, with no clause saying which prescription it came from, and no chip difference or log
+multi-substance bridged concepts have a recorded name that NAMES every substance they resolve** — and
+the count refused every one. That reopened #349's own defect for the bridged population, silently: a
+Major chip naming a substance nowhere on the medication list, with no clause saying which prescription
+it came from, and no chip difference or log
 line to notice it by. It also made CLAUDE.md's standing rule "a combination order carrying BOTH
 substances bridges both sides" false for every bridged combination.
+
+**Say what that 990 is a count OF, and it is not a clinical class — review round 4.** The predicate is
+`substancesNamedByBridge`: the concept's recorded name NAMES every substance its bridged answer resolves.
+The francophone ARV combination lists the ticket is written for satisfy it, and this paragraph called the
+990 fixed-dose combinations on the strength of that until round 4 — a measured figure relabelled, which is
+#243's shape one step along (there a filtered figure was quoted for an unfiltered predicate; here the
+predicate and the figure agree and the WORDS do not). Naming every substance is also satisfied by a salt,
+ester or derivative name that names its parent moiety, and the shipped data has both kinds: of the 990,
+967 bridge names carry RxNorm's `/` combination separator and 23 do not, the 23 holding combinations
+spelled without it (`Amoxicillin and clavulanic acid`, `Rifampicin and isoniazid`) beside
+`Atropine sulfate`, `Mometasone furoate`, `Hydrocortisone butyrate`, `Penicillin G potassium`,
+`Isosorbide mononitrate` and `Lutetium Lu 177 dotatate`. Measured 2026-09-03 through
+`findByBridgedConcept` and `substancesNamedByBridge` over `DrugReferenceTestSupport.shippedEntries()`, in
+a throwaway JUnit test compiled against this head and deleted after; the `/` share is a key read of the
+bridge NAME and no predicate of this module's, which is why it is dated here rather than asserted — the
+two figures the code depends on are asserted, by
+`BridgedConceptLegBoundsTest.theRefusalsReachOverTheShippedKnowledgeBase`. What the relabelling costs is a
+maintainer re-deriving this refusal from combination SHAPE instead — `DrugReference.combinationConstituents`,
+the `/` separator, `derivedSubstanceKeys` — which reproduces 967 of the 990 and silently re-refuses the
+parent/derivative remainder, for a population the shipped knowledge base actually carries.
 
 Naming separates them, and it is the accessor CLAUDE.md already designates for exactly this question —
 "ask it before PRINTING a substance's own label in a sentence reporting the patient's record",
@@ -4824,6 +4844,17 @@ mechanism CLAUDE.md designates for each was already in the module.
   CHOICE and not of the SET — `identifies` still decides which candidates exist — and it does not
   separate two entries that each carry the token as an alias while neither is called it; there the
   first is still kept and the residue is a clause withheld rather than one misattributed.
+  **That tie-break is asserted and not only stated** (review round 4): relaxing the comparison to
+  `claim >= strongest` answers a tied group with the dataset's LAST row instead, which moves the very
+  row group this bullet is about; round 4 measured that mutation leaving the api suite green at
+  `dc5cabd2`, before
+  `BridgedConceptOrderResolutionTest.aTiedTokenIsAnsweredByTheFirstOfTheTiedRowsFromEitherRowOrder`.
+  That case asserts both cells — the two arrangements give opposite outcomes by design, since whichever
+  tied substance arrives first is the one the clause is decided about — so it pins the tie-break rather
+  than today's row order, and one of its cells is the withheld clause named above. The tie has to be
+  authored: this pair is separated in the shipped data by exactly the `rxnorm_name` that makes the two
+  rows one substance-name family, and `ddi-bridged-concept-tied-token.json`'s own note records that,
+  the one field it changes, and what was measured over the shipped knowledge base before authoring it.
   `DrugReference.canonicalRow` is deliberately not composed underneath it: its first rung is not scoped
   to one substance, so folding it over tied candidates would elect across substances on route
   qualification, which is #187's direction.

@@ -219,7 +219,10 @@ public class BridgedConceptLegBoundsTest {
 	 *   <li>{@code 1112} answer with more than one {@code substanceGroupKey} — the leg's residue, and
 	 *       what round 1's guard refused whole;</li>
 	 *   <li>{@code 122} of those have a recorded name that does not NAME every substance they answer
-	 *       with — what the guard refuses now. The other 990 are fixed-dose combinations;</li>
+	 *       with — what the guard refuses now. The other 990 are its complement, so that is what they
+	 *       are a count OF and not a count of combinations: naming every substance a concept resolves
+	 *       is satisfied by a combination name and by a salt, ester or derivative name alike
+	 *       ({@code Mometasone furoate}, {@code Hydrocortisone butyrate});</li>
 	 *   <li>{@code 166} of the {@code 5826} (concept, substance) attributions the leg can state are
 	 *       refused. That is the unit the clause is actually printed in, and it is not the concept
 	 *       count: one concept can have one substance refused and another admitted;</li>

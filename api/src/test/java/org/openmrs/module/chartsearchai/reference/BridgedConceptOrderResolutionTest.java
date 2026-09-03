@@ -399,7 +399,8 @@ public class BridgedConceptOrderResolutionTest {
 	 *
 	 * <p>Round 1's guard asked only whether the order's bridged answer spanned more than one substance,
 	 * so it refused this — measured over the shipped knowledge base, on 990 of the 1112 bridged concepts
-	 * that answer with more than one substance, which is every real combination in it. That reopened
+	 * that answer with more than one substance, which is every one of them whose recorded name names
+	 * every substance it answers with, this concept among them. That reopened
 	 * issue #349's defect for the bridged population: a Major chip naming a substance that appears
 	 * nowhere on the medication list, with no clause saying which prescription it came from. It is also
 	 * what CLAUDE.md's standing rule "a combination order carrying BOTH substances bridges both sides"
@@ -558,6 +559,90 @@ public class BridgedConceptOrderResolutionTest {
 				"and the substance the bridge's name does not name still states no prescription, from"
 						+ " either row order — rows " + order);
 		}
+	}
+
+	/**
+	 * The token this fixture's two rules carry — an ALIAS of both substances of the bridged concept and
+	 * the display name of neither, which is the shape
+	 * {@code DrugSafetyValidator.activeOrderEntryFor}'s javadoc names as the one its ranking cannot
+	 * separate.
+	 */
+	private static final String TIED_TOKEN = "esomeprazole magnesium trihydrate";
+
+	/** @return the chart-order clauses of the one chip a question about the PARTNER raises over
+	 *          {@code rows} — the side {@code activeOrderEntryFor}'s election decides. The two
+	 *          preconditions are asserted here rather than per arrangement because a tie that stopped
+	 *          chipping, or stopped printing the rule's own token, would make the clause assertions
+	 *          below pass for a reason that is not the tie-break. */
+	private static List<String> partnerSideBridgeClauses(List<DrugReference> rows) {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(rows);
+		PatientClinicalContext chart = chart(inexiumOrder(null), clopidogrelOrder());
+		String order = displayNames(rows).toString();
+
+		List<SafetyWarning> chips = DrugReferenceTestSupport.validator(service).validate("",
+			"Can I give this patient clopidogrel?", service.withReferenceNames(chart));
+
+		assertEquals(1, chips.size(), "precondition: the pair must chip, rows " + order + ", was: "
+				+ DrugReferenceTestSupport.details(chips));
+		assertTrue(chips.get(0).getDetail()
+				.startsWith("Clopidogrel interacts with active order " + TIED_TOKEN + " \u2014 Major"),
+			"precondition: a tied token is not unambiguous, so the chip prints the rule's own token"
+					+ " whichever row is elected — rows " + order + ", was: " + chips.get(0).getDetail());
+		return bridgeTexts(chips.get(0));
+	}
+
+	/**
+	 * What the election does NOT settle, pinned as an outcome rather than left to three javadoc
+	 * sentences (issue #353, review round 4).
+	 *
+	 * <p>{@code activeOrderEntryFor} advances its incumbent on a STRICTLY greater claim, so a group of
+	 * candidates {@link DrugReference#nameMatchStrength} ties is answered by the first of them — the
+	 * dataset's own order, exactly what that scan answered for every group before review round 3.
+	 * {@code activeOrderEntryFor}'s javadoc says so and so does ADR Decision 68, and until this case
+	 * nothing witnessed it: relaxing the comparison to {@code >=} answers a tied group with the
+	 * dataset's LAST row instead, which moves the row group {@code restsOnAnAmbiguousBridge} is asked
+	 * of — and review round 4 measured that mutation leaving the api suite green at {@code dc5cabd2},
+	 * this case's own head.
+	 *
+	 * <p><b>Both arrangements, and their two outcomes are opposite by design.</b> A case fixing one
+	 * would pin today's file: it passes for "last row wins" as soon as the rows arrive reversed, which
+	 * is how round 3's own case came to assert both. Here the two cells are opposite BY DESIGN —
+	 * whichever of the two substances arrives first is the one the clause is decided about — so the
+	 * mutation reddens both, and what the pair says is that the answer for a tied group is a fact about
+	 * the file's order and nothing else.
+	 *
+	 * <p><b>Neither cell is a false statement, and that is the residue's shape.</b> Where the tie
+	 * elects the substance the bridge's own name does not name, the clause is WITHHELD — the module
+	 * says nothing about which prescription that substance came from, rather than naming the wrong one.
+	 * The fixture's own {@code metadata.note} carries why the tie has to be authored, and what was
+	 * measured over the shipped knowledge base before authoring it.
+	 */
+	@Test
+	public void aTiedTokenIsAnsweredByTheFirstOfTheTiedRowsFromEitherRowOrder() throws Exception {
+		List<DrugReference> entries = DrugReferenceTestSupport
+				.ddiFixtureEntries(DrugReferenceTestSupport.DDI_BRIDGED_CONCEPT_TIED_TOKEN);
+
+		assertEquals(Arrays.asList("Omeprazole", "Esomeprazole", "Clopidogrel"),
+			displayNames(entries), "the premise: the fixture lists the un-named substance first");
+		assertEquals(DrugReference.NAME_IS_ANOTHER_NAME,
+			DrugReferenceTestSupport.row(entries, "Omeprazole").nameMatchStrength(TIED_TOKEN),
+			"the premise: the rule's token is another name of the substance the bridge does not name");
+		assertEquals(DrugReference.NAME_IS_ANOTHER_NAME,
+			DrugReferenceTestSupport.row(entries, "Esomeprazole").nameMatchStrength(TIED_TOKEN),
+			"and of the one it does, at the same rank — so the ranking has nothing to choose on");
+
+		List<DrugReference> esomeprazoleFirst = Arrays.asList(
+			DrugReferenceTestSupport.row(entries, "Esomeprazole"),
+			DrugReferenceTestSupport.row(entries, "Omeprazole"),
+			DrugReferenceTestSupport.row(entries, "Clopidogrel"));
+
+		assertEquals(Collections.<String> emptyList(), partnerSideBridgeClauses(entries),
+			"the tied group is answered by the row the dataset lists FIRST, whose substance the"
+					+ " bridge's own name does not name, so no prescription is stated");
+		assertEquals(Arrays.asList(TIED_TOKEN + " from " + INEXIUM_ORDER),
+			partnerSideBridgeClauses(esomeprazoleFirst),
+			"and reversed, the first of the same tied group is the substance the bridge's name names,"
+					+ " so the same screen states the prescription it came from");
 	}
 
 	/**

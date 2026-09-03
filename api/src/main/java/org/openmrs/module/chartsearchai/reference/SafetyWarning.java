@@ -530,8 +530,8 @@ public class SafetyWarning {
 	 * "no attribution to show" rather than "the chart records these substances"</b>. <b>Read the
 	 * MECHANISM off the code; no rule about which chips are empty is offered here, and that is
 	 * deliberate</b> — every draft of one has been measured false, the later ones against the real
-	 * pipeline. No count of those drafts is published here or anywhere else: one was, and it was stale
-	 * a commit later. {@code DrugSafetyValidator.chartOrderBridges} walks the SUBJECT against every active
+	 * pipeline. No count of those drafts is published here or anywhere else: counts were, they
+	 * disagreed with each other, and they went stale. {@code DrugSafetyValidator.chartOrderBridges} walks the SUBJECT against every active
 	 * order and the PARTNER against the orders its arm allowed to witness it, and each item
 	 * additionally needs {@code resolvesFromAny} and a display that does not already name the
 	 * substance. That clause is the whole of it: nothing is claimed here about what a chip's

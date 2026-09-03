@@ -291,7 +291,7 @@ public class ChartSearchAiChartOrderBridgeTest {
 		// is the platform's configuration and would go stale silently. XStream cannot
 		// marshal java.util.Collections' immutable wrappers under a modular JDK ("module java.base
 		// does not opens java.util"). chartOrderBridges() returns an unmodifiableList, or
-		// Collections$EmptyList in the common empty case, so publishing it AS HANDED turned every
+		// Collections$EmptyList in the empty case, so publishing it AS HANDED turned every
 		// chip-carrying XML response into a 500 — the empty case included.
 		//
 		// Driven through the REAL marshaller rather than an imitation of it, for the reason

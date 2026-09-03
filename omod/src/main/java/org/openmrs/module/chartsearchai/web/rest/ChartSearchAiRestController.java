@@ -1297,7 +1297,7 @@ public class ChartSearchAiRestController {
 			// artifact), not inferred. XStreamMarshaller cannot
 			// marshal java.util.Collections' immutable wrappers under a modular JDK ("module java.base
 			// does not opens java.util"). chartOrderBridges() returns an unmodifiableList, or
-			// Collections$EmptyList in the common empty case, so publishing it as handed turned every
+			// Collections$EmptyList in the empty case, so publishing it as handed turned every
 			// chip-carrying XML response into a 500 — the empty case included.
 			// ChartSearchAiChartOrderBridgeTest.theWholePayloadStillMarshalsForAnXmlClient pins it.
 			map.put("chartOrderBridges",

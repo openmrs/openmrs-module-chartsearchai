@@ -22,6 +22,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 /**
@@ -37,8 +38,11 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  *   <li>{@link #getAliases()} — lowercase free-text names, for question-driven matching and (through
  *       {@link #matchesDrugName}) for resolving an active order's own display name.</li>
  *   <li>{@link #getAtcCodes()} — ATC codes for order-driven matching against an active order's concept
- *       mappings. One of those two keys since issue #151, not the only one — see
+ *       mappings. One of the keys that join is built on since issue #151, not the only one — see
  *       {@link DrugReferenceService#findForActiveOrders}.</li>
+ *   <li>{@link #getBridgedConcepts()} — the dictionary concepts the dataset bridges this entry to, the
+ *       third key of that join since issue #353: the one that does not depend on which of a concept's
+ *       names a session's locale elects. Empty for every source but {@code ddinter}.</li>
  * </ul>
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -102,6 +106,23 @@ public class DrugReference {
 
 	/** {@link #nameKeys()}'s answer, derived where the alias list is stored. */
 	private Set<String> nameKeys = Collections.emptySet();
+
+	/**
+	 * The dictionary concepts the reference dataset BRIDGES this entry to — the {@code ciel[]} rows of
+	 * the DDInter knowledge base, each carrying the concept's uuid and the one name the bridge records
+	 * for it. Empty for every other source, and empty for an entry a caller built by hand.
+	 *
+	 * <p><b>Why the entry keeps the uuid at all</b> (issue #353): the bridge is the only place the
+	 * reference data says which SUBSTANCES a dictionary concept is, and the parser used to read
+	 * {@code ciel[].name} into the alias list and drop the identity beside it. What that cost, and what
+	 * the join does with it, are on {@link DrugReferenceService#findByBridgedConcept} and in ADR
+	 * Decision 68.
+	 *
+	 * <p>The NAME is kept beside the uuid rather than derived from the aliases, because an entry's
+	 * alias list is a flat union of every bridge row's name and cannot say which name came from which
+	 * concept — and that name is what makes the join RANKED rather than a bare identity claim.
+	 */
+	private List<BridgedConcept> bridgedConcepts = Collections.emptyList();
 
 	private List<String> atcCodes = Collections.emptyList();
 
@@ -531,6 +552,14 @@ public class DrugReference {
 	 * substance beside a record naming one of its routes is the chip-versus-prose divergence this module
 	 * keeps having to remove.
 	 *
+	 * <p><b>A fourth caller since issue #353, and it displays nothing</b>:
+	 * {@link DrugReferenceService#substancesNamedByBridge} elects the row a substance's claim on a
+	 * dictionary bridge's own recorded name is judged by. So this fold decides a NAMING answer there
+	 * rather than a rendered name — and keeping the first row instead made that answer, and therefore
+	 * whether a finding may state which prescription a substance came from, a fact about the order the
+	 * knowledge-base file lists its rows in. That caller's javadoc carries the measurement and what the
+	 * election leaves unsettled.
+	 *
 	 * <p>At the CHIP-SUBJECT site this is the second step rather than the whole answer since issue #194:
 	 * {@code DrugSafetyValidator.interactionSubject} asks {@link #nameMatchStrength} first — the row the
 	 * patient's own record names is the truthful subject (#187) — and folds only the rows tied on that.
@@ -878,6 +907,120 @@ public class DrugReference {
 		this.aliases = aliases != null ? trimmedAliases(aliases) : Collections.<String> emptyList();
 		this.foldedAliases = foldedAll(this.aliases);
 		this.nameKeys = normalizedAll(this.aliases);
+	}
+
+	/**
+	 * @return the one name the reference dataset's bridge records for {@code conceptUuid} on THIS entry,
+	 *         or null when the bridge does not file this entry under that concept. Both the membership
+	 *         test and the name in one answer, because the join needs both and asking twice would walk
+	 *         the same list twice for every entry in the dataset.
+	 */
+	String bridgedConceptName(String conceptUuid) {
+		if (conceptUuid == null) {
+			return null;
+		}
+		for (BridgedConcept bridged : bridgedConcepts) {
+			if (conceptUuid.equals(bridged.getConceptUuid())) {
+				return bridged.getConceptName();
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * @return the dictionary concepts this entry is bridged to, unmodifiable and never null — see
+	 *         {@link #bridgedConcepts}. Empty for every source but {@code ddinter}.
+	 *
+	 *         <p><b>Not bindable from the curated {@code json} format — which is what the
+	 *         {@code @JsonIgnore} below is for.</b> That format declares no bridge, and the class's
+	 *         {@code ignoreUnknown} covers only properties Jackson does not KNOW; a public accessor
+	 *         makes {@code bridgedConcepts} known. So the paragraph that follows is a COUNTERFACTUAL
+	 *         and not a description of this class: an earlier draft of it stated the counterfactual as
+	 *         current behaviour.
+	 *
+	 *         <p>WITHOUT the annotation an authored file carrying that key would bind it or fail, and
+	 *         what the failure costs was MEASURED rather than assumed. It is not the load going
+	 *         silently empty: {@code MAPPER.readValue} throws,
+	 *         {@code ReferenceDataFiles.loadWithClasspathFallback} catches it and falls back to the
+	 *         BUNDLED curated file, so the operator's own entries vanish and the bundled ones stand in
+	 *         their place — under a {@code configured-data-file-not-read} finding, which is a
+	 *         CONFIGURATION rule and therefore LOUD whatever the origin. The failure would be
+	 *         reported; what it would cost is the operator's dataset, swapped for another. Not issue
+	 *         #149's inert layer; do not cite it as one.
+	 *
+	 *         <p>WITH the annotation none of that happens — the key is ignored and the entries beside
+	 *         it load, which is what
+	 *         {@code BridgedConceptOrderResolutionTest.aCuratedFileCarryingABridgeStillLoadsTheEntriesBesideIt}
+	 *         asserts. Either accessor's annotation alone would suffice, because Jackson ignores a
+	 *         property annotated on either side: removing just one of them leaves that case green and
+	 *         removing BOTH is what reddens it (measured). Both are kept so that neither reads as the
+	 *         one that may go.
+	 */
+	@JsonIgnore
+	public List<BridgedConcept> getBridgedConcepts() {
+		return Collections.unmodifiableList(bridgedConcepts);
+	}
+
+	/**
+	 * The sole writer of {@link #bridgedConcepts}. Rows with a blank uuid or a blank name are dropped:
+	 * the pair is what the join needs and half of one answers neither question.
+	 */
+	@JsonIgnore
+	public void setBridgedConcepts(List<BridgedConcept> bridgedConcepts) {
+		if (bridgedConcepts == null) {
+			this.bridgedConcepts = Collections.emptyList();
+			return;
+		}
+		List<BridgedConcept> usable = new ArrayList<BridgedConcept>(bridgedConcepts.size());
+		for (BridgedConcept bridged : bridgedConcepts) {
+			if (bridged != null && bridged.getConceptUuid() != null && bridged.getConceptName() != null) {
+				usable.add(bridged);
+			}
+		}
+		this.bridgedConcepts = usable;
+	}
+
+	/**
+	 * One dictionary concept the reference dataset bridges an entry to: the concept's uuid, and the one
+	 * name the bridge records for it.
+	 *
+	 * <p>Immutable, and both halves are required — {@link DrugReference#setBridgedConcepts} drops a row
+	 * missing either. The uuid alone is a bare identity claim, which is not what the join uses it for;
+	 * the name is what {@link DrugReferenceService#findByBridgedConcept} resolves through the ranked
+	 * recorded-name accessor, so that the answer for a concept is a subset of what a session electing
+	 * the bridge's own spelling already gets today.
+	 */
+	public static final class BridgedConcept {
+
+		private final String conceptUuid;
+
+		private final String conceptName;
+
+		public BridgedConcept(String conceptUuid, String conceptName) {
+			this.conceptUuid = blankToNull(conceptUuid);
+			this.conceptName = blankToNull(conceptName);
+		}
+
+		/** @return the dictionary concept's uuid, trimmed; null when the dataset recorded none. */
+		public String getConceptUuid() {
+			return conceptUuid;
+		}
+
+		/** @return the one name the bridge records for that concept, trimmed; null when it recorded
+		 *          none. NOT the entry's own name and not one of its aliases in general — it is the
+		 *          dictionary's name for the concept, which for a combination product names substances
+		 *          this entry is only one of. */
+		public String getConceptName() {
+			return conceptName;
+		}
+
+		private static String blankToNull(String value) {
+			if (value == null) {
+				return null;
+			}
+			String trimmed = value.trim();
+			return trimmed.isEmpty() ? null : trimmed;
+		}
 	}
 
 	/**

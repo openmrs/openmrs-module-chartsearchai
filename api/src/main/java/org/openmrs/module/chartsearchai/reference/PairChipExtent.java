@@ -70,7 +70,7 @@ package org.openmrs.module.chartsearchai.reference;
  * the field and describes the list it kept — which {@code maxPairChips} can still truncate, exactly
  * as it could before — and the ceded pairs are reported beside it as chips rather than withheld.
  * The SCREENING arm has a cede of its own — it skips a pair the drug-in-play arm already
- * chipped — and still states a zero there, which ADR Decision 68 records as reproduced and
+ * chipped — and still states a zero there, which ADR Decision 69 records as reproduced and
  * deliberately not fixed by this rule.
  *
  * <p>What every one of them counts is the same thing: above-floor interaction RULES relating one
@@ -112,7 +112,7 @@ package org.openmrs.module.chartsearchai.reference;
  * arm ran and the reference data related none of the pairs it enumerated — a complete screen,
  * positively assertable, which is half of what this type exists for. <b>That is what it is MEANT
  * to say, and there are arrangements where it is false</b> — do not count them here either: an arm
- * can relate pairs and cede every one of them (ADR Decision 68, the screening arm), and a chart
+ * can relate pairs and cede every one of them (ADR Decision 69, the screening arm), and a chart
  * whose only medication the reference data cannot resolve was never a population to screen (ADR
  * Decision 65). Those decisions carry the cases. No extent at all
  * ({@code null} on the answer, {@code null} on the wire) says the producer stated no measurement.

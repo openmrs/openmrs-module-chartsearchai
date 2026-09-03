@@ -503,7 +503,7 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 	public void aQuestionPairListThatCededEveryPairStatesWhatTheChartArmReported() {
 		// Issue #336's own third row, the one its verification comment calls the one that bites — the
 		// live measurement of what its zero cost a reader is in PairChipExtent's javadoc and in ADR
-		// Decision 68, with the build and the chart it was taken on. This is that shape in miniature.
+		// Decision 69, with the build and the chart it was taken on. This is that shape in miniature.
 		// Every pair the question named was the CHART arm's — coveredByActiveOrderArm,
 		// because a rule joining the pair names one of her orders — so this arm related a pair and
 		// reported none. A zero says an arm ran and the reference data related NONE of the pairs it
@@ -538,7 +538,7 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 		// The boundary of aQuestionPairListThatCededEveryPairStatesWhatTheChartArmReported, and the
 		// residue it deliberately leaves. A third question drug on the same chart: warfarin x
 		// ibuprofen is the chart arm's, simvastatin x warfarin is this arm's, and this arm goes on
-		// describing the bounded list it kept — which the cap can still cut, see ADR Decision 68 for
+		// describing the bounded list it kept — which the cap can still cut, see ADR Decision 69 for
 		// what that does and does not let a client conclude. The ceded pair is reported as a chip rather
 		// than hidden, which is why the fix above is scoped to a pass that ceded EVERY pair. Withhold
 		// the statement on ANY cede instead and this reads the chart arm's three, having forfeited the

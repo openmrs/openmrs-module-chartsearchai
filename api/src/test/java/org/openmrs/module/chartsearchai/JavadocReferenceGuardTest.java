@@ -1072,6 +1072,15 @@ public class JavadocReferenceGuardTest {
 		/** javac discards the block, so the scanner has to report it. */
 		UNATTACHED(false, true),
 
+		/**
+		 * javac discards the block and the scanner is documented not to REACH it — a missed orphan,
+		 * which is the conservative half of {@link #annotationResidue}'s refusal to guess at an argument
+		 * list left open on the line. Declared rather than left unwritten because the refusal is what
+		 * chooses the safe direction: a hole here, instead of a red build on legal code. Turn the refusal
+		 * into a guess and the shape declared this way is flagged, so this row reddens.
+		 */
+		UNATTACHED_AND_UNREACHED(false, false),
+
 		/** There is no doc comment here at all, so neither side sees anything. */
 		NOT_A_JAVADOC_BLOCK(false, false);
 

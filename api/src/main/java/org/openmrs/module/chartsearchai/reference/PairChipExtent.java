@@ -75,7 +75,7 @@ package org.openmrs.module.chartsearchai.reference;
  * shape that ASKED for a screen: measured through the real {@code validate} over the DDInter excerpt,
  * {@code of(0, 0)} beside a Major chip about a pair it had itself related. It now states nothing too.
  * <b>Behind that arm there is no fallback, so the {@code null} is what a client reads</b>, which is
- * why this rule reaches the enumeration below on one arm and not on the other. ADR Decision 70 is
+ * why this rule reaches the enumeration below on one arm and not on the other. ADR Decision 71 is
  * canonical for why no number was available to it, and for what the silence costs.
  *
  * <p>What every one of them counts is the same thing: above-floor interaction RULES relating one
@@ -101,8 +101,10 @@ package org.openmrs.module.chartsearchai.reference;
  * counting, or it publishes a ratio of two different populations.
  *
  * <p><b>A candidate the screening arm cannot tell from one it already collected is not a pair it
- * found</b> (issue #339 review round 12). That arm collapses a chip whose every published field
- * repeats one it has already stated — {@code DrugSafetyValidator.StatedInteractionChips}, reachable
+ * found</b> (issue #339 review round 12). That arm collapses a chip whose every KEYED field
+ * repeats one it has already stated — the fields its own sentence is made of, and since issue
+ * #347 not every published one: {@code chartOrderBridges} reaches the wire and is deliberately
+ * outside that key — {@code DrugSafetyValidator.StatedInteractionChips}, reachable
  * because a fixed-dose combination prescription is one co-medication carrying two rule partners —
  * and it does so where the candidate is COLLECTED, before the sort and before the cap, so the
  * restatement is absent from BOTH numbers here rather than counted as a pair found and withheld.

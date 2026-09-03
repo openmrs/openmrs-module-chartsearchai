@@ -9,10 +9,15 @@
  */
 package org.openmrs.module.chartsearchai.web.rest;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * Decodes the SSE wire format the controller writes, for the streaming tests in this package.
@@ -69,5 +74,21 @@ final class SseEvents {
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * The first event of the given type, with its {@code data} parsed — failing with a message rather
+	 * than an NPE where the event was never emitted.
+	 *
+	 * <p>Here for the reason this class exists at all: three classes had grown a verbatim
+	 * {@code eventData(String)} of their own over {@link #ofType}, and the class javadoc above records
+	 * what happened the last time this package kept two copies of one decoder. The mapper is the
+	 * caller's, since each test class already holds one.
+	 */
+	static JsonNode dataOfType(ByteArrayOutputStream out, String type, ObjectMapper mapper)
+			throws Exception {
+		SseEvent event = ofType(out, type);
+		assertNotNull(event, "no '" + type + "' event was emitted");
+		return mapper.readTree(event.data);
 	}
 }

@@ -19,7 +19,6 @@ import org.junit.jupiter.api.Test;
 import org.openmrs.DrugOrder;
 import org.openmrs.Order;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.querystore.model.QueryDocument;
 import org.openmrs.module.querystore.serialization.DrugOrderRecordSerializer;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
@@ -55,18 +54,17 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  */
 public class QuerystoreOrderTextMarkerTest extends BaseModuleContextSensitiveTest {
 
-	/** Order 3 of the standard test dataset: a real, fully-populated Triomune-30 DrugOrder. */
-	private static final int TRIOMUNE_ORDER_ID = 3;
-
 	/** The real querystore serializer's rendered text for {@code order}, lowercased exactly as
-	 *  {@link DrugReferenceInjector} lowercases a chart record before testing it. */
+	 *  {@link DrugReferenceInjector} lowercases a chart record before testing it. The fold is here and
+	 *  not a second arity of the shared helper: this and
+	 *  {@code QuerystoreDrugOrderDisplayedNameTest} differ only by it, and two arities is how the pair
+	 *  would come apart. */
 	private String renderedLowerText(DrugOrder order) {
-		QueryDocument doc = new DrugOrderRecordSerializer().serialize(order);
-		return doc.getText() == null ? "" : doc.getText().toLowerCase(Locale.ROOT);
+		return DrugReferenceTestSupport.querystoreRenderedText(order).toLowerCase(Locale.ROOT);
 	}
 
 	private DrugOrder triomuneOrder() {
-		return (DrugOrder) Context.getOrderService().getOrder(TRIOMUNE_ORDER_ID);
+		return DrugReferenceTestSupport.standardDatasetDrugOrder();
 	}
 
 	@Test
@@ -92,8 +90,7 @@ public class QuerystoreOrderTextMarkerTest extends BaseModuleContextSensitiveTes
 		Context.getOrderService().discontinueOrder(original, "renewed at a higher dose", null,
 				original.getOrderer(), original.getEncounter());
 
-		String text = renderedLowerText((DrugOrder) Context.getOrderService()
-				.getOrder(TRIOMUNE_ORDER_ID));
+		String text = renderedLowerText(triomuneOrder());
 
 		assertTrue(DrugReferenceInjector.describesEndedOrder(text),
 				"a discontinued order carries querystore's stop marker and must be recognised as "

@@ -127,14 +127,20 @@ public class JavadocReferenceGuardTest {
 	 */
 	private static final String REFERENCE_CHECK = "-Xdoclint:reference";
 
-	private static final List<String> POMS = Arrays.asList("pom.xml", "api/pom.xml", "omod/pom.xml");
+	/**
+	 * The module this suite runs in, whose two source roots
+	 * {@link #everyJavadocReferenceInTheApiModuleResolves} compiles. A name and not a list, because
+	 * {@link #apiRoots} derives the roots from the reactor: what is api-specific here is the CLASSPATH
+	 * this suite runs on, not which directories that module keeps its sources in.
+	 */
+	private static final String API_MODULE = "api";
 
 	private static final String COMPILER_PLUGIN = "maven-compiler-plugin";
 
 	/**
-	 * The artifactId the root POM must declare. The POM side of this guard is the one caller with no
-	 * anchor of the kind {@link #SOURCE_ROOTS} gives the source walks, and it needs one for the same
-	 * reason: {@link ModuleSourceRoot#repoRoot()} walks up for {@code CLAUDE.md} and {@code docs/}, so
+	 * The artifactId the root POM must declare. The POM side of this guard has no anchor of the kind
+	 * {@link #SOURCE_ROOTS} gives the source walks, and it needs one for the same reason:
+	 * {@link ModuleSourceRoot#repoRoot()} walks up for {@code CLAUDE.md} and {@code docs/}, so
 	 * a wrapper checkout or a worktree without its own copy resolves a DIFFERENT project's root — and
 	 * "the root pom declares no plugin-level compilerArgs" would then be true, of a file that is not
 	 * this module's.
@@ -187,17 +193,25 @@ public class JavadocReferenceGuardTest {
 	private static final int MAX_REPORTED_LINES = 20;
 
 	/**
-	 * The four java source roots, each with one file the walk of it must find. The anchor is per ROOT
-	 * and not per walk, deliberately: a walk over four roots one of which resolves nowhere finds
-	 * files, passes a non-empty check, and reports no violations for the root it never read — a
-	 * structural guard passing for the reason it exists to catch, and the shape
-	 * {@link ModuleSourceRoot}'s own javadoc warns walking callers about. Each anchor is a file
-	 * {@code CLAUDE.md} itself cites, so none of them is likely to be renamed quietly.
+	 * One file each java source root's walk must find. The anchor is per ROOT and not per walk,
+	 * deliberately: a walk over several roots one of which resolves nowhere finds files, passes a
+	 * non-empty check, and reports no violations for the root it never read — a structural guard
+	 * passing for the reason it exists to catch, and the shape {@link ModuleSourceRoot}'s own javadoc
+	 * warns walking callers about. Each anchor is a file {@code CLAUDE.md} itself cites, so none of
+	 * them is likely to be renamed quietly.
+	 *
+	 * <p><strong>Anchors only. WHICH roots are walked is {@link #reactorSourceRoots}' answer, derived
+	 * from the root pom's {@code <modules>}, and this map is not the scope.</strong> It was: the roots
+	 * were a hand-written list nothing cross-checked, so deleting one line here — a plausible "let me
+	 * scope this to api" edit — took a whole reactor module out of {@link #noJavadocBlockIsOrphaned}
+	 * and {@link #noFileOpensWithAJavadocBlockBeforeItsPackageStatement} with all six checks green and
+	 * a planted orphan unreported. The anchor mechanism could not see it, because it protects only the
+	 * roots that are IN the list, and the compiler cannot compensate: an orphaned block is invisible to
+	 * doclint by construction, which is the whole reason the scanner exists. Now a root the reactor has
+	 * and this map does not is a failure ({@link #javaSourcesUnder}), and an entry naming a root the
+	 * reactor does NOT have is one too ({@link #reactorSourceRoots}).
 	 */
 	private static final Map<String, String> SOURCE_ROOTS = sourceRoots();
-
-	/** The roots an api-side test can compile — its classpath is this module's, not {@code omod}'s. */
-	private static final List<String> API_ROOTS = Arrays.asList("api/src/main/java", "api/src/test/java");
 
 	private static Map<String, String> sourceRoots() {
 		Map<String, String> roots = new LinkedHashMap<String, String>();
@@ -205,6 +219,112 @@ public class JavadocReferenceGuardTest {
 		roots.put("api/src/test/java", "ProjectInstructionsGuardTest.java");
 		roots.put("omod/src/main/java", "ChartSearchAiRestController.java");
 		roots.put("omod/src/test/java", "ChartSearchAiAuditSearchModeTest.java");
+		return roots;
+	}
+
+	/**
+	 * Every java source root of every module the ROOT POM declares, which is the scope both corpus
+	 * walks take — never a hand-written list, for the reason {@link #SOURCE_ROOTS} gives.
+	 *
+	 * <p>A module contributes {@code src/main/java} and {@code src/test/java} where the directory
+	 * exists, so a module with no tests costs nothing; a reactor that yields no root at all fails
+	 * rather than walking nothing. And an anchor naming a root no module has fails too — that is the
+	 * converse drift, an entry left behind by a rename, which would otherwise sit here looking like
+	 * coverage of something.
+	 */
+	private static List<String> reactorSourceRoots() throws Exception {
+		List<String> roots = new ArrayList<String>();
+		for (String module : reactorModules()) {
+			for (String kind : Arrays.asList("main", "test")) {
+				String root = module + "/src/" + kind + "/java";
+				if (Files.isDirectory(REPO_ROOT.resolve(root))) {
+					roots.add(root);
+				}
+			}
+		}
+		if (roots.isEmpty()) {
+			fail("None of the modules the root pom declares " + reactorModules() + " has a java source "
+					+ "root under " + REPO_ROOT + ", so both corpus walks would read nothing and report no "
+					+ "violations whatever the javadoc says.");
+		}
+		for (String anchored : SOURCE_ROOTS.keySet()) {
+			if (!roots.contains(anchored)) {
+				fail("SOURCE_ROOTS anchors " + anchored + ", which is not a java source root of any module\n"
+						+ "the root pom declares (those are " + roots + "). An anchor for a root nothing walks\n"
+						+ "checks nothing, and reads as coverage of it.");
+			}
+		}
+		return roots;
+	}
+
+	/**
+	 * The modules the root pom declares, read from {@code <modules>} by path. A pom declaring none
+	 * fails loudly: everything derived from this list would then be empty, and every walk and every
+	 * POM check would pass by reading nothing.
+	 */
+	private static List<String> reactorModules() throws Exception {
+		List<String> modules = new ArrayList<String>();
+		for (Element module : directChildren(directChild(pomRoot("pom.xml"), "modules"), "module")) {
+			String name = module.getTextContent().trim();
+			if (!name.isEmpty()) {
+				modules.add(name);
+			}
+		}
+		if (modules.isEmpty()) {
+			fail("The root pom at " + REPO_ROOT.resolve("pom.xml") + " declares no <modules>, so the source "
+					+ "roots and the POM list this guard derives from it would both be empty and every check "
+					+ "over them would pass by reading nothing.");
+		}
+		return modules;
+	}
+
+	/**
+	 * Every POM in the reactor: the root and one per declared module. Derived rather than listed for
+	 * {@link #SOURCE_ROOTS}' reason — a module dropped from a hand-written list is a module whose
+	 * {@code <compilerArgs>} override {@link #noOtherCompilerConfigurationDropsTheCheck} never reads.
+	 * {@link #pomRoot} fails on one that does not exist, so a module without its own POM is reported
+	 * rather than skipped.
+	 */
+	private static List<String> poms() throws Exception {
+		List<String> poms = new ArrayList<String>();
+		poms.add("pom.xml");
+		for (String module : reactorModules()) {
+			poms.add(module + "/pom.xml");
+		}
+		return poms;
+	}
+
+	/**
+	 * The source roots {@link #everyJavadocReferenceInTheApiModuleResolves} can compile — those of
+	 * {@link #API_MODULE}, taken from {@link #reactorSourceRoots} rather than written out. The
+	 * restriction is the CLASSPATH's: this suite runs with the api module's, so {@code omod}'s sources
+	 * are out of reach and are covered by the flag itself instead.
+	 *
+	 * <p>Its coverage is then asked of the FILESYSTEM and not of the filter above, which is the only
+	 * reason that second loop is not the first one written twice: narrowing this corpus is invisible on
+	 * a clean tree — the caller has nothing to find there — so a filter that quietly kept only
+	 * {@code src/main/java} would pass every check. Mutate the filter and read this failure.
+	 */
+	private static List<String> apiRoots() throws Exception {
+		List<String> roots = new ArrayList<String>();
+		for (String root : reactorSourceRoots()) {
+			if (root.startsWith(API_MODULE + "/")) {
+				roots.add(root);
+			}
+		}
+		if (roots.isEmpty()) {
+			fail("The root pom declares no module named " + API_MODULE + " with a java source root, so this "
+					+ "check would compile nothing and pass. This suite runs in that module: rename it here in "
+					+ "the same commit that renames it in the reactor.");
+		}
+		for (String kind : Arrays.asList("main", "test")) {
+			String root = API_MODULE + "/src/" + kind + "/java";
+			if (Files.isDirectory(REPO_ROOT.resolve(root)) && !roots.contains(root)) {
+				fail(root + " exists under " + REPO_ROOT + " and is not in the corpus\n"
+						+ "everyJavadocReferenceInTheApiModuleResolves compiles, so every pointer in it would go\n"
+						+ "unresolved by that check with the whole suite green.");
+			}
+		}
 		return roots;
 	}
 
@@ -237,7 +357,7 @@ public class JavadocReferenceGuardTest {
 	 */
 	@Test
 	public void everyJavadocReferenceInTheApiModuleResolves() throws Exception {
-		List<Path> sources = javaSourcesUnder(API_ROOTS);
+		List<Path> sources = javaSourcesUnder(apiRoots());
 
 		String classpath = System.getProperty("java.class.path");
 		List<String> withTheCheck = compile(withTheReferenceCheck(), sources, classpath).errors();
@@ -278,8 +398,9 @@ public class JavadocReferenceGuardTest {
 	public void theArgumentsTheBuildDeclaresRefuseADeadJavadocReference() throws Exception {
 		List<String> managed = rootManagedCompilerArgs();
 		if (managed.isEmpty()) {
+			List<String> poms = poms();
 			List<String> elsewhere = new ArrayList<String>();
-			for (String pom : POMS) {
+			for (String pom : poms) {
 				for (Element plugin : compilerPlugins(pom)) {
 					for (String where : compilerArgBlocks(plugin).keySet()) {
 						elsewhere.add(pom + " " + where);
@@ -289,7 +410,7 @@ public class JavadocReferenceGuardTest {
 			fail("The root pom's <build>/<pluginManagement> entry for " + COMPILER_PLUGIN + " declares no\n"
 					+ "plugin-level <compilerArgs>. That is the one position api and omod both inherit, and the\n"
 					+ "one both compile and testCompile receive.\n\n"
-					+ (elsewhere.isEmpty() ? "  No <compilerArgs> block was found anywhere in " + POMS + ".\n"
+					+ (elsewhere.isEmpty() ? "  No <compilerArgs> block was found anywhere in " + poms + ".\n"
 							: "  <compilerArgs> was found instead at:\n" + join(elsewhere))
 					+ "\nMeasured: declared in api/pom.xml alone, a dead javadoc reference in omod/src/main/java\n"
 					+ "compiles and the whole build reports success — issue #262. See docs/adr.md, Decision 71.");
@@ -334,7 +455,7 @@ public class JavadocReferenceGuardTest {
 	@Test
 	public void noOtherCompilerConfigurationDropsTheCheck() throws Exception {
 		List<String> violations = new ArrayList<String>();
-		for (String pom : POMS) {
+		for (String pom : poms()) {
 			for (Element plugin : compilerPlugins(pom)) {
 				for (Map.Entry<String, List<String>> block : compilerArgBlocks(plugin).entrySet()) {
 					if (!refusesADeadReference(pom + " " + block.getKey(), block.getValue())) {
@@ -369,7 +490,9 @@ public class JavadocReferenceGuardTest {
 	 * earlier one is discarded;</li>
 	 * <li>a block followed by no declaration at all before the enclosing brace or the end of the file;</li>
 	 * <li>a block stranded BETWEEN a declaration's annotations and the declaration itself, which javac
-	 * ignores because a doc comment has to precede the whole declaration, annotations included;</li>
+	 * ignores because a doc comment has to precede the whole declaration, annotations included — see
+	 * {@link #isAnnotationAlone}, which decides what counts as an annotation line and was simply off
+	 * for any annotation carrying a brace in its own argument list;</li>
 	 * <li>a block followed by an INITIALISER block, static or instance, which is not a declaration —
 	 * see {@link #opensAnInitialiserBlock};</li>
 	 * <li>a block followed by an {@code import}, which javac attaches nothing to and, unlike the
@@ -419,7 +542,7 @@ public class JavadocReferenceGuardTest {
 	 */
 	@Test
 	public void noJavadocBlockIsOrphaned() throws Exception {
-		List<Path> sources = javaSourcesUnder(new ArrayList<String>(SOURCE_ROOTS.keySet()));
+		List<Path> sources = javaSourcesUnder(reactorSourceRoots());
 		List<String> violations = new ArrayList<String>();
 		for (Path source : sources) {
 			for (String orphan : unattachedJavadocBlocks(Files.readAllLines(source, StandardCharsets.UTF_8))) {
@@ -522,7 +645,7 @@ public class JavadocReferenceGuardTest {
 		}
 		String rest = next.text.substring("static".length()).trim();
 		if (rest.isEmpty()) {
-			return after != null && !after.javadoc && after.text.startsWith("{");
+			return after != null && after.text.startsWith("{");
 		}
 		return rest.startsWith("{");
 	}
@@ -554,23 +677,99 @@ public class JavadocReferenceGuardTest {
 	 * that block, and the earlier rule reported a violation telling the author to move documentation
 	 * the compiler had read.
 	 *
-	 * <p>The exclusions are what a declaration on the line brings with it: a terminator, a body brace,
-	 * or the comma of a parameter list — this module's {@code @RequestParam} parameter lines take that
-	 * last form, and none of them annotates the next thing in the file.
+	 * <p><strong>Decided by what is LEFT once the annotations are consumed, and three character
+	 * exclusions decided it before.</strong> Those were a terminator, an opening brace, or a trailing
+	 * comma anywhere on the line — and an annotation's own argument list carries all three. This
+	 * module's single controller has an {@code @ExceptionHandler} taking a braced class array;
+	 * {@code @ValueSource(booleans = { false, true })} and every
+	 * {@code @ParameterizedTest(name = "[{index}] {0}")} in this suite were all read as carrying a
+	 * declaration, so the arm was simply off for them and a block stranded after one was reported by
+	 * nothing — the hole this rule exists to close, on the shape the caller documents as the only one
+	 * with real instances here. Testing the LAST character instead trades that for a
+	 * false positive, since a trailing {@code // note} on an annotated declaration moves the
+	 * terminator off the end of the line. So {@link #annotationResidue} consumes {@code @Name} and its
+	 * balanced argument list, repeatedly, and this asks whether anything is left.
 	 *
-	 * <p><strong>One row of {@link #SHAPES} per exclusion, and two of the three were missing.</strong>
-	 * The terminator has {@code AnnotatedDeclarationOnOneLineThenBlock}; the brace has
-	 * {@code AnnotatedTypeOpenThenBlock}, an annotated type whose body brace is on the same line as
-	 * the annotation and whose first member's javadoc javac reads; the comma has
-	 * {@code AnnotatedEnumConstantThenBlock}, an annotated enum constant, which is the same line shape
-	 * as the {@code @RequestParam} lines and is likewise annotating itself. Until those two rows
-	 * existed either clause could be deleted with all six checks green, so the failure each one
-	 * prevents — this rule telling an author to move documentation the compiler had read, i.e. a red
-	 * build on legal code — was argued in this paragraph and pinned by nothing.
+	 * <p><strong>A row of {@link #SHAPES} per residue the test has to see, on both sides of it.</strong>
+	 * Where javac DOES read the block: {@code AnnotatedDeclarationOnOneLineThenBlock}
+	 * leaves a field declaration; {@code AnnotatedTypeOpenThenBlock} leaves an annotated type whose
+	 * body brace is on the same line and whose first member's javadoc javac reads;
+	 * {@code AnnotatedEnumConstantThenBlock} leaves an annotated enum constant, the same line shape as
+	 * this module's {@code @RequestParam} parameter lines, which annotates itself rather than what
+	 * follows. A residue test that missed any of those turns a clean build red. Where javac reads
+	 * nothing and the arm has to fire: {@code AnnotationArgumentCarriesABrace} and
+	 * {@code AnnotationArgumentCarriesATerminator}. And the row that refuses the last-character version
+	 * of this fix is {@code AnnotatedDeclarationWithATrailingNoteThenBlock}. Mutate the residue test,
+	 * or substitute the character exclusions for it, and read which rows go red.
+	 *
+	 * <p>What it does not reach: an annotation whose argument list is left UNTERMINATED on the line,
+	 * which {@link #annotationResidue} refuses rather than guesses, and an annotation line carrying a
+	 * trailing comment, whose residue is that comment. Both fail in the safe direction — a block
+	 * stranded there is missed rather than a clean build reddened — and both are the same
+	 * one-content-line-per-source-line limit {@link #scan} states for multi-line annotations.
 	 */
 	private static boolean isAnnotationAlone(String text) {
-		return text.startsWith("@") && text.indexOf(';') < 0 && text.indexOf('{') < 0
-				&& !text.endsWith(",");
+		return text.startsWith("@") && annotationResidue(text).isEmpty();
+	}
+
+	/**
+	 * What is left of a content line after every leading {@code @Name} and its balanced argument list
+	 * has been consumed — the empty string where the line is annotations and nothing else.
+	 *
+	 * <p>Literals inside the argument list are skipped, so a quoted brace or terminator is part of the
+	 * annotation rather than evidence of a declaration. An argument list left OPEN at the end of the
+	 * line is refused: the whole line comes back as residue, so {@link #isAnnotationAlone} says no.
+	 * That is the conservative answer of the two — the caller's arm then reports nothing where a
+	 * multi-line annotation is involved, which is a missed orphan and not a red build on legal code.
+	 */
+	private static String annotationResidue(String text) {
+		int i = 0;
+		while (i < text.length() && text.charAt(i) == '@') {
+			i++;
+			while (i < text.length()
+					&& (Character.isJavaIdentifierPart(text.charAt(i)) || text.charAt(i) == '.')) {
+				i++;
+			}
+			while (i < text.length() && Character.isWhitespace(text.charAt(i))) {
+				i++;
+			}
+			if (i < text.length() && text.charAt(i) == '(') {
+				int end = endOfArgumentList(text, i);
+				if (end < 0) {
+					return text;
+				}
+				i = end;
+			}
+			while (i < text.length() && Character.isWhitespace(text.charAt(i))) {
+				i++;
+			}
+		}
+		return text.substring(i);
+	}
+
+	/**
+	 * The index just past the {@code )} closing the argument list that opens at {@code open}, or
+	 * {@code -1} where the line ends inside it. Nesting is counted and string and character literals
+	 * are skipped whole, which is the only reason this is not {@code indexOf(')')}.
+	 */
+	private static int endOfArgumentList(String text, int open) {
+		int depth = 0;
+		for (int i = open; i < text.length(); i++) {
+			char c = text.charAt(i);
+			if (c == '"' || c == '\'') {
+				i++;
+				while (i < text.length() && text.charAt(i) != c) {
+					i += text.charAt(i) == '\\' ? 2 : 1;
+				}
+			}
+			else if (c == '(') {
+				depth++;
+			}
+			else if (c == ')' && --depth == 0) {
+				return i + 1;
+			}
+		}
+		return -1;
 	}
 
 	/** One javadoc block, or one line of real content: what the scan below reduces a file to. */
@@ -605,11 +804,13 @@ public class JavadocReferenceGuardTest {
 	 * the line version disagreed with javac, and it is what settled the shape of this method. No count
 	 * of those is given, here or anywhere: see {@link #SHAPES}.
 	 *
-	 * <p>Literals are tracked for the same reason and not because a case was found: a trimmed line
-	 * cannot begin with {@code /**} inside a string in Java 11 source, so nothing here is reachable
-	 * today — but {@link #SHAPES} is itself a table of literals containing {@code /**} and the
-	 * terminator, scanned on every run, and a text block would make it reachable the day the source
-	 * level allows one.
+	 * <p>Literals are tracked because a {@code /**} inside a string literal is reached on every run
+	 * TODAY, at source level 11 and with no text block involved: {@link #SHAPES} is a table of string
+	 * literals carrying that sequence and the terminator, and this file is inside the corpus the walk
+	 * reads. An earlier version of this paragraph called the arm unreachable and offered a text block
+	 * as the day it would change — the argument of the retired line-oriented scanner, which decided a
+	 * line by its trimmed PREFIX and so could not meet a literal mid-line. Disable the arm and read the
+	 * violations this file's own table produces.
 	 *
 	 * <p>What it still does not do is decide which lines belong to which DECLARATION, so the
 	 * annotation rule reads the immediately preceding content line: a multi-line annotation whose last
@@ -712,31 +913,61 @@ public class JavadocReferenceGuardTest {
 	 * <p>It asks about the JAVADOC FORM and not about the header, deliberately: some sources carry no
 	 * licence header whatever, which is pre-existing and none of this ticket's business, and they
 	 * pass. What fails is a comment that documents nothing while looking like documentation.
+	 *
+	 * <p><strong>{@code package-info.java} is exempt, and the exemption is not a convenience.</strong>
+	 * A javadoc block before the {@code package} statement is the only way to document a package, and
+	 * it is the one position where javac ATTACHES it: measured on JDK 21, that file's block produced
+	 * {@code error: reference not found} for a dead pointer and no {@code documentation comment not
+	 * expected here} warning at all, while the same block in an ordinary source produced both. So this
+	 * rule's premise is false there in both directions — the form is legal, and the remedy the message
+	 * prints would take a pointer doclint currently resolves out of the gate, which is #262's own
+	 * defect reinstated on this guard's instruction. Verified by applying it: with the block opened
+	 * {@code /*} instead, the same dead pointer compiles silently.
 	 */
 	@Test
 	public void noFileOpensWithAJavadocBlockBeforeItsPackageStatement() throws Exception {
 		List<String> violations = new ArrayList<String>();
-		for (Path source : javaSourcesUnder(new ArrayList<String>(SOURCE_ROOTS.keySet()))) {
-			for (String line : Files.readAllLines(source, StandardCharsets.UTF_8)) {
-				String trimmed = line.trim();
-				if (trimmed.isEmpty()) {
-					continue;
-				}
-				if (trimmed.startsWith("/**") && !trimmed.startsWith("/**/")) {
-					violations.add(REPO_ROOT.relativize(source) + " opens with a javadoc block, before its "
-							+ "package statement, where it documents nothing. Open it with /* instead — with "
-							+ REFERENCE_CHECK + " in force javac reports every one of these, and a warning is "
-							+ "all it reports, so nothing else would notice.");
-				}
-				break;
+		for (Path source : javaSourcesUnder(reactorSourceRoots())) {
+			if (opensWithAnUnattachedJavadocBlock(source,
+					Files.readAllLines(source, StandardCharsets.UTF_8))) {
+				violations.add(REPO_ROOT.relativize(source) + " opens with a javadoc block, before its "
+						+ "package statement, where it documents nothing. Open it with /* instead — with "
+						+ REFERENCE_CHECK + " in force javac reports every one of these, and the FORM draws "
+						+ "only a warning, so nothing else would notice. (A package-info.java is exempt and "
+						+ "must stay a javadoc block: see this rule's javadoc.)");
 			}
 		}
 		assertNoViolations(violations);
 	}
 
 	/**
+	 * Whether one source opens with a javadoc block that documents nothing, which is
+	 * {@link #noFileOpensWithAJavadocBlockBeforeItsPackageStatement}'s whole decision — extracted so
+	 * that {@link #SHAPES} can declare the answer for a shape and
+	 * {@link #theScannerAgreesWithTheCompilerAboutWhatIsAttached} can hold this against it. Without
+	 * that the {@code package-info.java} exemption was deletable with the whole suite green, since
+	 * this repository carries no such file.
+	 *
+	 * <p>{@code /**}{@code /} is an EMPTY block comment and not a javadoc open, the same case
+	 * {@link #scan} handles.
+	 */
+	private static boolean opensWithAnUnattachedJavadocBlock(Path source, List<String> lines) {
+		if ("package-info.java".equals(source.getFileName().toString())) {
+			return false;
+		}
+		for (String line : lines) {
+			String trimmed = line.trim();
+			if (trimmed.isEmpty()) {
+				continue;
+			}
+			return trimmed.startsWith("/**") && !trimmed.startsWith("/**/");
+		}
+		return false;
+	}
+
+	/**
 	 * The scanner agrees with the real compiler about which javadoc blocks are attached, over a table
-	 * of shapes.
+	 * of shapes — and so does the rule about a block before the {@code package} statement.
 	 *
 	 * <p>This is the check {@link #noJavadocBlockIsOrphaned} rests on. That one is a heuristic
 	 * standing in for javac's attachment rule, and that heuristic was got wrong repeatedly — false
@@ -751,6 +982,14 @@ public class JavadocReferenceGuardTest {
 	 * {@link Attachment#NOT_A_JAVADOC_BLOCK} is the case neither side should see anything in, and it
 	 * is why this cannot be written as "one flags it exactly when the other does not": a shape with no
 	 * doc comment in it is read by neither.
+	 *
+	 * <p>Each row also declares {@link #noFileOpensWithAJavadocBlockBeforeItsPackageStatement}'s
+	 * answer for its file, because that rule had no ground truth of any kind and its
+	 * {@code package-info.java} exemption was deletable with the whole suite green — this repository
+	 * carries no such file, so the corpus walk can say nothing about it. The two whole-file rows that
+	 * put a block before a {@code package} statement are the ones where the answers differ, and the
+	 * compiler is held to both of them: doclint READS the pointer either way, which is what makes the
+	 * exemption necessary rather than tidy.
 	 */
 	@Test
 	public void theScannerAgreesWithTheCompilerAboutWhatIsAttached() throws Exception {
@@ -773,10 +1012,11 @@ public class JavadocReferenceGuardTest {
 			List<String> violations = new ArrayList<String>();
 			for (Map.Entry<String, Shape> entry : SHAPES.entrySet()) {
 				String shape = entry.getKey();
+				Path written = dir.resolve(shape + ".java");
+				List<String> lines = Files.readAllLines(written, StandardCharsets.UTF_8);
 				Attachment declared = entry.getValue().attachment;
 				boolean read = doclintRead.contains(shape);
-				boolean flagged = !unattachedJavadocBlocks(
-						Files.readAllLines(dir.resolve(shape + ".java"), StandardCharsets.UTF_8)).isEmpty();
+				boolean flagged = !unattachedJavadocBlocks(lines).isEmpty();
 				if (read != declared.doclintReadsIt) {
 					violations.add(shape + " is declared " + declared + " but the COMPILER "
 							+ (read ? "read" : "did not read") + " its pointer — the declaration is wrong, "
@@ -786,6 +1026,15 @@ public class JavadocReferenceGuardTest {
 					violations.add(shape + " is declared " + declared + " but the SCANNER "
 							+ (flagged ? "flagged" : "did not flag") + " it — unattachedJavadocBlocks and javac "
 							+ "no longer agree, so noJavadocBlockIsOrphaned is reporting the wrong blocks");
+				}
+				boolean dangling = opensWithAnUnattachedJavadocBlock(written, lines);
+				if (dangling != entry.getValue().opensWithADanglingBlock) {
+					violations.add(shape + " is declared to open with "
+							+ (entry.getValue().opensWithADanglingBlock ? "a " : "no ")
+							+ "javadoc block that documents nothing, and the header rule "
+							+ (dangling ? "says it does" : "says it does not")
+							+ " — noFileOpensWithAJavadocBlockBeforeItsPackageStatement is judging the wrong "
+							+ "files, and a block javac ATTACHES is the one it must not touch");
 				}
 			}
 			assertNoViolations(violations);
@@ -845,10 +1094,20 @@ public class JavadocReferenceGuardTest {
 
 		private final boolean wholeFile;
 
-		private Shape(Attachment attachment, String source, boolean wholeFile) {
+		/**
+		 * Declared: {@link #opensWithAnUnattachedJavadocBlock} says this file opens with a javadoc block
+		 * that documents nothing. False for every class BODY row, which the wrapper opens with the class
+		 * declaration — so the rows this field says anything interesting about are the whole-file ones
+		 * that put a block before a {@code package} statement.
+		 */
+		private final boolean opensWithADanglingBlock;
+
+		private Shape(Attachment attachment, String source, boolean wholeFile,
+				boolean opensWithADanglingBlock) {
 			this.attachment = attachment;
 			this.source = source;
 			this.wholeFile = wholeFile;
+			this.opensWithADanglingBlock = opensWithADanglingBlock;
 		}
 
 		/**
@@ -863,9 +1122,11 @@ public class JavadocReferenceGuardTest {
 	}
 
 	/**
-	 * The shapes, as class bodies carrying one pointer that resolves nowhere, each with what it IS.
-	 * Add a row whenever a new arrangement turns up — that is cheaper than another round of arguing
-	 * about the rule, and it is how every wrong version of the scanner was settled. No count of those
+	 * The shapes, each carrying one pointer that resolves nowhere and each declaring what it IS —
+	 * class bodies the harness wraps, except where the shape needs the whole file, and those spell the
+	 * dead pointer fully qualified where they have no enclosing class for {@code #member} to resolve
+	 * against. Add a row whenever a new arrangement turns up — that is cheaper than another round of
+	 * arguing about the rule, and it is how every wrong version of the scanner was settled. No count of those
 	 * is given, here or in the ADR: each one written during this change went stale in the next round.
 	 *
 	 * <p><strong>One map and not two.</strong> The source and the declaration were separate maps keyed
@@ -877,11 +1138,22 @@ public class JavadocReferenceGuardTest {
 	private static final Map<String, Shape> SHAPES = shapes();
 
 	private static void shape(Map<String, Shape> shapes, String name, Attachment attachment, String body) {
-		shapes.put(name, new Shape(attachment, body, false));
+		shapes.put(name, new Shape(attachment, body, false, false));
 	}
 
 	private static void wholeFile(Map<String, Shape> shapes, String name, Attachment attachment, String file) {
-		shapes.put(name, new Shape(attachment, file, true));
+		shapes.put(name, new Shape(attachment, file, true, false));
+	}
+
+	/**
+	 * A whole-file row that ALSO declares
+	 * {@link #noFileOpensWithAJavadocBlockBeforeItsPackageStatement}'s answer to be yes. Its own helper
+	 * rather than a fourth argument on {@link #wholeFile}, so that declaring NO is what every other row
+	 * already does rather than a column of {@code false}s a new row has to remember.
+	 */
+	private static void openingWithADanglingBlock(Map<String, Shape> shapes, String name,
+			Attachment attachment, String file) {
+		shapes.put(name, new Shape(attachment, file, true, true));
 	}
 
 	private static Map<String, Shape> shapes() {
@@ -967,6 +1239,43 @@ public class JavadocReferenceGuardTest {
 		shape(shapes, "AnnotatedTypeOpenThenBlock", Attachment.ATTACHED,
 				"\t@Deprecated static class Inner {\n\t\t/** " + dead
 						+ ". */\n\t\tprivate int a = 1;\n\t\tint r() { return a; }\n\t}\n");
+		// The other side of the same rule: an annotation whose own ARGUMENT list carries the brace, and
+		// one whose string argument carries the terminator. Both annotate the declaration below them,
+		// so javac discards a block stranded in between and the arm has to fire. Under the character
+		// exclusions it did not: the controller's @ExceptionHandler({ ... }) takes the first shape, and
+		// so does @ValueSource(booleans = { ... }); a quoted terminator takes the second.
+		shape(shapes, "AnnotationArgumentCarriesABrace", Attachment.UNATTACHED,
+				"\t@SuppressWarnings({ \"unused\" })\n\t/** " + dead
+						+ ". */\n\tprivate int a = 1;\n\tint r() { return a; }\n");
+		shape(shapes, "AnnotationArgumentCarriesATerminator", Attachment.UNATTACHED,
+				"\t@SuppressWarnings(\"a;b\")\n\t/** " + dead
+						+ ". */\n\tprivate int a = 1;\n\tint r() { return a; }\n");
+		// And the counterpart that refuses the cheap version of the same fix: an annotated declaration
+		// on one line with a trailing note, which moves the terminator off the END of the line. javac
+		// reads the block below it, so a last-character test would tell the author to move
+		// documentation the compiler had already read.
+		shape(shapes, "AnnotatedDeclarationWithATrailingNoteThenBlock", Attachment.ATTACHED,
+				"\t@SuppressWarnings(\"unused\") private int a = 1; // note\n\t/** " + dead
+						+ ". */\n\tprivate int b = 2;\n\tint r() { return a + b; }\n");
+		// The counterpart isImportDeclaration's whitespace clause exists for: a declaration whose
+		// identifier begins with the same six characters. An enum constant is the one place such a
+		// name can START a content line, and javac attaches the block above it — so a prefix test
+		// would report documentation the compiler had read.
+		shape(shapes, "EnumConstantNamedLikeAnImport", Attachment.ATTACHED,
+				"\tenum E {\n\t\t/** " + dead
+						+ ". */\n\t\timportantValue,\n\t\tOTHER;\n\t}\n\tE r() { return E.OTHER; }\n");
+		// The two rows that pin the header rule rather than the orphan scanner, which is why they carry
+		// a FULLY-QUALIFIED dead pointer: neither block has an enclosing class for `#member` to resolve
+		// against. A block before the `package` statement is read by doclint in both, and the orphan
+		// scanner reports neither — what separates them is that only package-info.java is a legal place
+		// to write one, so the header rule must fire on one and not the other.
+		String qualifiedDead = "{@link java.lang.String#noSuchMemberAnywhere()}";
+		wholeFile(shapes, "package-info", Attachment.ATTACHED,
+				"/** " + qualifiedDead + ". */\npackage shapes;\n");
+		openingWithADanglingBlock(shapes, "HeaderBlockBeforePackage", Attachment.ATTACHED,
+				"/** " + qualifiedDead + ". */\npackage shapes;\n\n"
+						+ "public class HeaderBlockBeforePackage {\n\tprivate int a = 1;\n"
+						+ "\tint r() { return a; }\n}\n");
 		return shapes;
 	}
 
@@ -1104,8 +1413,9 @@ public class JavadocReferenceGuardTest {
 	 * the working directory instead.
 	 *
 	 * <p>Each root is checked against its own anchor in {@link #SOURCE_ROOTS} and a root that fails
-	 * that fails the caller. A root that simply does not exist fails it too: silently skipping one is
-	 * how three of four roots pass for the fourth.
+	 * that fails the caller — including a root with no anchor at all, which is what stops
+	 * {@link #SOURCE_ROOTS} drifting behind {@link #reactorSourceRoots}. A root that simply does not
+	 * exist fails it too: silently skipping one is how every other root passes for the one nobody read.
 	 */
 	private static List<Path> javaSourcesUnder(List<String> roots) throws IOException {
 		List<Path> sources = new ArrayList<Path>();
@@ -1239,8 +1549,8 @@ public class JavadocReferenceGuardTest {
 
 	/**
 	 * One POM's {@code <project>} element, namespace-unaware so element names match without a prefix.
-	 * A missing file fails loudly: the POMs it reads are {@link #POMS}, and one it cannot open is one
-	 * it checks nothing in.
+	 * A missing file fails loudly: the POMs it reads come from {@link #poms}, and one it cannot open is
+	 * one it checks nothing in.
 	 */
 	private static Element pomRoot(String pom) throws Exception {
 		Path path = REPO_ROOT.resolve(pom);

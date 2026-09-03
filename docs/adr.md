@@ -5059,8 +5059,8 @@ plain text, which reads as authoritative rather than as stale.
 
 **The pre-existing breakage was measured before anything was designed, because the ticket asked for
 that count first and the answer decides whether a gate can be switched on in the same change.** Over
-`origin/main` at `6582f2c2`, with `maven-javadoc-plugin` 3.11.2 at `-Ddoclint=reference
--Dshow=private`:
+this branch's merge base, `git merge-base origin/main HEAD` = `5253c7d2`, with
+`maven-javadoc-plugin` 3.11.2 at `-Ddoclint=reference -Dshow=private`:
 
 | source root | goal | errors |
 | --- | --- | --- |
@@ -5071,10 +5071,16 @@ that count first and the answer decides whether a gate can be switched on in the
 
 `javac -Xdoclint:reference` over both api roots in one invocation (classpath from
 `dependency:build-classpath -Dmdep.includeScope=test`) reports the same three sites as compilation
-ERRORS. Re-run against `origin/main`'s sources on five JDKs — 11, 17, 21, 24 and 25, so the whole CI
-matrix and two beyond it — the site list came back identical every time. Five is what was MEASURED
-rather than what is installed; the box carries more, including a JDK 8 that cannot build this module
-at all. Three is small enough to repair in the same change, so both halves ship.
+ERRORS — re-derived at `5253c7d2` on JDK 21, where those roots hold 254 files and the compiler reports
+exactly 3 errors, at `SubjectMatterScopedContraindicationTest:81`, `ArchitectureGuardTest:275` and
+`PipelineSettings:49`, with 0 in the two `omod` roots. Run on five JDKs — 11, 17, 21, 24 and 25, so
+the whole CI matrix and two beyond it — the site list came back identical every time; that sweep was
+taken on `6582f2c2`, which is where this table was first measured and is two commits behind the merge
+base, and the three sites are the same on both. **The label is corrected rather than the figure**, and
+it is corrected here because this decision warns later on about exactly this: a count labelled with a
+tree it was not taken on. Five is what was MEASURED rather than what is installed; the box carries
+more, including a JDK 8 that cannot build this module at all. Three is small enough to repair in the
+same change, so both halves ship.
 
 The three, and what each one is:
 
@@ -5150,14 +5156,22 @@ anything above an import) and the negative `BareStaticThenDeclaration`, which is
 `static` arm reading a declaration split over two lines. Mutate an arm and read which rows redden
 rather than trusting this list.
 
-**The same round found two of `isAnnotationAlone`'s three exclusions unpinned**, and both prevent a
-FALSE POSITIVE — the rule telling an author to move documentation javac has already read, i.e. a red
-build on legal code. Each could be deleted with all six checks green. They now have a row apiece:
-`AnnotatedTypeOpenThenBlock` for the body brace (an annotated type whose brace is on the annotation's
-own line, whose first member's javadoc javac reads) and `AnnotatedEnumConstantThenBlock` for the
-comma (an annotated enum constant — the same line shape as the module's `@RequestParam` parameter
-lines, and likewise annotating itself). Measured: dropping either clause reddens exactly its own row
-in `theScannerAgreesWithTheCompilerAboutWhatIsAttached`.
+**The same round found two of `isAnnotationAlone`'s three character exclusions unpinned**, and both
+prevent a FALSE POSITIVE — the rule telling an author to move documentation javac has already read,
+i.e. a red build on legal code. Each could be deleted with all six checks green, and they got a row
+apiece: `AnnotatedTypeOpenThenBlock` for the body brace (an annotated type whose brace is on the
+annotation's own line, whose first member's javadoc javac reads) and
+`AnnotatedEnumConstantThenBlock` for the comma (an annotated enum constant — the same line shape as
+the module's `@RequestParam` parameter lines, and likewise annotating itself). **The next round found
+the exclusions themselves wrong**, for the reason the bullet above records, and the rule is now one
+residue test with rows on both sides of it: those two and
+`AnnotatedDeclarationOnOneLineThenBlock` where javac reads the block,
+`AnnotationArgumentCarriesABrace` and `AnnotationArgumentCarriesATerminator` where it does not, and
+`AnnotatedDeclarationWithATrailingNoteThenBlock` which is what refuses the last-character version of
+the same fix. Mutate the residue test and read which rows redden rather than trusting this list.
+`isImportDeclaration`'s own whitespace clause was unpinned in the same way and has
+`EnumConstantNamedLikeAnImport` now — an enum constant is the one place a declaration whose
+identifier starts with those six characters can begin a content line.
 
 **What doclint does not read is a METHOD BODY, and the first version of this said something narrower
 and wrong.** It named "a local declaration" and "an anonymous class's member" as the two unread
@@ -5190,11 +5204,13 @@ merge base carry that header**, one character each; the two that carry none are 
 untouched. This change adds one more source, which carries the block-comment form. Do not
 read a warning COUNT off a build to check this — javac caps warnings per compilation (default
 `-Xmaxwarns` 100), so a printed total is an artefact of the cap rather than a count of anything.
-Measured over `origin/main`'s two api source roots with `javac -Xdoclint:reference -Xmaxwarns 100000`:
-**252** warnings, one per header-bearing file in those roots, of which the default cap prints 100 and
-says so. The figure carries its tree and its command deliberately — two earlier drafts published 250
-and 249, each true of a different base this change passed through, and neither named the base it was
-taken on. Re-derive it against the merge base rather than quoting it.
+Measured over the merge base `5253c7d2`'s two api source roots with
+`javac -proc:none -Xdoclint:reference -Xmaxwarns 100000` on JDK 21: **252** warnings, all of them
+`documentation comment not expected here`, one per header-bearing file in those roots, of which the
+default cap prints 100 and says so. Note that `-Xlint:none` suppresses them on that JDK, so a run
+carrying it counts zero. The figure carries its tree and its command deliberately — two earlier
+drafts published 250 and 249, each true of a different base this change passed through, and neither
+named the base it was taken on. Re-derive it against the merge base rather than quoting it.
 
 **This decision is the ONE home of the 274/276 pair, and for one review round it was not.**
 `noFileOpensWithAJavadocBlockBeforeItsPackageStatement`'s javadoc carried a second copy reading "271
@@ -5227,15 +5243,45 @@ a table of source shapes each declaring what it IS, against which BOTH javac and
 held. It exists because the attachment heuristic was got wrong repeatedly — false positives on legal
 code and false negatives on real orphans, in both directions, every one of them green under the whole
 suite — and arguing the rule in prose is what kept failing. No count of those attempts is published,
-because every count of them written during this change went stale in the next round. The two that had to be rewritten after a fresh review are worth
-naming, because both were green while the gate was open:
+because every count of them written during this change went stale in the next round. The ones that had
+to be rewritten after a fresh review are named rather than counted — every one of them was green while
+the gate was open, which is the only property they share:
 
 - **The POM checks read the UNION of three POMs' plugin-level arguments**, which is the effective
   configuration of no module. With the flag moved into `api/pom.xml`'s own `<plugins>` — a plausible
   "let me scope this" edit — a dead reference in `omod/src/main/java` compiled, `mvn -o clean
   install` reported BUILD SUCCESS, and nothing in the guard noticed. Placement is asserted directly
-  now, so that mutation reddens the placement check and the effect check; the rest of the class does
-  not read the POMs and could not have seen it either way.
+  now, so that mutation reddens the placement check and the effect check; no other check reads a POM
+  for its ARGUMENTS — the source walks read the root pom since the round below, but only for its
+  `<modules>` — so none of them could have seen it either way.
+- **The scanner's annotation arm was OFF for any annotation whose own argument list carried a brace,
+  a terminator or a trailing comma**, which the three character exclusions it was written as could not
+  tell from a declaration sharing the line. That is
+  `@ExceptionHandler({ ContextAuthenticationException.class, APIAuthenticationException.class })` on
+  the module's single controller, `@ValueSource(booleans = { false, true })` and every
+  `@ParameterizedTest(name = ...)` in the suite — so a block stranded after one of those was invisible
+  to doclint AND unreported by all six checks, in exactly the "member inserted above the comment
+  written for the one below it" shape this change documents as the only one with real instances here.
+  Measured by planting one after the controller's `@ExceptionHandler`: `mvn -o clean install
+  -DskipTests` reported BUILD SUCCESS and every check passed. The rule now asks what is LEFT of the
+  line once the annotations and their balanced argument lists are consumed. Testing the LAST character
+  instead was rejected: it closes the hole and opens a false positive, since a trailing `// note` on an
+  annotated declaration moves the terminator off the end of the line, and a false positive here is a
+  red build on legal code. Both directions are rows of the shapes table now.
+- **The source roots, the POM list and the api-only root list were hand-written literals nothing
+  cross-checked against the repository.** Deleting one line — "let me scope this to api" — took a whole
+  reactor module out of the two corpus walks with every check green and a planted orphan unreported,
+  and the flag cannot compensate because an orphaned block is invisible to doclint by construction.
+  All three are derived from the root pom's `<modules>` now; the hand-written map keeps the per-root
+  ANCHOR files and nothing else, and an anchor naming a root the reactor does not have fails too.
+- **The pre-`package`-statement rule had no ground truth and fired on `package-info.java`**, where a
+  javadoc block is the standard and only way to document a package. Measured on JDK 21: in that file
+  javac reports `error: reference not found` for a dead pointer and NO `documentation comment not
+  expected here` warning, while the same block in an ordinary source reports both — so the rule's
+  premise was false there, and the remedy its message prints (`/*`) silences a pointer doclint was
+  resolving, which is #262's own defect reinstated on the guard's instruction. Verified by applying it.
+  Every shapes row now declares that rule's answer for its file as well, because this repository
+  carries no `package-info.java` and the corpus walk can therefore say nothing about it.
 - **An argument list was matched as a string prefix.** Two consequences, opposite in sign.
   `-Xdoclint:all,-missing,-html,-syntax` enables the reference group perfectly well and was reported
   as a removal, so a maintainer WIDENING the check would have been told they had removed it. And
@@ -5280,9 +5326,13 @@ Japanese or Chinese the match failed on a perfectly clean tree.
   resolves. Shipping the gate beside them would publish a claim of protection with a hole in exactly
   the place this repository has already been bitten twice.
 - **Recording the rule in `CLAUDE.md`.** The rule is compiler-enforced, and that file's doctrine keeps
-  enforced rules to a pointer with their evidence here. It also stood at 84,976 bytes against
-  `ProjectInstructionsGuardTest.MAX_INSTRUCTION_BYTES` of 85,000, so any addition would have reddened
-  the build for a reason unrelated to this ticket.
+  enforced rules to a pointer with their evidence here. It also stood at 84,992 bytes — at the merge
+  base `5253c7d2` and unchanged by this branch — against
+  `ProjectInstructionsGuardTest.MAX_INSTRUCTION_BYTES` of 85,000, so there were 8 bytes of headroom and
+  any real addition would have reddened the build for a reason unrelated to this ticket. **84,976 is
+  what this bullet published, and that is the value the file takes at `6582f2c2`** — the sha the table
+  at the top of this decision named before the same correction, so two figures in one decision were
+  keyed to different trees.
 
 ### Trade-offs
 

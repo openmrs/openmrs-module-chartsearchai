@@ -50,34 +50,59 @@ import org.junit.jupiter.api.Test;
  * would simply move to it — {@link #everyFindingOnAScreeningQuestionStatesOneVocabulary} is that
  * arrangement, and it is why the scope is the condition rather than the reported arm.
  *
- * <p><b>How the order-driven contraindication arm's referent is guarded, and where it is not.</b>
+ * <p><b>How the order-driven contraindication arm's referent is guarded.</b>
  * {@code addActiveOrderContraindications} decides the referent once per row and passes it at FOUR
  * call sites — the subject-matter branch and the fall-through, each handing it to
  * {@code addContraindications} and to {@code addAllergyContraindications} — and the two that hand it
  * to {@code addAllergyContraindications} reach THREE chip rungs inside it (identity, same ATC class,
- * same cross-reactivity group). Each needs its own case, exactly as CLAUDE.md states for the sibling
- * parameter on this same arm ({@code chartOrderBridges} "takes its list as a parameter, so each
- * call site needs its own case").
- * Force one site to one constant, or invert one rung, and read which case reddens; a pair-level or
- * arm-level reading of this coverage was measured twice in this PR and was wrong both times.
+ * same cross-reactivity group). Each site and each rung needs its own case, exactly as CLAUDE.md
+ * states for the sibling parameter on this same arm ({@code chartOrderBridges} "takes its list as a
+ * parameter, so each call site needs its own case"). Force one site to one constant, or invert one
+ * rung, and read which case reddens. No tally of covered cells is recorded here, and no claim that
+ * the set of them is complete: round 4 published this coverage per PAIR and round 5 per SITE and per
+ * RUNG, and each was falsified by the next round at the granularity its predecessor had just
+ * introduced — round 6 refuting round 5's rung enumeration and its unreachability claim in turn.
  *
- * <p>Every (site × direction) cell is held here or in {@code ActiveOrderContraindicationTest}
- * EXCEPT two, and those two are named rather than counted: the FALSE direction at each of the two
- * {@code addAllergyContraindications} sites. They are unreachable in effect rather than merely
- * untested. That direction requires a SIBLING row to have put the substance in play, and the
- * drug-in-play arm has then already raised, for the in-play row, a chip with the same ledger key,
- * the same rank, the same {@code namesTheFinding} answer and the same sentence — because every rung
- * of that method is a function of the SUBSTANCE, the allergen and the row's ATC codes, and rows of
- * one substance publish the same codes ({@code ContraindicationChips}' javadoc carries that
- * measurement and its date). {@code ContraindicationChips.add} keeps the incumbent on a tie, so the
- * order-driven chip is discarded. Measured on a throwaway fixture built to expose exactly that
- * direction — two rows of one substance sharing a subgroup with a recorded allergen, one row
- * proposed by the question and the other an active order: forcing either
- * {@code addAllergyContraindications} site to {@code true} left the rendered finding byte-identical
- * at BOTH branches, while forcing the drug-in-play arm's own literal {@code false} changed it. So
- * the only arrangement that would pin those cells has two rows of one substance publishing different
- * ATC codes — the divergence that javadoc records as absent — and a test for it would pin a path the
- * production data cannot reach. The gap is recorded instead.
+ * <p><b>The reading that was published and then refuted, kept because its failure is the
+ * instructive part.</b> Round 5 recorded the FALSE direction at each of the two
+ * {@code addAllergyContraindications} sites as unreachable in effect: that direction needs a SIBLING
+ * row to have put the substance in play, the drug-in-play arm has then already raised, for the
+ * in-play row, a chip with the same ledger key, the same rank, the same {@code namesTheFinding}
+ * answer and the same sentence, and {@code ContraindicationChips.add} keeps the incumbent on a tie —
+ * so the order-driven chip is discarded. The premise it leaves unchecked is the INCUMBENT, and that
+ * premise holds at ONE rung and not at the other two. Identity is a function of the SUBSTANCE, so
+ * the in-play row answers it the same way and the tie argument is right there. The two CLASS rungs
+ * read the ROW's own ATC codes, so the in-play row raises a chip at them only where ITS codes relate
+ * it to the recorded allergen; give the two rows different subgroups and the in-play row relates to
+ * nothing, so the ledger holds no chip for the substance when the order-driven row arrives and there
+ * is no tie for that rule to decide. Round 5 measured it on a fixture whose rows shared their codes,
+ * where its argument does hold, and wrote the conclusion unscoped.
+ *
+ * <p>Its claim about the SHIPPED knowledge base stands and is kept, scoped to that data:
+ * {@code ContraindicationChips}' javadoc carries the measurement with its date and the instruction
+ * to re-measure it on a refresh, and anticipates this same arrangement for its own replacement
+ * branch. What reaches the cells is an OPERATOR dataset — the reference file is configurable through
+ * {@code chartsearchai.drugReference.dataFilePath}, {@code JsonDrugReferenceSource}'s schema
+ * expresses per-entry {@code atcCodes} beside a shared {@code substanceName}, and
+ * {@code DrugReferenceValidity} carries no rule against two rows of one substance publishing
+ * different codes.
+ * {@link #anAllergenArmSiblingRowOfAProposedSubstanceStatesTheProposalCall} and
+ * {@link #anAllergenArmSiblingRowReachedByTheFallThroughStatesTheProposalCall} hold those two cells
+ * over such a dataset, one per site, and
+ * {@link #aCrossReactivityGroupFindingAboutHerOwnPrescriptionStatesTheCurrentMedicationCall} holds
+ * the third rung, which round 5 enumerated but left unheld in this direction.
+ *
+ * <p><b>What a rung mutation cannot see, which is where to look next.</b>
+ * {@code addAllergyContraindications} is called by the drug-in-play arm too, at a site that passes
+ * the referent as a literal {@code false}, so a rung's failures may come from either caller and a
+ * rung reddening in both directions does not establish that the ORDER-DRIVEN arm reaches it in
+ * both — at the identity rung it does not, for the structural reason above. Nor does either matrix
+ * distinguish a
+ * (site, rung) PAIR: forcing a site reaches every rung raised from it and forcing a rung reaches
+ * both sites, so a change making one rung read the referent only when reached from one site would
+ * leave both matrices reddening exactly as they do now. There is no per-pair expression to mutate
+ * today; if one is written, that is the granularity to mutate at, because each of these rounds found
+ * the recurrence one level below where its predecessor had looked.
  */
 public class CurrentMedicationFindingStrengthTest {
 
@@ -503,6 +528,153 @@ public class CurrentMedicationFindingStrengthTest {
 						+ "prescription, and the rung must state it as one: " + finding);
 		assertFalse(finding.contains(WITHHOLD),
 				"and not as a refusal to give a drug nobody proposed: " + finding);
+	}
+
+	/** Two rows of ONE substance publishing DIFFERENT ATC subgroups — an operator dataset's shape, not
+	 *  the shipped knowledge base's. See its own {@code description} for what each row is for. */
+	private static final String DIVERGENT_ATC_FIXTURE =
+			"chartsearchai-test/drug-reference-substance-rows-divergent-atc.json";
+
+	/** The chart both allergen-arm sibling-row cases run against: her prescription is the GEL row —
+	 *  the only row publishing a subgroup the allergen shares — and her allergy is the Kanamycin the
+	 *  fixture files under a sibling of it. */
+	private static PatientClinicalContext onTheGelWithTheKanamycinAllergy() {
+		return DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Zetagel"), null,
+			DrugReferenceTestSupport.set("Kanamycin"), null);
+	}
+
+	private static String onlyDivergentAtcFinding(String question) throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
+			DrugReferenceTestSupport.fixtureEntries(DIVERGENT_ATC_FIXTURE));
+		List<String> findings = DrugReferenceTestSupport.findingTexts(
+			DrugReferenceTestSupport.injectorWithSafety(service).injectRecords(
+				DrugReferenceTestSupport.oneRecordChart(), onTheGelWithTheKanamycinAllergy(), question));
+		assertEquals(1, findings.size(),
+				"one substance is one chip and one finding, was: " + findings);
+		assertTrue(findings.get(0).contains("is in the same ATC class (J01GB)")
+				&& findings.get(0).contains("Kanamycin"),
+				"precondition: the ALLERGEN arm's class rung is what raised this, over the gel row's "
+						+ "own subgroup — without that this case is not about the site it names: "
+						+ findings);
+		return findings.get(0);
+	}
+
+	/**
+	 * The allergen arm's FALSE referent direction, at the arm's subject-matter call site (issue #348,
+	 * round 6 of this PR's hardening).
+	 *
+	 * <p><b>What round 5 got wrong, kept here because its failure is the instructive part.</b> Round 5
+	 * recorded this cell and its fall-through twin as unreachable in effect, reasoning that the
+	 * FALSE direction needs a SIBLING row to have put the substance in play, that the drug-in-play
+	 * arm has then already raised a chip for the in-play row with the same ledger key and the same
+	 * rank, and that {@code ContraindicationChips.add} keeps the incumbent on a tie. The premise it
+	 * did not check is the incumbent, and it holds at ONE of the three rungs rather than at all
+	 * three. Identity is a function of the SUBSTANCE, so the in-play row does answer that rung the
+	 * same way and round 5's tie argument is right there. The two CLASS rungs read the ROW's own ATC
+	 * codes — {@code refClasses} from {@code ref.atcSubgroups()}, {@code refGroups} from
+	 * {@code CrossReactivityGroup.groupsOf(ref)}, itself a pure function of those codes — so the
+	 * in-play row raises a chip at them only where ITS codes relate it to the recorded allergen.
+	 * Give the two rows different subgroups and the in-play row relates to nothing, so the ledger
+	 * holds no chip for the substance when the order-driven row arrives and there is no tie for the
+	 * incumbent rule to decide. Round 5's measurement was made on a fixture whose rows shared their
+	 * codes, where its argument does hold.
+	 *
+	 * <p><b>Which data reaches it.</b> Not the shipped knowledge base — that half of round 5's claim
+	 * stands, round 6 re-measured it at this head, and the figure lives with its date where it was
+	 * first recorded, in {@code ContraindicationChips}' javadoc, which also anticipates this very
+	 * arrangement ("a group whose rows publish DIFFERENT ATC codes") for its own replacement branch.
+	 * An operator dataset reaches it: the file is configurable
+	 * through {@code chartsearchai.drugReference.dataFilePath}, {@code JsonDrugReferenceSource}'s
+	 * schema expresses per-entry {@code atcCodes} beside a shared {@code substanceName}, and
+	 * {@code DrugReferenceValidity} carries no rule against two rows of one substance publishing
+	 * different codes. So the cell is reachable on data an operator can configure today, and the
+	 * fail-open direction it guards is the one this issue reports with its sign flipped — a drug the
+	 * clinician just proposed described as therapy to change.
+	 *
+	 * <p>The question both names the drug and asks about medications, which is what opens
+	 * {@code SubjectMatter}'s active-order gate and routes the row to the arm's FIRST call-site pair.
+	 */
+	@Test
+	public void anAllergenArmSiblingRowOfAProposedSubstanceStatesTheProposalCall() throws IOException {
+		String finding = onlyDivergentAtcFinding(
+			"Is it safe to give her zetatab, and what other medications is she on?");
+
+		assertTrue(finding.endsWith(WITHHOLD),
+				"the question proposed this substance — through the tablets row, which shares no "
+						+ "subgroup with the allergen — so the sentence the gel row raises states the "
+						+ "proposal call: " + finding);
+		assertFalse(finding.contains(CHANGE_CURRENT),
+				"and must not describe a drug the clinician just proposed as therapy to change: "
+						+ finding);
+	}
+
+	/**
+	 * The same cell at the arm's OTHER call site, reached through the fall-through (issue #348, round
+	 * 6).
+	 *
+	 * <p>The referent is one decision per row, so this case asserts the same clause as
+	 * {@link #anAllergenArmSiblingRowOfAProposedSubstanceStatesTheProposalCall} — and it is a
+	 * separate case for the reason CLAUDE.md states for {@code chartOrderBridges} on this same arm:
+	 * the referent is passed as an argument, so each call site answers for itself. Round 4 and round
+	 * 5 each found one more site of this parameter unheld.
+	 *
+	 * <p>{@code QueryScopeRouter}'s MEDICATIONS vocabulary is a word list, so splitting the question
+	 * above into a proposal and an allergy question carries none of it: the allergy domain is what
+	 * widens the arm instead, {@code askedAbout.names(ref)} cannot hold for a prescription the
+	 * question does not write, and the gel row falls through.
+	 */
+	@Test
+	public void anAllergenArmSiblingRowReachedByTheFallThroughStatesTheProposalCall()
+			throws IOException {
+		String finding = onlyDivergentAtcFinding(
+			"Is it safe to give her zetatab? Does she have any allergies?");
+
+		assertTrue(finding.endsWith(WITHHOLD),
+				"the referent is a property of the ROW, so the proposal call survives at either of "
+						+ "the arm's call-site pairs: " + finding);
+		assertFalse(finding.contains(CHANGE_CURRENT),
+				"and the fall-through must not hand the model a change-of-therapy statement about a "
+						+ "proposed drug either: " + finding);
+	}
+
+	/**
+	 * The allergen arm's CROSS-REACTIVITY GROUP rung (issue #348, round 6).
+	 *
+	 * <p>The referent reaches three chip rungs inside {@code addAllergyContraindications}. Round 5
+	 * added the class rung's case and left this one; measured at this head BEFORE this case existed,
+	 * forcing its argument to {@code false} left the whole api module green, while inverting it to
+	 * {@code !subjectIsACurrentMedication} reddened
+	 * {@code SafetyFindingSeverityStrengthTest.aCrossReactivityContraindicationSaysItIsAReasonToWithholdTheDrug}
+	 * and nothing else — the PROPOSAL side. So the rung was live and pinned in one direction only,
+	 * and forcing it to {@code false} reddens this case now.
+	 *
+	 * <p>The arrangement is the bundled curated groups over the DDInter slice: NSAID is the one group
+	 * {@code cross-reactivity-groups.json} ships, and the aspirin/ibuprofen pair is the boundary ADR
+	 * Decision 24 recorded and Decision 27 added these groups to close — so a prescribed ibuprofen
+	 * against a recorded aspirin allergy is this rung's ordinary case rather than a corner. {@link #ALLERGY_QUESTION} carries no medication cue, so the fall-through is what
+	 * raises it.
+	 */
+	@Test
+	public void aCrossReactivityGroupFindingAboutHerOwnPrescriptionStatesTheCurrentMedicationCall()
+			throws IOException {
+		List<String> findings = DrugReferenceTestSupport.findingTexts(
+			DrugReferenceTestSupport.injectorWithSafety(
+				DrugReferenceTestSupport.ddinterServiceWithGroups()).injectRecords(
+					DrugReferenceTestSupport.oneRecordChart(),
+					DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Ibuprofen"),
+						null, DrugReferenceTestSupport.set("Aspirin"), null),
+					ALLERGY_QUESTION));
+
+		assertEquals(1, findings.size(),
+				"one substance is one chip and one finding, was: " + findings);
+		assertTrue(findings.get(0).contains("is in the same cross-reactivity group (NSAID)"),
+				"precondition: the GROUP rung is what raised this — the class rung and the identity "
+						+ "rung have their own cases: " + findings);
+		assertTrue(findings.get(0).endsWith(CHANGE_CURRENT),
+				"nothing proposed the ibuprofen she is already on, so the group rung states the "
+						+ "change-of-therapy call like the other two: " + findings);
+		assertFalse(findings.get(0).contains(WITHHOLD),
+				"and not the prescribing refusal, which is the reported defect verbatim: " + findings);
 	}
 
 	@Test

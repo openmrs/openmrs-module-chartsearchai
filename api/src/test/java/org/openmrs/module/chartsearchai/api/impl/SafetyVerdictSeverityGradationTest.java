@@ -85,12 +85,19 @@ public class SafetyVerdictSeverityGradationTest {
 	 * the first occurrence stays in the withholding branch and nothing read further. Every occurrence
 	 * is gated now, and the paragraph is still required to make the claim at least once.
 	 *
-	 * <p><b>A NEGATED occurrence is skipped rather than gated</b>: the caution branch's <em>"is not
-	 * evidence against giving the drug"</em> DENIES the direction instead of instructing it, so
-	 * demanding the withholding clause of it would demand the clause of a sentence whose whole point
-	 * is that the clause does not apply. Two residues that leaves, stated rather than argued away: a
-	 * positive claim worded around this literal (<em>"is evidence against that medication"</em>) is
-	 * matched by no occurrence here, and a negated occurrence is not read for what it then instructs
+	 * <p><b>A NEGATED occurrence would be skipped rather than gated, and at this head there is none
+	 * to skip — that branch is defensive.</b> Both of the paragraph's other evidence-against
+	 * phrasings are worded around this literal, and each belongs to a CAUTION branch: the proposal
+	 * caution says <em>"is not evidence against giving the drug"</em> and the current-medication
+	 * caution <em>"is not evidence against that medication"</em>, so neither contains
+	 * {@code "evidence against giving it"} and the search never
+	 * reaches them. The loop finds one occurrence and skips none. The branch is kept because a
+	 * reword putting the literal into a negated sentence would otherwise demand the withholding
+	 * clause of a sentence whose whole point is that the clause does not apply, and the
+	 * {@code gated > 0} floor below is what stops such a reword turning this case into a vacuous
+	 * pass. Two residues that leaves, stated rather than argued away: a positive claim worded around
+	 * this literal (<em>"is evidence against that medication"</em>) is matched by no occurrence here,
+	 * and a negated occurrence would not be read for what it then instructs
 	 * — {@link #assertCurrentMedicationBranch} is what holds the current-medication branches' own
 	 * leads, and {@link #everyRefusalInstructionInTheParagraphIsGatedOnTheWithholdingClause} the
 	 * refusal token wherever it appears.

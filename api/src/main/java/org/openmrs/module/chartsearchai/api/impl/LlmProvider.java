@@ -279,14 +279,19 @@ public class LlmProvider {
 			// for: neither branch wants a VERDICT at all — the lead is a statement about medications
 			// already prescribed, which is the sentence #348 says the chip carries and the answer does
 			// not — so being denied "Yes" costs them nothing, and being denied it explicitly is worth
-			// more than the alternative. What the alternative would cost is measured: a lead
-			// instruction in a paragraph of its own is #112's refuted shape, and putting these after
-			// the token would make the token's own scope the thing a reader has to infer.
+			// more than the alternative. One of the two alternatives has a measured cost: a lead
+			// instruction in a paragraph of its own is #112's refuted shape. The other — putting
+			// these two branches AFTER the never-"Yes" token — has not been measured, and the
+			// argument against it is legibility only: the token's own scope becomes the thing a
+			// reader has to infer. Worth weighing rather than settled: one READING of ADR Decision
+			// 70's first residue — §3a still opening with a bare "No —" — is that this token plus the
+			// yes/no verdict paragraph above leave no other lead available on a screening question.
+			// That reading is not measured either, and no arm has tried the placement.
 			// The residue that belongs to the measurement rather than to this comment: on the charts
 			// that already answered correctly the lead was "Yes, there are documented interactions
 			// …", and these branches ask for a statement instead. Measured — both several-finding
 			// cells KEEP that Yes lead with every finding, severity and citation, and ADR Decision
-			// 69's "The measurement" section records the run, its three residues and the arm above.
+			// 70's "The measurement" section records the run, its three residues and the arm above.
 			// Nothing in this repository can see what the model produces from these two sentences;
 			// SafetyVerdictSeverityGradationTest pins what they SAY.
 			+ "A finding that says it is a reason to change a medication this patient is already "

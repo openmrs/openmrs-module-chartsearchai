@@ -9,9 +9,14 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
@@ -440,12 +445,17 @@ public class SafetyVerdictSeverityGradationTest {
 	 * them and must be re-read here deliberately rather than repaired by editing the literal. In the
 	 * other direction, the permission line matches the sibling's own words and nothing else, so a
 	 * permission phrased away from them — <em>"open by stating that the medication may be
-	 * continued"</em> — is NOT caught. That residue is why the phrase is read off the paragraph
-	 * instead of copied: the derivation cannot close the gap, but it does stop the two branches and
-	 * their sibling drifting apart unnoticed. What is out of the LOOP's reach rather than the line's
-	 * is a permission instructed in a sentence naming no class core, or naming one and saying nothing
-	 * about opening; within a branch sentence the line is not scoped to the lead, so a permission
-	 * stated later in the same sentence reddens it as well.
+	 * continued"</em>, which is the natural wording for a medication she is already ON — is NOT
+	 * caught HERE. That residue is why the phrase is read off the paragraph instead of copied: the
+	 * derivation cannot close the gap, but it does stop the two branches and their sibling drifting
+	 * apart unnoticed. What CLOSES it is round 4's
+	 * {@link #theTwoCurrentMedicationBranchesAreExactlyTheseWords}, which seals both branch sentences
+	 * verbatim — so a permission in ANY wording, written into either of those two sentences or added
+	 * as a third one the same selector reaches, reddens the build. These four stay because they say
+	 * WHICH part of each sentence mattered, which a seal cannot. What is out of BOTH their reach,
+	 * since they select sentences by the same rule, is a permission instructed in a sentence naming no
+	 * class core, or naming one and saying nothing about opening; within a branch sentence the line is
+	 * not scoped to the lead, so a permission stated later in the same sentence reddens it as well.
 	 *
 	 * <p><b>They are asserted of EVERY matching sentence, not the first.</b> They read the first one
 	 * until round 2 of this PR's hardening, which meant a second sentence instructing a refusal for
@@ -684,5 +694,65 @@ public class SafetyVerdictSeverityGradationTest {
 								+ "for it: \"" + inner + "\" occurs in \"" + outer + "\"");
 			}
 		}
+	}
+
+	/**
+	 * The two current-medication branches are EXACTLY these words (issue #348, round 4 of this PR's
+	 * hardening).
+	 *
+	 * <p><b>Why a verbatim pin on top of the four properties.</b>
+	 * {@link #assertCurrentMedicationBranch} holds four properties of each branch, and round 3 showed
+	 * what a property guard over text cannot do: its permission term is read OFF the proposal-caution
+	 * sibling's lead, so it matches that sibling's spelling of a permission ("can be given") and
+	 * nothing else — and the natural wording for a medication the patient is already on is
+	 * <em>continued</em>, not <em>given</em>. Measured on the pushed head this case was added to,
+	 * where the api module was otherwise green: the caution-current branch reworded to <em>"open by naming it and stating that the
+	 * medication may be continued,"</em>, and the withholding-class branch to <em>"open by naming that
+	 * medication, stating that it may be continued, and what the finding relates it to,"</em>, were
+	 * each green across all four properties. #107 arm C measured a presence-shaped permission
+	 * inverting the clinical call 5 of 6 times on this question shape, and the second of those two
+	 * mutations instructs that lead for a Major screened pair of the patient's own prescriptions —
+	 * #348's own reproduction cell.
+	 *
+	 * <p><b>And it is a tripwire rather than an over-strict guard.</b> These two sentences are prompt
+	 * surface whose effect nothing in this repository can see, so ADR Decision 70's two-build A/B is
+	 * what licensed the words that are here. Any legitimate reword re-opens that A/B, which means
+	 * failing loudly on one is the WANTED behaviour: the failure tells the next maintainer a live
+	 * measurement is owed, and that is exactly why
+	 * {@code DrugClassQuestionNoteTest.theRenderedNoteIsExactlyTheseWords} pins its own rendered note
+	 * verbatim. The four properties stay because a verbatim pin alone says nothing about WHICH part of
+	 * the sentence mattered; they are the reasons, this is the seal.
+	 *
+	 * <p>The branch sentences are SELECTED by the same rule {@link #assertCurrentMedicationBranch}
+	 * selects by — a sentence naming a current-medication class core and saying how to open — and the
+	 * cores are derived from the record's own constants. So a reword of a CLAUSE constant is reported
+	 * by the pin failing here rather than by this case quietly selecting nothing, and a THIRD such
+	 * sentence appearing in the paragraph fails the equality rather than being skipped.
+	 */
+	@Test
+	public void theTwoCurrentMedicationBranchesAreExactlyTheseWords() {
+		String change = clauseCore(DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION);
+		String caution = clauseCore(DrugReferenceInjector.STRENGTH_CAUTION_CURRENT_MEDICATION);
+		List<String> branches = new ArrayList<String>();
+		for (String sentence : safetyParagraph().split("(?<=\\.)\\s+")) {
+			if ((sentence.contains(change) || sentence.contains(caution)) && sentence.contains("open")) {
+				branches.add(sentence);
+			}
+		}
+
+		assertEquals(Arrays.asList(
+			"A finding that says it is a reason to change a medication this patient is already taking "
+					+ "is not about a drug anything proposed: open by naming that medication and what "
+					+ "the finding relates it to, carry the finding's severity, and never open by "
+					+ "refusing to give a drug.",
+			"A finding that says it is a caution about a medication this patient is already taking, "
+					+ "not a reason to change it, is not evidence against that medication: open by "
+					+ "naming it and the caution in the same sentence, and never open by refusing to "
+					+ "give a drug."),
+			branches,
+			"these two sentences are what a clinician's answer opens from, and nothing in this "
+					+ "repository can see what a model makes of them — ADR Decision 70's two-build "
+					+ "A/B is what licensed these words. A reword re-opens that measurement, so this "
+					+ "failure is the reminder that one is owed, not a literal to repair");
 	}
 }

@@ -65,6 +65,15 @@ public class CurrentMedicationFindingStrengthTest {
 	 *  {@code ActiveOrderContraindicationTest} uses for that reason. */
 	private static final String NO_DRUG_QUESTION = "What are her current medications?";
 
+	/** Names no drug and carries no MEDICATIONS intent, so {@code SubjectMatter.coversActiveOrders}
+	 *  is FALSE and {@code askedAbout.names(ref)} cannot hold for a prescription the question does not
+	 *  write — which is what routes it to the SECOND of the arm's two call-site pairs (a
+	 *  condition-shaped question with no medication cue routes there too; the allergy domain is the
+	 *  one this fixture's records can be reached through). It is also the arm's canonical shape, the
+	 *  one {@code ActiveOrderContraindicationTest}'s class javadoc names it for: "Is the patient
+	 *  allergic to something they are already taking?" */
+	private static final String ALLERGY_QUESTION = "Does she have any allergies?";
+
 	/**
 	 * The four clauses as LITERALS, not read off {@code DrugReferenceInjector}: these sentences are
 	 * what the prompt keys on to decide how an answer opens, so a case comparing the constant to
@@ -164,6 +173,46 @@ public class CurrentMedicationFindingStrengthTest {
 		assertTrue(finding.endsWith(CHANGE_CURRENT),
 				"a contraindication against one of her OWN prescriptions is a reason to change that "
 						+ "prescription, not to withhold a drug nobody proposed: " + finding);
+	}
+
+	/**
+	 * The same finding, raised through the arm's OTHER call-site pair (issue #348, round 4 of this
+	 * PR's hardening).
+	 *
+	 * <p><b>Why a second case and not symmetry.</b> {@code addActiveOrderContraindications} decides
+	 * the referent once, per row, and then passes it at TWO pairs of call sites: the branch taken
+	 * where the question's own subject matter names the prescription, and the fall-through taken
+	 * where it does not. The case above drives the first — its question asks about medications, so
+	 * {@code SubjectMatter.coversActiveOrders} holds and {@code names(ref)} is true of every active
+	 * order. Nothing drove the second, in either direction: measured on the pushed head this case was
+	 * added to, hardcoding the fall-through pair's referent to {@code true} and then to {@code false}
+	 * left the whole api module green both times, while the same {@code false} at the FIRST pair
+	 * reddened three cases.
+	 * So one pair was pinned and one was reachable-but-unpinned, which is the shape CLAUDE.md states
+	 * for the sibling decision on this same arm — {@code chartOrderBridges} takes its list as a
+	 * parameter, "so each call site needs its own case".
+	 *
+	 * <p>An allergy-shaped question with no medication cue is what reaches it, and that is not a
+	 * corner: it is the question this arm was built for (issue #143), so the unpinned pair was the
+	 * one the reported defect's own wording — a refusal about a drug the patient is on, from a
+	 * question that proposed nothing — would come back through first.
+	 */
+	@Test
+	public void aContraindicationOnAnAllergyShapedQuestionStatesTheCurrentMedicationCall()
+			throws IOException {
+		String finding = onlyFinding(
+			DrugReferenceTestSupport.ctx(40, null, DrugReferenceTestSupport.set("Simvastatin"),
+				null, DrugReferenceTestSupport.set("simvastatin"), null),
+			ALLERGY_QUESTION);
+
+		assertTrue(finding.toLowerCase().contains("allerg"),
+				"precondition: the order-driven contraindication arm is what raised this: " + finding);
+		assertTrue(finding.endsWith(CHANGE_CURRENT),
+				"the referent is a property of the ROW — nothing proposed this drug — so it does not "
+						+ "depend on which of the arm's two call-site pairs the question routed to: "
+						+ finding);
+		assertFalse(finding.contains(WITHHOLD),
+				"and this pair must not hand the model the prescribing refusal either: " + finding);
 	}
 
 	@Test
@@ -277,6 +326,50 @@ public class CurrentMedicationFindingStrengthTest {
 		assertTrue(findings.get(0).endsWith(WITHHOLD),
 				"the question proposed this substance, so its finding states the proposal call however "
 						+ "this arm reached the row whose sentence survived: " + findings);
+	}
+
+	/**
+	 * And the OTHER direction at that same pair: a sibling row of a substance the question PROPOSED
+	 * keeps the proposal call when the fall-through is what reached it (issue #348, round 4).
+	 *
+	 * <p>{@link #aSiblingRowOfAProposedSubstanceDoesNotMakeItsFindingAboutCurrentTherapy} holds this
+	 * property at the arm's FIRST call-site pair; its question asks about medications, which is what
+	 * opens {@code SubjectMatter}'s active-order gate and routes it there. Reached through the
+	 * fall-through instead, the property was pinned by nothing: hardcoding the fall-through pair's
+	 * referent to {@code true} left the whole api module green, and it reddens this case. That is the FAIL-OPEN direction — a prescribing refusal about a drug the
+	 * clinician just proposed becomes a statement about changing her existing therapy — and it is
+	 * the same cross-row residue ADR Decision 44 warns about, arriving at the second call site.
+	 *
+	 * <p>The arrangement is that case's fixture and chart with the medication cue removed from the
+	 * question: {@code QueryScopeRouter}'s MEDICATIONS vocabulary is a word list ("medications",
+	 * "medicines", "meds", "drugs", "prescriptions", "prescribed"), so <em>"Is it safe to give her
+	 * levo? Does she have any allergies?"</em> carries none of it, the allergy domain is what widens
+	 * the arm instead, and the ORDER row — the gel, which the question's "levo" does not name — falls
+	 * through. Its substance is in play through the TABLETS row, which is what makes the referent
+	 * false.
+	 */
+	@Test
+	public void aSiblingRowReachedByTheFallThroughStillStatesTheProposalCall() throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
+			DrugReferenceTestSupport.fixtureEntries(
+				"chartsearchai-test/drug-reference-rule-rows-rank-crossing.json"));
+		List<String> findings = DrugReferenceTestSupport.findingTexts(
+			DrugReferenceTestSupport.injectorWithSafety(service).injectRecords(
+				DrugReferenceTestSupport.oneRecordChart(),
+				DrugReferenceTestSupport.ctx(60, null,
+					DrugReferenceTestSupport.set("Levoketoconazole (gel)"), null,
+					DrugReferenceTestSupport.set("Ketoconazole", "Levocetirizine"), null),
+				"Is it safe to give her levo? Does she have any allergies?"));
+
+		assertEquals(1, findings.size(),
+				"one substance is one chip and one finding, was: " + findings);
+		assertTrue(findings.get(0).contains("documented ketoconazole allergy"),
+				"precondition: the ORDER row's rule is the one that spoke — the gel's, which the "
+						+ "question's \"levo\" does not name, so the fall-through pair is what raised "
+						+ "it: " + findings);
+		assertTrue(findings.get(0).endsWith(WITHHOLD),
+				"the question proposed this substance, so its finding states the proposal call at "
+						+ "either of the arm's call-site pairs: " + findings);
 	}
 
 	@Test

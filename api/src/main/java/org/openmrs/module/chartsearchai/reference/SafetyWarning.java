@@ -603,9 +603,15 @@ public class SafetyWarning {
 	 * Said here because a reader checking for pass-stability will look for it.
 	 *
 	 * <p>It is not derivable from anything else the warning carries, which is why it travels. In
-	 * particular it is NOT {@link #chartOrderBridges()}: that answers whether the ORDER records a name
-	 * of the substance (issue #349) and is empty for the common case where it does — including on this
-	 * issue's own reproduction, where both orders are named as the reference data names them.
+	 * particular it is NOT {@link #chartOrderBridges()}, which answers a RESOLUTION question — which of
+	 * the patient's own orders each named substance was resolved from, and whether the sentence naming
+	 * one may be printed at all. Do not read the two as near-neighbours on the strength of both being
+	 * about active orders: that list is empty wherever the order's own recorded names reach the
+	 * substance, which is the common case and is this issue's own reproduction, where both orders are
+	 * named as the reference data names them. So a finding about a current medication routinely
+	 * carries no bridge at all. See {@code DrugSafetyValidator.chartOrderBridges} for what it
+	 * withholds and why — it has more than one silence, and since issue #353 more than it had when
+	 * this paragraph was written — rather than any summary of it here.
 	 *
 	 * <p><b>Prompt-facing only.</b> Nothing on the wire moves and the chip's own detail is untouched,
 	 * so {@code DrugSafetyValidator.StatedInteractionChips} deliberately does NOT key on it, for the

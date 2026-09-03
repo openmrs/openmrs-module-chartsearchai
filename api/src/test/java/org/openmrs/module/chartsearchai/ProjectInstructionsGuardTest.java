@@ -63,16 +63,23 @@ public class ProjectInstructionsGuardTest {
 	 * well before the file is back to a size nobody reads. Raising it is a decision: do it
 	 * here, in one commit, and say in the message what earned the space.
 	 *
-	 * <p><b>Raised from 85,000 to 86,000 for issue #348</b> (September 2026). The file stood at
-	 * 84,780 bytes, so ANY new rule tripped it, and #348 adds one: the REFERENT axis of a safety
-	 * finding's strength clause, plus the unit correction that keeps a sibling row from making a
-	 * proposed drug read as current therapy. What was paid for it first, rather than instead: the
-	 * EVIDENCE was pruned from four bullets of the same section — the caution-lead anchor's measured
-	 * division of labour, #283's contraindication-flip figures, the premise/conclusion history —
-	 * every sentence of it already carried verbatim by ADR Decision 37, which those bullets point at.
-	 * Measured: the file is 85,144 bytes at that commit, so the NET addition for two rules is 364.
-	 * Shaving further would have meant deleting DIRECTIVES, which is what this budget exists to
-	 * protect.
+	 * <p><b>Raised from 85,000 to 86,000 for issue #348</b> (September 2026). #348 adds a rule: the
+	 * REFERENT axis of a safety finding's strength clause, plus the unit correction that keeps a
+	 * sibling row from making a proposed drug read as current therapy. What was paid for it first,
+	 * rather than instead: the EVIDENCE was pruned from four bullets of the same section — the
+	 * caution-lead anchor's measured division of labour, #283's contraindication-flip figures, the
+	 * premise/conclusion history — every sentence of it already carried verbatim by ADR Decision 37,
+	 * which those bullets point at.
+	 *
+	 * <p><b>Re-measured after merging {@code origin/main} at {@code fce8dc61}</b>, which landed
+	 * issue #353's own rule and its own prune. {@code wc -c CLAUDE.md} on that merge reads
+	 * <b>85,325</b> bytes — 325 over the old tripwire, so the raise is still what the file needs and
+	 * not a leftover of the pre-merge measurement. The merge kept BOTH sides' prunes (#348's of the
+	 * two strength bullets, #353's of the chart-order-bridge ones), so that figure is the file with
+	 * every reduction either change made already applied. Closing the remaining 325 means deleting
+	 * DIRECTIVES: #348's own rule bullet is 704 bytes, so the smallest single thing that would fit
+	 * is the rule this raise exists for. Re-measure these figures rather than differencing them;
+	 * they move with the file.
 	 */
 	private static final int MAX_INSTRUCTION_BYTES = 86_000;
 

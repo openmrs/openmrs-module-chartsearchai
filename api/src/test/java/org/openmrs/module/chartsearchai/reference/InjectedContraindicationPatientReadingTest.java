@@ -93,13 +93,7 @@ public class InjectedContraindicationPatientReadingTest {
 		// NEGATIVE half and still pass. Asserted rather than relied on.
 		assertFalse(NOT_RECORDED_MARKER.contains(RECORDED_MARKER),
 				"the two leads must stay distinguishable by indexOf");
-		int start = record.indexOf(marker);
-		if (start < 0) {
-			return null;
-		}
-		int end = record.indexOf(".", start + marker.length());
-		assertTrue(end > start, "an unterminated sentence, was: " + record);
-		return record.substring(start + marker.length(), end);
+		return DrugReferenceTestSupport.sectionAfter(record, marker);
 	}
 
 	/** The clauses the record states the patient's chart records. */

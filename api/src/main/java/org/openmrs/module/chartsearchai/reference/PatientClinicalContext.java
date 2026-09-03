@@ -315,8 +315,8 @@ public class PatientClinicalContext {
 	 *         contract. It is one hash lookup, against a scan of every order the patient is on.
 	 */
 	boolean hasActiveDrug(String nameToken, String atcCode) {
-		if (nameToken != null && !nameToken.trim().isEmpty()) {
-			String n = nameToken.trim();
+		String n = normalizedToken(nameToken);
+		if (!n.isEmpty()) {
 			// The identity arm first: it is one hash lookup and the name arm below is a scan of every
 			// order the patient is on, so asking the cheap question second cost the whole scan whenever
 			// the answer was yes. Which of the two answers is immaterial — both arms return true, and
@@ -360,9 +360,9 @@ public class PatientClinicalContext {
 	 *         different drug entirely ({@code opium} inside an allergen recorded as {@code Tiotropium}).
 	 *         Only the record actually matched can be put to the drug.
 	 *
-	 *         <p>Shares {@link #containsToken}'s own primitives rather than re-expressing the scan, so
-	 *         the witnesses and the boolean cannot drift — the rule CLAUDE.md states for
-	 *         {@code matchesDrugName}/{@code aliasesNaming}. Read by
+	 *         <p>Through {@link #recordsMatching}, which shares {@link #containsToken}'s own primitives
+	 *         rather than re-expressing the scan, so the witnesses and the boolean cannot drift — the
+	 *         rule CLAUDE.md states for {@code matchesDrugName}/{@code aliasesNaming}. Read by
 	 *         {@code DrugSafetyValidator.aMatchedRecordNamesTheEntry}, which pairs each witness with
 	 *         {@link DrugReference#matchesDrugName}: the entry side of that question is about the
 	 *         reference dataset, which this value object deliberately knows nothing about, so it is asked
@@ -371,22 +371,58 @@ public class PatientClinicalContext {
 	 *         #269), which is why it carries a name of its own.
 	 */
 	List<String> allergensMatching(String token) {
+		return recordsMatching(allergyTokens, token);
+	}
+
+	/** @return true when any condition token contains the given (lowercased) contraindication token —
+	 *          see {@link #containsToken}, which is where the bare-containment rule lives, and where the
+	 *          measurement behind it lives for the condition list as well as the allergy one (issue
+	 *          #309). {@link #conditionsMatching} is WHICH tokens it matched. */
+	boolean hasConditionToken(String token) {
+		return containsToken(conditionTokens, token);
+	}
+
+	/**
+	 * @return WHICH recorded conditions {@link #hasConditionToken} matched — its witnesses, in the order
+	 *         the chart lists them, empty exactly when that returns false. The condition list's
+	 *         counterpart of {@link #allergensMatching}, and here for the reason that one is: the
+	 *         boolean says a curated token reached the condition list and does not say by WHICH record,
+	 *         and the token may have reached a record about a different finding entirely ({@code liver}
+	 *         inside a condition recorded as {@code Status Post Cesarean Delivery}).
+	 *
+	 *         <p>Read by {@code DrugSafetyValidator.aMatchedConditionCarriesTheToken}, which puts each
+	 *         witness to {@link DrugReference#containsWord} for the injected record's patient-specific
+	 *         reading (issue #309). The BOUNDARY question is asked there and not here for the reason
+	 *         {@link #allergensMatching}'s own second question is: this value object knows about the
+	 *         chart and deliberately not about the rules a matcher applies to it.
+	 */
+	List<String> conditionsMatching(String token) {
+		return recordsMatching(conditionTokens, token);
+	}
+
+	/**
+	 * The one witness scan behind {@link #allergensMatching} and {@link #conditionsMatching}, standing
+	 * to them exactly as {@link #containsToken} stands to {@link #hasAllergyToken} and
+	 * {@link #hasConditionToken} — one rule, one expression of it, two named entry points that say
+	 * which recorded list is being asked about.
+	 *
+	 * <p>Shares {@link #containsToken}'s own primitives rather than re-expressing the scan, so the
+	 * witnesses and the boolean cannot drift — the rule CLAUDE.md states for
+	 * {@code matchesDrugName}/{@code aliasesNaming}. That is what makes "the boolean is true" and "these
+	 * are the records that made it true" the same fact rather than two scans that agree today.
+	 */
+	private static List<String> recordsMatching(Collection<String> haystack, String token) {
 		if (!matchableToken(token)) {
 			return Collections.emptyList();
 		}
 		String folded = foldedToken(token);
 		List<String> out = new ArrayList<String>();
-		for (String allergen : allergyTokens) {
-			if (containsFolded(allergen, folded)) {
-				out.add(allergen);
+		for (String value : haystack) {
+			if (containsFolded(value, folded)) {
+				out.add(value);
 			}
 		}
 		return Collections.unmodifiableList(out);
-	}
-
-	/** @return true when any condition token contains the given (lowercased) contraindication token. */
-	boolean hasConditionToken(String token) {
-		return containsToken(conditionTokens, token);
 	}
 
 	/**
@@ -397,15 +433,45 @@ public class PatientClinicalContext {
 	 *         second). Both emptiness checks live here, including the post-fold one {@link #containsToken} documents.
 	 */
 	static boolean matchableToken(String token) {
-		return token != null && !token.trim().isEmpty() && !foldedToken(token).isEmpty();
+		return !normalizedToken(token).isEmpty() && !foldedToken(token).isEmpty();
+	}
+
+	/**
+	 * @return {@code token} in the form this class matches a record AGAINST, before folding — the
+	 *         unfolded half of {@link #foldedToken}, named so that a caller putting the SAME token to a
+	 *         different matcher can ask for the same string rather than writing the normalization again.
+	 *
+	 *         <p>Issue #309 is why it has a name. Its condition leg finds witnesses here and then puts
+	 *         the token to {@link DrugReference#containsWord}; with the two normalizations written
+	 *         independently they disagreed, and a rule whose token carried stray whitespace found its
+	 *         witness and then failed to match it. One expression, so a later widening of this — NFKC,
+	 *         punctuation — cannot reach one side and not the other.
+	 *
+	 *         <p>Null-tolerant, returning the empty string, because every caller would otherwise pair it
+	 *         with a null guard of its own and they had already grown two shapes. An empty result is what
+	 *         {@link #matchableToken} refuses anyway, so a null token reaches no matcher either way.
+	 *
+	 *         <p><b>The rule token family, not only this class's own matchers.</b>
+	 *         {@code DrugSafetyValidator.namesNamingOrder} puts a token to
+	 *         {@link DrugReference#matchesOrderName} rather than to anything here, and needs the same
+	 *         pre-fold form for the same reason: {@code containsBoundedToken} folds but never trims.
+	 */
+	static String normalizedToken(String token) {
+		return token == null ? "" : token.trim();
 	}
 
 	/**
 	 * Deliberately still bare containment, unlike the order-name arm above (issue #86): these
 	 * haystacks are free text — an allergen name, a condition in the clinician's own wording — where a
-	 * curated rule is meant to match a fragment ({@code nsaid} inside "NSAIDs", {@code peptic ulcer}
-	 * inside "history of peptic ulcer disease"), so the word-start rule would silently stop matching
-	 * the rules that exist. The nesting risk is the same in principle ({@code opium} against an
+	 * curated rule is meant to match a fragment ({@code penicillin} inside {@code benzylpenicillin},
+	 * which both boundary rules refuse), so a boundary rule here would silently stop matching
+	 * the rules that exist. <b>Two other examples stood here until 2026-09-03 and were deleted rather
+	 * than reworded, because measurement refuted them</b>: {@code peptic ulcer} inside "history of
+	 * peptic ulcer disease" is ACCEPTED by {@link DrugReference#containsWord} and by
+	 * {@link DrugReference#matchesOrderName} alike, and {@code nsaid} inside "NSAIDs" is accepted by
+	 * the order-name rule (its two-letter tail allowance covers the plural) and refused only by
+	 * {@code containsWord}. Neither is a case for bare containment; the one above is, and it is
+	 * #223's own measured witness below. The nesting risk is the same in principle ({@code opium} against an
 	 * allergen recorded as "Tiotropium") and this javadoc used to ask for its own measurement over
 	 * allergy text rather than the order-name corpus that settled #86.
 	 *
@@ -426,6 +492,115 @@ public class PatientClinicalContext {
 	 * actually reads a coded allergen's name out of (unreachable when this was measured), and not free
 	 * text at all, which is what a {@code nonCodedAllergen} is. It bounds the CLASS-token loss, which is
 	 * what the decision turned on; re-measure on the dictionary before reopening it.
+	 *
+	 * <p><b>The CONDITION list was measured too (issue #309), and it did NOT stay as it is.</b> The
+	 * question the ticket asked was whether a plausible curated condition token nests inside a plausible
+	 * recorded condition the way {@code opium} nests inside {@code Tiotropium}. It does, and the false
+	 * matches are clinical. Measured over the OpenMRS 3.7.1 reference-application demo dictionary,
+	 * through this method and the real {@link PatientClinicalContextBuilder} normalization, against two
+	 * corpora: the 704 distinct concepts actually RECORDED in that database's {@code conditions} table
+	 * (853 rows), and the 2581 Diagnosis/Finding/Symptom concepts that table's {@code condition_coded}
+	 * CAN hold. Both are {@code en} locale-preferred concept names, which is what
+	 * {@code PatientClinicalContextBuilder.addConceptName} reads through {@code Concept.getName()} — so
+	 * these bound an {@code en} deployment, and #141's {@code Pénicilline G} paragraph above is the
+	 * standing reminder that a francophone one reads different strings for the same concepts.
+	 *
+	 * <p>The hazard, over the candidate corpus, as (values matched / matched only inside a longer word),
+	 * under {@link DrugReference#containsWord}: {@code liver} 30/20, every one of the twenty a
+	 * deliver/delivery form ({@code Status Post Cesarean Delivery}, {@code Preterm Delivery});
+	 * {@code deficiency} 14/7, every one an immunoDEFICIENCY; {@code mania} 8/6
+	 * ({@code Leishmaniasis}, {@code Kleptomania}); {@code psoriasis} 4/2 ({@code Large plaque
+	 * parapsoriasis}, a different disease); {@code renal} 7/1 ({@code Malignant tumor of adrenal
+	 * gland}); {@code gi} 112/111. A hepatic or renal contraindication is the most
+	 * ordinary curated condition rule there is, so this is not an exotic shape.
+	 *
+	 * <p><b>What the fix could NOT be, and this is the part worth keeping.</b> The ticket proposed a
+	 * token-shape validity rule — "a condition token too short or too generic to be safe". No threshold
+	 * over the TOKEN separates safe from unsafe: taking every contiguous word run of a corpus value as a
+	 * plausible token (13908 distinct over the candidate corpus, 4968 over the recorded one), the
+	 * hazardous ones occur at 35 distinct character lengths spanning 1 to 46 and at every word count
+	 * from 1 to 6, and the longest — {@code traumatic intracranial subarachnoid hemorrhage} — nests
+	 * inside {@code Nontraumatic intracranial subarachnoid hemorrhage}, which is to say inside its own
+	 * NEGATION. Hazard is a property of the (token, recorded value) PAIR, and the loader holds no
+	 * condition corpus to pair against. A length rule is still defensible as a REPORTED loader finding
+	 * (at one to three characters a single-word token is hazardous 61-100% of the time on both corpora),
+	 * and it was declined because it warns rather than fixes, is silent on five of the six witnesses
+	 * above (every one but {@code gi} is five characters or more), and is silent by construction on
+	 * every shipped dataset — ADR Decision 73 carries the three together.
+	 *
+	 * <p><b>What the fix IS: a boundary, asked of the match rather than of the token.</b>
+	 * {@code DrugSafetyValidator.aMatchedConditionCarriesTheToken} — the third leg of
+	 * {@code corroboratedByTheChart}, carrying its own residue. The ticket's premise, that a condition
+	 * has no corroborating question because no arm resolves it to a reference substance, is true of the
+	 * two ALLERGY legs and does not settle the matter: what redeems a condition match is whether the
+	 * token reached the record as a WORD of it. This match itself is untouched and stays bare, for the
+	 * reason the paragraph above gives.
+	 *
+	 * <p>The LOSS of that boundary rule over the two corpora above is ZERO, and <b>what that zero is a
+	 * loss OF is ONE token, whose matches are counted per corpus and never summed into a total</b> —
+	 * 5 of the 2581 candidate values and 1 of the 704 recorded ones. State it that way wherever it is
+	 * published, because "all four tokens verified" reads as four confirmations and it is one, and a
+	 * single total reads as a larger evidence base than either corpus supplies (issue #243's rule; the
+	 * unbounded form had reached every document carrying this claim before it was measured, and the
+	 * summed form that replaced it then reached every one of them too).
+	 * "The curated condition population" below means the one this repo SHIPS; an
+	 * operator's own file is by definition unmeasured, which is what the loader-rule paragraph is about.
+	 * The four condition tokens the bundled seed publishes ({@code gi bleed}, {@code peptic
+	 * ulcer}, {@code severe hepatic}, {@code renal impairment} — the TOKENS, and not the four strings
+	 * #309's own body names in their place: two of those are these rules' {@code note} fields
+	 * ({@code active gastrointestinal bleeding}, {@code active peptic ulcer disease}) and the other two
+	 * ({@code avoid in CKD stage 4 or worse}, {@code avoid in severe hepatic impairment}) are neither a
+	 * token nor a note of any rule the seed ships, so a token set re-derived from the ticket finds two
+	 * of its four strings nowhere) match 1 value over the recorded corpus and 5 over the
+	 * candidate one, and every one of those matched values carries its token as a whole word.
+	 * Per token, and this is the part the aggregate hides: {@code peptic ulcer} accounts for ALL of
+	 * them — 5 candidate, 1 recorded, none mid-word — while {@code gi bleed}, {@code severe hepatic}
+	 * and {@code renal impairment} match nothing at all in either corpus, so the claim is vacuously
+	 * true for three of the four and neither corpus says anything about what the boundary rule would
+	 * do to them. Not a total of six: the recorded
+	 * concepts are a subset of the candidate ones, so those counts overlap and must not be summed. That
+	 * is the proxy issue #223 used to settle the allergy side, run for conditions — with the same
+	 * weakness that proxy always had, three of these four tokens being as unmeasured against a coded
+	 * corpus as an operator's own file is. Measured 2026-09-03 by driving each corpus value through
+	 * {@link #hasConditionToken} and then through
+	 * {@code DrugSafetyValidator.aMatchedConditionCarriesTheToken}, over the rules
+	 * {@code DrugSafetyValidator.isConditionRule} selects from the shipped curated seed.
+	 *
+	 * <p><b>Both corpora are CODED concept names, and the rule DOES cost the free-text half — including
+	 * on the shipped seed's own tokens.</b> A condition a clinician types as {@code GI bleeding} is
+	 * hedged against {@code gi bleed}, and {@code peptic ulceration} against {@code peptic ulcer}: an
+	 * INFLECTION, the commonest shape in free text and one neither corpus can exhibit. Neither of the
+	 * module's two allowances reaches them — 0 letters for prose and 2 for an order name, against tails
+	 * of three and five — and inventing a third at a call site is what issue #260 forbids, so what
+	 * would actually close this is morphology rather than a wider tail. The other shape is a prefix or
+	 * suffix compound that is clinically the same finding: {@code edema} 13/7, {@code carcinoma} 8/2
+	 * ({@code Adenocarcinoma}), {@code arthritis} 10/3 ({@code Osteoarthritis of knee}),
+	 * {@code cerebral} 10/2, {@code ulcer} 21/2. Both are hedged rather than dropped — the section
+	 * asserts nothing and denies nothing, the contraindication is still listed and the chip still fires
+	 * — and both are cases rather than sentences:
+	 * {@code ConditionRuleBoundaryCorroborationTest.anInflectionOfAShippedTokenIsHedged} and
+	 * {@code .aClinicallyRightCompoundIsHedgedToo}.
+	 *
+	 * <p><b>That the chip survives is a residue as well as a mitigation, and it must not be cited as
+	 * only the second.</b> On the HAZARD case the surviving chip is the false claim: for a patient
+	 * whose one recorded condition is {@code Status Post Cesarean Delivery}, the injected record and
+	 * the {@code safety_finding} now hedge, and the clinician-facing chip still reads
+	 * "… is contraindicated by an active condition: acute hepatitis or liver failure" — an unqualified
+	 * assertion about the chart, on the one surface with no third section to hedge into. Measured
+	 * 2026-09-03 by driving {@code DrugSafetyValidator.validate} over
+	 * {@code chartsearchai-test/drug-reference-condition-token-nesting.json}. #309 fixed the
+	 * model-facing half only; the chip half is untracked, and tightening this match is NOT its remedy
+	 * (it is fail-open — see the boundary rule's free-text cost above). ADR Decision 73 carries it as
+	 * a trade-off.
+	 *
+	 * <p>That the corpora cannot reach free text is a property of the source: that database's
+	 * {@code condition_non_coded} column holds ONE placeholder string across all 853 rows, so a
+	 * condition recorded in the clinician's own wording — the shape the fragment rationale above is
+	 * really about — is unmeasured on both sides of this rule, and the two inflections above are
+	 * reasoned from the rule rather than counted. This repo does not carry that dictionary, so none of
+	 * these figures is re-derivable here; what is stated is which population each is over. What CAN be
+	 * pinned here is the token set the zero-cost claim is ABOUT, and it is:
+	 * {@code ConditionRuleBoundaryCorroborationTest.theShippedSeedPublishesExactlyTheFourConditionTokensTheMeasurementWasOver}.
 	 *
 	 * <p>Exposure today is confined to hand-authored
 	 * contraindication rules: neither the {@code ddinter} nor the {@code atc} source emits any, and the
@@ -485,17 +660,18 @@ public class PatientClinicalContext {
 	}
 
 	/** The needle {@link #containsToken} scans for, folded once — shared with
-	 *  {@link #allergensMatching} so the boolean and its witnesses fold alike, and with
+	 *  {@link #recordsMatching}, and so with both witness accessors over it, so the booleans and their
+	 *  witnesses fold alike, and with
 	 *  {@link #matchableToken}, whose whole subject is whether this expression comes out empty. */
 	private static String foldedToken(String token) {
 		// Through DrugReference.foldedLower, not a second spelling of it: that method is "named once so
 		// that a caller preparing them itself cannot apply half of it or apply the two in the other
 		// order", and this was the hand-written copy its javadoc warns against (issue #330).
-		return DrugReference.foldedLower(token.trim());
+		return DrugReference.foldedLower(normalizedToken(token));
 	}
 
-	/** The one comparison behind both {@link #containsToken} and {@link #allergensMatching}: a recorded
-	 *  value contains an already-folded token. Extracted rather than written twice, so the witnesses
+	/** The one comparison behind {@link #containsToken} and {@link #recordsMatching} — and so behind
+	 *  all four of the accessors over them: a recorded value contains an already-folded token. Extracted rather than written twice, so the witnesses
 	 *  cannot come to disagree with the boolean about what matched. */
 	private static boolean containsFolded(String value, String foldedToken) {
 		return DrugReference.foldDiacritics(value).contains(foldedToken);

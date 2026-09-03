@@ -452,9 +452,10 @@ public class SafetyWarning {
 	}
 
 	/**
-	 * Whether nothing corroborates, as a record of this drug, the chart match behind the CLAUSE this
-	 * warning's sentence belongs to — the fourth question of CLAUDE.md's injected-record rule, asked
-	 * once so the two injected channels cannot answer it differently (issue #308).
+	 * Whether nothing corroborates the chart match behind the CLAUSE this warning's sentence belongs to
+	 * — as a record of this drug for an allergy rule, and since issue #309 as a whole WORD of the matched
+	 * record for a condition rule. The fourth question of CLAUDE.md's injected-record rule, asked once so
+	 * the two injected channels cannot answer it differently (issue #308).
 	 *
 	 * <p><b>Of the collapsed CLAUSE, not of the one rule this sentence came from</b>, and the
 	 * difference is reachable rather than pedantic. {@code DrugSafetyValidator.contraindicationFinding}
@@ -493,9 +494,21 @@ public class SafetyWarning {
 	 * not restated here, because three copies of a rejected-alternative argument is how this repo has
 	 * come to contradict itself before.
 	 *
-	 * <p>Scoped exactly as the chip's own demotion is — a SELF-NAMED allergy rule — so a class-token
-	 * rule, a condition rule and every allergen-arm sentence answer false. Not serialized; the wire
-	 * shape is unchanged, and the chip's detail is the same string it was.
+	 * <p>True for a SELF-NAMED allergy rule the corroborating union does not redeem, and — since issue
+	 * #309 — for a CONDITION rule whose matched record carries the token only inside a longer word
+	 * ({@code DrugSafetyValidator.aMatchedConditionCarriesTheToken}). A class-token rule and every
+	 * allergen-arm sentence still answer false.
+	 *
+	 * <p><b>So this is no longer scoped as the chip's own demotion is, and the divergence is
+	 * deliberate</b>: {@code DrugSafetyValidator.contraindicationRank} stays allergy-typed, because
+	 * issue #223 scoped it to the fold whose premise is that a self-named rule reports the allergen
+	 * arm's fact — a premise a condition rule has no part in. The record and the finding say the
+	 * condition answer; no chip does. Stated here because this accessor is where a reader would come to
+	 * learn the two scopes had parted. Not serialized; the wire shape is unchanged, and the chip's
+	 * detail is the same string it was — <b>which on the hazard case leaves the chip stating the
+	 * contraindication of the chart while the two records beside it hedge</b>, so read the divergence
+	 * as issue #309's remaining defect and not only as its scope. ADR Decision 73's trade-offs carry
+	 * the reproduction and why tightening the match is not the remedy.
 	 */
 	boolean restsOnAnUncorroboratedChartMatch() {
 		return uncorroboratedChartMatch;

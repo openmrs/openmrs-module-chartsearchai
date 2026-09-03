@@ -299,9 +299,15 @@ public class DrugReferenceInjector {
 	 *
 	 *  <p><b>What it must not be is a CATEGORICAL about the chart.</b> An
 	 *  earlier wording said "not by a recorded allergy to this drug", and that is a categorical the
-	 *  chart can contradict: both of {@link #corroborated}'s legs can miss a recorded allergy that
-	 *  really does name the drug, because the first sees only the witnesses of THIS rule's token and
-	 *  the second is narrowed by {@link DrugReferenceService#findImpliedSubstances}. Measured on a
+	 *  chart can contradict: both of {@link #corroborated}'s ALLERGY legs can miss a recorded allergy
+	 *  that really does name the drug, because the first sees only the witnesses of THIS rule's token
+	 *  and the second is narrowed by {@link DrugReferenceService#findImpliedSubstances}. Its condition
+	 *  leg (issue #309) can miss a recorded condition the same way — a prefix or suffix compound IS the
+	 *  finding the rule is about and carries the token inside a longer word — so the non-categorical
+	 *  FRAMING carries over to that section. <b>The WORDS do not, and that is a trade rather than a
+	 *  fit</b>: for a condition rule the token names no drug, so "a record of this drug" names a
+	 *  corroboration the module never attempts. See {@link #FINDING_UNCORROBORATED_MATCH}, whose
+	 *  javadoc argues the trade, and ADR Decision 73, which records it. Measured on a
 	 *  curated arrangement — an entry aliasing {@code ketoconazole} and ruling on another of its own
 	 *  names, beside an allergy recorded as {@code Ketoconazole} that {@code matchesDrugName} accepts —
 	 *  the record denied an allergy the chart holds. It claims no MECHANISM either, for the same
@@ -395,8 +401,9 @@ public class DrugReferenceInjector {
 	 * <p><b>A THIRD channel carries this patient's own contraindication findings into the prompt, and
 	 * it is neither of those.</b> {@link #contraindicationSections} marks a rendered clause "Recorded
 	 * for this patient" on an injected {@code drug_reference} record, off
-	 * {@code DrugSafetyValidator.recordedContraindicationKind} and — since issue #269, for a self-named
-	 * allergy rule — {@link #corroborated}, which NARROWS that match rather than adding a second route to
+	 * {@code DrugSafetyValidator.recordedContraindicationKind} and — since issue #269 for a self-named
+	 * allergy rule, and since issue #309 for a condition rule — {@link #corroborated}, which NARROWS
+	 * that match rather than adding a second route to
 	 * the marking: a clause the match reaches and corroboration does not takes a third section instead,
 	 * claiming nothing about the patient. That method's javadoc
 	 * used to call the marking exact — "which is exactly when the ledger raises a chip for that key" —
@@ -1434,7 +1441,8 @@ public class DrugReferenceInjector {
 
 	/**
 	 * How a contraindication finding's rule reached this patient's chart, stated in the finding
-	 * itself where nothing corroborates that match as a record of the drug (issue #308) — the
+	 * itself where nothing corroborates that match — as a record of the drug for an allergy rule, and
+	 * since issue #309 as a whole word for a condition rule (issue #308) — the
 	 * {@code safety_finding} counterpart of {@link #UNCORROBORATED_READING_LEAD}, which issue #269
 	 * gave the {@code drug_reference} record injected beside it.
 	 *
@@ -1455,8 +1463,19 @@ public class DrugReferenceInjector {
 	 * address it" — that a clause reading only "not a record of this drug", inside a record type the
 	 * same prompt says IS about this patient, would sit close to; a flip to that branch would be
 	 * fail-open. And it says what the MODULE established rather than a categorical about the chart,
-	 * ADR Decision 42's own measured constraint, because both corroborating legs can miss an allergy
-	 * the chart really holds.
+	 * ADR Decision 42's own measured constraint, because a corroborating leg can miss a record the
+	 * chart really holds: either allergy leg an allergy, and since issue #309 the condition leg a
+	 * condition, for which a clinician's own inflection is enough.
+	 *
+	 * <p><b>Its words were written for the allergy case and are reused for the condition one, which is
+	 * a trade rather than a fit</b> (issue #309). For a self-named allergy rule the token IS one of the
+	 * drug's names, so "a record of this drug" is the question actually asked. For a condition rule the module
+	 * never asks whether the token names a drug — its uncertainty is only about the WORDING of the
+	 * matched condition — so the sentence names a corroboration it never attempted. Reusing it was chosen over
+	 * writing a second clause because prompt wording here is measured rather than argued — ADR
+	 * Decision 42 already records this lead's own exact wording as unmeasured — and a new unmeasured
+	 * sentence in citable evidence is the larger risk; nothing false about the PATIENT is asserted
+	 * either way. ADR Decision 73 records it as an accepted trade rather than an oversight.
 	 *
 	 * <p><b>Additive, and that is the decision rather than a detail.</b> The finding still states
 	 * {@link #STRENGTH_WITHHOLD}, and a third strength class between withholding and a caution — the
@@ -2770,8 +2789,8 @@ public class DrugReferenceInjector {
 		}
 
 		/** The chart the two answers above are about. Read from here rather than taken as a second
-		 *  parameter beside this object: {@link #corroborated} asks one question of the context and one
-		 *  of the resolved set, and a caller able to hand it a context other than the one the set was
+		 *  parameter beside this object: {@link #corroborated} asks questions of the context and one of
+		 *  the resolved set, and a caller able to hand it a context other than the one the set was
 		 *  resolved from is the same two-facts-that-can-disagree shape this class exists to remove. */
 		PatientClinicalContext context() {
 			return context;
@@ -2834,14 +2853,22 @@ public class DrugReferenceInjector {
 	 *         standing at full rank. Asked in cost order — the rank's predicate reads only the context
 	 *         and the entry, so the dataset sweep happens only where it fails.
 	 *
-	 *         <p><b>Scoped to a self-named allergy rule</b>, exactly as the chip's demotion is, and that
-	 *         is load-bearing rather than incidental: a rule whose token is NOT one of its entry's names
-	 *         is asking about a class or about free text, which is what the bare match exists for, and
-	 *         neither corroborating question can speak to it. The shipped seed's {@code nsaid} rule is
-	 *         such a rule and the allergen arm resolves nothing at all from an allergy recorded as
-	 *         {@code NSAIDs}, so an unscoped reading would hedge a correct clause. Tightening the MATCH
-	 *         instead was measured and declined — see
+	 *         <p><b>The two legs above are scoped to a self-named allergy rule</b>, exactly as the
+	 *         chip's demotion is, and that is load-bearing rather than incidental: an ALLERGY rule whose
+	 *         token is NOT one of its entry's names is asking about a class or about free text, which is
+	 *         what the bare match exists for, and neither of those questions can speak to it. The shipped
+	 *         seed's {@code nsaid} rule is such a rule and the allergen arm resolves nothing at all from
+	 *         an allergy recorded as {@code NSAIDs}, so an unscoped reading would hedge a correct clause.
+	 *         Tightening the MATCH instead was measured and declined — see
 	 *         {@link PatientClinicalContext#hasAllergyToken}.
+	 *
+	 *         <p><b>A CONDITION rule is corroborated by a third leg that is neither of them</b> (issue
+	 *         #309): {@code DrugSafetyValidator.aMatchedConditionCarriesTheToken}, which asks whether a
+	 *         matched record carries the token as a WHOLE WORD. It is a boundary rather than a
+	 *         resolution, because no arm resolves a recorded condition to a substance — so the two legs
+	 *         above genuinely cannot serve it, and the answer was to ask a different question rather
+	 *         than to widen theirs. Its own measurement and residue are on that method and on
+	 *         {@link PatientClinicalContext#containsToken}.
 	 */
 	private static boolean corroborated(DrugReference ref, DrugReference.Contraindication c,
 			ContraindicationReading reading) {

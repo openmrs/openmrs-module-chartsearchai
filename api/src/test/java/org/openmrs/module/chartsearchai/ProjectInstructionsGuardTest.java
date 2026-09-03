@@ -62,8 +62,33 @@ public class ProjectInstructionsGuardTest {
 	 * 2026-08-31 trim; this allows roughly 20% of headroom for ordinary additions and fires
 	 * well before the file is back to a size nobody reads. Raising it is a decision: do it
 	 * here, in one commit, and say in the message what earned the space.
+	 *
+	 * <p><b>Raised from 85,000 to 86,000 for issue #348</b> (September 2026). #348 adds a rule: the
+	 * REFERENT axis of a safety finding's strength clause, plus the unit correction that keeps a
+	 * sibling row from making a proposed drug read as current therapy. What was paid for it first,
+	 * rather than instead: the EVIDENCE was pruned from several bullets of the same section — the
+	 * caution-lead anchor's measured division of labour, #283's contraindication-flip figures, the
+	 * premise/conclusion history — every sentence of it already carried verbatim by ADR Decision 37,
+	 * which those bullets point at.
+	 *
+	 * <p><b>The raise still holds, and its two figures are MEASURED at a named head, never
+	 * differenced from a previous quotation.</b> Both move with the file, and every merge of
+	 * {@code origin/main} into this branch has falsified the figure the commit before it recorded —
+	 * as has each hardening round that edited the bullet. So what is written here is the COMMAND and
+	 * the head, not arithmetic: {@code wc -c CLAUDE.md} for the file, and
+	 * {@code grep 'STRENGTH and REFERENT' CLAUDE.md | wc -c} for the #348 rule bullet, which names
+	 * the line by its own words rather than by a line number that moves. At the FOURTH merge of
+	 * {@code origin/main} @ {@code 8e679fb7} those read <b>85,874</b> and <b>1,278</b> bytes, leaving
+	 * <b>126</b> under this tripwire — headroom that GREW, because that merge's own change to this
+	 * file was a 56-byte trim, which is the direction an auto-merge is likeliest to lose silently.
+	 * Re-run both before quoting either number again; a figure here going stale is expected rather
+	 * than a defect, which is why the commands are the part that matters.
+	 *
+	 * <p>The CONCLUSION is what does not move: the bullet is larger than the headroom, so closing
+	 * the gap under the old 85,000 tripwire means deleting DIRECTIVES, and the smallest single thing
+	 * that would fit is the rule this raise exists for.
 	 */
-	private static final int MAX_INSTRUCTION_BYTES = 85_000;
+	private static final int MAX_INSTRUCTION_BYTES = 86_000;
 
 	/**
 	 * Where a cited symbol may be found. {@code eval/} is not decoration — the safety-probe

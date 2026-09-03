@@ -269,9 +269,15 @@ public class ActiveOrderContraindicationTest {
 		// since #283 — the clause taken from the constant, since its literal is pinned in
 		// SafetyFindingSeverityStrengthTest, which is where a reword should fail. This case's property,
 		// that the chip's own detail reaches the prompt as a citable record, is unchanged.
+		//
+		// The CALL moved at issue #348 and the strength did not. This arm's subject is one of the
+		// patient's own prescriptions and this question proposed nothing, so "withhold it" named an act
+		// with nothing to act on; the record now states the change-of-therapy counterpart, which
+		// licenses exactly as much. CurrentMedicationFindingStrengthTest is where that mapping is
+		// pinned per arm.
 		assertTrue(texts.contains(DrugReferenceInjector.FINDING_PREFIX + "Ibuprofen: Ibuprofen is "
 				+ "contraindicated by an active allergy: documented ibuprofen allergy."
-				+ DrugReferenceInjector.STRENGTH_WITHHOLD),
+				+ DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION),
 				"a record must carry the chip's own detail verbatim, was: " + texts);
 	}
 

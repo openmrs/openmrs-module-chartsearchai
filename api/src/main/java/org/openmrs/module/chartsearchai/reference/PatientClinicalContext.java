@@ -526,7 +526,7 @@ public class PatientClinicalContext {
 	 * (at one to three characters a single-word token is hazardous 61-100% of the time on both corpora),
 	 * and it was declined because it warns rather than fixes, is silent on five of the six witnesses
 	 * above (every one but {@code gi} is five characters or more), and is silent by construction on
-	 * every shipped dataset — ADR Decision 72 carries the three together.
+	 * every shipped dataset — ADR Decision 73 carries the three together.
 	 *
 	 * <p><b>What the fix IS: a boundary, asked of the match rather than of the token.</b>
 	 * {@code DrugSafetyValidator.aMatchedConditionCarriesTheToken} — the third leg of
@@ -586,7 +586,7 @@ public class PatientClinicalContext {
 	 * 2026-09-03 by driving {@code DrugSafetyValidator.validate} over
 	 * {@code chartsearchai-test/drug-reference-condition-token-nesting.json}. #309 fixed the
 	 * model-facing half only; the chip half is untracked, and tightening this match is NOT its remedy
-	 * (it is fail-open — see the boundary rule's free-text cost above). ADR Decision 72 carries it as
+	 * (it is fail-open — see the boundary rule's free-text cost above). ADR Decision 73 carries it as
 	 * a trade-off.
 	 *
 	 * <p>That the corpora cannot reach free text is a property of the source: that database's

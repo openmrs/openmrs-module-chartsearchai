@@ -84,7 +84,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * hepatitis or liver failure", unqualified, of a chart recording a caesarean delivery — the model
  * reads a hedge and the clinician does not. Wherever a comment here says the chip survives, that is
  * reassurance for the cases this rule OVER-hedges and is the false claim on the hazard case. ADR
- * Decision 72's trade-offs carry it; tightening the match is NOT the remedy (fail-open).
+ * Decision 73's trade-offs carry it; tightening the match is NOT the remedy (fail-open).
  *
  * <p><b>The residue, deliberately given up.</b> A prefix or suffix compound that is clinically the same
  * finding is hedged: {@code Lymphedema} and {@code Angioedema} for a rule on {@code edema}, pinned by
@@ -258,7 +258,7 @@ public class ConditionRuleBoundaryCorroborationTest {
 				"the zero-cost claim is ABOUT this token set — it is stated on "
 						+ "PatientClinicalContext.containsToken (which carries the token literals and "
 						+ "the per-corpus counts), DrugSafetyValidator.aMatchedConditionCarriesTheToken, "
-						+ "this class's javadoc, ADR Decision 72 and README; if the set changed, "
+						+ "this class's javadoc, ADR Decision 73 and README; if the set changed, "
 						+ "re-measure rather than re-word");
 		assertEquals(4, tokens.size(), "a duplicate token would pass the set comparison above");
 	}

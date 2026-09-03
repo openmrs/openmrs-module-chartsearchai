@@ -89,6 +89,9 @@ public class SafetyWarning {
 	/** @see #chartOrderBridges() */
 	private final List<ChartOrderBridge> chartOrderBridges;
 
+	/** @see #isAboutACurrentMedication() */
+	private final boolean aboutACurrentMedication;
+
 	/** A warning raised from something the reference data assigns no severity to — see
 	 *  {@link #getSeverity()} for which joins those are. */
 	public SafetyWarning(String type, String drug, String detail) {
@@ -97,7 +100,7 @@ public class SafetyWarning {
 
 	public SafetyWarning(String type, String drug, String detail, String severity) {
 		this(type, drug, detail, severity, false, false, null, null,
-				Collections.<ChartOrderBridge> emptyList());
+				Collections.<ChartOrderBridge> emptyList(), false);
 	}
 
 	/**
@@ -116,10 +119,17 @@ public class SafetyWarning {
 	 * the private constructor below. Nothing here is an impossible pair — the reason issue #298 gave a
 	 * FACTORY to the contraindication shape rather than widening a constructor does not reach this
 	 * one, since a chip of any type may in principle have been resolved from an order.
+	 *
+	 * <p>{@link #isAboutACurrentMedication()} is false here, as it is for the two shorter
+	 * constructors, and for the same reason rather than as a default: the two arms that answer true
+	 * to it reach {@link #interaction} or {@link #contraindication} instead (see that accessor for
+	 * which they are), so no caller of this constructor is one of them. A caller here is stating a
+	 * chip's wire-facing shape, and issue #348's clause is decided by the arm that raised the
+	 * finding, never by whoever assembles one.
 	 */
 	public SafetyWarning(String type, String drug, String detail, String severity,
 			List<ChartOrderBridge> chartOrderBridges) {
-		this(type, drug, detail, severity, false, false, null, null, chartOrderBridges);
+		this(type, drug, detail, severity, false, false, null, null, chartOrderBridges, false);
 	}
 
 	/**
@@ -135,21 +145,52 @@ public class SafetyWarning {
 	 * <p>Package-private, matching the accessor: a caller may set only what it may read back. The one
 	 * caller is {@code DrugSafetyValidator.addContraindications} — the curated-rule arm, the only arm
 	 * whose warning is derived from a rule matched against the chart at all. The allergen arm's own
-	 * three sentences are built from a {@code RecordedAllergen} and keep the public three-argument
-	 * form, so they answer false by construction rather than by remembering to.
+	 * three sentences go through {@link #recordedAllergenContraindication} instead, which hardcodes
+	 * this flag false rather than taking it, so they still answer false by construction rather than
+	 * by remembering to. They used the public three-argument constructor until issue #348 gave them a
+	 * fact of their own to carry.
 	 *
 	 * @param uncorroboratedChartMatch see {@link #restsOnAnUncorroboratedChartMatch()}
+	 * @param aboutACurrentMedication see {@link #isAboutACurrentMedication()} — true where the arm
+	 *        walking the patient's own active orders raised it (issue #348)
 	 */
 	static SafetyWarning contraindication(String drug, String detail,
-			boolean uncorroboratedChartMatch) {
+			boolean uncorroboratedChartMatch, boolean aboutACurrentMedication) {
 		return new SafetyWarning(TYPE_CONTRAINDICATION, drug, detail, null, false,
-				uncorroboratedChartMatch, null, null, Collections.<ChartOrderBridge> emptyList());
+				uncorroboratedChartMatch, null, null, Collections.<ChartOrderBridge> emptyList(),
+				aboutACurrentMedication);
+	}
+
+	/**
+	 * A recorded-allergen contraindication chip's warning — the allergen arm's three sentences, which
+	 * are built from a {@code RecordedAllergen} rather than from a curated rule matched against the
+	 * chart (issue #348).
+	 *
+	 * <p>A FACTORY rather than the public three-argument constructor those sentences used before,
+	 * and it hardcodes {@code uncorroboratedChartMatch} false rather than taking it: that arm has no
+	 * rule to have matched by containment, so it answered false BY CONSTRUCTION, and the whole point
+	 * of naming it here is to keep answering false by construction while the one fact it does have to
+	 * carry — whether its subject is one of the patient's own prescriptions — becomes settable. A
+	 * fourth argument on {@link #contraindication} would have offered that arm a flag it can never
+	 * legitimately set.
+	 *
+	 * <p>Package-private, matching the accessor: a caller may set only what it may read back. Its one
+	 * caller is {@code DrugSafetyValidator.addAllergyContraindications}, which is reached from BOTH
+	 * the drug-in-play loop (false — the drug was proposed) and
+	 * {@code addActiveOrderContraindications} (true — the subject is an active order).
+	 *
+	 * @param aboutACurrentMedication see {@link #isAboutACurrentMedication()}
+	 */
+	static SafetyWarning recordedAllergenContraindication(String drug, String detail,
+			boolean aboutACurrentMedication) {
+		return new SafetyWarning(TYPE_CONTRAINDICATION, drug, detail, null, false, false, null, null,
+				Collections.<ChartOrderBridge> emptyList(), aboutACurrentMedication);
 	}
 
 	private SafetyWarning(String type, String drug, String detail, String severity,
 			boolean unratedRelationship, boolean uncorroboratedChartMatch,
 			DrugReference.Interaction reconciledRule, String reconciledNoteName,
-			List<ChartOrderBridge> chartOrderBridges) {
+			List<ChartOrderBridge> chartOrderBridges, boolean aboutACurrentMedication) {
 		this.type = type;
 		this.drug = drug;
 		this.detail = detail;
@@ -166,6 +207,7 @@ public class SafetyWarning {
 		this.chartOrderBridges = chartOrderBridges == null || chartOrderBridges.isEmpty()
 				? Collections.<ChartOrderBridge> emptyList()
 				: Collections.unmodifiableList(new ArrayList<ChartOrderBridge>(chartOrderBridges));
+		this.aboutACurrentMedication = aboutACurrentMedication;
 	}
 
 	/**
@@ -208,14 +250,18 @@ public class SafetyWarning {
 	 * @param chartOrderBridges see {@link #chartOrderBridges()}, which is canonical for what empty
 	 *        covers — empty is not a degraded state, and no rule about which chips are empty belongs
 	 *        here or anywhere else; every draft of one has been measured false
+	 * @param aboutACurrentMedication see {@link #isAboutACurrentMedication()} — true only from the
+	 *        screening arm, whose two drugs are both the patient's own active orders (issue #348)
 	 */
-	// Three facts travel here, not two: the paragraphs above are worded for the pair issue #297 added
-	// and issue #349 put a third beside them. Read the @param list rather than any count in the prose.
+	// The paragraphs above are worded for the PAIR issue #297 added, and facts have been put beside
+	// them since — issue #349's bridge, issue #348's referent. Read the @param list rather than any
+	// count in the prose; a count here has already gone stale once.
 	static SafetyWarning interaction(String drug, String detail, String severity,
 			boolean unratedRelationship, DrugReference.Interaction reconciledRule,
-			String reconciledNoteName, List<ChartOrderBridge> chartOrderBridges) {
+			String reconciledNoteName, List<ChartOrderBridge> chartOrderBridges,
+			boolean aboutACurrentMedication) {
 		return new SafetyWarning(TYPE_INTERACTION, drug, detail, severity, unratedRelationship, false,
-				reconciledRule, reconciledNoteName, chartOrderBridges);
+				reconciledRule, reconciledNoteName, chartOrderBridges, aboutACurrentMedication);
 	}
 
 	/** One of {@link #TYPE_OVERDOSE}, {@link #TYPE_INTERACTION}, {@link #TYPE_CONTRAINDICATION}. */
@@ -461,7 +507,7 @@ public class SafetyWarning {
 	 * learn the two scopes had parted. Not serialized; the wire shape is unchanged, and the chip's
 	 * detail is the same string it was — <b>which on the hazard case leaves the chip stating the
 	 * contraindication of the chart while the two records beside it hedge</b>, so read the divergence
-	 * as issue #309's remaining defect and not only as its scope. ADR Decision 72's trade-offs carry
+	 * as issue #309's remaining defect and not only as its scope. ADR Decision 73's trade-offs carry
 	 * the reproduction and why tightening the match is not the remedy.
 	 */
 	boolean restsOnAnUncorroboratedChartMatch() {
@@ -600,6 +646,59 @@ public class SafetyWarning {
 	 */
 	public List<ChartOrderBridge> chartOrderBridges() {
 		return chartOrderBridges;
+	}
+
+	/**
+	 * Whether this warning is about a medication the patient is ALREADY TAKING rather than about a
+	 * drug something proposed (issue #348) — which decides which COLUMN of the four strength clauses
+	 * {@code DrugReferenceInjector.strengthClause} states, and so which call the answer opens with.
+	 *
+	 * <p><b>Established by the arm that raised the warning, never re-derived.</b> Only the two
+	 * ORDER-DRIVEN arms ever answer true: {@code DrugSafetyValidator.addActiveOrderPairInteractions}
+	 * (issue #113), whose subject is drawn from the resolved active-order entries and whose partner is
+	 * admitted only by {@code hasActiveDrug} against a DIFFERENT active order, and
+	 * {@code addActiveOrderContraindications} (issue #143), which walks those same entries — and that
+	 * second arm answers true only where no SIBLING ROW put the substance in play, because its chips
+	 * fold on the substance while its own skip is row-scoped. See that arm for the reproduction. The
+	 * drug-in-play arms and the question-pair arm answer false by construction, because their subject
+	 * is the drug the question or the answer named — which may well ALSO be a current medication, and
+	 * that is not this question: what a finding licenses there is a decision about a proposal, because
+	 * a proposal is what was put to the module.
+	 *
+	 * <p><b>It can answer differently in the two {@code validate} passes of one request, and nothing
+	 * reads the second answer.</b> The pre-answer pass validates with an EMPTY answer, so the drugs in
+	 * play there are the QUESTION's — which is the right base for a record the model reads before it
+	 * answers. The post-answer pass also has the drugs the ANSWER named in play, so a substance the
+	 * answer proposed can flip this to false there. That pass renders no clause
+	 * ({@code DrugReferenceInjector.renderFinding} has one caller, {@code injectRecords}, and it uses
+	 * the pre-answer findings), this flag is on neither the wire nor either collapse key, and nothing
+	 * compares the two passes' warnings — so the divergence is unobservable rather than tolerated.
+	 * Said here because a reader checking for pass-stability will look for it.
+	 *
+	 * <p>It is not derivable from anything else the warning carries, which is why it travels. In
+	 * particular it is NOT {@link #chartOrderBridges()}, which answers a RESOLUTION question — which of
+	 * the patient's own orders each named substance was resolved from, and whether the sentence naming
+	 * one may be printed at all. Do not read the two as near-neighbours on the strength of both being
+	 * about active orders: that list is empty wherever the order's own recorded names reach the
+	 * substance, which is the common case and is this issue's own reproduction, where both orders are
+	 * named as the reference data names them. So a finding about a current medication routinely
+	 * carries no bridge at all. See {@code DrugSafetyValidator.chartOrderBridges} for what it
+	 * withholds and why — it has more than one silence, and since issue #353 more than it had when
+	 * this paragraph was written — rather than any summary of it here.
+	 *
+	 * <p><b>Prompt-facing only.</b> Nothing on the wire moves and the chip's own detail is untouched,
+	 * so {@code DrugSafetyValidator.StatedInteractionChips} deliberately does NOT key on it, for the
+	 * reason stated at {@link #chartOrderBridges()}: that key decides which chips are emitted, so
+	 * keying on a prompt-only fact would let it decide wire content. Leaving it out costs nothing
+	 * observable, and that is worth saying rather than leaving to be re-derived: the flag is constant
+	 * within an arm, and where the two interaction arms can both run in one pass — the POST-answer
+	 * pass, where a drug the ANSWER named is in play beside a screening question —
+	 * {@code InteractionPairs.alreadyReported} already stops the screening arm restating a pair the
+	 * drug-in-play arm reported, before this ledger sees it. So no two chips of one pass can differ by
+	 * this flag alone.
+	 */
+	boolean isAboutACurrentMedication() {
+		return aboutACurrentMedication;
 	}
 
 	/**

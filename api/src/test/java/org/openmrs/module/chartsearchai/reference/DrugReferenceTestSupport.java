@@ -1272,6 +1272,29 @@ public final class DrugReferenceTestSupport {
 			Arrays.asList(activeOrder("order-naproxen", "Naproxen 500mg", set("naproxen 500mg"), codes)));
 	}
 
+	/**
+	 * The text between {@code lead} and that sentence's own full stop on a rendered reference record, or
+	 * null when the record carries no such section — what a model reads, read where a model reads it.
+	 *
+	 * <p>Here rather than in a test file because two classes wrote this same seven-line body:
+	 * {@code InjectedContraindicationCorroborationTest} over the production section-lead constants and
+	 * {@code InjectedContraindicationPatientReadingTest} over deliberate literals. The LEAD stays a
+	 * parameter so both keep their own choice about that, which is the half that differs; only the
+	 * locator is shared. Sound because no section lead nests inside another, which
+	 * {@code InjectedContraindicationCorroborationTest.theThreeSectionLeadsAreTheWordsAModelReads}
+	 * asserts of the three production constants and
+	 * {@code InjectedContraindicationPatientReadingTest.sentenceAfter} re-asserts of its own two.
+	 */
+	static String sectionAfter(String record, String lead) {
+		int start = record.indexOf(lead);
+		if (start < 0) {
+			return null;
+		}
+		int end = record.indexOf(".", start + lead.length());
+		assertTrue(end > start, "an unterminated sentence, was: " + record);
+		return record.substring(start + lead.length(), end);
+	}
+
 	/** A one-record chart to inject into; the injected reference must append as record [2]. */
 	static PatientChart oneRecordChart() {
 		return chartOf(new RecordMapping(1, ChartSearchAiConstants.RESOURCE_TYPE_OBS,

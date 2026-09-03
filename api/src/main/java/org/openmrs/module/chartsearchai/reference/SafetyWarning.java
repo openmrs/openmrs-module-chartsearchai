@@ -382,9 +382,10 @@ public class SafetyWarning {
 	}
 
 	/**
-	 * Whether nothing corroborates, as a record of this drug, the chart match behind the CLAUSE this
-	 * warning's sentence belongs to — the fourth question of CLAUDE.md's injected-record rule, asked
-	 * once so the two injected channels cannot answer it differently (issue #308).
+	 * Whether nothing corroborates the chart match behind the CLAUSE this warning's sentence belongs to
+	 * — as a record of this drug for an allergy rule, and since issue #309 as a whole WORD of the matched
+	 * record for a condition rule. The fourth question of CLAUDE.md's injected-record rule, asked once so
+	 * the two injected channels cannot answer it differently (issue #308).
 	 *
 	 * <p><b>Of the collapsed CLAUSE, not of the one rule this sentence came from</b>, and the
 	 * difference is reachable rather than pedantic. {@code DrugSafetyValidator.contraindicationFinding}

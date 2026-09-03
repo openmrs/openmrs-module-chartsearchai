@@ -107,13 +107,7 @@ public class InjectedContraindicationCorroborationTest {
 	/** The text between {@code lead} and that sentence's own full stop, or null when the record carries
 	 *  no such section — what a model reads, read where a model reads it. */
 	private static String sectionAfter(String record, String lead) {
-		int start = record.indexOf(lead);
-		if (start < 0) {
-			return null;
-		}
-		int end = record.indexOf(".", start + lead.length());
-		assertTrue(end > start, "an unterminated sentence, was: " + record);
-		return record.substring(start + lead.length(), end);
+		return DrugReferenceTestSupport.sectionAfter(record, lead);
 	}
 
 	/** A service over {@code fixture}, parsed by the real production parser — and with cross-reactivity

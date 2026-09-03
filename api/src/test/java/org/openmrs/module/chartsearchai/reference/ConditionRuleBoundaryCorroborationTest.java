@@ -56,8 +56,8 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * <p><b>What the measurement decided</b> (issue #309, over the OpenMRS 3.7.1 reference-application demo
  * dictionary; the figures and both corpora are recorded on
  * {@link PatientClinicalContext#containsToken}). The hazard is real and its false matches are clinical:
- * {@code liver} matches 30 of that dictionary's 2581 condition candidates and 20 of the 30 carry it only
- * inside a deliver/delivery form. The LOSS is zero over the two CODED corpora it ran on — all four
+ * a rule on {@code liver} matches a condition recorded as {@code Status Post Cesarean Delivery}, and the
+ * counts are on {@code containsToken} rather than here. The LOSS is zero over the two CODED corpora — all four
  * condition tokens the shipped seed publishes match every value they match there as whole words —
  * which is the proxy issue #223 used for the allergy side, run for conditions. That bound is
  * load-bearing: the free-text half is unmeasured and is where the rule DOES cost, on the seed's own
@@ -84,6 +84,10 @@ public class ConditionRuleBoundaryCorroborationTest {
 	private static final String UNCORROBORATED = DrugReferenceInjector.UNCORROBORATED_READING_LEAD;
 
 	private static final String NOT_RECORDED = DrugReferenceInjector.NOT_RECORDED_READING_LEAD;
+
+	/** The list every reference record ends with, which is NOT a patient-specific section — the bound
+	 *  {@link #clauseSection} needs so a clause appearing only there cannot be attributed to one. */
+	private static final String RULE_LIST_LEAD = " Contraindicated with: ";
 
 	/** The one arrangement every case here drives: the real injector, the real validator, and the
 	 *  service named by {@code fixture} — this file's own fixture, or the SHIPPED curated seed for the
@@ -127,13 +131,21 @@ public class ConditionRuleBoundaryCorroborationTest {
 	 *  version read only {@link #RECORDED} and {@link #UNCORROBORATED}, so a clause in the
 	 *  not-recorded section was attributed to whichever of those happened to precede it; measured on
 	 *  the shipped seed, where a record carries a recorded section and a not-recorded one at once, it
-	 *  named the recorded section for a clause in the not-recorded one. Sound because no lead is a
-	 *  substring of another, which
-	 *  {@code InjectedContraindicationCorroborationTest.theThreeSectionLeadsAreTheWordsAModelReads}
-	 *  asserts. */
+	 *  named the recorded section for a clause in the not-recorded one.
+	 *
+	 *  <p>Two things make it sound and only one was written down at first. No lead nests inside another,
+	 *  which {@code InjectedContraindicationCorroborationTest.theThreeSectionLeadsAreTheWordsAModelReads}
+	 *  asserts. AND the clause must occur inside a section rather than in the rule list every record
+	 *  ends with — {@code indexOf} takes the FIRST occurrence, so without that bound a clause appearing
+	 *  only in the list is attributed to whichever section precedes it, which is the uncorroborated one
+	 *  five cases here assert. Fail-OPEN, so it is asserted rather than assumed. */
 	private static String clauseSection(String record, String clause) {
 		int at = record.indexOf(clause);
 		assertTrue(at >= 0, "the record does not carry the clause at all: " + record);
+		int listAt = record.indexOf(RULE_LIST_LEAD);
+		assertTrue(listAt < 0 || at < listAt,
+				"the clause occurs only in the trailing rule list, so it sits in no patient-specific "
+						+ "section and this helper must not name one: " + record);
 		String section = "no patient-specific section";
 		int nearest = -1;
 		for (String lead : new String[] { RECORDED, NOT_RECORDED, UNCORROBORATED }) {
@@ -296,9 +308,9 @@ public class ConditionRuleBoundaryCorroborationTest {
 	@Test
 	public void aClinicallyRightCompoundIsHedgedToo() throws IOException {
 		// The residue, kept as a case rather than a sentence: 'Lymphedema' IS oedema, and the boundary
-		// rule hedges it. Measured over the dictionary's 2581 condition candidates, 'edema' matches 13
-		// values and 7 carry it only mid-word, most of them compounds of exactly this kind. This is the
-		// cost a future change would have to weigh, and it is asserted so that change reads it.
+		// rule hedges it. The figures for this shape are on PatientClinicalContext.containsToken with
+		// the rest; what is here is the case, so a future change reads the cost rather than a
+		// description of it.
 		String record = record("Can I give her paracetamol?", "Lymphedema");
 		assertEquals(UNCORROBORATED, clauseSection(record, "fluid retention"),
 				"the residue this rule gives up, pinned rather than described: " + record);

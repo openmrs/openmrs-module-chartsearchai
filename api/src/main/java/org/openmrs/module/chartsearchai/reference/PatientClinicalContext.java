@@ -494,8 +494,9 @@ public class PatientClinicalContext {
 	 * NEGATION. Hazard is a property of the (token, recorded value) PAIR, and the loader holds no
 	 * condition corpus to pair against. A length rule is still defensible as a REPORTED loader finding
 	 * (at one to three characters a single-word token is hazardous 61-100% of the time on both corpora),
-	 * and it was declined only because it warns rather than fixes and would be silent on five of the
-	 * six witnesses above — every one but {@code gi} is five characters or more.
+	 * and it was declined because it warns rather than fixes, is silent on five of the six witnesses
+	 * above (every one but {@code gi} is five characters or more), and is silent by construction on
+	 * every shipped dataset — ADR Decision 70 carries the three together.
 	 *
 	 * <p><b>What the fix IS: a boundary, asked of the match rather than of the token.</b>
 	 * {@code DrugSafetyValidator.aMatchedConditionCarriesTheToken} — the third leg of
@@ -517,9 +518,10 @@ public class PatientClinicalContext {
 	 * <p><b>Both corpora are CODED concept names, and the rule DOES cost the free-text half — including
 	 * on the shipped seed's own tokens.</b> A condition a clinician types as {@code GI bleeding} is
 	 * hedged against {@code gi bleed}, and {@code peptic ulceration} against {@code peptic ulcer}: an
-	 * INFLECTION, the commonest shape in free text and one neither corpus can exhibit. No choice of
-	 * boundary rule rescues them — the tails are three and five letters, both past even the order-name
-	 * rule's two, and choosing an allowance at a call site is what issue #260 forbids. The other shape is a prefix or
+	 * INFLECTION, the commonest shape in free text and one neither corpus can exhibit. Neither of the
+	 * module's two allowances reaches them — 0 letters for prose and 2 for an order name, against tails
+	 * of three and five — and inventing a third at a call site is what issue #260 forbids, so what
+	 * would actually close this is morphology rather than a wider tail. The other shape is a prefix or
 	 * suffix compound that is clinically the same finding: {@code edema} 13/7, {@code carcinoma} 8/2
 	 * ({@code Adenocarcinoma}), {@code arthritis} 10/3 ({@code Osteoarthritis of knee}),
 	 * {@code cerebral} 10/2, {@code ulcer} 21/2. Both are hedged rather than dropped — the section
@@ -595,7 +597,8 @@ public class PatientClinicalContext {
 	}
 
 	/** The needle {@link #containsToken} scans for, folded once — shared with
-	 *  {@link #allergensMatching} so the boolean and its witnesses fold alike, and with
+	 *  {@link #recordsMatching}, and so with both witness accessors over it, so the booleans and their
+	 *  witnesses fold alike, and with
 	 *  {@link #matchableToken}, whose whole subject is whether this expression comes out empty. */
 	private static String foldedToken(String token) {
 		// Through DrugReference.foldedLower, not a second spelling of it: that method is "named once so

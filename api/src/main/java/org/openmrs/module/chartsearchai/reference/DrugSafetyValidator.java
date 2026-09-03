@@ -2108,10 +2108,13 @@ public class DrugSafetyValidator {
 		// of their own, so an unmatched one now answers FALSE rather than TRUE and the mutation stopped
 		// reddening it. Measured on the commit that added the leg (whole api suite green under the
 		// mutation) and on its parent (that case red). The witness named above is an unmatched allergy
-		// rule that is NOT self-named. Two shapes still answer TRUE unconditionally — that one, and a
-		// rule whose type is neither `allergy` nor `condition`, which contraindicationSections files as
-		// unevaluable; the witness below is the first. What can no longer witness this guard is a
-		// condition rule, and a self-named allergy rule never could.
+		// rule that is NOT self-named. Two shapes answer TRUE UNCONDITIONALLY — that one, and a rule
+		// whose type is neither `allergy` nor `condition`, which contraindicationSections files as
+		// unevaluable; the witness named above is the first. A self-named allergy rule can witness this
+		// guard too, but never unconditionally: only through leg 2, allergicSubstanceKeys, which reads
+		// the whole allergy list rather than this rule's own witnesses — the papaveretum/opium shape
+		// DrugReferenceInjector.corroborated describes. What can no longer witness it is a CONDITION
+		// rule, which is what issue #309 changed.
 		Map<Object, String> clauses = contraindicationClauses(ref);
 		Map<Object, Boolean> corroboratedClauses = new HashMap<Object, Boolean>();
 		for (DrugReference.Contraindication c : ref.getContraindications()) {
@@ -2388,14 +2391,13 @@ public class DrugSafetyValidator {
 	 *         ask — WHICH recorded condition redeemed the match — and a boundary rule weaker than
 	 *         containment, for which the filter would start to matter.
 	 *
-	 *         <p><b>The boundary question is put to the TRIMMED token, because that is the string the
-	 *         witness filter matched on</b> ({@link PatientClinicalContext#recordsMatching} folds
-	 *         {@code token.trim()}). Untrimmed the two sides disagreed: a curated rule whose token
-	 *         carried stray whitespace found its witness and then failed to match it, so every such rule
-	 *         lost the recorded attribution it had before issue #309 — silently, and reachable from an
-	 *         operator's own file, since nothing in {@code DrugReferenceValidity} trims or reports a
-	 *         padded token. A normalization and not a widening: the trimmed token still goes to the
-	 *         whole-word rule.
+	 *         <p><b>Both sides are asked about the TRIMMED token.</b> Untrimmed they disagreed — the
+	 *         witness filter trims ({@link PatientClinicalContext#recordsMatching}) and the boundary
+	 *         question did not — so a curated rule whose token carried stray whitespace found its
+	 *         witness and then failed to match it, losing the recorded attribution it had before issue
+	 *         #309. Silently, and reachable from an operator's own file, since nothing in
+	 *         {@code DrugReferenceValidity} trims or reports a padded token. A normalization and not a
+	 *         widening: the trimmed token still goes to the whole-word rule.
 	 *         {@code ConditionRuleBoundaryCorroborationTest.aPaddedTokenIsPutToTheSameStringItsWitnessFilterTrimmed}
 	 *         holds both halves.
 	 *
@@ -2409,7 +2411,7 @@ public class DrugSafetyValidator {
 			return false;
 		}
 		String token = c.getToken() == null ? null : c.getToken().trim();
-		for (String condition : context.conditionsMatching(c.getToken())) {
+		for (String condition : context.conditionsMatching(token)) {
 			if (DrugReference.containsWord(condition, token)) {
 				return true;
 			}
@@ -7270,7 +7272,11 @@ public class DrugSafetyValidator {
 	 *         #recordedContraindicationKind} to decide which chart list a rule is put to, {@link
 	 *         SubjectMatter} to decide whether an allergy-domain question puts the rule in scope,
 	 *         {@link #evaluatesAgainstTheChart} to decide whether the module could ask the chart at all,
-	 *         and {@link #selfNamedAllergyRule} for issue #146's fold. Left as literals they would drift
+	 *         and {@link #selfNamedAllergyRule} for issue #146's fold. <b>A FIFTH reader branches on the
+	 *         CONDITION leg alone</b> since issue #309 — {@link #corroboratedByTheChart}, whose third leg
+	 *         asks {@link #isConditionRule} and neither of the two questions this one gates — so the pair
+	 *         is no longer read at the same places, and this enumeration is where that is recorded rather
+	 *         than left for a maintainer to discover. Left as literals they would drift
 	 *         silently and in the worse direction: a vocabulary that grew a synonym would keep matching
 	 *         rules through one reader while another quietly stopped applying to them, and the worst of
 	 *         those pairings is a rule {@code recordedContraindicationKind} can evaluate that
@@ -7286,6 +7292,14 @@ public class DrugSafetyValidator {
 	 *         {@link #isAllergyRule} and for the reason listed there, which is not symmetry: the readers
 	 *         of a rule's TYPE are enumerated once, on that method, rather than half here and half
 	 *         there. Keeping one of the pair literal and the other named is how the pair comes apart.
+	 *
+	 *         <p><b>Package-private, unlike its sibling, and asymmetric in readers too.</b> Issue #309
+	 *         gave {@link #corroboratedByTheChart} a leg that branches on this alone, so the two are no
+	 *         longer read at the same four places — {@link #isAllergyRule}'s enumeration names that
+	 *         reader. The visibility is for
+	 *         {@code ConditionRuleBoundaryCorroborationTest.theShippedSeedPublishesExactlyTheFourConditionTokensTheMeasurementWasOver},
+	 *         a data guard over the shipped seed that must screen condition rules by the production
+	 *         predicate rather than by a second spelling of the literal.
 	 */
 	static boolean isConditionRule(DrugReference.Contraindication c) {
 		return "condition".equalsIgnoreCase(c.getType());

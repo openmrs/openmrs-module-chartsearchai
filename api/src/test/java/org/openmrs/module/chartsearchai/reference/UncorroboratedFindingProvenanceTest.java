@@ -425,8 +425,10 @@ public class UncorroboratedFindingProvenanceTest {
 		// everywhere else. Codeine files an allergy rule on `codeine` and a CONDITION rule on
 		// `respiratory depression` carrying ONE note, `opioid reaction`; an allergy recorded as
 		// `Dihydrocodeine` reaches the first only mid-word and corroborates nothing, while a recorded
-		// condition `Respiratory depression` matches the second, which is not self-named and so is
-		// corroborated by construction. The record's own side of this is
+		// condition `Respiratory depression` matches the second, which since issue #309 the BOUNDARY leg
+		// corroborates — that recorded condition carries the token as a whole word. It was "corroborated
+		// by construction for not being self-named" before #309, and this case now depends on the leg:
+		// neuter aMatchedConditionCarriesTheToken and its precondition reddens. The record's own side is
 		// InjectedContraindicationCorroborationTest.aClauseAnotherRuleOfTheSameEntryDoesRecordIsStatedAsRecorded,
 		// which owns this exact arrangement and asserts only that side of it.
 		//
@@ -492,8 +494,8 @@ public class UncorroboratedFindingProvenanceTest {
 		// here said "corroborated by construction for not being self-named", which was that premise.
 		// The guard's witness is now
 		// ConditionRuleBoundaryCorroborationTest.anUnmatchedRuleStillCannotSeedItsKeyAsRecorded, whose
-		// unmatched rule is a non-self-named ALLERGY rule — the shape still answering TRUE
-		// unconditionally. What this case still pins is the pair of preconditions below: the record goes
+		// unmatched rule is a non-self-named ALLERGY rule, one of the two shapes still answering TRUE
+		// unconditionally (the other is a rule of an unrecognised type). What this case still pins is the pair of preconditions below: the record goes
 		// on hedging `opioid reaction` and states nothing as recorded, beside a finding that hedges it.
 		DrugReferenceService service = DrugReferenceTestSupport
 				.serviceWith(DrugReferenceTestSupport.fixtureEntries(BORROWED_ALIAS));

@@ -181,6 +181,47 @@ public class ConditionRuleBoundaryCorroborationTest {
 				"the residue this rule gives up, pinned rather than described: " + record);
 	}
 
+	/** The {@code allergens} counterpart of {@link #findings}: this case's witness is an ALLERGY
+	 *  arrangement, because the guard it re-pins is one the condition leg cannot reach. */
+	private static List<String> allergyFindings(String question, String... allergens)
+			throws IOException {
+		DrugReferenceService service =
+				DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport.fixtureEntries(FIXTURE));
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service)
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
+						DrugReferenceTestSupport.ctx(60, null, null, null,
+								DrugReferenceTestSupport.set(allergens), null),
+						question);
+		List<String> texts = new ArrayList<String>();
+		for (RecordMapping finding : DrugReferenceTestSupport.injectedFindings(chart)) {
+			texts.add(finding.getText());
+		}
+		return texts;
+	}
+
+	@Test
+	public void anUnmatchedRuleStillCannotSeedItsKeyAsRecorded() throws IOException {
+		// NOT a case about conditions, and it is here because of what #309's change COSTS rather than
+		// what it adds. DrugSafetyValidator.addContraindications opens its pre-pass with
+		// `if (recordedContraindicationKind(c, context) == null) continue;`, and that guard is what stops
+		// an UNMATCHED rule seeding its key corroborated — which would clear a hedge on a clause a
+		// sibling key renders identically. Its only witness was
+		// UncorroboratedFindingProvenanceTest.aRuleTheChartDoesNotRecordCannotStateItsClauseAsRecorded,
+		// whose unmatched rule is a CONDITION rule; before #309 that rule corroborated TRUE
+		// unconditionally, and after #309 it corroborates FALSE, so deleting the guard stopped reddening
+		// anything. Measured: with the guard deleted the whole api suite was green on the post-#309 code
+		// and that case FAILED on the pre-#309 code.
+		//
+		// This restores a witness the condition leg cannot silence, because its unmatched rule is an
+		// allergy rule that is not self-named ('nsaid' is no name of Nefopam), which corroborates TRUE
+		// unconditionally exactly as before. Delete the `continue` and read this failure.
+		List<String> findings = allergyFindings("Is it safe to give her nefopam?", "Nefotenone");
+		assertEquals(1, findings.size(), "one fact is one citable record, was: " + findings);
+		assertTrue(findings.get(0).contains(DrugReferenceInjector.FINDING_UNCORROBORATED_MATCH),
+				"a rule the chart does not record must not clear the hedge on a clause its own key "
+						+ "renders identically: " + findings.get(0));
+	}
+
 	@Test
 	public void anUnmatchedConditionRuleIsUnaffected() throws IOException {
 		// The boundary question is asked only of a rule that has already matched, which both call sites
@@ -189,5 +230,16 @@ public class ConditionRuleBoundaryCorroborationTest {
 		String record = record("Can I give her naltrexone?", "Malaria");
 		assertFalse(record.contains(UNCORROBORATED + "acute hepatitis or liver failure"),
 				"a rule the chart never matched must not be hedged as a matched one: " + record);
+		// And not in the RECORDED section either — the assertion above alone is satisfied by the rule
+		// simply not matching, so on its own it discriminates nothing. Both together say the clause is
+		// in NO patient-specific section.
+		assertFalse(record.contains(RECORDED + "acute hepatitis or liver failure"),
+				"a rule the chart never matched must not be stated as recorded either: " + record);
+		// The POSITIVE CONTROL, without which the two assertions above could both hold because the
+		// record names no clause at all: the SAME entry and question, with a recorded condition that
+		// does match, puts that very string in a patient-specific section.
+		assertTrue(record("Can I give her naltrexone?", "Chronic liver disease")
+				.contains(RECORDED + "acute hepatitis or liver failure"),
+				"the control must show this arrangement CAN state the clause");
 	}
 }

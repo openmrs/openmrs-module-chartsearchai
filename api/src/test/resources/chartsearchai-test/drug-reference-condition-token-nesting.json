@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "source": "hand-authored fixture for issue #309 — not shipped data",
-  "description": "Shapes about whether a CONDITION rule's bare-containment match against a recorded condition is corroborated, for the injected record's patient-specific reading. The recorded condition names are real: every one is a concept name from the OpenMRS 3.7.1 reference-application demo dictionary, which is the corpus issue #309's measurement was run over. (1) Naltrexone rules on the condition token 'liver', which is the most plausible hepatic contraindication token there is and which nests inside every deliver/delivery form the dictionary publishes — 20 of the 30 values it matches over that dictionary's 2581 condition candidates, e.g. 'Status Post Cesarean Delivery'. (2) Metformin rules on 'renal', which nests inside 'Malignant tumor of adrenal gland' — a tumour of a different organ. (3) Ibuprofen rules on 'peptic ulcer', which is one of the four condition tokens the SHIPPED curated seed publishes; over both measured corpora every one of its matches carries it as a whole word, which is the loss side of the boundary rule and is zero. (4) Paracetamol rules on 'edema', whose mid-word matches are clinically RIGHT compounds ('Lymphedema', 'Angioedema') — the residue the boundary rule gives up, kept here so a future change can read what it costs. No entry carries ATC codes or interactions, so no class comparison can chip and every record is the contraindication arms' own."
+  "description": "Shapes about whether a CONDITION rule's bare-containment match against a recorded condition is corroborated, for the injected record's patient-specific reading. The recorded condition names are real: every one is a concept name from the OpenMRS 3.7.1 reference-application demo dictionary, which is the corpus issue #309's measurement was run over. (1) Naltrexone rules on the condition token 'liver', which is the most plausible hepatic contraindication token there is and which nests inside every deliver/delivery form the dictionary publishes — 20 of the 30 values it matches over that dictionary's 2581 condition candidates, e.g. 'Status Post Cesarean Delivery'. (2) Metformin rules on 'renal', which nests inside 'Malignant tumor of adrenal gland' — a tumour of a different organ. (3) Ibuprofen rules on 'peptic ulcer', which is one of the four condition tokens the SHIPPED curated seed publishes; over both measured corpora every one of its matches carries it as a whole word, which is the loss side of the boundary rule and is zero. (4) Paracetamol rules on 'edema', whose mid-word matches are clinically RIGHT compounds ('Lymphedema', 'Angioedema') — the residue the boundary rule gives up, kept here so a future change can read what it costs. (5) Nefopam carries NO condition rule and is here for a coverage reason rather than a matching one: it re-pins the `continue` guard in DrugSafetyValidator.addContraindications, whose only previous witness used an unmatched CONDITION rule and which #309's change therefore disarmed — a self-named allergy rule 'nefo' that an allergen recorded as 'Nefotenone' reaches only mid-word, beside a CLASS allergy rule 'nsaid' that the same allergen does not match at all, both carrying ONE note so the two keys render one clause string. An unmatched non-self-named allergy rule still corroborates TRUE unconditionally, which is what makes it a witness the condition leg cannot silence. No entry carries ATC codes or interactions, so no class comparison can chip and every record is the contraindication arms' own."
   ,
   "entries": [
     {
@@ -28,6 +28,16 @@
       "aliases": ["ibuprofen"],
       "contraindications": [
         { "type": "condition", "token": "peptic ulcer", "note": "active peptic ulcer disease" }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "nefopam",
+      "name": "Nefopam",
+      "aliases": ["nefopam", "nefo"],
+      "contraindications": [
+        { "type": "allergy", "token": "nefo", "note": "documented nefopam allergy" },
+        { "type": "allergy", "token": "nsaid", "note": "documented nefopam allergy" }
       ],
       "source": "hand-authored fixture"
     },

@@ -2365,10 +2365,18 @@ public class DrugSafetyValidator {
 	 *         {@code ConditionRuleBoundaryCorroborationTest.aClinicallyRightCompoundIsHedgedToo} so a
 	 *         future change reads the cost rather than a description of it.
 	 *
-	 *         <p>Per WITNESS, through {@link PatientClinicalContext#conditionsMatching}, and never over
-	 *         the whole condition list: the question is whether THIS rule's match is redeemed, and a
-	 *         different recorded condition carrying the token as a word says nothing about the record
-	 *         that actually matched. Same shape as the allergy leg above, for the same reason.
+	 *         <p>Through {@link PatientClinicalContext#conditionsMatching} — the witness accessor — for
+	 *         SYMMETRY with the allergy leg above and to share one scan with the boolean, and NOT
+	 *         because scanning the witnesses answers differently from scanning the whole condition list.
+	 *         It does not: {@link DrugReference#containsWord} is strictly stronger than the containment
+	 *         those witnesses are filtered by, so any condition carrying the token as a word is already
+	 *         one of them. Measured by mutation — swapping this loop to
+	 *         {@code context.getConditionTokens()} reddens nothing. Stated because the allergy leg's own
+	 *         per-witness form IS load-bearing ({@code matchesDrugName} can accept a record that
+	 *         {@code hasAllergyToken} did not match), so the symmetry invites the reader to assume the
+	 *         same of this one. What the witness form buys here is a future question this leg cannot yet
+	 *         ask — WHICH recorded condition redeemed the match — and a boundary rule weaker than
+	 *         containment, for which the filter would start to matter.
 	 *
 	 *         <p>False for a null context, which is "nothing known" rather than "nothing recorded", and
 	 *         false is the safe direction here exactly as it is for {@link #aMatchedRecordNamesTheEntry}:

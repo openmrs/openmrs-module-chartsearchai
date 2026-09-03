@@ -1246,7 +1246,7 @@ public class ChartSearchAiRestController {
 	 * <b>The suite exercises it</b>: that fixture's chip 7 carries two bridges for this reason, and a
 	 * reshape into maps reddens the guard with the offending value in its message. It did NOT when
 	 * this key was first published — every chip there bridged nothing, so two empty lists compared
-	 * equal without reaching an element — and that is what the chip closes. ADR Decision 68 records
+	 * equal without reaching an element — and that is what the chip closes. ADR Decision 69 records
 	 * the state before and after; do not restore the blind spot by removing the chip.
 	 *
 	 * <p>Two consequences of publishing the object, both measured and neither hidden. The JSON field

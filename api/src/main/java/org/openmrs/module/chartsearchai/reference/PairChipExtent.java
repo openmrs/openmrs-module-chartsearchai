@@ -41,32 +41,36 @@ package org.openmrs.module.chartsearchai.reference;
  * question, "can I give this patient X?". Until #356 that shape published no statement at all, so a
  * completed negative screen and a question nobody screened were one value on the wire.
  *
- * <p><b>Which arm owns the field is decided by how many reference entries the question RESOLVED,
- * not by how many drugs a clinician would say it named</b>, and the two come apart on the shipped
- * knowledge base. A name that resolves to SEVERAL reference entries — a substance filed under more
- * than one row, {@code Dexamethasone} beside
- * {@code Dexamethasone (ophthalmic)}, or an alias family sharing an {@code rxnorm_name} — opens the
- * question-pair arm, which then owns this field and states its own pair count. The drug-in-play arm
- * still raises its chips, and they are not in that number. So a response CAN carry an above-floor
- * interaction chip beside {@code found: 0}: the zero is honest about the check that stated it, and
- * a client must not read it as a count of the chips beside it — which is the same warning
- * {@link #getReported()} carries for the other direction.
+ * <p><b>Which arm owns the field is decided by how many reference entries the question RESOLVED —
+ * and, since issue #336's verification round, by whether that arm ceded every pair it related to
+ * the drug-in-play arm — not by how many drugs a clinician would say it named</b>, and the resolved
+ * count and the clinician's reading come apart on the shipped knowledge base. A name that resolves
+ * to SEVERAL reference entries — a substance filed under more than one row, {@code Dexamethasone}
+ * beside {@code Dexamethasone (ophthalmic)}, or an alias family sharing an {@code rxnorm_name} —
+ * opens the question-pair arm, which then owns this field and states its own pair count. The
+ * drug-in-play arm still raises its chips, and they are not in that number. So a response CAN carry
+ * an above-floor interaction chip beside {@code found: 0}: the zero is honest about the check that
+ * stated it, and a client must not read it as a count of the chips beside it — which is the same
+ * warning {@link #getReported()} carries for the other direction.
  *
- * <p><b>An arm that CEDED every pair it related states nothing, never a zero</b> (issue #336's
- * verification round). The question-pair arm leaves a pair to the drug-in-play arm wherever a rule
- * joining it names one of the patient's own orders
+ * <p><b>The QUESTION-PAIR arm, having CEDED every pair it related, states nothing rather than a
+ * zero</b> (issue #336's verification round). It leaves a pair to the drug-in-play arm wherever a
+ * rule joining it names one of the patient's own orders
  * ({@code DrugSafetyValidator.coveredByActiveOrderArm}), because a chip about her own medication is
  * the stronger statement. Where that took EVERY pair it related, the arm has no bounded list left
  * to describe, and a zero there would say the reference data related none of the pairs it
- * enumerated. Measured on the 3.7.1 standalone, asking
- * {@code "Can I give her warfarin and ibuprofen?"} of a patient prescribed ibuprofen: the response
+ * enumerated. Measured on the 3.7.1 standalone at {@code main} @ {@code 77c0f9a2}, asking
+ * {@code "Can I give her warfarin and ibuprofen?"} of the eight-anti-inflammatory patient of issue
+ * #336's own report — one of whose orders is the ibuprofen the question names: the response
  * published {@code found: 0, reported: 0} beside fifteen interaction chips including a Major, so
  * a client rendering the field as {@code README} tells it to showed "0 of 0 interaction pairs"
  * above a Major finding. It now states nothing, which is what lets
  * {@code DrugSafetyValidator.validate}'s issue #356 fallback hand the field to the arm that did
- * report those pairs. Scoped to a pass that ceded every pair: where some
- * survive, the list it kept is complete and it says so, and the ceded pairs are reported beside it
- * as chips rather than withheld.
+ * report those pairs. Scoped to a pass that ceded every pair: where some survive, the list it kept
+ * is complete and it says so, and the ceded pairs are reported beside it as chips rather than
+ * withheld. The SCREENING arm's own cede — {@code DrugSafetyValidator.InteractionPairs}, a pair the
+ * drug-in-play arm already chipped — still states a zero, which ADR Decision 68 records as
+ * reproduced and deliberately not fixed here.
  *
  * <p>What every one of them counts is the same thing: above-floor interaction RULES relating one
  * drug to another. The drug-in-play arm's unrated class relationships — a shared ATC subgroup, a

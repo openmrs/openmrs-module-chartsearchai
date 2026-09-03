@@ -340,7 +340,7 @@ Ask the *identical* question of Barbara Miller, who is actively prescribed ibupr
 
 ```
 question: Can warfarin and ibuprofen be given together?
-pairs:    {"found": 3, "reported": 3}
+pairs:    {"found": 0, "reported": 0}
 chips:    5
   interaction  Major  "Warfarin interacts with active order Acetylsalicylic acid (aspirin) …"
   interaction  Major  "Warfarin interacts with active order Ibuprofen — Major. Nonsteroidal
@@ -356,17 +356,18 @@ The pair *is* reported — as **"active order Ibuprofen"**, by the drug-in-play 
 chart owns it. Test this arm on a patient prescribed neither drug or you will only ever see the
 other one.
 
-**The `pairs` value is the drug-in-play arm's, and it used to read `{"found": 0, "reported": 0}`.**
-The question-pair arm ceded its only pair, so it has no bounded list to describe and now states
-nothing at all, which lets the arm that *did* report those pairs speak
-([#336](https://github.com/openmrs/openmrs-module-chartsearchai/issues/336)). The three it states
-are its own rule chips, which are the three `interaction` lines above — so the field now describes
-findings a clinician can see rather than announcing "0 of 0 interaction pairs" above a Major.
-A zero here was not "of the pairs this arm was responsible for, none": the arm related a pair and
-handed it over, and a zero is defined as *the reference data related none of the pairs enumerated*.
-Where only **some** of a question's pairs are ceded the arm keeps the field and describes the list
-it kept: that list is complete and says so, and the ceded pairs are reported beside it as chips
-rather than withheld. So this field still does not count the chips beside it — see
+**That `pairs` line is not what a build carrying [#336](https://github.com/openmrs/openmrs-module-chartsearchai/issues/336)'s
+fix produces, and the run above has not been repeated on one.** The zero was recorded before it: the
+question-pair arm ceded its only pair to the drug-in-play arm and then reported a complete screen of
+none, which is defined as *the reference data related none of the pairs enumerated* and was false —
+the arm related one and handed it over. It now states nothing at all, so the arm that *did* report
+those pairs states the field instead, and what it states is the number of above-floor rule pairs it
+related for the question's own substances. On the mirror of this arrangement driven through the real
+`validate` over the DDInter test excerpt, that is `{"found": 3, "reported": 3}`; this patient has not
+been re-run on a build carrying the fix, so treat the block above as the pre-fix recording it is.
+Where only **some** of a question's pairs are ceded the arm keeps the field and describes the list it
+kept: that list is complete and says so, and the ceded pairs are reported beside it as chips rather
+than withheld. Either way the field does not count the chips beside it — see
 [The four arms, and what each one answers](#the-four-arms-and-what-each-one-answers).
 
 ---

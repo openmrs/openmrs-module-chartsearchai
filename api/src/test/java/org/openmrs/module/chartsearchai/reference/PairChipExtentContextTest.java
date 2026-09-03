@@ -127,8 +127,10 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 	 *  coincide, no assertion can tell the arm DECLINING to speak from the arm counting a ceded pair
 	 *  into its own numbers — the cross-arm sum ADR Decision 65 refuses — and, on the partial case,
 	 *  none can tell the arm KEEPING the field from the arm yielding it. Measured: on a chart holding
-	 *  the ibuprofen alone the partial case reads {@code found: 1} either way. Both the order's name
-	 *  and its code, so the cede does not rest on the order-name leg of {@code hasActiveDrug} alone. */
+	 *  the ibuprofen alone the partial case reads {@code found: 1} either way. Each order carries its
+	 *  name AND its code because that is what {@code PatientClinicalContextBuilder} builds for a
+	 *  mapped concept; no case here separates the two legs of {@code hasActiveDrug}, so read this as
+	 *  the arrangement's shape rather than as a claim that either leg alone would cede. */
 	private static PatientClinicalContext chartOwningTheQuestionsOnlyPair() {
 		return DrugReferenceTestSupport.ctx(60, null,
 				DrugReferenceTestSupport.set("Ibuprofen 400mg", "Aspirin 81mg"),
@@ -499,11 +501,10 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 
 	@Test
 	public void aQuestionPairListThatCededEveryPairStatesWhatTheChartArmReported() {
-		// Issue #336's own third row, the one its verification comment calls the one that bites:
-		// "Can I give her warfarin and ibuprofen?" on a patient prescribed ibuprofen published
-		// {found: 0, reported: 0} beside fifteen interaction chips including a Major, so a client
-		// rendering the field as README tells it to showed "0 of 0 interaction pairs" above a Major
-		// finding. Every pair the question named was the CHART arm's — coveredByActiveOrderArm,
+		// Issue #336's own third row, the one its verification comment calls the one that bites — the
+		// live measurement of what its zero cost a reader is in PairChipExtent's javadoc and in ADR
+		// Decision 68, with the build and the chart it was taken on. This is that shape in miniature.
+		// Every pair the question named was the CHART arm's — coveredByActiveOrderArm,
 		// because a rule joining the pair names one of her orders — so this arm related a pair and
 		// reported none. A zero says an arm ran and the reference data related NONE of the pairs it
 		// enumerated, which is what PairChipExtent and README both define found == 0 to mean, and it
@@ -535,8 +536,9 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 	@Test
 	public void aQuestionPairListThatCededOnlySomeOfItsPairsStillStatesItsOwnBoundedList() {
 		// The boundary of aQuestionPairListThatCededEveryPairStatesWhatTheChartArmReported, and the
-		// residue it deliberately leaves. A third question drug on the same chart: warfarin x ibuprofen is the chart arm's, simvastatin x warfarin is
-		// this arm's, and this arm goes on describing the bounded list it kept. Its statement is true
+		// residue it deliberately leaves. A third question drug on the same chart: warfarin x
+		// ibuprofen is the chart arm's, simvastatin x warfarin is this arm's, and this arm goes on
+		// describing the bounded list it kept. Its statement is true
 		// of that list — nothing in it was withheld — and the ceded pair is reported beside it as a
 		// chip rather than hidden, which is why the fix above is scoped to a pass that ceded EVERY
 		// pair. Withhold the statement on ANY cede instead and this reads the chart arm's three,
@@ -548,7 +550,7 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals(4, partial.chips.size(),
 				"precondition: the chart arm's three and this arm's one, so the cede is partial rather "
 						+ "than total: " + DrugReferenceTestSupport.details(partial.chips));
-		assertNotNull(partial.extent);
+		assertNotNull(partial.extent, "the arm kept a pair, so it still has a bounded list to describe");
 		assertEquals(1, partial.extent.getFound(),
 				"the pair this arm kept, and not the one it handed to the chart arm — nor the chart "
 						+ "arm's own three, which is what this reads if the field is yielded on any cede");

@@ -688,7 +688,10 @@ public class DrugSafetyValidator {
 		// overlapping sets (only one arm is ever reachable per question — which is also why the two
 		// share ONE configured limit, #131), and no shared "who owns this pair" decision is needed
 		// between them — which is why this arm needs no analogue of that arm's coveredByActiveOrderArm
-		// precedence check against the chart. What this arm DOES share with it is the machinery: the
+		// precedence check, whose subjects are the chart's own orders here. Read that as scoped to the
+		// two PAIRWISE arms and not to the chart generally: this arm yields a pair the DRUG-IN-PLAY arm
+		// already chipped, through reportedPairs.alreadyReported below, which ADR Decision 68 records
+		// as the nearest sibling of the cede addQuestionPairInteractions now declines to call a zero. What this arm DOES share with it is the machinery: the
 		// same bestRulePerPartner grouping, the same partnerLabel, the same pairKeyNames/unorderedPairKey
 		// keys, the same severityPriority ordering and the same maxPairChips() bound, so the two cannot
 		// drift apart on what a pair is, which of its rows is worth chipping, or how many are shown.
@@ -982,16 +985,20 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * States an interaction arm's extent into the caller's sink, where there is one and an arm ran.
+	 * States an interaction arm's extent into the caller's sink, where there is one and an arm made a
+	 * statement.
 	 *
 	 * <p>Called ONCE, on {@code validate}'s normal return, from a local the arms assign — never per
 	 * arm. That is what makes the statement atomic with the chips: the public entry answers a
 	 * RuntimeException with an empty warning list, so a sink written as each arm finished could
 	 * describe a screen whose chips were then discarded (issue #336).
 	 *
-	 * <p>A {@code null} extent means no arm enumerated anything, which is not the same as an
-	 * arm having enumerated nothing: an arm that ran and found no above-floor pair states
-	 * {@code found == 0}, a complete screen. See {@link PairChipExtent}.
+	 * <p>A {@code null} extent is the absence of a statement, which is not the same as an arm having
+	 * enumerated nothing: an arm that ran and found no above-floor pair states {@code found == 0}, a
+	 * complete screen. Since issue #336's verification round an arm can also enumerate pairs, relate
+	 * them, cede every one to another arm and state nothing — see {@link PairChipExtent}, which is
+	 * canonical for both, and {@code validate}'s issue #356 fallback, which is what a ceding
+	 * question-pair pass then reaches.
 	 */
 	private static void recordPairExtent(PairChipExtent.Sink sink, PairChipExtent extent) {
 		if (sink != null && extent != null) {
@@ -2552,7 +2559,9 @@ public class DrugSafetyValidator {
 	 * "Can I give this patient X?" usually resolves ONE drug, so neither pairwise arm runs — the
 	 * question-pair arm needs two and the screen needs none — and this arm is then the whole of the
 	 * interaction check on the canonical prescribing question. Where the name resolves to several
-	 * reference entries the question-pair arm owns the field instead and this count is discarded;
+	 * reference entries the question-pair arm owns the field instead and this count is discarded —
+	 * unless that arm ceded every pair it related, where it states nothing and this count is what
+	 * reaches the wire (issue #336, ADR Decision 68);
 	 * {@link PairChipExtent} is canonical for what that costs a reader. Stating nothing published a completed negative screen as
 	 * {@code interactionPairs: null}, which {@link PairChipExtent} defines as "the producer stated no
 	 * measurement": a clinician was given an abstention indistinguishable from one where nobody
@@ -4702,20 +4711,13 @@ public class DrugSafetyValidator {
 		// equally-rated pairs keep the dataset order the entry loop produced them in.
 		if (found.isEmpty()) {
 			if (!chartOwned.isEmpty()) {
-				// Related pairs, kept none: every one of them went to the chart arm above, and a zero
-				// would say the reference data related NONE of the pairs this arm enumerated — what
-				// PairChipExtent defines found == 0 to mean, and false here. Ceding is not a measurement:
-				// having handed over every pair this arm has no bounded list of its own to describe, so
-				// it states NOTHING and validate's issue #356 fallback lets the arm that did report them
-				// speak. Never a sum and never this arm counting what it ceded — the number a client
-				// then reads is the other arm's own, over its own population. PairChipExtent carries the
-				// live measurement of what the zero cost a reader; ADR Decision 68 carries the rest.
-				//
-				// Scoped to a pass that ceded EVERY pair, deliberately. Where some pairs survive, the
-				// list this arm kept is complete and it says so, exactly as before; the pairs it ceded
-				// are reported beside it as chips rather than withheld, and forfeiting the statement
-				// there would give up the bounded claim issue #336 exists to publish, for the sake of a
-				// number no cap ever cut.
+				// Ceding is not a measurement: this arm related pairs and kept none, so it has no bounded
+				// list of its own to describe. Scoped to a pass that ceded EVERY pair, deliberately —
+				// where some survive, the list it kept is complete and says so, and the ceded pairs are
+				// reported beside it as chips rather than withheld, so forfeiting the statement there
+				// would give up the bounded claim issue #336 exists to publish for a number no cap cut.
+				// What the zero asserted, what null reaches, and the live measurement of what the zero
+				// cost a reader are on this method's @return, on PairChipExtent and in ADR Decision 68.
 				return null;
 			}
 			// Nothing to order or bound, and no GP read for the common "these two do not interact" case —

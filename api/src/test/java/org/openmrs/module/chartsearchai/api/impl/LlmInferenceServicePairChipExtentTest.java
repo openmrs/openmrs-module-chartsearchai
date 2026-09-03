@@ -43,8 +43,8 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * one it hands to {@code validate}, that whatever the validator states into it reaches the answer,
  * and that an answer whose producer stated nothing carries nothing. The counts themselves are a fact
  * about the arms that state them — the two pairwise ones and, since issue #356, the drug-in-play arm
- * where neither of those stated one — and are pinned through the real {@code validate} over the real DDInter
- * excerpt by {@code PairChipExtentContextTest}; a stub here could only restate them.
+ * where neither of those stated one — and are pinned through the real {@code validate} over the
+ * real DDInter excerpt by {@code PairChipExtentContextTest}; a stub here could only restate them.
  *
  * <p>The validator seam is therefore deliberately a stub that states a fixed extent — it is
  * answering for the arms, not imitating them, and the arms have their own tests. What no stub could

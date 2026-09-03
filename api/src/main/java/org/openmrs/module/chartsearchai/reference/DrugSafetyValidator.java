@@ -691,8 +691,10 @@ public class DrugSafetyValidator {
 		// precedence check, whose subjects are the chart's own orders here. Read that as scoped to the
 		// two PAIRWISE arms and not to the chart generally: this arm yields a pair the DRUG-IN-PLAY arm
 		// already chipped, through reportedPairs.alreadyReported below, which ADR Decision 68 records
-		// as the nearest sibling of the cede addQuestionPairInteractions now declines to call a zero. What this arm DOES share with it is the machinery: the
-		// same bestRulePerPartner grouping, the same partnerLabel, the same pairKeyNames/unorderedPairKey
+		// as the nearest sibling of the cede addQuestionPairInteractions now declines to call a zero.
+		//
+		// What this arm DOES share with it is the machinery: the same bestRulePerPartner grouping, the
+		// same partnerLabel, the same pairKeyNames/unorderedPairKey
 		// keys, the same severityPriority ordering and the same maxPairChips() bound, so the two cannot
 		// drift apart on what a pair is, which of its rows is worth chipping, or how many are shown.
 		if (warnInteractions && questionDrugs.isEmpty()
@@ -995,10 +997,11 @@ public class DrugSafetyValidator {
 	 *
 	 * <p>A {@code null} extent is the absence of a statement, which is not the same as an arm having
 	 * enumerated nothing: an arm that ran and found no above-floor pair states {@code found == 0}, a
-	 * complete screen. Since issue #336's verification round an arm can also enumerate pairs, relate
-	 * them, cede every one to another arm and state nothing — see {@link PairChipExtent}, which is
-	 * canonical for both, and {@code validate}'s issue #356 fallback, which is what a ceding
-	 * question-pair pass then reaches.
+	 * complete screen. What a producer's {@code null} covers is on
+	 * {@link #addQuestionPairInteractions}'s {@code @return} for that arm and in ADR Decision 68;
+	 * what a CLIENT's covers is enumerated in {@link PairChipExtent} and in {@code README}, and
+	 * those two are not the same list, because {@code validate}'s issue #356 fallback stands between
+	 * them.
 	 */
 	private static void recordPairExtent(PairChipExtent.Sink sink, PairChipExtent extent) {
 		if (sink != null && extent != null) {
@@ -4712,12 +4715,9 @@ public class DrugSafetyValidator {
 		if (found.isEmpty()) {
 			if (!chartOwned.isEmpty()) {
 				// Ceding is not a measurement: this arm related pairs and kept none, so it has no bounded
-				// list of its own to describe. Scoped to a pass that ceded EVERY pair, deliberately —
-				// where some survive, the list it kept is complete and says so, and the ceded pairs are
-				// reported beside it as chips rather than withheld, so forfeiting the statement there
-				// would give up the bounded claim issue #336 exists to publish for a number no cap cut.
-				// What the zero asserted, what null reaches, and the live measurement of what the zero
-				// cost a reader are on this method's @return, on PairChipExtent and in ADR Decision 68.
+				// list of its own to describe. EVERY pair, deliberately — see this method's @return for
+				// what the two returns say differently, PairChipExtent for what the zero asserted and
+				// what it cost a reader, and ADR Decision 68 for why a partial cede keeps the field.
 				return null;
 			}
 			// Nothing to order or bound, and no GP read for the common "these two do not interact" case —
@@ -5515,6 +5515,12 @@ public class DrugSafetyValidator {
 	 *        below for why no chip of this arm can move and what can. Every order entry is added to that
 	 *        lookup's group map by {@link #resolvedSubstanceRows}, so the ungrouped-row fallback is
 	 *        unreachable from here too.
+	 * @return what this screen measured, or {@code null} where it could not run at all (no clinical
+	 *         context). It states {@code of(0, 0)} over an empty candidate list — including on the one
+	 *         path where that is FALSE, a pass whose every pair went to the drug-in-play arm through
+	 *         {@code alreadyReported}. Unlike {@link #addQuestionPairInteractions}, which since issue
+	 *         #336's verification round states nothing there, this arm has no fallback behind it: see
+	 *         the comment at that return, and ADR Decision 68 for the reproduction.
 	 */
 	private PairChipExtent addActiveOrderPairInteractions(List<SafetyWarning> warnings,
 			SubstanceSubjects subjects, PatientClinicalContext context, int severityFloor,
@@ -5680,6 +5686,16 @@ public class DrugSafetyValidator {
 			// data related none of the pairs it enumerated. That is a COMPLETE screen, and it is the
 			// half of issue #336 a truncation signal alone would leave unsaid — a caller hearing
 			// nothing cannot tell it from a question that never asked to be screened.
+			//
+			// ONE path here makes that sentence false and it is a KNOWN, reproduced gap, not a claim to
+			// rely on: where alreadyReported above yielded every pair to the drug-in-play arm, this
+			// screen related pairs and kept none, exactly as addQuestionPairInteractions did before
+			// issue #336's verification round. That arm now states nothing there; this one still states
+			// a zero, because returning null here reaches no fallback — validate's issue #356 fallback
+			// needs questionDrugScreened, which is false on the questionDrugs.isEmpty() gate this arm
+			// runs behind — so the choice is between a false zero and no statement at all on the one
+			// question shape that asked for a screen. ADR Decision 68 carries the reproduction and why
+			// it is left standing; whoever picks a value gives this branch its own ticket.
 			return PairChipExtent.of(0, 0);
 		}
 		Collections.sort(pairs, SCREENED_PAIR_SEVERITY_DESCENDING);

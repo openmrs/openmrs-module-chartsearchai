@@ -550,7 +550,9 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals(4, partial.chips.size(),
 				"precondition: the chart arm's three and this arm's one, so the cede is partial rather "
 						+ "than total: " + DrugReferenceTestSupport.details(partial.chips));
-		assertNotNull(partial.extent, "the arm kept a pair, so it still has a bounded list to describe");
+		// Not load-bearing on its own: withheld on any cede, the fallback supplies one and this stays
+		// green. The count below is what discriminates.
+		assertNotNull(partial.extent, "some arm must state one");
 		assertEquals(1, partial.extent.getFound(),
 				"the pair this arm kept, and not the one it handed to the chart arm — nor the chart "
 						+ "arm's own three, which is what this reads if the field is yielded on any cede");

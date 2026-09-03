@@ -54,8 +54,8 @@ package org.openmrs.module.chartsearchai.reference;
  * warning {@link #getReported()} carries for the other direction.
  *
  * <p><b>The QUESTION-PAIR arm, having CEDED every pair it related, states nothing rather than a
- * zero</b> (issue #336's verification round). It leaves a pair to the drug-in-play arm wherever a
- * rule joining it names one of the patient's own orders
+ * zero</b> (issue #336's verification round). It leaves a pair to the drug-in-play arm wherever one
+ * of the ABOVE-FLOOR rules joining it names one of the patient's own orders
  * ({@code DrugSafetyValidator.coveredByActiveOrderArm}), because a chip about her own medication is
  * the stronger statement. Where that took EVERY pair it related, the arm has no bounded list left
  * to describe, and a zero there would say the reference data related none of the pairs it
@@ -68,9 +68,9 @@ package org.openmrs.module.chartsearchai.reference;
  * {@code DrugSafetyValidator.validate}'s issue #356 fallback hand the field to the arm that did
  * report those pairs. Scoped to a pass that ceded every pair: where some survive, the list it kept
  * is complete and it says so, and the ceded pairs are reported beside it as chips rather than
- * withheld. The SCREENING arm's own cede — {@code DrugSafetyValidator.InteractionPairs}, a pair the
- * drug-in-play arm already chipped — still states a zero, which ADR Decision 68 records as
- * reproduced and deliberately not fixed here.
+ * withheld. The SCREENING arm has a cede of its own — it skips a pair the drug-in-play arm already
+ * chipped — and still states a zero there, which ADR Decision 68 records as reproduced and
+ * deliberately not fixed by this rule.
  *
  * <p>What every one of them counts is the same thing: above-floor interaction RULES relating one
  * drug to another. The drug-in-play arm's unrated class relationships — a shared ATC subgroup, a

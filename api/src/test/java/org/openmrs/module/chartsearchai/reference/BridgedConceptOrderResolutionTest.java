@@ -37,8 +37,13 @@ import org.junit.jupiter.api.Test;
  * name is {@code Cotrimoxazole}, returning no chips at all — with no exception and no log line.
  *
  * <p><b>What these cases pin, and why the order name they use has no spelling in the dataset.</b>
- * Every case here gives the order a display and names that appear nowhere in the fixture, which is
- * what makes the NAME leg provably not the thing that resolved it. The concept uuid is the real one
+ * Every case here but one gives the order UNDER TEST a display and names that appear nowhere in the
+ * fixture, which is what makes the NAME leg provably not the thing that resolved it — the
+ * co-prescriptions beside it are named by the fixture on purpose, so that there is a pair to chip.
+ * The exception is
+ * {@link #anEnglishSessionsSpellingOfAnAmbiguousBridgeNamesNoPrescriptionEither}, the {@code en}
+ * shape, whose bridged order has to record the concept name the bridge itself carries; it says so.
+ * The concept uuid is the real one
  * the shipped bridge records for CIEL 105281, and the fixture is {@code ddi-combination-allergen.json}
  * — a verbatim slice of the shipped knowledge base that already carries DDInter1874 Trimethoprim with
  * that bridge, DDInter1019 Lamivudine, and the {@code Minor} interaction row they share. Shared rather
@@ -96,6 +101,19 @@ public class BridgedConceptOrderResolutionTest {
 			DrugReferenceTestSupport.set(INEXIUM_ORDER), atcCodes, null, ESOMEPRAZOLE_CONCEPT);
 	}
 
+	/** How an ANGLOPHONE dictionary spells the same product — a brand the fixture carries nowhere,
+	 *  beside the concept name it DOES carry. */
+	private static final String NEXIUM_ORDER = "Nexium 40mg";
+
+	/** The {@code en} shape of that prescription: a brand display, and the concept's own
+	 *  locale-preferred name recorded beside it — which for CIEL 75876 in an {@code en} session is
+	 *  the very string the bridge records. {@code PatientClinicalContextBuilder} records both. */
+	private static PatientClinicalContext.ActiveDrugOrder anglophoneInexiumOrder() {
+		return PatientClinicalContext.ActiveDrugOrder.named("order-nexium", NEXIUM_ORDER,
+			DrugReferenceTestSupport.set(NEXIUM_ORDER, "Esomeprazole magnesium"), null, null,
+			ESOMEPRAZOLE_CONCEPT);
+	}
+
 	/** The co-prescription the fixture DOES name, so the bridged substance has a pair to chip with. */
 	private static PatientClinicalContext.ActiveDrugOrder clopidogrelOrder() {
 		return PatientClinicalContext.ActiveDrugOrder.named("order-clopidogrel", "Clopidogrel 75mg",
@@ -126,6 +144,17 @@ public class BridgedConceptOrderResolutionTest {
 		List<String> bridged = new ArrayList<String>();
 		for (SafetyWarning.ChartOrderBridge bridge : warning.chartOrderBridges()) {
 			bridged.add(bridge.toString());
+		}
+		return bridged;
+	}
+
+	/** Every bridge every chip of one response states, in emission order — asked of the whole list
+	 *  rather than of one chip because the false clause is a claim reaching the CLIENT, and which chip
+	 *  carries it is not what makes it false. */
+	private static List<String> everyBridgeText(List<SafetyWarning> warnings) {
+		List<String> bridged = new ArrayList<String>();
+		for (SafetyWarning warning : warnings) {
+			bridged.addAll(bridgeTexts(warning));
 		}
 		return bridged;
 	}
@@ -473,6 +502,65 @@ public class BridgedConceptOrderResolutionTest {
 				+ DrugReferenceTestSupport.details(unnamed));
 		assertEquals(Collections.<String> emptyList(), bridgeTexts(unnamed.get(0)),
 			"and the one it does not name states no prescription, out of the same bridged answer");
+	}
+
+	/**
+	 * The same ambiguous bridge on the deployment the module is ordinarily installed on, which is the
+	 * shape production actually builds and the one no case above covered (issue #347, review round 2).
+	 *
+	 * <p>Every other case here gives the bridged order under test a display and names the fixture
+	 * carries nowhere, so the concept key is provably what resolved it. That is the FRANCOPHONE
+	 * shape. In an {@code en}
+	 * session the concept's locale-preferred name IS the string the bridge records for it — this
+	 * class's own javadoc says so of CIEL 105281 — and
+	 * {@code PatientClinicalContextBuilder.addConceptName} puts that string into {@code getNames()}
+	 * beside the drug row's. So the order records {@code Esomeprazole magnesium}, and the
+	 * {@code ddinter} parser has written that same string onto BOTH bridged entries as an alias, so
+	 * the unranked {@code DrugReference.matchesDrugName} says it reaches Omeprazole while the ranked
+	 * {@code DrugReferenceService.substancesNamedByBridge} says it does not NAME it.
+	 *
+	 * <p><b>Both sides of that disagreement are asserted, because the refusal must fire on one and
+	 * must not fire on the other.</b> The patient is on esomeprazole and is not on omeprazole:
+	 * {@code Esomeprazole from Nexium 40mg} is true of this prescription and must still be stated,
+	 * while {@code Omeprazole from Nexium 40mg} is the false claim
+	 * {@link #aConceptBridgedToSeveralSubstancesNamesNoPrescriptionInTheFinding} names — reached here
+	 * through the order's recorded concept name rather than through its display.
+	 *
+	 * <p>Until this round the display test {@code displaysANameOfAny} was
+	 * {@code recordsANameOfAny}, which short-circuited this order into silence on both sides before
+	 * the ambiguity refusal was ever asked; issue #347 narrowed it to the DISPLAY, so the order
+	 * reaches the refusal and the refusal's own "nothing but the bridge made this true" conjunct was
+	 * answered by that same over-wide name match. Restore the conjunct to a bare
+	 * {@code !resolvesFromAny(rows, order, BridgedOrders.NONE)} and the Omeprazole half of this case
+	 * reddens with {@code Omeprazole from Nexium 40mg}.
+	 */
+	@Test
+	public void anEnglishSessionsSpellingOfAnAmbiguousBridgeNamesNoPrescriptionEither()
+			throws Exception {
+		DrugReferenceService service = DrugReferenceTestSupport
+				.ddiFixtureService(DrugReferenceTestSupport.DDI_BRIDGED_CONCEPT_TWO_SUBSTANCES);
+		PatientClinicalContext chart = chart(anglophoneInexiumOrder(), clopidogrelOrder());
+
+		List<SafetyWarning> unnamed = DrugReferenceTestSupport.validator(service)
+				.validate("", "Can I give this patient omeprazole?", service.withReferenceNames(chart));
+
+		assertTrue(unnamed.get(0).getDetail()
+				.startsWith("Omeprazole interacts with active order Clopidogrel \u2014 Major"),
+			"precondition: the screen must still run and the chip must still stand, was: "
+					+ DrugReferenceTestSupport.details(unnamed));
+		assertEquals(Collections.<String> emptyList(), everyBridgeText(unnamed),
+			"the concept name the bridge itself records is not evidence of WHICH substance the"
+					+ " prescription is, whatever the unranked name matcher makes of it");
+
+		List<SafetyWarning> named = DrugReferenceTestSupport.validator(service)
+				.validate("", "Can I give this patient esomeprazole?", service.withReferenceNames(chart));
+
+		assertTrue(named.get(0).getDetail()
+				.startsWith("Esomeprazole interacts with active order Clopidogrel \u2014 Major"),
+			"precondition: the named substance must chip too, was: "
+					+ DrugReferenceTestSupport.details(named));
+		assertEquals(Arrays.asList("Esomeprazole from " + NEXIUM_ORDER), everyBridgeText(named),
+			"and the substance that same recorded name NAMES is still attributed to it");
 	}
 
 	/**

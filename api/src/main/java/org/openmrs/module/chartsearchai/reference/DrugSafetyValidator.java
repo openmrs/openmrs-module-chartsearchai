@@ -5261,10 +5261,12 @@ public class DrugSafetyValidator {
 	 * ({@code recordsANameOfAny}, a fold over every name the order records) with
 	 * {@link #displaysANameOfAny}, which does no MORE work per call — equal where the order records one
 	 * name, less where it records more. Issue #353 added {@link #restsOnAnAmbiguousBridge}, a second
-	 * {@link #resolvesFromAny} walk on the orders that reach it and, for those that pass it, one
-	 * {@link DrugReferenceService#substancesNamedByBridge} per ORDER for the pass; neither is included
-	 * above and neither has been measured. Both of those are bounded by the orders that reach the
-	 * conjunct, which on a chart whose prescriptions the dataset can name is none of them.
+	 * walk on the orders that reach it — {@link #resolvesAsideFromTheBridgesOwnName} since #347's own
+	 * review round 2, which adds one pass over that order's bridged entries to read the names it
+	 * excludes — and, for those that pass it, one
+	 * {@link DrugReferenceService#substancesNamedByBridge} per ORDER for the pass; none of that is
+	 * included above and none of it has been measured. Both of those are bounded by the orders that
+	 * reach the conjunct, which on a chart whose prescriptions the dataset can name is none of them.
 	 *
 	 * <p><b>Both payments have a reader since issue #347, and that sentence used to say otherwise.</b>
 	 * It read "HALF of that second payment is dead work" on the grounds that
@@ -5407,23 +5409,30 @@ public class DrugSafetyValidator {
 	 *         naming the prescription it came from.
 	 *
 	 *         <p><b>Both conjuncts are load-bearing and neither is the other.</b> The first is "nothing
-	 *         but the bridge made this true": stated as the negation of {@link #resolvesFromAny} asked
-	 *         with {@link BridgedOrders#NONE}, so it cannot drift from the predicate it is the
-	 *         complement of. By the time this runs the display test {@link #displaysANameOfAny} has
-	 *         already returned false, and <b>that is a WEAKER premise than the
-	 *         {@code recordsANameOfAny} it replaced at issue #347, so the narrowing DOES reach this
-	 *         conjunct</b>: an order the old conjunct short-circuited on now reaches this one, the
-	 *         ticket's own among them — a display that does not name the substance beside a recorded
-	 *         concept name that does. So the negation is not left asking about coding alone.
-	 *         {@link #resolvesFromAny}'s first leg is {@link #recordsANameOf}, over every name the
-	 *         order records, so an order whose display does not name the substance while some OTHER
-	 *         recorded name of it does answers this conjunct FALSE through that NAME leg, and its
-	 *         clause stands. Measured on this head rather than reasoned: strip every ATC code off
+	 *         but the bridge made this true", and it is {@link #resolvesAsideFromTheBridgesOwnName}
+	 *         negated — the name and code legs of {@link #resolvesFrom}, asked of every recorded name
+	 *         EXCEPT the names the dataset's bridge records for this order's own concept. That
+	 *         exclusion is issue #347's review round 2 and that method carries why: without it the two
+	 *         conjuncts read one string by two rules that answer oppositely, and the refusal never
+	 *         fired on the deployment the module is ordinarily installed on. The exclusion is empty
+	 *         for an order carrying no bridged concept, so nothing outside this refusal's own
+	 *         population moves.
+	 *
+	 *         <p>By the time this runs the display test {@link #displaysANameOfAny} has already
+	 *         returned false, and <b>that is a WEAKER premise than the {@code recordsANameOfAny} it
+	 *         replaced at issue #347, so the narrowing DOES reach this conjunct</b>: an order the old
+	 *         conjunct short-circuited on now reaches this one, the ticket's own among them — a display
+	 *         that does not name the substance beside a recorded concept name that does. So the
+	 *         negation is not left asking about coding alone. An order whose display does not name the
+	 *         substance while some other recorded name of it does — a name that is NOT the bridge's own
+	 *         — answers this conjunct FALSE through that name leg, and its clause stands. Measured
+	 *         rather than reasoned: strip every ATC code off
 	 *         {@code OneOrderNameAcrossAnswerAndChipTest.ticketChart()}'s brand-named order and
 	 *         {@code .aSubstanceTheChartNamesOnlyByABrandIsBridgedToTheOrderItCameFrom} still gets
-	 *         {@code Warfarin from Coagubrand.}, so there the name leg is what answers it. Where the
-	 *         order's own recorded ATC codes reach the substance the clause stands too, exactly as it
-	 *         did before. The code leg has an over-wide residue of its own; it is
+	 *         {@code Warfarin from Coagubrand.}, so there the name leg is what answers it; that order
+	 *         carries no concept, so round 2's exclusion is empty for it and the measurement is the
+	 *         same one. Where the order's own recorded ATC codes reach the substance the clause stands
+	 *         too, exactly as it did before. The code leg has an over-wide residue of its own; it is
 	 *         named at {@link #resolvesFrom} and is deliberately not closed here, because closing it
 	 *         would change what every ATC-resolved order states and no measurement in this change
 	 *         covers that. The second is {@link BridgedOrders#recordedNameNames}, and it is what makes
@@ -5471,13 +5480,75 @@ public class DrugSafetyValidator {
 	 */
 	private static boolean restsOnAnAmbiguousBridge(List<DrugReference> rows,
 			PatientClinicalContext.ActiveDrugOrder order, BridgedOrders bridged) {
-		return !resolvesFromAny(rows, order, BridgedOrders.NONE)
+		return !resolvesAsideFromTheBridgesOwnName(rows, order, bridged)
 				&& !bridged.recordedNameNames(rows, order);
+	}
+
+	/**
+	 * @return whether anything the chart records about {@code order} OTHER than the dataset bridge's
+	 *         own recorded name joins it to {@code rows}' substance — {@link #restsOnAnAmbiguousBridge}'s
+	 *         first conjunct, "nothing but the bridge made this true".
+	 *
+	 *         <p><b>Why the exclusion, and what shipped without it (issue #347, review round 2).</b>
+	 *         The conjunct was a bare {@code !resolvesFromAny(rows, order, BridgedOrders.NONE)}, and
+	 *         on the deployment the module is ordinarily installed on that answered the refusal away.
+	 *         In an {@code en} session the concept's locale-preferred name IS the string the bridge
+	 *         records for it, and {@code PatientClinicalContextBuilder.addConceptName} puts that
+	 *         string into {@link PatientClinicalContext.ActiveDrugOrder#getNames()}; meanwhile the
+	 *         {@code ddinter} parser writes that same string onto every entry it files under the
+	 *         concept AS AN ALIAS. So one string was read by two rules that answer oppositely — the
+	 *         unranked {@link DrugReference#matchesDrugName} under {@link #recordsANameOf} said it
+	 *         reaches Omeprazole, while the ranked {@link DrugReferenceService#substancesNamedByBridge}
+	 *         under {@link BridgedOrders#recordedNameNames} said it does not NAME it — and the
+	 *         unranked reading, standing in for independent evidence, cancelled the refusal the ranked
+	 *         one had earned. Before issue #347 no order got that far: the silence test was
+	 *         {@code recordsANameOfAny}, over this same name set, so the shape short-circuited into
+	 *         silence one step earlier.
+	 *
+	 *         <p><b>A recorded name that IS the bridge's own is not independent of the bridge.</b>
+	 *         Both sides of the coincidence descend from the one CIEL concept name, and the ranked
+	 *         reading of that string is already the second conjunct's business. So the two conjuncts
+	 *         now partition the evidence: this one judges what the chart records BESIDES the bridge's
+	 *         name, and {@link BridgedOrders#recordedNameNames} judges the bridge's name itself, by
+	 *         the accessor CLAUDE.md designates for printing a substance's label into a sentence about
+	 *         the patient's record.
+	 *
+	 *         <p><b>Residue, named rather than claimed closed.</b> A recorded name that is NOT the
+	 *         bridge's own string still answers this through the unranked matcher, so a concept whose
+	 *         dictionary spelling differs from the bridge's while still containing a bounded token of
+	 *         another substance's name keeps the clause. That is {@link #resolvesFrom}'s own NAME-leg
+	 *         residue, which this method does not close and which no measurement here covers;
+	 *         narrowing it would change what every name-resolved order states.
+	 *
+	 *         <p>The legs are {@link #recordsANameOf}'s excluding overload and
+	 *         {@link #recordsACodeOf}, the same two primitives {@link #resolvesFrom} asks, so this is
+	 *         a second FOLD over shared legs and not a second reading of either leg. The bridged leg
+	 *         is absent by construction, which is what {@code BridgedOrders.NONE} used to express.
+	 *
+	 *         <p>Mutate the exclusion — hand {@link Collections#emptySet()} instead of the bridge's
+	 *         names — and
+	 *         {@code BridgedConceptOrderResolutionTest.anEnglishSessionsSpellingOfAnAmbiguousBridgeNamesNoPrescriptionEither}
+	 *         reddens with {@code Omeprazole from Nexium 40mg}. Drop the code leg and
+	 *         {@code .anAmbiguouslyBridgedOrderTheChartsOwnCodeReachesIsStillAttributed} reddens.
+	 */
+	private static boolean resolvesAsideFromTheBridgesOwnName(List<DrugReference> rows,
+			PatientClinicalContext.ActiveDrugOrder order, BridgedOrders bridged) {
+		Set<String> bridgeNames = bridged.recordedBridgeNames(order);
+		for (DrugReference row : rows) {
+			if (recordsANameOf(row, order, bridgeNames) || recordsACodeOf(row, order)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** @return whether any name {@code order} RECORDS reaches {@code ref} — {@link DrugReference#matchesDrugName}
 	 *          over the order's own names, and since issue #347 the name leg of {@link #resolvesFrom}
-	 *          and nothing else. It is still a method of its own rather than inlined there, so that
+	 *          and nothing else. Two arities since that issue's review round 2: this one, and the
+	 *          overload below taking the names to EXCLUDE, which
+	 *          {@link #resolvesAsideFromTheBridgesOwnName} asks. One leg either way — what the second
+	 *          arity changes is the operand and not the reading.
+	 *          It is still a method of its own rather than inlined there, so that
 	 *          "resolved without its NAME leg" stays expressible as this leg's negation — which since
 	 *          issue #353 is the ATC leg or the bridged-concept one, and is why the condition is stated
 	 *          as that negation rather than as a list. What it is no longer is the bridge's silence
@@ -5489,12 +5560,45 @@ public class DrugSafetyValidator {
 	 *          questions are not the same one. */
 	private static boolean recordsANameOf(DrugReference ref,
 			PatientClinicalContext.ActiveDrugOrder order) {
+		return recordsANameOf(ref, order, Collections.<String> emptySet());
+	}
+
+	/**
+	 * @return whether any name {@code order} records OTHER than one of {@code excluded} reaches
+	 *         {@code ref} — the same leg as the arity above, asked of a smaller operand.
+	 *
+	 *         <p>One caller, {@link #resolvesAsideFromTheBridgesOwnName}, and {@code excluded} is
+	 *         there the names the dataset's own bridge records for this order's concept. It is an
+	 *         overload rather than a second scan so that the two questions cannot come to disagree
+	 *         about what a recorded name REACHING an entry is; what differs is the operand and
+	 *         nothing else.
+	 *
+	 *         <p>Membership by {@link DrugReference#normalizeName} — CLAUDE.md's accessor for
+	 *         IDENTITY between two reference strings, which both operands are here (a concept's own
+	 *         name as the dictionary spells it, against the name the knowledge base's bridge records
+	 *         for that concept). {@code excluded} is normalized by its producer, so this side
+	 *         normalizes the order's name alone.
+	 */
+	private static boolean recordsANameOf(DrugReference ref,
+			PatientClinicalContext.ActiveDrugOrder order, Set<String> excluded) {
 		for (String name : order.getNames()) {
-			if (ref.matchesDrugName(name)) {
+			if (!excluded.contains(DrugReference.normalizeName(name)) && ref.matchesDrugName(name)) {
 				return true;
 			}
 		}
 		return false;
+	}
+
+	/** @return whether any ATC code {@code order} records is one {@code ref} publishes — the CODE leg
+	 *          of {@link #resolvesFrom}, named so that
+	 *          {@link #resolvesAsideFromTheBridgesOwnName} can ask that leg without a second spelling
+	 *          of it. Emptiness first: most orders carry no ATC map at all, and this way their subject
+	 *          check costs no allocation ({@link DrugReference#normalizedAtcCodes} builds a set per
+	 *          call). */
+	private static boolean recordsACodeOf(DrugReference ref,
+			PatientClinicalContext.ActiveDrugOrder order) {
+		return !order.getAtcCodes().isEmpty()
+				&& !Collections.disjoint(order.getAtcCodes(), ref.normalizedAtcCodes());
 	}
 
 	/**
@@ -5526,6 +5630,15 @@ public class DrugSafetyValidator {
 	 *         is now the intended behaviour rather than the hazard. The clause's TRUTH never rested on
 	 *         it: {@link #resolvesFromAny} beside it is what makes the attribution true, and this
 	 *         conjunct only ever decided whether saying it was worth the record's budget.
+	 *
+	 *         <p><b>Round 2 of this issue found one exception to that, and it is not a small one.</b>
+	 *         Where the OTHER recorded name is the dataset bridge's own name for the order's concept,
+	 *         the clause states which of several substances the prescription is when the module cannot
+	 *         — and on an {@code en} deployment that is the ordinary case, because the concept's
+	 *         locale-preferred name is the string the bridge carries. The decoupling did not create
+	 *         that over-wide name match; it stopped hiding it, and it also let it cancel the refusal
+	 *         issue #353 had written for exactly that population.
+	 *         {@link #resolvesAsideFromTheBridgesOwnName} is where the exception lives.
 	 *
 	 *         <p><b>It is not a pure widening, and the direction it can NARROW in is the one
 	 *         {@link #recordsANameOf}'s own javadoc used to name.</b> For an order
@@ -6219,6 +6332,42 @@ public class DrugSafetyValidator {
 			}
 			return false;
 		}
+
+		/**
+		 * @return the names the dataset's bridge records for {@code order}'s own concept,
+		 *         {@link DrugReference#normalizeName}d — empty for an order the bridge does not reach
+		 *         and for {@link #NONE}.
+		 *
+		 *         <p>{@link DrugSafetyValidator#resolvesAsideFromTheBridgesOwnName} subtracts these
+		 *         from the names it will judge, and that method carries the whole argument for why.
+		 *         Read off the SAME entry list through the SAME accessor
+		 *         ({@link DrugReference#bridgedConceptName}) that
+		 *         {@link DrugReferenceService#substancesNamedByBridge} reads its own bridge names off,
+		 *         so the string this one subtracts and the string that one judges are one string. A
+		 *         second reading of the bridge name — off the concept, or off the first entry alone —
+		 *         is how the exclusion and the naming rule would come to be about different names.
+		 *
+		 *         <p>Not memoised: only an order that has already reached
+		 *         {@link DrugSafetyValidator#restsOnAnAmbiguousBridge} asks it, which on an ordinary
+		 *         chart is no order at all, and the walk is over one order's own bridged entries. The
+		 *         per-pass memo beside it is {@link #recordedNameNames}', whose cost is a ranked
+		 *         dataset resolution rather than a field read.
+		 */
+		Set<String> recordedBridgeNames(PatientClinicalContext.ActiveDrugOrder order) {
+			List<DrugReference> entries = resolved().get(order);
+			if (entries == null) {
+				return Collections.emptySet();
+			}
+			String uuid = order.getConceptUuid() == null ? null : order.getConceptUuid().trim();
+			Set<String> names = new HashSet<String>();
+			for (DrugReference entry : entries) {
+				String name = DrugReference.normalizeName(entry.bridgedConceptName(uuid));
+				if (name != null) {
+					names.add(name);
+				}
+			}
+			return names;
+		}
 	}
 
 	/** @return true when ANY row of the subject's substance {@link #resolvesFrom} {@code order} — the
@@ -6298,13 +6447,34 @@ public class DrugSafetyValidator {
 	 *         evidence" — true only while the silence test was that same fold. It is now
 	 *         {@link #displaysANameOfAny}, over the one name a chart record displays, so an over-wide
 	 *         NAME match reached through some OTHER recorded name — the order's concept name, its free
-	 *         text — no longer silences itself. What the printed clause claims stays true of the
-	 *         module: it states a RESOLUTION this pass performed, not a fact about the drug, and that
-	 *         same resolution already decides the pair suppression this javadoc is about, so #347 makes
-	 *         an over-wide resolution VISIBLE rather than creating one. No shipped-KB instance is
-	 *         constructed: it needs an entry whose alias is a bounded token inside another substance's
-	 *         recorded name, the {@code insulin}/{@code insulin glargine} shape, which this repo's
-	 *         fixtures do not carry;</li>
+	 *         text — no longer silences itself. <b>One shape of that IS constructed on shipped data,
+	 *         and it was shipped as unconstructible.</b> This entry said the residue needed "an entry
+	 *         whose alias is a bounded token inside another substance's recorded name, the
+	 *         {@code insulin}/{@code insulin glargine} shape, which this repo's fixtures do not
+	 *         carry"; that characterisation is too narrow, and searching for an instance of it is
+	 *         what came up empty. The {@code ddinter} parser writes a bridged concept's recorded name
+	 *         onto every entry it files there AS AN ALIAS, so the over-wide match is an EXACT alias
+	 *         hit and not a nested-token one — and an {@code en} session records that very concept
+	 *         name on the order. {@code ddi-bridged-concept-two-substances.json}, a verbatim shipped-KB
+	 *         slice, carries it: {@code Esomeprazole magnesium} is an alias of BOTH Omeprazole and
+	 *         Esomeprazole (CIEL 75876, one of the 122 multi-substance bridged concepts of the shipped
+	 *         knowledge base whose recorded name does not name every substance they resolve — the
+	 *         difference of the two figures
+	 *         {@code BridgedConceptLegBoundsTest.theRefusalsReachOverTheShippedKnowledgeBase}
+	 *         asserts). The part of it that PRINTS a claim about the patient is refused at the
+	 *         printing site, by
+	 *         {@link #resolvesAsideFromTheBridgesOwnName}'s exclusion inside
+	 *         {@link #restsOnAnAmbiguousBridge}; the leg itself still resolves, in the safe direction
+	 *         above. The clause does state a RESOLUTION this pass performed rather than a fact about
+	 *         the drug — but a clinician reads it as a fact about the patient, which is ADR Decision
+	 *         68's own finding, so that is not a defence and the refusal is not optional. What is left
+	 *         open is the same residue for a recorded name that is NOT the bridge's own, and whether
+	 *         this repo constructs one is not established here: the nested-token shape this bullet
+	 *         used to name IS carried, by {@code ddi-screening-multiword-partner.json}
+	 *         ({@code insulin} a whole word of {@code insulin glargine}), but there the over-wide
+	 *         match is on the order's own DISPLAY, which silences the clause by itself, and that
+	 *         fixture's chart carries no per-order structure for a clause to be printed from at
+	 *         all;</li>
 	 *         <li>the CODE leg's is not closed. It needs two substances under one level-5 code AND no
 	 *         name match; no shipped-KB instance of that pair is constructed, and it is named here
 	 *         rather than left to be found;</li>
@@ -6338,20 +6508,19 @@ public class DrugSafetyValidator {
 	 */
 	private static boolean resolvesFrom(DrugReference ref, PatientClinicalContext.ActiveDrugOrder order,
 			BridgedOrders bridged) {
-		// The name leg is recordsANameOf, and since issue #347 that method has this one caller. Until
-		// then the bridge's silence test was "this predicate is true and its NAME leg is not what made
-		// it true", so the leg was shared rather than spelled again to keep that so; the silence test
-		// is now displaysANameOfAny, over the order's DISPLAY, and the two share the PRIMITIVE
+		// The name leg is recordsANameOf and the code leg recordsACodeOf, each a named primitive so
+		// that resolvesAsideFromTheBridgesOwnName can ask the same two legs over a smaller name set
+		// without a second reading of either (issue #347, review round 2). Until #347 the bridge's
+		// silence test was "this predicate is true and its NAME leg is not what made it true", so the
+		// name leg was shared rather than spelled again to keep that so; the silence test is now
+		// displaysANameOfAny, over the order's DISPLAY, and the two share the PRIMITIVE
 		// (DrugReference.matchesDrugName) rather than the fold. matchesDrugNameAny's javadoc states
 		// that, and displaysANameOfAny's records what the decoupling exposes.
 
 		if (recordsANameOf(ref, order)) {
 			return true;
 		}
-		// Emptiness first: most orders carry no ATC map at all, and this way their subject check costs no
-		// allocation (normalizedAtcCodes builds a set per call).
-		if (!order.getAtcCodes().isEmpty()
-				&& !Collections.disjoint(order.getAtcCodes(), ref.normalizedAtcCodes())) {
+		if (recordsACodeOf(ref, order)) {
 			return true;
 		}
 		// The bridged-concept leg (issue #353). Same rule as the candidate set's third leg and resolved

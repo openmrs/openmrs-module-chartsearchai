@@ -122,16 +122,25 @@ public class OneOrderNameAcrossAnswerAndChipTest {
 
 	@Test
 	public void theChartsOwnRecordsSpellNoNameOfTheBridgedSubstance() throws Exception {
-		// The PREMISE the case above rests on, pinned rather than assumed: the order RECORDS the name
-		// Warfarin (it is the concept's) and no record in the chart carries it. Neuter the bridge and
-		// this stays green — it is the reason the bridge is needed, not the bridge.
+		// The PREMISE the case above rests on: the order RECORDS the name Warfarin and no record in the
+		// chart carries it. Neuter the bridge and this stays green — it is the reason the bridge is
+		// needed, not the bridge.
+		//
+		// Both halves are read off THIS fixture, which is a model of the arrangement and not evidence
+		// that a real chart has it. The two production facts it models are pinned against the real
+		// components elsewhere, and this case is not a substitute for either:
+		// QuerystoreDrugOrderDisplayedNameTest drives querystore's own serializer for what a drug_order
+		// record renders, and RecordedOrderNameBeyondItsDisplayTest drives
+		// PatientClinicalContextBuilder for the concept name it records beyond that. What this case
+		// adds is that the arrangement the cases around it run on really has the shape they assume.
 		PatientChart records = ticketRecords();
 
 		assertFalse(records.getText().toLowerCase().contains("warfarin"),
-			"the querystore records name this prescription only by its brand, was: "
+			"this fixture's records must name the prescription only by its brand, was: "
 					+ records.getText());
 		assertTrue(hasRecordedName("order-warf", "Warfarin"),
-			"and the module records that name for it, which is what made the silence test wrong");
+			"and its order must record the substance's name, which is the shape that made the old "
+					+ "silence test fire — modelled here, measured in RecordedOrderNameBeyondItsDisplayTest");
 	}
 
 	@Test
@@ -160,7 +169,13 @@ public class OneOrderNameAcrossAnswerAndChipTest {
 	}
 
 	/** Unused-record guard: the arrangement must not inject an {@code active_drug_order} line, or the
-	 *  correspondence could be supplied by that rather than by the clause under test. */
+	 *  correspondence could be supplied by that rather than by the clause under test.
+	 *
+	 *  <p>A negative assertion, so a green run says nothing on its own — it needs a positive control,
+	 *  and it has one: drop {@code order-warf}'s record from {@link #ticketRecords()} and this reddens
+	 *  with {@code Active drug order: Coagubrand}, while the three cases around it stay green. So the
+	 *  arm it forbids is reachable from this very path, and the fixture is not silently unable to
+	 *  produce what the assertion excludes. */
 	@Test
 	public void theChartSubstantiatesBothOrdersSoNoActiveOrderRecordIsInjected() throws Exception {
 		for (RecordMapping mapping : injected().getMappings()) {

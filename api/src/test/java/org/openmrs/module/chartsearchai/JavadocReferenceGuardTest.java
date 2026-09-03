@@ -78,7 +78,11 @@ import org.w3c.dom.NodeList;
  * oracle deliberately: {@code -Xdoclint} is an option grammar, and a check that re-implements it
  * reddens on {@code -Xdoclint:all,-missing,-html,-syntax}, which enables the reference group
  * perfectly well. This is what extends the gate to {@code omod} and to failing at compile time,
- * which the check above cannot see.
+ * which the check above cannot see. It reads the corpus as well as the POM, because
+ * {@code -Xdoclint} has a PACKAGE qualifier and a probe answers only for the package it declares:
+ * the probe is written once per package the reactor's sources declare ({@link #corpusPackages}), and
+ * the answer is the set of packages the declared arguments leave unchecked. See
+ * {@link #DEAD_REFERENCE_BODY}.
  *
  * <p>It reads the arguments through {@link #rootManagedCompilerArgs}, which navigates to ONE
  * position — the root pom's {@code <build>/<pluginManagement>} entry, at plugin level — so the
@@ -118,10 +122,15 @@ import org.w3c.dom.NodeList;
  * find that written down. It is NOT {@code missing} (a doc-coverage mandate nobody asked for) and
  * NOT {@code html}/{@code syntax}.
  *
- * <p>Its blind spots, stated because none of the three is small. The POM checks read the
- * repository's own POMs, so an argument added from a {@code settings.xml} profile or a command
- * line is invisible to them, in both directions — a {@code -Dmaven.compiler.failOnError=false}
- * included, whose in-POM form IS read ({@link #compilerUserPropertyOverrides}). A METHOD BODY is
+ * <p>Its blind spots, stated because none of the three is small. The POM checks read THESE POMs —
+ * the ones {@link #poms} names — so anything ELSE Maven reads is invisible to them, in both
+ * directions: a {@code settings.xml} profile, the command line, {@code MAVEN_OPTS}, and a committed
+ * {@code .mvn/maven.config}, which Maven 3.3.1 and later read automatically. The boundary is the
+ * FILE and not the repository, and this paragraph drew it at the repository until round 6:
+ * {@code .mvn/maven.config} would sit alongside these POMs, be committed like them and still be
+ * unread here, so three words in it drop the gate exactly as three words in a {@code <properties>}
+ * once did. A {@code -Dmaven.compiler.failOnError=false} arriving by any of those routes is
+ * included; its in-POM form IS read ({@link #compilerUserPropertyOverrides}). A METHOD BODY is
  * unreadable to doclint at any configuration and so to every check here — a local declaration, a
  * member of a local class, a member of an anonymous class declared inside a method; the repository
  * carries no {@code @link} in any of them today and nothing detects one arriving, since
@@ -139,7 +148,7 @@ public class JavadocReferenceGuardTest {
 	 * {@link #everyJavadocReferenceInTheApiModuleResolves} passes itself, and to NAME the check in
 	 * failure messages — never to recognise it in a POM. Nothing here matches an argument as a
 	 * string: what a declared argument list does is asked of the compiler, for
-	 * {@link #refusesADeadReference}'s reason.
+	 * {@link #packagesLeftUnchecked}'s reason.
 	 */
 	private static final String REFERENCE_CHECK = "-Xdoclint:reference";
 
@@ -174,8 +183,11 @@ public class JavadocReferenceGuardTest {
 	 * {@code JavadocReferenceGuardTest} ran 7 checks with 0 failures. That is #262's headline defect
 	 * reinstated, identical in effect to the {@code <failOnError>false</failOnError>} element
 	 * {@link #disabledFailOnErrorAt} already refuses and reachable by an edit that touches no plugin
-	 * block. NOT one of the blind spots this class discloses: those are about arguments arriving from
-	 * OUTSIDE the repository's POMs, and this arrives from inside one.
+	 * block. NOT one of the blind spots this class discloses: those are about settings arriving from
+	 * somewhere OTHER THAN these POMs — a {@code settings.xml} profile, the command line,
+	 * {@code MAVEN_OPTS}, a committed {@code .mvn/maven.config} — while this one is set in a POM
+	 * {@link #poms} names and this reader parses. The line is the FILE and not the repository, which
+	 * is what an earlier wording of it got wrong.
 	 *
 	 * <p>Taken from the plugin's own descriptor rather than guessed from the parameter name: the
 	 * version this build resolves, 3.13.0, declares the {@code failOnError} parameter as a boolean
@@ -214,6 +226,13 @@ public class JavadocReferenceGuardTest {
 	 * claim that costs nothing is about the RANGE: refusing is cheap for as long as no source carries
 	 * an escape in it, and answering could be wrong for every line after one.
 	 *
+	 * <p>Matched after the text is lowercased AND after any run of {@code u} following a backslash is
+	 * collapsed to one, because the JLS UnicodeMarker is {@code u} followed by any number of further
+	 * {@code u}s. The multi-{@code u} spelling is the SAME escape and javac reads it as one —
+	 * measured: a javadoc block opened with it produces the reference error — while a literal search
+	 * for the single-{@code u} spelling matched neither, so such a file was silently lexed as ordinary
+	 * text instead of being refused. Until round 6 the sentence above was false of it.
+	 *
 	 * <p>Assembled from pieces rather than written out, because THIS file is inside the corpus the
 	 * scan walks: spelled as literals, the constant makes its own source unscannable and the check
 	 * refuses the guard that owns it. Which is at least a demonstration that it works.
@@ -222,15 +241,37 @@ public class JavadocReferenceGuardTest {
 			"\\" + "u002f");
 
 	/**
-	 * The probe every arguments-refuse-it check compiles. Its dead pointer sits on a {@code private}
-	 * member deliberately, and that is load-bearing rather than incidental: {@code -Xdoclint} takes an
-	 * ACCESS qualifier, and {@code -Xdoclint:reference/public} silences the check for everything but
-	 * public API. On a public probe that argument satisfied every check that reads a declared argument
-	 * list, while dropping the gate for most of the corpus — this module's design record lives
-	 * overwhelmingly on non-public members. The counterpart live probe is public, so between them the pair also refuses an argument
-	 * list that cannot compile anything.
+	 * The probe every arguments-refuse-it check compiles, written into EVERY package
+	 * {@link #corpusPackages} finds. {@code -Xdoclint} has TWO qualifiers and a probe answers only for
+	 * what it is itself qualified by, so both of them decide where this source has to live.
+	 *
+	 * <p><strong>The ACCESS qualifier.</strong> Its dead pointer sits on a {@code private} member
+	 * deliberately, and that is load-bearing rather than incidental:
+	 * {@code -Xdoclint:reference/public} silences the check for everything but public API. On a public
+	 * probe that argument satisfied every check that reads a declared argument list, while dropping the
+	 * gate for most of the corpus — this module's design record lives overwhelmingly on non-public
+	 * members.
+	 *
+	 * <p><strong>The PACKAGE qualifier.</strong> javac takes a separate
+	 * {@code -Xdoclint/package:[-]<packages>} option, which leaves {@code -Xdoclint:reference} in the
+	 * list and silences the group for the packages it names. In the unnamed package this probe answered
+	 * for a corpus it was not in: measured on JDK 21, an unnamed-package probe still reports
+	 * {@code reference not found} under {@code -Xdoclint/package:-org.openmrs.*}, so one added
+	 * {@code <arg>} dropped the gate for both reactor modules at compile time with every check here
+	 * green. One package is not enough either, and the reason is the option's own grammar: a trailing
+	 * {@code .*} expands to the SUB-packages of the package named and NOT to that package itself
+	 * (measured, same JDK), so a probe in {@code org.openmrs.module.chartsearchai} alone stays checked
+	 * under {@code -Xdoclint/package:-org.openmrs.module.chartsearchai.*} — which silences every
+	 * other package this build compiles. One probe per package needs no judgement about which spelling
+	 * a maintainer reaches for, and {@link #theArgumentsTheBuildDeclaresRefuseADeadJavadocReference}
+	 * pins that placement rather than leaving it to this paragraph.
+	 *
+	 * <p>The counterpart live probe is public and is written into the same packages, so between them
+	 * the pair also refuses an argument list that cannot compile anything.
 	 */
-	private static final String DEAD_REFERENCE_SOURCE =
+	private static final String DEAD_REFERENCE_CLASS = "DeadReference";
+
+	private static final String DEAD_REFERENCE_BODY =
 			"public class DeadReference {\n"
 					+ "\t/** Points at {@link java.lang.String#noSuchMemberAnywhere()}, which does not exist. */\n"
 					+ "\tprivate int onANonPublicMember = 1;\n"
@@ -245,7 +286,9 @@ public class JavadocReferenceGuardTest {
 	private static final List<String> BASELINE_ARGUMENTS = Arrays.asList(
 			"-nowarn", "-proc:none", "-Xlint:none", "-Xmaxerrs", "10000");
 
-	private static final String LIVE_REFERENCE_SOURCE =
+	private static final String LIVE_REFERENCE_CLASS = "LiveReference";
+
+	private static final String LIVE_REFERENCE_BODY =
 			"/** Points at {@link java.lang.String#length()}, which exists. */\n"
 					+ "public class LiveReference {\n}\n";
 
@@ -608,22 +651,61 @@ public class JavadocReferenceGuardTest {
 					+ "compiles and the whole build reports success — issue #262. See docs/adr.md, Decision 73.");
 		}
 
-		// The message is a Supplier deliberately: building it compiles the probe again, and as an
-		// eagerly-evaluated String argument that ran on every PASSING run too.
-		assertTrue(refusesADeadReference("the root pom's managed <compilerArgs>", managed),
-				() -> {
-					try {
-						return "the arguments the root pom manages " + managed + " do not make a dead javadoc "
-								+ "reference on a non-public member an error, so a dead pointer is silent again "
-								+ "— issue #262:\n"
-								+ compileOne(managed, "DeadReference", DEAD_REFERENCE_SOURCE).report();
-					}
-					catch (IOException e) {
-						return "the arguments the root pom manages " + managed + " do not make a dead javadoc "
-								+ "reference on a non-public member an error (issue #262), and the probe could "
-								+ "not be recompiled to show why: " + e;
-					}
-				});
+		List<String> unchecked = packagesLeftUnchecked("the root pom's managed <compilerArgs>", managed);
+		// Still a Supplier, though the message no longer recompiles anything: the packages are listed
+		// only where the assertion fails.
+		assertTrue(unchecked.isEmpty(),
+				() -> "the arguments the root pom manages " + managed + " do not make a dead javadoc "
+						+ "reference on a non-public member an error in " + unchecked.size() + " of the "
+						+ "package(s) this build compiles, so a dead pointer is silent in them — issue #262: "
+						+ unchecked);
+
+		// And the probes themselves are held to the corpus, because nothing in this repository's POMs
+		// exercises the package qualifier: with the probes in the unnamed package, or in one package,
+		// each of these argument lists silenced the module and left this check green. Derived from the
+		// corpus rather than spelled, so a package rename does not redden a correct guard.
+		List<String> packages = corpusPackages();
+		assertSilencedPackagesAreSeen(packages.get(0));
+		assertSilencedPackagesAreSeen(packages.get(packages.size() - 1));
+		String withASubPackage = null;
+		for (String parent : packages) {
+			for (String child : packages) {
+				if (child.startsWith(parent + ".")) {
+					withASubPackage = parent;
+					break;
+				}
+			}
+			if (withASubPackage != null) {
+				break;
+			}
+		}
+		assertTrue(withASubPackage != null,
+				"no package of this corpus " + packages + " contains another, so the trailing-.* spelling of "
+						+ "-Xdoclint/package cannot be pinned against it. That spelling is the one a maintainer "
+						+ "silencing this module reaches for, so say here how it is covered instead of dropping "
+						+ "the pin.");
+		assertSilencedPackagesAreSeen(withASubPackage + ".*");
+	}
+
+	/**
+	 * One package-qualifier pin: the reference check plus {@code -Xdoclint/package:-<silenced>} must be
+	 * SEEN to leave part of this corpus unchecked, {@code silenced} naming either one package of it or
+	 * one package's sub-packages.
+	 *
+	 * <p>"At least one package" and not an exact set, because what is pinned is that the probes REACH
+	 * the packages an argument silences. Which packages a given spelling covers is javac's rule to
+	 * define and this guard's to observe, and a guard restating it would go green on the reading it
+	 * restated rather than on the one the compiler applies — which is how the unnamed-package probe
+	 * survived five review rounds.
+	 */
+	private static void assertSilencedPackagesAreSeen(String silenced) throws Exception {
+		List<String> arguments = Arrays.asList(REFERENCE_CHECK, "-Xdoclint/package:-" + silenced);
+		List<String> unchecked = packagesLeftUnchecked("the package-qualifier pin", arguments);
+		assertTrue(!unchecked.isEmpty(),
+				"an argument list silencing " + silenced + " " + arguments + " was seen to leave no package "
+						+ "of this corpus unchecked, so the probes no longer sit where this build's sources do. "
+						+ "One added <arg> then drops the gate for the whole repository with every check here "
+						+ "green — issue #262. See DEAD_REFERENCE_BODY.");
 	}
 
 	/**
@@ -634,7 +716,7 @@ public class JavadocReferenceGuardTest {
 	 * document-wide, so a declaration moved into a {@code <profile>} is read here too.
 	 *
 	 * <p>Each block is put to the real compiler rather than matched as a string, for
-	 * {@link #refusesADeadReference}'s reason: a widened doclint list is a correct configuration and
+	 * {@link #packagesLeftUnchecked}'s reason: a widened doclint list is a correct configuration and
 	 * a prefix match calls it a removal.
 	 *
 	 * <p>{@code <failOnError>} and {@code <compilerId>} are asked about for the same reason and not
@@ -666,11 +748,14 @@ public class JavadocReferenceGuardTest {
 			}
 			for (Element plugin : compilerPlugins(pom)) {
 				for (Map.Entry<String, List<String>> block : compilerArgBlocks(plugin).entrySet()) {
-					if (!refusesADeadReference(pom + " " + block.getKey(), block.getValue())) {
+					List<String> unchecked = packagesLeftUnchecked(pom + " " + block.getKey(),
+							block.getValue());
+					if (!unchecked.isEmpty()) {
 						violations.add(pom + " " + block.getKey() + " declares <compilerArgs> "
 								+ block.getValue()
-								+ ", which the compiler does not refuse a dead javadoc reference under"
-								+ " — and a <compilerArgs> block REPLACES the managed one, so this drops the check");
+								+ ", which the compiler does not refuse a dead javadoc reference under in "
+								+ unchecked + " — and a <compilerArgs> block REPLACES the managed one, so this "
+								+ "drops the check");
 					}
 				}
 				for (String where : disabledFailOnErrorAt(plugin)) {
@@ -721,13 +806,16 @@ public class JavadocReferenceGuardTest {
 	 * both silent and both fail-OPEN, which is what {@link #SOURCE_ROOTS} exists to have stopped
 	 * happening by hand.
 	 *
-	 * <p><strong>Declared in a {@code <profile>}.</strong> {@link #modulesIn} reads {@code <module>}
-	 * document-wide, so a module built under {@code -P} is in the scope. It was read as a direct child
-	 * of {@code <project>} alone, which put such a module outside both corpus walks and outside every
-	 * POM check at once. Asked of a synthetic POM and not of this repository's, which carries no
-	 * {@code <profile>} at all — so there is nothing here for a direct-child read to get wrong, and
-	 * that is exactly why the narrower version was invisible. <strong>The other direction is pinned
-	 * beside it, in BOTH plugin-parameter shapes</strong>: read document-wide, {@code <module>} takes
+	 * <p><strong>Declared in a {@code <profile>}.</strong> {@link #modulesIn} reads a
+	 * {@code <modules>} wrapper wherever the POM model allows one — under {@code <project>} or under a
+	 * {@code <profile>} ({@link #declaredUnderProjectOrProfile}) — and {@code <module>} as a DIRECT
+	 * CHILD of that wrapper, so a module built under {@code -P} is in the scope. Neither element was:
+	 * {@code <module>} was read as a direct child of {@code <project>} alone, which put such a module
+	 * outside both corpus walks and outside every POM check at once. Asked of a synthetic POM and not
+	 * of this repository's, which carries no {@code <profile>} at all — so there is nothing here for a
+	 * direct-child read to get wrong, and that is exactly why the narrower version was invisible.
+	 * <strong>The other direction is pinned beside it, in BOTH plugin-parameter shapes</strong>: read
+	 * document-wide, {@code <module>} takes
 	 * in moditect's {@code <configuration><module>} parameter and the {@code <modules>} WRAPPER takes
 	 * in its plural counterpart, and either reddens THIS check and
 	 * {@link #noOtherCompilerConfigurationDropsTheCheck} on a legal POM — a false positive is the one
@@ -1025,7 +1113,8 @@ public class JavadocReferenceGuardTest {
 	 * terminator off the end of the line. So {@link #annotationResidue} consumes {@code @Name} and its
 	 * balanced argument list, repeatedly, and this asks whether anything is left.
 	 *
-	 * <p><strong>A row of {@link #SHAPES} per residue the test has to see, on both sides of it.</strong>
+	 * <p><strong>A row of {@link #SHAPES} per residue the test has to see, on both sides of it, and one
+	 * per deletable clause of {@link #annotationResidue}'s own walk.</strong>
 	 * Where javac DOES read the block: {@code AnnotatedDeclarationOnOneLineThenBlock}
 	 * leaves a field declaration; {@code AnnotatedTypeOpenThenBlock} leaves an annotated type whose
 	 * body brace is on the same line and whose first member's javadoc javac reads;
@@ -1036,6 +1125,14 @@ public class JavadocReferenceGuardTest {
 	 * {@code AnnotationArgumentCarriesATerminator}. And the row that refuses the last-character version
 	 * of this fix is {@code AnnotatedDeclarationWithATrailingNoteThenBlock}. Mutate the residue test,
 	 * or substitute the character exclusions for it, and read which rows go red.
+	 *
+	 * <p>The walk's own three clauses have rows too, and had none until round 6:
+	 * {@code AnnotationNameIsFullyQualified} for the {@code .} the identifier scan admits,
+	 * {@code AnnotationSpacedBeforeItsArgumentList} for the whitespace skip before the argument list
+	 * and {@code TwoAnnotationsOnOneLineThenBlock} for the one after it. All three fail CONSERVATIVELY
+	 * — residue is left, the arm goes quiet, a real orphan is missed and no build reddens — which is
+	 * the same direction as the character exclusions this rule replaced, and is why they were
+	 * deletable with every check here green.
 	 *
 	 * <p>What it does not reach: an annotation whose argument list is left UNTERMINATED on the line,
 	 * which {@link #annotationResidue} refuses rather than guesses, and an annotation line carrying a
@@ -1058,6 +1155,13 @@ public class JavadocReferenceGuardTest {
 	 * line is refused: the whole line comes back as residue, so {@link #isAnnotationAlone} says no.
 	 * That is the conservative answer of the two — the caller's arm then reports nothing where a
 	 * multi-line annotation is involved, which is a missed orphan and not a red build on legal code.
+	 *
+	 * <p><strong>Three clauses of this walk are separately deletable and each has a row of
+	 * {@link #SHAPES}</strong>, listed on {@link #isAnnotationAlone}: the {@code .} the identifier scan
+	 * admits, without which a fully-qualified annotation name leaves a residue, and the whitespace
+	 * skips before and after the argument list, without which {@code @Name ("x")} and
+	 * {@code @Name("x") @Other} do. None of the three has an instance in this repository, so all three
+	 * were deletable with every check here green.
 	 */
 	private static String annotationResidue(String text) {
 		int i = 0;
@@ -1173,8 +1277,9 @@ public class JavadocReferenceGuardTest {
 	 */
 	private static List<Item> scan(List<String> lines) {
 		String text = String.join("\n", lines);
+		String normalised = text.toLowerCase().replaceAll("\\\\u+", "\\\\u");
 		for (String escape : COMMENT_DELIMITER_ESCAPES) {
-			if (text.toLowerCase().contains(escape)) {
+			if (normalised.contains(escape)) {
 				fail("This guard cannot lex a source containing " + escape + ": javac translates unicode "
 						+ "escapes BEFORE it lexes, so that sequence begins or ends a comment for the compiler "
 						+ "and not for this scan, and every line number after it would be wrong. Refused "
@@ -1656,6 +1761,26 @@ public class JavadocReferenceGuardTest {
 		shape(shapes, "AnnotationArgumentListLeftOpenThenBlock", Attachment.UNATTACHED_AND_UNREACHED,
 				"\t@SuppressWarnings({\n\t/** " + dead
 						+ ". */\n\t\t\t\"unused\" })\n\tprivate int a = 1;\n\tint r() { return a; }\n");
+		// And one row per deletable clause of annotationResidue's OWN walk, which had none of its own
+		// while endOfArgumentList beside it had one apiece. Each of these is an annotation line that
+		// annotates the DECLARATION below it, so javac discards a block stranded in between and the arm
+		// has to fire; under the mutation named the walk leaves a residue, isAnnotationAlone answers no
+		// and the arm goes quiet on a real orphan with no build reddening.
+		// The dot in the identifier scan, which is the only reason a fully-qualified annotation name is
+		// consumed rather than read as `.lang.Deprecated` left over.
+		shape(shapes, "AnnotationNameIsFullyQualified", Attachment.UNATTACHED,
+				"\t@java.lang.Deprecated\n\t/** " + dead
+						+ ". */\n\tprivate int a = 1;\n\tint r() { return a; }\n");
+		// The whitespace skip BEFORE the argument list: java allows a space between the annotation name
+		// and its `(`, and without the skip the list itself is the residue.
+		shape(shapes, "AnnotationSpacedBeforeItsArgumentList", Attachment.UNATTACHED,
+				"\t@SuppressWarnings (\"unused\")\n\t/** " + dead
+						+ ". */\n\tprivate int a = 1;\n\tint r() { return a; }\n");
+		// The whitespace skip AFTER it, which is the only reason a SECOND annotation on the same line is
+		// consumed rather than read as a declaration sharing the line.
+		shape(shapes, "TwoAnnotationsOnOneLineThenBlock", Attachment.UNATTACHED,
+				"\t@SuppressWarnings(\"unused\") @Deprecated\n\t/** " + dead
+						+ ". */\n\tprivate int a = 1;\n\tint r() { return a; }\n");
 		// The counterpart isImportDeclaration's whitespace clause exists for: a declaration whose
 		// identifier begins with the same six characters. An enum constant is the one place such a
 		// name can START a content line, and javac attaches the block above it — so a prefix test
@@ -1719,6 +1844,25 @@ public class JavadocReferenceGuardTest {
 			return !errors().isEmpty();
 		}
 
+		/**
+		 * The absolute path of every source an ERROR was attributed to, which is what lets ONE compile
+		 * of many probes say which of them the arguments checked. A diagnostic carrying no source is
+		 * reported as {@code (no source)} rather than dropped, so that
+		 * {@link ProbeRun#packagesWhereItCompiledClean} can refuse it instead of crediting or debiting
+		 * a package for it.
+		 */
+		private Set<String> errorSources() {
+			Set<String> sources = new LinkedHashSet<String>();
+			for (Diagnostic<? extends JavaFileObject> d : diagnostics) {
+				if (d.getKind() == Diagnostic.Kind.ERROR) {
+					JavaFileObject source = d.getSource();
+					sources.add(source == null ? "(no source)"
+							: new File(source.getName()).getAbsolutePath());
+				}
+			}
+			return sources;
+		}
+
 		private String report() {
 			if (diagnostics.isEmpty()) {
 				return "  (the compiler reported nothing at all)";
@@ -1739,23 +1883,148 @@ public class JavadocReferenceGuardTest {
 	}
 
 	/**
-	 * Compiles one synthetic source with exactly the arguments given, plus this suite's classpath —
-	 * no {@code -source}/{@code -target}, so the running JDK's defaults apply and the only variable
-	 * is the argument list the POMs declare. The synthetic sources reference nothing but
-	 * {@code java.lang}; the classpath is there so that an argument needing one cannot fail the live
-	 * half for an unrelated reason.
+	 * Compiles one copy of a synthetic probe in every package {@link #corpusPackages} finds, with
+	 * exactly the arguments given plus this suite's classpath — no {@code -source}/{@code -target}, so
+	 * the running JDK's defaults apply and the only variable is the argument list the POMs declare.
+	 * The synthetic sources reference nothing but {@code java.lang}; the classpath is there so that an
+	 * argument needing one cannot fail the live half for an unrelated reason.
+	 *
+	 * <p>One compile of many files rather than one compile per package, so that the cost of covering
+	 * the corpus is a file count and not a process count. Which of them the arguments actually checked
+	 * is read back per file by {@link ProbeRun#packagesWhereItCompiledClean}, which is the whole reason
+	 * {@link Compilation#errorSources} exists.
 	 */
-	private static Compilation compileOne(List<String> arguments, String className, String source)
-			throws IOException {
-		Path dir = Files.createTempDirectory("javadoc-reference-guard-source");
+	private static ProbeRun runProbes(List<String> arguments, String className, String body)
+			throws Exception {
+		Path dir = Files.createTempDirectory("javadoc-reference-guard-probes");
 		try {
-			Path file = dir.resolve(className + ".java");
-			Files.write(file, source.getBytes(StandardCharsets.UTF_8));
-			return compile(arguments, Arrays.asList(file), System.getProperty("java.class.path"));
+			List<String> packages = corpusPackages();
+			List<Path> files = new ArrayList<Path>();
+			Map<String, String> packageByPath = new LinkedHashMap<String, String>();
+			for (String packageName : packages) {
+				Path file = dir.resolve(packageName.replace('.', File.separatorChar))
+						.resolve(className + ".java");
+				Files.createDirectories(file.getParent());
+				Files.write(file,
+						("package " + packageName + ";\n\n" + body).getBytes(StandardCharsets.UTF_8));
+				files.add(file);
+				packageByPath.put(file.toAbsolutePath().toString(), packageName);
+			}
+			return new ProbeRun(compile(arguments, files, System.getProperty("java.class.path")),
+					packages, packageByPath);
 		}
 		finally {
 			deleteRecursively(dir);
 		}
+	}
+
+	/** One compile of the per-package probes, and which package each diagnostic belongs to. */
+	private static final class ProbeRun {
+
+		private final Compilation compilation;
+
+		private final List<String> packages;
+
+		private final Map<String, String> packageByPath;
+
+		private ProbeRun(Compilation compilation, List<String> packages,
+				Map<String, String> packageByPath) {
+			this.compilation = compilation;
+			this.packages = packages;
+			this.packageByPath = packageByPath;
+		}
+
+		/**
+		 * The packages whose probe the compiler raised no error for, in corpus order — for the dead
+		 * probe, exactly the packages the arguments leave unchecked.
+		 *
+		 * <p>An error attributed to no probe file, a diagnostic with no source at all included, fails
+		 * LOUDLY instead of being counted either way. Counted as coverage it would report an unrelated
+		 * failure as a gate in force; counted as a gap it would report one as #262 reinstated. Neither
+		 * is a verdict this run can support.
+		 */
+		private List<String> packagesWhereItCompiledClean(String where, List<String> arguments) {
+			Set<String> refused = new LinkedHashSet<String>();
+			List<String> unattributed = new ArrayList<String>();
+			for (String source : compilation.errorSources()) {
+				String packageName = packageByPath.get(source);
+				if (packageName == null) {
+					unattributed.add(source);
+				}
+				else {
+					refused.add(packageName);
+				}
+			}
+			if (!unattributed.isEmpty()) {
+				fail(where + " declares <compilerArgs> " + arguments + ", under which the probes produced an "
+						+ "error attributed to no probe of any package " + unattributed + " — so this run cannot "
+						+ "say which packages those arguments cover:\n\n" + compilation.report());
+			}
+			List<String> clean = new ArrayList<String>();
+			for (String packageName : packages) {
+				if (!refused.contains(packageName)) {
+					clean.add(packageName);
+				}
+			}
+			return clean;
+		}
+	}
+
+	/**
+	 * Every package the reactor's own sources declare — the scope a {@code -Xdoclint/package} argument
+	 * is written against, and so the scope the probes have to answer for. Derived from the corpus and
+	 * never a hand-written list, for {@link #SOURCE_ROOTS}' reason.
+	 *
+	 * <p>Read off each source's DIRECTORY under its root and then cross-checked against that file's own
+	 * {@code package} statement, because it is the DECLARED package the option filters on: a file whose
+	 * directory and declaration disagree would put a probe in a package nothing compiles while leaving
+	 * the compiled one unprobed. A source sitting directly on a root is in the unnamed package, which no
+	 * {@code -Xdoclint/package} argument can name and which is therefore always checked — it is REFUSED
+	 * rather than probed, because this repository has never had such a file and the first one is worth a
+	 * reader.
+	 */
+	private static List<String> corpusPackages() throws Exception {
+		List<String> packages = new ArrayList<String>();
+		for (String root : reactorSourceRoots()) {
+			Path directory = REPO_ROOT.resolve(root);
+			for (Path source : javaSourcesUnder(Collections.singletonList(root))) {
+				Path relative = directory.relativize(source).getParent();
+				if (relative == null) {
+					fail(source + " sits directly on " + root + ", so it declares no package. No "
+							+ "-Xdoclint/package argument can name the unnamed package, so such a file needs no "
+							+ "probe — but this repository has never had one, and the first is worth reading "
+							+ "before this guard is taught to skip it.");
+					return packages;
+				}
+				String declared = relative.toString().replace(File.separatorChar, '.');
+				if (!declaresPackage(source, declared)) {
+					fail(source + " does not declare package " + declared + ", which is what its directory "
+							+ "under " + root + " says it is in. -Xdoclint/package filters on the DECLARED "
+							+ "package, so this guard would probe a package nothing compiles and leave the "
+							+ "compiled one unprobed.");
+					return packages;
+				}
+				if (!packages.contains(declared)) {
+					packages.add(declared);
+				}
+			}
+		}
+		if (packages.isEmpty()) {
+			fail("No package was derived from the reactor's source roots, so the probes would answer for "
+					+ "nothing at all.");
+		}
+		return packages;
+	}
+
+	/** Whether the file carries {@code package <packageName>;} as a line of its own. */
+	private static boolean declaresPackage(Path source, String packageName) throws IOException {
+		String statement = "package " + packageName + ";";
+		for (String line : Files.readAllLines(source, StandardCharsets.UTF_8)) {
+			if (line.trim().equals(statement)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -1885,17 +2154,22 @@ public class JavadocReferenceGuardTest {
 	// --- The POMs ---
 
 	/**
-	 * Whether one argument list, given to the real compiler, makes a dead javadoc reference an
-	 * ERROR. The compiler is the oracle rather than a string match on {@link #REFERENCE_CHECK}
-	 * because {@code -Xdoclint} is an option GRAMMAR: {@code -Xdoclint:all,-missing,-html,-syntax}
-	 * enables the reference group perfectly well and a prefix match calls it missing, so a
-	 * maintainer WIDENING the check would be told they had removed it.
+	 * The packages of this corpus in which one argument list, given to the real compiler, does NOT make
+	 * a dead javadoc reference an ERROR — empty where the arguments cover every package the build
+	 * compiles, which is the only answer a caller may treat as the gate being in force.
+	 *
+	 * <p>The compiler is the oracle rather than a string match on {@link #REFERENCE_CHECK} because
+	 * {@code -Xdoclint} is an option GRAMMAR: {@code -Xdoclint:all,-missing,-html,-syntax} enables the
+	 * reference group perfectly well and a prefix match calls it missing, so a maintainer WIDENING the
+	 * check would be told they had removed it. It answers per PACKAGE for the same reason one step
+	 * further on: {@code -Xdoclint/package} is part of that grammar too, and a single probe answers
+	 * only for wherever it happens to sit — see {@link #DEAD_REFERENCE_BODY}.
 	 *
 	 * <p>The LIVE probe is checked here rather than at one call site, because both callers need it: a
 	 * dead reference failing alone is also satisfied by an argument list that refuses to compile
 	 * anything at all, and a child {@code <compilerArgs>} block can carry such a list as easily as the
 	 * managed one. That, and a dirty baseline, fail LOUDLY with the compiler's own output rather than
-	 * returning false — false would report an environmental failure as "a dead pointer is silent
+	 * returning a gap — a gap would report an environmental failure as "a dead pointer is silent
 	 * again", the right colour with the wrong cause.
 	 *
 	 * <p><strong>Its answer is about the JDK running this suite, not about the CI matrix.</strong> An
@@ -1903,20 +2177,22 @@ public class JavadocReferenceGuardTest {
 	 * leg — measured with {@code -Xlint:-dangling-doc-comments}, which JDK 24 accepts and JDK 11 calls
 	 * an invalid flag.
 	 */
-	private static boolean refusesADeadReference(String where, List<String> arguments) throws IOException {
-		Compilation baseline = compileOne(BASELINE_ARGUMENTS, "DeadReference", DEAD_REFERENCE_SOURCE);
-		if (baseline.failedWithAnError()) {
-			fail("This guard could not run: the dead-reference probe does not compile even without "
+	private static List<String> packagesLeftUnchecked(String where, List<String> arguments)
+			throws Exception {
+		ProbeRun baseline = runProbes(BASELINE_ARGUMENTS, DEAD_REFERENCE_CLASS, DEAD_REFERENCE_BODY);
+		if (baseline.compilation.failedWithAnError()) {
+			fail("This guard could not run: the dead-reference probes do not compile even without "
 					+ REFERENCE_CHECK + ", so nothing can be attributed to the arguments under test.\n\n"
-					+ join(baseline.errors()));
+					+ join(baseline.compilation.errors()));
 		}
-		Compilation live = compileOne(arguments, "LiveReference", LIVE_REFERENCE_SOURCE);
-		if (live.failedWithAnError()) {
+		ProbeRun live = runProbes(arguments, LIVE_REFERENCE_CLASS, LIVE_REFERENCE_BODY);
+		if (live.compilation.failedWithAnError()) {
 			fail(where + " declares <compilerArgs> " + arguments + ", which refuse a source whose javadoc\n"
 					+ "reference RESOLVES — so every build would fail for a reason unrelated to any pointer:\n\n"
-					+ join(live.errors()));
+					+ join(live.compilation.errors()));
 		}
-		return compileOne(arguments, "DeadReference", DEAD_REFERENCE_SOURCE).failedWithAnError();
+		return runProbes(arguments, DEAD_REFERENCE_CLASS, DEAD_REFERENCE_BODY)
+				.packagesWhereItCompiledClean(where, arguments);
 	}
 
 	/**
@@ -2055,8 +2331,10 @@ public class JavadocReferenceGuardTest {
 	 *
 	 * <p>Read through {@link #declaredUnderProjectOrProfile}, so a plugin's own {@code <properties>}
 	 * parameter is not mistaken for the project's. What is still invisible is the same blind spot the
-	 * element form has and this class discloses: a property set in a {@code settings.xml} profile, or
-	 * a {@code -Dmaven.compiler.failOnError=false} on the command line, is not in any POM to be read.
+	 * element form has and this class discloses: the property set anywhere Maven reads that is not one
+	 * of {@link #poms} — a {@code settings.xml} profile, the command line, {@code MAVEN_OPTS}, a
+	 * committed {@code .mvn/maven.config} — is not in a POM here to be read. The last of those is
+	 * inside the repository, which is why the line is drawn at the FILE.
 	 */
 	private static List<String> compilerUserPropertyOverrides(Element pom) {
 		List<String> where = new ArrayList<String>();

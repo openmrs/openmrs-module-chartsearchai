@@ -5500,6 +5500,29 @@ the gate was open, which is the only property they share:
   It now reddens the two checks that put a declared argument list to the compiler.
   **The real compiler is the oracle now**, at every declared block, over a probe whose dead pointer
   sits on a `private` member.
+- **`-Xdoclint` has a SECOND qualifier, and the probes answered for a scope they were not in.**
+  javac takes `-Xdoclint/package:[-]<packages>` as an option of its own, so
+  `-Xdoclint/package:-org.openmrs.*` leaves `-Xdoclint:reference` in the managed list and checks
+  nothing this repository compiles. Both probes were in the unnamed package, which no package filter
+  written for this module can name, so on JDK 21 one added `<arg>` in the root pom's managed
+  `<compilerArgs>` — with a dead pointer planted in `omod/src/main/java` — gave BUILD SUCCESS,
+  exit 0, no `reference not found` printed at all, and seven checks with zero failures. Same defect
+  family as the access qualifier above: closed for one qualifier and left open for the other, and
+  reachable by one line of XML. **One package is not the fix either**, and the reason is the
+  option's own grammar — a trailing `.*` expands to the SUB-packages of the package named and NOT to
+  that package itself (measured on the same JDK), so a probe in `org.openmrs.module.chartsearchai`
+  alone stays checked under `-Xdoclint/package:-org.openmrs.module.chartsearchai.*` while every
+  other package of this build goes silent. The probes are written once per package the reactor's own
+  sources DECLARE now — derived from the corpus walk and cross-checked against each file's own
+  `package` statement, never a list — and one compile of that set reports which packages the
+  arguments actually reached, so the answer is a set of uncovered packages rather than a boolean.
+  **Three pins hold that placement**, because no POM here carries a package filter and nothing else
+  would notice the probes moving back: one package silenced on its own at each end of the corpus,
+  and one silenced as another package's sub-package, each derived from the corpus so that a rename
+  cannot redden a correct guard. The pins assert only that SOME package is seen to be silenced —
+  which packages a given spelling covers is javac's rule to define and this guard's to observe, and
+  a guard restating that rule would go green on its own reading of it, which is how the
+  unnamed-package probe passed five review rounds.
 - **`endOfArgumentList`, the balanced walk that annotation arm was rewritten as, was itself unpinned
   by any shape.** Nesting, the literal skip and the `-1` refusal of a list left open on the line could
   each be deleted — or the whole method replaced by the `indexOf(')')` its own javadoc says it is not
@@ -5511,7 +5534,15 @@ the gate was open, which is the only property they share:
   because the literal skip has three deletable clauses and was enumerated as two**: its backslash
   clause had no row, so replacing it with `i += 1` left every check green while the arm went quiet on
   `@Sep('\'')` — the walk ends the literal on the escaped quote, opens another on the real closing
-  one and answers -1. `AnnotationArgumentEscapesItsQuote` is that row.
+  one and answers -1. `AnnotationArgumentEscapesItsQuote` is that row. **`annotationResidue`, the
+  walk that CALLS it, then turned out to have three deletable clauses of its own and no rows at
+  all** — the `.` its identifier scan admits, without which a fully-qualified annotation name leaves
+  a residue, and the whitespace skips before and after the argument list, without which
+  `@Name ("x")` and `@Name("x") @Other` do. All three fail conservatively — residue left, arm quiet,
+  a real orphan missed, no build reddened — which is why they survived every check here, and none
+  has an instance in this repository.
+  `AnnotationNameIsFullyQualified`, `AnnotationSpacedBeforeItsArgumentList` and
+  `TwoAnnotationsOnOneLineThenBlock` are those rows; delete a clause and exactly its own row reddens.
 - **`failOnError` and `compilerId` were read only as plugin ELEMENTS, and maven-compiler-plugin
   binds both to user properties.** Its descriptor declares
   `<failOnError implementation="boolean" default-value="true">${maven.compiler.failOnError}</failOnError>`
@@ -5536,9 +5567,13 @@ the gate was open, which is the only property they share:
   pins hold is the READER and not the call site**: with no POM here setting either property, deleting
   the loop that asks leaves the check green, exactly as deleting either element-form loop beside it
   does, and there is nothing to cross-check that against the way `poms()` cross-checks its list
-  against the filesystem. Stated rather than fixed. A property from `settings.xml` or
-  `-Dmaven.compiler.failOnError=false` on the command line remains outside every POM check, which is
-  a blind spot this guard already discloses.
+  against the filesystem. Stated rather than fixed. The same property set anywhere Maven reads that is
+  not one of these POMs — a `settings.xml` profile, the command line, `MAVEN_OPTS`, or a committed
+  `.mvn/maven.config` — remains outside every POM check, which is a blind spot this guard discloses.
+  **The line is the FILE and not the repository, and the guard's own wording drew it at the repository
+  until round 6**: `.mvn/maven.config` would be committed alongside these POMs and still unread, so
+  three words in a file this project does not yet have drop the gate exactly as three words in a
+  `<properties>` did.
 - **The reactor scope was read as a direct child of `<project>` alone.** A module Maven builds from a
   `<profile>` was outside both corpus walks and outside every POM check without a line being deleted:
   the same fail-open as the hand-written lists above, reached by MOVING the declaration rather than
@@ -5662,27 +5697,34 @@ Japanese or Chinese the match failed on a perfectly clean tree.
   that wrong. The repository carries no `{@link}` in any unread scope today, and nothing detects one
   arriving; the attachment check is about attachment, not scope.
 - **− The guard's own reach is narrower than the flag's, in three stated ways.** Its POM checks read
-  the repository's POMs, so an argument from a `settings.xml` profile or a command line is invisible in
-  both directions. `everyJavadocReferenceInTheApiModuleResolves` takes no compiler ARGUMENT from the
-  build — it chooses its own, which is what makes it survive the flag being lost, relocated or
-  defeated — but it is not otherwise independent of the build, and an earlier version of this bullet
-  said it was: `apiRoots` derives its corpus from the root pom's `<modules>`, so emptying that element
-  reddens this check too — empty it and read which of the checks stay green. Exactly one reads no POM,
-  `theScannerAgreesWithTheCompilerAboutWhatIsAttached`, and what it reads is shapes the class wrote
-  rather than the corpus. And it reaches the `api` module only — `omod`'s sources are not on an api
-  test's classpath. And most of this repository's Maven invocations pass `-DskipTests` — the Docker
-  image build, the standalone zip, the natives deploy, the CVE scan and the reusable deploy job — so
-  they carry the flag's EFFECT while running nothing that would notice the flag being removed. The
-  required build and the querystore-HEAD job are the two that run the guard.
-- **− `everyJavadocReferenceInTheApiModuleResolves` costs about 2.4s, and what it buys is redundancy
-  rather than reach.** It is some 2.4s of the class's 4.5s as a wall clock on one developer machine;
-  no share of the api suite is given, because the earlier one carried neither tree nor command and a
-  later round would only have to re-measure it. An earlier draft here said it "cannot fire in a
-  Maven build", which is false and was refuted directly: replace the flag with an unrelated
-  argument, plant a dead pointer, and this is one of the checks that redden. What is true is
-  narrower — with the flag IN FORCE a dead pointer kills the build at `compile` or `testCompile` and
-  surefire never runs, and with the flag simply absent the cheap POM checks already redden and
-  already say why. What the 2.4s buys is a failure message that names the pointer, coverage under a
+  THESE POMs, so anything else Maven reads is invisible in both directions — a `settings.xml`
+  profile, the command line, `MAVEN_OPTS`, a committed `.mvn/maven.config` (read automatically since
+  Maven 3.3.1, and a file inside the repository, which is why this is stated by mechanism rather
+  than by inside-or-outside). `everyJavadocReferenceInTheApiModuleResolves` takes no compiler
+  ARGUMENT from the build — it chooses its own, which is what makes it survive the flag being lost,
+  relocated or defeated — but it is not otherwise independent of the build, and an earlier version
+  of this bullet said it was: `apiRoots` derives its corpus from the root pom's `<modules>`, so
+  emptying that element reddens this check too — empty it and read which of the checks stay green.
+  Exactly one reads no POM, `theScannerAgreesWithTheCompilerAboutWhatIsAttached`, and what it reads
+  is shapes the class wrote rather than the corpus. And it reaches the `api` module only — `omod`'s
+  sources are not on an api test's classpath. And most of this repository's Maven invocations pass
+  `-DskipTests` — the Docker image build, the standalone zip, the natives deploy, the CVE scan and
+  the reusable deploy job — so they carry the flag's EFFECT while running nothing that would notice
+  the flag being removed. The required build and the querystore-HEAD job are the two that run the
+  guard.
+- **− `everyJavadocReferenceInTheApiModuleResolves` costs about 3s, and what it buys is redundancy
+  rather than reach.** It is some 3.0s of the class's 6.2s as a wall clock on one developer machine
+  (`mvn -o -pl api test -Dtest=JavadocReferenceGuardTest`, and the same command scoped to the one
+  method, on this branch after the probes became per-package). **The pair was published as 2.4s of
+  4.5s and both halves moved**: the denominator because the per-package probes compile a file per
+  corpus package for each declared argument list, the numerator because it was re-measured on
+  another machine. No share of the api suite is given, because the earlier one carried neither tree
+  nor command and a later round would only have to re-measure it. An earlier draft here said it
+  "cannot fire in a Maven build", which is false and was refuted directly: replace the flag with an
+  unrelated argument, plant a dead pointer, and this is one of the checks that redden. What is true
+  is narrower — with the flag IN FORCE a dead pointer kills the build at `compile` or `testCompile`
+  and surefire never runs, and with the flag simply absent the cheap POM checks already redden and
+  already say why. What that 3s buys is a failure message that names the pointer, coverage under a
   non-Maven runner such as an IDE, and a check whose ORACLE is the compiler rather than XML — it
   still reads the root pom for its corpus, per the reach bullet above — which is what caught neither
   of the two POM-check defects above but is the only thing that would survive a third. Kept on that

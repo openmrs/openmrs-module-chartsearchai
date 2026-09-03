@@ -1,0 +1,44 @@
+{
+  "version": "1.0",
+  "source": "hand-authored fixture for issue #309 — not shipped data",
+  "description": "Shapes about whether a CONDITION rule's bare-containment match against a recorded condition is corroborated, for the injected record's patient-specific reading. The recorded condition names are real: every one is a concept name from the OpenMRS 3.7.1 reference-application demo dictionary, which is the corpus issue #309's measurement was run over. (1) Naltrexone rules on the condition token 'liver', which is the most plausible hepatic contraindication token there is and which nests inside every deliver/delivery form the dictionary publishes — 20 of the 30 values it matches over that dictionary's 2581 condition candidates, e.g. 'Status Post Cesarean Delivery'. (2) Metformin rules on 'renal', which nests inside 'Malignant tumor of adrenal gland' — a tumour of a different organ. (3) Ibuprofen rules on 'peptic ulcer', which is one of the four condition tokens the SHIPPED curated seed publishes; over both measured corpora every one of its matches carries it as a whole word, which is the loss side of the boundary rule and is zero. (4) Paracetamol rules on 'edema', whose mid-word matches are clinically RIGHT compounds ('Lymphedema', 'Angioedema') — the residue the boundary rule gives up, kept here so a future change can read what it costs. No entry carries ATC codes or interactions, so no class comparison can chip and every record is the contraindication arms' own."
+  ,
+  "entries": [
+    {
+      "id": "naltrexone",
+      "name": "Naltrexone",
+      "aliases": ["naltrexone"],
+      "contraindications": [
+        { "type": "condition", "token": "liver", "note": "acute hepatitis or liver failure" }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "metformin",
+      "name": "Metformin",
+      "aliases": ["metformin"],
+      "contraindications": [
+        { "type": "condition", "token": "renal", "note": "significant renal impairment" }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "ibuprofen",
+      "name": "Ibuprofen",
+      "aliases": ["ibuprofen"],
+      "contraindications": [
+        { "type": "condition", "token": "peptic ulcer", "note": "active peptic ulcer disease" }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "paracetamol",
+      "name": "Paracetamol",
+      "aliases": ["paracetamol"],
+      "contraindications": [
+        { "type": "condition", "token": "edema", "note": "fluid retention" }
+      ],
+      "source": "hand-authored fixture"
+    }
+  ]
+}

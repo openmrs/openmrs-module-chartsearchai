@@ -2332,6 +2332,62 @@ public class DrugSafetyValidator {
 	}
 
 	/**
+	 * @return whether some recorded condition {@code c}'s token matched carries that token as a WHOLE
+	 *         WORD rather than only inside a longer one — the CONDITION arm's corroborating question
+	 *         (issue #309), and the third leg of {@link #corroboratedByTheChart}. Asked only of a rule
+	 *         that has already matched.
+	 *
+	 *         <p><b>A boundary, not a resolution, and that is the whole design.</b> Issue #309 says the
+	 *         corroboration test has no condition analogue because both of its allergy legs resolve a
+	 *         drug NAME — {@link #aMatchedRecordNamesTheEntry} through
+	 *         {@link DrugReference#matchesDrugName}, {@link #allergicSubstanceKeys} through the allergen
+	 *         arm's identity question — and no arm resolves a recorded CONDITION to a reference
+	 *         substance. That is right about the legs and does not settle the question, because what
+	 *         redeems a condition match is not a resolution: it is whether the token reached the record
+	 *         as a word of it. So this asks the one thing that IS askable of free clinical text, and the
+	 *         ticket's own conclusion — that a fix must therefore wait on a resolver — does not follow.
+	 *
+	 *         <p><b>{@link DrugReference#containsWord} and deliberately not
+	 *         {@link DrugReference#matchesOrderName}.</b> The condition haystack is prose in the
+	 *         clinician's own wording, which is the shape {@link PatientClinicalContext#containsToken}
+	 *         describes it by, so it takes the PROSE rule — the accessor CLAUDE.md names for that
+	 *         operand shape. The order-name rule's two-letter tail allowance is measured over drug
+	 *         names and choosing it here would be a caller picking an allowance of its own.
+	 *
+	 *         <p><b>What it costs, measured</b> (issue #309, over the OpenMRS 3.7.1 demo dictionary —
+	 *         both corpora and every figure are recorded on {@link PatientClinicalContext#containsToken}).
+	 *         Over the only real curated condition population that exists, the four condition tokens the
+	 *         shipped seed publishes, it costs NOTHING: every value they match carries the token as a
+	 *         whole word, on both corpora. That is the proxy issue #223 used to settle the allergy side,
+	 *         run for conditions. What it does give up is a prefix or suffix compound that is clinically
+	 *         the same finding — {@code Lymphedema} for a rule on {@code edema} — which is hedged rather
+	 *         than lost, and is pinned as a case by
+	 *         {@code ConditionRuleBoundaryCorroborationTest.aClinicallyRightCompoundIsHedgedToo} so a
+	 *         future change reads the cost rather than a description of it.
+	 *
+	 *         <p>Per WITNESS, through {@link PatientClinicalContext#conditionsMatching}, and never over
+	 *         the whole condition list: the question is whether THIS rule's match is redeemed, and a
+	 *         different recorded condition carrying the token as a word says nothing about the record
+	 *         that actually matched. Same shape as the allergy leg above, for the same reason.
+	 *
+	 *         <p>False for a null context, which is "nothing known" rather than "nothing recorded", and
+	 *         false is the safe direction here exactly as it is for {@link #aMatchedRecordNamesTheEntry}:
+	 *         it hedges, and can never make a record ASSERT something about a chart nobody read.
+	 */
+	static boolean aMatchedConditionCarriesTheToken(DrugReference.Contraindication c,
+			PatientClinicalContext context) {
+		if (context == null) {
+			return false;
+		}
+		for (String condition : context.conditionsMatching(c.getToken())) {
+			if (DrugReference.containsWord(condition, c.getToken())) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
 	 * @return what the patient's own chart records that makes {@code c} apply to THEM — the words the
 	 *         chip sentence uses, {@code "active allergy"} or {@code "active condition"} — or null when
 	 *         the chart records neither, which is every rule of every drug for most patients.
@@ -6804,11 +6860,27 @@ public class DrugSafetyValidator {
 	 *
 	 *         <p>Scoped to a SELF-NAMED allergy rule, which is load-bearing rather than incidental —
 	 *         a rule whose token is not one of its entry's names is asking about a class or about a
-	 *         fragment of free text, which is what the bare match exists for, and neither corroborating
-	 *         question can speak to it. Mutate the scope out and read the failures.
+	 *         fragment of free text, which is what the bare match exists for, and neither of the ALLERGY
+	 *         corroborating questions can speak to it. Mutate the scope out and read the failures.
+	 *
+	 *         <p><b>A CONDITION rule is corroborated by a different question, and it is not one of the
+	 *         two above</b> (issue #309). Its token reached the condition list through the same bare
+	 *         containment, so the same accident is available — {@code liver} inside a condition recorded
+	 *         as {@code Status Post Cesarean Delivery} — and until #309 this method answered
+	 *         {@code true} for it unconditionally, so the record stated it under
+	 *         {@code Recorded for this patient:}. What redeems such a match is a BOUNDARY rather than a
+	 *         resolution, which is why the ticket's premise ("there is no condition arm resolving a
+	 *         recorded condition to a reference substance, so there is nothing to ask") does not settle
+	 *         it: see {@link #aMatchedConditionCarriesTheToken}, which carries the measurement and the
+	 *         residue. The three legs are NOT interchangeable and none of them is asked of the other's
+	 *         rule type — the entry side of the allergy legs is meaningless for a condition token, which
+	 *         is the widening #309 forbids in as many words.
 	 */
 	static boolean corroboratedByTheChart(DrugReference ref, DrugReference.Contraindication c,
 			PatientClinicalContext context, Supplier<Set<Object>> allergicSubstances) {
+		if (isConditionRule(c)) {
+			return aMatchedConditionCarriesTheToken(c, context);
+		}
 		if (!selfNamedAllergyRule(ref, c)) {
 			return true;
 		}

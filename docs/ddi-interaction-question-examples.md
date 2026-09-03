@@ -369,8 +369,9 @@ related for the question's own substances. On the mirror of this arrangement dri
 been re-run on a build carrying the fix, so treat the block above as the pre-fix recording it is.
 Where only **some** of a question's pairs are ceded the arm keeps the field — `README.md`'s
 `interactionPairs` section is the client contract for that, and for why this field never counts the
-chips beside it. The *screening* arm has a cede of its own and still states a zero there
-([ADR Decision 69](adr.md)).
+chips beside it. The *screening* arm has a cede of its own and takes the same rule
+([ADR Decision 70](adr.md)) — with no fallback behind it, so there the statement is simply absent
+and a client must not read that absence as completeness.
 
 ---
 

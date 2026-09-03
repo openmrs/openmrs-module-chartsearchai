@@ -459,6 +459,15 @@ public final class DrugReferenceTestSupport {
 	 * decision, so two extractors would have to be moved together, and the one left behind would go
 	 * on asserting against a slice that is no longer the clause. Read off the production constants at
 	 * both ends, so this cannot pass against a clause no record carries.
+	 *
+	 * <p><b>The far end is whichever strength clause the finding actually states, not one of them.</b>
+	 * Issue #348 gave the two order-driven arms a counterpart pair
+	 * ({@code STRENGTH_CHANGE_CURRENT_MEDICATION} and {@code STRENGTH_CAUTION_CURRENT_MEDICATION}), so
+	 * delimiting on {@code STRENGTH_WITHHOLD} alone returns the clause PLUS a call on every screening
+	 * arrangement — a bridge compared against a bridge plus a clause, whose diff reads as a bridge
+	 * defect. All four are searched and the earliest wins; a finding stating none still yields its
+	 * whole tail, which is the pre-existing behaviour and is why callers that care assert the call
+	 * separately ({@code InteractionFindingChartOrderBridgeTest.callOf}).
 	 */
 	static String bridgeOf(String finding) {
 		String lead = DrugReferenceInjector.FINDING_CHART_ORDER_LEAD;
@@ -466,7 +475,16 @@ public final class DrugReferenceTestSupport {
 		if (at < 0) {
 			return null;
 		}
-		int end = finding.indexOf(DrugReferenceInjector.STRENGTH_WITHHOLD, at);
+		int end = -1;
+		for (String clause : Arrays.asList(DrugReferenceInjector.STRENGTH_WITHHOLD,
+			DrugReferenceInjector.STRENGTH_CAUTION,
+			DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION,
+			DrugReferenceInjector.STRENGTH_CAUTION_CURRENT_MEDICATION)) {
+			int found = finding.indexOf(clause, at);
+			if (found >= 0 && (end < 0 || found < end)) {
+				end = found;
+			}
+		}
 		return finding.substring(at + lead.length(), end < 0 ? finding.length() : end);
 	}
 

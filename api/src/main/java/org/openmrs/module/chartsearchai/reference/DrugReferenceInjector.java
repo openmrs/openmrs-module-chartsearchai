@@ -1384,6 +1384,55 @@ public class DrugReferenceInjector {
 			" This finding is a caution to note, not a reason to withhold it.";
 
 	/**
+	 * {@link #STRENGTH_WITHHOLD}'s counterpart for a finding about a medication the patient is ALREADY
+	 * TAKING (issue #348) — the same strength, stated as the act it actually licenses.
+	 *
+	 * <p><b>What went wrong.</b> Asked a question that names no drug and proposes nothing, a Major
+	 * interaction between two of the patient's own prescriptions was answered <em>"No — Salicylic acid
+	 * should not be given: it interacts with active order Methotrexate, a Major problem [61]."</em>
+	 * Nobody asked whether to give salicylic acid; she is on it. "Withhold" names an act that
+	 * presupposes a proposal, and {@code LlmProvider.DEFAULT_SYSTEM_PROMPT} turns that literal into
+	 * "open with \"No\" and what to avoid", so the model manufactured the missing proposal. The
+	 * ticket's own title blames the pronoun, and that reading does not survive the reproduction: the
+	 * model resolved "it" to the record's own subject, correctly. What has no referent is the ACT.
+	 *
+	 * <p><b>A clause and not words beside one, because the additive shape is measured inert.</b> ADR
+	 * Decision 44 added a clause to this very record type and measured six runs byte-identical, and
+	 * its own reasoning says why — "The clause introduces no new call for {@code
+	 * DEFAULT_SYSTEM_PROMPT} to teach". What moved a call, 3 of 3 with the chip byte-identical, was
+	 * changing the clause the prompt DOES key on (ADR Decision 37). So this REPLACES the strength
+	 * clause for these findings, and {@code LlmProvider} teaches it in these exact words.
+	 *
+	 * <p><b>It must not reproduce the phrase {@link #STRENGTH_WITHHOLD} names its class with.</b> A
+	 * counterpart carrying "a reason to withhold it" anywhere in it — even negated, which is the shape
+	 * {@link #STRENGTH_CAUTION} already has — is matched by the refusal branch's antecedent read
+	 * shallowly, which is the hazard ADR Decision 37 records for that pair. So the act is named
+	 * positively and the word does not appear. Pinned as a literal in
+	 * {@code CurrentMedicationFindingStrengthTest.theTwoClausesAreTheWordsAModelReads}, together with
+	 * the absence of that phrase.
+	 *
+	 * <p>Public, and shared with the prompt verbatim, for the reason {@link #STRENGTH_WITHHOLD} is.
+	 * The frame ("This finding is …", full stop) is what
+	 * {@code SafetyVerdictSeverityGradationTest.clauseCore} reads to quote a class back at the
+	 * paragraph, so it is load-bearing rather than stylistic.
+	 */
+	public static final String STRENGTH_CHANGE_CURRENT_MEDICATION =
+			" This finding is a reason to change a medication this patient is already taking.";
+
+	/**
+	 * {@link #STRENGTH_CAUTION}'s counterpart for the same findings (issue #348).
+	 *
+	 * <p>Written in the same change as {@link #STRENGTH_CHANGE_CURRENT_MEDICATION} rather than after
+	 * it, because scoping the counterpart to the withholding class alone is FAIL-OPEN: a Minor or
+	 * Unknown-rated pair of the patient's own prescriptions would keep {@link #STRENGTH_CAUTION},
+	 * whose prompt branch opens by stating that <em>the drug can be given</em> — a presence-shaped
+	 * permission about a drug she is already taking, which is the direction issue #107's arm C
+	 * measured inverting the call 5 of 6 times.
+	 */
+	public static final String STRENGTH_CAUTION_CURRENT_MEDICATION = " This finding is a caution about "
+			+ "a medication this patient is already taking, not a reason to change it.";
+
+	/**
 	 * How a contraindication finding's rule reached this patient's chart, stated in the finding
 	 * itself where nothing corroborates that match as a record of the drug (issue #308) — the
 	 * {@code safety_finding} counterpart of {@link #UNCORROBORATED_READING_LEAD}, which issue #269
@@ -1677,8 +1726,9 @@ public class DrugReferenceInjector {
 	 * cross-reactivity chip and no interaction finding: <em>"No — ibuprofen should not be taken"</em>
 	 * became <em>"Ibuprofen can be given, with one caution"</em>, 3 of 3, on the caution
 	 * demonstration's own wording. The chip was identical on both sides; only the answer's call moved.
-	 * So a contraindication states {@link #STRENGTH_WITHHOLD} — it is never a caution, and the record
-	 * is where this module says so, per {@link DrugSafetyValidator#licensesWithholding(SafetyWarning)}.
+	 * So a contraindication states a WITHHOLDING-class clause and never a caution: {@link
+	 * #STRENGTH_WITHHOLD}, or since issue #348 {@link #STRENGTH_CHANGE_CURRENT_MEDICATION} where the
+	 * referent is a current medication. The record says so, per {@link DrugSafetyValidator#licensesWithholding(SafetyWarning)}.
 	 *
 	 * <p><b>A new type may not reach this renderer silently.</b> An OVERDOSE finding cannot arrive
 	 * today — {@link #preAnswerFindings} validates with an EMPTY answer and the dose arm parses a
@@ -1694,37 +1744,62 @@ public class DrugReferenceInjector {
 	 * that DOES raise an overdose warning through the real {@code validate} given an answer, and asserts
 	 * the pre-answer path raises none — so it reddens the moment the dose arm becomes reachable from
 	 * here. The CONCLUSION is not, and this javadoc claimed it was until review read the case:
-	 * {@code everyInjectedFindingStatesOneOfTheTwoStrengths} iterates the findings ONE fixed arrangement
+	 * {@code everyInjectedFindingStatesExactlyOneStrengthClause} iterates the findings ONE fixed arrangement
 	 * produced, no arrangement of {@link #injectRecords} produces an overdose finding, so it can never
 	 * observe the type it was named as the guard for. Measured by mutation rather than argued: with
 	 * {@link #preAnswerFindings} validating against a stated dose instead of the empty string, the
 	 * premise case reddens and names the record that would reach the model ("The stated Amoxicillin
 	 * dose ~4000 mg/day exceeds …", no clause on it) while
-	 * {@code everyInjectedFindingStatesOneOfTheTwoStrengths} stays green. A caller that renders
-	 * findings after an answer
-	 * exists is a new path neither case runs; it writes its own clause with no test to lean on.
+	 * {@code everyInjectedFindingStatesExactlyOneStrengthClause} stays green. A caller that renders findings
+	 * after an answer exists is a new path neither case runs; it writes its own clause with no test to lean on.
 	 *
 	 * <p>The interaction split is {@link DrugSafetyValidator#licensesWithholding(SafetyWarning)},
 	 * never a local reading of the rating, and never {@code ratingLicensesWithholding} underneath it:
 	 * unrated is not low-rated, and a FOLDED finding asserts an unrated class relationship its rating
 	 * does not cover — two halves a second copy would get wrong in opposite directions.
 	 *
-	 * <p>The clause is a statement about the FINDING's strength, not an instruction about a
-	 * prescribing action, and that is what keeps it true on every arm that renders through here. The
-	 * screening arm (#113) states it of a pair both of whose drugs are the patient's own active
-	 * orders, and the allergy-versus-active-order join (#143) of a drug they are already taking, so
-	 * "withhold it" reads there as a reason to stop rather than a reason not to start. Both readings
-	 * are the finding's own claim; neither is this module telling a clinician what to do, which is the
-	 * line {@code DrugSafetyValidator}'s class javadoc draws. Measured on the standalone, the
-	 * screening answer is unchanged by the clause.
+	 * <p><b>The clause is a statement about the FINDING's strength, not an instruction about a
+	 * prescribing action</b> — and it names an ACT, which is where issue #348 found the strength axis
+	 * insufficient. The two ORDER-DRIVEN arms have no proposal: the screening arm (#113) relates a
+	 * pair both of whose drugs are the patient's own active orders, and the allergy-and-condition join
+	 * (#143) checks a drug she is already taking. "Withhold it" was read there as a reason to stop
+	 * rather than a reason not to start, and that reading was recorded here as sufficient. It is not:
+	 * on a chart of TWO active orders the answer came back <em>"No — Salicylic acid should not be
+	 * given: it interacts with active order Methotrexate, a Major problem"</em> — a prescribing refusal
+	 * about a drug she is on, on a question that proposed nothing.
+	 *
+	 * <p><b>What ADR Decision 37 measured, and the scope its sentence was missing.</b> It reported the
+	 * screening answer unchanged by the clause: <em>"Yes, there are several drug interactions
+	 * recorded: …"</em>, 3/3. That arrangement is a SEVERAL-finding screen, and the reading holds
+	 * there — with a set of findings the model falls back on the yes/no rule. #348's is a
+	 * ONE-finding screen, which that measurement never covered, and there the clause is the only
+	 * instruction the record carries. So the sentence was not wrong; its scope was unstated.
+	 *
+	 * <p>Hence the REFERENT axis, orthogonal to the strength axis: the two order-driven arms state
+	 * {@link #STRENGTH_CHANGE_CURRENT_MEDICATION} or {@link #STRENGTH_CAUTION_CURRENT_MEDICATION},
+	 * which license exactly what their proposal counterparts do. Every clause here still states a
+	 * strength and none is a caution where the other pair withholds, so the strength half of this
+	 * javadoc is untouched. Whether a finding is about a current medication is
+	 * {@link SafetyWarning#isAboutACurrentMedication()}, established by the arm; it is never a reading
+	 * of the detail. Neither is this module telling a clinician what to do, which is the line
+	 * {@code DrugSafetyValidator}'s class javadoc draws.
 	 */
 	private static String strengthClause(SafetyWarning finding) {
+		// The REFERENT axis, asked first because it is orthogonal to the strength axis below and
+		// because reading them the other way round is how a branch gets missed: every clause the
+		// method can return states one of the two strengths, and which PAIR it draws from is decided
+		// here (issue #348).
+		boolean current = finding.isAboutACurrentMedication();
 		if (SafetyWarning.TYPE_INTERACTION.equals(finding.getType())) {
-			return DrugSafetyValidator.licensesWithholding(finding) ? STRENGTH_WITHHOLD
-					: STRENGTH_CAUTION;
+			if (DrugSafetyValidator.licensesWithholding(finding)) {
+				return current ? STRENGTH_CHANGE_CURRENT_MEDICATION : STRENGTH_WITHHOLD;
+			}
+			return current ? STRENGTH_CAUTION_CURRENT_MEDICATION : STRENGTH_CAUTION;
 		}
 		if (SafetyWarning.TYPE_CONTRAINDICATION.equals(finding.getType())) {
-			return STRENGTH_WITHHOLD;
+			// A contraindication is never a caution — ADR Decision 37 measured the alternative — so the
+			// referent is the only thing left to decide.
+			return current ? STRENGTH_CHANGE_CURRENT_MEDICATION : STRENGTH_WITHHOLD;
 		}
 		return "";
 	}

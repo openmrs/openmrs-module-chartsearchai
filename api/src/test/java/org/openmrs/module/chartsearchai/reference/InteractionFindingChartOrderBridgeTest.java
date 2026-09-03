@@ -73,6 +73,13 @@ public class InteractionFindingChartOrderBridgeTest {
 
 	private static final String WITHHOLD = DrugReferenceInjector.STRENGTH_WITHHOLD;
 
+	/** The call the SCREENING arrangements below state since issue #348: both drugs of a screened pair
+	 *  are the patient's own prescriptions, so the finding licenses a change of therapy rather than a
+	 *  refusal of a proposal nobody made. The drug-in-play arrangements still state {@link #WITHHOLD},
+	 *  which is why {@link #callOf} asks the record rather than assuming either. */
+	private static final String CHANGE_CURRENT =
+			DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION;
+
 	/** Everything the Simvastatin x Clarithromycin chip's detail says after its em dash: the rule's
 	 *  rating and the dataset's own mechanism prose (DDInter mechanism 2085). Spelled out rather than
 	 *  read off the fixture, because two cases assert the whole string a model reads and a helper that
@@ -138,8 +145,36 @@ public class InteractionFindingChartOrderBridgeTest {
 			ticketChart(), SCREENING_QUESTION);
 	}
 
-	/** @return the bridge clause of {@code finding}, without its lead — or null where it carries none. */
+	/**
+	 * @return the strength call {@code finding} ends with — {@link #WITHHOLD} for the drug-in-play
+	 *         arrangements below and {@link #CHANGE_CURRENT} for the screening ones (issue #348).
+	 *
+	 *         <p>Asserted rather than assumed. This class mixes both question shapes, and
+	 *         {@link DrugReferenceTestSupport#bridgeOf} stops at whichever strength clause the record
+	 *         states: a record ending in neither call would make that helper return the whole tail, so
+	 *         every case here would compare a bridge against a bridge plus a clause and the diff would
+	 *         read as a bridge defect. Asserting the call here is what turns that into a named failure
+	 *         rather than a puzzling one, and it is this class's question — the shared extractor
+	 *         serves callers with only the one arrangement too.
+	 */
+	private static String callOf(String finding) {
+		if (finding.endsWith(CHANGE_CURRENT)) {
+			return CHANGE_CURRENT;
+		}
+		assertTrue(finding.endsWith(WITHHOLD),
+			"every finding here states one of the two calls its arm can state, was: " + finding);
+		return WITHHOLD;
+	}
+
+	/**
+	 * @return the bridge clause of {@code finding}, without its lead — or null where it carries none.
+	 *
+	 *         <p>Issue #347 moved the extraction itself into {@link DrugReferenceTestSupport#bridgeOf},
+	 *         so where the clause sits inside a finding is decided once; this wrapper stays for
+	 *         {@link #callOf}, which is this class's own assertion and not the extractor's job.
+	 */
 	private static String bridgeOf(String finding) {
+		callOf(finding);
 		return DrugReferenceTestSupport.bridgeOf(finding);
 	}
 
@@ -386,9 +421,13 @@ public class InteractionFindingChartOrderBridgeTest {
 
 		assertTrue(finding.contains(LEAD),
 			"the arrangement must carry a bridge for this case to say anything, was: " + finding);
-		assertTrue(finding.endsWith(WITHHOLD),
-			"the call the finding states is the last word, was: " + finding);
-		assertTrue(finding.indexOf(LEAD) < finding.indexOf(WITHHOLD),
+		// Sentence-finality is established inside callOf, which reaches both of its return paths only
+		// through an endsWith on the call it returns — so re-asserting finding.endsWith(call) here
+		// could not fail, and a line that cannot fail claims a property it does not test. What this
+		// case adds is the ORDERING below; the call itself is pinned as a literal, on this very
+		// arrangement, by theClauseIsTheWordsAModelReads.
+		String call = callOf(finding);
+		assertTrue(finding.indexOf(LEAD) < finding.indexOf(call),
 			"the bridge qualifies the evidence and precedes the call, was: " + finding);
 	}
 
@@ -400,8 +439,10 @@ public class InteractionFindingChartOrderBridgeTest {
 					+ "sentence-whole exit covers its invariant half; a reword is a behaviour change");
 		assertEquals("Safety finding — Simvastatin: Simvastatin interacts with active order "
 				+ "Clarithromycin — " + RATING_AND_MECHANISM + LEAD
-				+ "Simvastatin from Zolvimix; Clarithromycin from Klarizom." + WITHHOLD,
-			ticketFinding(), "the whole record a model reads");
+				+ "Simvastatin from Zolvimix; Clarithromycin from Klarizom." + CHANGE_CURRENT,
+			ticketFinding(), "the whole record a model reads. Its call is the CURRENT-MEDICATION one "
+					+ "since issue #348: this arrangement is a screening question, so both drugs are "
+					+ "the patient's own prescriptions and nothing proposed either of them");
 	}
 
 	@Test

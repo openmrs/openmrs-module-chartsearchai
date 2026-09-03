@@ -239,6 +239,14 @@ public class LlmProvider {
 			+ "question names a category rather than a measurable quantity (\"any heart "
 			+ "problems\", \"any eye issues\"), cite nothing after a no-record verdict — do not "
 			+ "list vital signs or unrelated measurements.\n"
+			// The two question shapes named here are EXAMPLES of this paragraph's scope, not its
+			// bound, and nothing else carries scope: the #348 branches at the end of the paragraph
+			// are gated on the FINDING's clause and never on the question, and the screening shape
+			// they exist for ("Does she have any drug interactions I should know about?") is not one
+			// of the shapes listed. The scope reaches it in practice — the reproduction IS this
+			// paragraph's withholding branch applied to that question. Adding the screening shape
+			// here was RUN as an arm of ADR Decision 72's A/B and refuted: it produced the cleanest
+			// two-order leads of the three arms and dropped a finding from the eight-order cell. Do not re-propose it.
 			+ "The same rules apply to safety and suitability questions (\"is it safe to give "
 			+ "X\", \"can we start X\"): when no record addresses the drug or intervention asked "
 			+ "about, the whole answer is one sentence stating that the records do not address "
@@ -254,9 +262,49 @@ public class LlmProvider {
 			+ "drug: open by stating that the drug can be given, and name the caution in the same "
 			+ "sentence so it is never dropped. Where more than one finding names the drug and they "
 			+ "state different strengths, the strongest governs: a finding that is a reason to "
-			+ "withhold it outranks one that is only a caution to note, so open with \"No\". The "
-			+ "finding's mechanism is the evidence for either call: it belongs after the call, not "
-			+ "in place of it. Never open such an answer with \"Yes\".\n"
+			+ "withhold it outranks one that is only a caution to note, so open with \"No\". "
+			// ISSUE #348. Two branches for the two clauses a finding about a medication the patient
+			// is ALREADY TAKING states, quoting each clause in the words the record uses — which is
+			// the property SafetyVerdictSeverityGradationTest already holds the older two to, and
+			// what ADR Decision 44 measured the absence of: a clause the prompt keys on nothing at
+			// all is inert, six runs byte-identical. INSIDE this paragraph and never a paragraph of
+			// its own: #112 proposed a lead rule beside it and that was ruled out, on the measured
+			// history that added instructions in this area regress (see the comment above the
+			// "Safety finding" record-type sentence). Positively gated and carrying no fallback
+			// clause, because LlmProviderTest fails this paragraph on the substring "otherwise" in
+			// any casing (#107 arm D).
+			//
+			// Placed BEFORE the never-"Yes" token that closes the paragraph, so that token's "such an
+			// answer" reaches these two branches as well. That is deliberate and it is what they ask
+			// for: neither branch wants a VERDICT at all — the lead is a statement about medications
+			// already prescribed, which is the sentence #348 says the chip carries and the answer does
+			// not — so being denied "Yes" costs them nothing, and being denied it explicitly is worth
+			// more than the alternative. One of the two alternatives has a measured cost: a lead
+			// instruction in a paragraph of its own is #112's refuted shape. The other — putting
+			// these two branches AFTER the never-"Yes" token — has not been measured, and the
+			// argument against it is legibility only: the token's own scope becomes the thing a
+			// reader has to infer. Worth weighing rather than settled: one READING of ADR Decision
+			// 72's first residue — §3a still opening with a bare "No —" — is that this token plus the
+			// yes/no verdict paragraph above leave no other lead available on a screening question.
+			// That reading is not measured either, and no arm has tried the placement.
+			// The residue that belongs to the measurement rather than to this comment: on the charts
+			// that already answered correctly the lead was "Yes, there are documented interactions
+			// …", and these branches ask for a statement instead. Measured — both several-finding
+			// cells KEEP that Yes lead with every finding, severity and citation, and ADR Decision
+			// 72's "The measurement" section records the run, its three residues and the arm above.
+			// Nothing in this repository can see what the model produces from these two sentences;
+			// SafetyVerdictSeverityGradationTest pins what they SAY.
+			+ "A finding that says it is a reason to change a medication this patient is already "
+			+ "taking is not about a drug anything proposed: open by naming that medication and what "
+			+ "the finding relates it to, carry the finding's severity, and never open by refusing to "
+			+ "give a drug. A finding that says it is a caution about a medication this patient is "
+			+ "already taking, not a reason to change it, is not evidence against that medication: "
+			+ "open by naming it and the caution in the same sentence, and never open by refusing to "
+			+ "give a drug. Where findings state calls of both kinds, the strongest still governs: a "
+			+ "finding that is a reason to withhold it leads, then one that is a reason to change a "
+			+ "medication this patient is already taking, then a caution. "
+			+ "The finding's mechanism is the evidence for the call it states: it belongs after the "
+			+ "call, not in place of it. Never open such an answer with \"Yes\".\n"
 			+ "Your answer must not vary based on the punctuation or phrasing of the query "
 			+ "— focus only on its semantic meaning.\n\n"
 			+ "The following is a FORMAT DEMONSTRATION ONLY using fake non-medical data. "

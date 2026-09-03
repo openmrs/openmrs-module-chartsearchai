@@ -1,0 +1,30 @@
+{
+  "version": "1.0",
+  "source": "hand-authored fixture for issue #348 — not shipped data",
+  "description": "Two rows of ONE substance publishing DIFFERENT ATC subgroups — the arrangement the shipped knowledge base does not carry, which DrugSafetyValidator.ContraindicationChips' javadoc records as absent with its date and its instruction to re-measure it on a refresh, but which an operator dataset can express: JsonDrugReferenceSource reads per-entry atcCodes alongside a shared substanceName, and DrugReferenceValidity has no rule against two rows of one substance publishing different codes. Both Zetatab rows declare substanceName 'zetadrug' and stem to 'Zetatab', so substanceGroupKey folds them and ContraindicationChips holds ONE chip for the substance; only the GEL row publishes J01GB01, so only it shares the level-4 subgroup J01GB with the Kanamycin allergen. A question naming 'zetatab' puts the TABLETS row in play — its Z01AA01 shares nothing with the allergen, so the drug-in-play arm raises no chip for it — while the gel row arrives as an active order whose substance a sibling row put in play. That is the order-driven arm's FALSE referent direction reaching addAllergyContraindications with no incumbent chip in the ledger to yield to. The aliases are disjoint on purpose: 'zetatab' names the tablets row alone and 'zetagel' the gel row alone, so which row the question resolves and which row the prescription resolves are both stated by the fixture rather than by a ranking.",
+  "entries": [
+    {
+      "id": "zetatab-tablets",
+      "name": "Zetatab (tablets)",
+      "substanceName": "zetadrug",
+      "aliases": ["zetatab (tablets)", "zetatab"],
+      "atcCodes": ["Z01AA01"],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "zetatab-gel",
+      "name": "Zetatab (gel)",
+      "substanceName": "zetadrug",
+      "aliases": ["zetatab (gel)", "zetagel"],
+      "atcCodes": ["J01GB01"],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "kanamycin",
+      "name": "Kanamycin",
+      "aliases": ["kanamycin"],
+      "atcCodes": ["J01GB04"],
+      "source": "hand-authored fixture"
+    }
+  ]
+}

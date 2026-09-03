@@ -307,7 +307,7 @@ public class DrugReferenceInjector {
 	 *  FRAMING carries over to that section. <b>The WORDS do not, and that is a trade rather than a
 	 *  fit</b>: for a condition rule the token names no drug, so "a record of this drug" names a
 	 *  corroboration the module never attempts. See {@link #FINDING_UNCORROBORATED_MATCH}, whose
-	 *  javadoc argues the trade, and ADR Decision 71, which records it. Measured on a
+	 *  javadoc argues the trade, and ADR Decision 72, which records it. Measured on a
 	 *  curated arrangement — an entry aliasing {@code ketoconazole} and ruling on another of its own
 	 *  names, beside an allergy recorded as {@code Ketoconazole} that {@code matchesDrugName} accepts —
 	 *  the record denied an allergy the chart holds. It claims no MECHANISM either, for the same
@@ -1426,7 +1426,7 @@ public class DrugReferenceInjector {
 	 * writing a second clause because prompt wording here is measured rather than argued — ADR
 	 * Decision 42 already records this lead's own exact wording as unmeasured — and a new unmeasured
 	 * sentence in citable evidence is the larger risk; nothing false about the PATIENT is asserted
-	 * either way. ADR Decision 71 records it as an accepted trade rather than an oversight.
+	 * either way. ADR Decision 72 records it as an accepted trade rather than an oversight.
 	 *
 	 * <p><b>Additive, and that is the decision rather than a detail.</b> The finding still states
 	 * {@link #STRENGTH_WITHHOLD}, and a third strength class between withholding and a caution — the

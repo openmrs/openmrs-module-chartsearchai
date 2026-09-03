@@ -126,10 +126,8 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 	 *  chart arm reports OUTNUMBER the pairs the question-pair arm has to say anything about. That
 	 *  inequality is the whole point and the question-pair cede cases below need it: where the two counts
 	 *  coincide, no assertion can tell the arm DECLINING to speak from the arm counting a ceded pair
-	 *  into its own numbers. The screening case that shares this chart discriminates
-	 *  differently, on the statement's PRESENCE rather than on a count, because no fallback is
-	 *  reachable behind that arm — the cross-arm sum ADR Decision 65 refuses — and, on the partial case,
-	 *  none can tell the arm KEEPING the field from the arm yielding it. Measured: on a chart holding
+	 *  into its own numbers — the cross-arm sum ADR Decision 65 refuses — and, on the partial
+	 *  case, none can tell the arm KEEPING the field from the arm yielding it. Measured: on a chart holding
 	 *  the ibuprofen alone the partial case reads {@code found: 1} either way. Each order carries its
 	 *  name AND its code because that is what {@code PatientClinicalContextBuilder} builds for a
 	 *  mapped concept; no case here separates the two legs of {@code hasActiveDrug}, so read this as

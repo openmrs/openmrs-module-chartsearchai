@@ -22,7 +22,8 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
 
 /**
  * Order-driven reference injection resolves the patient's active orders the SAME way the chip layer
- * does — {@code DrugReferenceService.findForActiveOrders}, ATC ∪ name (issue #151).
+ * does — {@code DrugReferenceService.findForActiveOrders}, ATC ∪ name (issue #151) and, since issue
+ * #353, ∪ the concept each order was written against.
  *
  * <p><b>The defect.</b> {@code DrugReferenceInjector.matchingEntries} resolved its order-driven leg
  * through {@code findByActiveOrders} — the ATC-only primitive — while
@@ -146,9 +147,12 @@ public class OrderDrivenInjectionResolutionTest {
 
 	@Test
 	public void oneOrderInjectsOneRecordSetWhicheverWayItResolves() {
-		// The parity statement, and the sharpest form of the fix: which of the two keys a deployment's
+		// The parity statement, and the sharpest form of the fix: which of these two keys a deployment's
 		// dictionary happens to supply for an order must not decide whether the reference material for
-		// that order reaches the prompt. Same drug, same question, two contexts differing only in the key.
+		// that order reaches the prompt. Same drug, same question, two contexts differing only in the
+		// key. Two and not three — the join has carried a bridged-concept key since issue #353, and
+		// this case says nothing about it; BridgedConceptOrderResolutionTest is where that one is
+		// pinned.
 		List<String> byName = DrugReferenceTestSupport
 				.referenceTexts(inject(byName(ASPIRIN_ORDER), IBUPROFEN_QUESTION));
 		List<String> byAtc = DrugReferenceTestSupport

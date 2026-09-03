@@ -73,7 +73,8 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 65: The interaction check that runs on the prescribing question states its extent too](#decision-65-the-interaction-check-that-runs-on-the-prescribing-question-states-its-extent-too)
 - [Decision 66: A partner the chart names leads the injected record's dataset tail, whatever the source rates it](#decision-66-a-partner-the-chart-names-leads-the-injected-records-dataset-tail-whatever-the-source-rates-it)
 - [Decision 67: A question naming a drug CLASS is told so, rather than resolved to members the classification cannot honestly supply](#decision-67-a-question-naming-a-drug-class-is-told-so-rather-than-resolved-to-members-the-classification-cannot-honestly-supply)
-- [Decision 68: A finding about a medication the patient is already taking states a call about that medication](#decision-68-a-finding-about-a-medication-the-patient-is-already-taking-states-a-call-about-that-medication)
+- [Decision 68: An active order joins the reference data by the CONCEPT it was written against, not only by the names a locale elects](#decision-68-an-active-order-joins-the-reference-data-by-the-concept-it-was-written-against-not-only-by-the-names-a-locale-elects)
+- [Decision 69: A finding about a medication the patient is already taking states a call about that medication](#decision-69-a-finding-about-a-medication-the-patient-is-already-taking-states-a-call-about-that-medication)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -2515,7 +2516,7 @@ An **overdose** finding is the one that genuinely wants neither clause, being a 
 
 **The clause states the finding's strength, never a prescribing action.** That is what keeps it true on the arms whose subject is a drug the patient is already **on** — the interaction screen (#113) and the allergy-versus-active-order join (#143) — where "withhold it" reads as a reason to stop rather than a reason not to start. Both are the finding's own claim; neither is this module telling a clinician what to do. Measured, the screening answer is unchanged by it: *"Yes, there are several drug interactions recorded: …"*, 3/3.
 
-**That last measurement is a SEVERAL-finding screen, and issue [#348](https://github.com/openmrs/openmrs-module-chartsearchai/issues/348) found the reading fails on a ONE-finding one** — where the clause is the only instruction the record carries, and the answer came back *"No — Salicylic acid should not be given"* about a drug the patient is on. The measurement above is left as taken and is not what moved; what moved is the reading it rests on, that "withhold it" can be relied on to read as a reason to stop. [Decision 68](#decision-68-a-finding-about-a-medication-the-patient-is-already-taking-states-a-call-about-that-medication) gives those two arms a counterpart clause of the same strength, so the strength half of this decision is untouched.
+**That last measurement is a SEVERAL-finding screen, and issue [#348](https://github.com/openmrs/openmrs-module-chartsearchai/issues/348) found the reading fails on a ONE-finding one** — where the clause is the only instruction the record carries, and the answer came back *"No — Salicylic acid should not be given"* about a drug the patient is on. The measurement above is left as taken and is not what moved; what moved is the reading it rests on, that "withhold it" can be relied on to read as a reason to stop. [Decision 69](#decision-69-a-finding-about-a-medication-the-patient-is-already-taking-states-a-call-about-that-medication) gives those two arms a counterpart clause of the same strength, so the strength half of this decision is untouched.
 
 **The chip and the wire are unchanged.** The clause is prompt-facing evidence about how far a rating reaches, not a clinical instruction to put in front of a clinician, and `safetyWarnings` is a published shape.
 
@@ -4137,7 +4138,7 @@ concept-reference-source name containing `ATC`): **27 of the 43** active drug or
 3.7.1 demo instance carry no ATC code at all, while `DrugReference.normalizedAtcCodes()` over
 the real `DdiDrugReferenceSource.parse` of the 19 MB knowledge base publishes codes for 1839
 of its 2283 entries. The sparsity is the dictionary's, never the reference data's — which is
-why `findByActiveOrders` is package-private and `findForActiveOrders` (ATC ∪ name) is the list
+why `findByActiveOrders` is package-private and `findForActiveOrders` (ATC ∪ name, and ∪ bridged concept since Decision 68) is the list
 every consumer takes.
 
 **What the name leg of `addPartnersForUnmappedOrders` bought** (#228; Decision 54). Through the
@@ -4203,7 +4204,7 @@ Additive, prompt-facing only, and monotone: it adds words and moves no call. The
 
 **And the reduction belongs to the ARM that performed it, which the first implementation got wrong.** `addInteractionWarnings` applies no `activeOrdersOtherThan` reduction — its own comment says it runs "ungated, uncapped, and without that arm's `activeOrdersOtherThan` reduction" — so `chartOrderBridges` performing the reduction itself, for both arms, suppressed a witness that arm had not suppressed. Measured through the real `injectRecords` over the verbatim DDInter slice `ddi-alias-drug-names.json`: ONE prescription carrying both `C10AA01` and `J01FA09`, asked *"Can I give him clarithromycin?"*, produced `Clarithromycin interacts with active order Simvastatin — Major. … This module resolved the substances named here from this patient's own active orders. Clarithromycin from Zolvimix. This finding is a reason to withhold it.` — Simvastatin unbridged, i.e. this issue's own unciteable finding surviving inside the clause added to close it, now beside a sentence asserting the module HAS stated its resolutions. Found by a clean-context review agent, not by the plan or either gate pass. `.aCombinationOrderCarryingBOTHSubstancesBridgesBothSides` reproduces it verbatim when the call site is mutated back. The general lesson: a shared helper that performs a caller's reduction is asserting something about a caller it cannot see.
 
-**The silence test is the order's RECORDED NAMES against the substance, never the string the chip prints.** The plan's first form asked `!DrugReference.matchesOrderName(order.getDisplay(), printedName)`, and that is measurably the wrong operand: `matchesOrderName` is `containsBoundedToken`, so it can only answer true where the display carries the WHOLE printed string, and a printed name is a `displayLabel()` — multi-word, parenthesized or synonym-suffixed for a large minority of this knowledge base (`Acetylsalicylic acid (aspirin)`, `Hydrocortisone (ophthalmic)`, `Emtricitabine / Tenofovir disoproxil`). Under it an order plainly named `Aspirin 81mg` would have been bridged as if the chart named nothing. `recordsANameOf` asks instead whether any name the ORDER records reaches the substance, through `matchesDrugNameAny` — the same `matchesDrugName` primitive `resolvesFrom`'s own name leg uses. So the condition is exactly "`resolvesFrom` is true and its NAME leg is not what made it true", i.e. the ATC leg alone, which is what makes the scope claim below true of the code rather than merely asserted. `.anOrderNamingTheSubstanceOnlyByAnAliasIsNotBridged` is the case that reddens if this weakens back to a printed-name test.
+**The silence test is the order's RECORDED NAMES against the substance, never the string the chip prints.** The plan's first form asked `!DrugReference.matchesOrderName(order.getDisplay(), printedName)`, and that is measurably the wrong operand: `matchesOrderName` is `containsBoundedToken`, so it can only answer true where the display carries the WHOLE printed string, and a printed name is a `displayLabel()` — multi-word, parenthesized or synonym-suffixed for a large minority of this knowledge base (`Acetylsalicylic acid (aspirin)`, `Hydrocortisone (ophthalmic)`, `Emtricitabine / Tenofovir disoproxil`). Under it an order plainly named `Aspirin 81mg` would have been bridged as if the chart named nothing. `recordsANameOf` asks instead whether any name the ORDER records reaches the substance, through `matchesDrugNameAny` — the same `matchesDrugName` primitive `resolvesFrom`'s own name leg uses. So the condition is exactly "`resolvesFrom` is true and its NAME leg is not what made it true" — which was the ATC leg alone when this was decided, and since Decision 68 is that leg or the bridged-concept one — which is what makes the scope claim below true of the code rather than merely asserted. `.anOrderNamingTheSubstanceOnlyByAnAliasIsNotBridged` is the case that reddens if this weakens back to a printed-name test.
 
 **Scoped to the ATC leg, and that is a decision rather than an omission.** Where the NAME leg resolved a substance, the order's own recorded names already reach it, so the chart's own words carry the connection and the model needs no help. The ATC leg is different in kind: the mapping is in no record. The residue is #136's alias-spelling shape — an order named `Acetylsalicylic acid 81mg` beside a chip printing the token `aspirin` — which is pre-existing, is Decision 63's business, and is not what this ticket reproduces.
 
@@ -4540,7 +4541,381 @@ arrangements reporting nothing about the class.
   `DrugClassQuestionNoteTest.aClassQuestionStillGetsItsNoteWhereTheEntryDatasetIsInert` pins the
   arrangement, so a gate added later reddens against this paragraph rather than passing unread.
 
-## Decision 68: A finding about a medication the patient is already taking states a call about that medication
+## Decision 68: An active order joins the reference data by the CONCEPT it was written against, not only by the names a locale elects
+
+**Context.** Issue #353. Cotrimoxazole — the most routine co-prescription in HIV care — resolved to no
+reference entry, so no interaction screen ran and the answer read as an absence of records. The
+interaction is in the shipped knowledge base and is reachable: `Lamivudine × Trimethoprim`, Minor. Only
+the resolution failed, and it failed on both of the keys the order-to-entry join had.
+
+The knowledge base's CIEL bridge keeps ONE name per code — CIEL's `en` locale-preferred fully specified
+name. `DDInter1874` (Trimethoprim) bridges CIEL 105281 as exactly
+`{"code":"105281","uuid":"105281AAAA…","name":"Sulfamethoxazole / trimethoprim"}`, and the standalone's
+own dictionary carries 16 non-voided names for that concept. So the NAME leg reaches the entry only in a
+session whose locale elects the one spelling the bridge kept; the ticket measured the same order, same
+question, same patient, with only the session locale changed: `en` one Minor chip, `fr` none. The ATC
+leg cannot help — the concept maps to `J01EE01`, which no entry of the shipped knowledge base publishes.
+
+The failure is silent and fail-closed. "The records do not address Cotrimoxazole." reads to a clinician
+exactly like a screened-and-clear result.
+
+**Decision.** `DrugReference` retains the `ciel[]` rows' `(uuid, name)` pairs, which the parser used to
+read for the name alone and drop; `PatientClinicalContext.ActiveDrugOrder` retains the uuid of the
+concept it was written against, read off the SAME resolved concept the order's ATC codes come from; and
+`DrugReferenceService.findForActiveOrders` gains a third leg, `findByBridgedConcept`, beside the ATC
+primitive and the recorded-name resolution. `DrugSafetyValidator.resolvesFrom` gains the same leg, so
+the candidate set and the per-order attribution cannot disagree about which orders resolved a substance.
+
+**The leg is RANKED, and that is the load-bearing part.** Its answer is the entries the bridge files
+under the concept INTERSECTED with the ones `findImpliedByDrugName` answers for the name the bridge
+records for it. The two bounds fail in opposite directions and neither is removable:
+
+- Unranked, the leg is WIDER than the name leg it stands in for. A bridged uuid can reach several
+  entries that are not one substance — `Trastuzumab`, `Trastuzumab deruxtecan` and
+  `Trastuzumab emtansine` share one bridged concept and share no ATC code — which is issue #209's
+  widening arriving by a new route. Worse, `resolvesFrom` feeds SUPPRESSIONS:
+  `activeOrdersOtherThan` and `ordersOtherThan` withhold an order from witnessing an interaction, and
+  a wider set there removes a warning with no chip and no log line to notice it by. **Each of those two
+  sites has a case of its own since review round 3.** Round 2 measured that substituting
+  `BridgedOrders.NONE` for the `bridged` argument at either method alone left the whole api suite
+  green — only neutering all four across the two reddened
+  `BridgedConceptOrderResolutionTest.theScreeningArmWithholdsTheBridgedOrderFromWitnessingItsOwnPair` —
+  so the plausible slip, dropping the leg from one of two separate parameters, shipped green. The owed
+  cases are `BridgedOrderSelfWitnessContextTest`, one per method:
+  `.theBridgedOrderDoesNotWitnessAnInteractionBetweenItsOwnTwoConstituents` reddens on
+  `activeOrdersOtherThan`'s own `resolvesFromAny` with a chip that should not exist, and
+  `.theBridgedOrderIsNotNamedAsItsOwnPartnersSource` reddens on `ordersOtherThan`'s with one
+  prescription named as the source of BOTH sides of its own interaction. The reference-NAME leg inside
+  `activeOrdersOtherThan` was already pinned, by three cases of
+  `BridgedConceptOrderResolutionTest`; mutate each of the three arguments separately rather than
+  trusting that mapping. The shape both new cases need is one prescription whose bridged concept
+  resolves two substances the knowledge base relates to each other, and DDInter rates every real
+  fixed-dose combination's constituents `Unknown` — below the shipped floor — which is why that class
+  is context-sensitive and lowers `chartsearchai.drugSafety.minInteractionSeverity`.
+- Without the intersection, the leg could reach an entry the bridge does not file under this concept at
+  all, on the strength of a name it merely shares.
+
+**What the ranking does NOT do, stated because the first draft of this decision claimed it did.** The
+ranking keeps the STRONGEST claimants of the bridge's name. Where one entry's DISPLAY name is that
+name it keeps that entry alone, which is the Trastuzumab case above. Where the name is only an ALIAS
+of its entries, `nameMatchStrength` TIES and `findImpliedByDrugName` admits them all — so the leg can
+still answer with more than one substance. Measured through `findByBridgedConcept` and
+`substanceGroupKey` over the shipped knowledge base, **1112 of the 4251 bridged concepts do**, among
+them CIEL 77719 (`Hydrocortisone acetate` → Hydrocortisone AND Hydrocortisone butyrate — CLAUDE.md's
+own #209 example, "an ester she is not on"), CIEL 75876 (`Esomeprazole magnesium` → Esomeprazole AND
+Omeprazole) and CIEL 103166 (`Abacavir / lamivudine` → Abacavir AND Lamivudine, which is a real
+fixed-dose combination and no ambiguity at all). For those concepts a bridged order adds a second
+substance to `findForActiveOrders`, and it reaches the prompt as citable reference material.
+
+**A figure of 46 stood here, and in two javadocs, until review round 2.** It was a count over this same
+population MINUS every bridge name that reads as a combination — a filter no predicate applied — and it
+was asserted by no test, so it could not be re-derived from what it was attached to. A maintainer
+reading it sized the residue as a 1-in-92 carve-out; it is 1-in-4 of bridged concepts and the common
+case for combination products, which is how the round-1 clause refusal below shipped unnoticed. Every
+figure in this section now says what it is a count OF and is asserted by
+`BridgedConceptLegBoundsTest.theRefusalsReachOverTheShippedKnowledgeBase`.
+
+That is NOT narrowed further, and the reason is the same property that makes the leg defensible at
+all: its answer is a subset of what a session electing the bridge's own spelling already gets, so the
+1112 are what an `en` session gets for those orders TODAY. Narrowing past that would make the leg
+answer less than the name leg it stands in for, and the ticket's whole complaint is that the two
+locales disagree. What is being fixed here is the locale dependence, not #209.
+
+Together they make the leg's answer a SUBSET of what a session electing the bridge's own spelling
+already gets. So it states nothing the reference data does not already state about that concept; what
+it removes is the dependence on which spelling the session elects.
+
+**Both bounds bite on real data.** Measured 2026-09-02 through `findByBridgedConcept` and
+`findImpliedByDrugName` themselves — asserted, not printed, by
+`BridgedConceptLegBoundsTest.bothBoundsNarrowRealConceptsOfTheShippedKnowledgeBase`, so a refresh that
+moves them reddens rather than going unread. Of the shipped knowledge base's 4251 distinct bridged
+concepts, the ranking drops an entry the bridge files there on 16, and on 243 the ranked resolution of
+the bridge's own name reaches an entry the bridge does not file there. Mutate either bound and read the
+failures: dropping the ranking reddens the Trastuzumab case, dropping the intersection reddens the
+Ketorolac one, and each also moves its own figure.
+
+**What it inherits, stated rather than left to be found.** Decision 36 records ~10 stray `ciel[]`
+cross-walk rows in the shipped knowledge base (a rival product wrongly attached to a row). Those are
+already reachable — an order elected to that spelling resolves them today — and this leg makes them
+locale-independent too. The correct rows and the stray ones are the same field, so locale-independence
+cannot be had one way round. The knowledge base's own validity channel already reports the collisions.
+
+The one such link the two bounds were measured against does not survive them: CIEL 166154, recorded as
+`Moderna COVID-19 vaccine` and filed on six Pfizer/Tozinameran rows and on no Moderna row, resolves to
+nothing — it is the single bridged concept of the 4251 that does
+(`BridgedConceptLegBoundsTest.aStrayLinkWhoseRecordedNameNamesNoneOfItsRowsResolvesNothing`). Nothing is
+claimed about the others. **And that case is the strongest argument against the intersection, so it is
+answered rather than left out**: without it, the leg resolves that stray link to the entry the bridge's
+own name actually names — which looks like a repair and is the leg silently disagreeing with the
+bridge it is reading. It would also readmit `Tromethamine` for a Ketorolac order. The leg reports what
+the bridge says; correcting the bridge is the knowledge base's job and a different change.
+
+**What the leg costs, measured.** Instrumented counting subclasses of `DrugReferenceService` driving
+the real `DrugReferenceInjector.injectRecords` and `DrugSafetyValidator.validate` over the shipped
+knowledge base, median of 15 requests after 5 warm-ups: on a 43-order chart whose concepts the bridge
+carries, the drug-safety path takes 152 ms against 32 ms for the same orders carrying no concept. ~91%
+of one resolution is the ranked `findImpliedByDrugName` and ~9% the dataset walk, so a concept index
+would not help. 42 ms of the 152 is a DUPLICATE: `findForActiveOrders` resolves the leg for its
+candidate set and `BridgedOrders` resolves the identical answer again for the pass, each with its own
+`impliedByName` cache, and both happen twice per `/search` (the pre-answer and post-answer passes).
+Accepted rather than removed: it is well under 1% of a `/search` dominated by model latency, and the
+seam that would remove it — having `findForActiveOrders` hand back the per-order map it is already
+building, #255's shape — changes the signature of the one list every consumer takes, for a saving
+nothing measures. Recorded so the next person to look does not re-measure it.
+
+**UUID and not the CIEL reference-map code.** Measured against the 3.7.1 reference-application demo
+dictionary (2026-09-02, raw `SELECT`s over `concept` and `concept_reference_map`): of the knowledge
+base's 4251 distinct bridged CIEL concepts, 171 are present in that dictionary by uuid against 134
+reachable through a CIEL `concept_reference_map` for the same codes. Uuid coverage is both wider and
+simpler. Residue: an install that files CIEL concepts under local uuids gains nothing from this leg.
+
+**Alternatives considered and rejected.**
+
+*Widen the KB's alias set from the local dictionary* — the ticket's own proposed remedy ("carry every
+name CIEL publishes for a bridged code"), whether done upstream in the data or at load from the running
+dictionary. **Measured unsafe in this module**, and the two measurements are kept apart because only one of them
+can be produced without re-expressing a production predicate.
+
+Of the shipped knowledge base's alias vocabulary: every alias of five characters or fewer is itself a
+substance name — `clove`, `hemin`, `iron`, `kava`, `opium`, `urea`, `yeast`, and nothing else. That is
+produced by `DrugReference.getAliases()` over the real `DdiDrugReferenceSource.load()` and is asserted,
+as the list rather than as a count, by
+`ShippedAliasVocabularyTest.everyShortAliasTheShippedVocabularyCarriesIsItselfASubstance`.
+
+Of the dictionary those names would be harvested from (the 3.7.1 reference-application demo dictionary,
+2026-09-02, raw `SELECT`s over `concept` and `concept_name`): the 171 bridged CIEL concepts it carries
+publish 1519 distinct non-voided names between them, 103 of which are five characters or shorter —
+among them `alert`, `dos`, `pas`, `dt`, `abc`, `arret`, `ascot`, `mabel`, `linde` and the French fully
+specified name `73702`. That is a count of dictionary NAMES and deliberately not of aliases the module
+would gain; converting one to the other means reimplementing `addAlias`, which is what `CLAUDE.md`
+forbids for a quoted figure.
+
+The two together are the argument. `DrugReference.matchesText` is an unguarded whole-word match with no
+length floor and is applied to the question, the answer and rendered records, so `alert` as an alias
+puts a drug the patient is not on in play on "the patient is alert and oriented", and then screens it
+against her active orders. Two candidate discriminators were checked against that dictionary and both
+fail: every one of those tokens names exactly one concept there — the same count as `bactrim`,
+`septrin` and `cotrimoxazole` — and they mix `SHORT` with plain-synonym name types exactly as
+`Cotrimoxazole` itself does.
+
+*Widen `PatientClinicalContextBuilder.addConceptName` to read every name the concept publishes* — the
+#234 fix, one path over. Refused by `CLAUDE.md` and by the ticket alike: what counts as a name there
+decides which reference entries an ORDER can reach at all, and those names are also matched against
+chart prose. This decision routes around it instead — no name is added anywhere.
+
+*Resolve the combination ATC code `J01EE01` to its constituent substances* — the second thing the
+ticket leaves to this repo. The concept key subsumes it for the reported case and needs no new
+hand-maintained decomposition table, so it is answered rather than implemented.
+
+**Deliberately NOT closed here.** The question leg — a question naming `Cotrimoxazole`, `Septrin` or
+`Bactrim` rather than an order for it — goes through `findImpliedByQuery` → `matchesText`, which is
+PROSE, and the measurement above says no name-shape-scoped alias list can close it safely. Issue #353
+stays open for that half.
+
+**Nor is the CLASS arm touched, and the residue is larger than it first looked.**
+`DrugSafetyValidator.orderPartners` walks the flattened ATC codes and resolves the remainder by NAME
+through `findImpliedByDrugName`; it takes no `BridgedOrders` and never calls `findByBridgedConcept`, so
+`OrderPartner.substances` is not a consumer of this leg. (An earlier draft of this decision, and of
+`findByBridgedConcept`'s javadoc, named it as one of the leg's two suppression consumers. That was
+false: the two are `activeOrdersOtherThan` and `ordersOtherThan`.) The consequence, measured through
+the real `validate` over the shipped knowledge base with the question
+`Can I give this patient lansoprazole?` and one active order: a prescription displayed
+`Esomeprazole 40mg` raises `Lansoprazole is in the same ATC class (A02BC) as active order
+Esomeprazole — possible duplicate therapy`, while the SAME prescription displayed with a name the
+knowledge base does not carry and bridged to CIEL 75876 raises no chip at all — even though
+`findForActiveOrders` now asserts the patient is on esomeprazole. So for the bridged population the
+candidate set and the co-medication list describe different medication lists for one chart, which is
+#151's shape. It is fail-closed and it is the direction that arm already misses in, but it is not
+nothing, and it is why the locale dependence this ticket reports is only half removed.
+
+Not closed here because doing it properly means changing two rungs of `orderPartners`, both of which
+write `OrderPartner.substances` — the restating-existing-therapy skip's operand, where a wider set
+SILENCES a chip — and because it delivers none of the ticket's six verification rows. It belongs on its
+own evidence and its own change.
+
+**Consequence for Decision 64.** Its silence test — "`resolvesFrom` is true and its NAME leg is not what
+made it true" — is unchanged as stated, but the gloss "i.e. the ATC leg alone" no longer holds: since
+this decision there are two other legs. An order joined only by its concept IS chart-order-bridged, and
+that is the intended reading — the chart's own words for the prescription (`Cotrimoxazole 960mg`) name
+the substance nowhere, so without the clause a clinician has no way to connect the chip to anything on
+the medication list. `BridgedConceptOrderResolutionTest.theFindingSaysWhichPrescriptionTheSubstanceCameFrom`
+pins it.
+
+**But only for a substance the bridge's own recorded name NAMES — added in review round 1, narrowed in
+round 2, and the first draft of this section had it wrong.** That draft discussed the Decision 64
+clause as beneficial and never put it to the multi-substance concepts measured above. The subset argument this decision rests on is a
+statement about the candidate SET and it does not transfer to that consumer: Decision 64's clause is
+PRINTED, verbatim, into a citable `safety_finding` carrying `STRENGTH_WITHHOLD`, and its own silence
+test is `recordsANameOfAny` — "the order's own recorded names reach the substance" — which is exactly
+what the bridged leg's premise denies. So the orders the leg exists for are the orders whose false
+attributions that test cannot silence.
+
+Measured on this branch through the real `DrugSafetyValidator.validate` over the shipped knowledge
+base: one order displayed `Inexium 40mg`, written against CIEL 75876 and carrying no ATC code, beside
+an order for clopidogrel, question `Can I give this patient omeprazole?` The finding read
+`Omeprazole from Inexium 40mg`. The patient is not on omeprazole; the bridge names that concept
+`Esomeprazole magnesium`. The same prescription named `Esomeprazole magnesium 40mg` with no concept —
+the `en` session this leg's answer is claimed to be a subset of — states no such clause at all, because
+its recorded names reach the substance. So the bridged path made a statement the `en` path does not,
+which is the one thing the subset argument promises it will not do.
+
+`DrugSafetyValidator.restsOnAnAmbiguousBridge` refuses the clause where BOTH: nothing but the bridged
+leg joined the order to the substance, and the name the bridge records for that concept does not NAME
+that substance (`DrugReferenceService.substancesNamedByBridge`). Two conjuncts, and they redden
+different cases — mutate one and read them. The first is written as the negation of `resolvesFromAny`
+under `BridgedOrders.NONE`, so it cannot drift from the predicate it complements; where the order's own
+recorded ATC code reaches the substance the clause stands exactly as before, and the CODE leg's own
+over-wide residue (two substances under one level-5 code) is `resolvesFrom`'s and is deliberately left
+open here — closing it would change what every ATC-resolved order states, which nothing in this change
+measures.
+
+**Round 1 asked the second conjunct as a COUNT, and that was wrong in the population this leg exists
+for.** It refused the clause wherever the order's bridged answer spanned more than one
+`substanceGroupKey`, which cannot tell "the module knows the prescription is one of these and cannot
+say which" (`Esomeprazole magnesium` → Esomeprazole AND Omeprazole) from "the prescription genuinely
+contains all of these" (`Abacavir / lamivudine` → Abacavir AND Lamivudine). Measured, **990 of the 1112
+multi-substance bridged concepts have a recorded name that NAMES every substance they resolve** — and
+the count refused every one. That reopened #349's own defect for the bridged population, silently: a
+Major chip naming a substance nowhere on the medication list, with no clause saying which prescription
+it came from, and no chip difference or log
+line to notice it by. It also made CLAUDE.md's standing rule "a combination order carrying BOTH
+substances bridges both sides" false for every bridged combination.
+
+**Say what that 990 is a count OF, and it is not a clinical class — review round 4.** The predicate is
+`substancesNamedByBridge`: the concept's recorded name NAMES every substance its bridged answer resolves.
+The francophone ARV combination lists the ticket is written for satisfy it, and this paragraph called the
+990 fixed-dose combinations on the strength of that until round 4 — a measured figure relabelled, which is
+#243's shape one step along (there a filtered figure was quoted for an unfiltered predicate; here the
+predicate and the figure agree and the WORDS do not). Naming every substance is also satisfied by a salt,
+ester or derivative name that names its parent moiety, and the shipped data has both kinds: of the 990,
+967 bridge names carry RxNorm's `/` combination separator and 23 do not, the 23 holding combinations
+spelled without it (`Amoxicillin and clavulanic acid`, `Rifampicin and isoniazid`) beside
+`Atropine sulfate`, `Mometasone furoate`, `Hydrocortisone butyrate`, `Penicillin G potassium`,
+`Isosorbide mononitrate` and `Lutetium Lu 177 dotatate`. Measured 2026-09-03 through
+`findByBridgedConcept` and `substancesNamedByBridge` over `DrugReferenceTestSupport.shippedEntries()`, in
+a throwaway JUnit test compiled against this head and deleted after; the `/` share is a key read of the
+bridge NAME and no predicate of this module's, which is why it is dated here rather than asserted — the
+two figures the code depends on are asserted, by
+`BridgedConceptLegBoundsTest.theRefusalsReachOverTheShippedKnowledgeBase`. What the relabelling costs is a
+maintainer re-deriving this refusal from combination SHAPE instead — `DrugReference.combinationConstituents`,
+the `/` separator, `derivedSubstanceKeys` — which reproduces 967 of the 990 and silently re-refuses the
+parent/derivative remainder, for a population the shipped knowledge base actually carries.
+
+Naming separates them, and it is the accessor CLAUDE.md already designates for exactly this question —
+"ask it before PRINTING a substance's own label in a sentence reporting the patient's record",
+`DrugReferenceService.findNamedSubstances`, whose second production caller `substancesNamedByBridge`
+now is. Asked PER SUBSTANCE, so one prescription can state a clause for the substance its concept's
+name names and none for the substance it does not: `Esomeprazole from Inexium 40mg` stands where
+`Omeprazole from Inexium 40mg` does not, out of one bridged answer
+(`BridgedConceptOrderResolutionTest.theSubstanceTheBridgesOwnNameNamesIsAttributedThoughItsSiblingIsNot`).
+Over the shipped knowledge base the refusal now reaches **122 of the 4251 bridged concepts and 166 of
+the 5826 (concept, substance) attributions the leg can state** — the attribution being the unit the
+clause is printed in, and deliberately not the concept count.
+
+**The candidate set handed to `findNamedSubstances` is folded to one representative row per substance,
+and that fold is load-bearing.** That accessor's equal-claimant clause refuses a TIE, so a substance's
+several route-qualified rows contest each other and the substance is then named by nothing: unfolded,
+28 bridged concepts resolving to exactly ONE substance are named by nothing at all (`Naphazoline` →
+`Naphazoline (nasal)` AND `Naphazoline (ophthalmic)`); folded, none are. The same measurement is why
+there is no third conjunct asking whether the answer is ambiguous at all — the `ddinter` parser writes
+a bridge's recorded name onto every entry it files there as an alias, so a one-substance answer has a
+single uncontested claimant and is always named, and such a conjunct could change nothing. That is a
+property of the LOADER and not of the shipped data; `substancesNamedByBridge`'s javadoc names the
+entry shape that would escape it.
+
+**Round 2's naming answer was right and was asked of the wrong ROW, twice — review round 3.** The
+refusal is asked of a row GROUP, and two separate elections decided which group. Both took a row by
+arrival, so a clinical statement rested on the order the knowledge-base file lists its rows in; the
+mechanism CLAUDE.md designates for each was already in the module.
+
+- **The partner side of the pair.** `restsOnAnAmbiguousBridge` is asked of `rowsOfSubstance` of the
+  entry `DrugSafetyValidator.activeOrderEntryFor` elected, and that scan took the FIRST candidate the
+  rule's token identified. The `ddinter` parser writes a rule's token from the partner's `rxnorm_name`
+  and files that name in the partner's own aliases, so `esomeprazole` is Esomeprazole's display name
+  AND Omeprazole's alias — the shared `rxnorm_name` that makes those two rows one substance-name family
+  holding two `drugbank_id`s, which is `substanceKey`'s own case. Reproduced through the
+  real `validate` over `ddi-bridged-concept-two-substances.json`: the question
+  `Can I give this patient esomeprazole?` stated `Esomeprazole from Inexium 40mg` while
+  `Can I give this patient clopidogrel?` and the plain `Do any of her medications interact?` raised
+  `Clopidogrel interacts with active order esomeprazole — Major` with an EMPTY bridge list, because the
+  refusal was decided against Omeprazole's rows. Swapping only the two drug rows of that fixture
+  reversed it. So round 2's own headline property — the refusal is asked per substance — held from the
+  subject's side and not from the partner's, which is #349's defect standing inside the clause added to
+  close it. The election now ranks on `DrugReference.nameMatchStrength`, CLAUDE.md's one answer to how
+  strongly an entry claims a recorded name, and
+  `BridgedConceptOrderResolutionTest.theBridgedClauseIsAskedOfTheSubstanceAndNotOfTheDatasetsRowOrder`
+  asserts the outcome under BOTH row orders and for all three questions. It is a refinement of the
+  CHOICE and not of the SET — `identifies` still decides which candidates exist — and it does not
+  separate two entries that each carry the token as an alias while neither is called it; there the
+  first is still kept and the residue is a clause withheld rather than one misattributed.
+  **That tie-break is asserted and not only stated** (review round 4): relaxing the comparison to
+  `claim >= strongest` answers a tied group with the dataset's LAST row instead, which moves the very
+  row group this bullet is about; round 4 measured that mutation leaving the api suite green at
+  `dc5cabd2`, before
+  `BridgedConceptOrderResolutionTest.aTiedTokenIsAnsweredByTheFirstOfTheTiedRowsFromEitherRowOrder`.
+  That case asserts both cells — the two arrangements give opposite outcomes by design, since whichever
+  tied substance arrives first is the one the clause is decided about — so it pins the tie-break rather
+  than today's row order, and one of its cells is the withheld clause named above. The tie has to be
+  authored: this pair is separated in the shipped data by exactly the `rxnorm_name` that makes the two
+  rows one substance-name family, and `ddi-bridged-concept-tied-token.json`'s own note records that,
+  the one field it changes, and what was measured over the shipped knowledge base before authoring it.
+  `DrugReference.canonicalRow` is deliberately not composed underneath it: its first rung is not scoped
+  to one substance, so folding it over tied candidates would elect across substances on route
+  qualification, which is #187's direction.
+- **The representative inside the fold.** `substancesNamedByBridge` kept the first row seen for a
+  substance, so which of a family's rows `findNamedSubstances` judged the bridge's name against — and
+  therefore whether that substance is named at all — was arrival order too. Measured through the
+  accessor itself over the shipped knowledge base, 13 of the 4251 bridged concepts answer with a
+  different set of named substances when their rows arrive reversed. The representative is now elected
+  by `canonicalRow`, and none do:
+  `BridgedConceptLegBoundsTest.theSubstancesNamedDoNotDependOnTheOrderTheRowsAreListedIn`, which
+  reddens with the 13 if the fold goes back to first-wins, over the 735 bridged concepts whose answer
+  carries more than one row of some substance. It moves none of this section's other figures — 1112,
+  122, 166 of 5826 and the fold's own 28 are unchanged on the shipped dataset, which is what
+  `theRefusalsReachOverTheShippedKnowledgeBase` still asserts — because on this data the election
+  agrees with first-wins wherever the naming answer turns on it. Reversal is the probe because the fold
+  is a left reduction, so first and last are the two answers arrival order can give; a middle row of
+  three is not reached and is not claimed to be.
+
+Two elections and not one mechanism, because they answer different questions: which of the patient's
+order entries a rule's token points at, ranked across substances by a recorded name, and which row
+speaks for one substance, elected within it. Neither could have been expressed as the other.
+
+**The refusal is of the CLAUSE and not of the leg.** The screen still runs, the chip still stands and
+the order is still withheld from witnessing its own pair; what is withheld is the sentence naming which
+prescription the substance came from. That is the fail-safe direction for a record whose whole budget
+is evidence: silence about provenance costs a clinician a link, while a wrong provenance is a false
+clinical claim in citable material. Pinned by
+`BridgedConceptOrderResolutionTest.aConceptBridgedToSeveralSubstancesNamesNoPrescriptionInTheFinding`
+and, for where the refusal stops, `.anAmbiguouslyBridgedOrderTheChartsOwnCodeReachesIsStillAttributed`,
+`.aCombinationPrescriptionItsBridgeNameNamesIsStillAttributed`,
+`.theSubstanceTheBridgesOwnNameNamesIsAttributedThoughItsSiblingIsNot` and
+`.theBridgedClauseIsAskedOfTheSubstanceAndNotOfTheDatasetsRowOrder`. All but
+`.aCombinationPrescriptionItsBridgeNameNamesIsStillAttributed`, which needs a real fixed-dose
+combination and takes `ddi-combination-allergen.json`'s CIEL 103166, run on
+`ddi-bridged-concept-two-substances.json`, whose CIEL 75876 rows are the shipped bridge's own and whose
+interaction rows carry no mechanism text, so the fixture invents no clinical prose.
+
+**Considered and not taken: a CIEL reference-map rung beside the uuid one.** Raised in review round 1 —
+the measurement above settles uuid over code, not uuid instead of BOTH, and a deployment that files
+CIEL concepts under local uuids and cross-walks through `concept_reference_map` gains nothing from this
+leg. That residue is real and is recorded above. It is not taken here because it is a second KEY, not a
+second spelling: it needs the order's concept's CIEL-source reference maps carried on
+`PatientClinicalContext.ActiveDrugOrder` (today `PatientClinicalContextBuilder.addAtcCodes` reads
+reference maps only for ATC-named sources), a rule for which `ConceptSource` names count as CIEL, and a
+coverage-and-false-join measurement against a dictionary that actually cross-walks — none of which this
+change has. A second key feeding a SUPPRESSION on unmeasured evidence is the shape this decision
+already argues against for the unranked leg. It belongs on its own evidence and its own change; the
+population it would serve is no worse off than on `main`.
+
+**What no test here measures: a session LOCALE.** The mechanism is a uuid, which no locale can respell,
+and `ActiveOrderConceptIdentityTest.theRecordedConceptIsTheSameWhateverNameTheSessionLocaleElects`
+drives the real `PatientClinicalContextBuilder` under two locales and asserts exactly that — the
+recorded names move and the recorded concept does not. What that case does NOT do is screen the
+ticket's own order in `fr` end to end against a real dictionary; the ticket's six verification rows are
+for the standalone, and nothing in this repository stands in for them.
+
+## Decision 69: A finding about a medication the patient is already taking states a call about that medication
 
 **Status: Accepted** (September 2026) — implemented, issue [#348](https://github.com/openmrs/openmrs-module-chartsearchai/issues/348).
 

@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -536,6 +537,210 @@ public class DrugReferenceService {
 	}
 
 	/**
+	 * The entries the reference dataset's own dictionary bridge files under {@code conceptUuid} — the
+	 * THIRD key of the order-to-entry join, beside {@link #findByActiveOrders}' ATC codes and
+	 * {@link #findImpliedByDrugName}'s recorded names (issue #353).
+	 *
+	 * <p><b>Why a third key.</b> The other two are both defeated by one ordinary shape — a dictionary
+	 * concept the bridge records under one name while the deployment's locale elects another — and the
+	 * concept the order was written against is the one key that does not depend on which of its names
+	 * a session elects. ADR Decision 68 carries the case, its measurements and the alternatives that
+	 * were rejected; it is not restated here.
+	 *
+	 * <p><b>RANKED, and that is not decoration.</b> The answer is the entries the bridge files under
+	 * the concept INTERSECTED with the ones {@link #findImpliedByDrugName} answers for the name the
+	 * bridge records for it. Both bounds are load-bearing and they fail in opposite directions.
+	 *
+	 * <p><b>What the ranking does.</b> It keeps only the entries making the STRONGEST claim on the
+	 * bridge's own name. Where one entry's DISPLAY name is that name, that entry alone survives and the
+	 * others are dropped — CIEL 85300 is filed on {@code Trastuzumab}, {@code Trastuzumab deruxtecan}
+	 * and {@code Trastuzumab emtansine}, three drugbank ids sharing no ATC code, and resolves to the
+	 * first. Unranked, that order would be the patient's own order for all three, and one consumer of
+	 * this leg is a SUPPRESSION — {@code DrugSafetyValidator.activeOrdersOtherThan} withholds an order
+	 * from witnessing an interaction — where a superset removes a warning with no chip and no log line
+	 * to notice it by (see {@link #findImpliedByDrugName(String, Map)}'s own constraint).
+	 *
+	 * <p><b>What the ranking does NOT do, and the residue it leaves.</b> Where the bridge's name is
+	 * only an ALIAS of its entries, {@link DrugReference#nameMatchStrength} TIES and
+	 * {@link #findImpliedByDrugName} admits them all — so the leg can still answer with more than one
+	 * substance. <b>1112 of the 4251 bridged concepts do</b> — measured through this method and
+	 * {@link DrugReference#substanceGroupKey()} over the shipped knowledge base, and asserted by
+	 * {@code BridgedConceptLegBoundsTest.theRefusalsReachOverTheShippedKnowledgeBase} rather than
+	 * quoted. Say what it is a count OF: bridged concepts whose answer spans more than one
+	 * {@code substanceGroupKey}, with NO filter on the bridge name. A figure of 46 stood here, in
+	 * {@code DrugSafetyValidator} and in ADR Decision 68 until review round 2; it was a count over the
+	 * same population MINUS every bridge name that reads as a combination, and attaching it to the
+	 * unfiltered predicate made the residue look like a 1-in-92 carve-out rather than the 1-in-4 it
+	 * is. Among the 1112 are CIEL 77719 ({@code Hydrocortisone acetate} → Hydrocortisone AND
+	 * Hydrocortisone butyrate) and CIEL 75876 ({@code Esomeprazole magnesium} → Esomeprazole AND
+	 * Omeprazole), and also CIEL 103166 ({@code Abacavir / lamivudine} → Abacavir AND Lamivudine),
+	 * which is a real fixed-dose combination and not an ambiguity at all. That is issue #209's own
+	 * shape, and it is not narrowed here for the reason the next paragraph gives.
+	 *
+	 * <p><b>Part of it is refused at the one site that PRINTS an answer from it</b>, which is not the
+	 * same thing as narrowing the leg: {@code DrugSafetyValidator.restsOnAnAmbiguousBridge} withholds
+	 * the finding's "&lt;substance&gt; from &lt;prescription&gt;" clause for a substance the bridge's
+	 * own recorded name does not NAME ({@link #substancesNamedByBridge}), where nothing but the bridge
+	 * joined the order to it — because there the module would be saying which of several substances
+	 * the prescription is. Per SUBSTANCE and not per concept: {@code Esomeprazole from Inexium 40mg}
+	 * stands where {@code Omeprazole from Inexium 40mg} does not. The screen still runs and the chip
+	 * still stands. Added in review round 1 after that clause was measured stating
+	 * {@code Omeprazole from Inexium 40mg} for a prescription written against CIEL 75876, and narrowed
+	 * in round 2 from "more than one substance" to this, which was refusing all 990 of the 1112 whose
+	 * recorded name names every substance it resolves; ADR Decision 68 carries both.
+	 *
+	 * <p>Without the intersection the leg could reach an entry the bridge does not file under this
+	 * concept at all, on the strength of a name it merely shares.
+	 *
+	 * <p><b>What the two bounds buy together, and why the residue above is not narrowed further:</b>
+	 * the answer is a SUBSET of what a session electing the bridge's own spelling already gets today.
+	 * So this leg states nothing the reference data does not already state about that concept — the 46
+	 * are what an {@code en} session gets for those orders now — and it removes the dependence on WHICH
+	 * spelling the session elects. Narrowing past that would make the leg answer LESS than the name leg
+	 * it stands in for, which is the property that makes it defensible at all. What it inherits with
+	 * that is the bridge's own defects: ADR Decision 36 records ~10 stray cross-walk rows in the
+	 * shipped knowledge base, and this leg makes those locale-independent too. That is the trade and it
+	 * cannot be had one way round — the correct rows and the stray ones are the same field.
+	 *
+	 * <p>Package-private, like {@link #findByActiveOrders} and for the same reason: it is a LEG and not
+	 * an answer. "Which reference entries are this patient's active orders" is
+	 * {@link #findForActiveOrders}, and nothing else may build a candidate set from this one.
+	 *
+	 * @param conceptUuid the uuid of the concept an active order was written against, or null
+	 * @param impliedByName the caller's per-call resolution cache — a LOCAL, never a field (issue #172)
+	 * @return the bridged entries in dataset order, deduplicated, unmodifiable; empty for a null or
+	 *         unbridged concept, and empty on every source but {@code ddinter}, which is the only one
+	 *         whose format carries a dictionary bridge
+	 */
+	List<DrugReference> findByBridgedConcept(String conceptUuid,
+			Map<Object, Set<Object>> impliedByName) {
+		if (conceptUuid == null || conceptUuid.trim().isEmpty()) {
+			return Collections.emptyList();
+		}
+		String uuid = conceptUuid.trim();
+		// One pass for both halves — which entries the bridge files here, and the name it files them
+		// under — because asking twice would walk the whole dataset twice for one order.
+		List<DrugReference> bridged = new ArrayList<DrugReference>();
+		Set<String> bridgeNames = new LinkedHashSet<String>();
+		for (DrugReference ref : getAll()) {
+			String bridgeName = ref.bridgedConceptName(uuid);
+			if (bridgeName != null) {
+				bridged.add(ref);
+				bridgeNames.add(bridgeName);
+			}
+		}
+		if (bridged.isEmpty()) {
+			return Collections.emptyList();
+		}
+		// Identity, as findForActiveOrders' own dedup is and for the same reason: every row here came
+		// out of this bean's shared getAll() cache.
+		Set<DrugReference> ranked = Collections.newSetFromMap(
+				new IdentityHashMap<DrugReference, Boolean>());
+		for (String bridgeName : bridgeNames) {
+			ranked.addAll(findImpliedByDrugName(bridgeName, impliedByName));
+		}
+		List<DrugReference> out = new ArrayList<DrugReference>();
+		for (DrugReference ref : bridged) {
+			if (ranked.contains(ref)) {
+				out.add(ref);
+			}
+		}
+		return Collections.unmodifiableList(out);
+	}
+
+	/**
+	 * Which SUBSTANCES of a bridged answer the bridge's own recorded name actually NAMES — the question
+	 * {@code DrugSafetyValidator.restsOnAnAmbiguousBridge} asks before a finding prints one of them as
+	 * a prescription's (issue #353, review round 2).
+	 *
+	 * <p><b>Why naming and not counting.</b> The refusal it serves used to be "this order's bridged
+	 * answer spans more than one {@code substanceGroupKey}", which cannot tell "the module knows the
+	 * prescription is one of these and cannot say which" ({@code Esomeprazole magnesium} →
+	 * Esomeprazole AND Omeprazole) from "the prescription genuinely CONTAINS all of these"
+	 * ({@code Abacavir / lamivudine} → Abacavir AND Lamivudine). Measured over the shipped knowledge
+	 * base, 990 of the 1112 multi-substance bridged concepts have a recorded name that NAMES every substance they
+	 * resolve, and the count refused every one of them — what the figure counts, and not a count of combinations: a
+	 * derivative name naming its parent moiety satisfies it too (ADR Decision 68 has both shares). Naming separates
+	 * the two PER SUBSTANCE: for CIEL 75876 it admits Esomeprazole and refuses Omeprazole out of one answer.
+	 *
+	 * <p><b>{@link #findNamedSubstances} is the accessor for that question</b> — CLAUDE.md designates
+	 * it "ask it before PRINTING a substance's own label in a sentence reporting the patient's record"
+	 * — and this is its second production caller, after
+	 * {@code DrugSafetyValidator.addAllergyContraindications}. It is asked here rather than at the
+	 * validator so that its candidate-set contract is met in the same body that builds the set.
+	 *
+	 * <p><b>The candidates are ONE ROW PER SUBSTANCE, and that fold is load-bearing.</b>
+	 * {@link #findNamedSubstances} takes {@link #findImpliedSubstances}' shape — a representative row
+	 * per substance — and its equal-claimant clause refuses a TIE, so handing it a substance's several
+	 * route-qualified rows makes them contest each other and the substance is then named by nothing.
+	 * Measured: unfolded, 28 bridged concepts of the shipped knowledge base that resolve to exactly ONE
+	 * substance are named by nothing at all ({@code Naphazoline} → {@code Naphazoline (nasal)} AND
+	 * {@code Naphazoline (ophthalmic)}); folded, none are.
+	 *
+	 * <p><b>WHICH row represents it is elected and never taken by arrival</b> (review round 3):
+	 * {@link DrugReference#canonicalRow}, which CLAUDE.md designates for "which row represents a
+	 * substance" and whose first rung is the route qualification the {@code Naphazoline} family above
+	 * turns on. Keeping the first row seen made the whole answer a fact about the FILE: measured
+	 * through this accessor over the shipped knowledge base, 13 of the 4251 bridged concepts named a
+	 * different set of substances when their rows arrived reversed, and whether a substance is named is
+	 * whether a finding may state which prescription it came from. Elected, none do; that is
+	 * {@code BridgedConceptLegBoundsTest.theSubstancesNamedDoNotDependOnTheOrderTheRowsAreListedIn},
+	 * with the 13 as the figure it reddens with. Note what the election does NOT settle: rows a
+	 * canonical fold cannot separate keep the incumbent, so a family whose rows are all
+	 * route-qualified is still represented by the first of them — and for the {@code Naphazoline}
+	 * family, which is exactly that shape, this changes nothing at all.
+	 *
+	 * <p><b>What that leaves, so the caller's refusal is not read as wider than it is.</b> On the
+	 * {@code ddinter} format — the only one carrying a bridge at all — the parser writes the bridge's
+	 * name onto every entry it files there AS AN ALIAS (one pass, both readings, see
+	 * {@code DdiDrugReferenceSource}), so an answer spanning ONE substance has one uncontested claimant
+	 * at {@link DrugReference#NAME_IS_ANOTHER_NAME} or better and is always named. That is why the
+	 * caller needs no separate "is this ambiguous at all" conjunct, and it is a property of the LOADER
+	 * rather than of the shipped data: an entry assembled without that alias — which no source
+	 * produces, but {@code setBridgedConcepts} is public — can survive {@link #findByBridgedConcept}'s
+	 * intersection by containment alone and would then be named by nothing.
+	 *
+	 * @param conceptUuid the concept the answer was resolved for; the bridge's recorded name is read
+	 *        off the answer's own entries through {@link DrugReference#bridgedConceptName}, so this
+	 *        costs no dataset walk and the per-pass resolution count is unchanged
+	 * @param bridged {@link #findByBridgedConcept}'s answer for that concept, handed in rather than
+	 *        re-resolved (issue #151)
+	 * @return the {@link DrugReference#substanceGroupKey()}s the bridge's recorded name names, empty
+	 *         for an empty answer and for a name that names none of them
+	 */
+	Set<Object> substancesNamedByBridge(String conceptUuid, List<DrugReference> bridged) {
+		if (conceptUuid == null || bridged == null || bridged.isEmpty()) {
+			return Collections.emptySet();
+		}
+		String uuid = conceptUuid.trim();
+		Map<Object, DrugReference> representatives = new LinkedHashMap<Object, DrugReference>();
+		Set<String> bridgeNames = new LinkedHashSet<String>();
+		for (DrugReference entry : bridged) {
+			// The row that speaks for the substance, elected rather than taken by arrival:
+			// DrugReference.canonicalRow, which CLAUDE.md designates for "which row represents a
+			// substance". Arrival order made whether a substance is NAMED — and so whether a finding
+			// states its prescription — turn on the sequence the knowledge-base file lists its rows in.
+			representatives.put(entry.substanceGroupKey(),
+				DrugReference.canonicalRow(representatives.get(entry.substanceGroupKey()), entry));
+			String bridgeName = entry.bridgedConceptName(uuid);
+			if (bridgeName != null) {
+				bridgeNames.add(bridgeName);
+			}
+		}
+		List<DrugReference> candidates = new ArrayList<DrugReference>(representatives.values());
+		Set<Object> named = new HashSet<Object>();
+		// Every name the surviving entries record for this concept, unioned: the bridge keeps one name
+		// per (entry, concept) row and nothing makes them agree, so asking only the first would make the
+		// answer depend on dataset order.
+		for (String bridgeName : bridgeNames) {
+			for (DrugReference row : findNamedSubstances(bridgeName, candidates)) {
+				named.add(row.substanceGroupKey());
+			}
+		}
+		return named;
+	}
+
+	/**
 	 * Resolve a clinician-entered drug NAME — an allergen as recorded on the chart — to a reference
 	 * entry, or null when no entry MATCHES it. Matching is the gate and naming is only the ranking
 	 * below, so a name no entry is named still resolves — by containment, as it always did.
@@ -810,6 +1015,14 @@ public class DrugReferenceService {
 	 * A caller building a candidate set from it would silently drop the substances a recorded name
 	 * implies without naming — which is every comparison this module makes about a shared class.
 	 *
+	 * <p><b>Two production callers since issue #353 review round 2</b>, both printing rather than
+	 * resolving: {@code DrugSafetyValidator.addAllergyContraindications}, which asks it of an allergy as
+	 * the chart records it, and {@link #substancesNamedByBridge}, which asks it of the name the dataset's
+	 * dictionary bridge records for a concept before a finding prints one of that concept's substances
+	 * as a prescription's. The second one's candidate set is the bridged answer folded to one row per
+	 * substance — this method's own contract, and its javadoc records what handing over the unfolded
+	 * rows would cost.
+	 *
 	 * @param drugName the recorded name, as the chart holds it
 	 * @param implied  that name's substances, as {@link #findImpliedSubstances} resolved them — passed
 	 *                 in rather than re-resolved, so this cannot become a second resolution rule
@@ -1081,8 +1294,8 @@ public class DrugReferenceService {
 	 * subjects {@code addActiveOrderContraindications} checks against the patient's own allergy and
 	 * condition records, the candidate set {@code DrugReferenceInjector.matchingEntries} scopes
 	 * order-driven injection over (issue #151), and the source of the names {@link #withReferenceNames}
-	 * attaches. The union of the documented order-driven matcher ({@link #findByActiveOrders}, which
-	 * keys on ATC codes) and a name resolution of every name the patient's active orders carry
+	 * attaches. It unions the documented order-driven matcher ({@link #findByActiveOrders}, which
+	 * keys on ATC codes) with a name resolution of every name the patient's active orders carry
 	 * ({@link #findImpliedByDrugName} over {@link PatientClinicalContext#getActiveDrugNames()}, the
 	 * flattened union of each order's {@code ActiveDrugOrder.getNames()} — since issue #293 a display
 	 * name, the free text a clinician typed, and a concept name, not the display alone). One definition, so those consumers cannot come to disagree
@@ -1093,10 +1306,10 @@ public class DrugReferenceService {
 	 * introduced, so the chips and the prompt behind them were computed over different sets of orders.
 	 * It now takes the list its caller already resolved rather than calling this a second time.
 	 *
-	 * <p>Both keys are needed because {@link PatientClinicalContext#hasActiveDrug} — the join that
-	 * decides whether a rule concerns this patient — matches on name OR ATC, so a subject set resolved
-	 * on only one of them cannot be the subject of every chip that join can raise. Neither key can be
-	 * assumed present: measured on the 3.7.1 standalone's demo dictionary (2026-08-04), ATC coverage is
+	 * <p>Both of those keys are needed because {@link PatientClinicalContext#hasActiveDrug} — the join
+	 * that decides whether a rule concerns this patient — matches on name OR ATC, so a subject set
+	 * resolved on only one of them cannot be the subject of every chip that join can raise. Neither key
+	 * can be assumed present: measured on the 3.7.1 standalone's demo dictionary (2026-08-04), ATC coverage is
 	 * sparse but real — 85 of 616 Drug-class concepts carry a map from an ATC-named source
 	 * ({@code Torasemide} → {@code C03CA04}, {@code Heparin sodium} → {@code B01AB01}) and 158 carry a
 	 * {@code concept_reference_map} of any kind, so {@link PatientClinicalContextBuilder} yields ATC
@@ -1125,7 +1338,15 @@ public class DrugReferenceService {
 	 * as cross-reactive with her dexamethasone allergy — a chip about a drug she is not prescribed. Her
 	 * whole order list resolved 18 entries and 9 substances from 8 orders; ranked, 17 and 8.
 	 *
-	 * <p>Identity de-duplication is sound because both matchers resolve against this bean's shared
+	 * <p><b>And a THIRD key since issue #353: the CONCEPT each order was written against</b>
+	 * ({@link #findByBridgedConcept}, which carries the case and its bounds). What belongs HERE is the
+	 * one rule about the union: that leg needs no analogue in
+	 * {@link PatientClinicalContext#hasActiveDrug} and must not be given one. It reaches that join the
+	 * way the ATC leg already does, through {@link #withReferenceNames}, which copies the resolved
+	 * entries' own aliases into the context's {@code activeDrugReferenceNames}. A rule has no concept
+	 * to be keyed on, so a leg there would be a second spelling of a fact this one already carries.
+	 *
+	 * <p>Identity de-duplication is sound because all three matchers resolve against this bean's shared
 	 * {@link #getAll()} cache (the same reason the drugs-in-play set can dedup by identity).
 	 *
 	 * <p><b>The list is UNMODIFIABLE</b> — adding to it, removing from it or sorting it in place throws
@@ -1145,6 +1366,13 @@ public class DrugReferenceService {
 		Map<Object, Set<Object>> impliedByName = new HashMap<Object, Set<Object>>();
 		for (String name : context.getActiveDrugNames()) {
 			entries.addAll(findImpliedByDrugName(name, impliedByName));
+		}
+		// The third key (issue #353): the CONCEPT each order was written against, through the reference
+		// dataset's own dictionary bridge. Sharing the resolution cache above, because that leg resolves
+		// the bridge's recorded name through the very same ranked accessor. Contributes nothing where the
+		// context carries no per-order structure and nothing on a dataset whose format has no bridge.
+		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+			entries.addAll(findByBridgedConcept(order.getConceptUuid(), impliedByName));
 		}
 		// Unmodifiable, and that is a contract rather than caution (issue #255). Since that change the
 		// list a caller holds can be the SAME object another one reasons over — DrugReferenceInjector

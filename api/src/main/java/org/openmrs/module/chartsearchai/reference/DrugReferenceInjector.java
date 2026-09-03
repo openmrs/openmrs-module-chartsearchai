@@ -932,8 +932,8 @@ public class DrugReferenceInjector {
 	 * <p><b>Which orders are candidates is the caller's answer, not this method's (issue #151).</b> The
 	 * order leg resolved its own candidates through {@code DrugReferenceService.findByActiveOrders} —
 	 * the ATC-only primitive — while {@code DrugSafetyValidator.validate} has screened
-	 * {@code findForActiveOrders} (ATC ∪ name) since issue #148 extracted that union into a method of
-	 * its own (its name leg carries issue #147's recorded-name matcher). The split
+	 * {@code findForActiveOrders} (ATC ∪ name ∪ bridged concept) since issue #148 extracted that union
+	 * into a method of its own (its name leg carries issue #147's recorded-name matcher). The split
 	 * is not merely an inconsistency; it made this leg ask its two questions off two different keys:
 	 * an order's RELEVANCE came from the reference ENTRY's own ATC codes ({@link #relatedToAny} reads
 	 * {@code order.atcSubgroups()}), while its MEMBERSHIP came from the ORDER's concept mappings. Only

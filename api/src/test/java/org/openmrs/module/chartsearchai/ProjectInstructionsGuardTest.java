@@ -77,11 +77,12 @@ public class ProjectInstructionsGuardTest {
 	 * as has each hardening round that edited the bullet. So what is written here is the COMMAND and
 	 * the head, not arithmetic: {@code wc -c CLAUDE.md} for the file, and
 	 * {@code grep 'STRENGTH and REFERENT' CLAUDE.md | wc -c} for the #348 rule bullet, which names
-	 * the line by its own words rather than by a line number that moves. At the merge of
-	 * {@code origin/main} @ {@code 5253c7d2} those read <b>85,930</b> and <b>1,278</b> bytes, leaving
-	 * <b>70</b> under this tripwire. Re-run both before quoting either number again; a figure here
-	 * going stale is expected rather than a defect, which is why the commands are the part that
-	 * matters.
+	 * the line by its own words rather than by a line number that moves. At the FOURTH merge of
+	 * {@code origin/main} @ {@code 8e679fb7} those read <b>85,874</b> and <b>1,278</b> bytes, leaving
+	 * <b>126</b> under this tripwire — headroom that GREW, because that merge's own change to this
+	 * file was a 56-byte trim, which is the direction an auto-merge is likeliest to lose silently.
+	 * Re-run both before quoting either number again; a figure here going stale is expected rather
+	 * than a defect, which is why the commands are the part that matters.
 	 *
 	 * <p>The CONCLUSION is what does not move: the bullet is larger than the headroom, so closing
 	 * the gap under the old 85,000 tripwire means deleting DIRECTIVES, and the smallest single thing

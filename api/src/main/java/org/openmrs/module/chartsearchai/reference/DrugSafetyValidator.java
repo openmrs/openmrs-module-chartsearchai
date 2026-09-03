@@ -5651,7 +5651,8 @@ public class DrugSafetyValidator {
 	 *         is FALSE, a pass whose every pair went to the drug-in-play arm through
 	 *         {@code alreadyReported}. Unlike {@link #addQuestionPairInteractions}, which since issue
 	 *         #336's verification round states nothing there, this arm has no fallback behind it: see
-	 *         the comment at that return, and ADR Decision 69 for the reproduction.
+	 *         the comment at that return, ADR Decision 69 for the reproduction, and issue #370, which
+	 *         tracks it.
 	 */
 	private PairChipExtent addActiveOrderPairInteractions(List<SafetyWarning> warnings,
 			SubstanceSubjects subjects, PatientClinicalContext context, int severityFloor,
@@ -5828,7 +5829,9 @@ public class DrugSafetyValidator {
 			// needs questionDrugScreened, which is false on the questionDrugs.isEmpty() gate this arm
 			// runs behind — so the choice is between a false zero and no statement at all on the one
 			// question shape that asked for a screen. ADR Decision 69 carries the reproduction and why
-			// it is left standing; whoever picks a value gives this branch its own ticket.
+			// it is left standing, and issue #370 is that ticket — a remedy arrives there, with the
+			// case this branch deliberately does not pin (a test asserting today's zero would assert
+			// the defect as intended behaviour).
 			return PairChipExtent.of(0, 0);
 		}
 		Collections.sort(pairs, SCREENED_PAIR_SEVERITY_DESCENDING);

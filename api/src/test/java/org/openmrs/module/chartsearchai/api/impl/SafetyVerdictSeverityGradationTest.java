@@ -69,42 +69,73 @@ public class SafetyVerdictSeverityGradationTest {
 		return paragraph.substring(start < 0 ? 0 : start + 2, end < 0 ? paragraph.length() : end);
 	}
 
+	/**
+	 * The evidence-against claim is conditional on the strength the finding states (#283) — asked of
+	 * EVERY sentence that makes the claim and not the first (issue #348, round 3 of this PR).
+	 *
+	 * <p>Reading the FIRST occurrence was enough while the paragraph made the claim once, and it is
+	 * not any more. Measured on this PR's pushed head: rewriting the change-of-therapy branch as the
+	 * pre-#348 refusal WITHOUT the {@code "No"} literal — <em>"… is evidence against giving it: open
+	 * by naming the medication that must not be given and what to avoid"</em> — was green, because
+	 * the first occurrence stays in the withholding branch and nothing read further. Every occurrence
+	 * is gated now, and the paragraph is still required to make the claim at least once.
+	 *
+	 * <p><b>A NEGATED occurrence is skipped rather than gated</b>: the caution branch's <em>"is not
+	 * evidence against giving the drug"</em> DENIES the direction instead of instructing it, so
+	 * demanding the withholding clause of it would demand the clause of a sentence whose whole point
+	 * is that the clause does not apply. Two residues that leaves, stated rather than argued away: a
+	 * positive claim worded around this literal (<em>"is evidence against that medication"</em>) is
+	 * matched by no occurrence here, and a negated occurrence is not read for what it then instructs
+	 * — {@link #assertCurrentMedicationBranch} is what holds the current-medication branches' own
+	 * leads, and {@link #everyRefusalInstructionInTheParagraphIsGatedOnTheWithholdingClause} the
+	 * refusal token wherever it appears.
+	 */
 	@Test
 	public void theEvidenceAgainstClaimIsConditionalOnTheStrengthTheFindingStates() {
 		String paragraph = safetyParagraph();
-		int claim = paragraph.indexOf("evidence against giving it");
-		assertTrue(claim > 0, "the paragraph must still state that direction comes from the finding");
-
-		// The sentence carrying the claim, not the paragraph: a severity-blind instruction elsewhere
-		// in the paragraph would satisfy a paragraph-wide check while asserting the old rule.
-		int sentenceStart = paragraph.lastIndexOf(". ", claim);
-		String sentence = paragraph.substring(sentenceStart < 0 ? 0 : sentenceStart + 2, claim);
-		assertTrue(sentence.contains("a reason to withhold it"),
-				"the claim must be gated on the finding SAYING it is a reason to withhold — "
-						+ "unconditionally, a Minor rating refuses the drug: " + sentence);
-		// "a reason to withhold it" occurs inside STRENGTH_CAUTION as well, negated ("…is a caution
-		// to note, NOT a reason to withhold it"), so the assertion above passes whichever of the two
-		// clauses the antecedent names — the same defect d016a8ab removed from the ranking sentence
-		// one sentence further down, left standing here.
-		// Measured by mutation rather than argued: swapping the two branch antecedents in
-		// LlmProvider, so the paragraph says a CAUTION is evidence against giving the drug and a
-		// withholding finding is not, left the whole api suite at 1301 tests / 0 failures — a
-		// prompt reinstating #283 and inverting every Major refusal and every contraindication on
-		// top of it. Giving branch one the caution clause alone is green too, and then NO branch
-		// matches a withholding finding, which is the fall-through the contraindication round
-		// measured at 3/3 on the standalone. Nothing else in this class reached either mutation when
-		// this line was added — bothStrengthClassesAreTaughtInTheWordsTheInjectedRecordUses and
-		// theRuleNamesTheClauseTheRecordActuallyCarries test containment in the whole paragraph, and
-		// theCautionBranchLeadsWithNeitherARefusalNorAYes read forward from the first occurrence of
-		// the caution clause. That case is sentence-scoped now and reddens on both as well, so the
-		// two lines overlap; each still holds one the other does not, which is why both are here.
-		// The one that is this line's alone: gate branch one on the caution CLASS without the full
-		// clause ("a caution to note RATHER THAN a reason to withhold it"). The caution case's
-		// anchor then still finds branch two and passes, and only this line reddens (measured).
-		assertFalse(sentence.contains(cautionClass()),
-				"and on THAT clause rather than on the phrase the caution clause also contains, "
-						+ "which is the whole of what separates this branch from the caution one: "
-						+ sentence);
+		String claimText = "evidence against giving it";
+		int gated = 0;
+		for (int claim = paragraph.indexOf(claimText); claim >= 0; claim = paragraph
+				.indexOf(claimText, claim + 1)) {
+			// The sentence carrying the claim, not the paragraph: a severity-blind instruction
+			// elsewhere in the paragraph would satisfy a paragraph-wide check while asserting the
+			// old rule.
+			int sentenceStart = paragraph.lastIndexOf(". ", claim);
+			String sentence = paragraph.substring(sentenceStart < 0 ? 0 : sentenceStart + 2, claim);
+			if (sentence.endsWith("not ")) {
+				continue;
+			}
+			gated++;
+			assertTrue(sentence.contains("a reason to withhold it"),
+					"the claim must be gated on the finding SAYING it is a reason to withhold — "
+							+ "unconditionally, a Minor rating refuses the drug: " + sentence);
+			// "a reason to withhold it" occurs inside STRENGTH_CAUTION as well, negated ("…is a caution
+			// to note, NOT a reason to withhold it"), so the assertion above passes whichever of the two
+			// clauses the antecedent names — the same defect d016a8ab removed from the ranking sentence
+			// one sentence further down, left standing here.
+			// Measured by mutation rather than argued: swapping the two branch antecedents in
+			// LlmProvider, so the paragraph says a CAUTION is evidence against giving the drug and a
+			// withholding finding is not, left the whole api suite at 1301 tests / 0 failures — a
+			// prompt reinstating #283 and inverting every Major refusal and every contraindication on
+			// top of it. Giving branch one the caution clause alone is green too, and then NO branch
+			// matches a withholding finding, which is the fall-through the contraindication round
+			// measured at 3/3 on the standalone. Nothing else in this class reached either mutation when
+			// this line was added — bothStrengthClassesAreTaughtInTheWordsTheInjectedRecordUses and
+			// theRuleNamesTheClauseTheRecordActuallyCarries test containment in the whole paragraph, and
+			// theCautionBranchLeadsWithNeitherARefusalNorAYes read forward from the first occurrence of
+			// the caution clause. That case is sentence-scoped now and reddens on both as well, so the
+			// two lines overlap; each still holds one the other does not, which is why both are here.
+			// The one that is this line's alone: gate branch one on the caution CLASS without the full
+			// clause ("a caution to note RATHER THAN a reason to withhold it"). The caution case's
+			// anchor then still finds branch two and passes, and only this line reddens (measured).
+			assertFalse(sentence.contains(cautionClass()),
+					"and on THAT clause rather than on the phrase the caution clause also contains, "
+							+ "which is the whole of what separates this branch from the caution "
+							+ "one: " + sentence);
+		}
+		assertTrue(gated > 0,
+				"the paragraph must still state that direction comes from the finding, or this case "
+						+ "passes by having nothing to check: " + paragraph);
 	}
 
 	@Test
@@ -358,19 +389,23 @@ public class SafetyVerdictSeverityGradationTest {
 	 * telling the model to refuse satisfies both terms. Measured on {@code 86a5a4c0} by a reviewer
 	 * who rewrote the change-of-therapy branch as <em>"… is evidence against giving it: open with
 	 * \"No\" and what to avoid."</em> — the pre-#348 instruction reattached to the new class — and ran
-	 * the whole api module: 0 failures. The three assertions below are what closes that. <b>Both of the
-	 * reviewer's mutations are reported against the FIRST of them</b> — assertion order decides which
-	 * failure JUnit prints, and each of those two mutations violates more than one — so the witness
-	 * recorded for each individual assertion is a mutation that violates it ALONE, measured against
-	 * this class on the head this note was written on:
+	 * the whole api module: 0 failures. The four assertions below are what closes that. <b>A mutation
+	 * violating more than one of them is reported against the FIRST it violates</b> — assertion order
+	 * decides which failure JUnit prints — so the witness recorded for each individual assertion is a
+	 * mutation that violates it ALONE, measured against this class on the head this note was written
+	 * on:
 	 *
 	 * <ul>
 	 * <li>{@code "open by naming"} — the lead #348 asks for is a STATEMENT naming the medication, not
-	 * a verdict about giving a drug. This is the assertion both of the reviewer's mutations report
-	 * against: the change branch rewritten as a refusal, and the caution-current branch given the
-	 * #107 arm-C presence-shaped permission (<em>"open by stating that the drug can be given"</em>).
-	 * Its own witness is rewording just the verb — <em>"open by stating that medication and what the
-	 * finding relates it to"</em>, everything else intact — which leaves the other two green.</li>
+	 * a verdict about giving a drug. This is the assertion the reviewer's REFUSAL mutation reports
+	 * against, the change branch rewritten as a refusal. Its own witness is rewording just the verb —
+	 * <em>"open by stating that medication and what the finding relates it to"</em>, everything else
+	 * intact — which leaves the other three green. <b>What this line is not is an exclusion of a
+	 * permission</b>, and until round 3 of this PR's hardening this bullet said otherwise: it named
+	 * the caution-current branch given the #107 arm-C permission (<em>"open by stating that the drug
+	 * can be given"</em>) as a second witness for this line, which it reddens only because that
+	 * wording happens to DROP the literal. Keep the literal and add the permission and this line is
+	 * green — which is what the fourth bullet is for.</li>
 	 * <li>no {@code "No"} — the refusal lead belongs to the withholding branch and to the older
 	 * ranking sentence. This is the assertion {@link #theCautionBranchLeadsWithNeitherARefusalNorAYes}
 	 * already carried for the caution branch, whose own comment names the drift as "a refusal creeping
@@ -381,12 +416,36 @@ public class SafetyVerdictSeverityGradationTest {
 	 * by itself stop the model reaching for the refusal it read two sentences earlier, and this is the
 	 * clause that says so. Its witness is deleting exactly that clause from one branch, which reddens
 	 * this line alone.</li>
+	 * <li>no {@link #proposalCautionPermission()} — the branch may not borrow the lead the
+	 * PROPOSAL-caution sentence two sentences earlier is required to use. This is the FAIL-OPEN
+	 * direction and the one the three above do not touch: #107 arm C measured a presence-shaped
+	 * permission inverting the call 5 of 6 times, and it is the whole reason
+	 * {@link DrugReferenceInjector#STRENGTH_CAUTION_CURRENT_MEDICATION} exists rather than the
+	 * withholding counterpart alone. Three witnesses, each keeping the other three properties above
+	 * intact and each measured to redden THIS line and no other case in this class — and each of the
+	 * three was green across the whole api module before this line existed, which is how round 3
+	 * found the gap:
+	 * <em>"open by naming that the drug can be given and the caution in the same sentence"</em> for
+	 * the caution-current branch — the verbatim direction that clause's own javadoc names;
+	 * <em>"open by naming it and stating that the medication can be given, with the caution in the
+	 * same sentence"</em>, the harmonisation a maintainer would reach for; and, on the
+	 * WITHHOLDING-class branch, <em>"open by naming that medication, stating that it can be given,
+	 * and what the finding relates it to"</em>, which instructs a permission lead for a Major
+	 * screened pair of the patient's own prescriptions — #348's own reproduction cell.</li>
 	 * </ul>
 	 *
-	 * <p><b>What these three do NOT catch</b>, since a guard over text has a gap between the property
+	 * <p><b>What these four do NOT catch</b>, since a guard over text has a gap between the property
 	 * it means and the string it matches: they are literals, so a semantically equivalent reword —
 	 * <em>"do not open by refusing"</em>, or a lead that names the medication in other words — reddens
-	 * them and must be re-read here deliberately rather than repaired by editing the literal.
+	 * them and must be re-read here deliberately rather than repaired by editing the literal. In the
+	 * other direction, the permission line matches the sibling's own words and nothing else, so a
+	 * permission phrased away from them — <em>"open by stating that the medication may be
+	 * continued"</em> — is NOT caught. That residue is why the phrase is read off the paragraph
+	 * instead of copied: the derivation cannot close the gap, but it does stop the two branches and
+	 * their sibling drifting apart unnoticed. What is out of the LOOP's reach rather than the line's
+	 * is a permission instructed in a sentence naming no class core, or naming one and saying nothing
+	 * about opening; within a branch sentence the line is not scoped to the lead, so a permission
+	 * stated later in the same sentence reddens it as well.
 	 *
 	 * <p><b>They are asserted of EVERY matching sentence, not the first.</b> They read the first one
 	 * until round 2 of this PR's hardening, which meant a second sentence instructing a refusal for
@@ -394,7 +453,7 @@ public class SafetyVerdictSeverityGradationTest {
 	 * appending one such sentence after the change-of-therapy branch — <em>"… is evidence against
 	 * giving it: open with \"No\" and what to avoid."</em>, the pre-#348 instruction again: the whole
 	 * api module was green on {@code 026613de} and it now reddens, reported (as such a mutation always
-	 * is here) against the FIRST of the three, {@code "open by naming"}, since it violates all three.
+	 * is here) against the FIRST it violates, {@code "open by naming"}.
 	 * It costs nothing today because exactly one sentence per class carries both terms: the two
 	 * RANKING sentences name
 	 * a class core and contain no "open", which is what the loop's second term excludes and what
@@ -422,11 +481,56 @@ public class SafetyVerdictSeverityGradationTest {
 					because + ". And it must forbid the refusal outright, because the withholding "
 							+ "branch the model reads two sentences earlier is what it fell through "
 							+ "to: " + sentence);
+			assertFalse(sentence.contains(proposalCautionPermission()),
+					because + ". And it must not instruct a PERMISSION either — the words the "
+							+ "PROPOSAL-caution branch leads with are #107 arm C's presence-shaped "
+							+ "permission, and there is nothing to permit about a medication she is "
+							+ "already taking: " + sentence);
 		}
 		if (matched == 0) {
 			fail(because + ". No sentence of the paragraph both names \"" + core
 					+ "\" and says how to open: " + paragraph);
 		}
+	}
+
+	/**
+	 * The words the PROPOSAL-caution branch instructs its lead with — the permission a
+	 * current-medication branch may not borrow — read OFF that branch rather than written out here.
+	 *
+	 * <p><b>Derived, because the failure mode is HARMONISATION.</b> The sibling two sentences earlier
+	 * is REQUIRED to lead with a permission ({@link #theCautionBranchLeadsWithNeitherARefusalNorAYes}
+	 * asserts its "can be given"), so a maintainer making a caution answer about a current medication
+	 * more useful reaches for exactly those words; and if that sibling is ever reworded, a literal
+	 * copied over here would go on excluding a phrase the prompt no longer uses, silently. Reworded
+	 * away from a permission, the permission assertion in {@link #assertCurrentMedicationBranch}
+	 * fails HERE instead — saying the two branches must be re-read against the new words — rather
+	 * than passing vacuously.
+	 *
+	 * <p>It reads the LEAD only (to the comma that ends the instruction) and not the whole sentence,
+	 * so the phrase it hands back is the permission itself and not the sibling's whole clause; the
+	 * frame terms are asserted for the reason {@link #clauseCore} asserts its own.
+	 */
+	private static String proposalCautionPermission() {
+		String paragraph = safetyParagraph();
+		int at = paragraph.indexOf("a caution to note, not a reason to withhold it");
+		assertTrue(at > 0,
+				"the proposal-caution branch must be present for its lead to be read off: " + paragraph);
+		String sibling = sentenceAround(paragraph, at);
+		int open = sibling.indexOf("open by ");
+		assertTrue(open > 0,
+				"the proposal-caution branch must still say how to open, for this to read its "
+						+ "permission off: " + sibling);
+		int comma = sibling.indexOf(',', open);
+		assertTrue(comma > open,
+				"its lead must still end at a comma for this to read the permission rather than the "
+						+ "rest of the sentence: " + sibling);
+		String lead = sibling.substring(open, comma);
+		int permission = lead.indexOf("can be ");
+		assertTrue(permission > 0,
+				"the proposal-caution lead must still BE a permission for this check to name one; "
+						+ "reworded, the current-medication branches have to be re-read against the "
+						+ "new words rather than this literal repaired: " + lead);
+		return lead.substring(permission);
 	}
 
 	/**

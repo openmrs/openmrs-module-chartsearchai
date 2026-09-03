@@ -62,7 +62,7 @@ package org.openmrs.module.chartsearchai.reference;
  * enumerated. Measured on the 3.7.1 standalone at {@code main} @ {@code 77c0f9a2}, asking
  * {@code "Can I give her warfarin and ibuprofen?"} of the eight-anti-inflammatory patient of issue
  * #336's own report — one of whose orders is the ibuprofen the question names: the response
- * published {@code found: 0, reported: 0} beside fifteen interaction chips including a Major, so
+ * published {@code found: 0, reported: 0} beside fifteen interaction chips, two of them Major, so
  * a client rendering the field as {@code README} tells it to showed "0 of 0 interaction pairs"
  * above a Major finding. It now states nothing, which is what lets
  * {@code DrugSafetyValidator.validate}'s issue #356 fallback hand the field to the arm that did

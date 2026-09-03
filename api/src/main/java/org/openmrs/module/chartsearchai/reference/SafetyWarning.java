@@ -526,17 +526,18 @@ public class SafetyWarning {
 	 * {@code DrugReferenceInjector.renderFinding} states in the injected {@code safety_finding} (issue
 	 * #349; the silence test became the display at issue #347, and
 	 * {@code DrugSafetyValidator.displaysANameOfAny} records why). Empty, never null, and <b>empty says
-	 * "no attribution to show" rather than "the chart records these substances"</b>. <b>Read the MECHANISM off the
-	 * code; no rule about which chips are empty is offered here, and that is deliberate</b> — three
-	 * were written and each was measured false, the last of them against the real pipeline.
-	 * {@code DrugSafetyValidator.chartOrderBridges} walks the SUBJECT against every active order and
-	 * the PARTNER against the orders its arm allowed to witness it, and each item additionally needs
-	 * {@code resolvesFromAny} and a display that does not already name the substance. Both walks are
-	 * ORDER-driven and neither consults the question, so what a chip contributes on either side is a
-	 * fact about this patient's orders and not about how the chip arose.
+	 * "no attribution to show" rather than "the chart records these substances"</b>. <b>Read the
+	 * MECHANISM off the code; no rule about which chips are empty is offered here, and that is
+	 * deliberate</b> — four were written and each was measured false, the last two against the real
+	 * pipeline. {@code DrugSafetyValidator.chartOrderBridges} walks the SUBJECT against every active
+	 * order and the PARTNER against the orders its arm allowed to witness it, and each item
+	 * additionally needs {@code resolvesFromAny} and a display that does not already name the
+	 * substance. That clause is the whole of it: nothing is claimed here about what a chip's
+	 * contribution depends on, and in particular not that it is arm-independent — the partner witness
+	 * set is the CALLER's, and the two arms hand down different ones.
 	 * {@code InteractionFindingChartOrderBridgeTest.theDrugInPlayArmsPartnerIsBridgedToo} is one
-	 * arrangement of it — a partner side that bridges beside a subject side that does not — and is an
-	 * arrangement rather than the rule. Empty is also the answer for: a chip whose substances their own orders already display; a chip that is not
+	 * arrangement of that — a partner side that bridges beside a subject side that does not — and is
+	 * an arrangement rather than a rule. Empty is also the answer for: a chip whose substances their own orders already display; a chip that is not
 	 * an interaction; an interaction chip built from a public constructor here rather than through
 	 * {@code DrugSafetyValidator.interactionWarning} (the class-only and question-pair chips, whose
 	 * residue ADR Decision 64 records); an order the module could read no name for; and a chart with

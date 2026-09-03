@@ -1268,11 +1268,12 @@ public class ChartSearchAiRestController {
 	 * the real pipeline. The mechanism instead: {@code DrugSafetyValidator.chartOrderBridges} walks
 	 * the SUBJECT against every active order and the PARTNER against the orders its arm allowed to
 	 * witness it, and each item additionally needs {@code addChartOrderBridge}'s
-	 * {@code resolvesFromAny} and a display that does not already name the substance. Both walks are
-	 * ORDER-driven and neither consults the question, so what a chip carries is a fact about this
-	 * patient's orders and not about how the chip arose. Rendering empty as "the chart already records
-	 * it" would tell a clinician she is on a drug she is not, which is issue #347's own confusion
-	 * inverted inside the field added to fix it.
+	 * {@code resolvesFromAny} and a display that does not already name the substance. That clause is
+	 * the whole of it — a fourth rule was written here and refuted too, and nothing is claimed about
+	 * what a chip's contribution depends on, because the partner witness set is the CALLER's and the
+	 * two arms hand down different ones. Rendering empty as "the chart already records it" would tell
+	 * a clinician she is on a drug she is not, which is issue #347's own confusion inverted inside the
+	 * field added to fix it.
 	 */
 	private List<Map<String, Object>> serializeSafetyWarnings(List<SafetyWarning> warnings) {
 		List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();

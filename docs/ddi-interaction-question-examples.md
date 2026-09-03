@@ -116,7 +116,7 @@ Five fields of the response matter for these tests:
 | Field | What it is |
 |---|---|
 | `answer` | the LLM's prose. **Not** the safety output — it is what the model made of the chart plus the injected findings |
-| `safetyWarnings` | the **deterministic** chips. Computed by `DrugSafetyValidator` from the chart and the knowledge base, with no model involvement. Each carries `type`, `drug`, `detail` and — since [#340](https://github.com/openmrs/openmrs-module-chartsearchai/issues/340) — a `severity` |
+| `safetyWarnings` | the **deterministic** chips. Computed by `DrugSafetyValidator` from the chart and the knowledge base, with no model involvement. Each carries `type`, `drug`, `detail`, a `severity` (since [#340](https://github.com/openmrs/openmrs-module-chartsearchai/issues/340)) and a `chartOrderBridges` array (since [#347](https://github.com/openmrs/openmrs-module-chartsearchai/issues/347)). `README.md` is canonical for the shape; do not read this row as the whole contract |
 | `interactionPairs` | `{"found": N, "reported": M}` — how many above-floor rule pairs the interaction check related and how many survived the chip cap ([#336](https://github.com/openmrs/openmrs-module-chartsearchai/issues/336)); the drug-in-play arm states it too since [#356](https://github.com/openmrs/openmrs-module-chartsearchai/issues/356) and is not capped, so its two numbers are always equal. `{"found":0}` is MEANT as "an arm ran and related nothing"; `README.md` and `PairChipExtent`'s javadoc name the arrangements where it is not, and [ADR Decision 69](adr.md) carries the one this branch reproduced. **`null` is not completeness** — what it does cover is enumerated in `PairChipExtent`'s class javadoc and in `README.md`, and deliberately nowhere else, so read it there rather than inferring it from the cells below |
 | `references` | the records the answer actually **cited** — `drug_order`, `allergy`, `condition`, `safety_finding`, `drug_reference`, and since [#354](https://github.com/openmrs/openmrs-module-chartsearchai/issues/354) `drug_class_note` for a question that names a drug class no reference entry is indexed by |
 | `unresolvedDrugClass` | the drug **class** the question named and the module resolved to no substance, or `null` where it states none ([#354](https://github.com/openmrs/openmrs-module-chartsearchai/issues/354)). Deterministic like the chips: the same statement is injected as a citable `drug_class_note` record, but that reaches the response only if the model cites it — so this is what a test on a class-term question reads. `null` is the absence of a statement, never a denial |
@@ -685,7 +685,12 @@ or what reaches the model.
   [1d](#1d-cross-reactivity-across-atc-branches-the-curated-group) the answer says "active order
   Advil" and the chip says "active order Ibuprofen" — the same order, two names, because the
   chart row is a branded formulation. The chips themselves are internally consistent since
-  [#339](https://github.com/openmrs/openmrs-module-chartsearchai/issues/339).
+  [#339](https://github.com/openmrs/openmrs-module-chartsearchai/issues/339). **#347 states the
+  correspondence rather than removing the divergence**: the injected `safety_finding` carries a
+  `Ibuprofen from Advil 400mg` clause, and each chip publishes the same pair as
+  `chartOrderBridges`. The transcripts above pre-date that and are left as recorded; what the
+  answer prose CALLS the order is still the model's choice, so a rerun may or may not reproduce
+  the two names.
 - **A screening answer can read as a prescribing refusal** ([#348](https://github.com/openmrs/openmrs-module-chartsearchai/issues/348)). [3a](#3a-one-major-pair-on-a-two-drug-chart)
   and [3b](#3b-a-moderate-pair) both lead with "should not be given" about a drug the patient is
   already taking. The verdict is correct; the framing suits the "can I give her X?" shape better

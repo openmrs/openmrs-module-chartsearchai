@@ -112,6 +112,13 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 	 *   <li>6 — a chip whose sentence and rating DISAGREE, which is what makes
 	 *       {@link #theRatingIsPublishedEvenWhereTheProseNamesItNowhere} able to tell a field read
 	 *       from a parse that falls back to the field.</li>
+	 *   <li>7 — a chip carrying a NON-EMPTY {@code chartOrderBridges} (issue #347), and it is here for
+	 *       {@link #everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire} rather than for a
+	 *       case of its own. That guard compares each accessor's own reading against the value the
+	 *       wire carries; with every fixture chip bridging nothing, two empty lists compare equal
+	 *       without touching an element, so a serializer that RESHAPED the bridges — into maps, or
+	 *       into a rendered sentence — passed it. Appended rather than inserted, because the cases
+	 *       above index this list positionally.</li>
 	 * </ul>
 	 */
 	private static List<SafetyWarning> fixtureWarnings() {
@@ -149,7 +156,17 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 				new SafetyWarning(SafetyWarning.TYPE_INTERACTION, "Tramadol",
 						"Tramadol interacts with active order sertraline — Major bleeding risk is not what "
 								+ "this rule is rated.",
-						"Minor"));
+						"Minor"),
+				// Two bridges rather than one, so an accessor comparison that comes down to list SIZE
+				// alone still has an element to read; the two halves differ from each other in both
+				// fields, so a serializer transposing them cannot pass.
+				new SafetyWarning(SafetyWarning.TYPE_INTERACTION, "Ibuprofen",
+						"Ibuprofen interacts with active order Acetylsalicylic acid (aspirin) — Major.",
+						"Major",
+						Arrays.asList(
+								new SafetyWarning.ChartOrderBridge("Ibuprofen", "Advil 400mg"),
+								new SafetyWarning.ChartOrderBridge("Acetylsalicylic acid (aspirin)",
+										"Aspirin 81mg"))));
 	}
 
 	private ChartSearchAiRestController controller;

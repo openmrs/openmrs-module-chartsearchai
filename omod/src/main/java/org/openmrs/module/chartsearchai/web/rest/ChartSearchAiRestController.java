@@ -1264,12 +1264,12 @@ public class ChartSearchAiRestController {
 	 * published at all: the alternative is a client parsing English. The list is always
 	 * present and is EMPTY where the module bridged nothing. <b>Empty says "no attribution to show",
 	 * and NOT "the chart records these substances."</b> No rule about which chips are empty is offered
-	 * here, and that is deliberate — three were written and each was measured false, the last against
-	 * the real pipeline. The mechanism instead: {@code DrugSafetyValidator.chartOrderBridges} walks
+	 * here, and that is deliberate — every draft of one has been measured false, the later ones
+	 * against the real pipeline. The mechanism instead: {@code DrugSafetyValidator.chartOrderBridges} walks
 	 * the SUBJECT against every active order and the PARTNER against the orders its arm allowed to
 	 * witness it, and each item additionally needs {@code addChartOrderBridge}'s
 	 * {@code resolvesFromAny} and a display that does not already name the substance. That clause is
-	 * the whole of it — a fourth rule was written here and refuted too, and nothing is claimed about
+	 * the whole of it — the last such rule written here was refuted too, and nothing is claimed about
 	 * what a chip's contribution depends on, because the partner witness set is the CALLER's and the
 	 * two arms hand down different ones. Rendering empty as "the chart already records it" would tell
 	 * a clinician she is on a drug she is not, which is issue #347's own confusion inverted inside the

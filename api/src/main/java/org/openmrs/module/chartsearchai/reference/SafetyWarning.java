@@ -207,7 +207,7 @@ public class SafetyWarning {
 	 *        here, as they are for the chip
 	 * @param chartOrderBridges see {@link #chartOrderBridges()}, which is canonical for what empty
 	 *        covers — empty is not a degraded state, and no rule about which chips are empty belongs
-	 *        here or anywhere else; five drafts of one were each measured false
+	 *        here or anywhere else; every draft of one has been measured false
 	 */
 	// Three facts travel here, not two: the paragraphs above are worded for the pair issue #297 added
 	// and issue #349 put a third beside them. Read the @param list rather than any count in the prose.
@@ -529,8 +529,9 @@ public class SafetyWarning {
 	 * {@code DrugSafetyValidator.displaysANameOfAny} records why). Empty, never null, and <b>empty says
 	 * "no attribution to show" rather than "the chart records these substances"</b>. <b>Read the
 	 * MECHANISM off the code; no rule about which chips are empty is offered here, and that is
-	 * deliberate</b> — four were written and each was measured false, the last two against the real
-	 * pipeline. {@code DrugSafetyValidator.chartOrderBridges} walks the SUBJECT against every active
+	 * deliberate</b> — every draft of one has been measured false, the later ones against the real
+	 * pipeline. No count of those drafts is published here or anywhere else: one was, and it was stale
+	 * a commit later. {@code DrugSafetyValidator.chartOrderBridges} walks the SUBJECT against every active
 	 * order and the PARTNER against the orders its arm allowed to witness it, and each item
 	 * additionally needs {@code resolvesFromAny} and a display that does not already name the
 	 * substance. That clause is the whole of it: nothing is claimed here about what a chip's

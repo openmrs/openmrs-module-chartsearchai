@@ -249,7 +249,7 @@ public class ChartSearchAiChartOrderBridgeTest {
 	}
 
 	@Test
-	public void aChipWithNothingToReconcileStatesAnEmptyListRatherThanNothing() {
+	public void anEmptyAttributionListIsStatedRatherThanOmitted() {
 		// Empty says there was no attribution to show. It is NOT a statement that the chart records
 		// those substances — SafetyWarning.chartOrderBridges() is canonical for what empty covers, and
 		// this comment said the refuted thing until it was swept. What this case pins is that empty is
@@ -292,7 +292,7 @@ public class ChartSearchAiChartOrderBridgeTest {
 		// marshal java.util.Collections' immutable wrappers under a modular JDK ("module java.base
 		// does not opens java.util"). chartOrderBridges() returns an unmodifiableList, or
 		// Collections$EmptyList in the common empty case, so publishing it AS HANDED turned every
-		// chip-carrying XML response into a 500 — the empty case included, which is most of them.
+		// chip-carrying XML response into a 500 — the empty case included.
 		//
 		// Driven through the REAL marshaller rather than an imitation of it, for the reason
 		// QuerystoreOrderTextMarkerTest gives about querystore's serializer: keying a wire contract on
@@ -302,7 +302,7 @@ public class ChartSearchAiChartOrderBridgeTest {
 		assertMarshals(searchPayload(), "a populated chip");
 
 		bridges = Collections.<SafetyWarning.ChartOrderBridge> emptyList();
-		assertMarshals(searchPayload(), "a chip with no attributions, which is the common case");
+		assertMarshals(searchPayload(), "a chip with no attributions");
 	}
 
 	private static void assertMarshals(Map<String, Object> payload, String what) throws Exception {

@@ -5148,7 +5148,7 @@ public class DrugSafetyValidator {
 	 * all, and published as that chip's {@code chartOrderBridges} since issue #347. Empty wherever
 	 * the module attributed nothing, which is NOT a claim that the chart records the substance: see
 	 * {@link SafetyWarning#chartOrderBridges()} for what empty covers, and do not restate that list
-	 * here — nor offer a rule about it, which five drafts across these homes each got wrong.
+	 * here, nor offer a rule about which chips are empty: every draft of one has been measured false.
 	 *
 	 * <p><b>Why it exists.</b> A finding names its substances in the KNOWLEDGE BASE's vocabulary, which
 	 * is right and is issue #339's settlement. Where the module reached a substance from an active order

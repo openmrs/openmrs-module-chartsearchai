@@ -245,7 +245,7 @@ public class LlmProvider {
 			// they exist for ("Does she have any drug interactions I should know about?") is not one
 			// of the shapes listed. The scope reaches it in practice — the reproduction IS this
 			// paragraph's withholding branch applied to that question. Adding the screening shape
-			// here was RUN as an arm of ADR Decision 70's A/B and refuted: it produced the cleanest
+			// here was RUN as an arm of ADR Decision 71's A/B and refuted: it produced the cleanest
 			// two-order leads of the three arms and dropped a finding from the eight-order cell. Do not re-propose it.
 			+ "The same rules apply to safety and suitability questions (\"is it safe to give "
 			+ "X\", \"can we start X\"): when no record addresses the drug or intervention asked "
@@ -284,14 +284,14 @@ public class LlmProvider {
 			// these two branches AFTER the never-"Yes" token — has not been measured, and the
 			// argument against it is legibility only: the token's own scope becomes the thing a
 			// reader has to infer. Worth weighing rather than settled: one READING of ADR Decision
-			// 70's first residue — §3a still opening with a bare "No —" — is that this token plus the
+			// 71's first residue — §3a still opening with a bare "No —" — is that this token plus the
 			// yes/no verdict paragraph above leave no other lead available on a screening question.
 			// That reading is not measured either, and no arm has tried the placement.
 			// The residue that belongs to the measurement rather than to this comment: on the charts
 			// that already answered correctly the lead was "Yes, there are documented interactions
 			// …", and these branches ask for a statement instead. Measured — both several-finding
 			// cells KEEP that Yes lead with every finding, severity and citation, and ADR Decision
-			// 70's "The measurement" section records the run, its three residues and the arm above.
+			// 71's "The measurement" section records the run, its three residues and the arm above.
 			// Nothing in this repository can see what the model produces from these two sentences;
 			// SafetyVerdictSeverityGradationTest pins what they SAY.
 			+ "A finding that says it is a reason to change a medication this patient is already "

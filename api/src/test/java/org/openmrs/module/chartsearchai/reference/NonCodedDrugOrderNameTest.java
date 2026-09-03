@@ -113,16 +113,12 @@ public class NonCodedDrugOrderNameTest extends BaseModuleContextSensitiveTest {
 	/**
 	 * Renames the ordered concept's FULLY SPECIFIED name, which is what {@code Concept.getName()}
 	 * yields here — concept 88 carries the FSN "ASPIRIN" and the synonym "ASA", and only the first is
-	 * read by {@code addConceptName}. Scoped to that one row rather than applied to every name of the
-	 * concept: renaming both makes them duplicates in one locale, and {@code ConceptValidator} then
-	 * rejects the concept the moment anything saves it — which {@code mapConceptToAtc} does.
+	 * read by {@code addConceptName}. That pairing is this fixture's and is why the rename is enough
+	 * to move what the builder reads; why the shared helper touches only the FSN row is stated where
+	 * that helper lives.
 	 */
 	private void nameTheConcept(String name) {
-		Context.getAdministrationService().executeSQL("update concept_name set name = '" + name
-				+ "' where concept_id = " + ORDERED_CONCEPT
-				+ " and concept_name_type = 'FULLY_SPECIFIED'", false);
-		Context.flushSession();
-		Context.clearSession();
+		DrugReferenceTestSupport.nameTheConcept(ORDERED_CONCEPT, name);
 	}
 
 	/** The texts of the injected active-order records, through the shared accessor — this filter had

@@ -33,11 +33,14 @@ import org.openmrs.Concept;
 import org.openmrs.ConceptMap;
 import org.openmrs.ConceptReferenceTerm;
 import org.openmrs.ConceptSource;
+import org.openmrs.DrugOrder;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
+import org.openmrs.module.querystore.model.QueryDocument;
+import org.openmrs.module.querystore.serialization.DrugOrderRecordSerializer;
 import org.openmrs.util.OpenmrsUtil;
 
 /**
@@ -445,6 +448,44 @@ public final class DrugReferenceTestSupport {
 			texts.add(mapping.getText());
 		}
 		return texts;
+	}
+
+	/**
+	 * The chart-order bridge clause of one rendered finding, without its lead — or null where the
+	 * finding carries none (issues #349, #347).
+	 *
+	 * <p>Shared rather than declared per file, for the reason {@link #findingTexts} gives about
+	 * itself: WHERE the clause sits inside a finding is {@code DrugReferenceInjector.renderFinding}'s
+	 * decision, so two extractors would have to be moved together, and the one left behind would go
+	 * on asserting against a slice that is no longer the clause. Read off the production constants at
+	 * both ends, so this cannot pass against a clause no record carries.
+	 *
+	 * <p><b>The far end is whichever strength clause the finding actually states, not one of them.</b>
+	 * Issue #348 gave the two order-driven arms a counterpart pair
+	 * ({@code STRENGTH_CHANGE_CURRENT_MEDICATION} and {@code STRENGTH_CAUTION_CURRENT_MEDICATION}), so
+	 * delimiting on {@code STRENGTH_WITHHOLD} alone returns the clause PLUS a call on every screening
+	 * arrangement — a bridge compared against a bridge plus a clause, whose diff reads as a bridge
+	 * defect. All four are searched and the earliest wins; a finding stating none still yields its
+	 * whole tail, which is the pre-existing behaviour and is why callers that care assert the call
+	 * separately ({@code InteractionFindingChartOrderBridgeTest.callOf}).
+	 */
+	static String bridgeOf(String finding) {
+		String lead = DrugReferenceInjector.FINDING_CHART_ORDER_LEAD;
+		int at = finding.indexOf(lead);
+		if (at < 0) {
+			return null;
+		}
+		int end = -1;
+		for (String clause : Arrays.asList(DrugReferenceInjector.STRENGTH_WITHHOLD,
+			DrugReferenceInjector.STRENGTH_CAUTION,
+			DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION,
+			DrugReferenceInjector.STRENGTH_CAUTION_CURRENT_MEDICATION)) {
+			int found = finding.indexOf(clause, at);
+			if (found >= 0 && (end < 0 || found < end)) {
+				end = found;
+			}
+		}
+		return finding.substring(at + lead.length(), end < 0 ? finding.length() : end);
 	}
 
 	/** The real WHO ATC sample fixture (parsed by the real {@link AtcDrugReferenceSource#parse}). */
@@ -1157,6 +1198,49 @@ public final class DrugReferenceTestSupport {
 		}
 		Context.getConceptService().saveConcept(concept);
 		Context.flushSession();
+	}
+
+	/**
+	 * Order 3 of the standard test dataset — a real, fully-populated Triomune-30 {@code DrugOrder},
+	 * and the fixture every case that needs querystore's own rendering of an order mutates in memory.
+	 *
+	 * <p>Here rather than in each file for the reason this class exists: it was written twice with a
+	 * verbatim-identical javadoc, and the order ID is a fact about the dataset rather than about
+	 * either test.
+	 */
+	static DrugOrder standardDatasetDrugOrder() {
+		return (DrugOrder) Context.getOrderService().getOrder(3);
+	}
+
+	/**
+	 * What querystore's REAL {@link DrugOrderRecordSerializer} renders for {@code order} — the text a
+	 * {@code drug_order} chart record carries, and the empty string where it renders none.
+	 *
+	 * <p>Shared so that a test asserting what the model can SEE and a test asserting what the module
+	 * may SAY about it read the same serializer through the same call. A caller wanting it folded
+	 * lowercases the result rather than asking for a second arity: the two readings differ only in
+	 * that, and two arities is how the pair would come apart.
+	 */
+	static String querystoreRenderedText(DrugOrder order) {
+		QueryDocument doc = new DrugOrderRecordSerializer().serialize(order);
+		return doc.getText() == null ? "" : doc.getText();
+	}
+
+	/**
+	 * Renames {@code conceptId}'s FULLY SPECIFIED name, which is what {@code Concept.getName()} yields
+	 * for these fixtures.
+	 *
+	 * <p>Scoped to that one row rather than to every name of the concept, and that is the assertion
+	 * rather than economy: renaming both the FSN and the synonym makes them duplicates in one locale,
+	 * and {@code ConceptValidator} then rejects the concept the moment anything saves it — which
+	 * {@link #mapConceptToAtc} does.
+	 */
+	static void nameTheConcept(int conceptId, String name) {
+		Context.getAdministrationService().executeSQL("update concept_name set name = '" + name
+				+ "' where concept_id = " + conceptId
+				+ " and concept_name_type = 'FULLY_SPECIFIED'", false);
+		Context.flushSession();
+		Context.clearSession();
 	}
 
 	/** The injected ACTIVE-ORDER records of {@code chart}, for the files that use it. Shaped like

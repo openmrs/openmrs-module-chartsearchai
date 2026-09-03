@@ -72,16 +72,16 @@ public class ProjectInstructionsGuardTest {
 	 * which those bullets point at.
 	 *
 	 * <p><b>The raise still holds, and its two figures are MEASURED at a named head, never
-	 * differenced from a previous quotation.</b> Both move with the file, and inside this one PR both
-	 * have now moved three times — the merge at {@code fce8dc61}, the round-2 hardening commit, and
-	 * the merge of {@code origin/main} @ {@code 6582f2c2}, each of which falsified the figure the
-	 * commit before it recorded. So what is written here is the COMMAND and the head, not arithmetic:
-	 * {@code wc -c CLAUDE.md} for the file, and {@code grep 'STRENGTH and REFERENT' CLAUDE.md | wc -c}
-	 * for the #348 rule bullet, which names the line by its own words rather than by a line number
-	 * that moves. At the {@code 6582f2c2} merge those read <b>85,717</b> and <b>1,081</b> bytes,
-	 * leaving <b>283</b> under this tripwire. Re-run both before quoting either number again; a
-	 * figure here going stale is expected rather than a defect, which is why the commands are the
-	 * part that matters.
+	 * differenced from a previous quotation.</b> Both move with the file, and every merge of
+	 * {@code origin/main} into this branch has falsified the figure the commit before it recorded —
+	 * as has each hardening round that edited the bullet. So what is written here is the COMMAND and
+	 * the head, not arithmetic: {@code wc -c CLAUDE.md} for the file, and
+	 * {@code grep 'STRENGTH and REFERENT' CLAUDE.md | wc -c} for the #348 rule bullet, which names
+	 * the line by its own words rather than by a line number that moves. At the merge of
+	 * {@code origin/main} @ {@code 5253c7d2} those read <b>85,930</b> and <b>1,278</b> bytes, leaving
+	 * <b>70</b> under this tripwire. Re-run both before quoting either number again; a figure here
+	 * going stale is expected rather than a defect, which is why the commands are the part that
+	 * matters.
 	 *
 	 * <p>The CONCLUSION is what does not move: the bullet is larger than the headroom, so closing
 	 * the gap under the old 85,000 tripwire means deleting DIRECTIVES, and the smallest single thing

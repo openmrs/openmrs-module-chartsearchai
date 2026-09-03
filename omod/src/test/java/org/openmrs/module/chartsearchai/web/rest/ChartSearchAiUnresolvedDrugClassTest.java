@@ -126,9 +126,7 @@ public class ChartSearchAiUnresolvedDrugClassTest {
 	}
 
 	private JsonNode eventData(String eventType) throws Exception {
-		SseEvent event = SseEvents.ofType(out, eventType);
-		assertNotNull(event, "no '" + eventType + "' event was emitted");
-		return MAPPER.readTree(event.data);
+		return SseEvents.dataOfType(out, eventType, MAPPER);
 	}
 
 	/**

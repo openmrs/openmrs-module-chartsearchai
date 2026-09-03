@@ -715,7 +715,7 @@ public class SafetyVerdictSeverityGradationTest {
 	 * #348's own reproduction cell.
 	 *
 	 * <p><b>And it is a tripwire rather than an over-strict guard.</b> These two sentences are prompt
-	 * surface whose effect nothing in this repository can see, so ADR Decision 70's two-build A/B is
+	 * surface whose effect nothing in this repository can see, so ADR Decision 71's two-build A/B is
 	 * what licensed the words that are here. Any legitimate reword re-opens that A/B, which means
 	 * failing loudly on one is the WANTED behaviour: the failure tells the next maintainer a live
 	 * measurement is owed, and that is exactly why
@@ -751,7 +751,7 @@ public class SafetyVerdictSeverityGradationTest {
 					+ "give a drug."),
 			branches,
 			"these two sentences are what a clinician's answer opens from, and nothing in this "
-					+ "repository can see what a model makes of them — ADR Decision 70's two-build "
+					+ "repository can see what a model makes of them — ADR Decision 71's two-build "
 					+ "A/B is what licensed these words. A reword re-opens that measurement, so this "
 					+ "failure is the reminder that one is owed, not a literal to repair");
 	}

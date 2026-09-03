@@ -326,6 +326,13 @@ public class ChartSearchAiChartOrderBridgeTest {
 		// asserts the attribution is written from the chip's own bridges in exactly one place too, so
 		// a site that built the per-chip map for itself would be caught rather than silently dropping
 		// the correspondence for whichever surface it serves.
+		//
+		// It counts LITERALS in ONE class's source, so name what that leaves out rather than reading a
+		// green run as coverage: a second writer in a sibling class is outside the source it reads
+		// (the same scope CLAUDE.md records for the grounding-withholding guard), and inside it a key
+		// assembled from a constant or a concatenation is not this needle. No list of evasions is
+		// offered as closed. What it does catch is the shape that has actually happened here — a new
+		// emission surface copying the chip-map builder — and that is what it is for.
 		String source = ChartSearchAiStreamingTest.controllerSource();
 
 		int keys = ChartSearchAiStreamingTest.occurrences(source, "\"chartOrderBridges\"");

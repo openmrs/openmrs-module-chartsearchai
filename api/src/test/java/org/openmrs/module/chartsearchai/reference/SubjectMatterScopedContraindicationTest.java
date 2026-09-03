@@ -1,4 +1,4 @@
-/**
+/*
  * This Source Code Form is subject to the terms of the Mozilla Public License,
  * v. 2.0. If a copy of the MPL was not distributed with this file, You can
  * obtain one at http://mozilla.org/MPL/2.0/. OpenMRS is also distributed under
@@ -78,8 +78,10 @@ public class SubjectMatterScopedContraindicationTest {
 	/**
 	 * The condition one of ibuprofen's curated rules fires on, as a chart record an answer can cite.
 	 * Deliberately in TITLE CASE, as a clinician's chart writes it: {@code containsFolded} folds the
-	 * haystack but does not lower-case it, so the normalisation {@link SubjectMatter} applies on the way
-	 * in is load-bearing here. With all-lower-case prose, removing it changed no test — measured.
+	 * haystack but does not lower-case it, so the normalisation
+	 * {@link org.openmrs.module.chartsearchai.reference.DrugSafetyValidator.SubjectMatter} applies on
+	 * the way in is load-bearing here. With all-lower-case prose, removing it changed no test —
+	 * measured.
 	 */
 	private static final RecordMapping ULCER_RECORD = new RecordMapping(3,
 			ChartSearchAiConstants.RESOURCE_TYPE_CONDITION, "condition-uuid-3", null,

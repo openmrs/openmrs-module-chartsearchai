@@ -1,4 +1,4 @@
-/**
+/*
  * This Source Code Form is subject to the terms of the Mozilla Public License,
  * v. 2.0. If a copy of the MPL was not distributed with this file, You can
  * obtain one at http://mozilla.org/MPL/2.0/. OpenMRS is also distributed under
@@ -39,20 +39,6 @@ public final class ModuleSourceRoot {
 	}
 
 	/**
-	 * The {@code api} module root: the working directory when surefire set it to the module (the
-	 * normal case), else the nearest ancestor that looks like the module, else {@code api/} beneath
-	 * one. Falls back to the working directory rather than returning null.
-	 *
-	 * <p><strong>That fallback is not a safety net, and the callers differ in whether they can
-	 * tell.</strong> A caller that resolves a NAMED file under this root and asserts it exists
-	 * fails loudly on a wrong answer. A caller that WALKS the root does not: it scans nothing, or
-	 * the wrong tree, and reports no violations. Measured — forcing this method to an unrelated
-	 * directory USED TO leave {@code ArchitectureGuardTest} entirely green while the two
-	 * file-resolving callers went red. It no longer does: that class asserts its own scan is
-	 * non-empty and found a file it expects, and the same mutation now reddens it. A new WALKING
-	 * caller owes itself the same check, because nothing here can give it one.
-	 */
-	/**
 	 * @return the repository root — the directory holding {@code CLAUDE.md}, the project
 	 *         instructions, and {@code docs/}. Resolved by walking up from the working
 	 *         directory, which surefire sets to the module directory, so the walk is one
@@ -78,6 +64,20 @@ public final class ModuleSourceRoot {
 						+ "walking up from " + Paths.get("").toAbsolutePath());
 	}
 
+	/**
+	 * The {@code api} module root: the working directory when surefire set it to the module (the
+	 * normal case), else the nearest ancestor that looks like the module, else {@code api/} beneath
+	 * one. Falls back to the working directory rather than returning null.
+	 *
+	 * <p><strong>That fallback is not a safety net, and the callers differ in whether they can
+	 * tell.</strong> A caller that resolves a NAMED file under this root and asserts it exists
+	 * fails loudly on a wrong answer. A caller that WALKS the root does not: it scans nothing, or
+	 * the wrong tree, and reports no violations. Measured — forcing this method to an unrelated
+	 * directory USED TO leave {@code ArchitectureGuardTest} entirely green while the two
+	 * file-resolving callers went red. It no longer does: that class asserts its own scan is
+	 * non-empty and found a file it expects, and the same mutation now reddens it. A new WALKING
+	 * caller owes itself the same check, because nothing here can give it one.
+	 */
 	public static Path apiRoot() {
 		Path current = Paths.get("").toAbsolutePath();
 		while (current != null) {

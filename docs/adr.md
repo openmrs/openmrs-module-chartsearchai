@@ -5038,3 +5038,276 @@ Two halves, for the two readers, and the same settlement Decision 67 (#354) reac
 The ANSWER PROSE is the model's, and no deterministic change can force its wording. What the module now guarantees is that the correspondence is IN the prompt for the shape that lacked it, and that a client can read it whatever the answer says. Whether the model's own naming converges is a measurement about a model, reported on the pull request rather than asserted here.
 
 **And the client half of the ticket's second direction is another repository's.** `openmrs-esm-chartsearchai` is what renders the chip list beside the answer; this decision gives it the field and README gives it the contract, but nothing here makes it show one. That is why the pull request `Refs` #347 rather than closing it.
+
+## Decision 71: A javadoc pointer that no longer resolves is a compile error, checked by the compiler that already reads it
+
+**Status: Accepted** (September 2026) — implemented, issue [#262](https://github.com/openmrs/openmrs-module-chartsearchai/issues/262).
+
+### Context
+
+The javadoc in this repository is not commentary; it is where the design record lives. `CLAUDE.md`'s
+own "Documenting a decision" section says so — a rule belongs in that file, its evidence belongs
+here or in the javadoc of the member it constrains — and
+[#243](https://github.com/openmrs/openmrs-module-chartsearchai/issues/243) deliberately replaced
+copied figures with pointers to whichever member owns each one, on the argument that a copied number
+rots visibly while a pointer does not.
+
+Nothing resolved those pointers. `grep -n "javadoc\|checkstyle\|doclint" pom.xml api/pom.xml
+omod/pom.xml` returned nothing: no `maven-javadoc-plugin`, no doclint, no checkstyle. So a `{@link}`
+naming a renamed or deleted member compiled, passed the whole suite, and passed CI — and rendered as
+plain text, which reads as authoritative rather than as stale.
+
+**The pre-existing breakage was measured before anything was designed, because the ticket asked for
+that count first and the answer decides whether a gate can be switched on in the same change.** Over
+`origin/main` at `6582f2c2`, with `maven-javadoc-plugin` 3.11.2 at `-Ddoclint=reference
+-Dshow=private`:
+
+| source root | goal | errors |
+| --- | --- | --- |
+| `api/src/main/java` | `javadoc` | 1 |
+| `api/src/test/java` | `test-javadoc` | 2 |
+| `omod/src/main/java` | `javadoc` | 0 |
+| `omod/src/test/java` | `test-javadoc` | 0 |
+
+`javac -Xdoclint:reference` over both api roots in one invocation (classpath from
+`dependency:build-classpath -Dmdep.includeScope=test`) reports the same three sites as compilation
+ERRORS. Re-run against `origin/main`'s sources on five JDKs — 11, 17, 21, 24 and 25, so the whole CI
+matrix and two beyond it — the site list came back identical every time. Five is what was MEASURED
+rather than what is installed; the box carries more, including a JDK 8 that cannot build this module
+at all. Three is small enough to repair in the same change, so both halves ship.
+
+The three, and what each one is:
+
+- `PipelineSettings.java`, `{@link ChartSearchAiUtils#getStringGlobalProperty}`. The method exists;
+  the class is in another package and the file does not import it — `ChartSearchAiConstants` is
+  imported and `ChartSearchAiUtils` is not. **A pointer can die without anything being renamed.**
+- `ArchitectureGuardTest.java`, `{@link #loadAllSources}`. No such method — the loader is
+  `getSourceCache()`. The ticket's own scenario, already realised, in a test whose javadoc
+  `CLAUDE.md` cites.
+- `SubjectMatterScopedContraindicationTest.java`, `{@link SubjectMatter}` — a `private static final`
+  class nested in `DrugSafetyValidator`. **The rule here was measured twice and the first measurement
+  was wrong, which matters because it chose the fix.** What holds, on JDK 11, 17, 21 and 25:
+
+  | form | private nested | package-private nested |
+  | --- | --- | --- |
+  | `SubjectMatter` (simple name) | does not resolve | does not resolve |
+  | `DrugSafetyValidator.SubjectMatter` (enclosing-qualified) | does not resolve | resolves |
+  | the **fully-qualified** `org.openmrs.module.chartsearchai.reference.DrugSafetyValidator.SubjectMatter` | resolves | resolves |
+  | a `private` MEMBER of it, fully qualified | resolves | resolves |
+
+  So the simple name is a scope failure and the enclosing-qualified form is subject to accessibility,
+  but the **fully-qualified form resolves regardless** — verified on the real file, where the
+  fully-qualified `{@link}` compiles clean and `javadoc -private` renders it as a working hyperlink.
+  The first pass measured only the enclosing-qualified form, concluded that the group "enforces
+  resolvable AND accessible", and wrote `{@code}` at that site on the strength of it. That was a
+  design record stating a compiler rule that does not exist, and it cost a navigable pointer in the
+  file where the design record lives.
+
+Two of the three are in test sources. That is not incidental — it is the argument for where the
+check is configured.
+
+**A second, independent hole came out of this change's own refutation pass**, and the ticket's
+proposed instrument would not have closed it either. A javadoc block that attaches to no declaration
+is DISCARDED, and doclint says nothing whatever about the pointers inside it. Three blocks were in
+that state, each arising the same way — a member inserted above the comment written for the one
+below it:
+
+- `LlmProvider.parseEntailmentVerdict`'s block — pointers at `ChartAnswerResponseFormat`,
+  `parseYesNo` and `extractResponse`, none of them resolved by anything — orphaned by
+  `VERDICT_TOKEN`'s own one-line comment.
+- `CitationGroundingVerifier.LEADING_ITEM_SEPARATOR`'s, orphaned by `MAX_ENUMERATION_ITEM_WORDS`'s.
+- `ModuleSourceRoot.apiRoot()`'s, orphaned by `repoRoot()`'s.
+
+Proved blind rather than reasoned blind: renaming `{@link #parseYesNo}` inside the orphaned block to
+a name that exists nowhere left the error count at three, not four.
+
+**What detaches a block was then measured on probes rather than assumed, and there are three shapes,
+not one.** A block followed by another javadoc block; a block followed by no declaration before the
+enclosing brace or the end of the file; and a block stranded BETWEEN a declaration's annotations and
+the declaration itself, which javac ignores because a doc comment has to precede the whole
+declaration, annotations included. A four-pointer probe of the first two returned three errors; a
+probe carrying a block on each side of an annotation returned one, for the block ABOVE it. The third
+shape was found by accident — a verification probe of this very change inserted a comment after a
+controller's `@Controller` and `@RequestMapping` lines and then reported the gate as not reaching
+`omod`; the gate was fine and the probe was dangling. An intervening line comment or plain block
+comment detaches nothing, but neither rescues a block from any of the three. Only the first
+shape had instances here.
+
+**What doclint does not read is a METHOD BODY, and the first version of this said something narrower
+and wrong.** It named "a local declaration" and "an anonymous class's member" as the two unread
+scopes; an anonymous class's member IS read where the anonymous class sits in a FIELD initialiser,
+and the probe behind the original claim had put it inside a method. Measured on JDK 11, 17, 21 and
+25 — unread: a local declaration, a member of a LOCAL class, and a member of an anonymous class
+declared inside a method body. Read: a nested class's members, a `private` nested class itself, and
+an anonymous class's members in a field initialiser.
+
+### Decision
+
+**`-Xdoclint:reference` goes to `javac`, in the default build, through the root pom's
+`<build>/<pluginManagement>` entry for `maven-compiler-plugin`, at plugin level** — the entry that
+already carries `<source>`, `<target>` and `<encoding>`. **That position is the decision and not a
+detail**, which this change learned the hard way — see the POM-check bullet below.
+Both source roots of both reactor modules are covered, proved by planting a dead pointer in each and
+reading which goal fails. `llama-server-natives` inherits the same parent from outside the reactor
+and carries no java source, so it is unaffected either way.
+
+The three dead references are repaired in the same change — a fully-qualified link for the
+cross-package one, the real method name for the renamed one, and a fully-qualified link for the
+private nested class, which needs no visibility change and stays navigable. **The three orphaned
+blocks are moved to the members they were written for**, which is what puts their pointers inside
+the gate's corpus; deleting one would have satisfied the same check and lost the documentation.
+
+**Every source file's MPL licence header becomes a block comment rather than a javadoc block.** That
+is this change's own doing: the header sits before the `package` statement, so it documents nothing,
+and enabling doclint makes javac say so once per header-bearing file. **274 of the 276 sources at the
+merge base carry that header**, one character each; the two that carry none are pre-existing and
+untouched. This change adds one more source, which carries the block-comment form. Do not
+read a warning COUNT off a build to check this — javac caps warnings per compilation (default
+`-Xmaxwarns` 100), so a printed total is an artefact of the cap rather than a count of anything.
+Measured over `origin/main`'s two api source roots with `javac -Xdoclint:reference -Xmaxwarns 100000`:
+**252** warnings, one per header-bearing file in those roots, of which the default cap prints 100 and
+says so. The figure carries its tree and its command deliberately — two earlier drafts published 250
+and 249, each true of a different base this change passed through, and neither named the base it was
+taken on. Re-derive it against the merge base rather than quoting it.
+
+**A suppression does exist, and the first version of this decision said it did not.** `-nowarn`
+silences the dangling-comment warning while keeping every reference ERROR, measured on JDK 11, 17, 21
+and 25; `-Xlint:none` does the same except on 25. What was written here first is true only in part —
+`-Xlint:-dangling-doc-comments` really is `error: invalid flag` on 11/17/21, but it is a no-op on the
+JDKs that accept it, and it was never the only candidate. **The headers were changed anyway, for a
+reason that survives the correction**: `-nowarn` is blanket, so it would hide every other javac
+warning in the build as well, and these builds carry real ones. Changing the header removes the
+warning at its source and leaves the rest visible.
+
+Scope is doclint's `reference` group. **That group is wider than `{@link}` and the wider contract is
+what ships**: `@param` naming a parameter that does not exist and `@return` on a void method are
+errors too, both measured. **No enumeration of its messages is published here, deliberately** — the
+group has fifteen keys, several of them errors, and an incomplete list was a live defect (below). It
+is NOT `missing`, a doc-coverage mandate nobody asked for, and NOT `html`/`syntax`.
+
+`JavadocReferenceGuardTest` pins all of it, because the change is one line of XML whose removal
+nothing else would notice — #232's lesson turned on this PR itself. Its checks answer separate
+questions and none subsumes another; **each is mutation-checked, so mutate one and read the failures
+rather than trusting a list here.** One of them is `theScannerAgreesWithTheCompilerAboutWhatIsAttached`,
+a table of source shapes each declaring what it IS, against which BOTH javac and the scanner are
+held. It exists because the attachment heuristic was got wrong repeatedly — false positives on legal
+code and false negatives on real orphans, in both directions, every one of them green under the whole
+suite — and arguing the rule in prose is what kept failing. No count of those attempts is published,
+because every count of them written during this change went stale in the next round. The two that had to be rewritten after a fresh review are worth
+naming, because both were green while the gate was open:
+
+- **The POM checks read the UNION of three POMs' plugin-level arguments**, which is the effective
+  configuration of no module. With the flag moved into `api/pom.xml`'s own `<plugins>` — a plausible
+  "let me scope this" edit — a dead reference in `omod/src/main/java` compiled, `mvn -o clean
+  install` reported BUILD SUCCESS, and nothing in the guard noticed. Placement is asserted directly
+  now, so that mutation reddens the placement check and the effect check; the rest of the class does
+  not read the POMs and could not have seen it either way.
+- **An argument list was matched as a string prefix.** Two consequences, opposite in sign.
+  `-Xdoclint:all,-missing,-html,-syntax` enables the reference group perfectly well and was reported
+  as a removal, so a maintainer WIDENING the check would have been told they had removed it. And
+  `-Xdoclint:reference/public` — the group with an ACCESS qualifier — satisfied the prefix match
+  while silencing the gate for every non-public member, which is most of this module's design record.
+  It now reddens the two checks that put a declared argument list to the compiler.
+  **The real compiler is the oracle now**, at every declared block, over a probe whose dead pointer
+  sits on a `private` member.
+
+The same rule decides what counts as a javadoc error over the module's own sources: **a DIFFERENCE,
+never a message.** Where the flagged compile reports errors the sources are compiled again without
+the argument, and only what the flagged run adds is doclint's. Two earlier attempts matched message
+text and each was refuted — an incomplete key list reported a real javadoc defect as a broken
+classpath, and `Diagnostic.getMessage(null)` is DEFAULT-LOCALE, so on a machine set to German,
+Japanese or Chinese the match failed on a perfectly clean tree.
+
+### Rejected alternatives
+
+- **`maven-javadoc-plugin` with `-Xdoclint:reference` in a CI profile**, which is what the ticket
+  proposed. Its stated reason — "so it does not slow local iteration" — does not survive
+  measurement: the flag's cost is inside run-to-run noise and **the sign is not even stable**, coming
+  out at +0.19s on an 11.3s two-module `install -DskipTests` with a run-to-run sd of 1.1s, +0.12s on
+  a 3.4s bare `javac` over the api roots (n=15, t≈1.4), and −0.13s on a Maven `test-compile` arm.
+  Every earlier figure written here had the flag *faster*; that is what noise looks like, and it is
+  why no single pair of numbers is quoted as the result. Its `javadoc` goal reads `src/main/java`
+  only, so it would have found ONE of the three defects and needed a second `test-javadoc` execution
+  for the others. A profile nobody activates locally reproduces most of the original failure — a
+  developer renaming a member still sees green — which is the trap the ticket names by citing #232.
+  And a standalone javadoc job would open the `llama-server-natives` and `querystore-api` SNAPSHOT
+  resolution questions `build-against-querystore-head` exists to keep in one place.
+- **A hand-rolled `{@link}` resolver in a guard test**, walking the source and matching targets
+  against declarations. It is the shape `ProjectInstructionsGuardTest` uses for `CLAUDE.md`, and it is
+  right there because Markdown has no compiler. Java has one, and it already holds the imports, the
+  inherited members, the nested types and the scope rule the third defect turns on — a rule this
+  change got wrong twice with the compiler available to ask.
+- **Widening `DrugSafetyValidator.SubjectMatter` to package-private** so its pointer could be a
+  `{@link}`. Refused for the right reason and on a false premise: a fully-qualified `{@link}` resolves
+  to a private nested class already, so no visibility change was ever needed and `{@code}` was not the
+  only alternative.
+- **Leaving the orphaned blocks as stated residue.** They are not a neighbouring defect; they are the
+  part of the corpus this gate cannot see, and one of them carries three pointers that nothing
+  resolves. Shipping the gate beside them would publish a claim of protection with a hole in exactly
+  the place this repository has already been bitten twice.
+- **Recording the rule in `CLAUDE.md`.** The rule is compiler-enforced, and that file's doctrine keeps
+  enforced rules to a pointer with their evidence here. It also stood at 84,976 bytes against
+  `ProjectInstructionsGuardTest.MAX_INSTRUCTION_BYTES` of 85,000, so any addition would have reddened
+  the build for a reason unrelated to this ticket.
+
+### Trade-offs
+
+- **+** A dead pointer is a build failure on both modules, both source roots, and locally — rather
+  than plain text that reads as authoritative.
+- **+** It costs no build step and no CI job; the check rides the compilation that already happens.
+- **+** The attachment check closes a silent failure this repository has had twice, both times caught
+  by a human reader rather than by anything mechanical.
+- **−** **It says only that a pointer RESOLVES, never that it is the right one.** One retargeted to a
+  member that exists but is not the one the sentence is about stays silent, exactly as before. Nothing
+  here reaches that, and no instrument #262 proposed would have.
+- **− A dead pointer now reddens three jobs whose purpose has nothing to do with javadoc**: the
+  `owasp-dependency-check` CVE scan, the nightly `build-docker` image publish and the
+  `build-standalone` zip all run Maven, so all three fail at their compile step. Same class of failure
+  the change intends, on jobs whose red X says nothing about their subject.
+- **− The exposure to querystore is real but not the one to reason about first.** `api/src` carries
+  member-level pointers into `querystore-api:1.0.0-SNAPSHOT` (a `provided` dependency), all in
+  `QueryStoreChartBuilder`: `QueryStoreService#getPatientChart(String)`,
+  `QueryStoreService#searchByPatient` and its three-argument overload, and
+  `QueryDocument#getMetadata()`. Every one of those members is also CALLED, so a plain upstream rename
+  already broke this module's compile before #262. What is genuinely new is a **signature-only**
+  change — a parameter type widened, an overload added — where the call site still compiles and
+  `{@link QueryStoreService#searchByPatient(String, String, int)}` no longer resolves. Verified by
+  renaming one link's target: `BUILD FAILURE` at `default-compile`.
+- **− Do not expect that break to surface in `build-against-querystore-head` first.** An earlier draft
+  of this decision said so and it is wrong in both directions, against `build.yml`'s own comment two
+  hundred lines above it. The required build resolves the last PUBLISHED snapshot while that job
+  builds HEAD, so when the two diverge the daily job is green and the required build is red, naming an
+  upstream commit that is not the cause; and #181's actually-observed failure mode was a LOCALLY
+  installed querystore, which that job disables its Maven cache specifically in order not to see.
+- **− The JDK set this lint gate is exercised on is not pinned in this repository.** `build.yml`
+  delegates to `openmrs-contrib-gha-workflows` at a moving `@main`, which infers the matrix from
+  `openmrsPlatformVersion`; today that is 11/17/21, and bumping the platform or an edit upstream moves
+  it. Five JDKs were measured to agree, which covers everything currently reachable. Separately,
+  `release.yml` compiles on JDK 8 and has been failing at `invalid target release: 11` since before
+  this change — so "every CI JDK" is a claim about the legs that work.
+- **− A METHOD BODY is unchecked and no configuration reaches it**: a local declaration, a member of
+  a local class, a member of an anonymous class declared inside a method. An anonymous class in a
+  FIELD initialiser IS read — see the Context section, where an earlier version of this bullet had
+  that wrong. The repository carries no `{@link}` in any unread scope today, and nothing detects one
+  arriving; the attachment check is about attachment, not scope.
+- **− The guard's own reach is narrower than the flag's, in three stated ways.** Its POM checks read
+  the repository's POMs, so an argument from a `settings.xml` profile or a command line is invisible in
+  both directions. `everyJavadocReferenceInTheApiModuleResolves` is the one check that rests on no
+  claim about the build, and it reaches the `api` module only — `omod`'s sources are not on an api
+  test's classpath. And most of this repository's Maven invocations pass `-DskipTests` — the Docker
+  image build, the standalone zip, the natives deploy, the CVE scan and the reusable deploy job — so
+  they carry the flag's EFFECT while running nothing that would notice the flag being removed. The
+  required build and the querystore-HEAD job are the two that run the guard.
+- **− `everyJavadocReferenceInTheApiModuleResolves` costs about 2.4s, and what it buys is redundancy
+  rather than reach.** It is some 2.4s of the class's 4.5s, and the class is rank 5 of 176 api test
+  classes. An earlier draft here said it "cannot fire in a Maven build", which is false and was
+  refuted directly: replace the flag with an unrelated argument, plant a dead pointer, and this is one
+  of the checks that redden. What is true is narrower — with the flag IN FORCE a dead pointer kills
+  the build at `compile` or `testCompile` and surefire never runs, and with the flag simply absent the
+  cheap POM checks already redden and already say why. What the 2.4s buys is a failure message that names the pointer, coverage
+  under a non-Maven runner such as an IDE, and a check that does not rest on reading XML — which is
+  what caught neither of the two POM-check defects above but is the only thing that would survive a
+  third. Kept on that basis, with the number on the record for whoever weighs it again.
+- **− A future JDK adding a check to the `reference` group can redden a build on a JDK upgrade.** The
+  standing cost of any lint gate; the group is deliberately the narrow one, and the guard's
+  live-reference half makes such a change legible rather than a mystery failure.

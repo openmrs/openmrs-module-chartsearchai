@@ -12,6 +12,7 @@ package org.openmrs.module.chartsearchai;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -59,10 +60,16 @@ import org.w3c.dom.NodeList;
  * <ul>
  * <li><strong>Do this module's own pointers resolve?</strong>
  * {@link #everyJavadocReferenceInTheApiModuleResolves} asks the real compiler, over the real source
- * roots, and depends on no build configuration at all — so it keeps working if the flag below is
- * lost, relocated into a profile, or defeated by {@code <failOnError>} or a {@code <compilerId>}
- * swap. It is the only check that reads this module's OWN pointers; two others read no POM either,
- * but what they read is shapes this class wrote rather than the corpus.</li>
+ * roots, with the arguments IT chooses rather than the ones the build declares — so it keeps working
+ * if the flag below is lost, relocated into a profile, or defeated by {@code <failOnError>} or a
+ * {@code <compilerId>} swap. It is the only check that reads this module's OWN pointers.
+ *
+ * <p>It is not otherwise independent of the build, and an earlier version of this bullet said it was.
+ * {@link #apiRoots} derives its corpus from the root pom's {@code <modules>}, so this check needs
+ * that file to parse, to declare {@link #EXPECTED_ROOT_ARTIFACT} and to declare a module named
+ * {@link #API_MODULE}: empty the {@code <modules>} and it fails along with the rest. Exactly ONE
+ * check here reads no POM, {@link #theScannerAgreesWithTheCompilerAboutWhatIsAttached}, and what it
+ * reads is shapes this class wrote rather than the corpus.</li>
  * <li><strong>Do the arguments the build declares actually refuse one?</strong>
  * {@link #theArgumentsTheBuildDeclaresRefuseADeadJavadocReference} takes the root pom's MANAGED
  * argument list and asks the real compiler, rather than matching a string. The compiler is the
@@ -81,6 +88,12 @@ import org.w3c.dom.NodeList;
  * it existed for this one already failed.</li>
  * <li><strong>Can it be silently overridden?</strong>
  * {@link #noOtherCompilerConfigurationDropsTheCheck}.</li>
+ * <li><strong>Is the corpus every module the build compiles?</strong>
+ * {@link #theCorpusCoversEveryModuleTheBuildCompiles}. Both walks
+ * and every POM check derive their scope from the root pom's {@code <modules>}, so a module declared
+ * in a {@code <profile>} or keeping its sources off {@code src/main/java} leaves the scope without
+ * anything being deleted. Asked of synthetic POMs, because this repository contains neither shape —
+ * which is why the narrower readings were invisible.</li>
  * <li><strong>Does the compiler even SEE every comment?</strong> {@link #noJavadocBlockIsOrphaned}.
  * A javadoc block that attaches to no declaration is discarded, and doclint says nothing at all about
  * the pointers inside it — so the gate has a hole exactly the size of that block. Three such blocks
@@ -150,9 +163,11 @@ public class JavadocReferenceGuardTest {
 	/**
 	 * Unicode escapes for {@code *} and {@code /}. javac translates these before lexing, so either can
 	 * open or close a comment for the compiler while the scan, reading raw text, sees neither. A file
-	 * containing one is REFUSED rather than mis-read: this repository has eighteen unicode escapes and
-	 * none in this range, so refusing costs nothing while answering could be wrong for every line
-	 * after it.
+	 * containing one is REFUSED rather than mis-read, which the scan does whatever the corpus holds and
+	 * which reddens loudly rather than skipping the file. No tally of the repository's escapes is given
+	 * — an earlier version gave one and it was wrong under every reading of what an escape is. The
+	 * claim that costs nothing is about the RANGE: refusing is cheap for as long as no source carries
+	 * an escape in it, and answering could be wrong for every line after one.
 	 *
 	 * <p>Assembled from pieces rather than written out, because THIS file is inside the corpus the
 	 * scan walks: spelled as literals, the constant makes its own source unscannable and the check
@@ -204,7 +219,7 @@ public class JavadocReferenceGuardTest {
 	 * from the root pom's {@code <modules>}, and this map is not the scope.</strong> It was: the roots
 	 * were a hand-written list nothing cross-checked, so deleting one line here — a plausible "let me
 	 * scope this to api" edit — took a whole reactor module out of {@link #noJavadocBlockIsOrphaned}
-	 * and {@link #noFileOpensWithAJavadocBlockBeforeItsPackageStatement} with all six checks green and
+	 * and {@link #noFileOpensWithAJavadocBlockBeforeItsPackageStatement} with every check here green and
 	 * a planted orphan unreported. The anchor mechanism could not see it, because it protects only the
 	 * roots that are IN the list, and the compiler cannot compensate: an orphaned block is invisible to
 	 * doclint by construction, which is the whole reason the scanner exists. Now a root the reactor has
@@ -258,24 +273,66 @@ public class JavadocReferenceGuardTest {
 	}
 
 	/**
-	 * The modules the root pom declares, read from {@code <modules>} by path. A pom declaring none
-	 * fails loudly: everything derived from this list would then be empty, and every walk and every
-	 * POM check would pass by reading nothing.
+	 * The modules the root pom declares. A pom declaring none fails loudly: everything derived from
+	 * this list would then be empty, and every walk and every POM check would pass by reading nothing.
 	 */
 	private static List<String> reactorModules() throws Exception {
-		List<String> modules = new ArrayList<String>();
-		for (Element module : directChildren(directChild(pomRoot("pom.xml"), "modules"), "module")) {
-			String name = module.getTextContent().trim();
-			if (!name.isEmpty()) {
-				modules.add(name);
-			}
-		}
+		List<String> modules = modulesIn(pomRoot("pom.xml"));
 		if (modules.isEmpty()) {
 			fail("The root pom at " + REPO_ROOT.resolve("pom.xml") + " declares no <modules>, so the source "
 					+ "roots and the POM list this guard derives from it would both be empty and every check "
 					+ "over them would pass by reading nothing.");
 		}
 		return modules;
+	}
+
+	/**
+	 * Every {@code <module>} one POM declares, wherever it sits — the project's own
+	 * {@code <modules>} or a {@code <profile>}'s. Read document-wide for {@link #compilerPlugins}'
+	 * reason, and it was read as a direct child of {@code <project>} alone: a module Maven builds
+	 * under {@code -P} was then outside {@link #reactorSourceRoots}, outside {@link #poms} and so
+	 * outside both corpus walks and every POM check, silently — the same shape as the hand-written
+	 * root list {@link #SOURCE_ROOTS} warns about, arrived at by moving the declaration instead of
+	 * deleting a line. The widening's own failure direction is loud: were some plugin's
+	 * {@code <configuration>} to carry a stray {@code <module>}, {@link #pomRoot} fails on the POM it
+	 * names rather than quietly widening anything.
+	 */
+	private static List<String> modulesIn(Element pom) {
+		List<String> modules = new ArrayList<String>();
+		NodeList declared = pom.getElementsByTagName("module");
+		for (int i = 0; i < declared.getLength(); i++) {
+			String name = declared.item(i).getTextContent().trim();
+			if (!name.isEmpty() && !modules.contains(name)) {
+				modules.add(name);
+			}
+		}
+		return modules;
+	}
+
+	/**
+	 * Every {@code <sourceDirectory>} or {@code <testSourceDirectory>} one POM declares, under any
+	 * {@code <build>} — the project's own or a {@code <profile>}'s. Read as a direct child of a
+	 * {@code <build>} and not document-wide, because a codegen plugin's {@code <configuration>} may
+	 * legitimately carry an element of either name and that is not a module moving its sources.
+	 *
+	 * <p>{@link #reactorSourceRoots} probes {@code src/main/java} and {@code src/test/java} by
+	 * CONVENTION, so a module that moves either contributes no root and is skipped — and skipped
+	 * silently, since that walk only fails where EVERY module yields nothing. Its caller refuses such
+	 * a POM rather than judging it, which is {@link #noOtherCompilerConfigurationDropsTheCheck}'s
+	 * answer to a {@code <compilerId>} it cannot reason about.
+	 */
+	private static List<String> customSourceDirectoriesIn(Element pom) {
+		List<String> declared = new ArrayList<String>();
+		NodeList builds = pom.getElementsByTagName("build");
+		for (int i = 0; i < builds.getLength(); i++) {
+			for (String tag : Arrays.asList("sourceDirectory", "testSourceDirectory")) {
+				Element directory = directChild((Element) builds.item(i), tag);
+				if (directory != null) {
+					declared.add("<" + tag + "> " + directory.getTextContent().trim());
+				}
+			}
+		}
+		return declared;
 	}
 
 	/**
@@ -334,10 +391,11 @@ public class JavadocReferenceGuardTest {
 	 * Every javadoc reference in {@code api/src/main/java} and {@code api/src/test/java} resolves,
 	 * asked of the real compiler over the real files with the classpath this suite is running on.
 	 *
-	 * <p>This is the check that does not take the build's word for anything. In a normal build it is
-	 * redundant — the compiler has already refused a dead reference before any test runs — and that
-	 * redundancy is the point: it is what still fails when the declaration is present but not
-	 * applied, which is every way of losing the gate that reading XML cannot see.
+	 * <p>This is the check that does not take the build's word about the compiler ARGUMENTS — it
+	 * chooses its own. It does take it about the CORPUS: {@link #apiRoots} reads the root pom. In a
+	 * normal build it is redundant — the compiler has already refused a dead reference before any
+	 * test runs — and that redundancy is the point: it is what still fails when the declaration is
+	 * present but not applied, which is every way of losing the gate that reading XML cannot see.
 	 *
 	 * <p>Scoped to the {@code api} module because that is the tree an api-side test can compile: the
 	 * classpath here is this suite's own, so {@code omod}'s sources are out of reach. They are
@@ -479,6 +537,71 @@ public class JavadocReferenceGuardTest {
 		assertNoViolations(violations);
 	}
 
+	/**
+	 * The corpus both walks take is every module MAVEN builds, and every module keeps its sources
+	 * where those walks look. Two ways of losing a module from the scope without deleting anything,
+	 * both silent and both fail-OPEN, which is what {@link #SOURCE_ROOTS} exists to have stopped
+	 * happening by hand.
+	 *
+	 * <p><strong>Declared in a {@code <profile>}.</strong> {@link #modulesIn} reads {@code <module>}
+	 * document-wide, so a module built under {@code -P} is in the scope. It was read as a direct child
+	 * of {@code <project>} alone, which put such a module outside both corpus walks and outside every
+	 * POM check at once. Asked of a synthetic POM and not of this repository's, which carries no
+	 * {@code <profile>} at all — so there is nothing here for a direct-child read to get wrong, and
+	 * that is exactly why the narrower version was invisible.
+	 *
+	 * <p><strong>Moved off the convention.</strong> {@link #reactorSourceRoots} probes
+	 * {@code src/main/java} and {@code src/test/java}, so a module declaring its own
+	 * {@code <sourceDirectory>} contributes no root and is skipped — and that walk fails only where
+	 * EVERY module yields nothing, so one such module is silence. REFUSED rather than judged, the
+	 * same answer {@link #noOtherCompilerConfigurationDropsTheCheck} gives a {@code <compilerId>} it
+	 * cannot reason about: whoever moves a source directory teaches these walks about it in the same
+	 * commit.
+	 */
+	@Test
+	public void theCorpusCoversEveryModuleTheBuildCompiles() throws Exception {
+		List<String> violations = new ArrayList<String>();
+		for (String pom : poms()) {
+			for (String declared : customSourceDirectoriesIn(pomRoot(pom))) {
+				violations.add(pom + " declares " + declared + ", and the source roots this guard walks "
+						+ "are derived by CONVENTION — src/main/java and src/test/java of each declared "
+						+ "module. That module's sources are outside noJavadocBlockIsOrphaned and "
+						+ "noFileOpensWithAJavadocBlockBeforeItsPackageStatement, silently. Refused rather "
+						+ "than judged: teach reactorSourceRoots about the directory in the same commit");
+			}
+		}
+		String inAProfile = "moduleBuiltUnderAProfile";
+		List<String> modules = modulesIn(parseXml("<project><modules><module>api</module></modules>"
+				+ "<profiles><profile><id>extra</id><modules><module>" + inAProfile
+				+ "</module></modules></profile></profiles></project>"));
+		if (!modules.contains(inAProfile)) {
+			violations.add("a <module> declared inside a <profile> is not in the reactor list this guard "
+					+ "derives (it read " + modules + "). Maven builds it under -P, so its sources and its "
+					+ "POM would be outside both corpus walks and every POM check here, with nothing to "
+					+ "notice: this repository has no <profile>, so only this synthetic POM can say so");
+		}
+		String moved = "src/generated/java";
+		List<String> movedAway = customSourceDirectoriesIn(parseXml("<project><build><sourceDirectory>"
+				+ moved + "</sourceDirectory></build><profiles><profile><build><testSourceDirectory>"
+				+ moved + "</testSourceDirectory></build></profile></profiles></project>"));
+		if (movedAway.size() != 2) {
+			violations.add("a <sourceDirectory> under <build> and a <testSourceDirectory> under a "
+					+ "<profile>'s <build> are not both reported as moving a module off the convention "
+					+ "reactorSourceRoots probes (it read " + movedAway + "). Such a module contributes no "
+					+ "source root and is skipped in silence, which is what the refusal exists to stop");
+		}
+		List<String> inPluginConfig = customSourceDirectoriesIn(parseXml("<project><build><plugins>"
+				+ "<plugin><configuration><sourceDirectory>" + moved
+				+ "</sourceDirectory></configuration></plugin></plugins></build></project>"));
+		if (!inPluginConfig.isEmpty()) {
+			violations.add("a <sourceDirectory> inside a plugin's own <configuration> is reported as a "
+					+ "module moving its sources (it read " + inPluginConfig + "), which it is not — a "
+					+ "codegen plugin may legitimately take a parameter of that name. Read the element as a "
+					+ "direct child of a <build> and never document-wide, or this refusal reddens a clean "
+					+ "build");
+		}
+		assertNoViolations(violations);
+	}
 
 	/**
 	 * Every javadoc block attaches to a declaration, so that doclint reads the pointers inside it. The
@@ -501,8 +624,8 @@ public class JavadocReferenceGuardTest {
 	 *
 	 * <p><strong>No count of them is stated, and the first version of this stated three.</strong> The
 	 * last two arrived a review round later, both of them measured holes of exactly the kind above and
-	 * neither reported by any of the six checks; the enumeration is the list and {@link #SHAPES} is
-	 * what holds ground truth for it. So add a row and a bullet rather than adjusting a number.
+	 * neither reported by any check here; the enumeration is the list and {@link #SHAPES} is what
+	 * holds ground truth for it. So add a row and a bullet rather than adjusting a number.
 	 *
 	 * <p>The FIRST shape is not hypothetical. Three blocks were in it when the check went in, and each
 	 * arose the same way — a member inserted above the comment written for the one below it:
@@ -706,7 +829,9 @@ public class JavadocReferenceGuardTest {
 	 * which {@link #annotationResidue} refuses rather than guesses, and an annotation line carrying a
 	 * trailing comment, whose residue is that comment. Both fail in the safe direction — a block
 	 * stranded there is missed rather than a clean build reddened — and both are the same
-	 * one-content-line-per-source-line limit {@link #scan} states for multi-line annotations.
+	 * one-content-line-per-source-line limit {@link #scan} states for multi-line annotations. The
+	 * first is DECLARED rather than left unwritten, as {@code AnnotationArgumentListLeftOpenThenBlock}
+	 * ({@link Attachment#UNATTACHED_AND_UNREACHED}), so turning the refusal into a guess reddens it.
 	 */
 	private static boolean isAnnotationAlone(String text) {
 		return text.startsWith("@") && annotationResidue(text).isEmpty();
@@ -751,6 +876,18 @@ public class JavadocReferenceGuardTest {
 	 * The index just past the {@code )} closing the argument list that opens at {@code open}, or
 	 * {@code -1} where the line ends inside it. Nesting is counted and string and character literals
 	 * are skipped whole, which is the only reason this is not {@code indexOf(')')}.
+	 *
+	 * <p><strong>One row of {@link #SHAPES} per property claimed here, because every one of them was
+	 * deletable with every check here green.</strong> No shipped annotation argument list carries a
+	 * nested paren or a {@code )} inside a literal, so on this corpus the balanced walk and
+	 * {@code indexOf(')')} answer alike — and under the cheaper version the stranded-block arm
+	 * switches back off for {@code @ParameterizedTest(name = "run(x)")} or {@code @Qualifier("a)b")},
+	 * with nothing to notice, which is the defect {@link #annotationResidue} exists to fix. Nesting is
+	 * {@code AnnotationArgumentNestsAParen}; the two separately deletable halves of the literal skip
+	 * are {@code AnnotationArgumentQuotesACloseParen} and {@code AnnotationArgumentIsACharCloseParen};
+	 * and the {@code -1}, which the caller turns into the conservative answer, is
+	 * {@code AnnotationArgumentListLeftOpenThenBlock} — the one of these rows the arm must NOT fire
+	 * on. Mutate a clause and read which of them reddens.
 	 */
 	private static int endOfArgumentList(String text, int open) {
 		int depth = 0;
@@ -1266,6 +1403,32 @@ public class JavadocReferenceGuardTest {
 		shape(shapes, "AnnotatedDeclarationWithATrailingNoteThenBlock", Attachment.ATTACHED,
 				"\t@SuppressWarnings(\"unused\") private int a = 1; // note\n\t/** " + dead
 						+ ". */\n\tprivate int b = 2;\n\tint r() { return a + b; }\n");
+		// One row per property endOfArgumentList claims, because every one of them was deletable with
+		// the whole suite green: no shipped annotation argument list carries a nested paren or a `)`
+		// inside a literal, so the balanced walk was indistinguishable from indexOf(')'). The first
+		// three are stranded blocks the arm has to FIRE on and the walk is the only reason it can.
+		// Nesting: an annotation argument that groups a constant expression.
+		shape(shapes, "AnnotationArgumentNestsAParen", Attachment.UNATTACHED,
+				"\t@interface Sized {\n\t\tint value();\n\t}\n\t@Sized((1 + 2))\n\t/** " + dead
+						+ ". */\n\tprivate int a = 1;\n\tint r() { return a; }\n");
+		// Literal skipping, whose two halves are separately deletable: a `)` inside a STRING literal,
+		// and one inside a CHAR literal. Each is the whole reason the walk skips literals whole, and
+		// under indexOf(')') both close the list early and leave a residue that reads as a declaration.
+		shape(shapes, "AnnotationArgumentQuotesACloseParen", Attachment.UNATTACHED,
+				"\t@SuppressWarnings(\"unused)\")\n\t/** " + dead
+						+ ". */\n\tprivate int a = 1;\n\tint r() { return a; }\n");
+		shape(shapes, "AnnotationArgumentIsACharCloseParen", Attachment.UNATTACHED,
+				"\t@interface Sep {\n\t\tchar value();\n\t}\n\t@Sep(')')\n\t/** " + dead
+						+ ". */\n\tprivate int a = 1;\n\tint r() { return a; }\n");
+		// And the refusal, the one row of this group the arm must NOT fire on: an argument list
+		// left OPEN at the end of the line, where annotationResidue hands back the whole line rather
+		// than guessing. Declared UNATTACHED_AND_UNREACHED — javac reads nothing inside the list and
+		// the scanner is documented not to reach it. Turn the refusal into a guess (annotationResidue
+		// returning "" for it, or endOfArgumentList answering the end of the line instead of -1) and
+		// the arm reports a block on legal code, so this row reddens.
+		shape(shapes, "AnnotationArgumentListLeftOpenThenBlock", Attachment.UNATTACHED_AND_UNREACHED,
+				"\t@SuppressWarnings({\n\t/** " + dead
+						+ ". */\n\t\t\t\"unused\" })\n\tprivate int a = 1;\n\tint r() { return a; }\n");
 		// The counterpart isImportDeclaration's whitespace clause exists for: a declaration whose
 		// identifier begins with the same six characters. An enum constant is the one place such a
 		// name can START a content line, and javac attaches the block above it — so a prefix test
@@ -1273,6 +1436,13 @@ public class JavadocReferenceGuardTest {
 		shape(shapes, "EnumConstantNamedLikeAnImport", Attachment.ATTACHED,
 				"\tenum E {\n\t\t/** " + dead
 						+ ". */\n\t\timportantValue,\n\t\tOTHER;\n\t}\n\tE r() { return E.OTHER; }\n");
+		// The clause that keeps the header rule off an EMPTY block comment, which is not a javadoc
+		// open at all and which javac finds no doc comment in. Unpinned before this row — no file in
+		// the repository opens with one — so dropping it reddened a clean build and told the author to
+		// "Open it with /* instead" about a file already opened with one.
+		wholeFile(shapes, "EmptyBlockCommentBeforePackage", Attachment.ATTACHED,
+				"/**/\npackage shapes;\n\npublic class EmptyBlockCommentBeforePackage {\n\t/** " + dead
+						+ ". */\n\tprivate int a = 1;\n\tint r() { return a; }\n}\n");
 		// The two rows that pin the header rule rather than the orphan scanner, which is why they carry
 		// a FULLY-QUALIFIED dead pointer: neither block has an enclosing class for `#member` to resolve
 		// against. A block before the `package` statement is read by doclint in both, and the orphan
@@ -1580,6 +1750,20 @@ public class JavadocReferenceGuardTest {
 			}
 		}
 		return root;
+	}
+
+	/**
+	 * One XML document parsed from a string, for
+	 * {@link #theCorpusCoversEveryModuleTheBuildCompiles} to ask
+	 * {@link #modulesIn} about a shape this repository does not contain. Namespace-unaware, as
+	 * {@link #pomRoot} is, so the two read the same documents the same way.
+	 */
+	private static Element parseXml(String xml) throws Exception {
+		DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+		factory.setNamespaceAware(false);
+		return factory.newDocumentBuilder()
+				.parse(new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)))
+				.getDocumentElement();
 	}
 
 	/**

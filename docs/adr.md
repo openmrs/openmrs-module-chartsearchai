@@ -5145,12 +5145,12 @@ rescues a block from any of them. Only the first shape had instances here.
 
 **No count of the shapes is published, and this paragraph published "three" for one round.** The
 last two came out of round 1 of the PR's own review, on `a6416847`, and both were holes of exactly
-the kind this check exists to close: unread by doclint, unreported by all six checks, and silent. The
-initialiser one is adjacent to every `static` block in this repository: each is immediately preceded
-by the field it fills, and most of those fields carry a javadoc block, so an initialiser inserted
-above one is the same "member inserted above the comment written for the one below it" defect and
-would have taken that javadoc out of the gate. The scanner's two new arms are pinned by `SHAPES`
-rows of their own — `BeforeStaticInitialiser`, `BeforeInstanceInitialiser`,
+the kind this check exists to close: unread by doclint, unreported by every check in the class, and
+silent. The initialiser one is adjacent to every `static` block in this repository: each is
+immediately preceded by the field it fills, and most of those fields carry a javadoc block, so an
+initialiser inserted above one is the same "member inserted above the comment written for the one
+below it" defect and would have taken that javadoc out of the gate. The scanner's two new arms are
+pinned by `SHAPES` rows of their own — `BeforeStaticInitialiser`, `BeforeInstanceInitialiser`,
 `BeforeBareStaticThenBrace`, `BeforeImport` (a `wholeFile` row: the class-body wrapper cannot put
 anything above an import) and the negative `BareStaticThenDeclaration`, which is what stops the
 `static` arm reading a declaration split over two lines. Mutate an arm and read which rows redden
@@ -5158,7 +5158,7 @@ rather than trusting this list.
 
 **The same round found two of `isAnnotationAlone`'s three character exclusions unpinned**, and both
 prevent a FALSE POSITIVE — the rule telling an author to move documentation javac has already read,
-i.e. a red build on legal code. Each could be deleted with all six checks green, and they got a row
+i.e. a red build on legal code. Each could be deleted with the whole suite green, and they got a row
 apiece: `AnnotatedTypeOpenThenBlock` for the body brace (an annotated type whose brace is on the
 annotation's own line, whose first member's javadoc javac reads) and
 `AnnotatedEnumConstantThenBlock` for the comma (an annotated enum constant — the same line shape as
@@ -5260,8 +5260,9 @@ the gate was open, which is the only property they share:
   `@ExceptionHandler({ ContextAuthenticationException.class, APIAuthenticationException.class })` on
   the module's single controller, `@ValueSource(booleans = { false, true })` and every
   `@ParameterizedTest(name = ...)` in the suite — so a block stranded after one of those was invisible
-  to doclint AND unreported by all six checks, in exactly the "member inserted above the comment
-  written for the one below it" shape this change documents as the only one with real instances here.
+  to doclint AND unreported by every check in `JavadocReferenceGuardTest`, in exactly the "member
+  inserted above the comment written for the one below it" shape this change documents as the only
+  one with real instances here.
   Measured by planting one after the controller's `@ExceptionHandler`: `mvn -o clean install
   -DskipTests` reported BUILD SUCCESS and every check passed. The rule now asks what is LEFT of the
   line once the annotations and their balanced argument lists are consumed. Testing the LAST character
@@ -5281,7 +5282,10 @@ the gate was open, which is the only property they share:
   premise was false there, and the remedy its message prints (`/*`) silences a pointer doclint was
   resolving, which is #262's own defect reinstated on the guard's instruction. Verified by applying it.
   Every shapes row now declares that rule's answer for its file as well, because this repository
-  carries no `package-info.java` and the corpus walk can therefore say nothing about it.
+  carries no `package-info.java` and the corpus walk can therefore say nothing about it. A later
+  round found the rule's other clause unpinned for the same reason — no file here opens with the
+  EMPTY block comment `/**/`, which javac finds no doc comment in, so dropping the clause reddened a
+  clean build and printed a remedy (`/*`) the file had already followed. It is a row now too.
 - **An argument list was matched as a string prefix.** Two consequences, opposite in sign.
   `-Xdoclint:all,-missing,-html,-syntax` enables the reference group perfectly well and was reported
   as a removal, so a maintainer WIDENING the check would have been told they had removed it. And
@@ -5290,6 +5294,28 @@ the gate was open, which is the only property they share:
   It now reddens the two checks that put a declared argument list to the compiler.
   **The real compiler is the oracle now**, at every declared block, over a probe whose dead pointer
   sits on a `private` member.
+- **`endOfArgumentList`, the balanced walk that annotation arm was rewritten as, was itself unpinned
+  by any shape.** Nesting, the literal skip and the `-1` refusal of a list left open on the line could
+  each be deleted — or the whole method replaced by the `indexOf(')')` its own javadoc says it is not
+  — with every check green, because no annotation argument list in this repository carries a nested
+  paren or a `)` inside a literal. So the fix in the bullet above was reinstatable in silence for
+  `@ParameterizedTest(name = "run(x)")` or `@Qualifier("a)b")`. One row per claimed property now, and
+  the refusal is DECLARED as `UNATTACHED_AND_UNREACHED` — a missed orphan chosen deliberately over a
+  red build on legal code — so turning it into a guess reddens a row as well.
+- **The reactor scope was read as a direct child of `<project>` alone.** A module Maven builds from a
+  `<profile>` was outside both corpus walks and outside every POM check without a line being deleted:
+  the same fail-open as the hand-written lists above, reached by MOVING the declaration rather than
+  removing it, and `compilerPlugins` already read document-wide for precisely this reason while the
+  module list did not. `<module>` is read document-wide now, and the widening's own failure direction
+  is loud — a stray `<module>` in some plugin's `<configuration>` fails on the POM it names. Narrower
+  and adjacent: `reactorSourceRoots` probes `src/main/java` and `src/test/java` by CONVENTION, so a
+  module declaring its own `<sourceDirectory>` contributes no root while that walk fails only where
+  EVERY module yields nothing — such a POM is REFUSED now rather than judged, the same answer a
+  `<compilerId>` gets. Both are asked of synthetic POMs, because this repository carries neither
+  shape, which is exactly why both readings were invisible. What is deliberately still not read is
+  `llama-server-natives/pom.xml`: it is a `<parent>` child that `<modules>` does not declare, so it
+  is outside the reactor `mvn install` drives and it carries no java source, and compiler
+  configuration there gates nothing.
 
 The same rule decides what counts as a javadoc error over the module's own sources: **a DIFFERENCE,
 never a message.** Where the flagged compile reports errors the sources are compiled again without
@@ -5376,22 +5402,30 @@ Japanese or Chinese the match failed on a perfectly clean tree.
   arriving; the attachment check is about attachment, not scope.
 - **− The guard's own reach is narrower than the flag's, in three stated ways.** Its POM checks read
   the repository's POMs, so an argument from a `settings.xml` profile or a command line is invisible in
-  both directions. `everyJavadocReferenceInTheApiModuleResolves` is the one check that rests on no
-  claim about the build, and it reaches the `api` module only — `omod`'s sources are not on an api
+  both directions. `everyJavadocReferenceInTheApiModuleResolves` takes no compiler ARGUMENT from the
+  build — it chooses its own, which is what makes it survive the flag being lost, relocated or
+  defeated — but it is not otherwise independent of the build, and an earlier version of this bullet
+  said it was: `apiRoots` derives its corpus from the root pom's `<modules>`, so emptying that element
+  reddens this check too — empty it and read which of the checks stay green. Exactly one reads no POM,
+  `theScannerAgreesWithTheCompilerAboutWhatIsAttached`, and what it reads is shapes the class wrote
+  rather than the corpus. And it reaches the `api` module only — `omod`'s sources are not on an api
   test's classpath. And most of this repository's Maven invocations pass `-DskipTests` — the Docker
   image build, the standalone zip, the natives deploy, the CVE scan and the reusable deploy job — so
   they carry the flag's EFFECT while running nothing that would notice the flag being removed. The
   required build and the querystore-HEAD job are the two that run the guard.
 - **− `everyJavadocReferenceInTheApiModuleResolves` costs about 2.4s, and what it buys is redundancy
-  rather than reach.** It is some 2.4s of the class's 4.5s, and the class is rank 5 of 176 api test
-  classes. An earlier draft here said it "cannot fire in a Maven build", which is false and was
-  refuted directly: replace the flag with an unrelated argument, plant a dead pointer, and this is one
-  of the checks that redden. What is true is narrower — with the flag IN FORCE a dead pointer kills
-  the build at `compile` or `testCompile` and surefire never runs, and with the flag simply absent the
-  cheap POM checks already redden and already say why. What the 2.4s buys is a failure message that names the pointer, coverage
-  under a non-Maven runner such as an IDE, and a check that does not rest on reading XML — which is
-  what caught neither of the two POM-check defects above but is the only thing that would survive a
-  third. Kept on that basis, with the number on the record for whoever weighs it again.
+  rather than reach.** It is some 2.4s of the class's 4.5s as a wall clock on one developer machine;
+  no share of the api suite is given, because the earlier one carried neither tree nor command and a
+  later round would only have to re-measure it. An earlier draft here said it "cannot fire in a
+  Maven build", which is false and was refuted directly: replace the flag with an unrelated
+  argument, plant a dead pointer, and this is one of the checks that redden. What is true is
+  narrower — with the flag IN FORCE a dead pointer kills the build at `compile` or `testCompile` and
+  surefire never runs, and with the flag simply absent the cheap POM checks already redden and
+  already say why. What the 2.4s buys is a failure message that names the pointer, coverage under a
+  non-Maven runner such as an IDE, and a check whose ORACLE is the compiler rather than XML — it
+  still reads the root pom for its corpus, per the reach bullet above — which is what caught neither
+  of the two POM-check defects above but is the only thing that would survive a third. Kept on that
+  basis, with the number on the record for whoever weighs it again.
 - **− A future JDK adding a check to the `reference` group can redden a build on a JDK upgrade.** The
   standing cost of any lint gate; the group is deliberately the narrow one, and the guard's
   live-reference half makes such a change legible rather than a mystery failure.

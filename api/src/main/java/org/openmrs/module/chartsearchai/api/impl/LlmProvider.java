@@ -245,7 +245,7 @@ public class LlmProvider {
 			// they exist for ("Does she have any drug interactions I should know about?") is not one
 			// of the shapes listed. The scope reaches it in practice — the reproduction IS this
 			// paragraph's withholding branch applied to that question. Adding the screening shape
-			// here was RUN as an arm of ADR Decision 69's A/B and refuted: it produced the cleanest
+			// here was RUN as an arm of ADR Decision 70's A/B and refuted: it produced the cleanest
 			// two-order leads of the three arms and dropped a finding from the eight-order cell. Do not re-propose it.
 			+ "The same rules apply to safety and suitability questions (\"is it safe to give "
 			+ "X\", \"can we start X\"): when no record addresses the drug or intervention asked "

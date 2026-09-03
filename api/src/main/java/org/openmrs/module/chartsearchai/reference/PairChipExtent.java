@@ -41,16 +41,37 @@ package org.openmrs.module.chartsearchai.reference;
  * question, "can I give this patient X?". Until #356 that shape published no statement at all, so a
  * completed negative screen and a question nobody screened were one value on the wire.
  *
- * <p><b>Which arm owns the field is decided by how many reference entries the question RESOLVED,
- * not by how many drugs a clinician would say it named</b>, and the two come apart on the shipped
- * knowledge base. A name that resolves to SEVERAL reference entries — a substance filed under more
- * than one row, {@code Dexamethasone} beside
- * {@code Dexamethasone (ophthalmic)}, or an alias family sharing an {@code rxnorm_name} — opens the
- * question-pair arm, which then owns this field and states its own pair count. The drug-in-play arm
- * still raises its chips, and they are not in that number. So a response CAN carry an above-floor
- * interaction chip beside {@code found: 0}: the zero is honest about the check that stated it, and
- * a client must not read it as a count of the chips beside it — which is the same warning
- * {@link #getReported()} carries for the other direction.
+ * <p><b>Which arm owns the field is decided by how many reference entries the question RESOLVED —
+ * and, since issue #336's verification round, by whether that arm ceded every pair it related to
+ * the drug-in-play arm — not by how many drugs a clinician would say it named</b>, and the resolved
+ * count and the clinician's reading come apart on the shipped knowledge base. A name that resolves
+ * to SEVERAL reference entries — a substance filed under more than one row, {@code Dexamethasone}
+ * beside {@code Dexamethasone (ophthalmic)}, or an alias family sharing an {@code rxnorm_name} —
+ * opens the question-pair arm, which then owns this field and states its own pair count. The
+ * drug-in-play arm still raises its chips, and they are not in that number. So a response CAN carry
+ * an above-floor interaction chip beside {@code found: 0}: the zero is honest about the check that
+ * stated it, and a client must not read it as a count of the chips beside it — which is the same
+ * warning {@link #getReported()} carries for the other direction.
+ *
+ * <p><b>The QUESTION-PAIR arm, having CEDED every pair it related, states nothing rather than a
+ * zero</b> (issue #336's verification round). It leaves a pair to the drug-in-play arm wherever one
+ * of the ABOVE-FLOOR rules joining it names one of the patient's own orders
+ * ({@code DrugSafetyValidator.coveredByActiveOrderArm}), because a chip about her own medication is
+ * the stronger statement. Where that took EVERY pair it related, the arm has no bounded list left
+ * to describe, and a zero there would say the reference data related none of the pairs it
+ * enumerated. Measured on the 3.7.1 standalone at {@code main} @ {@code 77c0f9a2}, asking
+ * {@code "Can I give her warfarin and ibuprofen?"} of the eight-anti-inflammatory patient of issue
+ * #336's own report — one of whose orders is the ibuprofen the question names: the response
+ * published {@code found: 0, reported: 0} beside fifteen interaction chips, two of them Major, so
+ * a client rendering the field as {@code README} tells it to showed "0 of 0 interaction pairs"
+ * above a Major finding. It now states nothing, which is what lets
+ * {@code DrugSafetyValidator.validate}'s issue #356 fallback hand the field to the arm that did
+ * report those pairs. Scoped to a pass that ceded every pair: where some survive, the arm keeps
+ * the field and describes the list it kept — which {@code maxPairChips} can still truncate, exactly
+ * as it could before — and the ceded pairs are reported beside it as chips rather than withheld.
+ * The SCREENING arm has a cede of its own — it skips a pair the drug-in-play arm already
+ * chipped — and still states a zero there, which ADR Decision 69 records as reproduced and
+ * deliberately not fixed by this rule.
  *
  * <p>What every one of them counts is the same thing: above-floor interaction RULES relating one
  * drug to another. The drug-in-play arm's unrated class relationships — a shared ATC subgroup, a
@@ -89,7 +110,11 @@ package org.openmrs.module.chartsearchai.reference;
  *
  * <p><b>Zero is a measurement and absence is not.</b> An extent stating {@code found == 0} says an
  * arm ran and the reference data related none of the pairs it enumerated — a complete screen,
- * positively assertable, which is half of what this type exists for. No extent at all
+ * positively assertable, which is half of what this type exists for. <b>That is what it is MEANT
+ * to say, and there are arrangements where it is false</b> — do not count them here either: an arm
+ * can relate pairs and cede every one of them (ADR Decision 69, the screening arm), and a chart
+ * whose only medication the reference data cannot resolve was never a population to screen (ADR
+ * Decision 65). Those decisions carry the cases. No extent at all
  * ({@code null} on the answer, {@code null} on the wire) says the producer stated no measurement.
  * This javadoc and {@code README.md}'s client-facing paragraph carry that list — the second because
  * it is the only one a frontend author reads — and everything else points here rather than

@@ -71,22 +71,21 @@ public class ProjectInstructionsGuardTest {
 	 * premise/conclusion history — every sentence of it already carried verbatim by ADR Decision 37,
 	 * which those bullets point at.
 	 *
-	 * <p><b>The raise still holds, and its two figures are re-measured rather than differenced.</b>
-	 * Both move with the file and both had already gone stale once: this javadoc first quoted the
-	 * merge at {@code fce8dc61} (85,325 bytes, and a 704-byte rule bullet), and the review rounds on
-	 * this same PR moved both — the file by their own additions, the bullet by the content rule and
-	 * the test pointer round 1 put in it. So the figures are stated with the commands that produce
-	 * them rather than as arithmetic on each other. As of the round-2 hardening commit on this
-	 * branch, {@code wc -c CLAUDE.md} reads <b>85,702</b> bytes, leaving <b>298</b> under this
-	 * tripwire; and the #348 rule bullet — measured as
-	 * {@code grep 'STRENGTH and REFERENT' CLAUDE.md | wc -c}, which names the line by its own words
-	 * rather than by a line number that moves — is <b>1,081</b> bytes.
+	 * <p><b>The raise still holds, and its two figures are MEASURED at a named head, never
+	 * differenced from a previous quotation.</b> Both move with the file, and inside this one PR both
+	 * have now moved three times — the merge at {@code fce8dc61}, the round-2 hardening commit, and
+	 * the merge of {@code origin/main} @ {@code 6582f2c2}, each of which falsified the figure the
+	 * commit before it recorded. So what is written here is the COMMAND and the head, not arithmetic:
+	 * {@code wc -c CLAUDE.md} for the file, and {@code grep 'STRENGTH and REFERENT' CLAUDE.md | wc -c}
+	 * for the #348 rule bullet, which names the line by its own words rather than by a line number
+	 * that moves. At the {@code 6582f2c2} merge those read <b>85,717</b> and <b>1,081</b> bytes,
+	 * leaving <b>283</b> under this tripwire. Re-run both before quoting either number again; a
+	 * figure here going stale is expected rather than a defect, which is why the commands are the
+	 * part that matters.
 	 *
 	 * <p>The CONCLUSION is what does not move: the bullet is larger than the headroom, so closing
 	 * the gap under the old 85,000 tripwire means deleting DIRECTIVES, and the smallest single thing
-	 * that would fit is the rule this raise exists for. Re-run those two commands before quoting
-	 * either number again. The 85,325 was not wrong when it was written — it was measured at
-	 * {@code 86a5a4c0}, and the next commit on the branch falsified it.
+	 * that would fit is the rule this raise exists for.
 	 */
 	private static final int MAX_INSTRUCTION_BYTES = 86_000;
 

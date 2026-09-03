@@ -119,15 +119,16 @@ import org.w3c.dom.NodeList;
  * NOT {@code html}/{@code syntax}.
  *
  * <p>Its blind spots, stated because none of the three is small. The POM checks read the
- * repository's own POMs, so an argument added from a {@code settings.xml} profile or a command line
- * is invisible to them, in both directions. A METHOD BODY is unreadable to doclint at any
- * configuration and so to every check here — a local declaration, a member of a local class, a member
- * of an anonymous class declared inside a method; the repository carries no {@code @link} in any of
- * them today and nothing detects one arriving, since {@link #noJavadocBlockIsOrphaned} is about
- * attachment rather than scope. An anonymous class in a FIELD initialiser is read, which is what an
- * earlier version of this paragraph got wrong. And nothing here, nor anything #262 proposed, can tell a pointer
- * that resolves from the pointer the sentence meant: one retargeted to a member that exists but is
- * the wrong one stays silent.
+ * repository's own POMs, so an argument added from a {@code settings.xml} profile or a command
+ * line is invisible to them, in both directions — a {@code -Dmaven.compiler.failOnError=false}
+ * included, whose in-POM form IS read ({@link #compilerUserPropertyOverrides}). A METHOD BODY is
+ * unreadable to doclint at any configuration and so to every check here — a local declaration, a
+ * member of a local class, a member of an anonymous class declared inside a method; the repository
+ * carries no {@code @link} in any of them today and nothing detects one arriving, since
+ * {@link #noJavadocBlockIsOrphaned} is about attachment rather than scope. An anonymous class in a
+ * FIELD initialiser is read, which is what an earlier version of this paragraph got wrong. And nothing
+ * here, nor anything #262 proposed, can tell a pointer that resolves from the pointer the sentence
+ * meant: one retargeted to a member that exists but is the wrong one stays silent.
  */
 public class JavadocReferenceGuardTest {
 
@@ -162,6 +163,37 @@ public class JavadocReferenceGuardTest {
 	private static final String NON_REACTOR_POM_DIRECTORY = "llama-server-natives";
 
 	private static final String COMPILER_PLUGIN = "maven-compiler-plugin";
+
+	/**
+	 * The user property maven-compiler-plugin binds its {@code failOnError} parameter to, which is a
+	 * second position the parameter can be set from and one that needs no plugin element at all.
+	 * Read because three words in the root pom's own {@code <properties>} dropped the gate
+	 * ENTIRELY while every check here stayed green: measured on this branch, JDK 21, with a dead
+	 * pointer planted in {@code omod/src/main/java} — {@code mvn -o clean install} printed
+	 * {@code [ERROR] ... reference not found} and then reported BUILD SUCCESS, exit 0, and
+	 * {@code JavadocReferenceGuardTest} ran 7 checks with 0 failures. That is #262's headline defect
+	 * reinstated, identical in effect to the {@code <failOnError>false</failOnError>} element
+	 * {@link #disabledFailOnErrorAt} already refuses and reachable by an edit that touches no plugin
+	 * block. NOT one of the blind spots this class discloses: those are about arguments arriving from
+	 * OUTSIDE the repository's POMs, and this arrives from inside one.
+	 *
+	 * <p>Taken from the plugin's own descriptor rather than guessed from the parameter name: the
+	 * version this build resolves, 3.13.0, declares the {@code failOnError} parameter as a boolean
+	 * defaulting to true and expressed by this property, on BOTH the {@code compile} and
+	 * {@code testCompile} mojos, and 3.15.0 declares it identically. No plugin VERSION is read
+	 * anywhere here, and none needs to be — a POM that pins a version whose descriptor binds neither
+	 * property would make this reader silent rather than wrong.
+	 */
+	private static final String FAIL_ON_ERROR_PROPERTY = "maven.compiler.failOnError";
+
+	/**
+	 * The user property the same plugin binds {@code compilerId} to, declared on both mojos beside
+	 * the one above. The weaker half of the pair — set to a backend with no plexus-compiler
+	 * implementation on the classpath the build fails loudly rather than silently — and reported
+	 * anyway, because "it fails loudly today" is a claim about the plugin's dependencies and not
+	 * about this gate.
+	 */
+	private static final String COMPILER_ID_PROPERTY = "maven.compiler.compilerId";
 
 	/**
 	 * The artifactId the root POM must declare. The POM side of this guard has no anchor of the kind
@@ -301,30 +333,34 @@ public class JavadocReferenceGuardTest {
 
 	/**
 	 * Every {@code <module>} one POM declares, wherever the declaring {@code <modules>} sits — the
-	 * project's own or a {@code <profile>}'s. The {@code <modules>} element is found document-wide
-	 * and the {@code <module>} is then read as a DIRECT CHILD of it, which is exactly the reach the
-	 * profile case needs and no more: it was read as a direct child of {@code <project>} alone, so a
-	 * module Maven builds under {@code -P} was outside {@link #reactorSourceRoots}, outside
-	 * {@link #poms} and so outside both corpus walks and every POM check, silently — the same shape
-	 * as the hand-written root list {@link #SOURCE_ROOTS} warns about, arrived at by moving the
-	 * declaration instead of deleting a line.
+	 * project's own or a {@code <profile>}'s. The wrapper comes from
+	 * {@link #declaredUnderProjectOrProfile} and the {@code <module>} is then read as a DIRECT CHILD
+	 * of it, which is exactly the reach the profile case needs and no more: it was read as a direct
+	 * child of {@code <project>} alone, so a module Maven builds under {@code -P} was outside
+	 * {@link #reactorSourceRoots}, outside {@link #poms} and so outside both corpus walks and every
+	 * POM check, silently — the same shape as the hand-written root list {@link #SOURCE_ROOTS} warns
+	 * about, arrived at by moving the declaration instead of deleting a line.
 	 *
-	 * <p>Not document-wide, for {@link #customSourceDirectoriesIn}' reason and with the same
-	 * consequence: {@code <module>} is a real plugin parameter — moditect's {@code add-module-info}
-	 * takes {@code <configuration><module><moduleInfoSource>} — so a document-wide read turns a legal
-	 * POM into a red build with a message naming a POM that was never a module, from two checks at
-	 * once and with no hint that a plugin parameter caused it. Keying on the PARENT puts that shape
-	 * out of reach, because the parameter is named {@code <module>} and not {@code <modules>} — which
-	 * is a claim about the shape reported, not about every plugin there could be: a plugin taking a
-	 * {@code <modules>} parameter would still be read, and the answer for it is another row here
-	 * rather than a wider rule. Both directions are pinned by
-	 * {@link #theCorpusCoversEveryModuleTheBuildCompiles}.
+	 * <p>NEITHER element is read document-wide, for {@link #customSourceDirectoriesIn}' reason and
+	 * with the same consequence: a document-wide read of either turns a legal POM into a red build
+	 * with a message naming a "module" that was never one, from two checks at once and with no hint
+	 * that a plugin parameter caused it. {@code <module>} is a real plugin parameter — moditect's
+	 * {@code add-module-info} takes {@code <configuration><module><moduleInfoSource>} — and keying on
+	 * THAT element's parent alone was half the fix, because the WRAPPER name is reported to be a
+	 * parameter of the same goal: {@code <configuration><modules>}, a list of those configurations for
+	 * artifacts other than the project's own. That much is a report and not a reading of the plugin's
+	 * descriptor, which this guard has not opened; what was MEASURED is the consequence — a
+	 * never-activated {@code <profile>} carrying that plural form reddened
+	 * {@link #theCorpusCoversEveryModuleTheBuildCompiles} and
+	 * {@link #noOtherCompilerConfigurationDropsTheCheck} on a POM Maven builds without complaint,
+	 * naming the {@code <moduleInfoSource>} text as a module. So what puts both shapes out of reach is
+	 * the WRAPPER's parent and not the two names being spelled differently. Both directions are
+	 * pinned by {@link #theCorpusCoversEveryModuleTheBuildCompiles}.
 	 */
 	private static List<String> modulesIn(Element pom) {
 		List<String> modules = new ArrayList<String>();
-		NodeList wrappers = pom.getElementsByTagName("modules");
-		for (int i = 0; i < wrappers.getLength(); i++) {
-			for (Element declared : directChildren((Element) wrappers.item(i), "module")) {
+		for (Element wrapper : declaredUnderProjectOrProfile(pom, "modules")) {
+			for (Element declared : directChildren(wrapper, "module")) {
 				String name = declared.getTextContent().trim();
 				if (!name.isEmpty() && !modules.contains(name)) {
 					modules.add(name);
@@ -332,6 +368,32 @@ public class JavadocReferenceGuardTest {
 			}
 		}
 		return modules;
+	}
+
+	/**
+	 * The elements of one name that a POM declares directly under its own {@code <project>} or under
+	 * one of its {@code <profile>}s — never a plugin parameter that happens to share the name. Both
+	 * callers need exactly that reach and for the same reason: {@code <modules>} and
+	 * {@code <properties>} are legal in those two positions and nowhere else in the POM model, while
+	 * a plugin's own {@code <configuration>} may carry an element of either name for its own purposes
+	 * — maven-surefire-plugin's descriptor declares a {@code <properties>} parameter of type
+	 * {@code java.util.Properties} for configuring its provider, and {@link #modulesIn} carries the
+	 * measured case for {@code <modules>}. Reading either document-wide reddens a legal POM, which is
+	 * the one failure direction {@link #customSourceDirectoriesIn} refused for its own element and
+	 * the one this refuses for both of these.
+	 */
+	private static List<Element> declaredUnderProjectOrProfile(Element pom, String name) {
+		List<Element> declared = new ArrayList<Element>();
+		NodeList all = pom.getElementsByTagName(name);
+		for (int i = 0; i < all.getLength(); i++) {
+			Element element = (Element) all.item(i);
+			Node parent = element.getParentNode();
+			String enclosing = parent == null ? "" : parent.getNodeName();
+			if ("project".equals(enclosing) || "profile".equals(enclosing)) {
+				declared.add(element);
+			}
+		}
+		return declared;
 	}
 
 	/**
@@ -581,11 +643,27 @@ public class JavadocReferenceGuardTest {
 	 * {@code -Xdoclint} is a javac option — so anything but {@code javac} is refused here rather
 	 * than judged, because this guard cannot know whether another backend honours the argument. A
 	 * wrapper that does honour it is refused too; say so in the same commit that changes the id.
+	 *
+	 * <p><strong>Each of those two is asked at BOTH positions Maven answers it from</strong> — the
+	 * element under a plugin {@code <configuration>} ({@link #disabledFailOnErrorAt},
+	 * {@link #nonJavacCompilerIdAt}) and the user property the plugin binds the parameter to
+	 * ({@link #compilerUserPropertyOverrides}). The property form was unread, and it is not a smaller
+	 * hole than the element: this whole check hung off {@link #compilerPlugins}, so three words in the
+	 * root pom's own {@code <properties>} dropped the gate with all seven checks green — see
+	 * {@link #FAIL_ON_ERROR_PROPERTY} for the measurement. The property pins are synthetic because
+	 * this repository sets neither, which is exactly why the omission was invisible — and they pin the
+	 * READER and not the call site: with no POM here setting either property, deleting the loop that
+	 * asks about them leaves this check green, exactly as deleting either element-form loop beside it
+	 * does. There is nothing to cross-check that against, the way {@link #poms} cross-checks its list
+	 * against the filesystem, so it is stated instead.
 	 */
 	@Test
 	public void noOtherCompilerConfigurationDropsTheCheck() throws Exception {
 		List<String> violations = new ArrayList<String>();
 		for (String pom : poms()) {
+			for (String where : compilerUserPropertyOverrides(pomRoot(pom))) {
+				violations.add(pom + " " + where);
+			}
 			for (Element plugin : compilerPlugins(pom)) {
 				for (Map.Entry<String, List<String>> block : compilerArgBlocks(plugin).entrySet()) {
 					if (!refusesADeadReference(pom + " " + block.getKey(), block.getValue())) {
@@ -606,6 +684,34 @@ public class JavadocReferenceGuardTest {
 				}
 			}
 		}
+		List<String> asProperties = compilerUserPropertyOverrides(parseXml("<project><properties><"
+				+ FAIL_ON_ERROR_PROPERTY + ">false</" + FAIL_ON_ERROR_PROPERTY + "></properties>"
+				+ "<profiles><profile><properties><" + COMPILER_ID_PROPERTY + ">eclipse</"
+				+ COMPILER_ID_PROPERTY + "></properties></profile></profiles></project>"));
+		String bothProperties = join(asProperties);
+		if (asProperties.size() != 2 || !bothProperties.contains(FAIL_ON_ERROR_PROPERTY)
+				|| !bothProperties.contains(COMPILER_ID_PROPERTY)) {
+			violations.add("the two user properties maven-compiler-plugin binds failOnError and compilerId "
+					+ "to are not both read out of a POM's <properties> — the project's own and a <profile>'s, "
+					+ "and each named in what it reports "
+					+ "(it read " + asProperties + "). Measured on this branch: three words in the root pom's "
+					+ "own <properties> left a doclint reference error printed, the build reporting BUILD "
+					+ "SUCCESS and all seven checks here green, which is #262's headline defect reinstated by "
+					+ "an edit that touches no plugin block. This repository sets neither property, so only "
+					+ "this synthetic POM can say so");
+		}
+		List<String> asAPluginParameter = compilerUserPropertyOverrides(parseXml("<project><build>"
+				+ "<plugins><plugin><configuration><properties><" + FAIL_ON_ERROR_PROPERTY + ">false</"
+				+ FAIL_ON_ERROR_PROPERTY + "></properties></configuration></plugin></plugins></build>"
+				+ "</project>"));
+		if (!asAPluginParameter.isEmpty()) {
+			violations.add("a <properties> inside a plugin's own <configuration> is read as setting the "
+					+ "compiler's user property (it read " + asAPluginParameter + "), which it is not — "
+					+ "maven-surefire-plugin's descriptor declares a <properties> parameter of type "
+					+ "java.util.Properties for its provider configuration. Read the element as a declaration "
+					+ "of the project or a <profile> and never document-wide, or this refusal reddens a clean "
+					+ "build");
+		}
 		assertNoViolations(violations);
 	}
 
@@ -621,11 +727,15 @@ public class JavadocReferenceGuardTest {
 	 * POM check at once. Asked of a synthetic POM and not of this repository's, which carries no
 	 * {@code <profile>} at all — so there is nothing here for a direct-child read to get wrong, and
 	 * that is exactly why the narrower version was invisible. <strong>The other direction is pinned
-	 * beside it</strong>: {@code <module>} read document-wide takes in moditect's
-	 * {@code <configuration><module>} parameter, which reddens THIS check and
+	 * beside it, in BOTH plugin-parameter shapes</strong>: read document-wide, {@code <module>} takes
+	 * in moditect's {@code <configuration><module>} parameter and the {@code <modules>} WRAPPER takes
+	 * in its plural counterpart, and either reddens THIS check and
 	 * {@link #noOtherCompilerConfigurationDropsTheCheck} on a legal POM — a false positive is the one
 	 * failure {@link #customSourceDirectoriesIn} refused for the sibling element, so it is refused
-	 * here too. Mutate {@link #modulesIn} in either direction and read which half goes red.
+	 * here too. Keying on {@code <module>}'s parent alone left the plural form read, which was
+	 * measured on a never-activated {@code <profile>}: two checks red on a POM Maven builds without
+	 * complaint. Mutate {@link #modulesIn} or {@link #declaredUnderProjectOrProfile} in either
+	 * direction and read which half goes red.
 	 *
 	 * <p><strong>Moved off the convention.</strong> {@link #reactorSourceRoots} probes
 	 * {@code src/main/java} and {@code src/test/java}, so a module declaring its own
@@ -667,6 +777,20 @@ public class JavadocReferenceGuardTest {
 					+ "noOtherCompilerConfigurationDropsTheCheck would then fail a legal POM, naming a "
 					+ "\"module\" that was never one and giving no hint that a plugin parameter caused it. "
 					+ "Read <module> as a direct child of a <modules>, which is all the profile case needs");
+		}
+		List<String> inAPluralPluginParameter = modulesIn(parseXml("<project><build><plugins><plugin>"
+				+ "<configuration><modules><module><artifact><artifactId>example-core</artifactId>"
+				+ "</artifact><moduleInfoSource>module org.example {}</moduleInfoSource></module>"
+				+ "</modules></configuration></plugin></plugins></build></project>"));
+		if (!inAPluralPluginParameter.isEmpty()) {
+			violations.add("a <modules> WRAPPER inside a plugin's own <configuration> is read as declaring "
+					+ "reactor modules (it read " + inAPluralPluginParameter + "), which it is not — the same "
+					+ "moditect goal is reported to take a plural parameter of that name for artifacts other "
+					+ "than the project's own, and keying on <module>'s parent alone leaves this shape read. "
+					+ "Measured: "
+					+ "a never-activated <profile> carrying it reddened this check and "
+					+ "noOtherCompilerConfigurationDropsTheCheck on a POM Maven builds without complaint. "
+					+ "Read the WRAPPER as a declaration of the project or a <profile> too");
 		}
 		String moved = "src/generated/java";
 		List<String> movedAway = customSourceDirectoriesIn(parseXml("<project><build><sourceDirectory>"
@@ -971,9 +1095,11 @@ public class JavadocReferenceGuardTest {
 	 * {@code indexOf(')')} answer alike — and under the cheaper version the stranded-block arm
 	 * switches back off for {@code @ParameterizedTest(name = "run(x)")} or {@code @Qualifier("a)b")},
 	 * with nothing to notice, which is the defect {@link #annotationResidue} exists to fix. Nesting is
-	 * {@code AnnotationArgumentNestsAParen}; the two separately deletable halves of the literal skip
-	 * are {@code AnnotationArgumentQuotesACloseParen} and {@code AnnotationArgumentIsACharCloseParen};
-	 * and the {@code -1}, which the caller turns into the conservative answer, is
+	 * {@code AnnotationArgumentNestsAParen}; the three separately deletable clauses of the literal
+	 * skip are {@code AnnotationArgumentQuotesACloseParen},
+	 * {@code AnnotationArgumentIsACharCloseParen} and, for the backslash clause,
+	 * {@code AnnotationArgumentEscapesItsQuote}; and the {@code -1}, which the caller turns into the
+	 * conservative answer, is
 	 * {@code AnnotationArgumentListLeftOpenThenBlock} — the one of these rows the arm must NOT fire
 	 * on. Mutate a clause and read which of them reddens.
 	 */
@@ -1345,10 +1471,15 @@ public class JavadocReferenceGuardTest {
 		}
 
 		/**
-		 * {@code wholeFile} exists for one row and is not decoration: every other row is a class BODY
-		 * that the harness wraps, and that wrapper made the block-after-the-closing-brace arm of
-		 * {@link #unattachedJavadocBlocks} inexpressible — so that arm was deletable with the whole
-		 * suite green.
+		 * {@code wholeFile} is for a shape the class-body wrapper cannot express, and it is not
+		 * decoration: every other row is a class BODY the harness wraps, and that wrapper made the
+		 * block-after-the-closing-brace arm of {@link #unattachedJavadocBlocks} inexpressible — so that
+		 * arm was deletable with the whole suite green. No count of the rows that set it is given, here
+		 * or on any of them: see {@link #SHAPES}. What the wrapper cannot express is a POSITION:
+		 * nothing goes above a {@code package} statement or an {@code import}, and nothing after the
+		 * top-level class's own closing brace, which by construction is the last thing it writes. Unset
+		 * the flag on a row of the first kind and the shape stops compiling, which this check reports
+		 * as a guard that could not run.
 		 */
 		private String sourceFor(String name) {
 			return wholeFile ? source : "public class " + name + " {\n" + source + "}\n";
@@ -1431,8 +1562,8 @@ public class JavadocReferenceGuardTest {
 		shape(shapes, "AnnotatedDeclarationOnOneLineThenBlock", Attachment.ATTACHED,
 				"\t@SuppressWarnings(\"unused\") private int a = 1;\n\t/** " + dead
 						+ ". */\n\tprivate int b = 2;\n\tint r() { return a + b; }\n");
-		// The one row the class-body wrapper cannot express: a block after the top-level class, where
-		// nothing follows it at all.
+		// Needs the whole file: a block after the top-level class, where nothing follows it at all —
+		// the class-body wrapper has no position for that.
 		wholeFile(shapes, "TrailingBlockAfterTheClass", Attachment.UNATTACHED,
 				"public class TrailingBlockAfterTheClass {\n\tprivate int a = 1;\n"
 						+ "\tint r() { return a; }\n}\n\n/** " + dead + ". */\n");
@@ -1508,6 +1639,14 @@ public class JavadocReferenceGuardTest {
 		shape(shapes, "AnnotationArgumentIsACharCloseParen", Attachment.UNATTACHED,
 				"\t@interface Sep {\n\t\tchar value();\n\t}\n\t@Sep(')')\n\t/** " + dead
 						+ ". */\n\tprivate int a = 1;\n\tint r() { return a; }\n");
+		// And the backslash clause of that same skip, which had no row: a CHAR literal that IS an
+		// escaped quote. Without it the walk ends the literal on the quote the backslash escapes, opens
+		// another on the real closing one, runs off the end of the line and answers -1 — so the arm
+		// goes quiet on this orphan. Replacing the clause with `i += 1` left every check green before
+		// this row existed.
+		shape(shapes, "AnnotationArgumentEscapesItsQuote", Attachment.UNATTACHED,
+				"\t@interface Sep {\n\t\tchar value();\n\t}\n\t@Sep('\\'')\n\t/** " + dead
+						+ ". */\n\tprivate int a = 1;\n\tint r() { return a; }\n");
 		// And the refusal, the one row of this group the arm must NOT fire on: an argument list
 		// left OPEN at the end of the line, where annotationResidue hands back the whole line rather
 		// than guessing. Declared UNATTACHED_AND_UNREACHED — javac reads nothing inside the list and
@@ -1548,14 +1687,20 @@ public class JavadocReferenceGuardTest {
 
 	// --- The compiler ---
 
+	/**
+	 * One compile's diagnostics. The compiler's own boolean verdict from {@code call()} is
+	 * deliberately not kept: what makes an error doclint's here is a DIFFERENCE between two runs over
+	 * the same sources ({@link #everyJavadocReferenceInTheApiModuleResolves}, and
+	 * {@link #theScannerAgreesWithTheCompilerAboutWhatIsAttached} for the shapes), and one boolean per
+	 * run cannot carry that — a caller trusting it would call a broken classpath a javadoc defect,
+	 * which is the direction the difference rule exists to refuse. So the verdict is read off
+	 * {@link #errors()} instead, which is where this class decides what an error IS.
+	 */
 	private static final class Compilation {
-
-		private final boolean succeeded;
 
 		private final List<Diagnostic<? extends JavaFileObject>> diagnostics;
 
-		private Compilation(boolean succeeded, List<Diagnostic<? extends JavaFileObject>> diagnostics) {
-			this.succeeded = succeeded;
+		private Compilation(List<Diagnostic<? extends JavaFileObject>> diagnostics) {
 			this.diagnostics = diagnostics;
 		}
 
@@ -1641,9 +1786,8 @@ public class JavadocReferenceGuardTest {
 					asFiles.add(file.toFile());
 				}
 				Iterable<? extends JavaFileObject> units = manager.getJavaFileObjectsFromFiles(asFiles);
-				boolean ok;
 				try {
-					ok = compiler.getTask(null, manager, collector, arguments, null, units).call();
+					compiler.getTask(null, manager, collector, arguments, null, units).call();
 				}
 				catch (IllegalArgumentException rejected) {
 					// javax.tools THROWS on an unrecognised option rather than reporting a diagnostic, so
@@ -1656,7 +1800,7 @@ public class JavadocReferenceGuardTest {
 							+ "on the JDK running this suite and invalid on an older one in the CI matrix.");
 					return null;
 				}
-				return new Compilation(ok, collector.getDiagnostics());
+				return new Compilation(collector.getDiagnostics());
 			}
 		}
 		finally {
@@ -1891,6 +2035,45 @@ public class JavadocReferenceGuardTest {
 		for (Element execution : executions(plugin)) {
 			if (isFalse(directChild(directChild(execution, "configuration"), "failOnError"))) {
 				where.add(executionLabel(execution));
+			}
+		}
+		return where;
+	}
+
+	/**
+	 * Every {@code <properties>} entry in one POM that sets {@code failOnError} or {@code compilerId}
+	 * through the user property maven-compiler-plugin binds it to, described. The element form under a
+	 * plugin {@code <configuration>} is {@link #disabledFailOnErrorAt}'s and
+	 * {@link #nonJavacCompilerIdAt}'s question; this asks the SAME two questions of the other position
+	 * Maven answers them from.
+	 *
+	 * <p>A second reader rather than a widening of those two, because a user property needs no plugin
+	 * element: a POM declaring no maven-compiler-plugin block anywhere still sets both parameters from
+	 * three words of {@code <properties>}, so anything hanging off {@link #compilerPlugins} cannot see
+	 * it — and the whole of {@link #noOtherCompilerConfigurationDropsTheCheck} hung off that loop.
+	 * {@link #FAIL_ON_ERROR_PROPERTY} carries the measurement.
+	 *
+	 * <p>Read through {@link #declaredUnderProjectOrProfile}, so a plugin's own {@code <properties>}
+	 * parameter is not mistaken for the project's. What is still invisible is the same blind spot the
+	 * element form has and this class discloses: a property set in a {@code settings.xml} profile, or
+	 * a {@code -Dmaven.compiler.failOnError=false} on the command line, is not in any POM to be read.
+	 */
+	private static List<String> compilerUserPropertyOverrides(Element pom) {
+		List<String> where = new ArrayList<String>();
+		for (Element properties : declaredUnderProjectOrProfile(pom, "properties")) {
+			if (isFalse(directChild(properties, FAIL_ON_ERROR_PROPERTY))) {
+				where.add("<properties> sets <" + FAIL_ON_ERROR_PROPERTY + ">false</"
+						+ FAIL_ON_ERROR_PROPERTY + "> — that is the user property maven-compiler-plugin binds "
+						+ "failOnError to, on compile and testCompile alike, so a doclint reference error is "
+						+ "printed and not fatal, which is the green build #262 reports. No plugin block is "
+						+ "involved: this drops the gate from a <properties> entry");
+			}
+			Element id = directChild(properties, COMPILER_ID_PROPERTY);
+			if (isNonJavac(id)) {
+				where.add("<properties> sets <" + COMPILER_ID_PROPERTY + ">" + id.getTextContent().trim()
+						+ "</" + COMPILER_ID_PROPERTY + "> — that is the user property maven-compiler-plugin "
+						+ "binds compilerId to, and " + REFERENCE_CHECK + " is a javac option. Refused rather "
+						+ "than judged: if that backend does honour it, say so in the commit that sets it");
 			}
 		}
 		return where;

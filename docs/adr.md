@@ -5505,25 +5505,68 @@ the gate was open, which is the only property they share:
   each be deleted — or the whole method replaced by the `indexOf(')')` its own javadoc says it is not
   — with every check green, because no annotation argument list in this repository carries a nested
   paren or a `)` inside a literal. So the fix in the bullet above was reinstatable in silence for
-  `@ParameterizedTest(name = "run(x)")` or `@Qualifier("a)b")`. One row per claimed property now, and
+  `@ParameterizedTest(name = "run(x)")` or `@Qualifier("a)b")`. One row per deletable clause now, and
   the refusal is DECLARED as `UNATTACHED_AND_UNREACHED` — a missed orphan chosen deliberately over a
-  red build on legal code — so turning it into a guess reddens a row as well.
+  red build on legal code — so turning it into a guess reddens a row as well. **That took two rounds,
+  because the literal skip has three deletable clauses and was enumerated as two**: its backslash
+  clause had no row, so replacing it with `i += 1` left every check green while the arm went quiet on
+  `@Sep('\'')` — the walk ends the literal on the escaped quote, opens another on the real closing
+  one and answers -1. `AnnotationArgumentEscapesItsQuote` is that row.
+- **`failOnError` and `compilerId` were read only as plugin ELEMENTS, and maven-compiler-plugin
+  binds both to user properties.** Its descriptor declares
+  `<failOnError implementation="boolean" default-value="true">${maven.compiler.failOnError}</failOnError>`
+  and the matching `${maven.compiler.compilerId}` on BOTH the `compile` and `testCompile` mojos, in
+  3.13.0 (the version this build resolves) and in 3.15.0 alike. So three words in the root pom's own
+  `<properties>` dropped the whole gate: measured on this branch, JDK 21, with a dead pointer planted
+  in `omod/src/main/java`, `mvn -o clean install` printed `[ERROR] ... reference not found` and then
+  reported BUILD SUCCESS, exit 0, and `JavadocReferenceGuardTest` ran seven checks with zero
+  failures. Identical in effect to the `<failOnError>false</failOnError>` element the guard already
+  refused, and reachable by an edit that touches no plugin block — this decision's own headline
+  defect reinstated, from inside the repository, while the check whose name is "no compiler
+  configuration anywhere in these POMs drops the check" passed. The whole of that check hung off
+  `compilerPlugins`, which is why a reader of the OTHER position could not exist as a widening of the
+  element readers: a POM declaring no compiler plugin at all still sets both parameters. The
+  `compilerId` half fails loudly today for want of a plexus-compiler backend (verified: `No such
+  compiler 'eclipse'`, before any test runs) and is reported anyway, because that is a fact about the
+  plugin's dependencies rather than about this gate. `compilerUserPropertyOverrides` reads it through
+  the same `declaredUnderProjectOrProfile` as the module list, so a plugin's own `<properties>`
+  parameter — maven-surefire-plugin declares one, of type `java.util.Properties`, for its provider —
+  is not mistaken for the project's; both directions are pinned by synthetic POMs, because this
+  repository sets neither property, which is exactly why the omission was invisible. **What those
+  pins hold is the READER and not the call site**: with no POM here setting either property, deleting
+  the loop that asks leaves the check green, exactly as deleting either element-form loop beside it
+  does, and there is nothing to cross-check that against the way `poms()` cross-checks its list
+  against the filesystem. Stated rather than fixed. A property from `settings.xml` or
+  `-Dmaven.compiler.failOnError=false` on the command line remains outside every POM check, which is
+  a blind spot this guard already discloses.
 - **The reactor scope was read as a direct child of `<project>` alone.** A module Maven builds from a
   `<profile>` was outside both corpus walks and outside every POM check without a line being deleted:
   the same fail-open as the hand-written lists above, reached by MOVING the declaration rather than
   removing it, and `compilerPlugins` already read document-wide for precisely this reason while the
-  module list did not. The `<modules>` element is read document-wide now and `<module>` is read as a
-  DIRECT CHILD of it — exactly the reach the profile case needs, and no more. **A review round found
+  module list did not. Both elements are read wherever the POM model allows them — under the
+  project's own element or a `<profile>`'s — and `<module>` is read as a DIRECT CHILD of a
+  `<modules>`, which is exactly the reach the profile case needs and no more. **A review round found
   the first fix reading `<module>` itself document-wide, and that was too wide in a direction the
   decision had called loud rather than wrong**: `<module>` is a real plugin parameter — moditect's
   `add-module-info` takes `<configuration><module><moduleInfoSource>` — so a never-activated profile
   carrying that plugin reddened two checks on a legal POM, each naming a "module" that was never one
   and neither hinting that a plugin parameter caused it. That is the false positive
   `customSourceDirectoriesIn` had already refused for the sibling element, so it is refused here too.
-  Keying on the PARENT puts the reported shape out of reach because the parameter is spelled
-  `<module>` and not `<modules>`; a plugin taking a `<modules>` parameter would still be read, and
-  that is a row to add rather than a reason for a wider rule. Both directions are asked of synthetic
-  POMs — mutate `modulesIn` either way and read which half goes red. Narrower
+  **Keying on `<module>`'s parent was half the fix, and the reason first given for it was wrong
+  about the plugin it cited** — that the shape was out of reach because "the parameter is spelled
+  `<module>` and not `<modules>`". The same goal is reported to take a plural parameter of the
+  WRAPPER's name for artifacts other than the project's own — reported by the review round that found
+  this, and not read off the plugin's descriptor here — and the wrapper was still found
+  document-wide, which is the part that was measured: a never-activated `<profile>` carrying
+  `<configuration><modules><module><artifact>` reddened `theCorpusCoversEveryModuleTheBuildCompiles`
+  and
+  `noOtherCompilerConfigurationDropsTheCheck` on a POM Maven builds without complaint, naming the
+  `<moduleInfoSource>` text as a module — the very failure the previous round had removed for the
+  singular form. The wrapper goes through `declaredUnderProjectOrProfile` now, shared with the
+  `<properties>` reader above for the same reason, so what puts either shape out of reach is the
+  wrapper's PARENT and not the two names being spelled differently. Both plugin-parameter shapes and
+  the profile case are asked of synthetic POMs — mutate `modulesIn` or
+  `declaredUnderProjectOrProfile` either way and read which half goes red. Narrower
   and adjacent: `reactorSourceRoots` probes `src/main/java` and `src/test/java` by CONVENTION, so a
   module declaring its own `<sourceDirectory>` contributes no root while that walk fails only where
   EVERY module yields nothing — such a POM is REFUSED now rather than judged, the same answer a

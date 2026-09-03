@@ -550,6 +550,22 @@ public class PatientClinicalContext {
 
 		private final Set<String> atcCodes;
 
+		/**
+		 * The uuid of the concept this order was written against — the SAME concept
+		 * {@link #getAtcCodes()} was read off, which is the order's drug's concept where the order
+		 * carries a coded {@code Drug} and the order's own concept otherwise. Null where the module
+		 * could not read one, and null on every order a caller built through the public constructors:
+		 * only {@link PatientClinicalContextBuilder} records it.
+		 *
+		 * <p>Issue #353. The reference dataset bridges dictionary concepts to substances
+		 * ({@link DrugReference#getBridgedConcepts()}), and this is the other half of that join — the
+		 * key that does not depend on which of a concept's names the session's locale elects.
+		 * Deliberately NOT folded into {@link #getNames()}: that set is matched against chart prose,
+		 * and it is {@code DrugSafetyValidator.recordsANameOf}'s operand, so a uuid in it would both
+		 * match free text and make the issue #349 bridge believe the chart named the substance.
+		 */
+		private final String conceptUuid;
+
 		/** The administration the chart records for THIS order — the names its route concept publishes
 		 *  and the names its drug's dosage-form concept publishes, whichever of the two is recorded
 		 *  (issue #234). */
@@ -619,11 +635,40 @@ public class PatientClinicalContext {
 		 */
 		static ActiveDrugOrder namedByCodesOnly(String uuid, String display, Set<String> atcCodes,
 				Set<String> administrationTerms) {
-			return new ActiveDrugOrder(uuid, display, null, atcCodes, administrationTerms, false);
+			return namedByCodesOnly(uuid, display, atcCodes, administrationTerms, null);
+		}
+
+		/**
+		 * As {@link #namedByCodesOnly(String, String, Set, Set)}, recording the concept the order was
+		 * written against (issue #353). An order the module could read no NAME for can still be joined
+		 * to the reference data by its concept, which is exactly the population that join exists for.
+		 */
+		static ActiveDrugOrder namedByCodesOnly(String uuid, String display, Set<String> atcCodes,
+				Set<String> administrationTerms, String conceptUuid) {
+			return new ActiveDrugOrder(uuid, display, null, atcCodes, administrationTerms, false,
+					conceptUuid);
+		}
+
+		/**
+		 * As the public constructors, additionally recording the concept the order was written against
+		 * (issue #353). Package-private and not a fourth public constructor: only
+		 * {@link PatientClinicalContextBuilder} can know that the uuid it passes is the concept the ATC
+		 * codes beside it were read off, and that agreement is the whole point of the field.
+		 */
+		static ActiveDrugOrder named(String uuid, String display, Set<String> names,
+				Set<String> atcCodes, Set<String> administrationTerms, String conceptUuid) {
+			return new ActiveDrugOrder(uuid, display, names, atcCodes, administrationTerms, true,
+					conceptUuid);
 		}
 
 		private ActiveDrugOrder(String uuid, String display, Set<String> names, Set<String> atcCodes,
 				Set<String> administrationTerms, boolean nameKnown) {
+			this(uuid, display, names, atcCodes, administrationTerms, nameKnown, null);
+		}
+
+		private ActiveDrugOrder(String uuid, String display, Set<String> names, Set<String> atcCodes,
+				Set<String> administrationTerms, boolean nameKnown, String conceptUuid) {
+			this.conceptUuid = conceptUuid;
 			this.nameKnown = nameKnown;
 			this.administrationTerms = lower(administrationTerms);
 			this.uuid = uuid;
@@ -669,6 +714,14 @@ public class PatientClinicalContext {
 		 *          exists to rule out. */
 		public Set<String> getNames() {
 			return names;
+		}
+
+		/** @return the uuid of the concept this order was written against, or null when the module could
+		 *          not read one — and null on every order built through this class's public
+		 *          constructors, which is the ordinary state of a hand-built context. See
+		 *          {@link #conceptUuid} for why it is not one of {@link #getNames()}. */
+		public String getConceptUuid() {
+			return conceptUuid;
 		}
 
 		/** @return the uppercased ATC codes THIS order's concept maps to; empty when it maps to none.

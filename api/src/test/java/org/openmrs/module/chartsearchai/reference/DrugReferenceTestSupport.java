@@ -503,6 +503,27 @@ public final class DrugReferenceTestSupport {
 	 *  abacavir/lamivudine pair that claims one name equally (issue #193). */
 	static final String DDI_COMBINATION_ALLERGEN = "chartsearchai-test/ddi-combination-allergen.json";
 
+	/** CIEL 75876 {@code Esomeprazole magnesium} filed on BOTH Omeprazole and Esomeprazole, as the
+	 *  shipped bridge files it, plus the Clopidogrel row each of them has a Major rule with — a bridged
+	 *  concept resolving several substances only ONE of which its own recorded name names (issue #353,
+	 *  review rounds 1 and 2). {@code BridgedConceptLegBoundsTest.theRefusalsReachOverTheShippedKnowledgeBase}
+	 *  asserts what each of those two populations is over the shipped knowledge base; do not quote a
+	 *  figure here. The contrasting shape — a concept whose name names EVERY substance it resolves —
+	 *  is {@link #DDI_COMBINATION_ALLERGEN}'s CIEL 103166 {@code Abacavir / lamivudine}. */
+	static final String DDI_BRIDGED_CONCEPT_TWO_SUBSTANCES =
+			"chartsearchai-test/ddi-bridged-concept-two-substances.json";
+
+	/** {@link #DDI_BRIDGED_CONCEPT_TWO_SUBSTANCES}'s rows with ONE field changed — the two substances'
+	 *  shared {@code rxnorm_name}, and so the match token every rule between them and Clopidogrel
+	 *  carries — so that token is an alias of both and the display name of neither and
+	 *  {@code DrugSafetyValidator.activeOrderEntryFor}'s ranking cannot separate them (issue #353,
+	 *  review round 4). A separate file rather than a variant of that one because the change makes the
+	 *  slice no longer verbatim; the fixture's own {@code metadata.note} is the authority on which
+	 *  field it is, why the shape has to be authored, and what was measured over the shipped knowledge
+	 *  base before authoring it. */
+	static final String DDI_BRIDGED_CONCEPT_TIED_TOKEN =
+			"chartsearchai-test/ddi-bridged-concept-tied-token.json";
+
 	/** Eleven verbatim rows whose ALIAS SETS carry the shapes issues #136/#147 turn on — the entry named
 	 *  {@code Acetylsalicylic acid} whose every rule token is {@code aspirin} — plus the nesting pairs
 	 *  issue #86 removed ({@code opium} inside {@code tiotropium}). See the fixture's own

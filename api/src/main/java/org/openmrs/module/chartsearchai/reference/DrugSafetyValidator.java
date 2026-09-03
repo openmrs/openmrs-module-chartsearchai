@@ -2414,7 +2414,7 @@ public class DrugSafetyValidator {
 		if (context == null) {
 			return false;
 		}
-		String token = c.getToken() == null ? null : PatientClinicalContext.normalizedToken(c.getToken());
+		String token = PatientClinicalContext.normalizedToken(c.getToken());
 		for (String condition : context.conditionsMatching(token)) {
 			if (DrugReference.containsWord(condition, token)) {
 				return true;
@@ -4250,7 +4250,7 @@ public class DrugSafetyValidator {
 		if (ChartSearchAiUtils.isBlank(rule.getToken())) {
 			return false;
 		}
-		String token = rule.getToken().trim();
+		String token = PatientClinicalContext.normalizedToken(rule.getToken());
 		return DrugReference.matchesOrderName(order.getDisplay(), token);
 	}
 
@@ -7272,16 +7272,15 @@ public class DrugSafetyValidator {
 
 	/**
 	 * @return whether {@code c} is the ALLERGY leg of the curated rule vocabulary. One spelling of that
-	 *         test, because FOUR consumers now ask it for different reasons — {@link
+	 *         test, because several consumers ask it for different reasons — {@link
 	 *         #recordedContraindicationKind} to decide which chart list a rule is put to, {@link
 	 *         SubjectMatter} to decide whether an allergy-domain question puts the rule in scope,
 	 *         {@link #evaluatesAgainstTheChart} to decide whether the module could ask the chart at all,
-	 *         and {@link #selfNamedAllergyRule} for issue #146's fold. <b>A FIFTH reader branches on the
-	 *         CONDITION leg alone</b> since issue #309 — {@link #corroboratedByTheChart}, whose third leg
-	 *         asks {@link #isConditionRule} and neither of the two questions this one gates. With
-	 *         {@link #selfNamedAllergyRule} reading only this leg, the pair diverges in both directions;
-	 *         this enumeration is where that is recorded rather than left for a maintainer to discover.
-	 *         Which sites read which is answered by finding the callers, not by a tally here. Left as literals they would drift
+	 *         and {@link #selfNamedAllergyRule} for issue #146's fold. <b>{@link #corroboratedByTheChart}
+	 *         branches on the CONDITION leg alone</b> since issue #309, asking neither of the two
+	 *         questions this one gates — so the pair diverges in both directions, and this enumeration is
+	 *         where that is recorded rather than left for a maintainer to discover. Which sites read
+	 *         which is answered by finding the callers, not by a tally here. Left as literals they would drift
 	 *         silently and in the worse direction: a vocabulary that grew a synonym would keep matching
 	 *         rules through one reader while another quietly stopped applying to them, and the worst of
 	 *         those pairings is a rule {@code recordedContraindicationKind} can evaluate that
@@ -7298,11 +7297,10 @@ public class DrugSafetyValidator {
 	 *         of a rule's TYPE are enumerated once, on that method, rather than half here and half
 	 *         there. Keeping one of the pair literal and the other named is how the pair comes apart.
 	 *
-	 *         <p><b>Package-private, unlike its sibling, and asymmetric in readers.</b> The two never
-	 *         were read at the same places — {@link #selfNamedAllergyRule} reads only the allergy leg —
-	 *         and since issue #309 they diverge in both directions: {@link #corroboratedByTheChart}
-	 *         branches on this one alone. {@link #isAllergyRule}'s enumeration is where the readers are
-	 *         named. The visibility is for
+	 *         <p><b>Package-private, unlike its sibling, and asymmetric in readers.</b> Their reader
+	 *         SETS were never identical — {@link #selfNamedAllergyRule} reads only the allergy leg — and
+	 *         since issue #309 they diverge in both directions: {@link #corroboratedByTheChart} branches
+	 *         on this one alone. {@link #isAllergyRule}'s enumeration is where the readers are named. The visibility is for
 	 *         {@code ConditionRuleBoundaryCorroborationTest.theShippedSeedPublishesExactlyTheFourConditionTokensTheMeasurementWasOver},
 	 *         a data guard over the shipped seed that must screen condition rules by the production
 	 *         predicate rather than by a second spelling of the literal.

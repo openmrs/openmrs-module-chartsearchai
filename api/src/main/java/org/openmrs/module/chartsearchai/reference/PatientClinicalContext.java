@@ -315,8 +315,8 @@ public class PatientClinicalContext {
 	 *         contract. It is one hash lookup, against a scan of every order the patient is on.
 	 */
 	boolean hasActiveDrug(String nameToken, String atcCode) {
-		if (nameToken != null && !nameToken.trim().isEmpty()) {
-			String n = nameToken.trim();
+		String n = normalizedToken(nameToken);
+		if (!n.isEmpty()) {
 			// The identity arm first: it is one hash lookup and the name arm below is a scan of every
 			// order the patient is on, so asking the cheap question second cost the whole scan whenever
 			// the answer was yes. Which of the two answers is immaterial — both arms return true, and
@@ -433,7 +433,7 @@ public class PatientClinicalContext {
 	 *         second). Both emptiness checks live here, including the post-fold one {@link #containsToken} documents.
 	 */
 	static boolean matchableToken(String token) {
-		return token != null && !normalizedToken(token).isEmpty() && !foldedToken(token).isEmpty();
+		return !normalizedToken(token).isEmpty() && !foldedToken(token).isEmpty();
 	}
 
 	/**
@@ -446,9 +446,18 @@ public class PatientClinicalContext {
 	 *         independently they disagreed, and a rule whose token carried stray whitespace found its
 	 *         witness and then failed to match it. One expression, so a later widening of this — NFKC,
 	 *         punctuation — cannot reach one side and not the other.
+	 *
+	 *         <p>Null-tolerant, returning the empty string, because every caller would otherwise pair it
+	 *         with a null guard of its own and they had already grown two shapes. An empty result is what
+	 *         {@link #matchableToken} refuses anyway, so a null token reaches no matcher either way.
+	 *
+	 *         <p><b>The rule token family, not only this class's own matchers.</b>
+	 *         {@code DrugSafetyValidator.namesNamingOrder} puts a token to
+	 *         {@link DrugReference#matchesOrderName} rather than to anything here, and needs the same
+	 *         pre-fold form for the same reason: {@code containsBoundedToken} folds but never trims.
 	 */
 	static String normalizedToken(String token) {
-		return token.trim();
+		return token == null ? "" : token.trim();
 	}
 
 	/**

@@ -104,8 +104,7 @@ public class InjectedContraindicationCorroborationTest {
 
 	private static final String RULE_LIST_LEAD = " Contraindicated with: ";
 
-	/** The text between {@code lead} and that sentence's own full stop, or null when the record carries
-	 *  no such section — what a model reads, read where a model reads it. */
+	/** Call-site alias for {@link DrugReferenceTestSupport#sectionAfter}, which carries the contract. */
 	private static String sectionAfter(String record, String lead) {
 		return DrugReferenceTestSupport.sectionAfter(record, lead);
 	}

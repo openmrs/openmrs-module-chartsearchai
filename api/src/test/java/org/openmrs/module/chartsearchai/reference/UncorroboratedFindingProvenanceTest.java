@@ -494,8 +494,8 @@ public class UncorroboratedFindingProvenanceTest {
 		// here said "corroborated by construction for not being self-named", which was that premise.
 		// The guard's witness is now
 		// ConditionRuleBoundaryCorroborationTest.anUnmatchedRuleStillCannotSeedItsKeyAsRecorded, whose
-		// unmatched rule is a non-self-named ALLERGY rule, one of the two shapes still answering TRUE
-		// unconditionally (the other is a rule of an unrecognised type). What this case still pins is the pair of preconditions below: the record goes
+		// unmatched rule is a non-self-named ALLERGY rule — one of the rules that fall through the first
+		// two branches of corroboratedByTheChart, which is where to read which those are. What this case still pins is the pair of preconditions below: the record goes
 		// on hedging `opioid reaction` and states nothing as recorded, beside a finding that hedges it.
 		DrugReferenceService service = DrugReferenceTestSupport
 				.serviceWith(DrugReferenceTestSupport.fixtureEntries(BORROWED_ALIAS));

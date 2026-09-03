@@ -171,9 +171,11 @@ public class ConditionRuleBoundaryCorroborationTest {
 		// whole word, so this rule costs that population nothing. 'peptic ulcer' inside 'Peptic Ulcer of
 		// Stomach' is one of those five matches, and it is exactly the multi-word fragment case that
 		// tightening hasConditionToken itself was declined for.
-		// Through curatedService(), the SHIPPED seed — not this file's fixture, whose ibuprofen entry
-		// merely happens to spell the token and note the same way. Read from the fixture, a reworded
-		// note or a changed rule in the shipped file would redden nothing here.
+		// Through curatedService(), the SHIPPED seed. This file's fixture deliberately files no
+		// 'peptic ulcer' condition rule at all (see its description): a lookalike here would let a later
+		// case assert against the fixture while reading as though it asserted against the shipped data,
+		// and read from a lookalike, a reworded note or a changed rule in the shipped file would redden
+		// nothing.
 		String record = recordFrom(DrugReferenceTestSupport.curatedService(),
 				"Can I give her ibuprofen?", "Peptic Ulcer of Stomach");
 		assertEquals(RECORDED, clauseSection(record, "active peptic ulcer disease"),

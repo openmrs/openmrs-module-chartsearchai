@@ -102,6 +102,26 @@ public class BridgedConceptOrderResolutionTest {
 			DrugReferenceTestSupport.set("Clopidogrel 75mg", "clopidogrel"), null, null, null);
 	}
 
+	/** How a francophone dictionary spells the fixed-dose combination CIEL 103166 — again a string the
+	 *  fixture carries in no field of any entry. */
+	private static final String KIVEXA_ORDER = "Kivexa 600/300";
+
+	/** The uuid the shipped bridge records for CIEL 103166, {@code Abacavir / lamivudine} — filed on
+	 *  Abacavir AND Lamivudine, which the prescription really does BOTH contain. */
+	private static final String ABACAVIR_LAMIVUDINE_CONCEPT = "103166AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+	/** The combination prescription, joined to the dataset by its concept alone. */
+	private static PatientClinicalContext.ActiveDrugOrder kivexaOrder() {
+		return PatientClinicalContext.ActiveDrugOrder.named("order-kivexa", KIVEXA_ORDER,
+			DrugReferenceTestSupport.set(KIVEXA_ORDER), null, null, ABACAVIR_LAMIVUDINE_CONCEPT);
+	}
+
+	/** The co-prescription the fixture DOES name, carrying the {@code Minor} rule with lamivudine. */
+	private static PatientClinicalContext.ActiveDrugOrder trimethoprimOrder() {
+		return PatientClinicalContext.ActiveDrugOrder.named("order-trimethoprim", "Trimethoprim 100mg",
+			DrugReferenceTestSupport.set("Trimethoprim 100mg", "trimethoprim"), null, null, null);
+	}
+
 	private static List<String> bridgeTexts(SafetyWarning warning) {
 		List<String> bridged = new ArrayList<String>();
 		for (SafetyWarning.ChartOrderBridge bridge : warning.chartOrderBridges()) {
@@ -201,12 +221,20 @@ public class BridgedConceptOrderResolutionTest {
 	}
 
 	/**
-	 * The SCREENING arm reaches the leg too, and this is what pins the two sites where a wrong answer
-	 * SILENCES rather than adds — {@code activeOrdersOtherThan} and {@code ordersOtherThan}, which
-	 * withhold an order from witnessing a pair. ADR Decision 68 rests the whole "the leg must be
-	 * RANKED" argument on those two, and until this case they were reachable only through the
-	 * drug-in-play arm's own consumer: passing {@code BridgedOrders.NONE} at both left the entire
-	 * suite green.
+	 * The SCREENING arm reaches the leg too — the two sites where a wrong answer SILENCES rather than
+	 * adds, {@code activeOrdersOtherThan} and {@code ordersOtherThan}, which withhold an order from
+	 * witnessing a pair. ADR Decision 68 rests the whole "the leg must be RANKED" argument on those
+	 * two, and until this case they were reachable only through the drug-in-play arm's own consumer:
+	 * passing {@code BridgedOrders.NONE} at both left the entire suite green.
+	 *
+	 * <p><b>What it pins is that the arm reaches them AT ALL, and not either of them on its own.</b>
+	 * Measured in review round 2, one mutation per run over the whole api suite: substituting
+	 * {@code BridgedOrders.NONE} for the {@code bridged} argument at {@code ordersOtherThan}'s
+	 * {@code resolvesFromAny} leaves the suite green, and so does the same substitution at
+	 * {@code activeOrdersOtherThan}'s own; only neutering all four bridged arguments in those two
+	 * methods reddens this case. So a change that drops the leg from ONE of the two — the plausible
+	 * slip, since they are separate methods with separate parameters — ships green today. Said rather
+	 * than left to be found; a case per site is owed and is not here.
 	 *
 	 * <p>What the mutation moves, measured rather than theorised: with the leg, the pair is reported
 	 * from the LAMIVUDINE side and the partner is the bridged substance, so the chip names the
@@ -355,6 +383,93 @@ public class BridgedConceptOrderResolutionTest {
 			"an unrecognised bridge key must cost the key and never the entries beside it");
 		assertTrue(loaded.get(0).getBridgedConcepts().isEmpty(),
 			"and it must not be read as a bridge either");
+	}
+
+	/**
+	 * The refusal above is of an AMBIGUITY and not of a combination, and this is the case that says so
+	 * (issue #353, review round 2).
+	 *
+	 * <p>{@code Kivexa} is a fixed-dose abacavir/lamivudine tablet — the shape a francophone ARV
+	 * medication list is mostly made of. The bridge files CIEL 103166 on Abacavir AND Lamivudine, so
+	 * the order resolves two substances; but its recorded name, {@code Abacavir / lamivudine}, NAMES
+	 * both of them, and the prescription really does contain both. Nothing about which substance the
+	 * prescription is is in doubt, and the clause is true of each side.
+	 *
+	 * <p>Round 1's guard asked only whether the order's bridged answer spanned more than one substance,
+	 * so it refused this — measured over the shipped knowledge base, on 990 of the 1112 bridged concepts
+	 * that answer with more than one substance, which is every real combination in it. That reopened
+	 * issue #349's defect for the bridged population: a Major chip naming a substance that appears
+	 * nowhere on the medication list, with no clause saying which prescription it came from. It is also
+	 * what CLAUDE.md's standing rule "a combination order carrying BOTH substances bridges both sides"
+	 * says must not happen, though {@code InteractionFindingChartOrderBridgeTest}'s own case for it
+	 * stayed green because its order is named rather than bridged.
+	 *
+	 * <p>Restore the count in {@code restsOnAnAmbiguousBridge} — ask whether the order's bridged answer
+	 * spans more than one {@code substanceGroupKey} instead of asking
+	 * {@code !bridged.recordedNameNames(rows, order)} — and this case reddens with an empty bridge
+	 * list.
+	 */
+	@Test
+	public void aCombinationPrescriptionItsBridgeNameNamesIsStillAttributed() throws Exception {
+		DrugReferenceService service = service();
+		PatientClinicalContext chart = chart(kivexaOrder(), trimethoprimOrder());
+
+		assertEquals(Arrays.asList("Trimethoprim", "Abacavir", "Lamivudine"),
+			displayNames(service.findForActiveOrders(chart)),
+			"the premise: the bridge files that concept on two substances, so this order resolves both");
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+				.validate("", "Do any of her medications interact?", service.withReferenceNames(chart));
+
+		assertEquals(1, warnings.size(), "one pair, was: " + DrugReferenceTestSupport.details(warnings));
+		assertTrue(warnings.get(0).getDetail()
+				.startsWith("Trimethoprim interacts with active order lamivudine \u2014 Minor."),
+			"precondition: the pair must be reported from the named order's side, was: "
+					+ warnings.get(0).getDetail());
+		assertEquals(Arrays.asList("lamivudine from " + KIVEXA_ORDER), bridgeTexts(warnings.get(0)),
+			"a combination the bridge's own name names is attributed to the prescription it came from");
+	}
+
+	/**
+	 * The refusal is asked PER SUBSTANCE, so one bridged prescription can state a clause for the
+	 * substance its recorded name names while stating none for the substance it does not.
+	 *
+	 * <p>Same prescription and same concept as
+	 * {@link #aConceptBridgedToSeveralSubstancesNamesNoPrescriptionInTheFinding}; only the question
+	 * changes. {@code Esomeprazole magnesium} names Esomeprazole and does not name Omeprazole
+	 * ({@code DrugReferenceService.findNamedSubstances} over the bridged answer), and both of those are
+	 * the truth about this prescription: the patient IS on esomeprazole, and she is not on omeprazole.
+	 *
+	 * <p>Pinned deliberately rather than left to fall out. Round 1's guard refused both sides of this
+	 * concept, and a maintainer reading only the case above would take the absence of a clause for
+	 * Esomeprazole to be intended. Neuter {@code restsOnAnAmbiguousBridge} to {@code return true} and
+	 * this reddens; neuter it to {@code return false} and the case above reddens.
+	 */
+	@Test
+	public void theSubstanceTheBridgesOwnNameNamesIsAttributedThoughItsSiblingIsNot() throws Exception {
+		DrugReferenceService service = DrugReferenceTestSupport
+				.ddiFixtureService(DrugReferenceTestSupport.DDI_BRIDGED_CONCEPT_TWO_SUBSTANCES);
+		PatientClinicalContext chart = chart(inexiumOrder(null), clopidogrelOrder());
+
+		List<SafetyWarning> named = DrugReferenceTestSupport.validator(service)
+				.validate("", "Can I give this patient esomeprazole?", service.withReferenceNames(chart));
+
+		assertEquals(1, named.size(), "precondition: the named substance must chip at all, was: "
+				+ DrugReferenceTestSupport.details(named));
+		assertTrue(named.get(0).getDetail()
+				.startsWith("Esomeprazole interacts with active order Clopidogrel \u2014 Major"),
+			"precondition: the chip must be about the substance the bridge names, was: "
+					+ named.get(0).getDetail());
+		assertEquals(Arrays.asList("Esomeprazole from " + INEXIUM_ORDER), bridgeTexts(named.get(0)),
+			"the substance the bridge's own recorded name names is attributed to the prescription");
+
+		List<SafetyWarning> unnamed = DrugReferenceTestSupport.validator(service)
+				.validate("", "Can I give this patient omeprazole?", service.withReferenceNames(chart));
+
+		assertEquals(1, unnamed.size(), "precondition: the sibling must chip too, was: "
+				+ DrugReferenceTestSupport.details(unnamed));
+		assertEquals(Collections.<String> emptyList(), bridgeTexts(unnamed.get(0)),
+			"and the one it does not name states no prescription, out of the same bridged answer");
 	}
 
 	/**

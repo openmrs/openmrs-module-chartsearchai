@@ -563,20 +563,31 @@ public class DrugReferenceService {
 	 * <p><b>What the ranking does NOT do, and the residue it leaves.</b> Where the bridge's name is
 	 * only an ALIAS of its entries, {@link DrugReference#nameMatchStrength} TIES and
 	 * {@link #findImpliedByDrugName} admits them all — so the leg can still answer with more than one
-	 * substance. Measured over the shipped knowledge base through this method and
-	 * {@link DrugReference#substanceGroupKey()}, excluding every bridge name that is a combination:
-	 * 46 of the 4251 bridged concepts answer with more than one substance, among them CIEL 77719
-	 * ({@code Hydrocortisone acetate} → Hydrocortisone AND Hydrocortisone butyrate) and CIEL 75876
-	 * ({@code Esomeprazole magnesium} → Esomeprazole AND Omeprazole). That is issue #209's own shape,
-	 * and it is not narrowed here for the reason the next paragraph gives.
+	 * substance. <b>1112 of the 4251 bridged concepts do</b> — measured through this method and
+	 * {@link DrugReference#substanceGroupKey()} over the shipped knowledge base, and asserted by
+	 * {@code BridgedConceptLegBoundsTest.theRefusalsReachOverTheShippedKnowledgeBase} rather than
+	 * quoted. Say what it is a count OF: bridged concepts whose answer spans more than one
+	 * {@code substanceGroupKey}, with NO filter on the bridge name. A figure of 46 stood here, in
+	 * {@code DrugSafetyValidator} and in ADR Decision 68 until review round 2; it was a count over the
+	 * same population MINUS every bridge name that reads as a combination, and attaching it to the
+	 * unfiltered predicate made the residue look like a 1-in-92 carve-out rather than the 1-in-4 it
+	 * is. Among the 1112 are CIEL 77719 ({@code Hydrocortisone acetate} → Hydrocortisone AND
+	 * Hydrocortisone butyrate) and CIEL 75876 ({@code Esomeprazole magnesium} → Esomeprazole AND
+	 * Omeprazole), and also CIEL 103166 ({@code Abacavir / lamivudine} → Abacavir AND Lamivudine),
+	 * which is a real fixed-dose combination and not an ambiguity at all. That is issue #209's own
+	 * shape, and it is not narrowed here for the reason the next paragraph gives.
 	 *
-	 * <p><b>It is refused at the one site that PRINTS an answer from it</b>, which is not the same
-	 * thing as narrowing the leg: {@code DrugSafetyValidator.restsOnAnAmbiguousBridge} withholds the
-	 * finding's "&lt;substance&gt; from &lt;prescription&gt;" clause where an order's only join to a
-	 * substance is a concept in this population, because there the module would be saying which of
-	 * several substances the prescription is. The screen still runs and the chip still stands. Added
-	 * in review round 1 after that clause was measured stating {@code Omeprazole from Inexium 40mg}
-	 * for a prescription written against CIEL 75876; ADR Decision 68 carries the reproduction.
+	 * <p><b>Part of it is refused at the one site that PRINTS an answer from it</b>, which is not the
+	 * same thing as narrowing the leg: {@code DrugSafetyValidator.restsOnAnAmbiguousBridge} withholds
+	 * the finding's "&lt;substance&gt; from &lt;prescription&gt;" clause for a substance the bridge's
+	 * own recorded name does not NAME ({@link #substancesNamedByBridge}), where nothing but the bridge
+	 * joined the order to it — because there the module would be saying which of several substances
+	 * the prescription is. Per SUBSTANCE and not per concept: {@code Esomeprazole from Inexium 40mg}
+	 * stands where {@code Omeprazole from Inexium 40mg} does not. The screen still runs and the chip
+	 * still stands. Added in review round 1 after that clause was measured stating
+	 * {@code Omeprazole from Inexium 40mg} for a prescription written against CIEL 75876, and narrowed
+	 * in round 2 from "more than one substance" to this, which was refusing all 990 of the 1112 whose
+	 * recorded name names every substance it resolves; ADR Decision 68 carries both.
 	 *
 	 * <p>Without the intersection the leg could reach an entry the bridge does not file under this
 	 * concept at all, on the strength of a name it merely shares.
@@ -635,6 +646,83 @@ public class DrugReferenceService {
 			}
 		}
 		return Collections.unmodifiableList(out);
+	}
+
+	/**
+	 * Which SUBSTANCES of a bridged answer the bridge's own recorded name actually NAMES — the question
+	 * {@code DrugSafetyValidator.restsOnAnAmbiguousBridge} asks before a finding prints one of them as
+	 * a prescription's (issue #353, review round 2).
+	 *
+	 * <p><b>Why naming and not counting.</b> The refusal it serves used to be "this order's bridged
+	 * answer spans more than one {@code substanceGroupKey}", which cannot tell "the module knows the
+	 * prescription is one of these and cannot say which" ({@code Esomeprazole magnesium} →
+	 * Esomeprazole AND Omeprazole) from "the prescription genuinely CONTAINS all of these"
+	 * ({@code Abacavir / lamivudine} → Abacavir AND Lamivudine). Measured over the shipped knowledge
+	 * base, 990 of the 1112 multi-substance bridged concepts are the second kind — fixed-dose
+	 * combinations, which is what a francophone ARV medication list is mostly made of — and the count
+	 * refused every one of them. Naming separates the two, and does it PER SUBSTANCE: for CIEL 75876 it
+	 * admits Esomeprazole and refuses Omeprazole out of one answer.
+	 *
+	 * <p><b>{@link #findNamedSubstances} is the accessor for that question</b> — CLAUDE.md designates
+	 * it "ask it before PRINTING a substance's own label in a sentence reporting the patient's record"
+	 * — and this is its second production caller, after
+	 * {@code DrugSafetyValidator.addAllergyContraindications}. It is asked here rather than at the
+	 * validator so that its candidate-set contract is met in the same body that builds the set.
+	 *
+	 * <p><b>The candidates are ONE ROW PER SUBSTANCE, and that fold is load-bearing.</b>
+	 * {@link #findNamedSubstances} takes {@link #findImpliedSubstances}' shape — a representative row
+	 * per substance — and its equal-claimant clause refuses a TIE, so handing it a substance's several
+	 * route-qualified rows makes them contest each other and the substance is then named by nothing.
+	 * Measured: unfolded, 28 bridged concepts of the shipped knowledge base that resolve to exactly ONE
+	 * substance are named by nothing at all ({@code Naphazoline} → {@code Naphazoline (nasal)} AND
+	 * {@code Naphazoline (ophthalmic)}); folded, none are. The representative is the FIRST row seen for
+	 * a substance, which is what {@code addSubstance} keeps.
+	 *
+	 * <p><b>What that leaves, so the caller's refusal is not read as wider than it is.</b> On the
+	 * {@code ddinter} format — the only one carrying a bridge at all — the parser writes the bridge's
+	 * name onto every entry it files there AS AN ALIAS (one pass, both readings, see
+	 * {@code DdiDrugReferenceSource}), so an answer spanning ONE substance has one uncontested claimant
+	 * at {@link DrugReference#NAME_IS_ANOTHER_NAME} or better and is always named. That is why the
+	 * caller needs no separate "is this ambiguous at all" conjunct, and it is a property of the LOADER
+	 * rather than of the shipped data: an entry assembled without that alias — which no source
+	 * produces, but {@code setBridgedConcepts} is public — can survive {@link #findByBridgedConcept}'s
+	 * intersection by containment alone and would then be named by nothing.
+	 *
+	 * @param conceptUuid the concept the answer was resolved for; the bridge's recorded name is read
+	 *        off the answer's own entries through {@link DrugReference#bridgedConceptName}, so this
+	 *        costs no dataset walk and the per-pass resolution count is unchanged
+	 * @param bridged {@link #findByBridgedConcept}'s answer for that concept, handed in rather than
+	 *        re-resolved (issue #151)
+	 * @return the {@link DrugReference#substanceGroupKey()}s the bridge's recorded name names, empty
+	 *         for an empty answer and for a name that names none of them
+	 */
+	Set<Object> substancesNamedByBridge(String conceptUuid, List<DrugReference> bridged) {
+		if (conceptUuid == null || bridged == null || bridged.isEmpty()) {
+			return Collections.emptySet();
+		}
+		String uuid = conceptUuid.trim();
+		Map<Object, DrugReference> representatives = new LinkedHashMap<Object, DrugReference>();
+		Set<String> bridgeNames = new LinkedHashSet<String>();
+		for (DrugReference entry : bridged) {
+			if (!representatives.containsKey(entry.substanceGroupKey())) {
+				representatives.put(entry.substanceGroupKey(), entry);
+			}
+			String bridgeName = entry.bridgedConceptName(uuid);
+			if (bridgeName != null) {
+				bridgeNames.add(bridgeName);
+			}
+		}
+		List<DrugReference> candidates = new ArrayList<DrugReference>(representatives.values());
+		Set<Object> named = new HashSet<Object>();
+		// Every name the surviving entries record for this concept, unioned: the bridge keeps one name
+		// per (entry, concept) row and nothing makes them agree, so asking only the first would make the
+		// answer depend on dataset order.
+		for (String bridgeName : bridgeNames) {
+			for (DrugReference row : findNamedSubstances(bridgeName, candidates)) {
+				named.add(row.substanceGroupKey());
+			}
+		}
+		return named;
 	}
 
 	/**
@@ -911,6 +999,14 @@ public class DrugReferenceService {
 	 * NARROWER question than {@link #findImpliedSubstances} and must never be mistaken for a resolution.
 	 * A caller building a candidate set from it would silently drop the substances a recorded name
 	 * implies without naming — which is every comparison this module makes about a shared class.
+	 *
+	 * <p><b>Two production callers since issue #353 review round 2</b>, both printing rather than
+	 * resolving: {@code DrugSafetyValidator.addAllergyContraindications}, which asks it of an allergy as
+	 * the chart records it, and {@link #substancesNamedByBridge}, which asks it of the name the dataset's
+	 * dictionary bridge records for a concept before a finding prints one of that concept's substances
+	 * as a prescription's. The second one's candidate set is the bridged answer folded to one row per
+	 * substance — this method's own contract, and its javadoc records what handing over the unfolded
+	 * rows would cost.
 	 *
 	 * @param drugName the recorded name, as the chart holds it
 	 * @param implied  that name's substances, as {@link #findImpliedSubstances} resolved them — passed

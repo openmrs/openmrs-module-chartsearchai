@@ -1,7 +1,7 @@
 {
   "metadata": {
     "schema_version": "1.0",
-    "note": "Issue #353, review round 1: a dictionary concept the KB's bridge files on TWO substances. The three drug rows carry the shipped knowledge base's own identifying fields for DDInter1340 Omeprazole, DDInter676 Esomeprazole and DDInter383 Clopidogrel; their ciel[] arrays are TRIMMED to the one bridge row each case needs, and CIEL 75876 'Esomeprazole magnesium' is filed on the first two exactly as the shipped bridge files it - the population ADR Decision 68 measures at 46 of 4251 bridged concepts. The two are two substances because their shared rxnorm_name family holds two drugbank_ids, which is DdiDrugReferenceSource.substanceIds' own rule. The interaction row carries the shipped rating for Clopidogrel/Omeprazole and NO mechanism text, so the fixture invents no clinical prose; Esomeprazole deliberately carries no rule with Clopidogrel, so the substance the chip is about is the one the bridge did NOT name and a false attribution to the prescription is legible."
+    "note": "Issue #353: a dictionary concept the KB's bridge files on TWO substances, one of which its recorded name NAMES and the other of which it does not. The three drug rows carry the shipped knowledge base's own identifying fields for DDInter1340 Omeprazole, DDInter676 Esomeprazole and DDInter413 Clopidogrel; their ciel[] arrays are TRIMMED to the one bridge row each case needs, and CIEL 75876 'Esomeprazole magnesium' is filed on the first two exactly as the shipped bridge files it - one of the 1112 of 4251 bridged concepts that answer with more than one substance, and one of the 122 whose recorded name does not name every one of them. The two are two substances because their shared rxnorm_name family holds two drugbank_ids, which is DdiDrugReferenceSource.substanceIds' own rule. Both interaction rows carry the shipped Major rating for Clopidogrel against that substance and NO mechanism text, so the fixture invents no clinical prose. Esomeprazole carries a rule of its own since review round 2, because the refusal is asked PER SUBSTANCE and the case that 'Esomeprazole from Inexium 40mg' stands where 'Omeprazole from Inexium 40mg' does not needs both halves to raise a chip. Round 1's fixture named Clopidogrel DDInter383, which the shipped KB uses for Cinoxacin, and gave it a CIEL row it does not publish; both corrected in round 2."
   },
   "mechanisms": {
     "-1": {
@@ -45,7 +45,7 @@
       ]
     },
     {
-      "id": "DDInter383",
+      "id": "DDInter413",
       "name": "Clopidogrel",
       "rxcui": "32968",
       "rxnorm_name": "clopidogrel",
@@ -55,8 +55,8 @@
       ],
       "ciel": [
         {
-          "code": "77576",
-          "uuid": "77576AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "code": "73602",
+          "uuid": "73602AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
           "name": "Clopidogrel"
         }
       ]
@@ -65,7 +65,13 @@
   "interactions": [
     [
       "DDInter1340",
-      "DDInter383",
+      "DDInter413",
+      "Major",
+      "-1"
+    ],
+    [
+      "DDInter413",
+      "DDInter676",
       "Major",
       "-1"
     ]

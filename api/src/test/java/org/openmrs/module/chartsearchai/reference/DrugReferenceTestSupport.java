@@ -504,9 +504,12 @@ public final class DrugReferenceTestSupport {
 	static final String DDI_COMBINATION_ALLERGEN = "chartsearchai-test/ddi-combination-allergen.json";
 
 	/** CIEL 75876 {@code Esomeprazole magnesium} filed on BOTH Omeprazole and Esomeprazole, as the
-	 *  shipped bridge files it, plus the Clopidogrel row one of them has a Major rule with — the
-	 *  bridged concept that names several substances (issue #353, review round 1). ADR Decision 68
-	 *  measures that population at 46 of 4251 bridged concepts. */
+	 *  shipped bridge files it, plus the Clopidogrel row each of them has a Major rule with — a bridged
+	 *  concept resolving several substances only ONE of which its own recorded name names (issue #353,
+	 *  review rounds 1 and 2). {@code BridgedConceptLegBoundsTest.theRefusalsReachOverTheShippedKnowledgeBase}
+	 *  asserts what each of those two populations is over the shipped knowledge base; do not quote a
+	 *  figure here. The contrasting shape — a concept whose name names EVERY substance it resolves —
+	 *  is {@link #DDI_COMBINATION_ALLERGEN}'s CIEL 103166 {@code Abacavir / lamivudine}. */
 	static final String DDI_BRIDGED_CONCEPT_TWO_SUBSTANCES =
 			"chartsearchai-test/ddi-bridged-concept-two-substances.json";
 

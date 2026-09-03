@@ -200,4 +200,98 @@ public class BridgedConceptLegBoundsTest {
 					+ " there");
 		assertEquals(1, resolvesNothing, "concepts the two bounds together leave resolving nothing");
 	}
+
+	/**
+	 * How far the CLAUSE refusal reaches over the shipped dataset, and how far the residue it is asked
+	 * about reaches — two different populations, which is what review round 2 found stated as one
+	 * number.
+	 *
+	 * <p>A figure of <b>46</b> stood in {@code findByBridgedConcept}'s javadoc, in
+	 * {@code DrugSafetyValidator} and in ADR Decision 68 as the reach of a predicate that was in fact
+	 * refusing 1112 concepts. It was a count over the same population MINUS every bridge name that
+	 * reads as a combination, attached to a predicate applying no such filter, and asserted by nothing.
+	 * These are asserted, through the same production accessors the leg itself uses, so a refresh that
+	 * moves them reddens and says which way.
+	 *
+	 * <p>Each figure with what it is a count OF, over the shipped knowledge base's distinct bridged
+	 * concepts:
+	 * <ul>
+	 *   <li>{@code 1112} answer with more than one {@code substanceGroupKey} — the leg's residue, and
+	 *       what round 1's guard refused whole;</li>
+	 *   <li>{@code 122} of those have a recorded name that does not NAME every substance they answer
+	 *       with — what the guard refuses now. The other 990 are fixed-dose combinations;</li>
+	 *   <li>{@code 166} of the {@code 5826} (concept, substance) attributions the leg can state are
+	 *       refused. That is the unit the clause is actually printed in, and it is not the concept
+	 *       count: one concept can have one substance refused and another admitted;</li>
+	 *   <li>{@code 0} concepts answering with exactly ONE substance are named by nothing.</li>
+	 * </ul>
+	 *
+	 * <p><b>That last one is the pin on the FOLD</b>, and it is the only thing that is.
+	 * {@code substancesNamedByBridge} hands {@code findNamedSubstances} one representative ROW per
+	 * substance; hand it the raw answer instead and this reads 28, because a substance's
+	 * route-qualified rows tie on the bridge's name and its equal-claimant clause refuses a tie
+	 * ({@code Naphazoline} → {@code Naphazoline (nasal)} AND {@code Naphazoline (ophthalmic)}). It is
+	 * also the premise for there being no "is this ambiguous at all" conjunct in
+	 * {@code restsOnAnAmbiguousBridge}: over this dataset a one-substance answer is named by its own
+	 * recorded name, so such a conjunct would change no clause it states. {@code substancesNamedByBridge}
+	 * carries why that is a property of the {@code ddinter} LOADER rather than of these rows, and names
+	 * the entry shape that escapes it.
+	 */
+	@Test
+	public void theRefusalsReachOverTheShippedKnowledgeBase() {
+		Map<String, List<DrugReference>> bridged = new java.util.LinkedHashMap<String, List<DrugReference>>();
+		for (DrugReference entry : service.getAll()) {
+			for (DrugReference.BridgedConcept concept : entry.getBridgedConcepts()) {
+				List<DrugReference> filed = bridged.get(concept.getConceptUuid());
+				if (filed == null) {
+					filed = new ArrayList<DrugReference>();
+					bridged.put(concept.getConceptUuid(), filed);
+				}
+				filed.add(entry);
+			}
+		}
+		Map<Object, Set<Object>> cache = new HashMap<Object, Set<Object>>();
+		int severalSubstances = 0;
+		int severalAndNotAllNamed = 0;
+		int attributions = 0;
+		int attributionsRefused = 0;
+		int oneSubstanceNamedByNothing = 0;
+		for (Map.Entry<String, List<DrugReference>> concept : bridged.entrySet()) {
+			List<DrugReference> answer = service.findByBridgedConcept(concept.getKey(), cache);
+			if (answer.isEmpty()) {
+				continue;
+			}
+			Set<Object> substances = new java.util.LinkedHashSet<Object>();
+			for (DrugReference row : answer) {
+				substances.add(row.substanceGroupKey());
+			}
+			Set<Object> named = service.substancesNamedByBridge(concept.getKey(), answer);
+			if (substances.size() > 1) {
+				severalSubstances++;
+				if (!named.containsAll(substances)) {
+					severalAndNotAllNamed++;
+				}
+			} else if (named.isEmpty()) {
+				oneSubstanceNamedByNothing++;
+			}
+			for (Object substance : substances) {
+				attributions++;
+				if (substances.size() > 1 && !named.contains(substance)) {
+					attributionsRefused++;
+				}
+			}
+		}
+
+		assertEquals(1112, severalSubstances,
+			"bridged concepts answering with more than one substance — the leg's residue, unfiltered");
+		assertEquals(122, severalAndNotAllNamed,
+			"of those, the ones whose recorded name does not name every substance they answer with");
+		assertEquals(5826, attributions,
+			"(concept, substance) attributions the leg can state at all");
+		assertEquals(166, attributionsRefused,
+			"of those, the ones the clause refuses");
+		assertEquals(0, oneSubstanceNamedByNothing,
+			"a concept answering with one substance is named by its own recorded name — the premise"
+					+ " under the fold to one row per substance, which reads 28 without it");
+	}
 }

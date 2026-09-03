@@ -5202,9 +5202,10 @@ public class DrugSafetyValidator {
 	 *
 	 * <p><b>It is not the only silence, and calling it "the" silence test would now be false.</b>
 	 * {@link #restsOnAnAmbiguousBridge} withholds a second class of clause — an order joined to the
-	 * substance by nothing but a concept the dataset files on SEVERAL substances — and the two are
-	 * independent: the recorded-names test cannot reach that class, because the premise of the bridged
-	 * leg is that the order's names do not reach the substance at all.
+	 * substance by nothing but a bridged concept whose OWN recorded name does not name that substance —
+	 * and the two are independent: the recorded-names test cannot reach that class, because the premise
+	 * of the bridged leg is that the order's names do not reach the substance at all. Note which name
+	 * each of the two asks about: this one the ORDER's, that one the BRIDGE's.
 	 *
 	 * <p><b>"Usually", because the partner's printed name is {@link #partnerLabel} wherever nothing
 	 * reconciled</b> — the rule's own token, or its bare ATC code where the rule carries no token
@@ -5243,8 +5244,10 @@ public class DrugSafetyValidator {
 	 * latency is an LLM call. Measured 2026-09-01 with a bespoke instrumented harness and a
 	 * stubbed-body A/B; NO committed fixture pins any of these, so re-measure rather than re-quote.
 	 * The measurement predates {@link #restsOnAnAmbiguousBridge}, which adds a second
-	 * {@link #resolvesFromAny} walk on the orders that reach the last conjunct; it is not included
-	 * above and has not been measured.
+	 * {@link #resolvesFromAny} walk on the orders that reach it and, for those that pass that walk, one
+	 * {@link DrugReferenceService#substancesNamedByBridge} per ORDER for the pass; neither is included
+	 * above and neither has been measured. Both are bounded by the orders that reach the conjunct,
+	 * which on a chart whose prescriptions the dataset can name is none of them.
 	 *
 	 * <p><b>And HALF of that second payment is dead work, which is the honest denominator.</b>
 	 * {@link SafetyWarning#chartOrderBridges()}'s only production reader is
@@ -5308,6 +5311,16 @@ public class DrugSafetyValidator {
 	 *         uncapped, and without that arm's {@code activeOrdersOtherThan} reduction" — must hand the
 	 *         whole order list instead, and passing this there would suppress a witness that arm did
 	 *         not suppress.
+	 *
+	 *         <p><b>The {@code bridged} argument here is not pinned on its own, and neither is
+	 *         {@link #activeOrdersOtherThan}'s.</b> Measured in issue #353's review round 2, one
+	 *         mutation per full api run: substituting {@link BridgedOrders#NONE} for it at either
+	 *         method alone leaves the whole suite green, and only neutering all four bridged arguments
+	 *         across the two reddens
+	 *         {@code BridgedConceptOrderResolutionTest.theScreeningArmWithholdsTheBridgedOrderFromWitnessingItsOwnPair}'s
+	 *         subject. ADR Decision 68 rests the "the leg must be RANKED" argument on these two sites,
+	 *         so a change dropping the leg from one of them ships green today. Said rather than left to
+	 *         be found; a case per site is owed.
 	 */
 	private static List<PatientClinicalContext.ActiveDrugOrder> ordersOtherThan(
 			List<DrugReference> subjectRows, PatientClinicalContext context, BridgedOrders bridged) {
@@ -5328,10 +5341,10 @@ public class DrugSafetyValidator {
 	 * about, an order the module could read no name for or no display from, an order that did not
 	 * resolve this substance at all, an order whose own recorded names already reach it, where a
 	 * clause would be noise in a record whose whole budget is evidence, and (issue #353, review round
-	 * 1) an order nothing but an AMBIGUOUS bridged concept joined to this substance, where naming it
-	 * would say which of several substances the prescription is when the module cannot
-	 * ({@link #restsOnAnAmbiguousBridge}). No count is given: mutate a
-	 * conjunct and read the failures — but note that the blank-name refusal yields NOTHING, being
+	 * 1, narrowed in round 2) an order nothing but a bridged concept joined to this substance whose own
+	 * recorded name does not NAME it, where naming it would say which of several substances the
+	 * prescription is when the module cannot ({@link #restsOnAnAmbiguousBridge}). No count is given:
+	 * mutate a conjunct and read the failures — but note that the blank-name refusal yields NOTHING, being
 	 * defensive against the {@code trim()} below on a null {@code subjectName}, and is unreached by any
 	 * arrangement here. Said rather than left to be found, so this list does not look better defended
 	 * than it is. See {@link #chartOrderBridges} for why each of the others is the test it is.
@@ -5354,9 +5367,9 @@ public class DrugSafetyValidator {
 
 	/**
 	 * @return whether the only thing joining {@code order} to {@code rows}' substance is a bridged
-	 *         concept the dataset files on SEVERAL substances — in which case the module knows the
-	 *         prescription is one of them and cannot say which, so it may not print one of their names
-	 *         as that prescription's.
+	 *         concept whose own recorded name does not NAME that substance — in which case the module
+	 *         knows the prescription is one of several substances and cannot say it is this one, so it
+	 *         may not print this one's name as that prescription's.
 	 *
 	 *         <p><b>Why the clause and not the resolution.</b> The leg stays in {@link #resolvesFrom},
 	 *         where its residue runs the safe direction that predicate's javadoc describes — an
@@ -5375,20 +5388,39 @@ public class DrugSafetyValidator {
 	 *         and is left exactly as it was. The code leg has an over-wide residue of its own; it is
 	 *         named at {@link #resolvesFrom} and is deliberately not closed here, because closing it
 	 *         would change what every ATC-resolved order states and no measurement in this change
-	 *         covers that. The second conjunct is
-	 *         {@link BridgedOrders#namesMoreThanOneSubstance}, which is what makes this a refusal of
-	 *         ambiguity rather than a refusal of the leg: a concept the bridge files on ONE substance
-	 *         still states its clause, which is the whole point of the leg for the reported case.
+	 *         covers that. The second is {@link BridgedOrders#recordedNameNames}, and it is what makes
+	 *         this a refusal of AMBIGUITY rather than a refusal of the leg.
 	 *
-	 *         <p>Issue #353, review round 1. Mutate either conjunct — delete it, swap the {@code &&}
-	 *         for an {@code ||}, or loosen the {@code > 1} — and read which cases of
+	 *         <p><b>It counted substances until review round 2, and counting was wrong in the
+	 *         population this leg exists for.</b> "The bridge's answer for this order spans more than
+	 *         one {@code substanceGroupKey}" cannot tell {@code Esomeprazole magnesium} → Esomeprazole
+	 *         AND Omeprazole, where the module cannot say which the prescription is, from
+	 *         {@code Abacavir / lamivudine} → Abacavir AND Lamivudine, where the prescription contains
+	 *         both and the clause is true of each. Measured over the shipped knowledge base, 990 of the
+	 *         1112 multi-substance bridged concepts are of the second kind, and the count refused every
+	 *         one of them — silently, on exactly the fixed-dose-combination medication lists issue #353
+	 *         is written for. Those two figures are the difference of the two
+	 *         {@code BridgedConceptLegBoundsTest.theRefusalsReachOverTheShippedKnowledgeBase} asserts,
+	 *         so a knowledge-base refresh that moves either reddens rather than leaving this stale. Naming separates them and is asked PER SUBSTANCE, so
+	 *         {@code Esomeprazole from Inexium 40mg} stands where {@code Omeprazole from Inexium 40mg}
+	 *         does not.
+	 *
+	 *         <p><b>There is no third conjunct asking whether the answer is ambiguous at all, and that
+	 *         is a measured omission rather than an oversight.</b> The {@code ddinter} parser writes a
+	 *         bridge's recorded name onto every entry it files there as an ALIAS, so an answer spanning
+	 *         ONE substance has a single uncontested claimant and is always named;
+	 *         {@link DrugReferenceService#substancesNamedByBridge} carries that argument, its residue
+	 *         and the fold it depends on. Add one back only with a case that reddens without it.
+	 *
+	 *         <p>Issue #353, review rounds 1 and 2. Mutate either conjunct — delete it, swap the
+	 *         {@code &&} for an {@code ||}, drop either negation — and read which cases of
 	 *         {@code BridgedConceptOrderResolutionTest} redden; the two conjuncts redden different
 	 *         ones.
 	 */
 	private static boolean restsOnAnAmbiguousBridge(List<DrugReference> rows,
 			PatientClinicalContext.ActiveDrugOrder order, BridgedOrders bridged) {
 		return !resolvesFromAny(rows, order, BridgedOrders.NONE)
-				&& bridged.namesMoreThanOneSubstance(order);
+				&& !bridged.recordedNameNames(rows, order);
 	}
 
 	/** @return whether any name {@code order} RECORDS reaches {@code ref} — {@link DrugReference#matchesDrugName}
@@ -5970,6 +6002,10 @@ public class DrugSafetyValidator {
 
 		private Map<PatientClinicalContext.ActiveDrugOrder, List<DrugReference>> byOrder;
 
+		/** {@link #recordedNameNames}'s own memo — the substances the bridge's recorded name names, per
+		 *  order, for this pass. Separate from {@link #byOrder} because almost no order asks it. */
+		private Map<PatientClinicalContext.ActiveDrugOrder, Set<Object>> namedByOrder;
+
 		private BridgedOrders(DrugReferenceService service, PatientClinicalContext context) {
 			this.service = service;
 			this.context = context;
@@ -6033,29 +6069,47 @@ public class DrugSafetyValidator {
 		}
 
 		/**
-		 * @return whether the bridge's answer for {@code order} spans more than one SUBSTANCE — the
-		 *         residue {@link DrugReferenceService#findByBridgedConcept} names and ADR Decision 68
-		 *         measures at 46 of the shipped knowledge base's 4251 bridged concepts, asked of one
-		 *         order. Where it is true the module knows the prescription is one of those substances
-		 *         and cannot say which, so nothing may PRINT one of their names as this prescription's
-		 *         (see {@link #addChartOrderBridge}).
+		 * @return whether the name the bridge records for {@code order}'s concept NAMES the substance
+		 *         {@code rows} are the rows of — the question {@link #restsOnAnAmbiguousBridge} asks
+		 *         before a finding prints that substance's label as this prescription's. False for an
+		 *         order the bridge does not reach at all, and for {@link #NONE}.
 		 *
-		 *         <p>Over {@link DrugReference#substanceGroupKey()} and not the entry count: a
-		 *         substance has N rows in this dataset, so counting entries would call every
-		 *         route-qualified presentation of one substance an ambiguity. It answers a question
-		 *         about the ORDER's whole bridged answer and never about the rows a caller is holding,
-		 *         because the claim being refused is about which substance the PRESCRIPTION is.
+		 *         <p>Delegated whole to {@link DrugReferenceService#substancesNamedByBridge}, which is
+		 *         where the fold to one row per substance, the {@link DrugReferenceService} accessor it
+		 *         asks and the residue of the whole rule live. Nothing about the naming rule is decided
+		 *         here: this class's job is to hold one pass's resolution, and a second spelling of the
+		 *         rule beside the resolution is how the two would come apart.
+		 *
+		 *         <p><b>Memoised per ORDER for the pass, and resolved only for the orders that ask.</b>
+		 *         An order reaches this only after {@link #recordsANameOfAny} and the "nothing but the
+		 *         bridge" conjunct have both let it through, which on an ordinary chart is no order at
+		 *         all; an eager walk would make every pass pay for a question almost none of them ask.
+		 *         The map is this instance's, so it lives for one pass — {@link #NONE} is shared across
+		 *         requests and memoises nothing, exactly as {@link #resolved()} does not.
+		 *
+		 *         <p>It replaced a count of the substances the answer spans, in issue #353's review round
+		 *         2; {@link #restsOnAnAmbiguousBridge} carries what that count got wrong.
 		 */
-		boolean namesMoreThanOneSubstance(PatientClinicalContext.ActiveDrugOrder order) {
+		boolean recordedNameNames(List<DrugReference> rows,
+				PatientClinicalContext.ActiveDrugOrder order) {
 			List<DrugReference> entries = resolved().get(order);
 			if (entries == null) {
 				return false;
 			}
-			Set<Object> substances = new HashSet<Object>();
-			for (DrugReference entry : entries) {
-				substances.add(entry.substanceGroupKey());
+			if (namedByOrder == null) {
+				namedByOrder = new IdentityHashMap<PatientClinicalContext.ActiveDrugOrder, Set<Object>>();
 			}
-			return substances.size() > 1;
+			Set<Object> named = namedByOrder.get(order);
+			if (named == null) {
+				named = service.substancesNamedByBridge(order.getConceptUuid(), entries);
+				namedByOrder.put(order, named);
+			}
+			for (DrugReference row : rows) {
+				if (named.contains(row.substanceGroupKey())) {
+					return true;
+				}
+			}
+			return false;
 		}
 	}
 
@@ -6128,11 +6182,14 @@ public class DrugSafetyValidator {
 	 *         <li>the CODE leg's is not closed. It needs two substances under one level-5 code AND no
 	 *         name match; no shipped-KB instance of that pair is constructed, and it is named here
 	 *         rather than left to be found;</li>
-	 *         <li>the BRIDGED leg's has a constructed shipped-KB instance — ADR Decision 68 measures 46
-	 *         of the 4251 bridged concepts as filed on more than one substance, CIEL 75876
-	 *         {@code Esomeprazole magnesium} among them — and it is refused at the printing site by
-	 *         {@link #restsOnAnAmbiguousBridge} rather than here, so the leg keeps resolving and only
-	 *         the sentence naming a prescription is withheld.</li>
+	 *         <li>the BRIDGED leg's has a constructed shipped-KB instance — 1112 of the 4251 bridged
+	 *         concepts are filed on more than one substance, CIEL 75876
+	 *         {@code Esomeprazole magnesium} among them — and the part of it that is a false claim is
+	 *         refused at the printing site by {@link #restsOnAnAmbiguousBridge} rather than here, so
+	 *         the leg keeps resolving and only the sentence naming a prescription is withheld. Part,
+	 *         not all: 990 of the 1112 are fixed-dose combinations whose recorded name names every
+	 *         substance they resolve, and those state their clause. ADR Decision 68 carries both
+	 *         figures and what each is a count OF.</li>
 	 *         </ul>
 	 *         That reasoning is this predicate's alone and does not transfer.
 	 *         {@link #classRelationships}'s restating-existing-therapy skip keeps its own exact-code

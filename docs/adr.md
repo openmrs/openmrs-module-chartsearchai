@@ -4571,7 +4571,13 @@ records for it. The two bounds fail in opposite directions and neither is remova
   `Trastuzumab emtansine` share one bridged concept and share no ATC code — which is issue #209's
   widening arriving by a new route. Worse, `resolvesFrom` feeds SUPPRESSIONS:
   `activeOrdersOtherThan` and `ordersOtherThan` withhold an order from witnessing an interaction, and
-  a wider set there removes a warning with no chip and no log line to notice it by.
+  a wider set there removes a warning with no chip and no log line to notice it by. **Neither of those
+  two sites is pinned on its own** — measured in review round 2, one mutation per full api run:
+  substituting `BridgedOrders.NONE` for the `bridged` argument at either method alone leaves the whole
+  suite green, and only neutering all four bridged arguments across the two reddens
+  `BridgedConceptOrderResolutionTest.theScreeningArmWithholdsTheBridgedOrderFromWitnessingItsOwnPair`.
+  So this argument's own consumers are reachable but not individually guarded, and a change dropping
+  the leg from one of them ships green. A case per site is owed.
 - Without the intersection, the leg could reach an entry the bridge does not file under this concept at
   all, on the strength of a name it merely shares.
 
@@ -4580,18 +4586,26 @@ ranking keeps the STRONGEST claimants of the bridge's name. Where one entry's DI
 name it keeps that entry alone, which is the Trastuzumab case above. Where the name is only an ALIAS
 of its entries, `nameMatchStrength` TIES and `findImpliedByDrugName` admits them all — so the leg can
 still answer with more than one substance. Measured through `findByBridgedConcept` and
-`substanceGroupKey` over the shipped knowledge base, excluding every bridge name that is a
-combination: **46 of the 4251 bridged concepts answer with more than one substance**, among them CIEL
-77719 (`Hydrocortisone acetate` → Hydrocortisone AND Hydrocortisone butyrate — CLAUDE.md's own #209
-example, "an ester she is not on") and CIEL 75876 (`Esomeprazole magnesium` → Esomeprazole AND
-Omeprazole). For those concepts a bridged order adds a second substance to `findForActiveOrders`, and
-it reaches the prompt as citable reference material.
+`substanceGroupKey` over the shipped knowledge base, **1112 of the 4251 bridged concepts do**, among
+them CIEL 77719 (`Hydrocortisone acetate` → Hydrocortisone AND Hydrocortisone butyrate — CLAUDE.md's
+own #209 example, "an ester she is not on"), CIEL 75876 (`Esomeprazole magnesium` → Esomeprazole AND
+Omeprazole) and CIEL 103166 (`Abacavir / lamivudine` → Abacavir AND Lamivudine, which is a real
+fixed-dose combination and no ambiguity at all). For those concepts a bridged order adds a second
+substance to `findForActiveOrders`, and it reaches the prompt as citable reference material.
+
+**A figure of 46 stood here, and in two javadocs, until review round 2.** It was a count over this same
+population MINUS every bridge name that reads as a combination — a filter no predicate applied — and it
+was asserted by no test, so it could not be re-derived from what it was attached to. A maintainer
+reading it sized the residue as a 1-in-92 carve-out; it is 1-in-4 of bridged concepts and the common
+case for combination products, which is how the round-1 clause refusal below shipped unnoticed. Every
+figure in this section now says what it is a count OF and is asserted by
+`BridgedConceptLegBoundsTest.theRefusalsReachOverTheShippedKnowledgeBase`.
 
 That is NOT narrowed further, and the reason is the same property that makes the leg defensible at
 all: its answer is a subset of what a session electing the bridge's own spelling already gets, so the
-46 are what an `en` session gets for those orders TODAY. Narrowing past that would make the leg answer
-less than the name leg it stands in for, and the ticket's whole complaint is that the two locales
-disagree. What is being fixed here is the locale dependence, not #209.
+1112 are what an `en` session gets for those orders TODAY. Narrowing past that would make the leg
+answer less than the name leg it stands in for, and the ticket's whole complaint is that the two
+locales disagree. What is being fixed here is the locale dependence, not #209.
 
 Together they make the leg's answer a SUBSET of what a session electing the bridge's own spelling
 already gets. So it states nothing the reference data does not already state about that concept; what
@@ -4713,9 +4727,9 @@ the substance nowhere, so without the clause a clinician has no way to connect t
 the medication list. `BridgedConceptOrderResolutionTest.theFindingSaysWhichPrescriptionTheSubstanceCameFrom`
 pins it.
 
-**But only where the bridge names ONE substance — added in review round 1, and the first draft of this
-section had it wrong.** That draft discussed the Decision 64 clause as beneficial and never put it to
-the 46 multi-substance concepts measured above. The subset argument this decision rests on is a
+**But only for a substance the bridge's own recorded name NAMES — added in review round 1, narrowed in
+round 2, and the first draft of this section had it wrong.** That draft discussed the Decision 64
+clause as beneficial and never put it to the multi-substance concepts measured above. The subset argument this decision rests on is a
 statement about the candidate SET and it does not transfer to that consumer: Decision 64's clause is
 PRINTED, verbatim, into a citable `safety_finding` carrying `STRENGTH_WITHHOLD`, and its own silence
 test is `recordsANameOfAny` — "the order's own recorded names reach the substance" — which is exactly
@@ -4732,13 +4746,48 @@ its recorded names reach the substance. So the bridged path made a statement the
 which is the one thing the subset argument promises it will not do.
 
 `DrugSafetyValidator.restsOnAnAmbiguousBridge` refuses the clause where BOTH: nothing but the bridged
-leg joined the order to the substance, and the leg's answer for that order spans more than one
-`substanceGroupKey`. Two conjuncts, and they redden different cases — mutate one and read them. The
-first is written as the negation of `resolvesFromAny` under `BridgedOrders.NONE`, so it cannot drift
-from the predicate it complements; where the order's own recorded ATC code reaches the substance the
-clause stands exactly as before, and the CODE leg's own over-wide residue (two substances under one
-level-5 code) is `resolvesFrom`'s and is deliberately left open here — closing it would change what
-every ATC-resolved order states, which nothing in this change measures.
+leg joined the order to the substance, and the name the bridge records for that concept does not NAME
+that substance (`DrugReferenceService.substancesNamedByBridge`). Two conjuncts, and they redden
+different cases — mutate one and read them. The first is written as the negation of `resolvesFromAny`
+under `BridgedOrders.NONE`, so it cannot drift from the predicate it complements; where the order's own
+recorded ATC code reaches the substance the clause stands exactly as before, and the CODE leg's own
+over-wide residue (two substances under one level-5 code) is `resolvesFrom`'s and is deliberately left
+open here — closing it would change what every ATC-resolved order states, which nothing in this change
+measures.
+
+**Round 1 asked the second conjunct as a COUNT, and that was wrong in the population this leg exists
+for.** It refused the clause wherever the order's bridged answer spanned more than one
+`substanceGroupKey`, which cannot tell "the module knows the prescription is one of these and cannot
+say which" (`Esomeprazole magnesium` → Esomeprazole AND Omeprazole) from "the prescription genuinely
+contains all of these" (`Abacavir / lamivudine` → Abacavir AND Lamivudine). Measured, **990 of the 1112
+multi-substance bridged concepts are the second kind** — fixed-dose combinations, which is what a
+francophone ARV medication list is mostly made of — and the count refused every one. That reopened
+#349's own defect for the bridged population, silently: a Major chip naming a substance nowhere on the
+medication list, with no clause saying which prescription it came from, and no chip difference or log
+line to notice it by. It also made CLAUDE.md's standing rule "a combination order carrying BOTH
+substances bridges both sides" false for every bridged combination.
+
+Naming separates them, and it is the accessor CLAUDE.md already designates for exactly this question —
+"ask it before PRINTING a substance's own label in a sentence reporting the patient's record",
+`DrugReferenceService.findNamedSubstances`, whose second production caller `substancesNamedByBridge`
+now is. Asked PER SUBSTANCE, so one prescription can state a clause for the substance its concept's
+name names and none for the substance it does not: `Esomeprazole from Inexium 40mg` stands where
+`Omeprazole from Inexium 40mg` does not, out of one bridged answer
+(`BridgedConceptOrderResolutionTest.theSubstanceTheBridgesOwnNameNamesIsAttributedThoughItsSiblingIsNot`).
+Over the shipped knowledge base the refusal now reaches **122 of the 4251 bridged concepts and 166 of
+the 5826 (concept, substance) attributions the leg can state** — the attribution being the unit the
+clause is printed in, and deliberately not the concept count.
+
+**The candidate set handed to `findNamedSubstances` is folded to one representative row per substance,
+and that fold is load-bearing.** That accessor's equal-claimant clause refuses a TIE, so a substance's
+several route-qualified rows contest each other and the substance is then named by nothing: unfolded,
+28 bridged concepts resolving to exactly ONE substance are named by nothing at all (`Naphazoline` →
+`Naphazoline (nasal)` AND `Naphazoline (ophthalmic)`); folded, none are. The same measurement is why
+there is no third conjunct asking whether the answer is ambiguous at all — the `ddinter` parser writes
+a bridge's recorded name onto every entry it files there as an alias, so a one-substance answer has a
+single uncontested claimant and is always named, and such a conjunct could change nothing. That is a
+property of the LOADER and not of the shipped data; `substancesNamedByBridge`'s javadoc names the
+entry shape that would escape it.
 
 **The refusal is of the CLAUSE and not of the leg.** The screen still runs, the chip still stands and
 the order is still withheld from witnessing its own pair; what is withheld is the sentence naming which
@@ -4746,8 +4795,9 @@ prescription the substance came from. That is the fail-safe direction for a reco
 is evidence: silence about provenance costs a clinician a link, while a wrong provenance is a false
 clinical claim in citable material. Pinned by
 `BridgedConceptOrderResolutionTest.aConceptBridgedToSeveralSubstancesNamesNoPrescriptionInTheFinding`
-and, for where the refusal stops,
-`.anAmbiguouslyBridgedOrderTheChartsOwnCodeReachesIsStillAttributed`. Both run on
+and, for where the refusal stops, `.anAmbiguouslyBridgedOrderTheChartsOwnCodeReachesIsStillAttributed`,
+`.aCombinationPrescriptionItsBridgeNameNamesIsStillAttributed` and
+`.theSubstanceTheBridgesOwnNameNamesIsAttributedThoughItsSiblingIsNot`. Both run on
 `ddi-bridged-concept-two-substances.json`, whose CIEL 75876 rows are the shipped bridge's own and whose
 interaction row carries no mechanism text, so the fixture invents no clinical prose.
 

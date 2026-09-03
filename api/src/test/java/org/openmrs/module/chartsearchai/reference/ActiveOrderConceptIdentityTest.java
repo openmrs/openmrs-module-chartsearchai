@@ -13,16 +13,20 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.Locale;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Concept;
+import org.openmrs.ConceptName;
 import org.openmrs.DrugOrder;
 import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
+import org.openmrs.util.OpenmrsConstants;
 
 /**
  * Issue #353: {@link PatientClinicalContextBuilder} records WHICH concept an active drug order was
@@ -40,6 +44,10 @@ public class ActiveOrderConceptIdentityTest extends BaseModuleContextSensitiveTe
 
 	/** Concept 88 (ASPIRIN), the concept on patient 7's single active drug order (order 111). */
 	private static final int ORDERED_CONCEPT = 88;
+
+	/** How a francophone dictionary spells that concept — added to it by this class's locale case, and
+	 *  written without its accents so the file needs no encoding of its own to say what it means. */
+	private static final String FRENCH_SPELLING = "Acide acetylsalicylique";
 
 	private Patient patient;
 
@@ -113,6 +121,77 @@ public class ActiveOrderConceptIdentityTest extends BaseModuleContextSensitiveTe
 			"the arrangement must reach the code-only rung, was: " + order);
 		assertEquals(Context.getConceptService().getConcept(ORDERED_CONCEPT).getUuid(),
 			order.getConceptUuid(), "an order with no readable name still records its concept");
+	}
+
+	/**
+	 * The property the whole leg rests on, MEASURED for one order across two locales rather than argued
+	 * from the type: the recorded NAMES move with the session locale and the recorded CONCEPT does not.
+	 * One arrangement is not a proof about every dictionary; what it rules out is the join being keyed,
+	 * anywhere on this path, on something a locale can respell.
+	 *
+	 * <p>That asymmetry is the ticket's own report — same order, same question, same patient, {@code en}
+	 * one chip and {@code fr} none. Every other case for this issue models the francophone order by
+	 * handing the builder a name the fixture does not carry, which assumes the thing being claimed;
+	 * this is the only case in the module that varies a session locale (grep {@code Context.setLocale}).
+	 *
+	 * <p>The order's coded drug is removed first so that its only name comes from the concept: with a
+	 * {@code Drug} row attached, {@code addDrugName} contributes that row's own name, which no locale
+	 * respells, and the two name sets would differ by an addition rather than by the spelling the
+	 * session elects.
+	 *
+	 * <p><b>What this does NOT do</b> is screen the ticket's order in {@code fr} end to end against a
+	 * real dictionary. Those are the ticket's six verification rows, they belong on the standalone, and
+	 * nothing here stands in for them.
+	 */
+	@Test
+	public void theRecordedConceptIsTheSameWhateverNameTheSessionLocaleElects() {
+		// Appended to the list already configured rather than replacing it: core refuses an allowed
+		// list that drops the installation's own default locale (localeListNotIncludingDefaultLocale),
+		// and the default here is the one this list already carries.
+		String allowed = Context.getAdministrationService()
+				.getGlobalProperty(OpenmrsConstants.GLOBAL_PROPERTY_LOCALE_ALLOWED_LIST);
+		Context.getAdministrationService().setGlobalProperty(
+			OpenmrsConstants.GLOBAL_PROPERTY_LOCALE_ALLOWED_LIST, allowed + ", fr");
+		Context.getAdministrationService().executeSQL(
+			"update drug_order set drug_inventory_id = null, drug_non_coded = null where order_id = 111",
+			false);
+		Concept ordered = Context.getConceptService().getConcept(ORDERED_CONCEPT);
+		ordered.setFullySpecifiedName(new ConceptName(FRENCH_SPELLING, Locale.FRENCH));
+		Context.getConceptService().saveConcept(ordered);
+		Context.flushSession();
+		Context.clearSession();
+		String conceptUuid = Context.getConceptService().getConcept(ORDERED_CONCEPT).getUuid();
+
+		Context.setLocale(Locale.ENGLISH);
+		PatientClinicalContext.ActiveDrugOrder inEnglish = theOrder();
+		Context.setLocale(Locale.FRENCH);
+		PatientClinicalContext.ActiveDrugOrder inFrench = theOrder();
+
+		// Asserted as membership and not merely as inequality: an fr session that read NO name at all
+		// would also make the two sets differ, and would send the order down the code-only rung
+		// instead — which is a different fact and would leave this case passing vacuously.
+		assertTrue(namesInclude(inFrench, FRENCH_SPELLING),
+			"the premise: the fr session must elect the French spelling, was: " + inFrench.getNames());
+		assertFalse(namesInclude(inEnglish, FRENCH_SPELLING),
+			"and the en session must not, or the locale is not what moved the names, was: "
+					+ inEnglish.getNames());
+		assertEquals(conceptUuid, inEnglish.getConceptUuid(),
+			"the concept key must be recorded in the locale the bridge's own names are written in");
+		assertEquals(conceptUuid, inFrench.getConceptUuid(),
+			"and must be the SAME in the locale that spells the order differently, which is the whole"
+					+ " of what this leg claims over the name key");
+	}
+
+	/** Whether the order records {@code name}, compared without case. The case the dictionary hands
+	 *  back for a name it was given is not what this case is about, and asserting it would make the
+	 *  premise depend on a core behaviour nothing here has measured. */
+	private static boolean namesInclude(PatientClinicalContext.ActiveDrugOrder order, String name) {
+		for (String recorded : order.getNames()) {
+			if (recorded.equalsIgnoreCase(name)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** The one active drug order patient 7 has, off the real builder. */

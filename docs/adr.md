@@ -4712,3 +4712,60 @@ that is the intended reading — the chart's own words for the prescription (`Co
 the substance nowhere, so without the clause a clinician has no way to connect the chip to anything on
 the medication list. `BridgedConceptOrderResolutionTest.theFindingSaysWhichPrescriptionTheSubstanceCameFrom`
 pins it.
+
+**But only where the bridge names ONE substance — added in review round 1, and the first draft of this
+section had it wrong.** That draft discussed the Decision 64 clause as beneficial and never put it to
+the 46 multi-substance concepts measured above. The subset argument this decision rests on is a
+statement about the candidate SET and it does not transfer to that consumer: Decision 64's clause is
+PRINTED, verbatim, into a citable `safety_finding` carrying `STRENGTH_WITHHOLD`, and its own silence
+test is `recordsANameOfAny` — "the order's own recorded names reach the substance" — which is exactly
+what the bridged leg's premise denies. So the orders the leg exists for are the orders whose false
+attributions that test cannot silence.
+
+Measured on this branch through the real `DrugSafetyValidator.validate` over the shipped knowledge
+base: one order displayed `Inexium 40mg`, written against CIEL 75876 and carrying no ATC code, beside
+an order for clopidogrel, question `Can I give this patient omeprazole?` The finding read
+`Omeprazole from Inexium 40mg`. The patient is not on omeprazole; the bridge names that concept
+`Esomeprazole magnesium`. The same prescription named `Esomeprazole magnesium 40mg` with no concept —
+the `en` session this leg's answer is claimed to be a subset of — states no such clause at all, because
+its recorded names reach the substance. So the bridged path made a statement the `en` path does not,
+which is the one thing the subset argument promises it will not do.
+
+`DrugSafetyValidator.restsOnAnAmbiguousBridge` refuses the clause where BOTH: nothing but the bridged
+leg joined the order to the substance, and the leg's answer for that order spans more than one
+`substanceGroupKey`. Two conjuncts, and they redden different cases — mutate one and read them. The
+first is written as the negation of `resolvesFromAny` under `BridgedOrders.NONE`, so it cannot drift
+from the predicate it complements; where the order's own recorded ATC code reaches the substance the
+clause stands exactly as before, and the CODE leg's own over-wide residue (two substances under one
+level-5 code) is `resolvesFrom`'s and is deliberately left open here — closing it would change what
+every ATC-resolved order states, which nothing in this change measures.
+
+**The refusal is of the CLAUSE and not of the leg.** The screen still runs, the chip still stands and
+the order is still withheld from witnessing its own pair; what is withheld is the sentence naming which
+prescription the substance came from. That is the fail-safe direction for a record whose whole budget
+is evidence: silence about provenance costs a clinician a link, while a wrong provenance is a false
+clinical claim in citable material. Pinned by
+`BridgedConceptOrderResolutionTest.aConceptBridgedToSeveralSubstancesNamesNoPrescriptionInTheFinding`
+and, for where the refusal stops,
+`.anAmbiguouslyBridgedOrderTheChartsOwnCodeReachesIsStillAttributed`. Both run on
+`ddi-bridged-concept-two-substances.json`, whose CIEL 75876 rows are the shipped bridge's own and whose
+interaction row carries no mechanism text, so the fixture invents no clinical prose.
+
+**Considered and not taken: a CIEL reference-map rung beside the uuid one.** Raised in review round 1 —
+the measurement above settles uuid over code, not uuid instead of BOTH, and a deployment that files
+CIEL concepts under local uuids and cross-walks through `concept_reference_map` gains nothing from this
+leg. That residue is real and is recorded above. It is not taken here because it is a second KEY, not a
+second spelling: it needs the order's concept's CIEL-source reference maps carried on
+`PatientClinicalContext.ActiveDrugOrder` (today `PatientClinicalContextBuilder.addAtcCodes` reads
+reference maps only for ATC-named sources), a rule for which `ConceptSource` names count as CIEL, and a
+coverage-and-false-join measurement against a dictionary that actually cross-walks — none of which this
+change has. A second key feeding a SUPPRESSION on unmeasured evidence is the shape this decision
+already argues against for the unranked leg. It belongs on its own evidence and its own change; the
+population it would serve is no worse off than on `main`.
+
+**What no test here measures: a session LOCALE.** The mechanism is a uuid, which no locale can respell,
+and `ActiveOrderConceptIdentityTest.theRecordedConceptIsTheSameWhateverNameTheSessionLocaleElects`
+drives the real `PatientClinicalContextBuilder` under two locales and asserts exactly that — the
+recorded names move and the recorded concept does not. What that case does NOT do is screen the
+ticket's own order in `fr` end to end against a real dictionary; the ticket's six verification rows are
+for the standalone, and nothing in this repository stands in for them.

@@ -570,6 +570,14 @@ public class DrugReferenceService {
 	 * ({@code Esomeprazole magnesium} → Esomeprazole AND Omeprazole). That is issue #209's own shape,
 	 * and it is not narrowed here for the reason the next paragraph gives.
 	 *
+	 * <p><b>It is refused at the one site that PRINTS an answer from it</b>, which is not the same
+	 * thing as narrowing the leg: {@code DrugSafetyValidator.restsOnAnAmbiguousBridge} withholds the
+	 * finding's "&lt;substance&gt; from &lt;prescription&gt;" clause where an order's only join to a
+	 * substance is a concept in this population, because there the module would be saying which of
+	 * several substances the prescription is. The screen still runs and the chip still stands. Added
+	 * in review round 1 after that clause was measured stating {@code Omeprazole from Inexium 40mg}
+	 * for a prescription written against CIEL 75876; ADR Decision 68 carries the reproduction.
+	 *
 	 * <p>Without the intersection the leg could reach an entry the bridge does not file under this
 	 * concept at all, on the strength of a name it merely shares.
 	 *

@@ -81,6 +81,35 @@ public class BridgedConceptOrderResolutionTest {
 			DrugReferenceTestSupport.set("Lamivudine 150mg", "lamivudine"), null, null, null);
 	}
 
+	/** How a francophone dictionary spells CIEL 75876 — again a string the fixture carries nowhere, so
+	 *  the concept key is provably the only thing that can reach the substance. */
+	private static final String INEXIUM_ORDER = "Inexium 40mg";
+
+	/** The uuid the shipped bridge records for CIEL 75876, {@code Esomeprazole magnesium} — filed on
+	 *  Omeprazole AND Esomeprazole, which are two substances by
+	 *  {@code DdiDrugReferenceSource.substanceIds}' own rule. */
+	private static final String ESOMEPRAZOLE_CONCEPT = "75876AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+	/** The ambiguously bridged prescription, optionally carrying the ATC code its concept publishes. */
+	private static PatientClinicalContext.ActiveDrugOrder inexiumOrder(Set<String> atcCodes) {
+		return PatientClinicalContext.ActiveDrugOrder.named("order-inexium", INEXIUM_ORDER,
+			DrugReferenceTestSupport.set(INEXIUM_ORDER), atcCodes, null, ESOMEPRAZOLE_CONCEPT);
+	}
+
+	/** The co-prescription the fixture DOES name, so the bridged substance has a pair to chip with. */
+	private static PatientClinicalContext.ActiveDrugOrder clopidogrelOrder() {
+		return PatientClinicalContext.ActiveDrugOrder.named("order-clopidogrel", "Clopidogrel 75mg",
+			DrugReferenceTestSupport.set("Clopidogrel 75mg", "clopidogrel"), null, null, null);
+	}
+
+	private static List<String> bridgeTexts(SafetyWarning warning) {
+		List<String> bridged = new ArrayList<String>();
+		for (SafetyWarning.ChartOrderBridge bridge : warning.chartOrderBridges()) {
+			bridged.add(bridge.toString());
+		}
+		return bridged;
+	}
+
 	private static PatientClinicalContext chart(PatientClinicalContext.ActiveDrugOrder... orders) {
 		Set<String> names = DrugReferenceTestSupport.set();
 		Set<String> codes = DrugReferenceTestSupport.set();
@@ -209,6 +238,77 @@ public class BridgedConceptOrderResolutionTest {
 	}
 
 	/**
+	 * The one thing a bridged order must NOT be made to say (issue #353, review round 1).
+	 *
+	 * <p>Where the bridge files a concept on SEVERAL substances the module knows the prescription is
+	 * one of them and cannot say which. The bridged leg is still what resolved the order — the screen
+	 * runs and the chip stands — but the finding's "&lt;substance&gt; from &lt;prescription&gt;" clause
+	 * would state one of those substances as this prescription's, in text
+	 * {@code DrugReferenceInjector.renderFinding} copies verbatim into a citable {@code safety_finding}
+	 * carrying {@code STRENGTH_WITHHOLD}. Here the prescription is written against
+	 * {@code Esomeprazole magnesium} and the clause would read {@code Omeprazole from Inexium 40mg}.
+	 *
+	 * <p>It is exactly the orders this leg exists for that cannot be silenced by
+	 * {@code addChartOrderBridge}'s recorded-names test: the premise of the leg is that the order's own
+	 * names do not reach the substance. So the refusal is its own conjunct —
+	 * {@code restsOnAnAmbiguousBridge}.
+	 *
+	 * <p>The premise is asserted rather than assumed: without the two substances the case would also
+	 * pass for a guard that refused every bridged order, and for a fixture that had stopped carrying
+	 * the shape at all.
+	 */
+	@Test
+	public void aConceptBridgedToSeveralSubstancesNamesNoPrescriptionInTheFinding() throws Exception {
+		DrugReferenceService service = DrugReferenceTestSupport
+				.ddiFixtureService(DrugReferenceTestSupport.DDI_BRIDGED_CONCEPT_TWO_SUBSTANCES);
+		PatientClinicalContext chart = chart(inexiumOrder(null), clopidogrelOrder());
+
+		assertEquals(Arrays.asList("Clopidogrel", "Omeprazole", "Esomeprazole"),
+			displayNames(service.findForActiveOrders(chart)),
+			"the premise: the bridge files that concept on two substances, so this order resolves both");
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+				.validate("", "Can I give this patient omeprazole?", service.withReferenceNames(chart));
+
+		assertEquals(1, warnings.size(), "the screen must still run, was: "
+				+ DrugReferenceTestSupport.details(warnings));
+		assertTrue(warnings.get(0).getDetail()
+				.startsWith("Omeprazole interacts with active order Clopidogrel \u2014 Major"),
+			"and the chip must still stand, was: " + warnings.get(0).getDetail());
+		assertEquals(Collections.<String> emptyList(), bridgeTexts(warnings.get(0)),
+			"but nothing may name a prescription the module cannot say the substance of");
+	}
+
+	/**
+	 * The SCOPE of that refusal, and the reason it is two conjuncts rather than one: the same
+	 * ambiguously bridged prescription, now carrying the ATC code its own concept publishes. The
+	 * substance is then reached by a key the chart itself records, and the clause stands exactly as it
+	 * did before the guard.
+	 *
+	 * <p>What this case does NOT assert is that the code leg is right to reach it. That leg has an
+	 * over-wide residue of its own — two substances under one level-5 code — which
+	 * {@code DrugSafetyValidator.resolvesFrom}'s javadoc names and which this change deliberately
+	 * leaves open: closing it would change what every ATC-resolved order states, and nothing here
+	 * measures that. This pins where the new guard stops.
+	 */
+	@Test
+	public void anAmbiguouslyBridgedOrderTheChartsOwnCodeReachesIsStillAttributed() throws Exception {
+		DrugReferenceService service = DrugReferenceTestSupport
+				.ddiFixtureService(DrugReferenceTestSupport.DDI_BRIDGED_CONCEPT_TWO_SUBSTANCES);
+		PatientClinicalContext chart = chart(inexiumOrder(DrugReferenceTestSupport.set("A02BC05")),
+			clopidogrelOrder());
+
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service)
+				.validate("", "Can I give this patient omeprazole?", service.withReferenceNames(chart));
+
+		assertEquals(1, warnings.size(), "precondition: the pair must chip at all, was: "
+				+ DrugReferenceTestSupport.details(warnings));
+		assertEquals(Arrays.asList("Omeprazole from " + INEXIUM_ORDER), bridgeTexts(warnings.get(0)),
+			"an order whose own recorded code reaches the substance is attributed as it was before"
+					+ " the ambiguity guard");
+	}
+
+	/**
 	 * A concept the bridge does not record at all joins to nothing. The negative control for the cases
 	 * above and for {@code BridgedConceptLegBoundsTest}, which is where the two bounds that NARROW a
 	 * non-empty answer are pinned — an empty result here would also be produced by a leg that did
@@ -231,13 +331,17 @@ public class BridgedConceptOrderResolutionTest {
 	 * must not be read as one.
 	 *
 	 * <p>{@code DrugReference}'s {@code ignoreUnknown} covers only properties Jackson does not KNOW,
-	 * and a public accessor makes this one known — so such a file fails to BIND and
-	 * {@code MAPPER.readValue} throws. What that costs the operator is measured on
-	 * {@link DrugReference#getBridgedConcepts()}: not a silent empty load, but their whole dataset
-	 * replaced by the bundled fallback under a loud {@code configured-data-file-not-read} finding.
-	 * This case pins the PARSER, which is where the throw happens; it drives the real
-	 * {@code JsonDrugReferenceSource.parse} on a file whose {@code bridgedConcepts} value is not even
-	 * the right SHAPE, so it reddens if the property is ever made bindable.
+	 * and a public accessor makes this one known — so both of its accessors carry {@code @JsonIgnore},
+	 * and the file below therefore PARSES. Take both annotations away and it does not:
+	 * {@code MAPPER.readValue} throws a {@code MismatchedInput}, because the {@code bridgedConcepts}
+	 * value here is not even the right TYPE. That is what makes this a pin on the property being
+	 * unbindable rather than a pin on nothing. Removing just ONE of the two annotations leaves this
+	 * case green — measured, and why neither of them is described as the load-bearing one.
+	 *
+	 * <p>What the throw would cost the operator is on {@link DrugReference#getBridgedConcepts()}: not
+	 * a silent empty load, but their whole dataset replaced by the bundled fallback under a loud
+	 * {@code configured-data-file-not-read} finding. It drives the real
+	 * {@code JsonDrugReferenceSource.parse}, which is where the throw would happen.
 	 */
 	@Test
 	public void aCuratedFileCarryingABridgeStillLoadsTheEntriesBesideIt() throws Exception {

@@ -923,21 +923,30 @@ public class DrugReference {
 	 * @return the dictionary concepts this entry is bridged to, unmodifiable and never null — see
 	 *         {@link #bridgedConcepts}. Empty for every source but {@code ddinter}.
 	 *
-	 *         <p><b>Not bindable from the curated {@code json} format.</b> That format declares no
-	 *         bridge, and the class's {@code ignoreUnknown} only covers properties Jackson does not
-	 *         KNOW — a public accessor here makes {@code bridgedConcepts} known, so an authored file
-	 *         carrying one binds it or fails. What that costs was MEASURED rather than assumed, and it
-	 *         is not the load going silently empty: {@code MAPPER.readValue} throws,
+	 *         <p><b>Not bindable from the curated {@code json} format — which is what the
+	 *         {@code @JsonIgnore} below is for.</b> That format declares no bridge, and the class's
+	 *         {@code ignoreUnknown} covers only properties Jackson does not KNOW; a public accessor
+	 *         makes {@code bridgedConcepts} known. So the paragraph that follows is a COUNTERFACTUAL
+	 *         and not a description of this class: an earlier draft of it stated the counterfactual as
+	 *         current behaviour.
+	 *
+	 *         <p>WITHOUT the annotation an authored file carrying that key would bind it or fail, and
+	 *         what the failure costs was MEASURED rather than assumed. It is not the load going
+	 *         silently empty: {@code MAPPER.readValue} throws,
 	 *         {@code ReferenceDataFiles.loadWithClasspathFallback} catches it and falls back to the
-	 *         BUNDLED curated file, so the operator's own entries vanish and four unrelated ones stand
-	 *         in their place — under a {@code configured-data-file-not-read} finding, which is a
-	 *         CONFIGURATION rule and therefore LOUD whatever the origin. So the failure is reported,
-	 *         and what it costs is the operator's dataset, silently swapped for another. Not issue
+	 *         BUNDLED curated file, so the operator's own entries vanish and the bundled ones stand in
+	 *         their place — under a {@code configured-data-file-not-read} finding, which is a
+	 *         CONFIGURATION rule and therefore LOUD whatever the origin. The failure would be
+	 *         reported; what it would cost is the operator's dataset, swapped for another. Not issue
 	 *         #149's inert layer; do not cite it as one.
 	 *
-	 *         <p>The annotation is on both accessors, and only the GETTER's is load-bearing — Jackson
-	 *         ignores a property annotated on either side, so removing the setter's alone changes
-	 *         nothing. Both are kept so that neither reads as the one that may go.
+	 *         <p>WITH the annotation none of that happens — the key is ignored and the entries beside
+	 *         it load, which is what
+	 *         {@code BridgedConceptOrderResolutionTest.aCuratedFileCarryingABridgeStillLoadsTheEntriesBesideIt}
+	 *         asserts. Either accessor's annotation alone would suffice, because Jackson ignores a
+	 *         property annotated on either side: removing just one of them leaves that case green and
+	 *         removing BOTH is what reddens it (measured). Both are kept so that neither reads as the
+	 *         one that may go.
 	 */
 	@JsonIgnore
 	public List<BridgedConcept> getBridgedConcepts() {

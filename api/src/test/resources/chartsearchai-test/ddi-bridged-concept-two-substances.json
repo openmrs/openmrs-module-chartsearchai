@@ -1,0 +1,73 @@
+{
+  "metadata": {
+    "schema_version": "1.0",
+    "note": "Issue #353, review round 1: a dictionary concept the KB's bridge files on TWO substances. The three drug rows carry the shipped knowledge base's own identifying fields for DDInter1340 Omeprazole, DDInter676 Esomeprazole and DDInter383 Clopidogrel; their ciel[] arrays are TRIMMED to the one bridge row each case needs, and CIEL 75876 'Esomeprazole magnesium' is filed on the first two exactly as the shipped bridge files it - the population ADR Decision 68 measures at 46 of 4251 bridged concepts. The two are two substances because their shared rxnorm_name family holds two drugbank_ids, which is DdiDrugReferenceSource.substanceIds' own rule. The interaction row carries the shipped rating for Clopidogrel/Omeprazole and NO mechanism text, so the fixture invents no clinical prose; Esomeprazole deliberately carries no rule with Clopidogrel, so the substance the chip is about is the one the bridge did NOT name and a false attribution to the prescription is legible."
+  },
+  "mechanisms": {
+    "-1": {
+      "text": null,
+      "categories": []
+    }
+  },
+  "drugs": [
+    {
+      "id": "DDInter1340",
+      "name": "Omeprazole",
+      "rxcui": "283742",
+      "rxnorm_name": "esomeprazole",
+      "drugbank_id": "DB00338",
+      "atc": [
+        "A02BC05"
+      ],
+      "ciel": [
+        {
+          "code": "75876",
+          "uuid": "75876AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Esomeprazole magnesium"
+        }
+      ]
+    },
+    {
+      "id": "DDInter676",
+      "name": "Esomeprazole",
+      "rxcui": "283742",
+      "rxnorm_name": "esomeprazole",
+      "drugbank_id": "DB00736",
+      "atc": [
+        "A02BC05"
+      ],
+      "ciel": [
+        {
+          "code": "75876",
+          "uuid": "75876AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Esomeprazole magnesium"
+        }
+      ]
+    },
+    {
+      "id": "DDInter383",
+      "name": "Clopidogrel",
+      "rxcui": "32968",
+      "rxnorm_name": "clopidogrel",
+      "drugbank_id": "DB00758",
+      "atc": [
+        "B01AC04"
+      ],
+      "ciel": [
+        {
+          "code": "77576",
+          "uuid": "77576AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Clopidogrel"
+        }
+      ]
+    }
+  ],
+  "interactions": [
+    [
+      "DDInter1340",
+      "DDInter383",
+      "Major",
+      "-1"
+    ]
+  ]
+}

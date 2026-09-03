@@ -503,6 +503,13 @@ public final class DrugReferenceTestSupport {
 	 *  abacavir/lamivudine pair that claims one name equally (issue #193). */
 	static final String DDI_COMBINATION_ALLERGEN = "chartsearchai-test/ddi-combination-allergen.json";
 
+	/** CIEL 75876 {@code Esomeprazole magnesium} filed on BOTH Omeprazole and Esomeprazole, as the
+	 *  shipped bridge files it, plus the Clopidogrel row one of them has a Major rule with — the
+	 *  bridged concept that names several substances (issue #353, review round 1). ADR Decision 68
+	 *  measures that population at 46 of 4251 bridged concepts. */
+	static final String DDI_BRIDGED_CONCEPT_TWO_SUBSTANCES =
+			"chartsearchai-test/ddi-bridged-concept-two-substances.json";
+
 	/** Eleven verbatim rows whose ALIAS SETS carry the shapes issues #136/#147 turn on — the entry named
 	 *  {@code Acetylsalicylic acid} whose every rule token is {@code aspirin} — plus the nesting pairs
 	 *  issue #86 removed ({@code opium} inside {@code tiotropium}). See the fixture's own

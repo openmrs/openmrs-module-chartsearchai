@@ -16,10 +16,12 @@ import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -147,6 +149,17 @@ public class JavadocReferenceGuardTest {
 	 * this suite runs on, not which directories that module keeps its sources in.
 	 */
 	private static final String API_MODULE = "api";
+
+	/**
+	 * The one directory carrying a {@code pom.xml} that {@link #poms} deliberately leaves out. It is a
+	 * {@code <parent>} child the root pom's {@code <modules>} does not declare, so it sits outside the
+	 * reactor {@code mvn install} drives, and it carries no java source — so its compiler
+	 * configuration gates nothing this guard is about. A literal rather than a rule ("has no java
+	 * source", say) because the exemption is a JUDGEMENT recorded in docs/adr.md Decision 72: were it
+	 * promoted to a real module its sources WOULD fall behind the gate, and this line is where that
+	 * has to be said again.
+	 */
+	private static final String NON_REACTOR_POM_DIRECTORY = "llama-server-natives";
 
 	private static final String COMPILER_PLUGIN = "maven-compiler-plugin";
 
@@ -287,23 +300,35 @@ public class JavadocReferenceGuardTest {
 	}
 
 	/**
-	 * Every {@code <module>} one POM declares, wherever it sits — the project's own
-	 * {@code <modules>} or a {@code <profile>}'s. Read document-wide for {@link #compilerPlugins}'
-	 * reason, and it was read as a direct child of {@code <project>} alone: a module Maven builds
-	 * under {@code -P} was then outside {@link #reactorSourceRoots}, outside {@link #poms} and so
-	 * outside both corpus walks and every POM check, silently — the same shape as the hand-written
-	 * root list {@link #SOURCE_ROOTS} warns about, arrived at by moving the declaration instead of
-	 * deleting a line. The widening's own failure direction is loud: were some plugin's
-	 * {@code <configuration>} to carry a stray {@code <module>}, {@link #pomRoot} fails on the POM it
-	 * names rather than quietly widening anything.
+	 * Every {@code <module>} one POM declares, wherever the declaring {@code <modules>} sits — the
+	 * project's own or a {@code <profile>}'s. The {@code <modules>} element is found document-wide
+	 * and the {@code <module>} is then read as a DIRECT CHILD of it, which is exactly the reach the
+	 * profile case needs and no more: it was read as a direct child of {@code <project>} alone, so a
+	 * module Maven builds under {@code -P} was outside {@link #reactorSourceRoots}, outside
+	 * {@link #poms} and so outside both corpus walks and every POM check, silently — the same shape
+	 * as the hand-written root list {@link #SOURCE_ROOTS} warns about, arrived at by moving the
+	 * declaration instead of deleting a line.
+	 *
+	 * <p>Not document-wide, for {@link #customSourceDirectoriesIn}' reason and with the same
+	 * consequence: {@code <module>} is a real plugin parameter — moditect's {@code add-module-info}
+	 * takes {@code <configuration><module><moduleInfoSource>} — so a document-wide read turns a legal
+	 * POM into a red build with a message naming a POM that was never a module, from two checks at
+	 * once and with no hint that a plugin parameter caused it. Keying on the PARENT puts that shape
+	 * out of reach, because the parameter is named {@code <module>} and not {@code <modules>} — which
+	 * is a claim about the shape reported, not about every plugin there could be: a plugin taking a
+	 * {@code <modules>} parameter would still be read, and the answer for it is another row here
+	 * rather than a wider rule. Both directions are pinned by
+	 * {@link #theCorpusCoversEveryModuleTheBuildCompiles}.
 	 */
 	private static List<String> modulesIn(Element pom) {
 		List<String> modules = new ArrayList<String>();
-		NodeList declared = pom.getElementsByTagName("module");
-		for (int i = 0; i < declared.getLength(); i++) {
-			String name = declared.item(i).getTextContent().trim();
-			if (!name.isEmpty() && !modules.contains(name)) {
-				modules.add(name);
+		NodeList wrappers = pom.getElementsByTagName("modules");
+		for (int i = 0; i < wrappers.getLength(); i++) {
+			for (Element declared : directChildren((Element) wrappers.item(i), "module")) {
+				String name = declared.getTextContent().trim();
+				if (!name.isEmpty() && !modules.contains(name)) {
+					modules.add(name);
+				}
 			}
 		}
 		return modules;
@@ -341,6 +366,20 @@ public class JavadocReferenceGuardTest {
 	 * {@code <compilerArgs>} override {@link #noOtherCompilerConfigurationDropsTheCheck} never reads.
 	 * {@link #pomRoot} fails on one that does not exist, so a module without its own POM is reported
 	 * rather than skipped.
+	 *
+	 * <p>Its coverage is then asked of the FILESYSTEM and not of the loop above, for
+	 * {@link #apiRoots}' reason and with the same failure direction: narrowing this list is invisible
+	 * on a clean tree, because every check reading a POM reads only the ones it hands out — so
+	 * deleting the module loop leaves the whole suite green while a child {@code <compilerArgs>}
+	 * override, which REPLACES the managed argument list, drops the gate for a whole module. Mutate
+	 * the loop and read the failures. {@link #NON_REACTOR_POM_DIRECTORY} is the one exemption and
+	 * carries its own reason.
+	 *
+	 * <p>What the cross-check does NOT reach is a POM nested deeper than one level, which
+	 * {@link #directoriesCarryingAPom} does not look for: a declared {@code <module>} with a path in
+	 * it is covered by the loop above either way, but an UNDECLARED one under a subdirectory is
+	 * invisible here. That is a limit of this check and not a claim about the repository, which
+	 * carries no such POM.
 	 */
 	private static List<String> poms() throws Exception {
 		List<String> poms = new ArrayList<String>();
@@ -348,7 +387,40 @@ public class JavadocReferenceGuardTest {
 		for (String module : reactorModules()) {
 			poms.add(module + "/pom.xml");
 		}
+		for (String directory : directoriesCarryingAPom()) {
+			if (!poms.contains(directory + "/pom.xml") && !NON_REACTOR_POM_DIRECTORY.equals(directory)) {
+				fail(directory + "/pom.xml exists under " + REPO_ROOT + " and is in neither the root pom's\n"
+						+ "<modules> nor this guard's one recorded exclusion (" + NON_REACTOR_POM_DIRECTORY
+						+ "), so noOtherCompilerConfigurationDropsTheCheck would never read its\n"
+						+ "<compilerArgs> — and a child override REPLACES the managed argument list, dropping\n"
+						+ "the javadoc-reference gate for that module with the whole suite green. Declare it as a\n"
+						+ "module, or record here why its compiler configuration gates nothing.");
+			}
+		}
 		return poms;
+	}
+
+	/**
+	 * Every directory one level under the repository root that carries a {@code pom.xml}, which is
+	 * where every module of this reactor keeps one. Read off the filesystem so that {@link #poms}'
+	 * coverage is asked of something the root pom cannot narrow, and sorted so that which directory a
+	 * failure names does not depend on the order the filesystem hands them back.
+	 */
+	private static List<String> directoriesCarryingAPom() throws IOException {
+		List<String> directories = new ArrayList<String>();
+		DirectoryStream<Path> children = Files.newDirectoryStream(REPO_ROOT);
+		try {
+			for (Path child : children) {
+				if (Files.isRegularFile(child.resolve("pom.xml"))) {
+					directories.add(child.getFileName().toString());
+				}
+			}
+		}
+		finally {
+			children.close();
+		}
+		Collections.sort(directories);
+		return directories;
 	}
 
 	/**
@@ -548,7 +620,12 @@ public class JavadocReferenceGuardTest {
 	 * of {@code <project>} alone, which put such a module outside both corpus walks and outside every
 	 * POM check at once. Asked of a synthetic POM and not of this repository's, which carries no
 	 * {@code <profile>} at all — so there is nothing here for a direct-child read to get wrong, and
-	 * that is exactly why the narrower version was invisible.
+	 * that is exactly why the narrower version was invisible. <strong>The other direction is pinned
+	 * beside it</strong>: {@code <module>} read document-wide takes in moditect's
+	 * {@code <configuration><module>} parameter, which reddens THIS check and
+	 * {@link #noOtherCompilerConfigurationDropsTheCheck} on a legal POM — a false positive is the one
+	 * failure {@link #customSourceDirectoriesIn} refused for the sibling element, so it is refused
+	 * here too. Mutate {@link #modulesIn} in either direction and read which half goes red.
 	 *
 	 * <p><strong>Moved off the convention.</strong> {@link #reactorSourceRoots} probes
 	 * {@code src/main/java} and {@code src/test/java}, so a module declaring its own
@@ -579,6 +656,17 @@ public class JavadocReferenceGuardTest {
 					+ "derives (it read " + modules + "). Maven builds it under -P, so its sources and its "
 					+ "POM would be outside both corpus walks and every POM check here, with nothing to "
 					+ "notice: this repository has no <profile>, so only this synthetic POM can say so");
+		}
+		List<String> inAPluginParameter = modulesIn(parseXml("<project><build><plugins><plugin>"
+				+ "<configuration><module><moduleInfoSource>module org.example {}</moduleInfoSource>"
+				+ "</module></configuration></plugin></plugins></build></project>"));
+		if (!inAPluginParameter.isEmpty()) {
+			violations.add("a <module> inside a plugin's own <configuration> is read as a declared reactor "
+					+ "module (it read " + inAPluginParameter + "), which it is not — moditect's "
+					+ "add-module-info takes a parameter of exactly that name. Both this check and "
+					+ "noOtherCompilerConfigurationDropsTheCheck would then fail a legal POM, naming a "
+					+ "\"module\" that was never one and giving no hint that a plugin parameter caused it. "
+					+ "Read <module> as a direct child of a <modules>, which is all the profile case needs");
 		}
 		String moved = "src/generated/java";
 		List<String> movedAway = customSourceDirectoriesIn(parseXml("<project><build><sourceDirectory>"
@@ -1036,10 +1124,10 @@ public class JavadocReferenceGuardTest {
 	 * <p>A comment there documents nothing — javadoc attaches to declarations and a package statement
 	 * is not one — so with the check enabled javac reports every such file. Nearly every source in
 	 * this module carried an MPL licence header written that way, and they became plain block comments
-	 * in the same change that enabled the check. The count is recorded once, in docs/adr.md Decision
-	 * 71, with the tree it was measured on and the command that measured it — not copied here, because
-	 * a count of sources tracks the code: the figure this sentence used to carry was wrong in both its
-	 * numerator and its denominator while the ADR beside it was right.
+	 * in the same change that enabled the check. The count is recorded once, in docs/adr.md Decision 72
+	 * (this change's own decision), with the tree it was measured on and the command that measured it —
+	 * not copied here, because a count of sources tracks the code: the figure this sentence used to
+	 * carry was wrong in both its numerator and its denominator while the ADR beside it was right.
 	 *
 	 * <p>This exists because that normalisation would otherwise decay. The form is a WARNING on every
 	 * JDK measured (11, 17, 21, 24, 25), never an error, so one file arriving with the old header is

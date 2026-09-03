@@ -5126,8 +5126,10 @@ plain text, which reads as authoritative rather than as stale.
 
 **The pre-existing breakage was measured before anything was designed, because the ticket asked for
 that count first and the answer decides whether a gate can be switched on in the same change.** Over
-this branch's merge base, `git merge-base origin/main HEAD` = `5253c7d2`, with
-`maven-javadoc-plugin` 3.11.2 at `-Ddoclint=reference -Dshow=private`:
+`5253c7d2`, with `maven-javadoc-plugin` 3.11.2 at `-Ddoclint=reference -Dshow=private`. **Every
+figure in this decision names the sha it was taken on and never "the merge base"**, because a later
+merge of `main` moves what `git merge-base origin/main HEAD` answers — it did, at `6abd4aec`, and
+`5253c7d2` had been this branch's merge base when these measurements were made:
 
 | source root | goal | errors |
 | --- | --- | --- |
@@ -5142,9 +5144,9 @@ ERRORS — re-derived at `5253c7d2` on JDK 21, where those roots hold 254 files 
 exactly 3 errors, at `SubjectMatterScopedContraindicationTest:81`, `ArchitectureGuardTest:275` and
 `PipelineSettings:49`, with 0 in the two `omod` roots. Run on five JDKs — 11, 17, 21, 24 and 25, so
 the whole CI matrix and two beyond it — the site list came back identical every time; that sweep was
-taken on `6582f2c2`, which is where this table was first measured and is two commits behind the merge
-base, and the three sites are the same on both. **The label is corrected rather than the figure**, and
-it is corrected here because this decision warns later on about exactly this: a count labelled with a
+taken on `6582f2c2`, which is where this table was first measured and is two commits behind
+`5253c7d2`, and the three sites are the same on both. **The label is corrected rather than the
+figure**, and it is corrected here because this decision warns later on about exactly this: a count labelled with a
 tree it was not taken on. Five is what was MEASURED rather than what is installed; the box carries
 more, including a JDK 8 that cannot build this module at all. Three is small enough to repair in the
 same change, so both halves ship.
@@ -5266,18 +5268,19 @@ the gate's corpus; deleting one would have satisfied the same check and lost the
 
 **Every source file's MPL licence header becomes a block comment rather than a javadoc block.** That
 is this change's own doing: the header sits before the `package` statement, so it documents nothing,
-and enabling doclint makes javac say so once per header-bearing file. **274 of the 276 sources at the
-merge base carry that header**, one character each; the two that carry none are pre-existing and
+and enabling doclint makes javac say so once per header-bearing file. **274 of the 276 sources at
+`5253c7d2` carry that header**, one character each; the two that carry none are pre-existing and
 untouched. This change adds one more source, which carries the block-comment form. Do not
 read a warning COUNT off a build to check this — javac caps warnings per compilation (default
 `-Xmaxwarns` 100), so a printed total is an artefact of the cap rather than a count of anything.
-Measured over the merge base `5253c7d2`'s two api source roots with
+Measured over `5253c7d2`'s two api source roots with
 `javac -proc:none -Xdoclint:reference -Xmaxwarns 100000` on JDK 21: **252** warnings, all of them
 `documentation comment not expected here`, one per header-bearing file in those roots, of which the
 default cap prints 100 and says so. Note that `-Xlint:none` suppresses them on that JDK, so a run
 carrying it counts zero. The figure carries its tree and its command deliberately — two earlier
 drafts published 250 and 249, each true of a different base this change passed through, and neither
-named the base it was taken on. Re-derive it against the merge base rather than quoting it.
+named the base it was taken on. Re-derive it against `5253c7d2` — named as a sha and not as "the
+merge base", which is no longer what that command answers — rather than quoting it.
 
 **This decision is the ONE home of the 274/276 pair, and for one review round it was not.**
 `noFileOpensWithAJavadocBlockBeforeItsPackageStatement`'s javadoc carried a second copy reading "271
@@ -5342,6 +5345,16 @@ the gate was open, which is the only property they share:
   and the flag cannot compensate because an orphaned block is invisible to doclint by construction.
   All three are derived from the root pom's `<modules>` now; the hand-written map keeps the per-root
   ANCHOR files and nothing else, and an anchor naming a root the reactor does not have fails too.
+  **Derived is not enough on its own, and for one review round the POM list had only that** — a later
+  round narrowed `poms()` back to the root pom alone, the same three-line deletion, and the whole
+  suite stayed green while a `<compilerArgs>` override in `omod/pom.xml` (which REPLACES the managed
+  list) dropped the gate for the one module `everyJavadocReferenceInTheApiModuleResolves` cannot
+  reach — a dead pointer in `omod/src/main/java` then compiled and the build reported success, which
+  is this decision's own headline defect reinstated. So all three are also CROSS-CHECKED against the
+  repository, each in the direction its own narrowing is invisible in: the api roots and the POM list
+  ask the FILESYSTEM whether the derivation kept everything it names, and the source roots
+  cross-check their anchors both ways. `llama-server-natives` is named as a literal exemption in the
+  POM check rather than excused by a rule, so promoting it to a real module has to say so there.
 - **The pre-`package`-statement rule had no ground truth and fired on `package-info.java`**, where a
   javadoc block is the standard and only way to document a package. Measured on JDK 21: in that file
   javac reports `error: reference not found` for a dead pointer and NO `documentation comment not
@@ -5373,8 +5386,18 @@ the gate was open, which is the only property they share:
   `<profile>` was outside both corpus walks and outside every POM check without a line being deleted:
   the same fail-open as the hand-written lists above, reached by MOVING the declaration rather than
   removing it, and `compilerPlugins` already read document-wide for precisely this reason while the
-  module list did not. `<module>` is read document-wide now, and the widening's own failure direction
-  is loud — a stray `<module>` in some plugin's `<configuration>` fails on the POM it names. Narrower
+  module list did not. The `<modules>` element is read document-wide now and `<module>` is read as a
+  DIRECT CHILD of it — exactly the reach the profile case needs, and no more. **A review round found
+  the first fix reading `<module>` itself document-wide, and that was too wide in a direction the
+  decision had called loud rather than wrong**: `<module>` is a real plugin parameter — moditect's
+  `add-module-info` takes `<configuration><module><moduleInfoSource>` — so a never-activated profile
+  carrying that plugin reddened two checks on a legal POM, each naming a "module" that was never one
+  and neither hinting that a plugin parameter caused it. That is the false positive
+  `customSourceDirectoriesIn` had already refused for the sibling element, so it is refused here too.
+  Keying on the PARENT puts the reported shape out of reach because the parameter is spelled
+  `<module>` and not `<modules>`; a plugin taking a `<modules>` parameter would still be read, and
+  that is a row to add rather than a reason for a wider rule. Both directions are asked of synthetic
+  POMs — mutate `modulesIn` either way and read which half goes red. Narrower
   and adjacent: `reactorSourceRoots` probes `src/main/java` and `src/test/java` by CONVENTION, so a
   module declaring its own `<sourceDirectory>` contributes no root while that walk fails only where
   EVERY module yields nothing — such a POM is REFUSED now rather than judged, the same answer a
@@ -5419,13 +5442,15 @@ Japanese or Chinese the match failed on a perfectly clean tree.
   resolves. Shipping the gate beside them would publish a claim of protection with a hole in exactly
   the place this repository has already been bitten twice.
 - **Recording the rule in `CLAUDE.md`.** The rule is compiler-enforced, and that file's doctrine keeps
-  enforced rules to a pointer with their evidence here. It also stood at 84,992 bytes — at the merge
-  base `5253c7d2` and unchanged by this branch — against
-  `ProjectInstructionsGuardTest.MAX_INSTRUCTION_BYTES` of 85,000, so there were 8 bytes of headroom and
-  any real addition would have reddened the build for a reason unrelated to this ticket. **84,976 is
-  what this bullet published, and that is the value the file takes at `6582f2c2`** — the sha the table
-  at the top of this decision named before the same correction, so two figures in one decision were
-  keyed to different trees.
+  enforced rules to a pointer with their evidence here. It also stood at 84,992 bytes at `5253c7d2`,
+  against `ProjectInstructionsGuardTest.MAX_INSTRUCTION_BYTES` of 85,000, so there were 8 bytes of
+  headroom and any real addition would have reddened the build for a reason unrelated to this ticket.
+  **84,976 is what this bullet published, and that is the value the file takes at `6582f2c2`** — the
+  sha the table at the top of this decision named before the same correction, so two figures in one
+  decision were keyed to different trees. **Both figures are labelled with their sha and neither with
+  "the merge base"**, which a later merge of `main` moved: no commit of this branch touches the file,
+  but `8e679fb7` (`main`'s #370) shortened it, so the headroom at any head past that merge is larger
+  than the 8 bytes above and has to be re-derived there rather than read here.
 
 ### Trade-offs
 

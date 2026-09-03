@@ -1303,9 +1303,14 @@ public class ChartSearchAiRestController {
 			// xmlMarshallingHttpMessageConverter, a MarshallingHttpMessageConverter over an
 			// XStreamMarshaller — read off openmrs-web's own openmrs-servlet.xml (the
 			// RequestMappingHandlerAdapter's messageConverters list, lines 117-129 of the 2.8.4
-			// artifact), not inferred. XStreamMarshaller cannot
-			// marshal java.util.Collections' immutable wrappers under a modular JDK ("module java.base
-			// does not opens java.util"). chartOrderBridges() returns an unmodifiableList, or
+			// artifact), not inferred — and confirmed on a live request, whose XML body is XStream's
+			// own <map><entry><string>… . XStreamMarshaller refuses java.util.Collections' immutable
+			// wrappers: measured on JDK 21.0.6 with xstream 1.4.21, both
+			// Collections$UnmodifiableRandomAccessList and Collections$EmptyList raise
+			// ConversionException("No converter available") while an ArrayList marshals. (An earlier
+			// draft of this comment attributed it to a modular-JDK access error and quoted "module
+			// java.base does not opens java.util"; no such text appears — the behaviour is what was
+			// verified, the message was not.) chartOrderBridges() returns an unmodifiableList, or
 			// Collections$EmptyList in the empty case, so publishing it as handed turned every
 			// chip-carrying XML response into a 500 — the empty case included.
 			// ChartSearchAiChartOrderBridgeTest.theWholePayloadStillMarshalsForAnXmlClient pins it.

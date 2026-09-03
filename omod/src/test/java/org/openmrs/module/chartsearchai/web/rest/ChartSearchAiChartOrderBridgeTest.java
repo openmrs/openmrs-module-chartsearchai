@@ -288,9 +288,13 @@ public class ChartSearchAiChartOrderBridgeTest {
 		// a MarshallingHttpMessageConverter — read off openmrs-web's openmrs-servlet.xml rather than
 		// inferred, and NOT pinned by this test, which drives the marshaller directly. What this case
 		// pins is that the marshaller refuses the value; that it is the marshaller in the request path
-		// is the platform's configuration and would go stale silently. XStream cannot
-		// marshal java.util.Collections' immutable wrappers under a modular JDK ("module java.base
-		// does not opens java.util"). chartOrderBridges() returns an unmodifiableList, or
+		// is the platform's configuration and would go stale silently — though it WAS confirmed on a
+		// live request during this change's verification, whose XML body came back as XStream's own
+		// <map><entry><string>… . XStream refuses java.util.Collections' immutable wrappers:
+		// measured on JDK 21.0.6 with xstream 1.4.21, both Collections$UnmodifiableRandomAccessList
+		// and Collections$EmptyList raise ConversionException("No converter available") while an
+		// ArrayList marshals. (An earlier draft quoted "module java.base does not opens java.util";
+		// no such text appears.) chartOrderBridges() returns an unmodifiableList, or
 		// Collections$EmptyList in the empty case, so publishing it AS HANDED turned every
 		// chip-carrying XML response into a 500 — the empty case included.
 		//

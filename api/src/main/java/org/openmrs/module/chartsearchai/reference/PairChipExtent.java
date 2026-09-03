@@ -52,6 +52,21 @@ package org.openmrs.module.chartsearchai.reference;
  * a client must not read it as a count of the chips beside it — which is the same warning
  * {@link #getReported()} carries for the other direction.
  *
+ * <p><b>An arm that CEDED every pair it related states nothing, never a zero</b> (issue #336's
+ * verification round). The question-pair arm leaves a pair to the drug-in-play arm wherever a rule
+ * joining it names one of the patient's own orders
+ * ({@code DrugSafetyValidator.coveredByActiveOrderArm}), because a chip about her own medication is
+ * the stronger statement. Where that took EVERY pair it related, the arm has no bounded list left
+ * to describe, and a zero there would say the reference data related none of the pairs it
+ * enumerated. Measured on the 3.7.1 standalone, asking
+ * {@code "Can I give her warfarin and ibuprofen?"} of a patient prescribed ibuprofen: the response
+ * published {@code found: 0, reported: 0} beside fifteen interaction chips including a Major, so
+ * a client rendering the field as {@code README} tells it to showed "0 of 0 interaction pairs"
+ * above a Major finding. It now states nothing, which is what lets the fallback below hand the
+ * field to the arm that did report those pairs. Scoped to a pass that ceded every pair: where some
+ * survive, the list it kept is complete and it says so, and the ceded pairs are reported beside it
+ * as chips rather than withheld.
+ *
  * <p>What every one of them counts is the same thing: above-floor interaction RULES relating one
  * drug to another. The drug-in-play arm's unrated class relationships — a shared ATC subgroup, a
  * curated cross-reactivity group — are chips and are deliberately NOT counted here, because neither

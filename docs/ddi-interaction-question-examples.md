@@ -130,7 +130,7 @@ Five fields of the response matter for these tests:
 
 | Arm | Fires when | What it checks | States `interactionPairs`? |
 |---|---|---|---|
-| **Drug-in-play** | the question names a drug | that drug × every active order | yes, since [#356](https://github.com/openmrs/openmrs-module-chartsearchai/issues/356), where neither pairwise arm ran |
+| **Drug-in-play** | the question names a drug | that drug × every active order | yes, since [#356](https://github.com/openmrs/openmrs-module-chartsearchai/issues/356), where neither pairwise arm stated one |
 | **Question-pair** | the question resolves **≥2** reference entries | those drugs against each other | yes |
 | **Screening** | the question names **no** drug *and* reads as a screening request | every active order × every other | yes |
 | **Class / allergy** | always, scoped to what the response is about | ATC class and cross-reactivity-group joins against allergies, conditions and other orders | no |
@@ -141,7 +141,7 @@ below are separate.
 **Where `interactionPairs` comes from.** Three arms state it. The two *pairwise* ones have
 mutually exclusive gates — the question-pair arm needs two or more resolved drugs, the screening
 arm needs none — so at most one of those runs per question and neither can be suppressed by the
-other's cap. Where neither ran, the **drug-in-play** arm states it instead
+other's cap. Where neither of them stated one, the **drug-in-play** arm states it instead
 ([#356](https://github.com/openmrs/openmrs-module-chartsearchai/issues/356)), which is what a
 plain "can I give her X?" now reports: before that fix it reported `null` even while raising
 seven interaction chips, so a completed screen that related nothing was indistinguishable from
@@ -311,7 +311,8 @@ Worth running on every pass — it is the false-positive control.
 
 Checks drugs named in the **question** against each other. Testing it *requires* a patient on
 neither drug: where the chart already holds one of them the drug-in-play arm owns the pair, and
-this arm then correctly reports `found: 0` — see [2b](#2b-why-you-must-pick-a-patient-on-neither-drug).
+this arm then has nothing of its own to report — see
+[2b](#2b-why-you-must-pick-a-patient-on-neither-drug).
 
 **Patient:** Betty Williams — on neither warfarin nor ibuprofen, but allergic to aspirin.
 **Question:** *Can warfarin and ibuprofen be given together?*
@@ -339,7 +340,7 @@ Ask the *identical* question of Barbara Miller, who is actively prescribed ibupr
 
 ```
 question: Can warfarin and ibuprofen be given together?
-pairs:    {"found": 0, "reported": 0}
+pairs:    {"found": 3, "reported": 3}
 chips:    5
   interaction  Major  "Warfarin interacts with active order Acetylsalicylic acid (aspirin) …"
   interaction  Major  "Warfarin interacts with active order Ibuprofen — Major. Nonsteroidal
@@ -352,9 +353,21 @@ chips:    5
 ```
 
 The pair *is* reported — as **"active order Ibuprofen"**, by the drug-in-play arm, because the
-chart owns it — and the question-pair arm then correctly states `found: 0`. That zero is not a
-miss; it says "of the pairs this arm was responsible for, none". Test this arm on a patient
-prescribed neither drug or you will only ever see the other one.
+chart owns it. Test this arm on a patient prescribed neither drug or you will only ever see the
+other one.
+
+**The `pairs` value is the drug-in-play arm's, and it used to read `{"found": 0, "reported": 0}`.**
+The question-pair arm ceded its only pair, so it has no bounded list to describe and now states
+nothing at all, which lets the arm that *did* report those pairs speak
+([#336](https://github.com/openmrs/openmrs-module-chartsearchai/issues/336)). The three it states
+are its own rule chips, which are the three `interaction` lines above — so the field now describes
+findings a clinician can see rather than announcing "0 of 0 interaction pairs" above a Major.
+A zero here was not "of the pairs this arm was responsible for, none": the arm related a pair and
+handed it over, and a zero is defined as *the reference data related none of the pairs enumerated*.
+Where only **some** of a question's pairs are ceded the arm keeps the field and describes the list
+it kept: that list is complete and says so, and the ceded pairs are reported beside it as chips
+rather than withheld. So this field still does not count the chips beside it — see the table at
+the top of this document.
 
 ---
 

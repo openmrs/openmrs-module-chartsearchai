@@ -4644,6 +4644,15 @@ public class DrugSafetyValidator {
 	 *        own rows, which is what let one response name one substance two ways. Every question drug is
 	 *        in {@code inPlay}, so its substance is always in that lookup's group map and the
 	 *        ungrouped-row fallback is unreachable from here.
+	 * @return what this arm measured about its own list, or {@code null} where it measured no list —
+	 *         which is a question resolving fewer than two drugs (the arm did not run) and, since
+	 *         issue #336's verification round, a pass that related pairs and ceded EVERY one of them
+	 *         to the chart arm. The two are one statement to a reader, and both are unlike
+	 *         {@code of(0, 0)}, which asserts that the reference data related none of the pairs this
+	 *         arm enumerated. {@code null} is also what {@code validate}'s issue #356 fallback is
+	 *         gated on, so on the ceding path the arm that did report those pairs is the one a client
+	 *         hears from. See {@link PairChipExtent}, which is canonical for what the two say
+	 *         differently.
 	 */
 	private PairChipExtent addQuestionPairInteractions(List<SafetyWarning> warnings,
 			Set<DrugReference> questionDrugs, SubstanceSubjects subjects, PatientClinicalContext context,
@@ -4686,6 +4695,23 @@ public class DrugSafetyValidator {
 		// Most severe first, and bounded — see maxPairChips(). Collections.sort is stable, so
 		// equally-rated pairs keep the dataset order the entry loop produced them in.
 		if (found.isEmpty()) {
+			if (!chartOwned.isEmpty()) {
+				// Related pairs, kept none: every one of them went to the chart arm above, and a zero
+				// would say the reference data related NONE of the pairs this arm enumerated — what
+				// PairChipExtent defines found == 0 to mean, and false here. Ceding is not a measurement:
+				// having handed over every pair this arm has no bounded list of its own to describe, so
+				// it states NOTHING and validate's issue #356 fallback lets the arm that did report them
+				// speak. Never a sum and never this arm counting what it ceded — the number a client
+				// then reads is the other arm's own, over its own population. PairChipExtent carries the
+				// live measurement of what the zero cost a reader; ADR Decision 68 carries the rest.
+				//
+				// Scoped to a pass that ceded EVERY pair, deliberately. Where some pairs survive, the
+				// list this arm kept is complete and it says so, exactly as before; the pairs it ceded
+				// are reported beside it as chips rather than withheld, and forfeiting the statement
+				// there would give up the bounded claim issue #336 exists to publish, for the sake of a
+				// number no cap ever cut.
+				return null;
+			}
 			// Nothing to order or bound, and no GP read for the common "these two do not interact" case —
 			// the same shape the screening arm's own early return takes. The extent is still STATED, and
 			// it is the whole reason zero is a measurement here: this pair list is complete, and a

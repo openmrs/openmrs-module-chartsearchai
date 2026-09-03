@@ -4536,3 +4536,49 @@ arrangements reporting nothing about the class.
   its own configuration.
   `DrugClassQuestionNoteTest.aClassQuestionStillGetsItsNoteWhereTheEntryDatasetIsInert` pins the
   arrangement, so a gate added later reddens against this paragraph rather than passing unread.
+
+## Decision 68: A pairwise arm that ceded every pair it related states nothing, rather than a complete screen of none
+
+**Status: Accepted** (September 2026) — implemented, issue [#336](https://github.com/openmrs/openmrs-module-chartsearchai/issues/336) (its verification round). Amends Decisions 60 and 65.
+
+### Context
+
+Decision 60 put `interactionPairs` on the wire so a truncated interaction screen could say it was truncated, and Decision 65 gave the drug-in-play arm the field wherever neither pairwise arm spoke. #336's own verification comment then measured the residue, on the 3.7.1 standalone against the bundled DDInter knowledge base, and named the row that bites:
+
+| question | `interactionPairs` | `type: interaction` chips |
+| --- | --- | --- |
+| `"Please screen her current medications…"` | `{found: 18, reported: 10}` | 10 |
+| `"Can I give her warfarin?"` | `null` | 8 |
+| `"Can I give her warfarin and ibuprofen?"` | `{found: 0, reported: 0}` | 15 |
+
+The third row published a complete screen of nothing beside fifteen interaction chips, one of them Major. A client rendering the field as `README` tells it to — "10 of 18 shown" — showed *"0 of 0 interaction pairs"* directly above a Major finding.
+
+**The cause is not the field's scope; it is a false measurement.** `addQuestionPairInteractions` cedes a pair to the drug-in-play arm wherever any rule joining it names one of the patient's active orders (`coveredByActiveOrderArm`), because a chip stating a fact about her own medication is the stronger statement — `collectQuestionPairInteraction` records the pair in `chartOwned` and collects no candidate for it. Where that took every pair the arm related, `found` was empty and the arm returned `PairChipExtent.of(0, 0)`. Two things followed. The value asserts what Decision 60 defines it to assert — *an arm ran and the reference data related none of the pairs it enumerated* — and pairs had been related, so it was false. And being non-null it satisfied the gate on Decision 65's fallback (`pairExtent == null && questionDrugScreened && hasActiveMedicationRecords`), so the arm that had actually reported those pairs was silenced by the arm that reported none.
+
+Reproduced at the api level over the DDInter excerpt through the real `validate`: `"Can I give her warfarin and ibuprofen?"` on a chart carrying Ibuprofen 400mg and Aspirin 81mg stated `found=0, reported=0` beside three Major chips, every one of them the chart arm's.
+
+### Decision
+
+**Ceding is not a measurement.** In `addQuestionPairInteractions`, where the candidate list is empty:
+
+- **`chartOwned` non-empty → `null`.** The arm related pairs and kept none, so it has no bounded list to describe and states nothing. Decision 65's fallback is then reached and the arm that did report those pairs states its own count over its own population — never a sum, and never this arm counting what it ceded.
+- **`chartOwned` empty → `of(0, 0)`, unchanged.** The arm enumerated pairs and the data related none of them: a complete screen, which is half of what Decision 60 exists for.
+
+**Scoped to a pass that ceded EVERY pair.** Where some pairs survive the arm keeps the field and describes the list it kept, exactly as before.
+
+**No client-facing `null` is added.** All three conjuncts of the fallback hold on this path — a cede requires `hasActiveDrug`, hence `hasActiveMedicationRecords`; `interactionsPending` is seeded from every substance in play, so a question substance is always screened; and the ceding rule is walked again by `addInteractionWarnings` through the same predicate, so its count is at least one. So the reachable change to the client contract is to the ZERO sentence, and the enumeration of what `null` covers is not extended.
+
+### Rejected alternatives
+
+- **Documenting the zero instead**, which is what the ticket comment suggested ("state that `found: 0` means 'no pairs withheld' rather than 'no interactions found'"). `README` and `PairChipExtent` both already define `found == 0` as *screened and related nothing*, so the suggestion asks for the opposite of what shipped, and the value was false rather than under-specified. Documenting it would have made the contract weaker in order to keep a wrong number.
+- **Counting the ceded pairs into `found`/`reported`.** They were reported, by another arm, over another population — the cross-arm sum Decision 60 exists to prevent, published by the producer.
+- **Counting them into `found` but not `reported`.** It reads as "one of two withheld", which is false: nothing was withheld, the pair is on the response as a chip.
+- **Returning `null` on ANY cede.** It forfeits the bounded statement on a pass whose surviving pairs the cap did truncate, which is the whole function Decision 60 added.
+
+### Trade-offs
+
+- **+** The response describes the findings it carries on the commonest two-drug prescribing question about a medicated patient, instead of asserting a screen of none above them.
+- **+** It makes true a sentence `README` and `PairChipExtent` already published. The zero contract had a counter-example in shipped code.
+- **−** **A PARTIAL cede still states only the list the arm kept, and the reader cannot tell from the wire.** Three question drugs where the chart owns one pair and the arm keeps another report `{found: 1, reported: 1}` beside two interaction chips (measured at the api level over the excerpt). The statement is true of the list it describes and nothing was withheld from it, but a client reading `found == reported` as "complete" is reading it as complete about the *response*, which this field has never been — the same residue Decision 65 records for the multi-row cause, one arm nearer. Pinned as deliberate by `PairChipExtentContextTest.aQuestionPairListThatCededOnlySomeOfItsPairsStillStatesItsOwnBoundedList`, which reddens if the scope is widened to any cede.
+- **−** **The multi-row cause of the same rendering is untouched.** A name resolving to several reference rows opens the question-pair arm, whose entry pairs are then all one drug, so it enumerates no pair and states a true `of(0, 0)` while the drug-in-play chips go uncounted. Decision 65 records it; it is not a cede and this decision does not reach it.
+- **−** **One more branch on a return value three arms feed one local.** The arm's `@return` now carries three outcomes rather than two.

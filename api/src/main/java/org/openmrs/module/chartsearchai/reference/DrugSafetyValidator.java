@@ -2108,13 +2108,14 @@ public class DrugSafetyValidator {
 		// of their own, so an unmatched one now answers FALSE rather than TRUE and the mutation stopped
 		// reddening it. Measured on the commit that added the leg (whole api suite green under the
 		// mutation) and on its parent (that case red). The witness named above is an unmatched allergy
-		// rule that is NOT self-named. Two shapes answer TRUE UNCONDITIONALLY — that one, and a rule
-		// whose type is neither `allergy` nor `condition`, which contraindicationSections files as
-		// unevaluable; the witness named above is the first. A self-named allergy rule can witness this
-		// guard too, but never unconditionally: only through leg 2, allergicSubstanceKeys, which reads
-		// the whole allergy list rather than this rule's own witnesses — the papaveretum/opium shape
-		// DrugReferenceInjector.corroborated describes. What can no longer witness it is a CONDITION
-		// rule, which is what issue #309 changed.
+		// rule that is NOT self-named. Read corroboratedByTheChart for which rules answer TRUE
+		// unconditionally rather than trusting a list here — it is every rule the first two branches
+		// fall through, and enumerating those has gone stale on this branch already. Two things about
+		// this witness are worth stating because they are not obvious from that method. A self-named
+		// allergy rule can witness the guard too, but never unconditionally: only through leg 2,
+		// allergicSubstanceKeys, which reads the whole allergy list rather than this rule's own
+		// witnesses — the papaveretum/opium shape DrugReferenceInjector.corroborated describes. And a
+		// CONDITION rule can no longer witness it at all, which is what issue #309 changed.
 		Map<Object, String> clauses = contraindicationClauses(ref);
 		Map<Object, Boolean> corroboratedClauses = new HashMap<Object, Boolean>();
 		for (DrugReference.Contraindication c : ref.getContraindications()) {
@@ -7278,9 +7279,9 @@ public class DrugSafetyValidator {
 	 *         and {@link #selfNamedAllergyRule} for issue #146's fold. <b>A FIFTH reader branches on the
 	 *         CONDITION leg alone</b> since issue #309 — {@link #corroboratedByTheChart}, whose third leg
 	 *         asks {@link #isConditionRule} and neither of the two questions this one gates. With
-	 *         {@link #selfNamedAllergyRule} reading only this leg, the pair now diverges in both
-	 *         directions and three sites read both; this enumeration is where that is recorded rather
-	 *         than left for a maintainer to discover. Left as literals they would drift
+	 *         {@link #selfNamedAllergyRule} reading only this leg, the pair diverges in both directions;
+	 *         this enumeration is where that is recorded rather than left for a maintainer to discover.
+	 *         Which sites read which is answered by finding the callers, not by a tally here. Left as literals they would drift
 	 *         silently and in the worse direction: a vocabulary that grew a synonym would keep matching
 	 *         rules through one reader while another quietly stopped applying to them, and the worst of
 	 *         those pairings is a rule {@code recordedContraindicationKind} can evaluate that
@@ -7300,8 +7301,8 @@ public class DrugSafetyValidator {
 	 *         <p><b>Package-private, unlike its sibling, and asymmetric in readers.</b> The two never
 	 *         were read at the same places — {@link #selfNamedAllergyRule} reads only the allergy leg —
 	 *         and since issue #309 they diverge in both directions: {@link #corroboratedByTheChart}
-	 *         branches on this one alone. Three sites read both. {@link #isAllergyRule}'s enumeration
-	 *         names them. The visibility is for
+	 *         branches on this one alone. {@link #isAllergyRule}'s enumeration is where the readers are
+	 *         named. The visibility is for
 	 *         {@code ConditionRuleBoundaryCorroborationTest.theShippedSeedPublishesExactlyTheFourConditionTokensTheMeasurementWasOver},
 	 *         a data guard over the shipped seed that must screen condition rules by the production
 	 *         predicate rather than by a second spelling of the literal.

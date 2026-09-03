@@ -231,7 +231,19 @@ public class ReferenceProseFidelityTest {
 		service.setLlmProvider(answering(copiedThrough("may") + " potentiate the risk of serotonin "
 				+ "syndrome [" + finding.getIndex() + "]."));
 
-		ChartAnswer answer = service.search(patient(), QUESTION);
+		ChartAnswer answer;
+		try (LogCapture capture = LogCapture.on(CHECK, Level.DEBUG)) {
+			answer = service.search(patient(), QUESTION);
+			// Which silence this is, asserted rather than assumed. An empty list is also what the
+			// two DECLINE gates return — an answer citing no readable reference record, and one
+			// reproducing nothing — so without this the case would pass on an arrangement where the
+			// check never compared anything, which is the reading the accessor's javadoc warns a
+			// client about and would be no better inside its own test.
+			assertTrue(debugStating(capture, "every reproduction of a cited reference record is faithful"),
+					"the premise: the check reproduced this record and found the reproduction "
+							+ "faithful, rather than declining before it compared anything. Captured: "
+							+ capture.describeAll());
+		}
 
 		assertNotNull(answer.getUnfaithfullyRenderedCitations(),
 				"null says the producer stated no measurement; a check that ran and found nothing "

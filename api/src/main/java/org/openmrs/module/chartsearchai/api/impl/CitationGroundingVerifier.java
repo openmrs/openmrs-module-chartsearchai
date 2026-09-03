@@ -101,10 +101,12 @@ import org.springframework.stereotype.Service;
  * claim unit under entailment, the stronger rule below wins and even the fail is withheld — no
  * consumer can see the difference, since #201 withholds every reference-group verdict at the wire.)
  * Faithfulness of reference content is
- * checked deterministically instead, by report-only comparisons over what the answer states
+ * checked deterministically instead, by two exact comparisons over what the answer states
  * about the record: {@link ClassCodeFidelityCheck} for an ATC class code the model edited while
- * citing the record that carries it (issue #142), and {@link ReferenceProseFidelityCheck} for a
- * recitation the model diverged from inside the sentence it was copying (issue #337). NOT by the
+ * citing the record that carries it (issue #142), report-only, and {@link ReferenceProseFidelityCheck}
+ * for a recitation the model diverged from inside the sentence it was copying (issue #337), whose
+ * answer is also published — as {@code unfaithfullyRenderedCitations}, and deliberately not as a
+ * verdict on these citations, which stay withheld. NOT by the
  * {@code DrugSafetyValidator} chips, which this javadoc named until #337: they carry the
  * deterministic text but are an independent list nothing reconciles against the answer. Accepted
  * cost: under entailment mode these citations now take the lazy Tier-1 path (up to two

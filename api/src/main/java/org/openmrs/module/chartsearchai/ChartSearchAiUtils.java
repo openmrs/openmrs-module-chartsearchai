@@ -107,7 +107,12 @@ public class ChartSearchAiUtils {
 	 *         <p><b>Weaker on purpose, and the weakness is the correctness.</b> Its caller
 	 *         ({@code ReferenceProseFidelityCheck}) uses the answer only to STAY SILENT, so a gap
 	 *         read as a sentence end can only suppress a report and never cause one — which is what
-	 *         makes that check's "loses recall, never precision" property true. Asking
+	 *         makes that check's "loses recall, never precision" property true. Since issue #337's
+	 *         second round that suppression is client-visible as well as log-local, the check's
+	 *         answer being published: what it costs is an entry in
+	 *         {@code ChartAnswer.getUnfaithfullyRenderedCitations()}, which is why that key's client
+	 *         contract says an absent entry is not a certificate of faithfulness. The direction is
+	 *         unchanged — it still cannot manufacture one. Asking
 	 *         {@code SENTENCE_BOUNDARY} instead was measured wrong in exactly that direction: it
 	 *         requires the terminator to be followed IMMEDIATELY by whitespace, so a quotation the
 	 *         model closed — {@code ."} or {@code .)} , and this module's own reference prose is full

@@ -261,8 +261,10 @@ public class InteractionFindingChartOrderBridgeTest {
 	public void anOrderNamingTheSubstanceOnlyByAnAliasIsNotBridged() throws Exception {
 		// Acetylsalicylic acid's rxnorm_name is aspirin, so the order named "Aspirin 81mg" resolves it
 		// through an ALIAS rather than through its display label — and the chart's own words therefore
-		// DO carry a name of it. The guard is the order's recorded names against the substance, never
-		// the string the finding prints: printed, this substance is "Acetylsalicylic acid (aspirin)",
+		// DO carry a name of it. The guard is the one name a chart record DISPLAYS for the order (#347;
+		// it was every name the order RECORDS until then, and here the display is one of them, which is
+		// why this case is unmoved) — never the string the finding prints: printed, this substance is
+		// "Acetylsalicylic acid (aspirin)",
 		// which no order display contains, so a printed-name guard would bridge it as if the chart
 		// named nothing. Its partner here is a brand-named warfarin order, which IS bridged, so the
 		// case reads a clause rather than the absence of one.

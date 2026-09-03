@@ -1429,8 +1429,10 @@ public class DrugReferenceInjector {
 
 	/**
 	 * How a finding's substances reach THIS patient's chart, stated in the finding itself where the
-	 * orders they were resolved from record no name of them (issue #349) — the lead of a clause whose
-	 * items follow it, {@code "; "}-joined, each reading {@code "<Substance> from <order display>"}.
+	 * name each order DISPLAYS does not name them (issue #349; the silence test was every name the
+	 * order RECORDS until issue #347, and {@code DrugSafetyValidator.displaysANameOfAny} is where the
+	 * change and its residues live) — the lead of a clause whose items follow it, {@code "; "}-joined,
+	 * each reading {@code "<Substance> from <order display>"}.
 	 *
 	 * <p><b>What it is for.</b> A finding names its substances in the KNOWLEDGE BASE's vocabulary,
 	 * which is right and is #339's settlement. Where the module reached those substances from an active

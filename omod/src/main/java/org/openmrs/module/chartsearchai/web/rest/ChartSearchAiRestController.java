@@ -1263,17 +1263,16 @@ public class ChartSearchAiRestController {
 	 * <p>Two fields rather than a rendered sentence, for the same reason {@code severity} above is
 	 * published at all: the alternative is a client parsing English. The list is always
 	 * present and is EMPTY where the module bridged nothing. <b>Empty says "no attribution to show",
-	 * and NOT "the chart records these substances."</b> The mechanism, rather than a rule about which
-	 * case is commonest — two drafts of that rule were written here and both were measured false:
-	 * {@code DrugSafetyValidator.chartOrderBridges} walks the SUBJECT against every order and the
-	 * PARTNER against the orders its arm allowed, and each item needs
-	 * {@code addChartOrderBridge}'s {@code resolvesFromAny} AND a display that does not already name
-	 * the substance. So a chip about a drug the QUESTION named contributes nothing on its subject side
-	 * — that drug resolves from no order — while its partner side can still bridge, which is exactly
-	 * what {@code InteractionFindingChartOrderBridgeTest.theDrugInPlayArmsPartnerIsBridgedToo}
-	 * asserts. Rendering empty as "the chart already records it" would tell a clinician she is on a
-	 * drug she is not, which is issue #347's own confusion inverted inside the field added to fix
-	 * it.
+	 * and NOT "the chart records these substances."</b> No rule about which chips are empty is offered
+	 * here, and that is deliberate — three were written and each was measured false, the last against
+	 * the real pipeline. The mechanism instead: {@code DrugSafetyValidator.chartOrderBridges} walks
+	 * the SUBJECT against every active order and the PARTNER against the orders its arm allowed to
+	 * witness it, and each item additionally needs {@code addChartOrderBridge}'s
+	 * {@code resolvesFromAny} and a display that does not already name the substance. Both walks are
+	 * ORDER-driven and neither consults the question, so what a chip carries is a fact about this
+	 * patient's orders and not about how the chip arose. Rendering empty as "the chart already records
+	 * it" would tell a clinician she is on a drug she is not, which is issue #347's own confusion
+	 * inverted inside the field added to fix it.
 	 */
 	private List<Map<String, Object>> serializeSafetyWarnings(List<SafetyWarning> warnings) {
 		List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();

@@ -5235,8 +5235,9 @@ public class DrugSafetyValidator {
 	 * post-answer), so the maximising arrangement is ~+26 ms per request against a request whose
 	 * latency is an LLM call. Measured 2026-09-01 with a bespoke instrumented harness and a
 	 * stubbed-body A/B, <b>against the pre-#347 silence test</b> ({@code recordsANameOfAny}, a fold
-	 * over every name the order records) — {@link #displaysANameOfAny} does strictly less work per
-	 * call, so these stand as an upper bound rather than as current figures. NO committed fixture
+	 * over every name the order records) — {@link #displaysANameOfAny} does no MORE work per
+	 * call — equal where the order records one name, less where it records more — so these stand as an
+	 * upper bound rather than as current figures. NO committed fixture
 	 * pins any of them, so re-measure rather than re-quote.
 	 *
 	 * <p><b>Both payments have a reader since issue #347, and that sentence used to say otherwise.</b>

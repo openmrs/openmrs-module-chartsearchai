@@ -526,16 +526,17 @@ public class SafetyWarning {
 	 * {@code DrugReferenceInjector.renderFinding} states in the injected {@code safety_finding} (issue
 	 * #349; the silence test became the display at issue #347, and
 	 * {@code DrugSafetyValidator.displaysANameOfAny} records why). Empty, never null, and <b>empty says
-	 * "no attribution to show" rather than "the chart records these substances"</b>. <b>The MECHANISM,
-	 * not a rule about which case is commonest</b> — two such rules were written and both were
-	 * measured false, which {@code ChartSearchAiRestController.serializeSafetyWarnings} records:
-	 * {@code DrugSafetyValidator.chartOrderBridges} walks the SUBJECT against every order and the
-	 * PARTNER against the orders its arm allowed, and each item needs {@code resolvesFromAny} AND a
-	 * display that does not already name the substance. So a chip about a drug the QUESTION named
-	 * contributes nothing on its subject side — that drug resolves from no order — while its partner
-	 * side can still bridge, which is what
-	 * {@code InteractionFindingChartOrderBridgeTest.theDrugInPlayArmsPartnerIsBridgedToo} pins.
-	 * Other empty cases: a chip whose substances their own orders already display; a chip that is not
+	 * "no attribution to show" rather than "the chart records these substances"</b>. <b>Read the MECHANISM off the
+	 * code; no rule about which chips are empty is offered here, and that is deliberate</b> — three
+	 * were written and each was measured false, the last of them against the real pipeline.
+	 * {@code DrugSafetyValidator.chartOrderBridges} walks the SUBJECT against every active order and
+	 * the PARTNER against the orders its arm allowed to witness it, and each item additionally needs
+	 * {@code resolvesFromAny} and a display that does not already name the substance. Both walks are
+	 * ORDER-driven and neither consults the question, so what a chip contributes on either side is a
+	 * fact about this patient's orders and not about how the chip arose.
+	 * {@code InteractionFindingChartOrderBridgeTest.theDrugInPlayArmsPartnerIsBridgedToo} is one
+	 * arrangement of it — a partner side that bridges beside a subject side that does not — and is an
+	 * arrangement rather than the rule. Empty is also the answer for: a chip whose substances their own orders already display; a chip that is not
 	 * an interaction; an interaction chip built from a public constructor here rather than through
 	 * {@code DrugSafetyValidator.interactionWarning} (the class-only and question-pair chips, whose
 	 * residue ADR Decision 64 records); an order the module could read no name for; and a chart with
@@ -587,8 +588,8 @@ public class SafetyWarning {
 	 * One substance this chip names, and one active order of this patient's that the module resolved it
 	 * from — the pair {@code DrugReferenceInjector.FINDING_CHART_ORDER_LEAD}'s items are rendered from.
 	 *
-	 * <p>A value class with {@link #equals} and {@link #hashCode}. <b>{@code equals} has ONE reader
-	 * that is exercised</b>: {@code DrugSafetyValidator.addChartOrderBridge}'s
+	 * <p>A value class with {@link #equals} and {@link #hashCode}. <b>{@code equals} has TWO readers,
+	 * both exercised.</b> The first is {@code DrugSafetyValidator.addChartOrderBridge}'s
 	 * {@code out.contains(bridge)} — an {@code ArrayList}, so that resolves to {@code equals} and never
 	 * to {@code hashCode}. Since issue #347 published this list there is a SECOND exercised reader,
 	 * {@code ChartSearchAiSafetyWarningSeverityWireTest}'s accessor-versus-key comparison, whose
@@ -598,7 +599,7 @@ public class SafetyWarning {
 	 * element — and the chip that closed it was added for exactly that reason; ADR Decision 68 is the
 	 * record. {@code hashCode} has NO reader (Jackson serializes
 	 * through the getters below, not through either) and is here only to hold the contract with
-	 * {@code equals}. The exercised reader is the
+	 * {@code equals}. The first of those two readers is the
 	 * de-duplication that makes two orders of one display state their substance once, pinned by
 	 * {@code InteractionFindingChartOrderBridgeTest.twoOrdersOfTheSameDisplayAreNamedOnce}. Said
 	 * precisely because an earlier draft named the chip COLLAPSE as the reason and that is false (it

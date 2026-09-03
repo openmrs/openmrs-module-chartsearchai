@@ -19,7 +19,6 @@ import org.junit.jupiter.api.Test;
 import org.openmrs.DrugOrder;
 import org.openmrs.Order;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.querystore.model.QueryDocument;
 import org.openmrs.module.querystore.serialization.DrugOrderRecordSerializer;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 

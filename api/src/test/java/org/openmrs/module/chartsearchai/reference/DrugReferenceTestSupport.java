@@ -1142,6 +1142,25 @@ public final class DrugReferenceTestSupport {
 	 * included, and the arrangement encodes which concept-reference-source names the builder
 	 * recognises — so a change to that predicate must not have to be found in two test files.
 	 */
+	static void mapConceptToAtc(int conceptId, String... codes) {
+		ConceptSource whoAtc = new ConceptSource();
+		whoAtc.setName("WHOATC");
+		whoAtc.setDescription("WHO ATC classification (test)");
+		Context.getConceptService().saveConceptSource(whoAtc);
+		Concept concept = Context.getConceptService().getConcept(conceptId);
+		for (String code : codes) {
+			ConceptReferenceTerm term = new ConceptReferenceTerm();
+			term.setName(code);
+			term.setCode(code);
+			term.setConceptSource(whoAtc);
+			Context.getConceptService().saveConceptReferenceTerm(term);
+			concept.addConceptMapping(
+					new ConceptMap(term, Context.getConceptService().getDefaultConceptMapType()));
+		}
+		Context.getConceptService().saveConcept(concept);
+		Context.flushSession();
+	}
+
 	/**
 	 * Order 3 of the standard test dataset — a real, fully-populated Triomune-30 {@code DrugOrder},
 	 * and the fixture every case that needs querystore's own rendering of an order mutates in memory.
@@ -1175,7 +1194,7 @@ public final class DrugReferenceTestSupport {
 	 * <p>Scoped to that one row rather than to every name of the concept, and that is the assertion
 	 * rather than economy: renaming both the FSN and the synonym makes them duplicates in one locale,
 	 * and {@code ConceptValidator} then rejects the concept the moment anything saves it — which
-	 * {@link #mapConceptToAtc} above does.
+	 * {@link #mapConceptToAtc} does.
 	 */
 	static void nameTheConcept(int conceptId, String name) {
 		Context.getAdministrationService().executeSQL("update concept_name set name = '" + name
@@ -1183,25 +1202,6 @@ public final class DrugReferenceTestSupport {
 				+ " and concept_name_type = 'FULLY_SPECIFIED'", false);
 		Context.flushSession();
 		Context.clearSession();
-	}
-
-	static void mapConceptToAtc(int conceptId, String... codes) {
-		ConceptSource whoAtc = new ConceptSource();
-		whoAtc.setName("WHOATC");
-		whoAtc.setDescription("WHO ATC classification (test)");
-		Context.getConceptService().saveConceptSource(whoAtc);
-		Concept concept = Context.getConceptService().getConcept(conceptId);
-		for (String code : codes) {
-			ConceptReferenceTerm term = new ConceptReferenceTerm();
-			term.setName(code);
-			term.setCode(code);
-			term.setConceptSource(whoAtc);
-			Context.getConceptService().saveConceptReferenceTerm(term);
-			concept.addConceptMapping(
-					new ConceptMap(term, Context.getConceptService().getDefaultConceptMapType()));
-		}
-		Context.getConceptService().saveConcept(concept);
-		Context.flushSession();
 	}
 
 	/** The injected ACTIVE-ORDER records of {@code chart}, for the files that use it. Shaped like

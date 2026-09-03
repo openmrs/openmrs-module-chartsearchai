@@ -506,7 +506,8 @@ public class PatientClinicalContext {
 	 * reason the paragraph above gives.
 	 *
 	 * <p>The LOSS of that boundary rule over the two corpora above is ZERO, and that bound is the whole
-	 * of the claim. The four condition tokens the bundled seed publishes ({@code gi bleed}, {@code peptic
+	 * of the claim. "The curated condition population" below means the one this repo SHIPS; an
+	 * operator's own file is by definition unmeasured, which is what the loader-rule paragraph is about. The four condition tokens the bundled seed publishes ({@code gi bleed}, {@code peptic
 	 * ulcer}, {@code severe hepatic}, {@code renal impairment} — the TOKENS, which #309's own body
 	 * misquoted as the {@code note} fields) match 1 value over the recorded corpus and 5 over the
 	 * candidate one, and every one of them carries its token as a whole word. Not six: the recorded
@@ -516,9 +517,9 @@ public class PatientClinicalContext {
 	 * <p><b>Both corpora are CODED concept names, and the rule DOES cost the free-text half — including
 	 * on the shipped seed's own tokens.</b> A condition a clinician types as {@code GI bleeding} is
 	 * hedged against {@code gi bleed}, and {@code peptic ulceration} against {@code peptic ulcer}: an
-	 * INFLECTION, the commonest shape in free text and the one neither corpus can exhibit. No choice of
-	 * boundary rule rescues it — the tail is three letters, past even the order-name rule's two, and
-	 * choosing an allowance at a call site is what issue #260 forbids. The other shape is a prefix or
+	 * INFLECTION, the commonest shape in free text and one neither corpus can exhibit. No choice of
+	 * boundary rule rescues them — the tails are three and five letters, both past even the order-name
+	 * rule's two, and choosing an allowance at a call site is what issue #260 forbids. The other shape is a prefix or
 	 * suffix compound that is clinically the same finding: {@code edema} 13/7, {@code carcinoma} 8/2
 	 * ({@code Adenocarcinoma}), {@code arthritis} 10/3 ({@code Osteoarthritis of knee}),
 	 * {@code cerebral} 10/2, {@code ulcer} 21/2. Both are hedged rather than dropped — the section

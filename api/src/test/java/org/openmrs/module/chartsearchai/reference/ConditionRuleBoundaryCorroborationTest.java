@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
@@ -48,7 +49,9 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * {@link DrugReference#containsWord}, the PROSE rule, because that is the shape
  * {@code PatientClinicalContext.containsToken}'s own javadoc describes the condition haystack by ("a
  * condition in the clinician's own wording"). No matching behaviour moves: {@code hasConditionToken} is
- * byte-identical and every chip this arm raises is unchanged.
+ * byte-identical, and no chip's wire shape, detail, rank or severity moves — the {@code SafetyWarning}'s
+ * own {@code uncorroboratedChartMatch} flag does flip for a condition rule, which is what the injected
+ * finding reads.
  *
  * <p><b>What the measurement decided</b> (issue #309, over the OpenMRS 3.7.1 reference-application demo
  * dictionary; the figures and both corpora are recorded on
@@ -79,6 +82,8 @@ public class ConditionRuleBoundaryCorroborationTest {
 	private static final String RECORDED = DrugReferenceInjector.RECORDED_READING_LEAD;
 
 	private static final String UNCORROBORATED = DrugReferenceInjector.UNCORROBORATED_READING_LEAD;
+
+	private static final String NOT_RECORDED = DrugReferenceInjector.NOT_RECORDED_READING_LEAD;
 
 	/** The one arrangement every case here drives: the real injector, the real validator, and the
 	 *  service named by {@code fixture} — this file's own fixture, or the SHIPPED curated seed for the
@@ -118,15 +123,27 @@ public class ConditionRuleBoundaryCorroborationTest {
 				chart(fixtureService(), question, null, DrugReferenceTestSupport.set(conditions)));
 	}
 
+	/** Which patient-specific section {@code clause} sits in — ALL THREE leads, not two. An earlier
+	 *  version read only {@link #RECORDED} and {@link #UNCORROBORATED}, so a clause in the
+	 *  not-recorded section was attributed to whichever of those happened to precede it; measured on
+	 *  the shipped seed, where a record carries a recorded section and a not-recorded one at once, it
+	 *  named the recorded section for a clause in the not-recorded one. Sound because no lead is a
+	 *  substring of another, which
+	 *  {@code InjectedContraindicationCorroborationTest.theThreeSectionLeadsAreTheWordsAModelReads}
+	 *  asserts. */
 	private static String clauseSection(String record, String clause) {
 		int at = record.indexOf(clause);
 		assertTrue(at >= 0, "the record does not carry the clause at all: " + record);
-		int recorded = record.lastIndexOf(RECORDED, at);
-		int uncorroborated = record.lastIndexOf(UNCORROBORATED, at);
-		if (recorded < 0 && uncorroborated < 0) {
-			return "no patient-specific section";
+		String section = "no patient-specific section";
+		int nearest = -1;
+		for (String lead : new String[] { RECORDED, NOT_RECORDED, UNCORROBORATED }) {
+			int start = record.lastIndexOf(lead, at);
+			if (start > nearest) {
+				nearest = start;
+				section = lead;
+			}
 		}
-		return recorded > uncorroborated ? RECORDED : UNCORROBORATED;
+		return nearest < 0 ? "no patient-specific section" : section;
 	}
 
 	@Test
@@ -157,7 +174,11 @@ public class ConditionRuleBoundaryCorroborationTest {
 		// whole word, so this rule costs that population nothing. 'peptic ulcer' inside 'Peptic Ulcer of
 		// Stomach' is one of those five matches, and it is exactly the multi-word fragment case that
 		// tightening hasConditionToken itself was declined for.
-		String record = record("Can I give her ibuprofen?", "Peptic Ulcer of Stomach");
+		// Through curatedService(), the SHIPPED seed — not this file's fixture, whose ibuprofen entry
+		// merely happens to spell the token and note the same way. Read from the fixture, a reworded
+		// note or a changed rule in the shipped file would redden nothing here.
+		String record = recordFrom(DrugReferenceTestSupport.curatedService(),
+				"Can I give her ibuprofen?", "Peptic Ulcer of Stomach");
 		assertEquals(RECORDED, clauseSection(record, "active peptic ulcer disease"),
 				"the shipped seed's own condition token must keep stating its clause: " + record);
 	}
@@ -180,13 +201,19 @@ public class ConditionRuleBoundaryCorroborationTest {
 		assertEquals(1, findings.size(), "one fact is one citable record, was: " + findings);
 		assertTrue(findings.get(0).contains(DrugReferenceInjector.FINDING_UNCORROBORATED_MATCH),
 				"the finding must carry the same provenance clause the record does: " + findings.get(0));
+		// The COMPLEMENT, without which this case says only that the two channels agree when both
+		// hedge — a regression hedging every condition finding would have left it green.
+		List<String> corroborated = findings("Can I give her naltrexone?", "Chronic liver disease");
+		assertEquals(1, corroborated.size(), "one fact is one citable record, was: " + corroborated);
+		assertFalse(corroborated.get(0).contains(DrugReferenceInjector.FINDING_UNCORROBORATED_MATCH),
+				"a corroborated condition rule's finding must go bare: " + corroborated.get(0));
 	}
 
 	@Test
 	public void theShippedSeedPublishesExactlyTheFourConditionTokensTheMeasurementWasOver() {
-		// A DATA guard over the file itself, and the reason it exists is that four documents — this
-		// class's javadoc, DrugSafetyValidator.aMatchedConditionCarriesTheToken, ADR Decision 70 and
-		// README — state a zero-cost claim whose subject is exactly this token set. The measurement
+		// A DATA guard over the file itself, and the reason it exists is that several documents state a
+		// zero-cost claim whose subject is exactly this token set; the assertion message below names
+		// them, so the list has one home rather than two that can disagree. The measurement
 		// behind it cannot be re-run in this repo (it needs the 3.7.1 dictionary, which the repo does
 		// not carry), so the one thing that CAN be pinned is the population it was over. Add a fifth
 		// condition rule to the shipped seed and this reddens, which is the prompt to re-measure rather
@@ -197,14 +224,27 @@ public class ConditionRuleBoundaryCorroborationTest {
 				continue;
 			}
 			for (DrugReference.Contraindication c : entry.getContraindications()) {
-				if ("condition".equalsIgnoreCase(c.getType())) {
+				// Production's own predicate, never a second spelling of it: isConditionRule's javadoc
+				// says the readers of a rule's TYPE are enumerated once, and a guard that re-expressed
+				// it stayed green when that vocabulary was mutated — measured.
+				if (DrugSafetyValidator.isConditionRule(c)) {
 					tokens.add(c.getToken());
 				}
 			}
 		}
-		assertEquals(Arrays.asList("gi bleed", "peptic ulcer", "severe hepatic", "renal impairment"),
-				tokens, "the zero-cost claim in four documents is ABOUT this token set; if it changed, "
+		// A SET, because the claim is about which tokens exist and not about their order — nothing
+		// contracts the order Jackson hands them back in, and asserting it made a pure reordering of the
+		// JSON demand a corpus re-measurement it does not need. The size is asserted beside it so a
+		// duplicate or a fifth rule still reddens.
+		assertEquals(new TreeSet<String>(Arrays.asList(
+				"gi bleed", "peptic ulcer", "severe hepatic", "renal impairment")),
+				new TreeSet<String>(tokens),
+				"the zero-cost claim is ABOUT this token set — it is stated on "
+						+ "PatientClinicalContext.containsToken (which carries the token literals and "
+						+ "the per-corpus counts), DrugSafetyValidator.aMatchedConditionCarriesTheToken, "
+						+ "this class's javadoc, ADR Decision 70 and README; if the set changed, "
 						+ "re-measure rather than re-word");
+		assertEquals(4, tokens.size(), "a duplicate token would pass the set comparison above");
 	}
 
 	@Test
@@ -225,12 +265,32 @@ public class ConditionRuleBoundaryCorroborationTest {
 				"Can I give her ibuprofen?", "GI bleeding");
 		assertEquals(UNCORROBORATED, clauseSection(hedged, "active gastrointestinal bleeding"),
 				"an inflection of the shipped seed's own token is hedged: " + hedged);
-		// The control, so the case above is not read as the rule being broadly destructive: the same
-		// token against the multi-word fragment the bare match exists FOR still states as recorded.
-		String recorded = recordFrom(DrugReferenceTestSupport.curatedService(),
-				"Can I give her ibuprofen?", "history of peptic ulcer disease");
-		assertEquals(RECORDED, clauseSection(recorded, "active peptic ulcer disease"),
-				"the fragment case the bare match exists for is untouched: " + recorded);
+		// The control that keeps this from reading as the rule being broadly destructive — the
+		// multi-word fragment the bare match exists FOR still states as recorded — is
+		// InjectedContraindicationPatientReadingTest
+		// .aConditionOnRecordReadsFromTheConditionListAndOnlyItsOwnRule, over the same shipped seed and
+		// the same recorded condition, asserting the whole recorded AND not-recorded sections by
+		// equality rather than one clause's section. Not copied here; that case is stricter.
+	}
+
+	@Test
+	public void aPaddedTokenIsPutToTheSameStringItsWitnessFilterTrimmed() throws IOException {
+		// The two sides of this leg normalize differently, and until #309's cycle-2 review they did not
+		// agree: PatientClinicalContext.recordsMatching filters witnesses on foldedLower(token.trim()),
+		// while the boundary question was put to the RAW token — so a curated rule whose token carries
+		// stray whitespace found its witness and then failed to match it, and every such rule lost the
+		// recorded attribution it had before #309. Nothing in DrugReferenceValidity trims or reports a
+		// padded token, so an operator's own file reaches this silently.
+		//
+		// Acamprosate files Naltrexone's rule with the token padded; the two must answer alike.
+		String padded = record("Can I give her acamprosate?", "Chronic liver disease");
+		assertEquals(RECORDED, clauseSection(padded, "hepatic impairment"),
+				"a padded token must be put to the string its own witness filter trimmed: " + padded);
+		// And the padding must not buy a match the trimmed token would not get — the hedge still holds
+		// on the nesting case, so this is a normalization fix and not a widening.
+		String hedged = record("Can I give her acamprosate?", "Status Post Cesarean Delivery");
+		assertEquals(UNCORROBORATED, clauseSection(hedged, "hepatic impairment"),
+				"trimming must not widen the match: " + hedged);
 	}
 
 	@Test

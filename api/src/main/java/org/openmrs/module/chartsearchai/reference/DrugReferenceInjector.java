@@ -302,9 +302,12 @@ public class DrugReferenceInjector {
 	 *  chart can contradict: both of {@link #corroborated}'s ALLERGY legs can miss a recorded allergy
 	 *  that really does name the drug, because the first sees only the witnesses of THIS rule's token
 	 *  and the second is narrowed by {@link DrugReferenceService#findImpliedSubstances}. Its condition
-	 *  leg (issue #309) can miss a recorded condition the same way, which is why this lead suits that
-	 *  section too: a prefix or suffix compound IS the finding the rule is about and carries the token
-	 *  inside a longer word. Measured on a
+	 *  leg (issue #309) can miss a recorded condition the same way — a prefix or suffix compound IS the
+	 *  finding the rule is about and carries the token inside a longer word — so the non-categorical
+	 *  FRAMING carries over to that section. <b>The WORDS do not, and that is a trade rather than a
+	 *  fit</b>: for a condition rule the token names no drug, so "a record of this drug" names a
+	 *  corroboration the module never attempts. See {@link #FINDING_UNCORROBORATED_MATCH}, whose
+	 *  javadoc argues the trade, and ADR Decision 70, which records it. Measured on a
 	 *  curated arrangement — an entry aliasing {@code ketoconazole} and ruling on another of its own
 	 *  names, beside an allergy recorded as {@code Ketoconazole} that {@code matchesDrugName} accepts —
 	 *  the record denied an allergy the chart holds. It claims no MECHANISM either, for the same

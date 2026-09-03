@@ -16,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -557,5 +558,71 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 				"the pair this arm kept, and not the one it handed to the chart arm — nor the chart "
 						+ "arm's own three, which is what this reads if the field is yielded on any cede");
 		assertEquals(1, partial.extent.getReported());
+	}
+
+	/** A question about dexamethasone and voxelotor over {@link DrugReferenceTestSupport#DDI_ROUTE_VARIANTS},
+	 *  whose four dexamethasone rows share one {@code drugbank_id} and so are one substance — which is
+	 *  what puts all four in play from the one question word and makes one clinical pair arrive as four
+	 *  entry pairs. */
+	private static final String ROUTE_VARIANT_QUESTION = "Does dexamethasone interact with voxelotor?";
+
+	/**
+	 * As {@link #pass(String, PatientClinicalContext)}, over
+	 * {@link DrugReferenceTestSupport#DDI_ROUTE_VARIANTS} instead of the excerpt. Reassigns BOTH
+	 * fields, so {@link #entriesResolvedBy} keeps reading the dataset the pass ran over — a case
+	 * asserting what a question resolves and a case asserting what the pass then states must not be
+	 * reading two datasets, which is what this class's {@code service} field exists for.
+	 */
+	private Pass passOverRouteVariants(String question, PatientClinicalContext context)
+			throws IOException {
+		service = DrugReferenceTestSupport.ddiFixtureService(DrugReferenceTestSupport.DDI_ROUTE_VARIANTS);
+		validator = DrugReferenceTestSupport.validator(service);
+		return pass(question, context);
+	}
+
+	@Test
+	public void aClinicalPairOneEntryPairCollectedAndAnotherCededStatesWhatTheChartArmReported()
+			throws IOException {
+		// The cede the two cases above cannot express, and the reason addQuestionPairInteractions
+		// collects candidates and filters them against chartOwned rather than deciding the cede on the
+		// candidate map. Both of those arrangements cede a pair that never became a candidate at all,
+		// so `candidates` is empty in each and narrowing the guard to "chartOwned non-empty AND
+		// candidates empty" is green on both — measured.
+		//
+		// Here it is not. Dexamethasone x voxelotor arrives as FOUR entry pairs, because the four
+		// dexamethasone rows are one substance and the question word puts all of them in play, and they
+		// carry different rule sets. The systemic, nasal and ophthalmic rows each carry their own
+		// above-floor row against voxelotor, whose token is "voxelotor" and so names her active order:
+		// those three pairs are ceded. The TOPICAL row carries no interaction row at all, so its side of
+		// the pair contributes nothing that could name the order; what joins it instead is voxelotor's
+		// own rows against its three siblings, every one of them tokened with the rxnorm name the family
+		// shares ("dexamethasone", measured off the parsed fixture), which names the topical row too —
+		// above the floor, naming no order of hers, so that entry pair collects a candidate. All four
+		// key alike, on that same shared token, so chartOwned then filters the candidate out: this arm
+		// kept nothing and states nothing, and the arm that did report the pair speaks. Decide the cede
+		// on the candidate map and it publishes of(0, 0) beside those chips instead — issue #336's own
+		// defect, on a shape neither case above reaches.
+		Pass ceded = passOverRouteVariants(ROUTE_VARIANT_QUESTION,
+				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Voxelotor 1500mg"),
+						null, null, null));
+
+		assertEquals(5, entriesResolvedBy(ROUTE_VARIANT_QUESTION),
+				"precondition: the four dexamethasone rows and voxelotor, or one clinical pair does not "
+						+ "arrive as several entry pairs and this case measures the same shape as the "
+						+ "two above");
+		assertTrue(ceded.chips.size() >= 1, "precondition: the chart arm reports the pair: "
+				+ DrugReferenceTestSupport.details(ceded.chips));
+		for (SafetyWarning chip : ceded.chips) {
+			assertFalse(chip.getDetail().contains("named in the question"),
+					"precondition: the question-pair arm must have chipped NOTHING, or its candidate "
+							+ "survived the filter and no pair was ceded: " + chip);
+		}
+		assertNotNull(ceded.extent, "a response carrying interaction chips must not state a screen that "
+				+ "related nothing");
+		assertTrue(ceded.extent.getFound() >= 1,
+				"and the number is the chart arm's own, which is what reddens if the cede is decided on "
+						+ "an empty candidate map rather than on an empty surviving list; was: "
+						+ ceded.extent.getFound() + " with chips "
+						+ DrugReferenceTestSupport.details(ceded.chips));
 	}
 }

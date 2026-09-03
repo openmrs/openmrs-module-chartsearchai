@@ -699,7 +699,7 @@ public class DrugSafetyValidator {
 		// between them — which is why this arm needs no analogue of that arm's coveredByActiveOrderArm
 		// precedence check, whose subjects are the chart's own orders here. Read that as scoped to the
 		// two PAIRWISE arms and not to the chart generally: this arm yields a pair the DRUG-IN-PLAY arm
-		// already chipped, through reportedPairs.alreadyReported below, which ADR Decision 68 records
+		// already chipped, through reportedPairs.alreadyReported below, which ADR Decision 69 records
 		// as the nearest sibling of the cede addQuestionPairInteractions now declines to call a zero.
 		//
 		// What this arm DOES share with it is the machinery: the same bestRulePerPartner grouping, the
@@ -723,7 +723,7 @@ public class DrugSafetyValidator {
 		// verification round is a real difference: a question-pair pass that related pairs and ceded
 		// every one of them to the arm above returns null rather than of(0, 0), so this fallback is
 		// what then hands the field to the arm that actually reported them. Its numbers are still its
-		// own, over its own population — see addQuestionPairInteractions and ADR Decision 68.
+		// own, over its own population — see addQuestionPairInteractions and ADR Decision 69.
 		//
 		// LAST and only where pairExtent is still null, never summed. A pairwise statement is about a
 		// BOUNDED list — found and reported can differ, and which is the whole of what a client renders
@@ -4730,6 +4730,15 @@ public class DrugSafetyValidator {
 				// list of its own to describe. EVERY pair, deliberately — see this method's @return for
 				// what the two returns say differently, PairChipExtent for what the zero asserted and
 				// what it cost a reader, and ADR Decision 69 for why a partial cede keeps the field.
+				//
+				// Read off the SURVIVING list, which is what the enclosing found.isEmpty() asks, and
+				// never off the candidates map: by the paragraph above, a sibling entry pair of a ceded
+				// clinical pair can collect a candidate under that same key, which chartOwned then
+				// filters out. Ask "chartOwned non-empty AND candidates empty" instead and that
+				// arrangement publishes of(0, 0) beside the chart arm's own Major chip — issue #336's
+				// defect, on a shape the arm's other cede cases do not reach. Pinned by
+				// PairChipExtentContextTest
+				// .aClinicalPairOneEntryPairCollectedAndAnotherCededStatesWhatTheChartArmReported.
 				return null;
 			}
 			// Nothing to order or bound, and no GP read for the common "these two do not interact" case —

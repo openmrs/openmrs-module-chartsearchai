@@ -75,7 +75,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 67: A question naming a drug CLASS is told so, rather than resolved to members the classification cannot honestly supply](#decision-67-a-question-naming-a-drug-class-is-told-so-rather-than-resolved-to-members-the-classification-cannot-honestly-supply)
 - [Decision 68: An active order joins the reference data by the CONCEPT it was written against, not only by the names a locale elects](#decision-68-an-active-order-joins-the-reference-data-by-the-concept-it-was-written-against-not-only-by-the-names-a-locale-elects)
 - [Decision 69: The question-pair arm, having ceded every pair it related, states nothing rather than a complete screen of none](#decision-69-the-question-pair-arm-having-ceded-every-pair-it-related-states-nothing-rather-than-a-complete-screen-of-none)
-- [Decision 70: The screening arm, having ceded every pair it related, states nothing — and nothing stands behind it](#decision-70-the-screening-arm-having-ceded-every-pair-it-related-states-nothing--and-nothing-stands-behind-it)
+- [Decision 70: The screening arm, having ceded every pair it related, states nothing, and nothing stands behind it](#decision-70-the-screening-arm-having-ceded-every-pair-it-related-states-nothing-and-nothing-stands-behind-it)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -4967,7 +4967,7 @@ Reproduced at the api level over the DDInter excerpt through the real `validate`
 
   **It was left standing because no candidate value looked right, and choosing one is a decision #336 did not make.** `of(0, 0)` is false, as here. `null` re-creates Decision 65's own complaint on the one question shape that asked for a screen — a completed screen indistinguishable from one nobody ran — because `questionDrugScreened` is false when `questionDrugs` is empty, so no fallback rescues it. `of(1, 0)` reads as a pair withheld, and it is on the response. `of(1, 1)` — counting the ceded pair into both numbers — is the closest of the four and still wrong for a reason the type publishes: `getReported()` is "how many of them **it** reported as chips", so counting a chip this arm did not raise is the cross-arm sum Decision 60 exists to prevent, this time published by the producer. And whether that arm cedes at all depends on what the ANSWER named, which is the answer-dependence Decision 65 refuses for the value and would here move to the statement's presence. A remedy needs its own ticket and its own measurement, and that ticket is [#370](https://github.com/openmrs/openmrs-module-chartsearchai/issues/370), which carries this reproduction and the four refusals above; what is recorded here is that the gap is known, reproduced, tracked, and not reasoned away. `DrugSafetyValidator`'s own comment beside the screening gate now points at it rather than reading as though that arm has no chart-precedence decision at all.
 
-## Decision 70: The screening arm, having ceded every pair it related, states nothing — and nothing stands behind it
+## Decision 70: The screening arm, having ceded every pair it related, states nothing, and nothing stands behind it
 
 **Status: Accepted** (September 2026) — implemented, issue [#370](https://github.com/openmrs/openmrs-module-chartsearchai/issues/370). Amends Decisions 60, 65 and 69, and closes the residue Decision 69 records as its own last trade-off.
 

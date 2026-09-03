@@ -156,8 +156,10 @@ package org.openmrs.module.chartsearchai.reference;
  *       rather than describing chips that were discarded.</li>
  *   <li>the statement has not been produced YET — the early {@code done} answer of an
  *       async-grounding stream is built before validation runs, carries no chips either, and is
- *       followed by a {@code grounded} event carrying both. A streaming client must keep consuming
- *       rather than read this one as an answer about the screen.</li>
+ *       followed by a {@code grounded} event carrying the chips. A streaming client must keep
+ *       consuming rather than read this one as an answer about the screen — but the trailing
+ *       event is not a promise of a statement either: any of the situations above can be what it
+ *       carries, the ceding one among them.</li>
  * </ol>
  *
  * <p>Never read absence as completeness, and never re-derive either count from the chip list.

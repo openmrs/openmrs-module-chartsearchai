@@ -3422,13 +3422,12 @@ public class DrugSafetyValidator {
 	 * 12). That ledger answers "has a chip been raised for this PAIR", on identity, and its own javadoc
 	 * says why it must not key on rendered text: two arms word one finding differently, so text
 	 * equality UNDER-recognises a repeat. This one is the other direction and needs no identity at all
-	 * — two chips whose every KEYED field is equal state the same relationship in the same
-	 * words, so a second copy states nothing a reader did not already have. Keyed and not published,
-	 * since issue #347: {@code chartOrderBridges} reaches the wire and is deliberately NOT in this key
-	 * (see {@code CLAUDE.md}), so a collapsed twin can carry different bridges. What the collapse
-	 * claims is that the SENTENCE repeats, which is what a reader reads. Both ledgers run: this one
-	 * cannot recognise a repeat the arms word differently, and that one cannot recognise two DIFFERENT
-	 * pairs that render alike.
+	 * — two chips whose every KEYED field is equal state the same relationship in the same words.
+	 * Keyed and not published, since issue #347: {@code chartOrderBridges} reaches the wire and is
+	 * deliberately NOT in this key (see {@code CLAUDE.md}), so a collapsed twin can carry different
+	 * bridges. What the collapse claims is that the SENTENCE repeats, which is what a reader reads.
+	 * Both ledgers run: this one cannot recognise a repeat the arms word differently, and that one
+	 * cannot recognise two DIFFERENT pairs that render alike.
 	 *
 	 * <p><b>What makes two different pairs render alike is the reconciliation this issue widened.</b>
 	 * A fixed-dose combination prescription resolves to one order-rung co-medication
@@ -3458,8 +3457,7 @@ public class DrugSafetyValidator {
 	 * <p><b>The key is every field the chip's SENTENCE is made of</b>, not the detail alone: the
 	 * {@code type}, {@code drug}, {@code detail} and {@code severity} it renders with, plus the two
 	 * booleans deciding the clauses {@link #licensesWithholding(SafetyWarning)} and
-	 * {@code DrugReferenceInjector.renderFinding} add to the injected record. So a chip this drops
-	 * states no word another chip of the same pass does not state already.
+	 * {@code DrugReferenceInjector.renderFinding} add to the injected record.
 	 *
 	 * <p><b>{@link SafetyWarning#chartOrderBridges()} is deliberately left OUT of that key</b> (issue
 	 * #349), and it was added here and reverted, so the omission is a decision rather than an

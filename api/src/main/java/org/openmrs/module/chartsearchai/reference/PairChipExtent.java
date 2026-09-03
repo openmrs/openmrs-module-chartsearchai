@@ -72,10 +72,11 @@ package org.openmrs.module.chartsearchai.reference;
  * <b>The SCREENING arm takes the same rule, one issue later</b> (issue #370). Its cede is its own —
  * it skips a pair the drug-in-play arm already chipped, {@code DrugSafetyValidator.InteractionPairs}
  * — and where a cede left it with no pair of its own, it published the same false zero on the one
- * question shape that ASKED for a screen: a screen that kept no pair having ceded NONE relates none
- * of the pairs it enumerated and states that zero still. Measured through the real
- * {@code validate} over the DDInter excerpt,
- * {@code of(0, 0)} beside a Major chip about a pair it had itself related. It now states nothing too.
+ * question shape that ASKED for a screen. Measured through the real {@code validate} over the
+ * DDInter excerpt, it returned {@code of(0, 0)} beside a Major chip about a pair it had itself
+ * related. It now states nothing too. A pass that kept no pair having ceded NONE is the RETAINED
+ * branch and is not that defect: it related none of the pairs it enumerated, and states that zero
+ * still.
  * <b>Behind that arm there is no fallback, so the {@code null} is what a client reads</b>, which is
  * why this rule reaches the enumeration below on one arm and not on the other. ADR Decision 71 is
  * canonical for why no number was available to it, and for what the silence costs.

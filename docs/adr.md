@@ -4238,7 +4238,7 @@ Additive, prompt-facing only, and monotone: it adds words and moves no call. The
 
 ## Decision 65: The interaction check that runs on the prescribing question states its extent too
 
-**Status: Accepted** (September 2026) — implemented, issue [#356](https://github.com/openmrs/openmrs-module-chartsearchai/issues/356). Amends Decision 60; amended in turn by Decision 69, which is what decides when a pairwise arm has "spoken".
+**Status: Accepted** (September 2026) — implemented, issue [#356](https://github.com/openmrs/openmrs-module-chartsearchai/issues/356). Amends Decision 60; amended in turn by Decisions 69 and 70, which are what decide when a pairwise arm has "spoken" and what happens where the arm this fallback sits behind is the one that ceded.
 
 ### Context
 
@@ -4248,7 +4248,7 @@ Decision 60 gave the two PAIRWISE interaction arms a `PairChipExtent` and put it
 
 ### Decision
 
-**The drug-in-play arm states the extent where neither pairwise arm did.**
+**The drug-in-play arm states the extent where neither pairwise arm did** — and, since Decision 70, only where the QUESTION also resolved a drug this arm could screen. Behind a screening arm that kept no pair, nothing states the field: this fallback is gated on `questionDrugScreened`, which that arm's own `questionDrugs.isEmpty()` gate makes false. Do not read this bullet as licensing a widening to cover it; Decision 70 refuses that by name.
 
 - **`addInteractionWarnings` returns how many pairs it related** — the rule chips it appended, after `StatedInteractionChips` has dropped any that restate one this pass already made. `validate` accumulates that and states `PairChipExtent.of(n, n)` from a fallback beside the two pairwise blocks, published through the one `recordPairExtent` call Decision 60 already established.
 - **`found == reported`, because this arm applies no cap.** `maxPairChips` bounds the two quadratic arms and has never bounded this one, which raises one chip per partner it relates. It reports everything it finds, and says so.
@@ -4916,7 +4916,7 @@ for the standalone, and nothing in this repository stands in for them.
 
 ## Decision 69: The question-pair arm, having ceded every pair it related, states nothing rather than a complete screen of none
 
-**Status: Accepted** (September 2026) — implemented, issue [#336](https://github.com/openmrs/openmrs-module-chartsearchai/issues/336) (its verification round). Amends Decisions 60 and 65.
+**Status: Accepted** (September 2026) — implemented, issue [#336](https://github.com/openmrs/openmrs-module-chartsearchai/issues/336) (its verification round). Amends Decisions 60 and 65; amended by Decision 70, which takes the same rule to the screening arm.
 
 ### Context
 
@@ -4963,7 +4963,7 @@ Reproduced at the api level over the DDInter excerpt through the real `validate`
 - **−** **One more branch on a return value three arms feed one local.** The arm's `@return` now carries three outcomes rather than two.
 - **− THE SCREENING ARM HAS THE SAME DEFECT, MEASURED, AND THIS DECISION DOES NOT FIX IT.** Not every candidate that arm skips is a cede: `seenPairs` collapses one clinical pair reached from two rows, and `StatedInteractionChips` drops a candidate whose every published field repeats a chip already stated — #339's review round 12 decided the latter, and `PairChipExtent`'s javadoc carries its reason (a restatement is a pair *already shown*, byte-identically, so what `found` counts there is what a reader could have been told apart). But one of them IS a cede to the drug-in-play arm, by a predicate this decision's first draft did not reach: `reportedPairs.alreadyReported(ref, matched.partnerKey())`. Measured through the real `validate` over the excerpt — answer `"Ibuprofen is on the list."`, a screening question, the same two-order chart — it publishes `of(0, 0)` beside one Major interaction chip, and neutering `alreadyReported` gives `1/1` with two chips, so the drop is that cede and not the collapse. That is this decision's own defect on the sibling arm.
 
-  **CLOSED by Decision 70** (issue #370), which is where the fifth option and its measurement live; the four refusals below are what that decision had to answer, and it kept three of them. The paragraph is left as written because it is the record of what was known when this decision shipped.
+  **CLOSED by Decision 70** (issue #370), which is where the fifth option and its measurement live; the four refusals below are what that decision had to answer, and it kept three of them. The trade-off bullet above is left as written because it is the record of what was known when this decision shipped; the paragraph below it keeps its every claim and moves only its tense.
 
   **It was left standing because no candidate value looked right, and choosing one is a decision #336 did not make.** `of(0, 0)` is false, as here. `null` re-creates Decision 65's own complaint on the one question shape that asked for a screen — a completed screen indistinguishable from one nobody ran — because `questionDrugScreened` is false when `questionDrugs` is empty, so no fallback rescues it. `of(1, 0)` reads as a pair withheld, and it is on the response. `of(1, 1)` — counting the ceded pair into both numbers — is the closest of the four and still wrong for a reason the type publishes: `getReported()` is "how many of them **it** reported as chips", so counting a chip this arm did not raise is the cross-arm sum Decision 60 exists to prevent, this time published by the producer. And whether that arm cedes at all depends on what the ANSWER named, which is the answer-dependence Decision 65 refuses for the value and would here move to the statement's presence. A remedy needs its own ticket and its own measurement, and that ticket is [#370](https://github.com/openmrs/openmrs-module-chartsearchai/issues/370), which carries this reproduction and the four refusals above; what is recorded here is that the gap is known, reproduced, tracked, and not reasoned away. `DrugSafetyValidator`'s own comment beside the screening gate now points at it rather than reading as though that arm has no chart-precedence decision at all.
 

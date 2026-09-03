@@ -569,7 +569,7 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 		// ADR Decision 69 recorded it as reproduced and left standing for want of a value; ADR
 		// Decision 70 is where the value was chosen, and this case is what pins it.
 		// The screening arm cedes a pair the drug-in-play arm has already chipped
-		// (reportedPairs.alreadyReported), and where that took every pair it related it kept nothing --
+		// (reportedPairs.alreadyReported), and where that took every pair it related it kept nothing —
 		// so of(0, 0) said the reference data related NONE of the pairs it enumerated, which is what
 		// PairChipExtent and README both define found == 0 to mean, beside a Major chip about a pair it
 		// had related. Having ceded every one it has no bounded list of its own to describe, so it

@@ -71,7 +71,7 @@ package org.openmrs.module.chartsearchai.reference;
  * as it could before — and the ceded pairs are reported beside it as chips rather than withheld.
  * <b>The SCREENING arm takes the same rule, one issue later</b> (issue #370). Its cede is its own —
  * it skips a pair the drug-in-play arm already chipped, {@code DrugSafetyValidator.InteractionPairs}
- * — and where that took every pair it related, it published the same false zero on the one question
+ * — and where it kept no pair at all, it published the same false zero on the one question
  * shape that ASKED for a screen: measured through the real {@code validate} over the DDInter excerpt,
  * {@code of(0, 0)} beside a Major chip about a pair it had itself related. It now states nothing too.
  * <b>Behind that arm there is no fallback, so the {@code null} is what a client reads</b>, which is
@@ -144,9 +144,9 @@ package org.openmrs.module.chartsearchai.reference;
  *       even over no orders at all. What #356 calls the row to get right is the other direction:
  *       {@code found == 0} must mean SCREENED and related nothing, never "the drug could not be
  *       resolved", so a drug only the ANSWER named states nothing on its own;</li>
- *   <li>a PAIRWISE arm related pairs and ceded EVERY one of them to the drug-in-play arm,
- *       so it has no bounded list of its own to describe (ADR Decisions 69 and 70). What reaches a
- *       client is the SCREENING arm's, nothing being gated behind that arm; the question-pair arm's
+ *   <li>the SCREENING arm kept no pair, having ceded at least one to the drug-in-play arm, so it
+ *       has no bounded list of its own to describe (ADR Decisions 69 and 70). Its subject is that
+ *       arm because nothing is gated behind it; the question-pair arm's
  *       {@code null} on the same rule is consumed today by
  *       {@code DrugSafetyValidator.validate}'s issue #356 fallback and replaced with the statement
  *       of the arm that did report those pairs — for the reason ADR Decision 69 records, which

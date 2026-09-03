@@ -5664,9 +5664,15 @@ public class DrugSafetyValidator {
 	 *        lookup's group map by {@link #resolvedSubstanceRows}, so the ungrouped-row fallback is
 	 *        unreachable from here too.
 	 * @return what this screen measured, or {@code null} where it measured no list — which is a pass
-	 *         that could not run at all (no clinical context) and, since issue #370, one that related
-	 *         pairs and ceded EVERY one of them to the drug-in-play arm through
-	 *         {@code alreadyReported}. The two are one statement to a reader, and both are unlike
+	 *         that could not run at all (no clinical context) and, since issue #370, one that KEPT NO
+	 *         PAIR having ceded at least one to the drug-in-play arm through
+	 *         {@code alreadyReported}. Stated as the predicate the code has rather than as "ceded
+	 *         every pair": this arm has a third exit the question-pair arm lacks
+	 *         ({@code StatedInteractionChips}), so a pass that ceded one candidate and collapsed
+	 *         another kept none without having ceded all, and states nothing for the same reason —
+	 *         it has no bounded list of its own, and both exclusions leave their pair visible as a
+	 *         chip. Narrowing this to a literal total cede leaves the whole suite green (measured),
+	 *         which is why the wording is not left to imply it. The two are one statement to a reader, and both are unlike
 	 *         {@code of(0, 0)}, which asserts that the reference data related none of the pairs this
 	 *         screen enumerated. Unlike {@link #addQuestionPairInteractions}, whose {@code null} on the
 	 *         same rule reaches {@code validate}'s issue #356 fallback, this arm has none behind it, so
@@ -5852,7 +5858,10 @@ public class DrugSafetyValidator {
 			if (cededToDrugInPlayArm) {
 				// Ceding is not a measurement — the rule addQuestionPairInteractions took at issue
 				// #336's verification round, and since issue #370 the rule on both pairwise arms, stated
-				// once in each. This screen related pairs and kept none, so it has no bounded list of
+				// once in each. Read the condition as the pair it is: this screen KEPT NO PAIR and at
+				// least one of them went to the drug-in-play arm. Not "ceded every pair" — see the
+				// @return, which says what a cede beside a collapse does and why the difference is
+				// worth spelling out. This screen related pairs and kept none, so it has no bounded list of
 				// its own to describe and describes none; the zero it used to state asserts the
 				// opposite, beside the drug-in-play arm's own Major chip about one of those pairs.
 				//

@@ -2387,7 +2387,10 @@ public class DrugSafetyValidator {
 	 *
 	 *         <p><b>What it costs, measured</b> (issue #309, over the OpenMRS 3.7.1 demo dictionary —
 	 *         both corpora and every figure are recorded on {@link PatientClinicalContext#containsToken}).
-	 *         Over the curated condition tokens this repo ships it costs nothing on those corpora. It
+	 *         Over the curated condition tokens this repo ships it costs nothing on those corpora —
+	 *         over a base of ONE token and six matches, {@code peptic ulcer} being the only one of the
+	 *         four that matches anything in either corpus, which is what that zero is a share of and is
+	 *         to be stated with it wherever it is published. It
 	 *         DOES cost the free-text half, which they cannot reach, and that reaches those same shipped
 	 *         tokens — an INFLECTION, pinned by
 	 *         {@code ConditionRuleBoundaryCorroborationTest.anInflectionOfAShippedTokenIsHedged}. A
@@ -2418,6 +2421,14 @@ public class DrugSafetyValidator {
 	 *         widening: the trimmed token still goes to the whole-word rule.
 	 *         {@code ConditionRuleBoundaryCorroborationTest.aPaddedTokenIsPutToTheSameStringItsWitnessFilterTrimmed}
 	 *         holds both halves.
+	 *
+	 *         <p><b>Prompt-facing only, and that is the LIMIT of issue #309's fix rather than merely its
+	 *         scope.</b> The chip arm's own answer is unmoved, so on the ticket's reproduction the
+	 *         injected record and the {@code safety_finding} hedge while the {@code safetyWarnings} chip
+	 *         still states the contraindication of the chart, unqualified — a surface with no third
+	 *         section to hedge into. Do not close it by tightening
+	 *         {@link PatientClinicalContext#hasConditionToken}, which is fail-open; ADR Decision 72's
+	 *         trade-offs carry the case and what a remedy would have to be.
 	 *
 	 *         <p>False for a null context, which is "nothing known" rather than "nothing recorded", and
 	 *         false is the safe direction here exactly as it is for {@link #aMatchedRecordNamesTheEntry}:

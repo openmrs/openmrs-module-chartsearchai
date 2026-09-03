@@ -463,9 +463,15 @@ public class PatientClinicalContext {
 	/**
 	 * Deliberately still bare containment, unlike the order-name arm above (issue #86): these
 	 * haystacks are free text — an allergen name, a condition in the clinician's own wording — where a
-	 * curated rule is meant to match a fragment ({@code nsaid} inside "NSAIDs", {@code peptic ulcer}
-	 * inside "history of peptic ulcer disease"), so the word-start rule would silently stop matching
-	 * the rules that exist. The nesting risk is the same in principle ({@code opium} against an
+	 * curated rule is meant to match a fragment ({@code penicillin} inside {@code benzylpenicillin},
+	 * which both boundary rules refuse), so a boundary rule here would silently stop matching
+	 * the rules that exist. <b>Two other examples stood here until 2026-09-03 and were deleted rather
+	 * than reworded, because measurement refuted them</b>: {@code peptic ulcer} inside "history of
+	 * peptic ulcer disease" is ACCEPTED by {@link DrugReference#containsWord} and by
+	 * {@link DrugReference#matchesOrderName} alike, and {@code nsaid} inside "NSAIDs" is accepted by
+	 * the order-name rule (its two-letter tail allowance covers the plural) and refused only by
+	 * {@code containsWord}. Neither is a case for bare containment; the one above is, and it is
+	 * #223's own measured witness below. The nesting risk is the same in principle ({@code opium} against an
 	 * allergen recorded as "Tiotropium") and this javadoc used to ask for its own measurement over
 	 * allergy text rather than the order-name corpus that settled #86.
 	 *
@@ -530,14 +536,28 @@ public class PatientClinicalContext {
 	 * token reached the record as a WORD of it. This match itself is untouched and stays bare, for the
 	 * reason the paragraph above gives.
 	 *
-	 * <p>The LOSS of that boundary rule over the two corpora above is ZERO, and that bound is the whole
-	 * of the claim. "The curated condition population" below means the one this repo SHIPS; an
-	 * operator's own file is by definition unmeasured, which is what the loader-rule paragraph is about. The four condition tokens the bundled seed publishes ({@code gi bleed}, {@code peptic
+	 * <p>The LOSS of that boundary rule over the two corpora above is ZERO, and <b>what that zero is a
+	 * loss OF is one token and six matches</b> — state it that way wherever it is published, because
+	 * "all four tokens verified" reads as four confirmations and it is one (issue #243's rule; the
+	 * unbounded form had reached every document carrying this claim before it was measured).
+	 * "The curated condition population" below means the one this repo SHIPS; an
+	 * operator's own file is by definition unmeasured, which is what the loader-rule paragraph is about.
+	 * The four condition tokens the bundled seed publishes ({@code gi bleed}, {@code peptic
 	 * ulcer}, {@code severe hepatic}, {@code renal impairment} — the TOKENS, which #309's own body
 	 * misquoted as the {@code note} fields) match 1 value over the recorded corpus and 5 over the
-	 * candidate one, and every one of them carries its token as a whole word. Not six: the recorded
+	 * candidate one, and every one of those matched values carries its token as a whole word.
+	 * Per token, and this is the part the aggregate hides: {@code peptic ulcer} accounts for ALL of
+	 * them — 5 candidate, 1 recorded, none mid-word — while {@code gi bleed}, {@code severe hepatic}
+	 * and {@code renal impairment} match nothing at all in either corpus, so the claim is vacuously
+	 * true for three of the four and neither corpus says anything about what the boundary rule would
+	 * do to them. Not six matches: the recorded
 	 * concepts are a subset of the candidate ones, so those counts overlap and must not be summed. That
-	 * is the proxy issue #223 used to settle the allergy side, run for conditions.
+	 * is the proxy issue #223 used to settle the allergy side, run for conditions — with the same
+	 * weakness that proxy always had, three of these four tokens being as unmeasured against a coded
+	 * corpus as an operator's own file is. Measured 2026-09-03 by driving each corpus value through
+	 * {@link #hasConditionToken} and then through
+	 * {@code DrugSafetyValidator.aMatchedConditionCarriesTheToken}, over the rules
+	 * {@code DrugSafetyValidator.isConditionRule} selects from the shipped curated seed.
 	 *
 	 * <p><b>Both corpora are CODED concept names, and the rule DOES cost the free-text half — including
 	 * on the shipped seed's own tokens.</b> A condition a clinician types as {@code GI bleeding} is
@@ -553,6 +573,18 @@ public class PatientClinicalContext {
 	 * — and both are cases rather than sentences:
 	 * {@code ConditionRuleBoundaryCorroborationTest.anInflectionOfAShippedTokenIsHedged} and
 	 * {@code .aClinicallyRightCompoundIsHedgedToo}.
+	 *
+	 * <p><b>That the chip survives is a residue as well as a mitigation, and it must not be cited as
+	 * only the second.</b> On the HAZARD case the surviving chip is the false claim: for a patient
+	 * whose one recorded condition is {@code Status Post Cesarean Delivery}, the injected record and
+	 * the {@code safety_finding} now hedge, and the clinician-facing chip still reads
+	 * "… is contraindicated by an active condition: acute hepatitis or liver failure" — an unqualified
+	 * assertion about the chart, on the one surface with no third section to hedge into. Measured
+	 * 2026-09-03 by driving {@code DrugSafetyValidator.validate} over
+	 * {@code chartsearchai-test/drug-reference-condition-token-nesting.json}. #309 fixed the
+	 * model-facing half only; the chip half is untracked, and tightening this match is NOT its remedy
+	 * (it is fail-open — see the boundary rule's free-text cost above). ADR Decision 72 carries it as
+	 * a trade-off.
 	 *
 	 * <p>That the corpora cannot reach free text is a property of the source: that database's
 	 * {@code condition_non_coded} column holds ONE placeholder string across all 853 rows, so a

@@ -32,7 +32,10 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * unconditionally for every rule that is not a self-named ALLERGY rule, so a condition rule reached
  * {@code Recorded for this patient:} on the strength of {@code PatientClinicalContext.hasConditionToken}
  * alone — which is bare containment, deliberately, because a curated condition token is MEANT to match
- * a fragment ({@code peptic ulcer} inside "history of peptic ulcer disease"). That is issue #269's
+ * a fragment ({@code penicillin} inside {@code benzylpenicillin} on the allergy list beside it; the
+ * example that stood here, {@code peptic ulcer} inside "history of peptic ulcer disease", was
+ * deleted on 2026-09-03 because {@link DrugReference#containsWord} ACCEPTS it and it therefore
+ * argues for nothing). That is issue #269's
  * defect one rule type along: for a patient whose recorded condition is {@code Status Post Cesarean
  * Delivery}, an entry ruling on the condition token {@code liver} read
  * <pre>
@@ -57,9 +60,12 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * dictionary; the figures and both corpora are recorded on
  * {@link PatientClinicalContext#containsToken}). The hazard is real and its false matches are clinical:
  * a rule on {@code liver} matches a condition recorded as {@code Status Post Cesarean Delivery}, and the
- * counts are on {@code containsToken} rather than here. The LOSS is zero over the two CODED corpora — all four
- * condition tokens the shipped seed publishes match every value they match there as whole words —
- * which is the proxy issue #223 used for the allergy side, run for conditions. That bound is
+ * counts are on {@code containsToken} rather than here. The LOSS is zero over the two CODED corpora,
+ * and the base that zero is over is ONE token and six matches: {@code peptic ulcer} accounts for all
+ * of them (5 candidate, 1 recorded, none mid-word) and the seed's other three condition tokens match
+ * nothing in either corpus, so the familiar "all four tokens" wording is vacuous for three of them —
+ * which is the proxy issue #223 used for the allergy side, run for conditions, with the same
+ * weakness. That bound is
  * load-bearing: the free-text half is unmeasured and is where the rule DOES cost, on the seed's own
  * tokens ({@link #anInflectionOfAShippedTokenIsHedged}). What is pinned here is the token set the
  * claim is about ({@link #theShippedSeedPublishesExactlyTheFourConditionTokensTheMeasurementWasOver});
@@ -69,6 +75,15 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * <p><b>Prompt-facing only</b>, exactly as issues #269 and #308 scoped themselves: this is
  * {@code corroboratedByTheChart}, which both injected channels ask and which no chip reads. The chip's
  * own demotion ({@code contraindicationRank}, issue #223) is allergy-typed and stays so.
+ *
+ * <p><b>Which is the LIMIT of this change and not only its scope, so no case here may be read as
+ * saying the defect is closed.</b> On the very arrangement
+ * {@link #aConditionTokenNestingInsideARecordedConditionIsNotStatedAsTheChartsOwnReading} drives, the
+ * clinician-facing chip still says "Naltrexone is contraindicated by an active condition: acute
+ * hepatitis or liver failure", unqualified, of a chart recording a caesarean delivery — the model
+ * reads a hedge and the clinician does not. Wherever a comment here says the chip survives, that is
+ * reassurance for the cases this rule OVER-hedges and is the false claim on the hazard case. ADR
+ * Decision 72's trade-offs carry it; tightening the match is NOT the remedy (fail-open).
  *
  * <p><b>The residue, deliberately given up.</b> A prefix or suffix compound that is clinically the same
  * finding is hedged: {@code Lymphedema} and {@code Angioedema} for a rule on {@code edema}, pinned by
@@ -169,8 +184,12 @@ public class ConditionRuleBoundaryCorroborationTest {
 		// The LOSS side, over the only real curated condition population that exists. Measured over both
 		// corpora: every value the shipped seed's four condition tokens match carries the token as a
 		// whole word, so this rule costs that population nothing. 'peptic ulcer' inside 'Peptic Ulcer of
-		// Stomach' is one of those five matches, and it is exactly the multi-word fragment case that
-		// tightening hasConditionToken itself was declined for.
+		// Stomach' is one of those five matches, and it is the ONLY shipped condition token that matches
+		// anything in either corpus — the other three match nothing, so this case is the whole of the
+		// zero-cost evidence rather than one of four. It is NOT an example of what tightening
+		// hasConditionToken would cost: containsWord accepts 'peptic ulcer' inside 'Peptic Ulcer of
+		// Stomach' and inside 'history of peptic ulcer disease' alike (measured 2026-09-03). What
+		// tightening would cost is the inflection below.
 		// Through curatedService(), the SHIPPED seed. This file's fixture deliberately files no
 		// 'peptic ulcer' condition rule at all (see its description): a lookalike here would let a later
 		// case assert against the fixture while reading as though it asserted against the shipped data,
@@ -256,13 +275,15 @@ public class ConditionRuleBoundaryCorroborationTest {
 		// the order-name rule's two-letter inflection allowance does not reach it either — and choosing
 		// an allowance at a call site is what CLAUDE.md forbids (#260). What keeps this conservative is
 		// that the section asserts nothing and denies nothing: the contraindication is still listed and
-		// the chip still fires, so the safety net is intact and only the attribution weakens.
+		// the chip still fires, so the safety net is intact and only the attribution weakens. That
+		// reading holds HERE, where the rule over-hedges a real record; it does not hold on the hazard
+		// case, where the same surviving chip is the false claim — see this class's javadoc.
 		String hedged = recordFrom(DrugReferenceTestSupport.curatedService(),
 				"Can I give her ibuprofen?", "GI bleeding");
 		assertEquals(UNCORROBORATED, clauseSection(hedged, "active gastrointestinal bleeding"),
 				"an inflection of the shipped seed's own token is hedged: " + hedged);
-		// The control that keeps this from reading as the rule being broadly destructive — the
-		// multi-word fragment the bare match exists FOR still states as recorded — is
+		// The control that keeps this from reading as the rule being broadly destructive — the seed's
+		// other condition rule still states as recorded — is
 		// InjectedContraindicationPatientReadingTest
 		// .aConditionOnRecordReadsFromTheConditionListAndOnlyItsOwnRule, over the same shipped seed and
 		// the same ENTRY, on its other condition rule — asserting the whole recorded AND not-recorded

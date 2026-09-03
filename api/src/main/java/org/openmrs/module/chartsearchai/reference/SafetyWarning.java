@@ -459,7 +459,10 @@ public class SafetyWarning {
 	 * arm's fact — a premise a condition rule has no part in. The record and the finding say the
 	 * condition answer; no chip does. Stated here because this accessor is where a reader would come to
 	 * learn the two scopes had parted. Not serialized; the wire shape is unchanged, and the chip's
-	 * detail is the same string it was.
+	 * detail is the same string it was — <b>which on the hazard case leaves the chip stating the
+	 * contraindication of the chart while the two records beside it hedge</b>, so read the divergence
+	 * as issue #309's remaining defect and not only as its scope. ADR Decision 72's trade-offs carry
+	 * the reproduction and why tightening the match is not the remedy.
 	 */
 	boolean restsOnAnUncorroboratedChartMatch() {
 		return uncorroboratedChartMatch;

@@ -175,8 +175,13 @@ public class ChartSearchAiInteractionPairExtentTest {
 	@Test
 	public void theTrailingGroundedEventSaysItToo() throws Exception {
 		// With async grounding the chips arrive on `grounded`, not on `done` — so that event is the
-		// one a client consuming safety chips has to read, and a statement missing there would leave
+		// one a client consuming safety chips has to read, and a statement missing there once left
 		// exactly the clients that render chips unable to tell a capped list from a complete one.
+		// Since issue #370 a missing statement there is also a REACHABLE production state rather than
+		// only a defect: a screening pass a cede left with no pair of its own states nothing beside
+		// real chips, which ADR Decision 71 accepts as this fix's cost. So this case pins that the arm's
+		// statement TRAVELS to the trailing event, never that one is promised there — the sibling
+		// below is the other half, and README's `interactionPairs` section is the client contract.
 		controller.streamAnswer(out, patient(), "Please screen her current medications.", new User(3),
 				true);
 
@@ -189,14 +194,40 @@ public class ChartSearchAiInteractionPairExtentTest {
 		assertEquals(REPORTED, pairs.get("reported").asInt());
 
 		// And the done event that preceded it states nothing, because the answer behind it carries no
-		// chips yet — the two travel together, which is what stops a client reading a completeness
-		// claim beside an empty list. README documents this shape; nothing else pins it.
+		// chips yet — which is what stops a client reading a completeness claim beside an empty
+		// list. Scoped to the early `done`: it is not an invariant that a null accompanies no chips,
+		// and since issue #370 the reverse arrangement is reachable (the sibling below drives it).
+		// README documents this shape; nothing else pins it.
 		JsonNode done = eventData("done");
 		assertTrue(done.has("interactionPairs"), "the key must be present on the early done event too");
 		assertTrue(done.get("interactionPairs").isNull(),
 				"the early done event carries no chips, so it may state no extent: " + done);
 		assertEquals(0, done.get("safetyWarnings").size(),
 				"precondition: it is the empty-chip answer, which is why it may state no extent");
+	}
+
+	@Test
+	public void theTrailingGroundedEventCarriesChipsBesideAnAbsentStatementWhereTheProducerMadeNone()
+			throws Exception {
+		// The arrangement issue #370 creates, at the surface where it reaches a client: a screening
+		// pass a cede left with no pair of its own states nothing, so the trailing event carries the
+		// chips with no statement about how bounded they are. `theKeyIsPresentAndNullWhenNothingWasStated`
+		// pins the same shape on the `/search` body; this is the SSE half of it, which is the half a
+		// streaming client reads, and it is the cost ADR Decision 71 signs off rather than a defect.
+		stated = null;
+		controller.streamAnswer(out, patient(), "Please screen her current medications.", new User(3),
+				true);
+
+		JsonNode grounded = eventData("grounded");
+		assertTrue(grounded.get("safetyWarnings").size() > 0,
+				"precondition: the trailing event must carry the chips, or this measures the empty "
+						+ "answer rather than the arrangement: " + grounded);
+		assertTrue(grounded.has("interactionPairs"),
+				"the key must be present even beside chips the producer stated no measurement about, "
+						+ "so a client reads one field unconditionally: " + grounded);
+		assertTrue(grounded.get("interactionPairs").isNull(),
+				"and it must be null rather than a zeroed object, which asserts a complete screen: "
+						+ grounded);
 	}
 
 	@Test

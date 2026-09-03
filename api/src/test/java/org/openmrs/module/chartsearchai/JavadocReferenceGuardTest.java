@@ -99,7 +99,7 @@ import org.w3c.dom.NodeList;
  * the pointers inside it — so the gate has a hole exactly the size of that block. Three such blocks
  * existed when this was written, and this repository has had that failure twice before, both times
  * found by a human reader rather than by anything mechanical. The blocks and their pointers are named
- * once, on that method, and the evidence is in docs/adr.md Decision 71.</li>
+ * once, on that method, and the evidence is in docs/adr.md Decision 72.</li>
  * <li><strong>And is anything that documents nothing left where the compiler will complain about
  * it?</strong> {@link #noFileOpensWithAJavadocBlockBeforeItsPackageStatement}, which keeps the licence
  * headers this change normalised from drifting back one file at a time.</li>
@@ -432,7 +432,7 @@ public class JavadocReferenceGuardTest {
 		fail(withTheCheck.size() + " javadoc reference error(s) in the api module — every one of these\n"
 				+ "appears only when " + REFERENCE_CHECK + " is passed, so every one is doclint's:\n\n"
 				+ join(withTheCheck)
-				+ "\nThe javadoc is this module's design record (docs/adr.md, Decision 71), so a pointer\n"
+				+ "\nThe javadoc is this module's design record (docs/adr.md, Decision 72), so a pointer\n"
 				+ "that no longer resolves is a build failure rather than plain text. Fix the pointer — a\n"
 				+ "FULLY-QUALIFIED {@link} resolves even where the enclosing-qualified form does not.");
 	}
@@ -471,7 +471,7 @@ public class JavadocReferenceGuardTest {
 					+ (elsewhere.isEmpty() ? "  No <compilerArgs> block was found anywhere in " + poms + ".\n"
 							: "  <compilerArgs> was found instead at:\n" + join(elsewhere))
 					+ "\nMeasured: declared in api/pom.xml alone, a dead javadoc reference in omod/src/main/java\n"
-					+ "compiles and the whole build reports success — issue #262. See docs/adr.md, Decision 71.");
+					+ "compiles and the whole build reports success — issue #262. See docs/adr.md, Decision 72.");
 		}
 
 		// The message is a Supplier deliberately: building it compiles the probe again, and as an
@@ -1893,7 +1893,7 @@ public class JavadocReferenceGuardTest {
 			StringBuilder sb = new StringBuilder();
 			sb.append(violations.size()).append(" javadoc-reference-check violation(s) found:\n\n");
 			sb.append(join(violations));
-			sb.append("\nSee docs/adr.md, Decision 71: the javadoc IS this module's design record, so a ")
+			sb.append("\nSee docs/adr.md, Decision 72: the javadoc IS this module's design record, so a ")
 					.append("pointer that no longer resolves has to be a build failure rather than plain text.");
 			fail(sb.toString());
 		}

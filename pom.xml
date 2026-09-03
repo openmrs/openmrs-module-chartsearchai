@@ -94,7 +94,7 @@
 						     group rather than a wider one; that group covers more than {@link}, so a mistyped
 						     @param is an error here too.
 
-						     Do not remove or narrow this without reading docs/adr.md, Decision 71, which carries
+						     Do not remove or narrow this without reading docs/adr.md, Decision 72, which carries
 						     the measurements, the alternatives already refused and what the check still cannot
 						     see. JavadocReferenceGuardTest is what stops it being removed with a green build,
 						     and it asserts this POSITION and not merely the argument: declared in a child pom

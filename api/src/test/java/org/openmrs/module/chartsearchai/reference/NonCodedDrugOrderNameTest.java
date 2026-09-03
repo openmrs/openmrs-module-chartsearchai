@@ -118,11 +118,7 @@ public class NonCodedDrugOrderNameTest extends BaseModuleContextSensitiveTest {
 	 * rejects the concept the moment anything saves it — which {@code mapConceptToAtc} does.
 	 */
 	private void nameTheConcept(String name) {
-		Context.getAdministrationService().executeSQL("update concept_name set name = '" + name
-				+ "' where concept_id = " + ORDERED_CONCEPT
-				+ " and concept_name_type = 'FULLY_SPECIFIED'", false);
-		Context.flushSession();
-		Context.clearSession();
+		DrugReferenceTestSupport.nameTheConcept(ORDERED_CONCEPT, name);
 	}
 
 	/** The texts of the injected active-order records, through the shared accessor — this filter had

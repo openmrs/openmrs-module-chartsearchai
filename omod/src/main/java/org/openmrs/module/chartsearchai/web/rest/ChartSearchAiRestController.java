@@ -1243,9 +1243,11 @@ public class ChartSearchAiRestController {
 	 * compares each public accessor's own reading against the key it names, so its CONTRACT is that
 	 * the published value equals what the accessor returns — a value the module computes and then
 	 * reshapes is indistinguishable there from issue #340's own defect, a value computed and dropped.
-	 * Stated as the contract and not as something the suite currently exercises: every chip in that
-	 * test's fixture bridges nothing, so a reshape into maps passes it today, and it would redden the
-	 * moment anyone gives that fixture a bridged chip. Do not take the blind spot.
+	 * <b>The suite exercises it</b>: that fixture's chip 7 carries two bridges for this reason, and a
+	 * reshape into maps reddens the guard with the offending value in its message. It did NOT when
+	 * this key was first published — every chip there bridged nothing, so two empty lists compared
+	 * equal without reaching an element — and that is what the chip closes. ADR Decision 68 records
+	 * the state before and after; do not restore the blind spot by removing the chip.
 	 *
 	 * <p>Two consequences of publishing the object, both measured and neither hidden. The JSON field
 	 * names come from {@code ChartOrderBridge}'s getters, so a public getter added there becomes a

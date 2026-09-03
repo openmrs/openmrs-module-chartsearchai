@@ -105,8 +105,9 @@ public class SafetyWarning {
 	 * substances were resolved from — see {@link #chartOrderBridges()}, which is published as this
 	 * chip's {@code chartOrderBridges} wire key (issue #347).
 	 *
-	 * <p>Public for the reason the three- and four-argument constructors above are: the wire-facing
-	 * shape is public, and since issue #347 the bridges are part of it. (What made it NECESSARY is
+	 * <p>Public for the reason the shorter constructors above are: the wire-facing shape is public,
+	 * and since issue #347 the bridges are part of it. (Neither of those carries that reason in its
+	 * own javadoc, so it is given here rather than cross-referenced.) (What made it NECESSARY is
 	 * narrower — the test that pins their serialization lives in {@code web.rest} and cannot reach
 	 * {@code interaction(..)} below, which already answers "build a chip carrying bridges" but is
 	 * package-private here. Stated second because the policy sentence is the stronger reason and the
@@ -525,10 +526,17 @@ public class SafetyWarning {
 	 * {@code DrugReferenceInjector.renderFinding} states in the injected {@code safety_finding} (issue
 	 * #349; the silence test became the display at issue #347, and
 	 * {@code DrugSafetyValidator.displaysANameOfAny} records why). Empty, never null, and <b>empty says
-	 * "no attribution to show" rather than "the chart records these substances"</b> — the commonest
-	 * empty case is a chip about a drug the QUESTION named, which resolves from no active order at
-	 * all. Others: a chip whose substances their own orders already display; a chip that is not an
-	 * interaction; an interaction chip built from a public constructor here rather than through
+	 * "no attribution to show" rather than "the chart records these substances"</b>. <b>The MECHANISM,
+	 * not a rule about which case is commonest</b> — two such rules were written and both were
+	 * measured false, which {@code ChartSearchAiRestController.serializeSafetyWarnings} records:
+	 * {@code DrugSafetyValidator.chartOrderBridges} walks the SUBJECT against every order and the
+	 * PARTNER against the orders its arm allowed, and each item needs {@code resolvesFromAny} AND a
+	 * display that does not already name the substance. So a chip about a drug the QUESTION named
+	 * contributes nothing on its subject side — that drug resolves from no order — while its partner
+	 * side can still bridge, which is what
+	 * {@code InteractionFindingChartOrderBridgeTest.theDrugInPlayArmsPartnerIsBridgedToo} pins.
+	 * Other empty cases: a chip whose substances their own orders already display; a chip that is not
+	 * an interaction; an interaction chip built from a public constructor here rather than through
 	 * {@code DrugSafetyValidator.interactionWarning} (the class-only and question-pair chips, whose
 	 * residue ADR Decision 64 records); an order the module could read no name for; and a chart with
 	 * no active medication. Not offered as exhaustive, and the client contract in README's
@@ -582,12 +590,13 @@ public class SafetyWarning {
 	 * <p>A value class with {@link #equals} and {@link #hashCode}. <b>{@code equals} has ONE reader
 	 * that is exercised</b>: {@code DrugSafetyValidator.addChartOrderBridge}'s
 	 * {@code out.contains(bridge)} — an {@code ArrayList}, so that resolves to {@code equals} and never
-	 * to {@code hashCode}. Since issue #347 published this list there is a second POTENTIAL reader,
+	 * to {@code hashCode}. Since issue #347 published this list there is a SECOND exercised reader,
 	 * {@code ChartSearchAiSafetyWarningSeverityWireTest}'s accessor-versus-key comparison, whose
-	 * {@code Objects.equals} falls through to {@code AbstractList.equals}; it is NOT exercised, because
-	 * every chip in that test's fixture bridges nothing and two empty lists compare equal without
-	 * touching an element. Said this way round because an earlier draft of this paragraph claimed the
-	 * second reader and a mutation refuted it. {@code hashCode} has NO reader (Jackson serializes
+	 * {@code Objects.equals} falls through to {@code AbstractList.equals} and walks the elements of
+	 * that fixture's bridged chip. It was not exercised when this list was first published — every
+	 * chip in that fixture bridged nothing, so two empty lists compared equal without touching an
+	 * element — and the chip that closed it was added for exactly that reason; ADR Decision 68 is the
+	 * record. {@code hashCode} has NO reader (Jackson serializes
 	 * through the getters below, not through either) and is here only to hold the contract with
 	 * {@code equals}. The exercised reader is the
 	 * de-duplication that makes two orders of one display state their substance once, pinned by

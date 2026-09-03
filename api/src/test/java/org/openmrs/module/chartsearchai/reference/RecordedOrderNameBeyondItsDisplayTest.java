@@ -70,15 +70,11 @@ public class RecordedOrderNameBeyondItsDisplayTest extends BaseModuleContextSens
 	 * with the generic. Both are renamed, because the fixture's drug row and concept share a name and
 	 * the divergence between them is the whole subject.
 	 *
-	 * <p>The concept's FULLY SPECIFIED name is the row renamed, since that is what
-	 * {@code Concept.getName()} yields here; scoped to that one row for the reason
-	 * {@code NonCodedDrugOrderNameTest.nameTheConcept} gives — renaming every name of the concept
-	 * makes them duplicates in one locale and {@code ConceptValidator} then rejects it.
+	 * <p>The concept rename goes through {@code DrugReferenceTestSupport.nameTheConcept}, which is
+	 * where the reason for renaming only the FULLY SPECIFIED row lives.
 	 */
 	private void brandTheOrderOnAGenericConcept() {
-		Context.getAdministrationService().executeSQL("update concept_name set name = '" + GENERIC
-				+ "' where concept_id = " + ORDERED_CONCEPT
-				+ " and concept_name_type = 'FULLY_SPECIFIED'", false);
+		DrugReferenceTestSupport.nameTheConcept(ORDERED_CONCEPT, GENERIC);
 		Context.getAdministrationService().executeSQL("update drug set name = '" + BRAND
 				+ "' where drug_id = (select drug_inventory_id from drug_order where order_id = 111)",
 			false);
@@ -119,8 +115,9 @@ public class RecordedOrderNameBeyondItsDisplayTest extends BaseModuleContextSens
 
 		PatientClinicalContext.ActiveDrugOrder order = theOrder();
 
-		// Case-folded on both sides: PatientClinicalContextBuilder.addRaw lower-cases what it records,
-		// because that set is matched against chart prose. Which STRING is present is the subject here;
+		// Case-folded on both sides: ActiveDrugOrder's constructor lower-cases the name set it is handed
+		// (PatientClinicalContext's `this.names = lower(names)`), because that set is matched against
+		// chart prose. Not addRaw, which only collapses whitespace and trims. Which STRING is present is the subject here;
 		// its casing is not, and asserting the raw spelling would pin an unrelated normalization.
 		assertTrue(order.getNames().contains(GENERIC.toLowerCase(Locale.ROOT)),
 			"the builder records the ordered concept's name beside the drug row's, so the recorded set "

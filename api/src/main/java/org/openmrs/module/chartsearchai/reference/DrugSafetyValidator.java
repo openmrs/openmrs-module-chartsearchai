@@ -5234,7 +5234,10 @@ public class DrugSafetyValidator {
 	 * orders, 2405 calls, 355 ms against 272 ms. A request pays the pass TWICE (pre-answer and
 	 * post-answer), so the maximising arrangement is ~+26 ms per request against a request whose
 	 * latency is an LLM call. Measured 2026-09-01 with a bespoke instrumented harness and a
-	 * stubbed-body A/B; NO committed fixture pins any of these, so re-measure rather than re-quote.
+	 * stubbed-body A/B, <b>against the pre-#347 silence test</b> ({@code recordsANameOfAny}, a fold
+	 * over every name the order records) — {@link #displaysANameOfAny} does strictly less work per
+	 * call, so these stand as an upper bound rather than as current figures. NO committed fixture
+	 * pins any of them, so re-measure rather than re-quote.
 	 *
 	 * <p><b>Both payments have a reader since issue #347, and that sentence used to say otherwise.</b>
 	 * It read "HALF of that second payment is dead work" on the grounds that
@@ -5339,9 +5342,10 @@ public class DrugSafetyValidator {
 	}
 
 	/** @return whether any name {@code order} RECORDS reaches {@code ref} — {@link DrugReference#matchesDrugName}
-	 *          over the order's own names, and the name leg of
-	 *          {@link #resolvesFrom}, asked on its own so that "resolved by the ATC code alone" is
-	 *          expressible without a second matcher. Over {@code getNames()} and not the display alone
+	 *          over the order's own names, and since issue #347 the name leg of {@link #resolvesFrom}
+	 *          and nothing else. It is still a method of its own rather than inlined there, so that
+	 *          "resolved by the ATC code alone" stays expressible as this leg's negation; what it is
+	 *          no longer is the bridge's silence test. Over {@code getNames()} and not the display alone
 	 *          because ATTRIBUTION is the question here: an order is this substance's however it was
 	 *          recorded, and narrowing that would lose a pair rather than a clause. Since issue #347
 	 *          the bridge's silence test is no longer this predicate's group form —
@@ -6012,10 +6016,11 @@ public class DrugSafetyValidator {
 	}
 
 	private static boolean resolvesFrom(DrugReference ref, PatientClinicalContext.ActiveDrugOrder order) {
-		// The name leg is recordsANameOf, shared rather than spelled again so that one matcher decides
-		// both what an order is attributed to and what a printed bridge may say about it. Until issue
-		// #347 it was more than that — the bridge's silence test WAS this leg negated — and the
-		// javadoc above records what changed and what it exposes.
+		// The name leg is recordsANameOf, and since issue #347 that method has this one caller: the
+		// bridge's silence test WAS this leg negated and is now displaysANameOfAny, over the display.
+		// What the two still share is the PRIMITIVE, DrugReference.matchesDrugName, and no longer the
+		// fold — matchesDrugNameAny's javadoc is where that is stated. The javadoc above records what
+		// the separation exposes.
 		if (recordsANameOf(ref, order)) {
 			return true;
 		}

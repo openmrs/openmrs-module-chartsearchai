@@ -18,8 +18,6 @@ import java.util.Locale;
 
 import org.junit.jupiter.api.Test;
 import org.openmrs.DrugOrder;
-import org.openmrs.api.context.Context;
-import org.openmrs.module.querystore.model.QueryDocument;
 import org.openmrs.module.querystore.serialization.DrugOrderRecordSerializer;
 import org.openmrs.module.querystore.util.ConceptNameUtil;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
@@ -55,20 +53,16 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  */
 public class QuerystoreDrugOrderDisplayedNameTest extends BaseModuleContextSensitiveTest {
 
-	/** Order 3 of the standard test dataset: a real, fully-populated Triomune-30 DrugOrder. */
-	private static final int TRIOMUNE_ORDER_ID = 3;
-
 	/** A brand no concept in the dictionary carries, standing for the ticket's {@code Advil 400mg}. */
 	private static final String BRAND = "Advilbrand 400mg";
 
 	private DrugOrder triomuneOrder() {
-		return (DrugOrder) Context.getOrderService().getOrder(TRIOMUNE_ORDER_ID);
+		return DrugReferenceTestSupport.standardDatasetDrugOrder();
 	}
 
 	/** The real querystore serializer's rendered text for {@code order}. */
 	private String renderedText(DrugOrder order) {
-		QueryDocument doc = new DrugOrderRecordSerializer().serialize(order);
-		return doc.getText() == null ? "" : doc.getText();
+		return DrugReferenceTestSupport.querystoreRenderedText(order);
 	}
 
 	/** querystore's own answer for what the order's concept is called, read through the util its
@@ -119,7 +113,16 @@ public class QuerystoreDrugOrderDisplayedNameTest extends BaseModuleContextSensi
 		// The residue on displaysANameOfAny is exactly this: drugNonCoded is a name the MODULE records
 		// and can display, and querystore renders none of it. Pinned so that the residue is a measured
 		// property of querystore's format rather than an assumption in a javadoc.
+		//
+		// The drug-row name MUST be cleared first, and that line is part of the assertion rather than
+		// tidying. The residue is about an order the module DISPLAYS by its free text, and
+		// PatientClinicalContextBuilder.addDrugName reaches drugNonCoded only where the drug row has
+		// no name; querystore's own first branch is that same name. Leaving it set puts the case on a
+		// rung where drugNonCoded was never a candidate for EITHER module, so the absence below would
+		// hold whether or not querystore renders free text — it would pass against the very behaviour
+		// it exists to refute.
 		DrugOrder order = triomuneOrder();
+		order.getDrug().setName(null);
 		order.setDrugNonCoded("clinic-supplied warfarin tablets");
 
 		String text = renderedText(order);
@@ -127,5 +130,9 @@ public class QuerystoreDrugOrderDisplayedNameTest extends BaseModuleContextSensi
 		assertFalse(text.contains("clinic-supplied"),
 				"querystore renders no free-text drug name, so an order displayed by its free text is "
 						+ "displayed by a string its own record does not show. Rendered: " + text);
+		assertTrue(text.startsWith("Drug order: " + conceptPreferredName(order)),
+				"and it falls through to the CONCEPT, which is what stands in the free text's place — "
+						+ "asserted beside the absence so that a rendering naming no drug at all could "
+						+ "not satisfy it. Rendered: " + text);
 	}
 }

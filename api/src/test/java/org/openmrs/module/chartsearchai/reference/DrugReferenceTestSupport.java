@@ -33,11 +33,14 @@ import org.openmrs.Concept;
 import org.openmrs.ConceptMap;
 import org.openmrs.ConceptReferenceTerm;
 import org.openmrs.ConceptSource;
+import org.openmrs.DrugOrder;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
+import org.openmrs.module.querystore.model.QueryDocument;
+import org.openmrs.module.querystore.serialization.DrugOrderRecordSerializer;
 import org.openmrs.util.OpenmrsUtil;
 
 /**
@@ -1139,6 +1142,49 @@ public final class DrugReferenceTestSupport {
 	 * included, and the arrangement encodes which concept-reference-source names the builder
 	 * recognises — so a change to that predicate must not have to be found in two test files.
 	 */
+	/**
+	 * Order 3 of the standard test dataset — a real, fully-populated Triomune-30 {@code DrugOrder},
+	 * and the fixture every case that needs querystore's own rendering of an order mutates in memory.
+	 *
+	 * <p>Here rather than in each file for the reason this class exists: it was written twice with a
+	 * verbatim-identical javadoc, and the order ID is a fact about the dataset rather than about
+	 * either test.
+	 */
+	static DrugOrder standardDatasetDrugOrder() {
+		return (DrugOrder) Context.getOrderService().getOrder(3);
+	}
+
+	/**
+	 * What querystore's REAL {@link DrugOrderRecordSerializer} renders for {@code order} — the text a
+	 * {@code drug_order} chart record carries, and the empty string where it renders none.
+	 *
+	 * <p>Shared so that a test asserting what the model can SEE and a test asserting what the module
+	 * may SAY about it read the same serializer through the same call. A caller wanting it folded
+	 * lowercases the result rather than asking for a second arity: the two readings differ only in
+	 * that, and two arities is how the pair would come apart.
+	 */
+	static String querystoreRenderedText(DrugOrder order) {
+		QueryDocument doc = new DrugOrderRecordSerializer().serialize(order);
+		return doc.getText() == null ? "" : doc.getText();
+	}
+
+	/**
+	 * Renames {@code conceptId}'s FULLY SPECIFIED name, which is what {@code Concept.getName()} yields
+	 * for these fixtures.
+	 *
+	 * <p>Scoped to that one row rather than to every name of the concept, and that is the assertion
+	 * rather than economy: renaming both the FSN and the synonym makes them duplicates in one locale,
+	 * and {@code ConceptValidator} then rejects the concept the moment anything saves it — which
+	 * {@link #mapConceptToAtc} above does.
+	 */
+	static void nameTheConcept(int conceptId, String name) {
+		Context.getAdministrationService().executeSQL("update concept_name set name = '" + name
+				+ "' where concept_id = " + conceptId
+				+ " and concept_name_type = 'FULLY_SPECIFIED'", false);
+		Context.flushSession();
+		Context.clearSession();
+	}
+
 	static void mapConceptToAtc(int conceptId, String... codes) {
 		ConceptSource whoAtc = new ConceptSource();
 		whoAtc.setName("WHOATC");

@@ -140,8 +140,10 @@ public class ChartSearchAiChartOrderBridgeTest {
 
 	/** The one chip's attributions as the named SSE event actually serialized them — asserted
 	 *  non-empty here rather than dereferenced blind, so a serializer that publishes the key with an
-	 *  empty placeholder under it (the issue #340 shape, which the accessor-versus-key guard next door
-	 *  cannot see because its own fixture bridges nothing) fails with a message. */
+	 *  empty placeholder under it (the issue #340 shape) fails with a message rather than an NPE. The
+	 *  accessor-versus-key guard next door reaches that shape too, since its fixture gained a bridged
+	 *  chip; what this one adds is the SSE surfaces, which that guard reads only for the keys it
+	 *  reflects. */
 	private JsonNode streamedChartOrderBridges(String eventType) throws Exception {
 		JsonNode chips = eventData(eventType).get("safetyWarnings");
 		assertNotNull(chips, "the " + eventType + " event carried no safetyWarnings key");
@@ -154,9 +156,7 @@ public class ChartSearchAiChartOrderBridgeTest {
 	}
 
 	private JsonNode eventData(String eventType) throws Exception {
-		SseEvent event = SseEvents.ofType(out, eventType);
-		assertNotNull(event, "no '" + eventType + "' event was emitted");
-		return MAPPER.readTree(event.data);
+		return SseEvents.dataOfType(out, eventType, MAPPER);
 	}
 
 	@Test

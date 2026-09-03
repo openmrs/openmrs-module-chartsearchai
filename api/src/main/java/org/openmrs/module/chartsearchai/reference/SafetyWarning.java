@@ -161,7 +161,7 @@ public class SafetyWarning {
 		// Copied and wrapped rather than stored as handed: this list travels to
 		// DrugReferenceInjector.renderFinding, so a caller that went on filling its own builder would
 		// change what a record already published. Never null, so no reader branches on absence — an
-		// empty list is the honest answer wherever nothing needed reconciling, which is most chips.
+		// empty list is the honest answer wherever the module attributed nothing.
 		// chartOrderBridges()'s javadoc is the one place that says what empty covers.
 		this.chartOrderBridges = chartOrderBridges == null || chartOrderBridges.isEmpty()
 				? Collections.<ChartOrderBridge> emptyList()
@@ -206,7 +206,8 @@ public class SafetyWarning {
 	 *        refused or reached no co-medication, so that a refusal and an absent answer are one answer
 	 *        here, as they are for the chip
 	 * @param chartOrderBridges see {@link #chartOrderBridges()}, which is canonical for what empty
-	 *        covers — empty is most chips and is not a degraded state
+	 *        covers — empty is not a degraded state, and no rule about which chips are empty belongs
+	 *        here or anywhere else; five drafts of one were each measured false
 	 */
 	// Three facts travel here, not two: the paragraphs above are worded for the pair issue #297 added
 	// and issue #349 put a third beside them. Read the @param list rather than any count in the prose.

@@ -10,11 +10,13 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -117,6 +119,23 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 	 *  fact rather than an intention. */
 	private Pass screeningPass() {
 		return pass(SCREENING_QUESTION, DrugReferenceTestSupport.screenedSixOrderChart());
+	}
+
+	/** Issue #336's own third row in miniature: a chart carrying the ibuprofen the question also
+	 *  names, plus one further order the excerpt relates BOTH question drugs to, so the pairs the
+	 *  chart arm reports OUTNUMBER the pairs the question-pair arm has to say anything about. That
+	 *  inequality is the whole point and both cede cases below need it: where the two counts
+	 *  coincide, no assertion can tell the arm DECLINING to speak from the arm counting a ceded pair
+	 *  into its own numbers — the cross-arm sum ADR Decision 65 refuses — and, on the partial case,
+	 *  none can tell the arm KEEPING the field from the arm yielding it. Measured: on a chart holding
+	 *  the ibuprofen alone the partial case reads {@code found: 1} either way. Each order carries its
+	 *  name AND its code because that is what {@code PatientClinicalContextBuilder} builds for a
+	 *  mapped concept; no case here separates the two legs of {@code hasActiveDrug}, so read this as
+	 *  the arrangement's shape rather than as a claim that either leg alone would cede. */
+	private static PatientClinicalContext chartOwningTheQuestionsOnlyPair() {
+		return DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set("Ibuprofen 400mg", "Aspirin 81mg"),
+				DrugReferenceTestSupport.set("M01AE01", "N02BA01"), null, null);
 	}
 
 	/** One active order, related to nothing the questions below name above the floor. Called by the
@@ -479,5 +498,131 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals(1, both.extent.getFound(),
 				"the one question-named pair the excerpt relates, and nothing the other arm added");
 		assertEquals(1, both.extent.getReported());
+	}
+
+	@Test
+	public void aQuestionPairListThatCededEveryPairStatesWhatTheChartArmReported() {
+		// Issue #336's own third row, the one its verification comment calls the one that bites — the
+		// live measurement of what its zero cost a reader is in PairChipExtent's javadoc and in ADR
+		// Decision 69, with the build and the chart it was taken on. This is that shape in miniature.
+		// Every pair the question named was the CHART arm's — coveredByActiveOrderArm,
+		// because a rule joining the pair names one of her orders — so this arm related a pair and
+		// reported none. A zero says an arm ran and the reference data related NONE of the pairs it
+		// enumerated, which is what PairChipExtent and README both define found == 0 to mean, and it
+		// is false here. Having ceded every one of them the arm has no bounded list of its own to
+		// describe, so it states nothing and the arm that DID report them speaks instead.
+		String twoDrugs = "Can I give her warfarin and ibuprofen?";
+		Pass ceded = pass(twoDrugs, chartOwningTheQuestionsOnlyPair());
+
+		assertEquals(2, entriesResolvedBy(twoDrugs),
+				"precondition: two resolved entries, or the question-pair arm never ran and this case "
+						+ "measures the fallback's ordinary path instead of a cede");
+		assertEquals(3, ceded.chips.size(), "precondition: three Major chips, every one of them the "
+				+ "chart arm's: " + DrugReferenceTestSupport.details(ceded.chips));
+		for (SafetyWarning chip : ceded.chips) {
+			assertFalse(chip.getDetail().contains("named in the question"),
+					"precondition: the question-pair arm must have chipped NOTHING, or the pair it ceded "
+							+ "was not its only one: " + chip);
+		}
+		assertNotNull(ceded.extent, "a response carrying three Major interaction chips must not state "
+				+ "a screen that related nothing");
+		assertEquals(3, ceded.extent.getFound(),
+				"and the number is the chart arm's own three, not the one pair the question-pair arm "
+						+ "ceded to it — a sum of the two arms, or that arm counting what it ceded, "
+						+ "would read 1 or 4 here");
+		assertEquals(3, ceded.extent.getReported(),
+				"reported by the arm that applies no cap, so it equals what it found");
+	}
+
+	@Test
+	public void aQuestionPairListThatCededOnlySomeOfItsPairsStillStatesItsOwnBoundedList() {
+		// The boundary of aQuestionPairListThatCededEveryPairStatesWhatTheChartArmReported, and the
+		// residue it deliberately leaves. A third question drug on the same chart: warfarin x
+		// ibuprofen is the chart arm's, simvastatin x warfarin is this arm's, and this arm goes on
+		// describing the bounded list it kept — which the cap can still cut, see ADR Decision 69 for
+		// what that does and does not let a client conclude. The ceded pair is reported as a chip rather
+		// than hidden, which is why the fix above is scoped to a pass that ceded EVERY pair. Withhold
+		// the statement on ANY cede instead and this reads the chart arm's three, having forfeited the
+		// bounded claim issue #336 exists to publish for a number no cap cut.
+		String threeDrugs = "Interactions for warfarin, ibuprofen and simvastatin?";
+		Pass partial = pass(threeDrugs, chartOwningTheQuestionsOnlyPair());
+
+		assertEquals(3, entriesResolvedBy(threeDrugs), "precondition: three resolved entries");
+		assertEquals(4, partial.chips.size(),
+				"precondition: the chart arm's three and this arm's one, so the cede is partial rather "
+						+ "than total: " + DrugReferenceTestSupport.details(partial.chips));
+		// Not load-bearing on its own: withheld on any cede, the fallback supplies one and this stays
+		// green. The count below is what discriminates.
+		assertNotNull(partial.extent, "some arm must state one");
+		assertEquals(1, partial.extent.getFound(),
+				"the pair this arm kept, and not the one it handed to the chart arm — nor the chart "
+						+ "arm's own three, which is what this reads if the field is yielded on any cede");
+		assertEquals(1, partial.extent.getReported());
+	}
+
+	/** A question about dexamethasone and voxelotor over {@link DrugReferenceTestSupport#DDI_ROUTE_VARIANTS},
+	 *  whose four dexamethasone rows share one {@code drugbank_id} and so are one substance — which is
+	 *  what puts all four in play from the one question word and makes one clinical pair arrive as four
+	 *  entry pairs. */
+	private static final String ROUTE_VARIANT_QUESTION = "Does dexamethasone interact with voxelotor?";
+
+	/**
+	 * As {@link #pass(String, PatientClinicalContext)}, over
+	 * {@link DrugReferenceTestSupport#DDI_ROUTE_VARIANTS} instead of the excerpt. Reassigns BOTH
+	 * fields, so {@link #entriesResolvedBy} keeps reading the dataset the pass ran over — a case
+	 * asserting what a question resolves and a case asserting what the pass then states must not be
+	 * reading two datasets, which is what this class's {@code service} field exists for.
+	 */
+	private Pass passOverRouteVariants(String question, PatientClinicalContext context)
+			throws IOException {
+		service = DrugReferenceTestSupport.ddiFixtureService(DrugReferenceTestSupport.DDI_ROUTE_VARIANTS);
+		validator = DrugReferenceTestSupport.validator(service);
+		return pass(question, context);
+	}
+
+	@Test
+	public void aClinicalPairOneEntryPairCollectedAndAnotherCededStatesWhatTheChartArmReported()
+			throws IOException {
+		// The cede the two cases above cannot express, and the reason addQuestionPairInteractions
+		// collects candidates and filters them against chartOwned rather than deciding the cede on the
+		// candidate map. Both of those arrangements cede a pair that never became a candidate at all,
+		// so `candidates` is empty in each and narrowing the guard to "chartOwned non-empty AND
+		// candidates empty" is green on both — measured.
+		//
+		// Here it is not. Dexamethasone x voxelotor arrives as FOUR entry pairs, because the four
+		// dexamethasone rows are one substance and the question word puts all of them in play, and they
+		// carry different rule sets. The systemic, nasal and ophthalmic rows each carry their own
+		// above-floor row against voxelotor, whose token is "voxelotor" and so names her active order:
+		// those three pairs are ceded. The TOPICAL row carries no interaction row at all, so its side of
+		// the pair contributes nothing that could name the order; what joins it instead is voxelotor's
+		// own rows against its three siblings, every one of them tokened with the rxnorm name the family
+		// shares ("dexamethasone", measured off the parsed fixture), which names the topical row too —
+		// above the floor, naming no order of hers, so that entry pair collects a candidate. All four
+		// key alike, on that same shared token, so chartOwned then filters the candidate out: this arm
+		// kept nothing and states nothing, and the arm that did report the pair speaks. Decide the cede
+		// on the candidate map and it publishes of(0, 0) beside those chips instead — issue #336's own
+		// defect, on a shape neither case above reaches.
+		Pass ceded = passOverRouteVariants(ROUTE_VARIANT_QUESTION,
+				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Voxelotor 1500mg"),
+						null, null, null));
+
+		assertEquals(5, entriesResolvedBy(ROUTE_VARIANT_QUESTION),
+				"precondition: the four dexamethasone rows and voxelotor, or one clinical pair does not "
+						+ "arrive as several entry pairs and this case measures the same shape as the "
+						+ "two above");
+		assertTrue(ceded.chips.size() >= 1, "precondition: the chart arm reports the pair: "
+				+ DrugReferenceTestSupport.details(ceded.chips));
+		for (SafetyWarning chip : ceded.chips) {
+			assertFalse(chip.getDetail().contains("named in the question"),
+					"precondition: the question-pair arm must have chipped NOTHING, or its candidate "
+							+ "survived the filter and no pair was ceded: " + chip);
+		}
+		assertNotNull(ceded.extent, "a response carrying interaction chips must not state a screen that "
+				+ "related nothing");
+		assertTrue(ceded.extent.getFound() >= 1,
+				"and the number is the chart arm's own, which is what reddens if the cede is decided on "
+						+ "an empty candidate map rather than on an empty surviving list; was: "
+						+ ceded.extent.getFound() + " with chips "
+						+ DrugReferenceTestSupport.details(ceded.chips));
 	}
 }

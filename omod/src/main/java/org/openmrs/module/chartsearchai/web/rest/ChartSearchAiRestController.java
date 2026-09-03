@@ -1302,7 +1302,8 @@ public class ChartSearchAiRestController {
 	 * The wire shape of {@code interactionPairs}: {@code found} above-floor pairs, {@code reported}
 	 * of them shown. {@code null} for an answer whose interaction check stated no measurement — never
 	 * an empty object and never a zeroed one, because zero is itself a measurement here (a complete
-	 * screen that related no pairs).
+	 * screen that related no pairs). See {@code PairChipExtent}, which is canonical for what the
+	 * zero and the absence each do and do not mean, including a screen whose zero is false.
 	 */
 	private Map<String, Object> serializePairChipExtent(PairChipExtent extent) {
 		if (extent == null) {

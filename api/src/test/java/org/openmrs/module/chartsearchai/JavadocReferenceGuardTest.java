@@ -360,17 +360,26 @@ public class JavadocReferenceGuardTest {
 
 
 	/**
-	 * Every javadoc block attaches to a declaration, so that doclint reads the pointers inside it.
-	 * THREE shapes fail that, each measured against the real compiler rather than reasoned about, and
-	 * each leaving the gate a hole exactly the size of that block:
+	 * Every javadoc block attaches to a declaration, so that doclint reads the pointers inside it. The
+	 * shapes that fail it are enumerated below, each measured against the real compiler rather than
+	 * reasoned about, and each leaving the gate a hole exactly the size of that block:
 	 *
 	 * <ul>
 	 * <li>a block immediately followed by ANOTHER javadoc block — Java attaches only the last, and the
 	 * earlier one is discarded;</li>
 	 * <li>a block followed by no declaration at all before the enclosing brace or the end of the file;</li>
 	 * <li>a block stranded BETWEEN a declaration's annotations and the declaration itself, which javac
-	 * ignores because a doc comment has to precede the whole declaration, annotations included.</li>
+	 * ignores because a doc comment has to precede the whole declaration, annotations included;</li>
+	 * <li>a block followed by an INITIALISER block, static or instance, which is not a declaration —
+	 * see {@link #opensAnInitialiserBlock};</li>
+	 * <li>a block followed by an {@code import}, which javac attaches nothing to and, unlike the
+	 * {@code package} statement, does not even warn about — see {@link #isImportDeclaration}.</li>
 	 * </ul>
+	 *
+	 * <p><strong>No count of them is stated, and the first version of this stated three.</strong> The
+	 * last two arrived a review round later, both of them measured holes of exactly the kind above and
+	 * neither reported by any of the six checks; the enumeration is the list and {@link #SHAPES} is
+	 * what holds ground truth for it. So add a row and a bullet rather than adjusting a number.
 	 *
 	 * <p>The FIRST shape is not hypothetical. Three blocks were in it when the check went in, and each
 	 * arose the same way — a member inserted above the comment written for the one below it:
@@ -380,10 +389,18 @@ public class JavadocReferenceGuardTest {
 	 * {@link ModuleSourceRoot}'s own block for {@code apiRoot()}. Each was found by a human reader on
 	 * the two previous occasions it happened, which is exactly what a mechanical check is for.
 	 *
-	 * <p>The other two had no instance here and are checked because they are the same defect. A probe
+	 * <p>The rest had no instance here and are checked because they are the same defect. A probe
 	 * carrying the trailing shape put four dead pointers to the compiler and got three errors back; one
 	 * carrying a block on each side of an annotation got an error for the block ABOVE it and none for
-	 * the block below. The third shape was found by accident — a verification probe of this very change
+	 * the block below; one carrying a dead pointer above a static initialiser, above an instance
+	 * initialiser and above an {@code import} got no diagnostic of any kind for any of the three, while
+	 * the same pointer on a method in the same file was reported. The initialiser shape is one edit
+	 * away from real code: every static initialiser in this repository is immediately preceded by the
+	 * field it fills, and most of those fields carry a javadoc block — so an initialiser inserted
+	 * above one is the same "member inserted above the comment written for the one below it" defect,
+	 * and before this arm it would have taken that javadoc out of the gate in silence.
+	 *
+	 * <p>The ANNOTATION shape was found by accident — a verification probe of this very change
 	 * inserted a comment after a controller's {@code @Controller} and {@code @RequestMapping} lines and
 	 * then reported the gate as not reaching that module. The gate was fine and the probe was dangling;
 	 * an author can make the same mistake.
@@ -460,8 +477,72 @@ public class JavadocReferenceGuardTest {
 						+ " is followed by a closing brace at line " + next.line
 						+ " rather than by a declaration");
 			}
+			else if (opensAnInitialiserBlock(next, i + 2 < items.size() ? items.get(i + 2) : null)) {
+				orphans.add("the javadoc block closing at line " + item.line
+						+ " is followed by an initialiser block at line " + next.line
+						+ " rather than by a declaration, and an initialiser is not one — javac attaches no "
+						+ "doc comment to it");
+			}
+			else if (isImportDeclaration(next.text)) {
+				orphans.add("the javadoc block closing at line " + item.line
+						+ " is followed by an import declaration at line " + next.line
+						+ ", which javac attaches no doc comment to and says nothing about. A block above "
+						+ "the package statement is at least read and warned about; this position is silent");
+			}
 		}
 		return orphans;
+	}
+
+	/**
+	 * Whether the content line after a javadoc block opens an INITIALISER block — a static initialiser
+	 * or a bare instance one — which is not a declaration, so javac attaches the block to nothing and
+	 * doclint reads none of its pointers. Measured on JDK 21: a probe carrying a dead pointer above a
+	 * static initialiser and a second above an instance initialiser returned no error and no warning
+	 * for either, while the same pointer on a method returned one.
+	 *
+	 * <p>This shape is one edit away from real code here. Every static initialiser in this repository
+	 * is immediately preceded by the field it fills, and most of those fields carry a javadoc block —
+	 * so an initialiser inserted above such a field is exactly the "member inserted above the comment
+	 * written for the one below it" defect the caller exists for, and before this arm it would have
+	 * taken that javadoc out of the gate in silence.
+	 *
+	 * <p>An opening brace at the start of the line is enough on its own: no Java DECLARATION can begin
+	 * with one, so there is nothing to false-positive on. The {@code static} form needs the brace
+	 * FOUND, because {@code static final int a = 1;} begins with the same word — so the brace is
+	 * looked for on the same content line, and, where the line is the bare word, on the NEXT one.
+	 * Without that second lookahead a declaration split as {@code static} then
+	 * {@code final int a = 1;} would be reported, which is a red build on legal code.
+	 */
+	private static boolean opensAnInitialiserBlock(Item next, Item after) {
+		if (next.text.startsWith("{")) {
+			return true;
+		}
+		if (!next.text.startsWith("static")) {
+			return false;
+		}
+		String rest = next.text.substring("static".length()).trim();
+		if (rest.isEmpty()) {
+			return after != null && !after.javadoc && after.text.startsWith("{");
+		}
+		return rest.startsWith("{");
+	}
+
+	/**
+	 * Whether the content line after a javadoc block is an {@code import} declaration, which javac
+	 * attaches no doc comment to — and, unlike the {@code package} statement, says nothing at all
+	 * about. Measured on JDK 21: a dead pointer above an {@code import} produced neither an error nor
+	 * a warning, while the same pointer above {@code package} produced the error AND
+	 * {@code documentation comment not expected here}. So the pre-{@code package} position is inside
+	 * the gate and is guarded for its WARNING by
+	 * {@link #noFileOpensWithAJavadocBlockBeforeItsPackageStatement}, while this one is a hole and
+	 * belongs here.
+	 *
+	 * <p>The word has to be followed by whitespace or nothing: {@code importantValue = 1;} begins with
+	 * the same six characters.
+	 */
+	private static boolean isImportDeclaration(String text) {
+		return text.equals("import")
+				|| (text.startsWith("import") && Character.isWhitespace(text.charAt("import".length())));
 	}
 
 	/**
@@ -476,6 +557,16 @@ public class JavadocReferenceGuardTest {
 	 * <p>The exclusions are what a declaration on the line brings with it: a terminator, a body brace,
 	 * or the comma of a parameter list — this module's {@code @RequestParam} parameter lines take that
 	 * last form, and none of them annotates the next thing in the file.
+	 *
+	 * <p><strong>One row of {@link #SHAPES} per exclusion, and two of the three were missing.</strong>
+	 * The terminator has {@code AnnotatedDeclarationOnOneLineThenBlock}; the brace has
+	 * {@code AnnotatedTypeOpenThenBlock}, an annotated type whose body brace is on the same line as
+	 * the annotation and whose first member's javadoc javac reads; the comma has
+	 * {@code AnnotatedEnumConstantThenBlock}, an annotated enum constant, which is the same line shape
+	 * as the {@code @RequestParam} lines and is likewise annotating itself. Until those two rows
+	 * existed either clause could be deleted with all six checks green, so the failure each one
+	 * prevents — this rule telling an author to move documentation the compiler had read, i.e. a red
+	 * build on legal code — was argued in this paragraph and pinned by nothing.
 	 */
 	private static boolean isAnnotationAlone(String text) {
 		return text.startsWith("@") && text.indexOf(';') < 0 && text.indexOf('{') < 0
@@ -605,9 +696,12 @@ public class JavadocReferenceGuardTest {
 	 * No file opens with a javadoc block before its {@code package} statement.
 	 *
 	 * <p>A comment there documents nothing — javadoc attaches to declarations and a package statement
-	 * is not one — so with the check enabled javac reports every such file. 271 of this module's 273
-	 * sources carried an MPL licence header written that way, and they became plain block comments in
-	 * the same change that enabled the check.
+	 * is not one — so with the check enabled javac reports every such file. Nearly every source in
+	 * this module carried an MPL licence header written that way, and they became plain block comments
+	 * in the same change that enabled the check. The count is recorded once, in docs/adr.md Decision
+	 * 71, with the tree it was measured on and the command that measured it — not copied here, because
+	 * a count of sources tracks the code: the figure this sentence used to carry was wrong in both its
+	 * numerator and its denominator while the ADR beside it was right.
 	 *
 	 * <p>This exists because that normalisation would otherwise decay. The form is a WARNING on every
 	 * JDK measured (11, 17, 21, 24, 25), never an error, so one file arriving with the old header is
@@ -615,7 +709,7 @@ public class JavadocReferenceGuardTest {
 	 * javadoc, so a file copied from there, or an IDE template, reinstates it. Nothing else in this
 	 * repository or in the org's shared workflows reads a source header at all.
 	 *
-	 * <p>It asks about the JAVADOC FORM and not about the header, deliberately: two files carry no
+	 * <p>It asks about the JAVADOC FORM and not about the header, deliberately: some sources carry no
 	 * licence header whatever, which is pre-existing and none of this ticket's business, and they
 	 * pass. What fails is a comment that documents nothing while looking like documentation.
 	 */
@@ -838,6 +932,41 @@ public class JavadocReferenceGuardTest {
 						+ "\tint r() { return a; }\n}\n\n/** " + dead + ". */\n");
 		shape(shapes, "BlankLinesThenDeclaration", Attachment.ATTACHED,
 				"\t/** " + dead + ". */\n\n\n\tprivate int a = 1;\n\tint r() { return a; }\n");
+		// An INITIALISER is not a declaration, so javac attaches nothing to it and doclint reads
+		// nothing inside the block above it. Three arrangements, because the scanner has to tell each
+		// of them from a declaration beginning with the same word: `static {`, the bare instance
+		// block, and `static` with its brace on the next line.
+		shape(shapes, "BeforeStaticInitialiser", Attachment.UNATTACHED,
+				"\t/** " + dead + ". */\n\tstatic {\n\t}\n\tprivate int a = 1;\n\tint r() { return a; }\n");
+		shape(shapes, "BeforeInstanceInitialiser", Attachment.UNATTACHED,
+				"\t/** " + dead + ". */\n\t{\n\t}\n\tprivate int a = 1;\n\tint r() { return a; }\n");
+		shape(shapes, "BeforeBareStaticThenBrace", Attachment.UNATTACHED,
+				"\t/** " + dead + ". */\n\tstatic\n\t{\n\t}\n\tprivate int a = 1;\n\tint r() { return a; }\n");
+		// The counterpart the same arm must NOT report: `static` beginning a real declaration, split
+		// over two lines. javac reads this block; a scanner that recognised the bare word alone would
+		// tell the author to move documentation the compiler had already read.
+		shape(shapes, "BareStaticThenDeclaration", Attachment.ATTACHED,
+				"\t/** " + dead + ". */\n\tstatic\n\tfinal int a = 1;\n\tint r() { return a; }\n");
+		// An `import` is a declaration javac attaches no doc comment to, and — unlike the `package`
+		// statement — it warns about nothing either, so this shape is silent on both channels. Needs
+		// the whole file: the class-body wrapper cannot put anything above an import.
+		wholeFile(shapes, "BeforeImport", Attachment.UNATTACHED,
+				"package shapes;\n\n/** " + dead + ". */\nimport java.util.List;\n\n"
+						+ "public class BeforeImport {\n\tprivate List<String> a = null;\n"
+						+ "\tint r() { return a == null ? 0 : 1; }\n}\n");
+		// The two rows that pin isAnnotationAlone's remaining two exclusions. Both were unpinned when
+		// this table was first written — each clause could be deleted with the whole suite green — and
+		// both are cases where javac DOES read the block, so dropping either turns a clean build red.
+		// The comma: an annotated enum constant, the same line shape as this module's @RequestParam
+		// parameter lines, which annotates itself rather than what follows.
+		shape(shapes, "AnnotatedEnumConstantThenBlock", Attachment.ATTACHED,
+				"\tenum E {\n\t\t@Deprecated A,\n\t\t/** " + dead
+						+ ". */\n\t\tB;\n\t}\n\tE r() { return E.B; }\n");
+		// The brace: an annotated type declaration whose body brace is on the same line. The block
+		// below it documents the first member of that type, and javac reads it.
+		shape(shapes, "AnnotatedTypeOpenThenBlock", Attachment.ATTACHED,
+				"\t@Deprecated static class Inner {\n\t\t/** " + dead
+						+ ". */\n\t\tprivate int a = 1;\n\t\tint r() { return a; }\n\t}\n");
 		return shapes;
 	}
 

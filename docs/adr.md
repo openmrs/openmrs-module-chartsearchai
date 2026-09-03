@@ -5121,17 +5121,43 @@ below it:
 Proved blind rather than reasoned blind: renaming `{@link #parseYesNo}` inside the orphaned block to
 a name that exists nowhere left the error count at three, not four.
 
-**What detaches a block was then measured on probes rather than assumed, and there are three shapes,
-not one.** A block followed by another javadoc block; a block followed by no declaration before the
-enclosing brace or the end of the file; and a block stranded BETWEEN a declaration's annotations and
+**What detaches a block was then measured on probes rather than assumed, and it is more than one
+shape.** A block followed by another javadoc block; a block followed by no declaration before the
+enclosing brace or the end of the file; a block stranded BETWEEN a declaration's annotations and
 the declaration itself, which javac ignores because a doc comment has to precede the whole
-declaration, annotations included. A four-pointer probe of the first two returned three errors; a
-probe carrying a block on each side of an annotation returned one, for the block ABOVE it. The third
-shape was found by accident — a verification probe of this very change inserted a comment after a
-controller's `@Controller` and `@RequestMapping` lines and then reported the gate as not reaching
-`omod`; the gate was fine and the probe was dangling. An intervening line comment or plain block
-comment detaches nothing, but neither rescues a block from any of the three. Only the first
-shape had instances here.
+declaration, annotations included; a block followed by an INITIALISER block, static or instance,
+which is not a declaration; and a block followed by an `import`, which javac attaches nothing to and
+— unlike the `package` statement — does not even warn about. A four-pointer probe of the first two
+returned three errors; a probe carrying a block on each side of an annotation returned one, for the
+block ABOVE it; a probe carrying a dead pointer above a static initialiser, above an instance
+initialiser and above an `import` returned no diagnostic of any kind for any of the three while
+reporting the same pointer on a method in the same file. The annotation shape was found by accident —
+a verification probe of this very change inserted a comment after a controller's `@Controller` and
+`@RequestMapping` lines and then reported the gate as not reaching `omod`; the gate was fine and the
+probe was dangling. An intervening line comment or plain block comment detaches nothing, but neither
+rescues a block from any of them. Only the first shape had instances here.
+
+**No count of the shapes is published, and this paragraph published "three" for one round.** The
+last two came out of round 1 of the PR's own review, on `a6416847`, and both were holes of exactly
+the kind this check exists to close: unread by doclint, unreported by all six checks, and silent. The
+initialiser one is adjacent to every `static` block in this repository: each is immediately preceded
+by the field it fills, and most of those fields carry a javadoc block, so an initialiser inserted
+above one is the same "member inserted above the comment written for the one below it" defect and
+would have taken that javadoc out of the gate. The scanner's two new arms are pinned by `SHAPES`
+rows of their own — `BeforeStaticInitialiser`, `BeforeInstanceInitialiser`,
+`BeforeBareStaticThenBrace`, `BeforeImport` (a `wholeFile` row: the class-body wrapper cannot put
+anything above an import) and the negative `BareStaticThenDeclaration`, which is what stops the
+`static` arm reading a declaration split over two lines. Mutate an arm and read which rows redden
+rather than trusting this list.
+
+**The same round found two of `isAnnotationAlone`'s three exclusions unpinned**, and both prevent a
+FALSE POSITIVE — the rule telling an author to move documentation javac has already read, i.e. a red
+build on legal code. Each could be deleted with all six checks green. They now have a row apiece:
+`AnnotatedTypeOpenThenBlock` for the body brace (an annotated type whose brace is on the annotation's
+own line, whose first member's javadoc javac reads) and `AnnotatedEnumConstantThenBlock` for the
+comma (an annotated enum constant — the same line shape as the module's `@RequestParam` parameter
+lines, and likewise annotating itself). Measured: dropping either clause reddens exactly its own row
+in `theScannerAgreesWithTheCompilerAboutWhatIsAttached`.
 
 **What doclint does not read is a METHOD BODY, and the first version of this said something narrower
 and wrong.** It named "a local declaration" and "an anonymous class's member" as the two unread
@@ -5169,6 +5195,14 @@ Measured over `origin/main`'s two api source roots with `javac -Xdoclint:referen
 says so. The figure carries its tree and its command deliberately — two earlier drafts published 250
 and 249, each true of a different base this change passed through, and neither named the base it was
 taken on. Re-derive it against the merge base rather than quoting it.
+
+**This decision is the ONE home of the 274/276 pair, and for one review round it was not.**
+`noFileOpensWithAJavadocBlockBeforeItsPackageStatement`'s javadoc carried a second copy reading "271
+of this module's 273 sources" — 274 and 276 with the three files that also took non-header edits
+dropped from both halves — so two figures for one quantity disagreed inside one commit, in the change
+whose whole thesis is that a stale pointer reads as authoritative. The warning in the sentence above
+was written and did not reach the copy beside it. The guard now points here rather than restating a
+count that tracks the code.
 
 **A suppression does exist, and the first version of this decision said it did not.** `-nowarn`
 silences the dangling-comment warning while keeping every reference ERROR, measured on JDK 11, 17, 21

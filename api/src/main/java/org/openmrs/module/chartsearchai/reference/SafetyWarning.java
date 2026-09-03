@@ -423,9 +423,18 @@ public class SafetyWarning {
 	 * not restated here, because three copies of a rejected-alternative argument is how this repo has
 	 * come to contradict itself before.
 	 *
-	 * <p>Scoped exactly as the chip's own demotion is — a SELF-NAMED allergy rule — so a class-token
-	 * rule, a condition rule and every allergen-arm sentence answer false. Not serialized; the wire
-	 * shape is unchanged, and the chip's detail is the same string it was.
+	 * <p>True for a SELF-NAMED allergy rule the corroborating union does not redeem, and — since issue
+	 * #309 — for a CONDITION rule whose matched record carries the token only inside a longer word
+	 * ({@code DrugSafetyValidator.aMatchedConditionCarriesTheToken}). A class-token rule and every
+	 * allergen-arm sentence still answer false.
+	 *
+	 * <p><b>So this is no longer scoped as the chip's own demotion is, and the divergence is
+	 * deliberate</b>: {@code DrugSafetyValidator.contraindicationRank} stays allergy-typed, because
+	 * issue #223 scoped it to the fold whose premise is that a self-named rule reports the allergen
+	 * arm's fact — a premise a condition rule has no part in. The record and the finding say the
+	 * condition answer; no chip does. Stated here because this accessor is where a reader would come to
+	 * learn the two scopes had parted. Not serialized; the wire shape is unchanged, and the chip's
+	 * detail is the same string it was.
 	 */
 	boolean restsOnAnUncorroboratedChartMatch() {
 		return uncorroboratedChartMatch;

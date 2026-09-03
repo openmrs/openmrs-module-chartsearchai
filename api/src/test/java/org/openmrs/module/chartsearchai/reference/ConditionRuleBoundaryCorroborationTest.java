@@ -15,7 +15,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
@@ -52,10 +54,14 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * dictionary; the figures and both corpora are recorded on
  * {@link PatientClinicalContext#containsToken}). The hazard is real and its false matches are clinical:
  * {@code liver} matches 30 of that dictionary's 2581 condition candidates and 20 of the 30 carry it only
- * inside a deliver/delivery form. The LOSS is zero over the only real curated condition population that
- * exists — all four condition tokens the shipped seed publishes match every value they match as whole
- * words, over both corpora — which is the proxy issue #223 used for the allergy side, run for
- * conditions. {@link #aShippedSeedConditionTokenIsStillStatedAsRecorded} is that population's guard.
+ * inside a deliver/delivery form. The LOSS is zero over the two CODED corpora it ran on — all four
+ * condition tokens the shipped seed publishes match every value they match there as whole words —
+ * which is the proxy issue #223 used for the allergy side, run for conditions. That bound is
+ * load-bearing: the free-text half is unmeasured and is where the rule DOES cost, on the seed's own
+ * tokens ({@link #anInflectionOfAShippedTokenIsHedged}). What is pinned here is the token set the
+ * claim is about ({@link #theShippedSeedPublishesExactlyTheFourConditionTokensTheMeasurementWasOver});
+ * {@link #aShippedSeedConditionTokenIsStillStatedAsRecorded} is one worked case of it, not a guard
+ * over the corpus, which this repo does not carry and which still escapes.
  *
  * <p><b>Prompt-facing only</b>, exactly as issues #269 and #308 scoped themselves: this is
  * {@code corroboratedByTheChart}, which both injected channels ask and which no chip reads. The chip's
@@ -74,36 +80,42 @@ public class ConditionRuleBoundaryCorroborationTest {
 
 	private static final String UNCORROBORATED = DrugReferenceInjector.UNCORROBORATED_READING_LEAD;
 
-	/** The injected {@code drug_reference} record for {@code question}, for a patient whose recorded
-	 *  conditions are {@code conditions} — the real injector, the real validator, the real fixture
-	 *  parsed by the real {@link JsonDrugReferenceSource}. */
-	private static String record(String question, String... conditions) throws IOException {
-		DrugReferenceService service =
-				DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport.fixtureEntries(FIXTURE));
-		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service)
+	/** The one arrangement every case here drives: the real injector, the real validator, and the
+	 *  service named by {@code fixture} — this file's own fixture, or the SHIPPED curated seed for the
+	 *  two cases that are about the shipped population. Allergens and conditions are separate slots
+	 *  because one case's witness is an allergy arrangement. */
+	private static PatientChart chart(DrugReferenceService service, String question,
+			Set<String> allergens, Set<String> conditions) {
+		return DrugReferenceTestSupport.injectorWithSafety(service)
 				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
-						DrugReferenceTestSupport.ctx(60, null, null, null, null,
-								DrugReferenceTestSupport.set(conditions)),
+						DrugReferenceTestSupport.ctx(60, null, null, null, allergens, conditions),
 						question);
-		RecordMapping reference = DrugReferenceTestSupport.injectedReference(chart);
+	}
+
+	private static DrugReferenceService fixtureService() throws IOException {
+		return DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport.fixtureEntries(FIXTURE));
+	}
+
+	/** The injected {@code drug_reference} record for {@code question}, for a patient whose recorded
+	 *  conditions are {@code conditions}. */
+	private static String record(String question, String... conditions) throws IOException {
+		return recordFrom(fixtureService(), question, conditions);
+	}
+
+	private static String recordFrom(DrugReferenceService service, String question,
+			String... conditions) {
+		RecordMapping reference = DrugReferenceTestSupport.injectedReference(
+				chart(service, question, null, DrugReferenceTestSupport.set(conditions)));
 		return reference == null ? "" : reference.getText();
 	}
 
 	/** The injected {@code safety_finding} texts for the same arrangement — the second channel, which
-	 *  since issue #308 states the same answer and must not disagree with the record. */
+	 *  since issue #308 states the same answer and must not disagree with the record. Through
+	 *  {@link DrugReferenceTestSupport#findingTexts}, whose javadoc asks callers to stop writing this
+	 *  loop out; it is not written again here. */
 	private static List<String> findings(String question, String... conditions) throws IOException {
-		DrugReferenceService service =
-				DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport.fixtureEntries(FIXTURE));
-		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service)
-				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
-						DrugReferenceTestSupport.ctx(60, null, null, null, null,
-								DrugReferenceTestSupport.set(conditions)),
-						question);
-		List<String> texts = new ArrayList<String>();
-		for (RecordMapping finding : DrugReferenceTestSupport.injectedFindings(chart)) {
-			texts.add(finding.getText());
-		}
-		return texts;
+		return DrugReferenceTestSupport.findingTexts(
+				chart(fixtureService(), question, null, DrugReferenceTestSupport.set(conditions)));
 	}
 
 	private static String clauseSection(String record, String clause) {
@@ -171,6 +183,57 @@ public class ConditionRuleBoundaryCorroborationTest {
 	}
 
 	@Test
+	public void theShippedSeedPublishesExactlyTheFourConditionTokensTheMeasurementWasOver() {
+		// A DATA guard over the file itself, and the reason it exists is that four documents — this
+		// class's javadoc, DrugSafetyValidator.aMatchedConditionCarriesTheToken, ADR Decision 70 and
+		// README — state a zero-cost claim whose subject is exactly this token set. The measurement
+		// behind it cannot be re-run in this repo (it needs the 3.7.1 dictionary, which the repo does
+		// not carry), so the one thing that CAN be pinned is the population it was over. Add a fifth
+		// condition rule to the shipped seed and this reddens, which is the prompt to re-measure rather
+		// than to edit the claim. It is not a guard over the CORPUS, which still escapes.
+		List<String> tokens = new ArrayList<String>();
+		for (DrugReference entry : DrugReferenceTestSupport.curatedService().getAll()) {
+			if (entry.getContraindications() == null) {
+				continue;
+			}
+			for (DrugReference.Contraindication c : entry.getContraindications()) {
+				if ("condition".equalsIgnoreCase(c.getType())) {
+					tokens.add(c.getToken());
+				}
+			}
+		}
+		assertEquals(Arrays.asList("gi bleed", "peptic ulcer", "severe hepatic", "renal impairment"),
+				tokens, "the zero-cost claim in four documents is ABOUT this token set; if it changed, "
+						+ "re-measure rather than re-word");
+	}
+
+	@Test
+	public void anInflectionOfAShippedTokenIsHedged() throws IOException {
+		// THE RESIDUE THAT REACHES THE SHIPPED SEED, and the one the first draft of this change did not
+		// disclose. "Zero cost over the shipped seed" is true of the two CODED corpora the measurement
+		// ran over — no concept in either is spelled this way — and the free-text half of the condition
+		// list is unmeasured, because the demo database's condition_non_coded column holds one
+		// placeholder across all 853 rows. A clinician typing the condition themselves is exactly where
+		// an inflection arises, and `GI bleeding` for the seed's own `gi bleed` is hedged.
+		//
+		// Not fixable by choosing a different boundary rule: the tail here is `ing`, three letters, so
+		// the order-name rule's two-letter inflection allowance does not reach it either — and choosing
+		// an allowance at a call site is what CLAUDE.md forbids (#260). What keeps this conservative is
+		// that the section asserts nothing and denies nothing: the contraindication is still listed and
+		// the chip still fires, so the safety net is intact and only the attribution weakens.
+		String hedged = recordFrom(DrugReferenceTestSupport.curatedService(),
+				"Can I give her ibuprofen?", "GI bleeding");
+		assertEquals(UNCORROBORATED, clauseSection(hedged, "active gastrointestinal bleeding"),
+				"an inflection of the shipped seed's own token is hedged: " + hedged);
+		// The control, so the case above is not read as the rule being broadly destructive: the same
+		// token against the multi-word fragment the bare match exists FOR still states as recorded.
+		String recorded = recordFrom(DrugReferenceTestSupport.curatedService(),
+				"Can I give her ibuprofen?", "history of peptic ulcer disease");
+		assertEquals(RECORDED, clauseSection(recorded, "active peptic ulcer disease"),
+				"the fragment case the bare match exists for is untouched: " + recorded);
+	}
+
+	@Test
 	public void aClinicallyRightCompoundIsHedgedToo() throws IOException {
 		// The residue, kept as a case rather than a sentence: 'Lymphedema' IS oedema, and the boundary
 		// rule hedges it. Measured over the dictionary's 2581 condition candidates, 'edema' matches 13
@@ -185,18 +248,8 @@ public class ConditionRuleBoundaryCorroborationTest {
 	 *  arrangement, because the guard it re-pins is one the condition leg cannot reach. */
 	private static List<String> allergyFindings(String question, String... allergens)
 			throws IOException {
-		DrugReferenceService service =
-				DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport.fixtureEntries(FIXTURE));
-		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service)
-				.injectRecords(DrugReferenceTestSupport.oneRecordChart(),
-						DrugReferenceTestSupport.ctx(60, null, null, null,
-								DrugReferenceTestSupport.set(allergens), null),
-						question);
-		List<String> texts = new ArrayList<String>();
-		for (RecordMapping finding : DrugReferenceTestSupport.injectedFindings(chart)) {
-			texts.add(finding.getText());
-		}
-		return texts;
+		return DrugReferenceTestSupport.findingTexts(
+				chart(fixtureService(), question, DrugReferenceTestSupport.set(allergens), null));
 	}
 
 	@Test

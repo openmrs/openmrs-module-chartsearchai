@@ -1389,7 +1389,8 @@ public class DrugReferenceInjector {
 
 	/**
 	 * How a contraindication finding's rule reached this patient's chart, stated in the finding
-	 * itself where nothing corroborates that match as a record of the drug (issue #308) — the
+	 * itself where nothing corroborates that match — as a record of the drug for an allergy rule, and
+	 * since issue #309 as a whole word for a condition rule (issue #308) — the
 	 * {@code safety_finding} counterpart of {@link #UNCORROBORATED_READING_LEAD}, which issue #269
 	 * gave the {@code drug_reference} record injected beside it.
 	 *
@@ -1410,8 +1411,19 @@ public class DrugReferenceInjector {
 	 * address it" — that a clause reading only "not a record of this drug", inside a record type the
 	 * same prompt says IS about this patient, would sit close to; a flip to that branch would be
 	 * fail-open. And it says what the MODULE established rather than a categorical about the chart,
-	 * ADR Decision 42's own measured constraint, because both corroborating legs can miss an allergy
-	 * the chart really holds.
+	 * ADR Decision 42's own measured constraint, because a corroborating leg can miss a record the
+	 * chart really holds: either allergy leg an allergy, and since issue #309 the condition leg a
+	 * condition, for which a clinician's own inflection is enough.
+	 *
+	 * <p><b>Its words were written for the allergy case and are reused for the condition one, which is
+	 * a trade rather than a fit</b> (issue #309). For a self-named allergy rule the token IS one of the
+	 * drug's names, so "a record of this drug" is the question actually asked. For a condition rule the
+	 * token names no drug at all and the module's uncertainty is only about the WORDING of the matched
+	 * condition, so the sentence names a corroboration it never attempted. Reusing it was chosen over
+	 * writing a second clause because prompt wording here is measured rather than argued — ADR
+	 * Decision 42 already records this lead's own exact wording as unmeasured — and a new unmeasured
+	 * sentence in citable evidence is the larger risk; nothing false about the PATIENT is asserted
+	 * either way. ADR Decision 70 records it as an accepted trade rather than an oversight.
 	 *
 	 * <p><b>Additive, and that is the decision rather than a detail.</b> The finding still states
 	 * {@link #STRENGTH_WITHHOLD}, and a third strength class between withholding and a caution — the

@@ -2092,7 +2092,7 @@ public class DrugSafetyValidator {
 		//
 		// The guard opening the loop — MATCHED rules only — is load-bearing too, and it is what
 		// everything read off this map assumes. corroboratedByTheChart answers TRUE unconditionally for
-		// a rule that is not a self-named allergy rule, and contraindicationClauses renders a clause for
+		// an ALLERGY rule that is not self-named, and contraindicationClauses renders a clause for
 		// every rule of the entry whether it matched or not, so an UNMATCHED rule reaching this fold
 		// seeds its key TRUE, puts that key's clause into statedAsRecorded and clears a finding whose
 		// record beside it goes on hedging the same string — issue #308's own contradiction, one rule
@@ -2100,7 +2100,16 @@ public class DrugSafetyValidator {
 		// open on the same recordedContraindicationKind call, so a later dedup pass that shares it is
 		// the seam to watch. Delete the `continue` here, leaving `Object key = contraindicationFinding(
 		// ref, c);` as the loop's first statement, and read the failure:
-		// UncorroboratedFindingProvenanceTest.aRuleTheChartDoesNotRecordCannotStateItsClauseAsRecorded.
+		// ConditionRuleBoundaryCorroborationTest.anUnmatchedRuleStillCannotSeedItsKeyAsRecorded.
+		//
+		// WHICH rule type witnesses that is not incidental, and issue #309 moved it. The witness used to
+		// be UncorroboratedFindingProvenanceTest.aRuleTheChartDoesNotRecordCannotStateItsClauseAsRecorded,
+		// whose unmatched rule is a CONDITION rule — and #309 gave condition rules a corroborating leg
+		// of their own, so an unmatched one now answers FALSE rather than TRUE and the mutation stopped
+		// reddening it. Measured on the commit that added the leg (whole api suite green under the
+		// mutation) and on its parent (that case red). The witness named above is an unmatched allergy
+		// rule that is NOT self-named — the one shape still answering TRUE unconditionally, so a
+		// condition rule cannot witness this guard any more and a self-named allergy rule never could.
 		Map<Object, String> clauses = contraindicationClauses(ref);
 		Map<Object, Boolean> corroboratedClauses = new HashMap<Object, Boolean>();
 		for (DrugReference.Contraindication c : ref.getContraindications()) {
@@ -2197,7 +2206,9 @@ public class DrugSafetyValidator {
 			// rendered clause and a corroborated key always contributed that clause to the set: the
 			// key-clause conjunct already answers for it. That premise is a statement about this map
 			// holding MATCHED rules only, which is the guard above and is pinned by
-			// aRuleTheChartDoesNotRecordCannotStateItsClauseAsRecorded. One was written here in round 1
+			// ConditionRuleBoundaryCorroborationTest.anUnmatchedRuleStillCannotSeedItsKeyAsRecorded —
+			// issue #309 retired the case that used to pin it, for the reason the guard's own comment
+			// gives. One was written here in round 1
 			// of this branch's review and removed in round 3, having measured that replacing it with
 			// corroboratedByTheChart(ref, c, context, allergicSubstances) — the mutation four texts then
 			// prescribed as this fold's own guard — moved no case's colour.
@@ -2332,8 +2343,8 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * @return whether some recorded condition {@code c}'s token matched carries that token as a WHOLE
-	 *         WORD rather than only inside a longer one — the CONDITION arm's corroborating question
+	 * @return whether some recorded condition that {@code c}'s token matched carries that token as a
+	 *         WHOLE WORD rather than only inside a longer one — the CONDITION arm's corroborating question
 	 *         (issue #309), and the third leg of {@link #corroboratedByTheChart}. Asked only of a rule
 	 *         that has already matched.
 	 *
@@ -2356,14 +2367,24 @@ public class DrugSafetyValidator {
 	 *
 	 *         <p><b>What it costs, measured</b> (issue #309, over the OpenMRS 3.7.1 demo dictionary —
 	 *         both corpora and every figure are recorded on {@link PatientClinicalContext#containsToken}).
-	 *         Over the only real curated condition population that exists, the four condition tokens the
-	 *         shipped seed publishes, it costs NOTHING: every value they match carries the token as a
-	 *         whole word, on both corpora. That is the proxy issue #223 used to settle the allergy side,
-	 *         run for conditions. What it does give up is a prefix or suffix compound that is clinically
-	 *         the same finding — {@code Lymphedema} for a rule on {@code edema} — which is hedged rather
-	 *         than lost, and is pinned as a case by
-	 *         {@code ConditionRuleBoundaryCorroborationTest.aClinicallyRightCompoundIsHedgedToo} so a
-	 *         future change reads the cost rather than a description of it.
+         Over the only real curated condition population that exists — the four condition tokens the
+	 *         shipped seed publishes — it costs nothing ON THE MEASURED CORPORA: every value they match
+	 *         there carries the token as a whole word. That is the proxy issue #223 used to settle the
+	 *         allergy side, run for conditions, and that bound is the whole of the claim: both corpora
+	 *         are CODED concept names, and the free-text half is unmeasured because the demo database's
+	 *         {@code condition_non_coded} column holds one placeholder across all its rows.
+	 *
+	 *         <p><b>Free text is where it does cost, and it reaches the shipped seed's own tokens.</b>
+	 *         A condition a clinician types as {@code GI bleeding} is hedged against the seed's
+	 *         {@code gi bleed}, and {@code peptic ulceration} against {@code peptic ulcer} — an
+	 *         INFLECTION, which no choice of boundary rule rescues (the tail is three letters, past even
+	 *         the order-name rule's two, and picking an allowance at a call site is what #260 forbids).
+	 *         The other shape is a prefix or suffix compound that is clinically the same finding,
+	 *         {@code Lymphedema} for a rule on {@code edema}. Both are hedged rather than lost — the
+	 *         section asserts nothing and denies nothing, the contraindication is still listed and the
+	 *         chip still fires — and both are pinned as cases rather than described, by
+	 *         {@code ConditionRuleBoundaryCorroborationTest.anInflectionOfAShippedTokenIsHedged} and
+	 *         {@code .aClinicallyRightCompoundIsHedgedToo}, so a future change reads the cost.
 	 *
 	 *         <p>Through {@link PatientClinicalContext#conditionsMatching} — the witness accessor — for
 	 *         SYMMETRY with the allergy leg above and to share one scan with the boolean, and NOT

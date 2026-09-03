@@ -481,7 +481,7 @@ public class PatientClinicalContext {
 	 * {@code deficiency} 14/7, every one an immunoDEFICIENCY; {@code mania} 8/6
 	 * ({@code Leishmaniasis}, {@code Kleptomania}); {@code psoriasis} 4/2 ({@code Large plaque
 	 * parapsoriasis}, a different disease); {@code renal} 7/1 ({@code Malignant tumor of adrenal
-	 * gland}); {@code gi} 112/111. A hepatic, renal or haematologic contraindication is the most
+	 * gland}); {@code gi} 112/111. A hepatic or renal contraindication is the most
 	 * ordinary curated condition rule there is, so this is not an exotic shape.
 	 *
 	 * <p><b>What the fix could NOT be, and this is the part worth keeping.</b> The ticket proposed a
@@ -494,8 +494,8 @@ public class PatientClinicalContext {
 	 * NEGATION. Hazard is a property of the (token, recorded value) PAIR, and the loader holds no
 	 * condition corpus to pair against. A length rule is still defensible as a REPORTED loader finding
 	 * (at one to three characters a single-word token is hazardous 61-100% of the time on both corpora),
-	 * and it was declined only because it warns rather than fixes and would be silent on six of the
-	 * seven witnesses above.
+	 * and it was declined only because it warns rather than fixes and would be silent on five of the
+	 * six witnesses above — every one but {@code gi} is five characters or more.
 	 *
 	 * <p><b>What the fix IS: a boundary, asked of the match rather than of the token.</b>
 	 * {@code DrugSafetyValidator.aMatchedConditionCarriesTheToken} — the third leg of
@@ -505,22 +505,36 @@ public class PatientClinicalContext {
 	 * token reached the record as a WORD of it. This match itself is untouched and stays bare, for the
 	 * reason the paragraph above gives.
 	 *
-	 * <p>The LOSS of that boundary rule, over the only real curated condition population that exists, is
-	 * ZERO: the four condition tokens the bundled seed publishes ({@code gi bleed}, {@code peptic
+	 * <p>The LOSS of that boundary rule over the two corpora above is ZERO, and that bound is the whole
+	 * of the claim. The four condition tokens the bundled seed publishes ({@code gi bleed}, {@code peptic
 	 * ulcer}, {@code severe hepatic}, {@code renal impairment} — the TOKENS, which #309's own body
 	 * misquoted as the {@code note} fields) match 1 value over the recorded corpus and 5 over the
-	 * candidate one, and every one of those six carries its token as a whole word. That is the proxy
-	 * issue #223 used to settle the allergy side, run for conditions. What IS given up is a prefix or
-	 * suffix compound that is clinically the same finding — {@code edema} 13/7, {@code carcinoma} 8/2
-	 * ({@code Adenocarcinoma}), {@code arthritis} 10/3 ({@code Osteoarthritis of knee}),
-	 * {@code cerebral} 10/2, {@code ulcer} 21/2 — which is hedged rather than dropped, and is a case
-	 * rather than a sentence: {@code ConditionRuleBoundaryCorroborationTest.aClinicallyRightCompoundIsHedgedToo}.
+	 * candidate one, and every one of them carries its token as a whole word. Not six: the recorded
+	 * concepts are a subset of the candidate ones, so those counts overlap and must not be summed. That
+	 * is the proxy issue #223 used to settle the allergy side, run for conditions.
 	 *
-	 * <p>Neither corpus reaches the free-text half. That database's {@code condition_non_coded} column
-	 * holds ONE placeholder string across all 853 rows, so a condition recorded in the clinician's own
-	 * wording — the shape the fragment rationale above is really about — is unmeasured on both sides of
-	 * this rule. This repo does not carry that dictionary, so none of these figures is re-derivable
-	 * here; what is stated is which population each is over.
+	 * <p><b>Both corpora are CODED concept names, and the rule DOES cost the free-text half — including
+	 * on the shipped seed's own tokens.</b> A condition a clinician types as {@code GI bleeding} is
+	 * hedged against {@code gi bleed}, and {@code peptic ulceration} against {@code peptic ulcer}: an
+	 * INFLECTION, the commonest shape in free text and the one neither corpus can exhibit. No choice of
+	 * boundary rule rescues it — the tail is three letters, past even the order-name rule's two, and
+	 * choosing an allowance at a call site is what issue #260 forbids. The other shape is a prefix or
+	 * suffix compound that is clinically the same finding: {@code edema} 13/7, {@code carcinoma} 8/2
+	 * ({@code Adenocarcinoma}), {@code arthritis} 10/3 ({@code Osteoarthritis of knee}),
+	 * {@code cerebral} 10/2, {@code ulcer} 21/2. Both are hedged rather than dropped — the section
+	 * asserts nothing and denies nothing, the contraindication is still listed and the chip still fires
+	 * — and both are cases rather than sentences:
+	 * {@code ConditionRuleBoundaryCorroborationTest.anInflectionOfAShippedTokenIsHedged} and
+	 * {@code .aClinicallyRightCompoundIsHedgedToo}.
+	 *
+	 * <p>That the corpora cannot reach free text is a property of the source: that database's
+	 * {@code condition_non_coded} column holds ONE placeholder string across all 853 rows, so a
+	 * condition recorded in the clinician's own wording — the shape the fragment rationale above is
+	 * really about — is unmeasured on both sides of this rule, and the two inflections above are
+	 * reasoned from the rule rather than counted. This repo does not carry that dictionary, so none of
+	 * these figures is re-derivable here; what is stated is which population each is over. What CAN be
+	 * pinned here is the token set the zero-cost claim is ABOUT, and it is:
+	 * {@code ConditionRuleBoundaryCorroborationTest.theShippedSeedPublishesExactlyTheFourConditionTokensTheMeasurementWasOver}.
 	 *
 	 * <p>Exposure today is confined to hand-authored
 	 * contraindication rules: neither the {@code ddinter} nor the {@code atc} source emits any, and the
@@ -589,8 +603,8 @@ public class PatientClinicalContext {
 		return DrugReference.foldedLower(token.trim());
 	}
 
-	/** The one comparison behind both {@link #containsToken} and {@link #allergensMatching}: a recorded
-	 *  value contains an already-folded token. Extracted rather than written twice, so the witnesses
+	/** The one comparison behind {@link #containsToken} and {@link #recordsMatching} — and so behind
+	 *  all four of the accessors over them: a recorded value contains an already-folded token. Extracted rather than written twice, so the witnesses
 	 *  cannot come to disagree with the boolean about what matched. */
 	private static boolean containsFolded(String value, String foldedToken) {
 		return DrugReference.foldDiacritics(value).contains(foldedToken);

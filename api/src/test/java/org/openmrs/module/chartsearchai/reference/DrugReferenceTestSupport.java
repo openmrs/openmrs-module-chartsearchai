@@ -1276,9 +1276,9 @@ public final class DrugReferenceTestSupport {
 	 * The text between {@code lead} and that sentence's own full stop on a rendered reference record, or
 	 * null when the record carries no such section — what a model reads, read where a model reads it.
 	 *
-	 * <p>Here rather than in a test file because two classes wrote this same seven-line body:
-	 * {@code InjectedContraindicationCorroborationTest} over the production section-lead constants and
-	 * {@code InjectedContraindicationPatientReadingTest} over deliberate literals. The LEAD stays a
+	 * <p>Here rather than in a test file because it was written out verbatim in
+	 * {@code InjectedContraindicationCorroborationTest} (over the production section-lead constants) and
+	 * in {@code InjectedContraindicationPatientReadingTest} (over deliberate literals). The LEAD stays a
 	 * parameter so both keep their own choice about that, which is the half that differs; only the
 	 * locator is shared. Sound because no section lead nests inside another, which
 	 * {@code InjectedContraindicationCorroborationTest.theThreeSectionLeadsAreTheWordsAModelReads}

@@ -307,7 +307,7 @@ public class DrugReferenceInjector {
 	 *  FRAMING carries over to that section. <b>The WORDS do not, and that is a trade rather than a
 	 *  fit</b>: for a condition rule the token names no drug, so "a record of this drug" names a
 	 *  corroboration the module never attempts. See {@link #FINDING_UNCORROBORATED_MATCH}, whose
-	 *  javadoc argues the trade, and ADR Decision 70, which records it. Measured on a
+	 *  javadoc argues the trade, and ADR Decision 71, which records it. Measured on a
 	 *  curated arrangement — an entry aliasing {@code ketoconazole} and ruling on another of its own
 	 *  names, beside an allergy recorded as {@code Ketoconazole} that {@code matchesDrugName} accepts —
 	 *  the record denied an allergy the chart holds. It claims no MECHANISM either, for the same
@@ -1426,7 +1426,7 @@ public class DrugReferenceInjector {
 	 * writing a second clause because prompt wording here is measured rather than argued — ADR
 	 * Decision 42 already records this lead's own exact wording as unmeasured — and a new unmeasured
 	 * sentence in citable evidence is the larger risk; nothing false about the PATIENT is asserted
-	 * either way. ADR Decision 70 records it as an accepted trade rather than an oversight.
+	 * either way. ADR Decision 71 records it as an accepted trade rather than an oversight.
 	 *
 	 * <p><b>Additive, and that is the decision rather than a detail.</b> The finding still states
 	 * {@link #STRENGTH_WITHHOLD}, and a third strength class between withholding and a caution — the
@@ -1448,8 +1448,10 @@ public class DrugReferenceInjector {
 
 	/**
 	 * How a finding's substances reach THIS patient's chart, stated in the finding itself where the
-	 * orders they were resolved from record no name of them (issue #349) — the lead of a clause whose
-	 * items follow it, {@code "; "}-joined, each reading {@code "<Substance> from <order display>"}.
+	 * name each order DISPLAYS does not name them (issue #349; the silence test was every name the
+	 * order RECORDS until issue #347, and {@code DrugSafetyValidator.displaysANameOfAny} is where the
+	 * change and its residues live) — the lead of a clause whose items follow it, {@code "; "}-joined,
+	 * each reading {@code "<Substance> from <order display>"}.
 	 *
 	 * <p><b>What it is for.</b> A finding names its substances in the KNOWLEDGE BASE's vocabulary,
 	 * which is right and is #339's settlement. Where the module reached those substances from an active
@@ -1494,14 +1496,16 @@ public class DrugReferenceInjector {
 	 * record the prompt already instructs the model to carry whole, exactly as
 	 * {@link #FINDING_UNCORROBORATED_MATCH} is.
 	 *
-	 * <p><b>Prompt-facing ONLY, and that is why {@code DrugSafetyValidator.StatedInteractionChips}
-	 * does NOT key on it.</b> Adding it to that key was tried and reverted in review: the key decides
-	 * which chips are emitted, so it reaches {@code PairChipExtent}'s counts and, through
-	 * {@code ChartSearchAiUtils.resourceKey}, whether two injected findings share one resource uuid —
-	 * which would make this clause decide wire CONTENT while every claim about it says it does not.
-	 * A collapsed chip therefore carries the survivor's bridge, which is the same residue ADR
-	 * Decision 63 already accepts for that collapse ("what it gives up is WHICH constituent").
-	 * The chip's detail, its rank and the {@code safetyWarnings} wire shape are
+	 * <p><b>{@code DrugSafetyValidator.StatedInteractionChips} does NOT key on it.</b> Adding it to
+	 * that key was tried and reverted in review: the key decides which chips are emitted, so it
+	 * reaches {@code PairChipExtent}'s counts and, through {@code ChartSearchAiUtils.resourceKey},
+	 * whether two injected findings share one resource uuid — a bridge must not be able to change
+	 * which chips exist. That reason used to be stated as "this clause is prompt-facing, and keying on
+	 * it would let it decide wire content"; since issue #347 the bridges ARE published, as each chip's
+	 * {@code chartOrderBridges} key, and the reason above is the one that survives it. A collapsed chip
+	 * therefore carries the survivor's bridge, on the wire as well as here, which is the same residue
+	 * ADR Decision 63 already accepts for that collapse ("what it gives up is WHICH constituent").
+	 * The chip's detail and its rank are
 	 * untouched, which is issue #283's own scoping;
 	 * {@code InteractionFindingChartOrderBridgeTest.theChipDetailIsTheWordsItAlwaysWas} pins it, and
 	 * {@code .theClauseIsTheWordsAModelReads} pins these words.

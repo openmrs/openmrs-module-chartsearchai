@@ -520,7 +520,7 @@ public class PatientClinicalContext {
 	 * (at one to three characters a single-word token is hazardous 61-100% of the time on both corpora),
 	 * and it was declined because it warns rather than fixes, is silent on five of the six witnesses
 	 * above (every one but {@code gi} is five characters or more), and is silent by construction on
-	 * every shipped dataset — ADR Decision 70 carries the three together.
+	 * every shipped dataset — ADR Decision 71 carries the three together.
 	 *
 	 * <p><b>What the fix IS: a boundary, asked of the match rather than of the token.</b>
 	 * {@code DrugSafetyValidator.aMatchedConditionCarriesTheToken} — the third leg of

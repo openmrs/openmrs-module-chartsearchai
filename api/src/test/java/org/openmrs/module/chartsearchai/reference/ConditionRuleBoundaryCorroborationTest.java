@@ -238,7 +238,7 @@ public class ConditionRuleBoundaryCorroborationTest {
 				"the zero-cost claim is ABOUT this token set — it is stated on "
 						+ "PatientClinicalContext.containsToken (which carries the token literals and "
 						+ "the per-corpus counts), DrugSafetyValidator.aMatchedConditionCarriesTheToken, "
-						+ "this class's javadoc, ADR Decision 70 and README; if the set changed, "
+						+ "this class's javadoc, ADR Decision 71 and README; if the set changed, "
 						+ "re-measure rather than re-word");
 		assertEquals(4, tokens.size(), "a duplicate token would pass the set comparison above");
 	}

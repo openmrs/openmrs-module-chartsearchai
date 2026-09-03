@@ -1219,6 +1219,70 @@ public class ChartSearchAiRestController {
 	 * not recognise it. Null rather than an omitted key, for the reason {@link #groundedForWire}
 	 * gives about its own field: the key's unconditional presence is what lets a client read it
 	 * without first asking whether it is there.
+	 *
+	 * <p><b>{@code chartOrderBridges} names which of the patient's own active orders each substance
+	 * the chip NAMES was resolved from</b>, where the order's own displayed name does not reach that
+	 * substance (issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/347">#347</a>). Each
+	 * entry serializes as {@code {substance, orderDisplay}} — the two public getters of
+	 * {@link SafetyWarning.ChartOrderBridge}, and nothing else on that class is a getter.
+	 *
+	 * <p><b>Why the key exists.</b> One response named one prescription two ways — the answer prose
+	 * called it {@code Advil} after the {@code drug_order} record it cited, every chip called it
+	 * {@code Ibuprofen} after the knowledge base — and a clinician reading a chip list beside an
+	 * answer then has to decide whether those are one prescription or two. The chip side must not be
+	 * re-decided (#339's reverted rounds 5-6, and CLAUDE.md), and the module's own statement of the
+	 * correspondence is a clause inside the injected {@code safety_finding}, which reaches a client
+	 * only if the model cites it — measured on #354's reproduction, it did not. So the module states
+	 * it here as well. A client renders it as the order this chip's substance came FROM; it asserts a
+	 * RESOLUTION this module performed and no identity of the prescription, which is precisely what
+	 * #339's reverted rounds could not say.
+	 *
+	 * <p><b>Published VERBATIM, not remapped.</b>
+	 * {@code ChartSearchAiSafetyWarningSeverityWireTest.everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire}
+	 * compares each public accessor's own reading against the key it names, so its CONTRACT is that
+	 * the published value equals what the accessor returns — a value the module computes and then
+	 * reshapes is indistinguishable there from issue #340's own defect, a value computed and dropped.
+	 * <b>The suite exercises it</b>: that fixture's chip 7 carries two bridges for this reason, and a
+	 * reshape into maps reddens the guard with the offending value in its message. It did NOT when
+	 * this key was first published — every chip there bridged nothing, so two empty lists compared
+	 * equal without reaching an element — and that is what the chip closes. ADR Decision 70 records
+	 * the state before and after; do not restore the blind spot by removing the chip.
+	 *
+	 * <p>Two consequences of publishing the object, both measured and neither hidden. The JSON field
+	 * names come from {@code ChartOrderBridge}'s getters, so a public getter added there becomes a
+	 * wire field — {@code ChartSearchAiChartOrderBridgeTest.theTwoHalvesAreSeparateFieldsAndNotASentenceToParse}
+	 * pins the JSON field set. And this is the only value on the payload that is not a JDK type, so
+	 * XStream names its element after the CLASS
+	 * ({@code org.openmrs.module.chartsearchai.reference.SafetyWarning_-ChartOrderBridge}) where every
+	 * other element is a {@code map}/{@code list}/{@code string}; README scopes the documented field
+	 * names to JSON for that reason. XStream marshals FIELDS, so a PRIVATE field added to that class
+	 * also reaches an XML client, and neither of {@code ChartSearchAiChartOrderBridgeTest}'s other two
+	 * cases sees it —
+	 * {@code theTwoHalvesAreSeparateFieldsAndNotASentenceToParse} reads GETTERS, and
+	 * {@code theWholePayloadStillMarshalsForAnXmlClient} only catches a field XStream REFUSES.
+	 * {@code ChartSearchAiChartOrderBridgeTest.everyFieldAnXmlClientReceivesIsAFieldAJsonClientReceives}
+	 * is what closes that, structurally and off {@code getDeclaredFields}: every declared field needs a
+	 * public getter of its own name. Measured — add a private field with no getter and that one case
+	 * reddens while the marshalling case stays green. It is ONE-directional, a field implying a getter
+	 * and never the converse, and its own javadoc says why it has no observable value to assert; read
+	 * that before deleting it as unused. <b>This paragraph said nothing caught the shape until review
+	 * round 1 read it against the guard the same change had added.</b>
+	 *
+	 * <p>Two fields rather than a rendered sentence, for the same reason {@code severity} above is
+	 * published at all: the alternative is a client parsing English. The list is always
+	 * present and is EMPTY where the module bridged nothing. <b>Empty says "no attribution to show",
+	 * and NOT "the chart records these substances."</b> No rule about which chips are empty is offered
+	 * here, and that is deliberate — every draft of one has been measured false, the later ones
+	 * against the real pipeline. The mechanism instead: {@code DrugSafetyValidator.chartOrderBridges} walks
+	 * the SUBJECT against every active order and the PARTNER against the orders its arm allowed to
+	 * witness it, and each item additionally needs {@code addChartOrderBridge}'s
+	 * {@code resolvesFromAny} and a display that does not already name the substance. That clause is
+	 * the whole of it — the last such rule written here was refuted too, and nothing is claimed about
+	 * what a chip's contribution depends on, because the partner witness set is the CALLER's and the
+	 * two arms hand down different ones. Rendering empty as "the chart already records it" would tell
+	 * a clinician she is on a drug she is not, which is issue #347's own confusion inverted inside the
+	 * field added to fix it.
 	 */
 	private List<Map<String, Object>> serializeSafetyWarnings(List<SafetyWarning> warnings) {
 		List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
@@ -1231,6 +1295,27 @@ public class ChartSearchAiRestController {
 			map.put("drug", warning.getDrug());
 			map.put("detail", warning.getDetail());
 			map.put("severity", warning.getSeverity());
+			// Copied into an ArrayList, and that is a correctness requirement rather than caution —
+			// serializeReferences above copies for its own reason and this is a second one. The
+			// blocking /search response is a ResponseEntity<Object> served by the converters
+			// openmrs-core registers (webservices.rest leaves <mvc:annotation-driven/> commented out),
+			// and for `Accept: application/xml` the one selected for a Map body is
+			// xmlMarshallingHttpMessageConverter, a MarshallingHttpMessageConverter over an
+			// XStreamMarshaller — read off openmrs-web's own openmrs-servlet.xml (the
+			// RequestMappingHandlerAdapter's messageConverters list, lines 117-129 of the 2.8.4
+			// artifact), not inferred — and confirmed on a live request, whose XML body is XStream's
+			// own <map><entry><string>… . XStreamMarshaller refuses java.util.Collections' immutable
+			// wrappers: measured on JDK 21.0.6 with xstream 1.4.21, both
+			// Collections$UnmodifiableRandomAccessList and Collections$EmptyList raise
+			// ConversionException("No converter available") while an ArrayList marshals. (An earlier
+			// draft of this comment attributed it to a modular-JDK access error and quoted "module
+			// java.base does not opens java.util"; no such text appears — the behaviour is what was
+			// verified, the message was not.) chartOrderBridges() returns an unmodifiableList, or
+			// Collections$EmptyList in the empty case, so publishing it as handed turned every
+			// chip-carrying XML response into a 500 — the empty case included.
+			// ChartSearchAiChartOrderBridgeTest.theWholePayloadStillMarshalsForAnXmlClient pins it.
+			map.put("chartOrderBridges",
+				new ArrayList<SafetyWarning.ChartOrderBridge>(warning.chartOrderBridges()));
 			out.add(map);
 		}
 		return out;

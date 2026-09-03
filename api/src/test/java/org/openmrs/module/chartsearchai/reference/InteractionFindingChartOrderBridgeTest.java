@@ -14,7 +14,9 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
 
 /**
  * Issue #349: an injected {@code safety_finding} states which of this patient's own active orders
- * each substance it names was resolved from, where no name that order records names it.
+ * each substance it names was resolved from, where the name that order DISPLAYS does not name it —
+ * the silence test #349 shipped was every name the order RECORDS, and issue #347 narrowed it; see
+ * {@code OneOrderNameAcrossAnswerAndChipTest}.
  *
  * <p>The reported shape: two active orders whose only chart names are the local brands
  * {@code Zolvimix} and {@code Klarizom}, resolved to Simvastatin and Clarithromycin through their WHO
@@ -138,12 +140,7 @@ public class InteractionFindingChartOrderBridgeTest {
 
 	/** @return the bridge clause of {@code finding}, without its lead — or null where it carries none. */
 	private static String bridgeOf(String finding) {
-		int at = finding.indexOf(LEAD);
-		if (at < 0) {
-			return null;
-		}
-		int end = finding.indexOf(WITHHOLD, at);
-		return finding.substring(at + LEAD.length(), end < 0 ? finding.length() : end);
+		return DrugReferenceTestSupport.bridgeOf(finding);
 	}
 
 	@Test
@@ -264,8 +261,10 @@ public class InteractionFindingChartOrderBridgeTest {
 	public void anOrderNamingTheSubstanceOnlyByAnAliasIsNotBridged() throws Exception {
 		// Acetylsalicylic acid's rxnorm_name is aspirin, so the order named "Aspirin 81mg" resolves it
 		// through an ALIAS rather than through its display label — and the chart's own words therefore
-		// DO carry a name of it. The guard is the order's recorded names against the substance, never
-		// the string the finding prints: printed, this substance is "Acetylsalicylic acid (aspirin)",
+		// DO carry a name of it. The guard is the one name a chart record DISPLAYS for the order (#347;
+		// it was every name the order RECORDS until then, and here the display is one of them, which is
+		// why this case is unmoved) — never the string the finding prints: printed, this substance is
+		// "Acetylsalicylic acid (aspirin)",
 		// which no order display contains, so a printed-name guard would bridge it as if the chart
 		// named nothing. Its partner here is a brand-named warfarin order, which IS bridged, so the
 		// case reads a clause rather than the absence of one.
@@ -414,6 +413,7 @@ public class InteractionFindingChartOrderBridgeTest {
 		assertEquals(1, chips.size(), "one pair is one chip, was: " + chips);
 		assertEquals("Simvastatin interacts with active order Clarithromycin — " + RATING_AND_MECHANISM,
 			chips.get(0).getDetail(),
-			"the clause is prompt-facing only: the chip a clinician reads is unchanged");
+			"the chip's own detail is unchanged by the clause — since #347 the attributions reach a "
+					+ "client as the chip's chartOrderBridges key, and its detail still must not");
 	}
 }

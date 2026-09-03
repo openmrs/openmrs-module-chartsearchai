@@ -581,7 +581,9 @@ public class SafetyWarning {
 	 * so a bridge must not be able to change which chips exist, whether or not a client can read it.
 	 * The consequence is that a COLLAPSED chip publishes the survivor's bridge, which is the same
 	 * residue ADR Decision 63 already accepts for that collapse ("what it gives up is WHICH
-	 * constituent"). See that class's javadoc and ADR Decisions 64 and 68.
+	 * constituent"). See that class's javadoc and ADR Decisions 64 and 69 — not 68, which is issue
+	 * #353's bridged-concept leg and says nothing about this key. This pointer said 68 until review
+	 * round 1: issue #347's decision was renumbered from 68 to 69 when #353 merged first.
 	 */
 	public List<ChartOrderBridge> chartOrderBridges() {
 		return chartOrderBridges;

@@ -5410,12 +5410,20 @@ public class DrugSafetyValidator {
 	 *         but the bridge made this true": stated as the negation of {@link #resolvesFromAny} asked
 	 *         with {@link BridgedOrders#NONE}, so it cannot drift from the predicate it is the
 	 *         complement of. By the time this runs the display test {@link #displaysANameOfAny} has
-	 *         already returned false — it was {@code recordsANameOfAny} until issue #347, and the
-	 *         narrowing does not reach this conjunct, since an order whose DISPLAY does not name the
-	 *         substance is the weaker premise of the two —
-	 *         so what that negation is left asking is whether the order's OWN recorded ATC codes
-	 *         reach the substance — and where they do, the attribution rests on the chart's own coding
-	 *         and is left exactly as it was. The code leg has an over-wide residue of its own; it is
+	 *         already returned false, and <b>that is a WEAKER premise than the
+	 *         {@code recordsANameOfAny} it replaced at issue #347, so the narrowing DOES reach this
+	 *         conjunct</b>: an order the old conjunct short-circuited on now reaches this one, the
+	 *         ticket's own among them — a display that does not name the substance beside a recorded
+	 *         concept name that does. So the negation is not left asking about coding alone.
+	 *         {@link #resolvesFromAny}'s first leg is {@link #recordsANameOf}, over every name the
+	 *         order records, so an order whose display does not name the substance while some OTHER
+	 *         recorded name of it does answers this conjunct FALSE through that NAME leg, and its
+	 *         clause stands. Measured on this head rather than reasoned: strip every ATC code off
+	 *         {@code OneOrderNameAcrossAnswerAndChipTest.ticketChart()}'s brand-named order and
+	 *         {@code .aSubstanceTheChartNamesOnlyByABrandIsBridgedToTheOrderItCameFrom} still gets
+	 *         {@code Warfarin from Coagubrand.}, so there the name leg is what answers it. Where the
+	 *         order's own recorded ATC codes reach the substance the clause stands too, exactly as it
+	 *         did before. The code leg has an over-wide residue of its own; it is
 	 *         named at {@link #resolvesFrom} and is deliberately not closed here, because closing it
 	 *         would change what every ATC-resolved order states and no measurement in this change
 	 *         covers that. The second is {@link BridgedOrders#recordedNameNames}, and it is what makes

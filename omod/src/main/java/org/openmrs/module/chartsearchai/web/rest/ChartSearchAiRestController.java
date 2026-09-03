@@ -1257,8 +1257,17 @@ public class ChartSearchAiRestController {
 	 * ({@code org.openmrs.module.chartsearchai.reference.SafetyWarning_-ChartOrderBridge}) where every
 	 * other element is a {@code map}/{@code list}/{@code string}; README scopes the documented field
 	 * names to JSON for that reason. XStream marshals FIELDS, so a PRIVATE field added to that class
-	 * also reaches an XML client, and no test sees it — the JSON guard reads getters and the
-	 * marshalling guard only catches a field XStream refuses. Named rather than left to be found.
+	 * also reaches an XML client, and neither of {@code ChartSearchAiChartOrderBridgeTest}'s other two
+	 * cases sees it —
+	 * {@code theTwoHalvesAreSeparateFieldsAndNotASentenceToParse} reads GETTERS, and
+	 * {@code theWholePayloadStillMarshalsForAnXmlClient} only catches a field XStream REFUSES.
+	 * {@code ChartSearchAiChartOrderBridgeTest.everyFieldAnXmlClientReceivesIsAFieldAJsonClientReceives}
+	 * is what closes that, structurally and off {@code getDeclaredFields}: every declared field needs a
+	 * public getter of its own name. Measured — add a private field with no getter and that one case
+	 * reddens while the marshalling case stays green. It is ONE-directional, a field implying a getter
+	 * and never the converse, and its own javadoc says why it has no observable value to assert; read
+	 * that before deleting it as unused. <b>This paragraph said nothing caught the shape until review
+	 * round 1 read it against the guard the same change had added.</b>
 	 *
 	 * <p>Two fields rather than a rendered sentence, for the same reason {@code severity} above is
 	 * published at all: the alternative is a client parsing English. The list is always

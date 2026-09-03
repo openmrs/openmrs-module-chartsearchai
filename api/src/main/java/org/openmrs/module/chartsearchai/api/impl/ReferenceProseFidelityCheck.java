@@ -67,11 +67,13 @@ import org.slf4j.LoggerFactory;
  *   <li>it treats a record SENTENCE reproduced whole as faithful however the answer goes on. That
  *       exit is also what keeps the clauses {@code DrugReferenceInjector.renderFinding} appends out
  *       of the comparison at the seam: the detail is passed through
- *       {@code DrugSafetyValidator.endSentence} whenever a clause follows it, so
- *       {@code " This finding is a reason to withhold it."} always opens a new record sentence.
+ *       {@code DrugSafetyValidator.endSentence} whenever a clause follows it, so a strength clause
+ *       — {@code " This finding is a reason to withhold it."} and, since issue #348, any of the
+ *       three counterparts beside it — always opens a new record sentence.
  *       It covers the SEAM and not the clause's interior — a reproduction that runs from the
- *       detail into the clause and diverges inside it is reported, and so is one inside the
- *       thirteen words of {@code STRENGTH_CAUTION}. Since issue #349 a THIRD clause can follow
+ *       detail into the clause and diverges inside it is reported, and so is one inside a clause
+ *       long enough to clear {@link #MIN_REPRODUCED_WORDS} on its own, which every clause but
+ *       {@code STRENGTH_WITHHOLD} is. Since issue #349 a further clause can follow
  *       the detail, the chart-order bridge, and it is why that clause's own lead ENDS a
  *       sentence rather than introducing its items with a colon: the lead alone clears
  *       {@link #MIN_REPRODUCED_WORDS}, so joined to the items it would put invariant

@@ -47,7 +47,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * whichever branch the model reaches for. Measured on the standalone against {@code main} @ b0cfe545,
  * one Severe recorded Aspirin allergy and one NSAID cross-reactivity chip: <em>"No — ibuprofen should
  * not be taken"</em> became <em>"Ibuprofen can be given, with one caution"</em>, 3 of 3, and came back
- * once the contraindication stated its strength. {@link #everyInjectedFindingStatesOneOfTheTwoStrengths}
+ * once the contraindication stated its strength. {@link #everyInjectedFindingStatesExactlyOneStrengthClause}
  * states the property; the other cases pin it one rating and one finding type at a time, the
  * {@code moderate} one being the BOUNDARY itself — a sweep found every rating either side of it
  * covered and the line between them free to move. An OVERDOSE finding is the one that wants neither
@@ -189,7 +189,7 @@ public class SafetyFindingSeverityStrengthTest {
 	 * both ways round, so it reddens the moment the dose arm becomes reachable before an answer and a
 	 * finding stating neither clause reaches the model.
 	 *
-	 * <p><b>Which is not what {@link #everyInjectedFindingStatesOneOfTheTwoStrengths} does, and the
+	 * <p><b>Which is not what {@link #everyInjectedFindingStatesExactlyOneStrengthClause} does, and the
 	 * javadoc used to claim it was.</b> That case iterates the findings ONE fixed arrangement produced,
 	 * and no arrangement of {@code injectRecords} can produce an overdose finding, so it can never
 	 * observe the type it was named as the guard for. It stays where it is for the property it does
@@ -241,8 +241,24 @@ public class SafetyFindingSeverityStrengthTest {
 						+ "those sentences: " + overdose);
 	}
 
+	/**
+	 * Every injected finding states exactly ONE strength clause, out of the four
+	 * {@code strengthClause} can return since issue #348.
+	 *
+	 * <p>Written over the whole set rather than over the pair this arrangement reaches, and that is
+	 * the point of the sweep: a finding stating NONE of them falls through to whichever lead the model
+	 * reaches for, which is what issue #283 measured, and a finding stating TWO would put two calls in
+	 * one record. Neither is visible to a case that only looks for the two clauses it expects — before
+	 * #348 this case asked for exactly that, so a screening finding acquiring a third clause would
+	 * have reddened it with a message about the wrong pair.
+	 *
+	 * <p>The arrangement is a PROPOSAL question, so the two clauses it must actually reach are the
+	 * proposal pair; the current-medication pair is reached per arm by
+	 * {@code CurrentMedicationFindingStrengthTest}, and by
+	 * {@code .everyFindingOnAScreeningQuestionStatesOneVocabulary} over a whole response.
+	 */
 	@Test
-	public void everyInjectedFindingStatesOneOfTheTwoStrengths() {
+	public void everyInjectedFindingStatesExactlyOneStrengthClause() {
 		List<RecordMapping> findings = DrugReferenceTestSupport.injectedFindings(
 				DrugReferenceTestSupport.injectorWithSafety(
 						DrugReferenceTestSupport.ddinterServiceWithGroups())
@@ -255,16 +271,35 @@ public class SafetyFindingSeverityStrengthTest {
 		assertTrue(findings.size() >= 3,
 				"the arrangement must reach both finding types and both strengths, or the sweep below "
 						+ "passes on too little: " + findings);
+		String[] clauses = { WITHHOLD, CAUTION,
+			DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION.trim(),
+			DrugReferenceInjector.STRENGTH_CAUTION_CURRENT_MEDICATION.trim() };
 		boolean sawWithhold = false, sawCaution = false;
 		for (RecordMapping finding : findings) {
 			String text = finding.getText();
 			sawWithhold |= text.contains(WITHHOLD);
 			sawCaution |= text.contains(CAUTION);
-			assertTrue(text.contains(WITHHOLD) ^ text.contains(CAUTION),
-					"every injected finding states exactly one strength, because the prompt's two "
-							+ "branches are keyed on those sentences and a finding matching neither "
-							+ "falls through to whichever branch the model reaches for: " + text);
+			// A plain count, because the four CLAUSES are not substrings of one another — ADR Decision 37
+			// makes that distinction and it is easy to lose: what nests is the phrase each clause names
+			// its CLASS with ("a reason to withhold it", inside the caution clause negated), not the
+			// clause. SafetyVerdictSeverityGradationTest
+			// .theOnlyStrengthClassNamedInsideAnothersWordsIsTheOneDecision37Handles walks the cores;
+			// this walks the clauses, and an earlier version of this loop conflated the two and
+			// subtracted a match that was never there.
+			int stated = 0;
+			for (String clause : clauses) {
+				if (text.contains(clause)) {
+					stated++;
+				}
+			}
+			assertEquals(1, stated,
+					"every injected finding states exactly one strength clause, because the prompt's "
+							+ "branches are keyed on those sentences: a finding matching NONE falls "
+							+ "through to whichever branch the model reaches for, and one matching two "
+							+ "states two calls: " + text);
 		}
-		assertTrue(sawWithhold && sawCaution, "both strengths must be reached: " + findings);
+		assertTrue(sawWithhold && sawCaution,
+				"and this arrangement is a proposal question, so both PROPOSAL strengths must be "
+						+ "reached or the sweep above ran over one class: " + findings);
 	}
 }

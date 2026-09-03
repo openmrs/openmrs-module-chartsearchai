@@ -698,7 +698,19 @@ or what reaches the model.
 - **A screening answer can read as a prescribing refusal** ([#348](https://github.com/openmrs/openmrs-module-chartsearchai/issues/348)). [3a](#3a-one-major-pair-on-a-two-drug-chart)
   and [3b](#3b-a-moderate-pair) both lead with "should not be given" about a drug the patient is
   already taking. The verdict is correct; the framing suits the "can I give her X?" shape better
-  than the screening shape.
+  than the screening shape. **#348 has since given the two order-driven arms a counterpart strength
+  clause** (`DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION` and its caution twin, taught
+  by `LlmProvider.DEFAULT_SYSTEM_PROMPT`'s own branches; [ADR Decision 72](adr.md)), so a finding
+  about a medication the patient is already taking no longer states an act that presupposes a
+  proposal. Every transcript in this file predates that change and is left as recorded. **Measured**
+  on the two-build A/B [ADR Decision 72](adr.md) records — itself taken on builds that predate
+  #347, so the candidate leads quoted next are dated too and that decision scopes what still
+  stands of them: 3a now answers *"No — Methotrexate should
+  be changed: Salicylic acid interacts with active order Methotrexate, a Major problem [61]."* and 3b
+  leads with the medication rather than a refusal, while 3c and 3d keep their `Yes` leads and every
+  finding, severity and citation. Two residues stand, unfixed: 3a still opens with a bare `No —`
+  (repeatable 3 of 3), and it names the PARTNER rather than the chip's subject as the medication to
+  change, which 3b does not.
 - **In [3f](#3f-local-brand-names--where-the-chip-earns-its-keep) the answer contradicts its own
   chip** ([#349](https://github.com/openmrs/openmrs-module-chartsearchai/issues/349)). The validator raised a Major through the orders' ATC codes and the injector put the
   finding in the prompt (confirmed from its DEBUG line — one safety-finding record, 363 chars),

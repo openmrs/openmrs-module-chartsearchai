@@ -77,6 +77,13 @@ public class FoldedFindingStrengthTest {
 
 	private static final String CAUTION = "This finding is a caution to note, not a reason to withhold it.";
 
+	/** The SCREENING arm's caution since issue #348. The divergence this file is about is unchanged —
+	 *  the screen still states the weaker claim for the identical pair — but the vocabulary it states
+	 *  it in is the current-medication one, because both of a screened pair's drugs are the patient's
+	 *  own prescriptions and nothing proposed either of them. */
+	private static final String CAUTION_CURRENT = "This finding is a caution about a medication this "
+			+ "patient is already taking, not a reason to change it.";
+
 	private static String foldedFinding() throws IOException {
 		// ddiFixtureService, not serviceWith(fixtureEntries(…)): the slice is DDInter-shaped, and the
 		// curated parser reads a different schema — handed this file it yields no entries at all, so the
@@ -151,8 +158,12 @@ public class FoldedFindingStrengthTest {
 						+ "— if this ever fails, the fold reached this arm and the assertion below is "
 						+ "the one to re-read: " + screened);
 
-		assertTrue(screened.contains(CAUTION),
-				"the screened finding carries the rating alone, so it states a caution: " + screened);
+		assertTrue(screened.contains(CAUTION_CURRENT),
+				"the screened finding carries the rating alone, so it states a caution — the screening "
+						+ "arm's own, since issue #348: " + screened);
+		assertFalse(screened.contains(CAUTION),
+				"and never the PROPOSAL caution, whose prompt branch opens by stating that the drug "
+						+ "can be given: " + screened);
 		assertTrue(foldedFinding().contains(WITHHOLD),
 				"while the drug-in-play arm states withholding for the identical pair — the divergence "
 						+ "this case exists to keep visible");

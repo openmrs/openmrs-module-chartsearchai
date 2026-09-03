@@ -120,8 +120,8 @@ package org.openmrs.module.chartsearchai.reference;
  * positively assertable, which is half of what this type exists for. <b>That is what it is MEANT
  * to say, and there are arrangements where it is false</b> — do not count them here either: a chart
  * whose only medication the reference data cannot resolve was never a population to screen (ADR
- * Decision 65). What is no longer on that list is a total cede, on either pairwise arm: since ADR
- * Decisions 69 and 70 such a pass states nothing instead. Those decisions carry the cases. A
+ * Decision 65). What is no longer on that list, on either pairwise arm, is a cede that leaves the
+ * arm no pair of its own: since ADR Decisions 69 and 71 such a pass states nothing instead. Those decisions carry the cases. A
  * candidate a screen collapsed as a restatement is not on the list at all — the
  * {@code StatedInteractionChips} paragraph above is what defines that zero as honest, and a reader
  * who finds it surprising should read that rather than this list. No extent at all
@@ -147,7 +147,7 @@ package org.openmrs.module.chartsearchai.reference;
  *       {@code found == 0} must mean SCREENED and related nothing, never "the drug could not be
  *       resolved", so a drug only the ANSWER named states nothing on its own;</li>
  *   <li>the SCREENING arm kept no pair, having ceded at least one to the drug-in-play arm, so it
- *       has no bounded list of its own to describe (ADR Decisions 69 and 70). Its subject is that
+ *       has no bounded list of its own to describe (ADR Decisions 69 and 71). Its subject is that
  *       arm because nothing is gated behind it; the question-pair arm's
  *       {@code null} on the same rule is consumed today by
  *       {@code DrugSafetyValidator.validate}'s issue #356 fallback and replaced with the statement

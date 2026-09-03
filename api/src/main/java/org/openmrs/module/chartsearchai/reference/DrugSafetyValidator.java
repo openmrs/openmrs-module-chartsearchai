@@ -1023,7 +1023,7 @@ public class DrugSafetyValidator {
 	 * enumerate what that {@code null} covers. Each ARM's own {@code null} is not the same list —
 	 * neither contains the other — see the {@code @return} on
 	 * {@link #addQuestionPairInteractions} and on {@link #addActiveOrderPairInteractions}, and ADR
-	 * Decisions 69 and 70 — one rule about ceding on both arms, and two different things behind
+	 * Decisions 69 and 71 — one rule about ceding on both arms, and two different things behind
 	 * them: the question-pair arm's {@code null} is consumed by that fallback, the screening arm's
 	 * reaches here and then the client.
 	 */
@@ -5885,7 +5885,10 @@ public class DrugSafetyValidator {
 	 *         every pair": this arm has a third exit the question-pair arm lacks
 	 *         ({@code StatedInteractionChips}), so a pass that ceded one candidate and collapsed
 	 *         another kept none without having ceded all, and states nothing for the same reason —
-	 *         it has no bounded list of its own, and both exclusions leave their pair visible as a
+	 *         it has no bounded list of its own, and neither exclusion withholds the relationship: a
+	 *         ceded pair has its own chip, and a collapsed candidate leaves the chip whose KEYED
+	 *         fields it repeated — that ledger needs no identity, so what stands there is a sentence
+	 *         stating the same relationship in the same words rather than provably that pair's own
 	 *         chip. Narrowing this to a literal total cede leaves the whole suite green (measured),
 	 *         which is why the wording is not left to imply it. The two are one statement to a reader, and both are unlike
 	 *         {@code of(0, 0)}, which asserts that the reference data related none of the pairs this
@@ -5987,6 +5990,13 @@ public class DrugSafetyValidator {
 					// — including the ones StatedInteractionChips collapses, whose exclusion is NOT a
 					// cede and which #339 review round 12 settled as a pair already SHOWN rather than
 					// one found.
+					//
+					// Unconditional, and in particular NOT narrowed to a partner the dataset resolved
+					// to an entry: partnerKey falls back to the case-folded partnerLabel for the
+					// #155/#290 population, both arms key such a pair on that string, and a cede there
+					// is a cede on both sides of the ledger. `matched.partner != null` here republishes
+					// the false zero for exactly that population, and the case that reddens on it is
+					// PairChipExtentContextTest.aScreenWhoseCededPairIsKeyedOnALabelRatherThanAnEntryStatesNothingToo.
 					cededToDrugInPlayArm = true;
 					continue;
 				}

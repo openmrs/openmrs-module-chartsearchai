@@ -72,6 +72,14 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 	/** Above-floor pairs among the six active orders the screening arrangement carries. */
 	private static final int SCREENED_PAIRS = 15;
 
+	/** The curated slice whose interaction rows name a partner the file carries no ENTRY for, so a
+	 *  pair keys on {@code DrugSafetyValidator.partnerLabel} rather than on a {@code DrugReference} —
+	 *  the issue #155/#290 key space, and the one in which a cede recorded along partner-nullness
+	 *  would be invisible. Shared with {@code InteractionPartnerGroupingTest} and
+	 *  {@code InjectedInteractionNoteCollapseTest}, which state other properties of the same rows. */
+	private static final String PARTNER_WITHOUT_AN_ENTRY =
+			"chartsearchai-test/drug-reference-partner-label-variants.json";
+
 	private DrugSafetyValidator validator;
 
 	/** The same service object the validator resolves through, so a case asserting what a question
@@ -599,6 +607,46 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 
 		assertNull(ceded.extent, "a response carrying a Major interaction chip must not state a screen "
 				+ "that related none of the pairs it enumerated; was: " + ceded.extent);
+	}
+
+	@Test
+	public void aScreenWhoseCededPairIsKeyedOnALabelRatherThanAnEntryStatesNothingToo() throws IOException {
+		// The case above cedes a pair whose partner the dataset resolves to an ENTRY of its own, so it
+		// cannot tell the flag this rule turns on from one narrowed along partner-nullness: set the
+		// recording to `matched.partner != null` and that case stays green while of(0, 0) comes back
+		// for the population issues #155 and #290 are about — an active order the reference data
+		// carries no entry for, matched by NAME, where SubjectRule.partnerKey falls back to the
+		// case-folded partnerLabel. This is that population, and the curated fixture is what poses it:
+		// its Fluconazole entry's rules name a partner the file has no entry for, so
+		// activeOrderEntryFor answers null and both arms key the pair on the string "warfarin".
+		service = DrugReferenceTestSupport.serviceWith(
+				DrugReferenceTestSupport.fixtureEntries(PARTNER_WITHOUT_AN_ENTRY));
+		validator = DrugReferenceTestSupport.validator(service);
+		PatientClinicalContext chart = DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set("Fluconazole 200mg", "Warfarin 5mg"), null, null, null);
+
+		Pass ceded = passWithAnswer("Fluconazole is on the list.", SCREENING_QUESTION, chart);
+
+		assertEquals(Arrays.asList("Fluconazole"),
+				DrugReferenceTestSupport.names(service.findForActiveOrders(chart)),
+				"precondition: stated through the accessor the arm itself resolves its order entries "
+						+ "with — only the subject order resolves an entry, so activeOrderEntryFor can "
+						+ "answer nothing for the partner and the pair keys on the label. Were warfarin "
+						+ "resolved here, this case would measure the entry-backed one above again");
+		assertEquals(1, ceded.chips.size(),
+				"precondition: one chip, the drug-in-play arm's, because the screen ceded its only pair "
+						+ "to it: " + DrugReferenceTestSupport.details(ceded.chips));
+		// The control the case above also takes: the SAME chart with the answer that names nothing,
+		// where the screen keeps the pair and states it. So the pair is related on this chart and only
+		// the answer moved which arm reported it.
+		Pass unceded = pass(SCREENING_QUESTION, chart);
+		assertNotNull(unceded.extent, "precondition: the screen states its own extent on this chart");
+		assertEquals(1, unceded.extent.getFound(),
+				"precondition: and the pair it relates is the one this case cedes, so the cede is what "
+						+ "empties the kept list rather than the data relating nothing");
+
+		assertNull(ceded.extent, "a cede is a cede whether or not the dataset resolved the partner to "
+				+ "an entry of its own; was: " + ceded.extent);
 	}
 
 	@Test

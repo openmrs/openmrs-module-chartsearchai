@@ -117,7 +117,7 @@ Five fields of the response matter for these tests:
 |---|---|
 | `answer` | the LLM's prose. **Not** the safety output — it is what the model made of the chart plus the injected findings |
 | `safetyWarnings` | the **deterministic** chips. Computed by `DrugSafetyValidator` from the chart and the knowledge base, with no model involvement. Each carries `type`, `drug`, `detail`, a `severity` (since [#340](https://github.com/openmrs/openmrs-module-chartsearchai/issues/340)) and a `chartOrderBridges` array (since [#347](https://github.com/openmrs/openmrs-module-chartsearchai/issues/347)). `README.md` is canonical for the shape; do not read this row as the whole contract |
-| `interactionPairs` | `{"found": N, "reported": M}` — how many above-floor rule pairs the interaction check related and how many survived the chip cap ([#336](https://github.com/openmrs/openmrs-module-chartsearchai/issues/336)); the drug-in-play arm states it too since [#356](https://github.com/openmrs/openmrs-module-chartsearchai/issues/356) and is not capped, so its two numbers are always equal. `{"found":0}` means an arm ran and related nothing. **`null` is not completeness** — what it does cover is enumerated in `PairChipExtent`'s class javadoc and in `README.md`, and deliberately nowhere else, so read it there rather than inferring it from the cells below |
+| `interactionPairs` | `{"found": N, "reported": M}` — how many above-floor rule pairs the interaction check related and how many survived the chip cap ([#336](https://github.com/openmrs/openmrs-module-chartsearchai/issues/336)); the drug-in-play arm states it too since [#356](https://github.com/openmrs/openmrs-module-chartsearchai/issues/356) and is not capped, so its two numbers are always equal. `{"found":0}` is MEANT as "an arm ran and related nothing"; `README.md` and `PairChipExtent`'s javadoc name the arrangements where it is not, and [ADR Decision 69](adr.md) carries the one this branch reproduced. **`null` is not completeness** — what it does cover is enumerated in `PairChipExtent`'s class javadoc and in `README.md`, and deliberately nowhere else, so read it there rather than inferring it from the cells below |
 | `references` | the records the answer actually **cited** — `drug_order`, `allergy`, `condition`, `safety_finding`, `drug_reference`, and since [#354](https://github.com/openmrs/openmrs-module-chartsearchai/issues/354) `drug_class_note` for a question that names a drug class no reference entry is indexed by |
 | `unresolvedDrugClass` | the drug **class** the question named and the module resolved to no substance, or `null` where it states none ([#354](https://github.com/openmrs/openmrs-module-chartsearchai/issues/354)). Deterministic like the chips: the same statement is injected as a citable `drug_class_note` record, but that reaches the response only if the model cites it — so this is what a test on a class-term question reads. `null` is the absence of a statement, never a denial |
 
@@ -130,8 +130,8 @@ Five fields of the response matter for these tests:
 
 | Arm | Fires when | What it checks | States `interactionPairs`? |
 |---|---|---|---|
-| **Drug-in-play** | the question names a drug | that drug × every active order | yes, since [#356](https://github.com/openmrs/openmrs-module-chartsearchai/issues/356), where neither pairwise arm ran |
-| **Question-pair** | the question resolves **≥2** reference entries | those drugs against each other | yes |
+| **Drug-in-play** | the question names a drug | that drug × every active order | yes, since [#356](https://github.com/openmrs/openmrs-module-chartsearchai/issues/356), where neither pairwise arm stated one |
+| **Question-pair** | the question resolves **≥2** reference entries | those drugs against each other | yes — unless it ceded every pair to the drug-in-play arm, where it states nothing ([#336](https://github.com/openmrs/openmrs-module-chartsearchai/issues/336)) |
 | **Screening** | the question names **no** drug *and* reads as a screening request | every active order × every other | yes |
 | **Class / allergy** | always, scoped to what the response is about | ATC class and cross-reactivity-group joins against allergies, conditions and other orders | no |
 
@@ -141,7 +141,7 @@ below are separate.
 **Where `interactionPairs` comes from.** Three arms state it. The two *pairwise* ones have
 mutually exclusive gates — the question-pair arm needs two or more resolved drugs, the screening
 arm needs none — so at most one of those runs per question and neither can be suppressed by the
-other's cap. Where neither ran, the **drug-in-play** arm states it instead
+other's cap. Where neither of them stated one, the **drug-in-play** arm states it instead
 ([#356](https://github.com/openmrs/openmrs-module-chartsearchai/issues/356)), which is what a
 plain "can I give her X?" now reports: before that fix it reported `null` even while raising
 seven interaction chips, so a completed screen that related nothing was indistinguishable from
@@ -309,9 +309,12 @@ Worth running on every pass — it is the false-positive control.
 
 ## 2. "Can X and Y be given together?" — the question-pair arm
 
-Checks drugs named in the **question** against each other. Testing it *requires* a patient on
-neither drug: where the chart already holds one of them the drug-in-play arm owns the pair, and
-this arm then correctly reports `found: 0` — see [2b](#2b-why-you-must-pick-a-patient-on-neither-drug).
+Checks drugs named in the **question** against each other. The reliable way to test it is a
+patient on neither drug: where one of the above-floor rules joining the pair names an active
+order, the drug-in-play arm owns that pair and this arm reports nothing for it — see
+[2b](#2b-why-a-patient-on-neither-drug-is-the-reliable-choice). The predicate is not "the patient is on one
+of them" and is not restated here; `addQuestionPairInteractions`' own javadoc and
+[ADR Decision 69](adr.md) carry it.
 
 **Patient:** Betty Williams — on neither warfarin nor ibuprofen, but allergic to aspirin.
 **Question:** *Can warfarin and ibuprofen be given together?*
@@ -333,7 +336,7 @@ chips:   2
 distinguishing it from a chip about an active order. And note that the arm is still
 patient-aware: it picked up her aspirin allergy against a drug she is not on.
 
-### 2b. Why you must pick a patient on neither drug
+### 2b. Why a patient on neither drug is the reliable choice
 
 Ask the *identical* question of Barbara Miller, who is actively prescribed ibuprofen:
 
@@ -352,9 +355,22 @@ chips:    5
 ```
 
 The pair *is* reported — as **"active order Ibuprofen"**, by the drug-in-play arm, because the
-chart owns it — and the question-pair arm then correctly states `found: 0`. That zero is not a
-miss; it says "of the pairs this arm was responsible for, none". Test this arm on a patient
-prescribed neither drug or you will only ever see the other one.
+chart owns it. Drive this arm on a patient prescribed neither drug, or you will only ever see the
+other one.
+
+**That `pairs` line is not what a build carrying [#336](https://github.com/openmrs/openmrs-module-chartsearchai/issues/336)'s
+fix produces, and the run above has not been repeated on one.** The zero was recorded before it: the
+question-pair arm ceded its only pair to the drug-in-play arm and then reported a complete screen of
+none, which is defined as *the reference data related none of the pairs enumerated* and was false —
+the arm related one and handed it over. It now states nothing at all, so the arm that *did* report
+those pairs states the field instead, and what it states is the number of above-floor rule pairs it
+related for the question's own substances. On the mirror of this arrangement driven through the real
+`validate` over the DDInter test excerpt, that is `{"found": 3, "reported": 3}`; this patient has not
+been re-run on a build carrying the fix, so treat the block above as the pre-fix recording it is.
+Where only **some** of a question's pairs are ceded the arm keeps the field — `README.md`'s
+`interactionPairs` section is the client contract for that, and for why this field never counts the
+chips beside it. The *screening* arm has a cede of its own and still states a zero there
+([ADR Decision 69](adr.md)).
 
 ---
 
@@ -468,9 +484,11 @@ pairs:   {"found": 0, "reported": 0}
 chips:   0
 ```
 
-**What to check:** `{"found": 0, "reported": 0}` and **not** `null`. Zero is a measurement — a
-pairwise arm ran and related nothing. `null` would mean no arm ran, and reading the two alike is
-how a client comes to claim completeness it was never told about.
+**What to check:** `{"found": 0, "reported": 0}` and **not** `null`. Zero is a measurement — this
+screen ran and related nothing — and reading the two alike is how a client comes to claim
+completeness it was never told about. What `null` covers is not restated here; it lives in
+`PairChipExtent`'s class javadoc and in `README.md`, which is where the field's table cell above
+already points.
 
 ### 3f. Local brand names — where the chip earns its keep
 

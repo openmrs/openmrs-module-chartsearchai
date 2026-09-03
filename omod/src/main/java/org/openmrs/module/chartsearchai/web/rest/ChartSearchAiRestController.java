@@ -1246,7 +1246,7 @@ public class ChartSearchAiRestController {
 	 * <b>The suite exercises it</b>: that fixture's chip 7 carries two bridges for this reason, and a
 	 * reshape into maps reddens the guard with the offending value in its message. It did NOT when
 	 * this key was first published — every chip there bridged nothing, so two empty lists compared
-	 * equal without reaching an element — and that is what the chip closes. ADR Decision 69 records
+	 * equal without reaching an element — and that is what the chip closes. ADR Decision 70 records
 	 * the state before and after; do not restore the blind spot by removing the chip.
 	 *
 	 * <p>Two consequences of publishing the object, both measured and neither hidden. The JSON field
@@ -1387,7 +1387,8 @@ public class ChartSearchAiRestController {
 	 * The wire shape of {@code interactionPairs}: {@code found} above-floor pairs, {@code reported}
 	 * of them shown. {@code null} for an answer whose interaction check stated no measurement — never
 	 * an empty object and never a zeroed one, because zero is itself a measurement here (a complete
-	 * screen that related no pairs).
+	 * screen that related no pairs). See {@code PairChipExtent}, which is canonical for what the
+	 * zero and the absence each do and do not mean, including a screen whose zero is false.
 	 */
 	private Map<String, Object> serializePairChipExtent(PairChipExtent extent) {
 		if (extent == null) {

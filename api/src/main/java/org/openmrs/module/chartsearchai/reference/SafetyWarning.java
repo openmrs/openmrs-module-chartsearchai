@@ -601,7 +601,7 @@ public class SafetyWarning {
 	 * {@code Objects.equals} falls through to {@code AbstractList.equals} and walks the elements of
 	 * that fixture's bridged chip. It was not exercised when this list was first published — every
 	 * chip in that fixture bridged nothing, so two empty lists compared equal without touching an
-	 * element — and the chip that closed it was added for exactly that reason; ADR Decision 69 is the
+	 * element — and the chip that closed it was added for exactly that reason; ADR Decision 70 is the
 	 * record. {@code hashCode} has NO reader (Jackson serializes
 	 * through the getters below, not through either) and is here only to hold the contract with
 	 * {@code equals}. The first of those two readers is the

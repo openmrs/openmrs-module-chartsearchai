@@ -42,8 +42,8 @@ package org.openmrs.module.chartsearchai.reference;
  * completed negative screen and a question nobody screened were one value on the wire.
  *
  * <p><b>Which arm owns the field is decided by how many reference entries the question RESOLVED —
- * and, since issue #336's verification round, by whether that arm ceded every pair it related to
- * the drug-in-play arm — not by how many drugs a clinician would say it named</b>, and the resolved
+ * and, since issues #336 and #370, by whether a cede left that arm with no pair of its own — not by
+ * how many drugs a clinician would say it named</b>, and the resolved
  * count and the clinician's reading come apart on the shipped knowledge base. A name that resolves
  * to SEVERAL reference entries — a substance filed under more than one row, {@code Dexamethasone}
  * beside {@code Dexamethasone (ophthalmic)}, or an alias family sharing an {@code rxnorm_name} —
@@ -69,9 +69,17 @@ package org.openmrs.module.chartsearchai.reference;
  * report those pairs. Scoped to a pass that ceded every pair: where some survive, the arm keeps
  * the field and describes the list it kept — which {@code maxPairChips} can still truncate, exactly
  * as it could before — and the ceded pairs are reported beside it as chips rather than withheld.
- * The SCREENING arm has a cede of its own — it skips a pair the drug-in-play arm already
- * chipped — and still states a zero there, which ADR Decision 69 records as reproduced and
- * deliberately not fixed by this rule.
+ * <b>The SCREENING arm takes the same rule, one issue later</b> (issue #370). Its cede is its own —
+ * it skips a pair the drug-in-play arm already chipped, {@code DrugSafetyValidator.InteractionPairs}
+ * — and where a cede left it with no pair of its own, it published the same false zero on the one
+ * question shape that ASKED for a screen. Measured through the real {@code validate} over the
+ * DDInter excerpt, it returned {@code of(0, 0)} beside a Major chip about a pair it had itself
+ * related. It now states nothing too. A pass that kept no pair having ceded NONE is the RETAINED
+ * branch and is not that defect: it related none of the pairs it enumerated, and states that zero
+ * still.
+ * <b>Behind that arm there is no fallback, so the {@code null} is what a client reads</b>, which is
+ * why this rule reaches the enumeration below on one arm and not on the other. ADR Decision 71 is
+ * canonical for why no number was available to it, and for what the silence costs.
  *
  * <p>What every one of them counts is the same thing: above-floor interaction RULES relating one
  * drug to another. The drug-in-play arm's unrated class relationships — a shared ATC subgroup, a
@@ -96,8 +104,10 @@ package org.openmrs.module.chartsearchai.reference;
  * counting, or it publishes a ratio of two different populations.
  *
  * <p><b>A candidate the screening arm cannot tell from one it already collected is not a pair it
- * found</b> (issue #339 review round 12). That arm collapses a chip whose every published field
- * repeats one it has already stated — {@code DrugSafetyValidator.StatedInteractionChips}, reachable
+ * found</b> (issue #339 review round 12). That arm collapses a chip whose every KEYED field
+ * repeats one it has already stated — the fields its own sentence is made of, and since issue
+ * #347 not every published one: {@code chartOrderBridges} reaches the wire and is deliberately
+ * outside that key — {@code DrugSafetyValidator.StatedInteractionChips}, reachable
  * because a fixed-dose combination prescription is one co-medication carrying two rule partners —
  * and it does so where the candidate is COLLECTED, before the sort and before the cap, so the
  * restatement is absent from BOTH numbers here rather than counted as a pair found and withheld.
@@ -111,10 +121,13 @@ package org.openmrs.module.chartsearchai.reference;
  * <p><b>Zero is a measurement and absence is not.</b> An extent stating {@code found == 0} says an
  * arm ran and the reference data related none of the pairs it enumerated — a complete screen,
  * positively assertable, which is half of what this type exists for. <b>That is what it is MEANT
- * to say, and there are arrangements where it is false</b> — do not count them here either: an arm
- * can relate pairs and cede every one of them (ADR Decision 69, the screening arm), and a chart
+ * to say, and there are arrangements where it is false</b> — do not count them here either: a chart
  * whose only medication the reference data cannot resolve was never a population to screen (ADR
- * Decision 65). Those decisions carry the cases. No extent at all
+ * Decision 65). What is no longer on that list, on either pairwise arm, is a cede that leaves the
+ * arm no pair of its own: since ADR Decisions 69 and 71 such a pass states nothing instead. Those decisions carry the cases. A
+ * candidate a screen collapsed as a restatement is not on the list at all — the
+ * {@code StatedInteractionChips} paragraph above is what defines that zero as honest, and a reader
+ * who finds it surprising should read that rather than this list. No extent at all
  * ({@code null} on the answer, {@code null} on the wire) says the producer stated no measurement.
  * This javadoc and {@code README.md}'s client-facing paragraph carry that list — the second because
  * it is the only one a frontend author reads — and everything else points here rather than
@@ -136,13 +149,24 @@ package org.openmrs.module.chartsearchai.reference;
  *       even over no orders at all. What #356 calls the row to get right is the other direction:
  *       {@code found == 0} must mean SCREENED and related nothing, never "the drug could not be
  *       resolved", so a drug only the ANSWER named states nothing on its own;</li>
+ *   <li>the SCREENING arm kept no pair, having ceded at least one to the drug-in-play arm, so it
+ *       has no bounded list of its own to describe (ADR Decisions 69 and 71). Its subject is that
+ *       arm because nothing is gated behind it; the question-pair arm's
+ *       {@code null} on the same rule is consumed today by
+ *       {@code DrugSafetyValidator.validate}'s issue #356 fallback and replaced with the statement
+ *       of the arm that did report those pairs — for the reason ADR Decision 69 records, which
+ *       that decision states as what it rests on rather than as a proof. What is given up where it does reach a client is
+ *       the assertion that a screen RAN, on the one question shape that asked for one — weighed
+ *       against a zero asserting the data related nothing, beside chips saying otherwise;</li>
  *   <li>{@code validate} threw and degraded to no warnings, its documented fail-safe — and the
  *       statement is published only on the normal return, so a degraded pass states nothing
  *       rather than describing chips that were discarded.</li>
  *   <li>the statement has not been produced YET — the early {@code done} answer of an
  *       async-grounding stream is built before validation runs, carries no chips either, and is
- *       followed by a {@code grounded} event carrying both. A streaming client must keep consuming
- *       rather than read this one as an answer about the screen.</li>
+ *       followed by a {@code grounded} event carrying the chips. A streaming client must keep
+ *       consuming rather than read this one as an answer about the screen — but the trailing
+ *       event is not a promise of a statement either: any of the situations above can be what it
+ *       carries, the ceding one among them.</li>
  * </ol>
  *
  * <p>Never read absence as completeness, and never re-derive either count from the chip list.

@@ -72,6 +72,14 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 	/** Above-floor pairs among the six active orders the screening arrangement carries. */
 	private static final int SCREENED_PAIRS = 15;
 
+	/** The curated slice whose interaction rows name a partner the file carries no ENTRY for, so a
+	 *  pair keys on {@code DrugSafetyValidator.partnerLabel} rather than on a {@code DrugReference} —
+	 *  the issue #155/#290 key space, and the one in which a cede recorded along partner-nullness
+	 *  would be invisible. Shared with {@code InteractionPartnerGroupingTest} and
+	 *  {@code InjectedInteractionNoteCollapseTest}, which state other properties of the same rows. */
+	private static final String PARTNER_WITHOUT_AN_ENTRY =
+			"chartsearchai-test/drug-reference-partner-label-variants.json";
+
 	private DrugSafetyValidator validator;
 
 	/** The same service object the validator resolves through, so a case asserting what a question
@@ -124,10 +132,10 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 	/** Issue #336's own third row in miniature: a chart carrying the ibuprofen the question also
 	 *  names, plus one further order the excerpt relates BOTH question drugs to, so the pairs the
 	 *  chart arm reports OUTNUMBER the pairs the question-pair arm has to say anything about. That
-	 *  inequality is the whole point and both cede cases below need it: where the two counts
+	 *  inequality is the whole point and the question-pair cede cases below need it: where the two counts
 	 *  coincide, no assertion can tell the arm DECLINING to speak from the arm counting a ceded pair
-	 *  into its own numbers — the cross-arm sum ADR Decision 65 refuses — and, on the partial case,
-	 *  none can tell the arm KEEPING the field from the arm yielding it. Measured: on a chart holding
+	 *  into its own numbers — the cross-arm sum ADR Decision 65 refuses — and, on the partial
+	 *  case, none can tell the arm KEEPING the field from the arm yielding it. Measured: on a chart holding
 	 *  the ibuprofen alone the partial case reads {@code found: 1} either way. Each order carries its
 	 *  name AND its code because that is what {@code PatientClinicalContextBuilder} builds for a
 	 *  mapped concept; no case here separates the two legs of {@code hasActiveDrug}, so read this as
@@ -558,6 +566,118 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 				"the pair this arm kept, and not the one it handed to the chart arm — nor the chart "
 						+ "arm's own three, which is what this reads if the field is yielded on any cede");
 		assertEquals(1, partial.extent.getReported());
+	}
+
+	@Test
+	public void aScreenThatCededEveryPairItRelatedStatesNothingRatherThanACompleteScreenOfNone() {
+		// Issue #370: the same defect as
+		// aQuestionPairListThatCededEveryPairStatesWhatTheChartArmReported, on the sibling arm, and
+		// ADR Decision 69 recorded it as reproduced and left standing for want of a value; ADR
+		// Decision 71 is where the value was chosen, and this case is what pins it.
+		// The screening arm cedes a pair the drug-in-play arm has already chipped
+		// (reportedPairs.alreadyReported), and where that took every pair it related it kept nothing —
+		// so of(0, 0) said the reference data related NONE of the pairs it enumerated, which is what
+		// PairChipExtent and README both define found == 0 to mean, beside a Major chip about a pair it
+		// had related. Having ceded every one it has no bounded list of its own to describe, so it
+		// states nothing. Nothing rescues that into a number here and it must not: validate's issue
+		// #356 fallback is gated on questionDrugScreened, which is false whenever this arm ran at all
+		// (its own gate is questionDrugs.isEmpty()), and the count no fallback can supply would be the
+		// ANSWER's — the answer-dependence ADR Decision 65 refuses for this field's value.
+		Pass ceded = passWithAnswer("Ibuprofen is on the list.", SCREENING_QUESTION,
+				chartOwningTheQuestionsOnlyPair());
+
+		assertEquals(1, ceded.chips.size(),
+				"precondition: one chip, the drug-in-play arm's, because the screen ceded its only pair "
+						+ "to it — two would mean the cede did not happen and this case measures the "
+						+ "ordinary screen instead: " + DrugReferenceTestSupport.details(ceded.chips));
+		assertEquals("Ibuprofen", ceded.chips.get(0).getDrug(),
+				"precondition: and the chip is subjected on the drug the ANSWER named, which is this "
+						+ "arrangement's own tell for which arm raised it — the screen states the same "
+						+ "pair the other way round, as the control below shows. The two arms word this "
+						+ "chip identically once the subject is fixed, which is why alreadyReported keys "
+						+ "on the pair and not on the text");
+		// The control that makes this arrangement's cede a measurement rather than an assumption: the
+		// SAME chart, with the answer that names nothing, and the screen states its own pair. So the
+		// pair is related on this chart and only the answer moved which arm reported it.
+		Pass unceded = pass(SCREENING_QUESTION, chartOwningTheQuestionsOnlyPair());
+		assertNotNull(unceded.extent, "precondition: the screen states its own extent on this chart");
+		assertEquals(1, unceded.extent.getFound(),
+				"precondition: and the pair it relates is the one the case above cedes, so the cede is "
+						+ "what empties the list rather than the data relating nothing");
+
+		assertNull(ceded.extent, "a response carrying a Major interaction chip must not state a screen "
+				+ "that related none of the pairs it enumerated; was: " + ceded.extent);
+	}
+
+	@Test
+	public void aScreenWhoseCededPairIsKeyedOnALabelRatherThanAnEntryStatesNothingToo() throws IOException {
+		// The case above cedes a pair whose partner the dataset resolves to an ENTRY of its own, so it
+		// cannot tell the flag this rule turns on from one narrowed along partner-nullness: set the
+		// recording to `matched.partner != null` and that case stays green while of(0, 0) comes back
+		// for the population issues #155 and #290 are about — an active order the reference data
+		// carries no entry for, matched by NAME, where SubjectRule.partnerKey falls back to the
+		// case-folded partnerLabel. This is that population, and the curated fixture is what poses it:
+		// its Fluconazole entry's rules name a partner the file has no entry for, so
+		// activeOrderEntryFor answers null and both arms key the pair on the string "warfarin".
+		service = DrugReferenceTestSupport.serviceWith(
+				DrugReferenceTestSupport.fixtureEntries(PARTNER_WITHOUT_AN_ENTRY));
+		validator = DrugReferenceTestSupport.validator(service);
+		PatientClinicalContext chart = DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set("Fluconazole 200mg", "Warfarin 5mg"), null, null, null);
+
+		Pass ceded = passWithAnswer("Fluconazole is on the list.", SCREENING_QUESTION, chart);
+
+		assertEquals(Arrays.asList("Fluconazole"),
+				DrugReferenceTestSupport.names(service.findForActiveOrders(chart)),
+				"precondition: stated through the accessor the arm itself resolves its order entries "
+						+ "with — only the subject order resolves an entry, so activeOrderEntryFor can "
+						+ "answer nothing for the partner and the pair keys on the label. Were warfarin "
+						+ "resolved here, this case would measure the entry-backed one above again");
+		assertEquals(1, ceded.chips.size(),
+				"precondition: one chip, the drug-in-play arm's, because the screen ceded its only pair "
+						+ "to it: " + DrugReferenceTestSupport.details(ceded.chips));
+		// The control the case above also takes: the SAME chart with the answer that names nothing,
+		// where the screen keeps the pair and states it. So the pair is related on this chart and only
+		// the answer moved which arm reported it.
+		Pass unceded = pass(SCREENING_QUESTION, chart);
+		assertNotNull(unceded.extent, "precondition: the screen states its own extent on this chart");
+		assertEquals(1, unceded.extent.getFound(),
+				"precondition: and the pair it relates is the one this case cedes, so the cede is what "
+						+ "empties the kept list rather than the data relating nothing");
+
+		assertNull(ceded.extent, "a cede is a cede whether or not the dataset resolved the partner to "
+				+ "an entry of its own; was: " + ceded.extent);
+	}
+
+	@Test
+	public void aScreenThatCededOnlySomeOfItsPairsStillStatesItsOwnBoundedList() {
+		// The boundary of the case above, and the screening arm's half of
+		// aQuestionPairListThatCededOnlySomeOfItsPairsStillStatesItsOwnBoundedList. Six orders the
+		// excerpt relates 15 ways; an answer naming one of them puts that drug in play, so the
+		// drug-in-play arm chips its five pairs and the screen cedes exactly those — keeping ten of
+		// its own, which it goes on describing. Withhold the statement on ANY cede instead and this
+		// reads null, forfeiting the bounded claim issue #336 exists to publish for a list no cede
+		// emptied. The cap is raised above both counts so that `reported` is this arm's own identity
+		// rather than a cut: at the shipped cap of 10 the kept list is exactly 10 and the two readings
+		// coincide.
+		configureCap("20");
+		Pass partial = passWithAnswer("Warfarin is on the list.", SCREENING_QUESTION,
+				DrugReferenceTestSupport.screenedSixOrderChart());
+
+		assertEquals(10 + 5, partial.chips.size(),
+				"precondition: the screen's ten and the drug-in-play arm's five, so the cede is partial "
+						+ "rather than total. Spelled as the sum and not as SCREENED_PAIRS, which counts "
+						+ "PAIRS of one arm and coincides with this total only because every ceded pair "
+						+ "yielded one chip and the cap cut nothing: "
+						+ DrugReferenceTestSupport.details(partial.chips));
+		assertNotNull(partial.extent, "the arm kept a list, so it describes it — and unlike the "
+				+ "question-pair arm's partial case this is discriminating on its own, no fallback "
+				+ "being reachable behind this arm");
+		assertEquals(10, partial.extent.getFound(),
+				"the ten pairs this arm kept — not the fifteen it related, and not the five it handed "
+						+ "to the drug-in-play arm");
+		assertEquals(10, partial.extent.getReported(),
+				"reported at a cap that cut nothing, so it equals what the arm kept");
 	}
 
 	/** A question about dexamethasone and voxelotor over {@link DrugReferenceTestSupport#DDI_ROUTE_VARIANTS},

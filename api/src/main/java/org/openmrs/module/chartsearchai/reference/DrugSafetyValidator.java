@@ -700,10 +700,11 @@ public class DrugSafetyValidator {
 		// between them — which is why this arm needs no analogue of that arm's coveredByActiveOrderArm
 		// precedence check, whose subjects are the chart's own orders here. Read that as scoped to the
 		// two PAIRWISE arms and not to the chart generally: this arm yields a pair the DRUG-IN-PLAY arm
-		// already chipped, through reportedPairs.alreadyReported below, and since issue #370 it declines
-		// to call a TOTAL such cede a zero, exactly as addQuestionPairInteractions does — the same rule
-		// on both pairwise arms. What differs is what happens next: that arm's null is consumed by the
-		// issue #356 fallback below, and this arm's cannot be, so it reaches the client. ADR Decision 71.
+		// already chipped, through reportedPairs.alreadyReported below, and since issue #370 a cede that
+		// leaves it no pair is not a zero either, exactly as in addQuestionPairInteractions — the same
+		// rule on both pairwise arms, each arm's own @return stating its own condition. What differs is
+		// what happens next: that arm's null is consumed by the issue #356 fallback below, and this
+		// arm's cannot be, so it reaches the client. ADR Decision 71.
 		//
 		// What this arm DOES share with it is the machinery: the same bestRulePerPartner grouping, the
 		// same partnerLabel, the same pairKeyNames/unorderedPairKey keys, the same severityPriority
@@ -731,7 +732,7 @@ public class DrugSafetyValidator {
 		// It does NOT reach the screening arm's own null (issue #370), and that is structural rather
 		// than an omission: questionDrugScreened is set only for a substance in questionSubstances,
 		// which is built from questionDrugs alone, and the screening gate above requires questionDrugs
-		// to be empty. So a screening pass that ceded every pair publishes the null. Do not widen this
+		// to be empty. So wherever that arm states nothing, the null is published. Do not widen this
 		// gate to rescue it — the only count reachable there is over what the ANSWER named, which ADR
 		// Decision 65 refuses for this field's value. ADR Decision 71 carries that trade.
 		//
@@ -2587,11 +2588,11 @@ public class DrugSafetyValidator {
 	 * question-pair arm needs two and the screen needs none — and this arm is then the whole of the
 	 * interaction check on the canonical prescribing question. Where the name resolves to several
 	 * reference entries the question-pair arm owns the field instead and this count is discarded —
-	 * unless that arm ceded every pair it related, where it states nothing and this count is what
-	 * reaches the wire (issue #336, ADR Decision 69). The SCREENING arm's cede is not that case, and
-	 * the difference is worth knowing here: this count is gated on the QUESTION's own substances, of
-	 * which a screening question has none, so where that arm ceded every pair no count reaches the
-	 * wire at all (issue #370, ADR Decision 71). For what the question-pair arm owning the
+	 * unless a cede left that arm with no pair of its own, where it states nothing and this count is
+	 * what reaches the wire (issue #336, ADR Decision 69). The SCREENING arm's silence is not that
+	 * case, and the difference is worth knowing here: this count is gated on the QUESTION's own
+	 * substances, of which a screening question has none, so where that arm states nothing no count
+	 * reaches the wire at all (issue #370, ADR Decision 71). For what the question-pair arm owning the
 	 * field costs a reader, {@link PairChipExtent} is canonical. Stating nothing published a completed negative screen as
 	 * {@code interactionPairs: null}, which {@link PairChipExtent} defines as "the producer stated no
 	 * measurement": a clinician was given an abstention indistinguishable from one where nobody
@@ -3454,12 +3455,11 @@ public class DrugSafetyValidator {
 	 * {@code safety_finding}, and it would do so conditionally on what OTHER chips the response holds —
 	 * ADR Decision 63 carries that trade.
 	 *
-	 * <p><b>The key is every field a consumer can read</b>, not the detail alone: the wire publishes
-	 * {@code type}, {@code drug}, {@code detail} and {@code severity}
-	 * ({@code ChartSearchAiRestController.serializeSafetyWarnings}) and the prompt adds the two
-	 * booleans {@link #licensesWithholding(SafetyWarning)} and
-	 * {@code DrugReferenceInjector.renderFinding} read. So this can only drop a chip that is equal
-	 * everywhere a chip is looked at.
+	 * <p><b>The key is every field the chip's SENTENCE is made of</b>, not the detail alone: the
+	 * {@code type}, {@code drug}, {@code detail} and {@code severity} it renders with, plus the two
+	 * booleans deciding the clauses {@link #licensesWithholding(SafetyWarning)} and
+	 * {@code DrugReferenceInjector.renderFinding} add to the injected record. So a chip this drops
+	 * states no word another chip of the same pass does not state already.
 	 *
 	 * <p><b>{@link SafetyWarning#chartOrderBridges()} is deliberately left OUT of that key</b> (issue
 	 * #349), and it was added here and reverted, so the omission is a decision rather than an
@@ -5885,13 +5885,11 @@ public class DrugSafetyValidator {
 	 *         every pair": this arm has a third exit the question-pair arm lacks
 	 *         ({@code StatedInteractionChips}), so a pass that ceded one candidate and collapsed
 	 *         another kept none without having ceded all, and states nothing for the same reason —
-	 *         it has no bounded list of its own, and neither exclusion withholds the relationship: a
-	 *         ceded pair has its own chip, and a collapsed candidate leaves the chip whose KEYED
-	 *         fields it repeated — that ledger needs no identity, so what stands there is a sentence
-	 *         stating the same relationship in the same words rather than provably that pair's own
-	 *         chip. Narrowing this to a literal total cede leaves the whole suite green (measured),
-	 *         which is why the wording is not left to imply it. The two are one statement to a reader, and both are unlike
-	 *         {@code of(0, 0)}, which asserts that the reference data related none of the pairs this
+	 *         it has no bounded list of its own. What the response still holds for a pair this arm
+	 *         excluded is stated at the branch itself, and ADR Decision 71 is canonical for it.
+	 *         Narrowing this to a literal total cede leaves the whole suite green (measured),
+	 *         which is why the wording is not left to imply it. The two are one statement to a
+	 *         reader, and both are unlike {@code of(0, 0)}, which asserts that the reference data related none of the pairs this
 	 *         screen enumerated. Unlike {@link #addQuestionPairInteractions}, whose {@code null} on the
 	 *         same rule reaches {@code validate}'s issue #356 fallback, this arm has none behind it, so
 	 *         the {@code null} is what a client reads — ADR Decision 71 is canonical for why it is

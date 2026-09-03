@@ -42,8 +42,8 @@ package org.openmrs.module.chartsearchai.reference;
  * completed negative screen and a question nobody screened were one value on the wire.
  *
  * <p><b>Which arm owns the field is decided by how many reference entries the question RESOLVED —
- * and, since issue #336's verification round, by whether that arm ceded every pair it related to
- * the drug-in-play arm — not by how many drugs a clinician would say it named</b>, and the resolved
+ * and, since issues #336 and #370, by whether a cede left that arm with no pair of its own — not by
+ * how many drugs a clinician would say it named</b>, and the resolved
  * count and the clinician's reading come apart on the shipped knowledge base. A name that resolves
  * to SEVERAL reference entries — a substance filed under more than one row, {@code Dexamethasone}
  * beside {@code Dexamethasone (ophthalmic)}, or an alias family sharing an {@code rxnorm_name} —
@@ -71,8 +71,10 @@ package org.openmrs.module.chartsearchai.reference;
  * as it could before — and the ceded pairs are reported beside it as chips rather than withheld.
  * <b>The SCREENING arm takes the same rule, one issue later</b> (issue #370). Its cede is its own —
  * it skips a pair the drug-in-play arm already chipped, {@code DrugSafetyValidator.InteractionPairs}
- * — and where it kept no pair at all, it published the same false zero on the one question
- * shape that ASKED for a screen: measured through the real {@code validate} over the DDInter excerpt,
+ * — and where a cede left it with no pair of its own, it published the same false zero on the one
+ * question shape that ASKED for a screen: a screen that kept no pair having ceded NONE relates none
+ * of the pairs it enumerated and states that zero still. Measured through the real
+ * {@code validate} over the DDInter excerpt,
  * {@code of(0, 0)} beside a Major chip about a pair it had itself related. It now states nothing too.
  * <b>Behind that arm there is no fallback, so the {@code null} is what a client reads</b>, which is
  * why this rule reaches the enumeration below on one arm and not on the other. ADR Decision 71 is

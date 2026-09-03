@@ -431,8 +431,8 @@ public interface ChartSearchService {
 		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/356">#356</a>, for
 		 * the prescribing question, where neither pairwise arm stated one AND the question resolved a
 		 * drug it could screen — so it does not speak for every question a pairwise arm declined
-		 * to describe: behind a screening arm that ceded every pair it related, nothing states the
-		 * field at all (issue
+		 * to describe: where the screening arm states nothing, nothing else states the field at all,
+		 * and {@link PairChipExtent} carries the exact condition (issue
 		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/370">#370</a>).
 		 *
 		 * @return the statement, or {@code null} where the interaction check made none —

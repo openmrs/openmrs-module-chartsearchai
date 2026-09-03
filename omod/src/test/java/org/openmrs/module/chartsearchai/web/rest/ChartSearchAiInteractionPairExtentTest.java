@@ -178,8 +178,8 @@ public class ChartSearchAiInteractionPairExtentTest {
 		// one a client consuming safety chips has to read, and a statement missing there once left
 		// exactly the clients that render chips unable to tell a capped list from a complete one.
 		// Since issue #370 a missing statement there is also a REACHABLE production state rather than
-		// only a defect: a screening pass that ceded every pair it related states nothing beside real
-		// chips, which ADR Decision 71 accepts as this fix's cost. So this case pins that the arm's
+		// only a defect: a screening pass a cede left with no pair of its own states nothing beside
+		// real chips, which ADR Decision 71 accepts as this fix's cost. So this case pins that the arm's
 		// statement TRAVELS to the trailing event, never that one is promised there — the sibling
 		// below is the other half, and README's `interactionPairs` section is the client contract.
 		controller.streamAnswer(out, patient(), "Please screen her current medications.", new User(3),
@@ -210,7 +210,7 @@ public class ChartSearchAiInteractionPairExtentTest {
 	public void theTrailingGroundedEventCarriesChipsBesideAnAbsentStatementWhereTheProducerMadeNone()
 			throws Exception {
 		// The arrangement issue #370 creates, at the surface where it reaches a client: a screening
-		// pass that ceded every pair it related states nothing, so the trailing event carries the
+		// pass a cede left with no pair of its own states nothing, so the trailing event carries the
 		// chips with no statement about how bounded they are. `theKeyIsPresentAndNullWhenNothingWasStated`
 		// pins the same shape on the `/search` body; this is the SSE half of it, which is the half a
 		// streaming client reads, and it is the cost ADR Decision 71 signs off rather than a defect.

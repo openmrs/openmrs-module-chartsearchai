@@ -117,7 +117,7 @@ Five fields of the response matter for these tests:
 |---|---|
 | `answer` | the LLM's prose. **Not** the safety output — it is what the model made of the chart plus the injected findings |
 | `safetyWarnings` | the **deterministic** chips. Computed by `DrugSafetyValidator` from the chart and the knowledge base, with no model involvement. Each carries `type`, `drug`, `detail` and — since [#340](https://github.com/openmrs/openmrs-module-chartsearchai/issues/340) — a `severity` |
-| `interactionPairs` | `{"found": N, "reported": M}` — how many above-floor rule pairs the interaction check related and how many survived the chip cap ([#336](https://github.com/openmrs/openmrs-module-chartsearchai/issues/336)); the drug-in-play arm states it too since [#356](https://github.com/openmrs/openmrs-module-chartsearchai/issues/356) and is not capped, so its two numbers are always equal. `{"found":0}` means an arm ran and related nothing — with one known exception, a screening pass whose every pair went to the drug-in-play arm ([ADR Decision 68](adr.md)). **`null` is not completeness** — what it does cover is enumerated in `PairChipExtent`'s class javadoc and in `README.md`, and deliberately nowhere else, so read it there rather than inferring it from the cells below |
+| `interactionPairs` | `{"found": N, "reported": M}` — how many above-floor rule pairs the interaction check related and how many survived the chip cap ([#336](https://github.com/openmrs/openmrs-module-chartsearchai/issues/336)); the drug-in-play arm states it too since [#356](https://github.com/openmrs/openmrs-module-chartsearchai/issues/356) and is not capped, so its two numbers are always equal. `{"found":0}` is MEANT as "an arm ran and related nothing"; `README.md` and `PairChipExtent`'s javadoc name the arrangements where it is not, and [ADR Decision 68](adr.md) carries the one this branch reproduced. **`null` is not completeness** — what it does cover is enumerated in `PairChipExtent`'s class javadoc and in `README.md`, and deliberately nowhere else, so read it there rather than inferring it from the cells below |
 | `references` | the records the answer actually **cited** — `drug_order`, `allergy`, `condition`, `safety_finding`, `drug_reference`, and since [#354](https://github.com/openmrs/openmrs-module-chartsearchai/issues/354) `drug_class_note` for a question that names a drug class no reference entry is indexed by |
 | `unresolvedDrugClass` | the drug **class** the question named and the module resolved to no substance, or `null` where it states none ([#354](https://github.com/openmrs/openmrs-module-chartsearchai/issues/354)). Deterministic like the chips: the same statement is injected as a citable `drug_class_note` record, but that reaches the response only if the model cites it — so this is what a test on a class-term question reads. `null` is the absence of a statement, never a denial |
 
@@ -312,9 +312,9 @@ Worth running on every pass — it is the false-positive control.
 Checks drugs named in the **question** against each other. The reliable way to test it is a
 patient on neither drug: where one of the above-floor rules joining the pair names an active
 order, the drug-in-play arm owns that pair and this arm reports nothing for it — see
-[2b](#2b-why-you-must-pick-a-patient-on-neither-drug). The predicate is narrower than "the
-patient is on one of them" and is not restated here; `addQuestionPairInteractions`' own javadoc
-and [ADR Decision 68](adr.md) carry it.
+[2b](#2b-why-a-patient-on-neither-drug-is-the-reliable-choice). The predicate is not "the patient is on one
+of them" and is not restated here; `addQuestionPairInteractions`' own javadoc and
+[ADR Decision 68](adr.md) carry it.
 
 **Patient:** Betty Williams — on neither warfarin nor ibuprofen, but allergic to aspirin.
 **Question:** *Can warfarin and ibuprofen be given together?*
@@ -336,7 +336,7 @@ chips:   2
 distinguishing it from a chip about an active order. And note that the arm is still
 patient-aware: it picked up her aspirin allergy against a drug she is not on.
 
-### 2b. Why you must pick a patient on neither drug
+### 2b. Why a patient on neither drug is the reliable choice
 
 Ask the *identical* question of Barbara Miller, who is actively prescribed ibuprofen:
 
@@ -355,7 +355,7 @@ chips:    5
 ```
 
 The pair *is* reported — as **"active order Ibuprofen"**, by the drug-in-play arm, because the
-chart owns it. Test this arm on a patient prescribed neither drug or you will only ever see the
+chart owns it. Drive this arm on a patient prescribed neither drug, or you will only ever see the
 other one.
 
 **That `pairs` line is not what a build carrying [#336](https://github.com/openmrs/openmrs-module-chartsearchai/issues/336)'s

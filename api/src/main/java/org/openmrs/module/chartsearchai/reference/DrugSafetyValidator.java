@@ -694,8 +694,8 @@ public class DrugSafetyValidator {
 		// as the nearest sibling of the cede addQuestionPairInteractions now declines to call a zero.
 		//
 		// What this arm DOES share with it is the machinery: the same bestRulePerPartner grouping, the
-		// same partnerLabel, the same pairKeyNames/unorderedPairKey
-		// keys, the same severityPriority ordering and the same maxPairChips() bound, so the two cannot
+		// same partnerLabel, the same pairKeyNames/unorderedPairKey keys, the same severityPriority
+		// ordering and the same maxPairChips() bound, so the two cannot
 		// drift apart on what a pair is, which of its rows is worth chipping, or how many are shown.
 		if (warnInteractions && questionDrugs.isEmpty()
 				&& QueryScopeRouter.isInteractionScreening(question)) {
@@ -997,11 +997,13 @@ public class DrugSafetyValidator {
 	 *
 	 * <p>A {@code null} extent is the absence of a statement, which is not the same as an arm having
 	 * enumerated nothing: an arm that ran and found no above-floor pair states {@code found == 0}, a
-	 * complete screen. The value handed here is the one {@code validate} settled AFTER its issue
+	 * complete screen — meant as one; {@link PairChipExtent} names the arrangements where a zero is
+	 * false. The value handed here is the one {@code validate} settled AFTER its issue
 	 * #356 fallback, so it is already the client's: {@link PairChipExtent} and {@code README}
-	 * enumerate what that {@code null} covers. Each ARM's own {@code null} is a different and wider
-	 * thing — see the {@code @return} on {@link #addQuestionPairInteractions} and on
-	 * {@link #addActiveOrderPairInteractions}, and ADR Decision 68.
+	 * enumerate what that {@code null} covers. Each ARM's own {@code null} is not the same list —
+	 * neither contains the other — see the {@code @return} on
+	 * {@link #addQuestionPairInteractions} and on {@link #addActiveOrderPairInteractions}, and ADR
+	 * Decision 68.
 	 */
 	private static void recordPairExtent(PairChipExtent.Sink sink, PairChipExtent extent) {
 		if (sink != null && extent != null) {
@@ -2564,9 +2566,8 @@ public class DrugSafetyValidator {
 	 * interaction check on the canonical prescribing question. Where the name resolves to several
 	 * reference entries the question-pair arm owns the field instead and this count is discarded —
 	 * unless that arm ceded every pair it related, where it states nothing and this count is what
-	 * reaches the wire (issue #336, ADR Decision 68).
-	 * For what the question-pair arm owning the field costs a reader, {@link PairChipExtent} is
-	 * canonical. Stating nothing published a completed negative screen as
+	 * reaches the wire (issue #336, ADR Decision 68). For what the question-pair arm owning the
+	 * field costs a reader, {@link PairChipExtent} is canonical. Stating nothing published a completed negative screen as
 	 * {@code interactionPairs: null}, which {@link PairChipExtent} defines as "the producer stated no
 	 * measurement": a clinician was given an abstention indistinguishable from one where nobody
 	 * looked. The count returned is the RULE chips this call appended, because that is the population
@@ -4628,7 +4629,7 @@ public class DrugSafetyValidator {
 	 * to {@link #addInteractionWarnings}, whose chip states a fact about THIS patient — the stronger
 	 * statement, and reporting both would say one finding in two voices. Stated precisely, because the
 	 * looser version ("either drug is an active order") is not what the code can ask and not what it
-	 * does: the test is whether any RULE joining the pair names an active order,
+	 * does: the test is whether any ABOVE-FLOOR rule joining the pair names an active order,
 	 * {@link #coveredByActiveOrderArm} putting the same question to {@code hasActiveDrug} that
 	 * {@code addInteractionWarnings} answers when it decides to chip. The two differ, and the difference
 	 * is deliberate — a patient can be ON one of the pair while no rule joining it names their order
@@ -5517,8 +5518,8 @@ public class DrugSafetyValidator {
 	 *        lookup's group map by {@link #resolvedSubstanceRows}, so the ungrouped-row fallback is
 	 *        unreachable from here too.
 	 * @return what this screen measured, or {@code null} where it could not run at all (no clinical
-	 *         context). It states {@code of(0, 0)} over an empty candidate list — including on the one
-	 *         a path where that is FALSE, a pass whose every pair went to the drug-in-play arm through
+	 *         context). It states {@code of(0, 0)} over an empty candidate list — including where that
+	 *         is FALSE, a pass whose every pair went to the drug-in-play arm through
 	 *         {@code alreadyReported}. Unlike {@link #addQuestionPairInteractions}, which since issue
 	 *         #336's verification round states nothing there, this arm has no fallback behind it: see
 	 *         the comment at that return, and ADR Decision 68 for the reproduction.
@@ -5688,10 +5689,10 @@ public class DrugSafetyValidator {
 			// half of issue #336 a truncation signal alone would leave unsaid — a caller hearing
 			// nothing cannot tell it from a question that never asked to be screened.
 			//
-			// One path here makes that sentence false and it is a KNOWN, reproduced gap, not a claim to
-			// rely on: where alreadyReported above yielded every pair to the drug-in-play arm, this
-			// screen related pairs and kept none, exactly as addQuestionPairInteractions did before
-			// issue #336's verification round. That arm now states nothing there; this one still states
+			// A path through here makes that sentence false, and it is a KNOWN, reproduced gap rather
+			// than a claim to rely on: where alreadyReported above yielded every pair to the drug-in-play
+			// arm, this screen related pairs and kept none, exactly as addQuestionPairInteractions did
+			// before issue #336's verification round. That arm now states nothing there; this one states
 			// a zero, because returning null here reaches no fallback — validate's issue #356 fallback
 			// needs questionDrugScreened, which is false on the questionDrugs.isEmpty() gate this arm
 			// runs behind — so the choice is between a false zero and no statement at all on the one

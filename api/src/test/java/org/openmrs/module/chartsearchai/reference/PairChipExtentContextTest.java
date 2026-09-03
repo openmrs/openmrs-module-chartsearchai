@@ -538,8 +538,8 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 		// The boundary of aQuestionPairListThatCededEveryPairStatesWhatTheChartArmReported, and the
 		// residue it deliberately leaves. A third question drug on the same chart: warfarin x
 		// ibuprofen is the chart arm's, simvastatin x warfarin is this arm's, and this arm goes on
-		// describing the bounded list it kept — a list the cap can still truncate like any other, so
-		// this is not "nothing was withheld". The ceded pair is reported beside it as a chip rather
+		// describing the bounded list it kept — which the cap can still cut, see ADR Decision 68 for
+		// what that does and does not let a client conclude. The ceded pair is reported as a chip rather
 		// than hidden, which is why the fix above is scoped to a pass that ceded EVERY pair. Withhold
 		// the statement on ANY cede instead and this reads the chart arm's three, having forfeited the
 		// bounded claim issue #336 exists to publish for a number no cap cut.

@@ -5425,14 +5425,23 @@ public class DrugSafetyValidator {
 	 *         that does not name the substance beside a recorded concept name that does. So the
 	 *         negation is not left asking about coding alone. An order whose display does not name the
 	 *         substance while some other recorded name of it does — a name that is NOT the bridge's own
-	 *         — answers this conjunct FALSE through that name leg, and its clause stands. Measured
-	 *         rather than reasoned: strip every ATC code off
-	 *         {@code OneOrderNameAcrossAnswerAndChipTest.ticketChart()}'s brand-named order and
+	 *         — answers this conjunct FALSE through that name leg, and its clause stands. <b>Pinned since
+	 *         issue #347's review round 3, and until then it was not:</b>
+	 *         {@code BridgedConceptOrderResolutionTest.aRecordedNameBesideTheBridgesOwnIsStillEvidenceOfWhichSubstanceItIs}
+	 *         is a bridged order whose {@code drugNonCoded} free text names the substance the bridge's
+	 *         own name does not, and its clause stands through that name leg — widen the exclusion in
+	 *         {@link #resolvesAsideFromTheBridgesOwnName} to every name the order records and it
+	 *         reddens with an empty bridge list. <b>The measurement this paragraph used to cite does
+	 *         NOT exercise the exclusion, which is why the case was needed</b>: strip every ATC code
+	 *         off {@code OneOrderNameAcrossAnswerAndChipTest.ticketChart()}'s brand-named order and
 	 *         {@code .aSubstanceTheChartNamesOnlyByABrandIsBridgedToTheOrderItCameFrom} still gets
-	 *         {@code Warfarin from Coagubrand.}, so there the name leg is what answers it; that order
-	 *         carries no concept, so round 2's exclusion is empty for it and the measurement is the
-	 *         same one. Where the order's own recorded ATC codes reach the substance the clause stands
-	 *         too, exactly as it did before. The code leg has an over-wide residue of its own; it is
+	 *         {@code Warfarin from Coagubrand.}, so there the name leg is what answers it — but that
+	 *         order carries no concept, so round 2's exclusion is empty for it and every scope a
+	 *         maintainer could give the exclusion answers alike. That file's
+	 *         {@code .aBrandNamedOrderJoinedByItsBridgedConceptIsBridgedToTheSubstanceToo} is the same
+	 *         shape on an order this refusal IS asked of, and it stands on the second conjunct rather
+	 *         than the first. Where the order's own recorded ATC codes reach the substance the clause
+	 *         stands too, exactly as it did before. The code leg has an over-wide residue of its own; it is
 	 *         named at {@link #resolvesFrom} and is deliberately not closed here, because closing it
 	 *         would change what every ATC-resolved order states and no measurement in this change
 	 *         covers that. The second is {@link BridgedOrders#recordedNameNames}, and it is what makes
@@ -5530,6 +5539,18 @@ public class DrugSafetyValidator {
 	 *         {@code BridgedConceptOrderResolutionTest.anEnglishSessionsSpellingOfAnAmbiguousBridgeNamesNoPrescriptionEither}
 	 *         reddens with {@code Omeprazole from Nexium 40mg}. Drop the code leg and
 	 *         {@code .anAmbiguouslyBridgedOrderTheChartsOwnCodeReachesIsStillAttributed} reddens.
+	 *
+	 *         <p><b>Mutate it the other way — exclude EVERY name the order records, so that only
+	 *         {@link #recordsACodeOf} can count as evidence independent of the bridge — and
+	 *         {@code .aRecordedNameBesideTheBridgesOwnIsStillEvidenceOfWhichSubstanceItIs} reddens
+	 *         where it expects {@code Omeprazole from Losec 20mg}.</b> That is the SCOPE of the
+	 *         exclusion rather than its presence, and it was unpinned when round 2 shipped: round 3
+	 *         measured the whole api suite green under this mutation, because every case then reaching
+	 *         this conjunct recorded either no name the bridge carries or nothing BUT the bridge's
+	 *         name, so no fixture told the two readings apart. The two directions redden different
+	 *         assertions — the widening that case's ATTRIBUTED half, {@code emptySet()} its
+	 *         single-variable CONTROL half and the case named above it — so mutate each and read
+	 *         which.
 	 */
 	private static boolean resolvesAsideFromTheBridgesOwnName(List<DrugReference> rows,
 			PatientClinicalContext.ActiveDrugOrder order, BridgedOrders bridged) {

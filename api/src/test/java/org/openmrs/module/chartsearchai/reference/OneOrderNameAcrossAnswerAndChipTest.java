@@ -17,6 +17,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
@@ -47,6 +48,11 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * spell — beside {@code Aspirin 81mg}, whose display DOES reach its substance through the alias
  * {@code aspirin} and which must therefore stay unbridged.
  *
+ * <p>One case gives that brand-named order the CIEL concept the ticket's own prescription carries and
+ * drops its ATC codes ({@link #aBrandNamedOrderJoinedByItsBridgedConceptIsBridgedToTheSubstanceToo}),
+ * which is the arrangement production builds; the other orders here carry no concept, so issue
+ * #353's ambiguity refusal has nothing of its own to weigh for them.
+ *
  * <p>Every case drives the real {@code DrugReferenceInjector.injectRecords} wired to the real
  * {@code DrugSafetyValidator} over a fixture parsed by the real production parser, and reads the
  * record a model would read. The prompt is one half of the fix; the deterministic half a
@@ -71,14 +77,39 @@ public class OneOrderNameAcrossAnswerAndChipTest {
 	 * ({@code Aspirin 81mg}, which is the ticket's own order).
 	 */
 	private static PatientClinicalContext ticketChart() {
+		return ticketChart(DrugReferenceTestSupport.set("B01AA03"), null);
+	}
+
+	/** The uuid the shipped bridge records for CIEL 86415 {@code Warfarin}, which this fixture's
+	 *  verbatim slice carries on DDInter1951 — a concept filed on ONE substance, whose recorded name
+	 *  names it. That is the ticket's own concept ({@code Ibuprofen}) in this vocabulary. */
+	private static final String WARFARIN_CONCEPT = "86415AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+	/**
+	 * As {@link #ticketChart()}, taking the brand-named order's own ATC codes and the concept it was
+	 * written against — the two things the ticket's real prescription has differently, and the two the
+	 * bridged case below varies: {@code Advil 400mg} on concept {@code Ibuprofen} carries no ATC map at
+	 * all, and its concept is one the knowledge base's bridge does record.
+	 *
+	 * <p>The flattened code set is derived from the same argument rather than passed beside it, because
+	 * {@code PatientClinicalContextBuilder} unions each order's codes into it — a case handing one
+	 * without the other would be describing a chart no builder produces. {@code named} with a null
+	 * concept is the public five-argument constructor {@link DrugReferenceTestSupport#activeOrder}
+	 * reaches, so {@link #ticketChart()} is the order it always was.
+	 */
+	private static PatientClinicalContext ticketChart(Set<String> brandOrderCodes,
+			String brandOrderConcept) {
+		Set<String> flattenedCodes = DrugReferenceTestSupport.set();
+		flattenedCodes.addAll(brandOrderCodes);
+		flattenedCodes.add("N02BA01");
 		return DrugReferenceTestSupport.ctx(60, null,
 			DrugReferenceTestSupport.set("Coagubrand", "Warfarin", "Aspirin 81mg",
 				"Acetylsalicylate sodium"),
-			DrugReferenceTestSupport.set("B01AA03", "N02BA01"), null, null,
+			flattenedCodes, null, null,
 			Arrays.asList(
-				DrugReferenceTestSupport.activeOrder("order-warf", "Coagubrand",
-					DrugReferenceTestSupport.set("Coagubrand", "Warfarin"),
-					DrugReferenceTestSupport.set("B01AA03")),
+				PatientClinicalContext.ActiveDrugOrder.named("order-warf", "Coagubrand",
+					DrugReferenceTestSupport.set("Coagubrand", "Warfarin"), brandOrderCodes, null,
+					brandOrderConcept),
 				DrugReferenceTestSupport.activeOrder("order-aspirin", "Aspirin 81mg",
 					DrugReferenceTestSupport.set("Aspirin 81mg", "Acetylsalicylate sodium"),
 					DrugReferenceTestSupport.set("N02BA01"))));
@@ -93,16 +124,24 @@ public class OneOrderNameAcrossAnswerAndChipTest {
 	}
 
 	private static PatientChart injected() throws IOException {
+		return injected(ticketChart());
+	}
+
+	private static PatientChart injected(PatientClinicalContext chart) throws IOException {
 		DrugReferenceService service =
 				DrugReferenceTestSupport.ddiFixtureService(BRAND_NAMED_ORDERS);
 		return DrugReferenceTestSupport.injectorWithSafety(service)
-				.injectRecords(ticketRecords(), ticketChart(), SCREENING_QUESTION);
+				.injectRecords(ticketRecords(), chart, SCREENING_QUESTION);
 	}
 
 	/** The one finding this arrangement raises — asserted rather than assumed, because every case
 	 *  below turns on a single record's text and a second finding would let the wrong one answer. */
 	private static String onlyFinding() throws IOException {
-		List<String> findings = DrugReferenceTestSupport.findingTexts(injected());
+		return onlyFinding(ticketChart());
+	}
+
+	private static String onlyFinding(PatientClinicalContext chart) throws IOException {
+		List<String> findings = DrugReferenceTestSupport.findingTexts(injected(chart));
 		assertEquals(1, findings.size(), "one pair is one citable record, was: " + findings);
 		return findings.get(0);
 	}
@@ -173,7 +212,7 @@ public class OneOrderNameAcrossAnswerAndChipTest {
 	 *
 	 *  <p>A negative assertion, so a green run says nothing on its own — it needs a positive control,
 	 *  and it has one: drop {@code order-warf}'s record from {@link #ticketRecords()} and this reddens
-	 *  with {@code Active drug order: Coagubrand}, while the three cases around it stay green. So the
+	 *  with {@code Active drug order: Coagubrand}, while the other cases in this class stay green. So the
 	 *  arm it forbids is reachable from this very path, and the fixture is not silently unable to
 	 *  produce what the assertion excludes. */
 	@Test
@@ -183,5 +222,45 @@ public class OneOrderNameAcrossAnswerAndChipTest {
 				"both orders have a drug-order record, so none may be injected, was: "
 						+ mapping.getText());
 		}
+	}
+
+	/**
+	 * The same shape on an order that carries a BRIDGED CONCEPT, which is the arrangement production
+	 * actually builds and the one {@link #aSubstanceTheChartNamesOnlyByABrandIsBridgedToTheOrderItCameFrom}
+	 * does not reach (issue #347, review round 3).
+	 *
+	 * <p>{@link #ticketChart()}'s brand-named order carries no concept, so
+	 * {@code DrugSafetyValidator.restsOnAnAmbiguousBridge}'s first conjunct is answered by that
+	 * order's own recorded name and code and its bridged half is never reached — no case in this class
+	 * said anything about that seam. The ticket's own prescription does carry one: {@code Advil 400mg}
+	 * was written against concept {@code Ibuprofen}, which the shipped bridge files on ONE substance
+	 * and whose recorded name names it — read off the bundled knowledge base, where CIEL 77897
+	 * {@code Ibuprofen} is carried by that one entry and by no other. This case is that arrangement in
+	 * this fixture's vocabulary: CIEL 86415 {@code Warfarin}, which the same slice carries the same
+	 * way, and the brand order's ATC codes dropped, because a concept the dictionary maps to no ATC
+	 * code is the majority shape ({@code ActiveDrugOrder}'s own javadoc carries that count). The clause
+	 * the ticket exists for must still stand.
+	 *
+	 * <p><b>Which conjunct carries it, since the order is inside the ambiguity refusal's population
+	 * here and was not before.</b> Nothing the chart records about this order reaches Warfarin except
+	 * the bridge's own name ({@code Warfarin}, which is also the concept's recorded name, and which the
+	 * exclusion in {@code resolvesAsideFromTheBridgesOwnName} therefore removes) — the display names
+	 * nothing the dataset carries and there are no codes left. So the first conjunct is satisfied and
+	 * the clause stands on the second: {@code BridgedOrders.recordedNameNames} says that name NAMES the
+	 * one substance the concept is filed on. Widening that exclusion to every recorded name does NOT
+	 * redden this case, which is why review round 3's other finding needed a case of its own
+	 * ({@code BridgedConceptOrderResolutionTest.aRecordedNameBesideTheBridgesOwnIsStillEvidenceOfWhichSubstanceItIs}).
+	 *
+	 * <p>Revert {@code displaysANameOfAny} to the {@code getNames()} fold it replaced and this reddens
+	 * with a null bridge, as that case does too — the order RECORDS {@code Warfarin}, and that is the
+	 * name no chart record renders.
+	 */
+	@Test
+	public void aBrandNamedOrderJoinedByItsBridgedConceptIsBridgedToTheSubstanceToo() throws Exception {
+		String finding = onlyFinding(ticketChart(DrugReferenceTestSupport.set(), WARFARIN_CONCEPT));
+
+		assertEquals("Warfarin from Coagubrand.", DrugReferenceTestSupport.bridgeOf(finding),
+			"an order joined to the substance by its bridged concept states the prescription the"
+					+ " substance came from, was: " + finding);
 	}
 }

@@ -37,12 +37,14 @@ import org.junit.jupiter.api.Test;
  * name is {@code Cotrimoxazole}, returning no chips at all — with no exception and no log line.
  *
  * <p><b>What these cases pin, and why the order name they use has no spelling in the dataset.</b>
- * Every case here but one gives the order UNDER TEST a display and names that appear nowhere in the
+ * Most cases here give the order UNDER TEST a display and names that appear nowhere in the
  * fixture, which is what makes the NAME leg provably not the thing that resolved it — the
  * co-prescriptions beside it are named by the fixture on purpose, so that there is a pair to chip.
- * The exception is
+ * The exceptions are the two cases whose bridged order has to record a name the fixture DOES carry:
  * {@link #anEnglishSessionsSpellingOfAnAmbiguousBridgeNamesNoPrescriptionEither}, the {@code en}
- * shape, whose bridged order has to record the concept name the bridge itself carries; it says so.
+ * shape, whose bridged order has to record the concept name the bridge itself carries, and
+ * {@link #aRecordedNameBesideTheBridgesOwnIsStillEvidenceOfWhichSubstanceItIs}, whose order records
+ * a name of the substance BESIDE that one; each says so.
  * The concept uuid is the real one
  * the shipped bridge records for CIEL 105281, and the fixture is {@code ddi-combination-allergen.json}
  * — a verbatim slice of the shipped knowledge base that already carries DDInter1874 Trimethoprim with
@@ -112,6 +114,31 @@ public class BridgedConceptOrderResolutionTest {
 		return PatientClinicalContext.ActiveDrugOrder.named("order-nexium", NEXIUM_ORDER,
 			DrugReferenceTestSupport.set(NEXIUM_ORDER, "Esomeprazole magnesium"), null, null,
 			ESOMEPRAZOLE_CONCEPT);
+	}
+
+	/** A brand of the OTHER substance the same concept is filed on — again a string the fixture carries
+	 *  nowhere, so it names nothing on its own. */
+	private static final String LOSEC_ORDER = "Losec 20mg";
+
+	/**
+	 * The same concept prescribed under that brand, in the shape
+	 * {@code PatientClinicalContextBuilder.addDrugName} records: the coded drug's name FIRST, so it is
+	 * the display, then the clinician's {@code drugNonCoded} free text, then the concept's own
+	 * locale-preferred name — which for CIEL 75876 in an {@code en} session is the string the bridge
+	 * itself carries.
+	 *
+	 * @param freeText the clinician's own spelling, or null for the order that records only its drug
+	 *        row's name and its concept's. Null is the CONTROL, and it is the same order in every
+	 *        other respect so that one variable separates the two answers.
+	 */
+	private static PatientClinicalContext.ActiveDrugOrder losecOrder(String freeText) {
+		Set<String> names = DrugReferenceTestSupport.set(LOSEC_ORDER);
+		if (freeText != null) {
+			names.add(freeText);
+		}
+		names.add("Esomeprazole magnesium");
+		return PatientClinicalContext.ActiveDrugOrder.named("order-losec", LOSEC_ORDER, names, null,
+			null, ESOMEPRAZOLE_CONCEPT);
 	}
 
 	/** The co-prescription the fixture DOES name, so the bridged substance has a pair to chip with. */
@@ -561,6 +588,71 @@ public class BridgedConceptOrderResolutionTest {
 					+ DrugReferenceTestSupport.details(named));
 		assertEquals(Arrays.asList("Esomeprazole from " + NEXIUM_ORDER), everyBridgeText(named),
 			"and the substance that same recorded name NAMES is still attributed to it");
+	}
+
+	/**
+	 * The SCOPE of the exclusion the case above pins: it excludes the names the dataset's BRIDGE
+	 * records for this order's concept and NOT every name the order records, so a recorded name of the
+	 * substance that is not the bridge's own is still independent evidence and the clause still stands
+	 * (issue #347, review round 3).
+	 *
+	 * <p><b>The arrangement, which is the one production builds.</b>
+	 * {@code PatientClinicalContextBuilder.addDrugName} records three names for an order carrying both
+	 * a coded drug and {@code drugNonCoded} free text — the drug row's name, the free text, and the
+	 * concept's own — and the first of them is the display. So this order displays a brand the fixture
+	 * carries nowhere, records {@code omeprazole} as free text, and records the bridge's own
+	 * {@code Esomeprazole magnesium} as its concept name. Omeprazole is the substance that bridge name
+	 * does NOT name, so {@code BridgedOrders.recordedNameNames} is false and the whole refusal turns
+	 * on its first conjunct.
+	 *
+	 * <p><b>The control is inside the case rather than borrowed from a neighbour, and it varies one
+	 * thing.</b> {@code losecOrder(null)} is the same display, the same concept, the same
+	 * co-prescription and the same question with the free text alone removed, and it states no clause —
+	 * so that one recorded name is the whole difference between an attributed prescription and an
+	 * unattributed one. {@link #aConceptBridgedToSeveralSubstancesNamesNoPrescriptionInTheFinding} is
+	 * where that silence is the property under test rather than a control.
+	 *
+	 * <p><b>The two halves answer the two directions of that exclusion, and only the first is what
+	 * this case was written for.</b> Widen the exclusion in
+	 * {@code resolvesAsideFromTheBridgesOwnName} to every name the order records — the mutation review
+	 * round 3 measured the whole api suite green under — and the ATTRIBUTED half reddens with an empty
+	 * bridge list, because {@code recordsACodeOf} is then the only leg left and this order carries no
+	 * ATC code. Hand {@code Collections.emptySet()} instead and the CONTROL half reddens with
+	 * {@code Omeprazole from Losec 20mg}, beside the case above, which is that direction's own pin.
+	 */
+	@Test
+	public void aRecordedNameBesideTheBridgesOwnIsStillEvidenceOfWhichSubstanceItIs() throws Exception {
+		DrugReferenceService service = DrugReferenceTestSupport
+				.ddiFixtureService(DrugReferenceTestSupport.DDI_BRIDGED_CONCEPT_TWO_SUBSTANCES);
+
+		assertEquals(Collections.<String> emptyList(),
+			displayNames(service.findImpliedByDrugName(LOSEC_ORDER)),
+			"the premise: the order's DISPLAY names no substance this dataset carries, so the clause"
+					+ " below cannot be standing on the display test");
+
+		List<SafetyWarning> attributed = DrugReferenceTestSupport.validator(service).validate("",
+			"Can I give this patient omeprazole?",
+			service.withReferenceNames(chart(losecOrder("omeprazole"), clopidogrelOrder())));
+
+		assertTrue(attributed.get(0).getDetail()
+				.startsWith("Omeprazole interacts with active order Clopidogrel \u2014 Major"),
+			"precondition: the substance the bridge's name does not name must still chip, was: "
+					+ DrugReferenceTestSupport.details(attributed));
+		assertEquals(Arrays.asList("Omeprazole from " + LOSEC_ORDER), everyBridgeText(attributed),
+			"a recorded name that is NOT the bridge's own is evidence of which substance this"
+					+ " prescription is, so the prescription the substance came from is stated");
+
+		List<SafetyWarning> unattributed = DrugReferenceTestSupport.validator(service).validate("",
+			"Can I give this patient omeprazole?",
+			service.withReferenceNames(chart(losecOrder(null), clopidogrelOrder())));
+
+		assertTrue(unattributed.get(0).getDetail()
+				.startsWith("Omeprazole interacts with active order Clopidogrel \u2014 Major"),
+			"the control must differ in the CLAUSE and not in the chip, was: "
+					+ DrugReferenceTestSupport.details(unattributed));
+		assertEquals(Collections.<String> emptyList(), everyBridgeText(unattributed),
+			"the control: that one recorded name removed and the same prescription states nothing,"
+					+ " because the only name left is the bridge's own");
 	}
 
 	/**

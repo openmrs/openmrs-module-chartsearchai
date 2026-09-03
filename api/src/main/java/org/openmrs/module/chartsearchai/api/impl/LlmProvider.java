@@ -239,6 +239,14 @@ public class LlmProvider {
 			+ "question names a category rather than a measurable quantity (\"any heart "
 			+ "problems\", \"any eye issues\"), cite nothing after a no-record verdict — do not "
 			+ "list vital signs or unrelated measurements.\n"
+			// The two question shapes named here are EXAMPLES of this paragraph's scope, not its
+			// bound, and nothing else carries scope: the #348 branches at the end of the paragraph
+			// are gated on the FINDING's clause and never on the question, and the screening shape
+			// they exist for ("Does she have any drug interactions I should know about?") is not one
+			// of the shapes listed. The scope reaches it in practice — the reproduction IS this
+			// paragraph's withholding branch applied to that question — so adding the screening
+			// shape to this list is an ARM of the measurement ADR Decision 69 records as owed, and
+			// not a wording change to take on reasoning ahead of it.
 			+ "The same rules apply to safety and suitability questions (\"is it safe to give "
 			+ "X\", \"can we start X\"): when no record addresses the drug or intervention asked "
 			+ "about, the whole answer is one sentence stating that the records do not address "
@@ -276,7 +284,11 @@ public class LlmProvider {
 			// the token would make the token's own scope the thing a reader has to infer.
 			// The residue is real and belongs to the measurement rather than to this comment: on the
 			// charts that already answered correctly the lead was "Yes, there are documented
-			// interactions …", and these branches ask for a statement instead.
+			// interactions …", and these branches ask for a statement instead. That measurement is
+			// OWED and not waived — ADR Decision 69's "The measurement this change still owes" names
+			// the instrument, the two builds, the four screening patients and what would count as a
+			// regression. Nothing in this repository can see what the model produces from these two
+			// sentences; SafetyVerdictSeverityGradationTest pins what they SAY.
 			+ "A finding that says it is a reason to change a medication this patient is already "
 			+ "taking is not about a drug anything proposed: open by naming that medication and what "
 			+ "the finding relates it to, carry the finding's severity, and never open by refusing to "

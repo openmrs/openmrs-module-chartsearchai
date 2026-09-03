@@ -323,21 +323,28 @@ public class SafetyVerdictSeverityGradationTest {
 	 * {@code DEFAULT_SYSTEM_PROMPT} to teach". So a counterpart clause that the paragraph does not
 	 * quote is not a smaller version of this change; it is the inert one. Derived from the constants
 	 * for the reason {@link #theRuleNamesTheClauseTheRecordActuallyCarries} gives.
+	 *
+	 * <p>The branch is checked for what it INSTRUCTS and not only for naming its class —
+	 * {@link #assertCurrentMedicationBranch} carries which mutation holds each of those assertions,
+	 * and the measured reason the naming half alone was not enough.
 	 */
 	@Test
 	public void bothCurrentMedicationClassesAreTaughtInTheWordsTheInjectedRecordUses() {
-		assertBranchNaming(clauseCore(DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION),
+		assertCurrentMedicationBranch(
+			clauseCore(DrugReferenceInjector.STRENGTH_CHANGE_CURRENT_MEDICATION),
 			"the change-of-therapy class must have a BRANCH of its own, or a screened pair of the "
 					+ "patient's own prescriptions has a clause no branch of the prompt answers and "
 					+ "falls through to whichever lead the model reaches for — which is what #283 "
 					+ "measured");
-		assertBranchNaming(clauseCore(DrugReferenceInjector.STRENGTH_CAUTION_CURRENT_MEDICATION),
+		assertCurrentMedicationBranch(
+			clauseCore(DrugReferenceInjector.STRENGTH_CAUTION_CURRENT_MEDICATION),
 			"and so must its caution counterpart, in the same words");
 	}
 
 	/**
-	 * Asserts that some sentence of the safety paragraph names {@code core} AND tells the model how to
-	 * OPEN — i.e. that the class has a branch of its own, not merely a mention.
+	 * Asserts that some sentence of the safety paragraph is a BRANCH for the current-medication class
+	 * {@code core}: that it names the class, tells the model how to OPEN, and instructs the lead issue
+	 * #348 exists for rather than a verdict about giving a drug.
 	 *
 	 * <p><b>Why the paragraph-wide containment this replaced was not enough, measured rather than
 	 * argued.</b> The ranking sentence for a mixed set names both current-medication classes in order
@@ -345,16 +352,70 @@ public class SafetyVerdictSeverityGradationTest {
 	 * the change-of-therapy BRANCH — the sentence that says what to do with such a finding — left the
 	 * whole api suite green. That is the guard-satisfied-by-a-sibling shape, and it is what the
 	 * "open" term closes; the ranking sentence carries no opening instruction.
+	 *
+	 * <p><b>And why naming the class and the word "open" was not enough either.</b> That pair is an
+	 * EXISTENCE check, and the #348 defect is about CONTENT: a sentence naming the class and then
+	 * telling the model to refuse satisfies both terms. Measured on {@code 86a5a4c0} by a reviewer
+	 * who rewrote the change-of-therapy branch as <em>"… is evidence against giving it: open with
+	 * \"No\" and what to avoid."</em> — the pre-#348 instruction reattached to the new class — and ran
+	 * the whole api module: 0 failures. The three assertions below are what closes that. <b>Both of the
+	 * reviewer's mutations are reported against the FIRST of them</b> — assertion order decides which
+	 * failure JUnit prints, and each of those two mutations violates more than one — so the witness
+	 * recorded for each individual assertion is a mutation that violates it ALONE, measured against
+	 * this class on the head this note was written on:
+	 *
+	 * <ul>
+	 * <li>{@code "open by naming"} — the lead #348 asks for is a STATEMENT naming the medication, not
+	 * a verdict about giving a drug. This is the assertion both of the reviewer's mutations report
+	 * against: the change branch rewritten as a refusal, and the caution-current branch given the
+	 * #107 arm-C presence-shaped permission (<em>"open by stating that the drug can be given"</em>).
+	 * Its own witness is rewording just the verb — <em>"open by stating that medication and what the
+	 * finding relates it to"</em>, everything else intact — which leaves the other two green.</li>
+	 * <li>no {@code "No"} — the refusal lead belongs to the withholding branch and to the older
+	 * ranking sentence. This is the assertion {@link #theCautionBranchLeadsWithNeitherARefusalNorAYes}
+	 * already carried for the caution branch, whose own comment names the drift as "a refusal creeping
+	 * back INTO the caution branch rather than replacing it" — which is #348 realised. Its witness is
+	 * appending <em>"but open with \"No\" where the mechanism is serious"</em> to the shipped branch,
+	 * which keeps the lead and the prohibition and reddens this line alone.</li>
+	 * <li>the prohibition {@code "never open by refusing to give a drug"} — a positive lead does not
+	 * by itself stop the model reaching for the refusal it read two sentences earlier, and this is the
+	 * clause that says so. Its witness is deleting exactly that clause from one branch, which reddens
+	 * this line alone.</li>
+	 * </ul>
+	 *
+	 * <p><b>What these three do NOT catch</b>, since a guard over text has a gap between the property
+	 * it means and the string it matches: they are literals, so a semantically equivalent reword —
+	 * <em>"do not open by refusing"</em>, or a lead that names the medication in other words — reddens
+	 * them and must be re-read here deliberately rather than repaired by editing the literal. And they
+	 * read the FIRST sentence naming the class that also says "open", so what they assert of a branch
+	 * they assert of one sentence; a second sentence of the paragraph instructing a refusal for this
+	 * class is out of their reach.
 	 */
-	private static void assertBranchNaming(String core, String because) {
+	private static void assertCurrentMedicationBranch(String core, String because) {
 		String paragraph = safetyParagraph();
-		for (String sentence : paragraph.split("(?<=\\.)\\s+")) {
-			if (sentence.contains(core) && sentence.contains("open")) {
-				return;
+		String sentence = null;
+		for (String candidate : paragraph.split("(?<=\\.)\\s+")) {
+			if (candidate.contains(core) && candidate.contains("open")) {
+				sentence = candidate;
+				break;
 			}
 		}
-		fail(because + ". No sentence of the paragraph both names \"" + core
-				+ "\" and says how to open: " + paragraph);
+		if (sentence == null) {
+			fail(because + ". No sentence of the paragraph both names \"" + core
+					+ "\" and says how to open: " + paragraph);
+		}
+		assertTrue(sentence.contains("open by naming"),
+				because + ". The branch must open by NAMING the medication — the statement #348 says "
+						+ "the chip carries and the answer does not — and not with a verdict about "
+						+ "giving a drug: " + sentence);
+		assertFalse(sentence.contains("\"No\""),
+				because + ". And it must not instruct a refusal: that lead belongs to the withholding "
+						+ "branch and to the ranking sentence, and reattaching it here is issue #348 "
+						+ "itself: " + sentence);
+		assertTrue(sentence.contains("never open by refusing to give a drug"),
+				because + ". And it must forbid the refusal outright, because the withholding branch "
+						+ "the model reads two sentences earlier is what it fell through to: "
+						+ sentence);
 	}
 
 	/**

@@ -412,9 +412,12 @@ public class InteractionFindingChartOrderBridgeTest {
 
 		assertTrue(finding.contains(LEAD),
 			"the arrangement must carry a bridge for this case to say anything, was: " + finding);
+		// Sentence-finality is established inside callOf, which reaches both of its return paths only
+		// through an endsWith on the call it returns — so re-asserting finding.endsWith(call) here
+		// could not fail, and a line that cannot fail claims a property it does not test. What this
+		// case adds is the ORDERING below; the call itself is pinned as a literal, on this very
+		// arrangement, by theClauseIsTheWordsAModelReads.
 		String call = callOf(finding);
-		assertTrue(finding.endsWith(call),
-			"the call the finding states is the last word, was: " + finding);
 		assertTrue(finding.indexOf(LEAD) < finding.indexOf(call),
 			"the bridge qualifies the evidence and precedes the call, was: " + finding);
 	}

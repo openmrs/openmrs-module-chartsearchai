@@ -61,8 +61,9 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * {@link PatientClinicalContext#containsToken}). The hazard is real and its false matches are clinical:
  * a rule on {@code liver} matches a condition recorded as {@code Status Post Cesarean Delivery}, and the
  * counts are on {@code containsToken} rather than here. The LOSS is zero over the two CODED corpora,
- * and the base that zero is over is ONE token and six matches: {@code peptic ulcer} accounts for all
- * of them (5 candidate, 1 recorded, none mid-word) and the seed's other three condition tokens match
+ * and the base that zero is over is ONE token: {@code peptic ulcer} accounts for every match on
+ * either corpus (5 of the candidate values, 1 of the recorded ones, none mid-word — overlapping
+ * corpora, so the two are never summed) and the seed's other three condition tokens match
  * nothing in either corpus, so the familiar "all four tokens" wording is vacuous for three of them —
  * which is the proxy issue #223 used for the allergy side, run for conditions, with the same
  * weakness. That bound is

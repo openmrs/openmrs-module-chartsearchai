@@ -537,9 +537,12 @@ public class PatientClinicalContext {
 	 * reason the paragraph above gives.
 	 *
 	 * <p>The LOSS of that boundary rule over the two corpora above is ZERO, and <b>what that zero is a
-	 * loss OF is one token and six matches</b> — state it that way wherever it is published, because
-	 * "all four tokens verified" reads as four confirmations and it is one (issue #243's rule; the
-	 * unbounded form had reached every document carrying this claim before it was measured).
+	 * loss OF is ONE token, whose matches are counted per corpus and never summed into a total</b> —
+	 * 5 of the 2581 candidate values and 1 of the 704 recorded ones. State it that way wherever it is
+	 * published, because "all four tokens verified" reads as four confirmations and it is one, and a
+	 * single total reads as a larger evidence base than either corpus supplies (issue #243's rule; the
+	 * unbounded form had reached every document carrying this claim before it was measured, and the
+	 * summed form that replaced it then reached every one of them too).
 	 * "The curated condition population" below means the one this repo SHIPS; an
 	 * operator's own file is by definition unmeasured, which is what the loader-rule paragraph is about.
 	 * The four condition tokens the bundled seed publishes ({@code gi bleed}, {@code peptic
@@ -550,7 +553,7 @@ public class PatientClinicalContext {
 	 * them — 5 candidate, 1 recorded, none mid-word — while {@code gi bleed}, {@code severe hepatic}
 	 * and {@code renal impairment} match nothing at all in either corpus, so the claim is vacuously
 	 * true for three of the four and neither corpus says anything about what the boundary rule would
-	 * do to them. Not six matches: the recorded
+	 * do to them. Not a total of six: the recorded
 	 * concepts are a subset of the candidate ones, so those counts overlap and must not be summed. That
 	 * is the proxy issue #223 used to settle the allergy side, run for conditions — with the same
 	 * weakness that proxy always had, three of these four tokens being as unmeasured against a coded

@@ -2388,9 +2388,11 @@ public class DrugSafetyValidator {
 	 *         <p><b>What it costs, measured</b> (issue #309, over the OpenMRS 3.7.1 demo dictionary —
 	 *         both corpora and every figure are recorded on {@link PatientClinicalContext#containsToken}).
 	 *         Over the curated condition tokens this repo ships it costs nothing on those corpora —
-	 *         over a base of ONE token and six matches, {@code peptic ulcer} being the only one of the
-	 *         four that matches anything in either corpus, which is what that zero is a share of and is
-	 *         to be stated with it wherever it is published. It
+	 *         over a base of ONE token, {@code peptic ulcer} being the only one of the four that
+	 *         matches anything in either corpus; its matches are counted per corpus and never summed
+	 *         into a total, the two counts being on {@link PatientClinicalContext#containsToken} with
+	 *         the corpora they are OF. That base is what the zero is a share of and is to be stated
+	 *         with it wherever it is published. It
 	 *         DOES cost the free-text half, which they cannot reach, and that reaches those same shipped
 	 *         tokens — an INFLECTION, pinned by
 	 *         {@code ConditionRuleBoundaryCorroborationTest.anInflectionOfAShippedTokenIsHedged}. A

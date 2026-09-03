@@ -87,7 +87,7 @@ public class ConditionRuleBoundaryCorroborationTest {
 
 	/** The one arrangement every case here drives: the real injector, the real validator, and the
 	 *  service named by {@code fixture} — this file's own fixture, or the SHIPPED curated seed for the
-	 *  two cases that are about the shipped population. Allergens and conditions are separate slots
+	 *  cases that are about the shipped population. Allergens and conditions are separate slots
 	 *  because one case's witness is an allergy arrangement. */
 	private static PatientChart chart(DrugReferenceService service, String question,
 			Set<String> allergens, Set<String> conditions) {

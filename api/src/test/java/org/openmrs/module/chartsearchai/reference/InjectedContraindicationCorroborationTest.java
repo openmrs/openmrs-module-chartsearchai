@@ -104,16 +104,9 @@ public class InjectedContraindicationCorroborationTest {
 
 	private static final String RULE_LIST_LEAD = " Contraindicated with: ";
 
-	/** The text between {@code lead} and that sentence's own full stop, or null when the record carries
-	 *  no such section — what a model reads, read where a model reads it. */
+	/** Call-site alias for {@link DrugReferenceTestSupport#sectionAfter}, which carries the contract. */
 	private static String sectionAfter(String record, String lead) {
-		int start = record.indexOf(lead);
-		if (start < 0) {
-			return null;
-		}
-		int end = record.indexOf(".", start + lead.length());
-		assertTrue(end > start, "an unterminated sentence, was: " + record);
-		return record.substring(start + lead.length(), end);
+		return DrugReferenceTestSupport.sectionAfter(record, lead);
 	}
 
 	/** A service over {@code fixture}, parsed by the real production parser — and with cross-reactivity
@@ -157,10 +150,11 @@ public class InjectedContraindicationCorroborationTest {
 		// ChartSearchAiAuditSearchModeTest's four search-mode spellings.
 		//
 		// The third lead states what the MODULE established, deliberately not a categorical about the
-		// chart: both of corroborated()'s legs can miss a recorded allergy that really does name the drug
-		// (its first sees only this rule's own witnesses, its second is narrowed by
-		// findImpliedSubstances), so a lead reading "not by a recorded allergy to this drug" is one the
-		// chart can contradict. Reword it only with that in mind.
+		// chart: both of corroborated()'s ALLERGY legs can miss a recorded allergy that really does name
+		// the drug (the first sees only this rule's own witnesses, the second is narrowed by
+		// findImpliedSubstances), and since issue #309 its condition leg can miss a recorded condition
+		// the same way — so a lead reading "not by a recorded allergy to this drug" is one the chart can
+		// contradict. Reword it only with that in mind.
 		assertEquals(" Recorded for this patient: ", RECORDED_LEAD);
 		assertEquals(" Not recorded for this patient: ", NOT_RECORDED_LEAD);
 		assertEquals(" Matched in this patient's chart but not corroborated as a record of this drug: ",

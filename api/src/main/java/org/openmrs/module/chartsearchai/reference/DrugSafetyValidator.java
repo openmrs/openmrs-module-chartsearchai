@@ -2110,7 +2110,7 @@ public class DrugSafetyValidator {
 		//
 		// The guard opening the loop — MATCHED rules only — is load-bearing too, and it is what
 		// everything read off this map assumes. corroboratedByTheChart answers TRUE unconditionally for
-		// a rule that is not a self-named allergy rule, and contraindicationClauses renders a clause for
+		// an ALLERGY rule that is not self-named, and contraindicationClauses renders a clause for
 		// every rule of the entry whether it matched or not, so an UNMATCHED rule reaching this fold
 		// seeds its key TRUE, puts that key's clause into statedAsRecorded and clears a finding whose
 		// record beside it goes on hedging the same string — issue #308's own contradiction, one rule
@@ -2118,7 +2118,22 @@ public class DrugSafetyValidator {
 		// open on the same recordedContraindicationKind call, so a later dedup pass that shares it is
 		// the seam to watch. Delete the `continue` here, leaving `Object key = contraindicationFinding(
 		// ref, c);` as the loop's first statement, and read the failure:
-		// UncorroboratedFindingProvenanceTest.aRuleTheChartDoesNotRecordCannotStateItsClauseAsRecorded.
+		// ConditionRuleBoundaryCorroborationTest.anUnmatchedRuleStillCannotSeedItsKeyAsRecorded.
+		//
+		// WHICH rule type witnesses that is not incidental, and issue #309 moved it. The witness used to
+		// be UncorroboratedFindingProvenanceTest.aRuleTheChartDoesNotRecordCannotStateItsClauseAsRecorded,
+		// whose unmatched rule is a CONDITION rule — and #309 gave condition rules a corroborating leg
+		// of their own, so an unmatched one now answers FALSE rather than TRUE and the mutation stopped
+		// reddening it. Measured on the commit that added the leg (whole api suite green under the
+		// mutation) and on its parent (that case red). The witness named above is an unmatched allergy
+		// rule that is NOT self-named. Read corroboratedByTheChart for which rules answer TRUE
+		// unconditionally rather than trusting a list here — it is every rule the first two branches
+		// fall through, and enumerating those has gone stale on this branch already. Two things about
+		// this witness are worth stating because they are not obvious from that method. A self-named
+		// allergy rule can witness the guard too, but never unconditionally: only through leg 2,
+		// allergicSubstanceKeys, which reads the whole allergy list rather than this rule's own
+		// witnesses — the papaveretum/opium shape DrugReferenceInjector.corroborated describes. And a
+		// CONDITION rule can no longer witness it at all, which is what issue #309 changed.
 		Map<Object, String> clauses = contraindicationClauses(ref);
 		Map<Object, Boolean> corroboratedClauses = new HashMap<Object, Boolean>();
 		for (DrugReference.Contraindication c : ref.getContraindications()) {
@@ -2215,7 +2230,9 @@ public class DrugSafetyValidator {
 			// rendered clause and a corroborated key always contributed that clause to the set: the
 			// key-clause conjunct already answers for it. That premise is a statement about this map
 			// holding MATCHED rules only, which is the guard above and is pinned by
-			// aRuleTheChartDoesNotRecordCannotStateItsClauseAsRecorded. One was written here in round 1
+			// ConditionRuleBoundaryCorroborationTest.anUnmatchedRuleStillCannotSeedItsKeyAsRecorded —
+			// issue #309 retired the case that used to pin it, for the reason the guard's own comment
+			// gives. One was written here in round 1
 			// of this branch's review and removed in round 3, having measured that replacing it with
 			// corroboratedByTheChart(ref, c, context, allergicSubstances) — the mutation four texts then
 			// prescribed as this fold's own guard — moved no case's colour.
@@ -2343,6 +2360,94 @@ public class DrugSafetyValidator {
 		}
 		for (String allergen : context.allergensMatching(c.getToken())) {
 			if (ref.matchesDrugName(allergen)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * @return whether some recorded condition that {@code c}'s token matched carries that token as a
+	 *         WHOLE WORD rather than only inside a longer one — the CONDITION arm's corroborating question
+	 *         (issue #309), and the third leg of {@link #corroboratedByTheChart}. Asked only of a rule
+	 *         that has already matched.
+	 *
+	 *         <p><b>A boundary, not a resolution, and that is the whole design.</b> Issue #309 says the
+	 *         corroboration test has no condition analogue because both of its allergy legs resolve a
+	 *         drug NAME — {@link #aMatchedRecordNamesTheEntry} through
+	 *         {@link DrugReference#matchesDrugName}, {@link #allergicSubstanceKeys} through the allergen
+	 *         arm's identity question — and no arm resolves a recorded CONDITION to a reference
+	 *         substance. That is right about the legs and does not settle the question, because what
+	 *         redeems a condition match is not a resolution: it is whether the token reached the record
+	 *         as a word of it. So this asks the one thing that IS askable of free clinical text, and the
+	 *         ticket's own conclusion — that a fix must therefore wait on a resolver — does not follow.
+	 *
+	 *         <p><b>{@link DrugReference#containsWord} and deliberately not
+	 *         {@link DrugReference#matchesOrderName}.</b> The condition haystack is prose in the
+	 *         clinician's own wording, which is the shape {@link PatientClinicalContext#containsToken}
+	 *         describes it by, so it takes the PROSE rule — the accessor CLAUDE.md names for that
+	 *         operand shape. The order-name rule's two-letter tail allowance is measured over drug
+	 *         names and choosing it here would be a caller picking an allowance of its own.
+	 *
+	 *         <p><b>What it costs, measured</b> (issue #309, over the OpenMRS 3.7.1 demo dictionary —
+	 *         both corpora and every figure are recorded on {@link PatientClinicalContext#containsToken}).
+	 *         Over the curated condition tokens this repo ships it costs nothing on those corpora —
+	 *         over a base of ONE token, {@code peptic ulcer} being the only one of the four that
+	 *         matches anything in either corpus; its matches are counted per corpus and never summed
+	 *         into a total, the two counts being on {@link PatientClinicalContext#containsToken} with
+	 *         the corpora they are OF. That base is what the zero is a share of and is to be stated
+	 *         with it wherever it is published. It
+	 *         DOES cost the free-text half, which they cannot reach, and that reaches those same shipped
+	 *         tokens — an INFLECTION, pinned by
+	 *         {@code ConditionRuleBoundaryCorroborationTest.anInflectionOfAShippedTokenIsHedged}. A
+	 *         SECOND and separate residue is visible in the coded corpora and on tokens the seed does
+	 *         not ship: a prefix or suffix compound that is clinically the same finding, pinned by
+	 *         {@code .aClinicallyRightCompoundIsHedgedToo}. Two residues, two corpora; the figures for
+	 *         both are on {@link PatientClinicalContext#containsToken}.
+	 *
+	 *         <p>Through {@link PatientClinicalContext#conditionsMatching} — the witness accessor — for
+	 *         SYMMETRY with the allergy leg above and to share one scan with the boolean, and NOT
+	 *         because scanning the witnesses answers differently from scanning the whole condition list.
+	 *         It does not: {@link DrugReference#containsWord} is strictly stronger than the containment
+	 *         those witnesses are filtered by, so any condition carrying the token as a word is already
+	 *         one of them. Measured by mutation — swapping this loop to
+	 *         {@code context.getConditionTokens()} reddens nothing. Stated because the allergy leg's own
+	 *         per-witness form IS load-bearing ({@code matchesDrugName} can accept a record that
+	 *         {@code hasAllergyToken} did not match), so the symmetry invites the reader to assume the
+	 *         same of this one. What the witness form buys here is a future question this leg cannot yet
+	 *         ask — WHICH recorded condition redeemed the match — and a boundary rule weaker than
+	 *         containment, for which the filter would start to matter.
+	 *
+	 *         <p><b>Both sides are asked about the TRIMMED token.</b> Untrimmed they disagreed — the
+	 *         witness filter trims ({@link PatientClinicalContext#recordsMatching}) and the boundary
+	 *         question did not — so a curated rule whose token carried stray whitespace found its
+	 *         witness and then failed to match it, losing the recorded attribution it had before issue
+	 *         #309. Silently, and reachable from an operator's own file, since nothing in
+	 *         {@code DrugReferenceValidity} trims or reports a padded token. A normalization and not a
+	 *         widening: the trimmed token still goes to the whole-word rule.
+	 *         {@code ConditionRuleBoundaryCorroborationTest.aPaddedTokenIsPutToTheSameStringItsWitnessFilterTrimmed}
+	 *         holds both halves.
+	 *
+	 *         <p><b>Prompt-facing only, and that is the LIMIT of issue #309's fix rather than merely its
+	 *         scope.</b> The chip arm's own answer is unmoved, so on the ticket's reproduction the
+	 *         injected record and the {@code safety_finding} hedge while the {@code safetyWarnings} chip
+	 *         still states the contraindication of the chart, unqualified — a surface with no third
+	 *         section to hedge into. Do not close it by tightening
+	 *         {@link PatientClinicalContext#hasConditionToken}, which is fail-open; ADR Decision 73's
+	 *         trade-offs carry the case and what a remedy would have to be.
+	 *
+	 *         <p>False for a null context, which is "nothing known" rather than "nothing recorded", and
+	 *         false is the safe direction here exactly as it is for {@link #aMatchedRecordNamesTheEntry}:
+	 *         it hedges, and can never make a record ASSERT something about a chart nobody read.
+	 */
+	static boolean aMatchedConditionCarriesTheToken(DrugReference.Contraindication c,
+			PatientClinicalContext context) {
+		if (context == null) {
+			return false;
+		}
+		String token = PatientClinicalContext.normalizedToken(c.getToken());
+		for (String condition : context.conditionsMatching(token)) {
+			if (DrugReference.containsWord(condition, token)) {
 				return true;
 			}
 		}
@@ -4186,7 +4291,7 @@ public class DrugSafetyValidator {
 		if (ChartSearchAiUtils.isBlank(rule.getToken())) {
 			return false;
 		}
-		String token = rule.getToken().trim();
+		String token = PatientClinicalContext.normalizedToken(rule.getToken());
 		return DrugReference.matchesOrderName(order.getDisplay(), token);
 	}
 
@@ -7135,7 +7240,10 @@ public class DrugSafetyValidator {
 	 *         fourth injected-record question, and since issue #308 the question BOTH injected
 	 *         channels ask. Asked only of a rule that has already matched.
 	 *
-	 *         <p>The union of two questions, and neither half will do: everything about WHY is on
+	 *         <p><b>Three legs, and which one is asked is decided by the rule's TYPE.</b> An ALLERGY
+	 *         rule takes the union of two questions, and neither half will do; a CONDITION rule takes a
+	 *         third leg, outside that union and outside the self-naming scope stated below. Everything
+	 *         about WHY the allergy union is a union is on
 	 *         {@code DrugReferenceInjector.corroborated}, which is where the reasoning has lived since
 	 *         issue #269 and which now delegates here. What moved is only the body, and it moved for
 	 *         one reason — the injected {@code drug_reference} section and the injected
@@ -7176,13 +7284,30 @@ public class DrugSafetyValidator {
 	 *         the ledger's RANK is not the same thing, and the difference is reachable — see issue
 	 *         #308 and ADR Decision 44, which record three ways of getting the unit wrong.
 	 *
-	 *         <p>Scoped to a SELF-NAMED allergy rule, which is load-bearing rather than incidental —
+	 *         <p><b>The two allergy legs are scoped to a SELF-NAMED allergy rule</b> — the scope is the
+	 *         union's and not the method's — and it is load-bearing rather than incidental:
 	 *         a rule whose token is not one of its entry's names is asking about a class or about a
-	 *         fragment of free text, which is what the bare match exists for, and neither corroborating
-	 *         question can speak to it. Mutate the scope out and read the failures.
+	 *         fragment of free text, which is what the bare match exists for, and neither of the ALLERGY
+	 *         corroborating questions can speak to it. Mutate the scope out and read the failures.
+	 *
+	 *         <p><b>A CONDITION rule is corroborated by a different question, and it is not one of the
+	 *         two above</b> (issue #309). Its token reached the condition list through the same bare
+	 *         containment, so the same accident is available — {@code liver} inside a condition recorded
+	 *         as {@code Status Post Cesarean Delivery} — and until #309 this method answered
+	 *         {@code true} for it unconditionally, so the record stated it under
+	 *         {@code Recorded for this patient:}. What redeems such a match is a BOUNDARY rather than a
+	 *         resolution, which is why the ticket's premise ("there is no condition arm resolving a
+	 *         recorded condition to a reference substance, so there is nothing to ask") does not settle
+	 *         it: see {@link #aMatchedConditionCarriesTheToken}, which carries the measurement and the
+	 *         residue. The three legs are NOT interchangeable and none of them is asked of the other's
+	 *         rule type — the entry side of the allergy legs is meaningless for a condition token, which
+	 *         is the widening #309 forbids in as many words.
 	 */
 	static boolean corroboratedByTheChart(DrugReference ref, DrugReference.Contraindication c,
 			PatientClinicalContext context, Supplier<Set<Object>> allergicSubstances) {
+		if (isConditionRule(c)) {
+			return aMatchedConditionCarriesTheToken(c, context);
+		}
 		if (!selfNamedAllergyRule(ref, c)) {
 			return true;
 		}
@@ -7558,11 +7683,15 @@ public class DrugSafetyValidator {
 
 	/**
 	 * @return whether {@code c} is the ALLERGY leg of the curated rule vocabulary. One spelling of that
-	 *         test, because FOUR consumers now ask it for different reasons — {@link
+	 *         test, because several consumers ask it for different reasons — {@link
 	 *         #recordedContraindicationKind} to decide which chart list a rule is put to, {@link
 	 *         SubjectMatter} to decide whether an allergy-domain question puts the rule in scope,
 	 *         {@link #evaluatesAgainstTheChart} to decide whether the module could ask the chart at all,
-	 *         and {@link #selfNamedAllergyRule} for issue #146's fold. Left as literals they would drift
+	 *         and {@link #selfNamedAllergyRule} for issue #146's fold. <b>{@link #corroboratedByTheChart}
+	 *         branches on the CONDITION leg alone</b> since issue #309, asking neither of the two
+	 *         questions this one gates — so the pair diverges in both directions, and this enumeration is
+	 *         where that is recorded rather than left for a maintainer to discover. Which sites read
+	 *         which is answered by finding the callers, not by a tally here. Left as literals they would drift
 	 *         silently and in the worse direction: a vocabulary that grew a synonym would keep matching
 	 *         rules through one reader while another quietly stopped applying to them, and the worst of
 	 *         those pairings is a rule {@code recordedContraindicationKind} can evaluate that
@@ -7578,8 +7707,16 @@ public class DrugSafetyValidator {
 	 *         {@link #isAllergyRule} and for the reason listed there, which is not symmetry: the readers
 	 *         of a rule's TYPE are enumerated once, on that method, rather than half here and half
 	 *         there. Keeping one of the pair literal and the other named is how the pair comes apart.
+	 *
+	 *         <p><b>Package-private, unlike its sibling, and asymmetric in readers.</b> Their reader
+	 *         SETS were never identical — {@link #selfNamedAllergyRule} reads only the allergy leg — and
+	 *         since issue #309 they diverge in both directions: {@link #corroboratedByTheChart} branches
+	 *         on this one alone. {@link #isAllergyRule}'s enumeration is where the readers are named. The visibility is for
+	 *         {@code ConditionRuleBoundaryCorroborationTest.theShippedSeedPublishesExactlyTheFourConditionTokensTheMeasurementWasOver},
+	 *         a data guard over the shipped seed that must screen condition rules by the production
+	 *         predicate rather than by a second spelling of the literal.
 	 */
-	private static boolean isConditionRule(DrugReference.Contraindication c) {
+	static boolean isConditionRule(DrugReference.Contraindication c) {
 		return "condition".equalsIgnoreCase(c.getType());
 	}
 

@@ -425,8 +425,10 @@ public class UncorroboratedFindingProvenanceTest {
 		// everywhere else. Codeine files an allergy rule on `codeine` and a CONDITION rule on
 		// `respiratory depression` carrying ONE note, `opioid reaction`; an allergy recorded as
 		// `Dihydrocodeine` reaches the first only mid-word and corroborates nothing, while a recorded
-		// condition `Respiratory depression` matches the second, which is not self-named and so is
-		// corroborated by construction. The record's own side of this is
+		// condition `Respiratory depression` matches the second, which since issue #309 the BOUNDARY leg
+		// corroborates — that recorded condition carries the token as a whole word. It was "corroborated
+		// by construction for not being self-named" before #309, and this case now depends on the leg:
+		// neuter aMatchedConditionCarriesTheToken and its precondition reddens. The record's own side is
 		// InjectedContraindicationCorroborationTest.aClauseAnotherRuleOfTheSameEntryDoesRecordIsStatedAsRecorded,
 		// which owns this exact arrangement and asserts only that side of it.
 		//
@@ -471,23 +473,30 @@ public class UncorroboratedFindingProvenanceTest {
 		// The exact complement of the case above, and what pins the pre-pass's own opening guard: it
 		// seeds corroboratedClauses only from rules that MATCHED this chart
 		// (`recordedContraindicationKind(c, context) == null` -> continue). That guard is load-bearing
-		// twice over. corroboratedByTheChart answers TRUE unconditionally for anything that is not a
-		// self-named allergy rule, and contraindicationClauses renders a clause for every rule of the
-		// entry whether it matched or not — so an UNMATCHED rule reaching the fold seeds its key TRUE,
-		// puts that key's clause into statedAsRecorded and clears the finding's provenance, while the
-		// injected record beside it goes on hedging that very string. That is issue #308's own
+		// twice over. corroboratedByTheChart answers TRUE unconditionally for an ALLERGY rule that is
+		// not self-named, and contraindicationClauses renders a clause for every rule of the entry
+		// whether it matched or not — so an UNMATCHED rule of that shape reaching the fold seeds its key
+		// TRUE, puts that key's clause into statedAsRecorded and clears the finding's provenance, while
+		// the injected record beside it goes on hedging that very string. That is issue #308's own
 		// contradiction, one rule along.
 		//
 		// Same Codeine entry and same allergen as the case above, with the recorded CONDITION taken
 		// away: the allergy rule on `codeine` still matches an allergen recorded as `Dihydrocodeine`
 		// mid-word and corroborates nothing, while the condition rule on `respiratory depression` — the
-		// rule that carries the same note, `opioid reaction`, and is corroborated by construction for
-		// not being self-named — is now matched by nothing in the chart and may not speak for it.
+		// rule that carries the same note, `opioid reaction` — is now matched by nothing in the chart
+		// and may not speak for it.
 		//
-		// Delete that `continue` from the PRE-PASS (leaving `Object key = contraindicationFinding(ref,
-		// c);` as the loop's first statement) and read the failure: the two preconditions below still
-		// hold — the record goes on hedging `opioid reaction` and states nothing as recorded — while the
-		// finding beside it goes bare.
+		// THIS CASE NO LONGER WITNESSES THE `continue` GUARD, and the reason is issue #309 rather than
+		// anything here: that change gave a condition rule a corroborating leg of its own, so the
+		// unmatched condition rule this arrangement turns on now answers FALSE rather than TRUE and
+		// deleting the guard leaves the whole api suite green. Measured on the commit that added the
+		// leg, and on its parent, where the same mutation reddened this case. The comment that stood
+		// here said "corroborated by construction for not being self-named", which was that premise.
+		// The guard's witness is now
+		// ConditionRuleBoundaryCorroborationTest.anUnmatchedRuleStillCannotSeedItsKeyAsRecorded, whose
+		// unmatched rule is a non-self-named ALLERGY rule — one of the rules that fall through the first
+		// two branches of corroboratedByTheChart, which is where to read which those are. What this case still pins is the pair of preconditions below: the record goes
+		// on hedging `opioid reaction` and states nothing as recorded, beside a finding that hedges it.
 		DrugReferenceService service = DrugReferenceTestSupport
 				.serviceWith(DrugReferenceTestSupport.fixtureEntries(BORROWED_ALIAS));
 		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service)
@@ -531,8 +540,11 @@ public class UncorroboratedFindingProvenanceTest {
 		// #146) and render "opioid reaction — other reaction", while only the `levo` rule matches — an
 		// allergy recorded as `Levocetirizine` reaches it mid-word and corroborates nothing — so the
 		// finding prints "opioid reaction". A CONDITION rule of another key carries that same note and
-		// is matched by a recorded `Respiratory depression`; not being self-named it is corroborated by
-		// construction, so the record states "opioid reaction" as this chart's own reading.
+		// is matched by a recorded `Respiratory depression`; since issue #309 the BOUNDARY leg corroborates it — that
+		// recorded condition carries the token as a whole word — so the record states "opioid reaction"
+		// as this chart's own reading. It was "corroborated by construction for not being self-named"
+		// before #309, and this case now depends on the leg: neuter aMatchedConditionCarriesTheToken
+		// and its precondition reddens.
 		//
 		// Mutate the `contraindicationClause(c)` conjunct of `uncorroborated` away and read the failure.
 		//

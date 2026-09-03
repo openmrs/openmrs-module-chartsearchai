@@ -309,12 +309,12 @@ Worth running on every pass — it is the false-positive control.
 
 ## 2. "Can X and Y be given together?" — the question-pair arm
 
-Checks drugs named in the **question** against each other. Testing it *requires* a patient on
-neither drug: where one of the above-floor rules joining the pair names an active order, the
-drug-in-play arm owns that pair and this arm reports nothing for it — see
-[2b](#2b-why-you-must-pick-a-patient-on-neither-drug). Note the condition is about the RULE's
-token, not "the patient is on one of them": a patient can be on one of the pair while no rule
-joining it names her order, and that pair is still this arm's to report.
+Checks drugs named in the **question** against each other. The reliable way to test it is a
+patient on neither drug: where one of the above-floor rules joining the pair names an active
+order, the drug-in-play arm owns that pair and this arm reports nothing for it — see
+[2b](#2b-why-you-must-pick-a-patient-on-neither-drug). The predicate is narrower than "the
+patient is on one of them" and is not restated here; `addQuestionPairInteractions`' own javadoc
+and [ADR Decision 68](adr.md) carry it.
 
 **Patient:** Betty Williams — on neither warfarin nor ibuprofen, but allergic to aspirin.
 **Question:** *Can warfarin and ibuprofen be given together?*

@@ -66,9 +66,9 @@ package org.openmrs.module.chartsearchai.reference;
  * a client rendering the field as {@code README} tells it to showed "0 of 0 interaction pairs"
  * above a Major finding. It now states nothing, which is what lets
  * {@code DrugSafetyValidator.validate}'s issue #356 fallback hand the field to the arm that did
- * report those pairs. Scoped to a pass that ceded every pair: where some survive, the list it kept
- * is complete and it says so, and the ceded pairs are reported beside it as chips rather than
- * withheld. The SCREENING arm has a cede of its own — it skips a pair the drug-in-play arm already
+ * report those pairs. Scoped to a pass that ceded every pair: where some survive, the arm keeps
+ * the field and describes the list it kept — which {@code maxPairChips} can still truncate, exactly
+ * as it could before — and the ceded pairs are reported beside it as chips rather than withheld. The SCREENING arm has a cede of its own — it skips a pair the drug-in-play arm already
  * chipped — and still states a zero there, which ADR Decision 68 records as reproduced and
  * deliberately not fixed by this rule.
  *
@@ -109,7 +109,9 @@ package org.openmrs.module.chartsearchai.reference;
  *
  * <p><b>Zero is a measurement and absence is not.</b> An extent stating {@code found == 0} says an
  * arm ran and the reference data related none of the pairs it enumerated — a complete screen,
- * positively assertable, which is half of what this type exists for. No extent at all
+ * positively assertable, which is half of what this type exists for. One known exception survives
+ * and is not a licence to read the zero loosely: the SCREENING arm's own cede, above, where the
+ * zero is false and ADR Decision 68 records why it is still published. No extent at all
  * ({@code null} on the answer, {@code null} on the wire) says the producer stated no measurement.
  * This javadoc and {@code README.md}'s client-facing paragraph carry that list — the second because
  * it is the only one a frontend author reads — and everything else points here rather than

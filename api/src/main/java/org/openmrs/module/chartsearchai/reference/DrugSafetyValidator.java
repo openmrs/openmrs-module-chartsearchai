@@ -369,7 +369,7 @@ public class DrugSafetyValidator {
 	 *        {@code ActiveOrderResolutionPerPassTest} pins both halves: that the pass resolves once,
 	 *        and that what it injects is what a self-resolving pass produces.
 	 *
-	 * @param pairExtentSink where the arm that ran states how many above-floor rule pairs it found
+	 * @param pairExtentSink where the arm that made a statement says how many above-floor rule pairs it found
 	 *        and how many of them it reported — {@link #maxPairChips()}'s cut for either PAIRWISE arm,
 	 *        and everything it found for the uncapped drug-in-play arm, which states it where neither
 	 *        of those stated one (issue #356) — or {@code null} down every
@@ -997,11 +997,11 @@ public class DrugSafetyValidator {
 	 *
 	 * <p>A {@code null} extent is the absence of a statement, which is not the same as an arm having
 	 * enumerated nothing: an arm that ran and found no above-floor pair states {@code found == 0}, a
-	 * complete screen. What a producer's {@code null} covers is on
-	 * {@link #addQuestionPairInteractions}'s {@code @return} for that arm and in ADR Decision 68;
-	 * what a CLIENT's covers is enumerated in {@link PairChipExtent} and in {@code README}, and
-	 * those two are not the same list, because {@code validate}'s issue #356 fallback stands between
-	 * them.
+	 * complete screen. The value handed here is the one {@code validate} settled AFTER its issue
+	 * #356 fallback, so it is already the client's: {@link PairChipExtent} and {@code README}
+	 * enumerate what that {@code null} covers. Each ARM's own {@code null} is a different and wider
+	 * thing — see the {@code @return} on {@link #addQuestionPairInteractions} and on
+	 * {@link #addActiveOrderPairInteractions}, and ADR Decision 68.
 	 */
 	private static void recordPairExtent(PairChipExtent.Sink sink, PairChipExtent extent) {
 		if (sink != null && extent != null) {
@@ -2564,8 +2564,9 @@ public class DrugSafetyValidator {
 	 * interaction check on the canonical prescribing question. Where the name resolves to several
 	 * reference entries the question-pair arm owns the field instead and this count is discarded —
 	 * unless that arm ceded every pair it related, where it states nothing and this count is what
-	 * reaches the wire (issue #336, ADR Decision 68);
-	 * {@link PairChipExtent} is canonical for what that costs a reader. Stating nothing published a completed negative screen as
+	 * reaches the wire (issue #336, ADR Decision 68).
+	 * For what the question-pair arm owning the field costs a reader, {@link PairChipExtent} is
+	 * canonical. Stating nothing published a completed negative screen as
 	 * {@code interactionPairs: null}, which {@link PairChipExtent} defines as "the producer stated no
 	 * measurement": a clinician was given an abstention indistinguishable from one where nobody
 	 * looked. The count returned is the RULE chips this call appended, because that is the population
@@ -5517,7 +5518,7 @@ public class DrugSafetyValidator {
 	 *        unreachable from here too.
 	 * @return what this screen measured, or {@code null} where it could not run at all (no clinical
 	 *         context). It states {@code of(0, 0)} over an empty candidate list — including on the one
-	 *         path where that is FALSE, a pass whose every pair went to the drug-in-play arm through
+	 *         a path where that is FALSE, a pass whose every pair went to the drug-in-play arm through
 	 *         {@code alreadyReported}. Unlike {@link #addQuestionPairInteractions}, which since issue
 	 *         #336's verification round states nothing there, this arm has no fallback behind it: see
 	 *         the comment at that return, and ADR Decision 68 for the reproduction.
@@ -5687,7 +5688,7 @@ public class DrugSafetyValidator {
 			// half of issue #336 a truncation signal alone would leave unsaid — a caller hearing
 			// nothing cannot tell it from a question that never asked to be screened.
 			//
-			// ONE path here makes that sentence false and it is a KNOWN, reproduced gap, not a claim to
+			// One path here makes that sentence false and it is a KNOWN, reproduced gap, not a claim to
 			// rely on: where alreadyReported above yielded every pair to the drug-in-play arm, this
 			// screen related pairs and kept none, exactly as addQuestionPairInteractions did before
 			// issue #336's verification round. That arm now states nothing there; this one still states

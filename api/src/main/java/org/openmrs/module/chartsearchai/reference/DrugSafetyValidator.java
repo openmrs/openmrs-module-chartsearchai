@@ -372,7 +372,7 @@ public class DrugSafetyValidator {
 	 * @param pairExtentSink where the arm that ran states how many above-floor rule pairs it found
 	 *        and how many of them it reported — {@link #maxPairChips()}'s cut for either PAIRWISE arm,
 	 *        and everything it found for the uncapped drug-in-play arm, which states it where neither
-	 *        of those ran (issue #356) — or {@code null} down every
+	 *        of those stated one (issue #356) — or {@code null} down every
 	 *        path but the one {@code LlmInferenceService} takes to publish it on the answer. It is
 	 *        a caller-supplied per-call object rather than a field for issue #172's reason, the same
 	 *        one {@code resolvedOrderEntries} above gives. Issue #336: without it a capped list was
@@ -697,13 +697,19 @@ public class DrugSafetyValidator {
 			pairExtent = addActiveOrderPairInteractions(warnings, subjects, context, severityFloor,
 					orderEntries, interactionPairs, coMedications, statedChips);
 		}
-		// And where neither of them ran, the arm that DID screen speaks (issue #356). "Can I give this
+		// And where neither of them STATED one, the arm that DID screen speaks (issue #356). "Can I give this
 		// patient X?" typically resolves one drug: too few for the question-pair arm, too many for the
 		// screen, so the drug-in-play arm above is the whole of the interaction check on the canonical
 		// prescribing question — and a completed negative screen was published as `null`, the value
 		// PairChipExtent defines as "the producer stated nothing". Typically and not always: a name
 		// that resolves to several reference entries opens the question-pair arm, which then owns the
 		// field. See PairChipExtent, which is canonical for what that costs a reader.
+		//
+		// The gate is "neither STATED one" and not "neither ran", which since issue #336's
+		// verification round is a real difference: a question-pair pass that related pairs and ceded
+		// every one of them to the arm above returns null rather than of(0, 0), so this fallback is
+		// what then hands the field to the arm that actually reported them. Its numbers are still its
+		// own, over its own population — see addQuestionPairInteractions and ADR Decision 68.
 		//
 		// LAST and only where pairExtent is still null, never summed. A pairwise statement is about a
 		// BOUNDED list — found and reported can differ, and which is the whole of what a client renders
@@ -925,7 +931,7 @@ public class DrugSafetyValidator {
 	 * pair is NAMED in a WARN — a silent truncation would read to a clinician as "everything is
 	 * covered". <b>The WARN is no longer the only place the cut surfaces</b> (issue #336): both arms
 	 * now state how many pairs they found beside how many they reported — and since issue #356 so does
-	 * the uncapped drug-in-play arm, where neither of these ran — on the answer as
+	 * the uncapped drug-in-play arm, where neither of these stated one — on the answer as
 	 * {@code ChartAnswer.getPairChipExtent()} and on the wire as {@code interactionPairs}. This
 	 * javadoc used to say a clinician-facing "10 of 72 shown" needed a per-question container the chip
 	 * API does not have and was therefore a frontend change; the premise was half right and the

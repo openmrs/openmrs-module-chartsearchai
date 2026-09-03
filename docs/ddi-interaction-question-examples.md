@@ -366,8 +366,8 @@ A zero here was not "of the pairs this arm was responsible for, none": the arm r
 handed it over, and a zero is defined as *the reference data related none of the pairs enumerated*.
 Where only **some** of a question's pairs are ceded the arm keeps the field and describes the list
 it kept: that list is complete and says so, and the ceded pairs are reported beside it as chips
-rather than withheld. So this field still does not count the chips beside it — see the table at
-the top of this document.
+rather than withheld. So this field still does not count the chips beside it — see
+[The four arms, and what each one answers](#the-four-arms-and-what-each-one-answers).
 
 ---
 

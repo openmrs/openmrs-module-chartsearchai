@@ -62,8 +62,9 @@ package org.openmrs.module.chartsearchai.reference;
  * {@code "Can I give her warfarin and ibuprofen?"} of a patient prescribed ibuprofen: the response
  * published {@code found: 0, reported: 0} beside fifteen interaction chips including a Major, so
  * a client rendering the field as {@code README} tells it to showed "0 of 0 interaction pairs"
- * above a Major finding. It now states nothing, which is what lets the fallback below hand the
- * field to the arm that did report those pairs. Scoped to a pass that ceded every pair: where some
+ * above a Major finding. It now states nothing, which is what lets
+ * {@code DrugSafetyValidator.validate}'s issue #356 fallback hand the field to the arm that did
+ * report those pairs. Scoped to a pass that ceded every pair: where some
  * survive, the list it kept is complete and it says so, and the ceded pairs are reported beside it
  * as chips rather than withheld.
  *

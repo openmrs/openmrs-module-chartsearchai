@@ -120,13 +120,15 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 		return pass(SCREENING_QUESTION, DrugReferenceTestSupport.screenedSixOrderChart());
 	}
 
-	/** The ticket's own third row in miniature: a chart carrying the ibuprofen the question also
+	/** Issue #336's own third row in miniature: a chart carrying the ibuprofen the question also
 	 *  names, plus one further order the excerpt relates BOTH question drugs to, so the pairs the
-	 *  chart arm reports outnumber the one pair the question-pair arm ceded to it. That inequality is
-	 *  the whole point — with one of each, a case cannot tell the arm DECLINING to speak from the arm
-	 *  counting the ceded pair into its own numbers, which is the cross-arm sum ADR Decision 65
-	 *  refuses. Both the name and the code, so the cede does not rest on the order-name leg of
-	 *  {@code hasActiveDrug} alone. */
+	 *  chart arm reports OUTNUMBER the pairs the question-pair arm has to say anything about. That
+	 *  inequality is the whole point and both cede cases below need it: where the two counts
+	 *  coincide, no assertion can tell the arm DECLINING to speak from the arm counting a ceded pair
+	 *  into its own numbers — the cross-arm sum ADR Decision 65 refuses — and, on the partial case,
+	 *  none can tell the arm KEEPING the field from the arm yielding it. Measured: on a chart holding
+	 *  the ibuprofen alone the partial case reads {@code found: 1} either way. Both the order's name
+	 *  and its code, so the cede does not rest on the order-name leg of {@code hasActiveDrug} alone. */
 	private static PatientClinicalContext chartOwningTheQuestionsOnlyPair() {
 		return DrugReferenceTestSupport.ctx(60, null,
 				DrugReferenceTestSupport.set("Ibuprofen 400mg", "Aspirin 81mg"),
@@ -532,25 +534,24 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 
 	@Test
 	public void aQuestionPairListThatCededOnlySomeOfItsPairsStillStatesItsOwnBoundedList() {
-		// The boundary of the case above, and the residue it deliberately leaves. Three question
-		// drugs on a chart holding one of them: warfarin x ibuprofen is the chart arm's, simvastatin x
-		// warfarin is this arm's, and this arm goes on describing the bounded list it kept. Its statement is true
+		// The boundary of aQuestionPairListThatCededEveryPairStatesWhatTheChartArmReported, and the
+		// residue it deliberately leaves. A third question drug on the same chart: warfarin x ibuprofen is the chart arm's, simvastatin x warfarin is
+		// this arm's, and this arm goes on describing the bounded list it kept. Its statement is true
 		// of that list — nothing in it was withheld — and the ceded pair is reported beside it as a
 		// chip rather than hidden, which is why the fix above is scoped to a pass that ceded EVERY
-		// pair. Neuter that scope to "any cede" and this case reddens, having forfeited the bounded
-		// statement issue #336 exists to publish.
+		// pair. Withhold the statement on ANY cede instead and this reads the chart arm's three,
+		// having forfeited the bounded claim issue #336 exists to publish for a number no cap cut.
 		String threeDrugs = "Interactions for warfarin, ibuprofen and simvastatin?";
-		Pass partial = pass(threeDrugs, DrugReferenceTestSupport.ctx(60, null,
-				DrugReferenceTestSupport.set("Ibuprofen 400mg"),
-				DrugReferenceTestSupport.set("M01AE01"), null, null));
+		Pass partial = pass(threeDrugs, chartOwningTheQuestionsOnlyPair());
 
 		assertEquals(3, entriesResolvedBy(threeDrugs), "precondition: three resolved entries");
-		assertEquals(2, partial.chips.size(),
-				"precondition: one chip from each arm, so the cede is partial rather than total: "
-						+ DrugReferenceTestSupport.details(partial.chips));
+		assertEquals(4, partial.chips.size(),
+				"precondition: the chart arm's three and this arm's one, so the cede is partial rather "
+						+ "than total: " + DrugReferenceTestSupport.details(partial.chips));
 		assertNotNull(partial.extent);
 		assertEquals(1, partial.extent.getFound(),
-				"the pair this arm kept, and not the one it handed to the chart arm");
+				"the pair this arm kept, and not the one it handed to the chart arm — nor the chart "
+						+ "arm's own three, which is what this reads if the field is yielded on any cede");
 		assertEquals(1, partial.extent.getReported());
 	}
 }

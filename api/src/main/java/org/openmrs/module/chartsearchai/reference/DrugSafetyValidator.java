@@ -2108,8 +2108,10 @@ public class DrugSafetyValidator {
 		// of their own, so an unmatched one now answers FALSE rather than TRUE and the mutation stopped
 		// reddening it. Measured on the commit that added the leg (whole api suite green under the
 		// mutation) and on its parent (that case red). The witness named above is an unmatched allergy
-		// rule that is NOT self-named — the one shape still answering TRUE unconditionally, so a
-		// condition rule cannot witness this guard any more and a self-named allergy rule never could.
+		// rule that is NOT self-named. Two shapes still answer TRUE unconditionally — that one, and a
+		// rule whose type is neither `allergy` nor `condition`, which contraindicationSections files as
+		// unevaluable; the witness below is the first. What can no longer witness this guard is a
+		// condition rule, and a self-named allergy rule never could.
 		Map<Object, String> clauses = contraindicationClauses(ref);
 		Map<Object, Boolean> corroboratedClauses = new HashMap<Object, Boolean>();
 		for (DrugReference.Contraindication c : ref.getContraindications()) {
@@ -2367,24 +2369,11 @@ public class DrugSafetyValidator {
 	 *
 	 *         <p><b>What it costs, measured</b> (issue #309, over the OpenMRS 3.7.1 demo dictionary —
 	 *         both corpora and every figure are recorded on {@link PatientClinicalContext#containsToken}).
-         Over the only real curated condition population that exists — the four condition tokens the
-	 *         shipped seed publishes — it costs nothing ON THE MEASURED CORPORA: every value they match
-	 *         there carries the token as a whole word. That is the proxy issue #223 used to settle the
-	 *         allergy side, run for conditions, and that bound is the whole of the claim: both corpora
-	 *         are CODED concept names, and the free-text half is unmeasured because the demo database's
-	 *         {@code condition_non_coded} column holds one placeholder across all its rows.
-	 *
-	 *         <p><b>Free text is where it does cost, and it reaches the shipped seed's own tokens.</b>
-	 *         A condition a clinician types as {@code GI bleeding} is hedged against the seed's
-	 *         {@code gi bleed}, and {@code peptic ulceration} against {@code peptic ulcer} — an
-	 *         INFLECTION, which no choice of boundary rule rescues (the tail is three letters, past even
-	 *         the order-name rule's two, and picking an allowance at a call site is what #260 forbids).
-	 *         The other shape is a prefix or suffix compound that is clinically the same finding,
-	 *         {@code Lymphedema} for a rule on {@code edema}. Both are hedged rather than lost — the
-	 *         section asserts nothing and denies nothing, the contraindication is still listed and the
-	 *         chip still fires — and both are pinned as cases rather than described, by
+	 *         Over the curated condition tokens this repo ships it costs nothing on those corpora, and
+	 *         it DOES cost the free-text half, which they cannot reach — including on those same
+	 *         tokens. Both are stated there rather than again here; the two shapes are pinned as cases,
 	 *         {@code ConditionRuleBoundaryCorroborationTest.anInflectionOfAShippedTokenIsHedged} and
-	 *         {@code .aClinicallyRightCompoundIsHedgedToo}, so a future change reads the cost.
+	 *         {@code .aClinicallyRightCompoundIsHedgedToo}.
 	 *
 	 *         <p>Through {@link PatientClinicalContext#conditionsMatching} — the witness accessor — for
 	 *         SYMMETRY with the allergy leg above and to share one scan with the boolean, and NOT
@@ -2399,6 +2388,17 @@ public class DrugSafetyValidator {
 	 *         ask — WHICH recorded condition redeemed the match — and a boundary rule weaker than
 	 *         containment, for which the filter would start to matter.
 	 *
+	 *         <p><b>The boundary question is put to the TRIMMED token, because that is the string the
+	 *         witness filter matched on</b> ({@link PatientClinicalContext#recordsMatching} folds
+	 *         {@code token.trim()}). Untrimmed the two sides disagreed: a curated rule whose token
+	 *         carried stray whitespace found its witness and then failed to match it, so every such rule
+	 *         lost the recorded attribution it had before issue #309 — silently, and reachable from an
+	 *         operator's own file, since nothing in {@code DrugReferenceValidity} trims or reports a
+	 *         padded token. A normalization and not a widening: the trimmed token still goes to the
+	 *         whole-word rule.
+	 *         {@code ConditionRuleBoundaryCorroborationTest.aPaddedTokenIsPutToTheSameStringItsWitnessFilterTrimmed}
+	 *         holds both halves.
+	 *
 	 *         <p>False for a null context, which is "nothing known" rather than "nothing recorded", and
 	 *         false is the safe direction here exactly as it is for {@link #aMatchedRecordNamesTheEntry}:
 	 *         it hedges, and can never make a record ASSERT something about a chart nobody read.
@@ -2408,8 +2408,9 @@ public class DrugSafetyValidator {
 		if (context == null) {
 			return false;
 		}
+		String token = c.getToken() == null ? null : c.getToken().trim();
 		for (String condition : context.conditionsMatching(c.getToken())) {
-			if (DrugReference.containsWord(condition, c.getToken())) {
+			if (DrugReference.containsWord(condition, token)) {
 				return true;
 			}
 		}
@@ -7286,7 +7287,7 @@ public class DrugSafetyValidator {
 	 *         of a rule's TYPE are enumerated once, on that method, rather than half here and half
 	 *         there. Keeping one of the pair literal and the other named is how the pair comes apart.
 	 */
-	private static boolean isConditionRule(DrugReference.Contraindication c) {
+	static boolean isConditionRule(DrugReference.Contraindication c) {
 		return "condition".equalsIgnoreCase(c.getType());
 	}
 

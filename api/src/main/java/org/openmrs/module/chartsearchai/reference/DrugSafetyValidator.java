@@ -373,7 +373,8 @@ public class DrugSafetyValidator {
 	 * @param pairExtentSink where the arm that made a statement says how many above-floor rule pairs it found
 	 *        and how many of them it reported — {@link #maxPairChips()}'s cut for either PAIRWISE arm,
 	 *        and everything it found for the uncapped drug-in-play arm, which states it where neither
-	 *        of those stated one (issue #356) — or {@code null} down every
+	 *        of those stated one AND the question resolved a drug it could screen (issue #356; issue
+	 *        #370, ADR Decision 70) — or {@code null} down every
 	 *        path but the one {@code LlmInferenceService} takes to publish it on the answer. It is
 	 *        a caller-supplied per-call object rather than a field for issue #172's reason, the same
 	 *        one {@code resolvedOrderEntries} above gives. Issue #336: without it a capped list was

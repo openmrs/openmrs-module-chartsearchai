@@ -124,9 +124,11 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 	/** Issue #336's own third row in miniature: a chart carrying the ibuprofen the question also
 	 *  names, plus one further order the excerpt relates BOTH question drugs to, so the pairs the
 	 *  chart arm reports OUTNUMBER the pairs the question-pair arm has to say anything about. That
-	 *  inequality is the whole point and both cede cases below need it: where the two counts
+	 *  inequality is the whole point and the question-pair cede cases below need it: where the two counts
 	 *  coincide, no assertion can tell the arm DECLINING to speak from the arm counting a ceded pair
-	 *  into its own numbers — the cross-arm sum ADR Decision 65 refuses — and, on the partial case,
+	 *  into its own numbers. The screening case that shares this chart discriminates
+	 *  differently, on the statement's PRESENCE rather than on a count, because no fallback is
+	 *  reachable behind that arm — the cross-arm sum ADR Decision 65 refuses — and, on the partial case,
 	 *  none can tell the arm KEEPING the field from the arm yielding it. Measured: on a chart holding
 	 *  the ibuprofen alone the partial case reads {@code found: 1} either way. Each order carries its
 	 *  name AND its code because that is what {@code PatientClinicalContextBuilder} builds for a
@@ -574,26 +576,26 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 		// states nothing. Nothing rescues that into a number here and it must not: validate's issue
 		// #356 fallback is gated on questionDrugScreened, which is false whenever this arm ran at all
 		// (its own gate is questionDrugs.isEmpty()), and the count no fallback can supply would be the
-		// ANSWER's -- the answer-dependence ADR Decision 65 refuses for this field's value.
+		// ANSWER's — the answer-dependence ADR Decision 65 refuses for this field's value.
 		Pass ceded = passWithAnswer("Ibuprofen is on the list.", SCREENING_QUESTION,
 				chartOwningTheQuestionsOnlyPair());
 
 		assertEquals(1, ceded.chips.size(),
 				"precondition: one chip, the drug-in-play arm's, because the screen ceded its only pair "
-						+ "to it -- two would mean the cede did not happen and this case measures the "
+						+ "to it — two would mean the cede did not happen and this case measures the "
 						+ "ordinary screen instead: " + DrugReferenceTestSupport.details(ceded.chips));
 		assertEquals("Ibuprofen", ceded.chips.get(0).getDrug(),
 				"precondition: and the chip is subjected on the drug the ANSWER named, which is this "
-						+ "arrangement's own tell for which arm raised it -- the screen states the same "
+						+ "arrangement's own tell for which arm raised it — the screen states the same "
 						+ "pair the other way round, as the control below shows. The two arms word this "
 						+ "chip identically once the subject is fixed, which is why alreadyReported keys "
 						+ "on the pair and not on the text");
 		// The control that makes this arrangement's cede a measurement rather than an assumption: the
 		// SAME chart, with the answer that names nothing, and the screen states its own pair. So the
 		// pair is related on this chart and only the answer moved which arm reported it.
-		Pass uncoded = pass(SCREENING_QUESTION, chartOwningTheQuestionsOnlyPair());
-		assertNotNull(uncoded.extent, "precondition: the screen states its own extent on this chart");
-		assertEquals(1, uncoded.extent.getFound(),
+		Pass unceded = pass(SCREENING_QUESTION, chartOwningTheQuestionsOnlyPair());
+		assertNotNull(unceded.extent, "precondition: the screen states its own extent on this chart");
+		assertEquals(1, unceded.extent.getFound(),
 				"precondition: and the pair it relates is the one the case above cedes, so the cede is "
 						+ "what empties the list rather than the data relating nothing");
 
@@ -606,7 +608,7 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 		// The boundary of the case above, and the screening arm's half of
 		// aQuestionPairListThatCededOnlySomeOfItsPairsStillStatesItsOwnBoundedList. Six orders the
 		// excerpt relates 15 ways; an answer naming one of them puts that drug in play, so the
-		// drug-in-play arm chips its five pairs and the screen cedes exactly those -- keeping ten of
+		// drug-in-play arm chips its five pairs and the screen cedes exactly those — keeping ten of
 		// its own, which it goes on describing. Withhold the statement on ANY cede instead and this
 		// reads null, forfeiting the bounded claim issue #336 exists to publish for a list no cede
 		// emptied. The cap is raised above both counts so that `reported` is this arm's own identity
@@ -616,14 +618,17 @@ public class PairChipExtentContextTest extends BaseModuleContextSensitiveTest {
 		Pass partial = passWithAnswer("Warfarin is on the list.", SCREENING_QUESTION,
 				DrugReferenceTestSupport.screenedSixOrderChart());
 
-		assertEquals(SCREENED_PAIRS, partial.chips.size(),
+		assertEquals(10 + 5, partial.chips.size(),
 				"precondition: the screen's ten and the drug-in-play arm's five, so the cede is partial "
-						+ "rather than total: " + DrugReferenceTestSupport.details(partial.chips));
-		assertNotNull(partial.extent, "the arm kept a list, so it describes it -- and unlike the "
+						+ "rather than total. Spelled as the sum and not as SCREENED_PAIRS, which counts "
+						+ "PAIRS of one arm and coincides with this total only because every ceded pair "
+						+ "yielded one chip and the cap cut nothing: "
+						+ DrugReferenceTestSupport.details(partial.chips));
+		assertNotNull(partial.extent, "the arm kept a list, so it describes it — and unlike the "
 				+ "question-pair arm's partial case this is discriminating on its own, no fallback "
 				+ "being reachable behind this arm");
 		assertEquals(10, partial.extent.getFound(),
-				"the ten pairs this arm kept -- not the fifteen it related, and not the five it handed "
+				"the ten pairs this arm kept — not the fifteen it related, and not the five it handed "
 						+ "to the drug-in-play arm");
 		assertEquals(10, partial.extent.getReported(),
 				"reported at a cap that cut nothing, so it equals what the arm kept");

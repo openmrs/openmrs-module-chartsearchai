@@ -1021,7 +1021,9 @@ public class DrugSafetyValidator {
 	 * enumerate what that {@code null} covers. Each ARM's own {@code null} is not the same list —
 	 * neither contains the other — see the {@code @return} on
 	 * {@link #addQuestionPairInteractions} and on {@link #addActiveOrderPairInteractions}, and ADR
-	 * Decision 69.
+	 * Decisions 69 and 70 — one rule about ceding on both arms, and two different things behind
+	 * them: the question-pair arm's {@code null} is consumed by that fallback, the screening arm's
+	 * reaches here and then the client.
 	 */
 	private static void recordPairExtent(PairChipExtent.Sink sink, PairChipExtent extent) {
 		if (sink != null && extent != null) {
@@ -2584,7 +2586,10 @@ public class DrugSafetyValidator {
 	 * interaction check on the canonical prescribing question. Where the name resolves to several
 	 * reference entries the question-pair arm owns the field instead and this count is discarded —
 	 * unless that arm ceded every pair it related, where it states nothing and this count is what
-	 * reaches the wire (issue #336, ADR Decision 69). For what the question-pair arm owning the
+	 * reaches the wire (issue #336, ADR Decision 69). The SCREENING arm's cede is not that case, and
+	 * the difference is worth knowing here: this count is gated on the QUESTION's own substances, of
+	 * which a screening question has none, so where that arm ceded every pair no count reaches the
+	 * wire at all (issue #370, ADR Decision 70). For what the question-pair arm owning the
 	 * field costs a reader, {@link PairChipExtent} is canonical. Stating nothing published a completed negative screen as
 	 * {@code interactionPairs: null}, which {@link PairChipExtent} defines as "the producer stated no
 	 * measurement": a clinician was given an abstention indistinguishable from one where nobody
@@ -3325,7 +3330,10 @@ public class DrugSafetyValidator {
 	/**
 	 * The (substance, partner) pairs an interaction chip has already been raised for in this pass, so the
 	 * screening arm ({@link #addActiveOrderPairInteractions}) can stand down from a pair the drug-in-play
-	 * arm ({@link #addInteractionWarnings}) already reported. The interaction counterpart of
+	 * arm ({@link #addInteractionWarnings}) already reported. <b>Since issue #370 it decides more than
+	 * which chips are raised</b>: a total stand-down is why that arm makes no statement about how
+	 * bounded its list was, so a change to what this ledger recognises moves the {@code
+	 * interactionPairs} key as well as the chip list. ADR Decision 70. The interaction counterpart of
 	 * {@link ContraindicationChips}, and keyed the same way: on IDENTITY, never on rendered text.
 	 *
 	 * <p><b>Why not the chip's text</b> — and this is about recognising a repeat of the same PAIR, not
@@ -5845,10 +5853,8 @@ public class DrugSafetyValidator {
 				// Ceding is not a measurement — the rule addQuestionPairInteractions took at issue
 				// #336's verification round, and since issue #370 the rule on both pairwise arms, stated
 				// once in each. This screen related pairs and kept none, so it has no bounded list of
-				// its own to describe and describes none. A zero here says the reference data related
-				// NONE of the pairs it enumerated, which is what PairChipExtent and README both define
-				// found == 0 to mean, and it was published beside the drug-in-play arm's own Major chip
-				// about one of them.
+				// its own to describe and describes none; the zero it used to state asserts the
+				// opposite, beside the drug-in-play arm's own Major chip about one of those pairs.
 				//
 				// Those pairs are on the response: InteractionPairs is written OUTSIDE the
 				// StatedInteractionChips collapse (see addInteractionWarnings), so a ceded pair provably
@@ -5873,12 +5879,11 @@ public class DrugSafetyValidator {
 			// half of issue #336 a truncation signal alone would leave unsaid — a caller hearing
 			// nothing cannot tell it from a question that never asked to be screened.
 			//
-			// Reached now only where nothing was ceded, which is what makes the sentence above true of
-			// every path through here. What it still covers is a candidate StatedInteractionChips
-			// collapsed rather than ceded: an honest zero by that collapse's own definition (a
-			// restatement is a pair already shown, not one found — PairChipExtent's javadoc, #339
-			// review round 12), and reachable only where the repeated chip was not the drug-in-play
-			// arm's for this very pair, since alreadyReported above tests that first.
+			// Reached now only where nothing was ceded. What it still covers is a candidate
+			// StatedInteractionChips collapsed rather than ceded: an honest zero by that collapse's own
+			// definition (a restatement is a pair already shown, not one found — PairChipExtent's
+			// javadoc, #339 review round 12), and reachable only where the repeated chip was not the
+			// drug-in-play arm's for this very pair, since alreadyReported above tests that first.
 			return PairChipExtent.of(0, 0);
 		}
 		Collections.sort(pairs, SCREENED_PAIR_SEVERITY_DESCENDING);

@@ -117,7 +117,7 @@ Five fields of the response matter for these tests:
 |---|---|
 | `answer` | the LLM's prose. **Not** the safety output — it is what the model made of the chart plus the injected findings |
 | `safetyWarnings` | the **deterministic** chips. Computed by `DrugSafetyValidator` from the chart and the knowledge base, with no model involvement. Each carries `type`, `drug`, `detail` and — since [#340](https://github.com/openmrs/openmrs-module-chartsearchai/issues/340) — a `severity` |
-| `interactionPairs` | `{"found": N, "reported": M}` — how many above-floor rule pairs the interaction check related and how many survived the chip cap ([#336](https://github.com/openmrs/openmrs-module-chartsearchai/issues/336)); the drug-in-play arm states it too since [#356](https://github.com/openmrs/openmrs-module-chartsearchai/issues/356) and is not capped, so its two numbers are always equal. `{"found":0}` is MEANT as "an arm ran and related nothing"; `README.md` and `PairChipExtent`'s javadoc name the arrangements where it is not, and [ADR Decision 69](adr.md) carries the one this branch reproduced. **`null` is not completeness** — what it does cover is enumerated in `PairChipExtent`'s class javadoc and in `README.md`, and deliberately nowhere else, so read it there rather than inferring it from the cells below |
+| `interactionPairs` | `{"found": N, "reported": M}` — how many above-floor rule pairs the interaction check related and how many survived the chip cap ([#336](https://github.com/openmrs/openmrs-module-chartsearchai/issues/336)); the drug-in-play arm states it too since [#356](https://github.com/openmrs/openmrs-module-chartsearchai/issues/356) and is not capped, so its two numbers are always equal. `{"found":0}` is MEANT as "an arm ran and related nothing"; `README.md` and `PairChipExtent`'s javadoc name the arrangements where it is not, and [ADR Decisions 65 and 70](adr.md) carry the ones that remain — a total cede is no longer among them on either pairwise arm. **`null` is not completeness** — what it does cover is enumerated in `PairChipExtent`'s class javadoc and in `README.md`, and deliberately nowhere else, so read it there rather than inferring it from the cells below |
 | `references` | the records the answer actually **cited** — `drug_order`, `allergy`, `condition`, `safety_finding`, `drug_reference`, and since [#354](https://github.com/openmrs/openmrs-module-chartsearchai/issues/354) `drug_class_note` for a question that names a drug class no reference entry is indexed by |
 | `unresolvedDrugClass` | the drug **class** the question named and the module resolved to no substance, or `null` where it states none ([#354](https://github.com/openmrs/openmrs-module-chartsearchai/issues/354)). Deterministic like the chips: the same statement is injected as a citable `drug_class_note` record, but that reaches the response only if the model cites it — so this is what a test on a class-term question reads. `null` is the absence of a statement, never a denial |
 
@@ -132,7 +132,7 @@ Five fields of the response matter for these tests:
 |---|---|---|---|
 | **Drug-in-play** | the question names a drug | that drug × every active order | yes, since [#356](https://github.com/openmrs/openmrs-module-chartsearchai/issues/356), where neither pairwise arm stated one |
 | **Question-pair** | the question resolves **≥2** reference entries | those drugs against each other | yes — unless it ceded every pair to the drug-in-play arm, where it states nothing ([#336](https://github.com/openmrs/openmrs-module-chartsearchai/issues/336)) |
-| **Screening** | the question names **no** drug *and* reads as a screening request | every active order × every other | yes |
+| **Screening** | the question names **no** drug *and* reads as a screening request | every active order × every other | yes — unless it ceded every pair to the drug-in-play arm, where it states nothing and, no fallback standing behind it, nothing else does either ([#370](https://github.com/openmrs/openmrs-module-chartsearchai/issues/370)) |
 | **Class / allergy** | always, scoped to what the response is about | ATC class and cross-reactivity-group joins against allergies, conditions and other orders | no |
 
 They are **not** equivalent and they do not cover for each other, which is why the sections
@@ -141,8 +141,11 @@ below are separate.
 **Where `interactionPairs` comes from.** Three arms state it. The two *pairwise* ones have
 mutually exclusive gates — the question-pair arm needs two or more resolved drugs, the screening
 arm needs none — so at most one of those runs per question and neither can be suppressed by the
-other's cap. Where neither of them stated one, the **drug-in-play** arm states it instead
-([#356](https://github.com/openmrs/openmrs-module-chartsearchai/issues/356)), which is what a
+other's cap. Where neither of them stated one *and* the question resolved a drug the drug-in-play arm could
+screen, that arm states it instead
+([#356](https://github.com/openmrs/openmrs-module-chartsearchai/issues/356)) — so behind a
+screening arm that ceded every pair, nothing states the field
+([#370](https://github.com/openmrs/openmrs-module-chartsearchai/issues/370)), which is what a
 plain "can I give her X?" now reports: before that fix it reported `null` even while raising
 seven interaction chips, so a completed screen that related nothing was indistinguishable from
 one nobody ran. Two things that arm's number does **not** include, for two different reasons. Its

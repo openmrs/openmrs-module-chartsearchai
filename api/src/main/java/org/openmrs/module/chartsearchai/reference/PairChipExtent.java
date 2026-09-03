@@ -118,10 +118,11 @@ package org.openmrs.module.chartsearchai.reference;
  * positively assertable, which is half of what this type exists for. <b>That is what it is MEANT
  * to say, and there are arrangements where it is false</b> — do not count them here either: a chart
  * whose only medication the reference data cannot resolve was never a population to screen (ADR
- * Decision 65), and a candidate a screen collapsed as a restatement of a chip already stated is a
- * pair it relates and does not count (the {@code StatedInteractionChips} paragraph below). What is
- * no longer on that list is a total cede, on either pairwise arm: since ADR Decisions 69 and 70 such
- * a pass states nothing instead. Those decisions carry the cases. No extent at all
+ * Decision 65). What is no longer on that list is a total cede, on either pairwise arm: since ADR
+ * Decisions 69 and 70 such a pass states nothing instead. Those decisions carry the cases. A
+ * candidate a screen collapsed as a restatement is not on the list at all — the
+ * {@code StatedInteractionChips} paragraph above is what defines that zero as honest, and a reader
+ * who finds it surprising should read that rather than this list. No extent at all
  * ({@code null} on the answer, {@code null} on the wire) says the producer stated no measurement.
  * This javadoc and {@code README.md}'s client-facing paragraph carry that list — the second because
  * it is the only one a frontend author reads — and everything else points here rather than
@@ -144,11 +145,12 @@ package org.openmrs.module.chartsearchai.reference;
  *       {@code found == 0} must mean SCREENED and related nothing, never "the drug could not be
  *       resolved", so a drug only the ANSWER named states nothing on its own;</li>
  *   <li>a PAIRWISE arm related pairs and ceded EVERY one of them to the drug-in-play arm,
- *       so it has no bounded list of its own to describe (ADR Decisions 69 and 70). Reaching a
- *       client is the SCREENING arm's, and only its: nothing is gated behind that arm, while the
- *       question-pair arm's {@code null} on the same rule is consumed by
+ *       so it has no bounded list of its own to describe (ADR Decisions 69 and 70). What reaches a
+ *       client is the SCREENING arm's, nothing being gated behind that arm; the question-pair arm's
+ *       {@code null} on the same rule is consumed today by
  *       {@code DrugSafetyValidator.validate}'s issue #356 fallback and replaced with the statement
- *       of the arm that did report those pairs. What is given up where it does reach a client is
+ *       of the arm that did report those pairs — for the reason ADR Decision 69 records, which
+ *       that decision states as what it rests on rather than as a proof. What is given up where it does reach a client is
  *       the assertion that a screen RAN, on the one question shape that asked for one — weighed
  *       against a zero asserting the data related nothing, beside chips saying otherwise;</li>
  *   <li>{@code validate} threw and degraded to no warnings, its documented fail-safe — and the

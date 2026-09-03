@@ -5139,9 +5139,10 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * As {@link #interactionWarning(DrugReference, DrugReference.Interaction, List)}, additionally naming the
-	 * partner by {@link #reconciledPartnerName}'s answer, and — where the class arm had a finding about
-	 * that SAME active order — folding its sentence into this one chip (issue #88).
+	 * As {@link #interactionWarning(DrugReference, DrugReference.Interaction, List, boolean)},
+	 * additionally naming the partner by {@link #reconciledPartnerName}'s answer, and — where the class
+	 * arm had a finding about that SAME active order — folding its sentence into this one chip (issue
+	 * #88).
 	 *
 	 * <p>The two are independent since issue #339: a chip can be reconciled without folding, which is
 	 * every rule chip whose partner the ladder resolved and whose displacement the gate permits. Only

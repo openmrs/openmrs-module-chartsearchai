@@ -49,6 +49,35 @@ import org.junit.jupiter.api.Test;
  * would leave the other holding the phrase the prompt's ranking sentence keys on, so the refusal lead
  * would simply move to it — {@link #everyFindingOnAScreeningQuestionStatesOneVocabulary} is that
  * arrangement, and it is why the scope is the condition rather than the reported arm.
+ *
+ * <p><b>How the order-driven contraindication arm's referent is guarded, and where it is not.</b>
+ * {@code addActiveOrderContraindications} decides the referent once per row and passes it at FOUR
+ * call sites — the subject-matter branch and the fall-through, each handing it to
+ * {@code addContraindications} and to {@code addAllergyContraindications} — and the two that hand it
+ * to {@code addAllergyContraindications} reach THREE chip rungs inside it (identity, same ATC class,
+ * same cross-reactivity group). Each needs its own case, exactly as CLAUDE.md states for the sibling
+ * parameter on this same arm ({@code chartOrderBridges} "takes its list as a parameter, so each
+ * call site needs its own case").
+ * Force one site to one constant, or invert one rung, and read which case reddens; a pair-level or
+ * arm-level reading of this coverage was measured twice in this PR and was wrong both times.
+ *
+ * <p>Every (site × direction) cell is held here or in {@code ActiveOrderContraindicationTest}
+ * EXCEPT two, and those two are named rather than counted: the FALSE direction at each of the two
+ * {@code addAllergyContraindications} sites. They are unreachable in effect rather than merely
+ * untested. That direction requires a SIBLING row to have put the substance in play, and the
+ * drug-in-play arm has then already raised, for the in-play row, a chip with the same ledger key,
+ * the same rank, the same {@code namesTheFinding} answer and the same sentence — because every rung
+ * of that method is a function of the SUBSTANCE, the allergen and the row's ATC codes, and rows of
+ * one substance publish the same codes ({@code ContraindicationChips}' javadoc carries that
+ * measurement and its date). {@code ContraindicationChips.add} keeps the incumbent on a tie, so the
+ * order-driven chip is discarded. Measured on a throwaway fixture built to expose exactly that
+ * direction — two rows of one substance sharing a subgroup with a recorded allergen, one row
+ * proposed by the question and the other an active order: forcing either
+ * {@code addAllergyContraindications} site to {@code true} left the rendered finding byte-identical
+ * at BOTH branches, while forcing the drug-in-play arm's own literal {@code false} changed it. So
+ * the only arrangement that would pin those cells has two rows of one substance publishing different
+ * ATC codes — the divergence that javadoc records as absent — and a test for it would pin a path the
+ * production data cannot reach. The gap is recorded instead.
  */
 public class CurrentMedicationFindingStrengthTest {
 
@@ -93,14 +122,27 @@ public class CurrentMedicationFindingStrengthTest {
 
 	private static List<String> findings(PatientClinicalContext context, String question)
 			throws IOException {
-		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(FIXTURE);
+		return findings(FIXTURE, context, question);
+	}
+
+	/** The same run over another DDInter slice. {@link #FIXTURE} carries ATC codes but no two of its
+	 *  rows share a level-4 subgroup, so the allergen arm's class-comparison rung cannot be reached
+	 *  over it at all. */
+	private static List<String> findings(String fixture, PatientClinicalContext context,
+			String question) throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport.ddiFixtureService(fixture);
 		return DrugReferenceTestSupport.findingTexts(DrugReferenceTestSupport.injectorWithSafety(service)
 				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context, question));
 	}
 
 	private static String onlyFinding(PatientClinicalContext context, String question)
 			throws IOException {
-		List<String> findings = findings(context, question);
+		return onlyFinding(FIXTURE, context, question);
+	}
+
+	private static String onlyFinding(String fixture, PatientClinicalContext context, String question)
+			throws IOException {
+		List<String> findings = findings(fixture, context, question);
 		assertEquals(1, findings.size(),
 				"one pair is one citable record, and a second would let the wrong one answer for this "
 						+ "case: " + findings);
@@ -336,9 +378,11 @@ public class CurrentMedicationFindingStrengthTest {
 	 * property at the arm's FIRST call-site pair; its question asks about medications, which is what
 	 * opens {@code SubjectMatter}'s active-order gate and routes it there. Reached through the
 	 * fall-through instead, the property was pinned by nothing: hardcoding the fall-through pair's
-	 * referent to {@code true} left the whole api module green, and it reddens this case. That is the FAIL-OPEN direction — a prescribing refusal about a drug the
-	 * clinician just proposed becomes a statement about changing her existing therapy — and it is
-	 * the same cross-row residue ADR Decision 44 warns about, arriving at the second call site.
+	 * referent to {@code true} left the whole api module green, and it reddens this case — which
+	 * round 5 re-measured per SITE, where it is the fall-through's {@code addContraindications}
+	 * argument that this case holds. That is the FAIL-OPEN direction — a prescribing refusal about a
+	 * drug the clinician just proposed becomes a statement about changing her existing therapy — and
+	 * it is the same cross-row residue ADR Decision 44 warns about, arriving at the second call site.
 	 *
 	 * <p>The arrangement is that case's fixture and chart with the medication cue removed from the
 	 * question: {@code QueryScopeRouter}'s MEDICATIONS vocabulary is a word list ("medications",
@@ -370,6 +414,95 @@ public class CurrentMedicationFindingStrengthTest {
 		assertTrue(findings.get(0).endsWith(WITHHOLD),
 				"the question proposed this substance, so its finding states the proposal call at "
 						+ "either of the arm's call-site pairs: " + findings);
+	}
+
+	/**
+	 * A CURATED contraindication rule about one of her own prescriptions, reached through the arm's
+	 * FALL-THROUGH (issue #348, round 5 of this PR's hardening).
+	 *
+	 * <p><b>Why a fourth contraindication case.</b> The referent is passed at FOUR call sites — the
+	 * subject-matter branch and the fall-through, each handing it to {@code addContraindications} and
+	 * to {@code addAllergyContraindications} — and each site needs its own case, exactly as CLAUDE.md
+	 * states for the sibling parameter on this same arm ({@code chartOrderBridges} "takes its list as
+	 * a parameter, so each call site needs its own case"). Round 4 pinned the fall-through at PAIR
+	 * granularity: {@link #aContraindicationOnAnAllergyShapedQuestionStatesTheCurrentMedicationCall}
+	 * drives it with an allergy the chart records against the drug ITSELF, so the chip that survives
+	 * the ledger's fold is the allergen arm's identity chip and only the SECOND of the pair's two
+	 * sites decides its clause. Measured: hardcoding the fall-through's
+	 * {@code addContraindications} argument to {@code false} — the pre-issue-#348 value — left the
+	 * whole api module green.
+	 *
+	 * <p>That is the direction the ticket is about, and the shape it reinstates is the reported one
+	 * verbatim: a Major contraindication about a drug the patient is already taking, carrying the
+	 * proposal refusal, on a question that proposed nothing.
+	 *
+	 * <p>The arrangement is {@code ActiveOrderContraindicationTest}'s
+	 * {@code theFindingReachesThePromptAsACitableRecord} — the bundled curated dataset, whose
+	 * ibuprofen entry carries a self-named allergy rule with a note of its own, so that rule outranks
+	 * the identity chip on the same ledger key and IS the finding — asked with
+	 * {@link #ALLERGY_QUESTION} instead, which carries no medication cue and so routes to the
+	 * fall-through.
+	 */
+	@Test
+	public void aCuratedRuleAboutHerOwnPrescriptionOnAnAllergyQuestionStatesTheCurrentMedicationCall()
+			throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport.curatedService();
+		List<String> findings = DrugReferenceTestSupport.findingTexts(
+			DrugReferenceTestSupport.injectorWithSafety(service).injectRecords(
+				DrugReferenceTestSupport.oneRecordChart(),
+				DrugReferenceTestSupport.ctx(60, null,
+					DrugReferenceTestSupport.set("Ibuprofen 400mg"), null,
+					DrugReferenceTestSupport.set("ibuprofen"), null),
+				ALLERGY_QUESTION));
+
+		assertEquals(1, findings.size(), "one substance is one chip and one finding, was: " + findings);
+		assertTrue(findings.get(0).contains(
+			"contraindicated by an active allergy: documented ibuprofen allergy"),
+				"precondition: the CURATED rule's sentence is the one that survived the fold, so this "
+						+ "case is about the site that raised it and not the allergen arm's: "
+						+ findings);
+		assertTrue(findings.get(0).endsWith(CHANGE_CURRENT),
+				"nothing proposed this drug — the question asks what she is allergic to — so the "
+						+ "curated rule about her own prescription states the change-of-therapy call at "
+						+ "the fall-through too: " + findings);
+		assertFalse(findings.get(0).contains(WITHHOLD),
+				"and never the proposal refusal, which is the reported defect verbatim: " + findings);
+	}
+
+	/**
+	 * The allergen arm's CLASS-COMPARISON rung, which the arm's identity rung does not stand in for
+	 * (issue #348, round 5).
+	 *
+	 * <p>The referent reaches three chip rungs inside {@code addAllergyContraindications} — identity,
+	 * same ATC class, same cross-reactivity group — and every other case in this class drives the
+	 * first. Measured on the head this case was added to: inverting the referent at the SAME_CLASS
+	 * rung changed no assertion in the api module, while a throw-probe there showed it reached in
+	 * both directions, so it was reachable-and-unpinned rather than unreachable.
+	 *
+	 * <p>The arrangement is {@code CrossReactivityClassChoiceTest}'s
+	 * {@code aPrescribedSteroidNamesTheSystemicClassNotTheLocalOralOne} — the prescribed steroid
+	 * against a dexamethasone allergy, which shares the systemic subgroup H02AB with it — asked with
+	 * {@link #ALLERGY_QUESTION}. That class asserts the sentence and says nothing about the clause,
+	 * which is how the rung came to be unpinned; this case asserts the clause and says nothing about
+	 * the sentence.
+	 */
+	@Test
+	public void aCrossReactivityFindingAboutHerOwnPrescriptionStatesTheCurrentMedicationCall()
+			throws IOException {
+		String finding = onlyFinding("chartsearchai-test/ddi-shared-class-choice.json",
+			DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set("Hydrocortisone Injection vial 100mg"), null,
+				DrugReferenceTestSupport.set("Dexamethasone"), null),
+			ALLERGY_QUESTION);
+
+		assertTrue(finding.contains("is in the same ATC class"),
+				"precondition: the CLASS rung is what raised this, not the identity rung every other "
+						+ "case here drives: " + finding);
+		assertTrue(finding.endsWith(CHANGE_CURRENT),
+				"a cross-reactivity finding about a drug she is already on is a reason to change that "
+						+ "prescription, and the rung must state it as one: " + finding);
+		assertFalse(finding.contains(WITHHOLD),
+				"and not as a refusal to give a drug nobody proposed: " + finding);
 	}
 
 	@Test

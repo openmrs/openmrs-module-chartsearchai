@@ -540,8 +540,11 @@ public class UncorroboratedFindingProvenanceTest {
 		// #146) and render "opioid reaction — other reaction", while only the `levo` rule matches — an
 		// allergy recorded as `Levocetirizine` reaches it mid-word and corroborates nothing — so the
 		// finding prints "opioid reaction". A CONDITION rule of another key carries that same note and
-		// is matched by a recorded `Respiratory depression`; not being self-named it is corroborated by
-		// construction, so the record states "opioid reaction" as this chart's own reading.
+		// is matched by a recorded `Respiratory depression`; since issue #309 the BOUNDARY leg corroborates it — that
+		// recorded condition carries the token as a whole word — so the record states "opioid reaction"
+		// as this chart's own reading. It was "corroborated by construction for not being self-named"
+		// before #309, and this case now depends on the leg: neuter aMatchedConditionCarriesTheToken
+		// and its precondition reddens.
 		//
 		// Mutate the `contraindicationClause(c)` conjunct of `uncorroborated` away and read the failure.
 		//

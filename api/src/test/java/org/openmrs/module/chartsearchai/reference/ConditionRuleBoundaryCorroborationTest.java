@@ -85,10 +85,6 @@ public class ConditionRuleBoundaryCorroborationTest {
 
 	private static final String NOT_RECORDED = DrugReferenceInjector.NOT_RECORDED_READING_LEAD;
 
-	/** The list every reference record ends with, which is NOT a patient-specific section — the bound
-	 *  {@link #clauseSection} needs so a clause appearing only there cannot be attributed to one. */
-	private static final String RULE_LIST_LEAD = " Contraindicated with: ";
-
 	/** The one arrangement every case here drives: the real injector, the real validator, and the
 	 *  service named by {@code fixture} — this file's own fixture, or the SHIPPED curated seed for the
 	 *  two cases that are about the shipped population. Allergens and conditions are separate slots
@@ -127,35 +123,24 @@ public class ConditionRuleBoundaryCorroborationTest {
 				chart(fixtureService(), question, null, DrugReferenceTestSupport.set(conditions)));
 	}
 
-	/** Which patient-specific section {@code clause} sits in — ALL THREE leads, not two. An earlier
-	 *  version read only {@link #RECORDED} and {@link #UNCORROBORATED}, so a clause in the
-	 *  not-recorded section was attributed to whichever of those happened to precede it; measured on
-	 *  the shipped seed, where a record carries a recorded section and a not-recorded one at once, it
-	 *  named the recorded section for a clause in the not-recorded one.
-	 *
-	 *  <p>Two things make it sound and only one was written down at first. No lead nests inside another,
-	 *  which {@code InjectedContraindicationCorroborationTest.theThreeSectionLeadsAreTheWordsAModelReads}
-	 *  asserts. AND the clause must occur inside a section rather than in the rule list every record
-	 *  ends with — {@code indexOf} takes the FIRST occurrence, so without that bound a clause appearing
-	 *  only in the list is attributed to whichever section precedes it, which is the uncorroborated one
-	 *  five cases here assert. Fail-OPEN, so it is asserted rather than assumed. */
+	/** Which patient-specific section {@code clause} sits in, by asking each section whether it CONTAINS
+	 *  the clause — through the shared {@link DrugReferenceTestSupport#sectionAfter}, rather than a
+	 *  backward scan of its own. An earlier version read only two of the three leads and then, once
+	 *  taught the third, still had to bound itself against the trailing rule list, because it located
+	 *  the clause with {@code indexOf} and attributed it to the nearest preceding lead — so a clause
+	 *  appearing ONLY in that list was reported as sitting in a section. Asking the sections directly
+	 *  needs neither the scan nor the bound, and answers "no patient-specific section" for that case
+	 *  instead of naming one. Reads the leads in the order {@code render} emits them, so a string two
+	 *  sections both carry is attributed to the first, exactly as before. */
 	private static String clauseSection(String record, String clause) {
-		int at = record.indexOf(clause);
-		assertTrue(at >= 0, "the record does not carry the clause at all: " + record);
-		int listAt = record.indexOf(RULE_LIST_LEAD);
-		assertTrue(listAt < 0 || at < listAt,
-				"the clause occurs only in the trailing rule list, so it sits in no patient-specific "
-						+ "section and this helper must not name one: " + record);
-		String section = "no patient-specific section";
-		int nearest = -1;
+		assertTrue(record.contains(clause), "the record does not carry the clause at all: " + record);
 		for (String lead : new String[] { RECORDED, NOT_RECORDED, UNCORROBORATED }) {
-			int start = record.lastIndexOf(lead, at);
-			if (start > nearest) {
-				nearest = start;
-				section = lead;
+			String section = DrugReferenceTestSupport.sectionAfter(record, lead);
+			if (section != null && section.contains(clause)) {
+				return lead;
 			}
 		}
-		return nearest < 0 ? "no patient-specific section" : section;
+		return "no patient-specific section";
 	}
 
 	@Test
@@ -232,9 +217,6 @@ public class ConditionRuleBoundaryCorroborationTest {
 		// than to edit the claim. It is not a guard over the CORPUS, which still escapes.
 		List<String> tokens = new ArrayList<String>();
 		for (DrugReference entry : DrugReferenceTestSupport.curatedService().getAll()) {
-			if (entry.getContraindications() == null) {
-				continue;
-			}
 			for (DrugReference.Contraindication c : entry.getContraindications()) {
 				// Production's own predicate, never a second spelling of it: isConditionRule's javadoc
 				// says the readers of a rule's TYPE are enumerated once, and a guard that re-expressed
@@ -281,8 +263,9 @@ public class ConditionRuleBoundaryCorroborationTest {
 		// multi-word fragment the bare match exists FOR still states as recorded — is
 		// InjectedContraindicationPatientReadingTest
 		// .aConditionOnRecordReadsFromTheConditionListAndOnlyItsOwnRule, over the same shipped seed and
-		// the same recorded condition, asserting the whole recorded AND not-recorded sections by
-		// equality rather than one clause's section. Not copied here; that case is stricter.
+		// the same ENTRY, on its other condition rule — asserting the whole recorded AND not-recorded
+		// sections by equality rather than one clause's section. Not copied here; that case is
+		// stricter.
 	}
 
 	@Test
@@ -352,19 +335,13 @@ public class ConditionRuleBoundaryCorroborationTest {
 		// The boundary question is asked only of a rule that has already matched, which both call sites
 		// gate on. A rule the chart does not record at all keeps stating its own section, so this change
 		// cannot have moved a clause into the reading that was never in it.
+		// One POSITIVE assertion rather than two negatives: the clause belongs in the NOT-RECORDED
+		// section, which rules out both matched sections and, unlike a pair of assertFalse, cannot be
+		// satisfied by the record simply not naming the clause at all. Measured: neutering the injector's
+		// not-recorded branch leaves a `contains`-based pair green and reddens this.
 		String record = record("Can I give her naltrexone?", "Malaria");
-		assertFalse(record.contains(UNCORROBORATED + "acute hepatitis or liver failure"),
-				"a rule the chart never matched must not be hedged as a matched one: " + record);
-		// And not in the RECORDED section either — the assertion above alone is satisfied by the rule
-		// simply not matching, so on its own it discriminates nothing. Both together say the clause is
-		// in NO patient-specific section.
-		assertFalse(record.contains(RECORDED + "acute hepatitis or liver failure"),
-				"a rule the chart never matched must not be stated as recorded either: " + record);
-		// The POSITIVE CONTROL, without which the two assertions above could both hold because the
-		// record names no clause at all: the SAME entry and question, with a recorded condition that
-		// does match, puts that very string in a patient-specific section.
-		assertTrue(record("Can I give her naltrexone?", "Chronic liver disease")
-				.contains(RECORDED + "acute hepatitis or liver failure"),
-				"the control must show this arrangement CAN state the clause");
+		assertEquals(NOT_RECORDED, clauseSection(record, "acute hepatitis or liver failure"),
+				"a rule the chart never matched is not recorded and not hedged — it is stated as not "
+						+ "recorded: " + record);
 	}
 }

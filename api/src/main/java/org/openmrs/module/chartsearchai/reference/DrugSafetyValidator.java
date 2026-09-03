@@ -2372,11 +2372,14 @@ public class DrugSafetyValidator {
 	 *
 	 *         <p><b>What it costs, measured</b> (issue #309, over the OpenMRS 3.7.1 demo dictionary —
 	 *         both corpora and every figure are recorded on {@link PatientClinicalContext#containsToken}).
-	 *         Over the curated condition tokens this repo ships it costs nothing on those corpora, and
-	 *         it DOES cost the free-text half, which they cannot reach — including on those same
-	 *         tokens. Both are stated there rather than again here; the two shapes are pinned as cases,
-	 *         {@code ConditionRuleBoundaryCorroborationTest.anInflectionOfAShippedTokenIsHedged} and
-	 *         {@code .aClinicallyRightCompoundIsHedgedToo}.
+	 *         Over the curated condition tokens this repo ships it costs nothing on those corpora. It
+	 *         DOES cost the free-text half, which they cannot reach, and that reaches those same shipped
+	 *         tokens — an INFLECTION, pinned by
+	 *         {@code ConditionRuleBoundaryCorroborationTest.anInflectionOfAShippedTokenIsHedged}. A
+	 *         SECOND and separate residue is visible in the coded corpora and on tokens the seed does
+	 *         not ship: a prefix or suffix compound that is clinically the same finding, pinned by
+	 *         {@code .aClinicallyRightCompoundIsHedgedToo}. Two residues, two corpora; the figures for
+	 *         both are on {@link PatientClinicalContext#containsToken}.
 	 *
 	 *         <p>Through {@link PatientClinicalContext#conditionsMatching} — the witness accessor — for
 	 *         SYMMETRY with the allergy leg above and to share one scan with the boolean, and NOT
@@ -2410,7 +2413,7 @@ public class DrugSafetyValidator {
 		if (context == null) {
 			return false;
 		}
-		String token = c.getToken() == null ? null : c.getToken().trim();
+		String token = c.getToken() == null ? null : PatientClinicalContext.normalizedToken(c.getToken());
 		for (String condition : context.conditionsMatching(token)) {
 			if (DrugReference.containsWord(condition, token)) {
 				return true;
@@ -7274,8 +7277,9 @@ public class DrugSafetyValidator {
 	 *         {@link #evaluatesAgainstTheChart} to decide whether the module could ask the chart at all,
 	 *         and {@link #selfNamedAllergyRule} for issue #146's fold. <b>A FIFTH reader branches on the
 	 *         CONDITION leg alone</b> since issue #309 — {@link #corroboratedByTheChart}, whose third leg
-	 *         asks {@link #isConditionRule} and neither of the two questions this one gates — so the pair
-	 *         is no longer read at the same places, and this enumeration is where that is recorded rather
+	 *         asks {@link #isConditionRule} and neither of the two questions this one gates. With
+	 *         {@link #selfNamedAllergyRule} reading only this leg, the pair now diverges in both
+	 *         directions and three sites read both; this enumeration is where that is recorded rather
 	 *         than left for a maintainer to discover. Left as literals they would drift
 	 *         silently and in the worse direction: a vocabulary that grew a synonym would keep matching
 	 *         rules through one reader while another quietly stopped applying to them, and the worst of
@@ -7293,10 +7297,11 @@ public class DrugSafetyValidator {
 	 *         of a rule's TYPE are enumerated once, on that method, rather than half here and half
 	 *         there. Keeping one of the pair literal and the other named is how the pair comes apart.
 	 *
-	 *         <p><b>Package-private, unlike its sibling, and asymmetric in readers too.</b> Issue #309
-	 *         gave {@link #corroboratedByTheChart} a leg that branches on this alone, so the two are no
-	 *         longer read at the same four places — {@link #isAllergyRule}'s enumeration names that
-	 *         reader. The visibility is for
+	 *         <p><b>Package-private, unlike its sibling, and asymmetric in readers.</b> The two never
+	 *         were read at the same places — {@link #selfNamedAllergyRule} reads only the allergy leg —
+	 *         and since issue #309 they diverge in both directions: {@link #corroboratedByTheChart}
+	 *         branches on this one alone. Three sites read both. {@link #isAllergyRule}'s enumeration
+	 *         names them. The visibility is for
 	 *         {@code ConditionRuleBoundaryCorroborationTest.theShippedSeedPublishesExactlyTheFourConditionTokensTheMeasurementWasOver},
 	 *         a data guard over the shipped seed that must screen condition rules by the production
 	 *         predicate rather than by a second spelling of the literal.

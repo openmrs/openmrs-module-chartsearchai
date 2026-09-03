@@ -433,7 +433,22 @@ public class PatientClinicalContext {
 	 *         second). Both emptiness checks live here, including the post-fold one {@link #containsToken} documents.
 	 */
 	static boolean matchableToken(String token) {
-		return token != null && !token.trim().isEmpty() && !foldedToken(token).isEmpty();
+		return token != null && !normalizedToken(token).isEmpty() && !foldedToken(token).isEmpty();
+	}
+
+	/**
+	 * @return {@code token} in the form this class matches a record AGAINST, before folding — the
+	 *         unfolded half of {@link #foldedToken}, named so that a caller putting the SAME token to a
+	 *         different matcher can ask for the same string rather than writing the normalization again.
+	 *
+	 *         <p>Issue #309 is why it has a name. Its condition leg finds witnesses here and then puts
+	 *         the token to {@link DrugReference#containsWord}; with the two normalizations written
+	 *         independently they disagreed, and a rule whose token carried stray whitespace found its
+	 *         witness and then failed to match it. One expression, so a later widening of this — NFKC,
+	 *         punctuation — cannot reach one side and not the other.
+	 */
+	static String normalizedToken(String token) {
+		return token.trim();
 	}
 
 	/**
@@ -604,7 +619,7 @@ public class PatientClinicalContext {
 		// Through DrugReference.foldedLower, not a second spelling of it: that method is "named once so
 		// that a caller preparing them itself cannot apply half of it or apply the two in the other
 		// order", and this was the hand-written copy its javadoc warns against (issue #330).
-		return DrugReference.foldedLower(token.trim());
+		return DrugReference.foldedLower(normalizedToken(token));
 	}
 
 	/** The one comparison behind {@link #containsToken} and {@link #recordsMatching} — and so behind

@@ -1420,9 +1420,9 @@ public class DrugReferenceInjector {
 	 *
 	 * <p><b>Its words were written for the allergy case and are reused for the condition one, which is
 	 * a trade rather than a fit</b> (issue #309). For a self-named allergy rule the token IS one of the
-	 * drug's names, so "a record of this drug" is the question actually asked. For a condition rule the
-	 * token names no drug at all and the module's uncertainty is only about the WORDING of the matched
-	 * condition, so the sentence names a corroboration it never attempted. Reusing it was chosen over
+	 * drug's names, so "a record of this drug" is the question actually asked. For a condition rule the module
+	 * never asks whether the token names a drug — its uncertainty is only about the WORDING of the
+	 * matched condition — so the sentence names a corroboration it never attempted. Reusing it was chosen over
 	 * writing a second clause because prompt wording here is measured rather than argued — ADR
 	 * Decision 42 already records this lead's own exact wording as unmeasured — and a new unmeasured
 	 * sentence in citable evidence is the larger risk; nothing false about the PATIENT is asserted

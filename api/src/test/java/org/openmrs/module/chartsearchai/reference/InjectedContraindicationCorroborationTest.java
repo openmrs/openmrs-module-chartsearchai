@@ -151,10 +151,11 @@ public class InjectedContraindicationCorroborationTest {
 		// ChartSearchAiAuditSearchModeTest's four search-mode spellings.
 		//
 		// The third lead states what the MODULE established, deliberately not a categorical about the
-		// chart: both of corroborated()'s legs can miss a recorded allergy that really does name the drug
-		// (its first sees only this rule's own witnesses, its second is narrowed by
-		// findImpliedSubstances), so a lead reading "not by a recorded allergy to this drug" is one the
-		// chart can contradict. Reword it only with that in mind.
+		// chart: both of corroborated()'s ALLERGY legs can miss a recorded allergy that really does name
+		// the drug (the first sees only this rule's own witnesses, the second is narrowed by
+		// findImpliedSubstances), and since issue #309 its condition leg can miss a recorded condition
+		// the same way — so a lead reading "not by a recorded allergy to this drug" is one the chart can
+		// contradict. Reword it only with that in mind.
 		assertEquals(" Recorded for this patient: ", RECORDED_LEAD);
 		assertEquals(" Not recorded for this patient: ", NOT_RECORDED_LEAD);
 		assertEquals(" Matched in this patient's chart but not corroborated as a record of this drug: ",

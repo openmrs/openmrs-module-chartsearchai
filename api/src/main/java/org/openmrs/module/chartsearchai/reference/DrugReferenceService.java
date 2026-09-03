@@ -675,8 +675,20 @@ public class DrugReferenceService {
 	 * route-qualified rows makes them contest each other and the substance is then named by nothing.
 	 * Measured: unfolded, 28 bridged concepts of the shipped knowledge base that resolve to exactly ONE
 	 * substance are named by nothing at all ({@code Naphazoline} → {@code Naphazoline (nasal)} AND
-	 * {@code Naphazoline (ophthalmic)}); folded, none are. The representative is the FIRST row seen for
-	 * a substance, which is what {@code addSubstance} keeps.
+	 * {@code Naphazoline (ophthalmic)}); folded, none are.
+	 *
+	 * <p><b>WHICH row represents it is elected and never taken by arrival</b> (review round 3):
+	 * {@link DrugReference#canonicalRow}, which CLAUDE.md designates for "which row represents a
+	 * substance" and whose first rung is the route qualification the {@code Naphazoline} family above
+	 * turns on. Keeping the first row seen made the whole answer a fact about the FILE: measured
+	 * through this accessor over the shipped knowledge base, 13 of the 4251 bridged concepts named a
+	 * different set of substances when their rows arrived reversed, and whether a substance is named is
+	 * whether a finding may state which prescription it came from. Elected, none do; that is
+	 * {@code BridgedConceptLegBoundsTest.theSubstancesNamedDoNotDependOnTheOrderTheRowsAreListedIn},
+	 * with the 13 as the figure it reddens with. Note what the election does NOT settle: rows a
+	 * canonical fold cannot separate keep the incumbent, so a family whose rows are all
+	 * route-qualified is still represented by the first of them — and for the {@code Naphazoline}
+	 * family, which is exactly that shape, this changes nothing at all.
 	 *
 	 * <p><b>What that leaves, so the caller's refusal is not read as wider than it is.</b> On the
 	 * {@code ddinter} format — the only one carrying a bridge at all — the parser writes the bridge's
@@ -704,9 +716,12 @@ public class DrugReferenceService {
 		Map<Object, DrugReference> representatives = new LinkedHashMap<Object, DrugReference>();
 		Set<String> bridgeNames = new LinkedHashSet<String>();
 		for (DrugReference entry : bridged) {
-			if (!representatives.containsKey(entry.substanceGroupKey())) {
-				representatives.put(entry.substanceGroupKey(), entry);
-			}
+			// The row that speaks for the substance, elected rather than taken by arrival:
+			// DrugReference.canonicalRow, which CLAUDE.md designates for "which row represents a
+			// substance". Arrival order made whether a substance is NAMED — and so whether a finding
+			// states its prescription — turn on the sequence the knowledge-base file lists its rows in.
+			representatives.put(entry.substanceGroupKey(),
+				DrugReference.canonicalRow(representatives.get(entry.substanceGroupKey()), entry));
 			String bridgeName = entry.bridgedConceptName(uuid);
 			if (bridgeName != null) {
 				bridgeNames.add(bridgeName);

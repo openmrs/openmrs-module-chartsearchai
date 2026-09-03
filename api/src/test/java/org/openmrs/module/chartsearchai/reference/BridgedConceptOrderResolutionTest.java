@@ -227,14 +227,16 @@ public class BridgedConceptOrderResolutionTest {
 	 * two, and until this case they were reachable only through the drug-in-play arm's own consumer:
 	 * passing {@code BridgedOrders.NONE} at both left the entire suite green.
 	 *
-	 * <p><b>What it pins is that the arm reaches them AT ALL, and not either of them on its own.</b>
-	 * Measured in review round 2, one mutation per run over the whole api suite: substituting
+	 * <p><b>What THIS case pins is that the arm reaches them AT ALL, and not either of them on its
+	 * own.</b> Measured in review round 2, one mutation per run over the whole api suite: substituting
 	 * {@code BridgedOrders.NONE} for the {@code bridged} argument at {@code ordersOtherThan}'s
-	 * {@code resolvesFromAny} leaves the suite green, and so does the same substitution at
+	 * {@code resolvesFromAny} leaves this case green, and so does the same substitution at
 	 * {@code activeOrdersOtherThan}'s own; only neutering all four bridged arguments in those two
-	 * methods reddens this case. So a change that drops the leg from ONE of the two — the plausible
-	 * slip, since they are separate methods with separate parameters — ships green today. Said rather
-	 * than left to be found; a case per site is owed and is not here.
+	 * methods reddens it. A change that drops the leg from ONE of the two is the plausible slip, since
+	 * they are separate methods with separate parameters, and the case per site owed for that is
+	 * {@code BridgedOrderSelfWitnessContextTest} — one per method, each reddening on its own
+	 * substitution. What that class needs and this one does not is a lowered severity floor, which is
+	 * why it is context-sensitive and separate.
 	 *
 	 * <p>What the mutation moves, measured rather than theorised: with the leg, the pair is reported
 	 * from the LAMIVUDINE side and the partner is the bridged substance, so the chip names the
@@ -470,6 +472,92 @@ public class BridgedConceptOrderResolutionTest {
 				+ DrugReferenceTestSupport.details(unnamed));
 		assertEquals(Collections.<String> emptyList(), bridgeTexts(unnamed.get(0)),
 			"and the one it does not name states no prescription, out of the same bridged answer");
+	}
+
+	/**
+	 * The same refusal asked of the PARTNER side, and the property that makes it a rule about the
+	 * substance rather than about the knowledge-base file (issue #353, review round 3).
+	 *
+	 * <p><b>What was wrong.</b> {@code restsOnAnAmbiguousBridge} is asked of a ROW GROUP, and on the
+	 * partner side that group is {@code rowsOfSubstance} of the entry {@code activeOrderEntryFor}
+	 * elected. That scan took the FIRST order entry the rule's token identified, and both substances of
+	 * this concept carry {@code esomeprazole} as a name — it is Esomeprazole's display name and
+	 * Omeprazole's {@code rxnorm_name}, which is the very tie that files them under one bridge. So a
+	 * chip printing {@code esomeprazole} had its clause decided against Omeprazole, the bridge's name
+	 * does not name Omeprazole, and the clause was withheld: a Major finding naming a substance that
+	 * appears nowhere on a medication list reading {@code Inexium 40mg}, with nothing connecting the
+	 * two. That is issue #349's defect, in the population issue #353 exists for, from the other side of
+	 * the same pair — and which way it fell was decided by which of the two rows the dataset lists
+	 * first.
+	 *
+	 * <p><b>Both row orders, deliberately.</b> A case pinning only today's file would pass for the
+	 * first-match scan as soon as the knowledge base put Esomeprazole first — measured, and it is why
+	 * the second half of this case exists. {@code activeOrderEntryFor} now RANKS the candidates by
+	 * {@link DrugReference#nameMatchStrength}, so the entry the token names as its own display name
+	 * beats the entry that carries it as an alias whichever order they arrive in.
+	 *
+	 * <p><b>And three questions, because the arms differ.</b> {@code esomeprazole?} reaches the
+	 * substance as the drug-in-play arm's SUBJECT, where the group was never in doubt and the clause
+	 * already stood; {@code clopidogrel?} reaches it as that arm's PARTNER; the plain screening
+	 * question reaches it through {@code addActiveOrderPairInteractions}, which resolves its own
+	 * partner. Mutate the election back to the first match and the second and third redden while the
+	 * first stays green, which is exactly what round 3 found this pinned as.
+	 */
+	@Test
+	public void theBridgedClauseIsAskedOfTheSubstanceAndNotOfTheDatasetsRowOrder() throws Exception {
+		List<DrugReference> entries = DrugReferenceTestSupport
+				.ddiFixtureEntries(DrugReferenceTestSupport.DDI_BRIDGED_CONCEPT_TWO_SUBSTANCES);
+
+		assertEquals(Arrays.asList("Omeprazole", "Esomeprazole", "Clopidogrel"),
+			displayNames(entries), "the premise: the fixture lists the un-named substance first");
+
+		List<DrugReference> esomeprazoleFirst = Arrays.asList(
+			DrugReferenceTestSupport.row(entries, "Esomeprazole"),
+			DrugReferenceTestSupport.row(entries, "Omeprazole"),
+			DrugReferenceTestSupport.row(entries, "Clopidogrel"));
+
+		for (List<DrugReference> rows : Arrays.asList(entries, esomeprazoleFirst)) {
+			DrugReferenceService service = DrugReferenceTestSupport.serviceWith(rows);
+			PatientClinicalContext chart = chart(inexiumOrder(null), clopidogrelOrder());
+			String order = displayNames(rows).toString();
+
+			List<SafetyWarning> partnerSide = DrugReferenceTestSupport.validator(service).validate("",
+				"Can I give this patient clopidogrel?", service.withReferenceNames(chart));
+
+			assertEquals(1, partnerSide.size(), "precondition: the pair must chip from this side too,"
+					+ " rows " + order + ", was: " + DrugReferenceTestSupport.details(partnerSide));
+			assertTrue(partnerSide.get(0).getDetail()
+					.startsWith("Clopidogrel interacts with active order esomeprazole \u2014 Major"),
+				"precondition: the chip names the partner by the rule's own token, rows " + order
+						+ ", was: " + partnerSide.get(0).getDetail());
+			assertEquals(Arrays.asList("esomeprazole from " + INEXIUM_ORDER),
+				bridgeTexts(partnerSide.get(0)),
+				"the substance the chip PRINTS is the one the bridge's name names, so the prescription"
+						+ " it came from is stated — rows " + order);
+
+			List<SafetyWarning> screened = DrugReferenceTestSupport.validator(service).validate("",
+				"Do any of her medications interact?", service.withReferenceNames(chart));
+
+			assertEquals(1, screened.size(), "precondition: one pair, rows " + order + ", was: "
+					+ DrugReferenceTestSupport.details(screened));
+			assertEquals(Arrays.asList("esomeprazole from " + INEXIUM_ORDER),
+				bridgeTexts(screened.get(0)),
+				"and the screening arm, which resolves its own partner, states it too — rows " + order);
+
+			List<SafetyWarning> subjectSide = DrugReferenceTestSupport.validator(service).validate("",
+				"Can I give this patient esomeprazole?", service.withReferenceNames(chart));
+
+			assertEquals(Arrays.asList("Esomeprazole from " + INEXIUM_ORDER),
+				bridgeTexts(subjectSide.get(0)),
+				"the subject side is unchanged by the election — rows " + order);
+
+			List<SafetyWarning> sibling = DrugReferenceTestSupport.validator(service).validate("",
+				"Can I give this patient omeprazole?", service.withReferenceNames(chart));
+
+			assertEquals(Collections.<String> emptyList(), bridgeTexts(sibling.get(0)),
+				"and the substance the bridge's name does not name still states no prescription, from"
+						+ " either row order — rows " + order);
+		}
 	}
 
 	/**

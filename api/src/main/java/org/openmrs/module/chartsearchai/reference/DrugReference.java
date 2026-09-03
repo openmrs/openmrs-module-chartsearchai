@@ -552,6 +552,14 @@ public class DrugReference {
 	 * substance beside a record naming one of its routes is the chip-versus-prose divergence this module
 	 * keeps having to remove.
 	 *
+	 * <p><b>A fourth caller since issue #353, and it displays nothing</b>:
+	 * {@link DrugReferenceService#substancesNamedByBridge} elects the row a substance's claim on a
+	 * dictionary bridge's own recorded name is judged by. So this fold decides a NAMING answer there
+	 * rather than a rendered name — and keeping the first row instead made that answer, and therefore
+	 * whether a finding may state which prescription a substance came from, a fact about the order the
+	 * knowledge-base file lists its rows in. That caller's javadoc carries the measurement and what the
+	 * election leaves unsettled.
+	 *
 	 * <p>At the CHIP-SUBJECT site this is the second step rather than the whole answer since issue #194:
 	 * {@code DrugSafetyValidator.interactionSubject} asks {@link #nameMatchStrength} first — the row the
 	 * patient's own record names is the truthful subject (#187) — and folds only the rows tied on that.

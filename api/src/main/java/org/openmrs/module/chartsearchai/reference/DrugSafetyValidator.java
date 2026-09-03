@@ -4356,9 +4356,10 @@ public class DrugSafetyValidator {
 	 *
 	 * <p>Since issue #162 the candidates for one partner come from several rows, not one — the subject's
 	 * whole substance — and the two rows of a substance resolve the SAME partner key: they carry the same
-	 * match token (their shared {@code rxnorm_name}), and {@link #activeOrderEntryFor} returns the first
-	 * order entry that token names. So no extra key work is needed on the subject side; what needed
-	 * deciding is which row wins, below.
+	 * match token (their shared {@code rxnorm_name}), and {@link #activeOrderEntryFor} elects the order
+	 * entry whose claim on that token is strongest — the same answer for both rows, since the token is
+	 * the same string. So no extra key work is needed on the subject side; what needed deciding is
+	 * which row wins, below.
 	 *
 	 * <p>The label alone was the key until issue #136, and it was a sound proxy for "one partner" only
 	 * while a rule could reach an order by ONE spelling. The reference-name arm of
@@ -4457,8 +4458,8 @@ public class DrugSafetyValidator {
 				// the candidate, so the screening arm and the cross-arm ledger read the same answer rather
 				// than each scanning for it (see SubjectRule). Two rows of ONE subject substance resolve the
 				// same partner entry here: they carry the same match token (their shared rxnorm_name), and
-				// activeOrderEntryFor returns the first order entry that token names, so the group is one
-				// key rather than one per row.
+				// activeOrderEntryFor elects the order entry claiming that token most strongly, which is
+				// one answer for both rows, so the group is one key rather than one per row.
 				SubjectRule candidate = new SubjectRule(ref, i,
 						activeOrderEntryFor(orderEntries, ref, i));
 				Object key = candidate.partnerKey();
@@ -5267,7 +5268,9 @@ public class DrugSafetyValidator {
 	 *        taken rather than its name, so this and {@code interactionWarning}'s own detail cannot
 	 *        print two different subject names
 	 * @param partnerRow the partner entry the arm already resolved, or null where the dataset carries
-	 *        none for that order — then the partner side contributes nothing, which is fail-closed
+	 *        none for that order — then the partner side contributes nothing, which is fail-closed. It
+	 *        is {@link #activeOrderEntryFor}'s ELECTION, and that ranking is what keeps this row group
+	 *        and {@code partnerName} about one substance (issue #353, review round 3)
 	 * @param partnerName the name the chip is about to call the partner
 	 * @param orderEntries {@code findForActiveOrders}' own answer, handed down rather than re-resolved
 	 *        (issue #151), and the only source the partner's row group is drawn from
@@ -5312,15 +5315,22 @@ public class DrugSafetyValidator {
 	 *         whole order list instead, and passing this there would suppress a witness that arm did
 	 *         not suppress.
 	 *
-	 *         <p><b>The {@code bridged} argument here is not pinned on its own, and neither is
-	 *         {@link #activeOrdersOtherThan}'s.</b> Measured in issue #353's review round 2, one
-	 *         mutation per full api run: substituting {@link BridgedOrders#NONE} for it at either
-	 *         method alone leaves the whole suite green, and only neutering all four bridged arguments
-	 *         across the two reddens
-	 *         {@code BridgedConceptOrderResolutionTest.theScreeningArmWithholdsTheBridgedOrderFromWitnessingItsOwnPair}'s
-	 *         subject. ADR Decision 68 rests the "the leg must be RANKED" argument on these two sites,
-	 *         so a change dropping the leg from one of them ships green today. Said rather than left to
-	 *         be found; a case per site is owed.
+	 *         <p><b>The {@code bridged} argument here has a case of its own since review round 3</b>, and
+	 *         so does {@link #activeOrdersOtherThan}'s. ADR Decision 68 rests the "the leg must be
+	 *         RANKED" argument on these two sites — the only ones in that change where a wrong answer
+	 *         SILENCES a warning or misattributes one rather than adding one — and round 2 measured
+	 *         that substituting {@link BridgedOrders#NONE} at either method ALONE left the whole api
+	 *         suite green, so the plausible slip of dropping the leg from one of two separate
+	 *         parameters shipped green. Now: substitute it here and
+	 *         {@code BridgedOrderSelfWitnessContextTest.theBridgedOrderIsNotNamedAsItsOwnPartnersSource}
+	 *         reddens with one prescription named as the source of BOTH sides of its own interaction;
+	 *         substitute it at {@code activeOrdersOtherThan}'s own {@code resolvesFromAny} and
+	 *         {@code .theBridgedOrderDoesNotWitnessAnInteractionBetweenItsOwnTwoConstituents} reddens
+	 *         with a chip that should not exist. That class needs a lowered severity floor to exist at
+	 *         all, and says why. The reference-NAME leg inside {@code activeOrdersOtherThan} — its
+	 *         {@code resolvesFrom(coResolved, …)} — was already pinned, by three cases of
+	 *         {@code BridgedConceptOrderResolutionTest}; mutate each of the three arguments separately
+	 *         and read the failures rather than trusting this list.
 	 */
 	private static List<PatientClinicalContext.ActiveDrugOrder> ordersOtherThan(
 			List<DrugReference> subjectRows, PatientClinicalContext context, BridgedOrders bridged) {
@@ -5403,7 +5413,21 @@ public class DrugSafetyValidator {
 	 *         {@code BridgedConceptLegBoundsTest.theRefusalsReachOverTheShippedKnowledgeBase} asserts,
 	 *         so a knowledge-base refresh that moves either reddens rather than leaving this stale. Naming separates them and is asked PER SUBSTANCE, so
 	 *         {@code Esomeprazole from Inexium 40mg} stands where {@code Omeprazole from Inexium 40mg}
-	 *         does not.
+	 *         does not — from either side of the pair since review round 3, and from the subject's side
+	 *         only before it.
+	 *
+	 *         <p><b>It is asked of a ROW GROUP, and WHICH group is a question its caller answers.</b>
+	 *         {@link #chartOrderBridges} asks it of the subject's own rows on one side and of
+	 *         {@link #rowsOfSubstance} of the ELECTED partner entry on the other, so the substance this
+	 *         refusal is about and the name the chip prints are only the same substance if that
+	 *         election agrees with the printed token. Until review round 3 it did not have to:
+	 *         {@link #activeOrderEntryFor} took the first candidate the token identified, and for a
+	 *         concept filed on two substances that both answer to the token — CIEL 75876, this
+	 *         refusal's own worked example — that was whichever row the knowledge-base FILE happened to
+	 *         list first. How much of the 122 that shape reaches is not measured and is not claimed. The clause the bridge's own name licenses then stood from the subject side and was
+	 *         withheld from the partner side of the very same pair. The election ranks on
+	 *         {@link DrugReference#nameMatchStrength} now; what it still cannot separate is recorded
+	 *         there.
 	 *
 	 *         <p><b>There is no third conjunct asking whether the answer is ambiguous at all, and that
 	 *         is a measured omission rather than an oversight.</b> The {@code ddinter} parser writes a
@@ -5777,6 +5801,13 @@ public class DrugSafetyValidator {
 	 *         codes), plus the rows' own codes — so {@link PatientClinicalContext#hasActiveDrug} against
 	 *         it can only be satisfied by a DIFFERENT order. A derived context rather than a second
 	 *         matching rule: the predicate stays the one the question-driven arm uses.
+	 *
+	 *         <p><b>Its {@code bridged} argument is one of the two sites ADR Decision 68's "the leg must
+	 *         be RANKED" argument rests on, and it has a case of its own since issue #353's review
+	 *         round 3</b> —
+	 *         {@code BridgedOrderSelfWitnessContextTest.theBridgedOrderDoesNotWitnessAnInteractionBetweenItsOwnTwoConstituents}.
+	 *         See {@link #ordersOtherThan}, which carries the measurement for both sites and for the
+	 *         reference-NAME leg below.
 	 *
 	 *         <p><b>The whole substance, not one row (issue #189).</b> Since the screening arm's subject
 	 *         is a substance rather than a row, the reduction has to be too: reduced against one row
@@ -6257,6 +6288,50 @@ public class DrugSafetyValidator {
 	 *         this method rather than a second resolution, because a second one is how the two come to
 	 *         name a partner twice again.
 	 *
+	 *         <p><b>Which of several candidates, since issue #353's review round 3: the one whose claim
+	 *         on the rule's token is STRONGEST</b> — {@link DrugReference#nameMatchStrength}, which
+	 *         CLAUDE.md designates as the one answer to how strongly an entry claims a recorded name. It
+	 *         took the FIRST candidate {@link #identifies} admitted, and this knowledge base gives one
+	 *         token to two substances routinely: the {@code ddinter} parser writes a rule's token from
+	 *         the partner's {@code rxnorm_name} and files that name in the partner's own aliases, so
+	 *         {@code esomeprazole} is Esomeprazole's display name AND Omeprazole's alias. A chip
+	 *         printing that token then had issue #349's chart-order clause decided against the OTHER
+	 *         substance's rows — {@link #restsOnAnAmbiguousBridge} is asked of
+	 *         {@link #rowsOfSubstance} of whatever this answers — so the substance the bridge's own name
+	 *         names stated no prescription, and which way it fell was decided by which of the two rows
+	 *         the knowledge-base file lists first. Reproduced by swapping exactly those two rows of a
+	 *         fixture; {@code BridgedConceptOrderResolutionTest.theBridgedClauseIsAskedOfTheSubstanceAndNotOfTheDatasetsRowOrder}
+	 *         asserts the outcome under both orders, and mutating this scan back to the first match
+	 *         reddens it.
+	 *
+	 *         <p><b>A refinement of the CHOICE and never of the SET</b>, which is the shape
+	 *         {@code nameMatchStrength}'s own {@link DrugReference#matchesDrugName} gate has:
+	 *         {@link #identifies} still decides which candidates exist, so this can return no entry it
+	 *         did not return before and cannot fail to return one where it returned something. Two
+	 *         consequences worth stating rather than leaving to be found. A candidate
+	 *         {@link #identifies} by the rule's ATC CODE alone scores
+	 *         {@link DrugReference#NAME_NO_MATCH} and therefore now loses to any candidate the token
+	 *         NAMES, which it could previously beat by arriving first. And the ranking cannot separate
+	 *         two entries that each carry the token as an alias while neither is CALLED it — there the
+	 *         first is still kept, so for that shape the answer is the dataset's own order exactly as it
+	 *         always was, and the residue is a clause withheld rather than one misattributed.
+	 *
+	 *         <p>It no longer stops at the first admitted candidate, so the scan is the whole
+	 *         order-entry list rather than a prefix of it. That list is the patient's own resolved
+	 *         orders, and the added work is one {@code nameMatchStrength} per candidate the gate
+	 *         admits — unmeasured, over a list that is the patient's own resolved orders. The site
+	 *         reaching it for EVERY rule of an entry is
+	 *         {@code DrugReferenceInjector.onePerPartner}, ungated, and there the full walk was already
+	 *         the common case: most of an entry's partners are drugs this patient is not on, and for
+	 *         those nothing was admitted and nothing short-circuited. {@link #bestRulePerPartner} asks
+	 *         only about rules a {@link PatientClinicalContext#hasActiveDrug} join has already passed.
+	 *
+	 *         <p>{@link DrugReference#canonicalRow} is deliberately NOT composed underneath it. Its
+	 *         second rung is scoped to one substance but its first is not, so folding it over
+	 *         candidates the ranking tied would elect ACROSS substances on route-qualification, which is
+	 *         the issue #187 direction. Which ROW a partner is printed from is a different question and
+	 *         {@link SubstanceSubjects#subjectOf} already answers it for every name slot.
+	 *
 	 *         <p>Name IDENTITY, deliberately not {@link DrugReference#matchesText}. A rule's token is
 	 *         exactly its partner's own alias (the {@code ddinter} parser writes it from the partner's
 	 *         RxNorm generic and puts that in the partner's aliases), whereas a whole-word scan also
@@ -6268,12 +6343,24 @@ public class DrugSafetyValidator {
 	 */
 	static DrugReference activeOrderEntryFor(List<DrugReference> orderDrugs,
 			DrugReference subject, DrugReference.Interaction i) {
+		// Folded once for the scan, not once per candidate (issue #330's rule for a ranked scan).
+		DrugReference.FoldedName token = DrugReference.fold(i.getToken());
+		DrugReference elected = null;
+		int strongest = DrugReference.NAME_NO_MATCH;
 		for (DrugReference candidate : orderDrugs) {
-			if (candidate != subject && identifies(i, candidate)) {
-				return candidate;
+			if (candidate == subject || !identifies(i, candidate)) {
+				continue;
+			}
+			int claim = candidate.nameMatchStrength(token);
+			// Strictly greater, so candidates the ranking cannot separate keep the incumbent and the
+			// answer for a tied group is the dataset's first row among them — exactly what this scan
+			// answered for every group before issue #353's round 3.
+			if (elected == null || claim > strongest) {
+				elected = candidate;
+				strongest = claim;
 			}
 		}
-		return null;
+		return elected;
 	}
 
 	/** One screened active-order pair: its chip, its sort key, and a log label naming both sides. */

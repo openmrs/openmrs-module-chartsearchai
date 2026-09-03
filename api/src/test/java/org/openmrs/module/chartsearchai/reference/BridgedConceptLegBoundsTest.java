@@ -226,7 +226,9 @@ public class BridgedConceptLegBoundsTest {
 	 *   <li>{@code 0} concepts answering with exactly ONE substance are named by nothing.</li>
 	 * </ul>
 	 *
-	 * <p><b>That last one is the pin on the FOLD</b>, and it is the only thing that is.
+	 * <p><b>That last one is the pin on the fold EXISTING</b>, and
+	 * {@link #theSubstancesNamedDoNotDependOnTheOrderTheRowsAreListedIn} is the pin on which row it
+	 * elects.
 	 * {@code substancesNamedByBridge} hands {@code findNamedSubstances} one representative ROW per
 	 * substance; hand it the raw answer instead and this reads 28, because a substance's
 	 * route-qualified rows tie on the bridge's name and its equal-claimant clause refuses a tie
@@ -293,5 +295,72 @@ public class BridgedConceptLegBoundsTest {
 		assertEquals(0, oneSubstanceNamedByNothing,
 			"a concept answering with one substance is named by its own recorded name — the premise"
 					+ " under the fold to one row per substance, which reads 28 without it");
+	}
+
+	/**
+	 * Which ROW represents a substance inside that fold is a CHOICE, and this is the case that makes it
+	 * one about the data rather than about the file (issue #353, review round 3).
+	 *
+	 * <p>The fold kept the first row it saw. So whether {@code findNamedSubstances} judged a
+	 * substance's claim on the bridge's own name by its plain row or by one of its route-qualified ones
+	 * — and therefore whether that substance is NAMED, and therefore whether a finding may state which
+	 * prescription it came from — turned on the sequence the knowledge-base file lists the rows in.
+	 * Measured on this dataset through the accessor itself: with the first row kept, 13 of the 4251
+	 * bridged concepts answer with a DIFFERENT set of named substances when their rows arrive reversed.
+	 * The representative is now elected by {@link DrugReference#canonicalRow}, which CLAUDE.md
+	 * designates for exactly this question, and none do.
+	 *
+	 * <p><b>Reversal is the probe because the fold is a left reduction</b>, so the first row and the
+	 * last row are the two answers arrival order can give; a fold that ELECTS gives the same answer to
+	 * both. What it does not reach is a middle row of three, and it does not claim to: the property is
+	 * asserted over every bridged concept the dataset has rather than over an arrangement.
+	 *
+	 * <p>The premise is asserted too, or the case would also pass for a dataset that had stopped filing
+	 * several rows of one substance under any concept — which is the only thing that makes the
+	 * representative a choice at all. Restore the fold to first-wins (drop the
+	 * {@code canonicalRow} call for a {@code containsKey} guard) and this reddens with the 13.
+	 */
+	@Test
+	public void theSubstancesNamedDoNotDependOnTheOrderTheRowsAreListedIn() {
+		Map<String, List<DrugReference>> bridged = new java.util.LinkedHashMap<String, List<DrugReference>>();
+		for (DrugReference entry : service.getAll()) {
+			for (DrugReference.BridgedConcept concept : entry.getBridgedConcepts()) {
+				List<DrugReference> filed = bridged.get(concept.getConceptUuid());
+				if (filed == null) {
+					filed = new ArrayList<DrugReference>();
+					bridged.put(concept.getConceptUuid(), filed);
+				}
+				filed.add(entry);
+			}
+		}
+		Map<Object, Set<Object>> cache = new HashMap<Object, Set<Object>>();
+		int severalRowsOfOneSubstance = 0;
+		List<String> differ = new ArrayList<String>();
+		for (String uuid : bridged.keySet()) {
+			List<DrugReference> answer = service.findByBridgedConcept(uuid, cache);
+			if (answer.isEmpty()) {
+				continue;
+			}
+			Set<Object> substances = new java.util.LinkedHashSet<Object>();
+			for (DrugReference row : answer) {
+				if (!substances.add(row.substanceGroupKey())) {
+					severalRowsOfOneSubstance++;
+					break;
+				}
+			}
+			List<DrugReference> reversed = new ArrayList<DrugReference>(answer);
+			Collections.reverse(reversed);
+			if (!service.substancesNamedByBridge(uuid, answer)
+					.equals(service.substancesNamedByBridge(uuid, reversed))) {
+				differ.add(uuid);
+			}
+		}
+
+		assertEquals(735, severalRowsOfOneSubstance,
+			"the premise: bridged concepts whose answer carries more than one row of some substance —"
+					+ " the population for which the representative is a choice at all");
+		assertEquals(Collections.<String> emptyList(), differ,
+			"and for none of the dataset's bridged concepts does the set of substances the bridge's own"
+					+ " name NAMES depend on the order its rows arrive in");
 	}
 }

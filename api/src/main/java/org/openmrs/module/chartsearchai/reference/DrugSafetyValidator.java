@@ -5387,6 +5387,17 @@ public class DrugSafetyValidator {
 	 *         it: {@link #resolvesFromAny} beside it is what makes the attribution true, and this
 	 *         conjunct only ever decided whether saying it was worth the record's budget.
 	 *
+	 *         <p><b>It is not a pure widening, and the direction it can NARROW in is the one
+	 *         {@link #recordsANameOf}'s own javadoc used to name.</b> For an order
+	 *         {@code PatientClinicalContextBuilder} built, the display IS one of the recorded names,
+	 *         so this predicate implies the old one and the change can only ADD clauses. For a
+	 *         caller-built order whose display is NOT among its names — the residue that javadoc
+	 *         recorded, in the other direction — the display can name the substance while no recorded
+	 *         name does, and then a clause that used to print is now silenced. Nothing in this repo
+	 *         builds such an order outside a test, and the refusal is fail-closed either way: a
+	 *         silenced clause states nothing, it does not state something false. Stated so the
+	 *         widening is not read as monotone, which it is only over the builder's own orders.
+	 *
 	 *         <p><b>Residue: TWO shapes where the display is not what a record renders, both on the
 	 *         rungs below a drug row with a non-blank name.</b>
 	 *         {@code PatientClinicalContextBuilder} reads the drug row's name, then

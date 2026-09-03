@@ -15,6 +15,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
 import java.io.StringWriter;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -183,8 +187,10 @@ public class ChartSearchAiChartOrderBridgeTest {
 		// its field names come from whatever mapper serializes it later, while the SSE path writes real
 		// bytes through the controller's own ObjectMapper. The /search cases assert what the payload
 		// carries; this one asserts what comes out. It pins the JSON field set only — XStream marshals
-		// FIELDS, so a private field added to ChartOrderBridge reaches an XML client without reddening
-		// this; theWholePayloadStillMarshalsForAnXmlClient catches only a field XStream REFUSES.
+		// FIELDS, not getters, so a field added to ChartOrderBridge reaches an XML client without
+		// reddening this, and theWholePayloadStillMarshalsForAnXmlClient catches only a field XStream
+		// REFUSES. That gap is closed structurally next door, by
+		// everyFieldAnXmlClientReceivesIsAFieldAJsonClientReceives.
 		controller.streamAnswer(out, RestControllerContext.patient(), "Is aspirin safe for her?", new User(3), false);
 		JsonNode bridge = streamedChartOrderBridges("done").get(0);
 
@@ -192,6 +198,54 @@ public class ChartSearchAiChartOrderBridgeTest {
 				"exactly the two fields, so neither side needs parsing out of the other, and a public "
 						+ "getter added to ChartOrderBridge does not silently become a third: " + bridge);
 		assertTrue(bridge.has("substance") && bridge.has("orderDisplay"), "was: " + bridge);
+	}
+
+	/**
+	 * The two mappers read {@link SafetyWarning.ChartOrderBridge} through different views — Jackson
+	 * takes its GETTERS, XStream takes its FIELDS — so the JSON contract above and the XML a client
+	 * receives are two field sets that can drift apart in silence. This makes them one.
+	 *
+	 * <p>Structural rather than behavioural, and that is the point: the drift it catches has no
+	 * observable value to assert. A field added here with no getter is published to an XML client and
+	 * to nobody else, with {@link #theTwoHalvesAreSeparateFieldsAndNotASentenceToParse} (which reads
+	 * JSON) and {@link #theWholePayloadStillMarshalsForAnXmlClient} (which only catches a field
+	 * XStream REFUSES) both green. This repo pins that shape off {@code getDeclaredFields} elsewhere
+	 * — CLAUDE.md cites {@code CoMedicationResolutionPerPassTest} for a field budget read the same
+	 * way.
+	 *
+	 * <p>It is ONE-directional, deliberately: a field implies a getter, never the converse. A derived
+	 * getter over no field of its own would become a JSON field an XML client does not receive, which
+	 * is a divergence in the other direction and one this class's JSON case already sees, since it
+	 * asserts the field COUNT.
+	 *
+	 * <p>Static and synthetic members are excluded — {@code static} because XStream does not marshal
+	 * one, and synthetic because a compiler writes {@code this$0} and jacoco writes
+	 * {@code $jacocoData} into classes that never declared them.
+	 */
+	@Test
+	public void everyFieldAnXmlClientReceivesIsAFieldAJsonClientReceives() throws Exception {
+		List<String> problems = new ArrayList<String>();
+		for (Field f : SafetyWarning.ChartOrderBridge.class.getDeclaredFields()) {
+			if (Modifier.isStatic(f.getModifiers()) || f.isSynthetic()) {
+				continue;
+			}
+			String getter = "get" + Character.toUpperCase(f.getName().charAt(0)) + f.getName().substring(1);
+			Method m = null;
+			try {
+				m = SafetyWarning.ChartOrderBridge.class.getDeclaredMethod(getter);
+			}
+			catch (NoSuchMethodException absent) {
+				problems.add("field '" + f.getName() + "' has no " + getter + "()");
+				continue;
+			}
+			if (!Modifier.isPublic(m.getModifiers())) {
+				problems.add("field '" + f.getName() + "' has " + getter + "() but it is not public");
+			}
+		}
+		assertEquals(Collections.<String> emptyList(), problems,
+				"XStream marshals this class's FIELDS and Jackson reads its GETTERS, so every field "
+						+ "needs a public getter of its own name or an XML client receives something a "
+						+ "JSON client never sees (issue #347)");
 	}
 
 	@Test
@@ -228,9 +282,13 @@ public class ChartSearchAiChartOrderBridgeTest {
 	@Test
 	public void theWholePayloadStillMarshalsForAnXmlClient() throws Exception {
 		// The one break this change introduced, and the only path no other test in this repo covers.
-		// The blocking /search response is a ResponseEntity<Object> served by openmrs-core's two
-		// converters (webservices.rest leaves <mvc:annotation-driven/> commented out), so for
-		// `Accept: application/xml` the selected one is an XStreamMarshaller — and XStream cannot
+		// The blocking /search response is a ResponseEntity<Object> served by the converters
+		// openmrs-core registers (webservices.rest leaves <mvc:annotation-driven/> commented out), so
+		// for `Accept: application/xml` the one that serves a Map body is an XStreamMarshaller behind
+		// a MarshallingHttpMessageConverter — read off openmrs-web's openmrs-servlet.xml rather than
+		// inferred, and NOT pinned by this test, which drives the marshaller directly. What this case
+		// pins is that the marshaller refuses the value; that it is the marshaller in the request path
+		// is the platform's configuration and would go stale silently. XStream cannot
 		// marshal java.util.Collections' immutable wrappers under a modular JDK ("module java.base
 		// does not opens java.util"). chartOrderBridges() returns an unmodifiableList, or
 		// Collections$EmptyList in the common empty case, so publishing it AS HANDED turned every

@@ -1286,9 +1286,13 @@ public class ChartSearchAiRestController {
 			map.put("severity", warning.getSeverity());
 			// Copied into an ArrayList, and that is a correctness requirement rather than caution —
 			// serializeReferences above copies for its own reason and this is a second one. The
-			// blocking /search response is a ResponseEntity<Object> served by openmrs-core's two
-			// converters (webservices.rest leaves <mvc:annotation-driven/> commented out), and for
-			// `Accept: application/xml` the second one is selected: an XStreamMarshaller, which cannot
+			// blocking /search response is a ResponseEntity<Object> served by the converters
+			// openmrs-core registers (webservices.rest leaves <mvc:annotation-driven/> commented out),
+			// and for `Accept: application/xml` the one selected for a Map body is
+			// xmlMarshallingHttpMessageConverter, a MarshallingHttpMessageConverter over an
+			// XStreamMarshaller — read off openmrs-web's own openmrs-servlet.xml (the
+			// RequestMappingHandlerAdapter's messageConverters list, lines 117-129 of the 2.8.4
+			// artifact), not inferred. XStreamMarshaller cannot
 			// marshal java.util.Collections' immutable wrappers under a modular JDK ("module java.base
 			// does not opens java.util"). chartOrderBridges() returns an unmodifiableList, or
 			// Collections$EmptyList in the common empty case, so publishing it as handed turned every

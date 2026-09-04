@@ -84,6 +84,15 @@
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-compiler-plugin</artifactId>
+					<!-- Pinned because this build's correctness now depends on ONE plugin parameter being
+					     honoured. <compilerArgs> arrived in maven-compiler-plugin 3.1; pin an earlier version
+					     and Maven silently ignores the element as an unknown parameter, with no diagnostic —
+					     measured: version 2.5.1 here, a dead javadoc reference planted in omod/src/main/java,
+					     `mvn -o clean install` exit 0 and not one `reference not found` printed. Unpinned, the
+					     version is whatever Maven's super-POM supplies and so moves with the developer's Maven
+					     install. JavadocReferenceGuardTest requires this element and requires it to be at
+					     least 3.1. -->
+					<version>3.13.0</version>
 					<configuration>
 						<target>${maven.compiler.target}</target>
 						<source>${maven.compiler.source}</source>

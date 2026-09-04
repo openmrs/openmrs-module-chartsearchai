@@ -5657,6 +5657,46 @@ the gate was open, which is the only property they share:
   is outside the reactor `mvn install` drives and it carries no java source, and compiler
   configuration there gates nothing.
 
+- **The guard read ONE of maven-compiler-plugin's five argument parameters, and the other four were
+  reachable from inside the very `<configuration>` this gate lives in.** The 3.13.0 descriptor
+  declares `compilerArgs` (a `List`), `compilerArgument` (a `String`, not deprecated),
+  `compilerArguments` (a deprecated `Map`) on both the `compile` and `testCompile` mojos, plus
+  `testCompilerArgument` and `testCompilerArguments` on `testCompile`. `compilerArgument` does not
+  REPLACE the managed list — the plugin APPENDS it — so one added line handed javac an argument
+  nothing read. Measured on this branch, JDK 21.0.6, plugin 3.13.0: with
+  `<compilerArgument>-Xdoclint/package:-org.openmrs.*</compilerArgument>` after `</compilerArgs>` and
+  a dead pointer planted in `omod/src/main/java`, `mvn -o clean install` exited 0 with not one
+  `reference not found` printed and this suite ran seven checks with zero failures — this decision's
+  headline defect reinstated, again, by an edit that moves no plugin block and touches no property.
+  The `testCompilerArgument` form does the same to both modules' TEST roots, which is where two of
+  the three dead references this change repaired actually lived. All five channels are read now, and
+  composed per configuration POSITION rather than per parameter.
+- **Reading one more parameter name is what this check kept receiving, and it is not the fix.** Round
+  5 found the `maven.compiler.failOnError` user property, round 6 the `-Xdoclint/package` qualifier,
+  round 7 four sibling argument parameters; each was closed by naming it, and each time the next one
+  was still reachable. **The world over compiler configuration in these POMs is CLOSED instead**: a
+  parameter these POMs set that is neither read as an argument channel, refused outright
+  (`failOnError`, `compilerId`), nor listed as unable to carry a javac argument (`source`, `target`,
+  `release`, `encoding` — the four these POMs use, and deliberately no more) is REFUSED, naming
+  itself. That is complete for the argument family and the reason is a fact about the plugin rather
+  than a hope: none of the five argument parameters is bound to a user property, so an element inside
+  a compiler `<configuration>` is the only position any of them can act from. It also newly refuses
+  `<fork>` plus `<executable>`, which hand the whole compilation to a binary of the POM's choosing —
+  so the property form of that pair is now read too, because refusing an element while ignoring the
+  property that sets the same parameter is the disagreement round 5 was about. The cost is friction:
+  a maintainer adding a fifth compiler parameter gets a red build until they say which list it
+  belongs in. That is the point of it.
+- **The `pluginManagement` entry pinned no plugin version, so the version that has to honour
+  `<compilerArgs>` was whatever Maven's super-POM supplied.** `<compilerArgs>` arrived in
+  maven-compiler-plugin 3.1 — read off the descriptors in the local repository: 2.5.1's declares no
+  parameter of that name, 3.1's declares it on both mojos — and **Maven ignores an unknown plugin
+  parameter in silence**, with no "Unknown parameter" diagnostic. Measured: `<version>2.5.1</version>`
+  added to that entry, dead pointer planted, exit 0, zero `reference not found`, seven checks green.
+  The entry pins 3.13.0 now (the version Maven 3.9.10's super-POM was supplying anyway, so the build
+  is unchanged), and the guard requires a `<version>` and requires it to be at least 3.1. What a POM
+  reader cannot say is whether that version actually PASSES the arguments to javac; the floor is the
+  whole of what these files can be asked.
+
 The same rule decides what counts as a javadoc error over the module's own sources: **a DIFFERENCE,
 never a message.** Where the flagged compile reports errors the sources are compiled again without
 the argument, and only what the flagged run adds is doclint's. Two earlier attempts matched message

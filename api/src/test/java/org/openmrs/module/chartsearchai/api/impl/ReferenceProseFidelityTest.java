@@ -924,8 +924,9 @@ public class ReferenceProseFidelityTest {
 	 *  It is written this way because the same arm raises a DIRECT recorded-allergy sentence that also
 	 *  carries the words "allergy to" — an allergen naming the subject row rather than the partner is
 	 *  all it takes — and a case reading a ROUTE-QUALIFIED one of those would slice a different
-	 *  sentence with every premise here still green. (For a bare one the slicing helpers fail
-	 *  instead, on a message about the allergen rather than about the premise.) */
+	 *  sentence with every premise here still green. (For a bare one a slicing helper fails first
+	 *  instead — which one depends on the case, so the failure names the slicing rather than the
+	 *  premise either way.) */
 	private static RecordMapping crossReactivityFinding(PatientChart chart) {
 		for (RecordMapping mapping : chart.getMappings()) {
 			if (ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(mapping.getResourceType())

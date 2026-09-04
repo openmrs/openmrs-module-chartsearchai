@@ -3889,6 +3889,16 @@ at, or how long the runs were, that is a second measurement over the same answer
   record to the floor — the duplicate-therapy finding about active order Dexamethasone, and that one
   alone of the eighteen reference records the chart carries; on
   the opening clause alone nothing reaches the floor and it declines before comparing.
+  **And the defect this silence rests on did not reproduce when the issue was re-measured after
+  Decision 59's own rules shipped.** They went in with
+  [#343](https://github.com/openmrs/openmrs-module-chartsearchai/pull/343), and this issue's follow-up
+  comment re-measured the same patient and question on `main` @ `3b98b04e` across three byte-identical
+  runs: each parenthetical carries one code there, so defect 1 did not reproduce — nor did defect 2 on
+  that chart, though the same comment records the same class of truncation on another one, which the
+  third reading below is about. The mechanism recorded here is therefore a reading of THIS capture, in
+  which two defects co-occur, and not a standing property of what a current head answers. What no
+  capture supplies is defect 2 standing alone inside a long enough reproduction; that is row four,
+  built rather than captured.
 - **A report is not evidence that a drug name was mangled.** Row six spells the allergen correctly and
   is reported all the same, for the gloss that follows it — drop that and it goes silent, which is
   row seven. Row four is reported for the shortened allergen instead, and drops the gloss without
@@ -3935,10 +3945,24 @@ narrows the rule; it does not answer it. Nor would such a rule buy anything at t
 where a substitution inside a long enough reproduction is already reported; its whole value would be a
 floor lowered for that class alone, which Decision 61 is canonical for and does not by itself refuse.
 What it would have to get past is its own false-positive measurement and Decision 35's standing bar
-that a check which cries wolf is worse than no check — and that measurement cannot be taken in this
-repository: the captured answers under `eval/drift-metric/fixtures` carry each citation's index, type
-and uuid but none of the record's own TEXT, so nothing there can be aligned against a record at all,
-and the live corpus Decision 35 used is outside this repository.
+that a check which cries wolf is worse than no check. **A corpus to take that measurement over exists
+in this repository — thin and unlabelled rather than absent.** The captures under
+`eval/drift-metric/fixtures` carry each answer's `safetyWarnings` beside its citations, and a chip's
+`drug` and `detail` are two of the operands `DrugReferenceInjector.renderFinding` composes a
+`safety_finding` record from, so that record's own detail SENTENCE — where an answer's reproduction of
+a finding sits — is reconstructible from a capture word for word, even though the citation objects
+themselves carry only index, type and uuid. Measured 2026-09-04 from a throwaway harness driving
+`reportUnfaithfulReferenceProse` itself (never a re-expression of it) over all 72 json files, each
+capture's reconstructed chips served as its own cited records: of the 42 captured answers 27 carry
+chips, 16 reproduce a reconstructed record to the floor — the population a rule scoped inside an
+established reproduction could fire in at this floor — and the check states a citation on 9 of them.
+Those nine are THIS check's reports and not a candidate rule's false alarms; what the sixteen give a
+candidate is somewhere to be run. Two things that corpus does not carry, and both are why it is thin
+rather than why it would be unavailable: a LABEL, these being the drift metric's own perturbed
+answers, so nothing in the tree settles which report is a true one; and any `drug_reference` record's
+text at all, no capture carrying it — the reconstruction reaches a `safety_finding`'s detail, and what
+`renderFinding` appends after it is approximated. The live corpus Decision 35 used is outside this
+repository.
 
 What this leaves is the bullet above, unchanged: defect 2 is open, and a remedy still has that
 bullet's measurement to get past. It is recorded here because *"the prose check covers it now"* is the

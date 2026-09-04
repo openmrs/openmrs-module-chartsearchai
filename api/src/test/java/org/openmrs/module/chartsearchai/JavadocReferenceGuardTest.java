@@ -103,6 +103,14 @@ import org.w3c.dom.NodeList;
  * {@code <arg>}, a child pom's own compiler-plugin {@code <version>}, and a {@code combine.self}
  * merge-control attribute. Each was fixed by reading one more thing, which is what left the next one
  * reachable. See {@link #PARAMETERS_CARRYING_NO_JAVAC_ARGUMENT}.</li>
+ * <li><strong>Or can a POM stop the checks RUNNING?</strong>
+ * {@link #noPomEditTakesAModuleOutOfTheTestBuild}, which is round 9's question and a different one
+ * from every bullet above: they all ask what javac is handed, this asks whether the module that
+ * would notice is in the build at all. Four lines unbinding one module's
+ * {@code default-testCompile} took its test root out of javac AND out of the corpus check living in
+ * that root, at once. Both modules' checks now read every reactor POM, so an edit stopping one
+ * module's tests is refused by the module whose tests still run. Its javadoc states what a POM can
+ * still do, which is the part not to paraphrase into an absolute.</li>
  * <li><strong>Is the corpus every module the build compiles?</strong>
  * {@link #theCorpusCoversEveryModuleTheBuildCompiles}. Both walks
  * and every POM check derive their scope from the root pom's {@code <modules>}, so a module declared
@@ -140,9 +148,14 @@ import org.w3c.dom.NodeList;
  * {@code <compilerArgs>}, a child pom's own {@code <version>}, and a {@code combine.self} attribute,
  * every one of them landing on {@code omod} for the structural reason the api bullet above gives. All
  * three are read now, and the completeness claim that stood here is not reinstated: what bounds the
- * next one is that {@code omod}'s own source roots are compiled by a check that reads no build
- * configuration at all ({@link #COMPILER_CHECKS_OUTSIDE_API}), so a POM defeating the flag makes these
- * readers disagree with the build rather than leaving a module's pointers unresolved in silence. The
+ * next one is that each module's own source roots are compiled by a check LIVING IN THAT MODULE, whose
+ * arguments are its own literals ({@link #COMPILER_CHECKS_OUTSIDE_API}), so a POM defeating the flag
+ * makes these readers disagree with the build rather than leaving a module's pointers unresolved in
+ * silence. <strong>Round 9 then falsified the bound as it was written, because those checks live in the
+ * very test roots they guard</strong>: four lines unbinding one module's {@code default-testCompile}
+ * removed the root from javac and the check from the build together, with BUILD SUCCESS and a dead
+ * pointer standing. {@link #noPomEditTakesAModuleOutOfTheTestBuild} is what answers that, from BOTH
+ * modules, and its javadoc states the residue rather than replacing one absolute with another. The
  * POM checks read THESE POMs —
  * the ones {@link #poms} names — so anything ELSE Maven reads is invisible to them, in both
  * directions: a {@code settings.xml} profile, the command line, {@code MAVEN_OPTS}, and a committed
@@ -193,6 +206,69 @@ public class JavadocReferenceGuardTest {
 	private static final String NON_REACTOR_POM_DIRECTORY = "llama-server-natives";
 
 	private static final String COMPILER_PLUGIN = "maven-compiler-plugin";
+
+	/**
+	 * The plugin that RUNS every check in this class, and every check in its omod-side sibling. Read
+	 * here for one reason and it is not the arguments: unbind its {@code default-test} execution, or
+	 * configure it not to run, and a module's checks vanish along with whatever they were asserting.
+	 * See {@link #noPomEditTakesAModuleOutOfTheTestBuild}.
+	 */
+	private static final String SUREFIRE_PLUGIN = "maven-surefire-plugin";
+
+	/**
+	 * The direct children of a {@code maven-compiler-plugin} element that this class accounts for —
+	 * and so, by {@link #unreadPluginChildrenAt}, a closed world one level OUT from the one
+	 * {@link #PARAMETERS_CARRYING_NO_JAVAC_ARGUMENT} closes. {@code <groupId>} and
+	 * {@code <artifactId>} name the plugin, {@link #versionBelowTheFloorAt} reads the
+	 * {@code <version>}, and the children of {@code <configuration>} are the other closed world.
+	 *
+	 * <p><strong>Why one level out, and why this is not another named reader.</strong> Round 9 of this
+	 * change's review defeated the whole defence from an {@code <executions>} element — four lines in a
+	 * child pom binding {@code default-testCompile} to {@code <phase>none</phase>}, carrying no
+	 * {@code <configuration>}, no {@code <version>} and no attribute, so every existing reader returned
+	 * empty for it. It takes that module's test root out of javac AND out of the corpus check that
+	 * lives in it, at once. Measured on this branch, JDK 21, plugin 3.13.0: that element in
+	 * {@code omod/pom.xml} plus a dead pointer in {@code omod/src/test/java} —
+	 * {@code mvn -o clean install} exit 0, BUILD SUCCESS, zero {@code reference not found} printed,
+	 * omod's surefire logging "No tests to run", and the api module's whole suite green with this class
+	 * green in it. Reading {@code <phase>} would have answered that one element; refusing an
+	 * unaccounted DIRECT CHILD answers the family — {@code <inherited>}, {@code <dependencies>} (which is where a
+	 * compiler backend would arrive), {@code <extensions>}, and whatever the next one is called.
+	 */
+	private static final List<String> COMPILER_PLUGIN_CHILDREN_READ_HERE =
+			Arrays.asList("groupId", "artifactId", "version", "configuration");
+
+	/**
+	 * The direct children of a {@code maven-surefire-plugin} element this class accounts for. Shorter
+	 * than {@link #COMPILER_PLUGIN_CHILDREN_READ_HERE} by {@code <configuration>}, deliberately:
+	 * nothing here can tell which surefire parameter stops a check from running — {@code skipTests},
+	 * {@code skip}, {@code excludes}, {@code test}, {@code excludedGroups} and {@code failIfNoTests}
+	 * are six of them — so the element is REFUSED rather than judged, which is the answer
+	 * {@link #noOtherCompilerConfigurationDropsTheCheck} already gives a {@code <compilerId>} it
+	 * cannot reason about. This repository declares surefire once, at the managed entry, with a
+	 * {@code <version>} and nothing else; whoever needs to configure it says here which parameter it is
+	 * and why it leaves both modules' checks running.
+	 */
+	private static final List<String> SUREFIRE_PLUGIN_CHILDREN_READ_HERE =
+			Arrays.asList("groupId", "artifactId", "version");
+
+	/**
+	 * The user properties that stop a module's tests being compiled or run, and so stop its checks
+	 * asserting anything. {@code maven.test.skip} is read by maven-compiler-plugin (as
+	 * {@code testCompile}'s {@code skip} parameter) and by surefire; {@code skipTests} and
+	 * {@code maven.test.skip.exec} are surefire's own. The ELEMENT form of each is refused by the two
+	 * child closures above — a compiler {@code <skip>} by
+	 * {@link #unreadCompilerParametersAt}, a surefire {@code <configuration>} outright — so these are
+	 * the SAME question at the other position Maven answers it from, which is the symmetry
+	 * {@link #FAIL_ON_ERROR_PROPERTY} records for its own parameter.
+	 *
+	 * <p>Set in a CHILD pom these take one module's tests out of the build and leave the other's
+	 * running, which is exactly {@link #COMPILER_PLUGIN_CHILDREN_READ_HERE}'s defect from a position
+	 * carrying no plugin element at all. Set in the ROOT pom they take out every module's, which is
+	 * the residue {@link #noPomEditTakesAModuleOutOfTheTestBuild} discloses rather than covers.
+	 */
+	private static final List<String> TEST_SKIP_PROPERTIES =
+			Arrays.asList("maven.test.skip", "maven.test.skip.exec", "skipTests");
 
 	/**
 	 * Maven's two merge-control attributes. See {@link #mergeControlAttributesAt}, which refuses them
@@ -393,7 +469,12 @@ public class JavadocReferenceGuardTest {
 	/**
 	 * The files outside the api module that carry a compiler-driven check of their own module's
 	 * javadoc pointers — one that compiles those sources with arguments IT chooses, reading no build
-	 * configuration. Today there is one, in {@code omod}.
+	 * configuration to decide them. Today there is one, in {@code omod}.
+	 *
+	 * <p>That is a claim about the ARGUMENTS and not about the check running at all: it lives in the
+	 * test root it guards, so a POM edit unbinding that module's test compilation removes both.
+	 * {@link #noPomEditTakesAModuleOutOfTheTestBuild} is what refuses such an edit, from whichever
+	 * module still runs its tests.
 	 *
 	 * <p>It exists because {@link #everyJavadocReferenceInTheApiModuleResolves} runs on the api
 	 * classpath and so cannot reach any other module's sources, which left every other module's
@@ -1225,6 +1306,230 @@ public class JavadocReferenceGuardTest {
 	}
 
 	/**
+	 * No POM in this reactor takes a module's tests out of the build, and the same line is held from
+	 * the other module by {@code JavadocReferenceOmodCorpusTest.noPomEditTakesAModuleOutOfTheTestBuild}.
+	 *
+	 * <p><strong>The defect it answers.</strong> Round 8 put a compiler-driven corpus check inside
+	 * {@code omod} so that the consequence of an unread POM position was bounded. Round 9 defeated that
+	 * by noticing where the check LIVES: each module's corpus check sits in the very test root it
+	 * guards, so four lines in that module's POM — an {@code <executions>} entry binding
+	 * {@code default-testCompile} to {@code <phase>none</phase>} — take the root out of javac and out of
+	 * the check at once. Measured before this arm existed, on this branch, JDK 21, plugin 3.13.0, with
+	 * that element in {@code omod/pom.xml} and a dead pointer planted in {@code omod/src/test/java}:
+	 * {@code mvn -o clean install} exit 0, BUILD SUCCESS, zero {@code reference not found} printed,
+	 * omod's surefire logging "No tests to run", the api module's whole suite green with this class
+	 * green in it, and the {@code .omod} artifact still installed. That is #262's headline defect
+	 * reinstated for a test root, which is where two of the three dead pointers this change repaired
+	 * actually lived. The mirror edit in {@code api/pom.xml} is not a separate defect but the same one
+	 * with the modules swapped; what was measured of it is that with this arm in place it reddens the
+	 * OMOD-side copy, api's own tests never having run.
+	 *
+	 * <p><strong>What makes this different from a fifth, sixth or seventh reader</strong> is not the
+	 * closure — {@link #COMPILER_PLUGIN_CHILDREN_READ_HERE} is one, and closures have been falsified
+	 * here twice — but WHERE the closure is asserted from. Both modules' checks read every reactor POM,
+	 * so an edit that stops ONE module's tests is refused by the module whose tests still run. The
+	 * omod-side arm states the same thing a different way (that these two plugins are declared only at
+	 * the root's managed entry), so the two are not one reader written twice.
+	 *
+	 * <p><strong>The residue, stated rather than claimed away.</strong> A POM can still remove test
+	 * execution from EVERY module at once — an {@code <executions>} entry in the ROOT pom's
+	 * {@code <build><plugins>}, which children inherit, or {@code maven.test.skip} in the root
+	 * {@code <properties>}. No check written in a test can survive that, because none of them runs. What
+	 * it costs the person doing it is that the build then runs no tests AT ALL, in either module.
+	 * Measured on both spellings of that edit: exit 0 and BUILD SUCCESS, but api's surefire printed no
+	 * test banner and no counts, omod's printed "No tests to run", and not one {@code Tests run:} line
+	 * was emitted for either module — so the reactor's test total was zero, rather than green with a
+	 * dead pointer hidden inside it. <strong>Do not write a claim here that no POM edit can
+	 * silence this gate.</strong> Two such claims were published in consecutive rounds — one in the
+	 * omod check's class javadoc, one in docs/adr.md Decision 75 — and both were falsified by the next
+	 * round.
+	 *
+	 * <p>An arm reading api's {@code target/surefire-reports} to check that the OTHER module's guard
+	 * actually ran was considered and declined: it covers exactly the case the cross-read POM arm
+	 * already covers, cannot reach the residue above (it would not run either), and makes a guard
+	 * depend on which modules a given {@code -pl} invocation built — a red build for the wrong reason.
+	 */
+	@Test
+	public void noPomEditTakesAModuleOutOfTheTestBuild() throws Exception {
+		List<String> violations = new ArrayList<String>();
+		for (String pom : poms()) {
+			for (Element plugin : pluginsNamed(pom, COMPILER_PLUGIN)) {
+				for (String where : unreadPluginChildrenAt(plugin, COMPILER_PLUGIN,
+						COMPILER_PLUGIN_CHILDREN_READ_HERE)) {
+					violations.add(pom + " " + where);
+				}
+			}
+			for (Element plugin : pluginsNamed(pom, SUREFIRE_PLUGIN)) {
+				for (String where : unreadPluginChildrenAt(plugin, SUREFIRE_PLUGIN,
+						SUREFIRE_PLUGIN_CHILDREN_READ_HERE)) {
+					violations.add(pom + " " + where);
+				}
+			}
+			for (String where : testSkipPropertyOverrides(pomRoot(pom))) {
+				violations.add(pom + " " + where);
+			}
+		}
+		violations.addAll(pomsNoCrossModuleReaderNames());
+		String unbinding = "<plugin><artifactId>" + COMPILER_PLUGIN + "</artifactId><executions>"
+				+ "<execution><id>default-testCompile</id><phase>none</phase></execution></executions></plugin>";
+		if (unreadPluginChildrenAt(parseXml(unbinding), COMPILER_PLUGIN,
+				COMPILER_PLUGIN_CHILDREN_READ_HERE).isEmpty()) {
+			violations.add("an <executions> element on a " + COMPILER_PLUGIN + " declaration is not refused. "
+					+ "That element carries no <configuration>, no <version> and no attribute, so every other "
+					+ "reader here returns empty for it: unreadCompilerParametersAt closes the world over a "
+					+ "<configuration>'s children, javacArgumentBlocks records no position, versionBelowTheFloorAt "
+					+ "finds no <version> and mergeControlAttributesAt finds no attribute. Measured on this "
+					+ "branch, JDK 21: those four lines in omod/pom.xml plus a dead pointer in "
+					+ "omod/src/test/java gave mvn -o clean install exit 0, BUILD SUCCESS, zero 'reference not "
+					+ "found', omod's surefire logging 'No tests to run' and this suite green — because the "
+					+ "check compiling that root lives IN that root. This repository declares no compiler-plugin "
+					+ "<executions> anywhere, so only this synthetic POM can say so");
+		}
+		String managedShape = "<plugin><groupId>org.apache.maven.plugins</groupId><artifactId>"
+				+ COMPILER_PLUGIN + "</artifactId><version>3.13.0</version><configuration><compilerArgs>"
+				+ "<arg>" + REFERENCE_CHECK + "</arg></compilerArgs></configuration></plugin>";
+		List<String> refusedLegally = unreadPluginChildrenAt(parseXml(managedShape), COMPILER_PLUGIN,
+				COMPILER_PLUGIN_CHILDREN_READ_HERE);
+		if (!refusedLegally.isEmpty()) {
+			violations.add("the shape of this repository's own managed compiler entry is refused on its "
+					+ "children (it read " + refusedLegally + "), which reddens a clean build — the one "
+					+ "failure direction this class refuses");
+		}
+		String surefireConfigured = "<plugin><artifactId>" + SUREFIRE_PLUGIN + "</artifactId>"
+				+ "<configuration><skipTests>true</skipTests></configuration></plugin>";
+		if (unreadPluginChildrenAt(parseXml(surefireConfigured), SUREFIRE_PLUGIN,
+				SUREFIRE_PLUGIN_CHILDREN_READ_HERE).isEmpty()) {
+			violations.add("a <configuration> on a " + SUREFIRE_PLUGIN + " declaration is not refused. "
+					+ "Nothing here can tell which surefire parameter stops a module's checks running, and a "
+					+ "module whose checks do not run is a module whose javadoc pointers are held by these POM "
+					+ "readers alone — the state round 8 was written to end. See "
+					+ "SUREFIRE_PLUGIN_CHILDREN_READ_HERE");
+		}
+		String surefirePinned = "<plugin><groupId>org.apache.maven.plugins</groupId><artifactId>"
+				+ SUREFIRE_PLUGIN + "</artifactId><version>3.5.5</version></plugin>";
+		List<String> pinnedRefused = unreadPluginChildrenAt(parseXml(surefirePinned), SUREFIRE_PLUGIN,
+				SUREFIRE_PLUGIN_CHILDREN_READ_HERE);
+		if (!pinnedRefused.isEmpty()) {
+			violations.add("this repository's own managed surefire entry is refused on its children (it read "
+					+ pinnedRefused + "), which reddens a clean build");
+		}
+		List<String> skipping = testSkipPropertyOverrides(parseXml("<project><properties>"
+				+ "<maven.test.skip>true</maven.test.skip></properties><profiles><profile><properties>"
+				+ "<skipTests>true</skipTests></properties></profile></profiles></project>"));
+		String bothSkips = join(skipping);
+		if (skipping.size() != 2 || !bothSkips.contains("maven.test.skip")
+				|| !bothSkips.contains("skipTests")) {
+			violations.add("the properties that take a module's tests out of the build are not both read out "
+					+ "of a POM's <properties> — the project's own and a <profile>'s (it read " + skipping
+					+ "). In a CHILD pom either of them does what round 9's <executions> element did, from "
+					+ "three words naming no plugin: this repository sets neither, so only this synthetic POM "
+					+ "can say so");
+		}
+		List<String> notSkipping = testSkipPropertyOverrides(parseXml("<project><properties>"
+				+ "<maven.test.skip>false</maven.test.skip><skipTests>false</skipTests></properties>"
+				+ "</project>"));
+		if (!notSkipping.isEmpty()) {
+			violations.add("a <properties> entry setting a test-skip property to FALSE is reported (it read "
+					+ notSkipping + "), which is the default and reddens a POM that builds exactly as this one "
+					+ "does");
+		}
+		List<String> asProviderProperties = testSkipPropertyOverrides(parseXml("<project><build><plugins>"
+				+ "<plugin><configuration><properties><skipTests>true</skipTests></properties>"
+				+ "</configuration></plugin></plugins></build></project>"));
+		if (!asProviderProperties.isEmpty()) {
+			violations.add("a <properties> inside a plugin's own <configuration> is read as setting a "
+					+ "test-skip user property (it read " + asProviderProperties + "), which it is not — "
+					+ "maven-surefire-plugin's descriptor declares a <properties> parameter of type "
+					+ "java.util.Properties for its provider configuration, which is why "
+					+ "declaredUnderProjectOrProfile exists");
+		}
+		assertNoViolations(violations);
+	}
+
+	/**
+	 * Every reactor POM named as a literal in a file listed in {@link #COMPILER_CHECKS_OUTSIDE_API},
+	 * and that file still carrying the two plugin names its own POM arm is made of. The anti-drift
+	 * device {@link #rootsNoCompilerCheckReads} uses for source roots, asked of POMs: a third module
+	 * arriving, or a module renamed, leaves the other side's cross-read narrower than the reactor with
+	 * nothing to notice.
+	 *
+	 * <p>Source text and not behaviour, with the same limits stated there — it says a literal is
+	 * present, never that the check around it is right.
+	 */
+	private static List<String> pomsNoCrossModuleReaderNames() throws Exception {
+		List<String> violations = new ArrayList<String>();
+		for (String check : COMPILER_CHECKS_OUTSIDE_API) {
+			Path path = REPO_ROOT.resolve(check);
+			if (!Files.isRegularFile(path)) {
+				continue;
+			}
+			String source = new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
+			for (String plugin : Arrays.asList(COMPILER_PLUGIN, SUREFIRE_PLUGIN)) {
+				if (!source.contains("\"" + plugin + "\"")) {
+					violations.add(check + " no longer names " + plugin + " as a literal, so it can no longer "
+							+ "be the check that refuses a POM edit taking THIS module's tests out of the build. "
+							+ "The two arms cover each other: whichever module still runs its tests is the one "
+							+ "that reports the edit");
+				}
+			}
+			for (String pom : poms()) {
+				if (!source.contains("\"" + pom + "\"")) {
+					violations.add(check + " does not name the reactor POM " + pom + " as a literal, so its "
+							+ "own POM arm would not read it — and an edit to that POM taking this module's "
+							+ "tests out of the build would be reported by nothing once these checks are the "
+							+ "ones not running. Add the literal there in the same commit");
+				}
+			}
+		}
+		return violations;
+	}
+
+	/**
+	 * Every direct child of one plugin element whose name this class does not account for, described.
+	 * The closed world one level OUT from {@link #unreadCompilerParametersAt}'s, and the answer to
+	 * round 9's finding — see {@link #COMPILER_PLUGIN_CHILDREN_READ_HERE} for what was measured and
+	 * why a reader for {@code <phase>} would have been the wrong fix.
+	 */
+	private static List<String> unreadPluginChildrenAt(Element plugin, String named, List<String> read) {
+		List<String> where = new ArrayList<String>();
+		for (Element child : elementChildren(plugin)) {
+			if (!read.contains(child.getNodeName())) {
+				where.add("declares " + named + " with a <" + child.getNodeName() + "> child, which this "
+						+ "guard does not account for. Such an element can decide whether that plugin RUNS for "
+						+ "a module at all — the measured case is an <executions> entry binding "
+						+ "default-testCompile to <phase>none</phase>, and a surefire <configuration> can do "
+						+ "the same to test EXECUTION — and a module whose tests are not compiled or not run "
+						+ "is a module whose corpus check asserts nothing, because that check lives in the "
+						+ "very root it guards. Refused rather than assumed harmless, for the reason "
+						+ "PARAMETERS_CARRYING_NO_JAVAC_ARGUMENT gives: say which it is, and say why it leaves "
+						+ "both modules' checks running");
+			}
+		}
+		return where;
+	}
+
+	/**
+	 * Every {@code <properties>} entry in one POM that stops that module's tests being compiled or
+	 * run, described. See {@link #TEST_SKIP_PROPERTIES}; read through
+	 * {@link #declaredUnderProjectOrProfile} for {@link #compilerUserPropertyOverrides}' reason, so a
+	 * surefire provider {@code <properties>} parameter is not mistaken for the project's own.
+	 */
+	private static List<String> testSkipPropertyOverrides(Element pom) {
+		List<String> where = new ArrayList<String>();
+		for (Element properties : declaredUnderProjectOrProfile(pom, "properties")) {
+			for (String property : TEST_SKIP_PROPERTIES) {
+				if (isTrue(directChild(properties, property))) {
+					where.add("<properties> sets <" + property + ">true</" + property + ">, which takes this "
+							+ "module's tests out of the build — so its corpus check asserts nothing, and its "
+							+ "javadoc pointers are held by these POM readers alone. Three words, naming no "
+							+ "plugin. See TEST_SKIP_PROPERTIES");
+				}
+			}
+		}
+		return where;
+	}
+
+	/**
 	 * The corpus both walks take is every module MAVEN builds, and every module keeps its sources
 	 * where those walks look. Two ways of losing a module from the scope without deleting anything,
 	 * both silent and both fail-OPEN, which is what {@link #SOURCE_ROOTS} exists to have stopped
@@ -1342,6 +1647,11 @@ public class JavadocReferenceGuardTest {
 	 * {@link #everyJavadocReferenceInTheApiModuleResolves} for the api module's roots, and for every
 	 * other module a file named in {@link #COMPILER_CHECKS_OUTSIDE_API}, read as source text because
 	 * it is not on this suite's classpath.
+	 *
+	 * <p>It says the check EXISTS, never that the build runs it. Each such check sits in the test root
+	 * it guards, so an edit unbinding that module's test compilation leaves every clause below true of
+	 * a file that is never compiled — measured in round 9. That is
+	 * {@link #noPomEditTakesAModuleOutOfTheTestBuild}'s question and not this one's.
 	 *
 	 * <p>Source text and not behaviour, so what it can say is limited and is worth stating plainly: it
 	 * says that a file exists, that it declares a {@code @Test}, that it passes
@@ -2723,12 +3033,22 @@ public class JavadocReferenceGuardTest {
 	 * them can carry the arguments and any of them can drop them; this repository uses the second.
 	 */
 	private static List<Element> compilerPlugins(String pom) throws Exception {
+		return pluginsNamed(pom, COMPILER_PLUGIN);
+	}
+
+	/**
+	 * Every {@code <plugin>} element in one POM declaring the given artifactId, wherever it sits.
+	 * {@link #compilerPlugins} is this asked for {@link #COMPILER_PLUGIN};
+	 * {@link #noPomEditTakesAModuleOutOfTheTestBuild} also asks it for {@link #SUREFIRE_PLUGIN},
+	 * which is the plugin that decides whether any check here RUNS.
+	 */
+	private static List<Element> pluginsNamed(String pom, String named) throws Exception {
 		List<Element> plugins = new ArrayList<Element>();
 		NodeList all = pomRoot(pom).getElementsByTagName("plugin");
 		for (int i = 0; i < all.getLength(); i++) {
 			Element plugin = (Element) all.item(i);
 			Element artifactId = directChild(plugin, "artifactId");
-			if (artifactId != null && COMPILER_PLUGIN.equals(artifactId.getTextContent().trim())) {
+			if (artifactId != null && named.equals(artifactId.getTextContent().trim())) {
 				plugins.add(plugin);
 			}
 		}
@@ -2886,9 +3206,16 @@ public class JavadocReferenceGuardTest {
 	 * ({@link #elementChildren}), a {@code <version>} is a sibling of {@code <configuration>} rather
 	 * than a child of it ({@link #versionBelowTheFloorAt}), and a merge-control ATTRIBUTE is not an
 	 * element at all ({@link #mergeControlAttributesAt}). Each of those is now read, and no claim is
-	 * made here that the list of positions is finished — what BOUNDS the consequence of the next one is
-	 * that {@code omod}'s sources are compiled by a check that reads no build configuration
-	 * ({@link #COMPILER_CHECKS_OUTSIDE_API}), not that this reader has run out of things to learn.
+	 * made here that the list of positions is finished.
+	 *
+	 * <p><strong>Round 9 found the next position one level OUT from this one, and it did not silence the
+	 * argument — it silenced the CHECK.</strong> An {@code <executions>} element is a sibling of
+	 * {@code <configuration>} under {@code <plugin>}, so nothing here saw it, and unbinding
+	 * {@code default-testCompile} takes a module's test root out of javac and out of the corpus check
+	 * that lives in that root, together. {@link #COMPILER_PLUGIN_CHILDREN_READ_HERE} closes the world
+	 * over these children too, and {@link #noPomEditTakesAModuleOutOfTheTestBuild} asserts it from both
+	 * modules so that whichever module still runs its tests reports the edit. Read that method's javadoc
+	 * for what a POM can still do; do not read either closure as a completeness claim.
 	 */
 	private static List<String> unreadCompilerParametersAt(Element plugin) {
 		List<String> where = new ArrayList<String>();

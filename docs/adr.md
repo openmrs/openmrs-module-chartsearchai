@@ -5764,20 +5764,77 @@ the gate was open, which is the only property they share:
   enumerating.** `omod/src/test/java` now carries `JavadocReferenceOmodCorpusTest`, a sibling of
   `everyJavadocReferenceInTheApiModuleResolves` living in the module it covers: it compiles
   `omod/src/main/java` and `omod/src/test/java` with `-Xdoclint:reference` chosen by the test itself,
-  reading no build configuration at all, and fails loudly rather than skipping where it cannot run — a
+  reading no build configuration to decide its arguments (not: no POM edit can stop it running — see
+  the round-9 bullet below), and fails loudly rather than skipping where it cannot run — a
   root whose walk does not find its anchor file, a compiler that is not there, arguments javac rejects,
   or a baseline compile that is already broken. **Proved against all three findings above**: with the
   gate defeated by each in turn and a dead pointer planted in BOTH omod source roots, the build
-  reported success and this check reported both pointers. So the consequence of a fourth position is
-  bounded — the POM readers would disagree with the build, which is a defect worth reporting to a
-  maintainer, instead of a module's pointers going unresolved with everything green. **No completeness
-  claim replaces the one it corrects.** It duplicates a little of the api-side scaffolding rather than
-  sharing it, because the two modules share no test classpath; the duplication also means one edit
-  cannot defeat both, and what it costs is drift. `theCorpusCoversEveryModuleTheBuildCompiles` requires
+  reported success and this check reported both pointers. So the consequence of a fourth position
+  bearing on the ARGUMENT LIST is bounded — the POM readers would disagree with the build, which is a
+  defect worth reporting to a maintainer, instead of a module's pointers going unresolved with
+  everything green. **No completeness claim replaces the one it corrects.** It duplicates a little of
+  the api-side scaffolding rather than sharing it, because the two modules share no test classpath; the
+  duplication also means one edit cannot defeat both, and what it costs is drift.
+  `theCorpusCoversEveryModuleTheBuildCompiles` requires
   every non-api reactor source root to be named as a literal in a file listed in
   `COMPILER_CHECKS_OUTSIDE_API`, and that file to exist and to declare a `@Test` passing the flag — so
   deleting the check, or adding a module with none, reddens. Read as source text, so it says nothing
   about whether the check inside is right.
+- **The bound above was stated over the wrong thing, and round 9 falsified it: a POM can stop a check
+  RUNNING, which no reader of the argument list can see.** Each module's corpus check lives in the very
+  test root it guards, so four lines in that module's POM — `<executions><execution><id>default-testCompile</id><phase>none</phase></execution></executions>`
+  on a `maven-compiler-plugin` element carrying no `<configuration>`, no `<version>` and no attribute —
+  take the root out of javac and take the check out of the build together. Every existing reader
+  returned empty for it: `unreadCompilerParametersAt` closes the world over a `<configuration>`'s
+  children, `javacArgumentBlocks` recorded no position, `versionBelowTheFloorAt` found no `<version>`,
+  `mergeControlAttributesAt` found no attribute, and `rootsNoCompilerCheckReads` reads the check as
+  SOURCE TEXT, so "the file exists, declares a `@Test`, passes the flag and names both roots" all stayed
+  true of a file never compiled. Measured before the fix, JDK 21, plugin 3.13.0, with that element in
+  `omod/pom.xml` and a dead pointer planted in `omod/src/test/java`: `mvn -o clean install` exit 0,
+  BUILD SUCCESS, zero `reference not found` printed, omod's surefire logging "No tests to run", the api
+  module's whole suite green, the `.omod` artifact still installed. The mirror edit in `api/pom.xml` is
+  the same defect with the modules swapped; what was measured of it is that with the fix in place it
+  reddens the omod-side arm, api's own tests never having run. Two of the three
+  dead pointers this change repaired lived in a test root, so that is #262's headline defect reinstated
+  for exactly the population it was found in.
+  **The fix is not a reader for `<phase>`.** It is two things, and neither on its own would do.
+  (i) The closed world moves one level OUT: `COMPILER_PLUGIN_CHILDREN_READ_HERE` and
+  `SUREFIRE_PLUGIN_CHILDREN_READ_HERE` refuse any direct child of a compiler or surefire `<plugin>`
+  element that the guard does not account for, so `<executions>` is refused along with `<inherited>`,
+  `<dependencies>`, `<extensions>` and whatever the next one is called; `TEST_SKIP_PROPERTIES` refuses
+  the `<properties>` form of the same thing (`maven.test.skip` in `omod/pom.xml` was measured to do
+  exactly what the `<executions>` element did, from three words naming no plugin).
+  (ii) The assertion is made from BOTH modules, over every reactor POM —
+  `noPomEditTakesAModuleOutOfTheTestBuild`, one in each check — so an edit stopping ONE module's tests
+  is refused by the module whose tests still run. That is what a closure alone could not buy: rounds 7
+  and 8 each closed a world and each was falsified by a position outside it, whereas here the api-side
+  arm and the omod-side arm state the rule DIFFERENTLY (a closed world over a plugin element's children
+  there; a positional rule — neither plugin declared anywhere but the root's `<pluginManagement>` —
+  here), so one edit weakens neither by weakening the other. Each check also requires the other's file
+  to exist and to still pass the flag as its own literal, and `pomsNoCrossModuleReaderNames` requires
+  every reactor POM to be named as a literal in the omod-side file, so a third module cannot arrive
+  outside the cross-read.
+  **Cross-covering the CORPUS rather than the assertion was considered and declined on the
+  classpath.** Read off the POMs rather than measured: `api/pom.xml` declares neither `openmrs-web` nor
+  `webservices.rest-omod-common`, both of which `omod`'s sources import, so an api-side compile of
+  those roots would hit the corpus check's own fail-loud branch — "this guard could not run" — rather
+  than return a verdict, and a loud failure for the wrong reason is not an improvement. The reverse
+  direction is not symmetric but is not free either: `omod` depends on the api JAR and not its
+  test-jar, so whether api's TEST roots compile there turns on test dependencies `omod` does not
+  declare. So the corpus stays per module and the assertion is what is shared. An arm reading `api/target/surefire-reports` to confirm the
+  other module's guard actually ran was also declined: it covers only the case the cross-read POM arm
+  already covers, cannot reach the residue below, and would make a guard depend on which modules a
+  given `-pl` invocation built.
+  **The residue, stated because two absolutes have now been falsified in consecutive rounds** — "no POM
+  edit can silence it" in the omod check's class javadoc, and this decision's own "the consequence of a
+  fourth position is bounded". A POM can still remove test execution from EVERY module at once: an
+  `<executions>` entry in the ROOT pom's `<build><plugins>`, which children inherit, or a test-skip
+  property in the root `<properties>`. Nothing written in a test survives that, because no test runs;
+  both were measured at exit 0 with BUILD SUCCESS. What it costs the person doing it is that the build
+  then runs **no tests at all**, in either module — measured: api's surefire printed no test banner and
+  no counts, omod's printed "No tests to run", and the reactor's test total was zero. That is not a
+  green build with a dead pointer hidden inside it; it is a build with no tests, and it says so in its
+  own output. Do not write a third absolute in place of that sentence.
 
 The same rule decides what counts as a javadoc error over the module's own sources: **a DIFFERENCE,
 never a message.** Where the flagged compile reports errors the sources are compiled again without

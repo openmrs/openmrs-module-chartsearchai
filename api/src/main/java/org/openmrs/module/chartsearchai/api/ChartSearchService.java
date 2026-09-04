@@ -228,6 +228,8 @@ public interface ChartSearchService {
 
 		private final String unresolvedDrugClass;
 
+		private final List<Integer> unfaithfullyRenderedCitations;
+
 		public ChartAnswer(String answer, List<RecordReference> references) {
 			this(answer, references, 0, 0, 0);
 		}
@@ -277,6 +279,15 @@ public interface ChartSearchService {
 				List<SafetyWarning> safetyWarnings, String searchMode,
 				ChartSearchAiUtils.ReferenceSlice referenceSlice, PairChipExtent pairChipExtent,
 				String unresolvedDrugClass) {
+			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, searchMode,
+					referenceSlice, pairChipExtent, unresolvedDrugClass, null);
+		}
+
+		public ChartAnswer(String answer, List<RecordReference> references,
+				int inputTokens, int outputTokens, int cachedTokens,
+				List<SafetyWarning> safetyWarnings, String searchMode,
+				ChartSearchAiUtils.ReferenceSlice referenceSlice, PairChipExtent pairChipExtent,
+				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations) {
 			this.answer = answer;
 			this.references = java.util.Collections.unmodifiableList(
 					new java.util.ArrayList<>(references));
@@ -290,6 +301,11 @@ public interface ChartSearchService {
 			this.referenceSlice = referenceSlice;
 			this.pairChipExtent = pairChipExtent;
 			this.unresolvedDrugClass = unresolvedDrugClass;
+			// Null SURVIVES as null and is not normalised to an empty list: the two say different
+			// things here, and the accessor's javadoc is where the difference lives.
+			this.unfaithfullyRenderedCitations = unfaithfullyRenderedCitations == null ? null
+					: java.util.Collections.unmodifiableList(
+							new java.util.ArrayList<Integer>(unfaithfullyRenderedCitations));
 		}
 
 		/**
@@ -476,6 +492,56 @@ public interface ChartSearchService {
 		 */
 		public String getUnresolvedDrugClass() {
 			return unresolvedDrugClass;
+		}
+
+		/**
+		 * The citations whose rendering in this answer the module found UNFAITHFUL to the record they
+		 * point at — the second round of
+		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/337">issue #337</a>.
+		 * {@code ReferenceProseFidelityCheck} reports, at WARN, an answer that reproduces a stretch of
+		 * a cited reference-group record and then states different words inside the sentence it was
+		 * copying; until this key that report was a maintainer's signal and nothing a consumer of the
+		 * response could see, so a degraded safety sentence reached a clinician carrying a citation
+		 * marker with nothing anywhere saying the marker's own record says otherwise. That is the
+		 * failure {@link #getUnresolvedDrugClass()} and {@link #getPairChipExtent()} each answered the
+		 * same way, one surface over.
+		 *
+		 * <p><b>What it states is the CITATION and never a word of either text.</b> One record is one
+		 * entry however many times the answer diverged from it, and no prose travels — ADR Decision 74
+		 * carries why, and README's {@code unfaithfullyRenderedCitations} section carries what a client
+		 * can and cannot put beside it. The short of that: the response does NOT let a consumer recover
+		 * the cited record's own words. A {@code safety_finding}'s {@code resourceUuid} names the
+		 * subject drug only, so several records — several indexes — share one, and the
+		 * {@code safetyWarnings} chips carrying that {@code (type, drug)} are a candidate SET rather
+		 * than a match; and a chip's {@code detail} is in any case only the mechanism half of what this
+		 * check compares against. The prefix, the strength call and the provenance note carry no wire
+		 * counterpart; the chart-order clause is not the exception it looks like, since what the chip
+		 * publishes is its ITEMS, as structured {@code chartOrderBridges}, and not the clause TEXT
+		 * compared here. A {@code drug_reference} record's text is published nowhere at all.
+		 *
+		 * <p><b>It is not a grounding verdict and must not be rendered as one.</b> The finding is
+		 * deterministic and correct; what diverged is the ANSWER's rendering of it. Reading it as
+		 * "unsupported" is issue #201's miscarriage — a red badge on this module's own Major
+		 * interaction finding.
+		 *
+		 * <p><b>Null is the absence of a measurement; empty is a measurement of none — and empty says
+		 * less than it looks.</b> An empty list also covers the answer citing no readable reference
+		 * record at all, which on a stock install is EVERY answer, {@code
+		 * chartsearchai.drugReference.enabled} being false: it says the check ran and named no
+		 * citation, never that the answer was compared against anything. And absence of an entry is
+		 * not a certificate of faithfulness — the check is recall-limited by construction, and ADR
+		 * Decision 61's "What this cannot see" enumerates how. Null says this producer stated nothing,
+		 * and the reachable cause is ONE: the early {@code done} of the async-grounding path, emitted
+		 * before the check runs. The check's own failure branch returns null too and no path is known
+		 * to deliver it — the one line it guards is a read of {@code patient.getPatientId()}, which
+		 * both answer methods re-read in their {@code finally} timing log, so a throw there leaves the
+		 * request as an error rather than as a response carrying null. On a cache hit this replays the
+		 * ORIGINAL request's list, the whole answer object being replayed.
+		 *
+		 * @return the distinct citation indexes, in report order, or null where none was stated
+		 */
+		public List<Integer> getUnfaithfullyRenderedCitations() {
+			return unfaithfullyRenderedCitations;
 		}
 	}
 

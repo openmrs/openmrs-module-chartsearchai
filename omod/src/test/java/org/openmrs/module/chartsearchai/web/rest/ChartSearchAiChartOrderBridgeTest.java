@@ -14,7 +14,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
-import java.io.StringWriter;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -34,9 +33,6 @@ import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.oxm.xstream.XStreamMarshaller;
-
-import javax.xml.transform.stream.StreamResult;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -303,24 +299,10 @@ public class ChartSearchAiChartOrderBridgeTest {
 		// another component's behaviour is fragile in the worst way if nothing here exercises it.
 		// Mutate the controller back to publishing the accessor's list and this reddens; nothing else
 		// does.
-		assertMarshals(searchPayload(), "a populated chip");
+		XmlPayloads.assertMarshals(searchPayload(), "a populated chip");
 
 		bridges = Collections.<SafetyWarning.ChartOrderBridge> emptyList();
-		assertMarshals(searchPayload(), "a chip with no attributions");
-	}
-
-	private static void assertMarshals(Map<String, Object> payload, String what) throws Exception {
-		XStreamMarshaller marshaller = new XStreamMarshaller();
-		marshaller.afterPropertiesSet();
-		try {
-			marshaller.marshal(payload, new StreamResult(new StringWriter()));
-		}
-		catch (Exception e) {
-			throw new AssertionError("the /search payload must marshal to XML for " + what
-					+ " — an XStreamMarshaller is the converter openmrs-core selects for "
-					+ "Accept: application/xml, and it cannot marshal Collections' immutable wrappers "
-					+ "(issue #347). Publish a copy, not the accessor's list. Cause: " + e, e);
-		}
+		XmlPayloads.assertMarshals(searchPayload(), "a chip with no attributions");
 	}
 
 	@Test

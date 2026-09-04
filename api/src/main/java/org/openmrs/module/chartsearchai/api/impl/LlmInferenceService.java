@@ -148,8 +148,12 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getCitations(), chart.getMappings());
 			ClassCodeFidelityCheck.reportClassCodeDefects(patient, question, response.getAnswer(),
 					cited, chart.getMappings());
-			ReferenceProseFidelityCheck.reportUnfaithfulReferenceProse(patient, response.getAnswer(),
-					cited, chart.getMappings());
+			// The prose check's own answer, carried rather than re-derived (issue #337 round two): a
+			// consumer could not re-ask it if it wanted to, the chart being gone by REST time, and a
+			// second walk would be the two-resolutions-that-agree shape #151 forbids.
+			List<Integer> unfaithfullyRenderedCitations =
+					ReferenceProseFidelityCheck.reportUnfaithfulReferenceProse(patient,
+							response.getAnswer(), cited, chart.getMappings());
 			List<RecordReference> references = groundReferences(response.getAnswer(), cited,
 					chart.getMappings());
 			// A per-call sink, never a field: the validator is a Spring singleton, so a field would be
@@ -163,7 +167,7 @@ public class LlmInferenceService implements ChartSearchService {
 			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
-					pairExtent.stated(), unresolvedDrugClass);
+					pairExtent.stated(), unresolvedDrugClass, unfaithfullyRenderedCitations);
 			outcome = "ok";
 			return answer;
 		}
@@ -458,14 +462,20 @@ public class LlmInferenceService implements ChartSearchService {
 			// answer states about the records it cites — the class-code defects a set-membership
 			// comparison can and cannot see (issues #142 and #338), and prose reproduced from a cited
 			// reference record and then rewritten inside the sentence it was copying (issue #337).
-			// Both report only to the log, so nothing downstream — and no consumer above — waits on
-			// them. Not "microseconds", which this comment said and which is true only of the first:
+			// Neither blocks: the class-code check reports only to the log, and the prose check's own
+			// answer is carried onto the ChartAnswer this method RETURNS, so no consumer above waits
+			// on either. Not "microseconds", which this comment said and which is true only of the first:
 			// the second is a word-level dynamic program, measured at ~0.7 ms on a realistic chart and
 			// ~1.2 ms at the largest injected record set anyone has swept (ADR Decision 61).
 			ClassCodeFidelityCheck.reportClassCodeDefects(patient, question, response.getAnswer(),
 					cited, chart.getMappings());
-			ReferenceProseFidelityCheck.reportUnfaithfulReferenceProse(patient, response.getAnswer(),
-					cited, chart.getMappings());
+			// Its answer is carried onto the ChartAnswer this method returns (issue #337 round two).
+			// The early one above cannot have it and states null: the check runs HERE, after the
+			// user-visible handoff, and moving it ahead would put a word-level dynamic program in
+			// front of the "done" event for a statement that is not needed to render the answer.
+			List<Integer> unfaithfullyRenderedCitations =
+					ReferenceProseFidelityCheck.reportUnfaithfulReferenceProse(patient,
+							response.getAnswer(), cited, chart.getMappings());
 
 			long groundStart = System.currentTimeMillis();
 			List<RecordReference> references = groundReferences(response.getAnswer(), cited,
@@ -483,7 +493,7 @@ public class LlmInferenceService implements ChartSearchService {
 			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
-					pairExtent.stated(), unresolvedDrugClass);
+					pairExtent.stated(), unresolvedDrugClass, unfaithfullyRenderedCitations);
 			outcome = "ok";
 			return answer;
 		}

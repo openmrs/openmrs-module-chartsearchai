@@ -11,9 +11,12 @@ package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
@@ -27,6 +30,7 @@ import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.LogCapture;
+import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport;
@@ -56,7 +60,9 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * sides, states different words, that is reported at WARN. Everything else is silence — an answer
  * that reproduces nothing, one that stops copying and ends its sentence, one that reproduces a
  * record sentence whole and moves on, and one whose continuation ANOTHER cited record explains.
- * The answer prose is never rewritten and nothing reaches the wire.
+ * The answer prose is never rewritten. What DOES reach the wire, since the second round of #337, is
+ * the citation the check named — not a word of either text; the cases at the top of this file pin
+ * that statement and {@code ChartSearchAiUnfaithfulRenderingTest} pins its wire shape.
  *
  * <p>Every case runs through the real {@link LlmInferenceService#search}/{@code searchStreaming}
  * orchestration, and the ones about the defect run over REAL production-rendered records: the cited
@@ -167,6 +173,167 @@ public class ReferenceProseFidelityTest {
 		}
 	}
 
+	/**
+	 * Issue #337's remaining half: the divergence the check finds has to reach a client, or the
+	 * clinician reads the degraded sentence with nothing anywhere in the response saying so. Same
+	 * answer as the case above — this one asks what the response STATES rather than what the log
+	 * says.
+	 */
+	@Test
+	public void search_statesTheCitationWhoseRenderingItFoundUnfaithful() {
+		service.setLlmProvider(answering(copiedThrough("may") + " increase the risk of complications ["
+				+ finding.getIndex() + "]."));
+
+		ChartAnswer answer = service.search(patient(), QUESTION);
+
+		assertEquals(Collections.singletonList(Integer.valueOf(finding.getIndex())),
+				answer.getUnfaithfullyRenderedCitations(),
+				"the response has to name the citation whose rendering diverged from the record, or "
+						+ "the only thing that knows is the server log");
+	}
+
+	/**
+	 * A record the answer diverges from TWICE is ONE unfaithful citation. The issue's own comment
+	 * records that shape live — two WARNs on record [253] from a single answer — and what a client
+	 * can act on is "this citation's rendering is not the record's words", once.
+	 */
+	@Test
+	public void aRecordDivergedFromTwiceIsStatedOnce() {
+		// Two maximal reproductions of the SAME record, each diverging mid-sentence: twelve words
+		// from the record's third sentence, then the record's own opening carried through to its
+		// first "may". Both are reported — the WARNs stay per divergence — and the statement is one.
+		service.setLlmProvider(answering(wordsFrom("Symptoms", 12) + " nothing at all. "
+				+ copiedThrough("may") + " increase the risk of complications ["
+				+ finding.getIndex() + "]."));
+
+		ChartAnswer answer;
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			answer = service.search(patient(), QUESTION);
+			// The premise, or this case is a second copy of the one above: TWO divergences were
+			// reported, and it is the STATEMENT that collapses them rather than the check.
+			assertEquals(2, capture.messagesAt(Level.WARN).size(),
+					"the premise: this answer diverges from the record twice. Captured: "
+							+ capture.describeAll());
+		}
+
+		assertEquals(Collections.singletonList(Integer.valueOf(finding.getIndex())),
+				answer.getUnfaithfullyRenderedCitations(),
+				"one record is one unfaithful citation however many times the answer diverged from "
+						+ "it, or a client renders the same mark twice");
+	}
+
+	/**
+	 * THREE records diverged from, stated in the order the check reported them, which is neither the
+	 * order the chart numbers them in nor its reverse. Three and not two, and that is the whole
+	 * arrangement: the statement comes back {@code [2, 3, 1]}, so it separates report order from BOTH
+	 * orderings a set could impose. A two-record version was written first and its {@code [2, 1]} is
+	 * descending — it passed under a reversed {@code TreeSet}, which is exactly the coincidence a
+	 * control has to rule out.
+	 *
+	 * <p><b>What "report order" is, stated because an earlier draft of this javadoc got it wrong.</b>
+	 * It is RECORD-major: {@code examine} runs once per cited record, in the order
+	 * {@code citedReferenceProse} returns them — which is {@code extractCitedReferences}' order, not
+	 * the answer's. Answer position orders the divergences WITHIN one record. In THIS case the two
+	 * coincide and the expectation is read straight off the marker order, because the stub returns an
+	 * empty structured {@code citations} array and injected reference records are undated, so nothing
+	 * reorders the markers — reorder them and the expectation moves. This arrangement cannot
+	 * tell the two apart, because its marker order and its divergence order coincide; an answer that
+	 * cites {@code [1]} before {@code [2]} while diverging from {@code [2]} first states
+	 * {@code [1, 2]}, and nothing here pins that.
+	 *
+	 * <p>Assembled rather than injected: the two records the real injector produces for one question
+	 * carry the SAME mechanism string, so they diverge together and pool, and the shape this needs
+	 * does not occur in a sixteen-entry excerpt — the reason the pooling cases below build their own
+	 * records. The check is a pure function of an answer and a record's text, so an assembled operand
+	 * is the right one here.
+	 *
+	 * <p>Without this the ordering the accessor and the check both promise is unpinned: with one
+	 * record there is nothing to order.
+	 */
+	@Test
+	public void severalRecordsDivergedFromAreStatedInTheOrderTheyWereReported() {
+		String one = "Aspirin and warfarin together raise the risk of serious bleeding in patients "
+				+ "who are elderly and frail.";
+		String two = "Metformin should be withheld before contrast imaging in any patient because "
+				+ "renal impairment can precipitate lactic acidosis.";
+		String three = "Amiodarone prolongs the QT interval and should not be combined with other "
+				+ "agents that delay cardiac repolarisation.";
+		TestableService overThree = newService(referenceRecordsStating(one, two, three));
+		overThree.setLlmProvider(answering(
+				"Metformin should be withheld before contrast imaging in any patient because "
+						+ "renal impairment can cause trouble [2]. Amiodarone prolongs the QT "
+						+ "interval and should not be combined with other medicines [3]. Aspirin and "
+						+ "warfarin together raise the risk of serious bleeding in patients who are "
+						+ "unwell [1]."));
+
+		ChartAnswer answer = overThree.search(patient(), QUESTION);
+
+		assertEquals(
+				Arrays.asList(Integer.valueOf(2), Integer.valueOf(3), Integer.valueOf(1)),
+				answer.getUnfaithfullyRenderedCitations(),
+				"the statement is in the order the divergences were reported, and neither the chart's "
+						+ "numbering nor its reverse");
+	}
+
+	/**
+	 * Empty is a measurement and null is not — the distinction {@code getReferenceSlice()} and
+	 * {@code PairChipExtent} already draw. A faithful answer must state that the check RAN and
+	 * related nothing, not that nobody looked.
+	 */
+	@Test
+	public void aFaithfulAnswerStatesAnEmptyListRatherThanNothing() {
+		service.setLlmProvider(answering(copiedThrough("may") + " potentiate the risk of serotonin "
+				+ "syndrome [" + finding.getIndex() + "]."));
+
+		ChartAnswer answer;
+		try (LogCapture capture = LogCapture.on(CHECK, Level.DEBUG)) {
+			answer = service.search(patient(), QUESTION);
+			// Which silence this is, asserted rather than assumed. An empty list is also what the
+			// two DECLINE gates return — an answer citing no readable reference record, and one
+			// reproducing nothing — so without this the case would pass on an arrangement where the
+			// check never compared anything, which is the reading the accessor's javadoc warns a
+			// client about and would be no better inside its own test.
+			assertTrue(debugStating(capture, "every reproduction of a cited reference record is faithful"),
+					"the premise: the check reproduced this record and found the reproduction "
+							+ "faithful, rather than declining before it compared anything. Captured: "
+							+ capture.describeAll());
+		}
+
+		assertNotNull(answer.getUnfaithfullyRenderedCitations(),
+				"null says the producer stated no measurement; a check that ran and found nothing "
+						+ "has made one");
+		assertTrue(answer.getUnfaithfullyRenderedCitations().isEmpty(),
+				"a faithful recitation names no citation. Was: "
+						+ answer.getUnfaithfullyRenderedCitations());
+	}
+
+	/**
+	 * The statement is a POST-answer measurement, so it is absent from the early {@code done} the
+	 * async-grounding path emits — the check runs after the user-visible handoff, deliberately, and
+	 * moving it ahead would put a word-level dynamic program in front of that event. This pins the
+	 * boundary rather than papering over it: {@code interactionPairs} behaves the same way and
+	 * {@code unresolvedDrugClass}, known before the model is called, does not.
+	 */
+	@Test
+	public void searchStreaming_statesItOnTheAnswerItReturnsAndNotOnTheEarlyOne() {
+		service.setLlmProvider(answering(copiedThrough("may") + " increase the risk of complications ["
+				+ finding.getIndex() + "]."));
+		final List<List<Integer>> early = new ArrayList<List<Integer>>();
+
+		ChartAnswer answer = service.searchStreaming(patient(), QUESTION, token -> { },
+				reasoning -> { }, citations -> { },
+				ungrounded -> early.add(ungrounded.getUnfaithfullyRenderedCitations()));
+
+		assertEquals(1, early.size(), "the early-done consumer must have fired");
+		assertNull(early.get(0),
+				"the check runs after the user-visible handoff, so the early answer has no "
+						+ "measurement to state — and null says exactly that, where an empty list "
+						+ "would claim the answer was checked and found faithful");
+		assertEquals(Collections.singletonList(Integer.valueOf(finding.getIndex())),
+				answer.getUnfaithfullyRenderedCitations(),
+				"and the answer the classic shape emits carries it");
+	}
+
 	@Test
 	public void search_shouldStaySilentWhenTheAnswerReproducesTheRecordFaithfully() {
 		// The other half of the pair above, on the same arrangement: that one fails if the check
@@ -265,12 +432,19 @@ public class ReferenceProseFidelityTest {
 		service.setLlmProvider(answering("Sertraline and the patient's tramadol together carry a "
 				+ "serotonin risk [" + finding.getIndex() + "]."));
 		try (LogCapture capture = LogCapture.on(CHECK, Level.DEBUG)) {
-			service.search(patient(), QUESTION);
+			ChartAnswer answer = service.search(patient(), QUESTION);
 			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
 					"with nothing reproduced there is no reproduction to be unfaithful to. Captured: "
 							+ capture.describeAll());
 			assertTrue(debugStating(capture, "reproduces no cited reference record"),
 					"the gate that declined has to be identifiable. Captured: " + capture.describeAll());
+			// And what the DECLINE states on the response. Empty, not null: the check ran. Returning
+			// null here would publish a failed-check reading for an answer that was simply never
+			// compared, which is the one thing the key's client contract forbids a consumer to infer
+			// in the other direction — so the two decline gates are pinned as well as the compare.
+			assertEquals(Collections.emptyList(), answer.getUnfaithfullyRenderedCitations(),
+					"a gate that declined has still MEASURED: it names no citation, and says so with "
+							+ "an empty list rather than with the absence of a measurement");
 		}
 	}
 
@@ -544,13 +718,16 @@ public class ReferenceProseFidelityTest {
 		onUnreadable.setLlmProvider(answering("The records address it and the finding is a reason to "
 				+ "withhold it [1]."));
 		try (LogCapture capture = LogCapture.on(CHECK, Level.DEBUG)) {
-			onUnreadable.search(patient(), QUESTION);
+			ChartAnswer answer = onUnreadable.search(patient(), QUESTION);
 			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
 					"an unreadable cited record must be skipped, not read. Captured: "
 							+ capture.describeAll());
 			assertTrue(debugStating(capture, "cites no readable reference record"),
 					"and which decline it was has to be identifiable. Captured: "
 							+ capture.describeAll());
+			assertEquals(Collections.emptyList(), answer.getUnfaithfullyRenderedCitations(),
+					"and this decline states an empty list too — the same statement a stock install "
+							+ "makes on every answer, and not the absence of a measurement");
 		}
 	}
 

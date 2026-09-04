@@ -349,15 +349,24 @@ public final class DrugReferenceTestSupport {
 	 * <p>Public for the cross-package reason {@link #injectedSafetyFindingChart} is: an inference test
 	 * asserting what a check did to a record needs the record to be production's own. A SLICE and
 	 * deliberately not {@link #shippedEntries()} — a case reading the rendered text is what that
-	 * accessor's javadoc reserves a verbatim slice for, and {@code Issue338SliceProvenanceTest} is
-	 * what holds the slice to its dataset.
+	 * accessor's javadoc reserves a verbatim slice for, and {@code SlicedReferenceRowProvenanceTest}
+	 * is what holds a listed slice to its dataset.
+	 *
+	 * @throws IllegalStateException when the arrangement raises no finding at all, so a caller cannot
+	 *         silently assert nothing — the contract {@link #injectedSafetyFinding} and
+	 *         {@link #injectedDrugClassNoteChart} each carry for their own arm
 	 */
 	public static PatientChart injectedAllergyFindingChart(String fixtureResource, String question,
 			List<String> allergies) throws IOException {
-		return injectorWithSafety(serviceWithGroups(ddiFixtureEntries(fixtureResource)))
+		PatientChart chart = injectorWithSafety(serviceWithGroups(ddiFixtureEntries(fixtureResource)))
 				.injectRecords(oneRecordChart(),
 						ctx(60, null, null, null, new LinkedHashSet<String>(allergies), null),
 						question);
+		if (injectedFindings(chart).isEmpty()) {
+			throw new IllegalStateException("no safety finding was injected for allergies " + allergies
+					+ " and question: " + question);
+		}
+		return chart;
 	}
 
 	/**

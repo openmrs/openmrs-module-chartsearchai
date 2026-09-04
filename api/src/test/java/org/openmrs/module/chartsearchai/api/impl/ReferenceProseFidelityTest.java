@@ -102,7 +102,10 @@ public class ReferenceProseFidelityTest {
 	 *  one of ITS reports. That is inert today because no canned answer below states an ATC-shaped
 	 *  token its cited records do not — the ones sliced from a real record carry only that record's
 	 *  own, and the assembled ones carry none at all. Write a literal code into any of them and the
-	 *  failure message will be about class codes.
+	 *  failure message will be about class codes. <b>That reason no longer covers every case in this
+	 *  file</b>: since issue #338's captured answer arrived here, one answer states only its record's
+	 *  own code and still trips the sibling, by stating it four times inside one parenthetical (ADR
+	 *  Decision 59's own rule 1). That case captures {@link #CHECK} instead, and says so.
 	 *  {@code ClassCodeFidelityTest} carries the same note in the other direction. */
 	private static final String PACKAGE = "org.openmrs.module.chartsearchai.api.impl";
 
@@ -118,10 +121,15 @@ public class ReferenceProseFidelityTest {
 	/** The allergen the slice's other row records, as a chart token. */
 	private static final String ISSUE_338_ALLERGY = "dexamethasone";
 
-	/** The opening sentence of the answer issue #338 captured, verbatim from the issue body — its own
-	 *  lead, its own fourfold class code, its own truncated allergen and the gloss after it. Only the
-	 *  citation marker is substituted, because this arrangement numbers its records differently; the
-	 *  rest of that answer's markers are out of range on a chart this size and would promote nothing. */
+	/** The opening CLAUSE of the answer issue #338 captured, word for word from the issue body — its
+	 *  own lead, its own fourfold class code, its own truncated allergen and the gloss after it. Three
+	 *  things are not the capture's: the citation marker's number, because this arrangement numbers
+	 *  its records differently; the five clauses after it, dropped because they cite records this
+	 *  arrangement does not carry; and the comma that joined this clause to the next, re-terminated
+	 *  with a full stop so the answer ends a sentence rather than trailing. That last one is not
+	 *  cosmetic in a check whose exits read sentence boundaries — the divergence is at the allergen,
+	 *  before the marker, so it is inert here, and the case below would still hold if it were not,
+	 *  because the control reports the same words with the repetition collapsed. */
 	private static final String ISSUE_338_CAPTURE =
 			"No — Hydrocortisone should not be given: Hydrocortisone is in the same ATC class "
 					+ "(H02AB, H02AB, H02AB, H02AB) as the patient's allergy to Dexamethason "
@@ -783,7 +791,8 @@ public class ReferenceProseFidelityTest {
 
 	/**
 	 * Issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/338">#338</a>'s
-	 * captured answer, verbatim: its repeated class code and its truncated allergen, in one sentence.
+	 * captured answer, word for word to the end of its opening clause: its repeated class code and its
+	 * truncated allergen, in one sentence.
 	 * The repetition cuts this answer's agreement with the record it is about into runs below the
 	 * floor, so the check declines at its gate and states nothing about it — the residue ADR
 	 * Decision 61 records as a substitution inside a reproduction shorter than twelve words, met here
@@ -796,6 +805,13 @@ public class ReferenceProseFidelityTest {
 	 * slice it from. What holds it to the dataset is the control below: collapse the repetition and
 	 * the same words must be REPORTED, which they can only be by reproducing the record. Let the
 	 * rendered sentence drift and the control reddens.
+	 *
+	 * <p><b>The clause, against a two-row slice — which is not the whole capture against the whole
+	 * chart, and the gate differs.</b> Here nothing of the record survives at the floor, so the check
+	 * declines before comparing. On the full six-clause answer over the arrangement ADR Decision 59
+	 * describes, its later clauses DO reproduce other findings' records past the floor, so the check
+	 * compares and finds no divergence — the truncated allergen still sitting in runs of eight words
+	 * and seven, under the floor. Two gates, one silence, and the section says which is which.
 	 *
 	 * <p>WHICH silence it is, asserted rather than assumed, as the three declining cases above do.
 	 * It captures the check's own logger and not {@link #PACKAGE}, which the other silence cases
@@ -813,13 +829,33 @@ public class ReferenceProseFidelityTest {
 		TestableService local = newService(chart);
 		String captured = ISSUE_338_CAPTURE.replace(ISSUE_338_CAPTURE_MARKER,
 				"[" + record.getIndex() + "]");
+		// The transcribed answer is held to the record in three ways, because the control below holds
+		// only the leading stretch: spell the allergen correctly in the constant, or state the code
+		// twice instead of four times, and every assertion here still passed before these.
+		String sentence = findingSentence(record);
+		String code = parenthesisedCode(sentence);
+		String allergen = allergenNamed(sentence);
+		assertTrue(captured.contains("(" + code + ", " + code + ", " + code + ", " + code + ")"),
+				"the premise: the capture states the record's own class code four times inside one "
+						+ "parenthetical, which is defect 1. Record: " + sentence);
+		assertTrue(captured.contains(ALLERGY_TO + allergen.substring(0, allergen.length() - 1) + " ("),
+				"the premise: it names the record's allergen a letter short and glosses it, which is "
+						+ "defect 2. Record: " + sentence);
+		assertFalse(captured.contains(ALLERGY_TO + allergen),
+				"and it does not also name it in full there, or defect 2 is not in this answer");
 
 		local.setLlmProvider(answering(captured));
 		try (LogCapture capture = LogCapture.on(CHECK, Level.DEBUG)) {
-			local.search(patient(), ISSUE_338_QUESTION);
+			ChartAnswer answer = local.search(patient(), ISSUE_338_QUESTION);
 			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
 					"the check states nothing about the captured answer. Captured: "
 							+ capture.describeAll());
+			// And what the silence reaches a CLIENT as. Empty, not null: the check ran and named no
+			// citation. ADR Decision 59 rests a paragraph on this being what a consumer of #338's own
+			// answer would read, and Decision 74's key contract on an empty list not being a
+			// certificate — the answer here carries two defects and the list is still empty.
+			assertEquals(Collections.emptyList(), answer.getUnfaithfullyRenderedCitations(),
+					"the decline states an empty list on the response, not the absence of a measurement");
 			assertTrue(debugStating(capture, "reproduces no cited reference record"),
 					"and the repeated code leaves no run of the record at the floor, so the gate that "
 							+ "declined has to be identifiable — as it does for the three declining "
@@ -884,7 +920,7 @@ public class ReferenceProseFidelityTest {
 
 	/** The recorded-allergy CROSS-REACTIVITY finding in {@code chart} — selected by what it relates the
 	 *  two substances by, never by injection order. Defensive on this slice, which raises exactly one
-	 *  finding: dropping the {@code cross-reactivity} conjunct leaves the whole class green today.
+	 *  finding: dropping either conjunct leaves the whole class green today.
 	 *  It is written this way because the same arm raises a DIRECT recorded-allergy sentence that also
 	 *  carries the words "allergy to" — an allergen naming the subject row rather than the partner is
 	 *  all it takes — and a case reading a ROUTE-QUALIFIED one of those would slice a different
@@ -925,15 +961,31 @@ public class ReferenceProseFidelityTest {
 		return detail.substring(detail.indexOf(": ", subject) + 2);
 	}
 
+	/** The token the record parenthesises — its class code, taken as the record's own text between its
+	 *  first brackets. Slicing, not a second spelling of {@code ClassCodeFidelityCheck}'s pattern:
+	 *  nothing here decides what a class code LOOKS like. */
+	private static String parenthesisedCode(String sentence) {
+		int open = sentence.indexOf('(');
+		int close = sentence.indexOf(')', open);
+		assertTrue(open > 0 && close > open, "no parenthesised code in " + sentence);
+		return sentence.substring(open + 1, close);
+	}
+
+	/** The allergen {@code sentence} names, as the record spells it. */
+	private static String allergenNamed(String sentence) {
+		int at = sentence.indexOf(ALLERGY_TO) + ALLERGY_TO.length();
+		int end = sentence.indexOf(' ', at);
+		assertTrue(at > ALLERGY_TO.length() && end > at, "no allergen named in " + sentence);
+		return sentence.substring(at, end);
+	}
+
 	/** {@code sentence} with the allergen it names shortened by its last letter — #338's own
 	 *  {@code Dexamethason} for {@code Dexamethasone}, derived from the record rather than typed. */
 	private static String truncateAllergen(String sentence) {
 		int at = sentence.indexOf(ALLERGY_TO) + ALLERGY_TO.length();
-		int end = sentence.indexOf(' ', at);
-		assertTrue(at > ALLERGY_TO.length() && end > at, "no allergen named in " + sentence);
-		String allergen = sentence.substring(at, end);
+		String allergen = allergenNamed(sentence);
 		return sentence.substring(0, at) + allergen.substring(0, allergen.length() - 1)
-				+ sentence.substring(end);
+				+ sentence.substring(at + allergen.length());
 	}
 
 	/** The finding's own text from its first word up to and including the first token equal to

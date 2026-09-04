@@ -118,6 +118,19 @@ public class ReferenceProseFidelityTest {
 	/** The allergen the slice's other row records, as a chart token. */
 	private static final String ISSUE_338_ALLERGY = "dexamethasone";
 
+	/** The opening sentence of the answer issue #338 captured, verbatim from the issue body — its own
+	 *  lead, its own fourfold class code, its own truncated allergen and the gloss after it. Only the
+	 *  citation marker is substituted, because this arrangement numbers its records differently; the
+	 *  rest of that answer's markers are out of range on a chart this size and would promote nothing. */
+	private static final String ISSUE_338_CAPTURE =
+			"No — Hydrocortisone should not be given: Hydrocortisone is in the same ATC class "
+					+ "(H02AB, H02AB, H02AB, H02AB) as the patient's allergy to Dexamethason "
+					+ "(Dexamethasone) [353].";
+
+	private static final String ISSUE_338_CAPTURE_MARKER = "[353]";
+
+	private static final String ISSUE_338_REPEATED_CODE = "(H02AB, H02AB, H02AB, H02AB)";
+
 	/** The clause the module's own recorded-allergy cross-reactivity sentence names its allergen
 	 *  after — the anchor every #338 slice below reads, asserted as a premise before it is used. */
 	private static final String ALLERGY_TO = "allergy to ";
@@ -770,49 +783,56 @@ public class ReferenceProseFidelityTest {
 
 	/**
 	 * Issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/338">#338</a>'s
-	 * own captured shape: the record's sentence with its parenthesised class code repeated and the
-	 * allergen shortened by a letter. The repetition cuts this answer's agreement with that record
-	 * into runs below the floor, so the check declines at its gate and states nothing about an answer
-	 * carrying both defects — the residue ADR Decision 61 records as a substitution inside a
-	 * reproduction shorter than twelve words, met here by the defect that sits earlier in the same
-	 * sentence. It is not a claim about every answer carrying both: one that also reproduces the
-	 * record somewhere else would be reported for that.
+	 * captured answer, verbatim: its repeated class code and its truncated allergen, in one sentence.
+	 * The repetition cuts this answer's agreement with the record it is about into runs below the
+	 * floor, so the check declines at its gate and states nothing about it — the residue ADR
+	 * Decision 61 records as a substitution inside a reproduction shorter than twelve words, met here
+	 * by the defect that sits earlier in the same sentence. It is not a claim about every answer
+	 * carrying both defects: one that also reproduced the record somewhere else would be reported for
+	 * that.
 	 *
-	 * <p>WHICH silence it is, asserted rather than assumed, as the three declining cases above do —
-	 * and that DEBUG line is also what shows this capture is live. The second half is the control
-	 * that shows the silence is the floor's doing and not the arrangement's.
+	 * <p>The answer is TRANSCRIBED rather than sliced out of the record, unlike every other case in
+	 * this file, because it is the historical capture the decision is about and there is nothing to
+	 * slice it from. What holds it to the dataset is the control below: collapse the repetition and
+	 * the same words must be REPORTED, which they can only be by reproducing the record. Let the
+	 * rendered sentence drift and the control reddens.
+	 *
+	 * <p>WHICH silence it is, asserted rather than assumed, as the three declining cases above do.
+	 * It captures the check's own logger and not {@link #PACKAGE}, which the other silence cases
+	 * here use: {@code ClassCodeFidelityCheck} REPORTS this answer, under Decision 59's own
+	 * repeated-code rule, so a package-wide silence assertion would fail on a sibling's correct
+	 * finding. The {@code PACKAGE} note above covers a literal code written into an answer; a code
+	 * repeated out of the record trips that check too.
 	 */
 	@Test
-	public void theCapturedShapeOfIssue338IsBelowTheFloorAndTheSameSentenceWithoutItIsReported()
+	public void theCapturedAnswerOfIssue338IsBelowTheFloorAndTheSameSentenceWithoutItsRepetitionIsReported()
 			throws Exception {
 		PatientChart chart = DrugReferenceTestSupport.injectedAllergyFindingChart(ISSUE_338_FIXTURE,
 				ISSUE_338_QUESTION, Arrays.asList(ISSUE_338_ALLERGY));
 		RecordMapping record = crossReactivityFinding(chart);
 		TestableService local = newService(chart);
-		String sentence = findingSentence(record);
-		String code = parenthesisedCode(sentence);
-		String marker = " [" + record.getIndex() + "].";
-		String repeated = sentence.replace("(" + code + ")",
-				"(" + code + ", " + code + ", " + code + ", " + code + ")");
+		String captured = ISSUE_338_CAPTURE.replace(ISSUE_338_CAPTURE_MARKER,
+				"[" + record.getIndex() + "]");
 
-		local.setLlmProvider(answering(LEAD + truncateAllergen(repeated) + marker));
+		local.setLlmProvider(answering(captured));
 		try (LogCapture capture = LogCapture.on(CHECK, Level.DEBUG)) {
 			local.search(patient(), ISSUE_338_QUESTION);
 			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
-					"the check states nothing about this answer. Captured: " + capture.describeAll());
+					"the check states nothing about the captured answer. Captured: "
+							+ capture.describeAll());
 			assertTrue(debugStating(capture, "reproduces no cited reference record"),
 					"and the repeated code leaves no run of the record at the floor, so the gate that "
 							+ "declined has to be identifiable — as it does for the three declining "
 							+ "cases above. Captured: " + capture.describeAll());
 		}
 
-		local.setLlmProvider(answering(LEAD + truncateAllergen(sentence) + marker));
+		local.setLlmProvider(answering(captured.replace(ISSUE_338_REPEATED_CODE, "(H02AB)")));
 		try (LogCapture capture = LogCapture.on(CHECK)) {
 			local.search(patient(), ISSUE_338_QUESTION);
 			assertTrue(warnStating(capture, "[" + record.getIndex() + "]"),
-					"the control: collapse the repetition and the same sentence IS reported, so the "
-							+ "silence above is the floor and not this arrangement. Captured: "
-							+ capture.describeAll());
+					"the control: collapse the repetition and the same captured words ARE reported, so "
+							+ "the silence above is the floor and not this arrangement — and the answer "
+							+ "really does reproduce this record. Captured: " + capture.describeAll());
 		}
 	}
 
@@ -867,8 +887,9 @@ public class ReferenceProseFidelityTest {
 	 *  finding: dropping the {@code cross-reactivity} conjunct leaves the whole class green today.
 	 *  It is written this way because the same arm raises a DIRECT recorded-allergy sentence that also
 	 *  carries the words "allergy to" — an allergen naming the subject row rather than the partner is
-	 *  all it takes — and a case reading that one instead would slice a different sentence with every
-	 *  premise still green. */
+	 *  all it takes — and a case reading a ROUTE-QUALIFIED one of those would slice a different
+	 *  sentence with every premise here still green. (For a bare one the slicing helpers fail
+	 *  instead, on a message about the allergen rather than about the premise.) */
 	private static RecordMapping crossReactivityFinding(PatientChart chart) {
 		for (RecordMapping mapping : chart.getMappings()) {
 			if (ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(mapping.getResourceType())
@@ -893,28 +914,15 @@ public class ReferenceProseFidelityTest {
 		String detail = text.substring(0, text.indexOf(DrugReferenceInjector.STRENGTH_WITHHOLD));
 		int subject = detail.indexOf(DrugReferenceInjector.FINDING_PREFIX)
 				+ DrugReferenceInjector.FINDING_PREFIX.length();
-		String sentence = detail.substring(detail.indexOf(": ", subject) + 2);
-		// Asserted, because neither case can see it: both answers are built from this string and
-		// compared against the record it came out of, so leaving the record prefix or the appended
-		// clause in it lengthens the run and reddens nothing. Gut this method and the class stays
-		// green without them.
-		assertFalse(sentence.startsWith(DrugReferenceInjector.FINDING_PREFIX),
-				"the record prefix must be off the sliced sentence, or the answers reproduce it too: "
-						+ sentence);
-		assertFalse(sentence.contains(DrugReferenceInjector.STRENGTH_WITHHOLD),
-				"and so must the appended strength clause, which the record-sentence exit is what keeps "
-						+ "out of the comparison: " + sentence);
-		return sentence;
-	}
-
-	/** The token the record parenthesises — its class code, taken as the record's own text between its
-	 *  first brackets. Slicing, not a second spelling of {@code ClassCodeFidelityCheck}'s pattern:
-	 *  nothing here decides what a class code LOOKS like. */
-	private static String parenthesisedCode(String sentence) {
-		int open = sentence.indexOf('(');
-		int close = sentence.indexOf(')', open);
-		assertTrue(open > 0 && close > open, "no parenthesised code in " + sentence);
-		return sentence.substring(open + 1, close);
+		// The premises are about the RECORD, not about the slice: asserting the slice is free of what
+		// this method just removed cannot fail. What can is the rendering changing shape under it —
+		// and then the case built on the slice compares an answer against a record it no longer
+		// resembles, silently.
+		assertTrue(text.startsWith(DrugReferenceInjector.FINDING_PREFIX),
+				"the premise: the record opens with the finding prefix this slices off. Was: " + text);
+		assertTrue(detail.indexOf(": ", subject) > subject,
+				"the premise: the subject label is followed by the detail this slices out. Was: " + text);
+		return detail.substring(detail.indexOf(": ", subject) + 2);
 	}
 
 	/** {@code sentence} with the allergen it names shortened by its last letter — #338's own

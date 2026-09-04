@@ -3819,7 +3819,8 @@ One depth walk over the answer, no model call, no I/O — the same order as the 
   Measured through the real `DdiDrugReferenceSource` parse of the shipped knowledge base and `DrugReference.displayLabel()` itself, never a re-expression of either. Two of its 2283 rows publish a label the rule fires on — `Ethinylestradiol (ethinyl estradiol)` and `Flax seed (flaxseed extract)` — and which of the two you get depends on how the head is delimited, so both readings and both rows are recorded rather than a count: taking the head as everything before the bracket and asking `containsWord` finds both; taking it as the single word before the bracket finds only the first. Either way an answer citing a chart order displaying `Ethinyl estradiol 30mcg` has the module's own correct label reported as a corruption. And of the **1840** single-token names those entries publish, **36** pairs stand in a proper-prefix relation, and they are three different things the rule cannot tell apart: spelling variants of ONE substance (`terazosin`/`terazosine`, `pramipexol`/`pramipexole`, `vasopressin`/`vasopressins`), biosimilar suffixes (`trastuzumab`/`trastuzumab-dkst` and its siblings, `denosumab` likewise), and genuinely different substances (`enalapril`/`enalaprilat`, `niacin`/`niacinamide`). A gloss over any of them is reported as a truncation. The same shape also covers the INN-versus-localized-spelling gloss (`Amoxicillin (Amoxicilline 500mg)`); `matchesOrderName`'s own javadoc records 67 localized spellings in the 3.7.1 demo dictionary.
 
   A rule that fires on the module's own output in the accusatory direction is the "cries wolf" failure Decision 35 names as worse than no check. The gloss-free variant (any answer token that is a proper prefix of a name a cited record states) is worse, not better: it reports `Amoxicillin` beside a charted `Amoxicilline`, and every one of those 36 pairs, without needing a gloss at all. #338's defect 2 is left open, and the measurement above is what it will have to get past.
-  **Re-measured after #337 landed; the section below is what that measurement decided.**
+  **Re-measured after #337 landed; the *Re-measured after #337* section at the end of this decision
+  is what that measurement decided.**
 
 - **Detecting the dropped findings** (#338's defect 4). That is a comparison against what the answer was expected to say, which Decision 35 already rejects one level along: *"The chips are what the answer was expected to report, not what it was licensed to state; a model that legitimately declines to repeat a chip would be reported."* The nine chips still reach the clinician on the wire as `safetyWarnings`.
 - **Repairing the prose instead of reporting it.** Decision 35 point 4, unchanged: deleting or collapsing a token in a clinician-facing sentence is a larger decision than this check is licensed to make, and a silent edit is worse than a visible flag.
@@ -3837,22 +3838,24 @@ own measured table a drug name deleted from a recited mechanism. So it reads lik
 arriving by another route. Measured 2026-09-04, before any production code was written, it is not one.
 
 **The arrangement**, driven through the real `DrugReferenceInjector.injectRecords` over the shipped
-knowledge base and the bundled cross-reactivity groups: the eight active orders the Context above
-counts, spelled from the issue's own list and carried as per-order structure — a flat name set for the
-same eight raises nine findings rather than thirteen, so a reader re-deriving this needs that clause —
-and two recorded allergens, `dexamethasone` and `hydrocortisone`. The issue's own list is not
-exhaustive (it says *including*) and a third allergen for the route-qualified hydrocortisone changes
-neither result below. That injects five `drug_reference` records and thirteen findings, counted off
-the returned mappings on the date above; both figures move with the knowledge base and the validator
-and nothing asserts them. The clause the captured answer opens with is about the first of those
-findings, rendered
+knowledge base and the bundled cross-reactivity groups. The eight active orders the Context above
+counts, spelled from the issue's own list — Ibuprofen, Celecoxib, Dexamethasone, Diclofenac,
+Hydrocortisone, Prednisone, Budesonide, Methylprednisolone — carried BOTH as per-order structure and
+in the flattened name set, which is what `PatientClinicalContextBuilder` produces for a real chart:
+the same eight as a flat set alone raise nine findings rather than thirteen, and as per-order
+structure alone six, so a reader re-deriving this needs both halves of that clause. And two recorded
+allergens, `dexamethasone` and `hydrocortisone`; the issue's own list is not exhaustive (it says
+*including*) and a third for the route-qualified hydrocortisone changes neither result below. That
+injects five `drug_reference` records and thirteen findings, counted off the returned mappings on the
+date above; both figures move with the knowledge base and the validator and nothing asserts them. The
+clause the captured answer opens with is about the first of those findings, rendered
 `Safety finding — Hydrocortisone: Hydrocortisone is in the same ATC class (H02AB) as the patient's
 allergy to Dexamethasone — possible cross-reactivity. This finding is a reason to withhold it.` The
 answers put to `ReferenceProseFidelityCheck.reportUnfaithfulReferenceProse` — the production predicate
-itself, never a re-expression of it — are this issue's own captured prose and variants of it differing
-from the capture in one substitution or two. The capture's gloss, `Dexamethason (Dexamethasone)`, is
-carried as the bare truncation in the variants: it is the shape the drug-name rule above was built
-around, and it is inert here, adding a run of four words to an answer whose longest is eight.
+itself, never a re-expression of it — are this issue's own captured answer, verbatim, and answers
+built out of the rendered record and shaped after it. Only the capture carries its own gloss,
+`Dexamethason (Dexamethasone)`, which is the shape the drug-name rule above was built around; the
+built answers carry the bare truncation, and the two are measured alike at every floor down to four.
 
 - **On the captured answer the check states nothing**, both when it is served the records that answer
   cites and when it is served every reference record in the chart. Defect 1 sits inside the sentence
@@ -3872,25 +3875,27 @@ around, and it is inert here, adding a run of four words to an answer whose long
   for `Ibuprofen`) is the same shape; that answer is quoted with an ellipsis, so what the check would
   have said about it is not something this repository can settle.
 
-**And the silence reaches a client, not only the log.** A decline states `[]` on Decision 74's
-`unfaithfullyRenderedCitations`, which is a measurement of none and — as that decision and the
-README's client contract both say — not a certificate of faithfulness. On this capture that is the
-misreading this section exists to remove, available to a consumer rather than only to a maintainer.
-Nothing here changes it: the reading was always wrong and the key's contract already says so.
+**And the silence reaches a client.** A decline states `[]` on Decision 74's
+`unfaithfullyRenderedCitations`, which the README's contract for that key already says is not a
+certificate of faithfulness — here is the answer that shows why. Also worth reading beside the first
+bullet: this decision's own rule 1 DOES report that answer, for its repeated code, so "nothing saw
+it" is false of the response as a whole and true only of the prose check.
 
 **What is pinned and what is only measured.**
-`ReferenceProseFidelityTest.theCapturedShapeOfIssue338IsBelowTheFloorAndTheSameSentenceWithoutItIsReported`
-pins the silence — naming which gate declined, at DEBUG on the check's own logger, so it holds the
-mechanism the first bullet states and not only its outcome — with the repetition-collapsed answer
-beside it as its control. `.aTruncatedDrugNameDecidesTheReportWhereTheRestOfTheReproductionIsFaithful`
-pins the faithful/truncated pair, and demonstrates rather than discriminates: it says so where it
-stands. The two servings, the run lengths, and the reported answer that spells the allergen in full
-are measurements and have no case of their own. Both cases read a verbatim two-row slice rather than
-the shipped knowledge base, because a case that reads rendered TEXT is what
-`DrugReferenceTestSupport.shippedEntries()` reserves a slice for; `Issue338SliceProvenanceTest` is
-what holds that slice to the dataset, since both cases build their answers out of the record and so
-stay green on a fixture edited away from it. Raising the floor far enough reddens both; the values
-either side of twelve are pre-existing cases' to hold, and do.
+`ReferenceProseFidelityTest.theCapturedAnswerOfIssue338IsBelowTheFloorAndTheSameSentenceWithoutItsRepetitionIsReported`
+pins the silence, on the captured answer itself — naming which gate declined, at DEBUG on the check's
+own logger, so it holds the mechanism the first bullet states and not only its outcome — with the
+repetition-collapsed capture beside it as its control, which is also what holds the transcribed answer
+to the rendered record.
+`.aTruncatedDrugNameDecidesTheReportWhereTheRestOfTheReproductionIsFaithful` pins the faithful and
+truncated pair, and demonstrates rather than discriminates: it says so where it stands. The second
+serving, the run lengths, and the reported answer that spells the allergen in full are measurements
+and have no case of their own. Both cases read a verbatim two-row slice rather than the shipped
+knowledge base, because a case that reads rendered TEXT is what
+`DrugReferenceTestSupport.shippedEntries()` reserves a slice for; `SlicedReferenceRowProvenanceTest`
+holds that slice to the dataset field for field, since both cases build or check their answers against
+the record and so stay green on a fixture edited away from it. Raising the floor far enough reddens
+both; the values either side of twelve are pre-existing cases' to hold, and do.
 
 **One candidate this does not refuse, named because a section called "Re-measured" is where it
 belongs.** The drug-name rule the bullet above refutes is UNALIGNED — *"any answer token that is a
@@ -3906,8 +3911,8 @@ at the position where a correct answer writes the INN `Amoxicillin` — one of t
 spellings `matchesOrderName`'s javadoc counts in the 3.7.1 demo dictionary — and a spelling variant
 of one substance, `terazosine` against `terazosin`, reaches the same position the same way. So
 alignment narrows the rule; it does not answer it. Nor does such a rule buy anything at the current floor, where any
-divergence inside a long enough run is already reported; its whole value would be a floor lowered for
-that class alone, which Decision 61 is canonical for and does not by itself refuse. What it would have
+substitution inside a long enough reproduction is already reported; its whole value would be a floor
+lowered for that class alone, which Decision 61 is canonical for and does not by itself refuse. What it would have
 to get past is its own false-positive measurement, which nobody has taken, and Decision 35's standing
 bar that a check which cries wolf is worse than no check.
 

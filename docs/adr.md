@@ -3771,7 +3771,7 @@ Behaviour-neutral, and pinned rather than argued: `ActiveOrderResolutionPerPassT
 - **−** The count assertion is a tally, and a tally of one. It is stated as an invariant of a PASS rather than as a total for the request, so it does not go stale with an arm added elsewhere — but an injection path that legitimately needed a second resolution would have to say so here.
 ## Decision 59: A class-code parenthetical is checked for shape as well as membership
 
-**Status: Accepted** (August 2026) — implemented, issue [#338](https://github.com/openmrs/openmrs-module-chartsearchai/issues/338). Extends [Decision 35](#decision-35-a-class-code-in-the-answer-must-come-from-a-record-the-answer-cites). Re-measured in September 2026 against the check issue #337 shipped in between; that measurement is the [last section](#re-measured-after-337-the-check-that-landed-since-is-silent-on-this-issues-own-capture) and leaves every verdict below standing.
+**Status: Accepted** (August 2026) — implemented, issue [#338](https://github.com/openmrs/openmrs-module-chartsearchai/issues/338). Extends [Decision 35](#decision-35-a-class-code-in-the-answer-must-come-from-a-record-the-answer-cites). Re-measured in September 2026 against the check issue #337 shipped in between; that measurement is [recorded below](#re-measured-after-337-the-check-that-landed-since-is-silent-on-this-issues-own-capture) and leaves every verdict here standing.
 
 ### Context
 
@@ -3849,14 +3849,19 @@ knowledge base and the validator, and nothing asserts any of them. The clause th
 `Safety finding — Hydrocortisone: Hydrocortisone is in the same ATC class (H02AB) as the patient's
 allergy to Dexamethasone — possible cross-reactivity. This finding is a reason to withhold it.`
 
-**The measurement.** Every answer below was put to the check by driving `LlmInferenceService.search`,
-which is what invokes it — the production path, never a direct call and never a re-expression of the
-predicate. The first two are this issue's captured answer, all six clauses word for word from the
-issue body, with its six citation markers remapped onto this arrangement's finding indexes — the
-capture's own numbers name records no chart of this size has, and which gate the check declines at
-turns on that: left as captured, row one declines for citing no readable reference record. The
-`reported` column is the same either way. The rest are its opening clause against a two-row verbatim
-slice that renders the same finding byte for byte, so that one substitution at a time can be undone. *Reported* names the citation the check
+**The measurement.** Every answer below was put to
+`ReferenceProseFidelityCheck.reportUnfaithfulReferenceProse` — the production predicate, never a
+re-expression of it — with the records named in the second column served to it as the answer's cited
+list, off a chart the real injector built. Serving them rather than letting the answer's own markers
+select them is what makes the second column a variable; the two rows the cases below pin are driven
+through `LlmInferenceService.search` instead, where `extractCitedReferences` decides it, and agree.
+The first two rows are this issue's captured answer, all six clauses word for word from the issue
+body. Its ten bracketed indexes name records no chart of this size has, so under `search` they decide
+which gate the check declines at — left as captured, it declines for citing no readable reference
+record; remapped onto this arrangement's records, it compares and finds no divergence. The `reported`
+column is the same under every one of those treatments. The remaining rows are the capture's opening
+clause, and the record's own sentence, against a two-row verbatim slice that renders the same finding
+byte for byte, so that one substitution at a time can be undone. *Reported* names the citation the check
 stated; every other row is an empty list, which is a measurement of none rather than the absence of
 one.
 
@@ -3883,7 +3888,7 @@ at, or how long the runs were, that is a second measurement over the same answer
   wherever it sits"*, met by a second defect of the same sentence rather than by a short answer. Which
   silence it is differs between the first row and the third, and both are silences: on all six clauses
   the check compares and finds no divergence, its sixth clause having reproduced one other finding's
-  record past the floor — the duplicate-therapy finding about active order Dexamethasone, and that one
+  record to the floor — the duplicate-therapy finding about active order Dexamethasone, and that one
   alone of the eighteen reference records the chart carries; on
   the opening clause alone nothing reaches the floor and it declines before comparing.
 - **A report is not evidence that a drug name was mangled.** Row six spells the allergen correctly and

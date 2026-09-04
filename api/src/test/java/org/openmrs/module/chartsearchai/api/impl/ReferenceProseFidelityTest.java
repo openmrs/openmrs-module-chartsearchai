@@ -800,11 +800,10 @@ public class ReferenceProseFidelityTest {
 	 * carrying both defects: one that also diverged from the record inside a long enough reproduction
 	 * elsewhere would be reported for that.
 	 *
-	 * <p>The answer is TRANSCRIBED rather than sliced out of the record, unlike every other case in
-	 * this file, because it is the historical capture the decision is about and there is nothing to
-	 * slice it from. What holds it to the dataset is the control below: collapse the repetition and
-	 * the same words must be REPORTED, which they can only be by reproducing the record. Let the
-	 * rendered sentence drift and the control reddens.
+	 * <p>The answer is TRANSCRIBED rather than sliced out of the record at run time, because it is
+	 * the historical capture the decision is about. What holds it to the dataset is the control
+	 * below: collapse the repetition and the same words must be REPORTED, which they can only be
+	 * by reproducing the record. Let the rendered sentence drift and the control reddens.
 	 *
 	 * <p><b>The clause, against a two-row slice — which is not the whole capture against the whole
 	 * chart, and the gate differs.</b> Here nothing of the record survives at the floor, so the check

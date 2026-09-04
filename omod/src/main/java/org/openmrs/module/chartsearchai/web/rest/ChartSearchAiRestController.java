@@ -1392,9 +1392,11 @@ public class ChartSearchAiRestController {
 	 * async-grounding early {@code done}, which is built from a shorter constructor and states null on
 	 * every such request — measured by removing the guard, which breaks the {@code done} event for
 	 * every {@code chartsearchai.grounding.async=true} stream. The failed-check case reaches it too
-	 * and is the rare one: ADR Decision 61 records that no TEST reaches it, a record throwing on read
-	 * being pre-empted by {@code referenceSlice}, but the check's own catch is documented as covering
-	 * a line that can still throw — reading a detached patient proxy.
+	 * and no path is known to deliver it: ADR Decision 61 records that no TEST reaches it, a record
+	 * throwing on read being pre-empted by {@code referenceSlice}, and the one line the check's catch
+	 * is documented as covering — a read of {@code patient.getPatientId()} — is re-read by both answer
+	 * methods in their {@code finally} timing log, so a throw there errors the request instead. The
+	 * guard stays because it costs one comparison and the alternative is a 500.
 	 */
 	private void putModuleStatements(Map<String, Object> target, ChartAnswer answer) {
 		putSafetyChips(target, answer);

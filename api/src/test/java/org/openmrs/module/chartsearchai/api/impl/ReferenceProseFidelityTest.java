@@ -233,7 +233,10 @@ public class ReferenceProseFidelityTest {
 	 * <p><b>What "report order" is, stated because an earlier draft of this javadoc got it wrong.</b>
 	 * It is RECORD-major: {@code examine} runs once per cited record, in the order
 	 * {@code citedReferenceProse} returns them — which is {@code extractCitedReferences}' order, not
-	 * the answer's. Answer position orders the divergences WITHIN one record. This arrangement cannot
+	 * the answer's. Answer position orders the divergences WITHIN one record. In THIS case the two
+	 * coincide and the expectation is read straight off the marker order, because the stub returns an
+	 * empty structured {@code citations} array and injected reference records are undated, so nothing
+	 * reorders the markers — reorder them and the expectation moves. This arrangement cannot
 	 * tell the two apart, because its marker order and its divergence order coincide; an answer that
 	 * cites {@code [1]} before {@code [2]} while diverging from {@code [2]} first states
 	 * {@code [1, 2]}, and nothing here pins that.

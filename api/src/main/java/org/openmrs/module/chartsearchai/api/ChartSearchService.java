@@ -528,11 +528,13 @@ public interface ChartSearchService {
 		 * chartsearchai.drugReference.enabled} being false: it says the check ran and named no
 		 * citation, never that the answer was compared against anything. And absence of an entry is
 		 * not a certificate of faithfulness — the check is recall-limited by construction, and ADR
-		 * Decision 61's "What this cannot see" enumerates how. Null says this producer stated nothing:
-		 * the check having failed, or an answer path that does not run it — the early {@code done} of
-		 * the async-grounding path among them, since the check runs after that user-visible handoff.
-		 * On a cache hit this replays the ORIGINAL request's list, the whole answer object being
-		 * replayed.
+		 * Decision 61's "What this cannot see" enumerates how. Null says this producer stated nothing,
+		 * and the reachable cause is ONE: the early {@code done} of the async-grounding path, emitted
+		 * before the check runs. The check's own failure branch returns null too and no path is known
+		 * to deliver it — the one line it guards is a read of {@code patient.getPatientId()}, which
+		 * both answer methods re-read in their {@code finally} timing log, so a throw there leaves the
+		 * request as an error rather than as a response carrying null. On a cache hit this replays the
+		 * ORIGINAL request's list, the whole answer object being replayed.
 		 *
 		 * @return the distinct citation indexes, in report order, or null where none was stated
 		 */

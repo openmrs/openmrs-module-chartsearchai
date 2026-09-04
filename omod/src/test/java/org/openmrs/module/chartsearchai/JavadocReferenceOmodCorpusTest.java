@@ -62,12 +62,18 @@ import org.w3c.dom.NodeList;
  * javadoc states what is covered, what is not, and on which channel each remaining shape shows.
  * Round 12 then found five surefire SELECTION properties refused in their element form and read
  * from no property at all — this arm's own ten-against-five asymmetry, which
- * {@link #everySurefireParameterIsRefusedInBothFormsMavenReadsIt} now asserts against.
+ * {@link #everySurefireParameterIsRefusedInBothFormsMavenReadsIt} now asserts against. Round 14
+ * found a fourth instance of that same shape and a NEW kind of error with it: {@code excludedGroups}
+ * was in neither arm's list on a stated GROUND, and the ground is false for the provider this
+ * reactor uses. It is the one member of the family whose cross-module cover did not fire — this arm
+ * ran, was green, and reported nothing. {@link #SUREFIRE_USER_PROPERTY_PREFIX} is what changed in
+ * answer to it, four rounds of one-more-name being the pattern that needed breaking rather than
+ * extending.
  * <strong>Do not write another absolute here.</strong> Every round so far has found a position the
  * round before had not read, and every absolute published about this change has been falsified by a
- * later round — the last of them being the api-side class javadoc's QUIET enumeration, which round
- * 12 falsified. Where a sentence of that shape suggests itself, name the edit that was actually
- * checked and stop there.
+ * later round — the api-side class javadoc's QUIET enumeration, which round 12 falsified, and then
+ * a REASON given for an omission, which round 14 falsified in four places at once. Where a sentence
+ * of that shape suggests itself, name the edit that was actually checked and stop there.
  *
  * <p><strong>Why it exists, which is the part worth reading.</strong> {@code JavadocReferenceGuardTest}
  * in the api module holds the same line two ways: it compiles the api corpus with its own arguments,
@@ -196,11 +202,28 @@ public class JavadocReferenceOmodCorpusTest {
 	 * <p>The bindings are read off the shipped descriptor rather than off documentation:
 	 * {@code META-INF/maven/plugin.xml} in the resolved {@code maven-surefire-plugin-3.5.5.jar},
 	 * {@code test} mojo. {@code skip} carries {@code maven.test.skip} and {@code skipExec}
-	 * {@code maven.test.skip.exec}, while {@code skipTests}, {@code test} and {@code groups} are their
-	 * own property names and the remaining selections take a {@code surefire.} prefix — which is the
-	 * sort of detail a list written from memory gets wrong.
-	 * {@code excludedGroups} is absent deliberately and not by oversight: a group EXCLUSION cannot
-	 * reach a test that is in no group, and neither guard declares a JUnit tag.
+	 * {@code maven.test.skip.exec}, while {@code skipTests}, {@code test}, {@code groups} and
+	 * {@code excludedGroups} are their own property names and the remaining selections take a
+	 * {@code surefire.} prefix — which is the sort of detail a list written from memory gets wrong.
+	 *
+	 * <p><strong>{@code excludedGroups} was absent on a stated ground and round 14 measured that
+	 * ground false.</strong> The ground was that a group EXCLUSION cannot reach a test in no group,
+	 * and neither guard declares a JUnit tag. It holds for a plain tag NAME. It does not hold for a
+	 * tag EXPRESSION, and surefire auto-selects its JUnit Platform provider for these suites, where
+	 * {@code excludedGroups} is an expression and {@code none()} is defined to match exactly the
+	 * tests carrying no tag. Measured, JDK 21, in {@code api/pom.xml}'s {@code <properties>} — a
+	 * file that has none, so the reproduction adds one:
+	 * {@code <excludedGroups>none()</excludedGroups>} gave {@code mvn -o clean install} exit 0,
+	 * BUILD SUCCESS, api {@code Tests run: 0}, THIS module's suite green, and {@code excludedGroups}
+	 * named ZERO times in the whole log. Of the members measured so far that is the one whose
+	 * cross-module cover did not fire: this arm ran, was green, and said nothing.
+	 * {@code <excludedGroups>nosuchtag</excludedGroups>} in the same position left api's whole suite
+	 * running, which is why the false ground survived four rounds.
+	 * {@code excludeJUnit5Engines} and {@code includeJUnit5Engines} are here from the same round —
+	 * {@code <surefire.excludeJUnit5Engines>junit-jupiter} in {@code api/pom.xml} gave exit 0 with
+	 * api {@code Tests run: 0} as well — and their PROPERTY side needs no entry, since
+	 * {@link #SUREFIRE_USER_PROPERTY_PREFIX} answers for a prefixed name without looking it up. They
+	 * are named here for the ELEMENT side, which has no prefix to read.
 	 * {@link #everySurefireParameterIsRefusedInBothFormsMavenReadsIt} drives both readers over the
 	 * pairs written out as literals.
 	 */
@@ -219,8 +242,70 @@ public class JavadocReferenceOmodCorpusTest {
 		pairs.put("excludes", "surefire.excludes");
 		pairs.put("excludesFile", "surefire.excludesFile");
 		pairs.put("groups", "groups");
+		pairs.put("excludedGroups", "excludedGroups");
+		pairs.put("excludeJUnit5Engines", "surefire.excludeJUnit5Engines");
+		pairs.put("includeJUnit5Engines", "surefire.includeJUnit5Engines");
 		return Collections.unmodifiableMap(pairs);
 	}
+
+	/**
+	 * The prefix that makes a {@code <properties>} entry maven-surefire-plugin's own. This arm
+	 * refuses a value-carrying entry under it whatever the value and whichever parameter it belongs
+	 * to, and {@link #TEST_DEFEATING_PROPERTIES} is left to answer for the un-prefixed names.
+	 *
+	 * <p><strong>Why the shape changed.</strong> Rounds 5, 10, 12 and 14 of this change's review each
+	 * supplied one more surefire name that takes a module's checks out of the build, and round 14
+	 * verified the following one in the same breath: {@code surefire.excludeJUnit5Engines} with the
+	 * value {@code junit-jupiter}, in {@code api/pom.xml}, exit 0 with api {@code Tests run: 0} and
+	 * this module's suite green. Two more names would have shipped a list whose next hole was already
+	 * known. Read off {@code META-INF/maven/plugin.xml} in the resolved
+	 * {@code maven-surefire-plugin-3.5.5} jar, {@code test} mojo: 81 children of the
+	 * {@code <configuration>} block, 70 of them binding a user property through a bare
+	 * {@code ${...}} expression, 31 of those 70 beginning {@code surefire.}. One prefix reaches those
+	 * 31 without naming them and reaches a knob added under it later; the figures are a measurement
+	 * of that descriptor at that version.
+	 *
+	 * <p><strong>The un-prefixed remainder is BOUNDED and not complete, and it is what
+	 * {@link #SUREFIRE_PARAMETERS_DEFEATING_CHECKS} spells out</strong> — the legacy spellings
+	 * {@code maven.test.skip}, {@code maven.test.skip.exec}, {@code skipTests},
+	 * {@code maven.test.failure.ignore}, {@code test}, {@code groups} and {@code excludedGroups}.
+	 * What was read of the descriptor's other un-prefixed bindings is that they are values Maven
+	 * injects which a POM cannot usefully set, and knobs deciding HOW tests run rather than WHETHER;
+	 * that is a characterisation of the read and not a proof about each of them, which is what
+	 * BOUNDED means here. {@code failIfNoTests} was
+	 * proposed for the list and the descriptor declines it: its {@code default-value} is
+	 * {@code false}, so {@code false} is what this build already does and {@code true} makes an empty
+	 * run FAIL.
+	 *
+	 * <p><strong>The value rule is this arm's own and it is not {@link #defeatsAModulesChecks}.</strong>
+	 * That method exempts the word {@code false} because {@code false} is the default of the flags it
+	 * reads; across 31 prefixed properties the harmful value is not uniformly {@code true}, so this
+	 * leg refuses a non-blank value and permits a blank one. <strong>The cost is friction on tuning
+	 * done through a property</strong> — {@code <surefire.runOrder>alphabetical</surefire.runOrder>}
+	 * reddens and takes nothing away — and it falls on a shape this reactor does not use, which sets
+	 * no {@code surefire.} property anywhere. It does not close the position:
+	 * {@link #noPomEditTakesAModuleOutOfTheTestBuild} discloses that a guard cannot report an edit
+	 * that stops it running, and the prefix narrows how easily that is reached rather than removing
+	 * it.
+	 */
+	private static final String SUREFIRE_USER_PROPERTY_PREFIX = "surefire.";
+
+	/**
+	 * Two {@code surefire.} properties {@link #SUREFIRE_PARAMETERS_DEFEATING_CHECKS} does not name,
+	 * put to the real reader by
+	 * {@link #everySurefireParameterIsRefusedInBothFormsMavenReadsIt} — a PREFIX rule earns its keep
+	 * on a name nobody wrote down. One is a real parameter of the pinned plugin
+	 * ({@code runOrder → surefire.runOrder}), which is also where the cost of the rule shows: it
+	 * takes no test away and is refused all the same. The other is invented, and stands for whatever
+	 * arrives under the prefix next.
+	 *
+	 * <p><strong>A witness has to stay outside {@link #TEST_DEFEATING_PROPERTIES} or it stops
+	 * witnessing</strong>, the prefix leg skipping a name that list already reports: moved into the
+	 * map, one of these would leave the assertions below passing with the prefix rule deleted.
+	 * {@link #everySurefireParameterIsRefusedInBothFormsMavenReadsIt} reports that first.
+	 */
+	private static final List<String> PREFIXED_PROPERTIES_NO_MAP_ENTRY_NAMES =
+			Arrays.asList("surefire.runOrder", "surefire.aParameterNoReviewRoundHasSeenYet");
 
 	/**
 	 * The same parameters {@link #SUREFIRE_PARAMETERS_DEFEATING_CHECKS} maps, written out as
@@ -246,7 +331,12 @@ public class JavadocReferenceOmodCorpusTest {
 					"<exclude>**/JavadocReferenceGuardTest.java</exclude>",
 					"**/JavadocReference*Test.java" },
 			new String[] { "excludesFile", "surefire.excludesFile", "exclusions.txt", "exclusions.txt" },
-			new String[] { "groups", "groups", "eval", "eval" });
+			new String[] { "groups", "groups", "eval", "eval" },
+			new String[] { "excludedGroups", "excludedGroups", "none()", "none()" },
+			new String[] { "excludeJUnit5Engines", "surefire.excludeJUnit5Engines",
+					"<excludeJUnit5Engine>junit-jupiter</excludeJUnit5Engine>", "junit-jupiter" },
+			new String[] { "includeJUnit5Engines", "surefire.includeJUnit5Engines",
+					"<includeJUnit5Engine>junit-vintage</includeJUnit5Engine>", "junit-vintage" });
 
 	/**
 	 * The user properties that stop a module's checks asserting anything, whatever the mechanism.
@@ -423,6 +513,24 @@ public class JavadocReferenceOmodCorpusTest {
 	 * the module whose tests still run: {@code <groups>eval</groups>} in {@code api/pom.xml} gave exit
 	 * 1 from THIS arm with api running no tests at all.
 	 *
+	 * <p><strong>Round 14's shape is a fifth and it sits with round 12's rather than beside it.</strong>
+	 * {@code <excludedGroups>none()</excludedGroups>} in {@code api/pom.xml}'s {@code <properties>}
+	 * gave {@code mvn -o clean install} exit 0, BUILD SUCCESS, api {@code Tests run: 0}, this
+	 * module's suite green, and {@code excludedGroups} named ZERO times in the whole log — so unlike
+	 * round 10's and round 12's child-pom cases, the module whose tests still ran did not report it,
+	 * that property being in neither arm's list. Adding one {@code <arg>} to the managed
+	 * {@code <compilerArgs>} beside it, with a dead pointer in {@code api/src/main/java}, gave exit 0
+	 * with no {@code reference not found} printed: #262's defect reinstated by two POM edits nothing
+	 * reported. Both are refused now — {@code excludedGroups} by name, since its element form needs
+	 * a map entry anyway, and {@code surefire.excludeJUnit5Engines} (verified in the same round, same
+	 * exit 0, same api {@code Tests run: 0}) by {@link #SUREFIRE_USER_PROPERTY_PREFIX}. That prefix
+	 * is the change of shape: four rounds each supplied one more name. <strong>Two shapes round 14
+	 * measured that are NOT holes</strong>, recorded so nobody re-measures them:
+	 * {@code surefire.suiteXmlFiles} pointing at a suite file gave exit 1 with
+	 * {@code [ERROR] ... suiteXmlFiles is configured, but there is no TestNG dependency}, so it fails
+	 * loudly; and {@code failIfNoTests} carries {@code default-value="false"} in the pinned
+	 * descriptor, so neither of its values takes a test away.
+	 *
 	 * <p>So the honest bound is not "no POM edit can silence this" and not one sentence about cost
 	 * either: an edit taking ONE module's checks out is refused by the module whose checks still run,
 	 * the two arms state that rule differently so one edit does not weaken both, and what is left is
@@ -585,17 +693,36 @@ public class JavadocReferenceOmodCorpusTest {
 	 * where its value leaves the guards running, and reported by NOTHING where the value removes them
 	 * both; {@link #noPomEditTakesAModuleOutOfTheTestBuild} discloses that rather than covering it.
 	 *
+	 * <p><strong>Round 14 was the fourth instance and the answer is a rule, not two further
+	 * names.</strong> {@code excludedGroups} had been left out on a ground that is false for the
+	 * provider this reactor uses, and {@code surefire.excludeJUnit5Engines} was verified alongside
+	 * it. So this check also drives {@link #testDefeatingPropertiesIn} over
+	 * {@link #PREFIXED_PROPERTIES_NO_MAP_ENTRY_NAMES}, two properties the map does not name, which is
+	 * the assertion that the property leg answers by {@link #SUREFIRE_USER_PROPERTY_PREFIX}. The
+	 * ELEMENT side gets no prefix rule because an element name carries none, which is why
+	 * {@code excludedGroups}, {@code excludeJUnit5Engines} and {@code includeJUnit5Engines} are map
+	 * entries.
+	 *
 	 * <p><strong>Mutate it rather than trust it.</strong> Drop the {@code excludes} entry from
 	 * {@link #SUREFIRE_PARAMETERS_DEFEATING_CHECKS} and this check names that pair on BOTH legs — the
 	 * element reader iterates that map's keys and {@link #TEST_DEFEATING_PROPERTIES} is derived from
 	 * its values, so one deletion reopens both positions, which is why the literals are the
-	 * independent statement.
+	 * independent statement. Remove the prefix leg from {@link #testDefeatingPropertiesIn} and this
+	 * check names both of {@link #PREFIXED_PROPERTIES_NO_MAP_ENTRY_NAMES}, twice each; docs/adr.md
+	 * Decision 75 carries that mutation's measurement.
 	 *
 	 * <p><strong>What it does not assert.</strong> That a pair is the binding surefire really
 	 * declares — those were read off the pinned plugin's own descriptor and recorded in
-	 * {@link #SUREFIRE_PARAMETERS_DEFEATING_CHECKS}, and nothing re-reads it at build time. Nor
-	 * anything about a parameter that map does not name; {@link #noPomEditTakesAModuleOutOfTheTestBuild}
-	 * discloses what that leaves open.
+	 * {@link #SUREFIRE_PARAMETERS_DEFEATING_CHECKS}, and nothing re-reads it at build time. A value
+	 * mistyped on ONE side reddens here; one mistyped in the map AND in
+	 * {@link #SUREFIRE_PARAMETER_FORMS_AS_LITERALS} is green in both modules, which is r14-2 and
+	 * stands. {@link #SUREFIRE_USER_PROPERTY_PREFIX} reduces its reach without closing it, measured
+	 * on the api arm: {@code surefire.excludeJUnit5Engines} mistyped in both places there left that
+	 * arm's pairing check green while the real property, planted in {@code api/pom.xml}, was still
+	 * refused at exit 1 by the prefix leg, which looks no name up. What is left is the un-prefixed
+	 * pairs, which have no second leg behind them. Nor does it say anything about an element name the map
+	 * does not carry; {@link #noPomEditTakesAModuleOutOfTheTestBuild} discloses what that leaves
+	 * open.
 	 */
 	@Test
 	public void everySurefireParameterIsRefusedInBothFormsMavenReadsIt() throws Exception {
@@ -648,13 +775,51 @@ public class JavadocReferenceOmodCorpusTest {
 						+ "defeatsAModulesChecks");
 			}
 		}
+		for (String property : PREFIXED_PROPERTIES_NO_MAP_ENTRY_NAMES) {
+			if (TEST_DEFEATING_PROPERTIES.contains(property)) {
+				violations.add("<" + property + "> is now one of TEST_DEFEATING_PROPERTIES, so it no longer "
+						+ "witnesses that the property reader answers by the " + SUREFIRE_USER_PROPERTY_PREFIX
+						+ " prefix — the prefix leg skips a name that list already reports, so the two checks "
+						+ "below would pass with the prefix rule deleted. Pick a prefixed property the map "
+						+ "does not carry, which is what PREFIXED_PROPERTIES_NO_MAP_ENTRY_NAMES is for");
+				continue;
+			}
+			String own = "<project><properties><" + property + ">something</" + property
+					+ "></properties></project>";
+			String inAProfile = "<project><profiles><profile><properties><" + property + ">something</"
+					+ property + "></properties></profile></profiles></project>";
+			for (String readable : Arrays.asList(own, inAProfile)) {
+				if (testDefeatingPropertiesIn(parseXml(readable)).isEmpty()) {
+					violations.add("<" + property + "> is read by nothing (" + readable + "), so this arm "
+							+ "answers for maven-surefire-plugin's user properties by NAME and not by the "
+							+ SUREFIRE_USER_PROPERTY_PREFIX + " prefix. Rounds 5, 10, 12 and 14 each supplied "
+							+ "one more name, and round 14 verified the following one in the same breath — "
+							+ "<surefire.excludeJUnit5Engines>junit-jupiter in api/pom.xml, exit 0 with api "
+							+ "Tests run: 0 and this module's suite green. A name per round is a list whose "
+							+ "next hole is already known. These two are outside the map deliberately, and the "
+							+ "guard above keeps them there: one is a real parameter of the pinned plugin, one "
+							+ "is invented. See SUREFIRE_USER_PROPERTY_PREFIX");
+				}
+			}
+			String blank = "<project><properties><" + property + "></" + property
+					+ "></properties></project>";
+			if (!testDefeatingPropertiesIn(parseXml(blank)).isEmpty()) {
+				violations.add("an EMPTY <" + property + "> is refused (" + blank + "). A blank value takes "
+						+ "nothing away, so refusing it reddens a POM that builds exactly as this one does, "
+						+ "the one failure direction both arms refuse");
+			}
+		}
 		assertNoViolations(violations);
 	}
 
 	/**
 	 * Every {@code <properties>} entry in one POM that stops that module's checks asserting anything,
-	 * described. See {@link #TEST_DEFEATING_PROPERTIES} for the list and
-	 * {@link #propertiesDeclaredUnderProjectOrProfile} for why the element is not read document-wide.
+	 * described. Two legs: {@link #TEST_DEFEATING_PROPERTIES} by NAME, judged by
+	 * {@link #defeatsAModulesChecks}, and {@link #SUREFIRE_USER_PROPERTY_PREFIX} by PREFIX, judged on
+	 * blankness alone. The prefix leg skips a name the first leg already reported, so a prefixed
+	 * selection this arm also refuses as an element is described once, by the leg that can name both
+	 * forms. See {@link #propertiesDeclaredUnderProjectOrProfile} for why the element is not read
+	 * document-wide.
 	 */
 	private static List<String> testDefeatingPropertiesIn(Element pom) {
 		List<String> where = new ArrayList<String>();
@@ -667,6 +832,24 @@ public class JavadocReferenceOmodCorpusTest {
 							+ "skipping them, by narrowing the run to something else, or by discarding their "
 							+ "verdict. One line, naming no plugin. See TEST_DEFEATING_PROPERTIES");
 				}
+			}
+			for (Element entry : elementChildren(properties)) {
+				String name = entry.getNodeName();
+				String value = entry.getTextContent().trim();
+				if (!name.startsWith(SUREFIRE_USER_PROPERTY_PREFIX) || value.isEmpty()
+						|| TEST_DEFEATING_PROPERTIES.contains(name)) {
+					continue;
+				}
+				where.add("<properties> sets <" + name + ">" + value + "</" + name + ">, one of "
+						+ "maven-surefire-plugin's own user properties. The rule at this leg is the "
+						+ SUREFIRE_USER_PROPERTY_PREFIX + " PREFIX and not the parameter behind the name, "
+						+ "because four review rounds each supplied one more name and round 14 verified the "
+						+ "following one while it was at it — <surefire.excludeJUnit5Engines>junit-jupiter in "
+						+ "api/pom.xml, exit 0 with api Tests run: 0 and this module's suite green. Unlike "
+						+ "defeatsAModulesChecks this leg does not exempt the word false, since the harmful "
+						+ "value is not uniformly true across the prefixed properties; a blank value is "
+						+ "permitted. It refuses tuning too, which is its cost. See "
+						+ "SUREFIRE_USER_PROPERTY_PREFIX");
 			}
 		}
 		return where;

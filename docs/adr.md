@@ -5918,9 +5918,12 @@ the gate was open, which is the only property they share:
   `excludes`, `excludesFile` and `groups` wherever they carry a value. Measured in all three
   directions: the tuning above green at exit 0; an `<excludes>` naming the omod corpus check reported
   by the api arm at exit 1; one naming the api guard reported by the omod arm at exit 1, that guard
-  not being among the tests that ran. `excludedGroups` is deliberately absent — a group EXCLUSION
-  cannot reach a test that declares no group, while a group INCLUSION drops both checks, which is why
-  `groups` is there. **It is a list of names and not a closed world**, and that is the point: closing
+  not being among the tests that ran. A group INCLUSION drops both checks, which is why `groups` is
+  there. `excludedGroups` was left out beside it on a stated ground — a group EXCLUSION cannot reach
+  a test that declares no group — and **round 14 measured that ground false; bullet (vi) below
+  carries it, and this sentence is corrected rather than dropped because the false ground stood in
+  four places at once.** It is a map entry in both arms now, beside `excludeJUnit5Engines` and
+  `includeJUnit5Engines`. **It is a list of names and not a closed world**, and that is the point: closing
   the world over surefire's parameters is what produced the false positive, so a parameter nobody has
   thought of is permitted here and disclosed instead.
   (iii) **Surefire's own `test` FILTER property was not in either arm's list.** Measured:
@@ -5955,8 +5958,9 @@ the gate was open, which is the only property they share:
   The bindings, taken from `META-INF/maven/plugin.xml` in the resolved `maven-surefire-plugin-3.5.5`
   jar rather than from documentation: `excludes → surefire.excludes`,
   `includes → surefire.includes`, `excludesFile → surefire.excludesFile`,
-  `includesFile → surefire.includesFile`, `groups → groups`, `test → test`. `excludedGroups` stays out
-  for the reason bullet (ii) gives. **The fix is the generator and not the five names.** Rounds 5, 10
+  `includesFile → surefire.includesFile`, `groups → groups`, `test → test`. `excludedGroups` stayed out
+  for the reason bullet (ii) gave, and bullet (vi) below is round 14 measuring that reason false.
+  **The fix is the generator and not the five names.** Rounds 5, 10
   and 12 were one defect three times because the element side and the property side were separate
   hand-kept lists, so nothing in the repository could see them disagree; the pairing is now one map
   entry per parameter — `SUREFIRE_PARAMETERS_SELECTING_TESTS` in the api arm, whose keys the element
@@ -5978,6 +5982,104 @@ the gate was open, which is the only property they share:
   with api running no tests, which is that arm's whole reason. **What reading the property does NOT
   reach** is a selection whose value removes both guards from the run — the LOUD/QUIET bullet below
   carries that, and it is the reason this decision's QUIET enumeration had to be corrected.
+  (vi) **Round 14: a fourth instance of that same shape, but what was falsified was a REASON for an
+  OMISSION rather than a claim of coverage — and it is the point at which the answer stopped being
+  one more name.** `excludedGroups` was in neither arm's property list on a stated ground: a group
+  EXCLUSION cannot reach a test that declares no group. That ground was published in four places —
+  `JavadocReferenceGuardTest`'s `SUREFIRE_PARAMETERS_SELECTING_TESTS`,
+  `JavadocReferenceOmodCorpusTest`'s `SUREFIRE_PARAMETERS_DEFEATING_CHECKS`, and bullets (ii) and (v)
+  above. It is false for the provider this reactor uses: surefire auto-selects `JUnitPlatformProvider`
+  here (the suites import `org.junit.jupiter.api.Test`), so `excludedGroups` is a JUnit 5 tag
+  EXPRESSION and `none()` is defined to match the tests carrying no tag. It holds for a plain tag
+  NAME, which is why it survived four rounds.
+  Measured on this head, JDK 21, in `api/pom.xml`'s `<properties>` — **a file that has no
+  `<properties>` element at all, so a reproduction has to add one and must assert its anchor: an
+  injection that silently no-ops reads as a clean baseline**:
+  `<excludedGroups>none()</excludedGroups>` gave `mvn -o clean install` exit 0, BUILD SUCCESS, api
+  `Tests run: 0`, omod's suite green, and `grep -c excludedGroups` over the whole log ZERO. (The
+  suite SIZES are deliberately not quoted: one was published in bullet (iii) and the next round's own
+  commit moved it.)
+  **Of the members measured so far this is the one whose cross-module cover did not fire**: the omod arm ran,
+  was green, and reported nothing, because that property was in neither arm's list. Adding
+  `<arg>-Xdoclint/package:-org.openmrs.*</arg>` to the managed `<compilerArgs>` beside it, with a
+  dead pointer in `api/src/main/java`, gives exit 0 and zero `reference not found` — #262's defect
+  reinstated by two POM edits nothing reported. Control:
+  `<excludedGroups>nosuchtag</excludedGroups>` in the same position left api's whole suite running.
+  **The remedy is a change of shape.** Rounds 5, 10, 12 and 14 each supplied one more surefire name,
+  and round 14 verified the following one in the same breath —
+  `<surefire.excludeJUnit5Engines>junit-jupiter</surefire.excludeJUnit5Engines>` in `api/pom.xml`,
+  exit 0 with api `Tests run: 0` and omod's suite green. So the property side is a PREFIX rule now:
+  `SUREFIRE_USER_PROPERTY_PREFIX` in each arm refuses a value-carrying `<properties>` entry whose
+  name begins `surefire.`, at both positions already read (a project's own and a `<profile>`'s),
+  without looking the parameter up. The descriptor read that bounds it, from
+  `META-INF/maven/plugin.xml` in the resolved `maven-surefire-plugin-3.5.5` jar, `test` mojo: 81
+  children of the `<configuration>` block, 70 of them binding a user property through a bare
+  `${...}` expression, 31 of those 70 beginning `surefire.`. One prefix reaches those 31 and
+  whatever arrives under it later. The 39 un-prefixed bindings have no prefix to read and are
+  answered by NAME; the ones that suppress a module's tests or discard their verdict are the legacy
+  spellings already read — `maven.test.skip`, `maven.test.skip.exec`, `skipTests`,
+  `maven.test.failure.ignore`, `test`, `groups` and now `excludedGroups` — and **that set is BOUNDED
+  rather than complete**, the remainder being values Maven injects that a POM cannot usefully set
+  (`project`, `session`, `basedir`, `project.build.*`) or knobs deciding HOW tests run rather than
+  WHETHER (`argLine`, `forkCount`, `parallel`). A further one is a name, not a family.
+  **The ELEMENT side gets no prefix rule, because a `<configuration>` child's name carries none** —
+  `excludedGroups`, `excludeJUnit5Engines` and `includeJUnit5Engines` are map entries in both arms
+  for that reason, which is also what keeps
+  `everySurefireParameterIsRefusedInBothFormsMavenReadsIt` meaningful after the change: it drives
+  both real readers over the pairs as literals, and now additionally over two `surefire.` properties
+  NO list names — one real (`surefire.runOrder`), one invented — which is the assertion that the
+  property leg answers by prefix rather than by name.
+  **Two shapes measured in this round that are NOT holes**, recorded so nobody re-measures them and
+  because an earlier commit message claimed one of them was already stated in the code, which it was
+  not. `suiteXmlFiles` appears in no file of this repository and surefire refuses it outright with
+  this provider: `<surefire.suiteXmlFiles>src/test/resources/suite.xml</surefire.suiteXmlFiles>` in
+  `api/pom.xml` gave exit 1 with `[ERROR] ... suiteXmlFiles is configured, but there is no TestNG
+  dependency`, so it fails loudly rather than silencing anything, and the prefix rule reads its
+  property form regardless. And `failIfNoTests`, proposed for the un-prefixed set, carries
+  `default-value="false"` in the pinned descriptor: `false` is what this build already does, so
+  refusing it would redden a POM that builds exactly as this one does, while `true` makes an empty
+  run FAIL, which is the protective direction.
+  **What was measured after the change**, each edit in `api/pom.xml`'s `<properties>`, each exit 1,
+  each named. `<excludedGroups>none()</excludedGroups>` and
+  `<surefire.excludeJUnit5Engines>junit-jupiter</surefire.excludeJUnit5Engines>`:
+  `JavadocReferenceOmodCorpusTest.noPomEditTakesAModuleOutOfTheTestBuild`, api running no tests so
+  only the omod arm can report, each violation quoting the entry. `<surefire.runOrder>alphabetical`,
+  which no list names: `JavadocReferenceGuardTest.noPomEditTakesAModuleOutOfTheTestBuild` — the
+  prefix rule answering for a name nobody wrote down, and also its COST, that property taking no
+  test away. Blank values are not refused: `<excludedGroups></excludedGroups>` and
+  `<surefire.reportNameSuffix></surefire.reportNameSuffix>` each gave exit 0 with both suites green,
+  while `<surefire.reportNameSuffix>x</surefire.reportNameSuffix>` gave exit 1 from the api arm. A
+  real-build demonstration of the blank case has to pick its property —
+  `<surefire.runOrder></surefire.runOrder>` exits 1 from surefire itself (`Index -1 out of bounds for
+  length 0`) and never reaches a guard — which is why the blank permission is asserted per parameter
+  over synthetic POMs inside `everySurefireParameterIsRefusedInBothFormsMavenReadsIt`.
+  **Mutate the prefix rule and read the failures.** With its leg made inert in `testDefeatingPropertiesIn`
+  in BOTH arms and `<surefire.runOrder>alphabetical</surefire.runOrder>` left standing in
+  `api/pom.xml`: `everySurefireParameterIsRefusedInBothFormsMavenReadsIt` reddens in each arm with
+  four violations apiece (two properties × two `<properties>` positions), and the planted property
+  is reported by NOTHING — `grep -c 'sets <surefire.runOrder'` over the whole log zero, and
+  `noPomEditTakesAModuleOutOfTheTestBuild` not named at all, which is the state the rule exists to
+  end. Measured twice: once as shipped, where the build stops at api and the omod arm's half is
+  unmeasured, and once with `-Dmaven.test.failure.ignore=true` so both arms report.
+  **What the prefix rule does to r14-2's residue, measured.** That residue is the pairing check being
+  driven off hand-written literals with nothing anchoring either side to the plugin descriptor, so a
+  value wrong in BOTH the map and the literals is green in both modules; it stands, and the failure
+  message still tells a maintainer to add the pair. The reduction: with
+  `surefire.excludeJUnit5Engines` mistyped in both places in the api arm,
+  `everySurefireParameterIsRefusedInBothFormsMavenReadsIt` stayed green and the real property,
+  planted in `api/pom.xml`'s `<properties>`, was still refused — exit 1 from
+  `JavadocReferenceGuardTest.noPomEditTakesAModuleOutOfTheTestBuild`, the violation quoting the
+  entry, raised by the prefix leg which looks no parameter up. What is left of the residue is the
+  three un-prefixed pairs, `test`, `groups` and `excludedGroups`, behind which there is no second
+  leg — a statement about the reader's two legs, not a further measurement.
+  A witness for the prefix leg has to stay OUT of the named lists or it stops witnessing, the leg
+  skipping a name those lists already report; both arms report that before asking anything else of
+  the name, and adding `runOrder → surefire.runOrder` to the api map reddens
+  `everySurefireParameterIsRefusedInBothFormsMavenReadsIt` on exactly that.
+  **It does not close the position.** A guard cannot report an edit that stops it running, so a
+  property whose value removes both guards from the run is still refused by nothing that runs; the
+  LOUD/QUIET bullet below carries that. The prefix narrows how easily such an edit is reached and
+  does not remove it, and no sentence here should be read as saying otherwise.
 - **The disclosure is generalised rather than extended by one more sentence, and that is round 10's
   main change.** Every round so far has found a position the round before had not read, and every
   absolute published here has been falsified by a later round, so the honest statement is not a
@@ -6007,7 +6109,11 @@ the gate was open, which is the only property they share:
   gives `mvn -o clean install` exit 0, BUILD SUCCESS, `grep -c JavadocReference` over the whole log
   ZERO, and a reactor test total short by only the guards' own tests — which reads as an ordinary
   green build, not as the total dropping; `<groups>eval</groups>` there gives exit 0 with
-  `Tests run: 0` printed for both modules instead. **Neither reinstates #262's defect on its own**:
+  `Tests run: 0` printed for both modules instead. **Round 14's shape belongs in that QUIET item and
+  was not covered by it**: `<excludedGroups>none()</excludedGroups>` in `api/pom.xml`'s
+  `<properties>` was exit 0 with api `Tests run: 0`, omod green, and `excludedGroups` named zero
+  times — a CHILD-pom edit that the module whose tests still ran did not report, because the
+  property was in neither arm's list. Bullet (vi) carries it, and it is refused now. **Neither reinstates #262's defect on its own**:
   the `<arg>` is still on javac, and that same exclusion with a dead pointer planted in
   `api/src/main/java` gives exit 1 with `reference not found` printed. What it removes is the guard on
   the CONTENTS of the managed `<compilerArgs>`, so one further `<arg>` there is the second edit that

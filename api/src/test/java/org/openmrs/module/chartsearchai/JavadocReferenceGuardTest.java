@@ -154,20 +154,26 @@ import org.w3c.dom.NodeList;
  * with the build rather than leaving a module's pointers unresolved in silence.
  *
  * <p><strong>What they do not do is enumerate the positions from which Maven can alter javac's
- * arguments or take a module's tests out of the build. That is measured, not conceded</strong>: six
- * consecutive review rounds of this change each found one more. The
+ * arguments or take a module's tests out of the build. That is measured, not conceded</strong>: every
+ * review round of this change so far has found one more. The
  * {@code maven.compiler.failOnError} user property (round 5); the {@code -Xdoclint/package} qualifier
  * (6); four sibling argument parameters beside {@code compilerArgs} (7); then three at once — a
  * channel entry not spelled {@code <arg>}, a child pom's own {@code <version>}, and a
  * {@code combine.self} attribute (8); an {@code <executions>} entry unbinding
  * {@code default-testCompile}, which removes a module's test root from javac and its corpus check from
- * the build together (9); and surefire's own {@code test} FILTER property with
- * {@code maven.test.failure.ignore} beside it (10). Rounds 7 and 8 landed on {@code omod} for the
- * structural reason the api bullet above gives; rounds 9 and 10 landed on whichever module the edit
- * named. <strong>Two ABSOLUTE claims were published in consecutive rounds</strong> — that no POM edit
- * could silence the omod corpus check, and that the consequence of an unread position was bounded —
- * and each was falsified by the next round. Do not write a third: where a sentence of that shape
- * suggests itself, name the edit that was actually checked and stop there.
+ * the build together (9); surefire's own {@code test} FILTER property with
+ * {@code maven.test.failure.ignore} beside it (10); and five surefire SELECTION properties —
+ * {@code surefire.excludes}, {@code surefire.includes}, {@code surefire.excludesFile},
+ * {@code surefire.includesFile} and {@code groups} — refused in their element form and read from no
+ * property at all (12), which is
+ * {@link #everySurefireParameterIsRefusedInBothFormsMavenReadsIt}. Rounds 7 and 8 landed on
+ * {@code omod} for the structural reason the api bullet above gives; 9, 10 and 12 landed on whichever
+ * module the edit named. <strong>Every ABSOLUTE claim published about this change has been falsified
+ * by a later round</strong> — that no POM edit could silence the omod corpus check; that the
+ * consequence of an unread position was bounded; and the QUIET enumeration below, which round 12
+ * falsified with a parameter both arms refuse in element form set inside one of these POMs. Do not
+ * write another: where a sentence of that shape suggests itself, name the edit that was actually
+ * checked and stop there.
  *
  * <p><strong>So what a careless or determined edit can still achieve, and where it shows.</strong>
  * LOUD, on output a maintainer sees without looking for it: where {@code failOnError} is what was
@@ -185,9 +191,22 @@ import org.w3c.dom.NodeList;
  * the whole log matching nothing, the goal never being invoked. {@code No tests to run} is what
  * round 9's CHILD-pom shape printed and that shape is refused now
  * ({@link #noPomEditTakesAModuleOutOfTheTestBuild}), so it is the wrong string to grep a log for.
- * QUIET: a surefire parameter nobody here has thought of, inside the
- * {@code <configuration>} this guard now permits ({@link #SUREFIRE_PLUGIN_CHILDREN_READ_HERE});
- * and anything Maven reads that is not one of these POMs.
+ * QUIET: anything Maven reads that is not one of these POMs; a surefire parameter neither arm names,
+ * inside the {@code <configuration>} this guard now permits
+ * ({@link #SUREFIRE_PLUGIN_CHILDREN_READ_HERE}); and — round 12's finding, which falsified the two
+ * items before it as an enumeration — <strong>a surefire SELECTION whose value removes BOTH guards
+ * from the run, which is a parameter both arms DO refuse, set inside one of these POMs.</strong> A
+ * guard cannot report an edit that stops it running. Measured on this branch, JDK 21:
+ * {@code <surefire.excludes>**}{@code /JavadocReference*Test.java</surefire.excludes>} in the root
+ * {@code <properties>} gives {@code mvn -o clean install} exit 0, BUILD SUCCESS,
+ * {@code grep -c JavadocReference} over the whole log ZERO, and the reactor's test total short by
+ * only the guards' own tests, which reads as an ordinary green build;
+ * {@code <groups>eval</groups>} there gives exit 0 with {@code Tests run: 0} for both modules.
+ * <strong>Neither reinstates #262's defect on its own</strong>: the flag is still on javac, and that
+ * same exclusion with a dead pointer planted in {@code api/src/main/java} gives exit 1 with
+ * {@code reference not found} printed. What it removes is the guard on the flag's CONTENTS, so one
+ * further {@code <arg>} inside the managed {@code <compilerArgs>} then silences doclint — two quiet
+ * edits, and the second is what the disclosure above is about.
  * <strong>A child declaration pinning a version these files cannot evaluate was in that QUIET list
  * and is not quiet.</strong> {@link #versionFloorViolationsAt} is silent on it, deliberately — but
  * two other checks are not, and both were measured on this branch, JDK 21:
@@ -308,11 +327,14 @@ public class JavadocReferenceGuardTest {
 	 * <p>So the element is permitted and its CHILDREN are judged, by
 	 * {@link #surefireParametersSilencingACheck} over
 	 * {@link #SUREFIRE_PARAMETERS_REMOVING_TESTS} and {@link #SUREFIRE_PARAMETERS_SELECTING_TESTS}.
-	 * <strong>Those two are lists of NAMES and not a closed world, and the difference is the point:</strong>
+	 * <strong>Those two enumerate NAMES and are not a closed world, and the difference is the point:</strong>
 	 * closing the world over a surefire configuration is what produced the false positive above, since
 	 * most of that parameter list is legitimate tuning. A surefire parameter nobody here has thought of
 	 * is therefore PERMITTED; {@link #noPomEditTakesAModuleOutOfTheTestBuild} says what that leaves
-	 * open and on which channel it shows.
+	 * open and on which channel it shows. What is NOT left open any more is a parameter named in
+	 * either of them whose user-property form goes unread —
+	 * {@link #everySurefireParameterIsRefusedInBothFormsMavenReadsIt} is where that pairing is
+	 * asserted, over both readers, and rounds 5, 10 and 12 were each one instance of it.
 	 */
 	private static final List<String> SUREFIRE_PLUGIN_CHILDREN_READ_HERE =
 			Arrays.asList("groupId", "artifactId", "version", "configuration");
@@ -330,19 +352,94 @@ public class JavadocReferenceGuardTest {
 			Arrays.asList("skip", "skipTests", "skipExec", "testFailureIgnore");
 
 	/**
-	 * The surefire parameters that decide WHICH tests run, refused wherever one carries a value at
-	 * all. Refused rather than inspected, deliberately: judging a selection would mean deciding
-	 * whether a pattern reaches two named checks in two modules, and a pattern that does not reach
-	 * them today reaches them after a rename. {@code test}, {@code includes} and {@code includesFile}
-	 * select positively, so everything they do not name is dropped; {@code excludes} and
-	 * {@code excludesFile} drop what they do name; {@code groups} restricts the run to tagged tests,
-	 * and neither module's check declares a JUnit tag, so a group INCLUSION drops both. Its
-	 * counterpart {@code excludedGroups} is absent for that same reason and not by oversight — a
-	 * group EXCLUSION cannot reach a test that is in no group. An empty element selects nothing and is
-	 * not refused.
+	 * The surefire parameters that decide WHICH tests run, each mapped from the {@code <configuration>}
+	 * ELEMENT name to the user PROPERTY maven-surefire-plugin binds that parameter to. Refused wherever
+	 * either form carries a value at all. Refused rather than inspected, deliberately: judging a
+	 * selection would mean deciding whether a pattern reaches two named checks in two modules, and a
+	 * pattern that does not reach them today reaches them after a rename. {@code test},
+	 * {@code includes} and {@code includesFile} select positively, so everything they do not name is
+	 * dropped; {@code excludes} and {@code excludesFile} drop what they do name; {@code groups}
+	 * restricts the run to tagged tests, and neither module's check declares a JUnit tag, so a group
+	 * INCLUSION drops both. Its counterpart {@code excludedGroups} is absent for that same reason and
+	 * not by oversight — a group EXCLUSION cannot reach a test that is in no group. An empty element,
+	 * and an empty property, select nothing and are not refused.
+	 *
+	 * <p><strong>Why the two forms are ONE entry here and not two lists.</strong> Rounds 5, 10 and 12
+	 * of this change's review were the same defect three times: a parameter refused in its ELEMENT
+	 * form while the user PROPERTY Maven answers the same question from went unread, so the refusal
+	 * was walked round from the position beside it. Round 5 was
+	 * {@link #FAIL_ON_ERROR_PROPERTY}; round 10 was {@code test} with
+	 * {@link #TEST_FAILURE_IGNORED_PROPERTY} beside it; round 12 was the five entries below, and it
+	 * defeated the whole gate — {@code <surefire.excludes>**}{@code /JavadocReference*Test.java}
+	 * {@code </surefire.excludes>} in the ROOT pom's own {@code <properties>}, measured on this branch,
+	 * JDK 21: {@code mvn -o clean install} exit 0, BUILD SUCCESS, {@code grep -c JavadocReference} over
+	 * the whole log ZERO. Neither guard ran, so neither could report the edit, and the managed
+	 * {@code <compilerArgs>} was then read by nothing — one added {@code <arg>} silences doclint for
+	 * the reactor with a dead pointer standing in {@code api/src/main/java}. What maintained that
+	 * asymmetry three times over was two lists kept BY HAND, so the pairing lived nowhere. Here it is
+	 * one entry: {@link #collectSurefireSilencers} iterates the keys and
+	 * {@link #testDefeatingPropertiesIn} the values, and
+	 * {@link #everySurefireParameterIsRefusedInBothFormsMavenReadsIt} drives both readers over the
+	 * pairs written out as LITERALS, so an entry deleted from this map — or mistyped in it — reddens
+	 * instead of quietly reopening the position. The mistype was measured on this arm and the deletion
+	 * on omod's; that check's javadoc says what each one reddens.
+	 *
+	 * <p><strong>The bindings are read off the shipped descriptor, not off documentation.</strong>
+	 * {@code META-INF/maven/plugin.xml} inside the {@code maven-surefire-plugin-3.5.5.jar} this
+	 * reactor resolves, {@code test} mojo, {@code <configuration>} block:
+	 * {@code excludes → ${surefire.excludes}}, {@code includes → ${surefire.includes}},
+	 * {@code excludesFile → ${surefire.excludesFile}},
+	 * {@code includesFile → ${surefire.includesFile}}, {@code groups → ${groups}} and
+	 * {@code test → ${test}}. Two of the six carry no {@code surefire.} prefix, and nothing here
+	 * re-reads that descriptor at build time — so this map states which pairs were CHECKED against it,
+	 * at that version, and no more.
 	 */
-	private static final List<String> SUREFIRE_PARAMETERS_SELECTING_TESTS =
-			Arrays.asList("test", "includes", "includesFile", "excludes", "excludesFile", "groups");
+	private static final Map<String, String> SUREFIRE_PARAMETERS_SELECTING_TESTS =
+			selectionParametersToUserProperties();
+
+	private static Map<String, String> selectionParametersToUserProperties() {
+		Map<String, String> pairs = new LinkedHashMap<String, String>();
+		pairs.put(TEST_FILTER_PROPERTY, TEST_FILTER_PROPERTY);
+		pairs.put("includes", "surefire.includes");
+		pairs.put("includesFile", "surefire.includesFile");
+		pairs.put("excludes", "surefire.excludes");
+		pairs.put("excludesFile", "surefire.excludesFile");
+		pairs.put("groups", "groups");
+		return Collections.unmodifiableMap(pairs);
+	}
+
+	/**
+	 * Every parameter {@link #SUREFIRE_PARAMETERS_REMOVING_TESTS} and
+	 * {@link #SUREFIRE_PARAMETERS_SELECTING_TESTS} name, written out as
+	 * {@code {parameter, user property, element value, property value}} — an INDEPENDENT statement of
+	 * the pairing, which is the whole reason it is spelled out rather than derived from those two
+	 * constants. Derived, {@link #everySurefireParameterIsRefusedInBothFormsMavenReadsIt} could not
+	 * redden on an entry deleted from either of them, which is exactly the mutation it exists to
+	 * catch; the same argument {@code ReferenceProseFidelityTest} makes for spelling out
+	 * {@code SENTENCE_TERMINATORS}' members instead of iterating the constant.
+	 *
+	 * <p>Two value columns because the two forms take different syntax: {@code <excludes>} and
+	 * {@code <includes>} take {@code <exclude>}/{@code <include>} children while
+	 * {@code surefire.excludes} and {@code surefire.includes} take a comma-separated string. Every
+	 * value here is non-blank, which is what makes the pair refusable at all; the blank case is
+	 * asserted separately in the same check, and it is the case that must NOT be refused.
+	 */
+	private static final List<String[]> SUREFIRE_PARAMETER_FORMS_AS_LITERALS = Arrays.asList(
+			new String[] { "skip", "maven.test.skip", "true", "true" },
+			new String[] { "skipTests", "skipTests", "true", "true" },
+			new String[] { "skipExec", "maven.test.skip.exec", "true", "true" },
+			new String[] { "testFailureIgnore", "maven.test.failure.ignore", "true", "true" },
+			new String[] { "test", "test", "DateFormatUtilTest", "DateFormatUtilTest" },
+			new String[] { "includes", "surefire.includes",
+					"<include>**/DateFormatUtilTest.java</include>", "**/DateFormatUtilTest.java" },
+			new String[] { "includesFile", "surefire.includesFile", "src/test/resources/inclusions.txt",
+					"src/test/resources/inclusions.txt" },
+			new String[] { "excludes", "surefire.excludes",
+					"<exclude>**/JavadocReferenceOmodCorpusTest.java</exclude>",
+					"**/JavadocReference*Test.java" },
+			new String[] { "excludesFile", "surefire.excludesFile", "src/test/resources/exclusions.txt",
+					"src/test/resources/exclusions.txt" },
+			new String[] { "groups", "groups", "eval", "eval" });
 
 	/**
 	 * The user properties whose value {@code true} stops a module's tests being compiled or run, and
@@ -359,26 +456,39 @@ public class JavadocReferenceGuardTest {
 	 * carrying no plugin element at all. Set in the ROOT pom they take out every module's, which is
 	 * part of what {@link #noPomEditTakesAModuleOutOfTheTestBuild} discloses rather than covers.
 	 *
-	 * <p><strong>Two further properties do the same thing by other mechanisms and are read beside
-	 * these rather than added to them</strong>, because neither is a boolean flag:
-	 * {@link #TEST_FILTER_PROPERTY} and {@link #TEST_FAILURE_IGNORED_PROPERTY}. All three families go
-	 * through {@link #testDefeatingPropertiesIn}. <strong>Three families is not a claim that there are
-	 * three</strong> — round 10 found the first two of them missing, one round after the list was
-	 * written.
+	 * <p><strong>Two further families do the same thing by other mechanisms and are read beside these
+	 * rather than added to them</strong>, because neither is a boolean flag: surefire's SELECTION
+	 * properties ({@link #SUREFIRE_PARAMETERS_SELECTING_TESTS}, of which
+	 * {@link #TEST_FILTER_PROPERTY} is one entry) and {@link #TEST_FAILURE_IGNORED_PROPERTY}. All
+	 * three families go through {@link #testDefeatingPropertiesIn}. <strong>Three families is not a
+	 * claim that there are three</strong> — round 10 found two of them missing, one round after the
+	 * list was written, and round 12 found five of the SELECTION properties still unread one round
+	 * after that; what those rounds share, and what
+	 * {@link #everySurefireParameterIsRefusedInBothFormsMavenReadsIt} now asserts, is that a
+	 * parameter refused as an element must be read as a property too.
 	 */
 	private static final List<String> TEST_SKIP_PROPERTIES =
 			Arrays.asList("maven.test.skip", "maven.test.skip.exec", "skipTests");
 
 	/**
 	 * Surefire's own {@code test} user property, which is a FILTER and not a flag: any non-blank value
-	 * narrows the run to what it names, so every check it does not name is dropped. It needs a reader
-	 * of its own for exactly that reason — {@link #TEST_SKIP_PROPERTIES} are read as booleans, and
-	 * this one carries a class-name pattern, so it sat outside that list unread.
+	 * narrows the run to what it names, so every check it does not name is dropped. It sat outside
+	 * {@link #TEST_SKIP_PROPERTIES} unread until round 10 for exactly that reason — those are read as
+	 * booleans and this one carries a class-name pattern.
+	 *
+	 * <p><strong>It is no longer read on its own.</strong> {@code test} is one of surefire's selection
+	 * parameters and its element form was always refused beside the other five, so since round 12 it
+	 * is the {@code test} entry of {@link #SUREFIRE_PARAMETERS_SELECTING_TESTS} — the same string in
+	 * both columns, since this is the one selection parameter whose user property carries no
+	 * {@code surefire.} prefix. The constant survives because this measurement is what the other five
+	 * were reasoned from, and because a name is easier to point at than a map entry.
 	 *
 	 * <p>Measured on this branch, JDK 21:
 	 * {@code <properties><test>DateFormatUtilTest</test></properties>} in {@code api/pom.xml} —
 	 * {@code mvn -o clean install} exit 0, BUILD SUCCESS, api's surefire printing
-	 * {@code Tests run: 5} with this class not among them, and omod's whole 127-test suite green.
+	 * {@code Tests run: 5} with this class not among them, and omod's whole suite green. <strong>That
+	 * suite's SIZE was published here and round 12 moved it by adding a check</strong> — a count of a
+	 * suite does not belong in a measurement of one POM edit.
 	 * <strong>That is worse than the residue this class discloses</strong>, whose cost to the person
 	 * doing it is every {@code Tests run:} line in the reactor: here both modules report tests
 	 * running, one module's checks are simply gone, and the position the omod arm deliberately does
@@ -1579,13 +1689,27 @@ public class JavadocReferenceGuardTest {
 	 * publish here.</li>
 	 * </ul>
 	 *
-	 * <p><strong>Do not write a claim here that no POM edit can silence this gate.</strong> Two such
-	 * claims were published in consecutive rounds — one in the omod check's class javadoc, one in
-	 * docs/adr.md Decision 75 — and both were falsified by the next round; six rounds running, each
-	 * found a position the round before had not read. The class javadoc above says what that leaves
-	 * open and on which channel each shape shows. What is claimed here is narrow and checkable: an edit
+	 * <p><strong>Do not write a claim here that no POM edit can silence this gate.</strong> Three such
+	 * claims have been published and each was falsified by a later round — one in the omod check's
+	 * class javadoc, one in docs/adr.md Decision 75, and the QUIET enumeration in this class's own
+	 * javadoc, which round 12 falsified with {@code surefire.excludes}. Every round so far has found a
+	 * position the round before had not read. The class javadoc above says what that leaves open and
+	 * on which channel each shape shows. What is claimed here is narrow and checkable: an edit
 	 * stopping ONE module's tests is refused by the module whose tests still run, and the arms state
 	 * the rule differently, so weakening one does not weaken the other.
+	 *
+	 * <p><strong>A fourth residue shape, and it is round 12's.</strong> A surefire SELECTION in the
+	 * ROOT pom whose value removes BOTH guards from the run is refused by nothing that runs — the
+	 * refusal is written in the very tests the selection drops. Measured on this branch, JDK 21:
+	 * {@code <surefire.excludes>**}{@code /JavadocReference*Test.java</surefire.excludes>} in the root
+	 * {@code <properties>} gives exit 0 with {@code grep -c JavadocReference} over the whole log zero,
+	 * and {@code <groups>eval</groups>} there gives exit 0 with both modules printing
+	 * {@code Tests run: 0}. What the refusal DOES buy was measured too, in the two directions it
+	 * reaches: a root-pom selection whose value leaves the guards running is exit 1 and named — that
+	 * is {@code surefire.excludes}, {@code surefire.includes}, {@code surefire.excludesFile} and
+	 * {@code surefire.includesFile}, each measured — and a selection in a CHILD pom is reported by the
+	 * module whose tests still run, {@code <groups>eval</groups>} in {@code api/pom.xml} giving exit 1
+	 * from {@code JavadocReferenceOmodCorpusTest} with api running no tests at all.
 	 *
 	 * <p>An arm reading api's {@code target/surefire-reports} to check that the OTHER module's guard
 	 * actually ran was considered and declined: it covers exactly the case the cross-read POM arm
@@ -1667,29 +1791,10 @@ public class JavadocReferenceGuardTest {
 					+ "entry gave exit 1 with this class reporting the <configuration> child as unaccounted "
 					+ "for. The one failure direction this class refuses");
 		}
-		for (String silencing : Arrays.asList("<skipTests>true</skipTests>", "<skip>true</skip>",
-				"<skipExec>true</skipExec>", "<testFailureIgnore>true</testFailureIgnore>",
-				"<excludes><exclude>**/JavadocReferenceOmodCorpusTest.java</exclude></excludes>",
-				"<includes><include>**/DateFormatUtilTest.java</include></includes>",
-				"<test>DateFormatUtilTest</test>", "<groups>eval</groups>",
-				"<excludesFile>src/test/resources/exclusions.txt</excludesFile>",
-				"<includesFile>src/test/resources/inclusions.txt</includesFile>")) {
-			String configured = "<plugin><artifactId>" + SUREFIRE_PLUGIN + "</artifactId><configuration>"
-					+ silencing + "</configuration></plugin>";
-			String inAnExecution = "<plugin><artifactId>" + SUREFIRE_PLUGIN + "</artifactId><executions>"
-					+ "<execution><id>default-test</id><configuration>" + silencing
-					+ "</configuration></execution></executions></plugin>";
-			for (String refusable : Arrays.asList(configured, inAnExecution)) {
-				if (surefireParametersSilencingACheck(parseXml(refusable)).isEmpty()) {
-					violations.add("a surefire configuration carrying " + silencing + " is not refused ("
-							+ refusable + "). Each of these either stops a module's checks running or discards "
-							+ "their verdict, and an execution's own <configuration> replaces the plugin's for "
-							+ "that execution, so both positions are read. This repository configures surefire "
-							+ "nowhere, so only these synthetic POMs can say so — see "
-							+ "SUREFIRE_PARAMETERS_REMOVING_TESTS");
-				}
-			}
-		}
+		// The ELEMENT form of each of these parameters, in both configuration positions, and the user
+		// PROPERTY form of each beside it, are asserted together by
+		// everySurefireParameterIsRefusedInBothFormsMavenReadsIt — the two forms were kept in separate
+		// lists here until round 12 and disagreed three times running.
 		String surefirePinned = "<plugin><groupId>org.apache.maven.plugins</groupId><artifactId>"
 				+ SUREFIRE_PLUGIN + "</artifactId><version>3.5.5</version></plugin>";
 		List<String> pinnedRefused = unreadPluginChildrenAt(parseXml(surefirePinned), SUREFIRE_PLUGIN,
@@ -1753,6 +1858,112 @@ public class JavadocReferenceGuardTest {
 					+ "maven-surefire-plugin's descriptor declares a <properties> parameter of type "
 					+ "java.util.Properties for its provider configuration, which is why "
 					+ "declaredUnderProjectOrProfile exists");
+		}
+		assertNoViolations(violations);
+	}
+
+	/**
+	 * Every surefire parameter this class refuses as a {@code <configuration>} ELEMENT is also read in
+	 * the user-PROPERTY form Maven binds it to, and neither form is refused when it is empty — asked
+	 * of the two real readers over a POM per form, with the pairs spelled out as LITERALS in
+	 * {@link #SUREFIRE_PARAMETER_FORMS_AS_LITERALS} rather than iterated off the constants they exist
+	 * to hold.
+	 *
+	 * <p><strong>It asserts the SHAPE that rounds 5, 10 and 12 each had</strong> — a parameter refused
+	 * at one of the two positions Maven answers it from and unread at the other, each time found by a
+	 * reviewer and not by the build. Round 5's was the compiler's {@link #FAIL_ON_ERROR_PROPERTY},
+	 * which {@link #compilerUserPropertyOverrides} reads and this check does not reach; round 10's
+	 * were {@code test} and {@link #TEST_FAILURE_IGNORED_PROPERTY}; round 12's were five surefire
+	 * SELECTION properties, and {@code surefire.excludes} in the root {@code <properties>} took both
+	 * guards out of the reactor at exit 0 with {@code grep -c JavadocReference} over the whole log
+	 * zero. What produced the recurrence was that the element side and the property side were separate
+	 * hand-kept lists, so nothing in the repository could notice them disagreeing. The pairing is one
+	 * map entry now ({@link #SUREFIRE_PARAMETERS_SELECTING_TESTS}) and this check drives both readers
+	 * over it, so deleting an entry reddens here instead of reopening the position quietly.
+	 *
+	 * <p><strong>What reading the property buys, measured, and what it does not.</strong> On this
+	 * branch, JDK 21, from the ROOT {@code <properties>}:
+	 * {@code <surefire.excludes>**}{@code /DateFormatUtilTest.java</surefire.excludes>} now gives
+	 * {@code mvn -o clean install} exit 1 with {@link #noPomEditTakesAModuleOutOfTheTestBuild} naming
+	 * it, and so do {@code surefire.includes}, {@code surefire.excludesFile} and
+	 * {@code surefire.includesFile}. It does NOT close a selection whose value removes BOTH guards
+	 * from the run — that one is refused by nothing that runs, which is disclosed in
+	 * {@link #noPomEditTakesAModuleOutOfTheTestBuild} rather than covered here, and the same is true
+	 * of {@code <groups>} in the ROOT pom, where nothing runs at all. In a CHILD pom {@code groups}
+	 * IS reported, by the module whose tests still run: {@code <groups>eval</groups>} in
+	 * {@code api/pom.xml} gave exit 1 with api running no tests and
+	 * {@code JavadocReferenceOmodCorpusTest.noPomEditTakesAModuleOutOfTheTestBuild} naming the entry.
+	 *
+	 * <p><strong>Mutate it rather than trust it.</strong> Mistype the {@code excludes} entry's
+	 * property in {@link #SUREFIRE_PARAMETERS_SELECTING_TESTS} and this check names that pair on the
+	 * property leg, twice — once per {@code <properties>} position — while every other check in this
+	 * class stays green — measured with only the two guard classes selected on the command line, so it
+	 * says nothing about the rest of either suite — which is the state round 12 shipped in. Delete
+	 * the entry outright and the element leg goes with it, since the element reader iterates the same
+	 * keys.
+	 *
+	 * <p><strong>What it does not assert.</strong> That a pair is the binding surefire really
+	 * declares: the pairs were read off {@code META-INF/maven/plugin.xml} in the pinned plugin jar,
+	 * recorded in {@link #SUREFIRE_PARAMETERS_SELECTING_TESTS}, and nothing re-reads that descriptor
+	 * at build time — a mistyped property name is read out of a POM that will never set it, and this
+	 * check passes. And it says nothing about a parameter neither list names, which
+	 * {@link #SUREFIRE_PLUGIN_CHILDREN_READ_HERE} permits deliberately and
+	 * {@link #noPomEditTakesAModuleOutOfTheTestBuild} discloses.
+	 */
+	@Test
+	public void everySurefireParameterIsRefusedInBothFormsMavenReadsIt() throws Exception {
+		List<String> violations = new ArrayList<String>();
+		for (String[] forms : SUREFIRE_PARAMETER_FORMS_AS_LITERALS) {
+			String parameter = forms[0];
+			String property = forms[1];
+			String element = "<" + parameter + ">" + forms[2] + "</" + parameter + ">";
+			String configured = "<plugin><artifactId>" + SUREFIRE_PLUGIN + "</artifactId><configuration>"
+					+ element + "</configuration></plugin>";
+			String inAnExecution = "<plugin><artifactId>" + SUREFIRE_PLUGIN + "</artifactId><executions>"
+					+ "<execution><id>default-test</id><configuration>" + element
+					+ "</configuration></execution></executions></plugin>";
+			for (String refusable : Arrays.asList(configured, inAnExecution)) {
+				if (surefireParametersSilencingACheck(parseXml(refusable)).isEmpty()) {
+					violations.add("a surefire configuration carrying " + element + " is not refused ("
+							+ refusable + "). Each of these either stops a module's checks running, narrows the "
+							+ "run to something else, or discards the verdict, and an execution's own "
+							+ "<configuration> replaces the plugin's for that execution, so both positions are "
+							+ "read. This repository configures surefire nowhere, so only a synthetic POM can "
+							+ "say so — see SUREFIRE_PARAMETERS_REMOVING_TESTS and "
+							+ "SUREFIRE_PARAMETERS_SELECTING_TESTS");
+				}
+			}
+			String own = "<project><properties><" + property + ">" + forms[3] + "</" + property
+					+ "></properties></project>";
+			String inAProfile = "<project><profiles><profile><properties><" + property + ">" + forms[3]
+					+ "</" + property + "></properties></profile></profiles></project>";
+			for (String readable : Arrays.asList(own, inAProfile)) {
+				if (testDefeatingPropertiesIn(parseXml(readable)).isEmpty()) {
+					violations.add("<" + parameter + "> is refused as a surefire ELEMENT while <" + property
+							+ ">, the user property maven-surefire-plugin binds it to, is read by nothing ("
+							+ readable + "). That asymmetry is the shape of rounds 5, 10 and 12 of this "
+							+ "change's review: the element refusal is walked round from the position beside "
+							+ "it, in three words, and no check reports it. Measured on this branch, JDK 21, "
+							+ "for this family: <surefire.excludes>**/DateFormatUtilTest.java in the ROOT pom "
+							+ "was exit 0 with nothing reported while the property went unread, and is exit 1 "
+							+ "naming the entry once it is read. Add the pair to "
+							+ "SUREFIRE_PARAMETERS_SELECTING_TESTS, whose keys the element reader iterates and "
+							+ "whose values the property reader does");
+				}
+			}
+			String emptyElement = "<plugin><artifactId>" + SUREFIRE_PLUGIN + "</artifactId><configuration>"
+					+ "<" + parameter + "></" + parameter + "></configuration></plugin>";
+			List<String> elementRefused = surefireParametersSilencingACheck(parseXml(emptyElement));
+			String emptyProperty = "<project><properties><" + property + "></" + property
+					+ "></properties></project>";
+			List<String> propertyRefused = testDefeatingPropertiesIn(parseXml(emptyProperty));
+			if (!elementRefused.isEmpty() || !propertyRefused.isEmpty()) {
+				violations.add("an EMPTY <" + parameter + "> element or <" + property + "> property is "
+						+ "refused (it read " + elementRefused + " and " + propertyRefused + "). Neither takes "
+						+ "anything away — an empty selection selects nothing and an empty flag is not true — "
+						+ "so refusing either reddens a POM that builds exactly as this one does, which is the "
+						+ "one failure direction this class refuses");
+			}
 		}
 		assertNoViolations(violations);
 	}
@@ -1822,8 +2033,11 @@ public class JavadocReferenceGuardTest {
 	/**
 	 * Every {@code <properties>} entry in one POM that stops that module's checks asserting anything,
 	 * described — by THREE mechanisms, and the entry says which. {@link #TEST_SKIP_PROPERTIES} stop
-	 * the tests being compiled or run, {@link #TEST_FILTER_PROPERTY} narrows the run to something
-	 * else, and {@link #TEST_FAILURE_IGNORED_PROPERTY} lets them run and discards the verdict. Read
+	 * the tests being compiled or run, the user-property side of
+	 * {@link #SUREFIRE_PARAMETERS_SELECTING_TESTS} narrows the run to something else, and
+	 * {@link #TEST_FAILURE_IGNORED_PROPERTY} lets them run and discards the verdict. The selection
+	 * family is iterated off the same map its ELEMENT refusal is, which is that constant's own rule
+	 * and why round 12's asymmetry is no longer maintained by hand at this position. Read
 	 * through {@link #declaredUnderProjectOrProfile} for {@link #compilerUserPropertyOverrides}'
 	 * reason, so a surefire provider {@code <properties>} parameter is not mistaken for the project's
 	 * own.
@@ -1839,14 +2053,21 @@ public class JavadocReferenceGuardTest {
 							+ "plugin. See TEST_SKIP_PROPERTIES");
 				}
 			}
-			Element filter = directChild(properties, TEST_FILTER_PROPERTY);
-			if (filter != null && !filter.getTextContent().trim().isEmpty()) {
-				where.add("<properties> sets <" + TEST_FILTER_PROPERTY + ">"
-						+ filter.getTextContent().trim() + "</" + TEST_FILTER_PROPERTY + ">, which is "
-						+ "surefire's own test FILTER: this module then runs the tests it names and no others, "
-						+ "so its checks are gone while its surefire still prints a Tests run: line. Measured — "
-						+ "one such entry in api/pom.xml gave exit 0 with api running 5 tests and omod's 127 "
-						+ "green. See TEST_FILTER_PROPERTY");
+			for (Map.Entry<String, String> selection : SUREFIRE_PARAMETERS_SELECTING_TESTS.entrySet()) {
+				Element declared = directChild(properties, selection.getValue());
+				if (declared == null || declared.getTextContent().trim().isEmpty()) {
+					continue;
+				}
+				where.add("<properties> sets <" + selection.getValue() + ">"
+						+ declared.getTextContent().trim() + "</" + selection.getValue() + ">, the user "
+						+ "property maven-surefire-plugin binds its <" + selection.getKey() + "> parameter to: "
+						+ "this module then runs whatever that selection leaves and no others, so its checks "
+						+ "are gone while its surefire still prints a Tests run: line. Measured — <"
+						+ TEST_FILTER_PROPERTY + "> in api/pom.xml gave exit 0 with api running 5 tests and "
+						+ "omod's suite green, before it was refused. A value that removes BOTH guards from "
+						+ "the run is a different case this refusal does not reach at all, since neither guard "
+						+ "then runs to report it: see noPomEditTakesAModuleOutOfTheTestBuild. See "
+						+ "SUREFIRE_PARAMETERS_SELECTING_TESTS");
 			}
 			if (isTrue(directChild(properties, TEST_FAILURE_IGNORED_PROPERTY))) {
 				where.add("<properties> sets <" + TEST_FAILURE_IGNORED_PROPERTY + ">true</"
@@ -1889,7 +2110,7 @@ public class JavadocReferenceGuardTest {
 				where.add(position + " sets <" + parameter + ">true</" + parameter + ">");
 			}
 		}
-		for (String parameter : SUREFIRE_PARAMETERS_SELECTING_TESTS) {
+		for (String parameter : SUREFIRE_PARAMETERS_SELECTING_TESTS.keySet()) {
 			Element declared = directChild(configuration, parameter);
 			if (declared != null && !declared.getTextContent().trim().isEmpty()) {
 				where.add(position + " sets <" + parameter + ">, which decides WHICH tests run");

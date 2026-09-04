@@ -3320,11 +3320,11 @@ Every figure produced by driving production code — `DdiDrugReferenceSource.par
 
 ## Decision 50: An unmapped order's codes are narrowed to the presentation the chart records
 
-**Status: Accepted** (August 2026) — implemented, issue [#234](https://github.com/openmrs/openmrs-module-chartsearchai/issues/234). Amends [Decision 31](#decision-31-one-shared-class-choice-for-both-arms)'s first rejected alternative.
+**Status: Accepted** (August 2026) — implemented, issue [#234](https://github.com/openmrs/openmrs-module-chartsearchai/issues/234). Amends [Decision 31](#decision-31-name-the-class-that-explains-the-relationship-not-the-first-one-shared)'s first rejected alternative.
 
 ### Context
 
-[#228](https://github.com/openmrs/openmrs-module-chartsearchai/issues/228) gave the duplicate-therapy class arm a second leg, so it reaches an active order the concept dictionary mapped to no ATC code by resolving the order's NAME against the reference dataset. That left the two legs comparing on two different authorities. A dictionary-**mapped** order is compared on the one code the dictionary published for its concept — a specific presentation. An **unmapped** one is compared on every code the dataset files its substance under, which covers every route that substance is marketed as. `DrugSafetyValidator.sharedClass` prefers a subgroup that is not locally applied ([Decision 31](#decision-31-one-shared-class-choice-for-both-arms), issue #161), so the systemic one always won.
+[#228](https://github.com/openmrs/openmrs-module-chartsearchai/issues/228) gave the duplicate-therapy class arm a second leg, so it reaches an active order the concept dictionary mapped to no ATC code by resolving the order's NAME against the reference dataset. That left the two legs comparing on two different authorities. A dictionary-**mapped** order is compared on the one code the dictionary published for its concept — a specific presentation. An **unmapped** one is compared on every code the dataset files its substance under, which covers every route that substance is marketed as. `DrugSafetyValidator.sharedClass` prefers a subgroup that is not locally applied ([Decision 31](#decision-31-name-the-class-that-explains-the-relationship-not-the-first-one-shared), issue #161), so the systemic one always won.
 
 The reported consequence: an unmapped `Hydrocortisone cream 1%` was named as a co-medication in an `H02AB` systemic-corticosteroid duplicate-therapy chip, while the same order mapped to `D07AA02` correctly says nothing. Mapping an order **more** correctly made the module quieter, and the chip an implementer saw was the wrong one of the two.
 
@@ -3351,7 +3351,7 @@ Measured impact per site over the shipped knowledge base (substances filed there
 
 ### The question is asked of the SUBSTANCE, over every order that names it
 
-A partner is keyed on `DrugReference.substanceGroupKey()`, so two orders of one substance are ONE co-medication ([Decision 31](#decision-31-one-shared-class-choice-for-both-arms)'s neighbour, issue #186) and `alreadyACoMedication` skips the second before its terms are ever read. Resolving the narrowing from the order that reached the partner first therefore let `OrderService`'s list order decide the classification for both. Measured through the real `validate` over `ddi-contra-route-variants.json`, a patient on an unmapped `Hydrocortisone cream 1%` recorded `Topical` **and** an unmapped `Hydrocortisone 20mg tablet` recorded `Oral administration`, asked about dexamethasone: cream first raised nothing, tablet first raised the `H02AB` chip. The patient is on systemic hydrocortisone in both.
+A partner is keyed on `DrugReference.substanceGroupKey()`, so two orders of one substance are ONE co-medication ([Decision 31](#decision-31-name-the-class-that-explains-the-relationship-not-the-first-one-shared)'s neighbour, issue #186) and `alreadyACoMedication` skips the second before its terms are ever read. Resolving the narrowing from the order that reached the partner first therefore let `OrderService`'s list order decide the classification for both. Measured through the real `validate` over `ddi-contra-route-variants.json`, a patient on an unmapped `Hydrocortisone cream 1%` recorded `Topical` **and** an unmapped `Hydrocortisone 20mg tablet` recorded `Oral administration`, asked about dexamethasone: cream first raised nothing, tablet first raised the `H02AB` chip. The patient is on systemic hydrocortisone in both.
 
 `DrugSafetyValidator.codesForThisSubstancesPresentations` asks it of the substance instead, over every dictionary-unmapped order that names it. **One presentation this module cannot EXPRESS declines for the whole substance**, rather than the union of the sites the others name — and the arrangement that pins that is a second order recording a bare dose form or nothing at all, not one recording `Oral administration`, which `ROUTES_OF_ENTRY` refuses a step earlier: the orders are presentations of one drug the patient is on, so an order this module cannot place is a presentation it cannot rule out. Failing the other way would let a topical cream silence the tablet beside it. Where every such order is one the data can express, the narrowing is the union of their sites.
 
@@ -3375,7 +3375,7 @@ Absence is not enough where a systemic route's recorded name **contains** a site
 
 - **Suppress the co-medication when the module cannot attribute the route.** That would silence every unmapped order of the 157 substances the shipped knowledge base files on both sides of `isLocallyAppliedAtcCode`, on no positive evidence, in the direction a safety net must not fail. Declining leaves today's answer instead, and this rule can only ever remove codes, never a partner.
 - **Read the order's NAME for the site.** `UnmappedOrderClassPartnerTest.thePartnerIsNamedByTheRowTheORDERRecords` pins a chip for an order literally named `Hydrocortisone (topical)`, and a drug name carries a presentation word for many reasons. The narrowing is decided by what the chart RECORDS as the administration, and that case is untouched.
-- **Apply it inside `sharedClass`.** That method compares two code sets and has four callers; the narrowing belongs where an order is turned into codes, not where codes are compared. Applying it there would use the same evidence twice and once out of reach of the order it came from — and would still leave the question-driven half of that arm choosing by another rule, which is what [Decision 31](#decision-31-one-shared-class-choice-for-both-arms) rejected route-matching for and still holds.
+- **Apply it inside `sharedClass`.** That method compares two code sets and has four callers; the narrowing belongs where an order is turned into codes, not where codes are compared. Applying it there would use the same evidence twice and once out of reach of the order it came from — and would still leave the question-driven half of that arm choosing by another rule, which is what [Decision 31](#decision-31-name-the-class-that-explains-the-relationship-not-the-first-one-shared) rejected route-matching for and still holds.
 
 ### Trade-offs
 
@@ -5852,9 +5852,10 @@ the gate was open, which is the only property they share:
   other module's guard actually ran was also declined: it covers only the case the cross-read POM arm
   already covers, cannot reach the residue below, and would make a guard depend on which modules a
   given `-pl` invocation built.
-  **The residue, stated because two absolutes have now been falsified in consecutive rounds** — "no POM
-  edit can silence it" in the omod check's class javadoc, and this decision's own "the consequence of a
-  fourth position is bounded". A POM can still remove test execution from EVERY module at once: an
+  **The residue, stated because every absolute published about this change has been falsified by a
+  later round** — "no POM edit can silence it" in the omod check's class javadoc, this decision's own
+  "the consequence of a fourth position is bounded", and its QUIET enumeration, which round 12
+  falsified. A POM can still remove test execution from EVERY module at once: an
   `<executions>` entry in the ROOT pom's `<build><plugins>`, which children inherit, or a test-skip
   property in the root `<properties>`. Nothing written in a test survives that, because no test runs;
   both were measured at exit 0 with BUILD SUCCESS, and what that one costs the person doing it is every
@@ -5872,7 +5873,7 @@ the gate was open, which is the only property they share:
   run` is the wrong string to grep a log for when checking whether the gate ran — which is exactly
   what the falsified sentence invited. **That cost sentence was then published as the
   cost of the residue, and round 10 falsified it too**: the family is wider than the shapes it was
-  measured on, and two of its members leave the test total intact. Do not write a third absolute in
+  measured on, and two of its members leave the test total intact. Do not write another absolute in
   place of it, and do not write a single characteristic cost either — the round-10 bullet below carries
   what was measured and which channel each shape is loud on.
 
@@ -5925,7 +5926,9 @@ the gate was open, which is the only property they share:
   (iii) **Surefire's own `test` FILTER property was not in either arm's list.** Measured:
   `<properties><test>DateFormatUtilTest</test></properties>` in `api/pom.xml` — `mvn -o clean install`
   exit 0, BUILD SUCCESS, api's surefire printing `Tests run: 5` with `JavadocReferenceGuardTest` not
-  among them, and omod's whole 127-test suite green. With the api guard out, the position the omod arm
+  among them, and omod's whole suite green (its SIZE was published here and round 12 moved it by
+  adding a check, which is the same lesson bullet (iv) records about a failure count). With the api
+  guard out, the position the omod arm
   deliberately does not read — the CONTENTS of the managed `<compilerArgs>` — is held by nothing, so
   one added `<arg>` silences doclint for the whole reactor and a dead pointer in `api/src/main/java`
   stands in a build where BOTH modules report tests running. It is refused by the module whose tests
@@ -5945,15 +5948,46 @@ the gate was open, which is the only property they share:
   verdict and the other module reddens, which is what
   the refusal buys; in the root pom the refusal is reported into a build that exits 0 anyway, and what
   is left is the `Failures:` line it cannot suppress. Refused and disclosed, both.
+  (v) **Round 12: the ELEMENT/PROPERTY asymmetry, which is what rounds 5 and 10 had been too, and the
+  generator that produced all three.** Both arms refused surefire's selection parameters as elements —
+  `test`, `includes`, `includesFile`, `excludes`, `excludesFile`, `groups` — while reading only five
+  names in property form, so the five bindings surefire declares for the rest were read by nothing.
+  The bindings, taken from `META-INF/maven/plugin.xml` in the resolved `maven-surefire-plugin-3.5.5`
+  jar rather than from documentation: `excludes → surefire.excludes`,
+  `includes → surefire.includes`, `excludesFile → surefire.excludesFile`,
+  `includesFile → surefire.includesFile`, `groups → groups`, `test → test`. `excludedGroups` stays out
+  for the reason bullet (ii) gives. **The fix is the generator and not the five names.** Rounds 5, 10
+  and 12 were one defect three times because the element side and the property side were separate
+  hand-kept lists, so nothing in the repository could see them disagree; the pairing is now one map
+  entry per parameter — `SUREFIRE_PARAMETERS_SELECTING_TESTS` in the api arm, whose keys the element
+  reader iterates and whose values the property reader does, and
+  `SUREFIRE_PARAMETERS_DEFEATING_CHECKS` in the omod arm, from which `TEST_DEFEATING_PROPERTIES` is
+  DERIVED — and `everySurefireParameterIsRefusedInBothFormsMavenReadsIt`, one per arm, drives both
+  real readers over the pairs written out as LITERALS. Literals rather than the map, deliberately:
+  derived, the check could not redden on the entry deleted from the map, which is the mutation it
+  exists for. Mutate it — mistyping one map value in the api arm reddens that check on the property
+  leg, twice, one per `<properties>` position, with every other check in that class green (the build
+  stops at api, so what the omod suite would have done is unmeasured); deleting the entry in the omod
+  arm reddens it on both legs, with the api-side guard's own checks green beside it. Both mutations
+  were run with only the two guard classes selected on the command line, so neither says anything
+  about the rest of either suite. Measured, JDK 21, root `<properties>`, each now exit 1 and
+  named by `noPomEditTakesAModuleOutOfTheTestBuild`: `<surefire.excludes>**/DateFormatUtilTest.java`,
+  `<surefire.includes>**/JavadocReference*Test.java`, and `surefire.excludesFile` /
+  `surefire.includesFile` pointing at a real pattern file. `<groups>eval</groups>` in the root pom
+  runs no test at all, so nothing reports it there; in `api/pom.xml` it is exit 1 from the omod arm
+  with api running no tests, which is that arm's whole reason. **What reading the property does NOT
+  reach** is a selection whose value removes both guards from the run — the LOUD/QUIET bullet below
+  carries that, and it is the reason this decision's QUIET enumeration had to be corrected.
 - **The disclosure is generalised rather than extended by one more sentence, and that is round 10's
-  main change.** Six consecutive rounds each found a position the round before had not read, and two
-  absolute claims were falsified in consecutive rounds, so the honest statement is not a longer list.
+  main change.** Every round so far has found a position the round before had not read, and every
+  absolute published here has been falsified by a later round, so the honest statement is not a
+  longer list.
   What the two guards DO: they make the flag's presence, what the declared arguments actually do
   (asked of the compiler), the plugin version that has to honour them, and the assertion that each
   module's tests are in the build at all checkable from two modules that state the rules differently —
   so one edit rarely defeats both. What they do NOT do: enumerate the positions from which Maven can
-  alter javac's arguments or take a module's tests out of the build. **That is measured, six rounds
-  running, rather than asserted.** What an edit can still achieve, and on which channel it shows —
+  alter javac's arguments or take a module's tests out of the build. **That is measured, every round
+  so far, rather than asserted.** What an edit can still achieve, and on which channel it shows —
   LOUD: where `failOnError` is what was turned off the doclint error itself is still printed
   (`[ERROR] ... reference not found`); `maven.test.failure.ignore` leaves `Tests run: N, Failures: M`
   printed beside exit 0, on BOTH modules' count lines, from the three checks named in bullet (iv)
@@ -5961,10 +5995,24 @@ the gate was open, which is the only property they share:
   total drops to nothing — and what it prints instead is `Tests are skipped.` under each module's
   surefire banner for the PROPERTY spelling, and no surefire output at all for the `<executions>`
   spelling. **Not `No tests to run`, which this list claimed for a round.** That string belongs to
-  round 9's child-pom shape, which is refused, so it is the wrong thing to grep a log for. QUIET: a
-  surefire parameter nobody here has thought of inside the `<configuration>` now permitted; anything
-  Maven reads that is not one of these POMs — a `settings.xml` profile, the command line,
-  `MAVEN_OPTS`, a committed `.mvn/maven.config`.
+  round 9's child-pom shape, which is refused, so it is the wrong thing to grep a log for. QUIET:
+  anything Maven reads that is not one of these POMs — a `settings.xml` profile, the command line,
+  `MAVEN_OPTS`, a committed `.mvn/maven.config`; a surefire parameter neither arm names, inside the
+  `<configuration>` now permitted; **and a surefire SELECTION whose value removes BOTH guards from the
+  run, which is a parameter both arms DO refuse, set inside one of these POMs.** That last is round
+  12's finding and it falsified this enumeration, which had said the quiet residue was the two items
+  before it — a third absolute of the kind this decision's own closing instruction forbids. A guard
+  cannot report an edit that stops it running. Measured on this head, JDK 21:
+  `<surefire.excludes>**/JavadocReference*Test.java</surefire.excludes>` in the root `<properties>`
+  gives `mvn -o clean install` exit 0, BUILD SUCCESS, `grep -c JavadocReference` over the whole log
+  ZERO, and a reactor test total short by only the guards' own tests — which reads as an ordinary
+  green build, not as the total dropping; `<groups>eval</groups>` there gives exit 0 with
+  `Tests run: 0` printed for both modules instead. **Neither reinstates #262's defect on its own**:
+  the `<arg>` is still on javac, and that same exclusion with a dead pointer planted in
+  `api/src/main/java` gives exit 1 with `reference not found` printed. What it removes is the guard on
+  the CONTENTS of the managed `<compilerArgs>`, so one further `<arg>` there is the second edit that
+  silences doclint — two quiet edits and not one, which is the accurate form of the failure mode round
+  12 reported.
   **A child declaration pinning a version these files cannot evaluate was in that QUIET list, and it
   is not quiet.** `versionFloorViolationsAt` is silent on it, deliberately — bullet (i) above says why
   — but two other checks are not. Measured on this head, JDK 21:
@@ -6046,15 +6094,23 @@ Japanese or Chinese the match failed on a perfectly clean tree.
   `owasp-dependency-check` CVE scan, the nightly `build-docker` image publish and the
   `build-standalone` zip all run Maven, so all three fail at their compile step. Same class of failure
   the change intends, on jobs whose red X says nothing about their subject.
-- **− The exposure to querystore is real but not the one to reason about first.** `api/src` carries
-  member-level pointers into `querystore-api:1.0.0-SNAPSHOT` (a `provided` dependency), all in
-  `QueryStoreChartBuilder`: `QueryStoreService#getPatientChart(String)`,
-  `QueryStoreService#searchByPatient` and its three-argument overload, and
-  `QueryDocument#getMetadata()`. Every one of those members is also CALLED, so a plain upstream rename
-  already broke this module's compile before #262. What is genuinely new is a **signature-only**
-  change — a parameter type widened, an overload added — where the call site still compiles and
-  `{@link QueryStoreService#searchByPatient(String, String, int)}` no longer resolves. Verified by
-  renaming one link's target: `BUILD FAILURE` at `default-compile`.
+- **− The exposure to a SNAPSHOT dependency is real but not the one to reason about first, and it is
+  not only querystore.** `api/src` carries member-level pointers into
+  `querystore-api:1.0.0-SNAPSHOT` (a `provided` dependency), all in `QueryStoreChartBuilder`:
+  `QueryStoreService#getPatientChart(String)`, `QueryStoreService#searchByPatient` and its
+  three-argument overload, and `QueryDocument#getMetadata()`. **Both source trees also point at
+  `openmrs-api`, which this reactor resolves at `openmrsPlatformVersion=2.9.0-SNAPSHOT`**: five
+  member-level pointers, verified by reading them — `Context#getService(Class)`,
+  `Context#getRegisteredComponents` and `Order#isActive()` in
+  `api/.../api/impl/QueryStoreChartBuilder.java`, `Daemon#runInDaemonThread` in
+  `api/.../api/impl/WarmupExecutor.java`, and `Context#requirePrivilege` in
+  `omod/.../web/rest/ChartSearchAiRestController.java`. That is a larger and more frequently moving
+  surface than querystore's, carrying exactly the same risk, and no bullet here mentioned it until
+  round 12 asked. Nothing points at a MEMBER of `openmrs-web` today. Every one of those members is
+  also CALLED, so a plain upstream rename already broke this module's compile before #262. What is
+  genuinely new is a **signature-only** change — a parameter type widened, an overload added — where
+  the call site still compiles and `{@link QueryStoreService#searchByPatient(String, String, int)}` no
+  longer resolves. Verified by renaming one link's target: `BUILD FAILURE` at `default-compile`.
 - **− Do not expect that break to surface in `build-against-querystore-head` first.** An earlier draft
   of this decision said so and it is wrong in both directions, against `build.yml`'s own comment two
   hundred lines above it. The required build resolves the last PUBLISHED snapshot while that job

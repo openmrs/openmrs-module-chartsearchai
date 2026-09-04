@@ -102,9 +102,54 @@ public class ReferenceProseFidelityTest {
 	 *  one of ITS reports. That is inert today because no canned answer below states an ATC-shaped
 	 *  token its cited records do not — the ones sliced from a real record carry only that record's
 	 *  own, and the assembled ones carry none at all. Write a literal code into any of them and the
-	 *  failure message will be about class codes.
+	 *  failure message will be about class codes. <b>That reason no longer covers every case in this
+	 *  file</b>: since issue #338's captured answer arrived here, one answer states only its record's
+	 *  own code and still trips the sibling, by stating it four times inside one parenthetical (ADR
+	 *  Decision 59's own rule 1). That case captures {@link #CHECK} instead, and says so.
 	 *  {@code ClassCodeFidelityTest} carries the same note in the other direction. */
 	private static final String PACKAGE = "org.openmrs.module.chartsearchai.api.impl";
+
+	/** The question issue #338 captured its answer on. */
+	private static final String ISSUE_338_QUESTION = "Can I give her hydrocortisone?";
+
+	/** The verbatim DDInter slice the two #338 cases read: the two rows whose shared level-4 subgroup
+	 *  raises the recorded-allergy cross-reactivity sentence that answer opens on. A slice and not the
+	 *  shipped knowledge base, because these cases read the rendered TEXT. */
+	private static final String ISSUE_338_FIXTURE =
+			"chartsearchai-test/ddi-issue338-allergy-cross-reactivity.json";
+
+	/** The allergen the slice's other row records, as a chart token. */
+	private static final String ISSUE_338_ALLERGY = "dexamethasone";
+
+	/** The opening CLAUSE of the answer issue #338 captured, word for word from the issue body — its
+	 *  own lead, its own fourfold class code, its own truncated allergen and the gloss after it. Three
+	 *  things are not the capture's: the citation marker's number, because this arrangement numbers
+	 *  its records differently; the five clauses after it, dropped because they cite records this
+	 *  arrangement does not carry; and the comma that joined this clause to the next, re-terminated
+	 *  with a full stop so the answer ends a sentence rather than trailing. That last one is not
+	 *  cosmetic in a check whose exits read sentence boundaries — the divergence is at the allergen,
+	 *  before the marker, so it is inert here, and the case below would still hold if it were not,
+	 *  because the control reports the same words with the repetition collapsed. */
+	private static final String ISSUE_338_CAPTURE =
+			"No — Hydrocortisone should not be given: Hydrocortisone is in the same ATC class "
+					+ "(H02AB, H02AB, H02AB, H02AB) as the patient's allergy to Dexamethason "
+					+ "(Dexamethasone) [353].";
+
+	private static final String ISSUE_338_CAPTURE_MARKER = "[353]";
+
+	private static final String ISSUE_338_REPEATED_CODE = "(H02AB, H02AB, H02AB, H02AB)";
+
+	/** The clause the module's own recorded-allergy cross-reactivity sentence names its allergen
+	 *  after — the anchor every #338 slice below reads, asserted as a premise before it is used. */
+	private static final String ALLERGY_TO = "allergy to ";
+
+	/** What that sentence relates the two by, and the premise that tells it from the recorded-allergy
+	 *  sentence the same arm can raise. */
+	private static final String CROSS_REACTIVITY = "cross-reactivity";
+
+	/** The answer's own opening, ahead of the stretch it reproduces. Its longest overlap with the
+	 *  record is one word, so it contributes no run of its own. */
+	private static final String LEAD = "No — it should not be given: ";
 
 	private TestableService service;
 
@@ -742,6 +787,205 @@ public class ReferenceProseFidelityTest {
 			assertTrue(warnStating(capture, "[" + finding.getIndex() + "]"),
 					"the streaming path must run the same check. Captured: " + capture.describeAll());
 		}
+	}
+
+	/**
+	 * Issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/338">#338</a>'s
+	 * captured answer, word for word to the end of its opening clause: its repeated class code and its
+	 * truncated allergen, in one sentence.
+	 * The repetition cuts this answer's agreement with the record it is about into runs below the
+	 * floor, so the check declines at its gate and states nothing about it — the residue ADR
+	 * Decision 61 records as a substitution inside a reproduction shorter than twelve words, met here
+	 * by the defect that sits earlier in the same sentence. It is not a claim about every answer
+	 * carrying both defects: one that also diverged from the record inside a long enough reproduction
+	 * elsewhere would be reported for that.
+	 *
+	 * <p>The answer is TRANSCRIBED rather than sliced out of the record at run time, because it is
+	 * the historical capture the decision is about. What holds it to the dataset is the control
+	 * below: collapse the repetition and the same words must be REPORTED, which they can only be
+	 * by reproducing the record. Let the rendered sentence drift and the control reddens.
+	 *
+	 * <p><b>The clause, against a two-row slice — which is not the whole capture against the whole
+	 * chart, and the gate differs.</b> Here nothing of the record survives at the floor, so the check
+	 * declines before comparing. On the full six-clause answer over the arrangement ADR Decision 59
+	 * describes, its sixth clause DOES reproduce one other finding's record to the floor, so the check
+	 * compares and finds no divergence — the run the truncated allergen ends being seven words, under
+	 * the floor. Two gates, one silence, and the section says which is which.
+	 *
+	 * <p>WHICH silence it is, asserted rather than assumed, as the three declining cases above do.
+	 * It captures the check's own logger and not {@link #PACKAGE}, which the other silence cases
+	 * here use: {@code ClassCodeFidelityCheck} REPORTS this answer, under Decision 59's own
+	 * repeated-code rule, so a package-wide silence assertion would fail on a sibling's correct
+	 * finding. The {@code PACKAGE} note above covers a literal code written into an answer; a code
+	 * repeated out of the record trips that check too.
+	 */
+	@Test
+	public void theCapturedAnswerOfIssue338IsBelowTheFloorAndTheSameSentenceWithoutItsRepetitionIsReported()
+			throws Exception {
+		PatientChart chart = DrugReferenceTestSupport.injectedAllergyFindingChart(ISSUE_338_FIXTURE,
+				ISSUE_338_QUESTION, Arrays.asList(ISSUE_338_ALLERGY));
+		RecordMapping record = crossReactivityFinding(chart);
+		TestableService local = newService(chart);
+		String captured = ISSUE_338_CAPTURE.replace(ISSUE_338_CAPTURE_MARKER,
+				"[" + record.getIndex() + "]");
+		// The transcribed answer is held to the record in three ways, because the control below holds
+		// only the leading stretch: spell the allergen correctly in the constant, or state the code
+		// twice instead of four times, and every assertion here still passed before these.
+		String sentence = findingSentence(record);
+		String code = parenthesisedCode(sentence);
+		String allergen = allergenNamed(sentence);
+		assertTrue(captured.contains("(" + code + ", " + code + ", " + code + ", " + code + ")"),
+				"the premise: the capture states the record's own class code four times inside one "
+						+ "parenthetical, which is defect 1. Record: " + sentence);
+		assertTrue(captured.contains(ALLERGY_TO + allergen.substring(0, allergen.length() - 1) + " ("),
+				"the premise: it names the record's allergen a letter short and glosses it, which is "
+						+ "defect 2. Record: " + sentence);
+		assertFalse(captured.contains(ALLERGY_TO + allergen),
+				"and it does not also name it in full there, or defect 2 is not in this answer");
+
+		local.setLlmProvider(answering(captured));
+		try (LogCapture capture = LogCapture.on(CHECK, Level.DEBUG)) {
+			ChartAnswer answer = local.search(patient(), ISSUE_338_QUESTION);
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"the check states nothing about the captured answer. Captured: "
+							+ capture.describeAll());
+			// And what the silence reaches a CLIENT as. Empty, not null: the check ran and named no
+			// citation. ADR Decision 59 rests a paragraph on this being what a consumer of #338's own
+			// answer would read, and Decision 74's key contract on an empty list not being a
+			// certificate — the answer here carries two defects and the list is still empty.
+			assertEquals(Collections.emptyList(), answer.getUnfaithfullyRenderedCitations(),
+					"the decline states an empty list on the response, not the absence of a measurement");
+			assertTrue(debugStating(capture, "reproduces no cited reference record"),
+					"and the repeated code leaves no run of the record at the floor, so the gate that "
+							+ "declined has to be identifiable — as it does for the three declining "
+							+ "cases above. Captured: " + capture.describeAll());
+		}
+
+		local.setLlmProvider(answering(captured.replace(ISSUE_338_REPEATED_CODE, "(H02AB)")));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			local.search(patient(), ISSUE_338_QUESTION);
+			assertTrue(warnStating(capture, "[" + record.getIndex() + "]"),
+					"the control: collapse the repetition and the same captured words ARE reported, so "
+							+ "the silence above is the floor and not this arrangement — and the answer "
+							+ "really does reproduce this record. Captured: " + capture.describeAll());
+		}
+	}
+
+	/**
+	 * And where the rest of the reproduction is faithful, the shortened name is what the report turns
+	 * on. The pair differs in nothing else: the same record sentence, reproduced to its own end both
+	 * times.
+	 *
+	 * <p><b>It demonstrates rather than discriminates.</b> The check compares whole words and has no
+	 * notion of a drug name, so nothing about the COMPARISON separates this pair from the two cases
+	 * either half resembles —
+	 * {@link #search_shouldStaySilentWhenTheAnswerReproducesTheRecordFaithfully} and
+	 * {@link #search_shouldReportAnAnswerThatSubstitutesItsOwnWordsInsideACopiedSentence}, on the
+	 * other arrangement. (The FLOOR does separate them: raise it far enough and this case reddens
+	 * while both of those stay green, because its runs are shorter than theirs. That is a fact about
+	 * this record's length, not about what the check can tell apart.) It is here because ADR
+	 * Decision 59 rests a statement on this pair — that a report from this check is not evidence a
+	 * name was mangled, while a name IS what the report turns on where the answer diverges in nothing
+	 * else — and a statement in a decision with no case behind it is one nothing re-measures.
+	 */
+	@Test
+	public void aTruncatedDrugNameDecidesTheReportWhereTheRestOfTheReproductionIsFaithful()
+			throws Exception {
+		PatientChart chart = DrugReferenceTestSupport.injectedAllergyFindingChart(ISSUE_338_FIXTURE,
+				ISSUE_338_QUESTION, Arrays.asList(ISSUE_338_ALLERGY));
+		RecordMapping record = crossReactivityFinding(chart);
+		TestableService local = newService(chart);
+		String sentence = findingSentence(record);
+		String marker = " [" + record.getIndex() + "].";
+
+		local.setLlmProvider(answering(LEAD + sentence + marker));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			local.search(patient(), ISSUE_338_QUESTION);
+			assertFalse(capture.describeAll().isEmpty(),
+					"the capture must receive the pipeline's own lines, or this passes vacuously");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"the record's own sentence reproduced whole states nothing the record does not. "
+							+ "Captured: " + capture.describeAll());
+		}
+
+		local.setLlmProvider(answering(LEAD + truncateAllergen(sentence) + marker));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			local.search(patient(), ISSUE_338_QUESTION);
+			assertTrue(warnStating(capture, "[" + record.getIndex() + "]"),
+					"shorten the allergen and nothing else, and it is reported. Captured: "
+							+ capture.describeAll());
+		}
+	}
+
+	/** The recorded-allergy CROSS-REACTIVITY finding in {@code chart} — selected by what it relates the
+	 *  two substances by, never by injection order. Defensive on this slice, which raises exactly one
+	 *  finding: dropping either conjunct leaves the whole class green today.
+	 *  It is written this way because the same arm raises a DIRECT recorded-allergy sentence that also
+	 *  carries the words "allergy to" — an allergen naming the subject row rather than the partner is
+	 *  all it takes — and a case reading a ROUTE-QUALIFIED one of those would slice a different
+	 *  sentence with every premise here still green. (For a bare one a slicing helper fails first
+	 *  instead — which one depends on the case, so the failure names the slicing rather than the
+	 *  premise either way.) */
+	private static RecordMapping crossReactivityFinding(PatientChart chart) {
+		for (RecordMapping mapping : chart.getMappings()) {
+			if (ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(mapping.getResourceType())
+					&& mapping.getText().contains(CROSS_REACTIVITY)
+					&& mapping.getText().contains(ALLERGY_TO)) {
+				assertTrue(mapping.getText().contains(DrugReferenceInjector.STRENGTH_WITHHOLD),
+						"the premise: the finding ends with the appended strength clause, which the "
+								+ "record-sentence exit keeps out of the comparison. Was: "
+								+ mapping.getText());
+				return mapping;
+			}
+		}
+		throw new IllegalStateException("the slice raised no recorded-allergy cross-reactivity finding: "
+				+ chart.getText());
+	}
+
+	/** The finding's own sentence: its detail with the record prefix and the appended clause removed.
+	 *  Sliced from the record at run time rather than transcribed, so the cases cannot drift from the
+	 *  dataset, and off the production constants rather than a second spelling of them. */
+	private static String findingSentence(RecordMapping record) {
+		String text = record.getText();
+		String detail = text.substring(0, text.indexOf(DrugReferenceInjector.STRENGTH_WITHHOLD));
+		int subject = detail.indexOf(DrugReferenceInjector.FINDING_PREFIX)
+				+ DrugReferenceInjector.FINDING_PREFIX.length();
+		// The premises are about the RECORD, not about the slice: asserting the slice is free of what
+		// this method just removed cannot fail. What can is the rendering changing shape under it —
+		// and then the case built on the slice compares an answer against a record it no longer
+		// resembles, silently.
+		assertTrue(text.startsWith(DrugReferenceInjector.FINDING_PREFIX),
+				"the premise: the record opens with the finding prefix this slices off. Was: " + text);
+		assertTrue(detail.indexOf(": ", subject) > subject,
+				"the premise: the subject label is followed by the detail this slices out. Was: " + text);
+		return detail.substring(detail.indexOf(": ", subject) + 2);
+	}
+
+	/** The token the record parenthesises — its class code, taken as the record's own text between its
+	 *  first brackets. Slicing, not a second spelling of {@code ClassCodeFidelityCheck}'s pattern:
+	 *  nothing here decides what a class code LOOKS like. */
+	private static String parenthesisedCode(String sentence) {
+		int open = sentence.indexOf('(');
+		int close = sentence.indexOf(')', open);
+		assertTrue(open > 0 && close > open, "no parenthesised code in " + sentence);
+		return sentence.substring(open + 1, close);
+	}
+
+	/** The allergen {@code sentence} names, as the record spells it. */
+	private static String allergenNamed(String sentence) {
+		int at = sentence.indexOf(ALLERGY_TO) + ALLERGY_TO.length();
+		int end = sentence.indexOf(' ', at);
+		assertTrue(at > ALLERGY_TO.length() && end > at, "no allergen named in " + sentence);
+		return sentence.substring(at, end);
+	}
+
+	/** {@code sentence} with the allergen it names shortened by its last letter — #338's own
+	 *  {@code Dexamethason} for {@code Dexamethasone}, derived from the record rather than typed. */
+	private static String truncateAllergen(String sentence) {
+		int at = sentence.indexOf(ALLERGY_TO) + ALLERGY_TO.length();
+		String allergen = allergenNamed(sentence);
+		return sentence.substring(0, at) + allergen.substring(0, allergen.length() - 1)
+				+ sentence.substring(at + allergen.length());
 	}
 
 	/** The finding's own text from its first word up to and including the first token equal to

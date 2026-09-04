@@ -3771,7 +3771,7 @@ Behaviour-neutral, and pinned rather than argued: `ActiveOrderResolutionPerPassT
 - **−** The count assertion is a tally, and a tally of one. It is stated as an invariant of a PASS rather than as a total for the request, so it does not go stale with an arm added elsewhere — but an injection path that legitimately needed a second resolution would have to say so here.
 ## Decision 59: A class-code parenthetical is checked for shape as well as membership
 
-**Status: Accepted** (August 2026) — implemented, issue [#338](https://github.com/openmrs/openmrs-module-chartsearchai/issues/338). Extends [Decision 35](#decision-35-a-class-code-in-the-answer-must-come-from-a-record-the-answer-cites).
+**Status: Accepted** (August 2026) — implemented, issue [#338](https://github.com/openmrs/openmrs-module-chartsearchai/issues/338). Extends [Decision 35](#decision-35-a-class-code-in-the-answer-must-come-from-a-record-the-answer-cites). Re-measured in September 2026 against the check issue #337 shipped in between; that measurement is [recorded below](#re-measured-after-337-the-check-that-landed-since-is-silent-on-this-issues-own-capture) and leaves every verdict here standing.
 
 ### Context
 
@@ -3819,8 +3819,176 @@ One depth walk over the answer, no model call, no I/O — the same order as the 
   Measured through the real `DdiDrugReferenceSource` parse of the shipped knowledge base and `DrugReference.displayLabel()` itself, never a re-expression of either. Two of its 2283 rows publish a label the rule fires on — `Ethinylestradiol (ethinyl estradiol)` and `Flax seed (flaxseed extract)` — and which of the two you get depends on how the head is delimited, so both readings and both rows are recorded rather than a count: taking the head as everything before the bracket and asking `containsWord` finds both; taking it as the single word before the bracket finds only the first. Either way an answer citing a chart order displaying `Ethinyl estradiol 30mcg` has the module's own correct label reported as a corruption. And of the **1840** single-token names those entries publish, **36** pairs stand in a proper-prefix relation, and they are three different things the rule cannot tell apart: spelling variants of ONE substance (`terazosin`/`terazosine`, `pramipexol`/`pramipexole`, `vasopressin`/`vasopressins`), biosimilar suffixes (`trastuzumab`/`trastuzumab-dkst` and its siblings, `denosumab` likewise), and genuinely different substances (`enalapril`/`enalaprilat`, `niacin`/`niacinamide`). A gloss over any of them is reported as a truncation. The same shape also covers the INN-versus-localized-spelling gloss (`Amoxicillin (Amoxicilline 500mg)`); `matchesOrderName`'s own javadoc records 67 localized spellings in the 3.7.1 demo dictionary.
 
   A rule that fires on the module's own output in the accusatory direction is the "cries wolf" failure Decision 35 names as worse than no check. The gloss-free variant (any answer token that is a proper prefix of a name a cited record states) is worse, not better: it reports `Amoxicillin` beside a charted `Amoxicilline`, and every one of those 36 pairs, without needing a gloss at all. #338's defect 2 is left open, and the measurement above is what it will have to get past.
-- **Detecting the dropped findings** (#338's defect 4). That is a comparison against what the answer was expected to say, which Decision 35 already rejects one level along: *"The chips are what the answer was expected to report, not what it was licensed to state; a model that legitimately declines to repeat a chip would be reported."* The nine chips still reach the clinician on the wire as `safetyWarnings`.
+  **Re-measured after #337 landed; [that measurement](#re-measured-after-337-the-check-that-landed-since-is-silent-on-this-issues-own-capture) leaves this bullet standing.**
+
+- **Detecting the dropped findings** (#338's defect 4). That is a comparison against what the answer was expected to say, which Decision 35 already rejects one level along: *"The chips are what the answer was expected to report, not what it was licensed to state; a model that legitimately declines to repeat a chip would be reported."* The nine chips a clinician does not read in the prose still reach the wire as `safetyWarnings`, so their CONTENT is not lost to a client that renders them beside the answer, which is `openmrs-esm-chartsearchai` and the same split [#201](https://github.com/openmrs/openmrs-module-chartsearchai/issues/201) took. **What is not stated anywhere is that the prose left one out**, and this issue's own follow-up comment says so — *"Nothing in the response says a finding was left out."* That is the residue this rejection accepts, not something already discharged: `interactionPairs` counts the pairwise arms' above-floor RULE pairs and is not a chip census (Decision 60), and no key reconciles the prose against the chips. Do not read the parallel with [Decision 67](#decision-67-a-question-naming-a-drug-class-is-told-so-rather-than-resolved-to-members-the-classification-cannot-honestly-supply) that an earlier draft of this bullet drew: that decision's deterministic half is `ChartAnswer.getUnresolvedDrugClass()`, a DERIVED statement published as its own key precisely because the injected record alone did not reach a client, and the analogue here would be a key stating the omission — which is the comparison Decision 35 rejects, one level along.
 - **Repairing the prose instead of reporting it.** Decision 35 point 4, unchanged: deleting or collapsing a token in a clinician-facing sentence is a larger decision than this check is licensed to make, and a silent edit is worse than a visible flag.
+
+### Re-measured after #337: the check that landed since is silent on this issue's own capture
+
+Issue [#337](https://github.com/openmrs/openmrs-module-chartsearchai/issues/337)'s
+`ReferenceProseFidelityCheck` landed after this decision. It reports an answer that reproduces a
+stretch of a cited reference record and then states different words inside the sentence it was
+reproducing — [Decision 61](#decision-61-prose-the-answer-reproduces-from-a-cited-reference-record-must-be-reproduced-faithfully)
+is canonical for it, [Decision 74](#decision-74-a-divergence-the-prose-check-finds-is-stated-on-the-response-not-only-in-the-log)
+for its published half — and it has named a mangled drug name in live prose: Decision 74 records an
+answer that reproduced a cited record and returned DDInter's `naproxen` as `naproxenic`, Decision 61's
+own measured table a drug name deleted from a recited mechanism. So it reads like defect 2's detection
+arriving by another route. Measured 2026-09-04, before any production code was written, it is not one.
+
+**The arrangement.** The real `DrugReferenceInjector.injectRecords` over the shipped knowledge base
+and the bundled cross-reactivity groups; the eight active orders the Context above counts, spelled
+from the issue's own list — Ibuprofen, Celecoxib, Dexamethasone, Diclofenac, Hydrocortisone,
+Prednisone, Budesonide, Methylprednisolone — carried BOTH as per-order structure and in the flattened
+name set, which is what `PatientClinicalContextBuilder` produces for a real chart; and the allergens
+`dexamethasone` and `hydrocortisone`. Both halves of the order clause are needed to re-derive it: the
+same eight as a flat set alone raise nine findings, and as per-order structure alone six. That
+arrangement injects five `drug_reference` records and thirteen findings, counted off the returned
+mappings on the date above — as were the nine and the six. Every one of those figures moves with the
+knowledge base and the validator, and nothing asserts any of them. The clause the captured answer opens with is about the first finding, rendered
+`Safety finding — Hydrocortisone: Hydrocortisone is in the same ATC class (H02AB) as the patient's
+allergy to Dexamethasone — possible cross-reactivity. This finding is a reason to withhold it.`
+
+**The measurement.** Every answer below was put to
+`ReferenceProseFidelityCheck.reportUnfaithfulReferenceProse` — the production predicate, never a
+re-expression of it — with the records named in the second column served to it as the answer's cited
+list, off a chart the real injector built. Serving them, rather than letting each answer's own
+citation markers select them, is what makes that column a variable; the capture's markers therefore
+play no part in the table. The four rows the two cases below pin are driven through
+`LlmInferenceService.search` instead, where `extractCitedReferences` selects from the markers, and
+agree. The first two rows are this issue's captured answer, all six clauses word for word from the
+issue body. The remaining rows are its opening clause, and the record's own sentence, against a
+two-row verbatim slice that renders the same finding byte for byte, so that one substitution at a
+time can be undone. *Reported* names the citation the check
+stated; every other row is an empty list, which is a measurement of none rather than the absence of
+one.
+
+| answer | records served | reported |
+|---|---|---|
+| the capture, six clauses | its thirteen findings | — |
+| the capture, six clauses | every reference record | — |
+| its opening clause, both defects | that finding | — |
+| its opening clause, repetition collapsed, allergen still short | that finding | that finding |
+| its opening clause, allergen in full, repetition kept | that finding | — |
+| its opening clause, both repaired, the capture's gloss kept | that finding | that finding |
+| its opening clause, both repaired, gloss dropped | that finding | — |
+| the record's own sentence reproduced to its end | that finding | — |
+| the same, allergen a letter short | that finding | that finding |
+
+Three readings. Each rests on a difference between rows; where one states which GATE a row declined
+at, or how long the runs were, that is a second measurement over the same answers and is named as one.
+
+- **The check is silent on the captured answer.** Defect 1 is why, not defect 2: it sits inside the
+  same sentence and cuts the answer's agreement with that finding into runs the floor rejects. Lower
+  `MIN_REPRODUCED_WORDS` to eight and the answer is reported, its WARN naming a run of eight words;
+  lower it to seven and a second WARN names the run the truncated allergen ends, of seven. This is the
+  residue Decision 61 records as *"A substitution inside a reproduction shorter than twelve words,
+  wherever it sits"*, met by a second defect of the same sentence rather than by a short answer. Which
+  silence it is differs between the first row and the third, and both are silences: on all six clauses
+  the check compares and finds no divergence, its sixth clause having reproduced one other finding's
+  record to the floor — the duplicate-therapy finding about active order Dexamethasone, and that one
+  alone of the eighteen reference records the chart carries; on
+  the opening clause alone nothing reaches the floor and it declines before comparing.
+  **And the defect this silence rests on did not reproduce when the issue was re-measured after
+  Decision 59's own rules shipped.** They went in with
+  [#343](https://github.com/openmrs/openmrs-module-chartsearchai/pull/343), and this issue's follow-up
+  comment re-measured the same patient and question on `main` @ `3b98b04e` across three byte-identical
+  runs: each parenthetical carries one code there, so defect 1 did not reproduce — nor did defect 2 on
+  that chart, though the same comment records the same class of truncation on another one, which the
+  third reading below is about. The mechanism recorded here is therefore a reading of THIS capture, in
+  which two defects co-occur, and not a standing property of what a current head answers. What no
+  capture supplies is defect 2 standing alone inside a long enough reproduction; that is row four,
+  built rather than captured.
+- **A report is not evidence that a drug name was mangled.** Row six spells the allergen correctly and
+  is reported all the same, for the gloss that follows it — drop that and it goes silent, which is
+  row seven. Row four is reported for the shortened allergen instead, and drops the gloss without
+  going quiet: its WARN is the same fourteen words either way. The two rows share a verdict and not a
+  cause, which is the whole of what a report tells a reader.
+- **Where the answer reproduces the record's sentence to its own end, the name is what the report
+  turns on.** The last two rows differ in one letter. The cross-reactivity-group sentence the issue's
+  follow-up comment captured on a second chart (`Ibuprof` for `Ibuprofen`) is that shape; that answer
+  is quoted with an ellipsis, so what the check would have said about it is not something this
+  repository can settle.
+
+**What is pinned.** `ReferenceProseFidelityTest.theCapturedAnswerOfIssue338IsBelowTheFloorAndTheSameSentenceWithoutItsRepetitionIsReported`
+holds rows three and four, the gate it declined at and the empty
+`unfaithfullyRenderedCitations` the decline publishes;
+`.aTruncatedDrugNameDecidesTheReportWhereTheRestOfTheReproductionIsFaithful` holds the last two. Each
+says at its own site what it does and does not discriminate. The other five rows are measurements with
+no case behind them. Both cases read the verbatim slice rather than the shipped knowledge base,
+because a case reading rendered TEXT is what `DrugReferenceTestSupport.shippedEntries()` reserves a
+slice for, and `SlicedReferenceRowProvenanceTest` is what holds that slice to the dataset field for
+field. Raising the floor far enough reddens both; the values either side of twelve are pre-existing
+cases' to hold, and do.
+
+**And the empty list reaches a client.** A decline states `[]` on Decision 74's
+`unfaithfullyRenderedCitations` — which the README's contract for that key already says is not a
+certificate of faithfulness, and rows one and two are the answer that shows why. Note beside the
+first reading that this decision's own rule 1 DOES see the captured answer, for its repeated code —
+but only in the log: `ClassCodeFidelityCheck` publishes nothing, so the response states nothing about
+either defect.
+
+**One candidate this does not refuse, named because a section called "Re-measured" is where it
+belongs.** The drug-name rule the bullet above refutes is UNALIGNED — *"any answer token that is a
+proper prefix of a name a cited record states"* — and alignment is a different predicate: inside a
+reproduction this check has already established, the question becomes whether the answer's word is a
+proper prefix of the record's word AT THAT POSITION. That removes the hits arising between an answer
+word and a name some cited record states elsewhere: the module's own
+`Ethinylestradiol (ethinyl estradiol)` label is word-identical at every position of a faithful
+reproduction, and the pairs the bullet counts are pairs of NAMES rather than of aligned positions.
+**What it does not remove is a correct answer normalising a spelling the record carries.** A
+`safety_finding` embeds this patient's own prescription display, so a record can carry `Amoxicilline`
+at the position where a correct answer writes the INN `Amoxicillin` — one of the 67 localized
+spellings `matchesOrderName`'s javadoc counts in the 3.7.1 demo dictionary — and a spelling variant of
+one substance, `terazosine` against `terazosin`, reaches the same position the same way. So alignment
+narrows the rule; it does not answer it. Nor would such a rule buy anything at the current floor,
+where a substitution inside a long enough reproduction is already reported; its whole value would be a
+floor lowered for that class alone, which Decision 61 is canonical for and does not by itself refuse.
+What it would have to get past is its own false-positive measurement and Decision 35's standing bar
+that a check which cries wolf is worse than no check. **A corpus to take that measurement over
+exists in this repository — thin, and labelled for a different question, rather than absent.** The
+captures under `eval/drift-metric/fixtures` carry each answer's `safetyWarnings` beside its
+citations, and a chip's `drug` and `detail` are two of the operands
+`DrugReferenceInjector.renderFinding` composes a `safety_finding` record from, so that record's own
+detail SENTENCE — where an answer's reproduction of a finding sits — is reconstructible from a
+capture word for word, even though no capture's citation object carries a word of the record's own
+text. Measured 2026-09-04 from a throwaway harness driving `reportUnfaithfulReferenceProse` itself
+(never a re-expression of it) over all 72 json files, each capture's reconstructed chips served as
+its own cited records: of the 42 captured answers 27 carry chips, 16 reproduce a reconstructed
+record to the floor — the population a rule scoped inside an established reproduction could fire in
+at this floor — and the check states a citation on 9 of them. Those nine are THIS check's reports
+and not a candidate rule's false alarms; what the sixteen give a candidate is somewhere to be run.
+Two things that corpus does not carry, and both are why it is thin rather than why it would be
+unavailable: a label saying whether a report on a capture is a TRUE one; and any `drug_reference`
+record's text at all, no capture carrying it — the reconstruction reaches a `safety_finding`'s
+detail, and what `renderFinding` appends after it is approximated. **What it does carry is a
+per-file provenance record, and it has to be READ rather than characterised from the shape of the
+tree** — an earlier draft of this paragraph characterised the whole of it as the drift metric's own
+perturbed answers, which its own `eval/drift-metric/fixtures/probe-safety/PROVENANCE.md` refuses in
+as many words: *"Everything not marked **CONSTRUCTED** or **COUNTERFACTUAL** below is a verbatim
+live capture — the markers are the record"*. Those markers answer a different question from this one
+— whether an ANSWER was constructed to give the drift SCORER a failure to catch, not whether it
+renders a cited record faithfully — which is why the label this measurement wants is still missing.
+What they do settle is which captures are the module's own output. The nine reported files are FOUR
+distinct answers — two of them live captures, the other two single-token edits of one of those,
+`Major` for `Moderate` and for `Minor` (measured on this head by hashing the nine files and their
+nine `answer` fields). `shipped-clean/agnes__safety-warfarin.json` (*"byte-identical"*) is one of
+the two, and four other arms carry that file unedited because each changes one other cell — five of
+the nine are one live answer. The second is `severity-overstated/steven__safety-rifabutin.json` (*"A
+**live capture**, verbatim and unedited"*). On both, the divergence is between the captured answer
+and the chip text the same file carries, and is legible without running anything: the answer writes
+`plateet` where the chip writes `platelet`, and `CYP402C8` where the chip writes `CYP450 2C8`. So
+this check's reports on the live subset are true divergences and not wolf-crying — which matters
+because `shipped-clean/`'s own contract is *"Nothing here may be flagged; if it is, the guards are
+crying wolf on the answers the module actually produces"*, a contract over the drift scorer's guards
+and not over this check, and the closest thing in the tree to the label above. What stays thin is
+the BREADTH: those nine reports are four answers about two patients, and the sixteen that reach the
+floor add one more patient. The live corpus Decision 35 used is outside this repository.
+
+What this leaves is the bullet above, unchanged: defect 2 is open, and a remedy still has that
+bullet's measurement to get past. It is recorded here because *"the prose check covers it now"* is the
+reading a maintainer arrives at from Decisions 61 and 74 alone, and the capture this issue is about is
+one the check is silent on.
 
 ### Trade-offs
 
@@ -3948,7 +4116,7 @@ The answer is tokenised only after at least one cited reference record has been 
 - **A hardcode of the reference-group pair inside this check's own gate.** The gate asks `ChartSearchAiUtils.referenceGroup` rather than a type name, so a reference type added later is covered without this class changing. Nothing guards that, and — unlike `isGroundingDemoteOnly` and `referenceSlice`, whose blindness a third type did close — a third type did **not** close this one: issue #354 added `drug_class_note` and re-measured, and the inline pair still ships green, because no case drives a record of that type through this check. What would close it is such a case, not another type. Said rather than left to be inferred.
 - **A gap read as a sentence end.** An abbreviation dot, and under `mayEndASentence` any terminator at all, reads as one. Both bit-driven conditions are SILENCING, so it can only add silence — on the record side the "reproduced a sentence and moved on" exit, on the answer side the "stopped copying" one. A misread boundary therefore costs a report and never causes one. That argument rests on two things and neither is decoration: the predicate must be the weak one (above), and the boundary bit must NOT be part of word equality — were it, a record writing `"(e.g. chloroquine"` against an answer writing `"(e.g., chloroquine"` would break the reproduction and then report two IDENTICAL words as a substitution.
 - **A divergence inside the clauses `renderFinding` appends.** The record-sentence exit covers the SEAM, not the clause's interior: a reproduction running from the detail into the clause, or one inside the thirteen words of `STRENGTH_CAUTION`, is reported. Excluding it means teaching this check where a finding's own prose ends, which is `renderFinding`'s knowledge and would be a second copy of it. The first draft of this change proposed exactly that accessor and deleted it.
-- **A substitution inside a reproduction shorter than twelve words**, wherever it sits.
+- **A substitution inside a reproduction shorter than twelve words**, wherever it sits. Issue [#338](https://github.com/openmrs/openmrs-module-chartsearchai/issues/338)'s own captured answer is an instance: a repeated class code earlier in the same sentence leaves the substitution after it in a run of seven words, so this check is silent on it — measured at [Decision 59](#re-measured-after-337-the-check-that-landed-since-is-silent-on-this-issues-own-capture), which also records why a report from this check is not evidence that a drug name was mangled.
 - **Which cited record a WARN names when two of them diverge at one answer position.** The first in citation order wins, and nothing pins that — mutating it to last-wins leaves the whole api suite green. It decides both handles the line gives a maintainer, since the line quotes no prose, and it is named here so a reader does not infer from a green suite that it was chosen. **It was a tie-break with no correctness content while this check was log-only, and [Decision 74](#decision-74-a-divergence-the-prose-check-finds-is-stated-on-the-response-not-only-in-the-log) changed that**: `Reproductions.diverged` keeps the FIRST divergence at an answer position, so where two cited records diverge at the same word the second is dropped — and that index is now one a client is shown, or rather is not. Measured on that change: two records sharing a fourteen-word prefix and diverging at one answer word produce one WARN and one published index. Collecting the statement from every divergence rather than from the position-deduped map would close it and would also change what the WARNs report, so it is recorded rather than taken.
 - **That a digit is a word character.** `Words.of` takes runs of letters AND digits, so `CYP450 3A4` and `5-HT1A` segment the way the record writes them; narrowing it to letters alone leaves the suite green. Nothing in the bundled arrangements turns on it.
 - **An elision the model marked with three ASCII dots.** The same cut written `…`, `—` or `[…]` IS reported — correctly, since issue #337's second capture is an elision and dropping *"aminoglycoside antibiotics"* out of a sentence a clinician reads is the defect whatever marks the cut — but `...` puts a terminator in the gap, which the weak gap question reads as the answer ending its sentence. So which elisions are seen depends on the glyph the model chose. Closing it means a gap question that is not silencing, and then a quotation closed with `."` is a false report again; the two cannot both be had.

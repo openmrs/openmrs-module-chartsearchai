@@ -3771,7 +3771,7 @@ Behaviour-neutral, and pinned rather than argued: `ActiveOrderResolutionPerPassT
 - **−** The count assertion is a tally, and a tally of one. It is stated as an invariant of a PASS rather than as a total for the request, so it does not go stale with an arm added elsewhere — but an injection path that legitimately needed a second resolution would have to say so here.
 ## Decision 59: A class-code parenthetical is checked for shape as well as membership
 
-**Status: Accepted** (August 2026) — implemented, issue [#338](https://github.com/openmrs/openmrs-module-chartsearchai/issues/338). Extends [Decision 35](#decision-35-a-class-code-in-the-answer-must-come-from-a-record-the-answer-cites). Re-measured in September 2026 against the check issue #337 shipped in between; that measurement is the [last section](#re-measured-after-337-the-check-that-landed-since-is-silent-on-this-issues-own-capture) and leaves every bullet below unchanged.
+**Status: Accepted** (August 2026) — implemented, issue [#338](https://github.com/openmrs/openmrs-module-chartsearchai/issues/338). Extends [Decision 35](#decision-35-a-class-code-in-the-answer-must-come-from-a-record-the-answer-cites). Re-measured in September 2026 against the check issue #337 shipped in between; that measurement is the [last section](#re-measured-after-337-the-check-that-landed-since-is-silent-on-this-issues-own-capture) and leaves every verdict below standing.
 
 ### Context
 
@@ -3844,8 +3844,8 @@ name set, which is what `PatientClinicalContextBuilder` produces for a real char
 `dexamethasone` and `hydrocortisone`. Both halves of the order clause are needed to re-derive it: the
 same eight as a flat set alone raise nine findings, and as per-order structure alone six. That
 arrangement injects five `drug_reference` records and thirteen findings, counted off the returned
-mappings on the date above; both figures move with the knowledge base and the validator, and nothing
-asserts them. The clause the captured answer opens with is about the first finding, rendered
+mappings on the date above — as were the nine and the six. Every one of those figures moves with the
+knowledge base and the validator, and nothing asserts any of them. The clause the captured answer opens with is about the first finding, rendered
 `Safety finding — Hydrocortisone: Hydrocortisone is in the same ATC class (H02AB) as the patient's
 allergy to Dexamethasone — possible cross-reactivity. This finding is a reason to withhold it.`
 
@@ -3886,9 +3886,11 @@ at, or how long the runs were, that is a second measurement over the same answer
   record past the floor — the duplicate-therapy finding about active order Dexamethasone, and that one
   alone of the eighteen reference records the chart carries; on
   the opening clause alone nothing reaches the floor and it declines before comparing.
-- **A report is not evidence that a drug name was mangled.** Rows four and six differ only in the
-  allergen's spelling and are reported alike; what they share is the gloss, words the record does not
-  carry.
+- **A report is not evidence that a drug name was mangled.** Row six spells the allergen correctly and
+  is reported all the same, for the gloss that follows it — drop that and it goes silent, which is
+  row seven. Row four is reported for the shortened allergen instead, and drops the gloss without
+  going quiet: its WARN is the same fourteen words either way. The two rows share a verdict and not a
+  cause, which is the whole of what a report tells a reader.
 - **Where the answer reproduces the record's sentence to its own end, the name is what the report
   turns on.** The last two rows differ in one letter. The cross-reactivity-group sentence the issue's
   follow-up comment captured on a second chart (`Ibuprof` for `Ibuprofen`) is that shape; that answer
@@ -3931,8 +3933,9 @@ where a substitution inside a long enough reproduction is already reported; its 
 floor lowered for that class alone, which Decision 61 is canonical for and does not by itself refuse.
 What it would have to get past is its own false-positive measurement and Decision 35's standing bar
 that a check which cries wolf is worse than no check — and that measurement cannot be taken in this
-repository: the fixture tree is structurally blind to it, which the paragraph above on this decision's
-own false-alarm rate records, and the live corpus Decision 35 used is outside it.
+repository: the captured answers under `eval/drift-metric/fixtures` carry each citation's index, type
+and uuid but none of the record's own TEXT, so nothing there can be aligned against a record at all,
+and the live corpus Decision 35 used is outside this repository.
 
 What this leaves is the bullet above, unchanged: defect 2 is open, and a remedy still has that
 bullet's measurement to get past. It is recorded here because *"the prose check covers it now"* is the

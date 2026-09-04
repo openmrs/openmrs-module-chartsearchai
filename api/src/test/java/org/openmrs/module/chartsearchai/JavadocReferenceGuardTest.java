@@ -96,8 +96,8 @@ import org.w3c.dom.NodeList;
  * {@link #noOtherCompilerConfigurationDropsTheCheck}, which is where the world is CLOSED: every
  * compiler-plugin parameter these POMs set is either read as an argument channel, refused outright,
  * or has been judged unable to carry a javac argument, and anything else reddens. That is deliberately
- * not a longer list of parameter names. Four review rounds of this change each found one more way to
- * silence the gate — the {@code maven.compiler.failOnError} user property, the
+ * not a longer list of parameter names. Rounds 5 through 8 of this change's review each found one more
+ * way to silence the gate — the {@code maven.compiler.failOnError} user property, the
  * {@code -Xdoclint/package} qualifier, four sibling argument parameters beside {@code compilerArgs},
  * and then three positions the closed world does not reach at all: a channel ENTRY not spelled
  * {@code <arg>}, a child pom's own compiler-plugin {@code <version>}, and a {@code combine.self}
@@ -109,8 +109,11 @@ import org.w3c.dom.NodeList;
  * would notice is in the build at all. Four lines unbinding one module's
  * {@code default-testCompile} took its test root out of javac AND out of the corpus check living in
  * that root, at once. Both modules' checks now read every reactor POM, so an edit stopping one
- * module's tests is refused by the module whose tests still run. Its javadoc states what a POM can
- * still do, which is the part not to paraphrase into an absolute.</li>
+ * module's tests is refused by the module whose tests still run — and round 10 found two more ways to
+ * stop them that neither arm read, surefire's own {@code test} FILTER and
+ * {@code maven.test.failure.ignore}, the first of which leaves BOTH modules printing test counts
+ * while one module's checks are gone. Its javadoc states what a POM can still do and on which
+ * channel each of those shows, which is the part not to paraphrase into an absolute.</li>
  * <li><strong>Is the corpus every module the build compiles?</strong>
  * {@link #theCorpusCoversEveryModuleTheBuildCompiles}. Both walks
  * and every POM check derive their scope from the root pom's {@code <modules>}, so a module declared
@@ -139,24 +142,50 @@ import org.w3c.dom.NodeList;
  * find that written down. It is NOT {@code missing} (a doc-coverage mandate nobody asked for) and
  * NOT {@code html}/{@code syntax}.
  *
- * <p>Its blind spots, stated because none of the three is small. <strong>The boundary below is
- * between what these POMs say and what Maven reads elsewhere, and until round 7 that boundary was
- * claimed rather than held</strong>: four of maven-compiler-plugin's five argument parameters were
- * unread, so one line INSIDE the very {@code <configuration>} this gate lives in dropped it with
- * every check here green ({@link #LIST_ARGUMENT_CHANNELS} carries the measurement). Round 8 then
- * defeated the closed world from three positions it does not cover — one line INSIDE
- * {@code <compilerArgs>}, a child pom's own {@code <version>}, and a {@code combine.self} attribute,
- * every one of them landing on {@code omod} for the structural reason the api bullet above gives. All
- * three are read now, and the completeness claim that stood here is not reinstated: what bounds the
- * next one is that each module's own source roots are compiled by a check LIVING IN THAT MODULE, whose
- * arguments are its own literals ({@link #COMPILER_CHECKS_OUTSIDE_API}), so a POM defeating the flag
- * makes these readers disagree with the build rather than leaving a module's pointers unresolved in
- * silence. <strong>Round 9 then falsified the bound as it was written, because those checks live in the
- * very test roots they guard</strong>: four lines unbinding one module's {@code default-testCompile}
- * removed the root from javac and the check from the build together, with BUILD SUCCESS and a dead
- * pointer standing. {@link #noPomEditTakesAModuleOutOfTheTestBuild} is what answers that, from BOTH
- * modules, and its javadoc states the residue rather than replacing one absolute with another. The
- * POM checks read THESE POMs —
+ * <p><strong>What these checks are worth, stated so that it can be checked.</strong> They make four
+ * things checkable, from two modules that state the rules differently: that the flag sits in an
+ * argument channel the build declares; what those arguments actually DO, asked of the compiler rather
+ * than matched as a string; that the plugin version which has to honour them is one that can; and that
+ * each module's tests are in the build at all. Both arms read every reactor POM and neither is written
+ * the way the other is, so one edit rarely defeats both, and the edits that are commonest are loud.
+ * What bounds a position going unread is also that each module's own source roots are compiled by a
+ * check LIVING IN THAT MODULE, whose arguments are its own literals
+ * ({@link #COMPILER_CHECKS_OUTSIDE_API}) — so a POM defeating the flag makes these readers disagree
+ * with the build rather than leaving a module's pointers unresolved in silence.
+ *
+ * <p><strong>What they do not do is enumerate the positions from which Maven can alter javac's
+ * arguments or take a module's tests out of the build. That is measured, not conceded</strong>: six
+ * consecutive review rounds of this change each found one more. The
+ * {@code maven.compiler.failOnError} user property (round 5); the {@code -Xdoclint/package} qualifier
+ * (6); four sibling argument parameters beside {@code compilerArgs} (7); then three at once — a
+ * channel entry not spelled {@code <arg>}, a child pom's own {@code <version>}, and a
+ * {@code combine.self} attribute (8); an {@code <executions>} entry unbinding
+ * {@code default-testCompile}, which removes a module's test root from javac and its corpus check from
+ * the build together (9); and surefire's own {@code test} FILTER property with
+ * {@code maven.test.failure.ignore} beside it (10). Rounds 7 and 8 landed on {@code omod} for the
+ * structural reason the api bullet above gives; rounds 9 and 10 landed on whichever module the edit
+ * named. <strong>Two ABSOLUTE claims were published in consecutive rounds</strong> — that no POM edit
+ * could silence the omod corpus check, and that the consequence of an unread position was bounded —
+ * and each was falsified by the next round. Do not write a third: where a sentence of that shape
+ * suggests itself, name the edit that was actually checked and stop there.
+ *
+ * <p><strong>So what a careless or determined edit can still achieve, and where it shows.</strong>
+ * LOUD, on output a maintainer sees without looking for it: where {@code failOnError} is what was
+ * turned off, the doclint error itself is still printed ({@code [ERROR] ... reference not found});
+ * {@code maven.test.failure.ignore} leaves this class's own failure printed as
+ * {@code Tests run: N, Failures: 1} and the build at exit 0; a test-skip in the ROOT pom leaves a
+ * module printing {@code No tests to run} and emits no {@code Tests run:} line for it at all, so the
+ * reactor's test total drops. QUIET: a surefire parameter nobody here has thought of, inside the
+ * {@code <configuration>} this guard now permits ({@link #SUREFIRE_PLUGIN_CHILDREN_READ_HERE}); a
+ * child declaration pinning a version these files cannot evaluate, where the floor goes unchecked
+ * ({@link #versionFloorViolationsAt}); and anything Maven reads that is not one of these POMs.
+ * <strong>The cost to whoever does it is not one characteristic thing, and a sentence here said it
+ * was</strong>: round 10's {@code <test>} filter in a child pom leaves BOTH modules printing test
+ * counts with one module's checks simply absent ({@link #TEST_FILTER_PROPERTY}), which is nothing like
+ * the reactor total going to zero. What is claimed is that the cost of silencing this gate is raised
+ * and that the common cases are loud — not that it cannot be silenced.
+ *
+ * <p>The POM checks read THESE POMs —
  * the ones {@link #poms} names — so anything ELSE Maven reads is invisible to them, in both
  * directions: a {@code settings.xml} profile, the command line, {@code MAVEN_OPTS}, and a committed
  * {@code .mvn/maven.config}, which Maven 3.3.1 and later read automatically. The boundary is the
@@ -219,7 +248,7 @@ public class JavadocReferenceGuardTest {
 	 * The direct children of a {@code maven-compiler-plugin} element that this class accounts for —
 	 * and so, by {@link #unreadPluginChildrenAt}, a closed world one level OUT from the one
 	 * {@link #PARAMETERS_CARRYING_NO_JAVAC_ARGUMENT} closes. {@code <groupId>} and
-	 * {@code <artifactId>} name the plugin, {@link #versionBelowTheFloorAt} reads the
+	 * {@code <artifactId>} name the plugin, {@link #versionFloorViolationsAt} reads the
 	 * {@code <version>}, and the children of {@code <configuration>} are the other closed world.
 	 *
 	 * <p><strong>Why one level out, and why this is not another named reader.</strong> Round 9 of this
@@ -239,36 +268,116 @@ public class JavadocReferenceGuardTest {
 			Arrays.asList("groupId", "artifactId", "version", "configuration");
 
 	/**
-	 * The direct children of a {@code maven-surefire-plugin} element this class accounts for. Shorter
-	 * than {@link #COMPILER_PLUGIN_CHILDREN_READ_HERE} by {@code <configuration>}, deliberately:
-	 * nothing here can tell which surefire parameter stops a check from running — {@code skipTests},
-	 * {@code skip}, {@code excludes}, {@code test}, {@code excludedGroups} and {@code failIfNoTests}
-	 * are six of them — so the element is REFUSED rather than judged, which is the answer
-	 * {@link #noOtherCompilerConfigurationDropsTheCheck} already gives a {@code <compilerId>} it
-	 * cannot reason about. This repository declares surefire once, at the managed entry, with a
-	 * {@code <version>} and nothing else; whoever needs to configure it says here which parameter it is
-	 * and why it leaves both modules' checks running.
+	 * The direct children of a {@code maven-surefire-plugin} element this class accounts for.
+	 * {@code <configuration>} is one of them since round 10, and what put it there is a FALSE
+	 * POSITIVE rather than a hole: the element was refused wholesale, and it is the element a real
+	 * project reaches for first — {@code argLine}, {@code forkCount}, {@code systemPropertyVariables},
+	 * {@code redirectTestOutputToFile}. Measured on this branch:
+	 * {@code <argLine>-Xmx1024m</argLine>} with
+	 * {@code <redirectTestOutputToFile>true</redirectTestOutputToFile>} at the root's managed surefire
+	 * entry gave {@code mvn -o clean test} exit 1, this class reporting the element as unaccounted
+	 * for, on a POM that takes no test out of anything. The obvious way past that red build is to
+	 * allowlist {@code <configuration>} — and with it allowlisted and nothing reading inside it, a
+	 * surefire {@code <excludes>} naming either module's check is refused by nothing at all.
+	 *
+	 * <p>So the element is permitted and its CHILDREN are judged, by
+	 * {@link #surefireParametersSilencingACheck} over
+	 * {@link #SUREFIRE_PARAMETERS_REMOVING_TESTS} and {@link #SUREFIRE_PARAMETERS_SELECTING_TESTS}.
+	 * <strong>Those two are lists of NAMES and not a closed world, and the difference is the point:</strong>
+	 * closing the world over a surefire configuration is what produced the false positive above, since
+	 * most of that parameter list is legitimate tuning. A surefire parameter nobody here has thought of
+	 * is therefore PERMITTED; {@link #noPomEditTakesAModuleOutOfTheTestBuild} says what that leaves
+	 * open and on which channel it shows.
 	 */
 	private static final List<String> SUREFIRE_PLUGIN_CHILDREN_READ_HERE =
-			Arrays.asList("groupId", "artifactId", "version");
+			Arrays.asList("groupId", "artifactId", "version", "configuration");
 
 	/**
-	 * The user properties that stop a module's tests being compiled or run, and so stop its checks
-	 * asserting anything. {@code maven.test.skip} is read by maven-compiler-plugin (as
-	 * {@code testCompile}'s {@code skip} parameter) and by surefire; {@code skipTests} and
-	 * {@code maven.test.skip.exec} are surefire's own. The ELEMENT form of each is refused by the two
-	 * child closures above — a compiler {@code <skip>} by
-	 * {@link #unreadCompilerParametersAt}, a surefire {@code <configuration>} outright — so these are
-	 * the SAME question at the other position Maven answers it from, which is the symmetry
+	 * The surefire parameters whose value {@code true} takes a check out of the build or out of the
+	 * verdict. {@code skip} and {@code skipTests} stop the goal, {@code skipExec} is the element form
+	 * of {@code maven.test.skip.exec}, and {@code testFailureIgnore} is the one that leaves every
+	 * check RUNNING and its failure non-fatal — the element form of
+	 * {@link #TEST_FAILURE_IGNORED_PROPERTY}, which carries the measurement. Refused only where the
+	 * value is {@code true}: {@code false} is the default, and refusing that would redden a POM that
+	 * builds exactly as this one does.
+	 */
+	private static final List<String> SUREFIRE_PARAMETERS_REMOVING_TESTS =
+			Arrays.asList("skip", "skipTests", "skipExec", "testFailureIgnore");
+
+	/**
+	 * The surefire parameters that decide WHICH tests run, refused wherever one carries a value at
+	 * all. Refused rather than inspected, deliberately: judging a selection would mean deciding
+	 * whether a pattern reaches two named checks in two modules, and a pattern that does not reach
+	 * them today reaches them after a rename. {@code test}, {@code includes} and {@code includesFile}
+	 * select positively, so everything they do not name is dropped; {@code excludes} and
+	 * {@code excludesFile} drop what they do name; {@code groups} restricts the run to tagged tests,
+	 * and neither module's check declares a JUnit tag, so a group INCLUSION drops both. Its
+	 * counterpart {@code excludedGroups} is absent for that same reason and not by oversight — a
+	 * group EXCLUSION cannot reach a test that is in no group. An empty element selects nothing and is
+	 * not refused.
+	 */
+	private static final List<String> SUREFIRE_PARAMETERS_SELECTING_TESTS =
+			Arrays.asList("test", "includes", "includesFile", "excludes", "excludesFile", "groups");
+
+	/**
+	 * The user properties whose value {@code true} stops a module's tests being compiled or run, and
+	 * so stops its checks asserting anything. {@code maven.test.skip} is read by
+	 * maven-compiler-plugin (as {@code testCompile}'s {@code skip} parameter) and by surefire;
+	 * {@code skipTests} and {@code maven.test.skip.exec} are surefire's own. The ELEMENT form of each
+	 * is refused beside them — a compiler {@code <skip>} by {@link #unreadCompilerParametersAt}, a
+	 * surefire {@code <skipTests>} by {@link #SUREFIRE_PARAMETERS_REMOVING_TESTS} — so these are the
+	 * SAME question at the other position Maven answers it from, which is the symmetry
 	 * {@link #FAIL_ON_ERROR_PROPERTY} records for its own parameter.
 	 *
 	 * <p>Set in a CHILD pom these take one module's tests out of the build and leave the other's
 	 * running, which is exactly {@link #COMPILER_PLUGIN_CHILDREN_READ_HERE}'s defect from a position
 	 * carrying no plugin element at all. Set in the ROOT pom they take out every module's, which is
-	 * the residue {@link #noPomEditTakesAModuleOutOfTheTestBuild} discloses rather than covers.
+	 * part of what {@link #noPomEditTakesAModuleOutOfTheTestBuild} discloses rather than covers.
+	 *
+	 * <p><strong>Two further properties do the same thing by other mechanisms and are read beside
+	 * these rather than added to them</strong>, because neither is a boolean flag:
+	 * {@link #TEST_FILTER_PROPERTY} and {@link #TEST_FAILURE_IGNORED_PROPERTY}. All three families go
+	 * through {@link #testDefeatingPropertiesIn}. <strong>Three families is not a claim that there are
+	 * three</strong> — round 10 found the first two of them missing, one round after the list was
+	 * written.
 	 */
 	private static final List<String> TEST_SKIP_PROPERTIES =
 			Arrays.asList("maven.test.skip", "maven.test.skip.exec", "skipTests");
+
+	/**
+	 * Surefire's own {@code test} user property, which is a FILTER and not a flag: any non-blank value
+	 * narrows the run to what it names, so every check it does not name is dropped. It needs a reader
+	 * of its own for exactly that reason — {@link #TEST_SKIP_PROPERTIES} are read as booleans, and
+	 * this one carries a class-name pattern, so it sat outside that list unread.
+	 *
+	 * <p>Measured on this branch, JDK 21:
+	 * {@code <properties><test>DateFormatUtilTest</test></properties>} in {@code api/pom.xml} —
+	 * {@code mvn -o clean install} exit 0, BUILD SUCCESS, api's surefire printing
+	 * {@code Tests run: 5} with this class not among them, and omod's whole 127-test suite green.
+	 * <strong>That is worse than the residue this class discloses</strong>, whose cost to the person
+	 * doing it is every {@code Tests run:} line in the reactor: here both modules report tests
+	 * running, one module's checks are simply gone, and the position the omod arm deliberately does
+	 * not read — the CONTENTS of the managed {@code <compilerArgs>} — is then held by nothing, so one
+	 * added {@code <arg>} silences doclint for the whole reactor with a dead pointer standing in
+	 * {@code api/src/main/java}.
+	 */
+	private static final String TEST_FILTER_PROPERTY = "test";
+
+	/**
+	 * Surefire's {@code maven.test.failure.ignore}, which leaves every check running and makes its
+	 * failure non-fatal. The same family at a different point of the mechanism — nothing skipped and
+	 * nothing filtered, the VERDICT discarded — and read here for the reason
+	 * {@link #FAIL_ON_ERROR_PROPERTY} is read: a guard reporting a violation into a build that exits 0
+	 * anyway has reported nothing.
+	 *
+	 * <p>Measured on this branch, JDK 21: this property in the ROOT pom's own {@code <properties>}
+	 * beside {@code <maven.compiler.failOnError>false</maven.compiler.failOnError>} —
+	 * {@code mvn -o clean install} exit 0, BUILD SUCCESS, api's surefire printing
+	 * {@code Tests run: 1870, Failures: 1} (the failure being this class reporting the failOnError
+	 * property) and omod's 127 green. It is LOUD on that {@code Failures:} line, which is why it is
+	 * disclosed as well as refused.
+	 */
+	private static final String TEST_FAILURE_IGNORED_PROPERTY = "maven.test.failure.ignore";
 
 	/**
 	 * Maven's two merge-control attributes. See {@link #mergeControlAttributesAt}, which refuses them
@@ -302,7 +411,7 @@ public class JavadocReferenceGuardTest {
 	 * A child pom declaring the plugin in its own {@code <build><plugins>} with an older
 	 * {@code <version>} overrides the managed version for that module, and such an element commonly
 	 * carries no {@code <configuration>} at all — so every other reader here returns empty for it.
-	 * {@link #versionBelowTheFloorAt} is that reader; the assertion in
+	 * {@link #versionFloorViolationsAt} is that reader; the assertion in
 	 * {@link #theArgumentsTheBuildDeclaresRefuseADeadJavadocReference} stays where it is because it
 	 * asks a second thing of the managed entry alone, that a version is pinned there at all.
 	 */
@@ -478,7 +587,7 @@ public class JavadocReferenceGuardTest {
 	 *
 	 * <p>It exists because {@link #everyJavadocReferenceInTheApiModuleResolves} runs on the api
 	 * classpath and so cannot reach any other module's sources, which left every other module's
-	 * pointers held by this class's POM readers ALONE — and four consecutive review rounds of #262
+	 * pointers held by this class's POM readers ALONE — and rounds 5 through 8 of #262's review
 	 * each found one more position from which the effective javac argument list is set that those
 	 * readers did not read, every one of them landing on {@code omod} for exactly that reason. A file
 	 * named here is required to exist, to declare a {@code @Test} and to pass {@link #REFERENCE_CHECK}
@@ -855,9 +964,11 @@ public class JavadocReferenceGuardTest {
 	 * {@link #theArgumentsTheBuildDeclaresRefuseADeadJavadocReference}, which says the flag works, and
 	 * since round 8 by a sibling of THIS check living in that module and compiling its two source roots
 	 * with arguments it chooses itself ({@link #COMPILER_CHECKS_OUTSIDE_API}). The third was added
-	 * because the first two are both POM-dependent in a way this one is not, and four review rounds
-	 * running found a further position from which a POM defeats them — every one landing on
-	 * {@code omod}, because this check is why no POM edit can reach api.
+	 * because the first two are both POM-dependent in a way this one is not, and rounds 5 through 8
+	 * each found a further position from which a POM defeats them — rounds 7 and 8 landing on
+	 * {@code omod}, because what this check LOOKS FOR is decided by its own literals rather than by a
+	 * POM. Rounds 9 and 10 then landed wherever the edit named, this check included: its arguments are
+	 * still its own, and it does not run when this module's tests are taken out of the build.
 	 *
 	 * <p><strong>What makes an error doclint's is a DIFFERENCE, never its wording.</strong> Where the
 	 * flagged compile reports errors, the same sources are compiled again WITHOUT the argument: what
@@ -931,16 +1042,21 @@ public class JavadocReferenceGuardTest {
 					+ "compiles and the whole build reports success — issue #262. See docs/adr.md, Decision 75.");
 		}
 
-		List<Integer> pinned = rootManagedCompilerPluginVersion();
-		assertTrue(!pinned.isEmpty(),
+		PinnedVersion pinned = pinnedVersion(rootManagedCompilerPlugin(), inheritedPomProperties());
+		assertTrue(!pinned.declaresNoVersion(),
 				"The root pom's <build>/<pluginManagement> entry for " + COMPILER_PLUGIN + " pins no\n"
 						+ "<version>, so the version that has to honour its <compilerArgs> is whatever Maven's\n"
 						+ "super-POM supplies and moves with the developer's Maven install. Maven ignores an\n"
 						+ "unknown plugin parameter in SILENCE, so a version predating that parameter leaves this\n"
 						+ "whole gate off with no diagnostic and every check here green — see\n"
 						+ "MINIMUM_COMPILER_PLUGIN_VERSION for the measurement.");
-		assertTrue(atLeast(pinned, MINIMUM_COMPILER_PLUGIN_VERSION),
-				"The root pom pins " + COMPILER_PLUGIN + " " + pinned + ", which is older than "
+		// A version this guard cannot evaluate is a THIRD verdict and prints as one. At this entry it is a
+		// failure, because a readable version is required here rather than merely compared; at a child
+		// declaration it is silent. PinnedVersion carries both halves of that, and why.
+		assertTrue(pinned.isEvaluable(),
+				"The root pom's managed entry " + pinned.describeTheUnreadableVersion() + ".");
+		assertTrue(pinned.clears(MINIMUM_COMPILER_PLUGIN_VERSION),
+				"The root pom pins " + COMPILER_PLUGIN + " " + pinned.describe() + ", which is older than "
 						+ MINIMUM_COMPILER_PLUGIN_VERSION[0] + "." + MINIMUM_COMPILER_PLUGIN_VERSION[1]
 						+ " — the earliest release declaring a compilerArgs parameter at all. Maven ignores an\n"
 						+ "unknown parameter in silence, so the managed <compilerArgs> below reaches javac in no\n"
@@ -989,6 +1105,19 @@ public class JavadocReferenceGuardTest {
 	private static String namedPlugin(String configuration) {
 		return "<plugin><artifactId>" + COMPILER_PLUGIN + "</artifactId><configuration>" + configuration
 				+ "</configuration></plugin>";
+	}
+
+	/**
+	 * One synthetic compiler-plugin declaration pinning the given {@code <version>}, inside a
+	 * {@code <project>} declaring the given {@code <properties>} — the shape the version pins need,
+	 * because a {@code ${...}} in a version is answered by the POM AROUND the plugin and not by the
+	 * plugin element ({@link #pinnedVersion}).
+	 */
+	private static Element pluginPinningVersion(String version, String properties) throws Exception {
+		Element pom = parseXml("<project><properties>" + properties + "</properties><build><plugins>"
+				+ "<plugin><artifactId>" + COMPILER_PLUGIN + "</artifactId><version>" + version
+				+ "</version></plugin></plugins></build></project>");
+		return (Element) pom.getElementsByTagName("plugin").item(0);
 	}
 
 	/**
@@ -1115,7 +1244,7 @@ public class JavadocReferenceGuardTest {
 	 * 8's findings were not among them.</strong> Each has a reader of its own here now: the CONTENTS of
 	 * an argument channel are read whatever the entries are spelled ({@link #elementChildren}), a
 	 * compiler-plugin {@code <version>} below the floor is refused at EVERY declaration and not only at
-	 * the managed one ({@link #versionBelowTheFloorAt}), and a Maven merge-control attribute is refused
+	 * the managed one ({@link #versionFloorViolationsAt}), and a Maven merge-control attribute is refused
 	 * outright because this check reads elements and does not model the merge
 	 * ({@link #mergeControlAttributesAt}). No claim is made that the list of positions is finished; what
 	 * bounds the next one is {@link #COMPILER_CHECKS_OUTSIDE_API}.
@@ -1143,6 +1272,7 @@ public class JavadocReferenceGuardTest {
 	@Test
 	public void noOtherCompilerConfigurationDropsTheCheck() throws Exception {
 		List<String> violations = new ArrayList<String>();
+		Map<String, String> inherited = inheritedPomProperties();
 		for (String pom : poms()) {
 			for (String where : compilerUserPropertyOverrides(pomRoot(pom))) {
 				violations.add(pom + " " + where);
@@ -1167,7 +1297,7 @@ public class JavadocReferenceGuardTest {
 							+ "testCompilerArguments unread while the gate looked green. Say which it is — add it "
 							+ "to PARAMETERS_CARRYING_NO_JAVAC_ARGUMENT, or teach javacArguments to read it");
 				}
-				for (String where : versionBelowTheFloorAt(plugin)) {
+				for (String where : versionFloorViolationsAt(plugin, inherited)) {
 					violations.add(pom + " " + where);
 				}
 				for (String where : mergeControlAttributesAt(plugin)) {
@@ -1226,9 +1356,10 @@ public class JavadocReferenceGuardTest {
 					+ interpretedParameters + "), so a correct configuration reddens — the one failure "
 					+ "direction this class refuses");
 		}
+		Map<String, String> noInheritedProperties = Collections.<String, String> emptyMap();
 		String belowTheFloor = "<plugin><artifactId>" + COMPILER_PLUGIN + "</artifactId><version>2.5.1"
 				+ "</version></plugin>";
-		if (versionBelowTheFloorAt(parseXml(belowTheFloor)).isEmpty()) {
+		if (versionFloorViolationsAt(parseXml(belowTheFloor), noInheritedProperties).isEmpty()) {
 			violations.add("a child declaration pinning " + COMPILER_PLUGIN + " below "
 					+ MINIMUM_COMPILER_PLUGIN_VERSION[0] + "." + MINIMUM_COMPILER_PLUGIN_VERSION[1]
 					+ " is not refused. That element carries no <configuration>, so every other reader here "
@@ -1242,12 +1373,66 @@ public class JavadocReferenceGuardTest {
 				+ "</version></plugin>";
 		String pinningNothing = "<plugin><artifactId>" + COMPILER_PLUGIN + "</artifactId></plugin>";
 		for (String legal : Arrays.asList(atTheFloor, pinningNothing)) {
-			List<String> refused = versionBelowTheFloorAt(parseXml(legal));
+			List<String> refused = versionFloorViolationsAt(parseXml(legal), noInheritedProperties);
 			if (!refused.isEmpty()) {
 				violations.add("a legal compiler-plugin declaration " + legal + " is refused on its version "
 						+ "(it read " + refused + "). A declaration AT the floor honours <compilerArgs>, and "
 						+ "one pinning no version at all inherits the managed one — refusing either reddens a "
 						+ "clean build, the one failure direction this class refuses");
+			}
+		}
+		// A PARAMETERISED version, which is where round 10 found this guard refusing ordinary Maven
+		// practice: the property was unread, the pin read as [-1] and the message said "older than 3.1".
+		// Asserted as EVALUABLE and clearing the floor rather than merely unreported, because an
+		// unevaluable version is unreported too — which is the confusion this pin exists to prevent.
+		PinnedVersion fromItsOwnPom = pinnedVersion(
+				pluginPinningVersion("${compilerPluginVersion}",
+						"<compilerPluginVersion>3.13.0</compilerPluginVersion>"),
+				noInheritedProperties);
+		PinnedVersion fromTheParent = pinnedVersion(pluginPinningVersion("${compilerPluginVersion}", ""),
+				Collections.singletonMap("compilerPluginVersion", "3.13.0"));
+		for (PinnedVersion resolvable : Arrays.asList(fromItsOwnPom, fromTheParent)) {
+			if (!resolvable.isEvaluable() || !resolvable.clears(MINIMUM_COMPILER_PLUGIN_VERSION)) {
+				violations.add("a compiler-plugin <version> given as a ${...} property this reactor declares "
+						+ "is not resolved and compared (it read " + resolvable.describe() + ", evaluable="
+						+ resolvable.isEvaluable() + "). Parameterising a pinned version is ordinary Maven "
+						+ "practice and Maven builds such a POM byte-identically; refusing it — which this "
+						+ "guard did, as \"older than 3.1\" and reporting the pin as [-1] — is the direction "
+						+ "this class refuses. Both scopes are pinned: the POM's own <properties> and the "
+						+ "reactor parent's. See PinnedVersion");
+			}
+		}
+		Element pinningAnOldOneByProperty = pluginPinningVersion("${compilerPluginVersion}",
+				"<compilerPluginVersion>2.5.1</compilerPluginVersion>");
+		List<String> refusedThroughAProperty = versionFloorViolationsAt(pinningAnOldOneByProperty,
+				noInheritedProperties);
+		if (refusedThroughAProperty.isEmpty() || !join(refusedThroughAProperty).contains("older than")) {
+			violations.add("a version BELOW the floor reached through a property is not refused with the "
+					+ "floor's own message (it read " + refusedThroughAProperty + "). Resolving a placeholder "
+					+ "must not become a way of not checking it");
+		}
+		// The four shapes that stay unevaluable. Each must be silent HERE and must describe itself as
+		// something this guard could not read — never as a version below the floor, which is what the
+		// -1 sentinel made all four say.
+		for (String unevaluable : Arrays.asList("${declaredNowhereInTheseFiles}", "RELEASE", "LATEST",
+				"[" + MINIMUM_COMPILER_PLUGIN_VERSION[0] + "." + MINIMUM_COMPILER_PLUGIN_VERSION[1] + ",)")) {
+			Element pinning = pluginPinningVersion(unevaluable, "");
+			PinnedVersion read = pinnedVersion(pinning, noInheritedProperties);
+			List<String> refused = versionFloorViolationsAt(pinning, noInheritedProperties);
+			if (read.isEvaluable() || !refused.isEmpty()) {
+				violations.add("a compiler-plugin <version>" + unevaluable + "</version> is read as a version "
+						+ "this guard can compare against the floor (evaluable=" + read.isEvaluable()
+						+ ", reported " + refused + "). It cannot be: a placeholder these POMs do not declare, "
+						+ "RELEASE, LATEST and a range are all facts about the repository rather than about the "
+						+ "file, and reporting one as below the floor states something these files do not say");
+			}
+			String cannotDetermine = read.describeTheUnreadableVersion();
+			if (cannotDetermine.contains("older than") || !cannotDetermine.contains("CANNOT COMPARE")
+					|| !cannotDetermine.contains(unevaluable)) {
+				violations.add("the cannot-determine verdict for <version>" + unevaluable + "</version> does "
+						+ "not print as its own verdict (it read " + cannotDetermine + "). It has to name what "
+						+ "could not be read and what the reader would need, and it must not read as the floor's "
+						+ "message — that conflation is round 10's finding");
 			}
 		}
 		String merging = "<plugin><artifactId>" + COMPILER_PLUGIN + "</artifactId>"
@@ -1331,18 +1516,37 @@ public class JavadocReferenceGuardTest {
 	 * omod-side arm states the same thing a different way (that these two plugins are declared only at
 	 * the root's managed entry), so the two are not one reader written twice.
 	 *
-	 * <p><strong>The residue, stated rather than claimed away.</strong> A POM can still remove test
-	 * execution from EVERY module at once — an {@code <executions>} entry in the ROOT pom's
-	 * {@code <build><plugins>}, which children inherit, or {@code maven.test.skip} in the root
-	 * {@code <properties>}. No check written in a test can survive that, because none of them runs. What
-	 * it costs the person doing it is that the build then runs no tests AT ALL, in either module.
-	 * Measured on both spellings of that edit: exit 0 and BUILD SUCCESS, but api's surefire printed no
-	 * test banner and no counts, omod's printed "No tests to run", and not one {@code Tests run:} line
-	 * was emitted for either module — so the reactor's test total was zero, rather than green with a
-	 * dead pointer hidden inside it. <strong>Do not write a claim here that no POM edit can
-	 * silence this gate.</strong> Two such claims were published in consecutive rounds — one in the
-	 * omod check's class javadoc, one in docs/adr.md Decision 75 — and both were falsified by the next
-	 * round.
+	 * <p><strong>The residue, and it does not have one characteristic cost — the sentence that stood
+	 * here said it did.</strong> Three shapes, three costs, and the difference between them is what a
+	 * maintainer would actually see:
+	 *
+	 * <ul>
+	 * <li><strong>Test execution removed from EVERY module at once</strong> — an {@code <executions>}
+	 * entry in the ROOT pom's {@code <build><plugins>}, which children inherit, or
+	 * {@link #TEST_SKIP_PROPERTIES} in the root {@code <properties>}. No check written in a test
+	 * survives it, because none of them runs. Measured on both spellings: exit 0 and BUILD SUCCESS, but
+	 * api's surefire printed no test banner and no counts, omod's printed "No tests to run", and not
+	 * one {@code Tests run:} line was emitted for either module — so the reactor's test total was
+	 * zero.</li>
+	 * <li><strong>One module's checks removed while both modules still report tests running</strong> —
+	 * round 10's finding, and the one the sentence above was wrong about. Surefire's {@code test}
+	 * FILTER in a child pom ({@link #TEST_FILTER_PROPERTY}) left api printing {@code Tests run: 5} and
+	 * omod its whole suite green at exit 0, with this class simply not among the five. That is refused
+	 * now, by the module whose tests still run; what makes the shape worth remembering is that its
+	 * output looks like an ordinary green build.</li>
+	 * <li><strong>Every check run and its verdict discarded</strong> —
+	 * {@link #TEST_FAILURE_IGNORED_PROPERTY} in the root pom, which cannot be refused into a red build
+	 * at all: the property is what makes this class's own failure non-fatal. It is reported here and it
+	 * is LOUD on the line it cannot suppress, {@code Tests run: N, Failures: 1} beside exit 0.</li>
+	 * </ul>
+	 *
+	 * <p><strong>Do not write a claim here that no POM edit can silence this gate.</strong> Two such
+	 * claims were published in consecutive rounds — one in the omod check's class javadoc, one in
+	 * docs/adr.md Decision 75 — and both were falsified by the next round; six rounds running, each
+	 * found a position the round before had not read. The class javadoc above says what that leaves
+	 * open and on which channel each shape shows. What is claimed here is narrow and checkable: an edit
+	 * stopping ONE module's tests is refused by the module whose tests still run, and the arms state
+	 * the rule differently, so weakening one does not weaken the other.
 	 *
 	 * <p>An arm reading api's {@code target/surefire-reports} to check that the OTHER module's guard
 	 * actually ran was considered and declined: it covers exactly the case the cross-read POM arm
@@ -1364,8 +1568,16 @@ public class JavadocReferenceGuardTest {
 						SUREFIRE_PLUGIN_CHILDREN_READ_HERE)) {
 					violations.add(pom + " " + where);
 				}
+				for (String where : surefireParametersSilencingACheck(plugin)) {
+					violations.add(pom + " " + SUREFIRE_PLUGIN + " " + where + " — that parameter decides "
+							+ "whether a module's checks run, or whether their failure matters. A module whose "
+							+ "checks do not run is a module whose javadoc pointers are held by these POM readers "
+							+ "alone, which is the state round 8 was written to end. Say which parameter it is "
+							+ "and why it leaves both modules' checks running and fatal — see "
+							+ "SUREFIRE_PARAMETERS_REMOVING_TESTS and SUREFIRE_PARAMETERS_SELECTING_TESTS");
+				}
 			}
-			for (String where : testSkipPropertyOverrides(pomRoot(pom))) {
+			for (String where : testDefeatingPropertiesIn(pomRoot(pom))) {
 				violations.add(pom + " " + where);
 			}
 		}
@@ -1377,7 +1589,7 @@ public class JavadocReferenceGuardTest {
 			violations.add("an <executions> element on a " + COMPILER_PLUGIN + " declaration is not refused. "
 					+ "That element carries no <configuration>, no <version> and no attribute, so every other "
 					+ "reader here returns empty for it: unreadCompilerParametersAt closes the world over a "
-					+ "<configuration>'s children, javacArgumentBlocks records no position, versionBelowTheFloorAt "
+					+ "<configuration>'s children, javacArgumentBlocks records no position, versionFloorViolationsAt "
 					+ "finds no <version> and mergeControlAttributesAt finds no attribute. Measured on this "
 					+ "branch, JDK 21: those four lines in omod/pom.xml plus a dead pointer in "
 					+ "omod/src/test/java gave mvn -o clean install exit 0, BUILD SUCCESS, zero 'reference not "
@@ -1395,15 +1607,49 @@ public class JavadocReferenceGuardTest {
 					+ "children (it read " + refusedLegally + "), which reddens a clean build — the one "
 					+ "failure direction this class refuses");
 		}
-		String surefireConfigured = "<plugin><artifactId>" + SUREFIRE_PLUGIN + "</artifactId>"
-				+ "<configuration><skipTests>true</skipTests></configuration></plugin>";
-		if (unreadPluginChildrenAt(parseXml(surefireConfigured), SUREFIRE_PLUGIN,
-				SUREFIRE_PLUGIN_CHILDREN_READ_HERE).isEmpty()) {
-			violations.add("a <configuration> on a " + SUREFIRE_PLUGIN + " declaration is not refused. "
-					+ "Nothing here can tell which surefire parameter stops a module's checks running, and a "
-					+ "module whose checks do not run is a module whose javadoc pointers are held by these POM "
-					+ "readers alone — the state round 8 was written to end. See "
-					+ "SUREFIRE_PLUGIN_CHILDREN_READ_HERE");
+		// The surefire <configuration> is PERMITTED and its children are judged, which is round 10's
+		// finding: the element itself was refused, so a legal argLine reddened the build, and the obvious
+		// way past that — allowlisting <configuration> — leaves an <excludes> naming either check refused
+		// by nothing. Both directions are pinned, and the exclusion names the OMOD check deliberately:
+		// that is the one this class cannot notice by failing to run.
+		String surefireTuned = "<plugin><artifactId>" + SUREFIRE_PLUGIN + "</artifactId><configuration>"
+				+ "<argLine>-Xmx1024m</argLine><forkCount>2</forkCount>"
+				+ "<redirectTestOutputToFile>true</redirectTestOutputToFile>"
+				+ "<systemPropertyVariables><chartsearchai.x>y</chartsearchai.x></systemPropertyVariables>"
+				+ "<skipTests>false</skipTests></configuration></plugin>";
+		List<String> tuningRefused = new ArrayList<String>(unreadPluginChildrenAt(parseXml(surefireTuned),
+				SUREFIRE_PLUGIN, SUREFIRE_PLUGIN_CHILDREN_READ_HERE));
+		tuningRefused.addAll(surefireParametersSilencingACheck(parseXml(surefireTuned)));
+		if (!tuningRefused.isEmpty()) {
+			violations.add("an ordinary surefire <configuration> — argLine, forkCount, "
+					+ "systemPropertyVariables, redirectTestOutputToFile, skipTests explicitly false — is "
+					+ "refused (it read " + tuningRefused + "). It takes no test out of anything, and refusing "
+					+ "it reddens a legal build: measured on this branch, that element at the root's managed "
+					+ "entry gave exit 1 with this class reporting the <configuration> child as unaccounted "
+					+ "for. The one failure direction this class refuses");
+		}
+		for (String silencing : Arrays.asList("<skipTests>true</skipTests>", "<skip>true</skip>",
+				"<skipExec>true</skipExec>", "<testFailureIgnore>true</testFailureIgnore>",
+				"<excludes><exclude>**/JavadocReferenceOmodCorpusTest.java</exclude></excludes>",
+				"<includes><include>**/DateFormatUtilTest.java</include></includes>",
+				"<test>DateFormatUtilTest</test>", "<groups>eval</groups>",
+				"<excludesFile>src/test/resources/exclusions.txt</excludesFile>",
+				"<includesFile>src/test/resources/inclusions.txt</includesFile>")) {
+			String configured = "<plugin><artifactId>" + SUREFIRE_PLUGIN + "</artifactId><configuration>"
+					+ silencing + "</configuration></plugin>";
+			String inAnExecution = "<plugin><artifactId>" + SUREFIRE_PLUGIN + "</artifactId><executions>"
+					+ "<execution><id>default-test</id><configuration>" + silencing
+					+ "</configuration></execution></executions></plugin>";
+			for (String refusable : Arrays.asList(configured, inAnExecution)) {
+				if (surefireParametersSilencingACheck(parseXml(refusable)).isEmpty()) {
+					violations.add("a surefire configuration carrying " + silencing + " is not refused ("
+							+ refusable + "). Each of these either stops a module's checks running or discards "
+							+ "their verdict, and an execution's own <configuration> replaces the plugin's for "
+							+ "that execution, so both positions are read. This repository configures surefire "
+							+ "nowhere, so only these synthetic POMs can say so — see "
+							+ "SUREFIRE_PARAMETERS_REMOVING_TESTS");
+				}
+			}
 		}
 		String surefirePinned = "<plugin><groupId>org.apache.maven.plugins</groupId><artifactId>"
 				+ SUREFIRE_PLUGIN + "</artifactId><version>3.5.5</version></plugin>";
@@ -1413,7 +1659,7 @@ public class JavadocReferenceGuardTest {
 			violations.add("this repository's own managed surefire entry is refused on its children (it read "
 					+ pinnedRefused + "), which reddens a clean build");
 		}
-		List<String> skipping = testSkipPropertyOverrides(parseXml("<project><properties>"
+		List<String> skipping = testDefeatingPropertiesIn(parseXml("<project><properties>"
 				+ "<maven.test.skip>true</maven.test.skip></properties><profiles><profile><properties>"
 				+ "<skipTests>true</skipTests></properties></profile></profiles></project>"));
 		String bothSkips = join(skipping);
@@ -1425,7 +1671,7 @@ public class JavadocReferenceGuardTest {
 					+ "three words naming no plugin: this repository sets neither, so only this synthetic POM "
 					+ "can say so");
 		}
-		List<String> notSkipping = testSkipPropertyOverrides(parseXml("<project><properties>"
+		List<String> notSkipping = testDefeatingPropertiesIn(parseXml("<project><properties>"
 				+ "<maven.test.skip>false</maven.test.skip><skipTests>false</skipTests></properties>"
 				+ "</project>"));
 		if (!notSkipping.isEmpty()) {
@@ -1433,7 +1679,33 @@ public class JavadocReferenceGuardTest {
 					+ notSkipping + "), which is the default and reddens a POM that builds exactly as this one "
 					+ "does");
 		}
-		List<String> asProviderProperties = testSkipPropertyOverrides(parseXml("<project><build><plugins>"
+		List<String> filteredAndIgnored = testDefeatingPropertiesIn(parseXml("<project><properties>"
+				+ "<" + TEST_FILTER_PROPERTY + ">DateFormatUtilTest</" + TEST_FILTER_PROPERTY + ">"
+				+ "<" + TEST_FAILURE_IGNORED_PROPERTY + ">true</" + TEST_FAILURE_IGNORED_PROPERTY + ">"
+				+ "</properties></project>"));
+		String bothOfThem = join(filteredAndIgnored);
+		if (filteredAndIgnored.size() != 2 || !bothOfThem.contains(TEST_FILTER_PROPERTY)
+				|| !bothOfThem.contains(TEST_FAILURE_IGNORED_PROPERTY)) {
+			violations.add("the two properties that defeat a module's checks without SKIPPING anything are "
+					+ "not both read out of a POM's <properties> (it read " + filteredAndIgnored + "). "
+					+ "Measured on this branch: <" + TEST_FILTER_PROPERTY + "> in api/pom.xml gave exit 0 "
+					+ "with api running 5 tests, this class not among them, and omod's 127 green; <"
+					+ TEST_FAILURE_IGNORED_PROPERTY + "> in the root pom gave exit 0 with the full reactor "
+					+ "total printed and a failure in it. Neither is a boolean skip, which is why neither was "
+					+ "in TEST_SKIP_PROPERTIES");
+		}
+		List<String> neitherFilteredNorIgnored = testDefeatingPropertiesIn(parseXml("<project><properties>"
+				+ "<" + TEST_FILTER_PROPERTY + "></" + TEST_FILTER_PROPERTY + ">"
+				+ "<" + TEST_FAILURE_IGNORED_PROPERTY + ">false</" + TEST_FAILURE_IGNORED_PROPERTY + ">"
+				+ "</properties></project>"));
+		if (!neitherFilteredNorIgnored.isEmpty()) {
+			violations.add("an EMPTY <" + TEST_FILTER_PROPERTY + "> or a <" + TEST_FAILURE_IGNORED_PROPERTY
+					+ ">false</" + TEST_FAILURE_IGNORED_PROPERTY + "> is reported (it read "
+					+ neitherFilteredNorIgnored + "). Neither narrows anything: an empty filter selects "
+					+ "nothing and false is the default, so refusing either reddens a POM that builds exactly "
+					+ "as this one does");
+		}
+		List<String> asProviderProperties = testDefeatingPropertiesIn(parseXml("<project><build><plugins>"
 				+ "<plugin><configuration><properties><skipTests>true</skipTests></properties>"
 				+ "</configuration></plugin></plugins></build></project>"));
 		if (!asProviderProperties.isEmpty()) {
@@ -1497,8 +1769,8 @@ public class JavadocReferenceGuardTest {
 				where.add("declares " + named + " with a <" + child.getNodeName() + "> child, which this "
 						+ "guard does not account for. Such an element can decide whether that plugin RUNS for "
 						+ "a module at all — the measured case is an <executions> entry binding "
-						+ "default-testCompile to <phase>none</phase>, and a surefire <configuration> can do "
-						+ "the same to test EXECUTION — and a module whose tests are not compiled or not run "
+						+ "default-testCompile to <phase>none</phase> — and a module whose tests are not "
+						+ "compiled or not run "
 						+ "is a module whose corpus check asserts nothing, because that check lives in the "
 						+ "very root it guards. Refused rather than assumed harmless, for the reason "
 						+ "PARAMETERS_CARRYING_NO_JAVAC_ARGUMENT gives: say which it is, and say why it leaves "
@@ -1509,12 +1781,15 @@ public class JavadocReferenceGuardTest {
 	}
 
 	/**
-	 * Every {@code <properties>} entry in one POM that stops that module's tests being compiled or
-	 * run, described. See {@link #TEST_SKIP_PROPERTIES}; read through
-	 * {@link #declaredUnderProjectOrProfile} for {@link #compilerUserPropertyOverrides}' reason, so a
-	 * surefire provider {@code <properties>} parameter is not mistaken for the project's own.
+	 * Every {@code <properties>} entry in one POM that stops that module's checks asserting anything,
+	 * described — by THREE mechanisms, and the entry says which. {@link #TEST_SKIP_PROPERTIES} stop
+	 * the tests being compiled or run, {@link #TEST_FILTER_PROPERTY} narrows the run to something
+	 * else, and {@link #TEST_FAILURE_IGNORED_PROPERTY} lets them run and discards the verdict. Read
+	 * through {@link #declaredUnderProjectOrProfile} for {@link #compilerUserPropertyOverrides}'
+	 * reason, so a surefire provider {@code <properties>} parameter is not mistaken for the project's
+	 * own.
 	 */
-	private static List<String> testSkipPropertyOverrides(Element pom) {
+	private static List<String> testDefeatingPropertiesIn(Element pom) {
 		List<String> where = new ArrayList<String>();
 		for (Element properties : declaredUnderProjectOrProfile(pom, "properties")) {
 			for (String property : TEST_SKIP_PROPERTIES) {
@@ -1525,8 +1800,62 @@ public class JavadocReferenceGuardTest {
 							+ "plugin. See TEST_SKIP_PROPERTIES");
 				}
 			}
+			Element filter = directChild(properties, TEST_FILTER_PROPERTY);
+			if (filter != null && !filter.getTextContent().trim().isEmpty()) {
+				where.add("<properties> sets <" + TEST_FILTER_PROPERTY + ">"
+						+ filter.getTextContent().trim() + "</" + TEST_FILTER_PROPERTY + ">, which is "
+						+ "surefire's own test FILTER: this module then runs the tests it names and no others, "
+						+ "so its checks are gone while its surefire still prints a Tests run: line. Measured — "
+						+ "one such entry in api/pom.xml gave exit 0 with api running 5 tests and omod's 127 "
+						+ "green. See TEST_FILTER_PROPERTY");
+			}
+			if (isTrue(directChild(properties, TEST_FAILURE_IGNORED_PROPERTY))) {
+				where.add("<properties> sets <" + TEST_FAILURE_IGNORED_PROPERTY + ">true</"
+						+ TEST_FAILURE_IGNORED_PROPERTY + ">, which leaves every check running and makes its "
+						+ "failure non-fatal — so a violation reported here reaches a build that exits 0 anyway. "
+						+ "Loud on the Failures: line and refused all the same. See "
+						+ "TEST_FAILURE_IGNORED_PROPERTY");
+			}
 		}
 		return where;
+	}
+
+	/**
+	 * Every surefire parameter inside one plugin element that takes a check out of the build or out of
+	 * the verdict, described by the configuration position carrying it — the plugin's own
+	 * {@code <configuration>}, or a named {@code <execution>}'s, which replaces it for that execution.
+	 *
+	 * <p>This is what permits a surefire {@code <configuration>} instead of refusing the element
+	 * whole; {@link #SUREFIRE_PLUGIN_CHILDREN_READ_HERE} records the false positive that made the
+	 * wholesale refusal untenable, and {@link #SUREFIRE_PARAMETERS_SELECTING_TESTS} why a selection is
+	 * refused rather than judged. It is a list of names and not a closed world, which is stated there
+	 * and disclosed in {@link #noPomEditTakesAModuleOutOfTheTestBuild}.
+	 */
+	private static List<String> surefireParametersSilencingACheck(Element plugin) {
+		List<String> where = new ArrayList<String>();
+		collectSurefireSilencers(where, "plugin-level <configuration>", directChild(plugin, "configuration"));
+		for (Element execution : executions(plugin)) {
+			collectSurefireSilencers(where, executionLabel(execution), directChild(execution, "configuration"));
+		}
+		return where;
+	}
+
+	private static void collectSurefireSilencers(List<String> where, String position,
+			Element configuration) {
+		if (configuration == null) {
+			return;
+		}
+		for (String parameter : SUREFIRE_PARAMETERS_REMOVING_TESTS) {
+			if (isTrue(directChild(configuration, parameter))) {
+				where.add(position + " sets <" + parameter + ">true</" + parameter + ">");
+			}
+		}
+		for (String parameter : SUREFIRE_PARAMETERS_SELECTING_TESTS) {
+			Element declared = directChild(configuration, parameter);
+			if (declared != null && !declared.getTextContent().trim().isEmpty()) {
+				where.add(position + " sets <" + parameter + ">, which decides WHICH tests run");
+			}
+		}
 	}
 
 	/**
@@ -3011,9 +3340,9 @@ public class JavadocReferenceGuardTest {
 	/**
 	 * The root pom's {@code <build>/<pluginManagement>} entry for the compiler plugin, or null where
 	 * it declares none. The one position both modules inherit and both mojos receive; navigated by
-	 * path for {@link #rootManagedCompilerArgs}' reason, and shared with
-	 * {@link #rootManagedCompilerPluginVersion} so the arguments and the version that has to honour
-	 * them are read off the same element.
+	 * path for {@link #rootManagedCompilerArgs}' reason, and read for its {@code <version>} as well
+	 * ({@link #pinnedVersion}) so the arguments and the version that has to honour them come off the
+	 * same element.
 	 */
 	private static Element rootManagedCompilerPlugin() throws Exception {
 		Element build = directChild(pomRoot("pom.xml"), "build");
@@ -3204,7 +3533,7 @@ public class JavadocReferenceGuardTest {
 	 * this reader closes.</strong> A direct child of {@code <configuration>} is not the only thing that
 	 * decides the argument list: the CONTENTS of a channel are not direct children of a configuration
 	 * ({@link #elementChildren}), a {@code <version>} is a sibling of {@code <configuration>} rather
-	 * than a child of it ({@link #versionBelowTheFloorAt}), and a merge-control ATTRIBUTE is not an
+	 * than a child of it ({@link #versionFloorViolationsAt}), and a merge-control ATTRIBUTE is not an
 	 * element at all ({@link #mergeControlAttributesAt}). Each of those is now read, and no claim is
 	 * made here that the list of positions is finished.
 	 *
@@ -3243,51 +3572,244 @@ public class JavadocReferenceGuardTest {
 	}
 
 	/**
-	 * The version the root pom's managed compiler-plugin entry pins — empty where that entry declares
-	 * none, which {@link #theArgumentsTheBuildDeclaresRefuseADeadJavadocReference} treats as a
-	 * violation in its own right, unlike a child declaration.
+	 * What one plugin element's {@code <version>} states about {@link #MINIMUM_COMPILER_PLUGIN_VERSION}
+	 * — THREE answers and not two, which is why this is a type rather than the {@code List<Integer>}
+	 * it used to be. The element may declare no version; may declare one this guard can compare
+	 * against the floor; or may declare one it CANNOT. The third is a different verdict from "below
+	 * the floor" and has to print as one.
+	 *
+	 * <p><strong>The defect that made it three.</strong> The text was parsed as dot-separated leading
+	 * digits with {@code -1} substituted for a segment carrying none, so
+	 * {@code <version>${compilerPluginVersion}</version>} — with the property declared in the same
+	 * POM, which is ordinary Maven practice and which Maven builds byte-identically — read as
+	 * {@code [-1]} and was refused as older than 3.1. Measured on this branch, JDK 21: that one
+	 * substitution at the root pom's managed entry gave exit 1 with TWO of this class's checks failing,
+	 * one message reporting the pin as {@code [-1]} and the other as "older than 3.1",
+	 * and no remedy in either except to un-parameterise — the direction this class exists to refuse,
+	 * taken by the guard itself. {@code RELEASE}, {@code LATEST} and a version RANGE all read as that
+	 * same sentinel.
+	 *
+	 * <p><strong>What is resolved.</strong> A {@code ${...}} placeholder is interpolated from the
+	 * POM's own {@code <properties>} — the project's and any {@code <profile>}'s, through
+	 * {@link #declaredUnderProjectOrProfile} — and then from the properties of the reactor parent
+	 * these POMs inherit ({@link #inheritedPomProperties}), which is the chain this guard already
+	 * reads. A resolved value is then evaluated exactly as a literal one is, so a property resolving
+	 * to 2.5.1 is refused with the floor's own message.
+	 *
+	 * <p><strong>What stays unevaluable, and what becomes of it.</strong> A placeholder naming a
+	 * property declared somewhere these files are not ({@code settings.xml}, the command line, a
+	 * parent outside the reactor); {@code RELEASE} and {@code LATEST}; and Maven's version-RANGE
+	 * syntax, whose resolution this guard does not model — Maven resolves a range to the highest
+	 * matching version, which is a fact about the repository rather than about the file. None of those
+	 * is reported as below the floor, ever. At the root's MANAGED entry the answer is a failure
+	 * printing {@link #describeTheUnreadableVersion}: that entry is already required to pin a version
+	 * at all, so requiring one this guard can read is the same requirement, and the remedy is to pin a
+	 * literal or to declare the property in one of these POMs. At a CHILD declaration it is NOT
+	 * refused, exactly as pinning no version at all is not — see {@link #versionFloorViolationsAt},
+	 * which discloses what that leaves open.
+	 *
+	 * <p><strong>Which of those shapes actually reaches this reader, measured rather than assumed.</strong>
+	 * Not {@code RELEASE} or {@code LATEST} at a plugin version: Maven validates that itself and reads no
+	 * project at all — measured on both spellings, each giving
+	 * {@code 'build.plugins.plugin.version' for org.apache.maven.plugins:maven-compiler-plugin must be a
+	 * valid version but is 'RELEASE'} (respectively {@code 'LATEST'}) before any test runs. A RANGE was
+	 * refused at plugin RESOLUTION in an offline build ({@code -o}) rather than by this verdict, so what
+	 * it does online is not measured here. What DOES reach it is a version Maven can resolve and these
+	 * files cannot state: measured with
+	 * {@code -DcompilerPluginVersion=3.13.0} on the command line and no such property in any POM —
+	 * {@code mvn -o clean test -pl api -am} exit 1 with exactly one failing check, this verdict printed
+	 * and the floor not mentioned. That is the shape it is for, and it is the blind spot the
+	 * class javadoc discloses: a setting arriving from somewhere that is not one of {@link #poms}.
 	 */
-	private static List<Integer> rootManagedCompilerPluginVersion() throws Exception {
-		return pluginVersion(rootManagedCompilerPlugin());
+	private static final class PinnedVersion {
+
+		private final String declared;
+
+		private final String resolved;
+
+		private final List<Integer> segments;
+
+		private PinnedVersion(String declared, String resolved, List<Integer> segments) {
+			this.declared = declared;
+			this.resolved = resolved;
+			this.segments = segments;
+		}
+
+		private boolean declaresNoVersion() {
+			return declared == null;
+		}
+
+		/** Whether the floor can be compared against this pin at all. See the class javadoc. */
+		private boolean isEvaluable() {
+			return !segments.isEmpty();
+		}
+
+		/**
+		 * Whether an evaluable pin is at or above a floor. A segment the pin does not carry counts as
+		 * zero, so {@code 3} is below {@code 3.1} and {@code 3.1} is not.
+		 */
+		private boolean clears(int[] floor) {
+			for (int i = 0; i < floor.length; i++) {
+				int segment = i < segments.size() ? segments.get(i) : 0;
+				if (segment != floor[i]) {
+					return segment > floor[i];
+				}
+			}
+			return true;
+		}
+
+		/** The pin as written, plus what it resolved to where interpolation changed it. */
+		private String describe() {
+			return "<version>" + declared + "</version>"
+					+ (resolved.equals(declared) ? "" : " (which resolves to " + resolved + ")");
+		}
+
+		/**
+		 * What could not be read, and what would make it readable — the CANNOT-DETERMINE verdict, worded
+		 * so that it cannot be mistaken for the floor's. Never called where {@link #isEvaluable} is
+		 * true.
+		 */
+		private String describeTheUnreadableVersion() {
+			String cause;
+			if (resolved.contains("${")) {
+				cause = "it still carries the placeholder " + resolved.substring(resolved.indexOf("${"))
+						+ ", which no <properties> in these POMs — this POM's own or a <profile>'s, or the "
+						+ "reactor parent's — declares";
+			}
+			else if (resolved.startsWith("[") || resolved.startsWith("(")) {
+				cause = "it is a Maven version RANGE, and Maven resolves a range to the highest matching "
+						+ "version available, which these files do not state";
+			}
+			else {
+				cause = "it is not a dot-separated numeric version — RELEASE and LATEST read this way, "
+						+ "though Maven refuses those as a plugin version itself, before any test runs";
+			}
+			return "declares " + COMPILER_PLUGIN + " " + describe() + ", which this guard CANNOT COMPARE "
+					+ "against the " + MINIMUM_COMPILER_PLUGIN_VERSION[0] + "."
+					+ MINIMUM_COMPILER_PLUGIN_VERSION[1] + " floor: " + cause + ". This is not a claim that "
+					+ "the version is below the floor — it is a statement that these files do not say. What "
+					+ "would make it checkable: pin a literal version here, or declare the property in one of "
+					+ "these POMs' own <properties>. See PinnedVersion";
+		}
 	}
 
 	/**
-	 * The version one plugin element pins, split into its numeric segments — empty where it pins none,
-	 * which for a CHILD declaration means it inherits the managed one and is no violation. Only the
-	 * leading digits of each dot-separated segment are read, so a qualifier such as
-	 * {@code 4.0.0-beta-5} compares as {@code 4.0.0}.
+	 * What one plugin element's {@code <version>} states about the floor, with {@code ${...}} resolved
+	 * against that POM's own properties first and the inherited ones second. See {@link PinnedVersion}
+	 * for every part of that sentence.
 	 */
-	private static List<Integer> pluginVersion(Element plugin) {
-		List<Integer> segments = new ArrayList<Integer>();
+	private static PinnedVersion pinnedVersion(Element plugin, Map<String, String> inherited) {
 		Element version = directChild(plugin, "version");
 		if (version == null) {
-			return segments;
+			return new PinnedVersion(null, null, Collections.<Integer> emptyList());
 		}
-		for (String segment : version.getTextContent().trim().split("\\.")) {
+		String declared = version.getTextContent().trim();
+		String resolved = interpolate(declared, propertiesOf(plugin.getOwnerDocument()
+				.getDocumentElement()), inherited);
+		return new PinnedVersion(declared, resolved, numericSegments(resolved));
+	}
+
+	/**
+	 * One string with its {@code ${...}} placeholders replaced from the properties given — the POM's
+	 * own first, then the ones it inherits — repeatedly, since a property's value may name another. A
+	 * placeholder no scope declares is left as written and makes the version unevaluable rather than
+	 * resolving to anything. Bounded, so a property naming itself directly or through a cycle stops
+	 * rather than expanding forever.
+	 */
+	private static String interpolate(String text, Map<String, String> own,
+			Map<String, String> inherited) {
+		String resolved = text;
+		for (int pass = 0; pass < MAX_PROPERTY_RESOLUTION_PASSES && resolved.contains("${"); pass++) {
+			StringBuilder expanded = new StringBuilder();
+			int at = 0;
+			while (at < resolved.length()) {
+				int open = resolved.indexOf("${", at);
+				int close = open < 0 ? -1 : resolved.indexOf('}', open);
+				if (open < 0 || close < 0) {
+					expanded.append(resolved.substring(at));
+					break;
+				}
+				String name = resolved.substring(open + 2, close);
+				String value = own.containsKey(name) ? own.get(name) : inherited.get(name);
+				expanded.append(resolved, at, open)
+						.append(value == null ? resolved.substring(open, close + 1) : value);
+				at = close + 1;
+			}
+			if (expanded.toString().equals(resolved)) {
+				return resolved;
+			}
+			resolved = expanded.toString();
+		}
+		return resolved;
+	}
+
+	/**
+	 * How many times {@link #interpolate} will expand a placeholder whose value names another. Small
+	 * on purpose: this reads a plugin version, not a POM model.
+	 */
+	private static final int MAX_PROPERTY_RESOLUTION_PASSES = 5;
+
+	/**
+	 * Every property one POM declares under its own {@code <project>} or a {@code <profile>}, by name.
+	 * Read through {@link #declaredUnderProjectOrProfile} for {@link #compilerUserPropertyOverrides}'
+	 * reason, so a plugin's own {@code <properties>} parameter is not read as the project's — a
+	 * profile's entries are taken as declared, which is wider than Maven's activation and errs
+	 * towards RESOLVING a version rather than refusing it.
+	 */
+	private static Map<String, String> propertiesOf(Element pom) {
+		Map<String, String> properties = new LinkedHashMap<String, String>();
+		for (Element declared : declaredUnderProjectOrProfile(pom, "properties")) {
+			for (Element property : elementChildren(declared)) {
+				properties.put(property.getNodeName(), property.getTextContent().trim());
+			}
+		}
+		return properties;
+	}
+
+	/**
+	 * The properties a module POM of this reactor inherits: the root pom's own. The whole parent chain
+	 * this guard can read, since {@link #poms} is the reactor and the root is its parent; a property
+	 * declared in a parent OUTSIDE the reactor is one of the things
+	 * {@link PinnedVersion#describeTheUnreadableVersion} reports rather than resolves.
+	 */
+	private static Map<String, String> inheritedPomProperties() throws Exception {
+		return propertiesOf(pomRoot("pom.xml"));
+	}
+
+	/**
+	 * The numeric segments of a version string — empty where any dot-separated segment does not begin
+	 * with a digit, which is the ONE rule that makes {@code RELEASE}, {@code LATEST}, an unresolved
+	 * {@code ${...}} and a range all unevaluable rather than each needing a reader of its own. Only
+	 * the leading digits of a segment are read, so a qualifier such as {@code 4.0.0-beta-5} compares
+	 * as {@code 4.0.0}.
+	 */
+	private static List<Integer> numericSegments(String version) {
+		List<Integer> segments = new ArrayList<Integer>();
+		if (version.isEmpty()) {
+			return Collections.<Integer> emptyList();
+		}
+		for (String segment : version.split("\\.", -1)) {
 			int digits = 0;
 			while (digits < segment.length() && Character.isDigit(segment.charAt(digits))) {
 				digits++;
 			}
-			segments.add(digits == 0 ? -1 : Integer.parseInt(segment.substring(0, digits)));
+			if (digits == 0) {
+				return Collections.<Integer> emptyList();
+			}
+			try {
+				segments.add(Integer.valueOf(segment.substring(0, digits)));
+			}
+			catch (NumberFormatException tooManyDigitsToBeAVersion) {
+				return Collections.<Integer> emptyList();
+			}
 		}
 		return segments;
 	}
 
-	/** Whether a version read by {@link #rootManagedCompilerPluginVersion} is at or above a floor. */
-	private static boolean atLeast(List<Integer> version, int[] floor) {
-		for (int i = 0; i < floor.length; i++) {
-			int segment = i < version.size() ? version.get(i) : 0;
-			if (segment != floor[i]) {
-				return segment > floor[i];
-			}
-		}
-		return true;
-	}
-
 	/**
 	 * Where one plugin element pins a compiler-plugin version BELOW
-	 * {@link #MINIMUM_COMPILER_PLUGIN_VERSION}, described — empty where it pins none or pins one at or
-	 * above the floor.
+	 * {@link #MINIMUM_COMPILER_PLUGIN_VERSION}, described — empty where it pins none, pins one at or
+	 * above the floor, or pins one {@link PinnedVersion} cannot evaluate.
 	 *
 	 * <p>Asked of EVERY {@code maven-compiler-plugin} element in these POMs and not only of the root's
 	 * managed entry. A child pom declaring the plugin in its own {@code <build><plugins>} with an
@@ -3303,13 +3825,25 @@ public class JavadocReferenceGuardTest {
 	 * {@code omod/src/main/java} — {@code mvn -o clean install} exit 0, BUILD SUCCESS, not one
 	 * {@code reference not found} printed, and this suite green. That is the one module the api-side
 	 * compiler check cannot reach.
+	 *
+	 * <p><strong>What it deliberately does not report, since round 10.</strong> A version this guard
+	 * cannot evaluate — {@code RELEASE}, {@code LATEST}, a range, a placeholder no POM here declares —
+	 * is silent HERE, exactly as pinning no version at all is silent: refusing it would redden a POM
+	 * Maven builds, and reporting it as below the floor would state something these files do not say.
+	 * So the floor is unchecked for such a child declaration, and that is a hole the size of
+	 * {@code <version>RELEASE</version>} in {@code omod/pom.xml}. It is checked at the MANAGED entry,
+	 * where a readable version is required rather than merely evaluated
+	 * ({@link #theArgumentsTheBuildDeclaresRefuseADeadJavadocReference}), and disclosed in docs/adr.md
+	 * Decision 75.
 	 */
-	private static List<String> versionBelowTheFloorAt(Element plugin) {
+	private static List<String> versionFloorViolationsAt(Element plugin, Map<String, String> inherited) {
 		List<String> where = new ArrayList<String>();
-		List<Integer> pinned = pluginVersion(plugin);
-		if (!pinned.isEmpty() && !atLeast(pinned, MINIMUM_COMPILER_PLUGIN_VERSION)) {
-			where.add("declares " + COMPILER_PLUGIN + " <version>"
-					+ directChild(plugin, "version").getTextContent().trim() + "</version>, older than "
+		PinnedVersion pinned = pinnedVersion(plugin, inherited);
+		if (pinned.declaresNoVersion() || !pinned.isEvaluable()) {
+			return where;
+		}
+		if (!pinned.clears(MINIMUM_COMPILER_PLUGIN_VERSION)) {
+			where.add("declares " + COMPILER_PLUGIN + " " + pinned.describe() + ", older than "
 					+ MINIMUM_COMPILER_PLUGIN_VERSION[0] + "." + MINIMUM_COMPILER_PLUGIN_VERSION[1]
 					+ " — the earliest release declaring a compilerArgs parameter at all. A version pinned "
 					+ "at a child declaration overrides the managed one for that module, and Maven ignores "
@@ -3318,6 +3852,7 @@ public class JavadocReferenceGuardTest {
 		}
 		return where;
 	}
+
 
 	/**
 	 * Every Maven merge-control attribute ({@code combine.self}, {@code combine.children}) inside one

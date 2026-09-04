@@ -91,7 +91,12 @@
 					     `mvn -o clean install` exit 0 and not one `reference not found` printed. Unpinned, the
 					     version is whatever Maven's super-POM supplies and so moves with the developer's Maven
 					     install. JavadocReferenceGuardTest requires this element and requires it to be at
-					     least 3.1. -->
+					     least 3.1. A ${...} property declared in these POMs is resolved first, so
+					     parameterising this version is fine — measured: ${compilerPluginVersion} with the
+					     property here builds green, and one resolving to 2.5.1 is refused with the floor's
+					     own message. A version the check cannot evaluate is reported as UNREADABLE and never
+					     as too old; RELEASE and LATEST never get that far, Maven refusing them itself
+					     ("must be a valid version but is 'RELEASE'"). -->
 					<version>3.13.0</version>
 					<configuration>
 						<target>${maven.compiler.target}</target>
@@ -107,7 +112,20 @@
 						     the measurements, the alternatives already refused and what the check still cannot
 						     see. JavadocReferenceGuardTest is what stops it being removed with a green build,
 						     and it asserts this POSITION and not merely the argument: declared in a child pom
-						     instead, the flag gates one module and the other compiles ungated. -->
+						     instead, the flag gates one module and the other compiles ungated.
+
+						     What that guard and its omod-side sibling are worth is checkable and bounded:
+						     between them they hold the flag's presence, what the declared arguments DO (asked
+						     of the compiler), the plugin version that has to honour them, and the assertion
+						     that each module's tests are in the build — stated two different ways from two
+						     modules, so one edit rarely defeats both. They do NOT enumerate every position
+						     from which Maven can change javac's arguments or drop a module's tests: six
+						     consecutive review rounds of #262 each found one more, and two absolute claims —
+						     one in the omod-side check's javadoc, one in Decision 75 — were each falsified by
+						     the round after they were written. What is
+						     claimed is that silencing this gate costs more and shows up on output a
+						     maintainer sees — a printed doclint error, a changed test total, a "No tests to
+						     run" — not that it cannot be silenced. Decision 75 lists what stays quiet. -->
 						<compilerArgs>
 							<arg>-Xdoclint:reference</arg>
 						</compilerArgs>

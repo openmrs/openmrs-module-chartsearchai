@@ -45,8 +45,8 @@ import org.w3c.dom.NodeList;
 
 /**
  * Every javadoc reference in {@code omod/src/main/java} and {@code omod/src/test/java} resolves,
- * asked of the real compiler over the real files with arguments THIS class chooses — so no POM edit
- * can change what this check LOOKS FOR.
+ * asked of the real compiler over the real files with arguments THIS class chooses, as literals: what
+ * this check looks for is decided in this file and not in a build file.
  *
  * <p><strong>An earlier version of that sentence said no POM edit could silence it, and round 9 of
  * #262's review falsified it.</strong> The arguments are literals here, so no POM decides them; but
@@ -54,16 +54,22 @@ import org.w3c.dom.NodeList;
  * {@code <executions>} entry binding {@code default-testCompile} to {@code <phase>none</phase>} —
  * take that root out of javac AND take this class out of the build, together. Measured, JDK 21,
  * plugin 3.13.0: exit 0, BUILD SUCCESS, zero {@code reference not found}, omod's surefire logging
- * "No tests to run", the api module green. What answers that is
- * {@link #noPomEditTakesAModuleOutOfTheTestBuild} below, whose javadoc states what is covered, what
- * is not, and what a POM can still do. <strong>Do not write a third absolute here.</strong>
+ * "No tests to run", the api module green. Round 10 then found two further ways to stop a module's
+ * checks that neither arm read — surefire's own {@code test} FILTER property and
+ * {@code maven.test.failure.ignore} — and the first of them leaves BOTH modules printing test counts
+ * while one module's checks are gone, which is nothing like "No tests to run". What answers all of
+ * that, as far as it is answered, is {@link #noPomEditTakesAModuleOutOfTheTestBuild} below, whose
+ * javadoc states what is covered, what is not, and on which channel each remaining shape shows.
+ * <strong>Do not write a third absolute here.</strong> Six consecutive rounds each found a position
+ * the round before had not read; where a sentence of that shape suggests itself, name the edit that
+ * was actually checked and stop there.
  *
  * <p><strong>Why it exists, which is the part worth reading.</strong> {@code JavadocReferenceGuardTest}
  * in the api module holds the same line two ways: it compiles the api corpus with its own arguments,
  * and it reads these POMs to check that the argument the build declares is really in force. The first
  * of those cannot reach {@code omod} — an api-side test runs on the api classpath — so until this
- * class existed omod's two source roots were held by the POM readers ALONE. Four consecutive review
- * rounds of #262 each found one more position from which the effective javac argument list is set that
+ * class existed omod's two source roots were held by the POM readers ALONE. Rounds 5 through 8 of
+ * #262's review each found one more position from which the effective javac argument list is set that
  * those readers did not read: the {@code maven.compiler.failOnError} user property, the
  * {@code -Xdoclint/package} qualifier, four sibling argument parameters beside {@code compilerArgs},
  * and then three more at once — a non-{@code <arg>} child INSIDE {@code <compilerArgs>}, a child pom
@@ -133,6 +139,12 @@ public class JavadocReferenceOmodCorpusTest {
 	/** How many lines of any one failure listing are printed. */
 	private static final int MAX_REPORTED_LINES = 20;
 
+	/** The plugin that compiles a module's test sources. See {@link #PLUGINS_THAT_RUN_THESE_CHECKS}. */
+	private static final String COMPILER_PLUGIN = "maven-compiler-plugin";
+
+	/** The plugin that executes them. See {@link #PLUGINS_THAT_RUN_THESE_CHECKS}. */
+	private static final String SUREFIRE_PLUGIN = "maven-surefire-plugin";
+
 	/**
 	 * The two plugins that decide whether ANY check in this repository runs — the one that compiles a
 	 * module's test sources and the one that executes them. Named here because
@@ -141,7 +153,7 @@ public class JavadocReferenceOmodCorpusTest {
 	 * taken out of the build.
 	 */
 	private static final List<String> PLUGINS_THAT_RUN_THESE_CHECKS =
-			Arrays.asList("maven-compiler-plugin", "maven-surefire-plugin");
+			Arrays.asList(COMPILER_PLUGIN, SUREFIRE_PLUGIN);
 
 	/**
 	 * The direct children the root pom's managed entry for either of those plugins may declare. Anything
@@ -153,13 +165,38 @@ public class JavadocReferenceOmodCorpusTest {
 			Arrays.asList("groupId", "artifactId", "version", "configuration");
 
 	/**
-	 * The user properties that take a module's tests out of the build — {@code maven.test.skip} is read
-	 * by maven-compiler-plugin's {@code testCompile} and by surefire, the other two are surefire's own.
-	 * Set in a CHILD pom each does what round 9's {@code <executions>} element did, from three words
-	 * naming no plugin.
+	 * The user properties that stop a module's checks asserting anything, whatever the mechanism —
+	 * {@code maven.test.skip} is read by maven-compiler-plugin's {@code testCompile} and by surefire,
+	 * {@code skipTests} and {@code maven.test.skip.exec} are surefire's own, {@code test} is surefire's
+	 * FILTER (any value narrows the run to what it names) and {@code maven.test.failure.ignore} leaves
+	 * every check running and makes its failure non-fatal. Set in a CHILD pom each does what round 9's
+	 * {@code <executions>} element did, from a line naming no plugin.
+	 *
+	 * <p>Read as ONE list here, with {@link #defeatsAModulesChecks} deciding what a value means, while
+	 * the api-side guard splits the same five into three families by mechanism. The two arms state the
+	 * rule differently on purpose — see {@link #noPomEditTakesAModuleOutOfTheTestBuild}. The last two
+	 * were missing from both lists until round 10, one round after the list was published: measured on
+	 * this branch, {@code <test>DateFormatUtilTest</test>} in {@code api/pom.xml} gave
+	 * {@code mvn -o clean install} exit 0 with api running 5 tests, the api-side guard not among them,
+	 * and this module's whole 127-test suite green.
 	 */
-	private static final List<String> TEST_SKIP_PROPERTIES =
-			Arrays.asList("maven.test.skip", "maven.test.skip.exec", "skipTests");
+	private static final List<String> TEST_DEFEATING_PROPERTIES = Arrays.asList("maven.test.skip",
+			"maven.test.skip.exec", "skipTests", "test", "maven.test.failure.ignore");
+
+	/**
+	 * The surefire parameters that take a module's checks out of the build or out of the verdict,
+	 * refused INSIDE a surefire {@code <configuration>} — which {@link #MANAGED_PLUGIN_CHILDREN_READ_HERE}
+	 * permits, so without this nothing reads what is in it. The api-side guard refuses the same family
+	 * and splits it by value shape; here one rule covers all of them ({@link #defeatsAModulesChecks}),
+	 * which is the same difference in statement the two POM arms keep everywhere else.
+	 *
+	 * <p>It matters here and not only there because of WHERE the two checks live: a surefire
+	 * {@code <excludes>} naming the api-side guard, or a {@code <test>} naming something else, stops
+	 * that guard running — and then it is not there to report the edit. This arm is.
+	 */
+	private static final List<String> SUREFIRE_PARAMETERS_DEFEATING_CHECKS = Arrays.asList("skip",
+			"skipTests", "skipExec", "testFailureIgnore", "test", "includes", "includesFile", "excludes",
+			"excludesFile", "groups");
 
 	/**
 	 * Every reactor POM, spelled as literals for the same reason {@link #SOURCE_ROOTS} is: this suite
@@ -248,20 +285,35 @@ public class JavadocReferenceOmodCorpusTest {
 	 * direct children, asked at every declaration. Here it is POSITIONAL: neither of
 	 * {@link #PLUGINS_THAT_RUN_THESE_CHECKS} is declared anywhere except the root pom's
 	 * {@code <build><pluginManagement>}, and there its direct children are within
-	 * {@link #MANAGED_PLUGIN_CHILDREN_READ_HERE}. Two different statements, each sufficient on its own,
-	 * so a maintainer weakening one does not weaken the other by the same edit. Both sides also read
-	 * {@link #TEST_SKIP_PROPERTIES}, because a child pom's {@code <properties>} does the same thing
-	 * from three words naming no plugin.
+	 * {@link #MANAGED_PLUGIN_CHILDREN_READ_HERE}. Two different statements about the same edits, so a
+	 * maintainer weakening one does not weaken the other by the same edit. Both sides also read
+	 * {@link #TEST_DEFEATING_PROPERTIES}, because a child pom's {@code <properties>} does the same
+	 * thing from a line naming no plugin, and both read what is INSIDE a surefire
+	 * {@code <configuration>} ({@link #SUREFIRE_PARAMETERS_DEFEATING_CHECKS}) — permitted since round
+	 * 10, since refusing the element wholesale reddened an ordinary {@code argLine}, which left an
+	 * {@code <excludes>} naming either check read by nothing.
 	 *
-	 * <p><strong>The residue, stated because two absolutes have already been falsified here.</strong> A
-	 * POM can still remove test execution from EVERY module at once — an {@code <executions>} entry in
-	 * the ROOT pom's {@code <build><plugins>}, which children inherit, or a test-skip property in the
-	 * root {@code <properties>}. Nothing written in a test survives that, because no test runs. What it
-	 * costs the person doing it is that the build then runs no tests at all, in any module. Measured on
-	 * both spellings of that edit: exit 0 and BUILD SUCCESS, but api's surefire printed no test banner
-	 * and no counts, omod's printed "No tests to run", and not one {@code Tests run:} line was emitted
-	 * for either module — so the reactor's test total was zero, rather than green with a dead pointer
-	 * hidden inside it. That is the honest bound, and it is not "no POM edit can silence this".
+	 * <p><strong>The residue, and it has more than one cost — the sentence that stood here named
+	 * one.</strong> A POM can still remove test execution from EVERY module at once, through an
+	 * {@code <executions>} entry in the ROOT pom's {@code <build><plugins>} which children inherit, or
+	 * a test-skip property in the root {@code <properties>}. Nothing written in a test survives that,
+	 * because no test runs, and what it costs is every {@code Tests run:} line in the reactor —
+	 * measured on both spellings: exit 0 and BUILD SUCCESS, api's surefire printing no test banner and
+	 * no counts, omod's printing "No tests to run", the reactor's test total zero. <strong>Round 10
+	 * measured a shape that costs nothing of the kind</strong>: surefire's {@code test} filter in
+	 * {@code api/pom.xml} left api printing {@code Tests run: 5} and this module's whole 127-test suite
+	 * green, at exit 0, with the api-side guard simply absent from the five. It is refused now, by this
+	 * arm — the api-side guard could not report it, not being among the tests that ran — and
+	 * {@code maven.test.failure.ignore} is refused beside it, which cannot be turned into a red build
+	 * at all, since it is what makes a guard's failure non-fatal; it is loud instead, on the
+	 * {@code Tests run: N, Failures: 1} line it cannot suppress.
+	 *
+	 * <p>So the honest bound is not "no POM edit can silence this" and not one sentence about cost
+	 * either: an edit taking ONE module's checks out is refused by the module whose checks still run,
+	 * the two arms state that rule differently so one edit does not weaken both, and what is left is
+	 * loud on the printed doclint error, on a changed test total, or on a {@code No tests to run} —
+	 * except where it is not, which the api-side class javadoc enumerates as far as anyone has measured
+	 * it.
 	 */
 	@Test
 	public void noPomEditTakesAModuleOutOfTheTestBuild() throws Exception {
@@ -301,9 +353,20 @@ public class JavadocReferenceOmodCorpusTest {
 									+ "method's javadoc for what is covered and what is not");
 						}
 					}
+					if (SUREFIRE_PLUGIN.equals(named)) {
+						for (String where : surefireParametersDefeatingChecksIn(plugin)) {
+							violations.add(pom + " " + named + " at the managed entry " + where + ", which "
+									+ "stops a module's checks running or discards their verdict. The "
+									+ "<configuration> element itself is permitted — refusing it wholesale "
+									+ "reddened an ordinary argLine — so what is inside it is read instead. An "
+									+ "<excludes> or a <test> there can name the api-side guard, which is then "
+									+ "not running to report it; this arm is. See "
+									+ "SUREFIRE_PARAMETERS_DEFEATING_CHECKS");
+						}
+					}
 				}
 			}
-			for (String where : testSkipPropertiesIn(root)) {
+			for (String where : testDefeatingPropertiesIn(root)) {
 				violations.add(pom + " " + where);
 			}
 		}
@@ -315,7 +378,7 @@ public class JavadocReferenceOmodCorpusTest {
 					+ "theArgumentsTheBuildDeclaresRefuseADeadJavadocReference reads the argument list off that "
 					+ "very element — so finding none means this walk, its parse, or that declaration is gone.");
 		}
-		List<String> skipping = testSkipPropertiesIn(parseXml("<project><properties>"
+		List<String> skipping = testDefeatingPropertiesIn(parseXml("<project><properties>"
 				+ "<maven.test.skip>true</maven.test.skip></properties><profiles><profile><properties>"
 				+ "<skipTests>true</skipTests></properties></profile></profiles></project>"));
 		if (skipping.size() != 2) {
@@ -325,16 +388,58 @@ public class JavadocReferenceOmodCorpusTest {
 					+ "api-side guard does not run when api's own tests are skipped. This repository sets "
 					+ "none of them, so only this synthetic POM can say so");
 		}
-		List<String> notSkipping = testSkipPropertiesIn(parseXml("<project><properties>"
-				+ "<maven.test.skip>false</maven.test.skip></properties><build><plugins><plugin>"
+		List<String> notSkipping = testDefeatingPropertiesIn(parseXml("<project><properties>"
+				+ "<maven.test.skip>false</maven.test.skip><test></test></properties><build><plugins><plugin>"
 				+ "<configuration><properties><skipTests>true</skipTests></properties></configuration>"
 				+ "</plugin></plugins></build></project>"));
 		if (!notSkipping.isEmpty()) {
-			violations.add("a test-skip property set to FALSE, or a <properties> inside a plugin's own "
-					+ "<configuration>, is reported as taking tests out of the build (it read " + notSkipping
-					+ "). Neither is: false is the default, and maven-surefire-plugin's descriptor declares a "
-					+ "<properties> parameter of type java.util.Properties for its provider configuration. "
-					+ "Either refusal reddens a POM that builds exactly as this one does");
+			violations.add("a test-skip property set to FALSE, an EMPTY test filter, or a <properties> inside "
+					+ "a plugin's own <configuration>, is reported as taking tests out of the build (it read "
+					+ notSkipping + "). None is: false is the default, an empty filter selects nothing, and "
+					+ "maven-surefire-plugin's descriptor declares a <properties> parameter of type "
+					+ "java.util.Properties for its provider configuration. Any of those refusals reddens a "
+					+ "POM that builds exactly as this one does");
+		}
+		List<String> filteredAndIgnored = testDefeatingPropertiesIn(parseXml("<project><properties>"
+				+ "<test>DateFormatUtilTest</test><maven.test.failure.ignore>true"
+				+ "</maven.test.failure.ignore></properties></project>"));
+		if (filteredAndIgnored.size() != 2) {
+			violations.add("the two properties that defeat a module's checks without SKIPPING anything — "
+					+ "surefire's <test> filter and <maven.test.failure.ignore> — are not both read (it read "
+					+ filteredAndIgnored + "). Measured: <test>DateFormatUtilTest</test> in api/pom.xml gave "
+					+ "exit 0 with api running 5 tests, the api-side guard not among them, and this module's "
+					+ "127 green. Both were missing from these lists until round 10");
+		}
+		String tuned = "<plugin><artifactId>" + SUREFIRE_PLUGIN + "</artifactId><configuration>"
+				+ "<argLine>-Xmx1024m</argLine><skipTests>false</skipTests></configuration></plugin>";
+		List<String> tuningRefused = surefireParametersDefeatingChecksIn(parseXml(tuned));
+		if (!tuningRefused.isEmpty()) {
+			violations.add("an ordinary surefire <configuration> — an argLine, skipTests explicitly false — is "
+					+ "reported as defeating a module's checks (it read " + tuningRefused + "). It takes "
+					+ "nothing away, and refusing it reddens a legal build: measured, refusing the whole "
+					+ "<configuration> element gave exit 1 on exactly that POM. The one failure direction both "
+					+ "arms refuse");
+		}
+		for (String silencing : Arrays.asList("<skipTests>true</skipTests>", "<skip>true</skip>",
+				"<skipExec>true</skipExec>", "<testFailureIgnore>true</testFailureIgnore>",
+				"<test>DateFormatUtilTest</test>", "<groups>eval</groups>",
+				"<excludes><exclude>**/JavadocReferenceGuardTest.java</exclude></excludes>",
+				"<includes><include>**/DateFormatUtilTest.java</include></includes>",
+				"<excludesFile>exclusions.txt</excludesFile>",
+				"<includesFile>inclusions.txt</includesFile>")) {
+			String atThePlugin = "<plugin><artifactId>" + SUREFIRE_PLUGIN + "</artifactId><configuration>"
+					+ silencing + "</configuration></plugin>";
+			String atAnExecution = "<plugin><artifactId>" + SUREFIRE_PLUGIN + "</artifactId><executions>"
+					+ "<execution><id>default-test</id><configuration>" + silencing
+					+ "</configuration></execution></executions></plugin>";
+			for (String refusable : Arrays.asList(atThePlugin, atAnExecution)) {
+				if (surefireParametersDefeatingChecksIn(parseXml(refusable)).isEmpty()) {
+					violations.add("a surefire configuration carrying " + silencing + " is not refused ("
+							+ refusable + "). The exclusion naming the API-side guard is the case this arm "
+							+ "exists for: that guard is not running to report it. This repository configures "
+							+ "surefire nowhere, so only these synthetic POMs can say so");
+				}
+			}
 		}
 		Path apiGuard = repoRoot().resolve(API_SIDE_GUARD);
 		if (!Files.isRegularFile(apiGuard)) {
@@ -355,23 +460,73 @@ public class JavadocReferenceOmodCorpusTest {
 	}
 
 	/**
-	 * Every {@code <properties>} entry in one POM that takes that module's tests out of the build,
-	 * described. See {@link #TEST_SKIP_PROPERTIES}, and {@link #propertiesDeclaredUnderProjectOrProfile}
-	 * for why the element is not read document-wide.
+	 * Every {@code <properties>} entry in one POM that stops that module's checks asserting anything,
+	 * described. See {@link #TEST_DEFEATING_PROPERTIES} for the list and
+	 * {@link #propertiesDeclaredUnderProjectOrProfile} for why the element is not read document-wide.
 	 */
-	private static List<String> testSkipPropertiesIn(Element pom) {
+	private static List<String> testDefeatingPropertiesIn(Element pom) {
 		List<String> where = new ArrayList<String>();
 		for (Element properties : propertiesDeclaredUnderProjectOrProfile(pom)) {
-			for (String property : TEST_SKIP_PROPERTIES) {
+			for (String property : TEST_DEFEATING_PROPERTIES) {
 				Element declared = directChild(properties, property);
-				if (declared != null && "true".equalsIgnoreCase(declared.getTextContent().trim())) {
-					where.add("<properties> sets <" + property + ">true</" + property + ">, which takes that "
-							+ "module's tests out of the build — so its corpus check asserts nothing. Three "
-							+ "words, naming no plugin. See TEST_SKIP_PROPERTIES");
+				if (defeatsAModulesChecks(declared)) {
+					where.add("<properties> sets <" + property + ">" + declared.getTextContent().trim()
+							+ "</" + property + ">, which stops that module's checks asserting anything — by "
+							+ "skipping them, by narrowing the run to something else, or by discarding their "
+							+ "verdict. One line, naming no plugin. See TEST_DEFEATING_PROPERTIES");
 				}
 			}
 		}
 		return where;
+	}
+
+	/**
+	 * Every surefire parameter inside the managed entry's {@code <configuration>} — the plugin's own or
+	 * an execution's — that stops a module's checks asserting anything, described. See
+	 * {@link #SUREFIRE_PARAMETERS_DEFEATING_CHECKS}.
+	 */
+	private static List<String> surefireParametersDefeatingChecksIn(Element plugin) {
+		List<String> where = new ArrayList<String>();
+		List<Element> configurations = new ArrayList<Element>();
+		Element pluginLevel = directChild(plugin, "configuration");
+		if (pluginLevel != null) {
+			configurations.add(pluginLevel);
+		}
+		Element executions = directChild(plugin, "executions");
+		if (executions != null) {
+			for (Element execution : elementChildren(executions)) {
+				Element configuration = directChild(execution, "configuration");
+				if (configuration != null) {
+					configurations.add(configuration);
+				}
+			}
+		}
+		for (Element configuration : configurations) {
+			for (String parameter : SUREFIRE_PARAMETERS_DEFEATING_CHECKS) {
+				Element declared = directChild(configuration, parameter);
+				if (defeatsAModulesChecks(declared)) {
+					where.add("<configuration> sets <" + parameter + ">" + declared.getTextContent().trim()
+							+ "</" + parameter + ">");
+				}
+			}
+		}
+		return where;
+	}
+
+	/**
+	 * Whether one such element actually takes something away: ABSENT does not, and neither does a
+	 * blank value (an empty filter selects nothing) or the word {@code false} (which is the default of
+	 * every flag in these lists). Anything else does — a {@code true}, a class-name pattern, a list of
+	 * exclusions. One rule over both lists, deliberately coarser than the api-side guard's split by
+	 * value shape: refusing a POM that builds exactly as this one does is the failure direction both
+	 * arms refuse, and the three cases above are the whole of what a legal declaration looks like here.
+	 */
+	private static boolean defeatsAModulesChecks(Element declared) {
+		if (declared == null) {
+			return false;
+		}
+		String value = declared.getTextContent().trim();
+		return !value.isEmpty() && !"false".equalsIgnoreCase(value);
 	}
 
 	/**

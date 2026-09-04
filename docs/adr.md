@@ -5741,7 +5741,9 @@ the gate was open, which is the only property they share:
   dead pointer planted in `omod/src/main/java`, `mvn -o clean install` exit 0, BUILD SUCCESS, zero
   `reference not found` printed, the guard green — and each landed on `omod`, for a structural reason
   and not by chance: `everyJavadocReferenceInTheApiModuleResolves` compiles the api corpus with
-  arguments it chooses itself, so no POM edit can reach api, and `omod` had nothing of the kind.
+  arguments it chooses itself, so what it LOOKS FOR is decided by its own literals and not by a POM —
+  which is not the same as a POM being unable to stop it running, the distinction round 9 turned on —
+  and `omod` had nothing of the kind.
   (i) **A `<compilerArgs>` entry not spelled `<arg>`.** Maven maps a `List<String>` mojo parameter from
   every child element regardless of tag name — the `<arg>` spelling is convention, not a rule Maven
   applies — so `<compilerArg>-Xdoclint/package:-org.openmrs.*</compilerArg>` beside the managed
@@ -5830,11 +5832,92 @@ the gate was open, which is the only property they share:
   fourth position is bounded". A POM can still remove test execution from EVERY module at once: an
   `<executions>` entry in the ROOT pom's `<build><plugins>`, which children inherit, or a test-skip
   property in the root `<properties>`. Nothing written in a test survives that, because no test runs;
-  both were measured at exit 0 with BUILD SUCCESS. What it costs the person doing it is that the build
-  then runs **no tests at all**, in either module — measured: api's surefire printed no test banner and
-  no counts, omod's printed "No tests to run", and the reactor's test total was zero. That is not a
-  green build with a dead pointer hidden inside it; it is a build with no tests, and it says so in its
-  own output. Do not write a third absolute in place of that sentence.
+  both were measured at exit 0 with BUILD SUCCESS, and what that one costs the person doing it is every
+  `Tests run:` line in the reactor — api's surefire printed no test banner and no counts, omod's printed
+  "No tests to run", the reactor's test total was zero. **That cost sentence was then published as the
+  cost of the residue, and round 10 falsified it too**: the family is wider than the shapes it was
+  measured on, and two of its members leave the test total intact. Do not write a third absolute in
+  place of it, and do not write a single characteristic cost either — the round-10 bullet below carries
+  what was measured and which channel each shape is loud on.
+
+- **Round 10 found this guard refusing ordinary Maven practice in two places, and two further
+  positions from which a module's checks vanish. Both halves matter and the first half is the one
+  that would have shipped a red build on a legal POM.**
+  (i) **A parameterised plugin version.** The version reader parsed `<version>` text as dot-separated
+  leading digits with `-1` substituted for a segment carrying none, so
+  `<version>${compilerPluginVersion}</version>` — the property declared in the same POM, which Maven
+  builds byte-identically — read as `[-1]` and was refused as "older than 3.1". Measured on this
+  branch, JDK 21: that one substitution at the managed entry gave `mvn -o clean test` exit 1,
+  two of that class's checks failing, one message reporting the pin as `[-1]` and the other as older
+  than the floor, with no remedy in either except to un-parameterise. A `${...}` is interpolated now from the
+  POM's own `<properties>` (the project's and any `<profile>`'s) and then the reactor parent's, and
+  the resolved value is evaluated exactly as a literal is — measured both ways: resolving to 3.13.0
+  builds green at exit 0, resolving to 2.5.1 is refused with the floor's own message naming what it
+  resolved to. A version that stays unevaluable is a THIRD verdict, printing what could not be read
+  and what the reader would need, never "below the floor": at the MANAGED entry that is a failure,
+  because a version this guard can read is already required there, and at a CHILD declaration it is
+  silent, exactly as pinning no version at all is. That silence is a hole the size of
+  `<version>RELEASE</version>` in `omod/pom.xml`, disclosed rather than closed — and narrower than it
+  looks, because Maven refuses two of the four shapes itself: measured on both spellings, `RELEASE` and
+  `LATEST` at the managed entry each give `'build.plugins.plugin.version' for
+  org.apache.maven.plugins:maven-compiler-plugin must be a valid version but is 'RELEASE'` (respectively
+  `'LATEST'`) and the build reads no project at all. What the verdict IS reachable for was measured too:
+  `-DcompilerPluginVersion=3.13.0` on the command line with the placeholder at the managed entry and no
+  such property in any POM gave `mvn -o clean test -pl api -am` exit 1 with exactly one failing check,
+  the cannot-determine message printed and the floor not mentioned. A RANGE was refused at plugin
+  RESOLUTION in an offline build rather than by this verdict, so what it does online is unmeasured.
+  (ii) **A surefire `<configuration>`.** It was refused WHOLESALE, and it is the element a real
+  project reaches for first: measured, `<argLine>-Xmx1024m</argLine>` with
+  `<redirectTestOutputToFile>true</redirectTestOutputToFile>` at the root's managed surefire entry gave
+  exit 1 on a POM that takes no test out of anything. The obvious way past that red build is to
+  allowlist the element — after which a surefire `<excludes>` naming either module's check is read by
+  nothing. So the element is permitted and its children are judged: `skip`, `skipTests`, `skipExec`
+  and `testFailureIgnore` where true, and the selection parameters `test`, `includes`, `includesFile`,
+  `excludes`, `excludesFile` and `groups` wherever they carry a value. Measured in all three
+  directions: the tuning above green at exit 0; an `<excludes>` naming the omod corpus check reported
+  by the api arm at exit 1; one naming the api guard reported by the omod arm at exit 1, that guard
+  not being among the tests that ran. `excludedGroups` is deliberately absent — a group EXCLUSION
+  cannot reach a test that declares no group, while a group INCLUSION drops both checks, which is why
+  `groups` is there. **It is a list of names and not a closed world**, and that is the point: closing
+  the world over surefire's parameters is what produced the false positive, so a parameter nobody has
+  thought of is permitted here and disclosed instead.
+  (iii) **Surefire's own `test` FILTER property was not in either arm's list.** Measured:
+  `<properties><test>DateFormatUtilTest</test></properties>` in `api/pom.xml` — `mvn -o clean install`
+  exit 0, BUILD SUCCESS, api's surefire printing `Tests run: 5` with `JavadocReferenceGuardTest` not
+  among them, and omod's whole 127-test suite green. With the api guard out, the position the omod arm
+  deliberately does not read — the CONTENTS of the managed `<compilerArgs>` — is held by nothing, so
+  one added `<arg>` silences doclint for the whole reactor and a dead pointer in `api/src/main/java`
+  stands in a build where BOTH modules report tests running. It is refused by the module whose tests
+  still run, like every other member of this family.
+  (iv) **`maven.test.failure.ignore` was absent too, and it is the member that cannot be turned into a
+  red build in the root pom**, because it is what makes a guard's own failure non-fatal. Measured:
+  that property in the root pom's `<properties>` beside `maven.compiler.failOnError=false` gave exit 0
+  and BUILD SUCCESS with the full reactor total printed — api `Tests run: 1870, Failures: 1`, omod 127
+  green. In a CHILD pom it removes one module's verdict and the other module reddens, which is what
+  the refusal buys; in the root pom the refusal is reported into a build that exits 0 anyway, and what
+  is left is the `Failures:` line it cannot suppress. Refused and disclosed, both.
+- **The disclosure is generalised rather than extended by one more sentence, and that is round 10's
+  main change.** Six consecutive rounds each found a position the round before had not read, and two
+  absolute claims were falsified in consecutive rounds, so the honest statement is not a longer list.
+  What the two guards DO: they make the flag's presence, what the declared arguments actually do
+  (asked of the compiler), the plugin version that has to honour them, and the assertion that each
+  module's tests are in the build at all checkable from two modules that state the rules differently —
+  so one edit rarely defeats both. What they do NOT do: enumerate the positions from which Maven can
+  alter javac's arguments or take a module's tests out of the build. **That is measured, six rounds
+  running, rather than asserted.** What an edit can still achieve, and on which channel it shows —
+  LOUD: where `failOnError` is what was turned off the doclint error itself is still printed
+  (`[ERROR] ... reference not found`); `maven.test.failure.ignore` leaves `Tests run: N, Failures: 1`
+  printed beside exit 0; a test-skip in the root pom leaves a module printing `No tests to run` and
+  emits no `Tests run:` line for it, so the reactor's total drops. QUIET: a surefire parameter nobody
+  here has thought of inside the `<configuration>` now permitted; a child declaration pinning a
+  version these files cannot evaluate, where the floor goes unchecked; anything Maven reads that is
+  not one of these POMs — a `settings.xml` profile, the command line, `MAVEN_OPTS`, a committed
+  `.mvn/maven.config`. **And the residue has no single characteristic cost**, which is what the
+  sentence above it claimed for two rounds: the `test` filter leaves both modules printing test counts
+  with one module's checks simply absent. What is claimed for all of this is that the cost of
+  silencing the gate is raised and the common cases are loud — **not** that it cannot be silenced. No
+  sentence of the form "no POM edit can X" belongs in this decision, in either guard's javadoc, or in
+  the root pom's comment; where one suggests itself, name the edit that was checked and stop there.
 
 The same rule decides what counts as a javadoc error over the module's own sources: **a DIFFERENCE,
 never a message.** Where the flagged compile reports errors the sources are compiled again without

@@ -118,32 +118,46 @@
 						     between them they hold the flag's presence, what the declared arguments DO (asked
 						     of the compiler), the plugin version that has to honour them, and the assertion
 						     that each module's tests are in the build — stated two different ways from two
-						     modules, so one edit rarely defeats both. They do NOT enumerate every position
-						     from which Maven can change javac's arguments or drop a module's tests: every
-						     review round of #262 so far has found one more, and every absolute claim
-						     published about it — one in the omod-side check's javadoc, one in Decision 75,
-						     and that decision's own QUIET enumeration — has been falsified by a later
-						     round. What is
-						     claimed is that silencing this gate costs more and shows up on output a
-						     maintainer sees — a printed doclint error, a `Failures:` line beside exit 0, a
-						     reactor test total that drops — not that it cannot be silenced. Do NOT grep a log
-						     for "No tests to run" to check the gate ran: that string belongs to a child-pom
-						     shape the guards refuse. Re-measured: a root-pom test-skip property prints each
-						     module's surefire banner with "Tests are skipped." under it, and the <executions>
-						     spelling in the root's <build><plugins> prints no surefire output at all.
+						     modules, so one edit rarely defeats both. What they are FOR is the ACCIDENTAL
+						     removal of the flag or of the checks that read it, which is the failure #262
+						     describes. They do NOT enumerate every position from which Maven can change
+						     javac's arguments or drop a module's tests: every review round of #262 so far has
+						     found one more, and every absolute claim published about it — one in the
+						     omod-side check's javadoc, one in Decision 75, and that decision's own QUIET
+						     enumeration — has been falsified by a later round.
 
-						     Round 12's shape is the one that reads least like a dropped total, and it is
-						     why the QUIET enumeration was wrong: a surefire SELECTION in THIS pom's
-						     <properties> whose value removes both guards from the run is refused by nothing
-						     that runs, because the refusal is written in the tests it drops. Measured, JDK
-						     21: <surefire.excludes>**/JavadocReference*Test.java</surefire.excludes> here
-						     gives `mvn -o clean install` exit 0, BUILD SUCCESS, `grep -c JavadocReference`
-						     over the whole log zero, and a reactor total short by only those guards' tests.
-						     It does NOT on its own reinstate the defect: this <arg> is still on javac, and
-						     the same edit with a dead pointer in api/src/main/java gives exit 1 with
-						     "reference not found" printed. It removes the guard on what is INSIDE this
-						     <compilerArgs>, so one further <arg> here is the second edit that silences
-						     doclint. Decision 75 carries the rest, and what turned out not to be quiet. -->
+						     A sentence stood here claiming that silencing this gate shows up on output a
+						     maintainer sees (a printed doclint error, a `Failures:` line beside exit 0, a
+						     reactor test total that drops). That claim was written five times over and
+						     rounds 8, 10, 11, 12, 14 and 16 each measured one false, the last in four ways
+						     at once, of which two print nothing at all: a JUnit Platform dry run set through the
+						     un-prefixed `argLine` property, or through surefire's own
+						     <systemPropertyVariables>, reports every test as a SUCCESS without executing it
+						     (measured: exit 0, api reporting every test as skipped, omod green, the property named
+						     nowhere in the log). Round 17 DELETED the claim rather than rewriting it a sixth
+						     time. Do not write another; name the edit that was actually checked and stop.
+
+						     Round 12's shape is why the QUIET enumeration was wrong: a surefire SELECTION in
+						     THIS pom's <properties> whose value removes both guards from the run is refused
+						     by nothing that runs, because the refusal is written in the tests it drops.
+						     Measured, JDK 21:
+						     <surefire.excludes>**/JavadocReference*Test.java</surefire.excludes> here gives
+						     `mvn -o clean install` exit 0, BUILD SUCCESS, `grep -c JavadocReference` over the
+						     whole log zero, and a reactor total short by only those guards' tests. It does
+						     NOT on its own reinstate the defect: this <arg> is still on javac, and the same
+						     edit with a dead pointer in api/src/main/java gives exit 1 with "reference not
+						     found" printed. It removes the guard on what is INSIDE this <compilerArgs>, so
+						     one further <arg> here is the second edit that silences doclint.
+
+						     What holds the flag OUTSIDE surefire is the `javadoc-reference-gate` job in
+						     .github/workflows/build.yml. It plants a dead javadoc reference in each module's
+						     src/main/java in turn, compiles it through this build with -DskipTests, and
+						     requires the build to fail with "reference not found" naming that file — then
+						     requires the same build with no probe to pass. Verified: with round 12's
+						     selection in the root <properties>, which removes both guards from the reactor,
+						     that job still passes with both probes failing as required; with this <arg>
+						     deleted it exits 1 on the first probe. It does not cover an edit to that workflow
+						     file itself. Decision 75 carries the rest. -->
 						<compilerArgs>
 							<arg>-Xdoclint:reference</arg>
 						</compilerArgs>

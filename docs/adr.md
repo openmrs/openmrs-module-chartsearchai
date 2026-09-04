@@ -6018,10 +6018,17 @@ the gate was open, which is the only property they share:
   whatever arrives under it later. The 39 un-prefixed bindings have no prefix to read and are
   answered by NAME; the ones that suppress a module's tests or discard their verdict are the legacy
   spellings already read — `maven.test.skip`, `maven.test.skip.exec`, `skipTests`,
-  `maven.test.failure.ignore`, `test`, `groups` and now `excludedGroups` — and **that set is BOUNDED
-  rather than complete**, the remainder being values Maven injects that a POM cannot usefully set
-  (`project`, `session`, `basedir`, `project.build.*`) or knobs deciding HOW tests run rather than
-  WHETHER (`argLine`, `forkCount`, `parallel`). A further one is a name, not a family.
+  `maven.test.failure.ignore`, `test`, `groups` and now `excludedGroups` — seven of the 39.
+  **What stood here about the other 32 was a characterisation and round 16 measured it false**: it
+  read that they were values Maven injects a POM cannot usefully set (`project`, `session`,
+  `basedir`, `project.build.*`) or knobs deciding HOW tests run rather than WHETHER, and it named
+  `argLine` as an example of the harmless kind. `argLine` silences the whole run — bullet (vii)
+  below. Round 16 put each of the 32 to a build rather than to a reading and found `argLine`,
+  `maven.test.dependency.excludes` and `maven.test.additionalClasspath` able to silence a module's
+  checks; `workingDirectory` failing the build rather than silencing anything, so not a hole; and
+  the rest clean or loud, including a batch of 14 planted together that left the reactor's totals
+  byte-identical to baseline. That is a measurement of those 32 at plugin 3.5.5, not a proof about a
+  family; a further one is a name, not a family.
   **The ELEMENT side gets no prefix rule, because a `<configuration>` child's name carries none** —
   `excludedGroups`, `excludeJUnit5Engines` and `includeJUnit5Engines` are map entries in both arms
   for that reason, which is also what keeps
@@ -6080,6 +6087,97 @@ the gate was open, which is the only property they share:
   property whose value removes both guards from the run is still refused by nothing that runs; the
   LOUD/QUIET bullet below carries that. The prefix narrows how easily such an edit is reached and
   does not remove it, and no sentence here should be read as saying otherwise.
+  (vii) **Round 16: four shapes that leave surefire reporting nothing at all, and the point at which
+  the answer stopped being a test.** All measured on this head, JDK 21, in `api/pom.xml`'s
+  `<properties>` unless said otherwise — **a file with no `<properties>` element, so each
+  reproduction adds one and must assert its anchor; an injection that silently no-ops reads as a
+  clean baseline.** Baseline for comparison, this head: `mvn -o clean install` exit 0, api
+  both modules' suites green with no test skipped by any
+  POM setting, and both guard classes named as run.
+  - **r16-1, `argLine`.** Bound to the un-prefixed `${argLine}`, so a `<properties>` entry of that
+    name reaches the forked JVM and a `-D` in it sets a system property there.
+    `<argLine>-Djunit.platform.execution.dryRun.enabled=true</argLine>` gave exit 0, BUILD SUCCESS,
+    api's surefire printing the SAME figure for `Tests run` and `Skipped` — the api guard's own tests
+    among them — omod's suite green, and `argLine` named ZERO times in the log. JUnit Platform's dry run reports every
+    test as a SUCCESS without executing it, so no `Failures:` line appears anywhere and no total
+    drops to zero. Refused now in both arms — `SUREFIRE_PARAMETERS_DISABLING_THE_RUNNER` in the api
+    arm, the map plus `FORKED_JVM_ARGUMENT_NAMES` in the omod one. **Its value rule is a `-D` and
+    deliberately not a non-blank value**: `<argLine>-Xmx1024m</argLine>` is the very string round 10
+    reverted a wholesale refusal over, it takes no test away, and both arms assert it stays
+    permitted (`FORKED_JVM_ARGUMENTS_TAKING_NO_TEST_AWAY`, `VALUE_RULE_WITNESSES`). What that leaves:
+    a `-D` reaching the fork through an argument file, and friction on a harmless
+    `-Dfile.encoding=UTF-8`.
+  - **r16-4, `maven.test.dependency.excludes`** (`classpathDependencyExcludes`). Removes artifacts
+    from the TEST classpath; with JUnit Platform gone from it nothing is discovered.
+    `org.junit.platform:junit-platform-commons,org.junit.jupiter:junit-jupiter-engine,org.junit.jupiter:junit-jupiter-api`
+    gave exit 0, api `Tests run: 0`, omod green, the property named ZERO times. **Round 16 reports
+    the single-artifact forms did NOT reproduce it**, so the effect is of the triple and nothing here
+    claims one name does it. Refused at any non-blank value: the cost is friction on an ordinary
+    exclusion of a conflicting artifact, and the narrower rule available — naming the artifacts the
+    engine happens to need — is a list that goes stale on the next JUnit release.
+  - **r16-2, the word `false` on a SELECTION, and the sharpest of the four because it was a seam
+    between the two arms.** The omod arm's `defeatsAModulesChecks` exempted `false` for EVERY entry
+    including selections, where `false` is a working pattern or tag expression that matches nothing;
+    the api arm refuses any non-blank selection value, so the two disagreed on exactly that word, in
+    the direction where only the omod arm can speak. `<surefire.includes>false</surefire.includes>`
+    gave exit 0 with api's surefire printing its mojo banner and **no test output whatever** — quieter
+    than round 12's shape, which at least dropped a visible total — omod's suite green, the property
+    named nowhere; `<groups>false</groups>` gave exit 0 with api `Tests run: 0`. **Directional
+    control**: the same `<groups>false</groups>` in `omod/pom.xml` gave exit 1 with the API arm naming
+    it twice and the omod arm silent. Fixed by classifying the map's names —
+    `BOOLEAN_FLAG_NAMES` keep the exemption, because `false` is their default;
+    `FORKED_JVM_ARGUMENT_NAMES` take the `-D` rule; everything else is refused at any non-blank
+    value. The javadoc sentence claiming that absent, blank and `false` were "the whole of what a
+    legal declaration looks like here" was untrue of a selection and is corrected in place.
+    **The pairing check could not see this**, every witness value in it being non-blank and not
+    `false`, so `VALUE_RULE_WITNESSES` states one verdict per parameter as literals — derived from
+    the classification lists it would agree with a mutation that empties them.
+  - **r16-3, surefire's `<systemPropertyVariables>`, resolved by RECORD and not by refusal.** The
+    same dry run at the root pom's managed `<configuration>` gave exit 0, api
+    every test reported as skipped in BOTH modules, nothing reported anywhere.
+    **It stays permitted.** That element is what a real project reaches for first, refusing it
+    wholesale is what round 10 reverted, and `noPomEditTakesAModuleOutOfTheTestBuild` actively
+    asserts it is legal — refusing it would redden ordinary Maven usage, which is the one failure
+    direction both arms refuse. What had to go is any sentence reading as completeness around it, and
+    that is what the LOUD/QUIET deletion above is.
+  - **r16-5, `maven.test.additionalClasspath`** (`additionalClasspathElements`) can put a
+    `junit-platform.properties` on the test classpath and switch the dry run on for BOTH modules.
+    Named and not closed: the silencing edit is then not a POM edit alone — it needs a committed
+    properties file, its own line in a diff — and refusing an ordinary additional classpath entry
+    would redden a shape Maven users do use.
+  - **What was measured after the change.** Each of r16-1, r16-4 and both r16-2 spellings, planted in
+    `api/pom.xml`'s `<properties>`: exit 1, each named by
+    `JavadocReferenceOmodCorpusTest.noPomEditTakesAModuleOutOfTheTestBuild`, that arm being the one
+    whose tests still run. Directional control for r16-1 the other way:
+    `<argLine>-Djunit.platform.execution.dryRun.enabled=true</argLine>` in `omod/pom.xml` gave exit 1
+    named by `JavadocReferenceGuardTest.noPomEditTakesAModuleOutOfTheTestBuild`. **Descriptor counts
+    re-read at this version and reproduced to the digit**: `META-INF/maven/plugin.xml` in the
+    resolved `maven-surefire-plugin-3.5.5` jar, `test` mojo — 81 `<configuration>` children, 70
+    binding a user property through a bare `${...}`, 31 of those prefixed `surefire.`, 39 un-prefixed,
+    11 expression-less. `systemPropertyVariables` is a `<parameters>` entry with no
+    `<configuration>` binding, which is why no property rule reaches it.
+- **The closing move is a CI-side assertion that does not run under surefire, and it is the ticket's
+  own suggestion.** Twelve review rounds established the structural residue: every in-repo guard runs
+  under surefire — both guard classes are JUnit tests — and a POM edit can take surefire's report
+  away from at least the five positions above. `javadoc-reference-gate` in `.github/workflows/build.yml` asserts the flag's EFFECT instead
+  of its text — presence is what rounds 12 and 14 defeated, so there is no grep for it. It plants a
+  dead javadoc reference in a throwaway compilation unit in each module's `src/main/java` in turn
+  (an ATTACHED javadoc block, immediately above a method declaration: between a class's modifiers and
+  its `class` keyword doclint says nothing, and a probe written there reads as a clean baseline
+  whatever the flag does), compiles it through this build with `-DskipTests`, and requires the build
+  to FAIL with `reference not found` naming that very file — then requires the same build with no
+  probe planted to PASS, so the failure is attributable to the probe and not to a pre-existing break.
+  One probe per module in two separate builds, because the first fails at api and never reaches
+  omod's sources. **Proved both ways with the job's own script text**, JDK 21: on this head exit 0
+  with both probes failing as required; with `<arg>-Xdoclint:reference</arg>` deleted from the root
+  pom, exit 1 on the first probe printing the `::error::` that names the managed `<compilerArgs>`;
+  and with round 12's `<surefire.excludes>**/JavadocReference*Test.java</surefire.excludes>` in the
+  root `<properties>` — the edit that removes BOTH guards from the reactor at exit 0 — still exit 0
+  with both probes failing, which is the independence claim. **What it does not cover**: an edit to
+  that workflow file itself, deleting the job or making it non-fatal, is a position no check inside
+  the repository can hold; whether it gates a merge is branch protection's business and not this
+  file's; and it says nothing about doclint groups other than `reference`, nor about a source root
+  neither module compiles.
 - **The disclosure is generalised rather than extended by one more sentence, and that is round 10's
   main change.** Every round so far has found a position the round before had not read, and every
   absolute published here has been falsified by a later round, so the honest statement is not a
@@ -6089,27 +6187,33 @@ the gate was open, which is the only property they share:
   module's tests are in the build at all checkable from two modules that state the rules differently —
   so one edit rarely defeats both. What they do NOT do: enumerate the positions from which Maven can
   alter javac's arguments or take a module's tests out of the build. **That is measured, every round
-  so far, rather than asserted.** What an edit can still achieve, and on which channel it shows —
-  LOUD: where `failOnError` is what was turned off the doclint error itself is still printed
+  so far, rather than asserted.** What these guards are FOR is the ACCIDENTAL removal of the
+  flag or of the checks that read it, which is the failure #262 describes.
+  **What an edit can still achieve, recorded as the builds that were run and NOT as a channel it
+  shows on.** A claim of the second kind — that silencing this gate shows up on output a maintainer
+  sees, itemised as LOUD and QUIET — stood in this bullet, and it was written five times over with
+  rounds 8, 10, 11, 12, 14 and 16 each measuring one false, the last in four ways at once. Round 17
+  DELETED it rather than rewriting it a sixth time. What is recorded instead, per shape:
+  where `failOnError` is what was turned off the doclint error itself is still printed
   (`[ERROR] ... reference not found`); `maven.test.failure.ignore` leaves `Tests run: N, Failures: M`
   printed beside exit 0, on BOTH modules' count lines, from the three checks named in bullet (iv)
-  above; a test-skip in the root pom emits no `Tests run:` line for either module, so the reactor's
-  total drops to nothing — and what it prints instead is `Tests are skipped.` under each module's
-  surefire banner for the PROPERTY spelling, and no surefire output at all for the `<executions>`
-  spelling. **Not `No tests to run`, which this list claimed for a round.** That string belongs to
-  round 9's child-pom shape, which is refused, so it is the wrong thing to grep a log for. QUIET:
-  anything Maven reads that is not one of these POMs — a `settings.xml` profile, the command line,
-  `MAVEN_OPTS`, a committed `.mvn/maven.config`; a surefire parameter neither arm names, inside the
-  `<configuration>` now permitted; **and a surefire SELECTION whose value removes BOTH guards from the
-  run, which is a parameter both arms DO refuse, set inside one of these POMs.** That last is round
-  12's finding and it falsified this enumeration, which had said the quiet residue was the two items
-  before it — a third absolute of the kind this decision's own closing instruction forbids. A guard
-  cannot report an edit that stops it running. Measured on this head, JDK 21:
+  above; a test-skip in the root pom emits no `Tests run:` line for either module, printing
+  `Tests are skipped.` under each module's surefire banner for the PROPERTY spelling and no surefire
+  output at all for the `<executions>` spelling. **Not `No tests to run`, which this list claimed for
+  a round.** That string belongs to round 9's child-pom shape, which is refused, so it is the wrong
+  thing to grep a log for. Reported by nothing here so far: anything Maven reads that is not one of
+  these POMs — a `settings.xml` profile, the command line, `MAVEN_OPTS`, a committed
+  `.mvn/maven.config`; a surefire parameter neither arm names, inside the `<configuration>` now
+  permitted; **and a surefire SELECTION whose value removes BOTH guards from the run, which is a
+  parameter both arms DO refuse, set inside one of these POMs.** That last is round 12's finding and
+  it falsified the enumeration then standing, which had said the residue was the two items before
+  it — a third absolute of the kind this decision's own closing instruction forbids. A guard cannot
+  report an edit that stops it running. Measured on this head, JDK 21:
   `<surefire.excludes>**/JavadocReference*Test.java</surefire.excludes>` in the root `<properties>`
   gives `mvn -o clean install` exit 0, BUILD SUCCESS, `grep -c JavadocReference` over the whole log
-  ZERO, and a reactor test total short by only the guards' own tests — which reads as an ordinary
-  green build, not as the total dropping; `<groups>eval</groups>` there gives exit 0 with
-  `Tests run: 0` printed for both modules instead. **Round 14's shape belongs in that QUIET item and
+  ZERO, and a reactor test total short by only the guards' own tests;
+  `<groups>eval</groups>` there gives exit 0 with
+  `Tests run: 0` printed for both modules instead. **Round 14's shape belongs in that item and
   was not covered by it**: `<excludedGroups>none()</excludedGroups>` in `api/pom.xml`'s
   `<properties>` was exit 0 with api `Tests run: 0`, omod green, and `excludedGroups` named zero
   times — a CHILD-pom edit that the module whose tests still ran did not report, because the
@@ -6117,10 +6221,10 @@ the gate was open, which is the only property they share:
   the `<arg>` is still on javac, and that same exclusion with a dead pointer planted in
   `api/src/main/java` gives exit 1 with `reference not found` printed. What it removes is the guard on
   the CONTENTS of the managed `<compilerArgs>`, so one further `<arg>` there is the second edit that
-  silences doclint — two quiet edits and not one, which is the accurate form of the failure mode round
+  silences doclint — two edits and not one, which is the accurate form of the failure mode round
   12 reported.
   **A child declaration pinning a version these files cannot evaluate was in that QUIET list, and it
-  is not quiet.** `versionFloorViolationsAt` is silent on it, deliberately — bullet (i) above says why
+  is not silent.** `versionFloorViolationsAt` is silent on it, deliberately — bullet (i) above says why
   — but two other checks are not. Measured on this head, JDK 21:
   `<version>${compilerPluginVersion}</version>` on a compiler-plugin declaration in `omod/pom.xml`'s
   own `<build><plugins>`, no such property in any of these POMs, run as
@@ -6133,13 +6237,15 @@ the gate was open, which is the only property they share:
   the guard's own report rather than javac's. A consequence of the positional refusal, worth stating
   because it bounds bullet (i): the interpolation leg reading the reactor PARENT's `<properties>` is
   reachable only at a child declaration, and a child declaration is refused — so the unevaluable
-  verdict cannot decide a build on its own.
+  verdict cannot decide a build on its own. Round 17 moved that measurement into
+  `versionFloorViolationsAt`'s own javadoc as well, the api class-javadoc paragraph that carried it
+  being the LOUD/QUIET one deleted.
   **And the residue has no single characteristic cost**, which is what the
   sentence above it claimed for two rounds: the `test` filter leaves both modules printing test counts
-  with one module's checks simply absent. What is claimed for all of this is that the cost of
-  silencing the gate is raised and the common cases are loud — **not** that it cannot be silenced. No
+  with one module's checks simply absent. No
   sentence of the form "no POM edit can X" belongs in this decision, in either guard's javadoc, or in
-  the root pom's comment; where one suggests itself, name the edit that was checked and stop there.
+  the root pom's comment — **and none of the form "silencing it shows up on X" either**; where one
+  suggests itself, name the edit that was checked and stop there.
 
 The same rule decides what counts as a javadoc error over the module's own sources: **a DIFFERENCE,
 never a message.** Where the flagged compile reports errors the sources are compiled again without

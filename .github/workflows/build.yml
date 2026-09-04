@@ -91,6 +91,119 @@ jobs:
       - name: shellcheck (warnings and above)
         run: shellcheck -s sh -S warning backend-init.sh
 
+  # Issue #262, round 17. The in-repo guards (JavadocReferenceGuardTest and its omod-side sibling
+  # JavadocReferenceOmodCorpusTest) assert that -Xdoclint:reference is declared, where it is declared,
+  # and that each module's tests are in the build. Every one of them runs UNDER surefire, and twelve
+  # review rounds established that a POM edit can take surefire's own report away: a dry run through
+  # `argLine` or `systemPropertyVariables` reports every test as a SUCCESS without executing it, a
+  # selection value removes the guard classes from the run, and a test-classpath exclusion leaves
+  # nothing to discover. Each of those is refused by one arm or the other now, but the refusal is
+  # written in tests, so the residue is structural: a guard cannot report an edit that stops it
+  # running. This job is the assertion that does not run under surefire.
+  #
+  # It asserts the EFFECT and not the text. Presence of the flag in the POM is what rounds 12 and 14
+  # defeated — the flag stayed and its guard did not run — so there is no grep for it here: the job
+  # plants a dead javadoc reference in a throwaway compilation unit, compiles it through this build,
+  # and requires the build to FAIL with `reference not found` naming that very file. Then it removes
+  # the probe and requires the same build to PASS, so a failure above is attributable to the probe
+  # rather than to a pre-existing break. One probe per module, in two separate builds, because the
+  # flag is declared once in the root pom's <pluginManagement> and the position is the thing: the
+  # first probe's build fails at api and would never reach omod's sources.
+  #
+  # `-DskipTests` deliberately: surefire never runs in this job, so an edit acting on surefire has no
+  # verdict here to change. Measured for the shape that defeats both guards rather than claimed of
+  # every edit — on this branch, JDK 21, with
+  # <surefire.excludes>**/JavadocReference*Test.java</surefire.excludes> in the root <properties>,
+  # which removes BOTH guards from the reactor at exit 0, this script still exits 0 with both probes
+  # failing as required; and with the <arg>-Xdoclint:reference</arg> deleted from the root pom it
+  # exits 1 on the first probe, printing the ::error:: below.
+  #
+  # WHAT IT DOES NOT COVER. An edit to this workflow file itself — deleting the job, or adding
+  # `continue-on-error` — is a position no check inside the repository can hold, and the same is true
+  # of branch protection deciding whether this job gates a merge. Which checks are required is branch
+  # protection's business and not this file's; a reviewer wanting this one to block a merge sets it
+  # there. It also says nothing about javadoc groups other than `reference`, and nothing about a
+  # source root neither module compiles.
+  javadoc-reference-gate:
+    name: doclint reference gate (asserts the effect, outside surefire)
+    # Opted out of the daily schedule — see the `schedule:` comment above.
+    if: ${{ github.event_name != 'schedule' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 11
+        # One JDK: the variable here is the compiler ARGUMENT, not the JDK. 11 is the lowest of the
+        # required build's matrix. No `cache: maven`, for the reason the querystore-HEAD job below
+        # gives — this job `mvn install`s chartsearchai's own artifacts, and a ~/.m2 cache restorable
+        # by prefix is a way for one job's local installs to reach another job's resolution.
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+
+      - name: A dead javadoc reference fails this build, and the same build without one passes
+        run: |
+          set -euo pipefail
+          # Outside the checkout, so a run leaves the working tree exactly as it found it.
+          log="${RUNNER_TEMP:-/tmp}/doclint-gate.log"
+          probes="api/src/main/java/org/openmrs/module/chartsearchai/DoclintReferenceGateProbe.java
+          omod/src/main/java/org/openmrs/module/chartsearchai/DoclintReferenceGateProbe.java"
+
+          plant() {
+            mkdir -p "$(dirname "$1")"
+            cat > "$1" <<'PROBE'
+          package org.openmrs.module.chartsearchai;
+
+          /**
+           * Planted and deleted by the doclint reference gate in .github/workflows/build.yml. Nothing
+           * in the repository declares this file; a copy left behind is a bug in that job.
+           */
+          public final class DoclintReferenceGateProbe {
+
+              /**
+               * {@link #noSuchMethodTheGateMustNotResolve()} is the dead pointer this gate fails on.
+               * The block is ATTACHED to a declaration on purpose: doclint says nothing about one
+               * sitting between a class's modifiers and its {@code class} keyword, so a probe written
+               * there would report a clean baseline whatever the flag does.
+               */
+              public void probe() {
+              }
+          }
+          PROBE
+          }
+
+          for probe in $probes; do
+            plant "$probe"
+            echo "--- planted $probe; this build MUST fail"
+            set +e
+            mvn --batch-mode -DskipTests install > "${log}" 2>&1
+            status=$?
+            set -e
+            rm -f "$probe"
+            if [ "$status" -eq 0 ]; then
+              tail -40 "${log}"
+              echo "::error::A dead javadoc reference in ${probe} compiled at exit 0. -Xdoclint:reference is not reaching that source root, so #262's defect is back: a dead {@link} is plain text that reads as authoritative. Look at <compilerArgs> in the root pom's <pluginManagement> entry for maven-compiler-plugin."
+              exit 1
+            fi
+            if ! grep -q "reference not found" "${log}"; then
+              tail -40 "${log}"
+              echo "::error::The build with ${probe} planted failed for a reason OTHER than the dead reference (no 'reference not found' printed), so this gate measured nothing about the flag. Fix that failure before reading this job either way."
+              exit 1
+            fi
+            if ! grep -q "${probe}" "${log}"; then
+              grep -n "reference not found" "${log}" | head -5
+              echo "::error::'reference not found' was printed but not for ${probe}, so this build's failure is not attributable to the probe."
+              exit 1
+            fi
+            echo "--- ${probe}: failed with 'reference not found' as required"
+          done
+
+          echo "--- no probe planted; this build MUST pass, or the failures above said nothing"
+          mvn --batch-mode -DskipTests install
+
   # Issue #181. `api/pom.xml` declares querystore-api at 1.0.0-SNAPSHOT, so what this module
   # compiles against is whatever snapshot was published remotely last (CI) or `mvn install`ed
   # locally last (a developer). When querystore changes a method this module calls, the local build

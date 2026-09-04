@@ -59,7 +59,10 @@ import org.w3c.dom.NodeList;
  * {@code maven.test.failure.ignore} — and the first of them leaves BOTH modules printing test counts
  * while one module's checks are gone, which is nothing like "No tests to run". What answers all of
  * that, as far as it is answered, is {@link #noPomEditTakesAModuleOutOfTheTestBuild} below, whose
- * javadoc states what is covered, what is not, and on which channel each remaining shape shows.
+ * javadoc states what is covered and what is not. <strong>It used to state which output each
+ * remaining shape shows on. That claim was written five times over and rounds 8, 10, 11, 12, 14 and
+ * 16 each measured one of them false</strong>, the last in four ways. Round 17 deleted it
+ * rather than rewriting it again.
  * Round 12 then found five surefire SELECTION properties refused in their element form and read
  * from no property at all — this arm's own ten-against-five asymmetry, which
  * {@link #everySurefireParameterIsRefusedInBothFormsMavenReadsIt} now asserts against. Round 14
@@ -71,9 +74,11 @@ import org.w3c.dom.NodeList;
  * extending.
  * <strong>Do not write another absolute here.</strong> Every round so far has found a position the
  * round before had not read, and every absolute published about this change has been falsified by a
- * later round — the api-side class javadoc's QUIET enumeration, which round 12 falsified, and then
- * a REASON given for an omission, which round 14 falsified in four places at once. Where a sentence
- * of that shape suggests itself, name the edit that was actually checked and stop there.
+ * later round — the api-side class javadoc's QUIET enumeration, which round 12 falsified; a REASON
+ * given for an omission, which round 14 falsified in four places at once; and the whole LOUD/QUIET
+ * partition, which round 16 falsified and round 17 deleted. Where a sentence of that shape suggests
+ * itself — an absolute, or a promise about which output an edit shows on — name the edit that was
+ * actually checked and stop there.
  *
  * <p><strong>Why it exists, which is the part worth reading.</strong> {@code JavadocReferenceGuardTest}
  * in the api module holds the same line two ways: it compiles the api corpus with its own arguments,
@@ -245,8 +250,61 @@ public class JavadocReferenceOmodCorpusTest {
 		pairs.put("excludedGroups", "excludedGroups");
 		pairs.put("excludeJUnit5Engines", "surefire.excludeJUnit5Engines");
 		pairs.put("includeJUnit5Engines", "surefire.includeJUnit5Engines");
+		pairs.put("argLine", "argLine");
+		pairs.put("classpathDependencyExcludes", "maven.test.dependency.excludes");
 		return Collections.unmodifiableMap(pairs);
 	}
+
+	/**
+	 * The names in {@link #SUREFIRE_PARAMETERS_DEFEATING_CHECKS} — element or property, the two
+	 * spellings being the same word for some of them — whose harmless default is {@code false}, and so
+	 * the ones {@link #defeatsAModulesChecks} exempts that word for. <strong>A SELECTION is not among
+	 * them, which is r16-2</strong>: there {@code false} is a working pattern or tag expression that
+	 * matches nothing. {@link #FORKED_JVM_ARGUMENT_NAMES} is judged by a rule of its own that does not
+	 * ask about this word at all, so it is neither exempted here nor refused here. Measured on this branch, JDK 21, in {@code api/pom.xml}'s
+	 * {@code <properties>} — a file that has none, so the reproduction adds one:
+	 * {@code <surefire.includes>false</surefire.includes>} gave {@code mvn -o clean install} exit 0,
+	 * BUILD SUCCESS, api's surefire printing its mojo banner and no test output whatever, this
+	 * module's suite green, and the property named ZERO times in the log;
+	 * {@code <groups>false</groups>} there gave exit 0 with api {@code Tests run: 0}. The same
+	 * {@code <groups>false</groups>} in {@code omod/pom.xml} gave exit 1 with the api arm naming it
+	 * twice and this arm silent — so the exemption was this arm's alone, in the one direction where
+	 * only this arm can speak.
+	 *
+	 * <p>Every name here is a key or a value of {@link #SUREFIRE_PARAMETERS_DEFEATING_CHECKS}, which
+	 * {@link #everySurefireParameterIsRefusedInBothFormsMavenReadsIt} asserts: a name that is neither
+	 * exempts nothing and reads as though it did.
+	 */
+	private static final List<String> BOOLEAN_FLAG_NAMES = Arrays.asList("skip", "skipTests",
+			"skipExec", "testFailureIgnore", "maven.test.skip", "maven.test.skip.exec",
+			"maven.test.failure.ignore");
+
+	/**
+	 * The names in {@link #SUREFIRE_PARAMETERS_DEFEATING_CHECKS} that carry the FORKED JVM's own
+	 * command line, where the value rule is neither the boolean families' nor a selection's.
+	 * {@code argLine} is bound to the un-prefixed {@code ${argLine}}, so a {@code <properties>} entry
+	 * of that name reaches the fork — and a {@code -D} in it sets a system property there, which is
+	 * how a JUnit Platform configuration parameter is set from a POM. Measured on this branch, JDK 21,
+	 * in {@code api/pom.xml}'s {@code <properties>} (added for the reproduction, the file having
+	 * none): {@code <argLine>-Djunit.platform.execution.dryRun.enabled=true</argLine>} gave
+	 * {@code mvn -o clean install} exit 0, BUILD SUCCESS, api's surefire printing the SAME figure for
+	 * {@code Tests run} and {@code Skipped} — the api-side guard's own tests among them — this
+	 * module's suite green, and
+	 * {@code argLine} named ZERO times in the whole log. Every test reported SUCCESS without
+	 * executing.
+	 *
+	 * <p><strong>Refused on a {@code -D} and not on a non-blank value, and that is a false positive
+	 * already measured rather than a preference.</strong> An ordinary
+	 * {@code <argLine>-Xmx1024m</argLine>} takes no test away, and refusing the surefire
+	 * {@code <configuration>} element that carries it is what round 10 reverted — see
+	 * {@link #noPomEditTakesAModuleOutOfTheTestBuild}. So a value with no {@code -D} in it is
+	 * permitted, which {@link #everySurefireParameterIsRefusedInBothFormsMavenReadsIt} asserts of
+	 * that very string. <strong>What that leaves</strong>: a {@code -D} reaching the fork by a route
+	 * this reader does not see — an argument file ({@code @args}), or a placeholder resolving to one
+	 * — is not reported, and a harmless {@code -Dfile.encoding=UTF-8} is refused although it takes
+	 * nothing away. Neither shape is used in this reactor, which sets no {@code argLine} anywhere.
+	 */
+	private static final List<String> FORKED_JVM_ARGUMENT_NAMES = Arrays.asList("argLine");
 
 	/**
 	 * The prefix that makes a {@code <properties>} entry maven-surefire-plugin's own. This arm
@@ -265,17 +323,33 @@ public class JavadocReferenceOmodCorpusTest {
 	 * 31 without naming them and reaches a knob added under it later; the figures are a measurement
 	 * of that descriptor at that version.
 	 *
-	 * <p><strong>The un-prefixed remainder is BOUNDED and not complete, and it is what
-	 * {@link #SUREFIRE_PARAMETERS_DEFEATING_CHECKS} spells out</strong> — the legacy spellings
-	 * {@code maven.test.skip}, {@code maven.test.skip.exec}, {@code skipTests},
-	 * {@code maven.test.failure.ignore}, {@code test}, {@code groups} and {@code excludedGroups}.
-	 * What was read of the descriptor's other un-prefixed bindings is that they are values Maven
-	 * injects which a POM cannot usefully set, and knobs deciding HOW tests run rather than WHETHER;
-	 * that is a characterisation of the read and not a proof about each of them, which is what
-	 * BOUNDED means here. {@code failIfNoTests} was
-	 * proposed for the list and the descriptor declines it: its {@code default-value} is
-	 * {@code false}, so {@code false} is what this build already does and {@code true} makes an empty
-	 * run FAIL.
+	 * <p><strong>The un-prefixed remainder is answered by NAME, and
+	 * {@link #SUREFIRE_PARAMETERS_DEFEATING_CHECKS} is where those names live</strong> — the legacy
+	 * spellings {@code maven.test.skip}, {@code maven.test.skip.exec}, {@code skipTests},
+	 * {@code maven.test.failure.ignore}, {@code test}, {@code groups} and {@code excludedGroups},
+	 * plus {@code argLine} and {@code maven.test.dependency.excludes} since round 16.
+	 *
+	 * <p><strong>What stood here about the other un-prefixed bindings was a characterisation, and
+	 * round 16 measured it false.</strong> It read that they were values Maven injects which a POM
+	 * cannot usefully set, and knobs deciding HOW tests run rather than WHETHER — and the api-side
+	 * copy of the sentence named {@code argLine} as an example of the harmless kind. It is not
+	 * harmless: {@code <argLine>-Djunit.platform.execution.dryRun.enabled=true</argLine>} in
+	 * {@code api/pom.xml} gave {@code mvn -o clean install} exit 0 with api
+	 * the same figure for {@code Tests run} and {@code Skipped} and this module's suite green, every test reporting
+	 * SUCCESS without executing; see {@link #FORKED_JVM_ARGUMENT_NAMES}. Round 16 put each of the 32
+	 * un-prefixed bindings outside the seven named to a build rather than to a reading, and found
+	 * {@code argLine}, {@code maven.test.dependency.excludes} and
+	 * {@code maven.test.additionalClasspath} able to silence a module's checks;
+	 * {@code workingDirectory} failing the build rather than silencing anything, so not a hole; and
+	 * the rest clean or loud, including a batch of 14 planted together which left the reactor's
+	 * totals byte-identical to baseline. The first two are named now; the third needs a second
+	 * artefact and is recorded as an open position by
+	 * {@link #noPomEditTakesAModuleOutOfTheTestBuild}. That is a measurement of those 32 at this
+	 * plugin version, not a proof about a family.
+	 *
+	 * <p>{@code failIfNoTests} was proposed for the list and the descriptor declines it: its
+	 * {@code default-value} is {@code false}, so {@code false} is what this build already does and
+	 * {@code true} makes an empty run FAIL.
 	 *
 	 * <p><strong>The value rule is this arm's own and it is not {@link #defeatsAModulesChecks}.</strong>
 	 * That method exempts the word {@code false} because {@code false} is the default of the flags it
@@ -336,7 +410,61 @@ public class JavadocReferenceOmodCorpusTest {
 			new String[] { "excludeJUnit5Engines", "surefire.excludeJUnit5Engines",
 					"<excludeJUnit5Engine>junit-jupiter</excludeJUnit5Engine>", "junit-jupiter" },
 			new String[] { "includeJUnit5Engines", "surefire.includeJUnit5Engines",
-					"<includeJUnit5Engine>junit-vintage</includeJUnit5Engine>", "junit-vintage" });
+					"<includeJUnit5Engine>junit-vintage</includeJUnit5Engine>", "junit-vintage" },
+			new String[] { "argLine", "argLine",
+					"-Djunit.platform.execution.dryRun.enabled=true",
+					"-Djunit.platform.execution.dryRun.enabled=true" },
+			new String[] { "classpathDependencyExcludes", "maven.test.dependency.excludes",
+					"<classpathDependencyExclude>org.junit.jupiter:junit-jupiter-engine"
+							+ "</classpathDependencyExclude>",
+					"org.junit.platform:junit-platform-commons,org.junit.jupiter:junit-jupiter-engine,"
+							+ "org.junit.jupiter:junit-jupiter-api" });
+
+	/** The verdict column of {@link #VALUE_RULE_WITNESSES} for a value that must be reported. */
+	private static final String REFUSED = "refused";
+
+	/** The verdict column of {@link #VALUE_RULE_WITNESSES} for a value that must NOT be reported. */
+	private static final String PERMITTED = "permitted";
+
+	/**
+	 * One value per parameter whose VERDICT is spelled out here rather than derived from
+	 * {@link #BOOLEAN_FLAG_NAMES} or {@link #FORKED_JVM_ARGUMENT_NAMES}, written as
+	 * {@code {parameter, user property, value, verdict}}. Derived, the classification could be
+	 * emptied and {@link #everySurefireParameterIsRefusedInBothFormsMavenReadsIt} would still pass —
+	 * a name moved out of {@link #BOOLEAN_FLAG_NAMES} is then read as a selection, and a selection
+	 * refuses {@code false}, so the check would agree with the mutation. The same argument
+	 * {@link #SUREFIRE_PARAMETER_FORMS_AS_LITERALS} makes for the pairing.
+	 *
+	 * <p><strong>The word {@code false} on every parameter, because that is r16-2's own value.</strong>
+	 * Every other witness in this file is non-blank and not {@code false}, so nothing here could see
+	 * an exemption that reached the selections. {@code argLine} is the one name whose witnesses are a
+	 * pair of values instead — {@code -Xmx1024m} and Maven's late-replacement
+	 * {@code @}{@code {argLine}} form are ordinary tuning that must stay permitted, and its refused
+	 * value is the {@code -D} row of {@link #SUREFIRE_PARAMETER_FORMS_AS_LITERALS}.
+	 *
+	 * <p>The ELEMENT form of a witness whose parameter takes child elements — {@code <includes>},
+	 * {@code <excludes>} — is a shape Maven itself would not accept with a bare text value; it is
+	 * here because both legs share {@link #defeatsAModulesChecks} and a later split between them
+	 * would otherwise be unwatched. The PROPERTY form is the position r16-2 was measured in.
+	 */
+	private static final List<String[]> VALUE_RULE_WITNESSES = Arrays.asList(
+			new String[] { "skip", "maven.test.skip", "false", PERMITTED },
+			new String[] { "skipTests", "skipTests", "false", PERMITTED },
+			new String[] { "skipExec", "maven.test.skip.exec", "false", PERMITTED },
+			new String[] { "testFailureIgnore", "maven.test.failure.ignore", "false", PERMITTED },
+			new String[] { "test", "test", "false", REFUSED },
+			new String[] { "includes", "surefire.includes", "false", REFUSED },
+			new String[] { "includesFile", "surefire.includesFile", "false", REFUSED },
+			new String[] { "excludes", "surefire.excludes", "false", REFUSED },
+			new String[] { "excludesFile", "surefire.excludesFile", "false", REFUSED },
+			new String[] { "groups", "groups", "false", REFUSED },
+			new String[] { "excludedGroups", "excludedGroups", "false", REFUSED },
+			new String[] { "excludeJUnit5Engines", "surefire.excludeJUnit5Engines", "false", REFUSED },
+			new String[] { "includeJUnit5Engines", "surefire.includeJUnit5Engines", "false", REFUSED },
+			new String[] { "classpathDependencyExcludes", "maven.test.dependency.excludes", "false",
+					REFUSED },
+			new String[] { "argLine", "argLine", "-Xmx1024m", PERMITTED },
+			new String[] { "argLine", "argLine", "@{argLine} -Xmx1024m", PERMITTED });
 
 	/**
 	 * The user properties that stop a module's checks asserting anything, whatever the mechanism.
@@ -490,14 +618,14 @@ public class JavadocReferenceOmodCorpusTest {
 	 * green, at exit 0, with the api-side guard simply absent from the five. It is refused now, by this
 	 * arm — the api-side guard could not report it, not being among the tests that ran — and
 	 * {@code maven.test.failure.ignore} is refused beside it, which cannot be turned into a red build
-	 * at all, since it is what makes a guard's failure non-fatal; it is loud instead, on the
-	 * {@code Tests run: N, Failures: M} line it cannot suppress — in the ROOT pom on BOTH modules'
-	 * such lines, this arm being one of the checks that reports it. Do not publish the failure count:
+	 * at all, since it is what makes a guard's failure non-fatal; what it cannot suppress is the
+	 * {@code Tests run: N, Failures: M} line — in the ROOT pom on BOTH modules' such lines, this arm
+	 * being one of the checks that reports it, measured. Do not publish the failure count:
 	 * {@code JavadocReferenceGuardTest.TEST_FAILURE_IGNORED_PROPERTY} carries what was measured, and
 	 * a tally of it went stale inside the commit that published it.
 	 *
-	 * <p><strong>Round 12 measured a shape that removes BOTH arms at once and is not loud in any of
-	 * those ways.</strong> A surefire SELECTION in the ROOT pom whose value removes both guards from
+	 * <p><strong>Round 12 measured a shape that removes BOTH arms at once and prints none of
+	 * that.</strong> A surefire SELECTION in the ROOT pom whose value removes both guards from
 	 * the run is refused by nothing that runs, the refusal being written in the very tests the
 	 * selection drops: measured on this branch, JDK 21,
 	 * {@code <surefire.excludes>**}{@code /JavadocReference*Test.java</surefire.excludes>} in the root
@@ -531,14 +659,52 @@ public class JavadocReferenceOmodCorpusTest {
 	 * loudly; and {@code failIfNoTests} carries {@code default-value="false"} in the pinned
 	 * descriptor, so neither of its values takes a test away.
 	 *
-	 * <p>So the honest bound is not "no POM edit can silence this" and not one sentence about cost
-	 * either: an edit taking ONE module's checks out is refused by the module whose checks still run,
-	 * the two arms state that rule differently so one edit does not weaken both, and what is left is
-	 * loud on the printed doclint error, on a {@code Failures:} line beside exit 0, on a reactor test
-	 * total that drops, or on whatever a module's surefire prints in place of its counts
-	 * ({@code Tests are skipped.}, or nothing at all) — and never on a {@code No tests to run}, which
-	 * belongs to the CHILD-pom shape this arm refuses. Except where it is not loud at all, which the
-	 * paragraph above and the api-side class javadoc state as far as anyone has measured it.
+	 * <p><strong>Round 16's four shapes, all measured on this branch, JDK 21, in
+	 * {@code api/pom.xml}'s {@code <properties>} unless said otherwise</strong> — a file that has
+	 * none, so each reproduction adds one, and an injection assuming the element exists silently
+	 * no-ops and reads as a clean baseline. (i) A JUnit Platform DRY RUN through the un-prefixed
+	 * {@code argLine}: {@code -Djunit.platform.execution.dryRun.enabled=true} gave exit 0 with api
+	 * the same figure for {@code Tests run} and {@code Skipped} — the api-side guard's own tests among
+	 * them — this module's suite green, and {@code argLine} named ZERO times. (ii) The same dry run through
+	 * surefire's {@code <systemPropertyVariables>} at the root's managed {@code <configuration>}:
+	 * exit 0, both modules reporting every test as skipped, nothing reported.
+	 * <strong>That one is still PERMITTED</strong>, because refusing the element a real project
+	 * reaches for first is what round 10 reverted, and
+	 * {@link #everySurefireParameterIsRefusedInBothFormsMavenReadsIt} asserts it stays legal; it is
+	 * recorded as an open position, not covered. (iii) The value {@code false} on a SELECTION —
+	 * {@code <surefire.includes>false</surefire.includes>} gave exit 0 with api's surefire printing no
+	 * test output whatever and {@code <groups>false</groups>} gave exit 0 with api
+	 * {@code Tests run: 0}, while the same {@code <groups>false</groups>} in {@code omod/pom.xml} was
+	 * exit 1 from the API arm alone: this arm's own exemption of that word, r16-2, now fixed in
+	 * {@link #defeatsAModulesChecks}. (iv) The test classpath emptied of JUnit Platform through
+	 * {@code maven.test.dependency.excludes} naming the three
+	 * {@code junit-platform-commons}/{@code junit-jupiter-engine}/{@code junit-jupiter-api}
+	 * coordinates together: exit 0, api {@code Tests run: 0}, this module's suite green, the property
+	 * named ZERO times — and round 16 reports the single-artifact forms did NOT reproduce it, so that
+	 * effect is of the triple. (i), (iii) and (iv) are refused now, in both arms.
+	 *
+	 * <p><strong>One further open position, named rather than closed.</strong>
+	 * {@code maven.test.additionalClasspath} ({@code additionalClasspathElements}) can put a
+	 * {@code junit-platform.properties} on the test classpath and switch the dry run on for both
+	 * modules. The silencing edit is then not a POM edit alone — it needs a committed properties
+	 * file, which is its own line in a diff — and refusing an ordinary additional classpath entry
+	 * would redden a shape Maven users do use. Whoever closes it records in docs/adr.md Decision 75
+	 * what replaced this reasoning.
+	 *
+	 * <p><strong>So the honest bound.</strong> An edit taking ONE module's checks out is refused by
+	 * the module whose checks still run, and the two arms state that rule differently so one edit
+	 * does not weaken both. Beyond that: a guard cannot report an edit that stops it running, and
+	 * the positions from which that has been MEASURED are the ones above plus round 12's selection.
+	 * <strong>What stood here instead was a promise about which output a silencing edit shows on —
+	 * a printed doclint error, a {@code Failures:} line beside exit 0, a reactor test total that
+	 * drops, a surefire printing {@code Tests are skipped.} That promise was published five times and
+	 * measured false in rounds 8, 10, 11, 12, 14 and 16</strong>, most recently by (i) and (ii)
+	 * above, which drop no total,
+	 * print no failure and name nothing. It is deleted rather than rewritten; the check that does not
+	 * depend on surefire at all is {@code javadoc-reference-gate} in
+	 * {@code .github/workflows/build.yml}, which plants a dead reference in each module's
+	 * {@code src/main/java} and requires the build to fail — and which no POM edit reaches, only an
+	 * edit to that workflow file.
 	 */
 	@Test
 	public void noPomEditTakesAModuleOutOfTheTestBuild() throws Exception {
@@ -775,6 +941,51 @@ public class JavadocReferenceOmodCorpusTest {
 						+ "defeatsAModulesChecks");
 			}
 		}
+		List<String> classified = new ArrayList<String>(BOOLEAN_FLAG_NAMES);
+		classified.addAll(FORKED_JVM_ARGUMENT_NAMES);
+		for (String name : classified) {
+			if (!SUREFIRE_PARAMETERS_DEFEATING_CHECKS.containsKey(name)
+					&& !SUREFIRE_PARAMETERS_DEFEATING_CHECKS.containsValue(name)) {
+				violations.add("<" + name + "> is classified by BOOLEAN_FLAG_NAMES or "
+						+ "FORKED_JVM_ARGUMENT_NAMES and is neither a key nor a value of "
+						+ "SUREFIRE_PARAMETERS_DEFEATING_CHECKS, so defeatsAModulesChecks is never asked "
+						+ "about it and the classification reads as though it governed something");
+			}
+		}
+		for (String[] witness : VALUE_RULE_WITNESSES) {
+			String parameter = witness[0];
+			String property = witness[1];
+			String value = witness[2];
+			String verdict = witness[3];
+			if (!REFUSED.equals(verdict) && !PERMITTED.equals(verdict)) {
+				violations.add("the verdict column of the " + parameter + "/" + value + " witness reads "
+						+ verdict + ", which is neither REFUSED nor PERMITTED, so nothing was asserted of "
+						+ "it. See VALUE_RULE_WITNESSES");
+				continue;
+			}
+			boolean mustBeRefused = REFUSED.equals(verdict);
+			String asAnElement = "<plugin><artifactId>" + SUREFIRE_PLUGIN + "</artifactId>"
+					+ "<configuration><" + parameter + ">" + value + "</" + parameter
+					+ "></configuration></plugin>";
+			String asAProperty = "<project><properties><" + property + ">" + value + "</" + property
+					+ "></properties></project>";
+			boolean elementReported =
+					!surefireParametersDefeatingChecksIn(parseXml(asAnElement)).isEmpty();
+			boolean propertyReported = !testDefeatingPropertiesIn(parseXml(asAProperty)).isEmpty();
+			if (elementReported != mustBeRefused || propertyReported != mustBeRefused) {
+				violations.add("<" + parameter + "> and <" + property + "> carrying the value " + value
+						+ " should be " + verdict + " and the readers said element=" + elementReported
+						+ ", property=" + propertyReported + ". The word false was exempted for EVERY name "
+						+ "in this arm's map until r16-2, selections included, where false is a working "
+						+ "pattern or tag expression that matches nothing: <surefire.includes>false in "
+						+ "api/pom.xml gave mvn -o clean install exit 0 with api's surefire printing no test "
+						+ "output at all, and <groups>false there gave exit 0 with api Tests run: 0, while "
+						+ "the same <groups>false in omod/pom.xml was exit 1 from the api arm. An argLine "
+						+ "carrying no -D is tuning and must stay permitted, which is round 10's reverted "
+						+ "false positive. See defeatsAModulesChecks, BOOLEAN_FLAG_NAMES and "
+						+ "FORKED_JVM_ARGUMENT_NAMES");
+			}
+		}
 		for (String property : PREFIXED_PROPERTIES_NO_MAP_ENTRY_NAMES) {
 			if (TEST_DEFEATING_PROPERTIES.contains(property)) {
 				violations.add("<" + property + "> is now one of TEST_DEFEATING_PROPERTIES, so it no longer "
@@ -826,11 +1037,12 @@ public class JavadocReferenceOmodCorpusTest {
 		for (Element properties : propertiesDeclaredUnderProjectOrProfile(pom)) {
 			for (String property : TEST_DEFEATING_PROPERTIES) {
 				Element declared = directChild(properties, property);
-				if (defeatsAModulesChecks(declared)) {
+				if (defeatsAModulesChecks(property, declared)) {
 					where.add("<properties> sets <" + property + ">" + declared.getTextContent().trim()
 							+ "</" + property + ">, which stops that module's checks asserting anything — by "
-							+ "skipping them, by narrowing the run to something else, or by discarding their "
-							+ "verdict. One line, naming no plugin. See TEST_DEFEATING_PROPERTIES");
+							+ "skipping them, by narrowing the run to something else, by discarding their "
+							+ "verdict, or by taking away the machinery that discovers or runs them. One line, "
+							+ "naming no plugin. See TEST_DEFEATING_PROPERTIES");
 				}
 			}
 			for (Element entry : elementChildren(properties)) {
@@ -879,7 +1091,7 @@ public class JavadocReferenceOmodCorpusTest {
 		for (Element configuration : configurations) {
 			for (String parameter : SUREFIRE_PARAMETERS_DEFEATING_CHECKS.keySet()) {
 				Element declared = directChild(configuration, parameter);
-				if (defeatsAModulesChecks(declared)) {
+				if (defeatsAModulesChecks(parameter, declared)) {
 					where.add("<configuration> sets <" + parameter + ">" + declared.getTextContent().trim()
 							+ "</" + parameter + ">");
 				}
@@ -889,19 +1101,38 @@ public class JavadocReferenceOmodCorpusTest {
 	}
 
 	/**
-	 * Whether one such element actually takes something away: ABSENT does not, and neither does a
-	 * blank value (an empty filter selects nothing) or the word {@code false} (which is the default of
-	 * every flag in these lists). Anything else does — a {@code true}, a class-name pattern, a list of
-	 * exclusions. One rule over both lists, deliberately coarser than the api-side guard's split by
-	 * value shape: refusing a POM that builds exactly as this one does is the failure direction both
-	 * arms refuse, and the three cases above are the whole of what a legal declaration looks like here.
+	 * Whether one such declaration actually takes something away, asked of the NAME as well as the
+	 * value because the three families in {@link #SUREFIRE_PARAMETERS_DEFEATING_CHECKS} do not read
+	 * one value alike. ABSENT takes nothing away, and neither does a blank value — an empty filter
+	 * selects nothing and an empty flag is not {@code true}. Beyond that:
+	 * {@link #BOOLEAN_FLAG_NAMES} exempt the word {@code false}, which is their default;
+	 * {@link #FORKED_JVM_ARGUMENT_NAMES} are judged on carrying a {@code -D}, an ordinary
+	 * {@code -Xmx} being tuning this arm must not redden; and every other name — the SELECTIONS — is
+	 * refused at any non-blank value.
+	 *
+	 * <p><strong>The word {@code false} was exempted for every name here, including the selections,
+	 * and that was r16-2.</strong> On a selection {@code false} is a working pattern or tag
+	 * expression matching nothing, so the exemption silenced a module's whole run; the measurements
+	 * are in {@link #BOOLEAN_FLAG_NAMES}, and the sentence that stood here — that absent, blank and
+	 * {@code false} were the whole of what a legal declaration looks like — was untrue of a selection
+	 * and is the reason this reads the name. Refusing a POM that builds exactly as this one does is
+	 * still the failure direction both arms refuse, which is what the two exemptions are for.
 	 */
-	private static boolean defeatsAModulesChecks(Element declared) {
+	private static boolean defeatsAModulesChecks(String name, Element declared) {
 		if (declared == null) {
 			return false;
 		}
 		String value = declared.getTextContent().trim();
-		return !value.isEmpty() && !"false".equalsIgnoreCase(value);
+		if (value.isEmpty()) {
+			return false;
+		}
+		if (FORKED_JVM_ARGUMENT_NAMES.contains(name)) {
+			return value.contains("-D");
+		}
+		if (BOOLEAN_FLAG_NAMES.contains(name)) {
+			return !"false".equalsIgnoreCase(value);
+		}
+		return true;
 	}
 
 	/**

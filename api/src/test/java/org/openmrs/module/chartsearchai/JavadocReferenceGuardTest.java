@@ -147,7 +147,7 @@ import org.w3c.dom.NodeList;
  * argument channel the build declares; what those arguments actually DO, asked of the compiler rather
  * than matched as a string; that the plugin version which has to honour them is one that can; and that
  * each module's tests are in the build at all. Both arms read every reactor POM and neither is written
- * the way the other is, so one edit rarely defeats both, and the edits that are commonest are loud.
+ * the way the other is, so one edit rarely defeats both.
  * What bounds a position going unread is also that each module's own source roots are compiled by a
  * check LIVING IN THAT MODULE, whose arguments are its own literals
  * ({@link #COMPILER_CHECKS_OUTSIDE_API}) — so a POM defeating the flag makes these readers disagree
@@ -172,82 +172,56 @@ import org.w3c.dom.NodeList;
  * 8 landed on {@code omod} for the structural reason the api bullet above gives; 9, 10, 12 and 14
  * landed on whichever module the edit named. <strong>Every ABSOLUTE claim published about this
  * change has been falsified by a later round</strong> — that no POM edit could silence the omod
- * corpus check; that the consequence of an unread position was bounded; the QUIET enumeration below,
- * which round 12 falsified with a parameter both arms refuse in element form set inside one of these
- * POMs; and round 14's, which was not a claim of coverage but a stated ground for an OMISSION, in
- * four places at once. Do not
+ * corpus check; that the consequence of an unread position was bounded; a LOUD/QUIET enumeration
+ * that stood below and promised which output a silencing edit shows on, which rounds 12, 14 and 16
+ * falsified in that order and which round 17 DELETED rather than rewrote for the sixth time; and
+ * round 14's, which was not a claim of coverage but a stated ground for an OMISSION, in four places
+ * at once. Do not
  * write another: where a sentence of that shape suggests itself, name the edit that was actually
  * checked and stop there. <strong>Round 14 also changed the SHAPE of the answer</strong>: four
  * successive rounds each supplied one more surefire name, so the property side is now a PREFIX rule
  * ({@link #SUREFIRE_USER_PROPERTY_PREFIX}) over a bounded set of legacy un-prefixed spellings beside
  * it, rather than an enumeration a fifth round extends.
  *
- * <p><strong>So what a careless or determined edit can still achieve, and where it shows.</strong>
- * LOUD, on output a maintainer sees without looking for it: where {@code failOnError} is what was
- * turned off, the doclint error itself is still printed ({@code [ERROR] ... reference not found});
- * {@code maven.test.failure.ignore} leaves the checks that refuse it printed as
- * {@code Tests run: N, Failures: M} and the build at exit 0; a test-skip in the ROOT pom emits no
- * {@code Tests run:} line for either module at all, so the reactor's test total drops to nothing.
- * <strong>That last one does not print {@code No tests to run}, and this sentence said for a round
- * that it did.</strong> Re-measured on this branch, JDK 21, from the ROOT pom:
- * {@code <maven.test.skip>true</maven.test.skip>} in {@code <properties>} gives
- * {@code mvn -o clean install} exit 0 with each module's surefire banner printed and
- * {@code Tests are skipped.} under it — twice in the reactor, no {@code Tests run:} line and no
- * {@code No tests to run} anywhere in the log; the {@code <executions>} spelling in
- * {@code <build><plugins>} gives exit 0 with no surefire output whatever, {@code grep surefire} over
- * the whole log matching nothing, the goal never being invoked. {@code No tests to run} is what
- * round 9's CHILD-pom shape printed and that shape is refused now
- * ({@link #noPomEditTakesAModuleOutOfTheTestBuild}), so it is the wrong string to grep a log for.
- * QUIET: anything Maven reads that is not one of these POMs; a surefire parameter neither arm names,
- * inside the {@code <configuration>} this guard now permits
- * ({@link #SUREFIRE_PLUGIN_CHILDREN_READ_HERE}); and — round 12's finding, which falsified the two
- * items before it as an enumeration — <strong>a surefire SELECTION whose value removes BOTH guards
- * from the run, which is a parameter both arms DO refuse, set inside one of these POMs.</strong> A
- * guard cannot report an edit that stops it running. Measured on this branch, JDK 21:
- * {@code <surefire.excludes>**}{@code /JavadocReference*Test.java</surefire.excludes>} in the root
- * {@code <properties>} gives {@code mvn -o clean install} exit 0, BUILD SUCCESS,
- * {@code grep -c JavadocReference} over the whole log ZERO, and the reactor's test total short by
- * only the guards' own tests, which reads as an ordinary green build;
- * {@code <groups>eval</groups>} there gives exit 0 with {@code Tests run: 0} for both modules.
- * <strong>Round 14's own shape belongs in that item and was not covered by it.</strong>
- * {@code <excludedGroups>none()</excludedGroups>} in {@code api/pom.xml}'s {@code <properties>} —
- * a file that HAS no {@code <properties>}, so the reproduction adds one — gave exit 0, BUILD
- * SUCCESS, api {@code Tests run: 0}, omod's suite green, and {@code excludedGroups} named ZERO times
- * in the whole log; the same edit plus one {@code <arg>-Xdoclint/package:-org.openmrs.*</arg>} in
- * the managed {@code <compilerArgs>} and a dead pointer in {@code api/src/main/java} gave exit 0
- * with no {@code reference not found} — #262's defect fully reinstated by two POM edits nothing
- * reported. <strong>Unlike the other members of this family measured so far, the cross-module
- * cover did not fire</strong>:
- * the omod arm still ran, still green, and said nothing, because {@code excludedGroups} was in
- * neither arm's property list. It is refused now, in both arms, and so is
- * {@code surefire.excludeJUnit5Engines} — that one through the prefix rule rather than by name.
- * <strong>Neither reinstates #262's defect on its own</strong>: the flag is still on javac, and that
- * same exclusion with a dead pointer planted in {@code api/src/main/java} gives exit 1 with
- * {@code reference not found} printed. What it removes is the guard on the flag's CONTENTS, so one
- * further {@code <arg>} inside the managed {@code <compilerArgs>} then silences doclint — two quiet
- * edits, and the second is what the disclosure above is about.
- * <strong>A child declaration pinning a version these files cannot evaluate was in that QUIET list
- * and is not quiet.</strong> {@link #versionFloorViolationsAt} is silent on it, deliberately — but
- * two other checks are not, and both were measured on this branch, JDK 21:
- * {@code <version>${compilerPluginVersion}</version>} on a compiler-plugin declaration in
- * {@code omod/pom.xml}'s own {@code <build><plugins>}, no such property in any of these POMs, run as
- * {@code mvn -o clean install -DcompilerPluginVersion=2.5.1} with a dead pointer planted in
- * {@code omod/src/main/java} — exit 1, api's own suite green, and TWO omod checks reporting, named
- * rather than counted: {@code JavadocReferenceOmodCorpusTest.everyJavadocReferenceInTheOmodModuleResolves}
- * on the pointer, with its own literal arguments, and that class's
- * {@code noPomEditTakesAModuleOutOfTheTestBuild} on the POSITION — a compiler-plugin declaration
- * outside the root's {@code <pluginManagement>}. omod really did compile at
- * {@code compiler:2.5.1} with the managed {@code <compilerArgs>} silently ignored, which is the part
- * {@link #versionFloorViolationsAt} cannot see at a child declaration. A consequence of that
- * second one: the interpolation leg reading the reactor PARENT's {@code <properties>} is reachable
- * only at a child declaration, and a child declaration is refused, so the unevaluable verdict cannot
- * decide a build on its own.
- * <strong>The cost to whoever does it is not one characteristic thing, and a sentence here said it
- * was</strong>: round 10's {@code <test>} filter in a child pom leaves BOTH modules printing test
- * counts with one module's checks simply absent ({@link #TEST_FILTER_PROPERTY}), which is nothing like
- * the reactor total going to zero. What is claimed is that the cost of silencing this gate is raised
- * and that the common cases are loud — not that it cannot be silenced.
+ * <p><strong>What these guards are FOR, and it is not a claim about a determined edit.</strong> They
+ * catch the ACCIDENTAL removal of the flag and of the checks that read it — the failure #262
+ * describes, where a dead pointer compiles and reads as authoritative. A DELIBERATE POM edit can
+ * silence them, from several positions, and these are the ones MEASURED on this branch, JDK 21:
+ * a JUnit Platform DRY RUN, which reports every test as a SUCCESS without executing it, set through
+ * the un-prefixed {@code argLine} ({@link #SUREFIRE_PARAMETERS_DISABLING_THE_RUNNER}), through
+ * surefire's {@code <systemPropertyVariables>}, which both arms deliberately PERMIT
+ * ({@link #SUREFIRE_PLUGIN_CHILDREN_READ_HERE}), or through a {@code junit-platform.properties} put
+ * on the test classpath by {@code maven.test.additionalClasspath}; a SELECTION whose value removes
+ * both guard classes from the run, the value {@code false} on a selection included; and the removal
+ * of JUnit Platform from the test classpath through {@code maven.test.dependency.excludes}. Each is
+ * recorded where it is read or, where it is not read, at
+ * {@link #noPomEditTakesAModuleOutOfTheTestBuild}. <strong>That is a list of what has been measured
+ * and not of what exists.</strong>
  *
+ * <p><strong>Five successive claims of the form "silencing this gate shows up on output a maintainer
+ * sees" were published here and every one was measured false</strong> — one falsified per round in
+ * rounds 8, 10, 11, 12, 14 and 16, the last in four ways at once. A LOUD/QUIET enumeration of channels stood in this paragraph
+ * for five rounds and round 17 deleted it rather than rewriting it a sixth time. Do not write
+ * another: name the edit that was actually checked and stop there. The one limit that has held is
+ * not a channel claim — a guard cannot report an edit that stops it running.
+ *
+ * <p><strong>What does not run under surefire is a CI job.</strong>
+ * {@code .github/workflows/build.yml}'s {@code javadoc-reference-gate} plants a dead javadoc
+ * reference in each module's {@code src/main/java} in turn, compiles it through this build with
+ * {@code -DskipTests}, and requires the build to FAIL with {@code reference not found} naming that
+ * file — then requires the same build, with no probe planted, to PASS, so the failure is
+ * attributable to the probe rather than to a pre-existing break. Whether a surefire-side edit can
+ * change its verdict was MEASURED for the shape that defeats both guards, rather than claimed of the
+ * positions above as a class: with
+ * {@code <surefire.excludes>**}{@code /JavadocReference*Test.java</surefire.excludes>} in the root
+ * {@code <properties>} — the edit that removes BOTH guards from the reactor at exit 0 — that job's
+ * own script still exits 0 with both probes failing as required, and with the
+ * {@code <arg>-Xdoclint:reference</arg>} deleted from the root pom it exits 1 on the first probe.
+ * <strong>What it does not cover</strong> is an edit to that workflow file itself — deleting the job
+ * or making it non-fatal — which is a position no check inside the repository can hold, and whether
+ * it gates a merge, which is branch protection's business and not this file's.
+ *
+
  * <p>The POM checks read THESE POMs —
  * the ones {@link #poms} names — so anything ELSE Maven reads is invisible to them, in both
  * directions: a {@code settings.xml} profile, the command line, {@code MAVEN_OPTS}, and a committed
@@ -459,6 +433,88 @@ public class JavadocReferenceGuardTest {
 	}
 
 	/**
+	 * The one entry of {@link #SUREFIRE_PARAMETERS_DISABLING_THE_RUNNER} judged on carrying a
+	 * {@code -D} rather than on being non-blank, named so {@link #disablesTheRunner} can say which
+	 * rule it is applying and so the exception is one word rather than a condition repeated at two
+	 * readers. The element name and the user property are the same string.
+	 */
+	private static final String FORKED_JVM_ARGUMENTS_PARAMETER = "argLine";
+
+	/**
+	 * The surefire parameters that leave the run SELECTED as it is and take away the machinery that
+	 * discovers or executes a test, each mapped from the {@code <configuration>} ELEMENT name to the
+	 * user PROPERTY maven-surefire-plugin binds it to — the same one-entry pairing
+	 * {@link #SUREFIRE_PARAMETERS_SELECTING_TESTS} is, for the reason recorded there, and driven by
+	 * the same two readers. A third family rather than two more entries in that map, because its
+	 * violation message would be false of these: nothing is narrowed and every check is still
+	 * collected.
+	 *
+	 * <p><strong>{@code argLine} — r16-1.</strong> It is bound to the un-prefixed {@code ${argLine}},
+	 * so a {@code <properties>} entry of that name reaches the forked JVM's command line, and a
+	 * {@code -D} there sets a system property in the fork, which is how a JUnit Platform
+	 * configuration parameter is set from a POM. Measured on this branch, JDK 21, in
+	 * {@code api/pom.xml}'s {@code <properties>} — a file that has none, so the reproduction adds
+	 * one: {@code <argLine>-Djunit.platform.execution.dryRun.enabled=true</argLine>} gave
+	 * {@code mvn -o clean install} exit 0, BUILD SUCCESS, api's surefire printing the SAME figure
+	 * for {@code Tests run} and {@code Skipped} — this class's own tests among them — omod's suite
+	 * green, and {@code argLine} named
+	 * ZERO times in the whole log. JUnit Platform's dry run reports every test as a SUCCESS without
+	 * executing it, so no {@code Failures:} line appears anywhere.
+	 *
+	 * <p><strong>Its value rule is a {@code -D} and deliberately not a non-blank value.</strong>
+	 * {@code <argLine>-Xmx1024m</argLine>} is the very string
+	 * {@link #SUREFIRE_PLUGIN_CHILDREN_READ_HERE} records as round 10's FALSE POSITIVE, and it takes
+	 * no test away; refusing it would redden a POM that builds exactly as this one does, which is the
+	 * one failure direction this class refuses.
+	 * {@link #everySurefireParameterIsRefusedInBothFormsMavenReadsIt} asserts that string, and
+	 * Maven's late-replacement {@code @}{@code {argLine}} form beside it, are NOT reported. What that
+	 * leaves: a {@code -D} reaching the fork by a route this reader does not see — an argument file
+	 * ({@code @args}) or a placeholder resolving to one — and, in the other direction, friction on a
+	 * harmless {@code -Dfile.encoding=UTF-8}. This reactor sets no {@code argLine} anywhere.
+	 *
+	 * <p><strong>{@code classpathDependencyExcludes} — r16-4.</strong> Its property form removes
+	 * artifacts from the TEST classpath, and with JUnit Platform gone from it nothing is discovered.
+	 * Measured in the same position, same build:
+	 * {@code <maven.test.dependency.excludes>org.junit.platform:junit-platform-commons,}
+	 * {@code org.junit.jupiter:junit-jupiter-engine,org.junit.jupiter:junit-jupiter-api</...>} gave
+	 * exit 0, BUILD SUCCESS, api {@code Tests run: 0}, omod's suite green and the property named ZERO
+	 * times. <strong>Round 16 reports the single-artifact forms did NOT reproduce it</strong>, so the
+	 * effect above is of the triple and no claim is made about one name on its own. Refused at any
+	 * non-blank value all the same — the cost is friction on an ordinary exclusion of a conflicting
+	 * artifact, a shape this reactor does not use, and there is no narrower rule here that does not
+	 * become a list of artifact names the engine happens to need today.
+	 */
+	private static final Map<String, String> SUREFIRE_PARAMETERS_DISABLING_THE_RUNNER =
+			runnerParametersToUserProperties();
+
+	private static Map<String, String> runnerParametersToUserProperties() {
+		Map<String, String> pairs = new LinkedHashMap<String, String>();
+		pairs.put(FORKED_JVM_ARGUMENTS_PARAMETER, FORKED_JVM_ARGUMENTS_PARAMETER);
+		pairs.put("classpathDependencyExcludes", "maven.test.dependency.excludes");
+		return Collections.unmodifiableMap(pairs);
+	}
+
+	/**
+	 * Whether one declaration of a {@link #SUREFIRE_PARAMETERS_DISABLING_THE_RUNNER} parameter takes
+	 * the runner away. Blank takes nothing away for either;
+	 * {@link #FORKED_JVM_ARGUMENTS_PARAMETER} then asks for a {@code -D}, and the other entry is
+	 * refused at any non-blank value. The two rules and what each costs are recorded on that map.
+	 */
+	private static boolean disablesTheRunner(String name, Element declared) {
+		if (declared == null) {
+			return false;
+		}
+		String value = declared.getTextContent().trim();
+		if (value.isEmpty()) {
+			return false;
+		}
+		if (FORKED_JVM_ARGUMENTS_PARAMETER.equals(name)) {
+			return value.contains("-D");
+		}
+		return true;
+	}
+
+	/**
 	 * The prefix that makes a {@code <properties>} entry maven-surefire-plugin's own. An entry whose
 	 * name begins with it and carries a value is refused by {@link #testDefeatingPropertiesIn},
 	 * whatever the value and whichever parameter it belongs to. <strong>The rule is the PREFIX</strong>
@@ -482,20 +538,29 @@ public class JavadocReferenceGuardTest {
 	 * a boundary maintained here.
 	 *
 	 * <p><strong>The remaining 39 bindings have no prefix to read and are answered by NAME.</strong>
-	 * The ones that suppress a module's tests or discard their verdict are the legacy un-prefixed
-	 * spellings, and they are the families already read: {@link #TEST_SKIP_PROPERTIES}
+	 * Seven were named from the families already read: {@link #TEST_SKIP_PROPERTIES}
 	 * ({@code maven.test.skip → skip}, {@code maven.test.skip.exec → skipExec},
 	 * {@code skipTests → skipTests}), {@link #TEST_FAILURE_IGNORED_PROPERTY}
 	 * ({@code maven.test.failure.ignore → testFailureIgnore}), and the un-prefixed values of
 	 * {@link #SUREFIRE_PARAMETERS_SELECTING_TESTS} ({@code test → test}, {@code groups → groups},
-	 * {@code excludedGroups → excludedGroups}). <strong>That set is BOUNDED, which is a weaker claim
-	 * than complete and is meant as one</strong>: what was read of the other 39 is that they are
-	 * values Maven injects which a POM cannot usefully set ({@code project}, {@code session},
-	 * {@code basedir}, {@code project.artifactMap}, {@code project.build.*}) and knobs deciding HOW
-	 * tests run rather than WHETHER ({@code argLine}, {@code forkCount}, {@code threadCount},
-	 * {@code parallel}, {@code trimStackTrace}) — a characterisation of that read, not a proof that
-	 * none of them can silence a check. A reviewer finding a further one is finding a name and not a
-	 * family, which is the difference from the prefixed side.
+	 * {@code excludedGroups → excludedGroups}).
+	 *
+	 * <p><strong>What stood here about the other 32 was a characterisation, and round 16 replaced it
+	 * with a measurement that falsified it.</strong> The sentence read that they were values Maven
+	 * injects which a POM cannot usefully set and "knobs deciding HOW tests run rather than WHETHER",
+	 * and it named {@code argLine} as an example of the harmless kind. {@code argLine} silences the
+	 * whole run: see {@link #SUREFIRE_PARAMETERS_DISABLING_THE_RUNNER}, which carries the
+	 * reproduction. Round 16 put each of the 32 to a build rather than to a reading, and what it
+	 * found is this — {@code argLine}, {@code maven.test.dependency.excludes} and
+	 * {@code maven.test.additionalClasspath} able to silence a module's checks;
+	 * {@code workingDirectory} failing the build loudly rather than silencing anything, so not a
+	 * hole; and the rest clean or loud, including a batch of 14 planted together which left the
+	 * reactor's totals byte-identical to baseline. Two of the three are named now, in
+	 * {@link #SUREFIRE_PARAMETERS_DISABLING_THE_RUNNER}; the third needs a second artefact and is
+	 * recorded as an open position by
+	 * {@link #noPomEditTakesAModuleOutOfTheTestBuild}. <strong>That is a measurement of those 32 at
+	 * that plugin version and not a proof about the family</strong>, and a reviewer finding a further
+	 * one is finding a name rather than a family, which is the difference from the prefixed side.
 	 *
 	 * <p><strong>{@code failIfNoTests} was proposed for that set and the descriptor declines it.</strong>
 	 * Its {@code default-value} in the pinned jar is {@code false}, so {@code false} is what this
@@ -580,7 +645,25 @@ public class JavadocReferenceGuardTest {
 			new String[] { "excludeJUnit5Engines", "surefire.excludeJUnit5Engines",
 					"<excludeJUnit5Engine>junit-jupiter</excludeJUnit5Engine>", "junit-jupiter" },
 			new String[] { "includeJUnit5Engines", "surefire.includeJUnit5Engines",
-					"<includeJUnit5Engine>junit-vintage</includeJUnit5Engine>", "junit-vintage" });
+					"<includeJUnit5Engine>junit-vintage</includeJUnit5Engine>", "junit-vintage" },
+			new String[] { "argLine", "argLine", "-Djunit.platform.execution.dryRun.enabled=true",
+					"-Djunit.platform.execution.dryRun.enabled=true" },
+			new String[] { "classpathDependencyExcludes", "maven.test.dependency.excludes",
+					"<classpathDependencyExclude>org.junit.jupiter:junit-jupiter-engine"
+							+ "</classpathDependencyExclude>",
+					"org.junit.platform:junit-platform-commons,org.junit.jupiter:junit-jupiter-engine,"
+							+ "org.junit.jupiter:junit-jupiter-api" });
+
+	/**
+	 * The {@code argLine} values that take no test away and so must NOT be reported — round 10's
+	 * reverted false positive, and Maven's late-replacement form beside it. Spelled out because
+	 * {@link #SUREFIRE_PARAMETERS_DISABLING_THE_RUNNER}'s rule for that one parameter is a
+	 * {@code -D} and not a non-blank value, and nothing else in
+	 * {@link #SUREFIRE_PARAMETER_FORMS_AS_LITERALS} can witness the permitted side of a value rule:
+	 * every value there is one that must be refused.
+	 */
+	private static final List<String> FORKED_JVM_ARGUMENTS_TAKING_NO_TEST_AWAY =
+			Arrays.asList("-Xmx1024m", "@{argLine} -Xmx1024m");
 
 	/**
 	 * The user properties whose value {@code true} stops a module's tests being compiled or run, and
@@ -658,7 +741,10 @@ public class JavadocReferenceGuardTest {
 	 * round 10's own change added the refusal of this property, which is the second api failure and
 	 * the whole of the omod one. Name the checks; a failure COUNT here moves with the suite, and a
 	 * stale one tells a maintainer the omod module was unaffected when it was not.
-	 * It is LOUD on those {@code Failures:} lines, which is why it is disclosed as well as refused.
+	 * What it cannot suppress is those {@code Failures:} lines — measured, as above — which is why it
+	 * is disclosed as well as refused. Read that as the record of that one build and not as a promise
+	 * about silencing edits generally; five such promises were written about this change and rounds 8,
+	 * 10, 11, 12, 14 and 16 each measured one false.
 	 */
 	private static final String TEST_FAILURE_IGNORED_PROPERTY = "maven.test.failure.ignore";
 
@@ -1799,9 +1885,10 @@ public class JavadocReferenceGuardTest {
 	 * omod-side arm states the same thing a different way (that these two plugins are declared only at
 	 * the root's managed entry), so the two are not one reader written twice.
 	 *
-	 * <p><strong>The residue, and it does not have one characteristic cost — the sentence that stood
-	 * here said it did.</strong> Three shapes, three costs, and the difference between them is what a
-	 * maintainer would actually see:
+	 * <p><strong>The residue, and what was measured of each shape rather than what it would look
+	 * like.</strong> Three shapes; a sentence that stood here gave them one characteristic cost, which
+	 * they do not share. What follows is a record of the builds, not a promise about what a maintainer
+	 * notices:
 	 *
 	 * <ul>
 	 * <li><strong>Test execution removed from EVERY module at once</strong> — an {@code <executions>}
@@ -1825,19 +1912,22 @@ public class JavadocReferenceGuardTest {
 	 * <li><strong>Every check run and its verdict discarded</strong> —
 	 * {@link #TEST_FAILURE_IGNORED_PROPERTY} in the root pom, which cannot be refused into a red build
 	 * at all: the property is what makes this class's own failure non-fatal. It is reported here and it
-	 * is LOUD on the line it cannot suppress, {@code Tests run: N, Failures: M} beside exit 0 — that
-	 * constant's own javadoc names the checks that report it, and why {@code M} is not a figure to
-	 * publish here.</li>
+	 * prints its {@code Tests run: N, Failures: M} line beside exit 0, that being the line it cannot
+	 * suppress — measured; that constant's own javadoc names the checks that report it, and why
+	 * {@code M} is not a figure to publish here.</li>
 	 * </ul>
 	 *
-	 * <p><strong>Do not write a claim here that no POM edit can silence this gate.</strong> Three such
-	 * claims have been published and each was falsified by a later round — one in the omod check's
-	 * class javadoc, one in docs/adr.md Decision 75, and the QUIET enumeration in this class's own
-	 * javadoc, which round 12 falsified with {@code surefire.excludes}. Every round so far has found a
-	 * position the round before had not read. The class javadoc above says what that leaves open and
-	 * on which channel each shape shows. What is claimed here is narrow and checkable: an edit
-	 * stopping ONE module's tests is refused by the module whose tests still run, and the arms state
-	 * the rule differently, so weakening one does not weaken the other.
+	 * <p><strong>Do not write a claim here that no POM edit can silence this gate, and do not write one
+	 * about which output a silencing edit shows on either.</strong> Claims of the first shape were
+	 * published three times and falsified three times — one in the omod check's class javadoc, one in
+	 * docs/adr.md Decision 75, and a QUIET enumeration in this class's own javadoc, which round 12
+	 * falsified with {@code surefire.excludes}. Claims of the SECOND shape were published five times
+	 * over, and rounds 8, 10, 11, 12, 14 and 16 each measured one false, the last in four ways at once; round 17
+	 * deleted the enumeration rather than rewriting it again, and the class javadoc above now records
+	 * what these guards are FOR and which silencing positions have been measured. What is claimed
+	 * here is narrow and checkable: an edit stopping ONE module's tests is refused by the module whose
+	 * tests still run, and the arms state the rule differently, so weakening one does not weaken the
+	 * other.
 	 *
 	 * <p><strong>A fourth residue shape, and it is round 12's.</strong> A surefire SELECTION in the
 	 * ROOT pom whose value removes BOTH guards from the run is refused by nothing that runs — the
@@ -1877,6 +1967,52 @@ public class JavadocReferenceGuardTest {
 	 * anyway. And {@code failIfNoTests} carries {@code default-value="false"} in the pinned
 	 * descriptor, so {@code false} is what this build already does while {@code true} makes an empty
 	 * run FAIL; {@link #SUREFIRE_USER_PROPERTY_PREFIX} records why no value of it is refused.
+	 *
+	 * <p><strong>Round 16's shapes, and they are the reason this arm now records an open position
+	 * rather than an enumeration.</strong> All four were measured on this branch, JDK 21, in
+	 * {@code api/pom.xml}'s {@code <properties>} unless said otherwise — a file that HAS no
+	 * {@code <properties>}, so each reproduction adds one, and an injection assuming the element
+	 * exists silently no-ops and reads as a clean baseline.
+	 *
+	 * <ul>
+	 * <li><strong>A DRY RUN through the un-prefixed {@code argLine}</strong> —
+	 * {@code <argLine>-Djunit.platform.execution.dryRun.enabled=true</argLine>} gave exit 0, BUILD
+	 * SUCCESS, api's surefire printing the SAME figure for {@code Tests run} and {@code Skipped} —
+	 * this class's own tests among them — omod's suite green, and {@code argLine} named ZERO times in the log. Refused now, in both
+	 * arms — {@link #SUREFIRE_PARAMETERS_DISABLING_THE_RUNNER}.</li>
+	 * <li><strong>The same dry run through surefire's {@code <systemPropertyVariables>}</strong>, at
+	 * the root pom's managed {@code <configuration>}: exit 0, and BOTH modules printing the same figure
+	 * for {@code Tests run} and {@code Skipped}, nothing reported anywhere. <strong>Still PERMITTED, and
+	 * deliberately.</strong> That element is what a real project reaches for first, it is what round
+	 * 10 reverted a wholesale refusal over ({@link #SUREFIRE_PLUGIN_CHILDREN_READ_HERE}), and
+	 * {@link #everySurefireParameterIsRefusedInBothFormsMavenReadsIt}'s permitted cases assert it
+	 * stays legal; refusing it would redden ordinary Maven usage. It is recorded here as an open
+	 * position rather than closed, and the CI job named in the class javadoc is what does not depend
+	 * on surefire at all.</li>
+	 * <li><strong>The value {@code false} on a SELECTION</strong> —
+	 * {@code <surefire.includes>false</surefire.includes>} gave exit 0 with api's surefire printing
+	 * its mojo banner and no test output whatever, omod's suite green, the property named ZERO times;
+	 * {@code <groups>false</groups>} gave exit 0 with api {@code Tests run: 0}. This arm always
+	 * refused both, the omod arm exempted the word {@code false} for every entry including a
+	 * selection, and the directional control is the same {@code <groups>false</groups>} in
+	 * {@code omod/pom.xml} — exit 1, reported twice by THIS arm and not at all by that one. Refused in
+	 * both arms now; the omod side's {@code defeatsAModulesChecks} carries the fix.</li>
+	 * <li><strong>The test classpath emptied of JUnit Platform</strong> —
+	 * {@code <maven.test.dependency.excludes>} naming
+	 * {@code org.junit.platform:junit-platform-commons}, {@code org.junit.jupiter:junit-jupiter-engine}
+	 * and {@code org.junit.jupiter:junit-jupiter-api} together gave exit 0, api {@code Tests run: 0},
+	 * omod's suite green, the property named ZERO times. Round 16 reports that the single-artifact forms
+	 * did NOT reproduce it, so that effect is of the triple. Refused now at any non-blank value —
+	 * {@link #SUREFIRE_PARAMETERS_DISABLING_THE_RUNNER}.</li>
+	 * </ul>
+	 *
+	 * <p><strong>And one open position that needs a second artefact, so it is named rather than
+	 * closed.</strong> {@code maven.test.additionalClasspath} ({@code additionalClasspathElements})
+	 * can put a {@code junit-platform.properties} on the test classpath and switch the dry run on for
+	 * both modules. It is not refused: the silencing edit is not a POM edit alone — it needs a
+	 * committed properties file, which is its own line in a diff — and refusing an ordinary
+	 * additional classpath entry would redden a shape this reactor does not use but Maven users do.
+	 * Whoever changes that records in docs/adr.md Decision 75 what replaced it.
 	 *
 	 * <p>An arm reading api's {@code target/surefire-reports} to check that the OTHER module's guard
 	 * actually ran was considered and declined: it covers exactly the case the cross-read POM arm
@@ -2155,8 +2291,26 @@ public class JavadocReferenceGuardTest {
 						+ "one failure direction this class refuses");
 			}
 		}
+		for (String permitted : FORKED_JVM_ARGUMENTS_TAKING_NO_TEST_AWAY) {
+			String element = "<" + FORKED_JVM_ARGUMENTS_PARAMETER + ">" + permitted + "</"
+					+ FORKED_JVM_ARGUMENTS_PARAMETER + ">";
+			String configured = "<plugin><artifactId>" + SUREFIRE_PLUGIN + "</artifactId><configuration>"
+					+ element + "</configuration></plugin>";
+			String asAProperty = "<project><properties>" + element + "</properties></project>";
+			List<String> elementRead = surefireParametersSilencingACheck(parseXml(configured));
+			List<String> propertyRead = testDefeatingPropertiesIn(parseXml(asAProperty));
+			if (!elementRead.isEmpty() || !propertyRead.isEmpty()) {
+				violations.add("an <" + FORKED_JVM_ARGUMENTS_PARAMETER + "> carrying " + permitted
+						+ " is reported (it read " + elementRead + " and " + propertyRead + "). That value "
+						+ "takes no test away, and refusing the surefire <configuration> that carries it is "
+						+ "round 10's own reverted false positive — see SUREFIRE_PLUGIN_CHILDREN_READ_HERE. "
+						+ "The rule for this one parameter is a -D and not a non-blank value, which is what "
+						+ "these witnesses hold. See SUREFIRE_PARAMETERS_DISABLING_THE_RUNNER");
+			}
+		}
 		for (String property : PREFIXED_PROPERTIES_NO_LIST_HERE_NAMES) {
 			if (SUREFIRE_PARAMETERS_SELECTING_TESTS.containsValue(property)
+					|| SUREFIRE_PARAMETERS_DISABLING_THE_RUNNER.containsValue(property)
 					|| TEST_SKIP_PROPERTIES.contains(property)
 					|| TEST_FAILURE_IGNORED_PROPERTY.equals(property)) {
 				violations.add("<" + property + "> has been added to one of this class's named lists, so it "
@@ -2304,6 +2458,20 @@ public class JavadocReferenceGuardTest {
 						+ "then runs to report it: see noPomEditTakesAModuleOutOfTheTestBuild. See "
 						+ "SUREFIRE_PARAMETERS_SELECTING_TESTS");
 			}
+			for (Map.Entry<String, String> runner : SUREFIRE_PARAMETERS_DISABLING_THE_RUNNER.entrySet()) {
+				Element declared = directChild(properties, runner.getValue());
+				if (!disablesTheRunner(runner.getValue(), declared)) {
+					continue;
+				}
+				where.add("<properties> sets <" + runner.getValue() + ">"
+						+ declared.getTextContent().trim() + "</" + runner.getValue() + ">, the user "
+						+ "property maven-surefire-plugin binds its <" + runner.getKey() + "> parameter to: "
+						+ "this module's checks are all still collected and the machinery that discovers or "
+						+ "runs them is gone, so its surefire reported no failure at all. Measured — "
+						+ "<argLine>-Djunit.platform.execution.dryRun.enabled=true in api/pom.xml gave exit "
+						+ "0 with api printing the same figure for Tests run and Skipped, this class's own tests among "
+						+ "skipped, and omod green. See SUREFIRE_PARAMETERS_DISABLING_THE_RUNNER");
+			}
 			if (isTrue(directChild(properties, TEST_FAILURE_IGNORED_PROPERTY))) {
 				where.add("<properties> sets <" + TEST_FAILURE_IGNORED_PROPERTY + ">true</"
 						+ TEST_FAILURE_IGNORED_PROPERTY + ">, which leaves every check running and makes its "
@@ -2365,6 +2533,12 @@ public class JavadocReferenceGuardTest {
 			Element declared = directChild(configuration, parameter);
 			if (declared != null && !declared.getTextContent().trim().isEmpty()) {
 				where.add(position + " sets <" + parameter + ">, which decides WHICH tests run");
+			}
+		}
+		for (String parameter : SUREFIRE_PARAMETERS_DISABLING_THE_RUNNER.keySet()) {
+			if (disablesTheRunner(parameter, directChild(configuration, parameter))) {
+				where.add(position + " sets <" + parameter + ">, which leaves every check selected and "
+						+ "takes away the machinery that discovers or runs it");
 			}
 		}
 	}
@@ -4346,6 +4520,23 @@ public class JavadocReferenceGuardTest {
 	 * where a readable version is required rather than merely evaluated
 	 * ({@link #theArgumentsTheBuildDeclaresRefuseADeadJavadocReference}), and disclosed in docs/adr.md
 	 * Decision 75.
+	 *
+	 * <p><strong>Two other checks are not silent on such a child declaration, which is what makes the
+	 * hole narrower than this method's own silence.</strong> It had been recorded in the class javadoc
+	 * as a position nothing reported, and that was measured false. On this branch, JDK 21:
+	 * {@code <version>${compilerPluginVersion}</version>} on a compiler-plugin declaration in
+	 * {@code omod/pom.xml}'s own {@code <build><plugins>}, no such property in any of these POMs, run
+	 * as {@code mvn -o clean install -DcompilerPluginVersion=2.5.1} with a dead pointer planted in
+	 * {@code omod/src/main/java} — exit 1, api's own suite green, and TWO omod checks reporting, named
+	 * rather than counted:
+	 * {@code JavadocReferenceOmodCorpusTest.everyJavadocReferenceInTheOmodModuleResolves} on the
+	 * pointer, with its own literal arguments, and that class's
+	 * {@code noPomEditTakesAModuleOutOfTheTestBuild} on the POSITION — a compiler-plugin declaration
+	 * outside the root's {@code <pluginManagement>}. omod really did compile at
+	 * {@code compiler:2.5.1} with the managed {@code <compilerArgs>} silently ignored, which is the
+	 * part this method cannot see. A consequence: the interpolation leg reading the reactor PARENT's
+	 * {@code <properties>} is reachable only at a child declaration, and a child declaration is
+	 * refused by that positional rule, so the unevaluable verdict cannot decide a build on its own.
 	 */
 	private static List<String> versionFloorViolationsAt(Element plugin, Map<String, String> inherited) {
 		List<String> where = new ArrayList<String>();

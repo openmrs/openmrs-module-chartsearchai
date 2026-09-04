@@ -126,13 +126,9 @@ public class ReferenceProseFidelityTest {
 	 *  sentence the same arm can raise. */
 	private static final String CROSS_REACTIVITY = "cross-reactivity";
 
-	/** The answer's own opening, ahead of the stretch it reproduces. It names nothing the record does,
-	 *  so it contributes no run of its own. */
+	/** The answer's own opening, ahead of the stretch it reproduces. Its longest overlap with the
+	 *  record is one word, so it contributes no run of its own. */
 	private static final String LEAD = "No — it should not be given: ";
-
-	/** The DEBUG line the check declines at when the answer reproduces nothing of a cited record —
-	 *  which silence the #338 case gets, asserted rather than assumed, as three siblings above do. */
-	private static final String NO_REPRODUCTION = "reproduces no cited reference record";
 
 	private TestableService service;
 
@@ -802,12 +798,12 @@ public class ReferenceProseFidelityTest {
 		local.setLlmProvider(answering(LEAD + truncateAllergen(repeated) + marker));
 		try (LogCapture capture = LogCapture.on(CHECK, Level.DEBUG)) {
 			local.search(patient(), ISSUE_338_QUESTION);
-			assertTrue(debugStating(capture, NO_REPRODUCTION),
-					"the repeated code leaves no run of the record at the floor, so the check declines "
-							+ "at its gate rather than finding it faithful. Captured: "
-							+ capture.describeAll());
 			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
-					"and it states nothing about this answer. Captured: " + capture.describeAll());
+					"the check states nothing about this answer. Captured: " + capture.describeAll());
+			assertTrue(debugStating(capture, "reproduces no cited reference record"),
+					"and the repeated code leaves no run of the record at the floor, so the gate that "
+							+ "declined has to be identifiable — as it does for the three declining "
+							+ "cases above. Captured: " + capture.describeAll());
 		}
 
 		local.setLlmProvider(answering(LEAD + truncateAllergen(sentence) + marker));
@@ -826,12 +822,16 @@ public class ReferenceProseFidelityTest {
 	 * times.
 	 *
 	 * <p><b>It demonstrates rather than discriminates.</b> The check compares whole words and has no
-	 * notion of a drug name, so no mutation of it reddens this case while leaving
+	 * notion of a drug name, so nothing about the COMPARISON separates this pair from the two cases
+	 * either half resembles —
 	 * {@link #search_shouldStaySilentWhenTheAnswerReproducesTheRecordFaithfully} and
-	 * {@link #search_shouldReportAnAnswerThatSubstitutesItsOwnWordsInsideACopiedSentence} green. It
-	 * is here because ADR Decision 59 rests a statement on this pair — that a report from this check
-	 * is not evidence a name was mangled, while a name IS what decides where the answer diverges in
-	 * nothing else — and a statement in a decision with no case behind it is one nothing re-measures.
+	 * {@link #search_shouldReportAnAnswerThatSubstitutesItsOwnWordsInsideACopiedSentence}, on the
+	 * other arrangement. (The FLOOR does separate them: raise it far enough and this case reddens
+	 * while both of those stay green, because its runs are shorter than theirs. That is a fact about
+	 * this record's length, not about what the check can tell apart.) It is here because ADR
+	 * Decision 59 rests a statement on this pair — that a report from this check is not evidence a
+	 * name was mangled, while a name IS what the report turns on where the answer diverges in nothing
+	 * else — and a statement in a decision with no case behind it is one nothing re-measures.
 	 */
 	@Test
 	public void aTruncatedDrugNameDecidesTheReportWhereTheRestOfTheReproductionIsFaithful()
@@ -863,9 +863,12 @@ public class ReferenceProseFidelityTest {
 	}
 
 	/** The recorded-allergy CROSS-REACTIVITY finding in {@code chart} — selected by what it relates the
-	 *  two substances by, never by injection order: the same arm raises a direct recorded-allergy
-	 *  sentence that also carries the words "allergy to", and a case reading the wrong one would slice
-	 *  a different sentence with every premise still green. */
+	 *  two substances by, never by injection order. Defensive on this slice, which raises exactly one
+	 *  finding: dropping the {@code cross-reactivity} conjunct leaves the whole class green today.
+	 *  It is written this way because the same arm raises a DIRECT recorded-allergy sentence that also
+	 *  carries the words "allergy to" — an allergen naming the subject row rather than the partner is
+	 *  all it takes — and a case reading that one instead would slice a different sentence with every
+	 *  premise still green. */
 	private static RecordMapping crossReactivityFinding(PatientChart chart) {
 		for (RecordMapping mapping : chart.getMappings()) {
 			if (ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(mapping.getResourceType())
@@ -890,7 +893,18 @@ public class ReferenceProseFidelityTest {
 		String detail = text.substring(0, text.indexOf(DrugReferenceInjector.STRENGTH_WITHHOLD));
 		int subject = detail.indexOf(DrugReferenceInjector.FINDING_PREFIX)
 				+ DrugReferenceInjector.FINDING_PREFIX.length();
-		return detail.substring(detail.indexOf(": ", subject) + 2);
+		String sentence = detail.substring(detail.indexOf(": ", subject) + 2);
+		// Asserted, because neither case can see it: both answers are built from this string and
+		// compared against the record it came out of, so leaving the record prefix or the appended
+		// clause in it lengthens the run and reddens nothing. Gut this method and the class stays
+		// green without them.
+		assertFalse(sentence.startsWith(DrugReferenceInjector.FINDING_PREFIX),
+				"the record prefix must be off the sliced sentence, or the answers reproduce it too: "
+						+ sentence);
+		assertFalse(sentence.contains(DrugReferenceInjector.STRENGTH_WITHHOLD),
+				"and so must the appended strength clause, which the record-sentence exit is what keeps "
+						+ "out of the comparison: " + sentence);
+		return sentence;
 	}
 
 	/** The token the record parenthesises — its class code, taken as the record's own text between its

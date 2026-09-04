@@ -346,10 +346,11 @@ public final class DrugReferenceTestSupport {
 	 * and the bundled cross-reactivity groups — the arrangement behind a recorded-allergy finding,
 	 * which {@link #injectedSafetyFindingChart} cannot raise because it carries no allergy at all.
 	 *
-	 * <p>Public for the cross-package reason that one is: an inference test asserting what the check
-	 * did to a record needs the record to be production's own. A SLICE and deliberately not
-	 * {@link #shippedEntries()} — a case reading the rendered text is what that accessor's javadoc
-	 * reserves a verbatim slice for.
+	 * <p>Public for the cross-package reason {@link #injectedSafetyFindingChart} is: an inference test
+	 * asserting what a check did to a record needs the record to be production's own. A SLICE and
+	 * deliberately not {@link #shippedEntries()} — a case reading the rendered text is what that
+	 * accessor's javadoc reserves a verbatim slice for, and {@code Issue338SliceProvenanceTest} is
+	 * what holds the slice to its dataset.
 	 */
 	public static PatientChart injectedAllergyFindingChart(String fixtureResource, String question,
 			List<String> allergies) throws IOException {

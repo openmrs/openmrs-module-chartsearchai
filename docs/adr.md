@@ -3822,8 +3822,9 @@ One depth walk over the answer, no model call, no I/O — the same order as the 
   **Re-measured after #337 landed; the section below is what that measurement decided.**
 
 - **Detecting the dropped findings** (#338's defect 4). That is a comparison against what the answer was expected to say, which Decision 35 already rejects one level along: *"The chips are what the answer was expected to report, not what it was licensed to state; a model that legitimately declines to repeat a chip would be reported."* The nine chips still reach the clinician on the wire as `safetyWarnings`.
+- **Repairing the prose instead of reporting it.** Decision 35 point 4, unchanged: deleting or collapsing a token in a clinician-facing sentence is a larger decision than this check is licensed to make, and a silent edit is worse than a visible flag.
 
-### Re-measured after #337: the prose check reports a defect-2 answer without identifying one
+### Re-measured after #337: the check that landed since is silent on this issue's own capture
 
 Issue [#337](https://github.com/openmrs/openmrs-module-chartsearchai/issues/337)'s
 `ReferenceProseFidelityCheck` landed after this decision. It reports an answer that reproduces a
@@ -3833,49 +3834,65 @@ is canonical for it, [Decision 74](#decision-74-a-divergence-the-prose-check-fin
 for its published half — and it has named a mangled drug name in live prose: Decision 74 records an
 answer that reproduced a cited record and returned DDInter's `naproxen` as `naproxenic`, Decision 61's
 own measured table a drug name deleted from a recited mechanism. So it reads like defect 2's detection
-arriving by another route. Measured 2026-09-04, before any production code was written, it is not
-one.
+arriving by another route. Measured 2026-09-04, before any production code was written, it is not one.
 
-The arrangement is this issue's own, driven through the real `DrugReferenceInjector.injectRecords`
-over the shipped knowledge base and the bundled cross-reactivity groups: the eight active orders the
-Context above names, both recorded allergies, and the question the capture was taken on. It injects
-five `drug_reference` records and thirteen findings, of which the answer's opening clause cites
+The arrangement is this issue's own: the eight active orders its Context counts, spelled from the
+issue's own list, both of the recorded allergies it names, the shipped knowledge base and the bundled
+cross-reactivity groups, driven through the real `DrugReferenceInjector.injectRecords`. That is five
+`drug_reference` records and thirteen findings, counted off the returned mappings on the date above —
+they move with the knowledge base and the validator, and nothing asserts them. The clause the captured
+answer opens with is about the first of those findings, rendered
 `Safety finding — Hydrocortisone: Hydrocortisone is in the same ATC class (H02AB) as the patient's
 allergy to Dexamethasone — possible cross-reactivity. This finding is a reason to withhold it.` The
 answers put to `ReferenceProseFidelityCheck.reportUnfaithfulReferenceProse` — the production predicate
 itself, never a re-expression of it — are this issue's own captured prose and single-substitution
 variants of it. Two results.
 
-- **On the captured answer the check states nothing**, whether the answer's own citations are served
-  to it or every reference record in the chart is. Defect 1 sits inside the sentence defect 2 sits in,
-  and cuts the answer's agreement with that record into runs the check's floor rejects: lower
-  `MIN_REPRODUCED_WORDS` and its own WARN names them as eight words and seven. This is the residue
-  Decision 61 records as *"A substitution inside a reproduction shorter than twelve words, wherever it
-  sits"*, met by a second defect of the same sentence. Repair the repetition alone and the answer is
-  reported; repair the name alone and it is not.
+- **On the captured answer the check states nothing**, both when it is served the records that answer
+  cites and when it is served every reference record in the chart. Defect 1 sits inside the sentence
+  defect 2 sits in, and cuts the answer's agreement with that record into runs the floor rejects:
+  lower `MIN_REPRODUCED_WORDS` and the check's own WARN names that record's two runs as eight words
+  and seven. This is the residue Decision 61 records as *"A substitution inside a reproduction shorter
+  than twelve words, wherever it sits"*, met by a second defect of the same sentence rather than by a
+  short answer. Repair the repetition alone and the answer is reported; repair the name alone and it
+  is not.
 - **A report is not evidence that a name was mangled, and where the rest of the reproduction is
-  faithful the name is what decides.** Both halves were measured on this record. An answer that
-  collapses the repetition and spells the allergen in full is reported, because it carries on in its
-  own words where the record continues *"— possible cross-reactivity"* — the substitution
+  faithful the name is what the report turns on.** Both halves were measured on this record. An answer
+  that collapses the repetition and spells the allergen in full is reported, because it carries on in
+  its own words where the record continues *"— possible cross-reactivity"* — the substitution
   `search_shouldReportAnAnswerThatSubstitutesItsOwnWordsInsideACopiedSentence` is about. An answer
   that reproduces the record's sentence to its own end states nothing, and the same answer with the
   allergen shortened by one letter is reported. The cross-reactivity-group sentence the issue's
-  follow-up comment captured on a second chart (`Ibuprof` for `Ibuprofen`) behaves the same way; that
-  answer is quoted with an ellipsis in the comment, so its tail is not this repository's to check.
+  follow-up comment captured on a second chart (`Ibuprof` for `Ibuprofen`) is the same shape; that
+  answer is quoted with an ellipsis, so what the check would have said about it is not something this
+  repository can settle.
 
 `ReferenceProseFidelityTest.theCapturedShapeOfIssue338IsBelowTheFloorAndTheSameSentenceWithoutItIsReported`
 and `.aTruncatedDrugNameDecidesTheReportWhereTheRestOfTheReproductionIsFaithful` pin both, through the
-real `search` over the real injected record; move the floor in either direction and read the failures.
-The first asserts silence against the prose check's own WARN wording rather than against any WARN,
-because `ClassCodeFidelityCheck` reports that same answer under this decision's own rule 1 and logs
-into the same package — which is also what shows the capture is live.
+real `search` over a real injected record; move the floor in either direction and read the failures.
+They read a verbatim two-row slice rather than the shipped knowledge base, because a case that reads
+rendered TEXT is what `DrugReferenceTestSupport.shippedEntries()` reserves a slice for — so the
+arrangement above is a recorded measurement and the cases are the property. The first names which
+silence it got, at DEBUG on the check's own logger, so it pins the mechanism this bullet states and
+not only its outcome. The second demonstrates rather than discriminates, and says so where it stands.
+
+**One candidate this does not refuse, named because a section called "Re-measured" is where it belongs.**
+The drug-name rule the bullet above refutes is UNALIGNED — *"any answer token that is a proper prefix
+of a name a cited record states"* — and every false positive recorded against it is unaligned too: the
+module's own `Ethinylestradiol (ethinyl estradiol)` label is word-identical at every position of a
+faithful reproduction, and the 36 proper-prefix pairs and the `Amoxicillin`/`Amoxicilline` gloss fire
+only because nothing anchors them to a position in a record. Inside a reproduction this check has
+already established, *"the answer's word is a proper prefix of the record's word at this position"* is
+a different predicate. Decision 61's floor argument does not refuse a floor lowered for that class
+alone either: twelve was chosen because at eight the check reports the module's own generated headline
+being restated, which is not a prefix relation. What such a rule would still have to get past is its
+own false-positive measurement, which nobody has taken — and Decision 35's standing bar, that a check
+which cries wolf is worse than no check.
 
 What this leaves is the bullet above, unchanged: defect 2 is open, and a remedy still has that
 bullet's measurement to get past. It is recorded here because *"the prose check covers it now"* is the
 reading a maintainer arrives at from Decisions 61 and 74 alone, and the capture this issue is about is
 one the check is silent on.
-
-- **Repairing the prose instead of reporting it.** Decision 35 point 4, unchanged: deleting or collapsing a token in a clinician-facing sentence is a larger decision than this check is licensed to make, and a silent edit is worse than a visible flag.
 
 ### Trade-offs
 

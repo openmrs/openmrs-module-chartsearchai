@@ -109,17 +109,30 @@ public class ReferenceProseFidelityTest {
 	/** The question issue #338 captured its answer on. */
 	private static final String ISSUE_338_QUESTION = "Can I give her hydrocortisone?";
 
+	/** The verbatim DDInter slice the two #338 cases read: the two rows whose shared level-4 subgroup
+	 *  raises the recorded-allergy cross-reactivity sentence that answer opens on. A slice and not the
+	 *  shipped knowledge base, because these cases read the rendered TEXT. */
+	private static final String ISSUE_338_FIXTURE =
+			"chartsearchai-test/ddi-issue338-allergy-cross-reactivity.json";
+
+	/** The allergen the slice's other row records, as a chart token. */
+	private static final String ISSUE_338_ALLERGY = "dexamethasone";
+
 	/** The clause the module's own recorded-allergy cross-reactivity sentence names its allergen
-	 *  after — the anchor every #338 slice below reads, and asserted as a premise before it is used. */
+	 *  after — the anchor every #338 slice below reads, asserted as a premise before it is used. */
 	private static final String ALLERGY_TO = "allergy to ";
+
+	/** What that sentence relates the two by, and the premise that tells it from the recorded-allergy
+	 *  sentence the same arm can raise. */
+	private static final String CROSS_REACTIVITY = "cross-reactivity";
 
 	/** The answer's own opening, ahead of the stretch it reproduces. It names nothing the record does,
 	 *  so it contributes no run of its own. */
 	private static final String LEAD = "No — it should not be given: ";
 
-	/** The check's own WARN wording, so a silence assertion can be made in a package-scoped capture
-	 *  that the SIBLING check is legitimately warning into. */
-	private static final String PROSE_WARN = "states different words inside the sentence it was copying";
+	/** The DEBUG line the check declines at when the answer reproduces nothing of a cited record —
+	 *  which silence the #338 case gets, asserted rather than assumed, as three siblings above do. */
+	private static final String NO_REPRODUCTION = "reproduces no cited reference record";
 
 	private TestableService service;
 
@@ -134,10 +147,6 @@ public class ReferenceProseFidelityTest {
 	 *  own tokeniser: it keeps the punctuation, which is what carries the sentence boundaries the
 	 *  check reads, and a canned answer assembled from a lower-cased word list would carry none. */
 	private String[] recordTokens;
-
-	/** The #338 arrangement's chart, built by the two cases that need it rather than in setUp: it is
-	 *  a different knowledge base and a different context from every other case in this file. */
-	private PatientChart issue338Chart;
 
 	@BeforeEach
 	public void setUp() {
@@ -765,43 +774,46 @@ public class ReferenceProseFidelityTest {
 
 	/**
 	 * Issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/338">#338</a>'s
-	 * own captured shape: the record's sentence with its class code repeated inside the parenthetical
-	 * and the allergen truncated. The repetition cuts every run of the record below the floor, so this
-	 * check states nothing about an answer carrying BOTH defects — the residue ADR Decision 61 records
-	 * as a substitution inside a reproduction shorter than twelve words, met here by the defect that
-	 * sits earlier in the same sentence.
+	 * own captured shape: the record's sentence with its parenthesised class code repeated and the
+	 * allergen shortened by a letter. The repetition cuts this answer's agreement with that record
+	 * into runs below the floor, so the check declines at its gate and states nothing about an answer
+	 * carrying both defects — the residue ADR Decision 61 records as a substitution inside a
+	 * reproduction shorter than twelve words, met here by the defect that sits earlier in the same
+	 * sentence. It is not a claim about every answer carrying both: one that also reproduces the
+	 * record somewhere else would be reported for that.
 	 *
-	 * <p>The silence is asserted against the check's own wording rather than against any WARN,
-	 * because {@code ClassCodeFidelityCheck} DOES report this answer — the repeated code is its own
-	 * issue #338 rule (ADR Decision 59) and it logs into this same package. That WARN is what shows
-	 * the capture is live, so this case cannot pass vacuously; the second half is the control that
-	 * shows the silence is the floor's doing and not the arrangement's.
+	 * <p>WHICH silence it is, asserted rather than assumed, as the three declining cases above do —
+	 * and that DEBUG line is also what shows this capture is live. The second half is the control
+	 * that shows the silence is the floor's doing and not the arrangement's.
 	 */
 	@Test
-	public void theCapturedShapeOfIssue338IsBelowTheFloorAndTheSameSentenceWithoutItIsReported() {
-		RecordMapping record = issue338Finding();
-		TestableService local = newService(issue338Chart);
+	public void theCapturedShapeOfIssue338IsBelowTheFloorAndTheSameSentenceWithoutItIsReported()
+			throws Exception {
+		PatientChart chart = DrugReferenceTestSupport.injectedAllergyFindingChart(ISSUE_338_FIXTURE,
+				ISSUE_338_QUESTION, Arrays.asList(ISSUE_338_ALLERGY));
+		RecordMapping record = crossReactivityFinding(chart);
+		TestableService local = newService(chart);
 		String sentence = findingSentence(record);
 		String code = parenthesisedCode(sentence);
+		String marker = " [" + record.getIndex() + "].";
 		String repeated = sentence.replace("(" + code + ")",
 				"(" + code + ", " + code + ", " + code + ", " + code + ")");
-		String marker = " [" + record.getIndex() + "].";
 
 		local.setLlmProvider(answering(LEAD + truncateAllergen(repeated) + marker));
-		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+		try (LogCapture capture = LogCapture.on(CHECK, Level.DEBUG)) {
 			local.search(patient(), ISSUE_338_QUESTION);
-			assertFalse(capture.describeAll().isEmpty(),
-					"the capture must receive the pipeline's own lines, or this passes vacuously");
-			assertFalse(warnStating(capture, PROSE_WARN),
-					"with the repeated code cutting every run below the floor the prose check states "
-							+ "nothing, whatever the allergen is spelled. Captured: "
+			assertTrue(debugStating(capture, NO_REPRODUCTION),
+					"the repeated code leaves no run of the record at the floor, so the check declines "
+							+ "at its gate rather than finding it faithful. Captured: "
 							+ capture.describeAll());
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"and it states nothing about this answer. Captured: " + capture.describeAll());
 		}
 
 		local.setLlmProvider(answering(LEAD + truncateAllergen(sentence) + marker));
 		try (LogCapture capture = LogCapture.on(CHECK)) {
 			local.search(patient(), ISSUE_338_QUESTION);
-			assertTrue(warnStating(capture, PROSE_WARN, "[" + record.getIndex() + "]"),
+			assertTrue(warnStating(capture, "[" + record.getIndex() + "]"),
 					"the control: collapse the repetition and the same sentence IS reported, so the "
 							+ "silence above is the floor and not this arrangement. Captured: "
 							+ capture.describeAll());
@@ -809,19 +821,25 @@ public class ReferenceProseFidelityTest {
 	}
 
 	/**
-	 * And where the rest of the reproduction IS faithful, the truncated name is what decides. The pair
-	 * differs in nothing else: the same record sentence, reproduced to its own end both times.
+	 * And where the rest of the reproduction is faithful, the shortened name is what the report turns
+	 * on. The pair differs in nothing else: the same record sentence, reproduced to its own end both
+	 * times.
 	 *
-	 * <p>This is what a report can and cannot be read as. It does NOT say a report means the answer
-	 * mangled a name — an answer that spells the name correctly and then carries on in its own words
-	 * is reported too, which
-	 * {@link #search_shouldReportAnAnswerThatSubstitutesItsOwnWordsInsideACopiedSentence} pins. It
-	 * says the check is able to separate the two where the answer diverges in nothing else.
+	 * <p><b>It demonstrates rather than discriminates.</b> The check compares whole words and has no
+	 * notion of a drug name, so no mutation of it reddens this case while leaving
+	 * {@link #search_shouldStaySilentWhenTheAnswerReproducesTheRecordFaithfully} and
+	 * {@link #search_shouldReportAnAnswerThatSubstitutesItsOwnWordsInsideACopiedSentence} green. It
+	 * is here because ADR Decision 59 rests a statement on this pair — that a report from this check
+	 * is not evidence a name was mangled, while a name IS what decides where the answer diverges in
+	 * nothing else — and a statement in a decision with no case behind it is one nothing re-measures.
 	 */
 	@Test
-	public void aTruncatedDrugNameDecidesTheReportWhereTheRestOfTheReproductionIsFaithful() {
-		RecordMapping record = issue338Finding();
-		TestableService local = newService(issue338Chart);
+	public void aTruncatedDrugNameDecidesTheReportWhereTheRestOfTheReproductionIsFaithful()
+			throws Exception {
+		PatientChart chart = DrugReferenceTestSupport.injectedAllergyFindingChart(ISSUE_338_FIXTURE,
+				ISSUE_338_QUESTION, Arrays.asList(ISSUE_338_ALLERGY));
+		RecordMapping record = crossReactivityFinding(chart);
+		TestableService local = newService(chart);
 		String sentence = findingSentence(record);
 		String marker = " [" + record.getIndex() + "].";
 
@@ -838,38 +856,41 @@ public class ReferenceProseFidelityTest {
 		local.setLlmProvider(answering(LEAD + truncateAllergen(sentence) + marker));
 		try (LogCapture capture = LogCapture.on(CHECK)) {
 			local.search(patient(), ISSUE_338_QUESTION);
-			assertTrue(warnStating(capture, PROSE_WARN, "[" + record.getIndex() + "]"),
+			assertTrue(warnStating(capture, "[" + record.getIndex() + "]"),
 					"shorten the allergen and nothing else, and it is reported. Captured: "
 							+ capture.describeAll());
 		}
 	}
 
-	/** The cross-reactivity finding #338's answer opens on, from the real injector over the shipped
-	 *  knowledge base. Its premises are asserted rather than assumed: every slice below reads this
-	 *  text, and a KB refresh that changed the sentence would otherwise make the cases assert nothing.
-	 *  The chart is held so the service serves the record the answers cite. */
-	private RecordMapping issue338Finding() {
-		issue338Chart = DrugReferenceTestSupport.injectedAllergyFindingChart(ISSUE_338_QUESTION,
-				Arrays.asList("dexamethasone", "hydrocortisone"),
-				Arrays.asList("Ibuprofen", "Celecoxib", "Dexamethasone", "Diclofenac", "Hydrocortisone",
-						"Prednisone", "Budesonide", "Methylprednisolone"));
-		RecordMapping record = DrugReferenceTestSupport.safetyFindingIn(issue338Chart);
-		assertTrue(record.getText().contains(ALLERGY_TO),
-				"the premise: the first injected finding is the recorded-allergy cross-reactivity one, "
-						+ "which is the sentence #338's answer opens on. Was: " + record.getText());
-		assertTrue(record.getText().contains(DrugReferenceInjector.STRENGTH_WITHHOLD),
-				"the premise: it ends with the appended strength clause, which the record-sentence exit "
-						+ "keeps out of the comparison. Was: " + record.getText());
-		return record;
+	/** The recorded-allergy CROSS-REACTIVITY finding in {@code chart} — selected by what it relates the
+	 *  two substances by, never by injection order: the same arm raises a direct recorded-allergy
+	 *  sentence that also carries the words "allergy to", and a case reading the wrong one would slice
+	 *  a different sentence with every premise still green. */
+	private static RecordMapping crossReactivityFinding(PatientChart chart) {
+		for (RecordMapping mapping : chart.getMappings()) {
+			if (ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(mapping.getResourceType())
+					&& mapping.getText().contains(CROSS_REACTIVITY)
+					&& mapping.getText().contains(ALLERGY_TO)) {
+				assertTrue(mapping.getText().contains(DrugReferenceInjector.STRENGTH_WITHHOLD),
+						"the premise: the finding ends with the appended strength clause, which the "
+								+ "record-sentence exit keeps out of the comparison. Was: "
+								+ mapping.getText());
+				return mapping;
+			}
+		}
+		throw new IllegalStateException("the slice raised no recorded-allergy cross-reactivity finding: "
+				+ chart.getText());
 	}
 
 	/** The finding's own sentence: its detail with the record prefix and the appended clause removed.
 	 *  Sliced from the record at run time rather than transcribed, so the cases cannot drift from the
-	 *  dataset. */
+	 *  dataset, and off the production constants rather than a second spelling of them. */
 	private static String findingSentence(RecordMapping record) {
 		String text = record.getText();
 		String detail = text.substring(0, text.indexOf(DrugReferenceInjector.STRENGTH_WITHHOLD));
-		return detail.substring(detail.indexOf(": ") + 2);
+		int subject = detail.indexOf(DrugReferenceInjector.FINDING_PREFIX)
+				+ DrugReferenceInjector.FINDING_PREFIX.length();
+		return detail.substring(detail.indexOf(": ", subject) + 2);
 	}
 
 	/** The token the record parenthesises — its class code, taken as the record's own text between its

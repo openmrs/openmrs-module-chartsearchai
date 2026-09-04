@@ -341,30 +341,22 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/**
-	 * The chart the REAL pipeline produces for the arrangement issue
-	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/338">#338</a> captured: a
-	 * patient carrying {@code allergies} as recorded allergen tokens and {@code activeOrderDisplays} as
-	 * her active orders, asked {@code question}. Over the SHIPPED knowledge base rather than the
-	 * excerpt, because the corticosteroids that answer names are not in a sixteen-entry file, and with
-	 * the bundled cross-reactivity groups beside it.
+	 * The chart the REAL pipeline produces for a patient whose only recorded allergies are
+	 * {@code allergies}, asked {@code question}, over the verbatim slice at {@code fixtureResource}
+	 * and the bundled cross-reactivity groups — the arrangement behind a recorded-allergy finding,
+	 * which {@link #injectedSafetyFindingChart} cannot raise because it carries no allergy at all.
 	 *
-	 * <p>Public for the cross-package reason {@link #injectedSafetyFindingChart} is, and a method of
-	 * its own rather than an overload of it: that one carries no allergy, so it cannot raise the
-	 * recorded-allergen arm at all, and the two differ in the knowledge base as well as in the context.
+	 * <p>Public for the cross-package reason that one is: an inference test asserting what the check
+	 * did to a record needs the record to be production's own. A SLICE and deliberately not
+	 * {@link #shippedEntries()} — a case reading the rendered text is what that accessor's javadoc
+	 * reserves a verbatim slice for.
 	 */
-	public static PatientChart injectedAllergyFindingChart(String question, List<String> allergies,
-			List<String> activeOrderDisplays) {
-		DrugReferenceService service = serviceWith(shippedEntries());
-		service.setCrossReactivityGroups(bundledGroups());
-		List<PatientClinicalContext.ActiveDrugOrder> orders =
-				new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
-		for (String display : activeOrderDisplays) {
-			orders.add(activeOrder("order-" + orders.size(), display));
-		}
-		return injectorWithSafety(service).injectRecords(oneRecordChart(),
-				ctx(60, null, new LinkedHashSet<String>(activeOrderDisplays), null,
-						new LinkedHashSet<String>(allergies), null, orders),
-				question);
+	public static PatientChart injectedAllergyFindingChart(String fixtureResource, String question,
+			List<String> allergies) throws IOException {
+		return injectorWithSafety(serviceWithGroups(ddiFixtureEntries(fixtureResource)))
+				.injectRecords(oneRecordChart(),
+						ctx(60, null, null, null, new LinkedHashSet<String>(allergies), null),
+						question);
 	}
 
 	/**

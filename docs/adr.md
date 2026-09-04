@@ -3821,7 +3821,7 @@ One depth walk over the answer, no model call, no I/O — the same order as the 
   A rule that fires on the module's own output in the accusatory direction is the "cries wolf" failure Decision 35 names as worse than no check. The gloss-free variant (any answer token that is a proper prefix of a name a cited record states) is worse, not better: it reports `Amoxicillin` beside a charted `Amoxicilline`, and every one of those 36 pairs, without needing a gloss at all. #338's defect 2 is left open, and the measurement above is what it will have to get past.
   **Re-measured after #337 landed; [that measurement](#re-measured-after-337-the-check-that-landed-since-is-silent-on-this-issues-own-capture) leaves this bullet standing.**
 
-- **Detecting the dropped findings** (#338's defect 4). That is a comparison against what the answer was expected to say, which Decision 35 already rejects one level along: *"The chips are what the answer was expected to report, not what it was licensed to state; a model that legitimately declines to repeat a chip would be reported."* The nine chips still reach the clinician on the wire as `safetyWarnings`, so the deterministic half of the remedy [Decision 67](#decision-67-a-question-naming-a-drug-class-is-told-so-rather-than-resolved-to-members-the-classification-cannot-honestly-supply) takes for its own issue — state the fact on the wire rather than leave it to the model — is already discharged here; what is left is a client that renders them beside the prose, which is `openmrs-esm-chartsearchai` and the same split [#201](https://github.com/openmrs/openmrs-module-chartsearchai/issues/201) took.
+- **Detecting the dropped findings** (#338's defect 4). That is a comparison against what the answer was expected to say, which Decision 35 already rejects one level along: *"The chips are what the answer was expected to report, not what it was licensed to state; a model that legitimately declines to repeat a chip would be reported."* The nine chips a clinician does not read in the prose still reach the wire as `safetyWarnings`, so their CONTENT is not lost to a client that renders them beside the answer, which is `openmrs-esm-chartsearchai` and the same split [#201](https://github.com/openmrs/openmrs-module-chartsearchai/issues/201) took. **What is not stated anywhere is that the prose left one out**, and this issue's own follow-up comment says so — *"Nothing in the response says a finding was left out."* That is the residue this rejection accepts, not something already discharged: `interactionPairs` counts the pairwise arms' above-floor RULE pairs and is not a chip census (Decision 60), and no key reconciles the prose against the chips. Do not read the parallel with [Decision 67](#decision-67-a-question-naming-a-drug-class-is-told-so-rather-than-resolved-to-members-the-classification-cannot-honestly-supply) that an earlier draft of this bullet drew: that decision's deterministic half is `ChartAnswer.getUnresolvedDrugClass()`, a DERIVED statement published as its own key precisely because the injected record alone did not reach a client, and the analogue here would be a key stating the omission — which is the comparison Decision 35 rejects, one level along.
 - **Repairing the prose instead of reporting it.** Decision 35 point 4, unchanged: deleting or collapsing a token in a clinician-facing sentence is a larger decision than this check is licensed to make, and a silent edit is worse than a visible flag.
 
 ### Re-measured after #337: the check that landed since is silent on this issue's own capture
@@ -3945,24 +3945,45 @@ narrows the rule; it does not answer it. Nor would such a rule buy anything at t
 where a substitution inside a long enough reproduction is already reported; its whole value would be a
 floor lowered for that class alone, which Decision 61 is canonical for and does not by itself refuse.
 What it would have to get past is its own false-positive measurement and Decision 35's standing bar
-that a check which cries wolf is worse than no check. **A corpus to take that measurement over exists
-in this repository — thin and unlabelled rather than absent.** The captures under
-`eval/drift-metric/fixtures` carry each answer's `safetyWarnings` beside its citations, and a chip's
-`drug` and `detail` are two of the operands `DrugReferenceInjector.renderFinding` composes a
-`safety_finding` record from, so that record's own detail SENTENCE — where an answer's reproduction of
-a finding sits — is reconstructible from a capture word for word, even though the citation objects
-themselves carry only index, type and uuid. Measured 2026-09-04 from a throwaway harness driving
-`reportUnfaithfulReferenceProse` itself (never a re-expression of it) over all 72 json files, each
-capture's reconstructed chips served as its own cited records: of the 42 captured answers 27 carry
-chips, 16 reproduce a reconstructed record to the floor — the population a rule scoped inside an
-established reproduction could fire in at this floor — and the check states a citation on 9 of them.
-Those nine are THIS check's reports and not a candidate rule's false alarms; what the sixteen give a
-candidate is somewhere to be run. Two things that corpus does not carry, and both are why it is thin
-rather than why it would be unavailable: a LABEL, these being the drift metric's own perturbed
-answers, so nothing in the tree settles which report is a true one; and any `drug_reference` record's
-text at all, no capture carrying it — the reconstruction reaches a `safety_finding`'s detail, and what
-`renderFinding` appends after it is approximated. The live corpus Decision 35 used is outside this
-repository.
+that a check which cries wolf is worse than no check. **A corpus to take that measurement over
+exists in this repository — thin, and labelled for a different question, rather than absent.** The
+captures under `eval/drift-metric/fixtures` carry each answer's `safetyWarnings` beside its
+citations, and a chip's `drug` and `detail` are two of the operands
+`DrugReferenceInjector.renderFinding` composes a `safety_finding` record from, so that record's own
+detail SENTENCE — where an answer's reproduction of a finding sits — is reconstructible from a
+capture word for word, even though no capture's citation object carries a word of the record's own
+text. Measured 2026-09-04 from a throwaway harness driving `reportUnfaithfulReferenceProse` itself
+(never a re-expression of it) over all 72 json files, each capture's reconstructed chips served as
+its own cited records: of the 42 captured answers 27 carry chips, 16 reproduce a reconstructed
+record to the floor — the population a rule scoped inside an established reproduction could fire in
+at this floor — and the check states a citation on 9 of them. Those nine are THIS check's reports
+and not a candidate rule's false alarms; what the sixteen give a candidate is somewhere to be run.
+Two things that corpus does not carry, and both are why it is thin rather than why it would be
+unavailable: a label saying whether a report on a capture is a TRUE one; and any `drug_reference`
+record's text at all, no capture carrying it — the reconstruction reaches a `safety_finding`'s
+detail, and what `renderFinding` appends after it is approximated. **What it does carry is a
+per-file provenance record, and it has to be READ rather than characterised from the shape of the
+tree** — an earlier draft of this paragraph characterised the whole of it as the drift metric's own
+perturbed answers, which its own `eval/drift-metric/fixtures/probe-safety/PROVENANCE.md` refuses in
+as many words: *"Everything not marked **CONSTRUCTED** or **COUNTERFACTUAL** below is a verbatim
+live capture — the markers are the record"*. Those markers answer a different question from this one
+— whether an ANSWER was constructed to give the drift SCORER a failure to catch, not whether it
+renders a cited record faithfully — which is why the label this measurement wants is still missing.
+What they do settle is which captures are the module's own output. The nine reported files are FOUR
+distinct answers — two of them live captures, the other two single-token edits of one of those,
+`Major` for `Moderate` and for `Minor` (measured on this head by hashing the nine files and their
+nine `answer` fields). `shipped-clean/agnes__safety-warfarin.json` (*"byte-identical"*) is one of
+the two, and four other arms carry that file unedited because each changes one other cell — five of
+the nine are one live answer. The second is `severity-overstated/steven__safety-rifabutin.json` (*"A
+**live capture**, verbatim and unedited"*). On both, the divergence is between the captured answer
+and the chip text the same file carries, and is legible without running anything: the answer writes
+`plateet` where the chip writes `platelet`, and `CYP402C8` where the chip writes `CYP450 2C8`. So
+this check's reports on the live subset are true divergences and not wolf-crying — which matters
+because `shipped-clean/`'s own contract is *"Nothing here may be flagged; if it is, the guards are
+crying wolf on the answers the module actually produces"*, a contract over the drift scorer's guards
+and not over this check, and the closest thing in the tree to the label above. What stays thin is
+the BREADTH: those nine reports are four answers about two patients, and the sixteen that reach the
+floor add one more patient. The live corpus Decision 35 used is outside this repository.
 
 What this leaves is the bullet above, unchanged: defect 2 is open, and a remedy still has that
 bullet's measurement to get past. It is recorded here because *"the prose check covers it now"* is the

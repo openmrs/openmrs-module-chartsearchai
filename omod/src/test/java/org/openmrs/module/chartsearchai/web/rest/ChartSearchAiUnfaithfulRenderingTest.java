@@ -29,7 +29,6 @@ import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.oxm.xstream.XStreamMarshaller;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -211,12 +210,14 @@ public class ChartSearchAiUnfaithfulRenderingTest {
 
 	/**
 	 * Structural: exactly one write of the key, so a second and divergent one cannot be added. Stated
-	 * as what it holds rather than as what would be useful — it reddens on the literal being
-	 * relocated (into a constant, across a line wrap, into a quoted comment), and it CANNOT force a
-	 * new emission surface through {@code putModuleStatements}. Measured by mutation: a fourth
-	 * payload-building method that serializes the answer and never calls that one leaves this guard,
-	 * and its two neighbours on the sibling keys, green. The three surfaces that exist today are
-	 * covered behaviourally by the cases above; a fourth would need its own.
+	 * as what it holds rather than as what would be useful. It reddens on the literal being wrapped
+	 * across a line or moved into a quoted comment. TWO mutations it does not see, both measured
+	 * rather than reasoned: hoisting the key to a {@code private static final String} and using that
+	 * at the put site keeps the count at one, which is the refactor a maintainer is most likely to
+	 * actually perform; and a fourth payload-building method that serializes the answer without
+	 * calling {@code putModuleStatements} leaves this guard and both its neighbours on the sibling
+	 * keys green. The three surfaces that exist today are covered behaviourally by the cases above; a
+	 * fourth would need its own.
 	 */
 	@Test
 	public void theKeyIsWrittenInExactlyOnePlace() throws Exception {

@@ -33,8 +33,6 @@ import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.oxm.xstream.XStreamMarshaller;
-
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -306,7 +304,6 @@ public class ChartSearchAiChartOrderBridgeTest {
 		bridges = Collections.<SafetyWarning.ChartOrderBridge> emptyList();
 		XmlPayloads.assertMarshals(searchPayload(), "a chip with no attributions");
 	}
-
 
 	@Test
 	public void noEmissionSiteCanPublishAChipWithoutSayingWhereItsSubstanceCameFrom() throws Exception {

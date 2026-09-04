@@ -16,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
@@ -219,6 +220,49 @@ public class ReferenceProseFidelityTest {
 				answer.getUnfaithfullyRenderedCitations(),
 				"one record is one unfaithful citation however many times the answer diverged from "
 						+ "it, or a client renders the same mark twice");
+	}
+
+	/**
+	 * THREE records diverged from, stated in the order the check reported them — which is the order
+	 * the ANSWER diverges in, not the order the chart numbers the records in. Three and not two, and
+	 * that is the whole arrangement: the answer diverges from {@code [2]}, then {@code [3]}, then
+	 * {@code [1]}, an order that is neither ascending nor descending, so it separates report order
+	 * from BOTH orderings a set could impose. A two-record version of this case was written first, and
+	 * its {@code [2, 1]} is descending — it passed under a reversed {@code TreeSet}, which is exactly
+	 * the coincidence a control has to rule out.
+	 *
+	 * <p>Assembled rather than injected: the two records the real injector produces for one question
+	 * carry the SAME mechanism string, so they diverge together and pool, and the shape this needs
+	 * does not occur in a sixteen-entry excerpt — the reason the pooling cases below build their own
+	 * records. The check is a pure function of an answer and a record's text, so an assembled operand
+	 * is the right one here.
+	 *
+	 * <p>Without this the ordering the accessor and the check both promise is unpinned: with one
+	 * record there is nothing to order.
+	 */
+	@Test
+	public void severalRecordsDivergedFromAreStatedInTheOrderTheyWereReported() {
+		String one = "Aspirin and warfarin together raise the risk of serious bleeding in patients "
+				+ "who are elderly and frail.";
+		String two = "Metformin should be withheld before contrast imaging in any patient because "
+				+ "renal impairment can precipitate lactic acidosis.";
+		String three = "Amiodarone prolongs the QT interval and should not be combined with other "
+				+ "agents that delay cardiac repolarisation.";
+		TestableService overThree = newService(referenceRecordsStating(one, two, three));
+		overThree.setLlmProvider(answering(
+				"Metformin should be withheld before contrast imaging in any patient because "
+						+ "renal impairment can cause trouble [2]. Amiodarone prolongs the QT "
+						+ "interval and should not be combined with other medicines [3]. Aspirin and "
+						+ "warfarin together raise the risk of serious bleeding in patients who are "
+						+ "unwell [1]."));
+
+		ChartAnswer answer = overThree.search(patient(), QUESTION);
+
+		assertEquals(
+				Arrays.asList(Integer.valueOf(2), Integer.valueOf(3), Integer.valueOf(1)),
+				answer.getUnfaithfullyRenderedCitations(),
+				"the statement is in the order the divergences were reported — the answer's own "
+						+ "order, and neither the chart's numbering nor its reverse");
 	}
 
 	/**

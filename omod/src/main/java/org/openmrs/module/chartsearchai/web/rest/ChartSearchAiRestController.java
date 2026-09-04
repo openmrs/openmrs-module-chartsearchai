@@ -1387,10 +1387,14 @@ public class ChartSearchAiRestController {
 	 * canonical for what it states, for why no prose travels with it, and for the difference between
 	 * {@code null} and an empty list — a difference this method preserves rather than flattening.
 	 *
-	 * <p><b>The copy is a correctness requirement</b> and not caution — {@code XmlPayloads} carries the
-	 * measurement, and {@code serializeSafetyWarnings} takes it for the same reason. What is new here
-	 * is the guard around it: unlike {@code chartOrderBridges()} this accessor can return null, and
-	 * {@code new ArrayList<>(null)} throws — a 500 on every request whose check failed.
+	 * <p><b>The copy is a correctness requirement</b> and not caution — the measurement is at
+	 * {@link #serializeSafetyWarnings}, which takes it for the same reason. What is new here is the
+	 * guard around it: unlike {@code chartOrderBridges()} this accessor can return null, and
+	 * {@code new ArrayList<>(null)} throws. Its ROUTINE trigger is not a failed check but the
+	 * async-grounding early {@code done}, which is built from a shorter constructor and states null on
+	 * every such request — measured by removing the guard, which breaks the {@code done} event for
+	 * every {@code chartsearchai.grounding.async=true} stream. The failed-check case reaches it too
+	 * and is the unreachable one (ADR Decision 61 records why nothing gets that far).
 	 */
 	private void putModuleStatements(Map<String, Object> target, ChartAnswer answer) {
 		putSafetyChips(target, answer);

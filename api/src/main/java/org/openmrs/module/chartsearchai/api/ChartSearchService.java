@@ -507,13 +507,15 @@ public interface ChartSearchService {
 		 * same way, one surface over.
 		 *
 		 * <p><b>What it states is the CITATION and never a word of either text.</b> One record is one
-		 * entry however many times the answer diverged from it. No prose travels: the record sentence
-		 * a client would want is not derivable without splitting a record on
-		 * {@link ChartSearchAiUtils#mayEndASentence}, which that predicate's javadoc forbids, and a
-		 * {@code drug_reference} record's text names this patient's recorded allergens and conditions
-		 * and appears on no wire key today. For a {@code safety_finding} the verbatim prose IS already
-		 * published, as the chip's {@code detail}; for a {@code drug_reference} divergence the
-		 * response carries no verbatim counterpart, and the README says so rather than implying one.
+		 * entry however many times the answer diverged from it, and no prose travels — ADR Decision 74
+		 * carries why, and README's {@code unfaithfullyRenderedCitations} section carries what a client
+		 * can and cannot put beside it. The short of that: the response does NOT let a consumer recover
+		 * the cited record's own words. A {@code safety_finding}'s {@code resourceUuid} names the
+		 * subject drug only, so several records — several indexes — share one, and the
+		 * {@code safetyWarnings} chips carrying that {@code (type, drug)} are a candidate SET rather
+		 * than a match; and a chip's {@code detail} is in any case only the mechanism half of what this
+		 * check compares against, the prefix and the clauses {@code renderFinding} appends carrying no
+		 * counterpart. A {@code drug_reference} record's text is published nowhere at all.
 		 *
 		 * <p><b>It is not a grounding verdict and must not be rendered as one.</b> The finding is
 		 * deterministic and correct; what diverged is the ANSWER's rendering of it. Reading it as

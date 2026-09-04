@@ -1387,12 +1387,10 @@ public class ChartSearchAiRestController {
 	 * canonical for what it states, for why no prose travels with it, and for the difference between
 	 * {@code null} and an empty list — a difference this method preserves rather than flattening.
 	 *
-	 * <p><b>The copy is a correctness requirement</b>, the same one {@code serializeSafetyWarnings}
-	 * spells out over {@code chartOrderBridges}: XStreamMarshaller refuses
-	 * {@code Collections$UnmodifiableRandomAccessList} and {@code Collections$EmptyList}, and this
-	 * accessor returns exactly those. Guarded on null rather than copied blindly, because unlike
-	 * {@code chartOrderBridges()} this accessor can return null and {@code new ArrayList<>(null)}
-	 * throws — a 500 on every request whose check failed.
+	 * <p><b>The copy is a correctness requirement</b> and not caution — {@code XmlPayloads} carries the
+	 * measurement, and {@code serializeSafetyWarnings} takes it for the same reason. What is new here
+	 * is the guard around it: unlike {@code chartOrderBridges()} this accessor can return null, and
+	 * {@code new ArrayList<>(null)} throws — a 500 on every request whose check failed.
 	 */
 	private void putModuleStatements(Map<String, Object> target, ChartAnswer answer) {
 		putSafetyChips(target, answer);

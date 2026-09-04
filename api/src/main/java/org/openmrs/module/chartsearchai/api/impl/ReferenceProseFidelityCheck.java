@@ -57,14 +57,9 @@ import org.slf4j.LoggerFactory;
  *
  * <p><b>Since the second round of issue #337 it also reaches the wire</b>, as the citation indexes it
  * warned about: {@code ChartAnswer.getUnfaithfullyRenderedCitations()}, published as the
- * {@code unfaithfullyRenderedCitations} response key. A WARN is a maintainer's signal, and what the
- * ticket asked for is that a divergence stop being invisible to whoever reads the answer — the shape
- * issue #354 answered the same way for the drug-class note. What travels is the INDEX and never a
- * word of either text: the sentence a client would want is not derivable here without splitting a
- * record on {@link ChartSearchAiUtils#mayEndASentence}, which that predicate's own javadoc forbids,
- * and for a {@code safety_finding} the record's verbatim prose is already on the wire as the chip's
- * {@code detail}. ADR Decision 74 carries the rest, including why the sibling class-code check
- * publishes nothing.
+ * {@code unfaithfullyRenderedCitations} response key. What travels is the INDEX and never a word of
+ * either text. That accessor is canonical for what is stated and ADR Decision 74 for why — including
+ * why no record prose goes with it, and why the sibling class-code check publishes nothing.
  *
  * <p><b>Conservative by construction</b>, because a check that cries wolf is worse than no check:
  * <ul>
@@ -290,9 +285,8 @@ final class ReferenceProseFidelityCheck {
 						+ "reproduction of a cited reference record is faithful", patientId);
 				return Collections.emptyList();
 			}
-			// Ordered and de-duplicated in one pass: the divergences arrive keyed on ANSWER position,
-			// so one record diverged from twice contributes two of them, and the statement is of the
-			// CITATION. The WARNs stay per divergence — a maintainer needs both offsets.
+			// Ordered and de-duplicated in one pass; the WARNs below stay per divergence, because a
+			// maintainer needs both offsets. The @return tag carries why the statement collapses them.
 			Set<Integer> stated = new LinkedHashSet<Integer>();
 			for (Divergence divergence : unexplained) {
 				stated.add(Integer.valueOf(divergence.recordIndex));

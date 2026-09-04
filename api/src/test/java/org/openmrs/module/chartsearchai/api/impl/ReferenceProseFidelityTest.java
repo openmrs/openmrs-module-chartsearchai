@@ -378,12 +378,19 @@ public class ReferenceProseFidelityTest {
 		service.setLlmProvider(answering("Sertraline and the patient's tramadol together carry a "
 				+ "serotonin risk [" + finding.getIndex() + "]."));
 		try (LogCapture capture = LogCapture.on(CHECK, Level.DEBUG)) {
-			service.search(patient(), QUESTION);
+			ChartAnswer answer = service.search(patient(), QUESTION);
 			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
 					"with nothing reproduced there is no reproduction to be unfaithful to. Captured: "
 							+ capture.describeAll());
 			assertTrue(debugStating(capture, "reproduces no cited reference record"),
 					"the gate that declined has to be identifiable. Captured: " + capture.describeAll());
+			// And what the DECLINE states on the response. Empty, not null: the check ran. Returning
+			// null here would publish a failed-check reading for an answer that was simply never
+			// compared, which is the one thing the key's client contract forbids a consumer to infer
+			// in the other direction — so the two decline gates are pinned as well as the compare.
+			assertEquals(Collections.emptyList(), answer.getUnfaithfullyRenderedCitations(),
+					"a gate that declined has still MEASURED: it names no citation, and says so with "
+							+ "an empty list rather than with the absence of a measurement");
 		}
 	}
 
@@ -657,13 +664,16 @@ public class ReferenceProseFidelityTest {
 		onUnreadable.setLlmProvider(answering("The records address it and the finding is a reason to "
 				+ "withhold it [1]."));
 		try (LogCapture capture = LogCapture.on(CHECK, Level.DEBUG)) {
-			onUnreadable.search(patient(), QUESTION);
+			ChartAnswer answer = onUnreadable.search(patient(), QUESTION);
 			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
 					"an unreadable cited record must be skipped, not read. Captured: "
 							+ capture.describeAll());
 			assertTrue(debugStating(capture, "cites no readable reference record"),
 					"and which decline it was has to be identifiable. Captured: "
 							+ capture.describeAll());
+			assertEquals(Collections.emptyList(), answer.getUnfaithfullyRenderedCitations(),
+					"and this decline states an empty list too — the same statement a stock install "
+							+ "makes on every answer, and not the absence of a measurement");
 		}
 	}
 

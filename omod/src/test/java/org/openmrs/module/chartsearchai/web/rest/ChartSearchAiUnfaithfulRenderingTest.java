@@ -14,15 +14,11 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
-import java.io.StringWriter;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
-
-import javax.xml.transform.stream.StreamResult;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -98,13 +94,6 @@ public class ChartSearchAiUnfaithfulRenderingTest {
 		openmrsContext.restore();
 	}
 
-	private static Patient patient() {
-		Patient p = new Patient();
-		p.setPatientId(9);
-		p.setUuid("uuid-9");
-		return p;
-	}
-
 	private ChartSearchService.ChartAnswer answer() {
 		return new ChartSearchService.ChartAnswer(MODEL_ANSWER,
 				Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
@@ -113,10 +102,7 @@ public class ChartSearchAiUnfaithfulRenderingTest {
 
 	@SuppressWarnings("unchecked")
 	private Map<String, Object> searchPayload() {
-		Map<String, String> body = new HashMap<String, String>();
-		body.put("patient", RestControllerContext.PATIENT_UUID);
-		body.put("question", QUESTION);
-		ResponseEntity<Object> response = controller.search(body);
+		ResponseEntity<Object> response = controller.search(RestControllerContext.searchBody(QUESTION));
 		assertEquals(HttpStatus.OK, response.getStatusCode(),
 				"the handler must have reached serialization");
 		Map<String, Object> payload = (Map<String, Object>) response.getBody();
@@ -172,7 +158,7 @@ public class ChartSearchAiUnfaithfulRenderingTest {
 
 	@Test
 	public void theDoneEventNamesItToo() throws Exception {
-		controller.streamAnswer(out, patient(), QUESTION, new User(3), false);
+		controller.streamAnswer(out, RestControllerContext.patient(), QUESTION, new User(3), false);
 
 		JsonNode done = eventData("done");
 		assertTrue(done.has("unfaithfullyRenderedCitations"),
@@ -193,7 +179,7 @@ public class ChartSearchAiUnfaithfulRenderingTest {
 	 */
 	@Test
 	public void theEarlyDoneStatesNothingAndTheGroundedEventCarriesTheMeasurement() throws Exception {
-		controller.streamAnswer(out, patient(), QUESTION, new User(3), true);
+		controller.streamAnswer(out, RestControllerContext.patient(), QUESTION, new User(3), true);
 
 		JsonNode done = eventData("done");
 		assertTrue(done.has("unfaithfullyRenderedCitations"),
@@ -216,30 +202,21 @@ public class ChartSearchAiUnfaithfulRenderingTest {
 	 */
 	@Test
 	public void theWholePayloadStillMarshalsForAnXmlClient() throws Exception {
-		assertMarshals(searchPayload(), "a stated divergence");
+		XmlPayloads.assertMarshals(searchPayload(), "a stated divergence");
 		stated = Collections.emptyList();
-		assertMarshals(searchPayload(), "a measurement of none");
+		XmlPayloads.assertMarshals(searchPayload(), "a measurement of none");
 		stated = null;
-		assertMarshals(searchPayload(), "no measurement at all");
-	}
-
-	private static void assertMarshals(Map<String, Object> payload, String what) throws Exception {
-		XStreamMarshaller marshaller = new XStreamMarshaller();
-		marshaller.afterPropertiesSet();
-		try {
-			marshaller.marshal(payload, new StreamResult(new StringWriter()));
-		}
-		catch (Exception e) {
-			throw new AssertionError("the /search payload must marshal to XML for " + what
-					+ " — an XStreamMarshaller is the converter openmrs-core selects for "
-					+ "Accept: application/xml, and it cannot marshal Collections' immutable wrappers "
-					+ "(issue #347). Publish a copy, not the accessor's list. Cause: " + e, e);
-		}
+		XmlPayloads.assertMarshals(searchPayload(), "no measurement at all");
 	}
 
 	/**
-	 * Structural, and it is what makes the cases above hold for a surface nobody has written yet: one
-	 * write of the key, inside the one method every emission surface goes through.
+	 * Structural: exactly one write of the key, so a second and divergent one cannot be added. Stated
+	 * as what it holds rather than as what would be useful — it reddens on the literal being
+	 * relocated (into a constant, across a line wrap, into a quoted comment), and it CANNOT force a
+	 * new emission surface through {@code putModuleStatements}. Measured by mutation: a fourth
+	 * payload-building method that serializes the answer and never calls that one leaves this guard,
+	 * and its two neighbours on the sibling keys, green. The three surfaces that exist today are
+	 * covered behaviourally by the cases above; a fourth would need its own.
 	 */
 	@Test
 	public void theKeyIsWrittenInExactlyOnePlace() throws Exception {

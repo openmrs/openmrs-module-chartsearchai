@@ -3819,7 +3819,7 @@ One depth walk over the answer, no model call, no I/O — the same order as the 
   Measured through the real `DdiDrugReferenceSource` parse of the shipped knowledge base and `DrugReference.displayLabel()` itself, never a re-expression of either. Two of its 2283 rows publish a label the rule fires on — `Ethinylestradiol (ethinyl estradiol)` and `Flax seed (flaxseed extract)` — and which of the two you get depends on how the head is delimited, so both readings and both rows are recorded rather than a count: taking the head as everything before the bracket and asking `containsWord` finds both; taking it as the single word before the bracket finds only the first. Either way an answer citing a chart order displaying `Ethinyl estradiol 30mcg` has the module's own correct label reported as a corruption. And of the **1840** single-token names those entries publish, **36** pairs stand in a proper-prefix relation, and they are three different things the rule cannot tell apart: spelling variants of ONE substance (`terazosin`/`terazosine`, `pramipexol`/`pramipexole`, `vasopressin`/`vasopressins`), biosimilar suffixes (`trastuzumab`/`trastuzumab-dkst` and its siblings, `denosumab` likewise), and genuinely different substances (`enalapril`/`enalaprilat`, `niacin`/`niacinamide`). A gloss over any of them is reported as a truncation. The same shape also covers the INN-versus-localized-spelling gloss (`Amoxicillin (Amoxicilline 500mg)`); `matchesOrderName`'s own javadoc records 67 localized spellings in the 3.7.1 demo dictionary.
 
   A rule that fires on the module's own output in the accusatory direction is the "cries wolf" failure Decision 35 names as worse than no check. The gloss-free variant (any answer token that is a proper prefix of a name a cited record states) is worse, not better: it reports `Amoxicillin` beside a charted `Amoxicilline`, and every one of those 36 pairs, without needing a gloss at all. #338's defect 2 is left open, and the measurement above is what it will have to get past.
-  **Re-measured after #337 landed; [that measurement](#re-measured-after-337-the-check-that-landed-since-is-silent-on-this-issues-own-capture) is what decided it.**
+  **Re-measured after #337 landed; [that measurement](#re-measured-after-337-the-check-that-landed-since-is-silent-on-this-issues-own-capture) leaves this bullet standing.**
 
 - **Detecting the dropped findings** (#338's defect 4). That is a comparison against what the answer was expected to say, which Decision 35 already rejects one level along: *"The chips are what the answer was expected to report, not what it was licensed to state; a model that legitimately declines to repeat a chip would be reported."* The nine chips still reach the clinician on the wire as `safetyWarnings`, so the deterministic half of the remedy [Decision 67](#decision-67-a-question-naming-a-drug-class-is-told-so-rather-than-resolved-to-members-the-classification-cannot-honestly-supply) takes for its own issue — state the fact on the wire rather than leave it to the model — is already discharged here; what is left is a client that renders them beside the prose, which is `openmrs-esm-chartsearchai` and the same split [#201](https://github.com/openmrs/openmrs-module-chartsearchai/issues/201) took.
 - **Repairing the prose instead of reporting it.** Decision 35 point 4, unchanged: deleting or collapsing a token in a clinician-facing sentence is a larger decision than this check is licensed to make, and a silent edit is worse than a visible flag.
@@ -3852,22 +3852,20 @@ allergy to Dexamethasone — possible cross-reactivity. This finding is a reason
 **The measurement.** Every answer below was put to
 `ReferenceProseFidelityCheck.reportUnfaithfulReferenceProse` — the production predicate, never a
 re-expression of it — with the records named in the second column served to it as the answer's cited
-list, off a chart the real injector built. Serving them rather than letting the answer's own markers
-select them is what makes the second column a variable; the two rows the cases below pin are driven
-through `LlmInferenceService.search` instead, where `extractCitedReferences` decides it, and agree.
-The first two rows are this issue's captured answer, all six clauses word for word from the issue
-body. Its ten bracketed indexes name records no chart of this size has, so under `search` they decide
-which gate the check declines at — left as captured, it declines for citing no readable reference
-record; remapped onto this arrangement's records, it compares and finds no divergence. The `reported`
-column is the same under every one of those treatments. The remaining rows are the capture's opening
-clause, and the record's own sentence, against a two-row verbatim slice that renders the same finding
-byte for byte, so that one substitution at a time can be undone. *Reported* names the citation the check
+list, off a chart the real injector built. Serving them, rather than letting each answer's own
+citation markers select them, is what makes that column a variable; the capture's markers therefore
+play no part in the table. The four rows the two cases below pin are driven through
+`LlmInferenceService.search` instead, where `extractCitedReferences` selects from the markers, and
+agree. The first two rows are this issue's captured answer, all six clauses word for word from the
+issue body. The remaining rows are its opening clause, and the record's own sentence, against a
+two-row verbatim slice that renders the same finding byte for byte, so that one substitution at a
+time can be undone. *Reported* names the citation the check
 stated; every other row is an empty list, which is a measurement of none rather than the absence of
 one.
 
 | answer | records served | reported |
 |---|---|---|
-| the capture, six clauses | the findings it names | — |
+| the capture, six clauses | its thirteen findings | — |
 | the capture, six clauses | every reference record | — |
 | its opening clause, both defects | that finding | — |
 | its opening clause, repetition collapsed, allergen still short | that finding | that finding |

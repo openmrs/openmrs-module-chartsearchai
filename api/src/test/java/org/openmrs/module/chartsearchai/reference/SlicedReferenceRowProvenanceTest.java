@@ -77,12 +77,17 @@ public class SlicedReferenceRowProvenanceTest {
 			JsonNode cut = read(slice);
 			Set<String> ids = new LinkedHashSet<String>();
 			assertTrue(cut.path("drugs").size() > 0, slice + " must carry at least one row");
+			int previous = -1;
 			for (JsonNode row : cut.path("drugs")) {
 				String id = row.path("id").asText(null);
 				assertNotNull(id, slice + " carries a row with no id");
 				ids.add(id);
 				assertEquals(drugRow(shipped, id), row,
 						slice + "'s row " + id + " must be the shipped dataset's own, field for field");
+				int at = shippedPosition(shipped, id);
+				assertTrue(at > previous, slice + "'s rows must be in the shipped dataset's own order, "
+						+ "which its metadata note is free to state; " + id + " is out of it");
+				previous = at;
 			}
 			assertEquals(interactionsWithin(shipped, ids), interactionsWithin(cut, ids),
 					slice + " must carry the shipped interaction rows falling wholly inside it, and no "
@@ -102,6 +107,17 @@ public class SlicedReferenceRowProvenanceTest {
 
 	/** @return the shipped row filed under {@code id}, failing rather than returning null so an id the
 	 *          dataset does not carry is a named failure and not a silent pass. */
+	private static int shippedPosition(JsonNode shipped, String id) {
+		int at = 0;
+		for (JsonNode row : shipped.path("drugs")) {
+			if (id.equals(row.path("id").asText(null))) {
+				return at;
+			}
+			at++;
+		}
+		throw new AssertionError("the shipped knowledge base carries no row with id " + id);
+	}
+
 	private static JsonNode drugRow(JsonNode shipped, String id) {
 		for (JsonNode row : shipped.path("drugs")) {
 			if (id.equals(row.path("id").asText(null))) {

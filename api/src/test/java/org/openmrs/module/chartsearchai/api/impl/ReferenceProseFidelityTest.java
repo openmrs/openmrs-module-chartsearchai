@@ -797,8 +797,8 @@ public class ReferenceProseFidelityTest {
 	 * floor, so the check declines at its gate and states nothing about it — the residue ADR
 	 * Decision 61 records as a substitution inside a reproduction shorter than twelve words, met here
 	 * by the defect that sits earlier in the same sentence. It is not a claim about every answer
-	 * carrying both defects: one that also reproduced the record somewhere else would be reported for
-	 * that.
+	 * carrying both defects: one that also diverged from the record inside a long enough reproduction
+	 * elsewhere would be reported for that.
 	 *
 	 * <p>The answer is TRANSCRIBED rather than sliced out of the record, unlike every other case in
 	 * this file, because it is the historical capture the decision is about and there is nothing to

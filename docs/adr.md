@@ -3836,93 +3836,95 @@ answer that reproduced a cited record and returned DDInter's `naproxen` as `napr
 own measured table a drug name deleted from a recited mechanism. So it reads like defect 2's detection
 arriving by another route. Measured 2026-09-04, before any production code was written, it is not one.
 
-**The arrangement**, driven through the real `DrugReferenceInjector.injectRecords` over the shipped
-knowledge base and the bundled cross-reactivity groups. The eight active orders the Context above
-counts, spelled from the issue's own list — Ibuprofen, Celecoxib, Dexamethasone, Diclofenac,
-Hydrocortisone, Prednisone, Budesonide, Methylprednisolone — carried BOTH as per-order structure and
-in the flattened name set, which is what `PatientClinicalContextBuilder` produces for a real chart:
-the same eight as a flat set alone raise nine findings rather than thirteen, and as per-order
-structure alone six, so a reader re-deriving this needs both halves of that clause. And two recorded
-allergens, `dexamethasone` and `hydrocortisone`; the issue's own list is not exhaustive (it says
-*including*) and a third for the route-qualified hydrocortisone changes neither result below. That
-injects five `drug_reference` records and thirteen findings, counted off the returned mappings on the
-date above; both figures move with the knowledge base and the validator and nothing asserts them. The
-clause the captured answer opens with is about the first of those findings, rendered
+**The arrangement.** The real `DrugReferenceInjector.injectRecords` over the shipped knowledge base
+and the bundled cross-reactivity groups; the eight active orders the Context above counts, spelled
+from the issue's own list — Ibuprofen, Celecoxib, Dexamethasone, Diclofenac, Hydrocortisone,
+Prednisone, Budesonide, Methylprednisolone — carried BOTH as per-order structure and in the flattened
+name set, which is what `PatientClinicalContextBuilder` produces for a real chart; and the allergens
+`dexamethasone` and `hydrocortisone`. Both halves of the order clause are needed to re-derive it: the
+same eight as a flat set alone raise nine findings, and as per-order structure alone six. That
+arrangement injects five `drug_reference` records and thirteen findings, counted off the returned
+mappings on the date above; both figures move with the knowledge base and the validator, and nothing
+asserts them. The clause the captured answer opens with is about the first finding, rendered
 `Safety finding — Hydrocortisone: Hydrocortisone is in the same ATC class (H02AB) as the patient's
-allergy to Dexamethasone — possible cross-reactivity. This finding is a reason to withhold it.` The
-answers are put to the check by driving `LlmInferenceService.search`, which is what invokes it — the
-production path, never a direct call and never a re-expression of the predicate. They are this issue's
-own captured answer, word for word to the end of its opening clause, and answers built out of the
-rendered record and shaped after it. Only the capture carries its own gloss,
-`Dexamethason (Dexamethasone)`, which is the shape the drug-name rule above was built around; the
-built answers carry the bare truncation.
+allergy to Dexamethasone — possible cross-reactivity. This finding is a reason to withhold it.`
 
-- **On the captured answer the check states nothing**, both when it is served the records that answer
-  cites and when it is served every reference record in the chart. Defect 1 sits inside the sentence
-  defect 2 sits in, and cuts the answer's agreement with THAT record into runs the floor rejects: at a
+**The measurement.** Every answer below was put to the check by driving `LlmInferenceService.search`,
+which is what invokes it — the production path, never a direct call and never a re-expression of the
+predicate. The first two are this issue's captured answer, all six clauses, word for word from the
+issue body. The rest are its opening clause against a two-row verbatim slice that renders the same
+finding, so that one substitution at a time can be undone. *Reported* names the citation the check
+stated; every other row states nothing.
+
+| answer | records served | reported |
+|---|---|---|
+| the capture, six clauses | the findings it names | — |
+| the capture, six clauses | every reference record | — |
+| its opening clause, both defects | that finding | — |
+| its opening clause, repetition collapsed, allergen still short | that finding | that finding |
+| its opening clause, allergen in full, repetition kept | that finding | — |
+| its opening clause, both repaired, the capture's gloss kept | that finding | that finding |
+| its opening clause, both repaired, gloss dropped | that finding | — |
+| the record's own sentence reproduced to its end | that finding | — |
+| the same, allergen a letter short | that finding | that finding |
+
+Three readings, and no more than the table carries.
+
+- **The check is silent on the captured answer.** Defect 1 is why, not defect 2: it sits inside the
+  same sentence and cuts the answer's agreement with that finding into runs the floor rejects — at a
   floor of seven or lower the check's own WARN names them, as eight words and seven. This is the
   residue Decision 61 records as *"A substitution inside a reproduction shorter than twelve words,
-  wherever it sits"*, met by a second defect of the same sentence rather than by a short answer.
-  Repair the repetition alone and the answer is reported; repair the name alone and it is not.
-  **Which silence it is depends on the rest of the answer, and both are silences.** On the whole
-  six-clause capture over this arrangement the check compares and finds no divergence — the later
-  clauses reproduce other findings' records past the floor, and the truncated allergen is in runs
-  under it. On the opening clause alone against a two-row slice, nothing reaches the floor and the
-  check declines before comparing. The case below is the second; the first is a measurement.
-- **A report is not evidence that a name was mangled, and where the rest of the reproduction is
-  faithful the name is what the report turns on.** Both halves were measured on this record. The
-  capture with its repetition collapsed and its allergen spelled in full — its gloss kept, so the
-  answer still carries words the record does not — is reported, because it carries on in its own words
-  where the record continues *"— possible cross-reactivity"*. Drop the gloss as well and it goes
-  silent — the answer then stops reproducing and ends its sentence, which this check does not report —
-  so the gloss is what the phrase "spells the allergen in full" has to keep. The reported one is the
-  substitution
-  `search_shouldReportAnAnswerThatSubstitutesItsOwnWordsInsideACopiedSentence` is about, on a
-  different arrangement. An answer that reproduces the record's sentence to its own end states
-  nothing, and the same answer with the allergen shortened by one letter is reported. The
-  cross-reactivity-group sentence the issue's follow-up comment captured on a second chart (`Ibuprof`
-  for `Ibuprofen`) is the same shape; that answer is quoted with an ellipsis, so what the check would
-  have said about it is not something this repository can settle.
+  wherever it sits"*, met by a second defect of the same sentence rather than by a short answer. Which
+  silence it is differs between the first row and the third, and both are silences: on all six clauses
+  the check compares and finds no divergence, the later clauses having reproduced other findings'
+  records past the floor; on the opening clause alone nothing reaches the floor and it declines before
+  comparing.
+- **A report is not evidence that a drug name was mangled.** Rows four and six differ only in the
+  allergen's spelling and are reported alike; what they share is the gloss, words the record does not
+  carry.
+- **Where the answer reproduces the record's sentence to its own end, the name is what the report
+  turns on.** The last two rows differ in one letter. The cross-reactivity-group sentence the issue's
+  follow-up comment captured on a second chart (`Ibuprof` for `Ibuprofen`) is that shape; that answer
+  is quoted with an ellipsis, so what the check would have said about it is not something this
+  repository can settle.
 
-**And the silence reaches a client.** A decline states `[]` on Decision 74's
-`unfaithfullyRenderedCitations`, which the README's contract for that key already says is not a
-certificate of faithfulness — here is the answer that shows why. Also worth reading beside the first
-bullet: this decision's own rule 1 DOES report that answer, for its repeated code, so "nothing saw
-it" is false of the response as a whole and true only of the prose check.
+**What is pinned.** `ReferenceProseFidelityTest.theCapturedAnswerOfIssue338IsBelowTheFloorAndTheSameSentenceWithoutItsRepetitionIsReported`
+holds rows three and four, the gate it declined at and the empty
+`unfaithfullyRenderedCitations` the decline publishes;
+`.aTruncatedDrugNameDecidesTheReportWhereTheRestOfTheReproductionIsFaithful` holds the last two. Each
+says at its own site what it does and does not discriminate. The other five rows are measurements with
+no case behind them. Both cases read the verbatim slice rather than the shipped knowledge base,
+because a case reading rendered TEXT is what `DrugReferenceTestSupport.shippedEntries()` reserves a
+slice for, and `SlicedReferenceRowProvenanceTest` is what holds that slice to the dataset field for
+field. Raising the floor far enough reddens both; the values either side of twelve are pre-existing
+cases' to hold, and do.
 
-**What is pinned and what is only measured.**
-`ReferenceProseFidelityTest.theCapturedAnswerOfIssue338IsBelowTheFloorAndTheSameSentenceWithoutItsRepetitionIsReported`
-holds the first bullet on the captured answer itself, its gate and its empty
-`unfaithfullyRenderedCitations` included, with the repetition-collapsed capture as its control;
-`.aTruncatedDrugNameDecidesTheReportWhereTheRestOfTheReproductionIsFaithful` holds the second bullet's
-pair. Each says at its own site what it does and does not discriminate. The second serving, the run
-lengths, and the reported answer that spells the allergen in full are measurements with no case behind
-them. Both read a verbatim two-row slice rather than the shipped knowledge base, because a case
-reading rendered TEXT is what `DrugReferenceTestSupport.shippedEntries()` reserves a slice for, and
-`SlicedReferenceRowProvenanceTest` is what holds that slice to the dataset field for field — the cases
-themselves cannot, since they read the record the fixture produces. Raising the floor far enough
-reddens both; the values either side of twelve are pre-existing cases' to hold, and do.
+**And the empty list reaches a client.** A decline states `[]` on Decision 74's
+`unfaithfullyRenderedCitations` — which the README's contract for that key already says is not a
+certificate of faithfulness, and rows one and two are the answer that shows why. Note beside the
+first reading that this decision's own rule 1 DOES report the captured answer, for its repeated code;
+the silence is the prose check's, not the response's.
 
 **One candidate this does not refuse, named because a section called "Re-measured" is where it
 belongs.** The drug-name rule the bullet above refutes is UNALIGNED — *"any answer token that is a
 proper prefix of a name a cited record states"* — and alignment is a different predicate: inside a
 reproduction this check has already established, the question becomes whether the answer's word is a
-proper prefix of the record's word AT THAT POSITION. That removes the hits which arise between an
-answer word and a name some cited record states elsewhere — the module's own
+proper prefix of the record's word AT THAT POSITION. That removes the hits arising between an answer
+word and a name some cited record states elsewhere: the module's own
 `Ethinylestradiol (ethinyl estradiol)` label is word-identical at every position of a faithful
 reproduction, and the pairs the bullet counts are pairs of NAMES rather than of aligned positions.
 **What it does not remove is a correct answer normalising a spelling the record carries.** A
 `safety_finding` embeds this patient's own prescription display, so a record can carry `Amoxicilline`
 at the position where a correct answer writes the INN `Amoxicillin` — one of the 67 localized
-spellings `matchesOrderName`'s javadoc counts in the 3.7.1 demo dictionary — and a spelling variant
-of one substance, `terazosine` against `terazosin`, reaches the same position the same way. So
-alignment narrows the rule; it does not answer it. Nor does such a rule buy anything at the current floor, where any
-substitution inside a long enough reproduction is already reported; its whole value would be a floor
-lowered for that class alone, which Decision 61 is canonical for and does not by itself refuse. What it would have
-to get past is its own false-positive measurement and Decision 35's standing bar that a check which
-cries wolf is worse than no check — and that measurement cannot be taken in this repository: the
-fixture tree is structurally blind to it, which the paragraph above on this decision's own
-false-alarm rate records, and the live corpus Decision 35 used is outside it.
+spellings `matchesOrderName`'s javadoc counts in the 3.7.1 demo dictionary — and a spelling variant of
+one substance, `terazosine` against `terazosin`, reaches the same position the same way. So alignment
+narrows the rule; it does not answer it. Nor would such a rule buy anything at the current floor,
+where a substitution inside a long enough reproduction is already reported; its whole value would be a
+floor lowered for that class alone, which Decision 61 is canonical for and does not by itself refuse.
+What it would have to get past is its own false-positive measurement and Decision 35's standing bar
+that a check which cries wolf is worse than no check — and that measurement cannot be taken in this
+repository: the fixture tree is structurally blind to it, which the paragraph above on this decision's
+own false-alarm rate records, and the live corpus Decision 35 used is outside it.
 
 What this leaves is the bullet above, unchanged: defect 2 is open, and a remedy still has that
 bullet's measurement to get past. It is recorded here because *"the prose check covers it now"* is the

@@ -113,7 +113,10 @@ jobs:
   #
   # The scope is DERIVED at run time and not written down here: the modules come from the root pom's
   # <modules> and the packages from the directory tree, cross-checked against each file's own `package`
-  # statement because that is what -Xdoclint/package filters on. Hardcoding probe paths is the defect
+  # statement because that is what -Xdoclint/package filters on. The derivation is then checked
+  # against the checkout — a java source root the derived list does not account for fails the job —
+  # because the <module> read is a line-oriented sed and an element split across lines is legal XML
+  # it does not see, which is a PARTIAL discovery and was silent. Hardcoding probe paths is the defect
   # commit 829f8b90 already fixed for the in-repo guard, whose message says so verbatim: "the reported
   # remedy - one probe inside the module's namespace - was measured and is not enough". Two paths in
   # one package answer for one package; this reactor declares twelve, in four source roots.
@@ -136,9 +139,18 @@ jobs:
   # at the first root that fails — one build cannot report a probe in a root it never compiled. That is
   # five `-DskipTests install` builds on this reactor: four probed roots and one clean run.
   #
-  # -DskipTests deliberately: surefire never runs in this job, so an edit acting on surefire has no
-  # verdict here to change. Measured for the shape that defeats both guards rather than claimed of
-  # every edit — with <surefire.excludes>**/JavadocReference*Test.java</surefire.excludes> in the root
+  # -DskipTests deliberately: what this job asks about is the compiler's argument list, and running
+  # the suite would just hand back the verdict of the guards this job exists to stand apart from.
+  # Being SKIPPED is not the same as not being COMPILED, and the difference reaches this job: a
+  # `maven.test.skip` skips test compilation as well as the run, so a probed TEST root is accepted
+  # without javac reading one probe. That is why the exit-0 branch in the script asks whether the
+  # probes produced class files before it says anything about -Xdoclint, and names the test-skip
+  # family where they did not — the sentence that stood here instead read that an edit acting on
+  # surefire had no verdict here to change, and under that sentence the job printed the
+  # <compilerArgs> accusation for that very edit.
+  #
+  # Measured for the shape that defeats both guards rather than claimed of every edit — with
+  # <surefire.excludes>**/JavadocReference*Test.java</surefire.excludes> in the root
   # <properties>, which is round 12's edit and removes both guards from the reactor at exit 0, this
   # script still exits 0 with every probe refused as required; with the <arg>-Xdoclint:reference</arg>
   # deleted it exits 1 on the first root, printing the ::error:: below.
@@ -194,6 +206,27 @@ jobs:
             exit 1
           fi
 
+          # The derived list is then checked against the RESULT rather than against the parse. The sed
+          # above is line-oriented, and a <module> element whose text sits on its own line is legal XML
+          # that Maven builds and that sed does not see — measured on this head: rewriting
+          # <module>api</module> across three lines left the reactor building api while this script
+          # planted probes in omod's two roots alone, at exit 0 and with no diagnostic. The emptiness
+          # refusal above sees a discovery that found NOTHING; this one sees one that found some of it.
+          present="$(find . -type d \( -path '*/src/main/java' -o -path '*/src/test/java' \) \
+            -not -path './target/*' -not -path '*/target/*' -not -path './.git/*' \
+            | sed 's:^\./::' | sort)"
+          unaccounted=""
+          for root in ${present}; do
+            case " ${roots} " in
+              *" ${root} "*) ;;
+              *) unaccounted="${unaccounted} ${root}" ;;
+            esac
+          done
+          if [ -n "${unaccounted}" ]; then
+            echo "::error::This job derived its source roots from the <module> elements it could read in the root pom (${modules}), and that does not account for${unaccounted} — yet each of those directories is a java source root in this checkout. Read the <module> elements with an XML parser, the way JavadocReferenceGuardTest.modulesIn does, or bring those directories under a module this sed can see: a source root left out here is probed by nothing and this job would say nothing about it."
+            exit 1
+          fi
+
           # One probe per package the reactor DECLARES, in each root separately. Two reasons, one per
           # -Xdoclint qualifier: the option takes -Xdoclint/package:[-]<packages>, whose trailing `.*`
           # reaches the SUB-packages of what it names and not that package itself, so a probe in one
@@ -206,11 +239,30 @@ jobs:
           # the declared-package refusal below left nine behind, which is a dirty tree and, worse, a
           # source root the next run would refuse for the probes of the last.
           planted=""
+          # The class file each planted probe would compile TO, tracked alongside the source because
+          # its presence is how the exit-0 branch below tells "javac read this and said nothing" from
+          # "javac was not handed it". Removed by the same trap, so no probe artefact reaches the
+          # jar the clean build at the end installs.
+          planted_classes=""
           cleanup() {
             for probe in ${planted:-}; do rm -f "${probe}"; done
+            for class in ${planted_classes:-}; do rm -f "${class}"; done
             planted=""
+            planted_classes=""
           }
           trap cleanup EXIT
+
+          # Maven's output directory for a source root, by the convention these POMs use. Derived from
+          # the root rather than read from the POM: what this is for is a two-way test the shell can
+          # make on its own, and a wrong answer here shows up as the discrimination below refusing to
+          # discriminate rather than as a claim about the flag.
+          class_output() {
+            case "$1" in
+              */src/main/java) printf '%s' "${1%/src/main/java}/target/classes" ;;
+              */src/test/java) printf '%s' "${1%/src/test/java}/target/test-classes" ;;
+              *) printf '' ;;
+            esac
+          }
 
           plant() {
             probe="$1/$2/DoclintReferenceGateProbe.java"
@@ -244,6 +296,15 @@ jobs:
           PROBE
             } > "${probe}"
             planted="${planted} ${probe}"
+            output="$(class_output "$1")"
+            if [ -n "${output}" ]; then
+              class="${output}/$2/DoclintReferenceGateProbe.class"
+              # These builds do not `clean`, so a class file left by an earlier run of this script
+              # would be read below as this build's own work. Removed at planting time, when the
+              # source it belongs to is being written.
+              rm -f "${class}"
+              planted_classes="${planted_classes} ${class}"
+            fi
           }
 
           packages_in() {
@@ -294,10 +355,32 @@ jobs:
             status=$?
             set -e
             probes="${planted}"
+            probe_classes="${planted_classes}"
+            compiled=""
+            for class in ${probe_classes}; do
+              if [ -f "${class}" ] && [ -z "${compiled}" ]; then
+                # One witness and not the list: the question the branch below asks is whether javac
+                # was handed these files at all.
+                compiled="${class}"
+              fi
+            done
             cleanup
             if [ "${status}" -eq 0 ]; then
               tail -40 "${log}"
-              echo "::error::A dead javadoc reference in every package of ${root} compiled at exit 0, so -Xdoclint:reference is not reaching that source root and #262's defect is back: a dead {@link} is plain text that reads as authoritative. Look at <compilerArgs> in the root pom's <pluginManagement> entry for maven-compiler-plugin, and at whether an -Xdoclint qualifier has been added beside it."
+              # Two causes reach exit 0 here and they want different sentences. Where the probes were
+              # not handed to javac there is no class file for any of them, and the compiler
+              # argument list is not implicated at all: `maven.test.skip` skips test COMPILATION as
+              # well as the run, so a build carrying it accepts a probed test root without reading one
+              # probe. Measured on this head, JDK 21: <maven.test.skip>true</maven.test.skip> in the
+              # root <properties> reaches this branch at api/src/test/java, while <arg>-Xdoclint:reference</arg>
+              # deleted reaches the branch below it at api/src/main/java with every probe's class file
+              # written. The first sentence written here named <compilerArgs> for both, which is a
+              # false accusation against the one line this job exists to protect.
+              if [ -z "${compiled}" ]; then
+                echo "::error::The build with ${root} probed exited 0 and compiled none of the probes — no class file was written for any of them — so this gate measured nothing about the compiler's argument list. Something took that source root out of the compilation rather than out of the check: a member of the test-skip family (maven.test.skip, which skips test COMPILATION as well as the run; maven.main.skip for a main root) reaches this exact state, and so does an edit that stops the module being built at all. Fix that before reading this job as evidence either way."
+                exit 1
+              fi
+              echo "::error::A dead javadoc reference in every package of ${root} compiled at exit 0 — ${compiled} was written, so javac read that file and said nothing — which means -Xdoclint:reference is not reaching that source root and #262's defect is back: a dead {@link} is plain text that reads as authoritative. Look at <compilerArgs> in the root pom's <pluginManagement> entry for maven-compiler-plugin, and at whether an -Xdoclint qualifier has been added beside it."
               exit 1
             fi
             if ! grep -q "reference not found" "${log}"; then

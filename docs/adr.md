@@ -6354,8 +6354,46 @@ the gate was open, which is the only property they share:
   `<surefire.excludes>**/JavadocReference*Test.java</surefire.excludes>` in the root `<properties>` —
   the edit that removes BOTH guards from the reactor at exit 0, re-measured on this head as `mvn -o
   clean install` exit 0 with `grep -c JavadocReference` over the whole log zero — which is the
-  independence claim. A red X there is a diagnostic; which checks gate a merge is branch protection's
-  business and not this file's.
+  independence claim.
+  **Round 20 found the exit-0 branch attributing two different causes to one line, and the fix is a
+  question the shell can answer for itself.** `maven.test.skip` in the root `<properties>` skips test
+  COMPILATION as well as the run, so the probes planted in a TEST root are not handed to javac and
+  the build accepts them at exit 0 — under the single branch the job then printed *#262's defect is
+  back … look at `<compilerArgs>`*, an accusation against the one line the change exists to protect,
+  with the actual cause named nowhere. The probes' own class files are what tell the two apart:
+  `plant` removes the class file it is about to make possible (these builds do not `clean`, so a
+  leftover from an earlier run would read as this build's work) and records it, and the exit-0 branch
+  asks whether javac wrote any of them before it says anything about the argument list. Measured on
+  this head, JDK 21, one run of the job's own script text per edit: with
+  `<maven.test.skip>true</maven.test.skip>` in the root `<properties>` the job exits 1 at
+  `api/src/test/java` naming the test-skip family and the compilation rather than the flag; with
+  `<arg>-Xdoclint:reference</arg>` deleted it exits 1 at `api/src/main/java` with a probe's class
+  file written, on the `<compilerArgs>` branch, which is the directional control that the new branch
+  does not swallow the defect. `<skipTests>true</skipTests>` in the same position is the surefire
+  half of that family and leaves test compilation running, which is why the job was green under it.
+  **And the derived scope is now checked against the RESULT rather than against its own parse.** The
+  `<module>` read is a line-oriented `sed`, and an element whose text sits on its own line is legal
+  XML that Maven builds and that `sed` does not see; the job refused a TOTALLY empty discovery and
+  was silent on a partial one. Measured: `<module>api</module>` rewritten across three lines leaves
+  `mvn -o validate` building three reactor projects while the job planted probes in omod's two
+  roots alone, at exit 0. It now `find`s every `src/{main,test}/java` in the checkout and fails when
+  the derived roots do not account for one — exit 1 naming `api/src/main/java` and
+  `api/src/test/java` under that same edit, and pointing at
+  `JavadocReferenceGuardTest.modulesIn`, which makes the same claim through a real XML parser.
+  A red X there is a diagnostic; which checks gate a merge is branch protection's business and not
+  this file's, and this repository has none — `gh api
+  repos/openmrs/openmrs-module-chartsearchai/branches/main/protection` answered
+  `404 Branch not protected` when round 20 asked, which makes the disclaimer in `build.yml` accurate
+  rather than an oversell.
+  **One residue of it, stated as a residue and not as an enumeration that closes**: nothing in the
+  repository asserts that this job exists, or that it still fails when it should. Measured — grep
+  both guard classes for `build.yml` and what comes back is a javadoc sentence in each describing
+  the job, and no assertion about it. So deleting the job, making it non-fatal, or editing the
+  workflow file reinstates the surefire-side positions above with nothing here going red. **Round 20
+  deleted that sentence in the same round that made this job the change's load-bearing claim, and
+  round 21 put it back**: the closing instruction below prohibits an absolute and a "silencing shows
+  up on X" claim, and a measured residue is neither. Round 20's review, which asked for it back,
+  read it as the largest residue this decision carries.
 - **A javadoc block between a member's MODIFIERS and the rest of its declaration was a hole in the
   scanner and in the shape table both, and round 19 closed it rather than recording it.** Measured on
   JDK 21 over four arrangements — a field split after `private`, a method split after `public`, the
@@ -6383,6 +6421,17 @@ the gate was open, which is the only property they share:
   and a pointer whose member name is split mid-identifier across two javadoc lines is not seen — the
   search copy is flattened at wraps, so a break after the `.` is found. The two directions are held
   from different modules on purpose, so one edit does not defeat both.
+  **What the reader does not read is REFUSED rather than left silent**, which is round 20's finding
+  against that bound: `membersPointedAt` requires the closing brace immediately after the
+  identifier, and two spellings a maintainer is at least as likely to write — a method written the
+  idiomatic way in a code span, `Class.someMember()`, and javadoc's own `Class#someMember` — were
+  read by neither module's arm while the paragraph above read as closed. `unreadPointerSpellings`
+  reports each as a violation naming the form the reader wants. Refused and not parsed on purpose:
+  widening the reader reopens which spans inside a code span are pointers at all, and each answer
+  would then carry a claim about the other module's file. Measured by planting three spellings in
+  one javadoc block of each guard — the parenthesised form, the `#` form and `Class#someMember()` —
+  and reading the violations back; the bare class-name mentions beside them are untouched, which is
+  what keeps the two files able to name each other in prose.
 - **The disclosure is generalised rather than extended by one more sentence, and that is round 10's
   main change.** Every round so far has found a position the round before had not read, and every
   absolute published here has been falsified by a later round, so the honest statement is not a
@@ -6448,9 +6497,17 @@ the gate was open, which is the only property they share:
   **And the residue has no single characteristic cost**, which is what the
   sentence above it claimed for two rounds: the `test` filter leaves both modules printing test counts
   with one module's checks simply absent. No
-  sentence of the form "no POM edit can X" belongs in this decision, in either guard's javadoc, or in
-  the root pom's comment — **and none of the form "silencing it shows up on X" either**; where one
-  suggests itself, name the edit that was checked and stop there.
+  sentence of the form "no POM edit can X" belongs in this decision, in either guard's javadoc, in
+  the root pom's comment, or in `.github/workflows/build.yml` — **and none of the form "silencing it
+  shows up on X" either**; where one suggests itself, name the edit that was checked and stop there.
+  **The workflow file is named here because its omission from this list is how one got written in
+  it**: round 20 found `-DskipTests deliberately: surefire never runs in this job, so an edit acting
+  on surefire has no verdict here to change` in that job's comment, and a `maven.test.skip` in the
+  root `<properties>` — a member of the test-skip family both guards refuse — falsifies it by
+  skipping test COMPILATION, so the job then accepted a probed test root at exit 0 and printed the
+  `<compilerArgs>` accusation against the one line the change exists to protect. Round 21 deleted
+  the sentence and gave the job a branch that asks whether the probes produced class files before it
+  says anything about the argument list.
 
 The same rule decides what counts as a javadoc error over the module's own sources: **a DIFFERENCE,
 never a message.** Where the flagged compile reports errors the sources are compiled again without

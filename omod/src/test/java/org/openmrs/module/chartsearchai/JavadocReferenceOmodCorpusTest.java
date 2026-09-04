@@ -856,6 +856,10 @@ public class JavadocReferenceOmodCorpusTest {
 	 * direction is held from the module its pointers are WRITTEN in, so this arm reads THIS module's
 	 * sources and the api-side sibling does the converse; one edit does not defeat both.
 	 *
+	 * <p>What the reader does not READ is refused rather than left silent, by
+	 * {@link #unreadPointerSpellings} — a pointer written as a method call inside a code span, or in
+	 * javadoc's own {@code #} syntax, is a violation naming the form this arm reads.
+	 *
 	 * <p>Where {@link #API_SIDE_GUARD} is missing this reports nothing, deliberately: the arm above is
 	 * what reddens for a deleted guard, and a violation per pointer would bury it.
 	 */
@@ -878,6 +882,13 @@ public class JavadocReferenceOmodCorpusTest {
 							+ "classpath cannot see api's test classes, so no compiler resolves this pointer "
 							+ "and nothing but this arm would notice it rotting");
 				}
+			}
+			for (String unread : unreadPointerSpellings(text, simpleName)) {
+				violations.add(repoRoot().relativize(source) + " writes " + unread
+						+ ", a spelling this arm does not read. It reads the target's simple name, a `.` and "
+						+ "one identifier, with the closing brace straight after — rewrite the pointer that "
+						+ "way. Refused rather than parsed: widening the reader reopens what else counts as "
+						+ "a pointer, and a spelling nothing reads is a pointer nothing checks");
 			}
 		}
 		assertNoViolations(violations);
@@ -905,6 +916,52 @@ public class JavadocReferenceOmodCorpusTest {
 			}
 		}
 		return members;
+	}
+
+	/**
+	 * The pointer-shaped spans at the api-side guard that {@link #membersPointedAt} does not read, so
+	 * that a spelling nothing resolves is a build failure rather than prose. Round 20's finding: that
+	 * reader requires the closing brace immediately after the identifier, and two neighbouring
+	 * spellings a maintainer is at least as likely to write were read by neither module's arm — a
+	 * method written the idiomatic way inside a code span (a {@code (} after the name) and javadoc's
+	 * own reference syntax (a {@code #} before it).
+	 *
+	 * <p>Refused and not parsed, which is the direction the rest of this class takes. Widening the
+	 * reader reopens the question of what else in a code span counts as a pointer, and each answer
+	 * would then carry a claim about the other module's file; a refusal is a build failure at the
+	 * moment the spelling is written, and its message names the form the reader wants.
+	 *
+	 * <p>The bare class name in a code span is a MENTION and stays legal — this file mentions the
+	 * api-side guard in prose repeatedly — as does a span whose next character reads as neither
+	 * separator. Held from both modules, the same way the reading arm is.
+	 */
+	private static List<String> unreadPointerSpellings(String text, String simpleName) {
+		String flattened = text.replaceAll("\\s*\\n\\s*\\*?\\s*", " ");
+		String open = "{@code " + simpleName;
+		List<String> unread = new ArrayList<String>();
+		for (int at = flattened.indexOf(open); at >= 0; at = flattened.indexOf(open, at + 1)) {
+			int separator = at + open.length();
+			if (separator >= flattened.length()) {
+				continue;
+			}
+			char between = flattened.charAt(separator);
+			if (between != '.' && between != '#') {
+				continue;
+			}
+			int end = separator + 1;
+			while (end < flattened.length() && Character.isJavaIdentifierPart(flattened.charAt(end))) {
+				end++;
+			}
+			if (end == separator + 1) {
+				continue;
+			}
+			if (between == '.' && end < flattened.length() && flattened.charAt(end) == '}') {
+				continue;
+			}
+			int close = flattened.indexOf('}', at);
+			unread.add(close < 0 ? flattened.substring(at) : flattened.substring(at, close + 1));
+		}
+		return unread;
 	}
 
 	/**

@@ -2739,6 +2739,11 @@ public class JavadocReferenceGuardTest {
 	 * so this arm reads its own reactor's sources for pointers at {@code omod}'s guard and the
 	 * omod-side sibling does the converse; one edit therefore does not defeat both directions.
 	 *
+	 * <p>What the reader does not READ is refused rather than left silent, by
+	 * {@link #unreadPointerSpellings} — a pointer written as a method call inside a code span, or in
+	 * javadoc's own {@code #} syntax, is a violation naming the form this arm reads. Round 20 found
+	 * both spellings held by neither module's arm while the paragraph above read as closed.
+	 *
 	 * <p>Where the target file is missing this reports nothing, deliberately:
 	 * {@link #rootsNoCompilerCheckReads} is what reddens for a deleted guard, and a violation per
 	 * pointer would bury it.
@@ -2763,6 +2768,13 @@ public class JavadocReferenceGuardTest {
 								+ "test classpath can see the other's test classes, so no compiler resolves this "
 								+ "pointer and nothing but this arm would notice it rotting");
 					}
+				}
+				for (String unread : unreadPointerSpellings(text, simpleName)) {
+					violations.add(REPO_ROOT.relativize(source) + " writes " + unread
+							+ ", a spelling this arm does not read. It reads the target's simple name, a `.` "
+							+ "and one identifier, with the closing brace straight after — rewrite the pointer "
+							+ "that way. Refused rather than parsed: widening the reader reopens what else "
+							+ "counts as a pointer, and a spelling nothing reads is a pointer nothing checks");
 				}
 			}
 		}
@@ -2791,6 +2803,55 @@ public class JavadocReferenceGuardTest {
 			}
 		}
 		return members;
+	}
+
+	/**
+	 * The pointer-shaped spans at the target class that {@link #membersPointedAt} does not read, so
+	 * that a spelling nothing resolves is a build failure rather than prose. Round 20's finding: that
+	 * reader requires the closing brace immediately after the identifier, and two neighbouring
+	 * spellings a maintainer is at least as likely to write were read by neither arm — a method
+	 * written the idiomatic way inside a code span (a {@code (} after the name) and javadoc's own
+	 * reference syntax (a {@code #} before it). The published bound named two residues of this arm
+	 * and neither of those was among them, so the paragraph read as closed and was not.
+	 *
+	 * <p>Refused and not parsed, which is the direction the rest of this scanner takes. Widening the
+	 * reader reopens the question of what else in a code span counts as a pointer — a nested type, a
+	 * chained name, a field with a suffix — and each answer would then carry a claim about the other
+	 * module's file. A refusal is one line, is a build failure at the moment the spelling is written,
+	 * and its message names the form the reader wants.
+	 *
+	 * <p>What is refused: the target's simple name followed by {@code .} or {@code #} and then
+	 * something that reads as a member name, where the reading arm does not take it. The bare class
+	 * name in a code span is a MENTION and stays legal — the two files mention each other in prose
+	 * repeatedly — and so does a span whose next character reads as neither separator.
+	 */
+	private static List<String> unreadPointerSpellings(String text, String simpleName) {
+		String flattened = text.replaceAll("\\s*\\n\\s*\\*?\\s*", " ");
+		String open = "{@code " + simpleName;
+		List<String> unread = new ArrayList<String>();
+		for (int at = flattened.indexOf(open); at >= 0; at = flattened.indexOf(open, at + 1)) {
+			int separator = at + open.length();
+			if (separator >= flattened.length()) {
+				continue;
+			}
+			char between = flattened.charAt(separator);
+			if (between != '.' && between != '#') {
+				continue;
+			}
+			int end = separator + 1;
+			while (end < flattened.length() && Character.isJavaIdentifierPart(flattened.charAt(end))) {
+				end++;
+			}
+			if (end == separator + 1) {
+				continue;
+			}
+			if (between == '.' && end < flattened.length() && flattened.charAt(end) == '}') {
+				continue;
+			}
+			int close = flattened.indexOf('}', at);
+			unread.add(close < 0 ? flattened.substring(at) : flattened.substring(at, close + 1));
+		}
+		return unread;
 	}
 
 	/**
@@ -3466,6 +3527,109 @@ public class JavadocReferenceGuardTest {
 		finally {
 			deleteRecursively(dir);
 		}
+	}
+
+	/**
+	 * The words {@link #DECLARATION_MODIFIERS} carries, written out again as literals — an
+	 * INDEPENDENT statement of that set, and the reason
+	 * {@link #everyModifierTheArmReadsStrandsAJavadocBlockWrittenUnderIt} can redden on a member
+	 * deleted from it. <strong>Derived, it could not.</strong> That check first iterated the set
+	 * itself, where deleting a member takes the word out of the loop rather than reddening anything.
+	 * Measured on JDK 21 with {@code mvn -o clean test} — a non-clean run of one module reuses stale
+	 * classes and reads either way — {@code "static"} deleted from the set ALONE is a failure naming
+	 * that word, and deleted from the set and from this list together, which is what iterating the
+	 * set amounts to, the class is green. Same argument
+	 * {@link #SUREFIRE_PARAMETER_FORMS_AS_LITERALS} makes for spelling the surefire pairing out
+	 * rather than deriving it, and the one {@code ReferenceProseFidelityTest} makes for spelling out
+	 * {@code SENTENCE_TERMINATORS}' members.
+	 *
+	 * <p>Kept in step with the set in the other direction by the same check, which reports a member
+	 * of the set this list does not name — so a word added to the arm arrives with a line above
+	 * asserting what it does, rather than joining ten that nothing exercised.
+	 */
+	private static final List<String> MODIFIER_WORDS_AS_LITERALS = Arrays.asList("public", "protected",
+			"private", "abstract", "static", "final", "transient", "volatile", "synchronized", "native",
+			"strictfp", "default");
+
+	/**
+	 * Every word {@link #DECLARATION_MODIFIERS} names strands a javadoc block written under it, and a
+	 * word that is not one of them does not. Driven through {@link #unattachedJavadocBlocks}, the
+	 * scanner {@link #noJavadocBlockIsOrphaned} runs, so what is exercised is the production path and
+	 * not {@link #isModifiersAlone} on its own.
+	 *
+	 * <p><strong>Round 20 found this set unexercised.</strong> Two of its twelve members reached a
+	 * {@link #SHAPES} row — {@code private} and {@code public} — and each of the other ten could be
+	 * deleted from the literal with this class green: measured by that round on the class as it then
+	 * stood, {@code "static"} removed and no check reporting it. That matters more here than at the
+	 * arms beside it because this is the position javac reports NOTHING about, neither an error nor
+	 * the warning the pre-{@code package} position draws, so a member dropped out of the set takes a
+	 * real hole with it and no build reddens for it.
+	 *
+	 * <p>Driven from {@link #MODIFIER_WORDS_AS_LITERALS} and not from the set, which is why a
+	 * deletion reddens at all: iterating the set, this check's own first version simply stopped
+	 * asking about the word that had been removed, and stayed green.
+	 *
+	 * <p>One assertion over the set rather than twelve more {@link #SHAPES} rows, which is where the
+	 * arms beside it put one row per deletable clause. {@code native}, {@code default} and
+	 * {@code abstract} each need an enclosing context that COMPILES — a native method, an interface,
+	 * an abstract class — and a row whose value is being put to a real compiler needs one. The
+	 * compiler's verdict on this position is already on the record, from
+	 * {@code ModifiersSplitByABlock} and {@code AnnotatedModifiersSplitByABlock}; what was missing is
+	 * that the arm reads each WORD of the set, and that is a property of the set.
+	 *
+	 * <p>The refusal beside it is what makes this discriminating rather than a set compared with
+	 * itself: an ordinary identifier in the same position is a line the arm must not claim, because a
+	 * block stranded mid-expression inside a method body is a hole this scanner declines to guess at
+	 * — see the {@code BlockInsideAMethodBody} row of {@link #SHAPES}, which is that refusal's own
+	 * ground truth against the compiler.
+	 */
+	@Test
+	public void everyModifierTheArmReadsStrandsAJavadocBlockWrittenUnderIt() {
+		List<String> violations = new ArrayList<String>();
+		for (String modifier : MODIFIER_WORDS_AS_LITERALS) {
+			if (!strandsABlockWrittenUnderIt(modifier)) {
+				violations.add("a javadoc block written under the content line `" + modifier
+						+ "` is reported by nothing, so that word has gone out of DECLARATION_MODIFIERS and "
+						+ "the arm no longer reads it. javac says NOTHING about this position — no error and "
+						+ "not the warning the pre-package position draws — so the pointers inside such a "
+						+ "block are read by no compiler and reported by no check");
+			}
+		}
+		for (String modifier : DECLARATION_MODIFIERS) {
+			if (!MODIFIER_WORDS_AS_LITERALS.contains(modifier)) {
+				violations.add("DECLARATION_MODIFIERS names `" + modifier
+						+ "` and MODIFIER_WORDS_AS_LITERALS does not, so that word is read by the arm with "
+						+ "nothing above asserting what it does. Add it to the literal list, which is what "
+						+ "makes a deletion from the set reddenable");
+			}
+		}
+		for (String notAModifier : Arrays.asList("value", "builder", "sealed", "b")) {
+			if (strandsABlockWrittenUnderIt(notAModifier)) {
+				violations.add("a javadoc block written under the content line `" + notAModifier
+						+ "` is reported as stranded between a declaration's modifiers and the rest of it, "
+						+ "and that word is not a modifier. The arm has been widened to a line of any single "
+						+ "token, which reports blocks javac READS — a red build on legal code, and the "
+						+ "direction every refusal in this scanner declines to take");
+			}
+		}
+		assertNoViolations(violations);
+	}
+
+	/**
+	 * Whether the scanner reports a javadoc block written between one content line and a field
+	 * declaration as stranded between a declaration's modifiers and the rest of it. The orphan's own
+	 * sentence is read, not merely the count, so that another arm firing for another reason does not
+	 * answer this question in the affirmative.
+	 */
+	private static boolean strandsABlockWrittenUnderIt(String word) {
+		List<String> lines = Arrays.asList("package shapes;", "", "public class Split {", "\t" + word,
+				"\t/** {@link #noSuchMemberAnywhere()}. */", "\tint a = 1;", "\tint r() { return a; }", "}");
+		for (String orphan : unattachedJavadocBlocks(lines)) {
+			if (orphan.contains("between the modifiers")) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** {@link #BASELINE_ARGUMENTS} with the check in front, which is the only other list used here. */

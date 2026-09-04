@@ -164,6 +164,14 @@
 						     <arg>-Xdoclint:reference/public</arg>,
 						     <arg>-Xdoclint/package:-org.openmrs.module.chartsearchai.reference</arg> and
 						     <arg>-Xdoclint/package:-org.openmrs.module.chartsearchai.*</arg> added beside it.
+
+						     One residue of that job, stated as a residue and not as an enumeration that
+						     closes: nothing in this repository asserts the job exists or still fails.
+						     Measured — grep both guard classes for build.yml and what comes back is a
+						     javadoc sentence in each of them describing the job, and no assertion about it.
+						     So deleting the job, making it non-fatal, or editing that workflow file leaves
+						     the surefire-side positions above reinstated with nothing here going red. That
+						     is why round 20 was wrong to delete this sentence, and round 21 put it back.
 						     Decision 75 carries the rest. -->
 						<compilerArgs>
 							<arg>-Xdoclint:reference</arg>

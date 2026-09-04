@@ -96,10 +96,12 @@ import org.w3c.dom.NodeList;
  * {@link #noOtherCompilerConfigurationDropsTheCheck}, which is where the world is CLOSED: every
  * compiler-plugin parameter these POMs set is either read as an argument channel, refused outright,
  * or has been judged unable to carry a javac argument, and anything else reddens. That is deliberately
- * not a longer list of parameter names. Three review rounds of this change each found one more name
- * that silences the gate — the {@code maven.compiler.failOnError} user property, the
- * {@code -Xdoclint/package} qualifier, and four sibling argument parameters beside
- * {@code compilerArgs} — and each was fixed by reading one more name, which is what left the next one
+ * not a longer list of parameter names. Four review rounds of this change each found one more way to
+ * silence the gate — the {@code maven.compiler.failOnError} user property, the
+ * {@code -Xdoclint/package} qualifier, four sibling argument parameters beside {@code compilerArgs},
+ * and then three positions the closed world does not reach at all: a channel ENTRY not spelled
+ * {@code <arg>}, a child pom's own compiler-plugin {@code <version>}, and a {@code combine.self}
+ * merge-control attribute. Each was fixed by reading one more thing, which is what left the next one
  * reachable. See {@link #PARAMETERS_CARRYING_NO_JAVAC_ARGUMENT}.</li>
  * <li><strong>Is the corpus every module the build compiles?</strong>
  * {@link #theCorpusCoversEveryModuleTheBuildCompiles}. Both walks
@@ -133,8 +135,15 @@ import org.w3c.dom.NodeList;
  * between what these POMs say and what Maven reads elsewhere, and until round 7 that boundary was
  * claimed rather than held</strong>: four of maven-compiler-plugin's five argument parameters were
  * unread, so one line INSIDE the very {@code <configuration>} this gate lives in dropped it with
- * every check here green ({@link #LIST_ARGUMENT_CHANNELS} carries the measurement). What holds it now
- * is the closed world described above and not a longer list of names. The POM checks read THESE POMs —
+ * every check here green ({@link #LIST_ARGUMENT_CHANNELS} carries the measurement). Round 8 then
+ * defeated the closed world from three positions it does not cover — one line INSIDE
+ * {@code <compilerArgs>}, a child pom's own {@code <version>}, and a {@code combine.self} attribute,
+ * every one of them landing on {@code omod} for the structural reason the api bullet above gives. All
+ * three are read now, and the completeness claim that stood here is not reinstated: what bounds the
+ * next one is that {@code omod}'s own source roots are compiled by a check that reads no build
+ * configuration at all ({@link #COMPILER_CHECKS_OUTSIDE_API}), so a POM defeating the flag makes these
+ * readers disagree with the build rather than leaving a module's pointers unresolved in silence. The
+ * POM checks read THESE POMs —
  * the ones {@link #poms} names — so anything ELSE Maven reads is invisible to them, in both
  * directions: a {@code settings.xml} profile, the command line, {@code MAVEN_OPTS}, and a committed
  * {@code .mvn/maven.config}, which Maven 3.3.1 and later read automatically. The boundary is the
@@ -186,6 +195,15 @@ public class JavadocReferenceGuardTest {
 	private static final String COMPILER_PLUGIN = "maven-compiler-plugin";
 
 	/**
+	 * Maven's two merge-control attributes. See {@link #mergeControlAttributesAt}, which refuses them
+	 * inside a compiler plugin element rather than interpreting them: they change how a child's
+	 * configuration COMBINES with the managed one, and this guard reads elements rather than modelling
+	 * that combination.
+	 */
+	private static final List<String> MERGE_CONTROL_ATTRIBUTES =
+			Arrays.asList("combine.self", "combine.children");
+
+	/**
 	 * The earliest maven-compiler-plugin release declaring a {@code compilerArgs} parameter, and so
 	 * the earliest one that can honour the argument list the root pom manages. Read out of the
 	 * descriptors in the local repository rather than from release notes: 2.5.1's
@@ -203,6 +221,14 @@ public class JavadocReferenceGuardTest {
 	 * PASSES the managed arguments to javac is a fact about Maven's execution and not about these
 	 * files; {@link #theArgumentsTheBuildDeclaresRefuseADeadJavadocReference} asks javac what the
 	 * arguments DO, which is a different question and does not cover this one.
+	 *
+	 * <p><strong>Asked at every declaration and not only at the managed entry, since round 8.</strong>
+	 * A child pom declaring the plugin in its own {@code <build><plugins>} with an older
+	 * {@code <version>} overrides the managed version for that module, and such an element commonly
+	 * carries no {@code <configuration>} at all — so every other reader here returns empty for it.
+	 * {@link #versionBelowTheFloorAt} is that reader; the assertion in
+	 * {@link #theArgumentsTheBuildDeclaresRefuseADeadJavadocReference} stays where it is because it
+	 * asks a second thing of the managed entry alone, that a version is pinned there at all.
 	 */
 	private static final int[] MINIMUM_COMPILER_PLUGIN_VERSION = { 3, 1 };
 
@@ -256,7 +282,10 @@ public class JavadocReferenceGuardTest {
 	 * The maven-compiler-plugin parameters this guard knows how to READ — the five argument channels
 	 * above, plus the two it refuses outright ({@code failOnError}, {@code compilerId}).
 	 * {@link #unreadCompilerParametersAt} refuses anything else, so this list and the inert one below
-	 * are together a closed world over the compiler configuration in these POMs.
+	 * are together a closed world over the DIRECT CHILDREN of a compiler {@code <configuration>} in
+	 * these POMs — which is narrower than that configuration, and narrower still than the set of
+	 * positions deciding what javac receives. See {@link #unreadCompilerParametersAt} for the three
+	 * positions round 8 measured outside it.
 	 */
 	private static final List<String> INTERPRETED_COMPILER_PARAMETERS = interpretedCompilerParameters();
 
@@ -278,12 +307,15 @@ public class JavadocReferenceGuardTest {
 	 *
 	 * <p>Deliberately the four these POMs actually use and no more. Adding a fifth parameter to a
 	 * compiler {@code <configuration>} here is meant to redden {@link #unreadCompilerParametersAt}
-	 * until someone says which of the two lists it belongs in — that refusal IS the fix for this
-	 * family of defect, and a generous list is how the family stays alive. Rounds 5, 6 and 7 of this
+	 * until someone says which of the two lists it belongs in — that refusal IS one fix for this
+	 * family of defect, and a generous list is how the family stays alive. Rounds 5, 6, 7 and 8 of this
 	 * change's review each found a further named way to silence the gate — the
-	 * {@code maven.compiler.failOnError} property, the {@code -Xdoclint/package} qualifier, and four
-	 * sibling argument parameters — and each was fixed by reading one more name; a closed world is what makes the next one visible
-	 * without knowing its name in advance. {@code fork} plus {@code executable} is the shape that
+	 * {@code maven.compiler.failOnError} property, the {@code -Xdoclint/package} qualifier, four
+	 * sibling argument parameters, and then a non-{@code <arg>} entry inside {@code <compilerArgs>}, a
+	 * child pom's own {@code <version>} and a {@code combine.self} attribute — and each was fixed by
+	 * reading one more thing. Refusing an unrecognised direct child makes the next unread PARAMETER
+	 * visible without knowing its name; it does not make the next unread POSITION visible, which is
+	 * what round 8 measured three times over. {@code fork} plus {@code executable} is the shape that
 	 * makes this more than tidiness: neither is an argument channel, and together they hand the whole
 	 * compilation to a binary of the POM's choosing.
 	 */
@@ -357,6 +389,27 @@ public class JavadocReferenceGuardTest {
 	 * this module's.
 	 */
 	private static final String EXPECTED_ROOT_ARTIFACT = "chartsearchai";
+
+	/**
+	 * The files outside the api module that carry a compiler-driven check of their own module's
+	 * javadoc pointers — one that compiles those sources with arguments IT chooses, reading no build
+	 * configuration. Today there is one, in {@code omod}.
+	 *
+	 * <p>It exists because {@link #everyJavadocReferenceInTheApiModuleResolves} runs on the api
+	 * classpath and so cannot reach any other module's sources, which left every other module's
+	 * pointers held by this class's POM readers ALONE — and four consecutive review rounds of #262
+	 * each found one more position from which the effective javac argument list is set that those
+	 * readers did not read, every one of them landing on {@code omod} for exactly that reason. A file
+	 * named here is required to exist, to declare a {@code @Test} and to pass {@link #REFERENCE_CHECK}
+	 * itself, and {@link #theCorpusCoversEveryModuleTheBuildCompiles} requires every non-api reactor
+	 * source root to be named as a literal in one of them.
+	 *
+	 * <p>A path literal rather than a rule ("some test somewhere compiles it"), because what is being
+	 * asserted is that a specific check exists: deleting it must redden something, and nothing else
+	 * here would notice.
+	 */
+	private static final List<String> COMPILER_CHECKS_OUTSIDE_API = Arrays.asList(
+			"omod/src/test/java/org/openmrs/module/chartsearchai/JavadocReferenceOmodCorpusTest.java");
 
 	/**
 	 * Unicode escapes for {@code *} and {@code /}. javac translates these before lexing, so either can
@@ -716,9 +769,14 @@ public class JavadocReferenceGuardTest {
 	 * present but not applied, which is every way of losing the gate that reading XML cannot see.
 	 *
 	 * <p>Scoped to the {@code api} module because that is the tree an api-side test can compile: the
-	 * classpath here is this suite's own, so {@code omod}'s sources are out of reach. They are
-	 * covered by the flag itself, and
-	 * {@link #theArgumentsTheBuildDeclaresRefuseADeadJavadocReference} is what says the flag works.
+	 * classpath here is this suite's own, so {@code omod}'s sources are out of reach. They are covered
+	 * three ways — by the flag itself, by
+	 * {@link #theArgumentsTheBuildDeclaresRefuseADeadJavadocReference}, which says the flag works, and
+	 * since round 8 by a sibling of THIS check living in that module and compiling its two source roots
+	 * with arguments it chooses itself ({@link #COMPILER_CHECKS_OUTSIDE_API}). The third was added
+	 * because the first two are both POM-dependent in a way this one is not, and four review rounds
+	 * running found a further position from which a POM defeats them — every one landing on
+	 * {@code omod}, because this check is why no POM edit can reach api.
 	 *
 	 * <p><strong>What makes an error doclint's is a DIFFERENCE, never its wording.</strong> Where the
 	 * flagged compile reports errors, the same sources are compiled again WITHOUT the argument: what
@@ -859,10 +917,14 @@ public class JavadocReferenceGuardTest {
 	 * {@code <configuration>} the gate lives in hands javac an argument nothing looks at. That is not a
 	 * hypothetical: it is what round 7 of this change's review measured, twice.
 	 *
-	 * <p><strong>Three of them are pinned end to end and two at the reader.</strong> A channel that can
-	 * carry the {@code -Xdoclint/package} qualifier is pinned by putting {@link #REFERENCE_CHECK} in
-	 * {@code <compilerArgs>} and the qualifier in the channel under test, then asking the real compiler:
-	 * read, the composed list leaves a package unchecked; unread, it does not, and the pin reddens. The
+	 * <p><strong>Three of them are pinned end to end and two at the reader, and the LIST channel is
+	 * pinned in two SHAPES.</strong> A channel that can carry the {@code -Xdoclint/package} qualifier is
+	 * pinned by putting {@link #REFERENCE_CHECK} in {@code <compilerArgs>} and the qualifier in the
+	 * channel under test, then asking the real compiler: read, the composed list leaves a package
+	 * unchecked; unread, it does not, and the pin reddens. The list channel gets a second such pin whose
+	 * silencer sits in a sibling entry NOT spelled {@code <arg>}, because Maven maps a {@code List}
+	 * parameter from every child element whatever its name — see {@link #elementChildren} for what
+	 * reading {@code <arg>} alone measured. The
 	 * two {@code Map} channels cannot carry that qualifier at all — an XML element name may not contain
 	 * {@code /}, and the map's key IS an element name — so there is no end-to-end silencer to plant, and
 	 * inventing one that javac rejects would pin the live probe's failure rather than the reader. They
@@ -874,6 +936,9 @@ public class JavadocReferenceGuardTest {
 		for (String channel : LIST_ARGUMENT_CHANNELS) {
 			violations.addAll(channelIsSeenToSilence(channel, "<" + channel + "><arg>" + REFERENCE_CHECK
 					+ "</arg><arg>" + silencer + "</arg></" + channel + ">"));
+			violations.addAll(channelIsSeenToSilence("an entry of <" + channel + "> not spelled <arg>",
+					"<" + channel + "><arg>" + REFERENCE_CHECK + "</arg><compilerArg>" + silencer
+							+ "</compilerArg></" + channel + ">"));
 		}
 		for (String channel : STRING_ARGUMENT_CHANNELS) {
 			violations.addAll(channelIsSeenToSilence(channel, "<compilerArgs><arg>" + REFERENCE_CHECK
@@ -896,9 +961,10 @@ public class JavadocReferenceGuardTest {
 	}
 
 	/**
-	 * One argument channel, put to the real compiler through {@link #javacArgumentBlocks} — the
-	 * production reader — rather than asked about as a string. Empty where the channel is seen to carry
-	 * a silencer into the composed list.
+	 * One argument channel, or one SHAPE of one, put to the real compiler through
+	 * {@link #javacArgumentBlocks} — the production reader — rather than asked about as a string. Empty
+	 * where the configuration under test is seen to carry a silencer into the composed list. The first
+	 * parameter names the thing being pinned in the failure message and is matched against nothing.
 	 */
 	private static List<String> channelIsSeenToSilence(String channel, String configuration)
 			throws Exception {
@@ -960,9 +1026,18 @@ public class JavadocReferenceGuardTest {
 	 * neither read nor judged inert, so a parameter nobody here has heard of — the next argument
 	 * channel, a future {@code <compilerArgs>} successor, {@code <fork>} plus {@code <executable>} —
 	 * reddens on the edit that introduces it instead of after someone thinks to add its name. The
-	 * name-by-name fix is what this check kept receiving and it is not what closes this family: three
-	 * rounds of review each named one more way to silence the gate, each fix read one more name, and
-	 * each time the next name was still reachable.
+	 * name-by-name fix is what this check kept receiving and it did not close this family: four rounds
+	 * of review each named one more way to silence the gate, each fix read one more thing, and each
+	 * time the next one was still reachable.
+	 *
+	 * <p><strong>The closed world is over the DIRECT CHILDREN of a configuration, and three of round
+	 * 8's findings were not among them.</strong> Each has a reader of its own here now: the CONTENTS of
+	 * an argument channel are read whatever the entries are spelled ({@link #elementChildren}), a
+	 * compiler-plugin {@code <version>} below the floor is refused at EVERY declaration and not only at
+	 * the managed one ({@link #versionBelowTheFloorAt}), and a Maven merge-control attribute is refused
+	 * outright because this check reads elements and does not model the merge
+	 * ({@link #mergeControlAttributesAt}). No claim is made that the list of positions is finished; what
+	 * bounds the next one is {@link #COMPILER_CHECKS_OUTSIDE_API}.
 	 *
 	 * <p>{@code <failOnError>} and {@code <compilerId>} are asked about for the same reason and not
 	 * as second subjects. Turning the first off leaves every doclint error printed and none of them
@@ -1011,6 +1086,17 @@ public class JavadocReferenceGuardTest {
 							+ "testCompilerArguments unread while the gate looked green. Say which it is — add it "
 							+ "to PARAMETERS_CARRYING_NO_JAVAC_ARGUMENT, or teach javacArguments to read it");
 				}
+				for (String where : versionBelowTheFloorAt(plugin)) {
+					violations.add(pom + " " + where);
+				}
+				for (String where : mergeControlAttributesAt(plugin)) {
+					violations.add(pom + " " + where + " — a Maven merge-control attribute, which decides how "
+							+ "this configuration COMBINES with the managed one. This guard reads POM elements "
+							+ "and does not model that merge, so it cannot say what javac ends up with. Refused "
+							+ "rather than judged: measured, combine.self=\"override\" on an EMPTY <compilerArgs> "
+							+ "in a child pom drops " + REFERENCE_CHECK + " for that module with the build "
+							+ "reporting success and every check here green");
+				}
 				for (String where : disabledFailOnErrorAt(plugin)) {
 					violations.add(pom + " " + where + " sets <failOnError>false</failOnError> — a doclint "
 							+ "reference error is then printed and not fatal, which is the green build #262 reports");
@@ -1058,6 +1144,53 @@ public class JavadocReferenceGuardTest {
 			violations.add("parameters this guard DOES read are refused as unknown (it read "
 					+ interpretedParameters + "), so a correct configuration reddens — the one failure "
 					+ "direction this class refuses");
+		}
+		String belowTheFloor = "<plugin><artifactId>" + COMPILER_PLUGIN + "</artifactId><version>2.5.1"
+				+ "</version></plugin>";
+		if (versionBelowTheFloorAt(parseXml(belowTheFloor)).isEmpty()) {
+			violations.add("a child declaration pinning " + COMPILER_PLUGIN + " below "
+					+ MINIMUM_COMPILER_PLUGIN_VERSION[0] + "." + MINIMUM_COMPILER_PLUGIN_VERSION[1]
+					+ " is not refused. That element carries no <configuration>, so every other reader here "
+					+ "returns empty for it, and it overrides the managed version for its own module — "
+					+ "measured on this branch, one such declaration in omod/pom.xml dropped the gate for the "
+					+ "one module the api-side compiler check cannot reach, with BUILD SUCCESS. This repository "
+					+ "pins the version only at the managed entry, so only this synthetic POM can say so");
+		}
+		String atTheFloor = "<plugin><artifactId>" + COMPILER_PLUGIN + "</artifactId><version>"
+				+ MINIMUM_COMPILER_PLUGIN_VERSION[0] + "." + MINIMUM_COMPILER_PLUGIN_VERSION[1]
+				+ "</version></plugin>";
+		String pinningNothing = "<plugin><artifactId>" + COMPILER_PLUGIN + "</artifactId></plugin>";
+		for (String legal : Arrays.asList(atTheFloor, pinningNothing)) {
+			List<String> refused = versionBelowTheFloorAt(parseXml(legal));
+			if (!refused.isEmpty()) {
+				violations.add("a legal compiler-plugin declaration " + legal + " is refused on its version "
+						+ "(it read " + refused + "). A declaration AT the floor honours <compilerArgs>, and "
+						+ "one pinning no version at all inherits the managed one — refusing either reddens a "
+						+ "clean build, the one failure direction this class refuses");
+			}
+		}
+		String merging = "<plugin><artifactId>" + COMPILER_PLUGIN + "</artifactId>"
+				+ "<configuration><compilerArgs combine.self=\"override\"/></configuration></plugin>";
+		String mergingAtTheConfiguration = "<plugin><artifactId>" + COMPILER_PLUGIN + "</artifactId>"
+				+ "<configuration combine.self=\"override\"><source>11</source></configuration></plugin>";
+		for (String carrying : Arrays.asList(merging, mergingAtTheConfiguration)) {
+			if (mergeControlAttributesAt(parseXml(carrying)).isEmpty()) {
+				violations.add("a Maven merge-control attribute inside a compiler plugin element is not "
+						+ "refused (" + carrying + "). It is an ATTRIBUTE and not an element, so "
+						+ "unreadCompilerParametersAt cannot see it, and it composes to nothing, so "
+						+ "javacArgumentBlocks records no position for it — measured, one such attribute on an "
+						+ "empty <compilerArgs> in omod/pom.xml dropped the gate for that module with BUILD "
+						+ "SUCCESS and all checks here green");
+			}
+		}
+		String withoutTheAttribute = "<plugin><artifactId>" + COMPILER_PLUGIN + "</artifactId>"
+				+ "<configuration><compilerArgs/></configuration></plugin>";
+		List<String> refusedWithoutIt = mergeControlAttributesAt(parseXml(withoutTheAttribute));
+		if (!refusedWithoutIt.isEmpty()) {
+			violations.add("an empty <compilerArgs> carrying NO merge-control attribute is refused (it read "
+					+ refusedWithoutIt + "). Measured: without the attribute Maven merges the managed entries "
+					+ "in and the gate stays on, so refusing it reddens a POM that compiles exactly as this "
+					+ "one does");
 		}
 		List<String> forkedToAnotherBinary = compilerUserPropertyOverrides(parseXml("<project><properties><"
 				+ FORK_PROPERTY + ">true</" + FORK_PROPERTY + "><" + EXECUTABLE_PROPERTY + ">/no/such/javac</"
@@ -1123,6 +1256,15 @@ public class JavadocReferenceGuardTest {
 	 * same answer {@link #noOtherCompilerConfigurationDropsTheCheck} gives a {@code <compilerId>} it
 	 * cannot reason about: whoever moves a source directory teaches these walks about it in the same
 	 * commit.
+	 *
+	 * <p><strong>And every root is compiled by a check that reads no build configuration.</strong>
+	 * {@link #rootsNoCompilerCheckReads} — api's roots by
+	 * {@link #everyJavadocReferenceInTheApiModuleResolves}, every other module's by a file named in
+	 * {@link #COMPILER_CHECKS_OUTSIDE_API}. That arm is about a different scope from the two above:
+	 * they ask whether the corpus this class WALKS is every module, this asks whether every module has
+	 * a compiler behind it that no POM can silence. Read as source text, because those files are not on
+	 * this suite's classpath — so it catches the file being deleted and a module arriving with no check
+	 * written for it, and nothing about whether the check inside is right.
 	 */
 	@Test
 	public void theCorpusCoversEveryModuleTheBuildCompiles() throws Exception {
@@ -1136,6 +1278,7 @@ public class JavadocReferenceGuardTest {
 						+ "than judged: teach reactorSourceRoots about the directory in the same commit");
 			}
 		}
+		violations.addAll(rootsNoCompilerCheckReads());
 		String inAProfile = "moduleBuiltUnderAProfile";
 		List<String> modules = modulesIn(parseXml("<project><modules><module>api</module></modules>"
 				+ "<profiles><profile><id>extra</id><modules><module>" + inAProfile
@@ -1192,6 +1335,60 @@ public class JavadocReferenceGuardTest {
 					+ "build");
 		}
 		assertNoViolations(violations);
+	}
+
+	/**
+	 * Every reactor source root is compiled by SOME check that chooses its own javac arguments —
+	 * {@link #everyJavadocReferenceInTheApiModuleResolves} for the api module's roots, and for every
+	 * other module a file named in {@link #COMPILER_CHECKS_OUTSIDE_API}, read as source text because
+	 * it is not on this suite's classpath.
+	 *
+	 * <p>Source text and not behaviour, so what it can say is limited and is worth stating plainly: it
+	 * says that a file exists, that it declares a {@code @Test}, that it passes
+	 * {@link #REFERENCE_CHECK}, and that the root is named in it as a literal. It cannot say the check
+	 * is correct. What it does catch is the two ways this defence disappears without anyone deciding
+	 * to remove it — the file deleted, and a module or a source root added with no check written for
+	 * it.
+	 */
+	private static List<String> rootsNoCompilerCheckReads() throws Exception {
+		List<String> violations = new ArrayList<String>();
+		Map<String, String> checks = new LinkedHashMap<String, String>();
+		for (String check : COMPILER_CHECKS_OUTSIDE_API) {
+			Path path = REPO_ROOT.resolve(check);
+			if (!Files.isRegularFile(path)) {
+				violations.add(check + " does not exist under " + REPO_ROOT + ". That file is the only "
+						+ "check compiling its module's sources with arguments it chooses itself; without it "
+						+ "that module's javadoc pointers are held by the POM readers here alone, which four "
+						+ "review rounds of #262 each defeated from a position they did not read");
+				continue;
+			}
+			String source = new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
+			if (!source.contains("@Test") || !source.contains("\"" + REFERENCE_CHECK + "\"")) {
+				violations.add(check + " no longer declares a @Test passing " + REFERENCE_CHECK
+						+ " as its own literal, so it can no longer be what compiles that module's sources "
+						+ "with arguments no build file decides");
+			}
+			checks.put(check, source);
+		}
+		for (String root : reactorSourceRoots()) {
+			if (root.startsWith(API_MODULE + "/")) {
+				continue;
+			}
+			boolean named = false;
+			for (String source : checks.values()) {
+				if (source.contains("\"" + root + "\"")) {
+					named = true;
+				}
+			}
+			if (!named) {
+				violations.add("no compiler-driven check names the source root " + root + " — "
+						+ "everyJavadocReferenceInTheApiModuleResolves runs on the api classpath and cannot "
+						+ "reach it, so its javadoc pointers would be held by this class's POM readers alone. "
+						+ "Add the root to one of " + COMPILER_CHECKS_OUTSIDE_API + ", or write that module its "
+						+ "own check and name the file in COMPILER_CHECKS_OUTSIDE_API");
+			}
+		}
+		return violations;
 	}
 
 	/**
@@ -2614,8 +2811,8 @@ public class JavadocReferenceGuardTest {
 	private static List<String> javacArguments(Element configuration) {
 		List<String> arguments = new ArrayList<String>();
 		for (String channel : LIST_ARGUMENT_CHANNELS) {
-			for (Element arg : directChildren(directChild(configuration, channel), "arg")) {
-				arguments.add(arg.getTextContent().trim());
+			for (Element entry : elementChildren(directChild(configuration, channel))) {
+				arguments.add(entry.getTextContent().trim());
 			}
 		}
 		for (String channel : STRING_ARGUMENT_CHANNELS) {
@@ -2647,17 +2844,12 @@ public class JavadocReferenceGuardTest {
 		if (channel == null) {
 			return arguments;
 		}
-		NodeList nodes = channel.getChildNodes();
-		for (int i = 0; i < nodes.getLength(); i++) {
-			Node node = nodes.item(i);
-			if (node.getNodeType() != Node.ELEMENT_NODE) {
-				continue;
-			}
-			String key = node.getNodeName();
+		for (Element entry : elementChildren(channel)) {
+			String key = entry.getNodeName();
 			if (!key.startsWith("-")) {
 				key = "-" + key;
 			}
-			String value = node.getTextContent().trim();
+			String value = entry.getTextContent().trim();
 			if (key.startsWith("-A") && !value.isEmpty()) {
 				arguments.add(key + "=" + value);
 			}
@@ -2673,19 +2865,30 @@ public class JavadocReferenceGuardTest {
 
 	/**
 	 * Every parameter one plugin element's configurations declare that this guard neither interprets
-	 * nor has judged unable to carry a javac argument, described by where it sits. The answer to the
-	 * family of defect that produced rounds 5, 6 and 7 of this change's review — see
+	 * nor has judged unable to carry a javac argument, described by where it sits. One answer to the
+	 * family of defect that has produced every review round of this change since round 5 — see
 	 * {@link #PARAMETERS_CARRYING_NO_JAVAC_ARGUMENT}.
 	 *
-	 * <p><strong>Why closing the world here is enough for the ARGUMENT family, and where it stops.</strong>
-	 * None of maven-compiler-plugin's five argument parameters is bound to a user property (read off
-	 * the 3.13.0 descriptor: {@code compilerArgs}, {@code compilerArgument}, {@code compilerArguments},
+	 * <p><strong>What this closes, stated as narrowly as it has earned.</strong> None of
+	 * maven-compiler-plugin's five argument parameters is bound to a user property (read off the
+	 * 3.13.0 descriptor: {@code compilerArgs}, {@code compilerArgument}, {@code compilerArguments},
 	 * {@code testCompilerArgument} and {@code testCompilerArguments} declare no expression, unlike
 	 * {@code failOnError} and {@code compilerId} which declare one each). So an argument channel can
-	 * only act from an element inside a compiler {@code <configuration>}, and a name this reader has
-	 * never heard of is exactly what that element looks like. That is NOT true of the two refused
+	 * only act from an element inside a compiler {@code <configuration>}, and a DIRECT CHILD of one
+	 * whose name this reader has never heard of is refused. That is NOT true of the two refused
 	 * parameters or of {@code fork}/{@code executable}, which is why each of those is also asked of
 	 * {@code <properties>} ({@link #compilerUserPropertyOverrides}).
+	 *
+	 * <p><strong>An earlier version of this paragraph called that complete for the argument family, and
+	 * round 8 falsified it from three further positions, all of them inside or beside the very element
+	 * this reader closes.</strong> A direct child of {@code <configuration>} is not the only thing that
+	 * decides the argument list: the CONTENTS of a channel are not direct children of a configuration
+	 * ({@link #elementChildren}), a {@code <version>} is a sibling of {@code <configuration>} rather
+	 * than a child of it ({@link #versionBelowTheFloorAt}), and a merge-control ATTRIBUTE is not an
+	 * element at all ({@link #mergeControlAttributesAt}). Each of those is now read, and no claim is
+	 * made here that the list of positions is finished — what BOUNDS the consequence of the next one is
+	 * that {@code omod}'s sources are compiled by a check that reads no build configuration
+	 * ({@link #COMPILER_CHECKS_OUTSIDE_API}), not that this reader has run out of things to learn.
 	 */
 	private static List<String> unreadCompilerParametersAt(Element plugin) {
 		List<String> where = new ArrayList<String>();
@@ -2703,13 +2906,8 @@ public class JavadocReferenceGuardTest {
 		if (configuration == null) {
 			return;
 		}
-		NodeList nodes = configuration.getChildNodes();
-		for (int i = 0; i < nodes.getLength(); i++) {
-			Node node = nodes.item(i);
-			if (node.getNodeType() != Node.ELEMENT_NODE) {
-				continue;
-			}
-			String name = node.getNodeName();
+		for (Element parameter : elementChildren(configuration)) {
+			String name = parameter.getNodeName();
 			if (!INTERPRETED_COMPILER_PARAMETERS.contains(name)
 					&& !PARAMETERS_CARRYING_NO_JAVAC_ARGUMENT.contains(name)) {
 				where.add(position + " sets <" + name + ">");
@@ -2718,14 +2916,22 @@ public class JavadocReferenceGuardTest {
 	}
 
 	/**
-	 * The version the root pom's managed compiler-plugin entry pins, split into its numeric segments —
-	 * empty where the entry declares none, which is itself a violation. Only the leading digits of each
-	 * dot-separated segment are read, so a qualifier such as {@code 4.0.0-beta-5} compares as
-	 * {@code 4.0.0}.
+	 * The version the root pom's managed compiler-plugin entry pins — empty where that entry declares
+	 * none, which {@link #theArgumentsTheBuildDeclaresRefuseADeadJavadocReference} treats as a
+	 * violation in its own right, unlike a child declaration.
 	 */
 	private static List<Integer> rootManagedCompilerPluginVersion() throws Exception {
+		return pluginVersion(rootManagedCompilerPlugin());
+	}
+
+	/**
+	 * The version one plugin element pins, split into its numeric segments — empty where it pins none,
+	 * which for a CHILD declaration means it inherits the managed one and is no violation. Only the
+	 * leading digits of each dot-separated segment are read, so a qualifier such as
+	 * {@code 4.0.0-beta-5} compares as {@code 4.0.0}.
+	 */
+	private static List<Integer> pluginVersion(Element plugin) {
 		List<Integer> segments = new ArrayList<Integer>();
-		Element plugin = rootManagedCompilerPlugin();
 		Element version = directChild(plugin, "version");
 		if (version == null) {
 			return segments;
@@ -2749,6 +2955,80 @@ public class JavadocReferenceGuardTest {
 			}
 		}
 		return true;
+	}
+
+	/**
+	 * Where one plugin element pins a compiler-plugin version BELOW
+	 * {@link #MINIMUM_COMPILER_PLUGIN_VERSION}, described — empty where it pins none or pins one at or
+	 * above the floor.
+	 *
+	 * <p>Asked of EVERY {@code maven-compiler-plugin} element in these POMs and not only of the root's
+	 * managed entry. A child pom declaring the plugin in its own {@code <build><plugins>} with an
+	 * explicit older {@code <version>} overrides the managed version FOR THAT MODULE, and the managed
+	 * {@code <compilerArgs>} is then an unknown parameter Maven ignores in silence. Nothing else here
+	 * can see it: {@code <version>} is a direct child of {@code <plugin>} rather than of
+	 * {@code <configuration>}, so {@link #unreadCompilerParametersAt} does not reach it, and such an
+	 * element carries no {@code <configuration>} at all, so {@link #javacArgumentBlocks},
+	 * {@link #disabledFailOnErrorAt} and {@link #nonJavacCompilerIdAt} all return empty.
+	 *
+	 * <p>Measured on this branch, JDK 21: four lines declaring the plugin at {@code <version>2.5.1</version>}
+	 * in {@code omod/pom.xml}, with no {@code <configuration>}, plus a dead pointer in
+	 * {@code omod/src/main/java} — {@code mvn -o clean install} exit 0, BUILD SUCCESS, not one
+	 * {@code reference not found} printed, and this suite green. That is the one module the api-side
+	 * compiler check cannot reach.
+	 */
+	private static List<String> versionBelowTheFloorAt(Element plugin) {
+		List<String> where = new ArrayList<String>();
+		List<Integer> pinned = pluginVersion(plugin);
+		if (!pinned.isEmpty() && !atLeast(pinned, MINIMUM_COMPILER_PLUGIN_VERSION)) {
+			where.add("declares " + COMPILER_PLUGIN + " <version>"
+					+ directChild(plugin, "version").getTextContent().trim() + "</version>, older than "
+					+ MINIMUM_COMPILER_PLUGIN_VERSION[0] + "." + MINIMUM_COMPILER_PLUGIN_VERSION[1]
+					+ " — the earliest release declaring a compilerArgs parameter at all. A version pinned "
+					+ "at a child declaration overrides the managed one for that module, and Maven ignores "
+					+ "an unknown parameter in SILENCE, so the managed <compilerArgs> then reaches javac in "
+					+ "no form. See MINIMUM_COMPILER_PLUGIN_VERSION");
+		}
+		return where;
+	}
+
+	/**
+	 * Every Maven merge-control attribute ({@code combine.self}, {@code combine.children}) inside one
+	 * plugin element, described by the element carrying it. Refused rather than interpreted.
+	 *
+	 * <p>This whole reader models POM TEXT, position by position; it does not model Maven's
+	 * configuration MERGE, and these two attributes are the documented way to change that merge. So an
+	 * element that is empty as written can be something else as applied, which no amount of reading the
+	 * element can show. Measured on this branch, JDK 21:
+	 * {@code <compilerArgs combine.self="override"/>} in {@code omod/pom.xml}'s compiler configuration
+	 * plus a dead pointer in {@code omod/src/main/java} — {@code mvn -o clean install} exit 0, BUILD
+	 * SUCCESS, no {@code reference not found}, this suite green; the same element WITHOUT the attribute
+	 * merges with the managed list and the build fails as it should, so the attribute is the whole of
+	 * the difference.
+	 *
+	 * <p>Read as an ATTRIBUTE and over the plugin element's whole subtree, because that is where the
+	 * two spellings that matter sit and neither is an element: on {@code <configuration>} itself, which
+	 * discards the managed configuration entirely, and on one channel inside it.
+	 * {@code combine.children="append"} is refused beside {@code override} even though the appended
+	 * arguments would separately be read as a position's own — the refusal is of an unmodelled merge
+	 * and does not rest on the other check catching it.
+	 */
+	private static List<String> mergeControlAttributesAt(Element plugin) {
+		List<String> where = new ArrayList<String>();
+		collectMergeControlAttributes(where, plugin);
+		return where;
+	}
+
+	private static void collectMergeControlAttributes(List<String> where, Element element) {
+		for (String attribute : MERGE_CONTROL_ATTRIBUTES) {
+			if (element.hasAttribute(attribute)) {
+				where.add("<" + element.getNodeName() + "> carries " + attribute + "=\""
+						+ element.getAttribute(attribute) + "\"");
+			}
+		}
+		for (Element child : elementChildren(element)) {
+			collectMergeControlAttributes(where, child);
+		}
 	}
 
 	private static List<String> disabledFailOnErrorAt(Element plugin) {
@@ -2877,12 +3157,23 @@ public class JavadocReferenceGuardTest {
 		return !id.isEmpty() && !"javac".equalsIgnoreCase(id);
 	}
 
-	private static Element directChild(Element parent, String name) {
-		List<Element> children = directChildren(parent, name);
-		return children.isEmpty() ? null : children.get(0);
-	}
-
-	private static List<Element> directChildren(Element parent, String name) {
+	/**
+	 * Every ELEMENT child of one element, whatever it is named. Maven maps a {@code List<String>} mojo
+	 * parameter from every child of the wrapper element and ignores the tag names entirely — the
+	 * convention that a {@code <compilerArgs>} entry is spelled {@code <arg>} is documentation and not
+	 * a rule Maven applies — so a reader keyed on {@code <arg>} sees only the entries whose author
+	 * followed the convention.
+	 *
+	 * <p>Measured on this branch, JDK 21, plugin 3.13.0:
+	 * {@code <compilerArg>-Xdoclint/package:-org.openmrs.*</compilerArg>} added immediately after the
+	 * managed {@code <arg>-Xdoclint:reference</arg>}, a dead pointer planted in
+	 * {@code omod/src/main/java}, {@code mvn -o clean install} exit 0, BUILD SUCCESS, not one
+	 * {@code reference not found} printed and this suite green — round 6's {@code -Xdoclint/package}
+	 * defect reinstated from one line INSIDE the gate's own element, where
+	 * {@link #unreadCompilerParametersAt} does not look because that closes the world over the direct
+	 * children of {@code <configuration>} and not over the contents of a channel.
+	 */
+	private static List<Element> elementChildren(Element parent) {
 		List<Element> children = new ArrayList<Element>();
 		if (parent == null) {
 			return children;
@@ -2890,8 +3181,23 @@ public class JavadocReferenceGuardTest {
 		NodeList nodes = parent.getChildNodes();
 		for (int i = 0; i < nodes.getLength(); i++) {
 			Node node = nodes.item(i);
-			if (node.getNodeType() == Node.ELEMENT_NODE && name.equals(node.getNodeName())) {
+			if (node.getNodeType() == Node.ELEMENT_NODE) {
 				children.add((Element) node);
+			}
+		}
+		return children;
+	}
+
+	private static Element directChild(Element parent, String name) {
+		List<Element> children = directChildren(parent, name);
+		return children.isEmpty() ? null : children.get(0);
+	}
+
+	private static List<Element> directChildren(Element parent, String name) {
+		List<Element> children = new ArrayList<Element>();
+		for (Element child : elementChildren(parent)) {
+			if (name.equals(child.getNodeName())) {
+				children.add(child);
 			}
 		}
 		return children;

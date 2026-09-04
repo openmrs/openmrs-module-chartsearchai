@@ -5714,9 +5714,12 @@ the gate was open, which is the only property they share:
   parameter these POMs set that is neither read as an argument channel, refused outright
   (`failOnError`, `compilerId`), nor listed as unable to carry a javac argument (`source`, `target`,
   `release`, `encoding` — the four these POMs use, and deliberately no more) is REFUSED, naming
-  itself. That is complete for the argument family and the reason is a fact about the plugin rather
-  than a hope: none of the five argument parameters is bound to a user property, so an element inside
-  a compiler `<configuration>` is the only position any of them can act from. It also newly refuses
+  itself. **That was called complete for the argument family and it is not; round 8 falsified it three
+  times over, and the sentence is left here with its correction rather than quietly rewritten.** What
+  it does hold is narrower and worth stating exactly: none of the five argument parameters is bound to
+  a user property, so an element inside a compiler `<configuration>` is the only position any of them
+  can act from — which makes the next unread PARAMETER visible, and says nothing about the next unread
+  POSITION. Three such positions are in the bullet below. It also newly refuses
   `<fork>` plus `<executable>`, which hand the whole compilation to a binary of the POM's choosing —
   so the property form of that pair is now read too, because refusing an element while ignoring the
   property that sets the same parameter is the disagreement round 5 was about. The cost is friction:
@@ -5731,7 +5734,50 @@ the gate was open, which is the only property they share:
   The entry pins 3.13.0 now (the version Maven 3.9.10's super-POM was supplying anyway, so the build
   is unchanged), and the guard requires a `<version>` and requires it to be at least 3.1. What a POM
   reader cannot say is whether that version actually PASSES the arguments to javac; the floor is the
-  whole of what these files can be asked.
+  whole of what these files can be asked. **That floor was asserted against the MANAGED entry alone
+  until round 8**, which is the bullet below.
+- **The closed world is closed over the DIRECT CHILDREN of a compiler `<configuration>`, and round 8
+  defeated the gate from three positions that are not among them.** Each was measured the same way — a
+  dead pointer planted in `omod/src/main/java`, `mvn -o clean install` exit 0, BUILD SUCCESS, zero
+  `reference not found` printed, the guard green — and each landed on `omod`, for a structural reason
+  and not by chance: `everyJavadocReferenceInTheApiModuleResolves` compiles the api corpus with
+  arguments it chooses itself, so no POM edit can reach api, and `omod` had nothing of the kind.
+  (i) **A `<compilerArgs>` entry not spelled `<arg>`.** Maven maps a `List<String>` mojo parameter from
+  every child element regardless of tag name — the `<arg>` spelling is convention, not a rule Maven
+  applies — so `<compilerArg>-Xdoclint/package:-org.openmrs.*</compilerArg>` beside the managed
+  `<arg>` reached javac and was invisible: the reader looked for `<arg>` children, and the closed world
+  never looks INSIDE a channel. Round 6's qualifier defect, reinstated from one line inside the gate's
+  own element. (ii) **A child pom's own `<version>`.** A `<plugin>` element for maven-compiler-plugin
+  in `omod/pom.xml` pinning 2.5.1 overrides the managed version for that module, and the managed
+  `<compilerArgs>` becomes an unknown parameter Maven ignores in silence; `<version>` is a sibling of
+  `<configuration>` rather than a child, and such an element carries no `<configuration>` at all, so
+  every other reader returned empty for it. (iii) **`combine.self="override"` on an empty
+  `<compilerArgs/>`.** Maven's documented merge-control ATTRIBUTE replaces the managed list rather than
+  merging with it. An attribute is not an element, so the closed world cannot see it, and the element
+  composes to nothing, so no argument position was recorded either. The negative control matters: the
+  same element WITHOUT the attribute merges and the build fails as it should, so the guard refuses the
+  attribute and not the empty element. All three are read now — every element child of a channel; the
+  version floor at EVERY compiler-plugin declaration in these POMs, not only the managed one; and any
+  merge-control attribute inside a compiler plugin element, refused outright because this reader models
+  POM text and not Maven's merge.
+- **The real answer to that family is not a fifth reader, and this is where the change stops
+  enumerating.** `omod/src/test/java` now carries `JavadocReferenceOmodCorpusTest`, a sibling of
+  `everyJavadocReferenceInTheApiModuleResolves` living in the module it covers: it compiles
+  `omod/src/main/java` and `omod/src/test/java` with `-Xdoclint:reference` chosen by the test itself,
+  reading no build configuration at all, and fails loudly rather than skipping where it cannot run — a
+  root whose walk does not find its anchor file, a compiler that is not there, arguments javac rejects,
+  or a baseline compile that is already broken. **Proved against all three findings above**: with the
+  gate defeated by each in turn and a dead pointer planted in BOTH omod source roots, the build
+  reported success and this check reported both pointers. So the consequence of a fourth position is
+  bounded — the POM readers would disagree with the build, which is a defect worth reporting to a
+  maintainer, instead of a module's pointers going unresolved with everything green. **No completeness
+  claim replaces the one it corrects.** It duplicates a little of the api-side scaffolding rather than
+  sharing it, because the two modules share no test classpath; the duplication also means one edit
+  cannot defeat both, and what it costs is drift. `theCorpusCoversEveryModuleTheBuildCompiles` requires
+  every non-api reactor source root to be named as a literal in a file listed in
+  `COMPILER_CHECKS_OUTSIDE_API`, and that file to exist and to declare a `@Test` passing the flag — so
+  deleting the check, or adding a module with none, reddens. Read as source text, so it says nothing
+  about whether the check inside is right.
 
 The same rule decides what counts as a javadoc error over the module's own sources: **a DIFFERENCE,
 never a message.** Where the flagged compile reports errors the sources are compiled again without

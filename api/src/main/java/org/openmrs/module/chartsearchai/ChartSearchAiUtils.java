@@ -107,7 +107,12 @@ public class ChartSearchAiUtils {
 	 *         <p><b>Weaker on purpose, and the weakness is the correctness.</b> Its caller
 	 *         ({@code ReferenceProseFidelityCheck}) uses the answer only to STAY SILENT, so a gap
 	 *         read as a sentence end can only suppress a report and never cause one — which is what
-	 *         makes that check's "loses recall, never precision" property true. Asking
+	 *         makes that check's "loses recall, never precision" property true. Since issue #337's
+	 *         second round that suppression is client-visible as well as log-local, the check's
+	 *         answer being published: what it costs is an entry in
+	 *         {@code ChartAnswer.getUnfaithfullyRenderedCitations()}, which is why that key's client
+	 *         contract says an absent entry is not a certificate of faithfulness. The direction is
+	 *         unchanged — it still cannot manufacture one. Asking
 	 *         {@code SENTENCE_BOUNDARY} instead was measured wrong in exactly that direction: it
 	 *         requires the terminator to be followed IMMEDIATELY by whitespace, so a quotation the
 	 *         model closed — {@code ."} or {@code .)} , and this module's own reference prose is full
@@ -251,11 +256,12 @@ public class ChartSearchAiUtils {
 	 * recitations were judged entailed while the one faithful recitation was judged not (issue #106).
 	 * A passing verdict is therefore false assurance. A FAILING verdict still carries information — it
 	 * says the citation is not about the record at all — so the flag is kept and only the pass is
-	 * withheld. Faithfulness of reference content is checked deterministically instead, by
-	 * report-only comparisons that run after every answer: {@code ClassCodeFidelityCheck} for an ATC
-	 * class code the answer states that no cited record does (issue #142), and
+	 * withheld. Faithfulness of reference content is checked deterministically instead, by two exact
+	 * comparisons that run after every answer: {@code ClassCodeFidelityCheck} for an ATC class code
+	 * the answer states that no cited record does (issue #142), report-only, and
 	 * {@code ReferenceProseFidelityCheck} for an answer that reproduces a cited reference record's
-	 * prose and then substitutes its own words inside the sentence it was copying (issue #337). NOT
+	 * prose and then substitutes its own words inside the sentence it was copying (issue #337), whose
+	 * answer is also published as {@code unfaithfullyRenderedCitations}. NOT
 	 * by the {@code DrugSafetyValidator} chips, which this javadoc said until #337: they carry the
 	 * deterministic text but are an independent list nothing reconciles against the answer.
 	 *

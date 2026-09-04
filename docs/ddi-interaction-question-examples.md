@@ -111,7 +111,7 @@ curl -s -u admin:Admin123 -H 'Content-Type: application/json' \
   http://localhost:8081/openmrs/ws/rest/v1/chartsearchai/search | jq
 ```
 
-Five fields of the response matter for these tests:
+Six fields of the response matter for these tests:
 
 | Field | What it is |
 |---|---|
@@ -119,6 +119,7 @@ Five fields of the response matter for these tests:
 | `safetyWarnings` | the **deterministic** chips. Computed by `DrugSafetyValidator` from the chart and the knowledge base, with no model involvement. Each carries `type`, `drug`, `detail`, a `severity` (since [#340](https://github.com/openmrs/openmrs-module-chartsearchai/issues/340)) and a `chartOrderBridges` array (since [#347](https://github.com/openmrs/openmrs-module-chartsearchai/issues/347)). `README.md` is canonical for the shape; do not read this row as the whole contract |
 | `interactionPairs` | `{"found": N, "reported": M}` — how many above-floor rule pairs the interaction check related and how many survived the chip cap ([#336](https://github.com/openmrs/openmrs-module-chartsearchai/issues/336)); the drug-in-play arm states it too since [#356](https://github.com/openmrs/openmrs-module-chartsearchai/issues/356) and is not capped, so its two numbers are always equal. `{"found":0}` is MEANT as "an arm ran and related nothing"; `README.md` and `PairChipExtent`'s javadoc name the arrangements where it is not, and [ADR Decision 65](adr.md) carries the one that remains; a cede that leaves an arm no pair is no longer among them on either pairwise arm ([Decisions 69 and 71](adr.md)). **`null` is not completeness** — what it does cover is enumerated in `PairChipExtent`'s class javadoc and in `README.md`, and deliberately nowhere else, so read it there rather than inferring it from the cells below |
 | `references` | the records the answer actually **cited** — `drug_order`, `allergy`, `condition`, `safety_finding`, `drug_reference`, and since [#354](https://github.com/openmrs/openmrs-module-chartsearchai/issues/354) `drug_class_note` for a question that names a drug class no reference entry is indexed by |
+| `unfaithfullyRenderedCitations` | the citations whose rendering IN THE ANSWER the module found unfaithful to the record they point at ([#337](https://github.com/openmrs/openmrs-module-chartsearchai/issues/337)) — one entry per record however many times the answer diverged from it. This is what turns the rough edge recorded below from a log line into something a test can read. `null` is the absence of a measurement (the early `done` under async grounding states it); `[]` says the check named no citation and is **not** a certificate that the answer was compared and found faithful. `README.md` is canonical for what a client may and may not put beside it |
 | `unresolvedDrugClass` | the drug **class** the question named and the module resolved to no substance, or `null` where it states none ([#354](https://github.com/openmrs/openmrs-module-chartsearchai/issues/354)). Deterministic like the chips: the same statement is injected as a citable `drug_class_note` record, but that reaches the response only if the model cites it — so this is what a test on a class-term question reads. `null` is the absence of a statement, never a denial |
 
 > **Judge the chips, not only the prose.** The chips are the tested, deterministic layer; the
@@ -684,7 +685,9 @@ or what reaches the model.
   "naproxen" as "naproxenic" and scatters citation markers mid-sentence. The chip text is
   verbatim and correct. `ReferenceProseFidelityCheck` detects this class of divergence and logs
   it at WARN ([#337](https://github.com/openmrs/openmrs-module-chartsearchai/issues/337),
-  [ADR Decision 61](adr.md)); it is deliberately not published to the wire.
+  [ADR Decision 61](adr.md)) and, since that issue's second round, names the citation on the
+  response as `unfaithfullyRenderedCitations` ([ADR Decision 74](adr.md)). The answer prose itself
+  is still left exactly as the model wrote it.
 - **The prose may name a drug by its chart brand where the chip names the substance** ([#347](https://github.com/openmrs/openmrs-module-chartsearchai/issues/347)). In
   [1d](#1d-cross-reactivity-across-atc-branches-the-curated-group) the answer says "active order
   Advil" and the chip says "active order Ibuprofen" — the same order, two names, because the

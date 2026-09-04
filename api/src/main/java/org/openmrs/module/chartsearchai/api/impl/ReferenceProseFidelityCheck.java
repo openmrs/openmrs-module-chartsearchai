@@ -10,9 +10,11 @@
 package org.openmrs.module.chartsearchai.api.impl;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -47,11 +49,17 @@ import org.slf4j.LoggerFactory;
  * nothing reconciles against the answer — which is what this repository asserted they did, in every
  * place the claim was written; ADR Decision 61 names them and says how they were found.
  *
- * <p><b>What it does and does not do.</b> It reports; it never rewrites, and nothing about it
- * reaches the wire. Editing a clinician-facing sentence is a larger decision than this check is
- * licensed to make, and since #201 a reference-group citation publishes no verdict to carry one.
- * It does not stop the paraphrase either — that is the ticket's option 1, a prompt or assembly
- * change, and this check is the instrument that would measure whether such a change worked.
+ * <p><b>What it does and does not do.</b> It reports and it STATES; it never rewrites. Editing a
+ * clinician-facing sentence is a larger decision than this check is licensed to make, and since #201
+ * a reference-group citation publishes no verdict to carry one. It does not stop the paraphrase
+ * either — that is the ticket's option 1, a prompt or assembly change, and this check is the
+ * instrument that would measure whether such a change worked.
+ *
+ * <p><b>Since the second round of issue #337 it also reaches the wire</b>, as the citation indexes it
+ * warned about: {@code ChartAnswer.getUnfaithfullyRenderedCitations()}, published as the
+ * {@code unfaithfullyRenderedCitations} response key. What travels is the INDEX and never a word of
+ * either text. That accessor is canonical for what is stated and ADR Decision 74 for why — including
+ * why no record prose goes with it, and why the sibling class-code check publishes nothing.
  *
  * <p><b>Conservative by construction</b>, because a check that cries wolf is worse than no check:
  * <ul>
@@ -216,7 +224,8 @@ final class ReferenceProseFidelityCheck {
 
 	/**
 	 * Reports, at WARN, every place where {@code answer} reproduces a cited reference-group record
-	 * and then states different words inside the sentence it was reproducing.
+	 * and then states different words inside the sentence it was reproducing — and returns the
+	 * citations it reported, for the caller to carry onto the answer.
 	 *
 	 * @param patient whose answer it is — logged so a line is attributable under concurrent requests
 	 * @param answer the answer prose, unchanged by this method
@@ -225,8 +234,16 @@ final class ReferenceProseFidelityCheck {
 	 *            output rather than re-deriving "which records were cited" from the prose, for the
 	 *            reason {@link ClassCodeFidelityCheck} takes it
 	 * @param mappings the chart's records, the carrier of the cited records' type and text
+	 * @return the DISTINCT citation indexes this call warned about, in the order they were reported;
+	 *         an empty list wherever it ran and warned about none, and {@code null} — the absence of
+	 *         a measurement rather than a measurement of none — only where the check itself failed.
+	 *         One record is one entry however many times the answer diverged from it: what a consumer
+	 *         can act on is "this citation's rendering is not the record's words", and the issue's
+	 *         own comment records two WARNs on one record from a single answer. The list is
+	 *         unmodifiable and carries no word of either text; {@code ChartAnswer
+	 *         .getUnfaithfullyRenderedCitations()} carries why, and what an empty one does not say.
 	 */
-	static void reportUnfaithfulReferenceProse(Patient patient, String answer,
+	static List<Integer> reportUnfaithfulReferenceProse(Patient patient, String answer,
 			List<RecordReference> cited, List<RecordMapping> mappings) {
 		Integer patientId = null;
 		try {
@@ -240,7 +257,7 @@ final class ReferenceProseFidelityCheck {
 				// and nothing here — including tokenising the answer — is worth doing.
 				log.debug("Reference-prose check skipped for patient={}: the answer cites no readable "
 						+ "reference record", patientId);
-				return;
+				return Collections.emptyList();
 			}
 			// Replaced with a space rather than removed, so a marker can never weld its neighbours
 			// into one token. Every marker this module has been observed to receive already has
@@ -257,7 +274,7 @@ final class ReferenceProseFidelityCheck {
 			if (!found.any()) {
 				log.debug("Reference-prose check skipped for patient={}: the answer reproduces no "
 						+ "cited reference record", patientId);
-				return;
+				return Collections.emptyList();
 			}
 			List<Divergence> unexplained = found.unexplained();
 			if (unexplained.isEmpty()) {
@@ -266,9 +283,13 @@ final class ReferenceProseFidelityCheck {
 				// silence ClassCodeFidelityTest's own gate assertions exist to prevent.
 				log.debug("Reference-prose check found no divergence for patient={}: every "
 						+ "reproduction of a cited reference record is faithful", patientId);
-				return;
+				return Collections.emptyList();
 			}
+			// Ordered and de-duplicated in one pass; the WARNs below stay per divergence, because a
+			// maintainer needs both offsets. The @return tag carries why the statement collapses them.
+			Set<Integer> stated = new LinkedHashSet<Integer>();
 			for (Divergence divergence : unexplained) {
+				stated.add(Integer.valueOf(divergence.recordIndex));
 				// Both halves are needed to reconstruct it: which record's prose was degraded, and
 				// where in it the answer stopped agreeing. Neither the answer nor the record text is
 				// logged — see the class javadoc. The word position counts from one, because it is
@@ -282,6 +303,7 @@ final class ReferenceProseFidelityCheck {
 						Integer.valueOf(divergence.recordIndex),
 						Integer.valueOf(divergence.recordWordOffset));
 			}
+			return Collections.unmodifiableList(new ArrayList<Integer>(stated));
 		}
 		catch (RuntimeException e) {
 			// A diagnostic must never break a clinical answer. Nothing here does I/O and every line
@@ -292,6 +314,12 @@ final class ReferenceProseFidelityCheck {
 			// has no guard of its own, so a record that throws on read never gets this far.
 			log.warn("Reference-prose check failed for patient={}; the answer is unaffected: {}",
 					patientId, e.toString());
+			// Null and not an empty list, for the reason the return tag gives: this call made no
+			// measurement. It is the one path where the log and the statement can disagree — a throw
+			// after the loop has emitted some lines leaves those WARNs standing while the response
+			// says nothing — and that asymmetry is deliberate: a partial list published as if it were
+			// the whole one would tell a client the unlisted citations were checked.
+			return null;
 		}
 	}
 

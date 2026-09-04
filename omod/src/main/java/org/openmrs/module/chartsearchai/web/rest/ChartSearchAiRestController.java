@@ -1377,10 +1377,33 @@ public class ChartSearchAiRestController {
 	 * model cites it — measured on that issue's own reproduction, it did not, so nothing a
 	 * {@code /search} consumer reads reported the class at all. The module states what it did;
 	 * whether the answer relays it stays the model's.
+	 *
+	 * <p>{@code unfaithfullyRenderedCitations} is the same remedy for the same failure, one issue
+	 * later (<a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/337">#337</a>):
+	 * the citations whose rendering in the answer the module found unfaithful to the record they point
+	 * at. {@code ChartAnswer.getUnfaithfullyRenderedCitations()} is canonical for what it states, for
+	 * why no prose travels with it, and for the difference between {@code null} and an empty list — a
+	 * difference this method preserves rather than flattening.
+	 *
+	 * <p><b>The copy is a correctness requirement</b> and not caution — the measurement is at
+	 * {@link #serializeSafetyWarnings}, which takes it for the same reason. What is new here is the
+	 * guard around it: unlike {@code chartOrderBridges()} this accessor can return null, and
+	 * {@code new ArrayList<>(null)} throws. Its ROUTINE trigger is not a failed check but the
+	 * async-grounding early {@code done}, which is built from a shorter constructor and states null on
+	 * every such request — measured by removing the guard, which breaks the {@code done} event for
+	 * every {@code chartsearchai.grounding.async=true} stream. The failed-check case reaches it too
+	 * and no path is known to deliver it: ADR Decision 61 records that no TEST reaches it, a record
+	 * throwing on read being pre-empted by {@code referenceSlice}, and the one line the check's catch
+	 * is documented as covering — a read of {@code patient.getPatientId()} — is re-read by both answer
+	 * methods in their {@code finally} timing log, so a throw there errors the request instead. The
+	 * guard stays because it costs one comparison and the alternative is a 500.
 	 */
 	private void putModuleStatements(Map<String, Object> target, ChartAnswer answer) {
 		putSafetyChips(target, answer);
 		target.put("unresolvedDrugClass", answer.getUnresolvedDrugClass());
+		List<Integer> unfaithful = answer.getUnfaithfullyRenderedCitations();
+		target.put("unfaithfullyRenderedCitations",
+			unfaithful == null ? null : new ArrayList<Integer>(unfaithful));
 	}
 
 	/**

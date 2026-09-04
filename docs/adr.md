@@ -5478,7 +5478,10 @@ the gate's corpus; deleting one would have satisfied the same check and lost the
 is this change's own doing: the header sits before the `package` statement, so it documents nothing,
 and enabling doclint makes javac say so once per header-bearing file. **274 of the 276 sources at
 `5253c7d2` carry that header**, one character each; the two that carry none are pre-existing and
-untouched. This change adds one more source, which carries the block-comment form. Do not
+untouched. This change adds TWO more sources, each carrying the block-comment form — the api-side guard, and
+its omod-side sibling, which arrived in round 9 of this review. (A sentence here said "one more
+source", written before that sibling existed and left standing beside the very 274/276 pair this
+paragraph warns about.) Do not
 read a warning COUNT off a build to check this — javac caps warnings per compilation (default
 `-Xmaxwarns` 100), so a printed total is an artefact of the cap rather than a count of anything.
 Measured over `5253c7d2`'s two api source roots with
@@ -5788,7 +5791,7 @@ the gate was open, which is the only property they share:
   on a `maven-compiler-plugin` element carrying no `<configuration>`, no `<version>` and no attribute —
   take the root out of javac and take the check out of the build together. Every existing reader
   returned empty for it: `unreadCompilerParametersAt` closes the world over a `<configuration>`'s
-  children, `javacArgumentBlocks` recorded no position, `versionBelowTheFloorAt` found no `<version>`,
+  children, `javacArgumentBlocks` recorded no position, `versionFloorViolationsAt` found no `<version>`,
   `mergeControlAttributesAt` found no attribute, and `rootsNoCompilerCheckReads` reads the check as
   SOURCE TEXT, so "the file exists, declares a `@Test`, passes the flag and names both roots" all stayed
   true of a file never compiled. Measured before the fix, JDK 21, plugin 3.13.0, with that element in
@@ -5816,6 +5819,27 @@ the gate was open, which is the only property they share:
   to exist and to still pass the flag as its own literal, and `pomsNoCrossModuleReaderNames` requires
   every reactor POM to be named as a literal in the omod-side file, so a third module cannot arrive
   outside the cross-read.
+  **What the positional half COSTS, stated plainly because it is a real restriction on this
+  repository and the two arms disagree about it.** `maven-compiler-plugin` and
+  `maven-surefire-plugin` cannot be declared in a child pom's `<build><plugins>` at all — not even in a declaration that takes
+  no test out of anything, such as `<version>${compilerPluginVersion}</version>` resolving from the
+  root's properties, or a `<release>17</release>` for a module on a different source level. That is
+  ordinary multi-module Maven, and the api-side arm PERMITS the same element (it closes a world over
+  the element's children and reads its `<version>` against the floor); the omod-side arm refuses it by
+  position. **Round 11 kept the refusal rather than narrowing it, deliberately, and this is the
+  record of that choice.** Narrowing it means deciding whether a given element removes a test — which
+  is reading what the element SAYS, the approach rounds 7 and 8 each took and each had falsified by
+  the next position, and round 9's defeat came from an element carrying no `<configuration>`, no
+  `<version>` and no attribute for exactly that reason. What the refusal costs is friction on a shape
+  this repository does not use; what it buys is that the next element nobody has heard of is refused
+  too. The friction is self-explaining rather than mysterious: the message names the position, says
+  why that plugin is read at all, and gives the remedy (move it to the root's `<pluginManagement>`),
+  and it fails no build that is legal TODAY — nothing in this reactor declares either plugin outside
+  the managed entry, which `noPomEditTakesAModuleOutOfTheTestBuild` also asserts. The asymmetry with
+  the api arm is not an oversight to be tidied: the two arms stating the rule differently is the whole
+  of what bullet (ii) buys, and making them agree would collapse them into one reader written twice.
+  A maintainer who does need such a declaration changes the omod arm, and records here what replaced
+  the position rule and how round 9's element stays refused.
   **Cross-covering the CORPUS rather than the assertion was considered and declined on the
   classpath.** Read off the POMs rather than measured: `api/pom.xml` declares neither `openmrs-web` nor
   `webservices.rest-omod-common`, both of which `omod`'s sources import, so an api-side compile of
@@ -5833,8 +5857,19 @@ the gate was open, which is the only property they share:
   `<executions>` entry in the ROOT pom's `<build><plugins>`, which children inherit, or a test-skip
   property in the root `<properties>`. Nothing written in a test survives that, because no test runs;
   both were measured at exit 0 with BUILD SUCCESS, and what that one costs the person doing it is every
-  `Tests run:` line in the reactor — api's surefire printed no test banner and no counts, omod's printed
-  "No tests to run", the reactor's test total was zero. **That cost sentence was then published as the
+  `Tests run:` line in the reactor — not one was emitted for either module, so the reactor's test total
+  was zero. **What the two spellings print in PLACE of those counts is not one string, and for two
+  rounds this said api's surefire printed no banner and omod's printed "No tests to run". Both halves
+  are false.** Re-measured on this head, JDK 21: `<maven.test.skip>true</maven.test.skip>` in the root
+  `<properties>` gives `mvn -o clean install` exit 0 with each module's surefire banner printed and
+  `Tests are skipped.` under it — twice in the reactor, zero `Tests run:` lines, zero `No tests to
+  run`; the `<executions>` spelling in the root's `<build><plugins>` gives exit 0 with no surefire
+  output whatever, `grep surefire` over the whole log matching nothing, because the goal is never
+  invoked. `No tests to run` is round 9's CHILD-pom output, reproduced on this head to be sure of it:
+  that `<executions>` element in `omod/pom.xml` with `mvn -o clean install -pl omod` gives exit 0 and
+  the string printed once under omod's surefire banner. That shape is refused now, so `No tests to
+  run` is the wrong string to grep a log for when checking whether the gate ran — which is exactly
+  what the falsified sentence invited. **That cost sentence was then published as the
   cost of the residue, and round 10 falsified it too**: the family is wider than the shapes it was
   measured on, and two of its members leave the test total intact. Do not write a third absolute in
   place of it, and do not write a single characteristic cost either — the round-10 bullet below carries
@@ -5866,6 +5901,11 @@ the gate was open, which is the only property they share:
   such property in any POM gave `mvn -o clean test -pl api -am` exit 1 with exactly one failing check,
   the cannot-determine message printed and the floor not mentioned. A RANGE was refused at plugin
   RESOLUTION in an offline build rather than by this verdict, so what it does online is unmeasured.
+  **Round 11 measured that "hole" and it is not one on its own**: a child declaration is refused by
+  POSITION from the omod arm, whatever version it pins, so the silent verdict never decides a build by
+  itself. The measurement is in the LOUD/QUIET bullet below, and it changes what this silence is a
+  disclosure OF — not that the floor goes unchecked in a green build, but that the reader has nothing
+  to say about a POM two other checks are already reddening.
   (ii) **A surefire `<configuration>`.** It was refused WHOLESALE, and it is the element a real
   project reaches for first: measured, `<argLine>-Xmx1024m</argLine>` with
   `<redirectTestOutputToFile>true</redirectTestOutputToFile>` at the root's managed surefire entry gave
@@ -5890,10 +5930,18 @@ the gate was open, which is the only property they share:
   stands in a build where BOTH modules report tests running. It is refused by the module whose tests
   still run, like every other member of this family.
   (iv) **`maven.test.failure.ignore` was absent too, and it is the member that cannot be turned into a
-  red build in the root pom**, because it is what makes a guard's own failure non-fatal. Measured:
-  that property in the root pom's `<properties>` beside `maven.compiler.failOnError=false` gave exit 0
-  and BUILD SUCCESS with the full reactor total printed — api `Tests run: 1870, Failures: 1`, omod 127
-  green. In a CHILD pom it removes one module's verdict and the other module reddens, which is what
+  red build in the root pom**, because it is what makes a guard's own failure non-fatal. Re-measured on
+  this head: that property in the root pom's `<properties>` beside `maven.compiler.failOnError=false`
+  gave exit 0 and BUILD SUCCESS with both modules' full test counts printed and THREE checks reporting
+  into them — `JavadocReferenceGuardTest.noOtherCompilerConfigurationDropsTheCheck` on the failOnError
+  property, that class's `noPomEditTakesAModuleOutOfTheTestBuild` on this one, and
+  `JavadocReferenceOmodCorpusTest.noPomEditTakesAModuleOutOfTheTestBuild` on this one as well. So
+  NEITHER module is green. **This bullet published a tally instead — "api `Tests run: 1870, Failures:
+  1`, omod 127 green" — and round 10's own commit falsified it in the act of publishing it**: that
+  commit added the refusal of this property, which is the second api failure and the whole of the omod
+  one. Name which checks report it; a failure count moves with the suite, and a stale one tells a
+  maintainer the omod module was untouched when it was not. In a CHILD pom it removes one module's
+  verdict and the other module reddens, which is what
   the refusal buys; in the root pom the refusal is reported into a build that exits 0 anyway, and what
   is left is the `Failures:` line it cannot suppress. Refused and disclosed, both.
 - **The disclosure is generalised rather than extended by one more sentence, and that is round 10's
@@ -5906,13 +5954,32 @@ the gate was open, which is the only property they share:
   alter javac's arguments or take a module's tests out of the build. **That is measured, six rounds
   running, rather than asserted.** What an edit can still achieve, and on which channel it shows —
   LOUD: where `failOnError` is what was turned off the doclint error itself is still printed
-  (`[ERROR] ... reference not found`); `maven.test.failure.ignore` leaves `Tests run: N, Failures: 1`
-  printed beside exit 0; a test-skip in the root pom leaves a module printing `No tests to run` and
-  emits no `Tests run:` line for it, so the reactor's total drops. QUIET: a surefire parameter nobody
-  here has thought of inside the `<configuration>` now permitted; a child declaration pinning a
-  version these files cannot evaluate, where the floor goes unchecked; anything Maven reads that is
-  not one of these POMs — a `settings.xml` profile, the command line, `MAVEN_OPTS`, a committed
-  `.mvn/maven.config`. **And the residue has no single characteristic cost**, which is what the
+  (`[ERROR] ... reference not found`); `maven.test.failure.ignore` leaves `Tests run: N, Failures: M`
+  printed beside exit 0, on BOTH modules' count lines, from the three checks named in bullet (iv)
+  above; a test-skip in the root pom emits no `Tests run:` line for either module, so the reactor's
+  total drops to nothing — and what it prints instead is `Tests are skipped.` under each module's
+  surefire banner for the PROPERTY spelling, and no surefire output at all for the `<executions>`
+  spelling. **Not `No tests to run`, which this list claimed for a round.** That string belongs to
+  round 9's child-pom shape, which is refused, so it is the wrong thing to grep a log for. QUIET: a
+  surefire parameter nobody here has thought of inside the `<configuration>` now permitted; anything
+  Maven reads that is not one of these POMs — a `settings.xml` profile, the command line,
+  `MAVEN_OPTS`, a committed `.mvn/maven.config`.
+  **A child declaration pinning a version these files cannot evaluate was in that QUIET list, and it
+  is not quiet.** `versionFloorViolationsAt` is silent on it, deliberately — bullet (i) above says why
+  — but two other checks are not. Measured on this head, JDK 21:
+  `<version>${compilerPluginVersion}</version>` on a compiler-plugin declaration in `omod/pom.xml`'s
+  own `<build><plugins>`, no such property in any of these POMs, run as
+  `mvn -o clean install -DcompilerPluginVersion=2.5.1` with a dead pointer planted in
+  `omod/src/main/java` — exit 1, api's suite green, and two omod checks reporting:
+  `JavadocReferenceOmodCorpusTest.everyJavadocReferenceInTheOmodModuleResolves` on the pointer (with
+  its own literal arguments) and that class's `noPomEditTakesAModuleOutOfTheTestBuild` on the POSITION.
+  The log confirms the mechanism the floor could not see — `compiler:2.5.1:compile @ chartsearchai-omod`,
+  the managed `<compilerArgs>` silently ignored, and the two `reference not found` lines in the log are
+  the guard's own report rather than javac's. A consequence of the positional refusal, worth stating
+  because it bounds bullet (i): the interpolation leg reading the reactor PARENT's `<properties>` is
+  reachable only at a child declaration, and a child declaration is refused — so the unevaluable
+  verdict cannot decide a build on its own.
+  **And the residue has no single characteristic cost**, which is what the
   sentence above it claimed for two rounds: the `test` filter leaves both modules printing test counts
   with one module's checks simply absent. What is claimed for all of this is that the cost of
   silencing the gate is raised and the common cases are loud — **not** that it cannot be silenced. No

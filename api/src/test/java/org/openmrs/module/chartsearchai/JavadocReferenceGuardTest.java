@@ -172,13 +172,38 @@ import org.w3c.dom.NodeList;
  * <p><strong>So what a careless or determined edit can still achieve, and where it shows.</strong>
  * LOUD, on output a maintainer sees without looking for it: where {@code failOnError} is what was
  * turned off, the doclint error itself is still printed ({@code [ERROR] ... reference not found});
- * {@code maven.test.failure.ignore} leaves this class's own failure printed as
- * {@code Tests run: N, Failures: 1} and the build at exit 0; a test-skip in the ROOT pom leaves a
- * module printing {@code No tests to run} and emits no {@code Tests run:} line for it at all, so the
- * reactor's test total drops. QUIET: a surefire parameter nobody here has thought of, inside the
- * {@code <configuration>} this guard now permits ({@link #SUREFIRE_PLUGIN_CHILDREN_READ_HERE}); a
- * child declaration pinning a version these files cannot evaluate, where the floor goes unchecked
- * ({@link #versionFloorViolationsAt}); and anything Maven reads that is not one of these POMs.
+ * {@code maven.test.failure.ignore} leaves the checks that refuse it printed as
+ * {@code Tests run: N, Failures: M} and the build at exit 0; a test-skip in the ROOT pom emits no
+ * {@code Tests run:} line for either module at all, so the reactor's test total drops to nothing.
+ * <strong>That last one does not print {@code No tests to run}, and this sentence said for a round
+ * that it did.</strong> Re-measured on this branch, JDK 21, from the ROOT pom:
+ * {@code <maven.test.skip>true</maven.test.skip>} in {@code <properties>} gives
+ * {@code mvn -o clean install} exit 0 with each module's surefire banner printed and
+ * {@code Tests are skipped.} under it — twice in the reactor, no {@code Tests run:} line and no
+ * {@code No tests to run} anywhere in the log; the {@code <executions>} spelling in
+ * {@code <build><plugins>} gives exit 0 with no surefire output whatever, {@code grep surefire} over
+ * the whole log matching nothing, the goal never being invoked. {@code No tests to run} is what
+ * round 9's CHILD-pom shape printed and that shape is refused now
+ * ({@link #noPomEditTakesAModuleOutOfTheTestBuild}), so it is the wrong string to grep a log for.
+ * QUIET: a surefire parameter nobody here has thought of, inside the
+ * {@code <configuration>} this guard now permits ({@link #SUREFIRE_PLUGIN_CHILDREN_READ_HERE});
+ * and anything Maven reads that is not one of these POMs.
+ * <strong>A child declaration pinning a version these files cannot evaluate was in that QUIET list
+ * and is not quiet.</strong> {@link #versionFloorViolationsAt} is silent on it, deliberately — but
+ * two other checks are not, and both were measured on this branch, JDK 21:
+ * {@code <version>${compilerPluginVersion}</version>} on a compiler-plugin declaration in
+ * {@code omod/pom.xml}'s own {@code <build><plugins>}, no such property in any of these POMs, run as
+ * {@code mvn -o clean install -DcompilerPluginVersion=2.5.1} with a dead pointer planted in
+ * {@code omod/src/main/java} — exit 1, api's own suite green, and TWO omod checks reporting, named
+ * rather than counted: {@code JavadocReferenceOmodCorpusTest.everyJavadocReferenceInTheOmodModuleResolves}
+ * on the pointer, with its own literal arguments, and that class's
+ * {@code noPomEditTakesAModuleOutOfTheTestBuild} on the POSITION — a compiler-plugin declaration
+ * outside the root's {@code <pluginManagement>}. omod really did compile at
+ * {@code compiler:2.5.1} with the managed {@code <compilerArgs>} silently ignored, which is the part
+ * {@link #versionFloorViolationsAt} cannot see at a child declaration. A consequence of that
+ * second one: the interpolation leg reading the reactor PARENT's {@code <properties>} is reachable
+ * only at a child declaration, and a child declaration is refused, so the unevaluable verdict cannot
+ * decide a build on its own.
  * <strong>The cost to whoever does it is not one characteristic thing, and a sentence here said it
  * was</strong>: round 10's {@code <test>} filter in a child pom leaves BOTH modules printing test
  * counts with one module's checks simply absent ({@link #TEST_FILTER_PROPERTY}), which is nothing like
@@ -370,12 +395,19 @@ public class JavadocReferenceGuardTest {
 	 * {@link #FAIL_ON_ERROR_PROPERTY} is read: a guard reporting a violation into a build that exits 0
 	 * anyway has reported nothing.
 	 *
-	 * <p>Measured on this branch, JDK 21: this property in the ROOT pom's own {@code <properties>}
+	 * <p>Re-measured on this branch, JDK 21: this property in the ROOT pom's own {@code <properties>}
 	 * beside {@code <maven.compiler.failOnError>false</maven.compiler.failOnError>} —
-	 * {@code mvn -o clean install} exit 0, BUILD SUCCESS, api's surefire printing
-	 * {@code Tests run: 1870, Failures: 1} (the failure being this class reporting the failOnError
-	 * property) and omod's 127 green. It is LOUD on that {@code Failures:} line, which is why it is
-	 * disclosed as well as refused.
+	 * {@code mvn -o clean install} exit 0, BUILD SUCCESS, and THREE checks reporting into it, named
+	 * rather than counted: {@link #noOtherCompilerConfigurationDropsTheCheck} on the failOnError
+	 * property, {@link #noPomEditTakesAModuleOutOfTheTestBuild} on this one, and its omod-side
+	 * counterpart {@code JavadocReferenceOmodCorpusTest.noPomEditTakesAModuleOutOfTheTestBuild} on
+	 * this one too. So BOTH modules print a {@code Failures:} line and neither is green.
+	 * <strong>A tally was published here instead and was already stale in the commit that published
+	 * it</strong> — "api {@code Tests run: 1870, Failures: 1} and omod's 127 green", written before
+	 * round 10's own change added the refusal of this property, which is the second api failure and
+	 * the whole of the omod one. Name the checks; a failure COUNT here moves with the suite, and a
+	 * stale one tells a maintainer the omod module was unaffected when it was not.
+	 * It is LOUD on those {@code Failures:} lines, which is why it is disclosed as well as refused.
 	 */
 	private static final String TEST_FAILURE_IGNORED_PROPERTY = "maven.test.failure.ignore";
 
@@ -1524,10 +1556,15 @@ public class JavadocReferenceGuardTest {
 	 * <li><strong>Test execution removed from EVERY module at once</strong> — an {@code <executions>}
 	 * entry in the ROOT pom's {@code <build><plugins>}, which children inherit, or
 	 * {@link #TEST_SKIP_PROPERTIES} in the root {@code <properties>}. No check written in a test
-	 * survives it, because none of them runs. Measured on both spellings: exit 0 and BUILD SUCCESS, but
-	 * api's surefire printed no test banner and no counts, omod's printed "No tests to run", and not
-	 * one {@code Tests run:} line was emitted for either module — so the reactor's test total was
-	 * zero.</li>
+	 * survives it, because none of them runs. Measured on both spellings: exit 0, BUILD SUCCESS, and
+	 * not one {@code Tests run:} line emitted for either module — so the reactor's test total was
+	 * zero. <strong>What the two spellings print INSTEAD is not one string, and a sentence here said
+	 * both printed "No tests to run", which neither does.</strong> Re-measured on this branch, JDK
+	 * 21: the {@link #TEST_SKIP_PROPERTIES} spelling prints each module's surefire banner with
+	 * {@code Tests are skipped.} under it, twice in the reactor; the {@code <executions>} spelling
+	 * prints no surefire output at all, {@code grep surefire} over the whole log matching nothing
+	 * because the goal is never invoked. "No tests to run" is what round 9's CHILD-pom shape printed,
+	 * and this arm refuses that shape — so it is the wrong string to check a log for.</li>
 	 * <li><strong>One module's checks removed while both modules still report tests running</strong> —
 	 * round 10's finding, and the one the sentence above was wrong about. Surefire's {@code test}
 	 * FILTER in a child pom ({@link #TEST_FILTER_PROPERTY}) left api printing {@code Tests run: 5} and
@@ -1537,7 +1574,9 @@ public class JavadocReferenceGuardTest {
 	 * <li><strong>Every check run and its verdict discarded</strong> —
 	 * {@link #TEST_FAILURE_IGNORED_PROPERTY} in the root pom, which cannot be refused into a red build
 	 * at all: the property is what makes this class's own failure non-fatal. It is reported here and it
-	 * is LOUD on the line it cannot suppress, {@code Tests run: N, Failures: 1} beside exit 0.</li>
+	 * is LOUD on the line it cannot suppress, {@code Tests run: N, Failures: M} beside exit 0 — that
+	 * constant's own javadoc names the checks that report it, and why {@code M} is not a figure to
+	 * publish here.</li>
 	 * </ul>
 	 *
 	 * <p><strong>Do not write a claim here that no POM edit can silence this gate.</strong> Two such
@@ -1688,11 +1727,11 @@ public class JavadocReferenceGuardTest {
 				|| !bothOfThem.contains(TEST_FAILURE_IGNORED_PROPERTY)) {
 			violations.add("the two properties that defeat a module's checks without SKIPPING anything are "
 					+ "not both read out of a POM's <properties> (it read " + filteredAndIgnored + "). "
-					+ "Measured on this branch: <" + TEST_FILTER_PROPERTY + "> in api/pom.xml gave exit 0 "
-					+ "with api running 5 tests, this class not among them, and omod's 127 green; <"
-					+ TEST_FAILURE_IGNORED_PROPERTY + "> in the root pom gave exit 0 with the full reactor "
-					+ "total printed and a failure in it. Neither is a boolean skip, which is why neither was "
-					+ "in TEST_SKIP_PROPERTIES");
+					+ "Measured on this branch BEFORE either was refused: <" + TEST_FILTER_PROPERTY
+					+ "> in api/pom.xml gave exit 0 with api running 5 tests, this class not among them, and "
+					+ "omod's whole suite green; <" + TEST_FAILURE_IGNORED_PROPERTY + "> in the root pom gave "
+					+ "exit 0 with both modules' totals printed and a reported failure in each. Neither is a "
+					+ "boolean skip, which is why neither was in TEST_SKIP_PROPERTIES");
 		}
 		List<String> neitherFilteredNorIgnored = testDefeatingPropertiesIn(parseXml("<project><properties>"
 				+ "<" + TEST_FILTER_PROPERTY + "></" + TEST_FILTER_PROPERTY + ">"

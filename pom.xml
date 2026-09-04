@@ -124,8 +124,13 @@
 						     one in the omod-side check's javadoc, one in Decision 75 — were each falsified by
 						     the round after they were written. What is
 						     claimed is that silencing this gate costs more and shows up on output a
-						     maintainer sees — a printed doclint error, a changed test total, a "No tests to
-						     run" — not that it cannot be silenced. Decision 75 lists what stays quiet. -->
+						     maintainer sees — a printed doclint error, a `Failures:` line beside exit 0, a
+						     reactor test total that drops — not that it cannot be silenced. Do NOT grep a log
+						     for "No tests to run" to check the gate ran: that string belongs to a child-pom
+						     shape the guards refuse. Re-measured: a root-pom test-skip property prints each
+						     module's surefire banner with "Tests are skipped." under it, and the <executions>
+						     spelling in the root's <build><plugins> prints no surefire output at all.
+						     Decision 75 lists what stays quiet, and what turned out not to be. -->
 						<compilerArgs>
 							<arg>-Xdoclint:reference</arg>
 						</compilerArgs>

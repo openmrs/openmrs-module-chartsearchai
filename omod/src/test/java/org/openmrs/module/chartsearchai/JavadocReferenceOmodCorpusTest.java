@@ -293,27 +293,57 @@ public class JavadocReferenceOmodCorpusTest {
 	 * 10, since refusing the element wholesale reddened an ordinary {@code argLine}, which left an
 	 * {@code <excludes>} naming either check read by nothing.
 	 *
+	 * <p><strong>What the positional rule COSTS, and the api arm does not agree with it.</strong>
+	 * Neither of {@link #PLUGINS_THAT_RUN_THESE_CHECKS} can be declared in a child pom's
+	 * {@code <build><plugins>} at all — not even in a declaration taking no test out of anything, such
+	 * as a {@code <version>} resolving from the root's properties or a {@code <release>} for a module
+	 * on a different source level. That is ordinary multi-module Maven, and the api-side arm PERMITS
+	 * that element: it closes a world over the element's children and reads its {@code <version>}
+	 * against the floor. Round 11 KEPT the refusal rather than narrowing it. Narrowing means deciding
+	 * whether a given element removes a test, which is reading what the element SAYS — the approach
+	 * rounds 7 and 8 each took and each had falsified by the next position, and round 9's defeating
+	 * element carried no {@code <configuration>}, no {@code <version>} and no attribute for exactly
+	 * that reason. The cost is friction on a shape this repository does not use; the friction is
+	 * self-explaining (the violation message names the position, why the plugin is read, and the
+	 * remedy) and it reddens no POM that is legal in this reactor today. The disagreement with the api
+	 * arm is not an oversight: the two arms stating the rule DIFFERENTLY is what makes one edit
+	 * unlikely to defeat both, and making them agree would collapse them into one reader written
+	 * twice. Whoever does need such a declaration changes this rule and records in docs/adr.md
+	 * Decision 75 what replaced it and how round 9's element stays refused.
+	 *
 	 * <p><strong>The residue, and it has more than one cost — the sentence that stood here named
 	 * one.</strong> A POM can still remove test execution from EVERY module at once, through an
 	 * {@code <executions>} entry in the ROOT pom's {@code <build><plugins>} which children inherit, or
 	 * a test-skip property in the root {@code <properties>}. Nothing written in a test survives that,
 	 * because no test runs, and what it costs is every {@code Tests run:} line in the reactor —
-	 * measured on both spellings: exit 0 and BUILD SUCCESS, api's surefire printing no test banner and
-	 * no counts, omod's printing "No tests to run", the reactor's test total zero. <strong>Round 10
+	 * measured on both spellings: exit 0, BUILD SUCCESS, the reactor's test total zero.
+	 * <strong>They do not print the same thing in place of those counts, and a sentence here said
+	 * they did: that api's surefire printed no banner and omod's printed "No tests to run".</strong>
+	 * Re-measured on this branch, JDK 21: the test-skip PROPERTY prints each module's surefire banner
+	 * with {@code Tests are skipped.} under it, twice in the reactor and never "No tests to run"; the
+	 * {@code <executions>} spelling prints no surefire output whatever, {@code grep surefire} over
+	 * the whole log matching nothing because the goal is never invoked. "No tests to run" is what
+	 * round 9's CHILD-pom shape printed — that shape is refused now, so it is the wrong string to
+	 * check a log for. <strong>Round 10
 	 * measured a shape that costs nothing of the kind</strong>: surefire's {@code test} filter in
-	 * {@code api/pom.xml} left api printing {@code Tests run: 5} and this module's whole 127-test suite
+	 * {@code api/pom.xml} left api printing {@code Tests run: 5} and this module's whole suite
 	 * green, at exit 0, with the api-side guard simply absent from the five. It is refused now, by this
 	 * arm — the api-side guard could not report it, not being among the tests that ran — and
 	 * {@code maven.test.failure.ignore} is refused beside it, which cannot be turned into a red build
 	 * at all, since it is what makes a guard's failure non-fatal; it is loud instead, on the
-	 * {@code Tests run: N, Failures: 1} line it cannot suppress.
+	 * {@code Tests run: N, Failures: M} line it cannot suppress — in the ROOT pom on BOTH modules'
+	 * such lines, this arm being one of the checks that reports it. Do not publish the failure count:
+	 * {@code JavadocReferenceGuardTest.TEST_FAILURE_IGNORED_PROPERTY} carries what was measured, and
+	 * a tally of it went stale inside the commit that published it.
 	 *
 	 * <p>So the honest bound is not "no POM edit can silence this" and not one sentence about cost
 	 * either: an edit taking ONE module's checks out is refused by the module whose checks still run,
 	 * the two arms state that rule differently so one edit does not weaken both, and what is left is
-	 * loud on the printed doclint error, on a changed test total, or on a {@code No tests to run} —
-	 * except where it is not, which the api-side class javadoc enumerates as far as anyone has measured
-	 * it.
+	 * loud on the printed doclint error, on a {@code Failures:} line beside exit 0, on a reactor test
+	 * total that drops, or on whatever a module's surefire prints in place of its counts
+	 * ({@code Tests are skipped.}, or nothing at all) — and never on a {@code No tests to run}, which
+	 * belongs to the CHILD-pom shape this arm refuses. Except where it is not loud at all, which the
+	 * api-side class javadoc enumerates as far as anyone has measured it.
 	 */
 	@Test
 	public void noPomEditTakesAModuleOutOfTheTestBuild() throws Exception {
@@ -406,9 +436,10 @@ public class JavadocReferenceOmodCorpusTest {
 		if (filteredAndIgnored.size() != 2) {
 			violations.add("the two properties that defeat a module's checks without SKIPPING anything — "
 					+ "surefire's <test> filter and <maven.test.failure.ignore> — are not both read (it read "
-					+ filteredAndIgnored + "). Measured: <test>DateFormatUtilTest</test> in api/pom.xml gave "
-					+ "exit 0 with api running 5 tests, the api-side guard not among them, and this module's "
-					+ "127 green. Both were missing from these lists until round 10");
+					+ filteredAndIgnored + "). Measured BEFORE it was refused: <test>DateFormatUtilTest</test> "
+					+ "in api/pom.xml gave exit 0 with api running 5 tests, the api-side guard not among them, "
+					+ "and this module's whole suite green. With it refused, this arm reddens instead. Both "
+					+ "were missing from these lists until round 10");
 		}
 		String tuned = "<plugin><artifactId>" + SUREFIRE_PLUGIN + "</artifactId><configuration>"
 				+ "<argLine>-Xmx1024m</argLine><skipTests>false</skipTests></configuration></plugin>";

@@ -341,6 +341,33 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/**
+	 * The chart the REAL pipeline produces for the arrangement issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/338">#338</a> captured: a
+	 * patient carrying {@code allergies} as recorded allergen tokens and {@code activeOrderDisplays} as
+	 * her active orders, asked {@code question}. Over the SHIPPED knowledge base rather than the
+	 * excerpt, because the corticosteroids that answer names are not in a sixteen-entry file, and with
+	 * the bundled cross-reactivity groups beside it.
+	 *
+	 * <p>Public for the cross-package reason {@link #injectedSafetyFindingChart} is, and a method of
+	 * its own rather than an overload of it: that one carries no allergy, so it cannot raise the
+	 * recorded-allergen arm at all, and the two differ in the knowledge base as well as in the context.
+	 */
+	public static PatientChart injectedAllergyFindingChart(String question, List<String> allergies,
+			List<String> activeOrderDisplays) {
+		DrugReferenceService service = serviceWith(shippedEntries());
+		service.setCrossReactivityGroups(bundledGroups());
+		List<PatientClinicalContext.ActiveDrugOrder> orders =
+				new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
+		for (String display : activeOrderDisplays) {
+			orders.add(activeOrder("order-" + orders.size(), display));
+		}
+		return injectorWithSafety(service).injectRecords(oneRecordChart(),
+				ctx(60, null, new LinkedHashSet<String>(activeOrderDisplays), null,
+						new LinkedHashSet<String>(allergies), null, orders),
+				question);
+	}
+
+	/**
 	 * The whole chart the REAL pipeline produces for a question naming a drug CLASS the reference
 	 * data resolves no substance for (issue #354) — the DDInter excerpt and the shipped
 	 * cross-reactivity groups behind the real injector, so the {@code drug_class_note} mapping in it

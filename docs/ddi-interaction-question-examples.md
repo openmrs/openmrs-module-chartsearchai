@@ -687,7 +687,10 @@ or what reaches the model.
   it at WARN ([#337](https://github.com/openmrs/openmrs-module-chartsearchai/issues/337),
   [ADR Decision 61](adr.md)) and, since that issue's second round, names the citation on the
   response as `unfaithfullyRenderedCitations` ([ADR Decision 74](adr.md)). The answer prose itself
-  is still left exactly as the model wrote it.
+  is still left exactly as the model wrote it. A report says the answer diverged from the record it
+  was reproducing, not that a drug name was mangled — [ADR Decision 59](adr.md) records that measured
+  on [#338](https://github.com/openmrs/openmrs-module-chartsearchai/issues/338)'s own capture, which
+  this check is silent on.
 - **The prose may name a drug by its chart brand where the chip names the substance** ([#347](https://github.com/openmrs/openmrs-module-chartsearchai/issues/347)). In
   [1d](#1d-cross-reactivity-across-atc-branches-the-curated-group) the answer says "active order
   Advil" and the chip says "active order Ibuprofen" — the same order, two names, because the

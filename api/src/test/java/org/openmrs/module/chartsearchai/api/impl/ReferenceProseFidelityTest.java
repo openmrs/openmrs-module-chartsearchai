@@ -106,6 +106,21 @@ public class ReferenceProseFidelityTest {
 	 *  {@code ClassCodeFidelityTest} carries the same note in the other direction. */
 	private static final String PACKAGE = "org.openmrs.module.chartsearchai.api.impl";
 
+	/** The question issue #338 captured its answer on. */
+	private static final String ISSUE_338_QUESTION = "Can I give her hydrocortisone?";
+
+	/** The clause the module's own recorded-allergy cross-reactivity sentence names its allergen
+	 *  after — the anchor every #338 slice below reads, and asserted as a premise before it is used. */
+	private static final String ALLERGY_TO = "allergy to ";
+
+	/** The answer's own opening, ahead of the stretch it reproduces. It names nothing the record does,
+	 *  so it contributes no run of its own. */
+	private static final String LEAD = "No — it should not be given: ";
+
+	/** The check's own WARN wording, so a silence assertion can be made in a package-scoped capture
+	 *  that the SIBLING check is legitimately warning into. */
+	private static final String PROSE_WARN = "states different words inside the sentence it was copying";
+
 	private TestableService service;
 
 	private PatientChart chart;
@@ -119,6 +134,10 @@ public class ReferenceProseFidelityTest {
 	 *  own tokeniser: it keeps the punctuation, which is what carries the sentence boundaries the
 	 *  check reads, and a canned answer assembled from a lower-cased word list would carry none. */
 	private String[] recordTokens;
+
+	/** The #338 arrangement's chart, built by the two cases that need it rather than in setUp: it is
+	 *  a different knowledge base and a different context from every other case in this file. */
+	private PatientChart issue338Chart;
 
 	@BeforeEach
 	public void setUp() {
@@ -742,6 +761,136 @@ public class ReferenceProseFidelityTest {
 			assertTrue(warnStating(capture, "[" + finding.getIndex() + "]"),
 					"the streaming path must run the same check. Captured: " + capture.describeAll());
 		}
+	}
+
+	/**
+	 * Issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/338">#338</a>'s
+	 * own captured shape: the record's sentence with its class code repeated inside the parenthetical
+	 * and the allergen truncated. The repetition cuts every run of the record below the floor, so this
+	 * check states nothing about an answer carrying BOTH defects — the residue ADR Decision 61 records
+	 * as a substitution inside a reproduction shorter than twelve words, met here by the defect that
+	 * sits earlier in the same sentence.
+	 *
+	 * <p>The silence is asserted against the check's own wording rather than against any WARN,
+	 * because {@code ClassCodeFidelityCheck} DOES report this answer — the repeated code is its own
+	 * issue #338 rule (ADR Decision 59) and it logs into this same package. That WARN is what shows
+	 * the capture is live, so this case cannot pass vacuously; the second half is the control that
+	 * shows the silence is the floor's doing and not the arrangement's.
+	 */
+	@Test
+	public void theCapturedShapeOfIssue338IsBelowTheFloorAndTheSameSentenceWithoutItIsReported() {
+		RecordMapping record = issue338Finding();
+		TestableService local = newService(issue338Chart);
+		String sentence = findingSentence(record);
+		String code = parenthesisedCode(sentence);
+		String repeated = sentence.replace("(" + code + ")",
+				"(" + code + ", " + code + ", " + code + ", " + code + ")");
+		String marker = " [" + record.getIndex() + "].";
+
+		local.setLlmProvider(answering(LEAD + truncateAllergen(repeated) + marker));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			local.search(patient(), ISSUE_338_QUESTION);
+			assertFalse(capture.describeAll().isEmpty(),
+					"the capture must receive the pipeline's own lines, or this passes vacuously");
+			assertFalse(warnStating(capture, PROSE_WARN),
+					"with the repeated code cutting every run below the floor the prose check states "
+							+ "nothing, whatever the allergen is spelled. Captured: "
+							+ capture.describeAll());
+		}
+
+		local.setLlmProvider(answering(LEAD + truncateAllergen(sentence) + marker));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			local.search(patient(), ISSUE_338_QUESTION);
+			assertTrue(warnStating(capture, PROSE_WARN, "[" + record.getIndex() + "]"),
+					"the control: collapse the repetition and the same sentence IS reported, so the "
+							+ "silence above is the floor and not this arrangement. Captured: "
+							+ capture.describeAll());
+		}
+	}
+
+	/**
+	 * And where the rest of the reproduction IS faithful, the truncated name is what decides. The pair
+	 * differs in nothing else: the same record sentence, reproduced to its own end both times.
+	 *
+	 * <p>This is what a report can and cannot be read as. It does NOT say a report means the answer
+	 * mangled a name — an answer that spells the name correctly and then carries on in its own words
+	 * is reported too, which
+	 * {@link #search_shouldReportAnAnswerThatSubstitutesItsOwnWordsInsideACopiedSentence} pins. It
+	 * says the check is able to separate the two where the answer diverges in nothing else.
+	 */
+	@Test
+	public void aTruncatedDrugNameDecidesTheReportWhereTheRestOfTheReproductionIsFaithful() {
+		RecordMapping record = issue338Finding();
+		TestableService local = newService(issue338Chart);
+		String sentence = findingSentence(record);
+		String marker = " [" + record.getIndex() + "].";
+
+		local.setLlmProvider(answering(LEAD + sentence + marker));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			local.search(patient(), ISSUE_338_QUESTION);
+			assertFalse(capture.describeAll().isEmpty(),
+					"the capture must receive the pipeline's own lines, or this passes vacuously");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"the record's own sentence reproduced whole states nothing the record does not. "
+							+ "Captured: " + capture.describeAll());
+		}
+
+		local.setLlmProvider(answering(LEAD + truncateAllergen(sentence) + marker));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			local.search(patient(), ISSUE_338_QUESTION);
+			assertTrue(warnStating(capture, PROSE_WARN, "[" + record.getIndex() + "]"),
+					"shorten the allergen and nothing else, and it is reported. Captured: "
+							+ capture.describeAll());
+		}
+	}
+
+	/** The cross-reactivity finding #338's answer opens on, from the real injector over the shipped
+	 *  knowledge base. Its premises are asserted rather than assumed: every slice below reads this
+	 *  text, and a KB refresh that changed the sentence would otherwise make the cases assert nothing.
+	 *  The chart is held so the service serves the record the answers cite. */
+	private RecordMapping issue338Finding() {
+		issue338Chart = DrugReferenceTestSupport.injectedAllergyFindingChart(ISSUE_338_QUESTION,
+				Arrays.asList("dexamethasone", "hydrocortisone"),
+				Arrays.asList("Ibuprofen", "Celecoxib", "Dexamethasone", "Diclofenac", "Hydrocortisone",
+						"Prednisone", "Budesonide", "Methylprednisolone"));
+		RecordMapping record = DrugReferenceTestSupport.safetyFindingIn(issue338Chart);
+		assertTrue(record.getText().contains(ALLERGY_TO),
+				"the premise: the first injected finding is the recorded-allergy cross-reactivity one, "
+						+ "which is the sentence #338's answer opens on. Was: " + record.getText());
+		assertTrue(record.getText().contains(DrugReferenceInjector.STRENGTH_WITHHOLD),
+				"the premise: it ends with the appended strength clause, which the record-sentence exit "
+						+ "keeps out of the comparison. Was: " + record.getText());
+		return record;
+	}
+
+	/** The finding's own sentence: its detail with the record prefix and the appended clause removed.
+	 *  Sliced from the record at run time rather than transcribed, so the cases cannot drift from the
+	 *  dataset. */
+	private static String findingSentence(RecordMapping record) {
+		String text = record.getText();
+		String detail = text.substring(0, text.indexOf(DrugReferenceInjector.STRENGTH_WITHHOLD));
+		return detail.substring(detail.indexOf(": ") + 2);
+	}
+
+	/** The token the record parenthesises — its class code, taken as the record's own text between its
+	 *  first brackets. Slicing, not a second spelling of {@code ClassCodeFidelityCheck}'s pattern:
+	 *  nothing here decides what a class code LOOKS like. */
+	private static String parenthesisedCode(String sentence) {
+		int open = sentence.indexOf('(');
+		int close = sentence.indexOf(')', open);
+		assertTrue(open > 0 && close > open, "no parenthesised code in " + sentence);
+		return sentence.substring(open + 1, close);
+	}
+
+	/** {@code sentence} with the allergen it names shortened by its last letter — #338's own
+	 *  {@code Dexamethason} for {@code Dexamethasone}, derived from the record rather than typed. */
+	private static String truncateAllergen(String sentence) {
+		int at = sentence.indexOf(ALLERGY_TO) + ALLERGY_TO.length();
+		int end = sentence.indexOf(' ', at);
+		assertTrue(at > ALLERGY_TO.length() && end > at, "no allergen named in " + sentence);
+		String allergen = sentence.substring(at, end);
+		return sentence.substring(0, at) + allergen.substring(0, allergen.length() - 1)
+				+ sentence.substring(end);
 	}
 
 	/** The finding's own text from its first word up to and including the first token equal to

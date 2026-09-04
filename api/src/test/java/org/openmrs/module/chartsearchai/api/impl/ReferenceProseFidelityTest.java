@@ -809,10 +809,9 @@ public class ReferenceProseFidelityTest {
 	 * <p><b>The clause, against a two-row slice — which is not the whole capture against the whole
 	 * chart, and the gate differs.</b> Here nothing of the record survives at the floor, so the check
 	 * declines before comparing. On the full six-clause answer over the arrangement ADR Decision 59
-	 * describes and with its markers remapped onto that chart, its sixth clause DOES reproduce one
-	 * other finding's record past the floor, so the check compares and finds no divergence — the
-	 * truncated allergen still sitting in runs of eight words and seven, under the floor. Two gates,
-	 * one silence, and the section says which is which.
+	 * describes, its sixth clause DOES reproduce one other finding's record to the floor, so the check
+	 * compares and finds no divergence — the run the truncated allergen ends being seven words, under
+	 * the floor. Two gates, one silence, and the section says which is which.
 	 *
 	 * <p>WHICH silence it is, asserted rather than assumed, as the three declining cases above do.
 	 * It captures the check's own logger and not {@link #PACKAGE}, which the other silence cases

@@ -105,8 +105,9 @@ public class SlicedReferenceRowProvenanceTest {
 		}
 	}
 
-	/** @return the shipped row filed under {@code id}, failing rather than returning null so an id the
-	 *          dataset does not carry is a named failure and not a silent pass. */
+	/** @return where {@code id} sits among the shipped dataset's rows, so a slice can be held to their
+	 *          order as well as to their content — its metadata note is free to state that order, and
+	 *          nothing else here would notice two rows swapped. */
 	private static int shippedPosition(JsonNode shipped, String id) {
 		int at = 0;
 		for (JsonNode row : shipped.path("drugs")) {
@@ -118,6 +119,8 @@ public class SlicedReferenceRowProvenanceTest {
 		throw new AssertionError("the shipped knowledge base carries no row with id " + id);
 	}
 
+	/** @return the shipped row filed under {@code id}, failing rather than returning null so an id the
+	 *          dataset does not carry is a named failure and not a silent pass. */
 	private static JsonNode drugRow(JsonNode shipped, String id) {
 		for (JsonNode row : shipped.path("drugs")) {
 			if (id.equals(row.path("id").asText(null))) {

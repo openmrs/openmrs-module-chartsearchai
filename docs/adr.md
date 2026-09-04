@@ -80,6 +80,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 72: A finding about a medication the patient is already taking states a call about that medication](#decision-72-a-finding-about-a-medication-the-patient-is-already-taking-states-a-call-about-that-medication)
 - [Decision 73: A condition rule's bare-containment match is corroborated by a word boundary, not by a resolution](#decision-73-a-condition-rules-bare-containment-match-is-corroborated-by-a-word-boundary-not-by-a-resolution)
 - [Decision 74: A divergence the prose check finds is stated on the response, not only in the log](#decision-74-a-divergence-the-prose-check-finds-is-stated-on-the-response-not-only-in-the-log)
+- [Decision 75: A javadoc pointer that no longer resolves is a compile error, checked by the compiler that already reads it](#decision-75-a-javadoc-pointer-that-no-longer-resolves-is-a-compile-error-checked-by-the-compiler-that-already-reads-it)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -3319,11 +3320,11 @@ Every figure produced by driving production code — `DdiDrugReferenceSource.par
 
 ## Decision 50: An unmapped order's codes are narrowed to the presentation the chart records
 
-**Status: Accepted** (August 2026) — implemented, issue [#234](https://github.com/openmrs/openmrs-module-chartsearchai/issues/234). Amends [Decision 31](#decision-31-one-shared-class-choice-for-both-arms)'s first rejected alternative.
+**Status: Accepted** (August 2026) — implemented, issue [#234](https://github.com/openmrs/openmrs-module-chartsearchai/issues/234). Amends [Decision 31](#decision-31-name-the-class-that-explains-the-relationship-not-the-first-one-shared)'s first rejected alternative.
 
 ### Context
 
-[#228](https://github.com/openmrs/openmrs-module-chartsearchai/issues/228) gave the duplicate-therapy class arm a second leg, so it reaches an active order the concept dictionary mapped to no ATC code by resolving the order's NAME against the reference dataset. That left the two legs comparing on two different authorities. A dictionary-**mapped** order is compared on the one code the dictionary published for its concept — a specific presentation. An **unmapped** one is compared on every code the dataset files its substance under, which covers every route that substance is marketed as. `DrugSafetyValidator.sharedClass` prefers a subgroup that is not locally applied ([Decision 31](#decision-31-one-shared-class-choice-for-both-arms), issue #161), so the systemic one always won.
+[#228](https://github.com/openmrs/openmrs-module-chartsearchai/issues/228) gave the duplicate-therapy class arm a second leg, so it reaches an active order the concept dictionary mapped to no ATC code by resolving the order's NAME against the reference dataset. That left the two legs comparing on two different authorities. A dictionary-**mapped** order is compared on the one code the dictionary published for its concept — a specific presentation. An **unmapped** one is compared on every code the dataset files its substance under, which covers every route that substance is marketed as. `DrugSafetyValidator.sharedClass` prefers a subgroup that is not locally applied ([Decision 31](#decision-31-name-the-class-that-explains-the-relationship-not-the-first-one-shared), issue #161), so the systemic one always won.
 
 The reported consequence: an unmapped `Hydrocortisone cream 1%` was named as a co-medication in an `H02AB` systemic-corticosteroid duplicate-therapy chip, while the same order mapped to `D07AA02` correctly says nothing. Mapping an order **more** correctly made the module quieter, and the chip an implementer saw was the wrong one of the two.
 
@@ -3350,7 +3351,7 @@ Measured impact per site over the shipped knowledge base (substances filed there
 
 ### The question is asked of the SUBSTANCE, over every order that names it
 
-A partner is keyed on `DrugReference.substanceGroupKey()`, so two orders of one substance are ONE co-medication ([Decision 31](#decision-31-one-shared-class-choice-for-both-arms)'s neighbour, issue #186) and `alreadyACoMedication` skips the second before its terms are ever read. Resolving the narrowing from the order that reached the partner first therefore let `OrderService`'s list order decide the classification for both. Measured through the real `validate` over `ddi-contra-route-variants.json`, a patient on an unmapped `Hydrocortisone cream 1%` recorded `Topical` **and** an unmapped `Hydrocortisone 20mg tablet` recorded `Oral administration`, asked about dexamethasone: cream first raised nothing, tablet first raised the `H02AB` chip. The patient is on systemic hydrocortisone in both.
+A partner is keyed on `DrugReference.substanceGroupKey()`, so two orders of one substance are ONE co-medication ([Decision 31](#decision-31-name-the-class-that-explains-the-relationship-not-the-first-one-shared)'s neighbour, issue #186) and `alreadyACoMedication` skips the second before its terms are ever read. Resolving the narrowing from the order that reached the partner first therefore let `OrderService`'s list order decide the classification for both. Measured through the real `validate` over `ddi-contra-route-variants.json`, a patient on an unmapped `Hydrocortisone cream 1%` recorded `Topical` **and** an unmapped `Hydrocortisone 20mg tablet` recorded `Oral administration`, asked about dexamethasone: cream first raised nothing, tablet first raised the `H02AB` chip. The patient is on systemic hydrocortisone in both.
 
 `DrugSafetyValidator.codesForThisSubstancesPresentations` asks it of the substance instead, over every dictionary-unmapped order that names it. **One presentation this module cannot EXPRESS declines for the whole substance**, rather than the union of the sites the others name — and the arrangement that pins that is a second order recording a bare dose form or nothing at all, not one recording `Oral administration`, which `ROUTES_OF_ENTRY` refuses a step earlier: the orders are presentations of one drug the patient is on, so an order this module cannot place is a presentation it cannot rule out. Failing the other way would let a topical cream silence the tablet beside it. Where every such order is one the data can express, the narrowing is the union of their sites.
 
@@ -3374,7 +3375,7 @@ Absence is not enough where a systemic route's recorded name **contains** a site
 
 - **Suppress the co-medication when the module cannot attribute the route.** That would silence every unmapped order of the 157 substances the shipped knowledge base files on both sides of `isLocallyAppliedAtcCode`, on no positive evidence, in the direction a safety net must not fail. Declining leaves today's answer instead, and this rule can only ever remove codes, never a partner.
 - **Read the order's NAME for the site.** `UnmappedOrderClassPartnerTest.thePartnerIsNamedByTheRowTheORDERRecords` pins a chip for an order literally named `Hydrocortisone (topical)`, and a drug name carries a presentation word for many reasons. The narrowing is decided by what the chart RECORDS as the administration, and that case is untouched.
-- **Apply it inside `sharedClass`.** That method compares two code sets and has four callers; the narrowing belongs where an order is turned into codes, not where codes are compared. Applying it there would use the same evidence twice and once out of reach of the order it came from — and would still leave the question-driven half of that arm choosing by another rule, which is what [Decision 31](#decision-31-one-shared-class-choice-for-both-arms) rejected route-matching for and still holds.
+- **Apply it inside `sharedClass`.** That method compares two code sets and has four callers; the narrowing belongs where an order is turned into codes, not where codes are compared. Applying it there would use the same evidence twice and once out of reach of the order it came from — and would still leave the question-driven half of that arm choosing by another rule, which is what [Decision 31](#decision-31-name-the-class-that-explains-the-relationship-not-the-first-one-shared) rejected route-matching for and still holds.
 
 ### Trade-offs
 
@@ -5481,3 +5482,1159 @@ What it decided, in three findings. **The hazard is real and clinical**: `liver`
 **It does not close #337.** The answer's prose is still degraded; the module states that it is. A clinician reads a frontend, and rendering this key is a change in `openmrs-esm-chartsearchai` — the same split this repository already records for the other half of [#201](https://github.com/openmrs/openmrs-module-chartsearchai/issues/201). The PR refs the issue rather than closing it.
 
 **And it inherits every limit of the check it publishes.** Decision 61's "What this cannot see" is unchanged and is now, for the first time, a limit on something a client renders: an elision written with three ASCII dots, a divergence inside a reproduction shorter than twelve words, a gap read as a sentence end. **More than one changes CHARACTER rather than merely audience, and Decision 61 has been amended at each.** Where two cited records diverge at one answer position the second is dropped — a tie-break between two handles in a log line, now a citation index a client is not shown. And the check's own failure branch, defence in depth while nothing read it, now decides a published value; nothing pins that either, and no path is known to deliver it to a client, the line it guards being re-read where a throw errors the request instead. That is the argument for the README's second prohibition — an absent entry is not a certificate — and it is why publishing the measurement is worth more than publishing a per-answer verdict this check could not honestly make.
+
+## Decision 75: A javadoc pointer that no longer resolves is a compile error, checked by the compiler that already reads it
+
+**Status: Accepted** (September 2026) — implemented, issue [#262](https://github.com/openmrs/openmrs-module-chartsearchai/issues/262).
+
+### Context
+
+The javadoc in this repository is not commentary; it is where the design record lives. `CLAUDE.md`'s
+own "Documenting a decision" section says so — a rule belongs in that file, its evidence belongs
+here or in the javadoc of the member it constrains — and
+[#243](https://github.com/openmrs/openmrs-module-chartsearchai/issues/243) deliberately replaced
+copied figures with pointers to whichever member owns each one, on the argument that a copied number
+rots visibly while a pointer does not.
+
+Nothing resolved those pointers. `grep -n "javadoc\|checkstyle\|doclint" pom.xml api/pom.xml
+omod/pom.xml` returned nothing: no `maven-javadoc-plugin`, no doclint, no checkstyle. So a `{@link}`
+naming a renamed or deleted member compiled, passed the whole suite, and passed CI — and rendered as
+plain text, which reads as authoritative rather than as stale.
+
+**The pre-existing breakage was measured before anything was designed, because the ticket asked for
+that count first and the answer decides whether a gate can be switched on in the same change.** Over
+`5253c7d2`, with `maven-javadoc-plugin` 3.11.2 at `-Ddoclint=reference -Dshow=private`. **Every
+figure in this decision names the sha it was taken on and never "the merge base"**, because a later
+merge of `main` moves what `git merge-base origin/main HEAD` answers — it did, at `6abd4aec`, and
+`5253c7d2` had been this branch's merge base when these measurements were made:
+
+| source root | goal | errors |
+| --- | --- | --- |
+| `api/src/main/java` | `javadoc` | 1 |
+| `api/src/test/java` | `test-javadoc` | 2 |
+| `omod/src/main/java` | `javadoc` | 0 |
+| `omod/src/test/java` | `test-javadoc` | 0 |
+
+`javac -Xdoclint:reference` over both api roots in one invocation (classpath from
+`dependency:build-classpath -Dmdep.includeScope=test`) reports the same three sites as compilation
+ERRORS — re-derived at `5253c7d2` on JDK 21, where those roots hold 254 files and the compiler reports
+exactly 3 errors, at `SubjectMatterScopedContraindicationTest:81`, `ArchitectureGuardTest:275` and
+`PipelineSettings:49`, with 0 in the two `omod` roots. Run on five JDKs — 11, 17, 21, 24 and 25, so
+the whole CI matrix and two beyond it — the site list came back identical every time; that sweep was
+taken on `6582f2c2`, which is where this table was first measured and is two commits behind
+`5253c7d2`, and the three sites are the same on both. **The label is corrected rather than the
+figure**, and it is corrected here because this decision warns later on about exactly this: a count labelled with a
+tree it was not taken on. Five is what was MEASURED rather than what is installed; the box carries
+more, including a JDK 8 that cannot build this module at all. Three is small enough to repair in the
+same change, so both halves ship.
+
+The three, and what each one is:
+
+- `PipelineSettings.java`, `{@link ChartSearchAiUtils#getStringGlobalProperty}`. The method exists;
+  the class is in another package and the file does not import it — `ChartSearchAiConstants` is
+  imported and `ChartSearchAiUtils` is not. **A pointer can die without anything being renamed.**
+- `ArchitectureGuardTest.java`, `{@link #loadAllSources}`. No such method — the loader is
+  `getSourceCache()`. The ticket's own scenario, already realised, in a test whose javadoc
+  `CLAUDE.md` cites.
+- `SubjectMatterScopedContraindicationTest.java`, `{@link SubjectMatter}` — a `private static final`
+  class nested in `DrugSafetyValidator`. **The rule here was measured twice and the first measurement
+  was wrong, which matters because it chose the fix.** What holds, on JDK 11, 17, 21 and 25:
+
+  | form | private nested | package-private nested |
+  | --- | --- | --- |
+  | `SubjectMatter` (simple name) | does not resolve | does not resolve |
+  | `DrugSafetyValidator.SubjectMatter` (enclosing-qualified) | does not resolve | resolves |
+  | the **fully-qualified** `org.openmrs.module.chartsearchai.reference.DrugSafetyValidator.SubjectMatter` | resolves | resolves |
+  | a `private` MEMBER of it, fully qualified | resolves | resolves |
+
+  So the simple name is a scope failure and the enclosing-qualified form is subject to accessibility,
+  but the **fully-qualified form resolves regardless** — verified on the real file, where the
+  fully-qualified `{@link}` compiles clean and `javadoc -private` renders it as a working hyperlink.
+  The first pass measured only the enclosing-qualified form, concluded that the group "enforces
+  resolvable AND accessible", and wrote `{@code}` at that site on the strength of it. That was a
+  design record stating a compiler rule that does not exist, and it cost a navigable pointer in the
+  file where the design record lives.
+
+Two of the three are in test sources. That is not incidental — it is the argument for where the
+check is configured.
+
+**A second, independent hole came out of this change's own refutation pass**, and the ticket's
+proposed instrument would not have closed it either. A javadoc block that attaches to no declaration
+is DISCARDED, and doclint says nothing whatever about the pointers inside it. Three blocks were in
+that state, each arising the same way — a member inserted above the comment written for the one
+below it:
+
+- `LlmProvider.parseEntailmentVerdict`'s block — pointers at `ChartAnswerResponseFormat`,
+  `parseYesNo` and `extractResponse`, none of them resolved by anything — orphaned by
+  `VERDICT_TOKEN`'s own one-line comment.
+- `CitationGroundingVerifier.LEADING_ITEM_SEPARATOR`'s, orphaned by `MAX_ENUMERATION_ITEM_WORDS`'s.
+- `ModuleSourceRoot.apiRoot()`'s, orphaned by `repoRoot()`'s.
+
+Proved blind rather than reasoned blind: renaming `{@link #parseYesNo}` inside the orphaned block to
+a name that exists nowhere left the error count at three, not four.
+
+**What detaches a block was then measured on probes rather than assumed, and it is more than one
+shape.** A block followed by another javadoc block; a block followed by no declaration before the
+enclosing brace or the end of the file; a block stranded BETWEEN a declaration's annotations and
+the declaration itself, which javac ignores because a doc comment has to precede the whole
+declaration, annotations included; a block followed by an INITIALISER block, static or instance,
+which is not a declaration; and a block followed by an `import`, which javac attaches nothing to and
+— unlike the `package` statement — does not even warn about. A four-pointer probe of the first two
+returned three errors; a probe carrying a block on each side of an annotation returned one, for the
+block ABOVE it; a probe carrying a dead pointer above a static initialiser, above an instance
+initialiser and above an `import` returned no diagnostic of any kind for any of the three while
+reporting the same pointer on a method in the same file. The annotation shape was found by accident —
+a verification probe of this very change inserted a comment after a controller's `@Controller` and
+`@RequestMapping` lines and then reported the gate as not reaching `omod`; the gate was fine and the
+probe was dangling. An intervening line comment or plain block comment detaches nothing, but neither
+rescues a block from any of them. Only the first shape had instances here.
+
+**No count of the shapes is published, and this paragraph published "three" for one round.** The
+last two came out of round 1 of the PR's own review, on `a6416847`, and both were holes of exactly
+the kind this check exists to close: unread by doclint, unreported by every check in the class, and
+silent. The initialiser one is adjacent to every `static` block in this repository: each is
+immediately preceded by the field it fills, and most of those fields carry a javadoc block, so an
+initialiser inserted above one is the same "member inserted above the comment written for the one
+below it" defect and would have taken that javadoc out of the gate. The scanner's two new arms are
+pinned by `SHAPES` rows of their own — `BeforeStaticInitialiser`, `BeforeInstanceInitialiser`,
+`BeforeBareStaticThenBrace`, `BeforeImport` (a `wholeFile` row: the class-body wrapper cannot put
+anything above an import) and the negative `BareStaticThenDeclaration`, which is what stops the
+`static` arm reading a declaration split over two lines. Mutate an arm and read which rows redden
+rather than trusting this list.
+
+**The same round found two of `isAnnotationAlone`'s three character exclusions unpinned**, and both
+prevent a FALSE POSITIVE — the rule telling an author to move documentation javac has already read,
+i.e. a red build on legal code. Each could be deleted with the whole suite green, and they got a row
+apiece: `AnnotatedTypeOpenThenBlock` for the body brace (an annotated type whose brace is on the
+annotation's own line, whose first member's javadoc javac reads) and
+`AnnotatedEnumConstantThenBlock` for the comma (an annotated enum constant — the same line shape as
+the module's `@RequestParam` parameter lines, and likewise annotating itself). **The next round found
+the exclusions themselves wrong**, for the reason the bullet above records, and the rule is now one
+residue test with rows on both sides of it: those two and
+`AnnotatedDeclarationOnOneLineThenBlock` where javac reads the block,
+`AnnotationArgumentCarriesABrace` and `AnnotationArgumentCarriesATerminator` where it does not, and
+`AnnotatedDeclarationWithATrailingNoteThenBlock` which is what refuses the last-character version of
+the same fix. Mutate the residue test and read which rows redden rather than trusting this list.
+`isImportDeclaration`'s own whitespace clause was unpinned in the same way and has
+`EnumConstantNamedLikeAnImport` now — an enum constant is the one place a declaration whose
+identifier starts with those six characters can begin a content line.
+
+**What doclint does not read is a METHOD BODY, and the first version of this said something narrower
+and wrong.** It named "a local declaration" and "an anonymous class's member" as the two unread
+scopes; an anonymous class's member IS read where the anonymous class sits in a FIELD initialiser,
+and the probe behind the original claim had put it inside a method. Measured on JDK 11, 17, 21 and
+25 — unread: a local declaration, a member of a LOCAL class, and a member of an anonymous class
+declared inside a method body. Read: a nested class's members, a `private` nested class itself, and
+an anonymous class's members in a field initialiser.
+
+### Decision
+
+**`-Xdoclint:reference` goes to `javac`, in the default build, through the root pom's
+`<build>/<pluginManagement>` entry for `maven-compiler-plugin`, at plugin level** — the entry that
+already carries `<source>`, `<target>` and `<encoding>`. **That position is the decision and not a
+detail**, which this change learned the hard way — see the POM-check bullet below.
+Both source roots of both reactor modules are covered, proved by planting a dead pointer in each and
+reading which goal fails. `llama-server-natives` inherits the same parent from outside the reactor
+and carries no java source, so it is unaffected either way.
+
+The three dead references are repaired in the same change — a fully-qualified link for the
+cross-package one, the real method name for the renamed one, and a fully-qualified link for the
+private nested class, which needs no visibility change and stays navigable. **The three orphaned
+blocks are moved to the members they were written for**, which is what puts their pointers inside
+the gate's corpus; deleting one would have satisfied the same check and lost the documentation.
+
+**Every source file's MPL licence header becomes a block comment rather than a javadoc block.** That
+is this change's own doing: the header sits before the `package` statement, so it documents nothing,
+and enabling doclint makes javac say so once per header-bearing file. **274 of the 276 sources at
+`5253c7d2` carry that header**, one character each; the two that carry none are pre-existing and
+untouched. This change adds TWO more sources, each carrying the block-comment form — the api-side guard, and
+its omod-side sibling, which arrived in round 9 of this review. (A sentence here said "one more
+source", written before that sibling existed and left standing beside the very 274/276 pair this
+paragraph warns about.) Do not
+read a warning COUNT off a build to check this — javac caps warnings per compilation (default
+`-Xmaxwarns` 100), so a printed total is an artefact of the cap rather than a count of anything.
+Measured over `5253c7d2`'s two api source roots with
+`javac -proc:none -Xdoclint:reference -Xmaxwarns 100000` on JDK 21: **252** warnings, all of them
+`documentation comment not expected here`, one per header-bearing file in those roots, of which the
+default cap prints 100 and says so. Note that `-Xlint:none` suppresses them on that JDK, so a run
+carrying it counts zero. The figure carries its tree and its command deliberately — two earlier
+drafts published 250 and 249, each true of a different base this change passed through, and neither
+named the base it was taken on. Re-derive it against `5253c7d2` — named as a sha and not as "the
+merge base", which is no longer what that command answers — rather than quoting it.
+
+**This decision is the ONE home of the 274/276 pair, and for one review round it was not.**
+`noFileOpensWithAJavadocBlockBeforeItsPackageStatement`'s javadoc carried a second copy reading "271
+of this module's 273 sources" — 274 and 276 with the three files that also took non-header edits
+dropped from both halves — so two figures for one quantity disagreed inside one commit, in the change
+whose whole thesis is that a stale pointer reads as authoritative. The warning in the sentence above
+was written and did not reach the copy beside it. The guard now points here rather than restating a
+count that tracks the code.
+
+**A suppression does exist, and the first version of this decision said it did not.** `-nowarn`
+silences the dangling-comment warning while keeping every reference ERROR, measured on JDK 11, 17, 21
+and 25; `-Xlint:none` does the same except on 25. What was written here first is true only in part —
+`-Xlint:-dangling-doc-comments` really is `error: invalid flag` on 11/17/21, but it is a no-op on the
+JDKs that accept it, and it was never the only candidate. **The headers were changed anyway, for a
+reason that survives the correction**: `-nowarn` is blanket, so it would hide every other javac
+warning in the build as well, and these builds carry real ones. Changing the header removes the
+warning at its source and leaves the rest visible.
+
+Scope is doclint's `reference` group. **That group is wider than `{@link}` and the wider contract is
+what ships**: `@param` naming a parameter that does not exist and `@return` on a void method are
+errors too, both measured. **No enumeration of its messages is published here, deliberately** — the
+group has fifteen keys, several of them errors, and an incomplete list was a live defect (below). It
+is NOT `missing`, a doc-coverage mandate nobody asked for, and NOT `html`/`syntax`.
+
+`JavadocReferenceGuardTest` pins all of it, because the change is one line of XML whose removal
+nothing else would notice — #232's lesson turned on this PR itself. Its checks answer separate
+questions and none subsumes another; **each is mutation-checked, so mutate one and read the failures
+rather than trusting a list here.** One of them is `theScannerAgreesWithTheCompilerAboutWhatIsAttached`,
+a table of source shapes each declaring what it IS, against which BOTH javac and the scanner are
+held. It exists because the attachment heuristic was got wrong repeatedly — false positives on legal
+code and false negatives on real orphans, in both directions, every one of them green under the whole
+suite — and arguing the rule in prose is what kept failing. No count of those attempts is published,
+because every count of them written during this change went stale in the next round. The ones that had
+to be rewritten after a fresh review are named rather than counted — every one of them was green while
+the gate was open, which is the only property they share:
+
+- **The POM checks read the UNION of three POMs' plugin-level arguments**, which is the effective
+  configuration of no module. With the flag moved into `api/pom.xml`'s own `<plugins>` — a plausible
+  "let me scope this" edit — a dead reference in `omod/src/main/java` compiled, `mvn -o clean
+  install` reported BUILD SUCCESS, and nothing in the guard noticed. Placement is asserted directly
+  now, so that mutation reddens the placement check and the effect check; no other check reads a POM
+  for its ARGUMENTS — the source walks read the root pom since the round below, but only for its
+  `<modules>` — so none of them could have seen it either way.
+- **The scanner's annotation arm was OFF for any annotation whose own argument list carried a brace,
+  a terminator or a trailing comma**, which the three character exclusions it was written as could not
+  tell from a declaration sharing the line. That is
+  `@ExceptionHandler({ ContextAuthenticationException.class, APIAuthenticationException.class })` on
+  the module's single controller, `@ValueSource(booleans = { false, true })` and every
+  `@ParameterizedTest(name = ...)` in the suite — so a block stranded after one of those was invisible
+  to doclint AND unreported by every check in `JavadocReferenceGuardTest`, in exactly the "member
+  inserted above the comment written for the one below it" shape this change documents as the only
+  one with real instances here.
+  Measured by planting one after the controller's `@ExceptionHandler`: `mvn -o clean install
+  -DskipTests` reported BUILD SUCCESS and every check passed. The rule now asks what is LEFT of the
+  line once the annotations and their balanced argument lists are consumed. Testing the LAST character
+  instead was rejected: it closes the hole and opens a false positive, since a trailing `// note` on an
+  annotated declaration moves the terminator off the end of the line, and a false positive here is a
+  red build on legal code. Both directions are rows of the shapes table now.
+- **The source roots, the POM list and the api-only root list were hand-written literals nothing
+  cross-checked against the repository.** Deleting one line — "let me scope this to api" — took a whole
+  reactor module out of the two corpus walks with every check green and a planted orphan unreported,
+  and the flag cannot compensate because an orphaned block is invisible to doclint by construction.
+  All three are derived from the root pom's `<modules>` now; the hand-written map keeps the per-root
+  ANCHOR files and nothing else, and an anchor naming a root the reactor does not have fails too.
+  **Derived is not enough on its own, and for one review round the POM list had only that** — a later
+  round narrowed `poms()` back to the root pom alone, the same three-line deletion, and the whole
+  suite stayed green while a `<compilerArgs>` override in `omod/pom.xml` (which REPLACES the managed
+  list) dropped the gate for the one module `everyJavadocReferenceInTheApiModuleResolves` cannot
+  reach — a dead pointer in `omod/src/main/java` then compiled and the build reported success, which
+  is this decision's own headline defect reinstated. So all three are also CROSS-CHECKED against the
+  repository, each in the direction its own narrowing is invisible in: the api roots and the POM list
+  ask the FILESYSTEM whether the derivation kept everything it names, and the source roots
+  cross-check their anchors both ways. `llama-server-natives` is named as a literal exemption in the
+  POM check rather than excused by a rule, so promoting it to a real module has to say so there.
+- **The pre-`package`-statement rule had no ground truth and fired on `package-info.java`**, where a
+  javadoc block is the standard and only way to document a package. Measured on JDK 21: in that file
+  javac reports `error: reference not found` for a dead pointer and NO `documentation comment not
+  expected here` warning, while the same block in an ordinary source reports both — so the rule's
+  premise was false there, and the remedy its message prints (`/*`) silences a pointer doclint was
+  resolving, which is #262's own defect reinstated on the guard's instruction. Verified by applying it.
+  Every shapes row now declares that rule's answer for its file as well, because this repository
+  carries no `package-info.java` and the corpus walk can therefore say nothing about it. A later
+  round found the rule's other clause unpinned for the same reason — no file here opens with the
+  EMPTY block comment `/**/`, which javac finds no doc comment in, so dropping the clause reddened a
+  clean build and printed a remedy (`/*`) the file had already followed. It is a row now too.
+- **An argument list was matched as a string prefix.** Two consequences, opposite in sign.
+  `-Xdoclint:all,-missing,-html,-syntax` enables the reference group perfectly well and was reported
+  as a removal, so a maintainer WIDENING the check would have been told they had removed it. And
+  `-Xdoclint:reference/public` — the group with an ACCESS qualifier — satisfied the prefix match
+  while silencing the gate for every non-public member, which is most of this module's design record.
+  It now reddens the two checks that put a declared argument list to the compiler.
+  **The real compiler is the oracle now**, at every declared block, over a probe whose dead pointer
+  sits on a `private` member.
+- **`-Xdoclint` has a SECOND qualifier, and the probes answered for a scope they were not in.**
+  javac takes `-Xdoclint/package:[-]<packages>` as an option of its own, so
+  `-Xdoclint/package:-org.openmrs.*` leaves `-Xdoclint:reference` in the managed list and checks
+  nothing this repository compiles. Both probes were in the unnamed package, which no package filter
+  written for this module can name, so on JDK 21 one added `<arg>` in the root pom's managed
+  `<compilerArgs>` — with a dead pointer planted in `omod/src/main/java` — gave BUILD SUCCESS,
+  exit 0, no `reference not found` printed at all, and seven checks with zero failures. Same defect
+  family as the access qualifier above: closed for one qualifier and left open for the other, and
+  reachable by one line of XML. **One package is not the fix either**, and the reason is the
+  option's own grammar — a trailing `.*` expands to the SUB-packages of the package named and NOT to
+  that package itself (measured on the same JDK), so a probe in `org.openmrs.module.chartsearchai`
+  alone stays checked under `-Xdoclint/package:-org.openmrs.module.chartsearchai.*` while every
+  other package of this build goes silent. The probes are written once per package the reactor's own
+  sources DECLARE now — derived from the corpus walk and cross-checked against each file's own
+  `package` statement, never a list — and one compile of that set reports which packages the
+  arguments actually reached, so the answer is a set of uncovered packages rather than a boolean.
+  **Three pins hold that placement**, because no POM here carries a package filter and nothing else
+  would notice the probes moving back: one package silenced on its own at each end of the corpus,
+  and one silenced as another package's sub-package, each derived from the corpus so that a rename
+  cannot redden a correct guard. The pins assert only that SOME package is seen to be silenced —
+  which packages a given spelling covers is javac's rule to define and this guard's to observe, and
+  a guard restating that rule would go green on its own reading of it, which is how the
+  unnamed-package probe passed five review rounds.
+- **`endOfArgumentList`, the balanced walk that annotation arm was rewritten as, was itself unpinned
+  by any shape.** Nesting, the literal skip and the `-1` refusal of a list left open on the line could
+  each be deleted — or the whole method replaced by the `indexOf(')')` its own javadoc says it is not
+  — with every check green, because no annotation argument list in this repository carries a nested
+  paren or a `)` inside a literal. So the fix in the bullet above was reinstatable in silence for
+  `@ParameterizedTest(name = "run(x)")` or `@Qualifier("a)b")`. One row per deletable clause now, and
+  the refusal is DECLARED as `UNATTACHED_AND_UNREACHED` — a missed orphan chosen deliberately over a
+  red build on legal code — so turning it into a guess reddens a row as well. **That took two rounds,
+  because the literal skip has three deletable clauses and was enumerated as two**: its backslash
+  clause had no row, so replacing it with `i += 1` left every check green while the arm went quiet on
+  `@Sep('\'')` — the walk ends the literal on the escaped quote, opens another on the real closing
+  one and answers -1. `AnnotationArgumentEscapesItsQuote` is that row. **`annotationResidue`, the
+  walk that CALLS it, then turned out to have three deletable clauses of its own and no rows at
+  all** — the `.` its identifier scan admits, without which a fully-qualified annotation name leaves
+  a residue, and the whitespace skips before and after the argument list, without which
+  `@Name ("x")` and `@Name("x") @Other` do. All three fail conservatively — residue left, arm quiet,
+  a real orphan missed, no build reddened — which is why they survived every check here, and none
+  has an instance in this repository.
+  `AnnotationNameIsFullyQualified`, `AnnotationSpacedBeforeItsArgumentList` and
+  `TwoAnnotationsOnOneLineThenBlock` are those rows; delete a clause and exactly its own row reddens.
+- **`failOnError` and `compilerId` were read only as plugin ELEMENTS, and maven-compiler-plugin
+  binds both to user properties.** Its descriptor declares
+  `<failOnError implementation="boolean" default-value="true">${maven.compiler.failOnError}</failOnError>`
+  and the matching `${maven.compiler.compilerId}` on BOTH the `compile` and `testCompile` mojos, in
+  3.13.0 (the version this build resolves) and in 3.15.0 alike. So three words in the root pom's own
+  `<properties>` dropped the whole gate: measured on this branch, JDK 21, with a dead pointer planted
+  in `omod/src/main/java`, `mvn -o clean install` printed `[ERROR] ... reference not found` and then
+  reported BUILD SUCCESS, exit 0, and `JavadocReferenceGuardTest` ran seven checks with zero
+  failures. Identical in effect to the `<failOnError>false</failOnError>` element the guard already
+  refused, and reachable by an edit that touches no plugin block — this decision's own headline
+  defect reinstated, from inside the repository, while the check whose name is "no compiler
+  configuration anywhere in these POMs drops the check" passed. The whole of that check hung off
+  `compilerPlugins`, which is why a reader of the OTHER position could not exist as a widening of the
+  element readers: a POM declaring no compiler plugin at all still sets both parameters. The
+  `compilerId` half fails loudly today for want of a plexus-compiler backend (verified: `No such
+  compiler 'eclipse'`, before any test runs) and is reported anyway, because that is a fact about the
+  plugin's dependencies rather than about this gate. `compilerUserPropertyOverrides` reads it through
+  the same `declaredUnderProjectOrProfile` as the module list, so a plugin's own `<properties>`
+  parameter — maven-surefire-plugin declares one, of type `java.util.Properties`, for its provider —
+  is not mistaken for the project's; both directions are pinned by synthetic POMs, because this
+  repository sets neither property, which is exactly why the omission was invisible. **What those
+  pins hold is the READER and not the call site**: with no POM here setting either property, deleting
+  the loop that asks leaves the check green, exactly as deleting either element-form loop beside it
+  does, and there is nothing to cross-check that against the way `poms()` cross-checks its list
+  against the filesystem. Stated rather than fixed. The same property set anywhere Maven reads that is
+  not one of these POMs — a `settings.xml` profile, the command line, `MAVEN_OPTS`, or a committed
+  `.mvn/maven.config` — remains outside every POM check, which is a blind spot this guard discloses.
+  **The line is the FILE and not the repository, and the guard's own wording drew it at the repository
+  until round 6**: `.mvn/maven.config` would be committed alongside these POMs and still unread, so
+  three words in a file this project does not yet have drop the gate exactly as three words in a
+  `<properties>` did.
+- **The reactor scope was read as a direct child of `<project>` alone.** A module Maven builds from a
+  `<profile>` was outside both corpus walks and outside every POM check without a line being deleted:
+  the same fail-open as the hand-written lists above, reached by MOVING the declaration rather than
+  removing it, and `compilerPlugins` already read document-wide for precisely this reason while the
+  module list did not. Both elements are read wherever the POM model allows them — under the
+  project's own element or a `<profile>`'s — and `<module>` is read as a DIRECT CHILD of a
+  `<modules>`, which is exactly the reach the profile case needs and no more. **A review round found
+  the first fix reading `<module>` itself document-wide, and that was too wide in a direction the
+  decision had called loud rather than wrong**: `<module>` is a real plugin parameter — moditect's
+  `add-module-info` takes `<configuration><module><moduleInfoSource>` — so a never-activated profile
+  carrying that plugin reddened two checks on a legal POM, each naming a "module" that was never one
+  and neither hinting that a plugin parameter caused it. That is the false positive
+  `customSourceDirectoriesIn` had already refused for the sibling element, so it is refused here too.
+  **Keying on `<module>`'s parent was half the fix, and the reason first given for it was wrong
+  about the plugin it cited** — that the shape was out of reach because "the parameter is spelled
+  `<module>` and not `<modules>`". The same goal is reported to take a plural parameter of the
+  WRAPPER's name for artifacts other than the project's own — reported by the review round that found
+  this, and not read off the plugin's descriptor here — and the wrapper was still found
+  document-wide, which is the part that was measured: a never-activated `<profile>` carrying
+  `<configuration><modules><module><artifact>` reddened `theCorpusCoversEveryModuleTheBuildCompiles`
+  and
+  `noOtherCompilerConfigurationDropsTheCheck` on a POM Maven builds without complaint, naming the
+  `<moduleInfoSource>` text as a module — the very failure the previous round had removed for the
+  singular form. The wrapper goes through `declaredUnderProjectOrProfile` now, shared with the
+  `<properties>` reader above for the same reason, so what puts either shape out of reach is the
+  wrapper's PARENT and not the two names being spelled differently. Both plugin-parameter shapes and
+  the profile case are asked of synthetic POMs — mutate `modulesIn` or
+  `declaredUnderProjectOrProfile` either way and read which half goes red. Narrower
+  and adjacent: `reactorSourceRoots` probes `src/main/java` and `src/test/java` by CONVENTION, so a
+  module declaring its own `<sourceDirectory>` contributes no root while that walk fails only where
+  EVERY module yields nothing — such a POM is REFUSED now rather than judged, the same answer a
+  `<compilerId>` gets. Both are asked of synthetic POMs, because this repository carries neither
+  shape, which is exactly why both readings were invisible. What is deliberately still not read is
+  `llama-server-natives/pom.xml`: it is a `<parent>` child that `<modules>` does not declare, so it
+  is outside the reactor `mvn install` drives and it carries no java source, and compiler
+  configuration there gates nothing.
+
+- **The guard read ONE of maven-compiler-plugin's five argument parameters, and the other four were
+  reachable from inside the very `<configuration>` this gate lives in.** The 3.13.0 descriptor
+  declares `compilerArgs` (a `List`), `compilerArgument` (a `String`, not deprecated),
+  `compilerArguments` (a deprecated `Map`) on both the `compile` and `testCompile` mojos, plus
+  `testCompilerArgument` and `testCompilerArguments` on `testCompile`. `compilerArgument` does not
+  REPLACE the managed list — the plugin APPENDS it — so one added line handed javac an argument
+  nothing read. Measured on this branch, JDK 21.0.6, plugin 3.13.0: with
+  `<compilerArgument>-Xdoclint/package:-org.openmrs.*</compilerArgument>` after `</compilerArgs>` and
+  a dead pointer planted in `omod/src/main/java`, `mvn -o clean install` exited 0 with not one
+  `reference not found` printed and this suite ran seven checks with zero failures — this decision's
+  headline defect reinstated, again, by an edit that moves no plugin block and touches no property.
+  The `testCompilerArgument` form does the same to both modules' TEST roots, which is where two of
+  the three dead references this change repaired actually lived. All five channels are read now, and
+  composed per configuration POSITION rather than per parameter.
+- **Reading one more parameter name is what this check kept receiving, and it is not the fix.** Round
+  5 found the `maven.compiler.failOnError` user property, round 6 the `-Xdoclint/package` qualifier,
+  round 7 four sibling argument parameters; each was closed by naming it, and each time the next one
+  was still reachable. **The world over compiler configuration in these POMs is CLOSED instead**: a
+  parameter these POMs set that is neither read as an argument channel, refused outright
+  (`failOnError`, `compilerId`), nor listed as unable to carry a javac argument (`source`, `target`,
+  `release`, `encoding` — the four these POMs use, and deliberately no more) is REFUSED, naming
+  itself. **That was called complete for the argument family and it is not; round 8 falsified it three
+  times over, and the sentence is left here with its correction rather than quietly rewritten.** What
+  it does hold is narrower and worth stating exactly: none of the five argument parameters is bound to
+  a user property, so an element inside a compiler `<configuration>` is the only position any of them
+  can act from — which makes the next unread PARAMETER visible, and says nothing about the next unread
+  POSITION. Three such positions are in the bullet below. It also newly refuses
+  `<fork>` plus `<executable>`, which hand the whole compilation to a binary of the POM's choosing —
+  so the property form of that pair is now read too, because refusing an element while ignoring the
+  property that sets the same parameter is the disagreement round 5 was about. The cost is friction:
+  a maintainer adding a fifth compiler parameter gets a red build until they say which list it
+  belongs in. That is the point of it.
+- **The `pluginManagement` entry pinned no plugin version, so the version that has to honour
+  `<compilerArgs>` was whatever Maven's super-POM supplied.** `<compilerArgs>` arrived in
+  maven-compiler-plugin 3.1 — read off the descriptors in the local repository: 2.5.1's declares no
+  parameter of that name, 3.1's declares it on both mojos — and **Maven ignores an unknown plugin
+  parameter in silence**, with no "Unknown parameter" diagnostic. Measured: `<version>2.5.1</version>`
+  added to that entry, dead pointer planted, exit 0, zero `reference not found`, seven checks green.
+  The entry pins 3.13.0 now (the version Maven 3.9.10's super-POM was supplying anyway, so the build
+  is unchanged), and the guard requires a `<version>` and requires it to be at least 3.1. What a POM
+  reader cannot say is whether that version actually PASSES the arguments to javac; the floor is the
+  whole of what these files can be asked. **That floor was asserted against the MANAGED entry alone
+  until round 8**, which is the bullet below.
+- **The closed world is closed over the DIRECT CHILDREN of a compiler `<configuration>`, and round 8
+  defeated the gate from three positions that are not among them.** Each was measured the same way — a
+  dead pointer planted in `omod/src/main/java`, `mvn -o clean install` exit 0, BUILD SUCCESS, zero
+  `reference not found` printed, the guard green — and each landed on `omod`, for a structural reason
+  and not by chance: `everyJavadocReferenceInTheApiModuleResolves` compiles the api corpus with
+  arguments it chooses itself, so what it LOOKS FOR is decided by its own literals and not by a POM —
+  which is not the same as a POM being unable to stop it running, the distinction round 9 turned on —
+  and `omod` had nothing of the kind.
+  (i) **A `<compilerArgs>` entry not spelled `<arg>`.** Maven maps a `List<String>` mojo parameter from
+  every child element regardless of tag name — the `<arg>` spelling is convention, not a rule Maven
+  applies — so `<compilerArg>-Xdoclint/package:-org.openmrs.*</compilerArg>` beside the managed
+  `<arg>` reached javac and was invisible: the reader looked for `<arg>` children, and the closed world
+  never looks INSIDE a channel. Round 6's qualifier defect, reinstated from one line inside the gate's
+  own element. (ii) **A child pom's own `<version>`.** A `<plugin>` element for maven-compiler-plugin
+  in `omod/pom.xml` pinning 2.5.1 overrides the managed version for that module, and the managed
+  `<compilerArgs>` becomes an unknown parameter Maven ignores in silence; `<version>` is a sibling of
+  `<configuration>` rather than a child, and such an element carries no `<configuration>` at all, so
+  every other reader returned empty for it. (iii) **`combine.self="override"` on an empty
+  `<compilerArgs/>`.** Maven's documented merge-control ATTRIBUTE replaces the managed list rather than
+  merging with it. An attribute is not an element, so the closed world cannot see it, and the element
+  composes to nothing, so no argument position was recorded either. The negative control matters: the
+  same element WITHOUT the attribute merges and the build fails as it should, so the guard refuses the
+  attribute and not the empty element. All three are read now — every element child of a channel; the
+  version floor at EVERY compiler-plugin declaration in these POMs, not only the managed one; and any
+  merge-control attribute inside a compiler plugin element, refused outright because this reader models
+  POM text and not Maven's merge.
+- **The real answer to that family is not a fifth reader, and this is where the change stops
+  enumerating.** `omod/src/test/java` now carries `JavadocReferenceOmodCorpusTest`, a sibling of
+  `everyJavadocReferenceInTheApiModuleResolves` living in the module it covers: it compiles
+  `omod/src/main/java` and `omod/src/test/java` with `-Xdoclint:reference` chosen by the test itself,
+  reading no build configuration to decide its arguments (not: no POM edit can stop it running — see
+  the round-9 bullet below), and fails loudly rather than skipping where it cannot run — a
+  root whose walk does not find its anchor file, a compiler that is not there, arguments javac rejects,
+  or a baseline compile that is already broken. **Proved against all three findings above**: with the
+  gate defeated by each in turn and a dead pointer planted in BOTH omod source roots, the build
+  reported success and this check reported both pointers. So the consequence of a fourth position
+  bearing on the ARGUMENT LIST is bounded — the POM readers would disagree with the build, which is a
+  defect worth reporting to a maintainer, instead of a module's pointers going unresolved with
+  everything green. **No completeness claim replaces the one it corrects.** It duplicates a little of
+  the api-side scaffolding rather than sharing it, because the two modules share no test classpath; the
+  duplication also means one edit cannot defeat both, and what it costs is drift.
+  `theCorpusCoversEveryModuleTheBuildCompiles` requires
+  every non-api reactor source root to be named as a literal in a file listed in
+  `COMPILER_CHECKS_OUTSIDE_API`, and that file to exist and to declare a `@Test` passing the flag — so
+  deleting the check, or adding a module with none, reddens. Read as source text, so it says nothing
+  about whether the check inside is right.
+- **The bound above was stated over the wrong thing, and round 9 falsified it: a POM can stop a check
+  RUNNING, which no reader of the argument list can see.** Each module's corpus check lives in the very
+  test root it guards, so four lines in that module's POM — `<executions><execution><id>default-testCompile</id><phase>none</phase></execution></executions>`
+  on a `maven-compiler-plugin` element carrying no `<configuration>`, no `<version>` and no attribute —
+  take the root out of javac and take the check out of the build together. Every existing reader
+  returned empty for it: `unreadCompilerParametersAt` closes the world over a `<configuration>`'s
+  children, `javacArgumentBlocks` recorded no position, `versionFloorViolationsAt` found no `<version>`,
+  `mergeControlAttributesAt` found no attribute, and `rootsNoCompilerCheckReads` reads the check as
+  SOURCE TEXT, so "the file exists, declares a `@Test`, passes the flag and names both roots" all stayed
+  true of a file never compiled. Measured before the fix, JDK 21, plugin 3.13.0, with that element in
+  `omod/pom.xml` and a dead pointer planted in `omod/src/test/java`: `mvn -o clean install` exit 0,
+  BUILD SUCCESS, zero `reference not found` printed, omod's surefire logging "No tests to run", the api
+  module's whole suite green, the `.omod` artifact still installed. The mirror edit in `api/pom.xml` is
+  the same defect with the modules swapped; what was measured of it is that with the fix in place it
+  reddens the omod-side arm, api's own tests never having run. Two of the three
+  dead pointers this change repaired lived in a test root, so that is #262's headline defect reinstated
+  for exactly the population it was found in.
+  **The fix is not a reader for `<phase>`.** It is two things, and neither on its own would do.
+  (i) The closed world moves one level OUT: `COMPILER_PLUGIN_CHILDREN_READ_HERE` and
+  `SUREFIRE_PLUGIN_CHILDREN_READ_HERE` refuse any direct child of a compiler or surefire `<plugin>`
+  element that the guard does not account for, so `<executions>` is refused along with `<inherited>`,
+  `<dependencies>`, `<extensions>` and whatever the next one is called; `TEST_SKIP_PROPERTIES` refuses
+  the `<properties>` form of the same thing (`maven.test.skip` in `omod/pom.xml` was measured to do
+  exactly what the `<executions>` element did, from three words naming no plugin).
+  (ii) The assertion is made from BOTH modules, over every reactor POM —
+  `noPomEditTakesAModuleOutOfTheTestBuild`, one in each check — so an edit stopping ONE module's tests
+  is refused by the module whose tests still run. That is what a closure alone could not buy: rounds 7
+  and 8 each closed a world and each was falsified by a position outside it, whereas here the api-side
+  arm and the omod-side arm state the rule DIFFERENTLY (a closed world over a plugin element's children
+  there; a positional rule — neither plugin declared anywhere but the root's `<pluginManagement>` —
+  here), so one edit weakens neither by weakening the other. Each check also requires the other's file
+  to exist and to still pass the flag as its own literal, and `pomsNoCrossModuleReaderNames` requires
+  every reactor POM to be named as a literal in the omod-side file, so a third module cannot arrive
+  outside the cross-read.
+  **What the positional half COSTS, stated plainly because it is a real restriction on this
+  repository and the two arms disagree about it.** `maven-compiler-plugin` and
+  `maven-surefire-plugin` cannot be declared in a child pom's `<build><plugins>` at all — not even in a declaration that takes
+  no test out of anything, such as `<version>${compilerPluginVersion}</version>` resolving from the
+  root's properties, or a `<release>17</release>` for a module on a different source level. That is
+  ordinary multi-module Maven, and the api-side arm PERMITS the same element (it closes a world over
+  the element's children and reads its `<version>` against the floor); the omod-side arm refuses it by
+  position. **Round 11 kept the refusal rather than narrowing it, deliberately, and this is the
+  record of that choice.** Narrowing it means deciding whether a given element removes a test — which
+  is reading what the element SAYS, the approach rounds 7 and 8 each took and each had falsified by
+  the next position, and round 9's defeat came from an element carrying no `<configuration>`, no
+  `<version>` and no attribute for exactly that reason. What the refusal costs is friction on a shape
+  this repository does not use; what it buys is that the next element nobody has heard of is refused
+  too. The friction is self-explaining rather than mysterious: the message names the position, says
+  why that plugin is read at all, and gives the remedy (move it to the root's `<pluginManagement>`),
+  and it fails no build that is legal TODAY — nothing in this reactor declares either plugin outside
+  the managed entry, which `noPomEditTakesAModuleOutOfTheTestBuild` also asserts. The asymmetry with
+  the api arm is not an oversight to be tidied: the two arms stating the rule differently is the whole
+  of what bullet (ii) buys, and making them agree would collapse them into one reader written twice.
+  A maintainer who does need such a declaration changes the omod arm, and records here what replaced
+  the position rule and how round 9's element stays refused.
+  **Cross-covering the CORPUS rather than the assertion was considered and declined on the
+  classpath.** Read off the POMs rather than measured: `api/pom.xml` declares neither `openmrs-web` nor
+  `webservices.rest-omod-common`, both of which `omod`'s sources import, so an api-side compile of
+  those roots would hit the corpus check's own fail-loud branch — "this guard could not run" — rather
+  than return a verdict, and a loud failure for the wrong reason is not an improvement. The reverse
+  direction is not symmetric but is not free either: `omod` depends on the api JAR and not its
+  test-jar, so whether api's TEST roots compile there turns on test dependencies `omod` does not
+  declare. So the corpus stays per module and the assertion is what is shared. An arm reading `api/target/surefire-reports` to confirm the
+  other module's guard actually ran was also declined: it covers only the case the cross-read POM arm
+  already covers, cannot reach the residue below, and would make a guard depend on which modules a
+  given `-pl` invocation built.
+  **The residue, stated because every absolute published about this change has been falsified by a
+  later round** — "no POM edit can silence it" in the omod check's class javadoc, this decision's own
+  "the consequence of a fourth position is bounded", and its QUIET enumeration, which round 12
+  falsified. A POM can still remove test execution from EVERY module at once: an
+  `<executions>` entry in the ROOT pom's `<build><plugins>`, which children inherit, or a test-skip
+  property in the root `<properties>`. Nothing written in a test survives that, because no test runs;
+  both were measured at exit 0 with BUILD SUCCESS, and what that one costs the person doing it is every
+  `Tests run:` line in the reactor — not one was emitted for either module, so the reactor's test total
+  was zero. **What the two spellings print in PLACE of those counts is not one string, and for two
+  rounds this said api's surefire printed no banner and omod's printed "No tests to run". Both halves
+  are false.** Re-measured on this head, JDK 21: `<maven.test.skip>true</maven.test.skip>` in the root
+  `<properties>` gives `mvn -o clean install` exit 0 with each module's surefire banner printed and
+  `Tests are skipped.` under it — twice in the reactor, zero `Tests run:` lines, zero `No tests to
+  run`; the `<executions>` spelling in the root's `<build><plugins>` gives exit 0 with no surefire
+  output whatever, `grep surefire` over the whole log matching nothing, because the goal is never
+  invoked. `No tests to run` is round 9's CHILD-pom output, reproduced on this head to be sure of it:
+  that `<executions>` element in `omod/pom.xml` with `mvn -o clean install -pl omod` gives exit 0 and
+  the string printed once under omod's surefire banner. That shape is refused now, so `No tests to
+  run` is the wrong string to grep a log for when checking whether the gate ran — which is exactly
+  what the falsified sentence invited. **That cost sentence was then published as the
+  cost of the residue, and round 10 falsified it too**: the family is wider than the shapes it was
+  measured on, and two of its members leave the test total intact. Do not write another absolute in
+  place of it, and do not write a single characteristic cost either — the round-10 bullet below carries
+  what was measured and which channel each shape is loud on.
+
+- **Round 10 found this guard refusing ordinary Maven practice in two places, and two further
+  positions from which a module's checks vanish. Both halves matter and the first half is the one
+  that would have shipped a red build on a legal POM.**
+  (i) **A parameterised plugin version.** The version reader parsed `<version>` text as dot-separated
+  leading digits with `-1` substituted for a segment carrying none, so
+  `<version>${compilerPluginVersion}</version>` — the property declared in the same POM, which Maven
+  builds byte-identically — read as `[-1]` and was refused as "older than 3.1". Measured on this
+  branch, JDK 21: that one substitution at the managed entry gave `mvn -o clean test` exit 1,
+  two of that class's checks failing, one message reporting the pin as `[-1]` and the other as older
+  than the floor, with no remedy in either except to un-parameterise. A `${...}` is interpolated now from the
+  POM's own `<properties>` (the project's and any `<profile>`'s) and then the reactor parent's, and
+  the resolved value is evaluated exactly as a literal is — measured both ways: resolving to 3.13.0
+  builds green at exit 0, resolving to 2.5.1 is refused with the floor's own message naming what it
+  resolved to. A version that stays unevaluable is a THIRD verdict, printing what could not be read
+  and what the reader would need, never "below the floor": at the MANAGED entry that is a failure,
+  because a version this guard can read is already required there, and at a CHILD declaration it is
+  silent, exactly as pinning no version at all is. That silence is a hole the size of
+  `<version>RELEASE</version>` in `omod/pom.xml`, disclosed rather than closed — and narrower than it
+  looks, because Maven refuses two of the four shapes itself: measured on both spellings, `RELEASE` and
+  `LATEST` at the managed entry each give `'build.plugins.plugin.version' for
+  org.apache.maven.plugins:maven-compiler-plugin must be a valid version but is 'RELEASE'` (respectively
+  `'LATEST'`) and the build reads no project at all. What the verdict IS reachable for was measured too:
+  `-DcompilerPluginVersion=3.13.0` on the command line with the placeholder at the managed entry and no
+  such property in any POM gave `mvn -o clean test -pl api -am` exit 1 with exactly one failing check,
+  the cannot-determine message printed and the floor not mentioned. A RANGE was refused at plugin
+  RESOLUTION in an offline build rather than by this verdict, so what it does online is unmeasured.
+  **Round 11 measured that "hole" and it is not one on its own**: a child declaration is refused by
+  POSITION from the omod arm, whatever version it pins, so the silent verdict never decides a build by
+  itself. The measurement is in the LOUD/QUIET bullet below, and it changes what this silence is a
+  disclosure OF — not that the floor goes unchecked in a green build, but that the reader has nothing
+  to say about a POM two other checks are already reddening.
+  (ii) **A surefire `<configuration>`.** It was refused WHOLESALE, and it is the element a real
+  project reaches for first: measured, `<argLine>-Xmx1024m</argLine>` with
+  `<redirectTestOutputToFile>true</redirectTestOutputToFile>` at the root's managed surefire entry gave
+  exit 1 on a POM that takes no test out of anything. The obvious way past that red build is to
+  allowlist the element — after which a surefire `<excludes>` naming either module's check is read by
+  nothing. So the element is permitted and its children are judged: `skip`, `skipTests`, `skipExec`
+  and `testFailureIgnore` where true, and the selection parameters `test`, `includes`, `includesFile`,
+  `excludes`, `excludesFile` and `groups` wherever they carry a value. Measured in all three
+  directions: the tuning above green at exit 0; an `<excludes>` naming the omod corpus check reported
+  by the api arm at exit 1; one naming the api guard reported by the omod arm at exit 1, that guard
+  not being among the tests that ran. A group INCLUSION drops both checks, which is why `groups` is
+  there. `excludedGroups` was left out beside it on a stated ground — a group EXCLUSION cannot reach
+  a test that declares no group — and **round 14 measured that ground false; bullet (vi) below
+  carries it, and this sentence is corrected rather than dropped because the false ground stood in
+  four places at once.** It is a map entry in both arms now, beside `excludeJUnit5Engines` and
+  `includeJUnit5Engines`. **It is a list of names and not a closed world**, and that is the point: closing
+  the world over surefire's parameters is what produced the false positive, so a parameter nobody has
+  thought of is permitted here and disclosed instead.
+  (iii) **Surefire's own `test` FILTER property was not in either arm's list.** Measured:
+  `<properties><test>DateFormatUtilTest</test></properties>` in `api/pom.xml` — `mvn -o clean install`
+  exit 0, BUILD SUCCESS, api's surefire printing `Tests run: 5` with `JavadocReferenceGuardTest` not
+  among them, and omod's whole suite green (its SIZE was published here and round 12 moved it by
+  adding a check, which is the same lesson bullet (iv) records about a failure count). With the api
+  guard out, the position the omod arm
+  deliberately does not read — the CONTENTS of the managed `<compilerArgs>` — is held by nothing, so
+  one added `<arg>` silences doclint for the whole reactor and a dead pointer in `api/src/main/java`
+  stands in a build where BOTH modules report tests running. It is refused by the module whose tests
+  still run, like every other member of this family.
+  (iv) **`maven.test.failure.ignore` was absent too, and it is the member that cannot be turned into a
+  red build in the root pom**, because it is what makes a guard's own failure non-fatal. Re-measured on
+  this head: that property in the root pom's `<properties>` beside `maven.compiler.failOnError=false`
+  gave exit 0 and BUILD SUCCESS with both modules' full test counts printed and THREE checks reporting
+  into them — `JavadocReferenceGuardTest.noOtherCompilerConfigurationDropsTheCheck` on the failOnError
+  property, that class's `noPomEditTakesAModuleOutOfTheTestBuild` on this one, and
+  `JavadocReferenceOmodCorpusTest.noPomEditTakesAModuleOutOfTheTestBuild` on this one as well. So
+  NEITHER module is green. **This bullet published a tally instead — "api `Tests run: 1870, Failures:
+  1`, omod 127 green" — and round 10's own commit falsified it in the act of publishing it**: that
+  commit added the refusal of this property, which is the second api failure and the whole of the omod
+  one. Name which checks report it; a failure count moves with the suite, and a stale one tells a
+  maintainer the omod module was untouched when it was not. In a CHILD pom it removes one module's
+  verdict and the other module reddens, which is what
+  the refusal buys; in the root pom the refusal is reported into a build that exits 0 anyway, and what
+  is left is the `Failures:` line it cannot suppress. Refused and disclosed, both.
+  (v) **Round 12: the ELEMENT/PROPERTY asymmetry, which is what rounds 5 and 10 had been too, and the
+  generator that produced all three.** Both arms refused surefire's selection parameters as elements —
+  `test`, `includes`, `includesFile`, `excludes`, `excludesFile`, `groups` — while reading only five
+  names in property form, so the five bindings surefire declares for the rest were read by nothing.
+  The bindings, taken from `META-INF/maven/plugin.xml` in the resolved `maven-surefire-plugin-3.5.5`
+  jar rather than from documentation: `excludes → surefire.excludes`,
+  `includes → surefire.includes`, `excludesFile → surefire.excludesFile`,
+  `includesFile → surefire.includesFile`, `groups → groups`, `test → test`. `excludedGroups` stayed out
+  for the reason bullet (ii) gave, and bullet (vi) below is round 14 measuring that reason false.
+  **The fix is the generator and not the five names.** Rounds 5, 10
+  and 12 were one defect three times because the element side and the property side were separate
+  hand-kept lists, so nothing in the repository could see them disagree; the pairing is now one map
+  entry per parameter — `SUREFIRE_PARAMETERS_SELECTING_TESTS` in the api arm, whose keys the element
+  reader iterates and whose values the property reader does, and
+  `SUREFIRE_PARAMETERS_DEFEATING_CHECKS` in the omod arm, from which `TEST_DEFEATING_PROPERTIES` is
+  DERIVED — and `everySurefireParameterIsRefusedInBothFormsMavenReadsIt`, one per arm, drives both
+  real readers over the pairs written out as LITERALS. Literals rather than the map, deliberately:
+  derived, the check could not redden on the entry deleted from the map, which is the mutation it
+  exists for. Mutate it — mistyping one map value in the api arm reddens that check on the property
+  leg, twice, one per `<properties>` position, with every other check in that class green (the build
+  stops at api, so what the omod suite would have done is unmeasured); deleting the entry in the omod
+  arm reddens it on both legs, with the api-side guard's own checks green beside it. Both mutations
+  were run with only the two guard classes selected on the command line, so neither says anything
+  about the rest of either suite. Measured, JDK 21, root `<properties>`, each now exit 1 and
+  named by `noPomEditTakesAModuleOutOfTheTestBuild`: `<surefire.excludes>**/DateFormatUtilTest.java`,
+  `<surefire.includes>**/JavadocReference*Test.java`, and `surefire.excludesFile` /
+  `surefire.includesFile` pointing at a real pattern file. `<groups>eval</groups>` in the root pom
+  runs no test at all, so nothing reports it there; in `api/pom.xml` it is exit 1 from the omod arm
+  with api running no tests, which is that arm's whole reason. **What reading the property does NOT
+  reach** is a selection whose value removes both guards from the run — the LOUD/QUIET bullet below
+  carries that, and it is the reason this decision's QUIET enumeration had to be corrected.
+  (vi) **Round 14: a fourth instance of that same shape, but what was falsified was a REASON for an
+  OMISSION rather than a claim of coverage — and it is the point at which the answer stopped being
+  one more name.** `excludedGroups` was in neither arm's property list on a stated ground: a group
+  EXCLUSION cannot reach a test that declares no group. That ground was published in four places —
+  `JavadocReferenceGuardTest`'s `SUREFIRE_PARAMETERS_SELECTING_TESTS`,
+  `JavadocReferenceOmodCorpusTest`'s `SUREFIRE_PARAMETERS_DEFEATING_CHECKS`, and bullets (ii) and (v)
+  above. It is false for the provider this reactor uses: surefire auto-selects `JUnitPlatformProvider`
+  here (the suites import `org.junit.jupiter.api.Test`), so `excludedGroups` is a JUnit 5 tag
+  EXPRESSION and `none()` is defined to match the tests carrying no tag. It holds for a plain tag
+  NAME, which is why it survived four rounds.
+  Measured on this head, JDK 21, in `api/pom.xml`'s `<properties>` — **a file that has no
+  `<properties>` element at all, so a reproduction has to add one and must assert its anchor: an
+  injection that silently no-ops reads as a clean baseline**:
+  `<excludedGroups>none()</excludedGroups>` gave `mvn -o clean install` exit 0, BUILD SUCCESS, api
+  `Tests run: 0`, omod's suite green, and `grep -c excludedGroups` over the whole log ZERO. (The
+  suite SIZES are deliberately not quoted: one was published in bullet (iii) and the next round's own
+  commit moved it.)
+  **Of the members measured so far this is the one whose cross-module cover did not fire**: the omod arm ran,
+  was green, and reported nothing, because that property was in neither arm's list. Adding
+  `<arg>-Xdoclint/package:-org.openmrs.*</arg>` to the managed `<compilerArgs>` beside it, with a
+  dead pointer in `api/src/main/java`, gives exit 0 and zero `reference not found` — #262's defect
+  reinstated by two POM edits nothing reported. Control:
+  `<excludedGroups>nosuchtag</excludedGroups>` in the same position left api's whole suite running.
+  **The remedy is a change of shape.** Rounds 5, 10, 12 and 14 each supplied one more surefire name,
+  and round 14 verified the following one in the same breath —
+  `<surefire.excludeJUnit5Engines>junit-jupiter</surefire.excludeJUnit5Engines>` in `api/pom.xml`,
+  exit 0 with api `Tests run: 0` and omod's suite green. So the property side is a PREFIX rule now:
+  `SUREFIRE_USER_PROPERTY_PREFIX` in each arm refuses a value-carrying `<properties>` entry whose
+  name begins `surefire.`, at both positions already read (a project's own and a `<profile>`'s),
+  without looking the parameter up. The descriptor read that bounds it, from
+  `META-INF/maven/plugin.xml` in the resolved `maven-surefire-plugin-3.5.5` jar, `test` mojo: 81
+  children of the `<configuration>` block, 70 of them binding a user property through a bare
+  `${...}` expression, 31 of those 70 beginning `surefire.`. One prefix reaches those 31 and
+  whatever arrives under it later. The 39 un-prefixed bindings have no prefix to read and are
+  answered by NAME; the ones that suppress a module's tests or discard their verdict are the legacy
+  spellings already read — `maven.test.skip`, `maven.test.skip.exec`, `skipTests`,
+  `maven.test.failure.ignore`, `test`, `groups` and now `excludedGroups` — seven of the 39.
+  **What stood here about the other 32 was a characterisation and round 16 measured it false**: it
+  read that they were values Maven injects a POM cannot usefully set (`project`, `session`,
+  `basedir`, `project.build.*`) or knobs deciding HOW tests run rather than WHETHER, and it named
+  `argLine` as an example of the harmless kind. `argLine` silences the whole run — bullet (vii)
+  below. Round 16 put each of the 32 to a build rather than to a reading and found `argLine`,
+  `maven.test.dependency.excludes` and `maven.test.additionalClasspath` able to silence a module's
+  checks; `workingDirectory` failing the build rather than silencing anything, so not a hole; and
+  the rest clean or loud, including a batch of 14 planted together that left the reactor's totals
+  byte-identical to baseline. That is a measurement of those 32 at plugin 3.5.5, not a proof about a
+  family; a further one is a name, not a family.
+  **The ELEMENT side gets no prefix rule, because a `<configuration>` child's name carries none** —
+  `excludedGroups`, `excludeJUnit5Engines` and `includeJUnit5Engines` are map entries in both arms
+  for that reason, which is also what keeps
+  `everySurefireParameterIsRefusedInBothFormsMavenReadsIt` meaningful after the change: it drives
+  both real readers over the pairs as literals, and now additionally over two `surefire.` properties
+  NO list names — one real (`surefire.runOrder`), one invented — which is the assertion that the
+  property leg answers by prefix rather than by name.
+  **Two shapes measured in this round that are NOT holes**, recorded so nobody re-measures them and
+  because an earlier commit message claimed one of them was already stated in the code, which it was
+  not. `suiteXmlFiles` appears in no file of this repository and surefire refuses it outright with
+  this provider: `<surefire.suiteXmlFiles>src/test/resources/suite.xml</surefire.suiteXmlFiles>` in
+  `api/pom.xml` gave exit 1 with `[ERROR] ... suiteXmlFiles is configured, but there is no TestNG
+  dependency`, so it fails loudly rather than silencing anything, and the prefix rule reads its
+  property form regardless. And `failIfNoTests`, proposed for the un-prefixed set, carries
+  `default-value="false"` in the pinned descriptor: `false` is what this build already does, so
+  refusing it would redden a POM that builds exactly as this one does, while `true` makes an empty
+  run FAIL, which is the protective direction.
+  **What was measured after the change**, each edit in `api/pom.xml`'s `<properties>`, each exit 1,
+  each named. `<excludedGroups>none()</excludedGroups>` and
+  `<surefire.excludeJUnit5Engines>junit-jupiter</surefire.excludeJUnit5Engines>`:
+  `JavadocReferenceOmodCorpusTest.noPomEditTakesAModuleOutOfTheTestBuild`, api running no tests so
+  only the omod arm can report, each violation quoting the entry. `<surefire.runOrder>alphabetical`,
+  which no list names: `JavadocReferenceGuardTest.noPomEditTakesAModuleOutOfTheTestBuild` — the
+  prefix rule answering for a name nobody wrote down, and also its COST, that property taking no
+  test away. Blank values are not refused: `<excludedGroups></excludedGroups>` and
+  `<surefire.reportNameSuffix></surefire.reportNameSuffix>` each gave exit 0 with both suites green,
+  while `<surefire.reportNameSuffix>x</surefire.reportNameSuffix>` gave exit 1 from the api arm. A
+  real-build demonstration of the blank case has to pick its property —
+  `<surefire.runOrder></surefire.runOrder>` exits 1 from surefire itself (`Index -1 out of bounds for
+  length 0`) and never reaches a guard — which is why the blank permission is asserted per parameter
+  over synthetic POMs inside `everySurefireParameterIsRefusedInBothFormsMavenReadsIt`.
+  **Mutate the prefix rule and read the failures.** With its leg made inert in `testDefeatingPropertiesIn`
+  in BOTH arms and `<surefire.runOrder>alphabetical</surefire.runOrder>` left standing in
+  `api/pom.xml`: `everySurefireParameterIsRefusedInBothFormsMavenReadsIt` reddens in each arm with
+  four violations apiece (two properties × two `<properties>` positions), and the planted property
+  is reported by NOTHING — `grep -c 'sets <surefire.runOrder'` over the whole log zero, and
+  `noPomEditTakesAModuleOutOfTheTestBuild` not named at all, which is the state the rule exists to
+  end. Measured twice: once as shipped, where the build stops at api and the omod arm's half is
+  unmeasured, and once with `-Dmaven.test.failure.ignore=true` so both arms report.
+  **What the prefix rule does to r14-2's residue, measured.** That residue is the pairing check being
+  driven off hand-written literals with nothing anchoring either side to the plugin descriptor, so a
+  value wrong in BOTH the map and the literals is green in both modules; it stands, and the failure
+  message still tells a maintainer to add the pair. The reduction: with
+  `surefire.excludeJUnit5Engines` mistyped in both places in the api arm,
+  `everySurefireParameterIsRefusedInBothFormsMavenReadsIt` stayed green and the real property,
+  planted in `api/pom.xml`'s `<properties>`, was still refused — exit 1 from
+  `JavadocReferenceGuardTest.noPomEditTakesAModuleOutOfTheTestBuild`, the violation quoting the
+  entry, raised by the prefix leg which looks no parameter up. What is left of the residue is the
+  three un-prefixed pairs, `test`, `groups` and `excludedGroups`, behind which there is no second
+  leg — a statement about the reader's two legs, not a further measurement.
+  A witness for the prefix leg has to stay OUT of the named lists or it stops witnessing, the leg
+  skipping a name those lists already report; both arms report that before asking anything else of
+  the name, and adding `runOrder → surefire.runOrder` to the api map reddens
+  `everySurefireParameterIsRefusedInBothFormsMavenReadsIt` on exactly that.
+  **It does not close the position.** A guard cannot report an edit that stops it running, so a
+  property whose value removes both guards from the run is still refused by nothing that runs; the
+  LOUD/QUIET bullet below carries that. The prefix narrows how easily such an edit is reached and
+  does not remove it, and no sentence here should be read as saying otherwise.
+  (vii) **Round 16: four shapes that leave surefire reporting nothing at all, and the point at which
+  the answer stopped being a test.** All measured on this head, JDK 21, in `api/pom.xml`'s
+  `<properties>` unless said otherwise — **a file with no `<properties>` element, so each
+  reproduction adds one and must assert its anchor; an injection that silently no-ops reads as a
+  clean baseline.** Baseline for comparison, this head: `mvn -o clean install` exit 0, api
+  both modules' suites green with no test skipped by any
+  POM setting, and both guard classes named as run.
+  - **r16-1, `argLine`.** Bound to the un-prefixed `${argLine}`, so a `<properties>` entry of that
+    name reaches the forked JVM and a `-D` in it sets a system property there.
+    `<argLine>-Djunit.platform.execution.dryRun.enabled=true</argLine>` gave exit 0, BUILD SUCCESS,
+    api's surefire printing the SAME figure for `Tests run` and `Skipped` — the api guard's own tests
+    among them — omod's suite green, and `argLine` named ZERO times in the log. JUnit Platform's dry run reports every
+    test as a SUCCESS without executing it, so no `Failures:` line appears anywhere and no total
+    drops to zero. Refused now in both arms — `SUREFIRE_PARAMETERS_DISABLING_THE_RUNNER` in the api
+    arm, the map plus `FORKED_JVM_ARGUMENT_NAMES` in the omod one. **Its value rule is a `-D` and
+    deliberately not a non-blank value**: `<argLine>-Xmx1024m</argLine>` is the very string round 10
+    reverted a wholesale refusal over, it takes no test away, and both arms assert it stays
+    permitted (`FORKED_JVM_ARGUMENTS_TAKING_NO_TEST_AWAY`, `VALUE_RULE_WITNESSES`). What that leaves:
+    a `-D` reaching the fork through an argument file, and friction on a harmless
+    `-Dfile.encoding=UTF-8`.
+  - **r16-4, `maven.test.dependency.excludes`** (`classpathDependencyExcludes`). Removes artifacts
+    from the TEST classpath; with JUnit Platform gone from it nothing is discovered.
+    `org.junit.platform:junit-platform-commons,org.junit.jupiter:junit-jupiter-engine,org.junit.jupiter:junit-jupiter-api`
+    gave exit 0, api `Tests run: 0`, omod green, the property named ZERO times. **Round 16 reports
+    the single-artifact forms did NOT reproduce it**, so the effect is of the triple and nothing here
+    claims one name does it. Refused at any non-blank value: the cost is friction on an ordinary
+    exclusion of a conflicting artifact, and the narrower rule available — naming the artifacts the
+    engine happens to need — is a list that goes stale on the next JUnit release.
+  - **r16-2, the word `false` on a SELECTION, and the sharpest of the four because it was a seam
+    between the two arms.** The omod arm's `defeatsAModulesChecks` exempted `false` for EVERY entry
+    including selections, where `false` is a working pattern or tag expression that matches nothing;
+    the api arm refuses any non-blank selection value, so the two disagreed on exactly that word, in
+    the direction where only the omod arm can speak. `<surefire.includes>false</surefire.includes>`
+    gave exit 0 with api's surefire printing its mojo banner and **no test output whatever** — quieter
+    than round 12's shape, which at least dropped a visible total — omod's suite green, the property
+    named nowhere; `<groups>false</groups>` gave exit 0 with api `Tests run: 0`. **Directional
+    control**: the same `<groups>false</groups>` in `omod/pom.xml` gave exit 1 with the API arm naming
+    it twice and the omod arm silent. Fixed by classifying the map's names —
+    `BOOLEAN_FLAG_NAMES` keep the exemption, because `false` is their default;
+    `FORKED_JVM_ARGUMENT_NAMES` take the `-D` rule; everything else is refused at any non-blank
+    value. The javadoc sentence claiming that absent, blank and `false` were "the whole of what a
+    legal declaration looks like here" was untrue of a selection and is corrected in place.
+    **The pairing check could not see this**, every witness value in it being non-blank and not
+    `false`, so `VALUE_RULE_WITNESSES` states one verdict per parameter as literals — derived from
+    the classification lists it would agree with a mutation that empties them.
+  - **r16-3, surefire's `<systemPropertyVariables>`, resolved by RECORD and not by refusal.** The
+    same dry run at the root pom's managed `<configuration>` gave exit 0, api
+    every test reported as skipped in BOTH modules, nothing reported anywhere.
+    **It stays permitted.** That element is what a real project reaches for first, refusing it
+    wholesale is what round 10 reverted, and `noPomEditTakesAModuleOutOfTheTestBuild` actively
+    asserts it is legal — refusing it would redden ordinary Maven usage, which is the one failure
+    direction both arms refuse. What had to go is any sentence reading as completeness around it, and
+    that is what the LOUD/QUIET deletion above is.
+  - **r16-5, `maven.test.additionalClasspath`** (`additionalClasspathElements`) can put a
+    `junit-platform.properties` on the test classpath and switch the dry run on for BOTH modules.
+    Named and not closed: the silencing edit is then not a POM edit alone — it needs a committed
+    properties file, its own line in a diff — and refusing an ordinary additional classpath entry
+    would redden a shape Maven users do use.
+  - **What was measured after the change.** Each of r16-1, r16-4 and both r16-2 spellings, planted in
+    `api/pom.xml`'s `<properties>`: exit 1, each named by
+    `JavadocReferenceOmodCorpusTest.noPomEditTakesAModuleOutOfTheTestBuild`, that arm being the one
+    whose tests still run. Directional control for r16-1 the other way:
+    `<argLine>-Djunit.platform.execution.dryRun.enabled=true</argLine>` in `omod/pom.xml` gave exit 1
+    named by `JavadocReferenceGuardTest.noPomEditTakesAModuleOutOfTheTestBuild`. **Descriptor counts
+    re-read at this version and reproduced to the digit**: `META-INF/maven/plugin.xml` in the
+    resolved `maven-surefire-plugin-3.5.5` jar, `test` mojo — 81 `<configuration>` children, 70
+    binding a user property through a bare `${...}`, 31 of those prefixed `surefire.`, 39 un-prefixed,
+    11 expression-less. `systemPropertyVariables` is a `<parameters>` entry with no
+    `<configuration>` binding, which is why no property rule reaches it.
+- **The closing move is a CI-side assertion that does not run under surefire, and it is the ticket's
+  own suggestion.** Twelve review rounds established the structural residue: every in-repo guard runs
+  under surefire — both guard classes are JUnit tests — and a POM edit can take surefire's report
+  away from at least the five positions above. `javadoc-reference-gate` in `.github/workflows/build.yml` asserts the flag's EFFECT instead
+  of its text — presence is what rounds 12 and 14 defeated, so there is no grep for it. **What it
+  asserts**: for each java source root of each module the ROOT POM declares, it writes one throwaway
+  compilation unit into every package that root's own directory tree declares, requires the build to
+  FAIL with `reference not found` printed against every one of those files BY NAME, then requires the
+  same build with no probe planted to PASS, so a failure is attributable to a probe and not to a
+  pre-existing break. Three properties of a probe's POSITION are load-bearing, one per way the
+  argument list can be qualified or the block detached. Its javadoc block is ATTACHED (immediately
+  above a member declaration) because a block javac discards reports a clean baseline whatever the
+  flag does. Its dead pointer sits on a `private` member because `-Xdoclint:reference/public` leaves
+  the group named and checks public API alone. And there is one probe per PACKAGE, discovered at run
+  time from `<modules>` and the directory tree and cross-checked against each file's own `package`
+  statement, because `-Xdoclint/package:[-]<packages>` silences the group for the packages it names
+  and its trailing `.*` reaches the SUB-packages of what it names rather than that package itself.
+  Per source ROOT as well as per package, because javac runs once per root and the reactor stops at
+  the first root that fails: five `-DskipTests install` builds a run on this reactor, four probed and
+  one clean. Round 18 found the round-17 job with two probes in one of the reactor's twelve packages,
+  both on a `public` member — the same defect commit `829f8b90` had already fixed for the in-repo
+  guard.
+  **Proved by running the job's own script text once per edit** (JDK 21 on this head, `mvn -o`): exit
+  0 on this head with the working tree unchanged and no probe left behind; exit 1 for each of
+  `<arg>-Xdoclint:reference</arg>` deleted, `<arg>-Xdoclint:reference/public</arg>`,
+  `<arg>-Xdoclint/package:-org.openmrs.module.chartsearchai.reference</arg>` and
+  `<arg>-Xdoclint/package:-org.openmrs.module.chartsearchai.*</arg>`; and exit 0 with round 12's
+  `<surefire.excludes>**/JavadocReference*Test.java</surefire.excludes>` in the root `<properties>` —
+  the edit that removes BOTH guards from the reactor at exit 0, re-measured on this head as `mvn -o
+  clean install` exit 0 with `grep -c JavadocReference` over the whole log zero — which is the
+  independence claim.
+  **Round 20 found the exit-0 branch attributing two different causes to one line, and the fix is a
+  question the shell can answer for itself.** `maven.test.skip` in the root `<properties>` skips test
+  COMPILATION as well as the run, so the probes planted in a TEST root are not handed to javac and
+  the build accepts them at exit 0 — under the single branch the job then printed *#262's defect is
+  back … look at `<compilerArgs>`*, an accusation against the one line the change exists to protect,
+  with the actual cause named nowhere. The probes' own class files are what tell the two apart:
+  `plant` removes the class file it is about to make possible (these builds do not `clean`, so a
+  leftover from an earlier run would read as this build's work) and records it, and the exit-0 branch
+  asks whether javac wrote any of them before it says anything about the argument list. Measured on
+  this head, JDK 21, one run of the job's own script text per edit: with
+  `<maven.test.skip>true</maven.test.skip>` in the root `<properties>` the job exits 1 at
+  `api/src/test/java` naming the test-skip family and the compilation rather than the flag; with
+  `<arg>-Xdoclint:reference</arg>` deleted it exits 1 at `api/src/main/java` with a probe's class
+  file written, on the `<compilerArgs>` branch, which is the directional control that the new branch
+  does not swallow the defect. `<skipTests>true</skipTests>` in the same position is the surefire
+  half of that family and leaves test compilation running, which is why the job was green under it.
+  **And the derived scope is now checked against the RESULT rather than against its own parse.** The
+  `<module>` read is a line-oriented `sed`, and an element whose text sits on its own line is legal
+  XML that Maven builds and that `sed` does not see; the job refused a TOTALLY empty discovery and
+  was silent on a partial one. Measured: `<module>api</module>` rewritten across three lines leaves
+  `mvn -o validate` building three reactor projects while the job planted probes in omod's two
+  roots alone, at exit 0. It now `find`s every `src/{main,test}/java` in the checkout and fails when
+  the derived roots do not account for one — exit 1 naming `api/src/main/java` and
+  `api/src/test/java` under that same edit, and pointing at
+  `JavadocReferenceGuardTest.modulesIn`, which makes the same claim through a real XML parser.
+  A red X there is a diagnostic; which checks gate a merge is branch protection's business and not
+  this file's, and this repository has none — `gh api
+  repos/openmrs/openmrs-module-chartsearchai/branches/main/protection` answered
+  `404 Branch not protected` when round 20 asked, which makes the disclaimer in `build.yml` accurate
+  rather than an oversell.
+  **One residue of it, stated as a residue and not as an enumeration that closes**: nothing in the
+  repository asserts that this job exists, or that it still fails when it should. Measured — grep
+  both guard classes for `build.yml` and what comes back is a javadoc sentence in each describing
+  the job, and no assertion about it. So deleting the job, making it non-fatal, or editing the
+  workflow file reinstates the surefire-side positions above with nothing here going red. **Round 20
+  deleted that sentence in the same round that made this job the change's load-bearing claim, and
+  round 21 put it back**: the closing instruction below prohibits an absolute and a "silencing shows
+  up on X" claim, and a measured residue is neither. Round 20's review, which asked for it back,
+  read it as the largest residue this decision carries.
+- **A javadoc block between a member's MODIFIERS and the rest of its declaration was a hole in the
+  scanner and in the shape table both, and round 19 closed it rather than recording it.** Measured on
+  JDK 21 over four arrangements — a field split after `private`, a method split after `public`, the
+  same with a leading annotation, and an interface method split after `default` — javac exits 0 with
+  NO diagnostic of any kind: no `reference not found`, and not the `documentation comment not expected
+  here` the pre-`package` position draws. So a dead pointer there was invisible to doclint, invisible
+  to `unattachedJavadocBlocks`, and needed no POM edit to get that way. `isModifiersAlone` is the arm
+  and `ModifiersSplitByABlock` / `AnnotatedModifiersSplitByABlock` are its ground truth; planted for
+  real in `DateFormatUtil.java` between `public` and `static String formatDate(...)`, the build now
+  exits 1 from `noJavadocBlockIsOrphaned` naming that file and line. The reserved-word modifier list
+  deliberately excludes the CONTEXTUAL ones (`sealed`, `non-sealed`), which are also legal
+  identifiers. A block inside a METHOD BODY is now on the record as a row rather than in prose alone —
+  `BlockInsideAMethodBody`, declared `UNATTACHED_AND_UNREACHED`, which is also the counterpart that
+  makes the modifier list a SET of keywords rather than "one token".
+- **The two guards' cross-module pointers are checked as TEXT, from the module each is written in.**
+  Neither module's test classpath sees the other's test classes, so a pointer at the other guard is
+  written `{@code Class.member}` and no compiler resolves it — which left the two files that exist to
+  stop pointers rotting silently carrying pointers that rot silently, aimed at the members review
+  rounds keep renaming. `everyPointerAtTheOtherModulesGuardNamesSomethingItCarries` (api) and
+  `everyPointerAtTheApiSideGuardNamesSomethingItCarries` (omod) require each member name a pointer
+  prints to occur in the other file as a whole identifier. Proved by renaming: all occurrences of
+  `pomsNoCrossModuleReaderNames` in the api guard reddens the omod arm, and of
+  `noPomEditTakesAModuleOutOfTheTestBuild` in the omod guard reddens the api arm with one violation
+  per pointer site. Bounded, and worth stating: a name the other file merely MENTIONS satisfies it,
+  and a pointer whose member name is split mid-identifier across two javadoc lines is not seen — the
+  search copy is flattened at wraps, so a break after the `.` is found. The two directions are held
+  from different modules on purpose, so one edit does not defeat both.
+  **What the reader does not read is REFUSED rather than left silent**, which is round 20's finding
+  against that bound: `membersPointedAt` requires the closing brace immediately after the
+  identifier, and two spellings a maintainer is at least as likely to write — a method written the
+  idiomatic way in a code span, `Class.someMember()`, and javadoc's own `Class#someMember` — were
+  read by neither module's arm while the paragraph above read as closed. `unreadPointerSpellings`
+  reports each as a violation naming the form the reader wants. Refused and not parsed on purpose:
+  widening the reader reopens which spans inside a code span are pointers at all, and each answer
+  would then carry a claim about the other module's file. Measured by planting three spellings in
+  one javadoc block of each guard — the parenthesised form, the `#` form and `Class#someMember()` —
+  and reading the violations back; the bare class-name mentions beside them are untouched, which is
+  what keeps the two files able to name each other in prose.
+- **The disclosure is generalised rather than extended by one more sentence, and that is round 10's
+  main change.** Every round so far has found a position the round before had not read, and every
+  absolute published here has been falsified by a later round, so the honest statement is not a
+  longer list.
+  What the two guards DO: they make the flag's presence, what the declared arguments actually do
+  (asked of the compiler), the plugin version that has to honour them, and the assertion that each
+  module's tests are in the build at all checkable from two modules that state the rules differently —
+  so one edit rarely defeats both. What they do NOT do: enumerate the positions from which Maven can
+  alter javac's arguments or take a module's tests out of the build. **That is measured, every round
+  so far, rather than asserted.** What these guards are FOR is the ACCIDENTAL removal of the
+  flag or of the checks that read it, which is the failure #262 describes.
+  **What an edit can still achieve, recorded as the builds that were run and NOT as a channel it
+  shows on.** A claim of the second kind — that silencing this gate shows up on output a maintainer
+  sees, itemised as LOUD and QUIET — stood in this bullet, and it was written five times over with
+  rounds 8, 10, 11, 12, 14 and 16 each measuring one false, the last in four ways at once. Round 17
+  DELETED it rather than rewriting it a sixth time. What is recorded instead, per shape:
+  where `failOnError` is what was turned off the doclint error itself is still printed
+  (`[ERROR] ... reference not found`); `maven.test.failure.ignore` leaves `Tests run: N, Failures: M`
+  printed beside exit 0, on BOTH modules' count lines, from the three checks named in bullet (iv)
+  above; a test-skip in the root pom emits no `Tests run:` line for either module, printing
+  `Tests are skipped.` under each module's surefire banner for the PROPERTY spelling and no surefire
+  output at all for the `<executions>` spelling. **Not `No tests to run`, which this list claimed for
+  a round.** That string belongs to round 9's child-pom shape, which is refused, so it is the wrong
+  thing to grep a log for. Reported by nothing here so far: anything Maven reads that is not one of
+  these POMs — a `settings.xml` profile, the command line, `MAVEN_OPTS`, a committed
+  `.mvn/maven.config`; a surefire parameter neither arm names, inside the `<configuration>` now
+  permitted; **and a surefire SELECTION whose value removes BOTH guards from the run, which is a
+  parameter both arms DO refuse, set inside one of these POMs.** That last is round 12's finding and
+  it falsified the enumeration then standing, which had said the residue was the two items before
+  it — a third absolute of the kind this decision's own closing instruction forbids. A guard cannot
+  report an edit that stops it running. Measured on this head, JDK 21:
+  `<surefire.excludes>**/JavadocReference*Test.java</surefire.excludes>` in the root `<properties>`
+  gives `mvn -o clean install` exit 0, BUILD SUCCESS, `grep -c JavadocReference` over the whole log
+  ZERO, and a reactor test total short by only the guards' own tests;
+  `<groups>eval</groups>` there gives exit 0 with
+  `Tests run: 0` printed for both modules instead. **Round 14's shape belongs in that item and
+  was not covered by it**: `<excludedGroups>none()</excludedGroups>` in `api/pom.xml`'s
+  `<properties>` was exit 0 with api `Tests run: 0`, omod green, and `excludedGroups` named zero
+  times — a CHILD-pom edit that the module whose tests still ran did not report, because the
+  property was in neither arm's list. Bullet (vi) carries it, and it is refused now. **Neither reinstates #262's defect on its own**:
+  the `<arg>` is still on javac, and that same exclusion with a dead pointer planted in
+  `api/src/main/java` gives exit 1 with `reference not found` printed. What it removes is the guard on
+  the CONTENTS of the managed `<compilerArgs>`, so one further `<arg>` there is the second edit that
+  silences doclint — two edits and not one, which is the accurate form of the failure mode round
+  12 reported.
+  **A child declaration pinning a version these files cannot evaluate was in that QUIET list, and it
+  is not silent.** `versionFloorViolationsAt` is silent on it, deliberately — bullet (i) above says why
+  — but two other checks are not. Measured on this head, JDK 21:
+  `<version>${compilerPluginVersion}</version>` on a compiler-plugin declaration in `omod/pom.xml`'s
+  own `<build><plugins>`, no such property in any of these POMs, run as
+  `mvn -o clean install -DcompilerPluginVersion=2.5.1` with a dead pointer planted in
+  `omod/src/main/java` — exit 1, api's suite green, and two omod checks reporting:
+  `JavadocReferenceOmodCorpusTest.everyJavadocReferenceInTheOmodModuleResolves` on the pointer (with
+  its own literal arguments) and that class's `noPomEditTakesAModuleOutOfTheTestBuild` on the POSITION.
+  The log confirms the mechanism the floor could not see — `compiler:2.5.1:compile @ chartsearchai-omod`,
+  the managed `<compilerArgs>` silently ignored, and the two `reference not found` lines in the log are
+  the guard's own report rather than javac's. A consequence of the positional refusal, worth stating
+  because it bounds bullet (i): the interpolation leg reading the reactor PARENT's `<properties>` is
+  reachable only at a child declaration, and a child declaration is refused — so the unevaluable
+  verdict cannot decide a build on its own. Round 17 moved that measurement into
+  `versionFloorViolationsAt`'s own javadoc as well, the api class-javadoc paragraph that carried it
+  being the LOUD/QUIET one deleted.
+  **And the residue has no single characteristic cost**, which is what the
+  sentence above it claimed for two rounds: the `test` filter leaves both modules printing test counts
+  with one module's checks simply absent. No
+  sentence of the form "no POM edit can X" belongs in this decision, in either guard's javadoc, in
+  the root pom's comment, or in `.github/workflows/build.yml` — **and none of the form "silencing it
+  shows up on X" either**; where one suggests itself, name the edit that was checked and stop there.
+  **The workflow file is named here because its omission from this list is how one got written in
+  it**: round 20 found `-DskipTests deliberately: surefire never runs in this job, so an edit acting
+  on surefire has no verdict here to change` in that job's comment, and a `maven.test.skip` in the
+  root `<properties>` — a member of the test-skip family both guards refuse — falsifies it by
+  skipping test COMPILATION, so the job then accepted a probed test root at exit 0 and printed the
+  `<compilerArgs>` accusation against the one line the change exists to protect. Round 21 deleted
+  the sentence and gave the job a branch that asks whether the probes produced class files before it
+  says anything about the argument list.
+
+The same rule decides what counts as a javadoc error over the module's own sources: **a DIFFERENCE,
+never a message.** Where the flagged compile reports errors the sources are compiled again without
+the argument, and only what the flagged run adds is doclint's. Two earlier attempts matched message
+text and each was refuted — an incomplete key list reported a real javadoc defect as a broken
+classpath, and `Diagnostic.getMessage(null)` is DEFAULT-LOCALE, so on a machine set to German,
+Japanese or Chinese the match failed on a perfectly clean tree.
+
+### Rejected alternatives
+
+- **`maven-javadoc-plugin` with `-Xdoclint:reference` in a CI profile**, which is what the ticket
+  proposed. Its stated reason — "so it does not slow local iteration" — does not survive
+  measurement: the flag's cost is inside run-to-run noise and **the sign is not even stable**, coming
+  out at +0.19s on an 11.3s two-module `install -DskipTests` with a run-to-run sd of 1.1s, +0.12s on
+  a 3.4s bare `javac` over the api roots (n=15, t≈1.4), and −0.13s on a Maven `test-compile` arm.
+  Every earlier figure written here had the flag *faster*; that is what noise looks like, and it is
+  why no single pair of numbers is quoted as the result. Its `javadoc` goal reads `src/main/java`
+  only, so it would have found ONE of the three defects and needed a second `test-javadoc` execution
+  for the others. A profile nobody activates locally reproduces most of the original failure — a
+  developer renaming a member still sees green — which is the trap the ticket names by citing #232.
+  And a standalone javadoc job would open the `llama-server-natives` and `querystore-api` SNAPSHOT
+  resolution questions `build-against-querystore-head` exists to keep in one place.
+- **A hand-rolled `{@link}` resolver in a guard test**, walking the source and matching targets
+  against declarations. It is the shape `ProjectInstructionsGuardTest` uses for `CLAUDE.md`, and it is
+  right there because Markdown has no compiler. Java has one, and it already holds the imports, the
+  inherited members, the nested types and the scope rule the third defect turns on — a rule this
+  change got wrong twice with the compiler available to ask.
+- **Widening `DrugSafetyValidator.SubjectMatter` to package-private** so its pointer could be a
+  `{@link}`. Refused for the right reason and on a false premise: a fully-qualified `{@link}` resolves
+  to a private nested class already, so no visibility change was ever needed and `{@code}` was not the
+  only alternative.
+- **Leaving the orphaned blocks as stated residue.** They are not a neighbouring defect; they are the
+  part of the corpus this gate cannot see, and one of them carries three pointers that nothing
+  resolves. Shipping the gate beside them would publish a claim of protection with a hole in exactly
+  the place this repository has already been bitten twice.
+- **Recording the rule in `CLAUDE.md`.** The rule is compiler-enforced, and that file's doctrine keeps
+  enforced rules to a pointer with their evidence here. It also stood at 84,992 bytes at `5253c7d2`,
+  against `ProjectInstructionsGuardTest.MAX_INSTRUCTION_BYTES` of 85,000, so there were 8 bytes of
+  headroom and any real addition would have reddened the build for a reason unrelated to this ticket.
+  **84,976 is what this bullet published, and that is the value the file takes at `6582f2c2`** — the
+  sha the table at the top of this decision named before the same correction, so two figures in one
+  decision were keyed to different trees. **Both figures are labelled with their sha and neither with
+  "the merge base"**, which a later merge of `main` moved: no commit of this branch touches the file,
+  but `8e679fb7` (`main`'s #370) shortened it, so the headroom at any head past that merge is larger
+  than the 8 bytes above and has to be re-derived there rather than read here.
+
+### Trade-offs
+
+- **+** A dead pointer is a build failure on both modules, both source roots, and locally — rather
+  than plain text that reads as authoritative.
+- **+** It costs no build step and no CI job; the check rides the compilation that already happens.
+- **+** The attachment check closes a silent failure this repository has had twice, both times caught
+  by a human reader rather than by anything mechanical.
+- **−** **It says only that a pointer RESOLVES, never that it is the right one.** One retargeted to a
+  member that exists but is not the one the sentence is about stays silent, exactly as before. Nothing
+  here reaches that, and no instrument #262 proposed would have.
+- **− A dead pointer now reddens three jobs whose purpose has nothing to do with javadoc**: the
+  `owasp-dependency-check` CVE scan, the nightly `build-docker` image publish and the
+  `build-standalone` zip all run Maven, so all three fail at their compile step. Same class of failure
+  the change intends, on jobs whose red X says nothing about their subject.
+- **− The exposure to a SNAPSHOT dependency is real but not the one to reason about first, and it is
+  not only querystore.** `api/src` carries member-level pointers into
+  `querystore-api:1.0.0-SNAPSHOT` (a `provided` dependency), all in `QueryStoreChartBuilder`:
+  `QueryStoreService#getPatientChart(String)`, `QueryStoreService#searchByPatient` and its
+  three-argument overload, and `QueryDocument#getMetadata()`. **Both source trees also point at
+  `openmrs-api`, which this reactor resolves at `openmrsPlatformVersion=2.9.0-SNAPSHOT`**: five
+  member-level pointers, verified by reading them — `Context#getService(Class)`,
+  `Context#getRegisteredComponents` and `Order#isActive()` in
+  `api/.../api/impl/QueryStoreChartBuilder.java`, `Daemon#runInDaemonThread` in
+  `api/.../api/impl/WarmupExecutor.java`, and `Context#requirePrivilege` in
+  `omod/.../web/rest/ChartSearchAiRestController.java`. That is a larger and more frequently moving
+  surface than querystore's, carrying exactly the same risk, and no bullet here mentioned it until
+  round 12 asked. Nothing points at a MEMBER of `openmrs-web` today. Every one of those members is
+  also CALLED, so a plain upstream rename already broke this module's compile before #262. What is
+  genuinely new is a **signature-only** change — a parameter type widened, an overload added — where
+  the call site still compiles and `{@link QueryStoreService#searchByPatient(String, String, int)}` no
+  longer resolves. Verified by renaming one link's target: `BUILD FAILURE` at `default-compile`.
+- **− Do not expect that break to surface in `build-against-querystore-head` first.** An earlier draft
+  of this decision said so and it is wrong in both directions, against `build.yml`'s own comment two
+  hundred lines above it. The required build resolves the last PUBLISHED snapshot while that job
+  builds HEAD, so when the two diverge the daily job is green and the required build is red, naming an
+  upstream commit that is not the cause; and #181's actually-observed failure mode was a LOCALLY
+  installed querystore, which that job disables its Maven cache specifically in order not to see.
+- **− The JDK set this lint gate is exercised on is not pinned in this repository.** `build.yml`
+  delegates to `openmrs-contrib-gha-workflows` at a moving `@main`, which infers the matrix from
+  `openmrsPlatformVersion`; today that is 11/17/21, and bumping the platform or an edit upstream moves
+  it. Five JDKs were measured to agree, which covers everything currently reachable. Separately,
+  `release.yml` compiles on JDK 8 and has been failing at `invalid target release: 11` since before
+  this change — so "every CI JDK" is a claim about the legs that work.
+- **− A METHOD BODY is unchecked and no configuration reaches it**: a local declaration, a member of
+  a local class, a member of an anonymous class declared inside a method. An anonymous class in a
+  FIELD initialiser IS read — see the Context section, where an earlier version of this bullet had
+  that wrong. The repository carries no `{@link}` in any unread scope today, and nothing detects one
+  arriving; the attachment check is about attachment, not scope.
+- **− The guard's own reach is narrower than the flag's, in three stated ways.** Its POM checks read
+  THESE POMs, so anything else Maven reads is invisible in both directions — a `settings.xml`
+  profile, the command line, `MAVEN_OPTS`, a committed `.mvn/maven.config` (read automatically since
+  Maven 3.3.1, and a file inside the repository, which is why this is stated by mechanism rather
+  than by inside-or-outside). `everyJavadocReferenceInTheApiModuleResolves` takes no compiler
+  ARGUMENT from the build — it chooses its own, which is what makes it survive the flag being lost,
+  relocated or defeated — but it is not otherwise independent of the build, and an earlier version
+  of this bullet said it was: `apiRoots` derives its corpus from the root pom's `<modules>`, so
+  emptying that element reddens this check too — empty it and read which of the checks stay green.
+  Exactly one reads no POM, `theScannerAgreesWithTheCompilerAboutWhatIsAttached`, and what it reads
+  is shapes the class wrote rather than the corpus. And it reaches the `api` module only — `omod`'s
+  sources are not on an api test's classpath. And most of this repository's Maven invocations pass
+  `-DskipTests` — the Docker image build, the standalone zip, the natives deploy, the CVE scan and
+  the reusable deploy job — so they carry the flag's EFFECT while running nothing that would notice
+  the flag being removed. The required build and the querystore-HEAD job are the two that run the
+  guard.
+- **− `everyJavadocReferenceInTheApiModuleResolves` costs about 3s, and what it buys is redundancy
+  rather than reach.** It is some 3.0s of the class's 6.2s as a wall clock on one developer machine
+  (`mvn -o -pl api test -Dtest=JavadocReferenceGuardTest`, and the same command scoped to the one
+  method, on this branch after the probes became per-package). **The pair was published as 2.4s of
+  4.5s and both halves moved**: the denominator because the per-package probes compile a file per
+  corpus package for each declared argument list, the numerator because it was re-measured on
+  another machine. No share of the api suite is given, because the earlier one carried neither tree
+  nor command and a later round would only have to re-measure it. An earlier draft here said it
+  "cannot fire in a Maven build", which is false and was refuted directly: replace the flag with an
+  unrelated argument, plant a dead pointer, and this is one of the checks that redden. What is true
+  is narrower — with the flag IN FORCE a dead pointer kills the build at `compile` or `testCompile`
+  and surefire never runs, and with the flag simply absent the cheap POM checks already redden and
+  already say why. What that 3s buys is a failure message that names the pointer, coverage under a
+  non-Maven runner such as an IDE, and a check whose ORACLE is the compiler rather than XML — it
+  still reads the root pom for its corpus, per the reach bullet above — which is what caught neither
+  of the two POM-check defects above but is the only thing that would survive a third. Kept on that
+  basis, with the number on the record for whoever weighs it again.
+- **− A future JDK adding a check to the `reference` group can redden a build on a JDK upgrade.** The
+  standing cost of any lint gate; the group is deliberately the narrow one, and the guard's
+  live-reference half makes such a change legible rather than a mystery failure.

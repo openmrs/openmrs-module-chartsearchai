@@ -84,10 +84,98 @@
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-compiler-plugin</artifactId>
+					<!-- Pinned because this build's correctness now depends on ONE plugin parameter being
+					     honoured. <compilerArgs> arrived in maven-compiler-plugin 3.1; pin an earlier version
+					     and Maven silently ignores the element as an unknown parameter, with no diagnostic —
+					     measured: version 2.5.1 here, a dead javadoc reference planted in omod/src/main/java,
+					     `mvn -o clean install` exit 0 and not one `reference not found` printed. Unpinned, the
+					     version is whatever Maven's super-POM supplies and so moves with the developer's Maven
+					     install. JavadocReferenceGuardTest requires this element and requires it to be at
+					     least 3.1. A ${...} property declared in these POMs is resolved first, so
+					     parameterising this version is fine — measured: ${compilerPluginVersion} with the
+					     property here builds green, and one resolving to 2.5.1 is refused with the floor's
+					     own message. A version the check cannot evaluate is reported as UNREADABLE and never
+					     as too old; RELEASE and LATEST never get that far, Maven refusing them itself
+					     ("must be a valid version but is 'RELEASE'"). -->
+					<version>3.13.0</version>
 					<configuration>
 						<target>${maven.compiler.target}</target>
 						<source>${maven.compiler.source}</source>
 						<encoding>${project.build.sourceEncoding}</encoding>
+						<!-- Every javadoc reference in this module must resolve, and this is what makes one that
+						     does not a build failure rather than plain text that reads as authoritative. It is on
+						     javac rather than in a maven-javadoc-plugin CI profile, and it is the `reference`
+						     group rather than a wider one; that group covers more than {@link}, so a mistyped
+						     @param is an error here too.
+
+						     Do not remove or narrow this without reading docs/adr.md, Decision 75, which carries
+						     the measurements, the alternatives already refused and what the check still cannot
+						     see. JavadocReferenceGuardTest is what stops it being removed with a green build,
+						     and it asserts this POSITION and not merely the argument: declared in a child pom
+						     instead, the flag gates one module and the other compiles ungated.
+
+						     What that guard and its omod-side sibling are worth is checkable and bounded:
+						     between them they hold the flag's presence, what the declared arguments DO (asked
+						     of the compiler), the plugin version that has to honour them, and the assertion
+						     that each module's tests are in the build — stated two different ways from two
+						     modules, so one edit rarely defeats both. What they are FOR is the ACCIDENTAL
+						     removal of the flag or of the checks that read it, which is the failure #262
+						     describes. They do NOT enumerate every position from which Maven can change
+						     javac's arguments or drop a module's tests: every review round of #262 so far has
+						     found one more, and every absolute claim published about it — one in the
+						     omod-side check's javadoc, one in Decision 75, and that decision's own QUIET
+						     enumeration — has been falsified by a later round.
+
+						     A sentence stood here claiming that silencing this gate shows up on output a
+						     maintainer sees (a printed doclint error, a `Failures:` line beside exit 0, a
+						     reactor test total that drops). That claim was written five times over and
+						     rounds 8, 10, 11, 12, 14 and 16 each measured one false, the last in four ways
+						     at once, of which two print nothing at all: a JUnit Platform dry run set through the
+						     un-prefixed `argLine` property, or through surefire's own
+						     <systemPropertyVariables>, reports every test as a SUCCESS without executing it
+						     (measured: exit 0, api reporting every test as skipped, omod green, the property named
+						     nowhere in the log). Round 17 DELETED the claim rather than rewriting it a sixth
+						     time. Do not write another; name the edit that was actually checked and stop.
+
+						     Round 12's shape is why the QUIET enumeration was wrong: a surefire SELECTION in
+						     THIS pom's <properties> whose value removes both guards from the run is refused
+						     by nothing that runs, because the refusal is written in the tests it drops.
+						     Measured, JDK 21:
+						     <surefire.excludes>**/JavadocReference*Test.java</surefire.excludes> here gives
+						     `mvn -o clean install` exit 0, BUILD SUCCESS, `grep -c JavadocReference` over the
+						     whole log zero, and a reactor total short by only those guards' tests. It does
+						     NOT on its own reinstate the defect: this <arg> is still on javac, and the same
+						     edit with a dead pointer in api/src/main/java gives exit 1 with "reference not
+						     found" printed. It removes the guard on what is INSIDE this <compilerArgs>, so
+						     one further <arg> here is the second edit that silences doclint.
+
+						     A CI-side assertion that does not run under surefire: the `javadoc-reference-gate`
+						     job in .github/workflows/build.yml. For each java source root of each module the
+						     root pom declares, it writes one throwaway compilation unit into every package
+						     that root's own directory tree declares — the dead pointer on a `private` member,
+						     because -Xdoclint takes an ACCESS qualifier as well as a package one — compiles
+						     them through this build with -DskipTests, and requires the build to FAIL with
+						     "reference not found" printed against every one of those files by name; then
+						     requires the same build with no probe planted to PASS. Five builds a run on this
+						     reactor. Measured on this head, one run of the job's own script text per edit:
+						     with round 12's selection in the root <properties>, which removes both guards
+						     from the reactor, it still exits 0 with every probe refused as required; with
+						     this <arg> deleted it exits 1 on the first root; and it exits 1 for each of
+						     <arg>-Xdoclint:reference/public</arg>,
+						     <arg>-Xdoclint/package:-org.openmrs.module.chartsearchai.reference</arg> and
+						     <arg>-Xdoclint/package:-org.openmrs.module.chartsearchai.*</arg> added beside it.
+
+						     One residue of that job, stated as a residue and not as an enumeration that
+						     closes: nothing in this repository asserts the job exists or still fails.
+						     Measured — grep both guard classes for build.yml and what comes back is a
+						     javadoc sentence in each of them describing the job, and no assertion about it.
+						     So deleting the job, making it non-fatal, or editing that workflow file leaves
+						     the surefire-side positions above reinstated with nothing here going red. That
+						     is why round 20 was wrong to delete this sentence, and round 21 put it back.
+						     Decision 75 carries the rest. -->
+						<compilerArgs>
+							<arg>-Xdoclint:reference</arg>
+						</compilerArgs>
 					</configuration>
 				</plugin>
 				<plugin>

@@ -1,4 +1,4 @@
-/**
+/*
  * This Source Code Form is subject to the terms of the Mozilla Public License,
  * v. 2.0. If a copy of the MPL was not distributed with this file, You can
  * obtain one at http://mozilla.org/MPL/2.0/. OpenMRS is also distributed under
@@ -785,6 +785,10 @@ public class LlmProvider {
 		return result;
 	}
 
+	/** Matches a standalone YES or NO verdict token (word-boundary anchored). */
+	private static final java.util.regex.Pattern VERDICT_TOKEN =
+			java.util.regex.Pattern.compile("\\b(YES|NO)\\b");
+
 	/**
 	 * Reads the YES/NO entailment verdict out of the LLM's raw reply. The shared response schema
 	 * ({@link ChartAnswerResponseFormat}) emits a leading {@code "reasoning"} field before
@@ -795,10 +799,6 @@ public class LlmProvider {
 	 * the verdict from that. Degrades safely: a bare, envelope-free reply ("YES") falls through
 	 * extractResponse unchanged, and a null/empty reply yields {@code null}.
 	 */
-	/** Matches a standalone YES or NO verdict token (word-boundary anchored). */
-	private static final java.util.regex.Pattern VERDICT_TOKEN =
-			java.util.regex.Pattern.compile("\\b(YES|NO)\\b");
-
 	static Boolean parseEntailmentVerdict(String rawLlmText) {
 		if (rawLlmText == null) {
 			return null;

@@ -91,6 +91,320 @@ jobs:
       - name: shellcheck (warnings and above)
         run: shellcheck -s sh -S warning backend-init.sh
 
+  # Issue #262. The in-repo guards (JavadocReferenceGuardTest and its omod-side sibling
+  # JavadocReferenceOmodCorpusTest) assert that -Xdoclint:reference is declared, where it is declared,
+  # what the declared arguments DO when a compiler is asked, and that each module's tests are in the
+  # build. Each of them runs UNDER surefire, and twelve review rounds established that a POM edit can
+  # take surefire's own report away: a dry run through the un-prefixed `argLine` property or through
+  # surefire's <systemPropertyVariables> reports every test as a SUCCESS without executing it, a
+  # selection value removes the guard classes from the run, and a test-classpath exclusion leaves
+  # nothing to discover. Each of those is refused by one arm or the other now, but the refusal is
+  # written in tests, so the residue is structural: a guard cannot report an edit that stops it
+  # running. This job is an assertion that does not run under surefire.
+  #
+  # WHAT IT ASSERTS. For each java source root of each module the ROOT POM declares, it writes one
+  # throwaway compilation unit into every package that root's own directory tree declares, each
+  # carrying a javadoc pointer to a member that does not exist, and requires the build to FAIL with
+  # `reference not found` printed against every one of those files BY NAME. It then requires the same
+  # build with no probe planted to pass, so a failure above is attributable to a probe rather than to
+  # a pre-existing break. It asserts the EFFECT and not the text — presence of the flag in the POM is
+  # what rounds 12 and 14 defeated, the flag staying while its guard did not run — so there is no grep
+  # for it here.
+  #
+  # The scope is DERIVED at run time and not written down here: the modules come from the root pom's
+  # <modules> and the packages from the directory tree, cross-checked against each file's own `package`
+  # statement because that is what -Xdoclint/package filters on. The derivation is then checked
+  # against the checkout — a java source root the derived list does not account for fails the job —
+  # because the <module> read is a line-oriented sed and an element split across lines is legal XML
+  # it does not see, which is a PARTIAL discovery and was silent. Hardcoding probe paths is the defect
+  # commit 829f8b90 already fixed for the in-repo guard, whose message says so verbatim: "the reported
+  # remedy - one probe inside the module's namespace - was measured and is not enough". Two paths in
+  # one package answer for one package; this reactor declares twelve, in four source roots.
+  #
+  # WHERE A PROBE HAS TO SIT is decided by the two qualifiers -Xdoclint itself takes, and each was
+  # measured on this head by running this script with the edit in place:
+  #   * -Xdoclint/package:[-]<packages> leaves `-Xdoclint:reference` in the argument list and silences
+  #     the group for the packages it names. Its trailing `.*` reaches the SUB-packages of what it names
+  #     and NOT that package itself, so a probe answers for the package it is in and its siblings need
+  #     their own. Adding <arg>-Xdoclint/package:-org.openmrs.module.chartsearchai.reference</arg> beside
+  #     the flag exits 1 here, naming the api/src/main/java `reference` probe; adding
+  #     <arg>-Xdoclint/package:-org.openmrs.module.chartsearchai.*</arg> exits 1 naming the nine
+  #     sub-package probes of that root.
+  #   * -Xdoclint:reference/public leaves the group named and checks public API alone. The probe's dead
+  #     pointer therefore sits on a `private` member: <arg>-Xdoclint:reference/public</arg> exits 1 here,
+  #     and on the public probe this job carried before round 19 that same edit read as a clean baseline.
+  #     This module's design record lives overwhelmingly on non-public members.
+  #
+  # Per source ROOT and not merely per package, because javac runs once per root and the reactor stops
+  # at the first root that fails — one build cannot report a probe in a root it never compiled. That is
+  # five `-DskipTests install` builds on this reactor: four probed roots and one clean run.
+  #
+  # -DskipTests deliberately: what this job asks about is the compiler's argument list, and running
+  # the suite would just hand back the verdict of the guards this job exists to stand apart from.
+  # Being SKIPPED is not the same as not being COMPILED, and the difference reaches this job: a
+  # `maven.test.skip` skips test compilation as well as the run, so a probed TEST root is accepted
+  # without javac reading one probe. That is why the exit-0 branch in the script asks whether the
+  # probes produced class files before it says anything about -Xdoclint, and names the test-skip
+  # family where they did not — the sentence that stood here instead read that an edit acting on
+  # surefire had no verdict here to change, and under that sentence the job printed the
+  # <compilerArgs> accusation for that very edit.
+  #
+  # Measured for the shape that defeats both guards rather than claimed of every edit — with
+  # <surefire.excludes>**/JavadocReference*Test.java</surefire.excludes> in the root
+  # <properties>, which is round 12's edit and removes both guards from the reactor at exit 0, this
+  # script still exits 0 with every probe refused as required; with the <arg>-Xdoclint:reference</arg>
+  # deleted it exits 1 on the first root, printing the ::error:: below.
+  #
+  # A red X here is a diagnostic, loudly attributed by the ::error:: annotations. Which checks gate a
+  # merge is branch protection's business and not this file's; a reviewer wanting this one to block a
+  # merge sets it there.
+  javadoc-reference-gate:
+    name: doclint reference gate (asserts the effect, outside surefire)
+    # Opted out of the daily schedule — see the `schedule:` comment above.
+    if: ${{ github.event_name != 'schedule' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 11
+        # One JDK: the variable here is the compiler ARGUMENT, not the JDK. 11 is the lowest of the
+        # required build's matrix. No `cache: maven`, for the reason the querystore-HEAD job below
+        # gives — this job `mvn install`s chartsearchai's own artifacts, and a ~/.m2 cache restorable
+        # by prefix is a way for one job's local installs to reach another job's resolution.
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+
+      - name: A dead javadoc reference fails this build, and the same build without one passes
+        run: |
+          set -euo pipefail
+          # Outside the checkout, so a run leaves the working tree exactly as it found it.
+          log="${RUNNER_TEMP:-/tmp}/doclint-gate.log"
+
+          # The scope is DERIVED, never written out here: the modules come from the root pom's <modules>
+          # and the packages from the directory tree, so a module or a package added to the reactor is
+          # probed by the next run of this job without an edit to this file. Hardcoding a path list is
+          # the defect commit 829f8b90 fixed for the in-repo guard, whose message says so verbatim.
+          modules="$(sed -n 's:.*<module>\(.*\)</module>.*:\1:p' pom.xml)"
+          if [ -z "${modules}" ]; then
+            echo "::error::The root pom declares no <modules>, so this job derived no source root and would probe nothing at all."
+            exit 1
+          fi
+          roots=""
+          for module in $modules; do
+            for kind in main test; do
+              if [ -d "${module}/src/${kind}/java" ]; then
+                roots="${roots} ${module}/src/${kind}/java"
+              fi
+            done
+          done
+          if [ -z "${roots}" ]; then
+            echo "::error::None of the modules the root pom declares (${modules}) has a java source root, so this job would probe nothing at all."
+            exit 1
+          fi
+
+          # The derived list is then checked against the RESULT rather than against the parse. The sed
+          # above is line-oriented, and a <module> element whose text sits on its own line is legal XML
+          # that Maven builds and that sed does not see — measured on this head: rewriting
+          # <module>api</module> across three lines left the reactor building api while this script
+          # planted probes in omod's two roots alone, at exit 0 and with no diagnostic. The emptiness
+          # refusal above sees a discovery that found NOTHING; this one sees one that found some of it.
+          present="$(find . -type d \( -path '*/src/main/java' -o -path '*/src/test/java' \) \
+            -not -path './target/*' -not -path '*/target/*' -not -path './.git/*' \
+            | sed 's:^\./::' | sort)"
+          unaccounted=""
+          for root in ${present}; do
+            case " ${roots} " in
+              *" ${root} "*) ;;
+              *) unaccounted="${unaccounted} ${root}" ;;
+            esac
+          done
+          if [ -n "${unaccounted}" ]; then
+            echo "::error::This job derived its source roots from the <module> elements it could read in the root pom (${modules}), and that does not account for${unaccounted} — yet each of those directories is a java source root in this checkout. Read the <module> elements with an XML parser, the way JavadocReferenceGuardTest.modulesIn does, or bring those directories under a module this sed can see: a source root left out here is probed by nothing and this job would say nothing about it."
+            exit 1
+          fi
+
+          # One probe per package the reactor DECLARES, in each root separately. Two reasons, one per
+          # -Xdoclint qualifier: the option takes -Xdoclint/package:[-]<packages>, whose trailing `.*`
+          # reaches the SUB-packages of what it names and not that package itself, so a probe in one
+          # package answers for one package; and it takes an access qualifier, which is why the dead
+          # pointer below sits on a `private` member. Per ROOT and not merely per package because javac
+          # runs once per root, and the build stops at the first root that fails.
+
+          # Every probe this run has written and not yet removed, and a trap that removes them on ANY
+          # exit. Without it a refusal raised mid-planting leaves probes in the checkout — measured:
+          # the declared-package refusal below left nine behind, which is a dirty tree and, worse, a
+          # source root the next run would refuse for the probes of the last.
+          planted=""
+          # The class file each planted probe would compile TO, tracked alongside the source because
+          # its presence is how the exit-0 branch below tells "javac read this and said nothing" from
+          # "javac was not handed it". Removed by the same trap, so no probe artefact reaches the
+          # jar the clean build at the end installs.
+          planted_classes=""
+          cleanup() {
+            for probe in ${planted:-}; do rm -f "${probe}"; done
+            for class in ${planted_classes:-}; do rm -f "${class}"; done
+            planted=""
+            planted_classes=""
+          }
+          trap cleanup EXIT
+
+          # Maven's output directory for a source root, by the convention these POMs use. Derived from
+          # the root rather than read from the POM: what this is for is a two-way test the shell can
+          # make on its own, and a wrong answer here shows up as the discrimination below refusing to
+          # discriminate rather than as a claim about the flag.
+          class_output() {
+            case "$1" in
+              */src/main/java) printf '%s' "${1%/src/main/java}/target/classes" ;;
+              */src/test/java) printf '%s' "${1%/src/test/java}/target/test-classes" ;;
+              *) printf '' ;;
+            esac
+          }
+
+          plant() {
+            probe="$1/$2/DoclintReferenceGateProbe.java"
+            declared="$(printf '%s' "$2" | tr '/' '.')"
+            mkdir -p "$(dirname "${probe}")"
+            {
+              printf 'package %s;\n' "${declared}"
+              cat <<'PROBE'
+
+          /**
+           * Planted and deleted by the doclint reference gate in .github/workflows/build.yml. Nothing in
+           * the repository declares this file; a copy left behind is a bug in that job.
+           */
+          public final class DoclintReferenceGateProbe {
+
+          	/**
+          	 * {@link java.lang.String#noSuchMemberAnywhere()} does not exist, and it is the dead pointer
+          	 * this gate requires the build to refuse. It sits on a PRIVATE member, and inside a block
+          	 * ATTACHED to a declaration, because each of those is a dimension the argument list can be
+          	 * qualified along: -Xdoclint:reference/public leaves the group named and checks public API
+          	 * only, and a block javac discards — one between a member's modifiers and the rest of its
+          	 * declaration, or one above the package statement — reports a clean baseline whatever the
+          	 * flag says. This module's design record lives overwhelmingly on non-public members.
+          	 */
+          	private int deadPointer = 1;
+
+          	int read() {
+          		return deadPointer;
+          	}
+          }
+          PROBE
+            } > "${probe}"
+            planted="${planted} ${probe}"
+            output="$(class_output "$1")"
+            if [ -n "${output}" ]; then
+              class="${output}/$2/DoclintReferenceGateProbe.class"
+              # These builds do not `clean`, so a class file left by an earlier run of this script
+              # would be read below as this build's own work. Removed at planting time, when the
+              # source it belongs to is being written.
+              rm -f "${class}"
+              planted_classes="${planted_classes} ${class}"
+            fi
+          }
+
+          packages_in() {
+            find "$1" -name '*.java' -exec dirname {} \; \
+              | sed "s:^$1/*::" \
+              | sort -u
+          }
+
+          for root in $roots; do
+            # A validation pass BEFORE anything is written, so a refusal here reports a checkout this
+            # job has not touched.
+            #
+            # An empty relative path would vanish under the word splitting below, so the unnamed
+            # package is refused where the question can still be asked: a source sitting directly on
+            # the root declares no package, and no -Xdoclint/package argument can name that one. This
+            # repository has never had such a file and the first one is worth reading.
+            if find "${root}" -maxdepth 1 -name '*.java' | grep -q .; then
+              echo "::error::A java source sits directly on ${root}, so it declares no package. No -Xdoclint/package argument can name the unnamed package, so such a file needs no probe — but this repository has never had one, and the first is worth reading before this job is taught to skip it."
+              exit 1
+            fi
+            packages="$(packages_in "${root}")"
+            if [ -z "${packages}" ]; then
+              echo "::error::${root} is a source root of a reactor module but yielded no package to probe, so this build would say nothing about it."
+              exit 1
+            fi
+            for relative in $packages; do
+              declared="$(printf '%s' "${relative}" | tr '/' '.')"
+              # -Xdoclint/package filters on the DECLARED package, so a file whose directory and
+              # declaration disagree would have this job probe a package nothing compiles. The dots
+              # are escaped: unescaped they are ERE wildcards, and the check would accept a
+              # declaration that merely looks like the directory.
+              escaped="$(printf '%s' "${declared}" | sed 's/\./\\./g')"
+              for source in "${root}/${relative}"/*.java; do
+                if ! grep -qE "^[[:space:]]*package[[:space:]]+${escaped}[[:space:]]*;" "${source}"; then
+                  echo "::error::${source} does not declare package ${declared}, which is what its directory under ${root} says it is in. -Xdoclint/package filters on the DECLARED package, so this job would probe a package nothing compiles and leave the compiled one unprobed."
+                  exit 1
+                fi
+              done
+            done
+
+            for relative in $packages; do
+              plant "${root}" "${relative}"
+            done
+            echo "--- planted in ${root}:${planted}"
+            echo "--- this build MUST fail, naming every probe above"
+            set +e
+            mvn --batch-mode -DskipTests install > "${log}" 2>&1
+            status=$?
+            set -e
+            probes="${planted}"
+            probe_classes="${planted_classes}"
+            compiled=""
+            for class in ${probe_classes}; do
+              if [ -f "${class}" ] && [ -z "${compiled}" ]; then
+                # One witness and not the list: the question the branch below asks is whether javac
+                # was handed these files at all.
+                compiled="${class}"
+              fi
+            done
+            cleanup
+            if [ "${status}" -eq 0 ]; then
+              tail -40 "${log}"
+              # Two causes reach exit 0 here and they want different sentences. Where the probes were
+              # not handed to javac there is no class file for any of them, and the compiler
+              # argument list is not implicated at all: `maven.test.skip` skips test COMPILATION as
+              # well as the run, so a build carrying it accepts a probed test root without reading one
+              # probe. Measured on this head, JDK 21: <maven.test.skip>true</maven.test.skip> in the
+              # root <properties> reaches this branch at api/src/test/java, while <arg>-Xdoclint:reference</arg>
+              # deleted reaches the branch below it at api/src/main/java with every probe's class file
+              # written. The first sentence written here named <compilerArgs> for both, which is a
+              # false accusation against the one line this job exists to protect.
+              if [ -z "${compiled}" ]; then
+                echo "::error::The build with ${root} probed exited 0 and compiled none of the probes — no class file was written for any of them — so this gate measured nothing about the compiler's argument list. Something took that source root out of the compilation rather than out of the check: a member of the test-skip family (maven.test.skip, which skips test COMPILATION as well as the run; maven.main.skip for a main root) reaches this exact state, and so does an edit that stops the module being built at all. Fix that before reading this job as evidence either way."
+                exit 1
+              fi
+              echo "::error::A dead javadoc reference in every package of ${root} compiled at exit 0 — ${compiled} was written, so javac read that file and said nothing — which means -Xdoclint:reference is not reaching that source root and #262's defect is back: a dead {@link} is plain text that reads as authoritative. Look at <compilerArgs> in the root pom's <pluginManagement> entry for maven-compiler-plugin, and at whether an -Xdoclint qualifier has been added beside it."
+              exit 1
+            fi
+            if ! grep -q "reference not found" "${log}"; then
+              tail -40 "${log}"
+              echo "::error::The build with ${root} probed failed for a reason OTHER than the dead references (no 'reference not found' printed), so this gate measured nothing about the flag. Fix that failure before reading this job either way."
+              exit 1
+            fi
+            missing=""
+            for probe in ${probes}; do
+              if ! grep -qF "${probe}" "${log}"; then
+                missing="${missing} ${probe}"
+              fi
+            done
+            if [ -n "${missing}" ]; then
+              grep -n "reference not found" "${log}" | head -20
+              echo "::error::The build failed with 'reference not found', but not for${missing} — so the flag is not reaching those packages. An -Xdoclint/package argument naming them, or a <compilerArgs> declared per module, does exactly this."
+              exit 1
+            fi
+            echo "--- ${root}: every probe was refused with 'reference not found' as required"
+          done
+
+          echo "--- no probe planted; this build MUST pass, or the failures above said nothing"
+          mvn --batch-mode -DskipTests install
+
   # Issue #181. `api/pom.xml` declares querystore-api at 1.0.0-SNAPSHOT, so what this module
   # compiles against is whatever snapshot was published remotely last (CI) or `mvn install`ed
   # locally last (a developer). When querystore changes a method this module calls, the local build

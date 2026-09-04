@@ -1,4 +1,4 @@
-/**
+/*
  * This Source Code Form is subject to the terms of the Mozilla Public License,
  * v. 2.0. If a copy of the MPL was not distributed with this file, You can
  * obtain one at http://mozilla.org/MPL/2.0/. OpenMRS is also distributed under
@@ -46,7 +46,8 @@ final class PipelineSettings {
 	 *  query-scoped record slice instead of the whole chart, and the full-chart prefill machinery
 	 *  (warmup, prewarm, per-patient KV persistence, preview) disengages. Resolution: an absent or
 	 *  unreadable GP takes {@code CHART_MODE_DEFAULT} (= queryScoped) via the fail-safe
-	 *  {@link ChartSearchAiUtils#getStringGlobalProperty} reader; a GP explicitly set to
+	 *  {@link org.openmrs.module.chartsearchai.ChartSearchAiUtils#getStringGlobalProperty}
+	 *  reader; a GP explicitly set to
 	 *  {@code fullChart} — or to any typo that is not an exact (case-insensitive) {@code queryScoped}
 	 *  — resolves to fullChart, so a mistyped value still fails toward the whole chart. Safe for the
 	 *  destructive KV decisions too, because those never trust a re-read of this gate — they follow

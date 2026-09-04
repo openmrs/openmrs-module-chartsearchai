@@ -1,4 +1,4 @@
-/**
+/*
  * This Source Code Form is subject to the terms of the Mozilla Public License,
  * v. 2.0. If a copy of the MPL was not distributed with this file, You can
  * obtain one at http://mozilla.org/MPL/2.0/. OpenMRS is also distributed under
@@ -1208,16 +1208,6 @@ public class CitationGroundingVerifier {
 	}
 
 	/**
-	 * Leading separator of an enumerated item — the punctuation and coordinating conjunction that
-	 * join it to its siblings ({@code ", "}, {@code ", and "}, {@code " or "}). Stripped so a
-	 * claim reads as its own statement rather than a dangling continuation.
-	 *
-	 * <p>The {@code \b} after {@code and|or} is load-bearing: without it a first item named
-	 * {@code Orphenadrine} loses its {@code Or} and the claim asks about "phenadrine", a drug that
-	 * does not exist. The conjunction is optional and the punctuation classes around it are not, so
-	 * {@code ", Ketoconazole"} strips exactly {@code ", "}.
-	 */
-	/**
 	 * Most whitespace-separated words an enumerated item may carry and still be treated as a NAME
 	 * rather than a clause. The split is only sound while the shared preamble carries the sentence's
 	 * SUBJECT; an item long enough to be a clause may carry its own, and then the siblings' claims lose
@@ -1318,6 +1308,16 @@ public class CitationGroundingVerifier {
 					+ "|denies|denied|takes|took|receives|received|presents|remains)\\b",
 			Pattern.CASE_INSENSITIVE);
 
+	/**
+	 * Leading separator of an enumerated item — the punctuation and coordinating conjunction that
+	 * join it to its siblings ({@code ", "}, {@code ", and "}, {@code " or "}). Stripped so a
+	 * claim reads as its own statement rather than a dangling continuation.
+	 *
+	 * <p>The {@code \b} after {@code and|or} is load-bearing: without it a first item named
+	 * {@code Orphenadrine} loses its {@code Or} and the claim asks about "phenadrine", a drug that
+	 * does not exist. The conjunction is optional and the punctuation classes around it are not, so
+	 * {@code ", Ketoconazole"} strips exactly {@code ", "}.
+	 */
 	private static final Pattern LEADING_ITEM_SEPARATOR =
 			Pattern.compile("^[\\s,;]*(?:(?:and|or)\\b[\\s,;]*)?", Pattern.CASE_INSENSITIVE);
 

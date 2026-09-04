@@ -341,6 +341,35 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/**
+	 * The chart the REAL pipeline produces for a patient whose only recorded allergies are
+	 * {@code allergies}, asked {@code question}, over the verbatim slice at {@code fixtureResource}
+	 * and the bundled cross-reactivity groups — the arrangement behind a recorded-allergy finding,
+	 * which {@link #injectedSafetyFindingChart} cannot raise because it carries no allergy at all.
+	 *
+	 * <p>Public for the cross-package reason {@link #injectedSafetyFindingChart} is: an inference test
+	 * asserting what a check did to a record needs the record to be production's own. A SLICE and
+	 * deliberately not {@link #shippedEntries()} — a case reading the rendered text is what that
+	 * accessor's javadoc reserves a verbatim slice for, and {@code SlicedReferenceRowProvenanceTest}
+	 * is what holds a listed slice to its dataset.
+	 *
+	 * @throws IllegalStateException when the arrangement raises no finding at all, so a caller cannot
+	 *         silently assert nothing — the contract {@link #injectedSafetyFinding} and
+	 *         {@link #injectedDrugClassNoteChart} each carry for their own arm
+	 */
+	public static PatientChart injectedAllergyFindingChart(String fixtureResource, String question,
+			List<String> allergies) throws IOException {
+		PatientChart chart = injectorWithSafety(serviceWithGroups(ddiFixtureEntries(fixtureResource)))
+				.injectRecords(oneRecordChart(),
+						ctx(60, null, null, null, new LinkedHashSet<String>(allergies), null),
+						question);
+		if (injectedFindings(chart).isEmpty()) {
+			throw new IllegalStateException("no safety finding was injected for allergies " + allergies
+					+ " and question: " + question);
+		}
+		return chart;
+	}
+
+	/**
 	 * The whole chart the REAL pipeline produces for a question naming a drug CLASS the reference
 	 * data resolves no substance for (issue #354) — the DDInter excerpt and the shipped
 	 * cross-reactivity groups behind the real injector, so the {@code drug_class_note} mapping in it

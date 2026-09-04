@@ -80,6 +80,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 72: A finding about a medication the patient is already taking states a call about that medication](#decision-72-a-finding-about-a-medication-the-patient-is-already-taking-states-a-call-about-that-medication)
 - [Decision 73: A condition rule's bare-containment match is corroborated by a word boundary, not by a resolution](#decision-73-a-condition-rules-bare-containment-match-is-corroborated-by-a-word-boundary-not-by-a-resolution)
 - [Decision 74: A divergence the prose check finds is stated on the response, not only in the log](#decision-74-a-divergence-the-prose-check-finds-is-stated-on-the-response-not-only-in-the-log)
+- [Decision 75: A javadoc pointer that no longer resolves is a compile error, checked by the compiler that already reads it](#decision-75-a-javadoc-pointer-that-no-longer-resolves-is-a-compile-error-checked-by-the-compiler-that-already-reads-it)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)

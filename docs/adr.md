@@ -3851,9 +3851,12 @@ allergy to Dexamethasone — possible cross-reactivity. This finding is a reason
 
 **The measurement.** Every answer below was put to the check by driving `LlmInferenceService.search`,
 which is what invokes it — the production path, never a direct call and never a re-expression of the
-predicate. The first two are this issue's captured answer, all six clauses, word for word from the
-issue body. The rest are its opening clause against a two-row verbatim slice that renders the same
-finding, so that one substitution at a time can be undone. *Reported* names the citation the check
+predicate. The first two are this issue's captured answer, all six clauses word for word from the
+issue body, with its six citation markers remapped onto this arrangement's finding indexes — the
+capture's own numbers name records no chart of this size has, and which gate the check declines at
+turns on that: left as captured, row one declines for citing no readable reference record. The
+`reported` column is the same either way. The rest are its opening clause against a two-row verbatim
+slice that renders the same finding byte for byte, so that one substitution at a time can be undone. *Reported* names the citation the check
 stated; every other row states nothing.
 
 | answer | records served | reported |
@@ -3876,9 +3879,9 @@ Three readings, and no more than the table carries.
   residue Decision 61 records as *"A substitution inside a reproduction shorter than twelve words,
   wherever it sits"*, met by a second defect of the same sentence rather than by a short answer. Which
   silence it is differs between the first row and the third, and both are silences: on all six clauses
-  the check compares and finds no divergence, the later clauses having reproduced other findings'
-  records past the floor; on the opening clause alone nothing reaches the floor and it declines before
-  comparing.
+  the check compares and finds no divergence, its sixth clause having reproduced one other finding's
+  record past the floor — the duplicate-therapy finding about the active order, and that one alone; on
+  the opening clause alone nothing reaches the floor and it declines before comparing.
 - **A report is not evidence that a drug name was mangled.** Rows four and six differ only in the
   allergen's spelling and are reported alike; what they share is the gloss, words the record does not
   carry.
@@ -4057,7 +4060,7 @@ The answer is tokenised only after at least one cited reference record has been 
 - **A hardcode of the reference-group pair inside this check's own gate.** The gate asks `ChartSearchAiUtils.referenceGroup` rather than a type name, so a reference type added later is covered without this class changing. Nothing guards that, and — unlike `isGroundingDemoteOnly` and `referenceSlice`, whose blindness a third type did close — a third type did **not** close this one: issue #354 added `drug_class_note` and re-measured, and the inline pair still ships green, because no case drives a record of that type through this check. What would close it is such a case, not another type. Said rather than left to be inferred.
 - **A gap read as a sentence end.** An abbreviation dot, and under `mayEndASentence` any terminator at all, reads as one. Both bit-driven conditions are SILENCING, so it can only add silence — on the record side the "reproduced a sentence and moved on" exit, on the answer side the "stopped copying" one. A misread boundary therefore costs a report and never causes one. That argument rests on two things and neither is decoration: the predicate must be the weak one (above), and the boundary bit must NOT be part of word equality — were it, a record writing `"(e.g. chloroquine"` against an answer writing `"(e.g., chloroquine"` would break the reproduction and then report two IDENTICAL words as a substitution.
 - **A divergence inside the clauses `renderFinding` appends.** The record-sentence exit covers the SEAM, not the clause's interior: a reproduction running from the detail into the clause, or one inside the thirteen words of `STRENGTH_CAUTION`, is reported. Excluding it means teaching this check where a finding's own prose ends, which is `renderFinding`'s knowledge and would be a second copy of it. The first draft of this change proposed exactly that accessor and deleted it.
-- **A substitution inside a reproduction shorter than twelve words**, wherever it sits. Issue [#338](https://github.com/openmrs/openmrs-module-chartsearchai/issues/338)'s own captured answer is an instance: a second defect earlier in the same sentence cuts every run below the floor, so this check is silent on it — measured at [Decision 59](#re-measured-after-337-the-check-that-landed-since-is-silent-on-this-issues-own-capture), which also records why a report from this check is not evidence that a drug name was mangled.
+- **A substitution inside a reproduction shorter than twelve words**, wherever it sits. Issue [#338](https://github.com/openmrs/openmrs-module-chartsearchai/issues/338)'s own captured answer is an instance, and its second defect is what puts the first below the floor — measured at [Decision 59](#re-measured-after-337-the-check-that-landed-since-is-silent-on-this-issues-own-capture), which also records why a report from this check is not evidence that a drug name was mangled.
 - **Which cited record a WARN names when two of them diverge at one answer position.** The first in citation order wins, and nothing pins that — mutating it to last-wins leaves the whole api suite green. It decides both handles the line gives a maintainer, since the line quotes no prose, and it is named here so a reader does not infer from a green suite that it was chosen. **It was a tie-break with no correctness content while this check was log-only, and [Decision 74](#decision-74-a-divergence-the-prose-check-finds-is-stated-on-the-response-not-only-in-the-log) changed that**: `Reproductions.diverged` keeps the FIRST divergence at an answer position, so where two cited records diverge at the same word the second is dropped — and that index is now one a client is shown, or rather is not. Measured on that change: two records sharing a fourteen-word prefix and diverging at one answer word produce one WARN and one published index. Collecting the statement from every divergence rather than from the position-deduped map would close it and would also change what the WARNs report, so it is recorded rather than taken.
 - **That a digit is a word character.** `Words.of` takes runs of letters AND digits, so `CYP450 3A4` and `5-HT1A` segment the way the record writes them; narrowing it to letters alone leaves the suite green. Nothing in the bundled arrangements turns on it.
 - **An elision the model marked with three ASCII dots.** The same cut written `…`, `—` or `[…]` IS reported — correctly, since issue #337's second capture is an elision and dropping *"aminoglycoside antibiotics"* out of a sentence a clinician reads is the defect whatever marks the cut — but `...` puts a terminator in the gap, which the weak gap question reads as the answer ending its sentence. So which elisions are seen depends on the glyph the model chose. Closing it means a gap question that is not silencing, and then a quotation closed with `."` is a false report again; the two cannot both be had.

@@ -206,20 +206,24 @@ import org.w3c.dom.NodeList;
  * not a channel claim — a guard cannot report an edit that stops it running.
  *
  * <p><strong>What does not run under surefire is a CI job.</strong>
- * {@code .github/workflows/build.yml}'s {@code javadoc-reference-gate} plants a dead javadoc
- * reference in each module's {@code src/main/java} in turn, compiles it through this build with
- * {@code -DskipTests}, and requires the build to FAIL with {@code reference not found} naming that
- * file — then requires the same build, with no probe planted, to PASS, so the failure is
- * attributable to the probe rather than to a pre-existing break. Whether a surefire-side edit can
- * change its verdict was MEASURED for the shape that defeats both guards, rather than claimed of the
- * positions above as a class: with
+ * {@code .github/workflows/build.yml}'s {@code javadoc-reference-gate} takes each java source root of
+ * each module the root pom declares, writes one throwaway compilation unit into every package that
+ * root's own directory tree declares, and requires the build to FAIL with
+ * {@code reference not found} printed against every one of those files BY NAME — then requires the
+ * same build, with no probe planted, to PASS, so the failure is attributable to a probe rather than
+ * to a pre-existing break. Its probe carries the dead pointer on a {@code private} member for
+ * {@link #DEAD_REFERENCE_CLASS}' reason, and its scope is derived from {@code <modules>} and the
+ * directory tree for {@link #corpusPackages}'. Whether a surefire-side edit can change its verdict
+ * was MEASURED for the shape that defeats both guards, rather than claimed of the positions above as
+ * a class: with
  * {@code <surefire.excludes>**}{@code /JavadocReference*Test.java</surefire.excludes>} in the root
  * {@code <properties>} — the edit that removes BOTH guards from the reactor at exit 0 — that job's
- * own script still exits 0 with both probes failing as required, and with the
- * {@code <arg>-Xdoclint:reference</arg>} deleted from the root pom it exits 1 on the first probe.
- * <strong>What it does not cover</strong> is an edit to that workflow file itself — deleting the job
- * or making it non-fatal — which is a position no check inside the repository can hold, and whether
- * it gates a merge, which is branch protection's business and not this file's.
+ * own script still exits 0 with every probe refused as required, and it exits 1 for each of
+ * {@code <arg>-Xdoclint:reference</arg>} deleted,
+ * {@code <arg>-Xdoclint:reference/public</arg>},
+ * {@code <arg>-Xdoclint/package:-org.openmrs.module.chartsearchai.reference</arg>} and
+ * {@code <arg>-Xdoclint/package:-org.openmrs.module.chartsearchai.*</arg>}. A red X there is a
+ * diagnostic; which checks gate a merge is branch protection's business and not this file's.
  *
 
  * <p>The POM checks read THESE POMs —
@@ -234,7 +238,9 @@ import org.w3c.dom.NodeList;
  * unreadable to doclint at any configuration and so to every check here — a local declaration, a
  * member of a local class, a member of an anonymous class declared inside a method; the repository
  * carries no {@code @link} in any of them today and nothing detects one arriving, since
- * {@link #noJavadocBlockIsOrphaned} is about attachment rather than scope. An anonymous class in a
+ * {@link #noJavadocBlockIsOrphaned} is about attachment rather than scope. That is on the record as a
+ * row rather than in this sentence alone: {@code BlockInsideAMethodBody} declares itself
+ * {@link Attachment#UNATTACHED_AND_UNREACHED}. An anonymous class in a
  * FIELD initialiser is read, which is what an earlier version of this paragraph got wrong. And nothing
  * here, nor anything #262 proposed, can tell a pointer that resolves from the pointer the sentence
  * meant: one retargeted to a member that exists but is the wrong one stays silent.
@@ -2716,6 +2722,96 @@ public class JavadocReferenceGuardTest {
 	}
 
 	/**
+	 * Every cross-module pointer at the other module's guard names something that file carries.
+	 *
+	 * <p>These pointers are written {@code @code} and not {@code @link} because omod's test classpath
+	 * cannot see api's test classes and api's cannot see omod's, so the compiler-driven checks resolve
+	 * neither direction — which made them the one class of pointer #262's own fix could not hold, in
+	 * the two files that exist to stop pointers rotting silently, aimed at exactly the members review
+	 * rounds keep renaming. The mirror ({@link #rootsNoCompilerCheckReads}) asks only that the other
+	 * file exist and carry a {@code @Test} and the literal, so a renamed member stayed green there.
+	 *
+	 * <p>Text and not resolution, so what it says is bounded and worth stating plainly: the member
+	 * name occurs in that source as a whole identifier. A name that file merely MENTIONS satisfies it,
+	 * and a pointer whose member name is itself split across two javadoc lines is not seen — the
+	 * search copy is flattened at wraps, so a pointer split between the {@code .} and the name is
+	 * found and one split mid-name is not. The pointers are held from the module they are WRITTEN in,
+	 * so this arm reads its own reactor's sources for pointers at {@code omod}'s guard and the
+	 * omod-side sibling does the converse; one edit therefore does not defeat both directions.
+	 *
+	 * <p>Where the target file is missing this reports nothing, deliberately:
+	 * {@link #rootsNoCompilerCheckReads} is what reddens for a deleted guard, and a violation per
+	 * pointer would bury it.
+	 */
+	@Test
+	public void everyPointerAtTheOtherModulesGuardNamesSomethingItCarries() throws Exception {
+		List<String> violations = new ArrayList<String>();
+		for (String check : COMPILER_CHECKS_OUTSIDE_API) {
+			Path target = REPO_ROOT.resolve(check);
+			if (!Files.isRegularFile(target)) {
+				continue;
+			}
+			String targetSource = new String(Files.readAllBytes(target), StandardCharsets.UTF_8);
+			String simpleName = target.getFileName().toString();
+			simpleName = simpleName.substring(0, simpleName.length() - ".java".length());
+			for (Path source : javaSourcesUnder(reactorSourceRoots())) {
+				String text = new String(Files.readAllBytes(source), StandardCharsets.UTF_8);
+				for (String member : membersPointedAt(text, simpleName)) {
+					if (!carriesTheIdentifier(targetSource, member)) {
+						violations.add(REPO_ROOT.relativize(source) + " points at " + simpleName + "."
+								+ member + ", which does not occur in " + check + " at all. Neither module's "
+								+ "test classpath can see the other's test classes, so no compiler resolves this "
+								+ "pointer and nothing but this arm would notice it rotting");
+					}
+				}
+			}
+		}
+		assertNoViolations(violations);
+	}
+
+	/**
+	 * The member names a source points at with an inline {@code @code} tag whose content is the
+	 * target's simple name, a {@code .} and one identifier — read off a copy flattened at javadoc line
+	 * wraps, so that a pointer broken after the {@code .} is still seen. The class name is derived
+	 * from the target's own FILE NAME rather than written as a literal, which is why this method's own
+	 * source is not itself a pointer it reports.
+	 */
+	private static List<String> membersPointedAt(String text, String simpleName) {
+		String flattened = text.replaceAll("\\s*\\n\\s*\\*?\\s*", " ");
+		String open = "{@code " + simpleName + ".";
+		List<String> members = new ArrayList<String>();
+		for (int at = flattened.indexOf(open); at >= 0; at = flattened.indexOf(open, at + 1)) {
+			int start = at + open.length();
+			int end = start;
+			while (end < flattened.length() && Character.isJavaIdentifierPart(flattened.charAt(end))) {
+				end++;
+			}
+			if (end > start && end < flattened.length() && flattened.charAt(end) == '}') {
+				members.add(flattened.substring(start, end));
+			}
+		}
+		return members;
+	}
+
+	/**
+	 * Whether a source carries an identifier as a WHOLE word. Bare {@code contains} would accept
+	 * {@code poms} for a pointer at {@code pomsNoCrossModuleReaderNames}, which is the shape a rename
+	 * leaves behind.
+	 */
+	private static boolean carriesTheIdentifier(String source, String identifier) {
+		for (int at = source.indexOf(identifier); at >= 0; at = source.indexOf(identifier, at + 1)) {
+			int after = at + identifier.length();
+			boolean startsFresh = at == 0 || !Character.isJavaIdentifierPart(source.charAt(at - 1));
+			boolean endsClean = after >= source.length()
+					|| !Character.isJavaIdentifierPart(source.charAt(after));
+			if (startsFresh && endsClean) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
 	 * Every javadoc block attaches to a declaration, so that doclint reads the pointers inside it. The
 	 * shapes that fail it are enumerated below, each measured against the real compiler rather than
 	 * reasoned about, and each leaving the gate a hole exactly the size of that block:
@@ -2731,7 +2827,10 @@ public class JavadocReferenceGuardTest {
 	 * <li>a block followed by an INITIALISER block, static or instance, which is not a declaration —
 	 * see {@link #opensAnInitialiserBlock};</li>
 	 * <li>a block followed by an {@code import}, which javac attaches nothing to and, unlike the
-	 * {@code package} statement, does not even warn about — see {@link #isImportDeclaration}.</li>
+	 * {@code package} statement, does not even warn about — see {@link #isImportDeclaration};</li>
+	 * <li>a block stranded between a member's MODIFIERS and the rest of its declaration, which javac
+	 * discards for the same reason it discards one stranded after an annotation — see
+	 * {@link #isModifiersAlone}, which round 18 found this scanner had no arm for.</li>
 	 * </ul>
 	 *
 	 * <p><strong>No count of them is stated, and the first version of this stated three.</strong> The
@@ -2821,6 +2920,14 @@ public class JavadocReferenceGuardTest {
 						+ "precede the whole declaration, annotations included");
 				continue;
 			}
+			if (previous != null && !previous.javadoc && isModifiersAlone(previous.text)) {
+				orphans.add("the javadoc block closing at line " + item.line
+						+ " sits between the modifiers at line " + previous.line
+						+ " and the rest of the declaration they begin, where javac ignores it — a doc comment "
+						+ "has to precede the WHOLE declaration, and this position draws no diagnostic of any "
+						+ "kind, not even the warning the pre-package position draws");
+				continue;
+			}
 			Item next = i + 1 < items.size() ? items.get(i + 1) : null;
 			if (next == null) {
 				orphans.add("the javadoc block closing at line " + item.line
@@ -2901,6 +3008,55 @@ public class JavadocReferenceGuardTest {
 	private static boolean isImportDeclaration(String text) {
 		return text.equals("import")
 				|| (text.startsWith("import") && Character.isWhitespace(text.charAt("import".length())));
+	}
+
+	/**
+	 * The reserved words a member declaration can begin with before anything naming a type. Reserved
+	 * words and not the contextual ones ({@code sealed}, {@code non-sealed}): a contextual keyword is
+	 * also a legal identifier, so a line carrying one alone is not provably a declaration left open,
+	 * and {@link #isModifiersAlone} is a rule that reports a build failure.
+	 */
+	private static final Set<String> DECLARATION_MODIFIERS = new LinkedHashSet<String>(
+			Arrays.asList("public", "protected", "private", "abstract", "static", "final", "transient",
+					"volatile", "synchronized", "native", "strictfp", "default"));
+
+	/**
+	 * Whether the content line BEFORE a javadoc block is a declaration's modifiers and nothing else,
+	 * so that the declaration those modifiers begin continues on the far side of the block. None of
+	 * {@link #DECLARATION_MODIFIERS} can end a declaration — a declaration ends on {@code ;} or a
+	 * brace — so a content line made of them alone is one javac is still part-way through, and a doc
+	 * comment has to precede the WHOLE declaration.
+	 *
+	 * <p><strong>This position was an undeclared hole until round 19, and it is worse than the
+	 * pre-{@code package} one</strong>: measured on JDK 21 over
+	 * {@code private}/{@code /**}{@code ...}{@code /}/{@code int a = 1;} and three further
+	 * arrangements, javac exits 0 with NO diagnostic of any kind — no {@code reference not found} and
+	 * no {@code documentation comment not expected here} — so a dead pointer there is invisible to
+	 * doclint, was invisible to this scanner, and needs no POM edit at all. Rows
+	 * {@code ModifiersSplitByABlock} and {@code AnnotatedModifiersSplitByABlock} of {@link #SHAPES}
+	 * are what hold both halves of that now.
+	 *
+	 * <p>Leading annotations are consumed by {@link #annotationResidue}, so {@code @Deprecated public}
+	 * is read as {@code public} — drop that and the annotated row stops being reported. The residue has
+	 * to be non-empty, which is how a line that is annotations ALONE stays the previous arm's case
+	 * rather than being claimed twice.
+	 *
+	 * <p>What it gives up: {@link #scan} records a content line to the END of the line, trailing line
+	 * comment included, so {@code public // note} leaves a residue that is not modifiers and this
+	 * answers no. A missed orphan rather than a red build on legal code, which is the direction every
+	 * refusal in this scanner takes.
+	 */
+	private static boolean isModifiersAlone(String text) {
+		String residue = annotationResidue(text).trim();
+		if (residue.isEmpty()) {
+			return false;
+		}
+		for (String word : residue.split("\\s+")) {
+			if (!DECLARATION_MODIFIERS.contains(word)) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	/**
@@ -3341,11 +3497,13 @@ public class JavadocReferenceGuardTest {
 		UNATTACHED(false, true),
 
 		/**
-		 * javac discards the block and the scanner is documented not to REACH it — a missed orphan,
-		 * which is the conservative half of {@link #annotationResidue}'s refusal to guess at an argument
-		 * list left open on the line. Declared rather than left unwritten because the refusal is what
-		 * chooses the safe direction: a hole here, instead of a red build on legal code. Turn the refusal
-		 * into a guess and the shape declared this way is flagged, so this row reddens.
+		 * javac discards the block and the scanner is documented not to REACH it — a missed orphan.
+		 * Declared rather than left unwritten because the refusal that produces it is what chooses the
+		 * safe direction: a hole here, instead of a red build on legal code. Turn a refusal into a guess
+		 * and the shape declared this way is flagged, so its row reddens. Two rows carry it, for
+		 * different refusals — {@link #annotationResidue} declining to guess at an argument list left
+		 * open on the line, and a METHOD BODY, which is unreadable to doclint at any configuration and
+		 * so unreachable by anything here.
 		 */
 		UNATTACHED_AND_UNREACHED(false, false),
 
@@ -3501,6 +3659,28 @@ public class JavadocReferenceGuardTest {
 		// tell the author to move documentation the compiler had already read.
 		shape(shapes, "BareStaticThenDeclaration", Attachment.ATTACHED,
 				"\t/** " + dead + ". */\n\tstatic\n\tfinal int a = 1;\n\tint r() { return a; }\n");
+		// Round 18's undeclared hole, and the position this table said nothing about while the change
+		// itself named it: a block between a member's MODIFIERS and the rest of its declaration.
+		// Measured on JDK 21 over four arrangements — javac exits 0 with no diagnostic of any kind, so
+		// unlike the pre-`package` position there is not even a warning to notice, and it needs no POM
+		// edit to reach. isModifiersAlone is the arm; these two rows are its
+		// ground truth, the second because leading annotations are consumed before the modifiers are
+		// read — drop that consumption, or the arm itself, and read the failures.
+		shape(shapes, "ModifiersSplitByABlock", Attachment.UNATTACHED,
+				"\tprivate\n\t/** " + dead + ". */\n\tint a = 1;\n\tint r() { return a; }\n");
+		shape(shapes, "AnnotatedModifiersSplitByABlock", Attachment.UNATTACHED,
+				"\t@Deprecated public\n\t/** " + dead
+						+ ". */\n\tstatic int a = 1;\n\tint r() { return a; }\n");
+		// The counterpart that arm must NOT fire on, and what makes DECLARATION_MODIFIERS a SET of
+		// reserved words rather than "one token": a block stranded mid-expression in a METHOD BODY,
+		// where the preceding content line is an identifier. Declared UNATTACHED_AND_UNREACHED — a
+		// method body is unreadable to doclint at any configuration, so nothing here can see a pointer
+		// arriving in one, and this row is where that hole is on the record rather than in prose alone.
+		// Widen the arm to any single-token line and it reports blocks on legal code; mutate
+		// isModifiersAlone that way and read the failures.
+		shape(shapes, "BlockInsideAMethodBody", Attachment.UNATTACHED_AND_UNREACHED,
+				"\tint r() {\n\t\tStringBuilder b = new StringBuilder();\n\t\tb\n\t\t/** " + dead
+						+ ". */\n\t\t.append(\"x\");\n\t\treturn b.length();\n\t}\n");
 		// An `import` is a declaration javac attaches no doc comment to, and — unlike the `package`
 		// statement — it warns about nothing either, so this shape is silent on both channels. Needs
 		// the whole file: the class-body wrapper cannot put anything above an import.

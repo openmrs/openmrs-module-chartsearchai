@@ -701,10 +701,14 @@ public class JavadocReferenceOmodCorpusTest {
 	 * measured false in rounds 8, 10, 11, 12, 14 and 16</strong>, most recently by (i) and (ii)
 	 * above, which drop no total,
 	 * print no failure and name nothing. It is deleted rather than rewritten; the check that does not
-	 * depend on surefire at all is {@code javadoc-reference-gate} in
-	 * {@code .github/workflows/build.yml}, which plants a dead reference in each module's
-	 * {@code src/main/java} and requires the build to fail — and which no POM edit reaches, only an
-	 * edit to that workflow file.
+	 * depend on surefire is {@code javadoc-reference-gate} in
+	 * {@code .github/workflows/build.yml}, which writes a dead reference into every package each java
+	 * source root of each reactor module declares and requires the build to fail naming every one of
+	 * those files. What a POM edit does to THAT job is measured per edit rather than claimed of POM
+	 * edits as a class: round 12's selection leaves it at exit 0, while four edits to the managed
+	 * {@code <compilerArgs>} — the flag deleted, {@code -Xdoclint:reference/public}, and a
+	 * {@code -Xdoclint/package} exclusion in either of its two spellings — each take it to exit 1.
+	 * The root pom's comment beside that {@code <arg>} carries the runs.
 	 */
 	@Test
 	public void noPomEditTakesAModuleOutOfTheTestBuild() throws Exception {
@@ -832,6 +836,93 @@ public class JavadocReferenceOmodCorpusTest {
 			}
 		}
 		assertNoViolations(violations);
+	}
+
+	/**
+	 * Every cross-module pointer this module writes at the api-side guard names something that file
+	 * carries.
+	 *
+	 * <p>These pointers are written {@code @code} and not {@code @link} because this module's test
+	 * classpath cannot see api's test classes, so neither module's compiler-driven check resolves them
+	 * — which made them the one class of pointer #262's own fix could not hold, in the two files that
+	 * exist to stop pointers rotting silently, aimed at exactly the members review rounds keep
+	 * renaming. The mirror above asks only that {@link #API_SIDE_GUARD} exist and carry a
+	 * {@code @Test} and the literal, so a renamed member stayed green there.
+	 *
+	 * <p>Text and not resolution, so what it says is bounded: the member name occurs in that source as
+	 * a whole identifier. A name that file merely MENTIONS satisfies it, and a pointer whose member
+	 * name is itself split across two javadoc lines is not seen — the search copy is flattened at
+	 * wraps, so a pointer split after the {@code .} is found and one split mid-name is not. Each
+	 * direction is held from the module its pointers are WRITTEN in, so this arm reads THIS module's
+	 * sources and the api-side sibling does the converse; one edit does not defeat both.
+	 *
+	 * <p>Where {@link #API_SIDE_GUARD} is missing this reports nothing, deliberately: the arm above is
+	 * what reddens for a deleted guard, and a violation per pointer would bury it.
+	 */
+	@Test
+	public void everyPointerAtTheApiSideGuardNamesSomethingItCarries() throws Exception {
+		Path apiGuard = repoRoot().resolve(API_SIDE_GUARD);
+		if (!Files.isRegularFile(apiGuard)) {
+			return;
+		}
+		String targetSource = new String(Files.readAllBytes(apiGuard), StandardCharsets.UTF_8);
+		String simpleName = apiGuard.getFileName().toString();
+		simpleName = simpleName.substring(0, simpleName.length() - ".java".length());
+		List<String> violations = new ArrayList<String>();
+		for (Path source : javaSourcesUnder()) {
+			String text = new String(Files.readAllBytes(source), StandardCharsets.UTF_8);
+			for (String member : membersPointedAt(text, simpleName)) {
+				if (!carriesTheIdentifier(targetSource, member)) {
+					violations.add(repoRoot().relativize(source) + " points at " + simpleName + "." + member
+							+ ", which does not occur in " + API_SIDE_GUARD + " at all. This module's test "
+							+ "classpath cannot see api's test classes, so no compiler resolves this pointer "
+							+ "and nothing but this arm would notice it rotting");
+				}
+			}
+		}
+		assertNoViolations(violations);
+	}
+
+	/**
+	 * The member names a source points at with an inline {@code @code} tag whose content is the
+	 * target's simple name, a {@code .} and one identifier — read off a copy flattened at javadoc line
+	 * wraps, so that a pointer broken after the {@code .} is still seen. The class name is derived
+	 * from the target's own FILE NAME rather than written as a literal, which is why this method's own
+	 * source is not itself a pointer it reports.
+	 */
+	private static List<String> membersPointedAt(String text, String simpleName) {
+		String flattened = text.replaceAll("\\s*\\n\\s*\\*?\\s*", " ");
+		String open = "{@code " + simpleName + ".";
+		List<String> members = new ArrayList<String>();
+		for (int at = flattened.indexOf(open); at >= 0; at = flattened.indexOf(open, at + 1)) {
+			int start = at + open.length();
+			int end = start;
+			while (end < flattened.length() && Character.isJavaIdentifierPart(flattened.charAt(end))) {
+				end++;
+			}
+			if (end > start && end < flattened.length() && flattened.charAt(end) == '}') {
+				members.add(flattened.substring(start, end));
+			}
+		}
+		return members;
+	}
+
+	/**
+	 * Whether a source carries an identifier as a WHOLE word. Bare {@code contains} would accept
+	 * {@code poms} for a pointer at {@code pomsNoCrossModuleReaderNames}, which is the shape a rename
+	 * leaves behind.
+	 */
+	private static boolean carriesTheIdentifier(String source, String identifier) {
+		for (int at = source.indexOf(identifier); at >= 0; at = source.indexOf(identifier, at + 1)) {
+			int after = at + identifier.length();
+			boolean startsFresh = at == 0 || !Character.isJavaIdentifierPart(source.charAt(at - 1));
+			boolean endsClean = after >= source.length()
+					|| !Character.isJavaIdentifierPart(source.charAt(after));
+			if (startsFresh && endsClean) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

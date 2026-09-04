@@ -149,15 +149,22 @@
 						     found" printed. It removes the guard on what is INSIDE this <compilerArgs>, so
 						     one further <arg> here is the second edit that silences doclint.
 
-						     What holds the flag OUTSIDE surefire is the `javadoc-reference-gate` job in
-						     .github/workflows/build.yml. It plants a dead javadoc reference in each module's
-						     src/main/java in turn, compiles it through this build with -DskipTests, and
-						     requires the build to fail with "reference not found" naming that file — then
-						     requires the same build with no probe to pass. Verified: with round 12's
-						     selection in the root <properties>, which removes both guards from the reactor,
-						     that job still passes with both probes failing as required; with this <arg>
-						     deleted it exits 1 on the first probe. It does not cover an edit to that workflow
-						     file itself. Decision 75 carries the rest. -->
+						     A CI-side assertion that does not run under surefire: the `javadoc-reference-gate`
+						     job in .github/workflows/build.yml. For each java source root of each module the
+						     root pom declares, it writes one throwaway compilation unit into every package
+						     that root's own directory tree declares — the dead pointer on a `private` member,
+						     because -Xdoclint takes an ACCESS qualifier as well as a package one — compiles
+						     them through this build with -DskipTests, and requires the build to FAIL with
+						     "reference not found" printed against every one of those files by name; then
+						     requires the same build with no probe planted to PASS. Five builds a run on this
+						     reactor. Measured on this head, one run of the job's own script text per edit:
+						     with round 12's selection in the root <properties>, which removes both guards
+						     from the reactor, it still exits 0 with every probe refused as required; with
+						     this <arg> deleted it exits 1 on the first root; and it exits 1 for each of
+						     <arg>-Xdoclint:reference/public</arg>,
+						     <arg>-Xdoclint/package:-org.openmrs.module.chartsearchai.reference</arg> and
+						     <arg>-Xdoclint/package:-org.openmrs.module.chartsearchai.*</arg> added beside it.
+						     Decision 75 carries the rest. -->
 						<compilerArgs>
 							<arg>-Xdoclint:reference</arg>
 						</compilerArgs>

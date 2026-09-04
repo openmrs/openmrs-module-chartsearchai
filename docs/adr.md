@@ -6160,24 +6160,61 @@ the gate was open, which is the only property they share:
   own suggestion.** Twelve review rounds established the structural residue: every in-repo guard runs
   under surefire — both guard classes are JUnit tests — and a POM edit can take surefire's report
   away from at least the five positions above. `javadoc-reference-gate` in `.github/workflows/build.yml` asserts the flag's EFFECT instead
-  of its text — presence is what rounds 12 and 14 defeated, so there is no grep for it. It plants a
-  dead javadoc reference in a throwaway compilation unit in each module's `src/main/java` in turn
-  (an ATTACHED javadoc block, immediately above a method declaration: between a class's modifiers and
-  its `class` keyword doclint says nothing, and a probe written there reads as a clean baseline
-  whatever the flag does), compiles it through this build with `-DskipTests`, and requires the build
-  to FAIL with `reference not found` naming that very file — then requires the same build with no
-  probe planted to PASS, so the failure is attributable to the probe and not to a pre-existing break.
-  One probe per module in two separate builds, because the first fails at api and never reaches
-  omod's sources. **Proved both ways with the job's own script text**, JDK 21: on this head exit 0
-  with both probes failing as required; with `<arg>-Xdoclint:reference</arg>` deleted from the root
-  pom, exit 1 on the first probe printing the `::error::` that names the managed `<compilerArgs>`;
-  and with round 12's `<surefire.excludes>**/JavadocReference*Test.java</surefire.excludes>` in the
-  root `<properties>` — the edit that removes BOTH guards from the reactor at exit 0 — still exit 0
-  with both probes failing, which is the independence claim. **What it does not cover**: an edit to
-  that workflow file itself, deleting the job or making it non-fatal, is a position no check inside
-  the repository can hold; whether it gates a merge is branch protection's business and not this
-  file's; and it says nothing about doclint groups other than `reference`, nor about a source root
-  neither module compiles.
+  of its text — presence is what rounds 12 and 14 defeated, so there is no grep for it. **What it
+  asserts**: for each java source root of each module the ROOT POM declares, it writes one throwaway
+  compilation unit into every package that root's own directory tree declares, requires the build to
+  FAIL with `reference not found` printed against every one of those files BY NAME, then requires the
+  same build with no probe planted to PASS, so a failure is attributable to a probe and not to a
+  pre-existing break. Three properties of a probe's POSITION are load-bearing, one per way the
+  argument list can be qualified or the block detached. Its javadoc block is ATTACHED (immediately
+  above a member declaration) because a block javac discards reports a clean baseline whatever the
+  flag does. Its dead pointer sits on a `private` member because `-Xdoclint:reference/public` leaves
+  the group named and checks public API alone. And there is one probe per PACKAGE, discovered at run
+  time from `<modules>` and the directory tree and cross-checked against each file's own `package`
+  statement, because `-Xdoclint/package:[-]<packages>` silences the group for the packages it names
+  and its trailing `.*` reaches the SUB-packages of what it names rather than that package itself.
+  Per source ROOT as well as per package, because javac runs once per root and the reactor stops at
+  the first root that fails: five `-DskipTests install` builds a run on this reactor, four probed and
+  one clean. Round 18 found the round-17 job with two probes in one of the reactor's twelve packages,
+  both on a `public` member — the same defect commit `829f8b90` had already fixed for the in-repo
+  guard.
+  **Proved by running the job's own script text once per edit** (JDK 21 on this head, `mvn -o`): exit
+  0 on this head with the working tree unchanged and no probe left behind; exit 1 for each of
+  `<arg>-Xdoclint:reference</arg>` deleted, `<arg>-Xdoclint:reference/public</arg>`,
+  `<arg>-Xdoclint/package:-org.openmrs.module.chartsearchai.reference</arg>` and
+  `<arg>-Xdoclint/package:-org.openmrs.module.chartsearchai.*</arg>`; and exit 0 with round 12's
+  `<surefire.excludes>**/JavadocReference*Test.java</surefire.excludes>` in the root `<properties>` —
+  the edit that removes BOTH guards from the reactor at exit 0, re-measured on this head as `mvn -o
+  clean install` exit 0 with `grep -c JavadocReference` over the whole log zero — which is the
+  independence claim. A red X there is a diagnostic; which checks gate a merge is branch protection's
+  business and not this file's.
+- **A javadoc block between a member's MODIFIERS and the rest of its declaration was a hole in the
+  scanner and in the shape table both, and round 19 closed it rather than recording it.** Measured on
+  JDK 21 over four arrangements — a field split after `private`, a method split after `public`, the
+  same with a leading annotation, and an interface method split after `default` — javac exits 0 with
+  NO diagnostic of any kind: no `reference not found`, and not the `documentation comment not expected
+  here` the pre-`package` position draws. So a dead pointer there was invisible to doclint, invisible
+  to `unattachedJavadocBlocks`, and needed no POM edit to get that way. `isModifiersAlone` is the arm
+  and `ModifiersSplitByABlock` / `AnnotatedModifiersSplitByABlock` are its ground truth; planted for
+  real in `DateFormatUtil.java` between `public` and `static String formatDate(...)`, the build now
+  exits 1 from `noJavadocBlockIsOrphaned` naming that file and line. The reserved-word modifier list
+  deliberately excludes the CONTEXTUAL ones (`sealed`, `non-sealed`), which are also legal
+  identifiers. A block inside a METHOD BODY is now on the record as a row rather than in prose alone —
+  `BlockInsideAMethodBody`, declared `UNATTACHED_AND_UNREACHED`, which is also the counterpart that
+  makes the modifier list a SET of keywords rather than "one token".
+- **The two guards' cross-module pointers are checked as TEXT, from the module each is written in.**
+  Neither module's test classpath sees the other's test classes, so a pointer at the other guard is
+  written `{@code Class.member}` and no compiler resolves it — which left the two files that exist to
+  stop pointers rotting silently carrying pointers that rot silently, aimed at the members review
+  rounds keep renaming. `everyPointerAtTheOtherModulesGuardNamesSomethingItCarries` (api) and
+  `everyPointerAtTheApiSideGuardNamesSomethingItCarries` (omod) require each member name a pointer
+  prints to occur in the other file as a whole identifier. Proved by renaming: all occurrences of
+  `pomsNoCrossModuleReaderNames` in the api guard reddens the omod arm, and of
+  `noPomEditTakesAModuleOutOfTheTestBuild` in the omod guard reddens the api arm with one violation
+  per pointer site. Bounded, and worth stating: a name the other file merely MENTIONS satisfies it,
+  and a pointer whose member name is split mid-identifier across two javadoc lines is not seen — the
+  search copy is flattened at wraps, so a break after the `.` is found. The two directions are held
+  from different modules on purpose, so one edit does not defeat both.
 - **The disclosure is generalised rather than extended by one more sentence, and that is round 10's
   main change.** Every round so far has found a position the round before had not read, and every
   absolute published here has been falsified by a later round, so the honest statement is not a

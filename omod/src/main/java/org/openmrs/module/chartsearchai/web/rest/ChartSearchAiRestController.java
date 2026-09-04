@@ -1380,12 +1380,10 @@ public class ChartSearchAiRestController {
 	 *
 	 * <p>{@code unfaithfullyRenderedCitations} is the same remedy for the same failure, one issue
 	 * later (<a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/337">#337</a>):
-	 * the citations whose rendering in the answer the module found unfaithful to the record they
-	 * point at. Until it, that finding was a {@code WARN} and nothing a consumer could see, so a
-	 * degraded safety sentence reached a clinician carrying a citation marker with nothing saying the
-	 * marker's own record reads otherwise. {@code ChartAnswer.getUnfaithfullyRenderedCitations()} is
-	 * canonical for what it states, for why no prose travels with it, and for the difference between
-	 * {@code null} and an empty list — a difference this method preserves rather than flattening.
+	 * the citations whose rendering in the answer the module found unfaithful to the record they point
+	 * at. {@code ChartAnswer.getUnfaithfullyRenderedCitations()} is canonical for what it states, for
+	 * why no prose travels with it, and for the difference between {@code null} and an empty list — a
+	 * difference this method preserves rather than flattening.
 	 *
 	 * <p><b>The copy is a correctness requirement</b> and not caution — the measurement is at
 	 * {@link #serializeSafetyWarnings}, which takes it for the same reason. What is new here is the

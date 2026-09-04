@@ -223,13 +223,20 @@ public class ReferenceProseFidelityTest {
 	}
 
 	/**
-	 * THREE records diverged from, stated in the order the check reported them — which is the order
-	 * the ANSWER diverges in, not the order the chart numbers the records in. Three and not two, and
-	 * that is the whole arrangement: the answer diverges from {@code [2]}, then {@code [3]}, then
-	 * {@code [1]}, an order that is neither ascending nor descending, so it separates report order
-	 * from BOTH orderings a set could impose. A two-record version of this case was written first, and
-	 * its {@code [2, 1]} is descending — it passed under a reversed {@code TreeSet}, which is exactly
-	 * the coincidence a control has to rule out.
+	 * THREE records diverged from, stated in the order the check reported them, which is neither the
+	 * order the chart numbers them in nor its reverse. Three and not two, and that is the whole
+	 * arrangement: the statement comes back {@code [2, 3, 1]}, so it separates report order from BOTH
+	 * orderings a set could impose. A two-record version was written first and its {@code [2, 1]} is
+	 * descending — it passed under a reversed {@code TreeSet}, which is exactly the coincidence a
+	 * control has to rule out.
+	 *
+	 * <p><b>What "report order" is, stated because an earlier draft of this javadoc got it wrong.</b>
+	 * It is RECORD-major: {@code examine} runs once per cited record, in the order
+	 * {@code citedReferenceProse} returns them — which is {@code extractCitedReferences}' order, not
+	 * the answer's. Answer position orders the divergences WITHIN one record. This arrangement cannot
+	 * tell the two apart, because its marker order and its divergence order coincide; an answer that
+	 * cites {@code [1]} before {@code [2]} while diverging from {@code [2]} first states
+	 * {@code [1, 2]}, and nothing here pins that.
 	 *
 	 * <p>Assembled rather than injected: the two records the real injector produces for one question
 	 * carry the SAME mechanism string, so they diverge together and pool, and the shape this needs
@@ -261,8 +268,8 @@ public class ReferenceProseFidelityTest {
 		assertEquals(
 				Arrays.asList(Integer.valueOf(2), Integer.valueOf(3), Integer.valueOf(1)),
 				answer.getUnfaithfullyRenderedCitations(),
-				"the statement is in the order the divergences were reported — the answer's own "
-						+ "order, and neither the chart's numbering nor its reverse");
+				"the statement is in the order the divergences were reported, and neither the chart's "
+						+ "numbering nor its reverse");
 	}
 
 	/**

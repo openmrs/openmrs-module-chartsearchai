@@ -514,8 +514,10 @@ public interface ChartSearchService {
 		 * subject drug only, so several records — several indexes — share one, and the
 		 * {@code safetyWarnings} chips carrying that {@code (type, drug)} are a candidate SET rather
 		 * than a match; and a chip's {@code detail} is in any case only the mechanism half of what this
-		 * check compares against, the prefix and the clauses {@code renderFinding} appends carrying no
-		 * counterpart. A {@code drug_reference} record's text is published nowhere at all.
+		 * check compares against. The prefix, the strength call and the provenance note carry no wire
+		 * counterpart; the chart-order clause is not the exception it looks like, since what the chip
+		 * publishes is its ITEMS, as structured {@code chartOrderBridges}, and not the clause TEXT
+		 * compared here. A {@code drug_reference} record's text is published nowhere at all.
 		 *
 		 * <p><b>It is not a grounding verdict and must not be rendered as one.</b> The finding is
 		 * deterministic and correct; what diverged is the ANSWER's rendering of it. Reading it as

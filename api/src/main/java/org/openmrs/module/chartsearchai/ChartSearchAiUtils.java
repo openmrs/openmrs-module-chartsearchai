@@ -35,7 +35,15 @@ public class ChartSearchAiUtils {
 	private static final Logger log = LoggerFactory.getLogger(ChartSearchAiUtils.class);
 
 	/**
-	 * Matches an inline {@code [N]} citation marker in LLM answer prose. The
+	 * Matches an inline {@code [N]} citation marker. Answer prose is where they are READ, and since
+	 * issue #379 a record's own prose can carry one too: {@code DrugReferenceInjector.chartOrderClause}
+	 * WRITES the spelling into a chart-order attribution, and
+	 * {@code ReferenceProseFidelityCheck.wordsWithoutMarkers} strips it from a record as well as an
+	 * answer so the two operands of its comparison are produced alike. The writer holds no reference to
+	 * this constant — it builds the spelling as a literal — so a change to either side is caught by
+	 * {@code InteractionFindingChartOrderBridgeTest}, whose cases assert the rendered clause and whose
+	 * {@code .theNumbersTheClauseWritesAreReadableByTheSharedCitationPattern} is the one that asks the
+	 * decode step rather than the words. The
 	 * single source of truth for citation-marker parsing, shared by every consumer
 	 * {@link #citedIndexes} names — citation extraction ({@code LlmInferenceService}),
 	 * grounding ({@code CitationGroundingVerifier}), safety echo-scoping

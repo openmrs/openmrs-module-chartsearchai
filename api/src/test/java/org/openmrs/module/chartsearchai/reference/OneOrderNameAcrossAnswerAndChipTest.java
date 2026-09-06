@@ -33,7 +33,9 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * <p><b>Why #349's clause was silent on exactly this shape.</b> That issue built the mechanism that
  * states the correspondence — {@code DrugSafetyValidator.chartOrderBridges} decides it and
  * {@link DrugReferenceInjector#FINDING_CHART_ORDER_LEAD} renders it as {@code "<Substance> from
- * <order display>"} inside the injected {@code safety_finding}. Its silence test asked whether ANY
+ * <order display>"} inside the injected {@code safety_finding} — and, on an install that sets
+ * {@code chartsearchai.drugSafety.citeOrderRecords}, the number of the chart record that order is
+ * (issue #379, off by default, which is why the clause here carries none). Its silence test asked whether ANY
  * name the order RECORDS reaches the substance, and
  * {@code PatientClinicalContextBuilder.addDrugName} puts the order's CONCEPT name into that set
  * beside its drug-row name. So an order displayed {@code Advil 400mg} on concept {@code Ibuprofen}

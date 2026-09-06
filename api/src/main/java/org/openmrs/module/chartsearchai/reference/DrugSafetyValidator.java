@@ -5708,8 +5708,9 @@ public class DrugSafetyValidator {
 	 *         reddens with an empty bridge list. <b>The measurement this paragraph used to cite does
 	 *         NOT exercise the exclusion, which is why the case was needed</b>: strip every ATC code
 	 *         off {@code OneOrderNameAcrossAnswerAndChipTest.ticketChart()}'s brand-named order and
-	 *         {@code .aSubstanceTheChartNamesOnlyByABrandIsBridgedToTheOrderItCameFrom} still gets
-	 *         {@code Warfarin from Coagubrand.}, so there the name leg is what answers it — but that
+	 *         {@code .aSubstanceTheChartNamesOnlyByABrandIsBridgedToTheOrderItCameFrom} is still
+	 *         bridged to {@code Coagubrand} (with that record's number since issue #379), so there the
+	 *         name leg is what answers it — but that
 	 *         order carries no concept, so round 2's exclusion is empty for it and every scope a
 	 *         maintainer could give the exclusion answers alike. That file's
 	 *         {@code .aBrandNamedOrderJoinedByItsBridgedConceptIsBridgedToTheSubstanceToo} is the same

@@ -146,11 +146,10 @@ public class ChartSearchAiUtils {
 	 * ({@code CitationGroundingVerifier}), safety echo-scoping ({@code DrugSafetyValidator}) and —
 	 * since issue #338 — the check that asks whether a marker sits INSIDE a class-code parenthetical
 	 * ({@code ClassCodeFidelityCheck}) and — since issue #377 — the active-order citation check
-	 * ({@code ActiveOrderCitationFidelityCheck}), so those consumers cannot drift. TWO callers match
-	 * {@link #INLINE_CITATION} directly instead, and each needs the one thing a set of indexes cannot
-	 * carry, a marker's text offset: the clause-scoped splitter, and
-	 * {@code ActiveOrderCitationFidelityCheck}, which must find where a RUN of markers ends before it
-	 * has a substring to decode. Returns an empty set for null/blank text.
+	 * ({@code ActiveOrderCitationFidelityCheck}), so those consumers cannot drift. A caller matches
+	 * {@link #INLINE_CITATION} directly only for what a set of indexes cannot carry — a marker's text
+	 * offset, or the text with markers removed — which is the two-reason split CLAUDE.md's own
+	 * inline-citation rule states. Returns an empty set for null/blank text.
 	 */
 	public static Set<Integer> citedIndexes(String text) {
 		Set<Integer> indexes = new java.util.LinkedHashSet<Integer>();
@@ -263,8 +262,8 @@ public class ChartSearchAiUtils {
 	 * withheld. Faithfulness of reference content is checked deterministically instead, by two exact
 	 * comparisons, which are the deterministic post-answer checks that read reference content and not
 	 * all of them — {@code ActiveOrderCitationFidelityCheck} (issue #377) reads none, asking instead
-	 * which CHART record a sentence cited. ADR Decision 75 enumerates them; this does not:
-	 * {@code ClassCodeFidelityCheck} for an ATC class code
+	 * which CHART record a sentence cited, and ADR Decision 75 is where they are enumerated. The two
+	 * that read reference content are {@code ClassCodeFidelityCheck}, for an ATC class code
 	 * the answer states that no cited record does (issue #142), report-only, and
 	 * {@code ReferenceProseFidelityCheck} for an answer that reproduces a cited reference record's
 	 * prose and then substitutes its own words inside the sentence it was copying (issue #337), whose
@@ -284,8 +283,8 @@ public class ChartSearchAiUtils {
 	 *
 	 * <p><strong>The unrecognised-type fallback grades normally</strong>, following
 	 * {@link #referenceGroup}'s fail-safe, and that is deliberate in this direction too: querystore
-	 * passes through chart types this module declares no constant for ({@code drug_order},
-	 * {@code visit}, {@code encounter} …), so demoting unknown types would silently stop verifying
+	 * passes through chart types this module declares no constant for ({@code visit},
+	 * {@code encounter} …), so demoting unknown types would silently stop verifying
 	 * most real chart citations. The cost is that a module-supplied type introduced as a bare string
 	 * literal — rather than as a {@code RESOURCE_TYPE_*} constant, which
 	 * {@code ChartSearchAiReferenceGroupTest}'s sweep would catch — would be graded as chart evidence;

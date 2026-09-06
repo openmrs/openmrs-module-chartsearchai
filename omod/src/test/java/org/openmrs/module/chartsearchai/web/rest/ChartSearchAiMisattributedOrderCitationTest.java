@@ -173,7 +173,7 @@ public class ChartSearchAiMisattributedOrderCitationTest {
 	 * stating nothing is serialized as {@code null} on the early event and not flattened to an empty
 	 * list, which would tell a client the answer had been compared and found faithful. That
 	 * PRODUCTION states nothing there is a different claim and is pinned one layer down, by
-	 * {@code ActiveOrderCitationFidelityTest.searchStreaming_reportsItOnThePrimaryProductionPathToo},
+	 * {@code ActiveOrderCitationFidelityTest.searchStreaming_statesItOnTheAnswerItReturnsAndNotOnTheEarlyOne},
 	 * which drives the real orchestration; the stub below only reproduces its shape.
 	 * {@code interactionPairs} is null on that event for the same class of reason.
 	 */

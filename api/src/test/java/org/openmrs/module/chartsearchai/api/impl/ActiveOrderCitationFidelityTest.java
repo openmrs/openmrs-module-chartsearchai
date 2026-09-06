@@ -194,29 +194,45 @@ public class ActiveOrderCitationFidelityTest {
 		// measurement to state — and null says exactly that, where an empty list would tell a client
 		// the citations had been examined and found sound. That PRODUCTION states nothing there is
 		// this case's claim; the controller half of it is the wire test's.
+		//
+		// The null assertion alone does NOT establish it, and review measured that: the early answer
+		// is built from a shorter constructor that has no such field, so it states null wherever the
+		// check runs, and moving the check ABOVE the handoff left every case here green. What the
+		// check's POSITION is pinned by is the log snapshot — at handoff time the WARN must not have
+		// been emitted yet.
 		int condition = indexOfType(ChartSearchAiConstants.RESOURCE_TYPE_CONDITION);
 		service.setLlmProvider(answering(sentenceFragment("Simvastatin", condition,
 				findingsStatingThePhrase().get(0)) + "."));
 		final List<List<Integer>> early = new ArrayList<List<Integer>>();
+		final List<List<String>> loggedByHandoff = new ArrayList<List<String>>();
 
-		ChartAnswer answer = service.searchStreaming(patient(), QUESTION, token -> { },
-				reasoning -> { }, citations -> { },
-				ungrounded -> early.add(ungrounded.getMisattributedOrderCitations()));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			ChartAnswer answer = service.searchStreaming(patient(), QUESTION, token -> { },
+					reasoning -> { }, citations -> { },
+					ungrounded -> {
+						early.add(ungrounded.getMisattributedOrderCitations());
+						loggedByHandoff.add(capture.describeAll());
+					});
 
-		assertEquals(1, early.size(), "the early-done consumer must have fired");
-		assertEquals(null, early.get(0),
-				"the check runs after the user-visible handoff, so the early answer states no "
-						+ "measurement");
-		assertEquals(Collections.singletonList(Integer.valueOf(condition)),
-				answer.getMisattributedOrderCitations(),
-				"and the answer this method RETURNS carries it");
+			assertEquals(1, early.size(), "the early-done consumer must have fired");
+			assertEquals(null, early.get(0),
+					"the check runs after the user-visible handoff, so the early answer states no "
+							+ "measurement");
+			assertFalse(loggedByHandoff.get(0).toString().contains("active drug order"),
+					"and the check must not have RUN by then — moving it ahead of the handoff puts a "
+							+ "comparison in front of the event a user sees. Captured at handoff: "
+							+ loggedByHandoff.get(0));
+			assertEquals(Collections.singletonList(Integer.valueOf(condition)),
+					answer.getMisattributedOrderCitations(),
+					"and the answer this method RETURNS carries it");
+		}
 	}
 
 	@Test
 	public void aCitedRecordWhoseTypeTheModuleCouldNotReadIsNotAccused() {
 		// The allow-list refuses an unrecognised type, and a type that was never READ is not an
 		// unrecognised one — referenceGroup's fail-safe calls it chart evidence, so without its own
-		// guard this record is reported as "a null record", which is an accusation about metadata
+		// guard this record is reported as "null record", which is an accusation about metadata
 		// nobody read. Silence is the direction this check must fail in.
 		PatientChart untyped = new PatientChart(
 				"Patient" + System.lineSeparator() + System.lineSeparator()

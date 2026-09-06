@@ -69,7 +69,7 @@ import org.slf4j.LoggerFactory;
  * <p><b>The unit is the citation RUN, not the sentence.</b> The reported answer put all five
  * findings in ONE sentence, two of them citing correct drug orders, so a sentence-scoped comparison
  * passes it. What is offered for a claim is the run of markers immediately following it: markers
- * separated by nothing but whitespace and commas, ending at the first other character. So
+ * separated by nothing but spaces, tabs and commas, ending at the first other character. So
  * {@code "…active order Methylprednisolone [177] [350], Clarithromycin interacts with…"} offers
  * {@code [177] [350]} and nothing further, and
  * {@code "…active order Simvastatin [3] [61], and her thyroid neoplasm [9] is unrelated"} does not
@@ -109,7 +109,7 @@ import org.slf4j.LoggerFactory;
  *   <li>a record whose resource type the module could not read is not accused. The allow-list
  *       refuses a type it does not recognise, and a type nobody READ is not one of those —
  *       {@link ChartSearchAiUtils#referenceGroup}'s fail-safe would call it chart evidence and the
- *       report would read "a null record";</li>
+ *       report would read "null record";</li>
  *   <li>it reports the CITATION and never the record's text or the answer's, both of which carry
  *       patient data. The type travels instead, which is what makes an unexpected retrieval contract
  *       diagnosable from one line.</li>
@@ -154,16 +154,22 @@ final class ActiveOrderCitationFidelityCheck {
 
 	private static final Logger log = LoggerFactory.getLogger(ActiveOrderCitationFidelityCheck.class);
 
-	/** The characters that may separate two markers of one run. Whitespace because that is how the
-	 *  model writes them, and a comma because {@code LlmAnswerExtractor.normalizeSlashCitations}
-	 *  rewrites {@code [6, 7]} into two markers and leaves the separator behind. Nothing else: a
-	 *  word between two markers means the second one attributes a different clause.
+	/** The characters that may separate two markers of one run: horizontal whitespace, and a comma
+	 *  because {@code LlmAnswerExtractor.normalizeSlashCitations} rewrites {@code [6, 7]} into two
+	 *  markers and leaves the separator behind. Nothing else — a word between two markers means the
+	 *  second one attributes a different clause.
+	 *
+	 *  <p><b>No carriage return or newline, and their absence is not an omission.</b> The caller has
+	 *  already split on {@link ChartSearchAiUtils#SENTENCE_BOUNDARY}, whose line-break arm means no
+	 *  string reaching here can carry one. What that costs is a real residue rather than nothing: a
+	 *  model that hard-wraps BETWEEN two markers of one run puts them in two units, and only the
+	 *  first is attributed. ADR Decision 75 records it.
 	 *
 	 *  <p>Deliberately narrower than {@code CitationGroundingVerifier}'s {@code LEADING_ITEM_SEPARATOR},
 	 *  the nearest neighbouring alphabet, which also admits {@code ;} and a leading {@code and} or
 	 *  {@code or} because it separates ITEMS of one enumeration. Widening this to match would make a
 	 *  second claim's markers part of the first claim's run; the narrowing fails toward silence. */
-	private static final String RUN_SEPARATORS = " \t\r\n,";
+	private static final String RUN_SEPARATORS = " \t,";
 
 	private ActiveOrderCitationFidelityCheck() {
 	}
@@ -197,7 +203,7 @@ final class ActiveOrderCitationFidelityCheck {
 				// same 66,429 arrangements, because examine's own per-sentence indexOf is what
 				// scopes the check to an active-order claim. What it buys is that the overwhelmingly
 				// common answer, which states no such claim, costs one containment scan and neither
-				// map below: 0.45 us against 66-90 us for an answer that does state one.
+				// map below — ADR Decision 75 carries the figures, and carries them once.
 				return offending;
 			}
 			Map<Integer, RecordMapping> byIndex = new HashMap<Integer, RecordMapping>();
@@ -342,7 +348,7 @@ final class ActiveOrderCitationFidelityCheck {
 		if (mapping == null || ChartSearchAiUtils.isBlank(mapping.getResourceType())) {
 			// A record whose type the module could not read is one it cannot say anything about, and
 			// this is NOT covered by the allow-list refusal below: referenceGroup's fail-safe calls
-			// an unknown type chart evidence, so a null would otherwise be reported as "a null
+			// an unknown type chart evidence, so a null would otherwise be reported as "null
 			// record" — an accusation made about metadata nobody read.
 			return null;
 		}

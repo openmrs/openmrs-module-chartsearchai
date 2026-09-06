@@ -235,8 +235,8 @@ public final class QueryScopeRouter {
 	 *  {@code drug_order} reads {@link ChartSearchAiConstants#RESOURCE_TYPE_DRUG_ORDER} because this
 	 *  module declares that type and other production sites read it — mutate the constant and read
 	 *  the compiler, rather than trusting a count here, which has already gone stale once. The rest
-	 *  are querystore contract strings, all but {@code medication_dispense} undeclared by this
-	 *  module, and declaring one is a reference-group decision
+	 *  are querystore contract strings written as literals, whatever this module declares elsewhere;
+	 *  declaring one is a reference-group decision
 	 *  ({@code ChartSearchAiReferenceGroupTest} sweeps every declared type) rather than a rename. */
 	static Set<String> typedSlice(Intent intent) {
 		switch (intent) {

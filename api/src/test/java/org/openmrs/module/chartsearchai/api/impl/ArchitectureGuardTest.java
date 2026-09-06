@@ -284,14 +284,16 @@ public class ArchitectureGuardTest {
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/378">#378</a>) — asked
 	 * of the CLASS FILES rather than of the source.
 	 *
-	 * <p><b>The source form of this guard was walked past five times, and the fix was to change the
-	 * question rather than to widen the needle again.</b> Fresh reviewers got a coverage-less answer
-	 * past it with a qualified {@code new ChartSearchService.ChartAnswer(}, with a COMMENT naming the
-	 * construction (whose unbalanced bracket made a raw-text depth walk swallow every real
-	 * construction after it), with a line wrap inside the qualifier, with a unicode escape
-	 * ({@code new \u0043hartAnswer(}), and with a generic witness ({@code new <String> ChartAnswer(}).
-	 * Every one of those is a fact about TYPING. None of them survives compilation: javac writes the
-	 * constructor's descriptor into the calling class's constant pool, identically for all five.
+	 * <p><b>The source form of this guard kept being walked past, and what ended it was changing the
+	 * question rather than widening the needle again.</b> Fresh reviewers got a coverage-less answer
+	 * past successive versions of it with a qualified {@code new ChartSearchService.ChartAnswer(},
+	 * with a COMMENT naming the construction (whose unbalanced bracket made a raw-text depth walk
+	 * swallow every real construction after it), with a line wrap inside the qualifier, with a
+	 * unicode escape ({@code new \u0043hartAnswer(}), and with a generic witness
+	 * ({@code new <String> ChartAnswer(}). Do not read that as the list. Every one of them is a fact
+	 * about TYPING, and none survives compilation: javac writes the same constructor descriptor into
+	 * the calling class's constant pool for all of them, which is why the question moved here rather
+	 * than the pattern getting another alternative.
 	 *
 	 * <p>So this reads {@code ChartAnswer}'s own constructor descriptors out of its class file, and
 	 * then asserts that no other production class references any of them except the widest — the one
@@ -310,7 +312,8 @@ public class ArchitectureGuardTest {
 	 * {@code ChartAnswer.class.getConstructor(...).newInstance(...)} names no descriptor in the
 	 * caller's pool, and a review agent confirmed it passes. No such factory or reflective
 	 * construction exists.
-	 * And it reads BUILD OUTPUT, so it describes what was last compiled — which is why the module's
+	 *
+	 * <p>And it reads BUILD OUTPUT, so it describes what was last compiled — which is why the module's
 	 * own rule to measure with {@code mvn -o clean install} from the root binds this guard as much as
 	 * any test. Reading compiled output is this repo's own idiom for a rule no behavioural case can
 	 * see, rather than a departure from it: {@code ChartSearchAiReferenceGroundingWithholdingTest}

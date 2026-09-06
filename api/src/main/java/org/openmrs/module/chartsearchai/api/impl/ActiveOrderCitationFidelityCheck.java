@@ -154,10 +154,16 @@ final class ActiveOrderCitationFidelityCheck {
 
 	private static final Logger log = LoggerFactory.getLogger(ActiveOrderCitationFidelityCheck.class);
 
-	/** The characters that may separate two markers of one run: horizontal whitespace, and a comma
-	 *  because {@code LlmAnswerExtractor.normalizeSlashCitations} rewrites {@code [6, 7]} into two
-	 *  markers and leaves the separator behind. Nothing else — a word between two markers means the
-	 *  second one attributes a different clause.
+	/** The characters that may separate two markers of one run: a space, a tab, and a comma because
+	 *  {@code LlmAnswerExtractor.normalizeSlashCitations} rewrites {@code [6, 7]} into two markers
+	 *  and leaves the separator behind. Nothing else — a word between two markers means the second
+	 *  one attributes a different clause.
+	 *
+	 *  <p>Spelled as the three characters rather than as a category, because a category is a claim
+	 *  about members nobody enumerated: a non-breaking space is horizontal whitespace and is not in
+	 *  this set, so {@code [1]\u00A0[2]} is one run of one marker and the second is not attributed.
+	 *  That is the same direction as the line-break residue below — silence — and it is recorded
+	 *  rather than closed.
 	 *
 	 *  <p><b>No carriage return or newline, and their absence is not an omission.</b> The caller has
 	 *  already split on {@link ChartSearchAiUtils#SENTENCE_BOUNDARY}, whose line-break arm means no

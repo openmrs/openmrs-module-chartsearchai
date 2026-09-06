@@ -90,6 +90,12 @@ public class ProjectInstructionsGuardTest {
 	 * way. Measure with {@code wc -c} on the file itself rather than differencing a figure quoted
 	 * in a previous commit; every such figure written here has gone stale.
 	 *
+	 * <p>These are BYTES; the cost they stand in for is TOKENS, and the ratio here is not the
+	 * usual one. Measured on the pre-split file through the harness's own context accounting,
+	 * 85,984 bytes were 31.6k tokens — about 2.7 bytes per token, where ordinary prose runs
+	 * nearer 4. Backticked identifiers, camelCase method names and em-dashes are why. So price a
+	 * kilobyte here at roughly 370 tokens rather than 250 before deciding a budget is generous.
+	 *
 	 * <p>One principle sets both: headroom of roughly a tenth — a couple of ordinary rules, not a
 	 * section. Both were set at the split, a little under a tenth above what each file measured once
 	 * {@link #noBulletCarriesMoreProseThanItsBudget} had been satisfied — room for a few rules, not

@@ -16,7 +16,8 @@
   4. Is anything missing — incomplete implementation, forgotten call sites?
   5. Does it use the real production pipeline, not a simulation or mock?
   6. Were any tests modified? If so, that's a rule violation — revert and fix the production code instead.
-  7. Were all rules in this file followed?
+  7. Were all rules followed — this file's, and those of every nested instruction file
+     covering code the change touches?
 - Follow test-driven development: for every bug fix or new feature, first write a failing test that defines the expected behavior, then write production code to make it pass. Write the strictest assertion — if it doesn't fail, tighten it until it does.
 - Always create a plan before writing code. Read the relevant code, outline the approach, then implement.
 - Never commit code with known regressions. When a change fixes one case but breaks another, the root cause is usually in shared infrastructure, not the individual call site — diagnose the shared problem before patching stages.
@@ -33,9 +34,12 @@ measured, and where the reasoning it carried went, is `docs/adr.md` Appendix A.
 
 So when you learn something worth keeping:
 
-- **A rule someone must obey** — "use X, never Y" — belongs here: the directive, its issue
-  number, and a pointer to the test that pins it. One sentence per rule wherever a rule fits in
-  one; where an entry point carries several, give each its own sub-bullet rather than a paragraph.
+- **A rule someone must obey** — "use X, never Y" — belongs in the instructions: the directive,
+  its issue number, and a pointer to the test that pins it.
+  **The file is decided by the code the rule binds** — beside that code where it all sits in one
+  directory, in this file where it binds several packages at once. One sentence per rule wherever a
+  rule fits in one; where an entry point carries several, give each its own sub-bullet rather than
+  a paragraph.
 - **Why the rule is that way**, what was measured, what was tried and reverted, what a mutation
   reddens — belongs in the ADR decision, or in the javadoc of the method it constrains. Not here.
 - **Do not publish a count that tracks the code.** A test-suite total, a per-mutation tally
@@ -49,7 +53,7 @@ So when you learn something worth keeping:
 
 Most of that is enforced, over this file and every nested one: `ProjectInstructionsGuardTest`
 fails the build on a suite total, an elided identifier, a cited symbol, path or ADR decision that
-does not resolve, an unclosed code span, a nested instruction file this file does not name, a
+does not resolve, an unclosed code span or bold run, a nested instruction file this file does not name, a
 file over its size budget, and one BULLET carrying more prose than its own budget — that last
 measured without its trailing pointer run, so citing a test costs nothing. It cannot check
 whether a rule is TRUE — only that its pointers land and its figures are not of the kind that rot.

@@ -587,7 +587,12 @@ public interface ChartSearchService {
 		 * not a certificate.</b> The check is recall-limited by construction: it sees only an answer
 		 * that reproduces {@code DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE}, only the run
 		 * of citation markers that follows it, and it cannot tell a citation of the WRONG drug order
-		 * from a citation of the right one. ADR Decision 75 enumerates that. Null's reachable cause
+		 * from a citation of the right one. ADR Decision 75 enumerates that. <b>And empty says less
+		 * than it looks on a stock install</b>: {@code chartsearchai.drugReference.enabled} defaults
+		 * to false, and its own description says no safety warnings are produced then — so no finding
+		 * carries the phrase for an answer to reproduce, and this list is empty for a reason that is
+		 * not about the citations at all. That is the same qualification
+		 * {@link #getUnfaithfullyRenderedCitations()} carries, for the same GP. Null's reachable cause
 		 * is the async-grounding path's early {@code done}, built before the check runs; on a cache
 		 * hit the ORIGINAL request's list is replayed with the rest of the answer.
 		 *

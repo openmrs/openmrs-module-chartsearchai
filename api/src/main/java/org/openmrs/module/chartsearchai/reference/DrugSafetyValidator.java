@@ -2550,11 +2550,19 @@ public class DrugSafetyValidator {
 	 *         all, on any install. {@code README.md}'s client contract states all three, because a
 	 *         client is where they do damage.
 	 *
-	 *         <p>Null only from the fail-safe below, which is why it is here rather than left to
+	 *         <p><b>The catch is why this returns null at all</b>, and it is here rather than left to
 	 *         propagate: unlike {@link #validate}, whose own catch keeps the answer path unbreakable,
 	 *         this is read from {@code LlmInferenceService}'s pre-model block, whose {@code finally}
 	 *         logs the timing line and rethrows. An enrichment must not be able to fail an answer that
-	 *         is otherwise fine. No memo, per issue #172's rule and because
+	 *         is otherwise fine.
+	 *
+	 *         <p>The null-service branch above it is a TEST-SEAM guard and is not discriminated by any
+	 *         case: production autowires the field, and removing that branch is absorbed by the catch,
+	 *         so the suite stays green and every affected request merely logs a stack trace instead.
+	 *         Measured by deleting it. It is kept for that stack trace and for nothing else — do not
+	 *         read it as protecting a production path, and do not add an assertion pretending it does.
+	 *
+	 *         <p>No memo, per issue #172's rule and because
 	 *         {@code CoMedicationResolutionPerPassTest} walks this bean's declared fields: the load
 	 *         status is already cached for the life of the service.
 	 */

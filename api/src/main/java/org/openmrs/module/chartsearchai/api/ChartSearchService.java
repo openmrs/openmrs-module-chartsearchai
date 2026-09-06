@@ -600,9 +600,10 @@ public interface ChartSearchService {
 		 * event is emitted from that answer and is what the user sees. Like the class statement and
 		 * unlike {@link #getPairChipExtent()}, it is known before the model is called.
 		 *
-		 * @return the verdict, or null where the module stated none — which the fail-safe in
-		 *         {@code DrugSafetyValidator.conditionRuleCoverage()} is the only production path to,
-		 *         the three constants above covering every case it can answer
+		 * @return the verdict, or null where the module stated none. The three constants above cover
+		 *         every case the producer can answer, so a null reaching a client means
+		 *         {@code DrugSafetyValidator.conditionRuleCoverage()} could not read the load status —
+		 *         that accessor's javadoc carries what it withholds and why
 		 */
 		public DrugReferenceLoad.Coverage getConditionRuleCoverage() {
 			return conditionRuleCoverage;

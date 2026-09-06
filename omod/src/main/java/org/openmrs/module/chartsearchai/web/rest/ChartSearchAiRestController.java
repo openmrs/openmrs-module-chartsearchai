@@ -1325,8 +1325,9 @@ public class ChartSearchAiRestController {
 	/**
 	 * Writes an answer's drug-safety chips AND the statement of how bounded the interaction list
 	 * behind them is, into one payload map. Every emission surface goes through here, since
-	 * issue #354 by way of {@link #putModuleStatements} — which composes this with the class
-	 * statement, and is this method's only caller.
+	 * issue #354 by way of {@link #putModuleStatements} — which composes this with the module's other
+	 * statements, and is this method's only caller. Read that method for what those are; a list here
+	 * is one that falls behind, which it already had once.
 	 *
 	 * <p>Named for the CHIPS and not for "findings", deliberately: {@code safety_finding} is a
 	 * reference resource type — the citable record form of a chip — and this method has nothing to

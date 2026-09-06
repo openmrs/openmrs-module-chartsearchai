@@ -412,6 +412,12 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 				status.coverageOf(DrugReferenceLoad.Arm.HAND_AUTHORED_RULES),
 				"neither rule can be evaluated against a chart, so the arm has nothing to act on");
 		assertEquals(0, status.entriesPublishing(DrugReferenceLoad.Arm.HAND_AUTHORED_RULES));
+		assertEquals(DrugReferenceLoad.Coverage.ABSENT,
+				status.coverageOf(DrugReferenceLoad.Arm.CONDITION_RULES),
+				"and its condition leg likewise (issue #378) — one of these rules IS typed condition, "
+						+ "so this is the case that puts the TOKEN half of that arm's predicate to "
+						+ "work rather than only its type half, which the allergy-only dataset covers");
+		assertEquals(0, status.entriesPublishing(DrugReferenceLoad.Arm.CONDITION_RULES));
 		assertEquals(DrugReferenceLoad.Coverage.PUBLISHED,
 				status.coverageOf(DrugReferenceLoad.Arm.ATC_CODES),
 				"while the class arms are served by the same entries, so the dataset did load");

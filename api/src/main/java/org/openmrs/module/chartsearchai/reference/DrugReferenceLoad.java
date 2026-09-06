@@ -124,6 +124,12 @@ public final class DrugReferenceLoad {
 		 * the drug itself needs no rule and no code, so {@code absent} here does NOT mean
 		 * contraindication checking is dead.
 		 *
+		 * <p><b>Its CONDITION leg is reported separately, as {@link #CONDITION_RULES}</b> (issue #378),
+		 * because this verdict fails in the other direction too: {@code published} here does not mean
+		 * condition checking is alive, an allergy-only dataset serving this arm while a patient's
+		 * recorded conditions are put to nothing. Read that constant before reading this one as an
+		 * answer about conditions.
+		 *
 		 * <p>{@link DrugSafetyValidator#evaluatesAgainstTheChart} rather than a non-empty contraindication
 		 * list, because that is the documented answer to "could the module even ask?": a rule typed neither
 		 * {@code allergy} nor {@code condition}, or carrying no matchable token, is unaskable. Counting the

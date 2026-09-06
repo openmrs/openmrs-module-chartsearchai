@@ -312,11 +312,14 @@ public class DrugSafetyValidator {
 	 * {@code StandingChartAlertsTest.theStandingSurfaceReportsNoInteractionsEvenBetweenInteractingActiveOrders},
 	 * which measures it over a chart whose orders the data relates many ways — not by this paragraph.
 	 *
-	 * <p>Gated exactly as {@link #validate(String, String, Patient, List, PairChipExtent.Sink)} is, and
-	 * the two must stay one gate:
-	 * {@code StandingChartAlertsTest.theGateOnTheStandingSurfaceIsTheOneTheAnswerSurfaceReads} reads
-	 * the other method's own body rather than a literal, so a change to the answer surface's gate that
-	 * leaves this one behind reddens. Fails safe to no alerts for the reason {@code validate} does.
+	 * <p>Gated on {@link #reportsStandingChartAlerts()} and on nothing of its own, which is what makes
+	 * the {@code screened} statement this surface publishes true OF it: the value a client is handed
+	 * and the condition this pass ran under are one expression, so neither can move without the
+	 * other. It reaches one switch further than
+	 * {@link #validate(String, String, Patient, List, PairChipExtent.Sink)}'s gate —
+	 * {@code warnOnContraindications}, which on the answer path stands the ARM down inside the pass
+	 * and here stands the whole surface down, there being nothing else on it. Fails safe to no
+	 * alerts for the reason {@code validate} does.
 	 *
 	 * @return the standing findings, newest arm order preserved; empty when the feature is off, when
 	 *         the chart records nothing an order could be contraindicated by, or when the pass
@@ -327,10 +330,7 @@ public class DrugSafetyValidator {
 	 */
 	public List<SafetyWarning> standingChartAlerts(Patient patient) {
 		try {
-			if (!ChartSearchAiUtils.isDrugReferenceEnabled()
-					|| !ChartSearchAiUtils.getBooleanGlobalProperty(
-							ChartSearchAiConstants.GP_DRUG_SAFETY_VALIDATE_ANSWERS,
-							ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_VALIDATE_ANSWERS)) {
+			if (!reportsStandingChartAlerts()) {
 				return new ArrayList<SafetyWarning>();
 			}
 			return standingChartAlerts(PatientClinicalContextBuilder.build(patient));
@@ -349,7 +349,7 @@ public class DrugSafetyValidator {
 	 *
 	 * <p>It is BELOW the two global properties the public entry reads, so a case entering here cannot
 	 * see them — which is what
-	 * {@code StandingChartAlertsTest.theGateOnTheStandingSurfaceIsTheOneTheAnswerSurfaceReads} exists
+	 * {@code StandingChartAlertsTest.theStandingEntryGatesOnThePredicateItPublishes} exists
 	 * to cover. {@code chartsearchai.drugSafety.warnOnContraindications} IS reachable from here, being
 	 * read inside {@code validate} where both surfaces share it
 	 * ({@code StandingChartAlertsToggleContextTest}).
@@ -363,6 +363,12 @@ public class DrugSafetyValidator {
 	 *         drug-reference switch AND {@link #reportsContraindications()}, which is the module's own
 	 *         composed answer to "may this module report a contraindication" and is therefore not
 	 *         re-spelled here.
+	 *
+	 *         <p><b>One expression, read by both consumers.</b> {@link #standingChartAlerts(Patient)}
+	 *         gates on this and the {@code chartalerts} handler publishes it, so the flag a client
+	 *         reads is the condition the pass ran under rather than a second predicate that happens
+	 *         to agree. Its three switches are asserted one at a time, through the real admin
+	 *         service, in {@code StandingChartAlertsToggleContextTest}.
 	 *
 	 *         <p><b>It is published</b>, as the {@code chartalerts} response's {@code screened} key,
 	 *         because an empty {@code alerts} array otherwise carries two unrelated meanings: this

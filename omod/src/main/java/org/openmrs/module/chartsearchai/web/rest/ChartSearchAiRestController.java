@@ -402,8 +402,15 @@ public class ChartSearchAiRestController {
 	 * <p><b>{@code screened} is not decoration.</b> An empty {@code alerts} array otherwise carries
 	 * two unrelated meanings — this chart holds no such finding, and nobody looked — which is the
 	 * distinction issue #378 drew for the condition-rule arm and issue #336 for the interaction
-	 * extent. It is read ONCE, here, and decides both keys, so the two cannot describe different
-	 * states of the toggles. What it does NOT answer is whether the loaded dataset can supply a rule
+	 * extent. It answers the TOGGLES and not the outcome:
+	 * {@link DrugSafetyValidator#standingChartAlerts(org.openmrs.Patient)} fails safe to no alerts, so
+	 * a pass that threw is published as {@code screened: true} beside an empty array, and the module's
+	 * log is what separates that from an honest miss. One read decides both keys, so neither is derived from the other. The validator's own
+	 * entry re-reads the same toggles as its gate, which is defence in depth rather than a second
+	 * source of truth: an operator flipping one BETWEEN the two reads gets {@code screened: true}
+	 * beside an empty list for that one request. Named rather than closed — every global property in
+	 * this predicate reads is read live, through the accessor every drug-safety toggle goes through,
+	 * and a lock over the three for one deterministic read is not worth its cost. What it does NOT answer is whether the loaded dataset can supply a rule
 	 * at all: that is {@code GET /chartsearchai/drugreferencestatus}, whose
 	 * {@code arms.conditionRules.coverage} tells a screen that had no condition rule to ask from one
 	 * that asked and found nothing — and which is deliberately not gated on the drug-safety toggles,

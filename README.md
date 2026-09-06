@@ -308,7 +308,7 @@ The `drugSafety.*` checks require both `chartsearchai.drugReference.enabled` and
 
 | Privilege | Purpose |
 |-----------|---------|
-| **AI Query Patient Data** | Execute chart search queries (`/search`, `/search/stream`, `/warmup`, `/feedback`) |
+| **AI Query Patient Data** | Execute chart search queries (`/search`, `/search/stream`, `/warmup`, `/feedback`) and read a patient's standing chart alerts (`/chartalerts`) |
 | **View AI Audit Logs** | Access the audit log endpoint |
 | **Manage AI Prewarm** | Trigger and monitor the bulk KV-prewarm bootstrap (`/prewarm`, `/prewarmstatus`) |
 
@@ -649,7 +649,7 @@ Ask this — not the log — after editing `sourceFormat` or `dataFilePath`. The
 
 ### Chart alerts
 
-This patient's **standing** chart findings — every active order her own allergy and condition records contraindicate — outside the answer thread ([#280](https://github.com/openmrs/openmrs-module-chartsearchai/issues/280)). Requires the same **"Query Patient Data"** privilege as `/search`, and the same per-patient access check.
+This patient's **standing** chart findings — her active orders checked against her own recorded allergies and conditions — outside the answer thread ([#280](https://github.com/openmrs/openmrs-module-chartsearchai/issues/280)). Which of those orders can be checked at all is the loaded dataset's business, and the third bullet below says what that leaves out. Requires the same **"AI Query Patient Data"** privilege as `/search`, and the same per-patient access check.
 
 ```
 GET /ws/rest/v1/chartsearchai/chartalerts?patient=<uuid>
@@ -665,7 +665,7 @@ GET /ws/rest/v1/chartsearchai/chartalerts?patient=<uuid>
 Why it is an endpoint rather than a key on `/search`. The contraindication check that joins a patient's own prescriptions to her own records once ran on every question, and put the identical chips on every answer — measured live on a 3.7.1 standalone, four questions about allergies, interactions, cancer and a date of birth returned the same two, byte for byte, which is the shape that trains a clinician to stop reading the box. That check is now scoped to what the response is about (see [`chartsearchai.drugSafety.warnOnContraindications`](#5-configure)), and this is the surface the withheld finding was given up to: a client asks for it and renders it where it chooses — a patient-header banner, a chart tab — so nothing rides an unrelated answer.
 
 - **`alerts`** carries the same objects as the `/search` response's `safetyWarnings`, through the same serializer, so a client renders one shape on both surfaces. There is no `interactionPairs` statement beside them because this pass raises no interaction chip to bound: it has no question, and the interaction screen is gated on one asking to be screened. Contraindications carry no rating, so `severity` is `null` here rather than absent — read it unconditionally, as on `/search`.
-- **`screened`** is whether the standing screen ran at all, and it is not decoration: an empty `alerts` array otherwise means both *this chart holds no such finding* and *nobody looked*. It is `false` when `chartsearchai.drugReference.enabled`, `chartsearchai.drugSafety.validateAnswers` or `chartsearchai.drugSafety.warnOnContraindications` is off, and it does **not** say which — nothing published tells those three apart. `true` with an empty `alerts` is a real measurement of none.
+- **`screened`** is whether the standing screen ran at all, and it is not decoration: an empty `alerts` array otherwise means both *this chart holds no such finding* and *nobody looked*. It is `false` when `chartsearchai.drugReference.enabled`, `chartsearchai.drugSafety.validateAnswers` or `chartsearchai.drugSafety.warnOnContraindications` is off, and it does **not** say which — nothing published tells those three apart. `true` with an empty `alerts` says the screen ran and related nothing — with one residue: a pass that threw degrades to no alerts rather than to an error, so it reports `true` and an empty array too, and the module's log is what separates that from an honest miss.
 - **What `screened: true` still does not promise.** It says the screen ran, not that the loaded dataset had a rule for it to ask. `GET /chartsearchai/drugreferencestatus` answers that, in `arms.conditionRules.coverage` and `arms.handAuthoredRules.coverage` — and it is deliberately not gated on the `drugSafety.*` toggles, so it answers even where `screened` is `false`. An order whose substance the loaded dataset does not carry resolves to no entry and has nothing to be compared against, which no field reports.
 - **It is a poll, not a subscription.** The module keeps no acknowledgement state, writes no audit row and applies no rate limit to this endpoint, and nothing here is delivered unprompted. Acknowledgement, dismissal and "don't show me this again" belong to whatever renders it — order-entry checking or a chart banner.
 

@@ -159,8 +159,9 @@ public class ChartSearchAiChartAlertsTest {
 	 * byte-identical to a chart that holds no such finding.
 	 *
 	 * <p>It also pins that the handler does not ask the validator for findings it has just been told
-	 * are not screened for — one read of the toggle decides both keys, so the array and the flag
-	 * cannot describe different states of the install.
+	 * are not screened for: one read decides both keys, so neither is derived from the other. What
+	 * that does not buy is atomicity against an operator flipping a toggle between the handler's read
+	 * and the validator's own — see the handler's javadoc, which names that residue.
 	 */
 	@Test
 	public void anUnscreenedInstallSaysSoRatherThanReportingAnEmptyChart() {
@@ -174,6 +175,28 @@ public class ChartSearchAiChartAlertsTest {
 				"and it must report nothing rather than a finding it did not screen for: " + body);
 		assertEquals(0, validator.standingCalls,
 				"the handler must not ask for findings on an install it has just read as unscreened");
+	}
+
+	/**
+	 * A patient this user may not read answers 403 and reports nothing about her.
+	 *
+	 * <p>Asserted rather than left to "it calls the same {@code resolvePatient} as {@code /search}":
+	 * every other case here installs an access check that says yes, so a handler that resolved the
+	 * patient and never consulted the check would pass all of them — and this is the surface where
+	 * that would leak a patient's prescriptions and recorded allergies to a user with no claim on her
+	 * chart. It also pins that the refusal happens BEFORE the findings are computed, which is what
+	 * makes it a refusal rather than a filtered answer.
+	 */
+	@Test
+	public void aPatientThisUserMayNotReadIsRefusedBeforeAnythingIsComputed() {
+		controller.setPatientAccessCheck((user, patient) -> false);
+
+		ResponseEntity<Object> response = alertsFor(RestControllerContext.PATIENT_UUID);
+
+		assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode(),
+				"a patient the user may not read must be refused, was: " + response);
+		assertEquals(0, validator.standingCalls,
+				"and refused before her chart is screened, so nothing about her is computed");
 	}
 
 	@Test

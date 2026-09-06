@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -36,16 +37,29 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * <p>The two GPs ABOVE this seam ({@code chartsearchai.drugReference.enabled} and
  * {@code chartsearchai.drugSafety.validateAnswers}) are not reachable from here: they gate the
  * {@code Patient}-taking entry, whose chart read needs a patient with a real allergy and a real active
- * order. {@code StandingChartAlertsTest.theGateOnTheStandingSurfaceIsTheOneTheAnswerSurfaceReads} pins
- * those structurally instead, and says what that does and does not reach.
+ * order — but that entry gates on nothing but {@code reportsStandingChartAlerts()}, which
+ * {@link #theScreenedStatementIsFalseWhereverASwitchThatSilencesTheSurfaceIsOff} measures here, one
+ * switch at a time. {@code StandingChartAlertsTest.theStandingEntryGatesOnThePredicateItPublishes}
+ * pins the other half: that the entry consults that predicate and spells no switch of its own.
  */
 public class StandingChartAlertsToggleContextTest extends BaseModuleContextSensitiveTest {
 
 	/** Writes the GP the way an implementation would. */
 	private void configureContraindicationWarnings(String value) {
-		Context.getAdministrationService().setGlobalProperty(
-				ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS, value);
+		configure(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS, value);
 	}
+
+	private void configure(String property, String value) {
+		Context.getAdministrationService().setGlobalProperty(property, value);
+	}
+
+	/** The three switches {@code reportsStandingChartAlerts} composes, each of which silences the
+	 *  surface on its own — written out here rather than read from the production predicate, which is
+	 *  what this class is measuring. */
+	private static final String[] GATES = {
+			ChartSearchAiConstants.GP_DRUG_REFERENCE_ENABLED,
+			ChartSearchAiConstants.GP_DRUG_SAFETY_VALIDATE_ANSWERS,
+			ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS };
 
 	/**
 	 * The standing surface's own shape, on the bundled curated dataset: a patient prescribed ibuprofen
@@ -66,6 +80,40 @@ public class StandingChartAlertsToggleContextTest extends BaseModuleContextSensi
 		assertTrue(alertsForAPrescribedAllergy().isEmpty(),
 				"an operator who switched contraindication warnings off must get none from the "
 						+ "standing surface either");
+	}
+
+	/**
+	 * The {@code screened} statement the {@code chartalerts} response publishes is false wherever any
+	 * one of the three switches that silence the surface is off.
+	 *
+	 * <p>Nothing else in the suite measures the real predicate: the omod wire test overrides it, and
+	 * the cases above enter below the two switches the {@code Patient} entry reads. So without this,
+	 * a predicate that answered {@code true} unconditionally would publish "this chart was screened"
+	 * on an install where the screen stands down — which is the one meaning the key exists to deny,
+	 * and the reason it is asserted per switch rather than on the composed default.
+	 *
+	 * <p>It reads the switches through the real admin service, so the assertion cannot pass on a
+	 * hardcoded default. The enabled direction is asserted first, and it is what makes the three
+	 * negatives discriminating rather than three ways of observing the shipped
+	 * {@code drugReference.enabled=false}.
+	 */
+	@Test
+	public void theScreenedStatementIsFalseWhereverASwitchThatSilencesTheSurfaceIsOff() {
+		DrugSafetyValidator validator =
+				DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService());
+		for (String gate : GATES) {
+			configure(gate, "true");
+		}
+		assertTrue(validator.reportsStandingChartAlerts(),
+				"precondition: with every switch on the surface screens, or the negatives below "
+						+ "observe the shipped default rather than the switch under test");
+
+		for (String off : GATES) {
+			configure(off, "false");
+			assertFalse(validator.reportsStandingChartAlerts(),
+					"the published screened statement must be false with " + off + " off");
+			configure(off, "true");
+		}
 	}
 
 	@Test

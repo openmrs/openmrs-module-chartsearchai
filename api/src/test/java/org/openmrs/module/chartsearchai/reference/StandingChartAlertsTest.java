@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -54,8 +55,8 @@ import org.junit.jupiter.api.Test;
  * {@code standingChartAlerts(PatientClinicalContext)}, which is where {@code validate}'s own
  * package-private seam sits and what every contextless case in
  * {@code ActiveOrderContraindicationTest} already drives; the two GPs above it are covered by
- * {@link #theGateOnTheStandingSurfaceIsTheOneTheAnswerSurfaceReads} and by
- * {@code StandingChartAlertsToggleContextTest}, which need a real {@code Context} and so cannot live
+ * {@link #theStandingEntryGatesOnThePredicateItPublishes} and by
+ * {@code StandingChartAlertsToggleContextTest}, which needs a real {@code Context} and so cannot live
  * here.
  */
 public class StandingChartAlertsTest {
@@ -206,40 +207,40 @@ public class StandingChartAlertsTest {
 	}
 
 	/**
-	 * The two global properties above the seam every other case here drives, pinned STRUCTURALLY
-	 * because no behavioural case in this suite can reach them.
+	 * The gate above the seam every other case here drives, pinned STRUCTURALLY because no behavioural
+	 * case in this suite can reach it.
 	 *
 	 * <p>The cases above enter at {@code standingChartAlerts(PatientClinicalContext)}, which sits BELOW
-	 * the gate exactly as {@code validate}'s own package-private seam does — so a public entry that
-	 * forgot the gate, or that read {@code drugReference.enabled} alone, would leave every one of them
-	 * green while serving standing alerts on an install that had switched the drug-safety validator
-	 * off. The omod wire test cannot see it either: it stubs the public method outright.
+	 * the gate exactly as {@code validate}'s own package-private seam does; the omod wire test cannot
+	 * see it either, since it stubs the public method outright. So a public entry that forgot the gate,
+	 * or that read its own combination of switches, would leave every one of them green while serving
+	 * standing alerts on an install where the screen stands down.
 	 *
-	 * <p>So this asserts the shape rather than the behaviour, which is what this repo does when a rule
-	 * is real and unobservable ({@code OrderPartnerNameSourceWritePathTest} scans for a write-path
-	 * shape for the same reason). It asks that the standing entry names the SAME two gate expressions
-	 * the public {@code validate} entry names, taken from that method's own body rather than written
-	 * out here — so a change to the answer surface's gate that left this one behind reddens, which a
-	 * pair of literals could not do. It cannot check that the two are COMBINED the same way; mutate an
-	 * {@code ||} to an {@code &&} and nothing here answers.
+	 * <p>What it asserts is that the entry gates on {@code reportsStandingChartAlerts()} and on nothing
+	 * else it spells for itself — which is the whole of the coupling worth pinning, because that
+	 * predicate is also the {@code screened} value the response publishes, and what it MEANS is
+	 * measured per switch by {@code StandingChartAlertsToggleContextTest}. Together the two say the
+	 * flag a client reads is the condition the pass ran under. A structural assertion for the SHAPE and
+	 * a behavioural one for the meaning is what this repo does with a rule that is real and
+	 * unobservable ({@code OrderPartnerNameSourceWritePathTest} scans for a write-path shape for the
+	 * same reason).
+	 *
+	 * <p>It reads the body rather than the whole file so that naming the predicate anywhere else — in
+	 * the seam below, in a javadoc — cannot satisfy it. What it cannot see is a gate that calls the
+	 * predicate AND short-circuits on something else first; mutate the body and read the failures.
 	 */
 	@Test
-	public void theGateOnTheStandingSurfaceIsTheOneTheAnswerSurfaceReads() throws IOException {
-		String source = validatorSource();
-		String answerGate = bodyOf(source, "public List<SafetyWarning> validate(String answer, String question, Patient patient,\n"
-				+ "\t\t\tList<RecordMapping> mappings, PairChipExtent.Sink pairExtentSink) {");
-		String standingGate = bodyOf(source,
+	public void theStandingEntryGatesOnThePredicateItPublishes() throws IOException {
+		String body = bodyOf(validatorSource(),
 				"public List<SafetyWarning> standingChartAlerts(Patient patient) {");
 
-		for (String expression : new String[] { "ChartSearchAiUtils.isDrugReferenceEnabled()",
-				"ChartSearchAiConstants.GP_DRUG_SAFETY_VALIDATE_ANSWERS" }) {
-			assertTrue(answerGate.contains(expression),
-					"precondition: the answer surface's own gate must name " + expression
-							+ ", or this case is comparing against nothing — its body was: " + answerGate);
-			assertTrue(standingGate.contains(expression),
-					"the standing surface must be gated on " + expression + " exactly as the answer "
-							+ "surface is (issue #280), and its body was: " + standingGate);
-		}
+		assertTrue(body.contains("if (!reportsStandingChartAlerts()) {"),
+				"the standing entry must gate on the predicate it publishes as `screened`, so the two "
+						+ "cannot come apart (issue #280), and its body was: " + body);
+		assertFalse(body.contains("GP_DRUG_SAFETY_VALIDATE_ANSWERS")
+				|| body.contains("isDrugReferenceEnabled()"),
+				"and it must not re-spell a switch of its own beside that predicate — a second "
+						+ "spelling is how the gate and the published flag would diverge: " + body);
 	}
 
 	/** @return {@code DrugSafetyValidator}'s production source. Fails rather than skips when it cannot

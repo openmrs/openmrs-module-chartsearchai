@@ -5522,6 +5522,12 @@ The gate is what buys the first figure — it short-circuits before either index
 
 The marker scan is bounded by a `Matcher` region, and that is not tidiness. `Matcher.find` scans to the end of its input rather than to a bound the caller applies afterwards, so a claim with no markers after it paid for a scan of the rest of the sentence, once per claim. Measured over an answer that is nothing but repeated claims: 40 of them cost 207 µs unbounded and 103 µs with the region, 320 of them 10.7 ms and 574 µs. `ChartSearchAiConstants.DEFAULT_LLM_MAX_OUTPUT_TOKENS` caps an answer at roughly 16 kB, which is what bounds the unbounded form's worst case; the region is what makes it not worth thinking about.
 
+### Measured on the running server
+
+Verified 2026-09-06 against the ticket's own patient on a RefApp standalone carrying the shipped knowledge base, by deploying the merging head and asking *"Is it safe to prescribe clarithromycin for this patient given her current medications?"*. The answer named five active orders and cited a chart record for each; all five citations were records that cannot be one, and the check reported every one of them — on the non-streaming `/search` and on the streaming path's `grounded` event alike — while every reference in that response serialized `grounded: null`, which is the #284 blindness this decision argues from, observed rather than quoted.
+
+**The live shape was broader than the ticket's.** The ticket measured three of five — a condition, a visit and an encounter. This run added two `obs` records to the same five-claim answer, so the misattribution is not confined to the three types the ticket happened to catch, and the allow-list covers the wider shape for the same reason it covers the narrower one: it admits what can be an order rather than excluding what cannot.
+
 ### Why the admissibility test is an allow-list
 
 The two types the ticket measured — querystore's `visit` and `encounter` — are contract strings this module never declares, so a deny-list could not have named them. The direction is therefore forced, and its cost is stated rather than implied: a deployment whose retrieval types prescriptions outside the list would have every active-order sentence reported. The `WARN` carries the type for exactly that reason, so one log line diagnoses it, and `MedicationOrderRecordTypeTest` sweeps every declared constant so a type added later cannot fall out of the list unnoticed.

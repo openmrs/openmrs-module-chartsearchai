@@ -33,11 +33,14 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * rejected gate and watched the whole suite stay green. A rule whose only support is a paragraph,
  * and a refutable one, is a rule the next session removes for free.
  *
- * <p>So the rule is pinned by the arrangement that actually separates the two designs, and there is
- * exactly one: <b>the arms switched OFF over a dataset that DID load</b>. A gated accessor states
- * {@code null} there; this one states what the dataset publishes. That is the case below, and it is
- * the one where the statement is most worth having — an operator who turned the contraindication
- * arms off has certainly not screened anyone's conditions.
+ * <p>So the rule is pinned by an arrangement that actually separates the two designs: <b>the arms
+ * switched OFF over a dataset that DID load</b>. A gated accessor states {@code null} there; this
+ * one states what the dataset publishes. It is the case where the statement is most worth having —
+ * an operator who turned the contraindication arms off has certainly not screened anyone's
+ * conditions. It is not the only separating arrangement, and an earlier draft of this sentence
+ * claimed it was: the designs also differ with the arms off and the feature off, where a gate states
+ * {@code null} and this states {@code UNLOADED}. That one is the same rule with less at stake, so it
+ * is named here rather than given a case.
  */
 public class ConditionRuleCoverageGateContextTest extends BaseModuleContextSensitiveTest {
 
@@ -47,8 +50,9 @@ public class ConditionRuleCoverageGateContextTest extends BaseModuleContextSensi
 
 	/**
 	 * The discriminating arrangement. Mutate {@code conditionRuleCoverage()} to return {@code null}
-	 * where {@code reportsContraindications()} is false — the rejected design, verbatim — and this
-	 * case is the one that reddens; the rest of the suite does not.
+	 * where {@code reportsContraindications()} is false — the rejected design, verbatim — and read
+	 * the failures: measured on the commit that added this, that mutation reddens this case and
+	 * leaves the rest of the suite green.
 	 */
 	@Test
 	public void theVerdictIsStatedEvenWhereTheContraindicationArmsAreSwitchedOff() {
@@ -60,8 +64,8 @@ public class ConditionRuleCoverageGateContextTest extends BaseModuleContextSensi
 
 		assertTrue(new DrugReferenceService().getLoadStatus().isLoaded(),
 				"the premise: a dataset really did load, so the verdict below is a reading of one "
-						+ "rather than of an empty cache — which is what makes this arrangement, and "
-						+ "not the stock install, the one that separates the two designs");
+						+ "rather than of an empty cache — which is what makes this arrangement, and not "
+						+ "the stock install, separate the two designs at all");
 		assertEquals(DrugReferenceLoad.Coverage.ABSENT, validator.conditionRuleCoverage(),
 				"the arms are off, so this patient's conditions are certainly not screened — and that "
 						+ "is exactly when a client most needs the dataset's own verdict. A gate on "

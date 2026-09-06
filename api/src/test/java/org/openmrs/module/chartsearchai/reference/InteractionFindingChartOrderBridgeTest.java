@@ -53,7 +53,7 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * record a model would read.
  *
  * <p><b>Context-sensitive because the record NUMBER issue #379 appends to each item is gated, and
- * OFF on a stock install</b> — {@code chartsearchai.drugSafety.citeOrderRecords}, ADR Decision 76,
+ * OFF on a stock install</b> — {@code chartsearchai.drugSafety.citeOrderRecords}, ADR Decision 77,
  * whose "What is NOT measured" section is the reason. A contextless case runs with the property
  * absent, which fails safe to the default, so it could not tell a rendering that honours the flag
  * from one that ignores it. {@link #setUp} turns it on for every case here; the one case that turns

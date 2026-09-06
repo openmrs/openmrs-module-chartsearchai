@@ -530,7 +530,7 @@ public class ChartSearchAiConstants {
 	 *  {@code "<Substance> from <order display>"} (issue #379). Off by default: the resolution is
 	 *  deterministic and pinned, but whether putting the number in front of the model makes it cite
 	 *  better is a live-engine measurement the ticket names as a precondition and which has not been
-	 *  run, and ADR Decision 76 records the costs a rendered marker carries in the meantime. Turning it
+	 *  run, and ADR Decision 77 records the costs a rendered marker carries in the meantime. Turning it
 	 *  on is how that measurement is run — one flip on one binary rather than two builds. It gates the
 	 *  rendered marker alone; the resolution's other reader (the issue #118 reconciliation) and
 	 *  {@code ReferenceProseFidelityCheck}'s marker stripping are unconditional, so the flag is safe to

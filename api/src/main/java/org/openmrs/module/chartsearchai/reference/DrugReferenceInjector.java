@@ -919,7 +919,7 @@ public class DrugReferenceInjector {
 		 *         leg is fail-OPEN by design: it exists to suppress a WARN and an injected record where
 		 *         a live drug-order record already tells the model the patient has an order for the
 		 *         drug, and over-matching there costs nothing. Citing is an affirmative claim about
-		 *         WHICH prescription, so the same over-match becomes false. ADR Decision 76 carries the
+		 *         WHICH prescription, so the same over-match becomes false. ADR Decision 77 carries the
 		 *         measured case, and {@code .aRecordAnotherOrderIsCannotBeCitedForThisOne} reproduces it.
 		 *
 		 *         <p><b>The two exclusions it applies are not the same kind of reasoning, and that is why
@@ -2033,7 +2033,7 @@ public class DrugReferenceInjector {
 	 * <p><b>That is also what the {@code chartsearchai.drugSafety.citeOrderRecords} gate rests on.</b>
 	 * An install with the flag off is handed an empty map, so every item takes the very path an
 	 * unresolvable attribution already took and no second rendering branch exists for the two states to
-	 * drift between. ADR Decision 76 says why the flag ships off;
+	 * drift between. ADR Decision 77 says why the flag ships off;
 	 * {@code InteractionFindingChartOrderBridgeTest.aStockInstallStatesNoRecordNumberAtAll} is the
 	 * case that separates the two states over one arrangement.
 	 *

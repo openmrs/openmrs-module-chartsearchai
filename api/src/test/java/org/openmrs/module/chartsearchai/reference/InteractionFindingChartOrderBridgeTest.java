@@ -9,10 +9,14 @@ import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.openmrs.api.context.Context;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
+import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 
 /**
  * Issue #349: an injected {@code safety_finding} states which of this patient's own active orders
@@ -47,8 +51,29 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * <p>Every case here drives the real {@code DrugReferenceInjector.injectRecords} wired to the real
  * {@code DrugSafetyValidator} over a fixture parsed by the real production parser, and reads the
  * record a model would read.
+ *
+ * <p><b>Context-sensitive because the record NUMBER issue #379 appends to each item is gated, and
+ * OFF on a stock install</b> — {@code chartsearchai.drugSafety.citeOrderRecords}, ADR Decision 76,
+ * whose "What is NOT measured" section is the reason. A contextless case runs with the property
+ * absent, which fails safe to the default, so it could not tell a rendering that honours the flag
+ * from one that ignores it. {@link #setUp} turns it on for every case here; the one case that turns
+ * it back off, {@link #aStockInstallStatesNoRecordNumberAtAll}, is what pins the gate — flip the
+ * shipped default to true and it is the case that reddens.
  */
-public class InteractionFindingChartOrderBridgeTest {
+public class InteractionFindingChartOrderBridgeTest extends BaseModuleContextSensitiveTest {
+
+	/** Every case below asserts the clause a model reads WITH the numbers, so every case needs the
+	 *  property on. Set here rather than per case so a new case cannot silently assert the gated
+	 *  rendering against the ungated default and pass for the wrong reason. */
+	@BeforeEach
+	public void setUp() {
+		citeOrderRecords(true);
+	}
+
+	private static void citeOrderRecords(boolean on) {
+		Context.getAdministrationService().setGlobalProperty(
+			ChartSearchAiConstants.GP_DRUG_SAFETY_CITE_ORDER_RECORDS, String.valueOf(on));
+	}
 
 	/** The pre-existing VERBATIM DDInter slice, which already carries every row these cases need:
 	 *  Simvastatin ({@code C10AA01}) x Clarithromycin ({@code J01FA09}) Major, Acetylsalicylic acid
@@ -657,6 +682,117 @@ public class InteractionFindingChartOrderBridgeTest {
 		assertEquals("Simvastatin from Zolvimix; Clarithromycin from Klarizom [2].", bridgeOf(finding),
 			"two orders reaching one record state no number for it, whether or not they spell the "
 					+ "same display (issue #379), was: " + finding);
+	}
+
+	/**
+	 * Issue #379's rendering is OFF on a stock install, and this is the case that says so.
+	 *
+	 * <p>The ticket's own chart, where both numbers ARE resolvable — {@link #ticketFinding} asserts
+	 * exactly this arrangement WITH them — so what separates the two expectations is the property and
+	 * nothing else. Set the shipped default to true and this reddens; remove the gate from
+	 * {@code injectRecords} and it reddens too.
+	 *
+	 * <p>The clause it states is the one Decision 64 shipped, character for character. That is the
+	 * additive claim the gate rests on: the withheld number takes the same per-item path an
+	 * unresolvable attribution already took, so no second rendering branch exists for it to drift
+	 * from.
+	 */
+	@Test
+	public void aStockInstallStatesNoRecordNumberAtAll() throws Exception {
+		citeOrderRecords(ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_CITE_ORDER_RECORDS);
+
+		String finding = onlyFinding(
+			chartNaming("order-zolvimix", "Zolvimix", "order-klarizom", "Klarizom"),
+			ticketChart(), SCREENING_QUESTION);
+
+		assertEquals("Simvastatin from Zolvimix; Clarithromycin from Klarizom.", bridgeOf(finding),
+			"the record numbers are withheld until an install asks for them, and the clause is then "
+					+ "the one issue #349 shipped (issue #379), was: " + finding);
+	}
+
+	/**
+	 * Issue #379 round two, the other side of the same rule: an order whose uuid the chart DOES carry
+	 * contests nothing, so a sibling prescription whose own record drifted still cites it.
+	 *
+	 * <p>The two-doses shape again, but with a record for BOTH orders — the 20mg order's under its own
+	 * uuid, the 40mg order's under a drifted one. Both orders record the brand name, so each names both
+	 * records; the 20mg order is nonetheless [1] and nothing else, so it is not a rival claimant to [2]
+	 * and counting its name matches into the contested set would take the 40mg order's correct number
+	 * away. Drop the uuid-resolved skip in {@code DrugOrderRecords.recordsSeveralOrdersName} and this is
+	 * the case that reddens.
+	 */
+	@Test
+	public void anOrderTheChartHoldsTheUuidRecordOfDoesNotContestItsSiblingsDriftedRecord()
+			throws Exception {
+		String finding = onlyFinding(
+			DrugReferenceTestSupport.chartOf(
+				DrugReferenceTestSupport.drugOrderRecord(1, "order-zolvimix-20", "Zolvimix 20mg"),
+				DrugReferenceTestSupport.drugOrderRecord(2, "stale-index-uuid", "Zolvimix 40mg"),
+				DrugReferenceTestSupport.drugOrderRecord(3, "order-klarizom", "Klarizom")),
+			DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set("Zolvimix", "Klarizom"),
+				DrugReferenceTestSupport.set("C10AA01", "J01FA09"), null, null,
+				Arrays.asList(
+					DrugReferenceTestSupport.activeOrder("order-zolvimix-20", "Zolvimix 20mg",
+						DrugReferenceTestSupport.set("Zolvimix"),
+						DrugReferenceTestSupport.set("C10AA01")),
+					DrugReferenceTestSupport.activeOrder("order-zolvimix-40", "Zolvimix 40mg",
+						DrugReferenceTestSupport.set("Zolvimix"),
+						DrugReferenceTestSupport.set("C10AA01")),
+					DrugReferenceTestSupport.activeOrder("order-klarizom", "Klarizom",
+						DrugReferenceTestSupport.set("Klarizom"),
+						DrugReferenceTestSupport.set("J01FA09")))),
+			SCREENING_QUESTION);
+
+		assertEquals("Simvastatin from Zolvimix 20mg [1]; Simvastatin from Zolvimix 40mg [2]; "
+				+ "Clarithromycin from Klarizom [3].", bridgeOf(finding),
+			"an order the uuid leg answers for is not a claimant to any other record, so it must not "
+					+ "take its sibling's drifted record away (issue #379), was: " + finding);
+	}
+
+	/**
+	 * Issue #379 round two: a record two active orders NAME is cited by neither, even where only one of
+	 * them resolved to it — the refusal is over the records orders are CANDIDATES for, not over the
+	 * numbers they happened to resolve TO.
+	 *
+	 * <p>Issue #118's own drifted-uuid population, with the two prescriptions sharing a concept name
+	 * rather than a brand: {@code PatientClinicalContextBuilder} records every name an order's concept
+	 * publishes, so two brands of one substance both record {@code Simvastatin}. Record [1] is named by
+	 * BOTH orders; record [2] by the Statibrand order alone. The Statibrand order therefore resolves to
+	 * nothing (two candidates), which used to leave the Zolvimix order the only claimant to put a
+	 * number in the map — so the finding stated, inside text closing with a change-of-therapy call,
+	 * that record [1] IS the Zolvimix prescription, when it is equally the Statibrand one. Found by a
+	 * clean-context review agent driving the real injector.
+	 *
+	 * <p>Klarizom keeps its number, so the refusal is still per item.
+	 */
+	@Test
+	public void aRecordTwoOrdersNameIsCitedByNeitherEvenWhereOnlyOneOfThemResolvedIt() throws Exception {
+		String finding = onlyFinding(
+			DrugReferenceTestSupport.chartOf(
+				DrugReferenceTestSupport.drugOrderRecord(1, "stale-index-uuid", "Simvastatin"),
+				DrugReferenceTestSupport.drugOrderRecord(2, "another-stale-uuid", "Statibrand"),
+				DrugReferenceTestSupport.drugOrderRecord(3, "order-klarizom", "Klarizom")),
+			DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set("Zolvimix", "Statibrand", "Klarizom"),
+				DrugReferenceTestSupport.set("C10AA01", "J01FA09"), null, null,
+				Arrays.asList(
+					DrugReferenceTestSupport.activeOrder("order-zolvimix", "Zolvimix 40mg",
+						DrugReferenceTestSupport.set("Zolvimix", "Simvastatin"),
+						DrugReferenceTestSupport.set("C10AA01")),
+					DrugReferenceTestSupport.activeOrder("order-statibrand", "Statibrand 20mg",
+						DrugReferenceTestSupport.set("Statibrand", "Simvastatin"),
+						DrugReferenceTestSupport.set("C10AA01")),
+					DrugReferenceTestSupport.activeOrder("order-klarizom", "Klarizom",
+						DrugReferenceTestSupport.set("Klarizom"),
+						DrugReferenceTestSupport.set("J01FA09")))),
+			SCREENING_QUESTION);
+
+		assertEquals("Simvastatin from Zolvimix 40mg; Simvastatin from Statibrand 20mg; "
+				+ "Clarithromycin from Klarizom [3].", bridgeOf(finding),
+			"record [1] is reached by both simvastatin orders on the same name evidence, so neither "
+					+ "may cite it however the other order's own resolution came out (issue #379), was: "
+					+ finding);
 	}
 
 	/**

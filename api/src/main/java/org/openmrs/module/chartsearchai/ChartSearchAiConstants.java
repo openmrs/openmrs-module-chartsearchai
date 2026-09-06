@@ -525,6 +525,21 @@ public class ChartSearchAiConstants {
 
 	public static final boolean DEFAULT_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS = true;
 
+	/** Whether an injected {@code safety_finding}'s chart-order attribution names the NUMBER of the
+	 *  chart record each order IS — {@code "<Substance> from <order display> [14]"} rather than
+	 *  {@code "<Substance> from <order display>"} (issue #379). Off by default: the resolution is
+	 *  deterministic and pinned, but whether putting the number in front of the model makes it cite
+	 *  better is a live-engine measurement the ticket names as a precondition and which has not been
+	 *  run, and ADR Decision 76 records the costs a rendered marker carries in the meantime. Turning it
+	 *  on is how that measurement is run — one flip on one binary rather than two builds. It gates the
+	 *  rendered marker alone; the resolution's other reader (the issue #118 reconciliation) and
+	 *  {@code ReferenceProseFidelityCheck}'s marker stripping are unconditional, so the flag is safe to
+	 *  flip in either direction. */
+	public static final String GP_DRUG_SAFETY_CITE_ORDER_RECORDS =
+			"chartsearchai.drugSafety.citeOrderRecords";
+
+	public static final boolean DEFAULT_DRUG_SAFETY_CITE_ORDER_RECORDS = false;
+
 	/** Minimum source-assigned severity ({@code unknown} &lt; {@code minor} &lt; {@code moderate} &lt;
 	 *  {@code major}) a rule-based interaction must carry to raise a warning chip. Rules without a
 	 *  severity (e.g. the curated seed's hand-authored rules) are always shown, as are class-based and

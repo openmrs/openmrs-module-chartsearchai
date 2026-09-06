@@ -33,7 +33,9 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * <p><b>Why #349's clause was silent on exactly this shape.</b> That issue built the mechanism that
  * states the correspondence — {@code DrugSafetyValidator.chartOrderBridges} decides it and
  * {@link DrugReferenceInjector#FINDING_CHART_ORDER_LEAD} renders it as {@code "<Substance> from
- * <order display> [N]"} inside the injected {@code safety_finding} (the number since issue #379). Its silence test asked whether ANY
+ * <order display>"} inside the injected {@code safety_finding} — and, on an install that sets
+ * {@code chartsearchai.drugSafety.citeOrderRecords}, the number of the chart record that order is
+ * (issue #379, off by default, which is why the clause here carries none). Its silence test asked whether ANY
  * name the order RECORDS reaches the substance, and
  * {@code PatientClinicalContextBuilder.addDrugName} puts the order's CONCEPT name into that set
  * beside its drug-row name. So an order displayed {@code Advil 400mg} on concept {@code Ibuprofen}
@@ -154,7 +156,7 @@ public class OneOrderNameAcrossAnswerAndChipTest {
 		// answer-versus-chip split.
 		String finding = onlyFinding();
 
-		assertEquals("Warfarin from Coagubrand [1].", DrugReferenceTestSupport.bridgeOf(finding),
+		assertEquals("Warfarin from Coagubrand.", DrugReferenceTestSupport.bridgeOf(finding),
 			"the brand-named order must be bridged to the substance the chip names it by, was: "
 					+ finding);
 	}
@@ -259,7 +261,7 @@ public class OneOrderNameAcrossAnswerAndChipTest {
 	public void aBrandNamedOrderJoinedByItsBridgedConceptIsBridgedToTheSubstanceToo() throws Exception {
 		String finding = onlyFinding(ticketChart(DrugReferenceTestSupport.set(), WARFARIN_CONCEPT));
 
-		assertEquals("Warfarin from Coagubrand [1].", DrugReferenceTestSupport.bridgeOf(finding),
+		assertEquals("Warfarin from Coagubrand.", DrugReferenceTestSupport.bridgeOf(finding),
 			"an order joined to the substance by its bridged concept states the prescription the"
 					+ " substance came from, was: " + finding);
 	}

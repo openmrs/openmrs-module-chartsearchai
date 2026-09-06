@@ -572,7 +572,18 @@ public class DrugReferenceInjector {
 		// every other per-chart answer in this method — and only where a finding will read it, since
 		// the findings loop below is its one consumer and the early return above admits arrangements
 		// that raise none (an unrepresented order, a matched entry or the class note alone).
+		//
+		// Gated, and OFF on a stock install. What the flag withholds is the rendered marker and
+		// nothing else: an empty map makes every item render exactly as it did before #379, per the
+		// same additive path an unresolvable attribution already takes, so no second rendering branch
+		// exists to drift. The reconciliation's own reading of the same walk is not gated — it decides
+		// whether to WARN and inject, which is issue #118's question and is not what is unmeasured
+		// here. Read beside the other once-per-injection global-property reads rather than inside
+		// renderFinding, so one chart cannot number record [7] and not record [8].
 		Map<String, Integer> orderRecordNumbers = findings.isEmpty()
+				|| !ChartSearchAiUtils.getBooleanGlobalProperty(
+						ChartSearchAiConstants.GP_DRUG_SAFETY_CITE_ORDER_RECORDS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_CITE_ORDER_RECORDS)
 				? Collections.<String, Integer>emptyMap()
 				: orderRecordNumbers(mappings, context);
 
@@ -911,23 +922,31 @@ public class DrugReferenceInjector {
 		 *         WHICH prescription, so the same over-match becomes false. ADR Decision 76 carries the
 		 *         measured case, and {@code .aRecordAnotherOrderIsCannotBeCitedForThisOne} reproduces it.
 		 *
-		 *         <p><b>What the refusal buys is the FIRST order's correct number, not the second's
-		 *         silence.</b> Remove it and the injectivity rule in {@link #orderRecordNumbers} still
-		 *         refuses the pair — both items go bare, the correct one included. Measured by mutation;
-		 *         do not read the refusal as the only thing standing between the model and a false
-		 *         citation here.
+		 *         <p><b>The two exclusions it applies are not the same kind of reasoning, and that is why
+		 *         one FILTERS and the other VETOES.</b> {@code claimedByUuid} is definitive — a record
+		 *         carrying another active order's uuid IS that order — so it is struck from this order's
+		 *         candidate set before anything is counted, leaving a neighbouring record the only thing
+		 *         this order can be. {@code contested} is not: a record several orders name might be any
+		 *         of them, so it stays IN the candidate set (it is a live possibility for this order,
+		 *         and a second candidate is already an answer of null) and is refused only as an
+		 *         ANSWER. Swap the two treatments and read the failure: with {@code contested} filtering,
+		 *         an order that names a contested record AND an uncontested one is left holding the
+		 *         uncontested one alone, and cites it — a record it has no more claim on than the
+		 *         contested one it was refused.
 		 *
 		 *         <p>It refuses a record claimed by an ACTIVE order and no other. A second index
 		 *         document for an order this patient no longer has is not in that set, so the name leg
 		 *         can still reach it; that is #118's fail-open leg and no test states the cell.
 		 *
-		 *         <p>So a record that is ANOTHER order's own — {@code claimedByUuid}, the records some
-		 *         active order carries the uuid of — is not a candidate for the name leg. The uuid leg
-		 *         is untouched by it: a record carrying this order's uuid IS this order, and it cannot
-		 *         be in that set for anyone else.
+		 *         <p>The uuid leg is untouched by either: a record carrying this order's uuid IS this
+		 *         order, so it cannot be claimed by anyone else and no count of who NAMES it can
+		 *         unseat it.
+		 *
+		 * @param claimedByUuid the numbers of the records some active order carries the uuid OF
+		 * @param contested the numbers no name-leg answer may be, from {@link #recordsSeveralOrdersName}
 		 */
 		private Integer citableNumberFor(PatientClinicalContext.ActiveDrugOrder order,
-				Set<Integer> claimedByUuid) {
+				Set<Integer> claimedByUuid, Set<Integer> contested) {
 			Integer exact = numberByUuid(order);
 			if (exact != null) {
 				return exact;
@@ -942,7 +961,48 @@ public class DrugReferenceInjector {
 				}
 				only = record.getKey();
 			}
-			return only;
+			return only == null || contested.contains(only) ? null : only;
+		}
+
+		/**
+		 * @return the numbers of the live drug-order records that MORE THAN ONE of {@code orders} names
+		 *         — the records no name-leg citation may be, because the module cannot say which of the
+		 *         orders reaching it a model should read that record as.
+		 *
+		 *         <p><b>Over CANDIDACY and not over what the orders resolved TO</b> (issue #379 round
+		 *         two). The first version of this rule counted the numbers orders came back with, so a
+		 *         record two orders both name was still handed to one of them whenever the other's own
+		 *         resolution returned null — which is exactly the arrangement where the module knows
+		 *         LESS, not more. {@code .aRecordTwoOrdersNameIsCitedByNeitherEvenWhereOnlyOneOfThemResolvedIt}
+		 *         is that cell.
+		 *
+		 *         <p><b>Only the orders the uuid leg could not answer for contest anything.</b> An order
+		 *         the chart carries the uuid record of IS that record, so it is not a rival claimant to
+		 *         any other — counting its name matches too would refuse a number that is not in
+		 *         question, and {@code .anOrderTheChartRecordsUnderAnotherUuidIsCitedByTheRecordThatNamesIt}
+		 *         is the shape that would lose one.
+		 *
+		 *         <p>Counted per ORDER and never per display, which is
+		 *         {@code .oneRecordTwoPrescriptionsWouldBothCiteIsCitedByNeither} — measured, because the
+		 *         case NAMED for that property, {@code .twoPrescriptionsSharingADisplayAndOneRecordCiteNeither},
+		 *         is not the one a per-display count reddens: its two orders spell one display, so a
+		 *         per-display key collides there too and it stays green.
+		 */
+		private Set<Integer> recordsSeveralOrdersName(
+				List<PatientClinicalContext.ActiveDrugOrder> orders) {
+			Set<Integer> named = new HashSet<Integer>();
+			Set<Integer> contested = new HashSet<Integer>();
+			for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+				if (numberByUuid(order) != null) {
+					continue;
+				}
+				for (Map.Entry<Integer, String> record : liveDrugOrderTexts.entrySet()) {
+					if (order.namedIn(record.getValue()) && !named.add(record.getKey())) {
+						contested.add(record.getKey());
+					}
+				}
+			}
+			return contested;
 		}
 	}
 
@@ -959,14 +1019,22 @@ public class DrugReferenceInjector {
 	 * file reserves to {@code DrugSafetyValidator.chartOrderBridges}: no bridge is re-derived here and
 	 * no silence test is re-asked.
 	 *
-	 * <p><b>THREE ways the answer is no, and the third was found by review.</b> One display two orders
-	 * resolve to different records by; one order the drifted-uuid name leg matched in two records at
-	 * once ({@link DrugOrderRecords#citableNumberFor}); and one record two ORDERS reach, which is the
-	 * same false claim arriving from the other side. In each case the module
+	 * <p><b>THREE ways the answer is no, and both review rounds found one.</b> One order the
+	 * drifted-uuid name leg matched in two records at once, and one record two orders NAME — both
+	 * {@link DrugOrderRecords#citableNumberFor}, which is where every rule about a RECORD's claimant
+	 * now sits; and, here, one DISPLAY two orders resolve to different records by, which is a rule
+	 * about the clause ITEM rather than about a record. In each case the module
 	 * cannot say which record a model should read, and naming one would put a citation it cannot stand
 	 * behind into a citable record stating a clinical call — so it names none, per ITEM: an unambiguous
 	 * neighbour in the same clause keeps its number. An order the chart holds no record for is not a
 	 * fourth case; it simply has no candidate.
+	 *
+	 * <p><b>The record-side rule is asked of CANDIDACY, not of the numbers orders resolved TO</b>
+	 * (issue #379 round two). A resolved-number injectivity check here — which is what this method
+	 * carried first — cannot see a record two orders both name where one of them resolved to nothing,
+	 * so it handed that record to the survivor. Moving the question to
+	 * {@link DrugOrderRecords#recordsSeveralOrdersName} made that check dead: with it in place no two
+	 * orders can come back with one number, measured by deleting the check and running the suite.
 	 *
 	 * <p>A blank display is skipped so the map cannot hold a key nothing will look up —
 	 * {@code chartOrderClause} keys on {@code SafetyWarning.ChartOrderBridge.getOrderDisplay()}, and
@@ -1001,31 +1069,29 @@ public class DrugReferenceInjector {
 				claimedByUuid.add(exact);
 			}
 		}
+		// One record cannot be two prescriptions, asked of every record an order could BE and not of the
+		// ones orders came back with — see recordsSeveralOrdersName, which carries what the second
+		// reading missed.
+		Set<Integer> contested = records.recordsSeveralOrdersName(orders);
 		Map<String, Integer> byDisplay = new LinkedHashMap<String, Integer>();
 		Set<String> ambiguous = new HashSet<String>();
-		Map<Integer, String> displayByNumber = new LinkedHashMap<Integer, String>();
 		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
 			String display = order.getDisplay() == null ? null : order.getDisplay().trim();
 			if (ChartSearchAiUtils.isBlank(display)) {
 				continue;
 			}
-			Integer number = records.citableNumberFor(order, claimedByUuid);
+			Integer number = records.citableNumberFor(order, claimedByUuid, contested);
 			if (number == null) {
 				ambiguous.add(display);
 				continue;
 			}
+			// Two prescriptions that SPELL one display are one item in the clause, so where they are
+			// different records that item can state neither number — the display is all the model has to
+			// look the item up by. Not the same rule as the record-side refusal above: this one is about
+			// the ITEM's key, which is why it survives that rule catching everything on the record side.
 			Integer already = byDisplay.put(display, number);
 			if (already != null && !already.equals(number)) {
 				ambiguous.add(display);
-			}
-			// One record cannot be two prescriptions. Counted per ORDER and not per display — each turn
-			// of this loop is one order, so a second put on a number IS a second prescription, and
-			// keying it on the display instead let two orders SHARING one display keep the number.
-			// Both claimants lose it rather than the later one, because nothing here ranks them.
-			String claimant = displayByNumber.put(number, display);
-			if (claimant != null) {
-				ambiguous.add(display);
-				ambiguous.add(claimant);
 			}
 		}
 		byDisplay.keySet().removeAll(ambiguous);
@@ -1714,9 +1780,10 @@ public class DrugReferenceInjector {
 	 * name each order DISPLAYS does not name them (issue #349; the silence test was every name the
 	 * order RECORDS until issue #347, and {@code DrugSafetyValidator.displaysANameOfAny} is where the
 	 * change and its residues live) — the lead of a clause whose items follow it, {@code "; "}-joined,
-	 * each reading {@code "<Substance> from <order display> [N]"} — the number being the chart record
-	 * that order IS, since issue #379, and absent where {@link #orderRecordNumbers} could not resolve
-	 * one.
+	 * each reading {@code "<Substance> from <order display>"} — and, on an install that sets
+	 * {@code chartsearchai.drugSafety.citeOrderRecords}, followed by the number of the chart record
+	 * that order IS (issue #379; off by default, and absent in any case where
+	 * {@link #orderRecordNumbers} could not resolve one).
 	 *
 	 * <p><b>What it is for.</b> A finding names its substances in the KNOWLEDGE BASE's vocabulary,
 	 * which is right and is #339's settlement. Where the module reached those substances from an active
@@ -1923,7 +1990,8 @@ public class DrugReferenceInjector {
 
 	/**
 	 * The bridge clause of one finding, or the empty string — {@link #FINDING_CHART_ORDER_LEAD}
-	 * followed by one {@code "<Substance> from <order display> [N]"} item per attribution,
+	 * followed by one {@code "<Substance> from <order display>"} item per attribution, each carrying
+	 * the number of the record its order is where the caller resolved one,
 	 * {@code "; "}-joined and closed with a full stop (issues #349, #379).
 	 *
 	 * <p>Rendered here and decided in {@code DrugSafetyValidator.chartOrderBridges}, which is where
@@ -1938,6 +2006,13 @@ public class DrugReferenceInjector {
 	 * numbered. Every bridge the validator admitted still renders; an attribution
 	 * {@link #orderRecordNumbers} could not resolve renders as it did before that issue, so the
 	 * absence of a number is silence and never a refusal to state the attribution.
+	 *
+	 * <p><b>That is also what the {@code chartsearchai.drugSafety.citeOrderRecords} gate rests on.</b>
+	 * An install with the flag off is handed an empty map, so every item takes the very path an
+	 * unresolvable attribution already took and no second rendering branch exists for the two states to
+	 * drift between. ADR Decision 76 says why the flag ships off;
+	 * {@code InteractionFindingChartOrderBridgeTest.aStockInstallStatesNoRecordNumberAtAll} is the
+	 * case that separates the two states over one arrangement.
 	 *
 	 * <p>The items carry {@link SafetyWarning.ChartOrderBridge#toString()}'s own spelling rather than a
 	 * second format string, so the pair a debug dump prints and the pair a model reads cannot differ;

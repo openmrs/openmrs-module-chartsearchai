@@ -136,6 +136,12 @@ public class ShippedDrugReferenceDefaultTest extends BaseModuleContextSensitiveT
 				status.coverageOf(DrugReferenceLoad.Arm.HAND_AUTHORED_RULES),
 				"and no hand-authored allergy/condition rule either");
 		assertEquals(0, status.entriesPublishing(DrugReferenceLoad.Arm.HAND_AUTHORED_RULES));
+		assertEquals(DrugReferenceLoad.Coverage.ABSENT,
+				status.coverageOf(DrugReferenceLoad.Arm.CONDITION_RULES),
+				"and the condition leg of that arm in its own right, which since issue #378 is what "
+						+ "reaches a clinician's client as conditionRuleCoverage: on this install a "
+						+ "recorded condition is put to nothing, and the defect was that nothing said so");
+		assertEquals(0, status.entriesPublishing(DrugReferenceLoad.Arm.CONDITION_RULES));
 		assertEquals(DrugReferenceLoad.Coverage.PUBLISHED,
 				status.coverageOf(DrugReferenceLoad.Arm.ATC_CODES),
 				"while the arms that need only a class code do have data — reporting only what is "
@@ -158,7 +164,7 @@ public class ShippedDrugReferenceDefaultTest extends BaseModuleContextSensitiveT
 	 * arm reaches WARN.
 	 *
 	 * <p>Asserted on the shipped default rather than on a fixture because it is the only case where the
-	 * line is MIXED: two arms served and two not, from one dataset, which is what makes it a report rather
+	 * line is MIXED: some arms served and some not, from one dataset, which is what makes it a report rather
 	 * than a constant. The WARN half matters as much as the INFO half: an arm with nothing behind it is a
 	 * capability the dataset does not have, not a defect in it, so nothing here may reach the register ADR
 	 * Decision 36 reserves for what an operator can act on.
@@ -177,6 +183,9 @@ public class ShippedDrugReferenceDefaultTest extends BaseModuleContextSensitiveT
 							+ "shares its rendering with. Captured: " + capture.describeAll());
 			assertTrue(logged.contains("handAuthoredRules=absent (0)"),
 					"and the hand-authored rule arm likewise. Captured: " + capture.describeAll());
+			assertTrue(logged.contains("conditionRules=absent (0)"),
+					"and its condition leg, which since issue #378 is also what the /search response "
+							+ "states. Captured: " + capture.describeAll());
 			assertTrue(logged.contains("atcCodes=published ("
 					+ status.entriesPublishing(DrugReferenceLoad.Arm.ATC_CODES) + ")"),
 					"and it must say what IS served, with the same count the endpoint reports — one "

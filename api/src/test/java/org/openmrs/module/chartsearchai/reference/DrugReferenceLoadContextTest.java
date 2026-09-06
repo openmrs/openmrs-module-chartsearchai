@@ -412,16 +412,71 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 				status.coverageOf(DrugReferenceLoad.Arm.HAND_AUTHORED_RULES),
 				"neither rule can be evaluated against a chart, so the arm has nothing to act on");
 		assertEquals(0, status.entriesPublishing(DrugReferenceLoad.Arm.HAND_AUTHORED_RULES));
+		assertEquals(DrugReferenceLoad.Coverage.ABSENT,
+				status.coverageOf(DrugReferenceLoad.Arm.CONDITION_RULES),
+				"and its condition leg likewise (issue #378) — one of these rules IS typed condition, "
+						+ "so this is the case that puts the TOKEN half of that arm's predicate to "
+						+ "work rather than only its type half, which the allergy-only dataset covers");
+		assertEquals(0, status.entriesPublishing(DrugReferenceLoad.Arm.CONDITION_RULES));
 		assertEquals(DrugReferenceLoad.Coverage.PUBLISHED,
 				status.coverageOf(DrugReferenceLoad.Arm.ATC_CODES),
 				"while the class arms are served by the same entries, so the dataset did load");
 	}
 
 	/**
+	 * The two hand-authored arms are not one arm, and this is the dataset that tells them apart: every
+	 * rule it publishes is typed {@code allergy}, so the union reports capability the CONDITION leg
+	 * does not have (issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/378">#378</a>).
+	 *
+	 * <p><b>This is the case that makes {@code CONDITION_RULES} more than a second name for
+	 * {@code HAND_AUTHORED_RULES}</b>, and it is why #378 did not simply publish the union's verdict
+	 * as the issue's own suggested direction proposed. Reading {@code handAuthoredRules: published}
+	 * here as "conditions are screened" states, on a perfectly ordinary
+	 * {@code chartsearchai.drugReference.dataFilePath} file, exactly the thing that issue exists to
+	 * stop being unsayable — a screen that cannot ask about conditions, indistinguishable from one
+	 * that asked and found nothing.
+	 *
+	 * <p>An existing fixture rather than a new one, deliberately: it was authored for issue #223's
+	 * mid-word allergy tokens and its rule TYPES are incidental to that purpose, so it is evidence
+	 * about the shape of real curated data rather than a file built to make this assertion pass.
+	 */
+	@Test
+	public void anAllergyOnlyDatasetServesTheUnionAndNotTheConditionLeg() throws IOException {
+		String path = copyToAppData("/chartsearchai-test/drug-reference-mid-word-allergy-token.json",
+				"allergy-only-rules.json");
+		configure(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_JSON, path);
+
+		DrugReferenceService service = new DrugReferenceService();
+		DrugReferenceLoad status = service.getLoadStatus();
+
+		assertTrue(status.entriesPublishing(DrugReferenceLoad.Arm.HAND_AUTHORED_RULES) > 0,
+				"the premise: entries here DO publish a rule the module can put to a chart, which is "
+						+ "what makes the condition verdict below discriminating rather than a reading "
+						+ "of a dataset with no rules at all");
+		assertEquals(DrugReferenceLoad.Coverage.PUBLISHED,
+				status.coverageOf(DrugReferenceLoad.Arm.HAND_AUTHORED_RULES),
+				"the union is served, because every rule here is an askable allergy rule");
+		assertEquals(DrugReferenceLoad.Coverage.ABSENT,
+				status.coverageOf(DrugReferenceLoad.Arm.CONDITION_RULES),
+				"and the condition leg is not — nothing here can be put to a recorded condition, so a "
+						+ "response over this dataset must say so rather than inherit the union's yes");
+		assertEquals(0, status.entriesPublishing(DrugReferenceLoad.Arm.CONDITION_RULES));
+	}
+
+	/**
 	 * The other direction, and the only form an operator ever actually reads: a dataset that DOES serve
 	 * its arms, serialized. The curated four-drug seed the module ships carries a ceiling, an askable
-	 * rule, a level-5 class code and an interaction on every entry, so all four arms report
+	 * rule, a level-5 class code and an interaction on every entry, so every arm reports
 	 * {@code published} — and this is the case that pins the {@code toMap} rendering of a LOADED report.
+	 *
+	 * <p><b>The COUNTS are asserted per arm rather than uniformly, and the arm that differs is why.</b>
+	 * {@code CONDITION_RULES} (issue #378) is served by three of these four entries where
+	 * {@code HAND_AUTHORED_RULES} is served by all four, because one entry publishes allergy rules and
+	 * no condition rule. A uniform assertion over {@code Arm.values()} cannot express that, and what it
+	 * would cost is the evidence that the condition leg needs an arm of its own rather than a reading
+	 * of the union's verdict — which is the whole of #378's design argument, measured on the module's
+	 * own shipped seed.
 	 *
 	 * <p>It is the only case in the suite that reddens when the {@code PUBLISHED} rendering breaks.
 	 * Measured by mutating {@code toMap}: rendering a {@code PUBLISHED} arm as {@code "unloaded"} fails
@@ -441,7 +496,20 @@ public class DrugReferenceLoadContextTest extends BaseModuleContextSensitiveTest
 		assertEquals(4, status.getEntryCount(), "precondition: the curated seed loaded");
 		for (DrugReferenceLoad.Arm arm : DrugReferenceLoad.Arm.values()) {
 			assertEquals(DrugReferenceLoad.Coverage.PUBLISHED, status.coverageOf(arm),
-					arm + ": every entry of the curated seed carries what each arm needs");
+					arm + ": the curated seed serves every arm, which is what makes this the case that "
+							+ "pins the PUBLISHED rendering");
+		}
+		assertEquals(3, status.entriesPublishing(DrugReferenceLoad.Arm.CONDITION_RULES),
+				"the condition arm is served by THREE of the four entries, not all four: one publishes "
+						+ "allergy rules and no condition rule. That divergence is not incidental — it "
+						+ "is the measurement behind issue #378's decision to give the condition leg an "
+						+ "arm of its own, since HAND_AUTHORED_RULES reads published over that same "
+						+ "entry while the module has nothing to ask its conditions with");
+		assertEquals(4, status.entriesPublishing(DrugReferenceLoad.Arm.HAND_AUTHORED_RULES),
+				"while the union reads all four, which is the other half of that measurement");
+		for (DrugReferenceLoad.Arm arm : new DrugReferenceLoad.Arm[] {
+				DrugReferenceLoad.Arm.DOSE_CEILINGS, DrugReferenceLoad.Arm.ATC_CODES,
+				DrugReferenceLoad.Arm.INTERACTIONS }) {
 			assertEquals(4, status.entriesPublishing(arm), arm + ": on all four entries");
 		}
 

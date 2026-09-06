@@ -908,7 +908,7 @@ public class DrugReferenceInjector {
 		 *         leg is fail-OPEN by design: it exists to suppress a WARN and an injected record where
 		 *         a live drug-order record already tells the model the patient has an order for the
 		 *         drug, and over-matching there costs nothing. Citing is an affirmative claim about
-		 *         WHICH prescription, so the same over-match becomes false. ADR Decision 75 carries the
+		 *         WHICH prescription, so the same over-match becomes false. ADR Decision 76 carries the
 		 *         measured case, and {@code .aRecordAnotherOrderIsCannotBeCitedForThisOne} reproduces it.
 		 *
 		 *         <p><b>What the refusal buys is the FIRST order's correct number, not the second's

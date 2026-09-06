@@ -291,7 +291,16 @@ public class CoMedicationResolutionPerPassTest {
 
 	private static final String MEMO_DECLARATION = "private final class CoMedications {";
 
-	private static final String CONSTRUCTION = "new CoMedications(";
+	/**
+	 * How a construction is FOUND — a PATTERN over the type name, never the literal
+	 * {@code "new CoMedications("}. Java allows whitespace anywhere between {@code new}, an optional
+	 * qualifier and the type, so a second construction written {@code new\n\t\tCoMedications(context)}
+	 * satisfied the literal form while being exactly the second per-pass resolution issue #256
+	 * forbids — measured by a review agent, which added one and left this class 6/6 green
+	 * (issue #378's harden round found it while fixing the same escape in a sibling guard).
+	 */
+	private static final java.util.regex.Pattern CONSTRUCTION =
+			java.util.regex.Pattern.compile("new\\s+(?:\\w+\\s*\\.\\s*)*CoMedications\\s*\\(");
 
 	/** The pass's one construction, as written — a LOCAL declaration, which is what separates the
 	 *  compliant memo from issue #172's field. */
@@ -425,7 +434,7 @@ public class CoMedicationResolutionPerPassTest {
 			"the accessor matched by \"" + RESOLVED + "\" is not inside CoMedications, so this guard has "
 					+ "delimited the wrong body and everything below it is meaningless (issue #256)");
 
-		List<Integer> constructions = scan.literalOffsets(CONSTRUCTION);
+		List<Integer> constructions = scan.matches(CONSTRUCTION);
 		assertEquals(1, constructions.size(),
 			"expected " + RELATIVE_SOURCE + " to construct CoMedications exactly once — in validate, for "
 					+ "the whole pass — and found " + constructions.size() + " at lines "

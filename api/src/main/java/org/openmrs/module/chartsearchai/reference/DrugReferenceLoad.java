@@ -189,10 +189,10 @@ public final class DrugReferenceLoad {
 		 * here does NOT mean no interaction warning can be raised. Listed because a dataset can withhold
 		 * these outright — {@code sourceFormat=atc} sets only class codes.
 		 *
-		 * <p><b>This is the one arm counted by field presence</b>, and the asymmetry is deliberate. The
-		 * other three ask a predicate because a field can be populated with something no configuration
+		 * <p><b>This is the one arm counted by field presence</b>, and the asymmetry is deliberate. Every
+		 * other arm asks a predicate because a field can be populated with something no configuration
 		 * can act on — a band with no ceiling, a code too short to reduce, a rule typed neither
-		 * {@code allergy} nor {@code condition}. An interaction row has no such shape: the only thing
+		 * {@code allergy} nor {@code condition}, or one typed {@code condition} with no matchable token. An interaction row has no such shape: the only thing
 		 * that can keep one from being raised is {@code DrugSafetyValidator.clearsSeverityFloor} against
 		 * {@code chartsearchai.drugSafety.minInteractionSeverity}, and every severity the rank
 		 * recognises — {@code unknown} included, at the floor's own lowest rank — clears SOME legitimate
@@ -344,8 +344,8 @@ public final class DrugReferenceLoad {
 		this.origin = null;
 		this.entryCount = 0;
 		this.findings = Collections.emptyList();
-		// No counts rather than four zeros: coverageOf short-circuits on !loaded, so nothing here can
-		// reach the map, and entriesPublishing answers 0 for an absent key.
+		// No counts at all rather than a zero per arm: coverageOf short-circuits on !loaded, so nothing
+		// here can reach the map, and entriesPublishing answers 0 for an absent key.
 		this.armCounts = Collections.<Arm, Integer> emptyMap();
 	}
 

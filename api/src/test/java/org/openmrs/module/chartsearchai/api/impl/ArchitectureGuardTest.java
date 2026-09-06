@@ -287,7 +287,11 @@ public class ArchitectureGuardTest {
 	 * <p>Scanned over the argument REGION of each construction rather than over the file, because a
 	 * file-wide search for the identifier is satisfied by the two resolutions alone and would say
 	 * nothing about whether any answer carries them. The regions span several lines each, which is
-	 * why this walks brackets rather than matching a line.
+	 * why this walks brackets rather than matching a line, and constructions are FOUND by a pattern
+	 * over the type name rather than by the literal {@code new ChartAnswer(} — see the comment at the
+	 * matcher, which records how the literal form was defeated. What it still cannot see is an answer
+	 * built somewhere other than this class, or one assembled through a factory; the count assertion
+	 * is what makes the first of those visible.
 	 */
 	@Test
 	public void everyAnswerTheInferenceServiceBuildsCarriesTheConditionRuleCoverage() throws IOException {
@@ -298,9 +302,17 @@ public class ArchitectureGuardTest {
 		String source = String.join("\n", lines);
 		List<String> silent = new ArrayList<>();
 		int constructions = 0;
-		int from = source.indexOf("new ChartAnswer(");
-		while (from >= 0) {
-			int open = source.indexOf('(', from);
+		// The TYPE NAME, not the literal `new ChartAnswer(`: ChartAnswer is a nested type, so
+		// `new ChartSearchService.ChartAnswer(...)` is legal Java naming the same constructor and
+		// needs no import change. A review agent defeated the literal form of this guard exactly
+		// that way — a fourth answer taking the 10-arg constructor, carrying no coverage, and the
+		// whole api suite green — so the pattern allows an optional qualifier and any whitespace.
+		java.util.regex.Matcher call =
+				java.util.regex.Pattern.compile("new\\s+(?:[\\w.]+\\.)?ChartAnswer\\s*\\(").matcher(source);
+		int searchFrom = 0;
+		while (call.find(searchFrom)) {
+			int from = call.start();
+			int open = source.indexOf('(', call.end() - 1);
 			int depth = 0;
 			int i = open;
 			for (; i < source.length(); i++) {
@@ -317,9 +329,10 @@ public class ArchitectureGuardTest {
 			String arguments = source.substring(open, Math.min(i + 1, source.length()));
 			constructions++;
 			if (!arguments.contains("conditionRuleCoverage")) {
-				silent.add("construction #" + constructions + ": " + arguments.replace("\n", " "));
+				silent.add("construction #" + constructions + " at offset " + from + ": "
+						+ arguments.replace("\n", " "));
 			}
-			from = source.indexOf("new ChartAnswer(", i);
+			searchFrom = Math.min(i + 1, source.length());
 		}
 		org.junit.jupiter.api.Assertions.assertEquals(3, constructions,
 				"precondition: this rule scans every ChartAnswer construction in LlmInferenceService, "

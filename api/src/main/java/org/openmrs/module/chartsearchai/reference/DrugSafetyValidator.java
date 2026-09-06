@@ -2532,23 +2532,29 @@ public class DrugSafetyValidator {
 	 *
 	 *         <p><b>Three values, and no gate on the drugSafety toggles.</b> The verdict is a property
 	 *         of the loaded DATASET, and it is knowable whether or not a screen ran — unlike
-	 *         {@code PairChipExtent}, which is a per-response MEASUREMENT and states nothing where its
-	 *         arm did not run. Gating this on {@link #reportsContraindications()} was tried and
-	 *         rejected while #378 was being planned, for the reason the issue itself gives: it would
-	 *         put {@code null} where the feature is off, making {@link DrugReferenceLoad.Coverage#UNLOADED}
-	 *         unreachable on this surface — and "we looked and there is none" against "nobody looked"
-	 *         is the distinction the issue asks for. With the feature off {@code getLoadStatus()}
-	 *         answers {@code notLoaded()} without loading anything, so reading this can never be what
-	 *         parses a file on an install that does not use the feature.
+	 *         {@code PairChipExtent}, which is a per-response MEASUREMENT and genuinely has nothing to
+	 *         state where its arm did not run. Gating this on {@link #reportsContraindications()} was
+	 *         tried and rejected: it would withhold a knowable dataset fact on the one install where
+	 *         it is most worth having — the arms switched off, where conditions are certainly not
+	 *         screened — substituting a statement about a toggle for the statement about the dataset
+	 *         this key is named for. <b>The reason first written here was that the gate would make
+	 *         {@link DrugReferenceLoad.Coverage#UNLOADED} unreachable, and that is FALSE</b>: the gate
+	 *         reads the two {@code drugSafety} toggles, which default TRUE, while the load is gated on
+	 *         {@code drugReference.enabled}, which defaults FALSE — so on a stock install the gate is
+	 *         open and the answer is {@code UNLOADED} either way. Measured by implementing the gate and
+	 *         running the suite, which stayed green. Do not restore that argument;
+	 *         {@code ConditionRuleCoverageGateContextTest} is what now holds the rule, and its
+	 *         discriminating case is the arms OFF over a dataset that DID load.
+	 *
+	 *         <p>With the feature off {@code getLoadStatus()} answers {@code notLoaded()} without
+	 *         loading anything, so reading this can never be what parses a file on an install that
+	 *         does not use the feature.
 	 *
 	 *         <p><b>It says the module had a rule to ask WITH, never that a condition was screened.</b>
-	 *         Three things it does not carry, each of which a client would be wrong to read into it:
-	 *         whether {@code drugSafety.validateAnswers} and {@code warnOnContraindications} are on;
-	 *         that a chart's conditions were READ, which
-	 *         {@link PatientClinicalContext#contraindicationRecordsRead()} answers and this does not;
-	 *         and encounter diagnoses, which {@code PatientClinicalContextBuilder} does not read at
-	 *         all, on any install. {@code README.md}'s client contract states all three, because a
-	 *         client is where they do damage.
+	 *         What it cannot speak to is enumerated in exactly one place —
+	 *         {@code ChartSearchService.ChartAnswer.getConditionRuleCoverage()} — and repeated only in
+	 *         {@code README.md}, which is the one a client author reads. Do not copy that list here:
+	 *         a second copy is a second thing to forget to update.
 	 *
 	 *         <p><b>The catch is why this returns null at all</b>, and it is here rather than left to
 	 *         propagate: unlike {@link #validate}, whose own catch keeps the answer path unbreakable,

@@ -116,7 +116,7 @@ curl -s -u admin:Admin123 -H 'Content-Type: application/json' \
   http://localhost:8081/openmrs/ws/rest/v1/chartsearchai/search | jq
 ```
 
-Six fields of the response matter for these tests:
+These fields of the response matter for these tests:
 
 | Field | What it is |
 |---|---|
@@ -126,6 +126,7 @@ Six fields of the response matter for these tests:
 | `references` | the records the answer actually **cited** — `drug_order`, `allergy`, `condition`, `safety_finding`, `drug_reference`, and since [#354](https://github.com/openmrs/openmrs-module-chartsearchai/issues/354) `drug_class_note` for a question that names a drug class no reference entry is indexed by |
 | `unfaithfullyRenderedCitations` | the citations whose rendering IN THE ANSWER the module found unfaithful to the record they point at ([#337](https://github.com/openmrs/openmrs-module-chartsearchai/issues/337)) — one entry per record however many times the answer diverged from it. This is what turns the rough edge recorded below from a log line into something a test can read. `null` is the absence of a measurement (the early `done` under async grounding states it); `[]` says the check named no citation and is **not** a certificate that the answer was compared and found faithful. `README.md` is canonical for what a client may and may not put beside it |
 | `unresolvedDrugClass` | the drug **class** the question named and the module resolved to no substance, or `null` where it states none ([#354](https://github.com/openmrs/openmrs-module-chartsearchai/issues/354)). Deterministic like the chips: the same statement is injected as a citable `drug_class_note` record, but that reaches the response only if the model cites it — so this is what a test on a class-term question reads. `null` is the absence of a statement, never a denial |
+| `conditionRuleCoverage` | what the loaded dataset publishes for the hand-authored **condition**-rule arm ([#378](https://github.com/openmrs/openmrs-module-chartsearchai/issues/378)) — `absent`, `published` or `unloaded`. On every `ddinter` cell below it reads **`absent`**, because DDInter publishes no such rule, so a test that sees anything else on this source has loaded something other than the shipped default. It is a statement about the DATASET: `absent` says the screen had no rule to ask the patient's conditions with, never that no contraindication chip can be raised — the same-drug allergy, shared-subgroup and curated legs are untouched by it. `README.md` is canonical for what a client may read into each value |
 
 > **Judge the chips, not only the prose.** The chips are the tested, deterministic layer; the
 > prose is a small local model's rendering of it. Several examples below are cases where the

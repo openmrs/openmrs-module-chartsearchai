@@ -320,7 +320,7 @@ public interface ChartSearchService {
 			this.unfaithfullyRenderedCitations = unfaithfullyRenderedCitations == null ? null
 					: java.util.Collections.unmodifiableList(
 							new java.util.ArrayList<Integer>(unfaithfullyRenderedCitations));
-				this.conditionRuleCoverage = conditionRuleCoverage;
+			this.conditionRuleCoverage = conditionRuleCoverage;
 		}
 
 		/**
@@ -585,13 +585,30 @@ public interface ChartSearchService {
 		 * this is a three-valued verdict and not a boolean —
 		 * {@code SerializedRecord.getOrderActive()} keeps the same discipline one layer down.
 		 *
-		 * <p><b>Two limits this value cannot speak to</b>, both stated in {@code README.md} beside the
-		 * key because a client is where they do damage. The module builds its condition token set from
-		 * OpenMRS's ACTIVE CONDITIONS alone ({@code PatientClinicalContextBuilder}), so an encounter
-		 * diagnosis is put to nothing on every install whatever this says; and a chart whose condition
-		 * list could not be READ degrades to an empty set, which
-		 * {@code PatientClinicalContext.contraindicationRecordsRead()} records and this key does not
-		 * carry. Neither is closed by issue #378.
+		 * <p><b>What this value cannot speak to. This javadoc is the one home for that list</b>, and
+		 * {@code README.md}'s client-facing paragraph is the second — the second because it is the only
+		 * one a frontend author reads, which is the same two-homes arrangement {@code PairChipExtent}
+		 * keeps for the same reason. Everything else points here rather than restating it: a copy is a
+		 * second thing to forget to update, which is the rule
+		 * {@code SerializedRecord.getOrderActive()}'s own field javadoc states one layer down. Three
+		 * things, none of them closed by issue #378:
+		 *
+		 * <ul>
+		 * <li>Whether the contraindication arms are switched ON at all.
+		 * {@code chartsearchai.drugSafety.validateAnswers} and
+		 * {@code chartsearchai.drugSafety.warnOnContraindications} govern that and are deliberately not
+		 * folded in — a load-time capability is knowable whether or not a screen ran, and gating this
+		 * on them would make {@link DrugReferenceLoad.Coverage#UNLOADED} unreachable here.</li>
+		 * <li>Whether the patient's condition list was READ. A failed read degrades to an empty set,
+		 * which {@code PatientClinicalContext.contraindicationRecordsRead()} records for the injected
+		 * record's benefit and this key does not carry.</li>
+		 * <li>ENCOUNTER DIAGNOSES. The contraindication screen builds its condition tokens from
+		 * OpenMRS's ACTIVE CONDITIONS alone ({@code PatientClinicalContextBuilder}), so a recorded
+		 * diagnosis reaches no contraindication rule whatever this says. It still reaches the chart the
+		 * model reads, like any other record, and the module reads a {@code Diagnosis} elsewhere to
+		 * invalidate a cached answer — the limit is on what the SCREEN sees, not on the module's
+		 * reach.</li>
+		 * </ul>
 		 *
 		 * <p>The producer states it and no consumer derives it, the discipline
 		 * {@link #getUnresolvedDrugClass()} follows: {@code LlmInferenceService} resolves it once per

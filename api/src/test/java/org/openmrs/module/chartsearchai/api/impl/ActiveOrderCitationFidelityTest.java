@@ -197,9 +197,9 @@ public class ActiveOrderCitationFidelityTest {
 		//
 		// The null assertion alone does NOT establish it, and review measured that: production hands
 		// the early answer an explicit null in that argument, so it states null wherever the check
-		// runs, and moving the check ABOVE the handoff left every case here green. What the
-		// check's POSITION is pinned by is the log snapshot — at handoff time the WARN must not have
-		// been emitted yet.
+		// runs, and before the log snapshot below was added, moving the check ABOVE the handoff left
+		// every case here green. It no longer does — that mutation reddens this case now, and the
+		// snapshot is why: at handoff time the WARN must not have been emitted yet.
 		int condition = indexOfType(ChartSearchAiConstants.RESOURCE_TYPE_CONDITION);
 		service.setLlmProvider(answering(sentenceFragment("Simvastatin", condition,
 				findingsStatingThePhrase().get(0)) + "."));

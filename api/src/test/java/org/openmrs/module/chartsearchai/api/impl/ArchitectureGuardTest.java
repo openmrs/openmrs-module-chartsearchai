@@ -48,6 +48,9 @@ public class ArchitectureGuardTest {
 	private static final String COVERAGE_TYPE =
 			"Lorg/openmrs/module/chartsearchai/reference/DrugReferenceLoad$Coverage;";
 
+	/** The widest constructor adds the safety status after condition-rule coverage. */
+	private static final String WIDEST_ANSWER_SUFFIX = COVERAGE_TYPE + "Ljava/lang/String;)V";
+
 
 	// --- Rules ---
 
@@ -349,13 +352,13 @@ public class ArchitectureGuardTest {
 						+ "to be built through and this guard is vacuous");
 		List<String> widest = new ArrayList<>();
 		for (String descriptor : constructors) {
-			if (descriptor.contains(COVERAGE_TYPE)) {
+			if (descriptor.endsWith(WIDEST_ANSWER_SUFFIX)) {
 				widest.add(descriptor);
 			}
 		}
 		org.junit.jupiter.api.Assertions.assertEquals(1, widest.size(),
-				"exactly one ChartAnswer constructor may take the condition-rule coverage — it is the "
-						+ "widest, and every shorter one states null. Found " + widest.size() + ".");
+				"exactly one ChartAnswer constructor may take both condition-rule coverage and the "
+						+ "safety status — it is the widest. Found " + widest.size() + ".");
 
 		List<String> violations = new ArrayList<>();
 		int callers = 0;
@@ -368,7 +371,7 @@ public class ArchitectureGuardTest {
 				}
 				callers++;
 				for (String entry : pool) {
-					if (constructors.contains(entry) && !entry.contains(COVERAGE_TYPE)) {
+					if (constructors.contains(entry) && !entry.endsWith(WIDEST_ANSWER_SUFFIX)) {
 						violations.add(classes.relativize(file) + " builds " + entry);
 					}
 				}

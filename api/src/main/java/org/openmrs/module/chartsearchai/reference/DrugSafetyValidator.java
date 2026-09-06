@@ -158,6 +158,33 @@ import org.springframework.stereotype.Service;
 @Service("chartSearchAi.drugSafetyValidator")
 public class DrugSafetyValidator {
 
+	public static final String STATUS_CHECKED = "checked";
+
+	public static final String STATUS_LIMITED = "limited";
+
+	public static final String STATUS_UNAVAILABLE = "unavailable";
+
+	public static final class SafetyCheckResult {
+
+		private final String status;
+
+		private final List<SafetyWarning> warnings;
+
+		public SafetyCheckResult(String status, List<SafetyWarning> warnings) {
+			this.status = status;
+			this.warnings = java.util.Collections.unmodifiableList(
+					new ArrayList<SafetyWarning>(warnings));
+		}
+
+		public String getStatus() {
+			return status;
+		}
+
+		public List<SafetyWarning> getWarnings() {
+			return warnings;
+		}
+	}
+
 	private static final Logger log = LoggerFactory.getLogger(DrugSafetyValidator.class);
 
 	private static final Pattern DOSE_MG = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*mg\\b");
@@ -255,19 +282,36 @@ public class DrugSafetyValidator {
 	 */
 	public List<SafetyWarning> validate(String answer, String question, Patient patient,
 			List<RecordMapping> mappings, PairChipExtent.Sink pairExtentSink) {
+		return validateWithStatus(answer, question, patient, mappings, pairExtentSink).getWarnings();
+	}
+
+	/** Status-carrying production entry point; preserves the same mapping and pair-extent pass. */
+	public SafetyCheckResult validateWithStatus(String answer, String question, Patient patient,
+			List<RecordMapping> mappings, PairChipExtent.Sink pairExtentSink) {
 		try {
 			if (!ChartSearchAiUtils.isDrugReferenceEnabled()
 					|| !ChartSearchAiUtils.getBooleanGlobalProperty(
 							ChartSearchAiConstants.GP_DRUG_SAFETY_VALIDATE_ANSWERS,
 							ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_VALIDATE_ANSWERS)) {
-				return new ArrayList<SafetyWarning>();
+				return new SafetyCheckResult(STATUS_UNAVAILABLE, new ArrayList<SafetyWarning>());
+			}
+			if (patient == null) {
+				return new SafetyCheckResult(STATUS_UNAVAILABLE, new ArrayList<SafetyWarning>());
 			}
 			PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
-			return validate(answer, question, context, mappings, null, pairExtentSink);
+			List<SafetyWarning> warnings = validate(answer, question, context, mappings, null,
+					pairExtentSink);
+			boolean complete = toggle(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_DOSE_EXCESS,
+						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_WARN_ON_DOSE_EXCESS)
+					&& toggle(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_INTERACTIONS,
+							ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_WARN_ON_INTERACTIONS)
+					&& toggle(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS,
+							ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS);
+			return new SafetyCheckResult(complete ? STATUS_CHECKED : STATUS_LIMITED, warnings);
 		}
 		catch (RuntimeException e) {
-			log.warn("Drug-safety validation failed; returning no warnings — the answer path is never broken", e);
-			return new ArrayList<SafetyWarning>();
+			log.warn("Drug-safety validation failed; returning unavailable status — the answer path is never broken", e);
+			return new SafetyCheckResult(STATUS_UNAVAILABLE, new ArrayList<SafetyWarning>());
 		}
 	}
 

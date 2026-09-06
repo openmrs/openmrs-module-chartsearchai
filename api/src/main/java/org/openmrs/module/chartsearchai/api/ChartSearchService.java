@@ -17,8 +17,10 @@ import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceLoad;
+import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.PairChipExtent;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
+import org.openmrs.module.chartsearchai.api.provider.CancellationSignal;
 
 /**
  * Answers natural language questions about a patient's chart using an LLM.
@@ -156,6 +158,15 @@ public interface ChartSearchService {
 				ungroundedAnswerConsumer);
 	}
 
+	/** Cancellation-aware form used by the provider-neutral turn lifecycle. */
+	default ChartAnswer searchStreaming(Patient patient, String question, Consumer<String> tokenConsumer,
+			Consumer<String> reasoningConsumer, Consumer<List<RecordReference>> citationsConsumer,
+			Consumer<ChartAnswer> ungroundedAnswerConsumer, Consumer<String> preliminaryReasoningConsumer,
+			CancellationSignal cancellation) {
+		return searchStreaming(patient, question, tokenConsumer, reasoningConsumer, citationsConsumer,
+				ungroundedAnswerConsumer, preliminaryReasoningConsumer);
+	}
+
 	/**
 	 * Pre-warm any patient-specific caches (serialized chart, LLM prompt cache) so the
 	 * first real query on this patient does not pay cold-start cost. Implementations
@@ -220,6 +231,8 @@ public interface ChartSearchService {
 		private final int cachedTokens;
 
 		private final List<SafetyWarning> safetyWarnings;
+
+		private final String safetyStatus;
 
 		private final String searchMode;
 
@@ -302,6 +315,18 @@ public interface ChartSearchService {
 				ChartSearchAiUtils.ReferenceSlice referenceSlice, PairChipExtent pairChipExtent,
 				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations,
 				DrugReferenceLoad.Coverage conditionRuleCoverage) {
+			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings,
+					searchMode, referenceSlice, pairChipExtent, unresolvedDrugClass,
+					unfaithfullyRenderedCitations, conditionRuleCoverage,
+					DrugSafetyValidator.STATUS_UNAVAILABLE);
+		}
+
+		public ChartAnswer(String answer, List<RecordReference> references,
+				int inputTokens, int outputTokens, int cachedTokens,
+				List<SafetyWarning> safetyWarnings, String searchMode,
+				ChartSearchAiUtils.ReferenceSlice referenceSlice, PairChipExtent pairChipExtent,
+				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations,
+				DrugReferenceLoad.Coverage conditionRuleCoverage, String safetyStatus) {
 			this.answer = answer;
 			this.references = java.util.Collections.unmodifiableList(
 					new java.util.ArrayList<>(references));
@@ -321,6 +346,7 @@ public interface ChartSearchService {
 					: java.util.Collections.unmodifiableList(
 							new java.util.ArrayList<Integer>(unfaithfullyRenderedCitations));
 			this.conditionRuleCoverage = conditionRuleCoverage;
+			this.safetyStatus = safetyStatus;
 		}
 
 		/**
@@ -368,6 +394,28 @@ public interface ChartSearchService {
 		 */
 		public List<SafetyWarning> getSafetyWarnings() {
 			return safetyWarnings;
+		}
+
+		/**
+		 * Whether the deterministic safety check completed fully, ran with disabled arms, or could
+		 * not run. An empty warning list does not state this on its own.
+		 */
+		public String getSafetyStatus() {
+			return safetyStatus;
+		}
+
+		/**
+		 * Provider-neutral safety envelope retained for clients that consume the dual-provider
+		 * contract. The current validator can state execution status and findings, so this projection
+		 * publishes exactly those facts and leaves package provenance or coverage fields absent when
+		 * this implementation cannot establish them.
+		 */
+		public java.util.Map<String, Object> getSafetyCheck() {
+			java.util.Map<String, Object> safetyCheck = new java.util.LinkedHashMap<String, Object>();
+			safetyCheck.put("schema_version", "drug_safety.v1");
+			safetyCheck.put("status", safetyStatus);
+			safetyCheck.put("warnings", new java.util.ArrayList<SafetyWarning>(safetyWarnings));
+			return java.util.Collections.unmodifiableMap(safetyCheck);
 		}
 
 		/**
@@ -650,6 +698,8 @@ public interface ChartSearchService {
 
 		private final int withheldInteractions;
 
+		private final String group;
+
 		public RecordReference(int index, String resourceType, String resourceUuid, Date date) {
 			this(index, resourceType, resourceUuid, date, null);
 		}
@@ -672,6 +722,7 @@ public interface ChartSearchService {
 			this.grounded = grounded;
 			this.source = source;
 			this.withheldInteractions = withheldInteractions;
+			this.group = ChartSearchAiUtils.referenceGroup(resourceType);
 		}
 
 		public int getIndex() {
@@ -738,6 +789,11 @@ public interface ChartSearchService {
 		 */
 		public int getWithheldInteractions() {
 			return withheldInteractions;
+		}
+
+		/** Server-authoritative provenance group: patient chart or module reference material. */
+		public String getGroup() {
+			return group;
 		}
 
 		/**

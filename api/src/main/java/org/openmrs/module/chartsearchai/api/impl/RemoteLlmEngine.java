@@ -26,6 +26,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.openmrs.api.APIException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.api.provider.CancellationSignal;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -77,10 +78,7 @@ public class RemoteLlmEngine implements LlmEngine {
 			if (response.statusCode() < 200 || response.statusCode() >= 300) {
 				log.error("Remote LLM API returned HTTP {}: {}", response.statusCode(),
 						truncateForLog(response.body()));
-				throw new APIException("Remote LLM API returned HTTP " + response.statusCode()
-						+ ". Check the endpoint URL and model name in the "
-						+ "chartsearchai.llm.remote.* global properties, and the API key "
-						+ "in openmrs-runtime.properties.");
+				throwForErrorResponse(response.statusCode(), response.body());
 			}
 
 			return parseResponse(response.body());
@@ -97,6 +95,14 @@ public class RemoteLlmEngine implements LlmEngine {
 	@Override
 	public InferenceResult inferStreaming(String systemPrompt, String userMessage,
 			int timeoutSeconds, Consumer<String> tokenConsumer) {
+		return inferStreaming(systemPrompt, userMessage, timeoutSeconds, tokenConsumer,
+				null, null, CancellationSignal.NONE);
+	}
+
+	@Override
+	public InferenceResult inferStreaming(String systemPrompt, String userMessage,
+			int timeoutSeconds, Consumer<String> tokenConsumer, String cacheScope, String cacheSeed,
+			CancellationSignal cancellation) {
 		String endpointUrl = getRequiredGlobalProperty(ChartSearchAiConstants.GP_LLM_REMOTE_ENDPOINT_URL);
 		String apiKey = getOptionalRuntimeProperty(ChartSearchAiConstants.RP_LLM_REMOTE_API_KEY);
 		String modelName = getRequiredGlobalProperty(ChartSearchAiConstants.GP_LLM_REMOTE_MODEL_NAME);
@@ -121,10 +127,17 @@ public class RemoteLlmEngine implements LlmEngine {
 				String body = new String(response.body().readAllBytes(), StandardCharsets.UTF_8);
 				log.error("Remote LLM API returned HTTP {}: {}", response.statusCode(),
 						truncateForLog(body));
-				throw new APIException("Remote LLM API returned HTTP " + response.statusCode());
+				throwForErrorResponse(response.statusCode(), body);
 			}
 
-			return parseStreamingResponse(response.body(), tokenConsumer);
+			InputStream responseBody = response.body();
+			cancellation.bindCloseable(responseBody);
+			try {
+				return parseStreamingResponse(responseBody, tokenConsumer);
+			}
+			finally {
+				cancellation.unbindCloseable(responseBody);
+			}
 		}
 		catch (IOException e) {
 			throw new APIException("Failed to call remote LLM API: " + e.getMessage(), e);
@@ -133,6 +146,27 @@ public class RemoteLlmEngine implements LlmEngine {
 			Thread.currentThread().interrupt();
 			throw new APIException("Remote LLM API call was interrupted", e);
 		}
+	}
+
+	/**
+	 * Translates a non-2xx remote response into the honest exception: a llama-server
+	 * context-overflow 400 becomes {@link org.openmrs.module.chartsearchai.api.ChartTooLargeException}
+	 * (the provider maps it to {@code chart_too_large}) — explicit-overflow parity with
+	 * {@link LocalLlmEngine}, so an oversized chart or slice is never disguised as a generic
+	 * provider failure. Everything else stays an {@link APIException} with the operator
+	 * remediation for the remote GPs.
+	 */
+	static void throwForErrorResponse(int statusCode, String body) {
+		if (statusCode == 400 && LlmResponseParser.isContextOverflowError(body)) {
+			throw new org.openmrs.module.chartsearchai.api.ChartTooLargeException(
+					"Patient chart exceeds the remote model's context window. Reduce the chart "
+							+ "(query-scoped mode / embedding pre-filter) or serve the model with a "
+							+ "larger context.");
+		}
+		throw new APIException("Remote LLM API returned HTTP " + statusCode
+				+ ". Check the endpoint URL and model name in the "
+				+ "chartsearchai.llm.remote.* global properties, and the API key "
+				+ "in openmrs-runtime.properties.");
 	}
 
 	@Override

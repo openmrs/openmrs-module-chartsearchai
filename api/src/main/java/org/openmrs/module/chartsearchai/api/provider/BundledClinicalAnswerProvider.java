@@ -1,0 +1,350 @@
+/**
+ * This Source Code Form is subject to the terms of the Mozilla Public License,
+ * v. 2.0. If a copy of the MPL was not distributed with this file, You can
+ * obtain one at http://mozilla.org/MPL/2.0/. OpenMRS is also distributed under
+ * the terms of the Healthcare Disclaimer located at http://openmrs.org/license.
+ *
+ * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
+ * graphic logo is a trademark of OpenMRS Inc.
+ */
+package org.openmrs.module.chartsearchai.api.provider;
+
+import java.io.Closeable;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.EnumSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+
+import org.openmrs.api.context.Context;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
+import org.openmrs.module.chartsearchai.api.ChartSearchService;
+import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
+import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
+import org.openmrs.module.chartsearchai.api.ChartTooLargeException;
+import org.openmrs.module.chartsearchai.api.InsufficientContextException;
+import org.openmrs.module.chartsearchai.reference.SafetyWarning;
+import org.openmrs.module.chartsearchai.util.DateFormatUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Service;
+
+/**
+ * Adapts the bundled ChartSearchAI pipeline (the {@link ChartSearchService} caching router and
+ * everything behind it: local/remote engines, query-scoped or full-chart context, grounding,
+ * drug safety, warmup) onto the provider-neutral {@link ClinicalAnswerProvider} boundary. Bundled
+ * behavior is unchanged — this class only translates the pipeline's streaming seams into the
+ * canonical turn lifecycle:
+ *
+ * <ul>
+ *   <li>preliminary and committed reasoning fragments become {@code reasoning_delta};</li>
+ *   <li>answer tokens become {@code answer_delta};</li>
+ *   <li>the ungrounded-answer seam becomes {@code answer_done} (verdicts still {@code null});</li>
+ *   <li>the grounded return value becomes {@code evidence_updated} when grounding is enabled;</li>
+ *   <li>an answer that arrives already final (e.g. cached, verdicts attached when first computed)
+ *       becomes a single {@code answer_done} with no separate evidence event.</li>
+ * </ul>
+ *
+ * Failures are normalized to one problem code and never fall back to another provider.
+ */
+@Service("chartSearchAi.bundledClinicalAnswerProvider")
+public class BundledClinicalAnswerProvider implements ClinicalAnswerProvider {
+
+	public static final String PROVIDER_ID = "bundled";
+
+	public static final String PROBLEM_PROVIDER_FAILURE = "provider_failure";
+
+	public static final String PROBLEM_CHART_TOO_LARGE = "chart_too_large";
+
+	/** Same wire string as med-agent-hub's {@code InsufficientContextError} — mandatory evidence
+	 *  alone exceeded the budget, a proactively-diagnosed abstention rather than llama-server's
+	 *  after-the-fact rejection ({@link #PROBLEM_CHART_TOO_LARGE}). */
+	public static final String PROBLEM_INSUFFICIENT_CONTEXT = "insufficient_context";
+
+	public static final String PROBLEM_UNSUPPORTED_MODE = "unsupported_mode";
+
+	public static final String PROBLEM_CANCELLED = "cancelled";
+
+	private static final Logger log = LoggerFactory.getLogger(BundledClinicalAnswerProvider.class);
+
+	private final ChartSearchService chartSearchService;
+
+	@Autowired
+	public BundledClinicalAnswerProvider(
+			@Qualifier("chartSearchAi.chartSearchServiceRouter") ChartSearchService chartSearchService) {
+		this.chartSearchService = chartSearchService;
+	}
+
+	/** Global-property read seam, overridable in tests (same pattern as the caching router). */
+	protected String gp(String property, String defaultValue) {
+		return Context.getAdministrationService().getGlobalProperty(property, defaultValue);
+	}
+
+	@Override
+	public String id() {
+		return PROVIDER_ID;
+	}
+
+	@Override
+	public ProviderDescriptor descriptor() {
+		Set<ProviderCapability> capabilities = EnumSet.of(ProviderCapability.ANSWER,
+				ProviderCapability.TOKEN_STREAMING);
+		if (groundingEnabled()) {
+			capabilities.add(ProviderCapability.GROUNDING);
+		}
+		if (Boolean.parseBoolean(gp(ChartSearchAiConstants.GP_DRUG_REFERENCE_ENABLED,
+				String.valueOf(ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_ENABLED)))) {
+			capabilities.add(ProviderCapability.DRUG_SAFETY);
+		}
+		String unavailableReason = engineUnavailableReason();
+		return new ProviderDescriptor(PROVIDER_ID, "ChartSearchAI (bundled)", true,
+				unavailableReason == null, true, Collections.singletonList(configuredMode()),
+				capabilities, unavailableReason);
+	}
+
+	/**
+	 * Why the configured LLM engine cannot serve right now, or {@code null} when it can.
+	 * Readiness must be truthful: an unusable engine (missing model file, unset or
+	 * unreachable remote endpoint) reports {@code ready:false} with the reason, so the
+	 * picker disables the provider and {@code registry.require} rejects with
+	 * {@code provider_not_ready} instead of every turn dying mid-stream with
+	 * {@code provider_failure}.
+	 */
+	private String engineUnavailableReason() {
+		String engine = gp(ChartSearchAiConstants.GP_LLM_ENGINE,
+				ChartSearchAiConstants.LLM_ENGINE_LOCAL);
+		if (ChartSearchAiConstants.LLM_ENGINE_REMOTE.equals(engine)) {
+			String endpoint = trimToNull(gp(ChartSearchAiConstants.GP_LLM_REMOTE_ENDPOINT_URL, null));
+			if (endpoint == null) {
+				return ChartSearchAiConstants.GP_LLM_REMOTE_ENDPOINT_URL + " is not set";
+			}
+			if (trimToNull(gp(ChartSearchAiConstants.GP_LLM_REMOTE_MODEL_NAME, null)) == null) {
+				return ChartSearchAiConstants.GP_LLM_REMOTE_MODEL_NAME + " is not set";
+			}
+			if (!engineReachable(endpoint)) {
+				return "remote engine unreachable: " + endpoint;
+			}
+			return null;
+		}
+		try {
+			requireLocalModel(gp(ChartSearchAiConstants.GP_LLM_MODEL_FILE_PATH, null));
+			return null;
+		}
+		catch (IllegalStateException e) {
+			return e.getMessage();
+		}
+	}
+
+	private static String trimToNull(String value) {
+		if (value == null) {
+			return null;
+		}
+		String trimmed = value.trim();
+		return trimmed.isEmpty() ? null : trimmed;
+	}
+
+	/**
+	 * Resolve the local engine's model file, throwing {@link IllegalStateException} with the
+	 * reason when it is missing or misconfigured. Seam overridable in tests (same pattern as
+	 * {@link #gp}); production delegates to the canonical resolver.
+	 */
+	protected String requireLocalModel(String configuredPath) {
+		return ChartSearchAiUtils.resolveModelPath(configuredPath,
+				ChartSearchAiConstants.GP_LLM_MODEL_FILE_PATH);
+	}
+
+	/**
+	 * Whether the remote engine endpoint can serve: it must answer HTTP with a non-5xx
+	 * status (a chat-completions URL answers GET with 405, which counts). Connect/read
+	 * failures AND 5xx both mean not-ready — a relay in front of a dead engine answers 502,
+	 * which must not hide the outage. Probes are cached briefly so per-turn readiness gates
+	 * and the providers endpoint stay cheap. Seam overridable in tests; the ready-path and
+	 * proxy-502 tests exercise this real implementation against live local servers.
+	 */
+	protected boolean engineReachable(String endpointUrl) {
+		long now = System.currentTimeMillis();
+		if (endpointUrl.equals(reachabilityEndpoint)
+				&& now - reachabilityProbedAtMs < REACHABILITY_TTL_MS) {
+			return reachabilityResult;
+		}
+		boolean reachable;
+		try {
+			java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+					.uri(java.net.URI.create(endpointUrl))
+					.timeout(java.time.Duration.ofSeconds(2)).GET().build();
+			java.net.http.HttpResponse<Void> response = REACHABILITY_CLIENT.send(request,
+					java.net.http.HttpResponse.BodyHandlers.discarding());
+			reachable = response.statusCode() < 500;
+		}
+		catch (java.io.IOException | IllegalArgumentException e) {
+			reachable = false;
+		}
+		catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			reachable = false;
+		}
+		reachabilityEndpoint = endpointUrl;
+		reachabilityProbedAtMs = now;
+		reachabilityResult = reachable;
+		return reachable;
+	}
+
+	private static final long REACHABILITY_TTL_MS = 10_000L;
+
+	private static final java.net.http.HttpClient REACHABILITY_CLIENT = java.net.http.HttpClient
+			.newBuilder().connectTimeout(java.time.Duration.ofSeconds(2)).build();
+
+	private volatile String reachabilityEndpoint;
+
+	private volatile long reachabilityProbedAtMs;
+
+	private volatile boolean reachabilityResult;
+
+	@Override
+	public CompletionStage<TurnResult> execute(TurnRequest request, TurnEventSink events,
+			CancellationSignal cancellation) {
+		// The bundled pipeline is synchronous; the turn runs on the caller's thread and the
+		// stage completes when the last event has been delivered.
+		AtomicInteger sequence = new AtomicInteger();
+		events.accept(TurnEvent.of(TurnEventType.TURN_STARTED, sequence.getAndIncrement(), PROVIDER_ID));
+
+		if (cancellation.isCancelled()) {
+			return failed(events, sequence, null, PROBLEM_CANCELLED);
+		}
+		ProviderMode configuredMode = configuredMode();
+		if (request.getMode() != null && request.getMode() != configuredMode) {
+			return failed(events, sequence, null, PROBLEM_UNSUPPORTED_MODE);
+		}
+
+		boolean[] answerDoneEmitted = { false };
+		AtomicReference<AnswerEnvelope> latestAnswer = new AtomicReference<>();
+		ChartAnswer finalAnswer;
+		Thread executionThread = Thread.currentThread();
+		Closeable threadInterrupt = executionThread::interrupt;
+		cancellation.bindCloseable(threadInterrupt);
+		try {
+			finalAnswer = chartSearchService.searchStreaming(request.getPatient(), request.getQuestion(),
+					token -> events.accept(TurnEvent.delta(TurnEventType.ANSWER_DELTA,
+							sequence.getAndIncrement(), PROVIDER_ID, token)),
+					reasoning -> events.accept(TurnEvent.delta(TurnEventType.REASONING_DELTA,
+							sequence.getAndIncrement(), PROVIDER_ID, reasoning)),
+					// Citations arrive inside the ungrounded answer below; the pre-grounding
+					// citations channel needs no separate lifecycle event.
+					citations -> {
+					}, ungrounded -> {
+						answerDoneEmitted[0] = true;
+						AnswerEnvelope envelope = toAnswerEnvelope(ungrounded);
+						latestAnswer.set(envelope);
+						events.accept(TurnEvent.withAnswer(TurnEventType.ANSWER_DONE,
+								sequence.getAndIncrement(), PROVIDER_ID, envelope));
+					}, preliminary -> events.accept(TurnEvent.delta(TurnEventType.REASONING_DELTA,
+							sequence.getAndIncrement(), PROVIDER_ID, preliminary)), cancellation);
+		}
+		catch (InsufficientContextException e) {
+			return failed(events, sequence, configuredMode, PROBLEM_INSUFFICIENT_CONTEXT);
+		}
+		catch (ChartTooLargeException e) {
+			return failed(events, sequence, configuredMode, PROBLEM_CHART_TOO_LARGE);
+		}
+		catch (RuntimeException e) {
+			if (cancellation.isCancelled()) {
+				if (latestAnswer.get() != null) {
+					AnswerEnvelope partialAnswer = latestAnswer.get();
+					events.accept(TurnEvent.withAnswer(TurnEventType.TURN_DONE,
+							sequence.getAndIncrement(), PROVIDER_ID, partialAnswer));
+					return CompletableFuture.completedFuture(
+							TurnResult.done(PROVIDER_ID, configuredMode, partialAnswer));
+				}
+				return failed(events, sequence, configuredMode, PROBLEM_CANCELLED);
+			}
+			log.warn("Bundled provider turn failed for request {}", request.getRequestId(), e);
+			return failed(events, sequence, configuredMode, PROBLEM_PROVIDER_FAILURE);
+		}
+		finally {
+			cancellation.unbindCloseable(threadInterrupt);
+			if (cancellation.isCancelled()) {
+				Thread.interrupted();
+			}
+		}
+
+		AnswerEnvelope finalEnvelope = toAnswerEnvelope(finalAnswer);
+		if (answerDoneEmitted[0]) {
+			if (groundingEnabled()) {
+				events.accept(TurnEvent.withAnswer(TurnEventType.EVIDENCE_UPDATED,
+						sequence.getAndIncrement(), PROVIDER_ID, finalEnvelope));
+			}
+		} else {
+			// The ungrounded seam did not fire, so the returned answer was already final
+			// (e.g. cached with verdicts attached when first computed).
+			events.accept(TurnEvent.withAnswer(TurnEventType.ANSWER_DONE, sequence.getAndIncrement(),
+					PROVIDER_ID, finalEnvelope));
+		}
+		events.accept(TurnEvent.withAnswer(TurnEventType.TURN_DONE,
+				sequence.getAndIncrement(), PROVIDER_ID, finalEnvelope));
+		return CompletableFuture.completedFuture(TurnResult.done(PROVIDER_ID, configuredMode, finalEnvelope));
+	}
+
+	private CompletionStage<TurnResult> failed(TurnEventSink events, AtomicInteger sequence,
+			ProviderMode mode, String problemCode) {
+		events.accept(TurnEvent.error(sequence.getAndIncrement(), PROVIDER_ID, problemCode));
+		return CompletableFuture.completedFuture(TurnResult.error(PROVIDER_ID, mode, problemCode));
+	}
+
+	private boolean groundingEnabled() {
+		return Boolean.parseBoolean(gp(ChartSearchAiConstants.GP_GROUNDING_ENABLED,
+				String.valueOf(ChartSearchAiConstants.DEFAULT_GROUNDING_ENABLED)));
+	}
+
+	private static AnswerEnvelope toAnswerEnvelope(ChartAnswer answer) {
+		Map<String, Object> payload = new LinkedHashMap<>();
+		payload.put("answer", answer.getAnswer());
+
+		List<Map<String, Object>> references = new ArrayList<>();
+		for (RecordReference reference : answer.getReferences()) {
+			Map<String, Object> value = new LinkedHashMap<>();
+			value.put("index", reference.getIndex());
+			value.put("resourceType", reference.getResourceType());
+			value.put("resourceUuid", reference.getResourceUuid());
+			value.put("date", reference.getDate() == null ? null
+					: DateFormatUtil.formatDate(reference.getDate()));
+			value.put("grounded", reference.getGrounded());
+			value.put("group", reference.getGroup());
+			value.put("source", reference.getSource());
+			value.put("withheldInteractions", reference.getWithheldInteractions());
+			references.add(value);
+		}
+		payload.put("references", references);
+
+		List<Map<String, Object>> warnings = new ArrayList<>();
+		for (SafetyWarning warning : answer.getSafetyWarnings()) {
+			Map<String, Object> value = new LinkedHashMap<>();
+			value.put("type", warning.getType());
+			value.put("drug", warning.getDrug());
+			value.put("detail", warning.getDetail());
+			warnings.add(value);
+		}
+		payload.put("safetyWarnings", warnings);
+		payload.put("safetyStatus", answer.getSafetyStatus());
+		payload.put("safetyCheck", answer.getSafetyCheck());
+		payload.put("blocks", Collections.emptyList());
+		payload.put("inputTokens", answer.getInputTokens());
+		payload.put("outputTokens", answer.getOutputTokens());
+		payload.put("cachedTokens", answer.getCachedTokens());
+		return AnswerEnvelope.fromPayload(payload);
+	}
+
+	private ProviderMode configuredMode() {
+		String chartMode = gp(ChartSearchAiConstants.GP_CHART_MODE, ChartSearchAiConstants.CHART_MODE_DEFAULT);
+		return ChartSearchAiConstants.CHART_MODE_FULL_CHART.equals(chartMode)
+				? ProviderMode.FULL_CHART_STABLE : ProviderMode.QUERY_SCOPED;
+	}
+}

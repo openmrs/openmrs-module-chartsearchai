@@ -85,15 +85,15 @@ public class LlmInferenceServicePairChipExtentTest {
 		});
 		service.setDrugSafetyValidator(new DrugSafetyValidator() {
 
-			// The overload production actually calls once a caller publishes the extent (issue #336).
+			// The status-carrying overload production calls also publishes the extent (issue #336).
 			@Override
-			public List<SafetyWarning> validate(String answer, String question, Patient patient,
+			public SafetyCheckResult validateWithStatus(String answer, String question, Patient patient,
 					List<RecordMapping> mappings, PairChipExtent.Sink pairExtentSink) {
 				sinks.add(pairExtentSink);
 				if (pairExtentSink != null) {
 					pairExtentSink.record(FOUND, REPORTED);
 				}
-				return Collections.emptyList();
+				return new SafetyCheckResult(STATUS_CHECKED, Collections.emptyList());
 			}
 		});
 	}

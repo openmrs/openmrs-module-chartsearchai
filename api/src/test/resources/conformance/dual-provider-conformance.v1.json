@@ -1,0 +1,185 @@
+{
+  "schema_version": "dual_provider_conformance.v1",
+  "description": "Provider-neutral fixtures for the dual-provider foundational-parity roadmap. Records are synthetic contract data, not patient evidence.",
+  "provider_lifecycle": [
+    {
+      "id": "provider.lifecycle.required-answer-and-terminal",
+      "capabilities": ["answer"],
+      "events": ["turn_started", "answer_done", "turn_done"],
+      "expected": "accept"
+    },
+    {
+      "id": "provider.lifecycle.review-is-optional",
+      "capabilities": ["answer", "answer_review", "indepth"],
+      "events": ["turn_started", "answer_done", "answer_validation", "indepth_pending", "indepth_done", "turn_done"],
+      "expected": "accept"
+    },
+    {
+      "id": "provider.lifecycle.no-silent-fallback",
+      "capabilities": ["answer"],
+      "events": ["turn_started", "turn_error"],
+      "expected": "accept"
+    }
+  ],
+  "provider_capabilities": [
+    {
+      "id": "provider.capabilities.single-provider-no-picker",
+      "providers": ["bundled"],
+      "default_provider": "bundled",
+      "expected_picker": false
+    },
+    {
+      "id": "provider.capabilities.configured-hub-visible-when-unready",
+      "providers": ["bundled", "hub"],
+      "default_provider": "bundled",
+      "hub_ready": false,
+      "expected_picker": true,
+      "expected_hub_state": "disabled"
+    },
+    {
+      "id": "provider.capabilities.switch-starts-new-conversation",
+      "providers": ["bundled", "hub"],
+      "switch_from": "bundled",
+      "switch_to": "hub",
+      "expected": "new_conversation"
+    }
+  ],
+  "querystore_records": [
+    {
+      "id": "querystore.record.obs-clinical-date",
+      "resource_type": "obs",
+      "date": "2026-01-15",
+      "clinical_date": "2026-01-15",
+      "date_kind": "clinical_event",
+      "last_modified": "2026-01-16T12:00:00Z"
+    },
+    {
+      "id": "querystore.record.patient-administrative-date",
+      "resource_type": "patient",
+      "date": "2026-01-15",
+      "clinical_date": null,
+      "date_kind": "administrative",
+      "last_modified": "2026-01-16T12:00:00Z"
+    },
+    {
+      "id": "querystore.snapshot.all-pages-agree",
+      "snapshot_ids": ["snapshot-a", "snapshot-a"],
+      "expected": "accept"
+    },
+    {
+      "id": "querystore.snapshot.mixed-pages-rejected",
+      "snapshot_ids": ["snapshot-a", "snapshot-b"],
+      "expected": "reject_after_one_retry"
+    }
+  ],
+  "context_policy": [
+    {
+      "id": "context.enumerated-medications-are-complete",
+      "mode": "query_scoped",
+      "question_kind": "medication_enumeration",
+      "mandatory_ids": ["p-1", "allergy-1", "cond-active"],
+      "typed_complete_ids": ["med-1", "med-2", "med-3"],
+      "expected_included": ["p-1", "allergy-1", "cond-active", "med-1", "med-2", "med-3"]
+    },
+    {
+      "id": "context.temporal-adds-recency-anchor",
+      "mode": "query_scoped",
+      "question_kind": "temporal",
+      "recency_anchor_ids": ["visit-1"],
+      "expected_included": ["visit-1"]
+    },
+    {
+      "id": "context.non-temporal-does-not-fill-budget",
+      "mode": "query_scoped",
+      "question_kind": "medication_enumeration",
+      "budget_tokens": 1000,
+      "selected_tokens": 420,
+      "must_exclude_ids": ["recent-1", "visit-1"],
+      "expected": "accept_without_extra_records"
+    },
+    {
+      "id": "context.explicit-signals-are-retained",
+      "mode": "query_scoped",
+      "question": "Compare \"Sprained ankle\", 2023-01-01, 11111111-1111-4111-8111-111111111111, and CIEL:12345.",
+      "exact_match_ids": ["cond-old", "noise-1", "11111111-1111-4111-8111-111111111111", "coded-1"],
+      "expected_tier": "exact"
+    },
+    {
+      "id": "context.mandatory-overflow-abstains",
+      "mode": "query_scoped",
+      "budget_tokens": 100,
+      "mandatory_tokens": 101,
+      "expected": "insufficient_context"
+    },
+    {
+      "id": "context.panel-completion-includes-all-members",
+      "similarity_matched_ids": ["panel-1"],
+      "panel_members": {"panel-1": ["member-1", "member-2"]},
+      "expected_included": ["panel-1", "member-1", "member-2"],
+      "expected_tier": {"panel-1": "panel", "member-1": "panel", "member-2": "panel"}
+    },
+    {
+      "id": "context.stable-ordering-preserves-chart-order-and-highest-tier-wins",
+      "chart_order_ids": ["p-1", "recent-1", "cond-active", "allergy-1"],
+      "mandatory_ids": ["allergy-1"],
+      "typed_complete_ids": ["allergy-1"],
+      "similarity_matched_ids": ["allergy-1"],
+      "expected_no_duplicates": true,
+      "expected_order_precedes": [["p-1", "recent-1"], ["recent-1", "allergy-1"]],
+      "expected_tier": {"allergy-1": "mandatory"}
+    }
+  ],
+  "temporal_gate": [
+    {
+      "id": "temporal.malformed-date-fails",
+      "answer": "The next visit is 2025-10-//13.",
+      "expected_status": "fail"
+    },
+    {
+      "id": "temporal.non-ledger-date-fails",
+      "answer": "The last visit was 2026-02-17.",
+      "ledger_dates": ["2026-02-16"],
+      "expected_status": "fail"
+    },
+    {
+      "id": "temporal.date-value-binding-fails",
+      "answer": "Weight was 60 kg on 2026-01-01.",
+      "concept": "Weight",
+      "numeric_series": [{"date": "2026-01-01", "value": 58}],
+      "expected_status": "fail"
+    },
+    {
+      "id": "temporal.single-point-trend-fails",
+      "answer": "Weight is increasing.",
+      "concept": "Weight",
+      "numeric_series": [{"date": "2026-01-01", "value": 58}],
+      "expected_status": "fail"
+    }
+  ],
+  "drug_safety_status": [
+    {
+      "id": "drug-safety.complete-check-is-checked",
+      "source_package": "reviewed-package-v1",
+      "mapping_complete": true,
+      "exposure_complete": true,
+      "execution_complete": true,
+      "expected_status": "checked"
+    },
+    {
+      "id": "drug-safety.partial-check-is-limited",
+      "source_package": "reviewed-package-v1",
+      "mapping_complete": false,
+      "exposure_complete": true,
+      "execution_complete": true,
+      "expected_status": "limited"
+    },
+    {
+      "id": "drug_safety.missing-package-is-unavailable",
+      "source_package": null,
+      "mapping_complete": false,
+      "exposure_complete": false,
+      "execution_complete": false,
+      "expected_status": "unavailable"
+    }
+  ]
+}

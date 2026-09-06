@@ -36,10 +36,10 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  *
  * <p>The reconciliation logic itself is unit-tested in
  * {@code LlmInferenceServiceTest}; this test guards the two call sites. The
- * streaming endpoint ({@code /search/stream}) is the primary production path,
+ * bundled compatibility endpoint ({@code /search/stream}) still consumes these callbacks,
  * so a refactor that passed {@code null} for the answer there would silently
- * drop the fix on the path users actually hit, and the logic-only unit test
- * would still pass. The stub LLM reproduces the
+ * drop the fix on that supported path while the logic-only unit test still passed.
+ * The stub LLM reproduces the
  * exact demo failure: it cites {@code [8]} inline but lists only {@code [9]}
  * in its structured array.</p>
  *
@@ -81,10 +81,9 @@ public class LlmInferenceServiceCitationWiringTest {
 
 		java.util.List<RecordMapping> mappingsSeen;
 
-		/** Which overload production reached — the sink-carrying one since issue #336. Recorded so a
-		 *  path that reverted to the four-argument overload fails by NAMING that, rather than by the
-		 *  mappings assertion below going quiet: the two arities differ only in what production can
-		 *  publish, so a stub that covers one and not the other is silently inert. */
+		/** Which overload production reached. The status-carrying entry point also receives the
+		 *  mappings and pair-extent sink, so recording it keeps this seam aligned with the response
+		 *  contract rather than silently intercepting a legacy overload. */
 		String arityUsed;
 
 		@Override
@@ -97,13 +96,14 @@ public class LlmInferenceServiceCitationWiringTest {
 		}
 
 		@Override
-		public java.util.List<org.openmrs.module.chartsearchai.reference.SafetyWarning> validate(
+		public SafetyCheckResult validateWithStatus(
 				String answer, String question, org.openmrs.Patient patient,
 				java.util.List<RecordMapping> mappings,
 				org.openmrs.module.chartsearchai.reference.PairChipExtent.Sink pairExtentSink) {
 			this.mappingsSeen = mappings;
-			this.arityUsed = "five-argument";
-			return java.util.Collections.emptyList();
+			this.arityUsed = "status-carrying";
+			return new SafetyCheckResult(STATUS_CHECKED,
+					java.util.Collections.emptyList());
 		}
 	}
 
@@ -156,9 +156,9 @@ public class LlmInferenceServiceCitationWiringTest {
 	private void assertMappingsSeenIncludeIndex(int index) {
 		// Both overloads are stubbed, so this cannot pass by production having reached neither — which
 		// is exactly what a one-overload stub allows once production prefers the other (issue #336).
-		assertEquals("five-argument", recordingValidator.arityUsed,
-				"production must reach the overload that also lets it publish how bounded the answer's "
-						+ "interaction list is; the four-argument one cannot carry that statement");
+		assertEquals("status-carrying", recordingValidator.arityUsed,
+				"production must reach the overload that publishes both validation status and how "
+						+ "bounded the answer's interaction list is");
 		assertTrue(recordingValidator.mappingsSeen != null && !recordingValidator.mappingsSeen.isEmpty(),
 				"the validator must receive the chart's record mappings for echo scoping");
 		boolean found = false;

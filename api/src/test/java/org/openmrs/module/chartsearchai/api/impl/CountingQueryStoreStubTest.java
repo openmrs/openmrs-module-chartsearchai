@@ -56,8 +56,9 @@ import org.openmrs.module.querystore.model.QueryDocument;
 public class CountingQueryStoreStubTest {
 
 	/**
-	 * The {@code QueryStoreService} methods the double answers on purpose — the two it counts
-	 * plus the {@code OpenmrsService} lifecycle pair, which a double has no work to do for.
+	 * The {@code QueryStoreService} methods the double answers on purpose — the legacy reads,
+	 * the typed chart read and shared context slice used by the builder, plus the
+	 * {@code OpenmrsService} lifecycle pair, which a double has no work to do for.
 	 *
 	 * <p>Deliberately spelled out here rather than read from the double: this list is the
 	 * specification. Asserting against a constant the double itself exports would pass no matter
@@ -65,7 +66,8 @@ public class CountingQueryStoreStubTest {
 	 * at it.
 	 */
 	private static final Set<String> ANSWERED_ON_PURPOSE = new TreeSet<>(
-			Arrays.asList("searchByPatient", "getPatientChart", "onStartup", "onShutdown"));
+			Arrays.asList("searchByPatient", "getPatientChart", "getPatientChartRead",
+					"getContextSlice", "onStartup", "onShutdown"));
 
 	@Test
 	public void stub_shouldNotImplementTheQuerystoreInterfaceAtCompileTime() {

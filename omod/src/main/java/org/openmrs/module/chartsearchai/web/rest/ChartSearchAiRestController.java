@@ -23,12 +23,15 @@ import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpServletResponseWrapper;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.openmrs.Patient;
@@ -44,17 +47,36 @@ import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.util.DateFormatUtil;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.ChartTooLargeException;
+import org.openmrs.module.chartsearchai.api.InsufficientContextException;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.api.AuditLogService;
 import org.openmrs.module.chartsearchai.api.PatientAccessCheck;
+import org.openmrs.module.chartsearchai.api.conversation.ConversationService;
+import org.openmrs.module.chartsearchai.api.conversation.PriorClinicalTurn;
 import org.openmrs.module.chartsearchai.api.impl.PrewarmBootstrapService;
 import org.openmrs.module.chartsearchai.api.impl.PrewarmStatus;
 import org.openmrs.module.chartsearchai.api.impl.WarmupExecutor;
+import org.openmrs.module.chartsearchai.api.provider.AnswerEnvelope;
+import org.openmrs.module.chartsearchai.api.provider.ClinicalAnswerProvider;
+import org.openmrs.module.chartsearchai.api.provider.ClinicalAnswerProviderRegistry;
+import org.openmrs.module.chartsearchai.api.provider.HubClinicalAnswerProvider;
+import org.openmrs.module.chartsearchai.api.provider.ProviderCapability;
+import org.openmrs.module.chartsearchai.api.provider.ProviderDescriptor;
+import org.openmrs.module.chartsearchai.api.provider.ProviderMode;
+import org.openmrs.module.chartsearchai.api.provider.ProviderUnavailableException;
+import org.openmrs.module.chartsearchai.api.provider.TurnEvent;
+import org.openmrs.module.chartsearchai.api.provider.TurnEventType;
+import org.openmrs.module.chartsearchai.api.provider.TurnCancellation;
+import org.openmrs.module.chartsearchai.api.provider.TurnPreemptionRegistry;
+import org.openmrs.module.chartsearchai.api.provider.TurnRequest;
+import org.openmrs.module.chartsearchai.api.provider.TurnResult;
 import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceLoad;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceService;
 import org.openmrs.module.chartsearchai.reference.PairChipExtent;
+import org.openmrs.module.chartsearchai.model.ClinicalConversation;
+import org.openmrs.module.chartsearchai.model.ClinicalConversationTurn;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.webservices.rest.web.RestConstants;
 import org.openmrs.util.PrivilegeConstants;
@@ -164,6 +186,85 @@ public class ChartSearchAiRestController {
 	@Qualifier("chartSearchAi.drugReferenceService")
 	private DrugReferenceService drugReferenceService;
 
+	@Autowired
+	@Qualifier("chartSearchAi.clinicalAnswerProviderRegistry")
+	private ClinicalAnswerProviderRegistry providerRegistry;
+
+	@Autowired
+	@Qualifier("chartSearchAi.conversationService")
+	private ConversationService conversationService;
+
+	@Autowired
+	@Qualifier("chartSearchAi.hubProfileService")
+	private org.openmrs.module.chartsearchai.api.impl.HubProfileService hubProfileService;
+
+	// A conversation has at most one turn in flight at a time — a new turn starting for the same
+	// conversation always supersedes whatever came before it. This controller is a singleton bean
+	// (default Spring MVC @Controller scope), so one registry instance safely tracks preemption
+	// across every concurrent request.
+	private TurnPreemptionRegistry preemptionRegistry = new TurnPreemptionRegistry();
+
+	/**
+	 * Provider discovery for the ESM picker. Fresh installs return only bundled with
+	 * {@code pickerVisible=false}; an enabled-but-unready hub stays listed with its reason.
+	 */
+	@RequestMapping(value = "/providers", method = RequestMethod.GET)
+	@ResponseBody
+	public ResponseEntity<Object> listProviders() {
+		Context.requirePrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
+		return new ResponseEntity<Object>(
+				providersResponse(providerRegistry.descriptors(), providerRegistry.isPickerVisible(),
+						providerRegistry.getDefaultProviderId()),
+				HttpStatus.OK);
+	}
+
+	/**
+	 * Relay med-agent-hub's authoritative product-profile metadata for the ESM profile picker.
+	 * ChartSearchAI does not merge, curate, or reinterpret the list; labels, availability,
+	 * capabilities, and the default marker all come from the hub.
+	 */
+	@RequestMapping(value = "/models", method = RequestMethod.GET)
+	@ResponseBody
+	public ResponseEntity<Object> listModels() {
+		Context.requirePrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
+		try {
+			return new ResponseEntity<Object>(hubProfileService.listProfiles(), HttpStatus.OK);
+		}
+		catch (Exception e) {
+			log.warn("Failed to list hub profiles: {}", e.getMessage());
+			return new ResponseEntity<Object>(
+					errorResponse("Hub profile discovery is unavailable."),
+					HttpStatus.SERVICE_UNAVAILABLE);
+		}
+	}
+
+	/**
+	 * Builds the {@code GET /providers} JSON body. Package-private for unit tests.
+	 */
+	static Map<String, Object> providersResponse(List<ProviderDescriptor> descriptors,
+			boolean pickerVisible, String defaultProviderId) {
+		List<Map<String, Object>> providers = new ArrayList<Map<String, Object>>();
+		for (ProviderDescriptor descriptor : descriptors) {
+			Map<String, Object> entry = new LinkedHashMap<String, Object>();
+			entry.put("id", descriptor.getId());
+			entry.put("label", descriptor.getLabel());
+			entry.put("enabled", descriptor.isEnabled());
+			entry.put("ready", descriptor.isReady());
+			entry.put("default", descriptor.isDefault());
+			entry.put("modes", descriptor.getModes().stream().map(ProviderMode::getWireName)
+					.collect(Collectors.toList()));
+			entry.put("capabilities", descriptor.getCapabilities().stream()
+					.map(ProviderCapability::getWireName).collect(Collectors.toList()));
+			entry.put("unavailableReason", descriptor.getUnavailableReason());
+			providers.add(entry);
+		}
+		Map<String, Object> response = new LinkedHashMap<String, Object>();
+		response.put("defaultProvider", defaultProviderId);
+		response.put("pickerVisible", pickerVisible);
+		response.put("providers", providers);
+		return response;
+	}
+
 	@RequestMapping(value = "/search", method = RequestMethod.POST)
 	@ResponseBody
 	public ResponseEntity<Object> search(@RequestBody Map<String, String> body) {
@@ -215,6 +316,15 @@ public class ChartSearchAiRestController {
 			long startTime = System.currentTimeMillis();
 			chartAnswer = chartSearchService.search(patient, question);
 			responseTimeMs = System.currentTimeMillis() - startTime;
+		}
+		catch (InsufficientContextException e) {
+			log.warn("Mandatory clinical evidence exceeded the LLM input budget for patient [id={}]: {}",
+					patient.getPatientId(), e.getMessage());
+			return new ResponseEntity<Object>(
+					errorResponse("This patient's mandatory clinical evidence (demographics, allergies, "
+							+ "active conditions) exceeds the LLM's input budget. Contact your "
+							+ "administrator to increase the LLM context size."),
+					HttpStatus.UNPROCESSABLE_ENTITY);
 		}
 		catch (ChartTooLargeException e) {
 			log.warn("Chart too large for LLM context for patient [id={}]: {}",
@@ -629,6 +739,19 @@ public class ChartSearchAiRestController {
 				writeSseEvent(out, "grounded", new ObjectMapper().writeValueAsString(groundedData));
 			}
 		}
+		catch (InsufficientContextException e) {
+			log.warn("Mandatory clinical evidence exceeded the LLM input budget during streaming for "
+					+ "patient [id={}]: {}", patient.getPatientId(), e.getMessage());
+			try {
+				writeSseEvent(out, "error",
+						"This patient's mandatory clinical evidence (demographics, allergies, active "
+								+ "conditions) exceeds the LLM's input budget. Contact your administrator "
+								+ "to increase the LLM context size.");
+			}
+			catch (IOException ioe) {
+				log.debug("Could not send insufficient-context error event, client likely disconnected");
+			}
+		}
 		catch (ChartTooLargeException e) {
 			log.warn("Chart too large for LLM context during streaming for patient [id={}]: {}",
 					patient.getPatientId(), e.getMessage());
@@ -773,6 +896,443 @@ public class ChartSearchAiRestController {
 	/** Test seam: production wires {@link DrugReferenceService} via {@code Autowired}. */
 	void setDrugReferenceService(DrugReferenceService drugReferenceService) {
 		this.drugReferenceService = drugReferenceService;
+	}
+
+	/** Test seam: production wires {@link ClinicalAnswerProviderRegistry} via {@code Autowired}. */
+	void setProviderRegistry(ClinicalAnswerProviderRegistry providerRegistry) {
+		this.providerRegistry = providerRegistry;
+	}
+
+	/** Test seam: production wires {@link ConversationService} via {@code Autowired}. */
+	void setConversationService(ConversationService conversationService) {
+		this.conversationService = conversationService;
+	}
+
+	/** Test seam: production uses the default instance constructed above. */
+	void setPreemptionRegistry(TurnPreemptionRegistry preemptionRegistry) {
+		this.preemptionRegistry = preemptionRegistry;
+	}
+
+	/**
+	 * Close the active conversation for the selected provider/mode and open a fresh one.
+	 *
+	 * <pre>
+	 * POST /ws/rest/v1/chartsearchai/chat/new
+	 * { "patient": "...", "provider": "bundled|hub", "mode": "query_scoped?" }
+	 * </pre>
+	 */
+	@RequestMapping(value = "/chat/new", method = RequestMethod.POST)
+	@ResponseBody
+	public ResponseEntity<Object> chatNew(@RequestBody Map<String, String> body) {
+		Context.requirePrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
+		PatientResolution resolved = resolvePatient(body == null ? null : body.get("patient"));
+		if (resolved.hasError()) {
+			return new ResponseEntity<Object>(errorResponse(resolved.errorMessage), resolved.errorStatus);
+		}
+		String providerId = resolveProviderId(body);
+		ProviderMode mode = resolveMode(body);
+		ClinicalConversation conversation;
+		try {
+			conversation = startNewConversation(resolved.patient, providerId, mode);
+		}
+		catch (ProviderUnavailableException e) {
+			Map<String, Object> error = new LinkedHashMap<String, Object>();
+			error.put("error", e.getMessage());
+			error.put("problemCode", e.getProblemCode());
+			return new ResponseEntity<Object>(error, HttpStatus.BAD_REQUEST);
+		}
+		Map<String, Object> response = new LinkedHashMap<String, Object>();
+		response.put("session", conversation.getUuid());
+		response.put("provider", conversation.getProviderId());
+		response.put("mode", conversation.getProviderMode());
+		response.put("messages", Collections.emptyList());
+		return new ResponseEntity<Object>(response, HttpStatus.OK);
+	}
+
+	/**
+	 * Reload an existing conversation's turns for the authenticated user. {@code session} is
+	 * optional: a fresh page load has no client-side session to send, only the patient it's
+	 * looking at, so an omitted session falls back to the caller's own latest active conversation
+	 * for that patient (see {@link #buildChatHistoryResponse}).
+	 *
+	 * <pre>
+	 * GET /ws/rest/v1/chartsearchai/chat?patient=...&amp;session=...?
+	 * </pre>
+	 */
+	@RequestMapping(value = "/chat", method = RequestMethod.GET)
+	@ResponseBody
+	public ResponseEntity<Object> getChat(
+			@RequestParam(value = "patient", required = true) String patientUuid,
+			@RequestParam(value = "session", required = false) String sessionUuid) {
+		Context.requirePrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
+		PatientResolution resolved = resolvePatient(patientUuid);
+		if (resolved.hasError()) {
+			return new ResponseEntity<Object>(errorResponse(resolved.errorMessage), resolved.errorStatus);
+		}
+		return buildChatHistoryResponse(resolved.patient, sessionUuid);
+	}
+
+	/**
+	 * Resolves which conversation to show — by explicit session, or the caller's latest active
+	 * conversation for this patient when session is omitted — and serializes its turns, including
+	 * each assistant turn's full persisted answer envelope (references, blocks, safety warnings,
+	 * confidence, answer validation, In-Depth) so a reload restores exactly what was on screen
+	 * before it, not just the bare answer text. Package-private for unit tests.
+	 */
+	ResponseEntity<Object> buildChatHistoryResponse(Patient patient, String sessionUuid) {
+		ClinicalConversation conversation;
+		if (sessionUuid != null && !sessionUuid.trim().isEmpty()) {
+			conversation = conversationService.getByUuid(sessionUuid.trim());
+			if (conversation == null || !patient.equals(conversation.getPatient())) {
+				return new ResponseEntity<Object>(errorResponse("Conversation not found"), HttpStatus.NOT_FOUND);
+			}
+		}
+		else {
+			conversation = conversationService.getLatestActiveConversation(patient);
+			if (conversation == null) {
+				// Nobody has asked anything yet for this patient — a normal empty state, not an
+				// error (the caller has no session to have gotten wrong).
+				Map<String, Object> empty = new LinkedHashMap<String, Object>();
+				empty.put("session", null);
+				empty.put("provider", null);
+				empty.put("mode", null);
+				empty.put("messages", Collections.emptyList());
+				return new ResponseEntity<Object>(empty, HttpStatus.OK);
+			}
+		}
+		List<Map<String, Object>> messages = new ArrayList<Map<String, Object>>();
+		for (ClinicalConversationTurn turn : conversationService.getTurns(conversation)) {
+			Map<String, Object> user = new LinkedHashMap<String, Object>();
+			user.put("role", "user");
+			user.put("content", turn.getQuestion());
+			user.put("messageId", turn.getRequestId());
+			if (turn.getStartedAt() != null) {
+				user.put("createdAt", turn.getStartedAt().getTime());
+			}
+			messages.add(user);
+			if (turn.getAnswerText() != null || turn.getTerminalState() != null) {
+				Map<String, Object> assistant = new LinkedHashMap<String, Object>();
+				Map<String, Object> payload = parseProviderPayload(turn.getProviderPayload());
+				if (payload != null) {
+					assistant.putAll(payload);
+				}
+				assistant.put("role", "assistant");
+				assistant.put("content", turn.getAnswerText() == null ? "" : turn.getAnswerText());
+				assistant.put("messageId", turn.getUuid());
+				assistant.put("terminalState", turn.getTerminalState());
+				assistant.put("problemCode", turn.getProblemCode());
+				if (turn.getCompletedAt() != null) {
+					assistant.put("createdAt", turn.getCompletedAt().getTime());
+				}
+				if (turn.getAuditLog() != null) {
+					assistant.put("auditLogId", turn.getAuditLog().getAuditLogId());
+				}
+				messages.add(assistant);
+			}
+		}
+		Map<String, Object> response = new LinkedHashMap<String, Object>();
+		response.put("session", conversation.getUuid());
+		response.put("provider", conversation.getProviderId());
+		response.put("mode", conversation.getProviderMode());
+		response.put("messages", messages);
+		return new ResponseEntity<Object>(response, HttpStatus.OK);
+	}
+
+	private Map<String, Object> parseProviderPayload(String json) {
+		if (json == null || json.trim().isEmpty()) {
+			return null;
+		}
+		try {
+			return new ObjectMapper().readValue(json, new TypeReference<Map<String, Object>>() {});
+		}
+		catch (IOException e) {
+			log.warn("Could not parse a persisted turn's provider payload; restoring bare content only", e);
+			return null;
+		}
+	}
+
+	/**
+	 * Provider-neutral streaming chat turn. Emits canonical lifecycle SSE event names
+	 * ({@code turn_started}, {@code answer_delta}, {@code answer_done}, …). Bundled
+	 * {@code /search/stream} remains available for the legacy token/thinking/done wire.
+	 *
+	 * <pre>
+	 * POST /ws/rest/v1/chartsearchai/chat/stream
+	 * { "patient": "...", "question": "...", "provider": "bundled|hub",
+	 *   "mode": "query_scoped?", "profile": "hub-profile?", "session": "uuid?" }
+	 * </pre>
+	 */
+	@RequestMapping(value = "/chat/stream", method = RequestMethod.POST)
+	public void chatStream(@RequestBody Map<String, String> body, HttpServletResponse response)
+			throws IOException {
+		Context.requirePrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
+
+		String patientUuid = body == null ? null : body.get("patient");
+		String question = body == null ? null : body.get("question");
+		if (patientUuid == null || patientUuid.trim().isEmpty()) {
+			writeJsonError(response, HttpServletResponse.SC_BAD_REQUEST, "patient is required");
+			return;
+		}
+		if (question == null || question.trim().isEmpty()) {
+			writeJsonError(response, HttpServletResponse.SC_BAD_REQUEST, "question is required");
+			return;
+		}
+		if (question.length() > MAX_QUESTION_LENGTH) {
+			writeJsonError(response, HttpServletResponse.SC_BAD_REQUEST,
+					"question exceeds maximum length of " + MAX_QUESTION_LENGTH + " characters");
+			return;
+		}
+		String sanitizedQuestion = CONTROL_CHARS.matcher(question).replaceAll("");
+		if (sanitizedQuestion.trim().isEmpty()) {
+			writeJsonError(response, HttpServletResponse.SC_BAD_REQUEST, "question is required");
+			return;
+		}
+		String sanitizationError = validateQuestion(sanitizedQuestion);
+		if (sanitizationError != null) {
+			writeJsonError(response, HttpServletResponse.SC_BAD_REQUEST, sanitizationError);
+			return;
+		}
+
+		PatientResolution resolved = resolvePatient(patientUuid);
+		if (resolved.hasError()) {
+			writeJsonError(response, resolved.errorStatus.value(), resolved.errorMessage);
+			return;
+		}
+		User user = Context.getAuthenticatedUser();
+		ResponseEntity<Object> rateLimitError = checkRateLimit(user);
+		if (rateLimitError != null) {
+			writeJsonError(response, 429, "Rate limit exceeded");
+			return;
+		}
+
+		String providerId = resolveProviderId(body);
+		ProviderMode mode = resolveMode(body);
+		String profileId = body.get("profile");
+		String sessionUuid = body.get("session");
+
+		HttpServletResponse unwrapped = response;
+		while (unwrapped instanceof HttpServletResponseWrapper) {
+			javax.servlet.ServletResponse inner = ((HttpServletResponseWrapper) unwrapped).getResponse();
+			if (inner instanceof HttpServletResponse) {
+				unwrapped = (HttpServletResponse) inner;
+			} else {
+				break;
+			}
+		}
+		response.setContentType("text/event-stream");
+		response.setCharacterEncoding("UTF-8");
+		response.setHeader("Cache-Control", "no-cache");
+		response.setHeader("X-Accel-Buffering", "no");
+		response.setHeader("Connection", "keep-alive");
+		unwrapped.setBufferSize(0);
+		final OutputStream out = unwrapped.getOutputStream();
+		unwrapped.flushBuffer();
+
+		streamProviderTurn(out, resolved.patient, sanitizedQuestion, providerId, mode, profileId,
+				sessionUuid);
+	}
+
+	/**
+	 * Orchestrates one provider turn: resolve provider (no silent fallback), open/reuse a
+	 * provider-bound conversation, execute, persist, and relay canonical SSE events.
+	 * Package-private for unit tests.
+	 */
+	void streamProviderTurn(OutputStream out, Patient patient, String question, String providerId,
+			ProviderMode mode, String profileId, String conversationUuid) {
+		ClinicalConversation conversation = null;
+		TurnCancellation cancellation = null;
+		try {
+			ClinicalAnswerProvider provider;
+			try {
+				provider = providerRegistry.require(providerId);
+			}
+			catch (ProviderUnavailableException e) {
+				writeSseEvent(out, TurnEventType.TURN_STARTED.getWireName(), "{}");
+				writeSseEvent(out, TurnEventType.TURN_ERROR.getWireName(),
+						problemCodeJson(e.getProblemCode()));
+				return;
+			}
+			if (HubClinicalAnswerProvider.PROVIDER_ID.equals(providerId)
+					&& (profileId == null || profileId.trim().isEmpty())) {
+				writeSseEvent(out, TurnEventType.TURN_STARTED.getWireName(), "{}");
+				writeSseEvent(out, TurnEventType.TURN_ERROR.getWireName(),
+						problemCodeJson("profile_required"));
+				return;
+			}
+
+			ProviderMode resolvedMode = resolveProviderMode(provider, mode);
+			conversation = resolveConversation(patient, providerId, resolvedMode, conversationUuid);
+			final ClinicalConversation activeConversation = conversation;
+			String requestId = UUID.randomUUID().toString();
+			ClinicalConversationTurn turn = conversationService.startTurn(activeConversation, requestId,
+					question);
+			List<PriorClinicalTurn> prior = conversationService.priorClinicalTurns(activeConversation);
+			TurnRequest request = new TurnRequest(patient, question, activeConversation.getUuid(),
+					requestId, resolvedMode, profileId, prior);
+
+			// A new turn starting for this conversation IS the preempt signal — it cancels
+			// whichever turn currently holds that conversation's slot (see TurnPreemptionRegistry),
+			// forcibly closing that turn's open hub connection instead of letting it run to the
+			// hub's own completion after the browser has already moved on.
+			cancellation = preemptionRegistry.begin(activeConversation.getUuid());
+			final TurnCancellation activeCancellation = cancellation;
+
+			long startNs = System.nanoTime();
+			TurnResult result = provider
+					.execute(request,
+							event -> {
+								// Once THIS turn is the one being cancelled, its browser connection is
+								// already gone by definition — that is what cancellation means. Writing
+								// to it would only throw and abort execute() before it can return a
+								// result to persist (see HubClinicalAnswerProvider's partial-answer
+								// completion), so drop silently rather than propagate.
+								if (activeCancellation.isCancelled()) {
+									return;
+								}
+								try {
+									writeTurnEventOrThrow(out, event, activeConversation, turn);
+								}
+								catch (RuntimeException e) {
+									activeCancellation.cancel();
+									throw e;
+								}
+							},
+							cancellation)
+					.toCompletableFuture().get();
+			long responseTimeMs = (System.nanoTime() - startNs) / 1_000_000L;
+			conversationService.finishTurn(turn, result, responseTimeMs);
+		}
+		catch (Exception e) {
+			if (e.getCause() instanceof IOException) {
+				log.debug("Provider chat stream ended due to client disconnect");
+				return;
+			}
+			log.error("Provider chat stream failed for patient [id={}]", patient.getPatientId(), e);
+			try {
+				writeSseEvent(out, TurnEventType.TURN_ERROR.getWireName(),
+						problemCodeJson("provider_failure"));
+			}
+			catch (IOException ignored) {
+				log.debug("Could not send turn_error after provider failure");
+			}
+		}
+		finally {
+			if (conversation != null && cancellation != null) {
+				preemptionRegistry.end(conversation.getUuid(), cancellation);
+			}
+		}
+	}
+
+	/** Package-private test seam — {@code ResolveConversationTest} exercises this directly rather
+	 *  than through the full SSE streaming path. */
+	ClinicalConversation resolveConversation(Patient patient, String providerId,
+			ProviderMode mode, String conversationUuid) {
+		if (conversationUuid != null && !conversationUuid.trim().isEmpty()) {
+			ClinicalConversation existing = conversationService.getByUuid(conversationUuid.trim());
+			if (existing != null && patient.equals(existing.getPatient())
+					&& providerId.equals(existing.getProviderId())
+					&& ClinicalConversation.STATUS_ACTIVE.equals(existing.getStatus())
+					&& (mode == null || mode.getWireName().equals(existing.getProviderMode()))) {
+				return existing;
+			}
+		}
+		return conversationService.openOrCreate(patient, providerId, mode);
+	}
+
+	/** Resolve and persist a new provider-bound conversation with the same mode semantics as chat. */
+	ClinicalConversation startNewConversation(Patient patient, String providerId,
+			ProviderMode requestedMode) {
+		ClinicalAnswerProvider provider = providerRegistry.require(providerId);
+		return conversationService.startNew(patient, providerId,
+				resolveProviderMode(provider, requestedMode));
+	}
+
+	private ProviderMode resolveProviderMode(ClinicalAnswerProvider provider,
+			ProviderMode requestedMode) {
+		if (requestedMode != null) {
+			return requestedMode;
+		}
+		return provider.modes().isEmpty() ? ProviderMode.QUERY_SCOPED : provider.modes().get(0);
+	}
+
+	private void writeTurnEventOrThrow(OutputStream out, TurnEvent event,
+			ClinicalConversation conversation, ClinicalConversationTurn turn) {
+		try {
+			writeTurnEvent(out, event, conversation, turn);
+		}
+		catch (IOException e) {
+			log.debug("Client disconnected during provider turn event {}", event.getType());
+			throw new RuntimeException("Client disconnected", e);
+		}
+	}
+
+	private void writeTurnEvent(OutputStream out, TurnEvent event, ClinicalConversation conversation,
+			ClinicalConversationTurn turn) throws IOException {
+		TurnEventType type = event.getType();
+		if (type == TurnEventType.ANSWER_VALIDATION && event.getAnswer() != null) {
+			// The composer becomes available after review while In-Depth may still run. Persist only
+			// the already checked/edited envelope so a follow-up sees safe prior context immediately.
+			conversationService.recordCheckedAnswer(turn, event.getAnswer());
+		}
+		String wire = type.getWireName();
+		if (type == TurnEventType.ANSWER_DELTA || type == TurnEventType.REASONING_DELTA) {
+			writeSseEvent(out, wire, event.getTextDelta() == null ? "" : event.getTextDelta());
+			return;
+		}
+		if (type == TurnEventType.TURN_ERROR) {
+			writeSseEvent(out, wire, problemCodeJson(event.getProblemCode()));
+			return;
+		}
+		if (type == TurnEventType.TURN_STARTED) {
+			Map<String, Object> payload = new LinkedHashMap<String, Object>();
+			payload.put("session", conversation.getUuid());
+			payload.put("messageId", turn.getUuid());
+			payload.put("provider", event.getProviderId());
+			writeSseEvent(out, wire, new ObjectMapper().writeValueAsString(payload));
+			return;
+		}
+		Map<String, Object> payload = new LinkedHashMap<String, Object>();
+		AnswerEnvelope answer = event.getAnswer();
+		if (answer != null) {
+			payload.putAll(answer.getPayload());
+		}
+		payload.put("session", conversation.getUuid());
+		payload.put("messageId", turn.getUuid());
+		payload.put("provider", event.getProviderId());
+		payload.put("disclaimer", DISCLAIMER);
+		if (turn.getAuditLog() != null && turn.getAuditLog().getAuditLogId() != null) {
+			payload.put("auditLogId", turn.getAuditLog().getAuditLogId());
+		}
+		writeSseEvent(out, wire, new ObjectMapper().writeValueAsString(payload));
+	}
+
+	private static String problemCodeJson(String problemCode) throws IOException {
+		Map<String, Object> payload = new LinkedHashMap<String, Object>();
+		payload.put("problemCode", problemCode);
+		return new ObjectMapper().writeValueAsString(payload);
+	}
+
+	private String resolveProviderId(Map<String, String> body) {
+		String providerId = body == null ? null : body.get("provider");
+		if (providerId == null || providerId.trim().isEmpty()) {
+			return providerRegistry.getDefaultProviderId();
+		}
+		return providerId.trim();
+	}
+
+	/**
+	 * The caller's EXPLICIT mode override, or {@code null} when unspecified. Mode is a deployment
+	 * setting ({@code chartsearchai.chartMode}), not something callers normally send — {@code null}
+	 * here lets {@link #streamProviderTurn}'s {@code resolvedMode} use the provider's configured
+	 * mode. A request-layer default would conflict with providers configured for another supported
+	 * mode. Package-private for {@code ProviderRestContractTest}.
+	 */
+	ProviderMode resolveMode(Map<String, String> body) {
+		String mode = body == null ? null : body.get("mode");
+		if (mode == null || mode.trim().isEmpty()) {
+			return null;
+		}
+		return ProviderMode.fromWireName(mode.trim());
 	}
 
 	@RequestMapping(value = "/auditlog", method = RequestMethod.GET)
@@ -1349,9 +1909,11 @@ public class ChartSearchAiRestController {
 	 * drug-in-play arm raises chips for drugs only the ANSWER named and unrated class chips this
 	 * counts nowhere, so a client must render this as a ratio of pairs, not of chips.
 	 */
-	private void putSafetyChips(Map<String, Object> target, ChartAnswer answer) {
-		target.put("safetyWarnings", serializeSafetyWarnings(answer.getSafetyWarnings()));
+	private List<Map<String, Object>> putSafetyChips(Map<String, Object> target, ChartAnswer answer) {
+		List<Map<String, Object>> warnings = serializeSafetyWarnings(answer.getSafetyWarnings());
+		target.put("safetyWarnings", warnings);
 		target.put("interactionPairs", serializePairChipExtent(answer.getPairChipExtent()));
+		return warnings;
 	}
 
 	/**
@@ -1413,7 +1975,17 @@ public class ChartSearchAiRestController {
 	 * guard stays because it costs one comparison and the alternative is a 500.
 	 */
 	private void putModuleStatements(Map<String, Object> target, ChartAnswer answer) {
-		putSafetyChips(target, answer);
+		target.put("safetyStatus", answer.getSafetyStatus());
+		List<Map<String, Object>> safetyWarningsForWire = putSafetyChips(target, answer);
+		Map<String, Object> safetyCheck = answer.getSafetyCheck();
+		if (safetyCheck == null) {
+			target.put("safetyCheck", null);
+		} else {
+			Map<String, Object> safetyCheckForWire =
+				new LinkedHashMap<String, Object>(safetyCheck);
+			safetyCheckForWire.put("warnings", safetyWarningsForWire);
+			target.put("safetyCheck", safetyCheckForWire);
+		}
 		target.put("unresolvedDrugClass", answer.getUnresolvedDrugClass());
 		List<Integer> unfaithful = answer.getUnfaithfullyRenderedCitations();
 		target.put("unfaithfullyRenderedCitations",

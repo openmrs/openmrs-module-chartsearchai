@@ -254,7 +254,7 @@ public class ChartSearchAiConditionRuleCoverageTest {
 		private ChartAnswer answer() {
 			return new ChartAnswer(MODEL_ANSWER,
 					Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
-					Collections.<SafetyWarning> emptyList(), null, null, null, null, null, stated);
+					Collections.<SafetyWarning> emptyList(), null, null, null, null, null, null, stated);
 		}
 
 		@Override

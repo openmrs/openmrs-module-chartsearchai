@@ -101,12 +101,14 @@ import org.springframework.stereotype.Service;
  * claim unit under entailment, the stronger rule below wins and even the fail is withheld — no
  * consumer can see the difference, since #201 withholds every reference-group verdict at the wire.)
  * Faithfulness of reference content is
- * checked deterministically instead, by two exact comparisons over what the answer states
- * about the record: {@link ClassCodeFidelityCheck} for an ATC class code the model edited while
+ * checked deterministically instead, by the exact comparisons over what the answer states about
+ * the record: {@link ClassCodeFidelityCheck} for an ATC class code the model edited while
  * citing the record that carries it (issue #142), report-only, and {@link ReferenceProseFidelityCheck}
  * for a recitation the model diverged from inside the sentence it was copying (issue #337), whose
  * answer is also published — as {@code unfaithfullyRenderedCitations}, and deliberately not as a
- * verdict on these citations, which stay withheld. NOT by the
+ * verdict on these citations, which stay withheld. {@link ActiveOrderCitationFidelityCheck} runs
+ * after every answer too and is NOT one of these: it reads no reference content, asking instead
+ * which CHART record a sentence cited (ADR Decision 76). NOT by the
  * {@code DrugSafetyValidator} chips, which this javadoc named until #337: they carry the
  * deterministic text but are an independent list nothing reconciles against the answer. Accepted
  * cost: under entailment mode these citations now take the lazy Tier-1 path (up to two
@@ -276,7 +278,11 @@ import org.springframework.stereotype.Service;
  * <p>The cost, stated rather than implied: a chart citation the model attached to the WRONG record
  * now renders unverified instead of unsupported wherever its graded statement rests on reference
  * material, so the mis-attribution signal #122 deliberately kept for reference citations has no
- * counterpart here. Read "its graded statement", not "its sentence", and not "a safety sentence" —
+ * counterpart here AS A VERDICT — and since issue #377 there is a counterpart of another kind, which
+ * this paragraph goes on to scope: {@link ActiveOrderCitationFidelityCheck} covers part of what
+ * follows, deterministically and outside grounding entirely. Issue #377's body points a maintainer
+ * at this sentence as the sole record of the residue, so read the scoping below before concluding
+ * from it that nothing looks. Read "its graded statement", not "its sentence", and not "a safety sentence" —
  * both are wider than they look. An enumeration ITEM is graded on its own text but rests on its
  * parent sentence's citations, so one item citing a finding withholds every sibling item's negative;
  * and an UNANCHORED finding rests on the whole answer, so it withholds the negative of every chart
@@ -290,14 +296,21 @@ import org.springframework.stereotype.Service;
  * other record's words as well as its own — is PREDICTED to fall below it and re-publish
  * {@code false}, returning #284 for any operator who followed the advice. Predicted and not measured,
  * because under entailment a single-candidate claim defers Tier-1 entirely, so no cosine was computed
- * for #284's cells at any floor. NOTHING checks this answer class deterministically. This javadoc
- * named the {@code DrugSafetyValidator} chips until #337 and they are not it — they carry the
- * deterministic text but are an independent list nothing reconciles against the answer — and
- * neither are {@link ClassCodeFidelityCheck} and {@link ReferenceProseFidelityCheck}, which compare
- * what the answer states about the REFERENCE records it cites, where the cost named here is a CHART
- * record attached to the wrong sentence. {@code README.md} and ADR Decision 41 say the same of it;
- * an earlier draft of this correction pasted the reference-content sentence here and made the three
- * disagree.
+ * for #284's cells at any floor. PART of this answer class is now checked deterministically, and
+ * only part: {@link ActiveOrderCitationFidelityCheck} (issue #377) asks, of a sentence stating this
+ * module's own {@code DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE}, whether the chart
+ * citations offered for it can be the order at all — a condition, a visit and an encounter cannot,
+ * and those were the three the ticket measured. It is a test of what a record CAN be, so a citation
+ * of the WRONG in-force drug order still passes it, and it sees nothing at all unless the answer
+ * reproduces that phrase and puts its markers directly after it. Everything else this paragraph
+ * describes is untouched: an enumeration ITEM resting on a sibling's finding, an UNANCHORED finding
+ * withholding every chart citation in the answer, and any composite sentence whose claim is not an
+ * active-order one. The {@code DrugSafetyValidator} chips are still not it — this javadoc named them
+ * until #337 and they carry the deterministic text as an independent list nothing reconciles against
+ * the answer — and neither are {@link ClassCodeFidelityCheck} and {@link ReferenceProseFidelityCheck},
+ * which compare what the answer states about the REFERENCE records it cites. {@code README.md} and
+ * ADR Decision 41 say the same of it; an earlier draft of an earlier correction pasted the
+ * reference-content sentence here and made the three disagree.
  *
  * <p>The verifier never throws into the search path: any failure (embedding
  * error, missing text) degrades to a {@code null} verdict — "could not verify"

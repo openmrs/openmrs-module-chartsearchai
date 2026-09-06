@@ -1387,7 +1387,15 @@ public class ChartSearchAiRestController {
 	 * why no prose travels with it, and for the difference between {@code null} and an empty list — a
 	 * difference this method preserves rather than flattening.
 	 *
-	 * <p>{@code conditionRuleCoverage} is the same remedy again, one issue later
+	 * <p>{@code misattributedOrderCitations} is that remedy once more, one issue later
+	 * (<a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/377">#377</a>): the
+	 * chart citations the answer offered as evidence of an active drug order that cannot be one.
+	 * {@code ChartAnswer.getMisattributedOrderCitations()} is canonical for what it states, for why
+	 * no prose travels with it, and for the difference between {@code null} and an empty list. It
+	 * reaches this method rather than {@code putSafetyChips} for the reason
+	 * {@code unfaithfullyRenderedCitations} does: it is a statement about the ANSWER, not a chip.
+	 *
+	 * <p>{@code conditionRuleCoverage} is the same remedy again, from the issue beside it
 	 * (<a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/378">#378</a>): what
 	 * the loaded dataset publishes for the hand-authored CONDITION-rule arm, so a client can tell a
 	 * contraindication screen that had no rule to ask from one that asked and found nothing. Always
@@ -1401,16 +1409,19 @@ public class ChartSearchAiRestController {
 	 *
 	 * <p><b>The copy is a correctness requirement</b> and not caution — the measurement is at
 	 * {@link #serializeSafetyWarnings}, which takes it for the same reason. What is new here is the
-	 * guard around it: unlike {@code chartOrderBridges()} this accessor can return null, and
+	 * guard around it: unlike {@code chartOrderBridges()} these two accessors can return null, and
 	 * {@code new ArrayList<>(null)} throws. Its ROUTINE trigger is not a failed check but the
-	 * async-grounding early {@code done}, which is built from a shorter constructor and states null on
-	 * every such request — measured by removing the guard, which breaks the {@code done} event for
-	 * every {@code chartsearchai.grounding.async=true} stream. The failed-check case reaches it too
-	 * and no path is known to deliver it: ADR Decision 61 records that no TEST reaches it, a record
+	 * async-grounding early {@code done}: that answer is handed off before either check has run, so
+	 * {@code LlmInferenceService} passes an explicit {@code null} in both arguments. Mutate a guard
+	 * away and read the failures — the {@code chartsearchai.grounding.async=true} wire cases lose
+	 * their {@code done} event. The failed-check case reaches it too and no path is known to deliver
+	 * it: ADR Decision 61 records that no TEST reaches it, a record
 	 * throwing on read being pre-empted by {@code referenceSlice}, and the one line the check's catch
 	 * is documented as covering — a read of {@code patient.getPatientId()} — is re-read by both answer
-	 * methods in their {@code finally} timing log, so a throw there errors the request instead. The
-	 * guard stays because it costs one comparison and the alternative is a 500.
+	 * methods in their {@code finally} timing log, so a throw there errors the request instead.
+	 * {@code misattributedOrderCitations} has an identically shaped failure branch, which ADR
+	 * Decision 76 records and Decision 61 does not cover. The guard stays because it costs one
+	 * comparison and the alternative is a 500.
 	 */
 	private void putModuleStatements(Map<String, Object> target, ChartAnswer answer) {
 		putSafetyChips(target, answer);
@@ -1418,6 +1429,9 @@ public class ChartSearchAiRestController {
 		List<Integer> unfaithful = answer.getUnfaithfullyRenderedCitations();
 		target.put("unfaithfullyRenderedCitations",
 			unfaithful == null ? null : new ArrayList<Integer>(unfaithful));
+		List<Integer> misattributed = answer.getMisattributedOrderCitations();
+		target.put("misattributedOrderCitations",
+			misattributed == null ? null : new ArrayList<Integer>(misattributed));
 		DrugReferenceLoad.Coverage conditionRules = answer.getConditionRuleCoverage();
 		target.put("conditionRuleCoverage",
 			conditionRules == null ? null : conditionRules.wireToken());

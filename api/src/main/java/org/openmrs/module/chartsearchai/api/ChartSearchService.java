@@ -231,6 +231,8 @@ public interface ChartSearchService {
 
 		private final List<Integer> unfaithfullyRenderedCitations;
 
+		private final List<Integer> misattributedOrderCitations;
+
 		private final DrugReferenceLoad.Coverage conditionRuleCoverage;
 
 		public ChartAnswer(String answer, List<RecordReference> references) {
@@ -293,14 +295,29 @@ public interface ChartSearchService {
 				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations) {
 			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, searchMode,
 					referenceSlice, pairChipExtent, unresolvedDrugClass, unfaithfullyRenderedCitations,
-					null);
+					null, null);
 		}
 
+		/**
+		 * The widest form, and the ONLY one that takes the condition-rule coverage —
+		 * {@code ArchitectureGuardTest.everyAnswerThisModuleBuildsCarriesTheConditionRuleCoverage}
+		 * requires exactly one, so that no production site can build an answer stating null on a key
+		 * README documents as always present.
+		 *
+		 * <p>There is deliberately no twelve-argument overload beside it in either direction. Issues
+		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/377">#377</a> and
+		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/378">#378</a> each
+		 * added a twelfth argument independently and this is where they met: two twelve-argument
+		 * forms distinguishable only by their last parameter's type would make a caller passing a
+		 * bare {@code null} there ambiguous, and a second one taking the coverage would fail that
+		 * guard outright.
+		 */
 		public ChartAnswer(String answer, List<RecordReference> references,
 				int inputTokens, int outputTokens, int cachedTokens,
 				List<SafetyWarning> safetyWarnings, String searchMode,
 				ChartSearchAiUtils.ReferenceSlice referenceSlice, PairChipExtent pairChipExtent,
 				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations,
+				List<Integer> misattributedOrderCitations,
 				DrugReferenceLoad.Coverage conditionRuleCoverage) {
 			this.answer = answer;
 			this.references = java.util.Collections.unmodifiableList(
@@ -320,6 +337,11 @@ public interface ChartSearchService {
 			this.unfaithfullyRenderedCitations = unfaithfullyRenderedCitations == null ? null
 					: java.util.Collections.unmodifiableList(
 							new java.util.ArrayList<Integer>(unfaithfullyRenderedCitations));
+			// Same rule, same reason (issue #377): null is the absence of a measurement and empty is
+			// a measurement of none, so neither is normalised into the other.
+			this.misattributedOrderCitations = misattributedOrderCitations == null ? null
+					: java.util.Collections.unmodifiableList(
+							new java.util.ArrayList<Integer>(misattributedOrderCitations));
 			this.conditionRuleCoverage = conditionRuleCoverage;
 		}
 
@@ -557,6 +579,47 @@ public interface ChartSearchService {
 		 */
 		public List<Integer> getUnfaithfullyRenderedCitations() {
 			return unfaithfullyRenderedCitations;
+		}
+
+		/**
+		 * The chart citations this answer offered as evidence of an ACTIVE DRUG ORDER that cannot be
+		 * one — <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/377">issue
+		 * #377</a>. {@code ActiveOrderCitationFidelityCheck} reports them, and this is the same
+		 * remedy {@link #getUnfaithfullyRenderedCitations()} is for the same failure one issue over:
+		 * the reported answer named five active orders, cited a condition, a visit and an encounter
+		 * for three of them, and nothing a consumer of the response could read separated those three
+		 * from the two that were right — every citation in it serialized {@code grounded: null},
+		 * which is what the #284 carve-out publishes for a chart citation whose sentence also rests
+		 * on a {@code safety_finding}.
+		 *
+		 * <p><b>The CITATION and never a word of either text</b>, for the reason its sibling states:
+		 * a client renders its own sentence beside the marker, and the record's prose is not the
+		 * module's to restate here. One index is one entry however many active-order claims cited
+		 * it.
+		 *
+		 * <p><b>It is not a grounding verdict.</b> It says the record cannot be evidence of an active
+		 * order, not that the claim is unsupported — the finding behind these sentences is
+		 * deterministic and, on the reported answer, correct. Rendering it as "unsupported" is issue
+		 * #201's miscarriage in a new place.
+		 *
+		 * <p><b>Null is the absence of a measurement; empty is a measurement of none — and empty is
+		 * not a certificate.</b> The check is recall-limited by construction: it sees only an answer
+		 * that reproduces {@code DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE}, only the run
+		 * of citation markers that follows it, and it cannot tell a citation of the WRONG drug order
+		 * from a citation of the right one. ADR Decision 76 enumerates that. <b>And empty says less
+		 * than it looks on a stock install</b>: {@code chartsearchai.drugReference.enabled} defaults
+		 * to false, and its own description says no safety warnings are produced then — so no finding
+		 * carries the phrase for an answer to reproduce, and this list is empty for a reason that is
+		 * not about the citations at all. That is the same qualification
+		 * {@link #getUnfaithfullyRenderedCitations()} carries, for the same GP. Null's reachable cause
+		 * is the async-grounding path's early {@code done}, built before the check runs; on a cache
+		 * hit the ORIGINAL request's list is replayed with the rest of the answer.
+		 *
+		 * @return the distinct citation indexes, in the order the answer states them, or null where
+		 *         none was stated
+		 */
+		public List<Integer> getMisattributedOrderCitations() {
+			return misattributedOrderCitations;
 		}
 
 		/**

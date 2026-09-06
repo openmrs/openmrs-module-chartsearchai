@@ -304,7 +304,17 @@ public class ArchitectureGuardTest {
 	 * descriptor PREFIX. It also closes what the source form conceded, that it could only see answers
 	 * built in one FILE; this sees every class under {@code api/target/classes}.
 	 *
-	 * <p><b>The residue, named rather than claimed away.</b> It reads api's output only, because omod
+	 * <p><b>What it actually proves is that every answer is built through the WIDEST constructor</b>,
+	 * which is not the same as carrying a value: passing a literal {@code null} for that last argument
+	 * satisfies this completely. A review round measured it — a fourth answer site calling the widest
+	 * constructor with a {@code null} coverage leaves this green — and named it the likeliest escape
+	 * of all, since {@code ChartAnswer}'s own telescoping constructors do exactly that. Closing it
+	 * means reading the CALLER's bytecode for an {@code aconst_null} in that argument slot, which is a
+	 * real instruction walk rather than a constant-pool read; this stops at the descriptor
+	 * deliberately. So do not read a green run here as "every answer states a verdict" — it says no
+	 * answer was built through a constructor that CANNOT state one.
+	 *
+	 * <p><b>The rest of the residue, named rather than claimed away.</b> It reads api's output only, because omod
 	 * is not compiled when api's tests run — no {@code omod/src/main} class constructs an answer
 	 * today, and one that did would be invisible here. It excludes {@code ChartAnswer} itself, whose
 	 * telescoping constructors legitimately name every arity. And a class that builds an answer

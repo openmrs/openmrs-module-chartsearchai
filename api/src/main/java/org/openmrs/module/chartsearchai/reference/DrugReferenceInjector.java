@@ -570,8 +570,20 @@ public class DrugReferenceInjector {
 		// was derived from — the clinician reads cause then conclusion in chart order.
 		for (SafetyWarning finding : findings) {
 			String rendered = renderFinding(finding);
+			// The rating travels STRUCTURALLY beside the record as well as inside its prose (issue
+			// #337). Inside is where the model reads it; beside is where a consumer compares against
+			// it, so "which rating did this finding state" has one answer rather than one per parse —
+			// and the two cannot come apart, because both are this one SafetyWarning. Never read back
+			// out of `rendered`: a DDInter mechanism can itself contain its own rating word, and
+			// thousands of the shipped knowledge base's rows do — ADR Decision 77 carries the
+			// measurement and its date. `statableRating` decides which ratings are worth requiring
+			// an answer to state and is canonical for the two that are not.
+			//
+			// resourceKey is NOT a substitute for it: one screening question raises several findings
+			// of one type about one drug, so five records of this loop can share a single key.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING,
-					ChartSearchAiUtils.resourceKey(finding.getType(), finding.getDrug()), null, rendered));
+					ChartSearchAiUtils.resourceKey(finding.getType(), finding.getDrug()), null, rendered,
+					null, 0, null, DrugSafetyValidator.statableRating(finding.getSeverity())));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;
 		}

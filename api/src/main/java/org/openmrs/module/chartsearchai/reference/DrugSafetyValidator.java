@@ -874,6 +874,50 @@ public class DrugSafetyValidator {
 	}
 
 	/**
+	 * The rating a finding carries where an ANSWER stating that finding ought to state the rating
+	 * too, or {@code null} where there is no such word — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/337">#337</a>. The one
+	 * decision of that question, read at {@link DrugReferenceInjector}'s {@code safety_finding}
+	 * mapping so a consumer never re-derives it, and in particular never from the rendered prose: a
+	 * DDInter mechanism can itself contain its own rating word, and reading one out of the text would
+	 * attribute a rating this module never assigned.
+	 *
+	 * <p><b>A different question from {@link #ratingLicensesWithholding}, and it must not be folded
+	 * into it.</b> That one asks how strongly a finding licenses a clinical call. This one asks
+	 * whether there is a WORD whose absence from an answer means something — a question about the
+	 * vocabulary, not about the call — so a caution's rating is as much wanted here as a withholding
+	 * one. The prompt asks for it either way: {@code LlmProvider}'s governing safety sentence tells
+	 * the answer to state the finding "carrying its own severity", and the current-medication
+	 * sentence repeats it. (The withhold/caution sentences after each of those decide which LEAD the
+	 * answer opens with and say nothing about the rating; reading them as narrowing it is what an
+	 * earlier draft of this method did.)
+	 *
+	 * <p><b>Two ratings answer null and they are not the same case.</b> An UNRATED finding — a
+	 * curated hand-authored rule, or an ATC-subgroup or cross-reactivity join — has no word at all;
+	 * {@link #severityRank} answers {@code -1}, which is also its answer for an operator dataset's
+	 * own spelling that this module does not recognise, so such a rating is left alone by the same
+	 * arm that leaves a curated rule alone. And {@code unknown} has a word that says nothing: DDInter
+	 * rates 14% of its links that way and those rows carry no mechanism text at all, which is why
+	 * {@link ChartSearchAiConstants#DEFAULT_DRUG_SAFETY_MIN_INTERACTION_SEVERITY} filters them out of
+	 * findings entirely. They become reachable exactly where the property's own documentation points
+	 * an operator — lowering the floor to audit the knowledge base — and requiring an answer to write
+	 * the word "Unknown" there would accuse a large share of that operator's findings of dropping a
+	 * rating that communicates nothing.
+	 *
+	 * <p>The boundary is expressed against {@link #severityRank} for the reason
+	 * {@link #ratingLicensesWithholding}'s is: written as a number or as a list of members it could
+	 * fall out of step with that switch, and this one has to move with it in BOTH directions — a
+	 * rating added below {@code unknown} would be excluded and one added above it included, without
+	 * this method changing.
+	 *
+	 * @param severity the source-assigned severity, or null where the source rates nothing
+	 * @return that same severity where an answer stating the finding should state it, else null
+	 */
+	static String statableRating(String severity) {
+		return severityRank(severity) > severityRank("unknown") ? severity : null;
+	}
+
+	/**
 	 * The same question asked of a whole FINDING rather than of a rating, and the form
 	 * {@link DrugReferenceInjector#renderFinding} must use.
 	 *

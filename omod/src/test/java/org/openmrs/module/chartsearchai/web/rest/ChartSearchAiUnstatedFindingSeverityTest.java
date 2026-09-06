@@ -34,40 +34,39 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * The chart citations the module found an answer could not have been offering as evidence of an
- * active drug order reach the wire (issue
- * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/377">#377</a>).
+ * The safety findings whose RATING an answer states nowhere reach the wire (issue
+ * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/337">#337</a>, round
+ * three).
  *
- * <p>On the reported response, three of five interaction sentences cited a condition, a visit and an
- * encounter as the active order they named, and the other two cited the right drug order — so the
- * citations read as uniformly plausible and nothing a client could see separated them. Every
- * reference in it serialized {@code grounded: null}, which is what the #284 carve-out publishes for
- * a chart citation whose sentence also rests on a {@code safety_finding}, so the field a client
- * WOULD have read said nothing about any of the eleven. That is the shape #354 answered for the
- * drug-class note, #336 for the interaction extent and #337 for a degraded rendering, and this key
- * is the same remedy.
+ * <p>On the reported response five interaction findings were enumerated flat with no rating stated
+ * for any of them, two of them Major, and nothing a client could read said so: the chips carried
+ * every rating correctly but are a parallel list nothing reconciles against the prose, and
+ * {@code unfaithfullyRenderedCitations} correctly read {@code []} because the round-two check
+ * reports a substitution inside a reproduction and this answer reproduced nothing. That is the shape
+ * #354 answered for the drug-class note, #336 for the interaction extent and #377 for a
+ * misattributed citation, and this key is the same remedy.
  *
- * <p>What the value MEANS — why it is the citation and not a word of the record's text, why an empty
- * list is not a certificate, and which residues the check cannot see — is pinned one layer down by
- * {@code ActiveOrderCitationFidelityTest} and is canonical at
- * {@code ChartAnswer.getMisattributedOrderCitations()}. Here the subject is the wire: that the key
+ * <p>What the value MEANS — why it is the citation and not a word of either text, why an empty list
+ * is not a certificate, and which residues the check cannot see — is pinned one layer down by
+ * {@code SafetyFindingSeverityFidelityTest} and is canonical at
+ * {@code ChartAnswer.getUnstatedFindingSeverities()}. Here the subject is the wire: that the key
  * reaches every surface, that {@code null} and empty survive as themselves, and that it marshals for
  * an XML client, which is the one shape a list-valued key is already known to break (issue #347).
  */
-public class ChartSearchAiMisattributedOrderCitationTest {
+public class ChartSearchAiUnstatedFindingSeverityTest {
 
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
 	private static final String QUESTION = "Is it safe to start her on clarithromycin?";
 
 	/**
-	 * The reported answer's shape: the module's own active-order claim, followed by the chart
-	 * citation the model chose and the finding's own. Nothing here is parsed — the check runs one
-	 * layer down — but a canned answer that looked nothing like the defect would make this file's
-	 * premise unreadable.
+	 * The reported answer's shape: findings enumerated flat, each with its citation, and no rating
+	 * word anywhere. Nothing here is parsed — the check runs one layer down — but a canned answer
+	 * that looked nothing like the defect would make this file's premise unreadable.
 	 */
-	private static final String MODEL_ANSWER = "Clarithromycin interacts with active order "
-			+ "Methylprednisolone [253] [350].";
+	private static final String MODEL_ANSWER = "No — Clarithromycin should not be started: "
+			+ "Clarithromycin interacts with active order Methylprednisolone [350], and "
+			+ "Clarithromycin interacts with active order Budesonide [351].";
 
 	private ChartSearchAiRestController controller;
 
@@ -75,15 +74,16 @@ public class ChartSearchAiMisattributedOrderCitationTest {
 
 	private final RestControllerContext openmrsContext = new RestControllerContext();
 
-	/** What the module states per case: the divergence by default, and reset per case. */
+	/** What the module states per case: the two dropped ratings by default, and reset per case. */
 	private List<Integer> stated;
 
 	@BeforeEach
 	public void setUp() {
-		stated = Collections.unmodifiableList(Arrays.asList(Integer.valueOf(253)));
+		stated = Collections.unmodifiableList(
+				Arrays.asList(Integer.valueOf(350), Integer.valueOf(351)));
 		controller = new ChartSearchAiRestController();
 		controller.setAuditLogService(new StubAuditLogService());
-		controller.setChartSearchService(new MisattributedAnswerStubService());
+		controller.setChartSearchService(new UnstatedSeverityAnswerStubService());
 		controller.setPatientAccessCheck((user, patient) -> true);
 		out = new ByteArrayOutputStream();
 		openmrsContext.install();
@@ -97,7 +97,8 @@ public class ChartSearchAiMisattributedOrderCitationTest {
 	private ChartSearchService.ChartAnswer answer() {
 		return new ChartSearchService.ChartAnswer(MODEL_ANSWER,
 				Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
-				Collections.<SafetyWarning> emptyList(), null, null, null, null, null, stated, null, null);
+				Collections.<SafetyWarning> emptyList(), null, null, null, null, null, null, stated,
+				null);
 	}
 
 	@SuppressWarnings("unchecked")
@@ -115,27 +116,27 @@ public class ChartSearchAiMisattributedOrderCitationTest {
 	}
 
 	/**
-	 * The defect, on the wire: an answer that cited a record which cannot be the order it names now
-	 * says so, where before this key every observable field read exactly as a correct answer's would.
+	 * The defect, on the wire: an answer that dropped the rating of the findings it states now says
+	 * so, where before this key every observable field read exactly as a faithful answer's would.
 	 */
 	@Test
-	public void theSearchResponseNamesTheCitationThatCannotBeTheOrder() {
+	public void theSearchResponseNamesTheFindingsWhoseRatingTheAnswerDropped() {
 		Map<String, Object> payload = searchPayload();
 
-		assertTrue(payload.containsKey("misattributedOrderCitations"),
-				"the blocking /search response must state which citations it found could not be the "
-						+ "order they were offered for: " + payload);
-		assertEquals(Arrays.asList(Integer.valueOf(253)),
-				payload.get("misattributedOrderCitations"));
-		// What made the defect invisible: nothing else on the response distinguishes this answer
-		// from one whose citations all pointed at the orders it named.
-		assertEquals(0, ((List<?>) payload.get("references")).size(),
-				"precondition: this stub cites nothing, so no reference field carries the news either");
+		assertTrue(payload.containsKey("unstatedFindingSeverities"),
+				"the blocking /search response must state which cited findings it found the answer "
+						+ "stated no rating for: " + payload);
+		assertEquals(Arrays.asList(Integer.valueOf(350), Integer.valueOf(351)),
+				payload.get("unstatedFindingSeverities"));
+		// What made the defect invisible: the chips are a parallel list, so a client rendering them
+		// beside this prose sees correct ratings and a degraded sentence and nothing relating the two.
+		assertEquals(0, ((List<?>) payload.get("safetyWarnings")).size(),
+				"precondition: this stub raises no chip, so no chip field carries the news either");
 	}
 
 	/**
 	 * Empty and null are different statements and both have to survive serialization as themselves.
-	 * Empty says the check ran and named no citation; null says this producer made no measurement —
+	 * Empty says the check ran and named no finding; null says this producer made no measurement —
 	 * which is what the early {@code done} of the async path carries, the check running after that
 	 * handoff.
 	 */
@@ -143,16 +144,16 @@ public class ChartSearchAiMisattributedOrderCitationTest {
 	public void anEmptyStatementAndNoStatementAreDifferentOnTheWire() {
 		stated = Collections.emptyList();
 		Map<String, Object> empty = searchPayload();
-		assertTrue(empty.containsKey("misattributedOrderCitations"),
+		assertTrue(empty.containsKey("unstatedFindingSeverities"),
 				"the key must be present for a measurement of none: " + empty);
-		assertEquals(Collections.emptyList(), empty.get("misattributedOrderCitations"),
-				"a check that ran and named no citation states an empty list, not null");
+		assertEquals(Collections.emptyList(), empty.get("unstatedFindingSeverities"),
+				"a check that ran and named no finding states an empty list, not null");
 
 		stated = null;
 		Map<String, Object> none = searchPayload();
-		assertTrue(none.containsKey("misattributedOrderCitations"),
+		assertTrue(none.containsKey("unstatedFindingSeverities"),
 				"the key must be present even where the module states nothing: " + none);
-		assertEquals(null, none.get("misattributedOrderCitations"),
+		assertEquals(null, none.get("unstatedFindingSeverities"),
 				"no measurement is null, and must not be flattened to an empty list");
 	}
 
@@ -161,10 +162,10 @@ public class ChartSearchAiMisattributedOrderCitationTest {
 		controller.streamAnswer(out, RestControllerContext.patient(), QUESTION, new User(3), false);
 
 		JsonNode done = eventData("done");
-		assertTrue(done.has("misattributedOrderCitations"),
-				"the done event carried no misattributedOrderCitations key");
-		assertEquals(1, done.get("misattributedOrderCitations").size());
-		assertEquals(253, done.get("misattributedOrderCitations").get(0).asInt());
+		assertTrue(done.has("unstatedFindingSeverities"),
+				"the done event carried no unstatedFindingSeverities key");
+		assertEquals(2, done.get("unstatedFindingSeverities").size());
+		assertEquals(350, done.get("unstatedFindingSeverities").get(0).asInt());
 	}
 
 	/**
@@ -173,25 +174,24 @@ public class ChartSearchAiMisattributedOrderCitationTest {
 	 * stating nothing is serialized as {@code null} on the early event and not flattened to an empty
 	 * list, which would tell a client the answer had been compared and found faithful. That
 	 * PRODUCTION states nothing there is a different claim and is pinned one layer down, by
-	 * {@code ActiveOrderCitationFidelityTest.searchStreaming_statesItOnTheAnswerItReturnsAndNotOnTheEarlyOne},
+	 * {@code SafetyFindingSeverityFidelityTest.searchStreaming_statesItOnTheAnswerItReturnsAndNotOnTheEarlyOne},
 	 * which drives the real orchestration; the stub below only reproduces its shape.
-	 * {@code interactionPairs} is null on that event for the same class of reason.
 	 */
 	@Test
 	public void theEarlyDoneStatesNothingAndTheGroundedEventCarriesTheMeasurement() throws Exception {
 		controller.streamAnswer(out, RestControllerContext.patient(), QUESTION, new User(3), true);
 
 		JsonNode done = eventData("done");
-		assertTrue(done.has("misattributedOrderCitations"),
+		assertTrue(done.has("unstatedFindingSeverities"),
 				"the early done must still carry the key, so a client reads one field unconditionally");
-		assertTrue(done.get("misattributedOrderCitations").isNull(),
+		assertTrue(done.get("unstatedFindingSeverities").isNull(),
 				"the check has not run when this event is emitted, and an empty list here would tell a "
-						+ "client the answer was compared against its records and found faithful");
+						+ "client the answer's ratings had been compared and found intact");
 
 		JsonNode grounded = eventData("grounded");
-		assertEquals(1, grounded.get("misattributedOrderCitations").size(),
+		assertEquals(2, grounded.get("unstatedFindingSeverities").size(),
 				"the trailing event is where the measurement lands");
-		assertEquals(253, grounded.get("misattributedOrderCitations").get(0).asInt());
+		assertEquals(350, grounded.get("unstatedFindingSeverities").get(0).asInt());
 	}
 
 	/**
@@ -202,7 +202,7 @@ public class ChartSearchAiMisattributedOrderCitationTest {
 	 */
 	@Test
 	public void theWholePayloadStillMarshalsForAnXmlClient() throws Exception {
-		XmlPayloads.assertMarshals(searchPayload(), "a stated divergence");
+		XmlPayloads.assertMarshals(searchPayload(), "a stated set of dropped ratings");
 		stated = Collections.emptyList();
 		XmlPayloads.assertMarshals(searchPayload(), "a measurement of none");
 		stated = null;
@@ -212,28 +212,25 @@ public class ChartSearchAiMisattributedOrderCitationTest {
 	/**
 	 * Structural: exactly one write of the key, so a second and divergent one cannot be added. Stated
 	 * as what it holds rather than as what would be useful. It reddens on the literal being wrapped
-	 * across a line or moved into a quoted comment. TWO mutations it does not see, both measured
-	 * rather than reasoned: hoisting the key to a {@code private static final String} and using that
-	 * at the put site keeps the count at one, which is the refactor a maintainer is most likely to
-	 * actually perform; and a fourth payload-building method that serializes the answer without
-	 * calling {@code putModuleStatements} leaves this guard and both its neighbours on the sibling
-	 * keys green. The three surfaces that exist today are covered behaviourally by the cases above; a
-	 * fourth would need its own.
+	 * across a line or moved into a quoted comment, and it does NOT see the two mutations its sibling
+	 * on {@code misattributedOrderCitations} records — hoisting the literal to a constant, and a
+	 * fourth payload-building method that never calls {@code putModuleStatements} — which are the
+	 * same two here for the same reason.
 	 */
 	@Test
 	public void theKeyIsWrittenInExactlyOnePlace() throws Exception {
 		String source = ChartSearchAiStreamingTest.controllerSource();
 
-		int keys = ChartSearchAiStreamingTest.occurrences(source, "\"misattributedOrderCitations\"");
+		int keys = ChartSearchAiStreamingTest.occurrences(source, "\"unstatedFindingSeverities\"");
 		assertEquals(1, keys,
-				"the misattributedOrderCitations key must be written in exactly one place, beside "
-						+ "the chips and the class statement (issue #377). Found " + keys
+				"the unstatedFindingSeverities key must be written in exactly one place, beside the "
+						+ "chips and the module's other statements (issue #337). Found " + keys
 						+ " writes of it.");
 	}
 
-	/** An answer citing a record that cannot be the order it names, on both the classic and the
-	 *  async shapes. */
-	private class MisattributedAnswerStubService implements ChartSearchService {
+	/** An answer that states its findings without their ratings, on both the classic and the async
+	 *  shapes. */
+	private class UnstatedSeverityAnswerStubService implements ChartSearchService {
 
 		@Override
 		public ChartAnswer search(Patient patient, String question) {
@@ -257,7 +254,8 @@ public class ChartSearchAiMisattributedOrderCitationTest {
 			// no measurement whatever the final one says.
 			ungroundedAnswerConsumer.accept(new ChartSearchService.ChartAnswer(MODEL_ANSWER,
 					Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
-					Collections.<SafetyWarning> emptyList(), null, null, null, null, null, null, null, null));
+					Collections.<SafetyWarning> emptyList(), null, null, null, null, null, null, null,
+					null));
 			return answer();
 		}
 

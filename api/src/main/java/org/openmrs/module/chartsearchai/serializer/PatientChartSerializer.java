@@ -641,6 +641,17 @@ public class PatientChartSerializer {
 		private final Boolean orderActive;
 
 		/**
+		 * The rating an injected {@code safety_finding} states, where an answer stating that finding
+		 * ought to state the rating too — {@code null} on every other record, and on a finding whose
+		 * rating has no word worth requiring (issue #337). Written in exactly ONE place,
+		 * {@code DrugReferenceInjector}'s finding mapping, off {@code SafetyWarning.getSeverity()}
+		 * through {@code DrugSafetyValidator.statableRating}, which is canonical for which ratings
+		 * answer null and why. Never re-derived from {@link #getText()}: a knowledge-base mechanism
+		 * can itself contain a rating word.
+		 */
+		private final String findingSeverity;
+
+		/**
 		 * Backward-compatible constructor that carries no source text. Mappings
 		 * built this way cannot be grounding-checked; the grounding verifier
 		 * treats a null/blank text as "cannot verify" and leaves the citation
@@ -670,12 +681,28 @@ public class PatientChartSerializer {
 		}
 
 		/**
-		 * Full constructor, including the order-currency answer. Every shorter constructor defaults it
-		 * to {@code null} — "the module cannot say" — which is right for an injected record (no
-		 * {@code Order} behind it) and for every caller that has not read the patient's orders.
+		 * The order-currency overload. Every shorter constructor defaults that answer to {@code null}
+		 * — "the module cannot say" — which is right for an injected record (no {@code Order} behind
+		 * it) and for every caller that has not read the patient's orders.
+		 *
+		 * <p>Not the full constructor since issue #337: it defaults {@link #findingSeverity} to
+		 * {@code null}, which is right for every record that is not an injected safety finding. The
+		 * one below is the full one, named so a caller reaching through this javadoc for "the full
+		 * constructor" cannot silently drop a finding's rating.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive) {
+			this(index, resourceType, resourceUuid, date, text, source, withheldInteractions,
+					orderActive, null);
+		}
+
+		/**
+		 * Full constructor, including the finding's stated rating. Every shorter constructor defaults
+		 * it to {@code null} — "this record states no rating an answer owes" — which is right for
+		 * every record but an injected {@code safety_finding}, the one thing that has a rating at all.
+		 */
+		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
+				String source, int withheldInteractions, Boolean orderActive, String findingSeverity) {
 			this.index = index;
 			this.resourceType = resourceType;
 			this.resourceUuid = resourceUuid;
@@ -684,6 +711,7 @@ public class PatientChartSerializer {
 			this.source = source;
 			this.withheldInteractions = withheldInteractions;
 			this.orderActive = orderActive;
+			this.findingSeverity = findingSeverity;
 		}
 
 		public int getIndex() {
@@ -766,6 +794,22 @@ public class PatientChartSerializer {
 		 */
 		public Boolean getOrderActive() {
 			return orderActive;
+		}
+
+		/**
+		 * @return the rating this record states that an answer citing it ought to state too, or
+		 *         {@code null} where there is none — every record that is not an injected
+		 *         {@code safety_finding}, and a finding whose rating carries no word worth requiring.
+		 *         {@code DrugSafetyValidator.statableRating} is canonical for that second case.
+		 *
+		 *         <p>Metadata ABOUT the record and deliberately not part of {@link #getText()}, the
+		 *         discipline this class's own javadoc states — though the rating does also appear
+		 *         inside the rendered prose, because the model is meant to read it there. This field
+		 *         is what a consumer compares against, so that "which rating did this finding state"
+		 *         has one answer rather than one per parse.
+		 */
+		public String getFindingSeverity() {
+			return findingSeverity;
 		}
 	}
 }

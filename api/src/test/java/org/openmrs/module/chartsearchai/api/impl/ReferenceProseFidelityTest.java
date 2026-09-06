@@ -109,6 +109,22 @@ public class ReferenceProseFidelityTest {
 	 *  {@code ClassCodeFidelityTest} carries the same note in the other direction. */
 	private static final String PACKAGE = "org.openmrs.module.chartsearchai.api.impl";
 
+	/** The logger of the finding-severity check that issue #337's third round added to this package.
+	 *
+	 *  <p>Some of the canned answers here cite a rated {@code safety_finding} without stating its
+	 *  rating, which is exactly what that check reports — a different property of the same answer,
+	 *  and one this file makes no claim about. The negatives below therefore capture the package (so
+	 *  the pipeline's own INFO line still proves the capture is live, per {@link #PACKAGE}) and
+	 *  ignore that one logger, rather than narrowing to this file's own check and giving up their
+	 *  reach over every other logger in the package. */
+	private static final String FINDING_SEVERITY_CHECK =
+			"org.openmrs.module.chartsearchai.api.impl.SafetyFindingSeverityFidelityCheck";
+
+	/** @return whether anything but {@link #FINDING_SEVERITY_CHECK} logged at WARN or above. */
+	private static boolean warnedByAnotherCheck(LogCapture capture) {
+		return capture.hasEventAtOrAbove(Level.WARN, FINDING_SEVERITY_CHECK);
+	}
+
 	/** The question issue #338 captured its answer on. */
 	private static final String ISSUE_338_QUESTION = "Can I give her hydrocortisone?";
 
@@ -579,7 +595,7 @@ public class ReferenceProseFidelityTest {
 			service.search(patient(), QUESTION);
 			assertFalse(capture.describeAll().isEmpty(),
 					"the capture must receive the pipeline's own INFO lines, or this passes vacuously");
-			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+			assertFalse(warnedByAnotherCheck(capture),
 					"a reproduction one word short of the floor is not evidence of copying. Captured: "
 							+ capture.describeAll());
 		}

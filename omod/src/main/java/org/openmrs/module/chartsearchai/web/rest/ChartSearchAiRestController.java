@@ -1395,6 +1395,13 @@ public class ChartSearchAiRestController {
 	 * reaches this method rather than {@code putSafetyChips} for the reason
 	 * {@code unfaithfullyRenderedCitations} does: it is a statement about the ANSWER, not a chip.
 	 *
+	 * <p>{@code unstatedFindingSeverities} is that remedy a third time, back on the issue the first
+	 * one came from (<a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/337">issue
+	 * #337</a>, round three): the citations of safety findings whose RATING the answer states nowhere. It
+	 * reaches this method rather than {@code putSafetyChips} for the reason its two neighbours do —
+	 * it is a statement about the ANSWER, not a chip — and it is emphatically not a restatement of
+	 * the chips' own {@code severity}, which is what the answer was supposed to carry and did not.
+	 *
 	 * <p>{@code conditionRuleCoverage} is the same remedy again, from the issue beside it
 	 * (<a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/378">#378</a>): what
 	 * the loaded dataset publishes for the hand-authored CONDITION-rule arm, so a client can tell a
@@ -1432,6 +1439,9 @@ public class ChartSearchAiRestController {
 		List<Integer> misattributed = answer.getMisattributedOrderCitations();
 		target.put("misattributedOrderCitations",
 			misattributed == null ? null : new ArrayList<Integer>(misattributed));
+		List<Integer> unstatedSeverities = answer.getUnstatedFindingSeverities();
+		target.put("unstatedFindingSeverities",
+			unstatedSeverities == null ? null : new ArrayList<Integer>(unstatedSeverities));
 		DrugReferenceLoad.Coverage conditionRules = answer.getConditionRuleCoverage();
 		target.put("conditionRuleCoverage",
 			conditionRules == null ? null : conditionRules.wireToken());

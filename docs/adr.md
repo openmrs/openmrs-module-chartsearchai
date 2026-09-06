@@ -5600,3 +5600,79 @@ The predicate is not `QueryScopeRouter.typedSlice`'s MEDICATIONS slice and must 
 **It does not reach the audit row**, and neither does its sibling. The derived columns there — `search_mode`, `reference_slice_records` — arrived because a maintainer reading rows could not re-derive them, and the same argument does not carry: a per-answer list of citation indexes has no aggregate reader, and on the async path the row is written from the early answer, which states `null` on every such request, so the column would be null wherever grounding is async.
 
 **It does not render anything.** A clinician reads a frontend, and rendering `misattributedOrderCitations` is a change in `openmrs-esm-chartsearchai` — the same split this repository already records for the other half of [#201](https://github.com/openmrs/openmrs-module-chartsearchai/issues/201).
+
+## Decision 77: A safety finding's rating has to survive into the answer that states it
+
+**Status:** Accepted (September 2026) · [#337](https://github.com/openmrs/openmrs-module-chartsearchai/issues/337)
+
+### Context
+
+[Decision 61](#decision-61-prose-the-answer-reproduces-from-a-cited-reference-record-must-be-reproduced-faithfully) closed the shape #337 was filed for — an answer that reproduces a cited reference record's prose and then states different words inside the sentence it was copying — and named, in the same breath, the residue it was leaving open: the check "reports a SUBSTITUTION and never a truncation", which "under-reports the ticket's weaker cousin, a hazard dropped by stopping early."
+
+That residue was then measured, on stock configuration, and reported on the issue. A *"Is it safe to start her on clarithromycin?"* answer, on a RefApp 3.7.1 standalone carrying the bundled knowledge base, enumerated five interaction findings in one `Furthermore` clause:
+
+> Furthermore, Clarithromycin interacts with active order Methylprednisolone [177] [350], Clarithromycin interacts with active order Budesonide [166] [351], Clarithromycin interacts with active order Prednisone [155] [352], …
+
+Two of those five are rated **Major** and carry mechanism text about adrenal suppression. The answer stated no rating for any of them — checked programmatically over the response text, not by eye — and no mechanism either. Three runs returned byte-identical text.
+
+Nothing on the response said so, and each layer was behaving correctly. The `safetyWarnings` chips carried all five ratings, but they are a parallel list nothing reconciles against the prose. `unfaithfullyRenderedCitations` read `[]`, which is a measurement rather than a miss: Decision 61's check requires a reproduction of at least `MIN_REPRODUCED_WORDS` before it will judge anything, and a flat enumeration reproduces nothing. `ActiveOrderCitationFidelityCheck` ([Decision 76](#decision-76-a-chart-citation-that-cannot-be-the-active-order-a-sentence-names-is-stated-on-the-response)) asks whether the chart citations can be the orders named, which is a different question. And a reference-group citation skips Tier-2 entailment entirely, so nothing graded these sentences.
+
+What made the residue tractable is that the missing datum is not prose. `SafetyWarning.getSeverity()` is the source's own rating, it is populated on every one of those five findings, and `DrugReferenceInjector.renderFinding` writes it into the record the model reads. The module also asks for it back: `LlmProvider`'s governing safety sentence tells the answer to state the finding "carrying its own severity", and the current-medication sentence repeats it. So the question "did the answer carry the rating?" is answerable with no model call, no embedding and no reproduction threshold.
+
+### Decision
+
+A fourth deterministic check runs after every answer on both answer paths: **`SafetyFindingSeverityFidelityCheck`**. Where the answer cites a safety finding that carries a rating, and that rating's word appears nowhere in the answer, the citation is reported at `WARN` and **published**, as `ChartAnswer.getUnstatedFindingSeverities()` / the `unstatedFindingSeverities` response key.
+
+Publishing is Decision 74's trigger met a third time: on the reported response every observable field read exactly as a clean answer's would, and the thing that is wrong — a Major rating that never reached the clinician — is precisely what a client would want to render beside the sentence. It never rewrites the answer, for the reason all three siblings refuse to.
+
+### The rating travels structurally, and is never parsed back out
+
+`RecordMapping` gains a `findingSeverity` field, written in exactly one place — the injector's `safety_finding` mapping, off `SafetyWarning.getSeverity()` — and the check reads that rather than the record's rendered text. This is not caution. The record's prose does state the rating, because that is where the model reads it, but a DDInter mechanism can itself contain a rating word: measured on 2026-09-07 over the shipped knowledge base, loaded by `DdiDrugReferenceSource.load()` and filtered through `statableRating` itself, the mechanism half of the note — the text after the `<Severity>. ` prefix `DdiDrugReferenceSource.noteFor` writes — carries its own rating word on **5,382 of the 505,482 links whose rating this check asks about**, which is **142 of the 7,709 distinct mechanism notes** those links share. A parse would attribute a rating this module never assigned, in exactly the tail being investigated.
+
+That measurement is also a small worked example of why the rule against re-expressing a production predicate in a measuring script exists. A first pass, run without `statableRating`, returned 90,212 links — sixteen times the real figure — because DDInter's `unknown` tier carries the sentinel *"Unknown severity interaction (DDInter 2.0; no mechanism description on file)"*, which has no `"Unknown. "` prefix to strip, so the whole sentinel counted as a mechanism carrying its own rating. It is plausible, it is wrong, and it is wrong precisely in the tail the check carves out.
+
+There was no existing carrier to reuse. The mapping's `resourceUuid` for a finding is `resourceKey(type, drug)`, and on the reported response all five findings share one such key — one type, one drug, five records — so a join through it cannot tell them apart.
+
+### Which ratings are asked about, and the two that are not
+
+`DrugSafetyValidator.statableRating` decides it, at the write site, expressed against `severityRank` so it cannot fall out of step with that switch. Two ratings answer `null` and they are different cases.
+
+An **unrated** finding — a curated hand-authored rule, or an ATC-subgroup or cross-reactivity join — has no word at all. `severityRank` answers `-1`, which is also its answer for an operator dataset's own spelling this module does not recognise, so such a rating is left alone by the same arm.
+
+And **`unknown`** has a word that says nothing. This is the one the plan for this change got wrong, and a plan-time refutation pass is what caught it: `unknown` is *rated* (rank 0), not unrated, so it is not covered by the arm above. DDInter rates 84,830 of the shipped knowledge base's 590,312 interaction links that way — 14.4% — and those rows carry no mechanism text at all, which is why `DEFAULT_DRUG_SAFETY_MIN_INTERACTION_SEVERITY` (`minor`) filters them out of findings entirely. They become reachable exactly where that property's own documentation points an operator, lowering the floor to audit the knowledge base; requiring an answer to write the word *"Unknown"* there would have accused a large share of that operator's findings of dropping a rating that communicates nothing. The check must fail toward silence, and this is where it would have failed loudly instead.
+
+**It makes no strength judgement, and must not be given one.** `licensesWithholding` answers how strongly a finding licenses a clinical call; this asks whether there is a word whose absence means something. A caution's rating is as much wanted as a withholding one — the prompt asks for it either way — so a `minor` finding's rating is carried like the rest.
+
+### The unit is the whole answer
+
+The check fires only where the rating appears nowhere in the answer. The alternatives were the sentence citing the finding, and the citation run Decision 76 uses; both would report *"There are two Major interactions. Clarithromycin interacts with active order Methylprednisolone [350] …"*, which is correct prose. A check that cries wolf is worse than no check, and the whole answer is also the unit the issue's own reproduction was measured in.
+
+What that costs is stated rather than implied: **an answer that states one Major finding's rating and drops a second Major finding's is silent.** So is one where the word reaches the answer for the wrong reason — inside a reproduced mechanism, or stated for a different finding.
+
+The rating is matched on a word boundary, case-insensitively, so *"major"*, *"**Major**"*, *"(Major)"* and *"Major-rated"* all satisfy it while *"majority"* does not — which matters, because *"the majority of her medications"* is ordinary clinical prose and a substring test would let it silence every Major finding in an answer. The scan is written in the check rather than borrowed from `DrugReference`'s bounded-token family: those are the drug-NAME shapes, their allowances exist for inflected order names and for prose naming a substance, and the rule for them is that a caller must never choose an allowance of its own. A rating has no aliases, no diacritics and no inflection to allow.
+
+### Alternatives considered
+
+**Render the finding's mechanism verbatim in the answer** — the issue's own option 1, and its stated root-cause fix. Not taken here and not refuted either: it is a prompt-or-assembly change whose effect is a question about model behaviour, and this check is the instrument that would measure whether such a change worked. Decision 61 records the same relationship for the substitution shape.
+
+**Report a truncated mechanism as well as a dropped rating** — the other half of the residue this decision's context quotes. Not taken. It needs a threshold separating a legitimate partial quotation from a hazard dropped by stopping early, and Decision 61 already measured that no threshold separates them; the rating is the half that needed none, which is why it is the half this round closes. **#337 therefore stays open.**
+
+**Reconcile the answer against the `safetyWarnings` chips.** Refused. The chips come from the post-answer `validate` pass and the injected findings from the pre-answer one, so they are two populations, and the chip carries no citation index to join on. Comparing the answer against the record it actually cites is both sounder and simpler.
+
+**Scope it to withholding-class ratings** (`moderate`, `major`). Refused: it would borrow `licensesWithholding`'s split for a question about vocabulary rather than about a clinical call, and the prompt asks for the rating on a caution too.
+
+### What this does not do
+
+**It does not stop the paraphrase**, any more than its siblings do; it makes one visible.
+
+**It does not reach the audit row**, for the reason Decision 76 gives for its own key: a per-answer list of citation indexes has no aggregate reader, and on the async path the row is written from the early answer, which states `null`.
+
+**It does not render anything.** A clinician reads a frontend, and rendering `unstatedFindingSeverities` is a change in `openmrs-esm-chartsearchai`.
+
+**Its recall over live answers is unmeasured.** It fires on the issue's own reproduction, three byte-identical runs of it. No sweep over captured answers has been run, and the residues above are stated from the rule rather than from a corpus.
+
+**Its own failure states no measurement.** The `catch (RuntimeException)` returns `null` rather than an empty list, and `putModuleStatements` guards for it. Unlike both siblings, a test does reach that branch — `getFindingSeverity()` is read by nothing else on the answer path, so a record that throws on it reaches this check and no earlier one.
+
+### One collision it caused
+
+Three cases in `ActiveOrderCitationFidelityTest` and one in `ReferenceProseFidelityTest` assert their own check's silence by capturing the *package* — the idiom that keeps "no WARN was logged" from passing vacuously, since a class-scoped capture of a silent class receives nothing. Their canned answers cite a rated finding without stating its rating, so this check reports them, correctly and about something those files make no claim about. Rather than narrow those captures to each file's own class, which would give up their reach over every other logger in the package, `LogCapture.hasEventAtOrAbove` gained an arity that ignores one named logger. The idiom is what invited the collision, and a fifth check will meet it again.

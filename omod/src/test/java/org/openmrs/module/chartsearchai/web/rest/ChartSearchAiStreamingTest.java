@@ -98,9 +98,8 @@ public class ChartSearchAiStreamingTest {
 	 * the identical read spelled {@code Context.getAuthenticatedUser()} failed the scan and nothing
 	 * else — so the scan works and it was the spelling that admitted it. The remedy is the import
 	 * assertion below, which is deliberately over the WHOLE file rather than the class body, since an
-	 * import sits above it; it needs no region canary, because the positive
-	 * {@code source.contains("new Thread(")} at the top of this method already fails if the source ever
-	 * reads empty. Placement matters to the measurement and not to the hole: the same read put BEFORE
+	 * import sits above it; it needs no region canary, because the positive thread-creation assertion
+	 * at the top of this method already fails if the source ever reads empty. Placement matters to the measurement and not to the hole: the same read put BEFORE
 	 * the write reddens six behavioural cases instead, because then no comment is ever written, which
 	 * is the case {@code RestControllerContext}'s javadoc records.</p>
 	 *
@@ -124,7 +123,11 @@ public class ChartSearchAiStreamingTest {
 	public void streamingEndpoint_shouldNotRunOpenmrsWorkOnBackgroundThreads() throws Exception {
 		String source = controllerSource();
 
-		assertTrue(source.contains("new Thread("),
+		// A PATTERN over the type name, never the literal "new Thread(". A background thread spelled
+		// `new java.lang.Thread(` — or wrapped after `new` — satisfied the literal form while running
+		// Context work off it, and left the whole omod suite green; measured by a review agent on
+		// issue #378's harden round, which is the same escape that round found in two other guards.
+		assertTrue(matches(source, THREAD_CREATION) > 0,
 				"the keep-alive's thread must be created HERE, in the controller, or both thread "
 						+ "assertions below pass on nothing: the loop iterates zero times, and the count "
 						+ "matches zero against zero. An empty scan is indistinguishable from a compliant "
@@ -135,8 +138,11 @@ public class ChartSearchAiStreamingTest {
 						+ "green. Measured: dropping the factory for a bare "
 						+ "Executors.newSingleThreadScheduledExecutor() reddens this and nothing else in "
 						+ "the module, because the two below then compare zero against zero");
-		for (int at = source.indexOf("new Thread("); at >= 0; at = source.indexOf("new Thread(", at + 1)) {
-			String creation = source.substring(at, Math.min(source.length(), at + 120));
+		java.util.regex.Matcher creations =
+				java.util.regex.Pattern.compile(THREAD_CREATION).matcher(source);
+		while (creations.find()) {
+			int at = creations.start();
+			String creation = source.substring(at, Math.min(source.length(), at + 140));
 			assertTrue(creation.contains("\"chartsearchai-sse-keepalive\""),
 					"a thread this controller creates must carry the keep-alive's NAME, so that it "
 							+ "identifies itself in a thread dump. That it IS the keep-alive's is the count "
@@ -159,7 +165,7 @@ public class ChartSearchAiStreamingTest {
 						+ "parked on the monitor writes after streamAnswer returns, into a response the "
 						+ "container may already have recycled, and shutdownNow cannot stop it because a "
 						+ "thread blocked entering a synchronized block ignores interrupt");
-		assertEquals(occurrences(keepAlive, "new Thread("), occurrences(source, "new Thread("),
+		assertEquals(matches(keepAlive, THREAD_CREATION), matches(source, THREAD_CREATION),
 				"every thread this controller creates must sit INSIDE SseKeepAlive, not merely wear its "
 						+ "name: the loop above matches on the name literal, so a raw "
 						+ "new Thread(runnable, \"chartsearchai-sse-keepalive\") started anywhere else in "
@@ -199,6 +205,11 @@ public class ChartSearchAiStreamingTest {
 				"Must not share UserContext across threads");
 	}
 
+	/** How a thread creation is FOUND — the type name with an optional qualifier and whitespace
+	 *  anywhere Java allows it, never the literal {@code "new Thread("}. See the comment at the first
+	 *  assertion in {@link #streamingEndpoint_shouldNotRunOpenmrsWorkOnBackgroundThreads}. */
+	private static final String THREAD_CREATION = "new\\s+(?:\\w+\\s*\\.\\s*)*Thread\\s*\\(";
+
 	/**
 	 * @return how many times {@code needle} occurs in {@code haystack}, counting overlaps
 	 *
@@ -211,6 +222,27 @@ public class ChartSearchAiStreamingTest {
 	static int occurrences(String haystack, String needle) {
 		int count = 0;
 		for (int at = haystack.indexOf(needle); at >= 0; at = haystack.indexOf(needle, at + 1)) {
+			count++;
+		}
+		return count;
+	}
+
+	/**
+	 * @return how many times {@code regex} matches — the counterpart of {@link #occurrences} for a
+	 *         needle that must tolerate the whitespace Java allows.
+	 *
+	 *         <p>Added on issue #378's harden round, where a review agent got past THREE guards in
+	 *         this family by exploiting exactly that: a construction spelled {@code new\n\t\tType(},
+	 *         a call spelled {@code name\n\t\t(args)}, and a thread spelled
+	 *         {@code new java.lang.Thread(}. Each satisfied a literal needle while being the very
+	 *         thing its guard forbids, and each left the suite green. Prefer this wherever the needle
+	 *         is a call or a construction; {@link #occurrences} is right for a wire KEY, which is a
+	 *         string literal and admits no whitespace.
+	 */
+	static int matches(String haystack, String regex) {
+		java.util.regex.Matcher matcher = java.util.regex.Pattern.compile(regex).matcher(haystack);
+		int count = 0;
+		while (matcher.find()) {
 			count++;
 		}
 		return count;

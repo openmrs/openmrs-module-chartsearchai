@@ -1318,7 +1318,18 @@ public final class DrugReferenceTestSupport {
 		return leads;
 	}
 
-	static DrugSafetyValidator validator(DrugReferenceService service) {
+	/**
+	 * A real validator over {@code service} — the production bean with its one collaborator set by
+	 * hand, since {@link org.springframework.beans.factory.annotation.Autowired} does not fire on a
+	 * constructed object.
+	 *
+	 * <p>Public since issue #378, for the cross-package reason this class exists: the statement
+	 * {@code DrugSafetyValidator.conditionRuleCoverage()} makes is read off the answer in
+	 * {@code api.impl}, and a test there needs the REAL validator rather than an anonymous subclass
+	 * whose service field is null. Widened rather than duplicated — a second factory would be a
+	 * second spelling of this one.
+	 */
+	public static DrugSafetyValidator validator(DrugReferenceService service) {
 		DrugSafetyValidator validator = new DrugSafetyValidator();
 		validator.setDrugReferenceService(service);
 		return validator;

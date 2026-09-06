@@ -699,14 +699,82 @@ public class InteractionFindingChartOrderBridgeTest extends BaseModuleContextSen
 	 * record — the same false claim the two cases above refuse, inside text closing with a
 	 * change-of-therapy call.
 	 *
-	 * <p>Delete the {@code ambiguous.add(display)} on {@code orderRecordNumbers}' null branch, leaving
-	 * the {@code continue}, and this is the case that reddens. Klarizom keeps its number, so the
-	 * refusal is per item. Found by a clean-context review agent.
+	 * <p><b>Asserted over BOTH orders of the active list since review round 3, because one of them was
+	 * not enough.</b> The module chooses neither the sequence {@code OrderService} returns the
+	 * prescriptions in nor which sibling resolves, and with the resolving order first the refusal can
+	 * be satisfied by striking the map ENTRY instead of the DISPLAY: substitute
+	 * {@code byDisplay.remove(display)} for the {@code ambiguous.add(display)} on
+	 * {@code orderRecordNumbers}' null branch — a smaller edit than deleting it, and the obvious one
+	 * once the extra Set looks redundant — and the a-then-b arrangement alone stays green while
+	 * b-then-a renders {@code Simvastatin from Zolvimix [1]}. Deleting that line outright still reddens
+	 * this case at its FIRST arrangement, which is round 2's own measurement and is why that evidence
+	 * could not separate a strike on the DISPLAY from a strike on the map ENTRY. Klarizom keeps its
+	 * number in both, so the refusal is per item. Both rounds found by a clean-context review agent.
 	 */
 	@Test
-	public void aDisplayWhoseSecondOrderCanCiteNothingStatesNoNumberEither() throws Exception {
-		String finding = onlyFinding(
+	public void aDisplayWhoseOtherOrderCanCiteNothingStatesNoNumberWhicheverComesFirst()
+			throws Exception {
+		String expected = "Simvastatin from Zolvimix; Clarithromycin from Klarizom [2].";
+		String message = "one of the two prescriptions spelling this display is record [1] and the "
+				+ "other is not, so the item they share states no number whichever of them the active "
+				+ "order list returns first (issue #379), was: ";
+
+		String resolvingFirst = onlyFinding(
 			chartNaming("order-zolvimix-a", "Zolvimix", "order-klarizom", "Klarizom"),
+			twoZolvimixOrders("order-zolvimix-a", "order-zolvimix-b"), SCREENING_QUESTION);
+		assertEquals(expected, bridgeOf(resolvingFirst), message + resolvingFirst);
+
+		String unresolvableFirst = onlyFinding(
+			chartNaming("order-zolvimix-a", "Zolvimix", "order-klarizom", "Klarizom"),
+			twoZolvimixOrders("order-zolvimix-b", "order-zolvimix-a"), SCREENING_QUESTION);
+		assertEquals(expected, bridgeOf(unresolvableFirst), message + unresolvableFirst);
+	}
+
+	/**
+	 * The two prescriptions spelling {@code Zolvimix} in the sequence the active-order list returns
+	 * them, beside the Klarizom order that is unambiguous in either arrangement.
+	 *
+	 * <p>One builder for both permutations, deliberately: two fixtures written out separately can be
+	 * edited apart, and a reviewer's own warning about this case was that reversing one list only
+	 * moves the gap.
+	 */
+	private static PatientClinicalContext twoZolvimixOrders(String firstUuid, String secondUuid) {
+		return DrugReferenceTestSupport.ctx(60, null,
+			DrugReferenceTestSupport.set("Zolvimix", "Klarizom"),
+			DrugReferenceTestSupport.set("C10AA01", "J01FA09"), null, null,
+			Arrays.asList(
+				DrugReferenceTestSupport.activeOrder(firstUuid, "Zolvimix",
+					DrugReferenceTestSupport.set("Zolvimix"),
+					DrugReferenceTestSupport.set("C10AA01")),
+				DrugReferenceTestSupport.activeOrder(secondUuid, "Zolvimix",
+					DrugReferenceTestSupport.set("Zolvimix"),
+					DrugReferenceTestSupport.set("C10AA01")),
+				DrugReferenceTestSupport.activeOrder("order-klarizom", "Klarizom",
+					DrugReferenceTestSupport.set("Klarizom"),
+					DrugReferenceTestSupport.set("J01FA09"))));
+	}
+
+	/**
+	 * Issue #379 round three: the refusal is a strike on the DISPLAY and outlives the map entry, so a
+	 * THIRD prescription spelling it cannot restore the number the second one took away.
+	 *
+	 * <p>The equality half of the same rule, at the cardinality that discriminates its mechanism.
+	 * {@link #twoOrdersOfTheSameDisplayAreNamedOnce} carries two orders, where striking the map ENTRY
+	 * and striking the DISPLAY cannot be told apart — the second put is the last one. Here three
+	 * active orders spell {@code Zolvimix} and the chart holds each one's own record under its own
+	 * uuid, so all three resolve, to [1], [2] and [3]. Substitute {@code byDisplay.remove(display)}
+	 * for the {@code ambiguous.add(display)} on {@code orderRecordNumbers}' equality branch and this is
+	 * the case that reddens: the third put arrives at an absent key, finds no value to disagree with,
+	 * and the item states {@code [3]} while the patient holds three prescriptions spelling that display
+	 * and only one of them is that record. The same substitution on the null branch is
+	 * {@link #aDisplayWhoseOtherOrderCanCiteNothingStatesNoNumberWhicheverComesFirst}; between them the
+	 * two halves pin the Set that makes both strikes permanent, which nothing did before round 3.
+	 */
+	@Test
+	public void aDisplayStruckByOneSiblingIsNotRestoredByAThird() throws Exception {
+		String finding = onlyFinding(
+			chartNaming("order-zolvimix-a", "Zolvimix", "order-zolvimix-b", "Zolvimix",
+				"order-zolvimix-c", "Zolvimix", "order-klarizom", "Klarizom"),
 			DrugReferenceTestSupport.ctx(60, null,
 				DrugReferenceTestSupport.set("Zolvimix", "Klarizom"),
 				DrugReferenceTestSupport.set("C10AA01", "J01FA09"), null, null,
@@ -717,14 +785,18 @@ public class InteractionFindingChartOrderBridgeTest extends BaseModuleContextSen
 					DrugReferenceTestSupport.activeOrder("order-zolvimix-b", "Zolvimix",
 						DrugReferenceTestSupport.set("Zolvimix"),
 						DrugReferenceTestSupport.set("C10AA01")),
+					DrugReferenceTestSupport.activeOrder("order-zolvimix-c", "Zolvimix",
+						DrugReferenceTestSupport.set("Zolvimix"),
+						DrugReferenceTestSupport.set("C10AA01")),
 					DrugReferenceTestSupport.activeOrder("order-klarizom", "Klarizom",
 						DrugReferenceTestSupport.set("Klarizom"),
 						DrugReferenceTestSupport.set("J01FA09")))),
 			SCREENING_QUESTION);
 
-		assertEquals("Simvastatin from Zolvimix; Clarithromycin from Klarizom [2].", bridgeOf(finding),
-			"one of the two prescriptions spelling this display is record [1] and the other is not, "
-					+ "so the item they share states no number (issue #379), was: " + finding);
+		assertEquals("Simvastatin from Zolvimix; Clarithromycin from Klarizom [4].", bridgeOf(finding),
+			"three prescriptions spell this display and each is a different record, so the item they "
+					+ "share states no number however many of them arrive after the first disagreement "
+					+ "(issue #379), was: " + finding);
 	}
 
 	/**

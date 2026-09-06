@@ -1026,13 +1026,24 @@ public class DrugReferenceInjector {
 	 * clause ITEM rather than about a record. Alike is not "to different records": the two orders may
 	 * resolve to different records ({@code .twoOrdersOfTheSameDisplayAreNamedOnce}), or one may resolve
 	 * while the other resolves to NOTHING
-	 * ({@code .aDisplayWhoseSecondOrderCanCiteNothingStatesNoNumberEither}), and the second half is
-	 * invisible to the first's equality test — a null takes the {@code continue} before the display is
-	 * put, so there is never a second value to compare. Each half needs its own case. In each case the
-	 * module cannot say which record a model should read, and naming one would put a citation it cannot
-	 * stand behind into a citable record stating a clinical call — so it names none, per ITEM: an
-	 * unambiguous neighbour in the same clause keeps its number. An order the chart holds no record for
-	 * is not a fourth case; it simply has no candidate.
+	 * ({@code .aDisplayWhoseOtherOrderCanCiteNothingStatesNoNumberWhicheverComesFirst}), and the
+	 * second half is invisible to the first's equality test — a null takes the {@code continue} before
+	 * the display is put, so there is never a second value to compare. Each half needs its own case.
+	 * In each case the module cannot say which record a model should read, and naming one would put a
+	 * citation it cannot stand behind into a citable record stating a clinical call — so it names
+	 * none, per ITEM: an unambiguous neighbour in the same clause keeps its number. An order the chart
+	 * holds no record for is not a fourth case; it simply has no candidate.
+	 *
+	 * <p><b>And each half has to be read where striking the DISPLAY differs from striking the map
+	 * ENTRY</b> — which is what {@code ambiguous} buys, and what nothing discriminated until review
+	 * round 3 of PR #382: substituting {@code byDisplay.remove(display)} for either
+	 * {@code ambiguous.add(display)} left the whole api suite green, a smaller edit than the deletion
+	 * the cases were written against. The null branch needs the unresolvable order FIRST, where the
+	 * removal is a no-op the surviving order's put then undoes — so its case asserts both orders of
+	 * the active list, a sequence this module does not choose. The equality branch needs a THIRD order
+	 * of the display ({@code .aDisplayStruckByOneSiblingIsNotRestoredByAThird}), where the removal is
+	 * undone by a put that finds no value left to disagree with; at two orders the second put is the
+	 * last one and the two strikes are indistinguishable.
 	 *
 	 * <p><b>The record-side rule is asked of CANDIDACY, not of the numbers orders resolved TO</b>
 	 * (issue #379 round two). A resolved-number injectivity check here — which is what this method
@@ -1065,8 +1076,11 @@ public class DrugReferenceInjector {
 		}
 		List<PatientClinicalContext.ActiveDrugOrder> orders = context.getActiveDrugOrders();
 		DrugOrderRecords records = new DrugOrderRecords(mappings);
-		// The records that are some order's OWN, by uuid. Resolved before anything is cited, because
-		// the name leg's candidates are judged against it — see citableNumberFor.
+		// The records that are some order's OWN, by uuid. Resolved in a pass of its own before anything
+		// is cited, because the name leg's candidates are judged against it — see citableNumberFor.
+		// Never accumulated as the citing walk goes: an order asked BEFORE the one whose uuid record it
+		// would be struck by is then judged against an incomplete set and cites that record, which
+		// .aDisplayWhoseOtherOrderCanCiteNothingStatesNoNumberWhicheverComesFirst reddens on.
 		Set<Integer> claimedByUuid = new HashSet<Integer>();
 		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
 			Integer exact = records.numberByUuid(order);

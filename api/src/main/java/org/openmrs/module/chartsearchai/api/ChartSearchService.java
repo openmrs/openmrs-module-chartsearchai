@@ -569,7 +569,7 @@ public interface ChartSearchService {
 		 * <p><b>Why the module states it rather than leaving it to the answer.</b> Under the shipped
 		 * {@code sourceFormat=ddinter} default the dataset publishes no hand-authored allergy or
 		 * condition rule at all, so the condition leg has no rule to evaluate and this patient's
-		 * recorded conditions are put to nothing — and nothing on the response said so, while
+		 * recorded conditions reach no rule at all — and nothing on the response said so, while
 		 * {@link #getPairChipExtent()} beside it made a completeness claim for the arm that had
 		 * nothing to hide. That is issue #336's argument with the count at zero, and this is the same
 		 * remedy: the module states what it could do, on a key, rather than depending on the wording
@@ -590,15 +590,19 @@ public interface ChartSearchService {
 		 * one a frontend author reads, which is the same two-homes arrangement {@code PairChipExtent}
 		 * keeps for the same reason. Everything else points here rather than restating it: a copy is a
 		 * second thing to forget to update, which is the rule
-		 * {@code SerializedRecord.getOrderActive()}'s own field javadoc states one layer down. Three
-		 * things, none of them closed by issue #378:
+		 * {@code SerializedRecord.getOrderActive()}'s own field javadoc states one layer down. ADR
+		 * Decision 75 is not a third copy — it records the two OPEN DEFECTS below with the evidence
+		 * for each, which is a decision's own business and not this list. Three things, none of them
+		 * closed by issue #378:
 		 *
 		 * <ul>
 		 * <li>Whether the contraindication arms are switched ON at all.
 		 * {@code chartsearchai.drugSafety.validateAnswers} and
 		 * {@code chartsearchai.drugSafety.warnOnContraindications} govern that and are deliberately not
-		 * folded in — a load-time capability is knowable whether or not a screen ran, and gating this
-		 * on them would make {@link DrugReferenceLoad.Coverage#UNLOADED} unreachable here.</li>
+		 * folded in: a load-time capability is knowable whether or not a screen ran, so gating this on
+		 * them would withhold a knowable fact exactly where the arms are off.
+		 * {@code DrugSafetyValidator.conditionRuleCoverage()} carries that argument, and the refuted
+		 * one a first draft gave for the same rule.</li>
 		 * <li>Whether the patient's condition list was READ. A failed read degrades to an empty set,
 		 * which {@code PatientClinicalContext.contraindicationRecordsRead()} records for the injected
 		 * record's benefit and this key does not carry.</li>

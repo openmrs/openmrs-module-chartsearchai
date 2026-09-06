@@ -40,6 +40,22 @@ public class ArchitectureGuardTest {
 
 	private static final Path SRC_ROOT = ModuleSourceRoot.apiRoot();
 
+	/**
+	 * How a {@code ChartAnswer} construction is FOUND: the type name with an optional qualifier, not
+	 * the literal {@code new ChartAnswer(}. {@code ChartAnswer} is a nested type, so
+	 * {@code new ChartSearchService.ChartAnswer(...)} is legal Java naming the same constructor and
+	 * needing no import change — a review agent defeated the literal form exactly that way, adding a
+	 * fourth answer that carried no coverage and leaving the whole api suite green.
+	 *
+	 * <p><b>Whitespace is allowed around the qualifier's DOT and not only around {@code new}</b>,
+	 * which is the second escape a review agent walked through: {@code new ChartSearchService.}
+	 * followed by {@code ChartAnswer(} on the next line is one construction to javac and was two
+	 * unrelated tokens to the first widening. Neither pom configures a formatter, so nothing
+	 * normalises that away. Reproduce both before trusting a third form.
+	 */
+	private static final java.util.regex.Pattern CHART_ANSWER_CONSTRUCTION =
+			java.util.regex.Pattern.compile("new\\s+(?:\\w+\\s*\\.\\s*)*ChartAnswer\\s*\\(");
+
 	// --- Rules ---
 
 	/**
@@ -286,59 +302,39 @@ public class ArchitectureGuardTest {
 	 *
 	 * <p>Scanned over the argument REGION of each construction rather than over the file, because a
 	 * file-wide search for the identifier is satisfied by the two resolutions alone and would say
-	 * nothing about whether any answer carries them. The regions span several lines each, which is
-	 * why this walks brackets rather than matching a line, and constructions are FOUND by a pattern
-	 * over the type name rather than by the literal {@code new ChartAnswer(} — see the comment at the
-	 * matcher, which records how the literal form was defeated. What it still cannot see is an answer
-	 * built somewhere other than this class, or one assembled through a factory; the count assertion
-	 * is what makes the first of those visible.
+	 * nothing about whether any answer carries them. The regions span several lines each, so it walks
+	 * brackets, and it does that through {@code SourceScan} — the shared reader whose source has its
+	 * comments and string literals BLANKED. Both of those matter and each was defeated in review: a
+	 * literal {@code new ChartAnswer(} needle misses the legal
+	 * {@code new ChartSearchService.ChartAnswer(}, and a walk over RAW text counts an unbalanced
+	 * bracket inside a comment and then swallows every real construction after it, taking this count
+	 * from 3 to 1 — which the failure message would then report as an added or removed answer. What it
+	 * still cannot see is an answer built somewhere other than this class, or one assembled through a
+	 * factory. <b>The count assertion does not close the first of those</b> — an earlier draft here
+	 * said it did, and a review agent refuted it by adding a coverage-less answer to
+	 * {@code ChartSearchServiceRouter}, which left this green with the count still at three. It
+	 * catches a construction MOVED out of this class, not one ADDED beside it. Closing that means
+	 * scanning every source under {@code api/src/main} and {@code omod/src/main}, which is a change of
+	 * its own.
 	 */
 	@Test
 	public void everyAnswerTheInferenceServiceBuildsCarriesTheConditionRuleCoverage() throws IOException {
-		List<String> lines = getSourceCache().get("LlmInferenceService.java");
-		org.junit.jupiter.api.Assertions.assertNotNull(lines,
-				"precondition: LlmInferenceService.java was not found by the source scan, so this rule "
-						+ "would pass vacuously");
-		String source = String.join("\n", lines);
+		org.openmrs.module.chartsearchai.reference.SourceScan scan =
+				new org.openmrs.module.chartsearchai.reference.SourceScan(
+						"src/main/java/org/openmrs/module/chartsearchai/api/impl/LlmInferenceService.java");
+		List<Integer> constructions = scan.matches(CHART_ANSWER_CONSTRUCTION);
 		List<String> silent = new ArrayList<>();
-		int constructions = 0;
-		// The TYPE NAME, not the literal `new ChartAnswer(`: ChartAnswer is a nested type, so
-		// `new ChartSearchService.ChartAnswer(...)` is legal Java naming the same constructor and
-		// needs no import change. A review agent defeated the literal form of this guard exactly
-		// that way — a fourth answer taking the 10-arg constructor, carrying no coverage, and the
-		// whole api suite green — so the pattern allows an optional qualifier and any whitespace.
-		java.util.regex.Matcher call =
-				java.util.regex.Pattern.compile("new\\s+(?:[\\w.]+\\.)?ChartAnswer\\s*\\(").matcher(source);
-		int searchFrom = 0;
-		while (call.find(searchFrom)) {
-			int from = call.start();
-			int open = source.indexOf('(', call.end() - 1);
-			int depth = 0;
-			int i = open;
-			for (; i < source.length(); i++) {
-				char c = source.charAt(i);
-				if (c == '(') {
-					depth++;
-				} else if (c == ')') {
-					depth--;
-					if (depth == 0) {
-						break;
-					}
-				}
-			}
-			String arguments = source.substring(open, Math.min(i + 1, source.length()));
-			constructions++;
+		for (int at : constructions) {
+			String arguments = scan.textOf(scan.argumentsAt(at));
 			if (!arguments.contains("conditionRuleCoverage")) {
-				silent.add("construction #" + constructions + " at offset " + from + ": "
-						+ arguments.replace("\n", " "));
+				silent.add(scan.statementAt(at) + " …" + arguments.replaceAll("\\s+", " "));
 			}
-			searchFrom = Math.min(i + 1, source.length());
 		}
-		org.junit.jupiter.api.Assertions.assertEquals(3, constructions,
+		org.junit.jupiter.api.Assertions.assertEquals(3, constructions.size(),
 				"precondition: this rule scans every ChartAnswer construction in LlmInferenceService, "
 						+ "and a changed number means one was added or removed — which is exactly when "
 						+ "the assertion below matters, so read it rather than adjusting this figure "
-						+ "without looking. Found " + constructions + ".");
+						+ "without looking. Found " + constructions.size() + ".");
 		org.junit.jupiter.api.Assertions.assertTrue(silent.isEmpty(),
 				"every answer this service builds must carry the condition-rule coverage (issue #378); "
 						+ "one that does not states null on a key the README documents as always "

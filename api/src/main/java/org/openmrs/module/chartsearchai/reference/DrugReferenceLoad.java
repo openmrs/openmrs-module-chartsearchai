@@ -192,7 +192,8 @@ public final class DrugReferenceLoad {
 		 * <p><b>This is the one arm counted by field presence</b>, and the asymmetry is deliberate. Every
 		 * other arm asks a predicate because a field can be populated with something no configuration
 		 * can act on — a band with no ceiling, a code too short to reduce, a rule typed neither
-		 * {@code allergy} nor {@code condition}, or one typed {@code condition} with no matchable token. An interaction row has no such shape: the only thing
+		 * {@code allergy} nor {@code condition}, or one typed {@code condition} with no matchable
+		 * token. An interaction row has no such shape: the only thing
 		 * that can keep one from being raised is {@code DrugSafetyValidator.clearsSeverityFloor} against
 		 * {@code chartsearchai.drugSafety.minInteractionSeverity}, and every severity the rank
 		 * recognises — {@code unknown} included, at the floor's own lowest rank — clears SOME legitimate

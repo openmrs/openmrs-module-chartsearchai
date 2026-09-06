@@ -41,7 +41,7 @@ import org.openmrs.module.chartsearchai.ModuleSourceRoot;
  * asserts the file exists and is not truncated for the same reason: a guard that reads nothing
  * satisfies every "is not called here" assertion by containing nothing.
  */
-final class SourceScan {
+public final class SourceScan {
 
 	private final String relativePath;
 
@@ -49,7 +49,7 @@ final class SourceScan {
 
 	/** @param relativePath the file under {@code api/}, e.g.
 	 *                     {@code src/main/java/.../DrugSafetyValidator.java} */
-	SourceScan(String relativePath) throws IOException {
+	public SourceScan(String relativePath) throws IOException {
 		this.relativePath = relativePath;
 		Path file = ModuleSourceRoot.apiRoot().resolve(relativePath);
 		assertTrue(Files.exists(file), "no " + relativePath + " under " + ModuleSourceRoot.apiRoot()
@@ -117,7 +117,7 @@ final class SourceScan {
 	}
 
 	/** @return every match of {@code pattern}. */
-	List<Integer> matches(Pattern pattern) {
+	public List<Integer> matches(Pattern pattern) {
 		List<Integer> found = new ArrayList<Integer>();
 		Matcher matcher = pattern.matcher(source);
 		while (matcher.find()) {
@@ -127,7 +127,7 @@ final class SourceScan {
 	}
 
 	/** @return the trimmed line {@code at} sits on. */
-	String statementAt(int at) {
+	public String statementAt(int at) {
 		int from = source.lastIndexOf('\n', at) + 1;
 		int to = source.indexOf('\n', at);
 		return source.substring(from, to < 0 ? source.length() : to).trim();
@@ -201,8 +201,45 @@ final class SourceScan {
 		return new String(text);
 	}
 
-	/** A brace-delimited span of the source. */
-	static final class Region {
+	/**
+	 * The PARENTHESISED argument list of the call whose name starts at {@code at} — the balanced span
+	 * from its opening bracket to the matching close, so a caller can ask what a call was HANDED
+	 * rather than what its line happens to contain.
+	 *
+	 * <p>Added at the fourth guard to need a source walk, beside {@link #body(String)}, which does the
+	 * same for braces. It reads this scan's BLANKED source, which is the whole reason it belongs here
+	 * rather than inline in a test: a walk over raw text counts an unbalanced bracket inside a comment
+	 * and then swallows every real call after it — measured on
+	 * {@code ArchitectureGuardTest.everyAnswerTheInferenceServiceBuildsCarriesTheConditionRuleCoverage},
+	 * where one added comment naming the constructor it forbids took its count from 3 to 1.
+	 *
+	 * @param at an offset at or before the call's opening bracket, as {@link #matches} returns
+	 */
+	public Region argumentsAt(int at) {
+		int open = source.indexOf('(', at);
+		assertTrue(open >= 0, "no argument list after offset " + at + " in " + relativePath);
+		int depth = 0;
+		for (int i = open; i < source.length(); i++) {
+			char c = source.charAt(i);
+			if (c == '(') {
+				depth++;
+			} else if (c == ')') {
+				depth--;
+				if (depth == 0) {
+					return new Region(open, i + 1);
+				}
+			}
+		}
+		throw new AssertionError("unbalanced argument list from offset " + open + " in " + relativePath);
+	}
+
+	/** @return the source between {@code region}'s bounds, comments and string literals blanked. */
+	public String textOf(Region region) {
+		return source.substring(region.start(), region.end());
+	}
+
+	/** A brace- or bracket-delimited span of the source. */
+	public static final class Region {
 
 		private final int start;
 
@@ -213,11 +250,11 @@ final class SourceScan {
 			this.end = end;
 		}
 
-		int start() {
+		public int start() {
 			return start;
 		}
 
-		int end() {
+		public int end() {
 			return end;
 		}
 

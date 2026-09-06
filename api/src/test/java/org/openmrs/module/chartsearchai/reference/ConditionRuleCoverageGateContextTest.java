@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
@@ -60,9 +61,19 @@ public class ConditionRuleCoverageGateContextTest extends BaseModuleContextSensi
 		set(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS, "false");
 		set(ChartSearchAiConstants.GP_DRUG_SAFETY_VALIDATE_ANSWERS, "false");
 
-		DrugSafetyValidator validator = DrugReferenceTestSupport.validator(new DrugReferenceService());
+		// ONE service, and the premise asserted off THAT one: `dataset` is a per-instance field, so a
+		// second service parses the file again and the premise would be about a different load than
+		// the verdict. DrugReferenceTestSupport's own javadoc warns against that shape.
+		DrugReferenceService service = new DrugReferenceService();
+		DrugSafetyValidator validator = DrugReferenceTestSupport.validator(service);
 
-		assertTrue(new DrugReferenceService().getLoadStatus().isLoaded(),
+		assertFalse(DrugSafetyValidator.reportsContraindications(),
+				"the OTHER premise, and the one that makes this case discriminating: the two toggles "
+						+ "above really did take effect, so the rejected gate would be CLOSED here. "
+						+ "Without this the case could go vacuous — still green, and no longer "
+						+ "separating the two designs — if those global properties stopped reaching "
+						+ "reportsContraindications()");
+		assertTrue(service.getLoadStatus().isLoaded(),
 				"the premise: a dataset really did load, so the verdict below is a reading of one "
 						+ "rather than of an empty cache — which is what makes this arrangement, and not "
 						+ "the stock install, separate the two designs at all");
@@ -74,16 +85,27 @@ public class ConditionRuleCoverageGateContextTest extends BaseModuleContextSensi
 	}
 
 	/**
-	 * And the shipped default still answers {@code UNLOADED}, which is what the false argument
-	 * claimed a gate would take away. Kept beside the case above so the pair reads as the
-	 * measurement: the gate changes the line above and nothing here.
+	 * The second separating arrangement, and the one the class javadoc names: the arms off AND the
+	 * feature off. A gated accessor states {@code null} here; this one still says nobody looked.
+	 *
+	 * <p><b>It sets the toggles rather than leaving them at their defaults, and that is the whole
+	 * difference between a guard and a restatement.</b> With them unset the gate is OPEN, so the case
+	 * would assert a value identical under both designs — which is what an earlier version of this
+	 * method did, while its javadoc claimed it was the half the gate leaves untouched. A review agent
+	 * found that, and also that
+	 * {@code LlmInferenceServiceConditionRuleCoverageContextTest.search_statesThatNobodyLookedWhereTheFeatureIsOff}
+	 * already carries the stock install more strongly, off the answer rather than off the accessor.
 	 */
 	@Test
-	public void theStockInstallStillStatesThatNobodyLooked() {
+	public void nobodyLookedIsStatedEvenWithTheArmsOffAsWell() {
 		set(ChartSearchAiConstants.GP_DRUG_REFERENCE_ENABLED, "false");
+		set(ChartSearchAiConstants.GP_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS, "false");
+		set(ChartSearchAiConstants.GP_DRUG_SAFETY_VALIDATE_ANSWERS, "false");
 
 		DrugSafetyValidator validator = DrugReferenceTestSupport.validator(new DrugReferenceService());
 
+		assertFalse(DrugSafetyValidator.reportsContraindications(),
+				"the premise: the arms really are off, so the rejected gate would be closed here too");
 		assertEquals(DrugReferenceLoad.Coverage.UNLOADED, validator.conditionRuleCoverage(),
 				"nothing was read, so nothing is known — and reading this must not be what triggers a "
 						+ "load on an install that does not use the feature");

@@ -249,10 +249,21 @@ public class ChartSearchAiInteractionPairExtentTest {
 				"the safetyWarnings key must be written in exactly one place, beside the statement of "
 						+ "how bounded those chips are (issue #336). Found " + keys + " writes of it.");
 		int calls = ChartSearchAiStreamingTest.occurrences(source, "serializeSafetyWarnings(");
-		assertEquals(2, calls,
-				"serializeSafetyWarnings must be named exactly twice — its own declaration and the one "
-						+ "call inside putSafetyChips. A third naming is an emission site building the "
-						+ "chip array for itself. Found " + calls + ".");
+		assertEquals(3, calls,
+				"serializeSafetyWarnings must be named exactly three times — its own declaration, the "
+						+ "call inside putSafetyChips, and the one inside chartAlerts. A fourth naming "
+						+ "is an emission site building the chip array for itself. Found " + calls + ".");
+		// The third naming, pinned to the body it belongs in rather than left to the count. Issue #280
+		// added a consumer that is NOT an answer emission site — the standing chart-alert surface,
+		// which raises no interaction chip and so has no extent to state — and a bare 3 would license
+		// any third caller, including an answer site that had dropped the statement. Scoped for the
+		// same reason the putSafetyChips assertion below is: measured on this very guard, a file-wide
+		// read let a chips-writer/extent-writer split pass green.
+		assertTrue(bodyOf(source, "public ResponseEntity<Object> chartAlerts(")
+				.contains("serializeSafetyWarnings("),
+				"the third naming must be the standing chart-alert surface's own; a third caller "
+						+ "elsewhere is an answer payload building the chip array without the statement "
+						+ "of how bounded those chips are (issue #336).");
 		// Scoped to putSafetyChips's OWN BODY, not to the file: asked of the whole source, both
 		// literals keep matching once they live in two different methods, so splitting the helper into
 		// a chips-writer and an extent-writer passed the guard whose message forbids exactly that

@@ -49,8 +49,10 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * <p><b>What this deliberately gives up</b>, recorded so it is not rediscovered as a bug: a
  * prescribing error nobody ever asks a drug-shaped question about is no longer announced. That is
  * not a safety net this module can honestly carry — it has no subscription, no acknowledgement and
- * no delivery path that opens unprompted — and the finding belongs on a surface that has them
- * (order entry, a chart banner, CDS hooks). See the rewritten case in
+ * no delivery path that opens unprompted — and since issue #280 the finding is served by a surface
+ * that does not need them, {@code GET /chartsearchai/chartalerts}, which a client ASKS for rather
+ * than one that opens on its own ({@link StandingChartAlertsTest}). Acknowledgement state is still
+ * elsewhere (order entry, a chart banner, CDS hooks). See the rewritten case in
  * {@link ActiveOrderContraindicationTest}, which is where this reverses a documented decision.
  *
  * <p>Every case drives the real {@code DrugSafetyValidator.validate} with real querystore-shaped chart

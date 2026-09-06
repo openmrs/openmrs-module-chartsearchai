@@ -54,6 +54,7 @@ import org.openmrs.module.chartsearchai.api.impl.WarmupExecutor;
 import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceLoad;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceService;
+import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.PairChipExtent;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.webservices.rest.web.RestConstants;
@@ -163,6 +164,10 @@ public class ChartSearchAiRestController {
 	@Autowired
 	@Qualifier("chartSearchAi.drugReferenceService")
 	private DrugReferenceService drugReferenceService;
+
+	@Autowired
+	@Qualifier("chartSearchAi.drugSafetyValidator")
+	private DrugSafetyValidator drugSafetyValidator;
 
 	@RequestMapping(value = "/search", method = RequestMethod.POST)
 	@ResponseBody
@@ -370,6 +375,64 @@ public class ChartSearchAiRestController {
 		// APPENDED after the entry load's own keys, never inserted among them: the endpoint's field list
 		// is asserted as an ORDERED list, and appending is what keeps that assertion order-sensitive.
 		body.put("crossReactivity", drugReferenceService.getCrossReactivityLoadStatus().toMap());
+		return new ResponseEntity<Object>(body, HttpStatus.OK);
+	}
+
+	/**
+	 * This patient's STANDING chart findings: every active order her own allergy and condition records
+	 * contraindicate, outside the answer thread (issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/280">#280</a>).
+	 *
+	 * <p><b>Why it is an endpoint of its own and not a key on {@code /search}.</b>
+	 * {@code DrugSafetyValidator}'s active-order contraindication arm once ran on every question, and
+	 * put the identical chips on every answer — measured live on the 3.7.1 standalone, four questions
+	 * about allergies, interactions, cancer and a date of birth returned the same two byte for byte,
+	 * which is the shape that trains a clinician to stop reading the box. That arm is now bounded to
+	 * what the response is about, and what the bound gives up is announcing a prescribing error nobody
+	 * asks a drug-shaped question about. This is the surface it was given up TO: the finding is
+	 * available to a client that did not run a search, and nothing rides an unrelated answer.
+	 *
+	 * <p>Gated on the same clinical privilege as {@code /search} and resolved through the same
+	 * {@link #resolvePatient}, so the per-patient access check is the one the answer path uses. It is
+	 * NOT rate-limited: the limiter counts this user's audit rows, and a deterministic read that runs
+	 * no model and writes no row can neither be counted by it nor pay for the LLM capacity it
+	 * protects. No audit row for the same reason — the row is question-shaped, and there is no
+	 * question here.
+	 *
+	 * <p><b>{@code screened} is not decoration.</b> An empty {@code alerts} array otherwise carries
+	 * two unrelated meanings — this chart holds no such finding, and nobody looked — which is the
+	 * distinction issue #378 drew for the condition-rule arm and issue #336 for the interaction
+	 * extent. It is read ONCE, here, and decides both keys, so the two cannot describe different
+	 * states of the toggles. What it does NOT answer is whether the loaded dataset can supply a rule
+	 * at all: that is {@code GET /chartsearchai/drugreferencestatus}, whose
+	 * {@code arms.conditionRules.coverage} tells a screen that had no condition rule to ask from one
+	 * that asked and found nothing — and which is deliberately not gated on the drug-safety toggles,
+	 * so it answers even where {@code screened} is false.
+	 *
+	 * <p>The chips are the {@code /search} chips, through the one serializer, so a finding cannot be
+	 * shaped two ways on two surfaces. They carry no {@code interactionPairs} statement because this
+	 * pass raises no interaction chip to bound: it has no question, and the screening arm is gated on
+	 * one asking to be screened (issue #113).
+	 */
+	@RequestMapping(value = "/chartalerts", method = RequestMethod.GET)
+	@ResponseBody
+	public ResponseEntity<Object> chartAlerts(@RequestParam(value = "patient", required = false) String patientUuid) {
+		Context.requirePrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
+
+		PatientResolution resolved = resolvePatient(patientUuid);
+		if (resolved.hasError()) {
+			return new ResponseEntity<Object>(
+					errorResponse(resolved.errorMessage), resolved.errorStatus);
+		}
+
+		boolean screened = drugSafetyValidator.reportsStandingChartAlerts();
+		List<SafetyWarning> alerts = screened
+				? drugSafetyValidator.standingChartAlerts(resolved.patient)
+				: Collections.<SafetyWarning> emptyList();
+
+		Map<String, Object> body = new LinkedHashMap<String, Object>();
+		body.put("screened", screened);
+		body.put("alerts", serializeSafetyWarnings(alerts));
 		return new ResponseEntity<Object>(body, HttpStatus.OK);
 	}
 
@@ -773,6 +836,10 @@ public class ChartSearchAiRestController {
 	/** Test seam: production wires {@link DrugReferenceService} via {@code Autowired}. */
 	void setDrugReferenceService(DrugReferenceService drugReferenceService) {
 		this.drugReferenceService = drugReferenceService;
+	}
+
+	void setDrugSafetyValidator(DrugSafetyValidator drugSafetyValidator) {
+		this.drugSafetyValidator = drugSafetyValidator;
 	}
 
 	@RequestMapping(value = "/auditlog", method = RequestMethod.GET)

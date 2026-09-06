@@ -214,8 +214,11 @@ public class ActiveOrderContraindicationTest {
 		// that still fires (see aPrescribedDrugTheAnswerOnlyEchoesIsStillCheckedAgainstTheAllergyList
 		// above, unchanged). What is withdrawn is the claim on responses about something else. The
 		// replacement rule and everything it deliberately gives up live in
-		// SubjectMatterScopedContraindicationTest; the standing-alert case belongs on a surface with
-		// acknowledgement (order entry, a chart banner, CDS hooks), not on every answer.
+		// SubjectMatterScopedContraindicationTest; the standing-alert case has a surface of its own
+		// since issue #280, GET /chartsearchai/chartalerts, which a client asks for — see
+		// StandingChartAlertsTest, whose first case is this same arrangement answered there. What that
+		// surface still does not carry is acknowledgement state; that stays order entry's or a chart
+		// banner's.
 		//
 		// This question and this chart are the shape that reversal is about: a blood-pressure answer
 		// citing the obs record, with the ibuprofen order sitting uncited in the same chart.

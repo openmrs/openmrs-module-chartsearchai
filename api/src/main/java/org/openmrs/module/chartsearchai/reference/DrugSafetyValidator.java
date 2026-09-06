@@ -290,6 +290,93 @@ public class DrugSafetyValidator {
 	}
 
 	/**
+	 * The patient's STANDING chart findings: every active order her own allergy and condition records
+	 * contraindicate, asked of the chart rather than of a response (issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/280">#280</a>). This is
+	 * the entry point {@code GET /chartsearchai/chartalerts} serves and the ONLY caller that may ask
+	 * for an unbounded pass; see {@link SubjectMatterScope#UNBOUNDED}.
+	 *
+	 * <p><b>Why it exists.</b> {@link SubjectMatter} bounds the active-order contraindication arm to
+	 * what a response is about, because an unconditional finding on every answer is an alert with none
+	 * of an alerting system's machinery. What that gives up is announcing a prescribing error nobody
+	 * asks a drug-shaped question about, and this is the surface it was given up TO: a client asks for
+	 * it, so nothing rides an unrelated answer, and the finding is available to a clinician who never
+	 * ran a search.
+	 *
+	 * <p><b>Contraindications only, and not by a filter.</b> Nothing here selects a type. Every other
+	 * arm is silent on a pass with no question and no answer by its own anchor:
+	 * {@code DrugReferenceService.findByQuery} answers an empty list for a null question, so the
+	 * drug-in-play, interaction and dose arms never enter their loop over the in-play set;
+	 * {@link #addQuestionPairInteractions} requires two question drugs; and the screening arm requires
+	 * {@code QueryScopeRouter.isInteractionScreening} of a null question. That composite is pinned by
+	 * {@code StandingChartAlertsTest.theStandingSurfaceReportsNoInteractionsEvenBetweenInteractingActiveOrders},
+	 * which measures it over a chart whose orders the data relates many ways — not by this paragraph.
+	 *
+	 * <p>Gated exactly as {@link #validate(String, String, Patient, List, PairChipExtent.Sink)} is, and
+	 * the two must stay one gate:
+	 * {@code StandingChartAlertsTest.theGateOnTheStandingSurfaceIsTheOneTheAnswerSurfaceReads} reads
+	 * the other method's own body rather than a literal, so a change to the answer surface's gate that
+	 * leaves this one behind reddens. Fails safe to no alerts for the reason {@code validate} does.
+	 *
+	 * @return the standing findings, newest arm order preserved; empty when the feature is off, when
+	 *         the chart records nothing an order could be contraindicated by, or when the pass
+	 *         degraded — <b>so an empty list is not a certificate that this chart holds no such
+	 *         finding.</b> {@link #reportsStandingChartAlerts()} is what tells a caller whether the
+	 *         screen ran at all, and the {@code chartalerts} response publishes it beside the list for
+	 *         exactly that reason.
+	 */
+	public List<SafetyWarning> standingChartAlerts(Patient patient) {
+		try {
+			if (!ChartSearchAiUtils.isDrugReferenceEnabled()
+					|| !ChartSearchAiUtils.getBooleanGlobalProperty(
+							ChartSearchAiConstants.GP_DRUG_SAFETY_VALIDATE_ANSWERS,
+							ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_VALIDATE_ANSWERS)) {
+				return new ArrayList<SafetyWarning>();
+			}
+			return standingChartAlerts(PatientClinicalContextBuilder.build(patient));
+		}
+		catch (RuntimeException e) {
+			log.warn("Standing chart alerts failed; returning none — the surface degrades to silence "
+					+ "rather than to an error", e);
+			return new ArrayList<SafetyWarning>();
+		}
+	}
+
+	/**
+	 * The seam beneath {@link #standingChartAlerts(Patient)}, where {@code validate}'s own
+	 * package-private seam sits and for the same reason: a caller holding a built context, and every
+	 * contextless test in this package.
+	 *
+	 * <p>It is BELOW the two global properties the public entry reads, so a case entering here cannot
+	 * see them — which is what
+	 * {@code StandingChartAlertsTest.theGateOnTheStandingSurfaceIsTheOneTheAnswerSurfaceReads} exists
+	 * to cover. {@code chartsearchai.drugSafety.warnOnContraindications} IS reachable from here, being
+	 * read inside {@code validate} where both surfaces share it
+	 * ({@code StandingChartAlertsToggleContextTest}).
+	 */
+	List<SafetyWarning> standingChartAlerts(PatientClinicalContext context) {
+		return validate(null, null, context, null, null, null, SubjectMatterScope.UNBOUNDED);
+	}
+
+	/**
+	 * @return whether this install's standing chart-alert screen runs at all — the master
+	 *         drug-reference switch AND {@link #reportsContraindications()}, which is the module's own
+	 *         composed answer to "may this module report a contraindication" and is therefore not
+	 *         re-spelled here.
+	 *
+	 *         <p><b>It is published</b>, as the {@code chartalerts} response's {@code screened} key,
+	 *         because an empty {@code alerts} array otherwise carries two unrelated meanings: this
+	 *         chart holds no such finding, and nobody looked. That distinction is the one issue #378
+	 *         drew for the condition-rule arm and issue #336 for the interaction extent; a new
+	 *         clinical surface must not ship without it. It answers only whether the SCREEN runs — not
+	 *         whether the loaded dataset can supply a rule, which is
+	 *         {@code GET /chartsearchai/drugreferencestatus}, and not whether any order was resolvable.
+	 */
+	public boolean reportsStandingChartAlerts() {
+		return ChartSearchAiUtils.isDrugReferenceEnabled() && reportsContraindications();
+	}
+
+	/**
 	 * Answer-only overload retained for callers/tests with no question in hand; equivalent to
 	 * passing a {@code null} question (no question-driven coverage).
 	 */
@@ -344,10 +431,48 @@ public class DrugSafetyValidator {
 	}
 
 	/**
+	 * What a pass is FOR, and the only thing that differs between annotating a response and stating a
+	 * patient's standing chart findings (issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/280">#280</a>).
+	 *
+	 * <p>A parameter rather than a field, for issue #172's reason: this bean is a Spring singleton, so
+	 * a field would be one slot shared by every concurrent request — and this one decides whether a
+	 * clinical finding is withheld, which is the sharpest form of that hazard in this class.
+	 */
+	enum SubjectMatterScope {
+
+		/** Every caller but one. The arm is bounded by what the response is about, which is the whole
+		 *  of {@link SubjectMatter}: a chip is raised where either side of it — the drug or the
+		 *  recorded finding — is named by the question, the answer or a cited record. */
+		OF_THE_RESPONSE,
+
+		/** {@link #standingChartAlerts(PatientClinicalContext)} and nothing else. There is no response
+		 *  to be about, so the gate has no referent and every finding the chart supports is stated.
+		 *  <b>Do not reach for this from a pass that produces an ANSWER</b> — that is issue #143's
+		 *  over-reach, measured live on the 3.7.1 standalone as four unrelated questions returning the
+		 *  same two chips byte for byte, and the reason the bound exists at all. */
+		UNBOUNDED
+	}
+
+	/**
+	 * Six-argument seam for every caller that annotates a RESPONSE, which is all of them but
+	 * {@link #standingChartAlerts(PatientClinicalContext)} — it supplies
+	 * {@link SubjectMatterScope#OF_THE_RESPONSE} so that the scope is a default no existing path can
+	 * get wrong, rather than an argument every call site restates. See the widest arity below for
+	 * every parameter.
+	 */
+	List<SafetyWarning> validate(String answer, String question, PatientClinicalContext rawContext,
+			List<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries,
+			PairChipExtent.Sink pairExtentSink) {
+		return validate(answer, question, rawContext, mappings, resolvedOrderEntries, pairExtentSink,
+			SubjectMatterScope.OF_THE_RESPONSE);
+	}
+
+	/**
 	 * The widest arity, and the one that builds the pass's shared state — every other delegates to it.
 	 *
 	 * <p><b>Two structural guards delimit this body by a literal needle, and each spells ALL THREE
-	 * lines of this declaration.</b> No shorter prefix is spelled, and what each buys was measured rather than assumed. The first line alone matches THREE times — this declaration and the two arities above it that open identically — and a needle matching more than once is a hard failure in each guard's own unique-offset check ({@code SourceScan.uniqueOffset} for {@code CoMedicationResolutionPerPassTest}, and {@code ChipSubjectOneResolutionTest}'s own copy of it, which ADR Decision 54 records as deliberately not migrated). The two-line prefix is ALREADY unique, and by one character: the five-argument seam above wraps its parameters identically and ends that line with {@code )} where this one ends with a comma. So the third line is not what buys uniqueness — spelling it is what makes any re-wrap of this declaration re-target both needles loudly instead of leaving one silently landing on the seam. The tail alone names no METHOD, which is what the first line buys. Move this declaration and the needles
+	 * lines of this declaration.</b> No shorter prefix is spelled, and a needle matching more than once is a hard failure in each guard's own unique-offset check ({@code SourceScan.uniqueOffset} for {@code CoMedicationResolutionPerPassTest}, and {@code ChipSubjectOneResolutionTest}'s own copy of it, which ADR Decision 54 records as deliberately not migrated). The first line alone matches every arity above that opens identically, so it names the METHOD and cannot delimit it. <b>The THIRD line is what makes the needle unique, and only since issue #280</b> — before it, the two-line prefix already was, by the one character separating this line's comma from the five-argument seam's {@code )}, and spelling the third line bought loudness alone. The delegate this issue added below wraps its first two lines exactly as this one does, so a needle stopping at line two would now match twice and hard-fail. What has not changed is the instruction: move this declaration and the needles
 	 * move with it — {@code ChipSubjectOneResolutionTest} and {@code CoMedicationResolutionPerPassTest},
 	 * which say so themselves.
 	 *
@@ -398,10 +523,16 @@ public class DrugSafetyValidator {
 	 *        one {@code resolvedOrderEntries} above gives. Issue #336: without it a capped list was
 	 *        indistinguishable from a complete one everywhere but the log. See
 	 *        {@link PairChipExtent} for what an absent statement does and does not mean.
+	 *
+	 * @param scope what this pass is FOR — see {@link SubjectMatterScope}. Every caller but
+	 *        {@link #standingChartAlerts(PatientClinicalContext)} reaches this through the
+	 *        six-argument delegate above, which supplies
+	 *        {@link SubjectMatterScope#OF_THE_RESPONSE}, so no existing path can reach the unbounded
+	 *        gate by omission and a new one has to name it.
 	 */
 	List<SafetyWarning> validate(String answer, String question, PatientClinicalContext rawContext,
 			List<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries,
-			PairChipExtent.Sink pairExtentSink) {
+			PairChipExtent.Sink pairExtentSink, SubjectMatterScope scope) {
 		List<SafetyWarning> warnings = new ArrayList<SafetyWarning>();
 		// The patient's active orders resolved to their reference entries — at most ONE dataset sweep
 		// per validate, and none at all where the caller has already made it (issue #255) — feeding
@@ -689,7 +820,7 @@ public class DrugSafetyValidator {
 				attribution = attributionTexts(answer, mappings);
 			}
 			addActiveOrderContraindications(contraindications, inPlay, context, orderEntries,
-					recordedAllergens, new SubjectMatter(question, answer, attribution.cited),
+					recordedAllergens, SubjectMatter.of(scope, question, answer, attribution.cited),
 					allergicSubstanceSupplier);
 		}
 		// LAST, so the patient's own findings lead: a chip about their allergy or their active order
@@ -1333,9 +1464,11 @@ public class DrugSafetyValidator {
 	 * cancer and a date of birth — returned the same two contraindication chips byte for byte. The
 	 * finding is the INVARIANCE, not that all four were off-topic: two of them were squarely about
 	 * drugs. The chips simply did not depend on what was asked, which is how a reader learns to skip
-	 * the box. The finding it was carrying is real and belongs on a surface
-	 * with subscription and acknowledgement (order entry, a chart banner, CDS hooks), not on every
-	 * answer this module happens to produce.
+	 * the box. The finding it was carrying is real, and since issue #280 it has a surface of its own:
+	 * {@link #standingChartAlerts(Patient)}, which a client ASKS for. So this reasoning is unchanged
+	 * — nothing here opens unprompted, and no answer carries a finding with no claim on it — and what
+	 * that surface still does not carry is subscription or acknowledgement STATE, which stays order
+	 * entry's, a chart banner's or a CDS hook's.
 	 *
 	 * <p><b>Both sides count, and that is the point.</b> A contraindication relates a DRUG to a
 	 * recorded FINDING, and either can be what was asked about. Scoped to the drug alone it would lose
@@ -1371,7 +1504,32 @@ public class DrugSafetyValidator {
 
 		private final boolean coversRecordedConditions;
 
-		private SubjectMatter(String question, String answer, List<String> citedTextsLower) {
+		/**
+		 * True where this pass is not about a RESPONSE at all, so every predicate below holds
+		 * unconditionally — {@link SubjectMatterScope#UNBOUNDED}, which
+		 * {@link #standingChartAlerts(PatientClinicalContext)} alone asks for.
+		 *
+		 * <p>All three predicates short-circuit on it, though only {@link #names(DrugReference)} is
+		 * reachable that way: it holds for every order entry, so
+		 * {@link #addActiveOrderContraindications} takes its first branch and the other two are never
+		 * asked. They short-circuit anyway so that this class states ONE rule about an unbounded pass
+		 * rather than a rule plus an argument about which of its methods a caller happens to reach —
+		 * an argument a later change to that arm's branching would silently invalidate.
+		 */
+		private final boolean unbounded;
+
+		/**
+		 * @return the gate this pass is bounded by. The factory rather than the constructor, so a call
+		 *         site cannot reach the unbounded form without naming the scope it was handed.
+		 */
+		private static SubjectMatter of(SubjectMatterScope scope, String question, String answer,
+				List<String> citedTextsLower) {
+			return new SubjectMatter(scope == SubjectMatterScope.UNBOUNDED, question, answer,
+				citedTextsLower);
+		}
+
+		private SubjectMatter(boolean unbounded, String question, String answer,
+				List<String> citedTextsLower) {
 			List<String> collected = new ArrayList<String>();
 			if (question != null && !question.trim().isEmpty()) {
 				collected.add(question.toLowerCase(Locale.ROOT));
@@ -1381,6 +1539,7 @@ public class DrugSafetyValidator {
 			}
 			collected.addAll(citedTextsLower);
 			this.texts = collected;
+			this.unbounded = unbounded;
 			this.coversActiveOrders = QueryScopeRouter.asksAboutMedications(question);
 			this.coversRecordedAllergies = QueryScopeRouter.asksAboutAllergies(question);
 			this.coversRecordedConditions = QueryScopeRouter.asksAboutConditions(question);
@@ -1388,7 +1547,7 @@ public class DrugSafetyValidator {
 
 		/** Whether an active order is what this response is about. */
 		private boolean names(DrugReference ref) {
-			return coversActiveOrders || namesAnyOf(texts, ref);
+			return unbounded || coversActiveOrders || namesAnyOf(texts, ref);
 		}
 
 		/**
@@ -1405,6 +1564,9 @@ public class DrugSafetyValidator {
 		 * applying to them.
 		 */
 		private boolean names(DrugReference.Contraindication c) {
+			if (unbounded) {
+				return true;
+			}
 			if (coversRecordedAllergies && isAllergyRule(c)) {
 				return true;
 			}
@@ -1416,7 +1578,7 @@ public class DrugSafetyValidator {
 
 		/** Whether a recorded allergen — the entries one charted allergy resolved to — is subject matter. */
 		private boolean namesRecordedAllergen(List<DrugReference> allergen) {
-			if (coversRecordedAllergies) {
+			if (unbounded || coversRecordedAllergies) {
 				return true;
 			}
 			for (DrugReference entry : allergen) {
@@ -7695,7 +7857,10 @@ public class DrugSafetyValidator {
 	 * or the recorded finding, is part of what the response is about. That is deliberately NOT a gate
 	 * on the question's wording, which is the thing this defect taught: a question naming a drug
 	 * carries no medication cue word at all, and the answer and the cited records count as much as the
-	 * question. What bounds the arm besides is the chart: it can only fire where an allergy or
+	 * question. What it gives up has a surface of its own since issue #280 —
+	 * {@link #standingChartAlerts(Patient)}, the one caller that asks for
+	 * {@link SubjectMatterScope#UNBOUNDED} — and that is not a reason to relax the bound here, since a
+	 * client asks for that one. What bounds the arm besides is the chart: it can only fire where an allergy or
 	 * condition record and an active order point at the same drug, and the two arms it delegates to
 	 * bound it further — one chip per
 	 * (substance, allergen's substance) and one per (substance, matching curated rule), those two being

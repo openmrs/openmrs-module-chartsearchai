@@ -2521,6 +2521,59 @@ public class DrugSafetyValidator {
 	}
 
 	/**
+	 * @return what the loaded dataset publishes for the hand-authored CONDITION-rule arm of the
+	 *         contraindication screen — the statement {@code ChartAnswer.getConditionRuleCoverage()}
+	 *         carries and the {@code conditionRuleCoverage} key publishes (issue
+	 *         <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/378">#378</a>).
+	 *         The ONE entry point for that question; never re-derive it at a consumer, and never read
+	 *         the global properties to infer it — the load is lazy, so a check made just after a
+	 *         global-property flip reads the PREVIOUS source (issues #149/#154), which is why
+	 *         {@link DrugReferenceService#getLoadStatus()} exists and is what this asks.
+	 *
+	 *         <p><b>Three values, and no gate on the drugSafety toggles.</b> The verdict is a property
+	 *         of the loaded DATASET, and it is knowable whether or not a screen ran — unlike
+	 *         {@code PairChipExtent}, which is a per-response MEASUREMENT and states nothing where its
+	 *         arm did not run. Gating this on {@link #reportsContraindications()} was tried and
+	 *         rejected while #378 was being planned, for the reason the issue itself gives: it would
+	 *         put {@code null} where the feature is off, making {@link DrugReferenceLoad.Coverage#UNLOADED}
+	 *         unreachable on this surface — and "we looked and there is none" against "nobody looked"
+	 *         is the distinction the issue asks for. With the feature off {@code getLoadStatus()}
+	 *         answers {@code notLoaded()} without loading anything, so reading this can never be what
+	 *         parses a file on an install that does not use the feature.
+	 *
+	 *         <p><b>It says the module had a rule to ask WITH, never that a condition was screened.</b>
+	 *         Three things it does not carry, each of which a client would be wrong to read into it:
+	 *         whether {@code drugSafety.validateAnswers} and {@code warnOnContraindications} are on;
+	 *         that a chart's conditions were READ, which
+	 *         {@link PatientClinicalContext#contraindicationRecordsRead()} answers and this does not;
+	 *         and encounter diagnoses, which {@code PatientClinicalContextBuilder} does not read at
+	 *         all, on any install. {@code README.md}'s client contract states all three, because a
+	 *         client is where they do damage.
+	 *
+	 *         <p>Null only from the fail-safe below, which is why it is here rather than left to
+	 *         propagate: unlike {@link #validate}, whose own catch keeps the answer path unbreakable,
+	 *         this is read from {@code LlmInferenceService}'s pre-model block, whose {@code finally}
+	 *         logs the timing line and rethrows. An enrichment must not be able to fail an answer that
+	 *         is otherwise fine. No memo, per issue #172's rule and because
+	 *         {@code CoMedicationResolutionPerPassTest} walks this bean's declared fields: the load
+	 *         status is already cached for the life of the service.
+	 */
+	public DrugReferenceLoad.Coverage conditionRuleCoverage() {
+		try {
+			if (drugReferenceService == null) {
+				return null;
+			}
+			return drugReferenceService.getLoadStatus()
+					.coverageOf(DrugReferenceLoad.Arm.CONDITION_RULES);
+		}
+		catch (RuntimeException e) {
+			log.warn("Could not read the drug-reference load status; the condition-rule coverage "
+					+ "statement is withheld rather than guessed", e);
+			return null;
+		}
+	}
+
+	/**
 	 * @return whether {@code c} is a rule this module can put to the patient's chart AT ALL — a
 	 *         recognised {@code type} carrying a token there is something to look for. Distinguishing
 	 *         that from "asked and the chart says no" is what a NEGATIVE claim needs and a chip does not:
@@ -2542,14 +2595,44 @@ public class DrugSafetyValidator {
 	 *
 	 *         <p>A THIRD consumer since issue #285: {@code DrugReferenceLoad}'s per-arm capability
 	 *         report asks it at LOAD time, to count the entries publishing a rule the module could
-	 *         actually put to a chart. That answer reaches {@code GET /chartsearchai/drugreferencestatus},
-	 *         so tightening this predicate moves an operator-facing wire value as well as the injected
-	 *         record's unrecorded half below — which is the one other call site in main; the chip arm
-	 *         consumes {@link #recordedContraindicationKind} rather than this predicate.
+	 *         actually put to a chart. That answer reaches {@code GET /chartsearchai/drugreferencestatus}
+	 *         and, since issue #378 and through {@link #evaluatesConditionAgainstTheChart}, the
+	 *         {@code conditionRuleCoverage} key on {@code /search} — so tightening this predicate moves
+	 *         two operator- and clinician-facing wire values as well as the injected record's
+	 *         unrecorded half below. The chip arm consumes {@link #recordedContraindicationKind}
+	 *         rather than this predicate. Find the callers rather than counting them here.
 	 */
 	static boolean evaluatesAgainstTheChart(DrugReference.Contraindication c) {
 		return (isAllergyRule(c) || isConditionRule(c))
 				&& PatientClinicalContext.matchableToken(c.getToken());
+	}
+
+	/**
+	 * @return whether {@code c} is a rule this module could put to the patient's recorded CONDITIONS
+	 *         — the condition RESTRICTION of {@link #evaluatesAgainstTheChart}, and asked at LOAD time
+	 *         by {@code DrugReferenceLoad.Arm.CONDITION_RULES} so that
+	 *         {@link #conditionRuleCoverage()} can state on {@code /search} whether this install's
+	 *         contraindication screen had anything to ask the condition list with (issue
+	 *         <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/378">#378</a>).
+	 *
+	 *         <p><b>It CALLS that predicate rather than re-expressing it</b>, which is the whole point
+	 *         of the shape: {@code evaluatesAgainstTheChart} is
+	 *         {@code (allergy || condition) && matchable}, so AND-ing {@link #isConditionRule} yields
+	 *         exactly {@code condition && matchable} — and a later change to what "the module could
+	 *         ask" means moves both together, by construction rather than by a maintainer noticing.
+	 *         A second spelling of the token rule here is the drift {@link #isAllergyRule}'s own
+	 *         javadoc records the cost of.
+	 *
+	 *         <p><b>Why the condition leg needs a report of its own.</b>
+	 *         {@code Arm.HAND_AUTHORED_RULES} admits an {@code allergy} rule too, so its
+	 *         {@code published} states nothing about conditions — an allergy-only dataset, an ordinary
+	 *         shape for a {@code chartsearchai.drugReference.dataFilePath} file, reads
+	 *         {@code published} there while a patient's conditions are still put to nothing. That is
+	 *         issue #378's own defect one install over, which is why this is a separate arm rather
+	 *         than a reading of that one.
+	 */
+	static boolean evaluatesConditionAgainstTheChart(DrugReference.Contraindication c) {
+		return isConditionRule(c) && evaluatesAgainstTheChart(c);
 	}
 
 	/**

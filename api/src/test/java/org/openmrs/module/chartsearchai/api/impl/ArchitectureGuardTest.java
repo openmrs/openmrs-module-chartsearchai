@@ -270,6 +270,69 @@ public class ArchitectureGuardTest {
 						+ "Found: " + ownDialect);
 	}
 
+	/**
+	 * Every answer {@code LlmInferenceService} constructs carries the condition-rule coverage (issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/378">#378</a>).
+	 *
+	 * <p><b>Structural because the behavioural cases cannot reach the site that matters most.</b>
+	 * That class builds three answers — the one {@code search} returns, the one
+	 * {@code searchStreaming} returns, and the UNGROUNDED one it hands its consumer before grounding,
+	 * which under {@code chartsearchai.grounding.async} is the event a user actually sees. A fourth
+	 * added later would take the shorter constructor and state {@code null} on a key documented as
+	 * always present, and the only thing that reddens is a case somebody remembered to write. This
+	 * reddens instead. It is the same argument {@code ChartSearchAiUnresolvedDrugClassTest} makes for
+	 * the emission surfaces one layer up, where the guard is a call count on
+	 * {@code putSafetyChips}.
+	 *
+	 * <p>Scanned over the argument REGION of each construction rather than over the file, because a
+	 * file-wide search for the identifier is satisfied by the two resolutions alone and would say
+	 * nothing about whether any answer carries them. The regions span several lines each, which is
+	 * why this walks brackets rather than matching a line.
+	 */
+	@Test
+	public void everyAnswerTheInferenceServiceBuildsCarriesTheConditionRuleCoverage() throws IOException {
+		List<String> lines = getSourceCache().get("LlmInferenceService.java");
+		org.junit.jupiter.api.Assertions.assertNotNull(lines,
+				"precondition: LlmInferenceService.java was not found by the source scan, so this rule "
+						+ "would pass vacuously");
+		String source = String.join("\n", lines);
+		List<String> silent = new ArrayList<>();
+		int constructions = 0;
+		int from = source.indexOf("new ChartAnswer(");
+		while (from >= 0) {
+			int open = source.indexOf('(', from);
+			int depth = 0;
+			int i = open;
+			for (; i < source.length(); i++) {
+				char c = source.charAt(i);
+				if (c == '(') {
+					depth++;
+				} else if (c == ')') {
+					depth--;
+					if (depth == 0) {
+						break;
+					}
+				}
+			}
+			String arguments = source.substring(open, Math.min(i + 1, source.length()));
+			constructions++;
+			if (!arguments.contains("conditionRuleCoverage")) {
+				silent.add("construction #" + constructions + ": " + arguments.replace("\n", " "));
+			}
+			from = source.indexOf("new ChartAnswer(", i);
+		}
+		org.junit.jupiter.api.Assertions.assertEquals(3, constructions,
+				"precondition: this rule scans every ChartAnswer construction in LlmInferenceService, "
+						+ "and a changed number means one was added or removed — which is exactly when "
+						+ "the assertion below matters, so read it rather than adjusting this figure "
+						+ "without looking. Found " + constructions + ".");
+		org.junit.jupiter.api.Assertions.assertTrue(silent.isEmpty(),
+				"every answer this service builds must carry the condition-rule coverage (issue #378); "
+						+ "one that does not states null on a key the README documents as always "
+						+ "present, and the ungrounded answer is the one a streaming user sees. "
+						+ "Found: " + silent);
+	}
+
 	// --- Infrastructure ---
 
 	/** Cache of file name → lines, populated once by {@link #loadAllSources}. */

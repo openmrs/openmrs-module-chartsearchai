@@ -201,6 +201,51 @@ public final class DrugReferenceLoad {
 			boolean publishedBy(DrugReference entry) {
 				return !entry.getInteractions().isEmpty();
 			}
+		},
+
+		/**
+		 * Hand-authored rules the module can put to the patient's recorded CONDITIONS — the condition
+		 * leg of {@link #HAND_AUTHORED_RULES}, and a strict subset of it, reported separately since
+		 * issue
+		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/378">#378</a>.
+		 *
+		 * <p><b>Why the union is not enough, which is the whole reason this constant exists.</b>
+		 * {@link #HAND_AUTHORED_RULES} admits a rule typed EITHER {@code allergy} or {@code condition}.
+		 * Its javadoc already warns that {@code absent} there does not mean contraindication checking
+		 * is dead; the converse is what #378 needs, and it fails in the other direction —
+		 * {@code published} there does not mean condition checking is alive. An allergy-only dataset
+		 * is an ordinary shape for a {@code chartsearchai.drugReference.dataFilePath} file, and on one
+		 * the union reads {@code published} while the patient's recorded conditions are put to nothing.
+		 * Publishing the union's verdict as a condition statement would therefore be #378's own defect,
+		 * one install over. The two arms disagree on the module's OWN curated seed, which is a
+		 * measurement rather than a hypothetical: read
+		 * {@code DrugReferenceLoadContextTest.aDatasetThatServesItsArmsSaysSoInTheSerializedStatus},
+		 * which reports each arm's {@link DrugReferenceLoad#entriesPublishing} over it.
+		 *
+		 * <p>{@link DrugSafetyValidator#evaluatesConditionAgainstTheChart}, which CALLS
+		 * {@code evaluatesAgainstTheChart} rather than re-expressing it — so this count and the union's
+		 * cannot come to disagree about what "the module could ask" means. The same reason
+		 * {@link #HAND_AUTHORED_RULES} asks a predicate rather than counting a non-empty list applies
+		 * unchanged: a rule typed neither {@code allergy} nor {@code condition}, or carrying no
+		 * matchable token, is capability this report must not publish.
+		 *
+		 * <p>Unlike the other four this arm is also read on the {@code /search} response, as
+		 * {@code conditionRuleCoverage} — see {@link DrugSafetyValidator#conditionRuleCoverage()}. That
+		 * changes nothing about what it counts, and in particular this is still a statement about the
+		 * DATASET: it says the module had a rule to ask WITH, never that any recorded condition was
+		 * screened.
+		 */
+		CONDITION_RULES("conditionRules") {
+
+			@Override
+			boolean publishedBy(DrugReference entry) {
+				for (DrugReference.Contraindication rule : entry.getContraindications()) {
+					if (DrugSafetyValidator.evaluatesConditionAgainstTheChart(rule)) {
+						return true;
+					}
+				}
+				return false;
+			}
 		};
 
 		private final String wireKey;
@@ -232,7 +277,20 @@ public final class DrugReferenceLoad {
 		PUBLISHED,
 
 		/** A dataset was loaded and NO entry publishes what this arm needs: the arm cannot fire. */
-		ABSENT
+		ABSENT;
+
+		/**
+		 * @return this verdict's spelling on the wire and in the log — the ONE definition of it, so no
+		 *         two surfaces can name a verdict two ways. {@link DrugReferenceLoad#toMap()} and
+		 *         {@link DrugReferenceLoad#armSummary()} have shared it since issue #285; since issue
+		 *         #378 {@code ChartSearchAiRestController} spells the {@code conditionRuleCoverage} key
+		 *         with it too, which is why it is public rather than private to the outer class. A
+		 *         caller writing {@code name().toLowerCase()} of its own is the second spelling this
+		 *         exists to prevent.
+		 */
+		public String wireToken() {
+			return name().toLowerCase(Locale.ROOT);
+		}
 	}
 
 	private final boolean loaded;
@@ -464,7 +522,7 @@ public final class DrugReferenceLoad {
 	/** The wire spelling of an arm's verdict, read by {@link #toMap()} and {@link #armSummary()} alike so
 	 *  the endpoint and the log cannot come to say a verdict two ways. */
 	private String coverageToken(Arm arm) {
-		return coverageOf(arm).name().toLowerCase(Locale.ROOT);
+		return coverageOf(arm).wireToken();
 	}
 
 	/**

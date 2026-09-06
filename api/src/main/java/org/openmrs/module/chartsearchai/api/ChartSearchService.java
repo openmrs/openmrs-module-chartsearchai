@@ -16,6 +16,7 @@ import java.util.function.Consumer;
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
+import org.openmrs.module.chartsearchai.reference.DrugReferenceLoad;
 import org.openmrs.module.chartsearchai.reference.PairChipExtent;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 
@@ -230,6 +231,8 @@ public interface ChartSearchService {
 
 		private final List<Integer> unfaithfullyRenderedCitations;
 
+		private final DrugReferenceLoad.Coverage conditionRuleCoverage;
+
 		public ChartAnswer(String answer, List<RecordReference> references) {
 			this(answer, references, 0, 0, 0);
 		}
@@ -288,6 +291,17 @@ public interface ChartSearchService {
 				List<SafetyWarning> safetyWarnings, String searchMode,
 				ChartSearchAiUtils.ReferenceSlice referenceSlice, PairChipExtent pairChipExtent,
 				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations) {
+			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, searchMode,
+					referenceSlice, pairChipExtent, unresolvedDrugClass, unfaithfullyRenderedCitations,
+					null);
+		}
+
+		public ChartAnswer(String answer, List<RecordReference> references,
+				int inputTokens, int outputTokens, int cachedTokens,
+				List<SafetyWarning> safetyWarnings, String searchMode,
+				ChartSearchAiUtils.ReferenceSlice referenceSlice, PairChipExtent pairChipExtent,
+				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations,
+				DrugReferenceLoad.Coverage conditionRuleCoverage) {
 			this.answer = answer;
 			this.references = java.util.Collections.unmodifiableList(
 					new java.util.ArrayList<>(references));
@@ -306,6 +320,7 @@ public interface ChartSearchService {
 			this.unfaithfullyRenderedCitations = unfaithfullyRenderedCitations == null ? null
 					: java.util.Collections.unmodifiableList(
 							new java.util.ArrayList<Integer>(unfaithfullyRenderedCitations));
+				this.conditionRuleCoverage = conditionRuleCoverage;
 		}
 
 		/**
@@ -542,6 +557,55 @@ public interface ChartSearchService {
 		 */
 		public List<Integer> getUnfaithfullyRenderedCitations() {
 			return unfaithfullyRenderedCitations;
+		}
+
+		/**
+		 * What the loaded drug-reference dataset publishes for the hand-authored <b>condition</b>-rule
+		 * arm of the contraindication screen — what the {@code conditionRuleCoverage} key on the
+		 * {@code /search} response and on the {@code done} and {@code grounded} SSE events publishes
+		 * (issue
+		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/378">#378</a>).
+		 *
+		 * <p><b>Why the module states it rather than leaving it to the answer.</b> Under the shipped
+		 * {@code sourceFormat=ddinter} default the dataset publishes no hand-authored allergy or
+		 * condition rule at all, so the condition leg has no rule to evaluate and this patient's
+		 * recorded conditions are put to nothing — and nothing on the response said so, while
+		 * {@link #getPairChipExtent()} beside it made a completeness claim for the arm that had
+		 * nothing to hide. That is issue #336's argument with the count at zero, and this is the same
+		 * remedy: the module states what it could do, on a key, rather than depending on the wording
+		 * of a generated answer.
+		 *
+		 * <p><b>It is a statement about the loaded DATASET and never about this patient.</b>
+		 * {@code ABSENT} says a dataset was read and no entry publishes a condition rule the module
+		 * could put to a chart. {@code PUBLISHED} says the dataset publishes such rules and nothing
+		 * more — not that any fired, and not that every condition a chart records is screened.
+		 * {@code UNLOADED} says nothing was read, so nothing is known; on a stock install
+		 * {@code chartsearchai.drugReference.enabled} is {@code false} and that is the value. Keeping
+		 * "we looked and there is none" apart from "nobody looked" is the whole point, which is why
+		 * this is a three-valued verdict and not a boolean —
+		 * {@code SerializedRecord.getOrderActive()} keeps the same discipline one layer down.
+		 *
+		 * <p><b>Two limits this value cannot speak to</b>, both stated in {@code README.md} beside the
+		 * key because a client is where they do damage. The module builds its condition token set from
+		 * OpenMRS's ACTIVE CONDITIONS alone ({@code PatientClinicalContextBuilder}), so an encounter
+		 * diagnosis is put to nothing on every install whatever this says; and a chart whose condition
+		 * list could not be READ degrades to an empty set, which
+		 * {@code PatientClinicalContext.contraindicationRecordsRead()} records and this key does not
+		 * carry. Neither is closed by issue #378.
+		 *
+		 * <p>The producer states it and no consumer derives it, the discipline
+		 * {@link #getUnresolvedDrugClass()} follows: {@code LlmInferenceService} resolves it once per
+		 * method through {@code DrugSafetyValidator.conditionRuleCoverage()} and sets it on every
+		 * answer that method produces — the ungrounded one included, because the early {@code done}
+		 * event is emitted from that answer and is what the user sees. Like the class statement and
+		 * unlike {@link #getPairChipExtent()}, it is known before the model is called.
+		 *
+		 * @return the verdict, or null where the module stated none — which the fail-safe in
+		 *         {@code DrugSafetyValidator.conditionRuleCoverage()} is the only production path to,
+		 *         the three constants above covering every case it can answer
+		 */
+		public DrugReferenceLoad.Coverage getConditionRuleCoverage() {
+			return conditionRuleCoverage;
 		}
 	}
 

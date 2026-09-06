@@ -213,7 +213,8 @@ public class ChartSearchAiDrugReferenceStatusTest {
 
 		Map<?, ?> arms = (Map<?, ?>) body.get("arms");
 		assertNotNull(arms, "the endpoint must report which safety arms the loaded dataset can serve");
-		assertEquals(Arrays.asList("doseCeilings", "handAuthoredRules", "atcCodes", "interactions"),
+		assertEquals(Arrays.asList("doseCeilings", "handAuthoredRules", "atcCodes", "interactions",
+				"conditionRules"),
 				new ArrayList<Object>(arms.keySet()),
 				"the arm keys are what an operator reads; a renamed or dropped one leaves them reading "
 						+ "null, and a MISSING one is worse — an arm absent from this map reads as an "

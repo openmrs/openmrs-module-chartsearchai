@@ -70,7 +70,8 @@ On a correctly configured instance the interesting fields are:
     "doseCeilings":      { "coverage": "absent",    "entriesPublishing": 0 },
     "handAuthoredRules": { "coverage": "absent",    "entriesPublishing": 0 },
     "atcCodes":          { "coverage": "published", "entriesPublishing": 1839 },
-    "interactions":      { "coverage": "published", "entriesPublishing": 2283 }
+    "interactions":      { "coverage": "published", "entriesPublishing": 2283 },
+    "conditionRules":    { "coverage": "absent",    "entriesPublishing": 0 }
   },
   "crossReactivity": { "loaded": true, "groupCount": 1 }
 }
@@ -82,8 +83,12 @@ Read three things off it:
   the *curated* parser instead and is reported here as a `configured-source-format-not-used`
   finding.
 - **`inert: false`.** An inert load is a safety layer that will never warn about anything.
-- **`arms.doseCeilings` and `arms.handAuthoredRules` are `absent`, and that is correct.**
-  DDInter's V1 scope is drug–drug interactions only. Do **not** write dose-excess or
+- **`arms.doseCeilings`, `arms.handAuthoredRules` and `arms.conditionRules` are `absent`, and that
+  is correct.** DDInter's V1 scope is drug–drug interactions only. The third is the second's
+  `condition` leg, reported separately since
+  [#378](https://github.com/openmrs/openmrs-module-chartsearchai/issues/378) and also published on
+  the `/search` response as `conditionRuleCoverage`, so a clinician's client can say this install did
+  not screen her conditions. Do **not** write dose-excess or
   hand-authored allergy/condition test cases against `ddinter` — they belong to
   `sourceFormat=json`. The allergy warnings in [section 4](#4-allergy-cross-reactivity-and-duplicate-therapy)
   come from the patient's own chart crossed with ATC classes and the curated cross-reactivity

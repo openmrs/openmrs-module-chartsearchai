@@ -107,7 +107,7 @@ public class ActiveOrderCitationFidelityTest {
 	 *  ignore that one logger, rather than narrowing to this file's own check and giving up their
 	 *  reach over every other logger in the package. */
 	private static final String FINDING_SEVERITY_CHECK =
-			"org.openmrs.module.chartsearchai.api.impl.SafetyFindingSeverityFidelityCheck";
+			SafetyFindingSeverityFidelityCheck.class.getName();
 
 	/** @return whether anything but {@link #FINDING_SEVERITY_CHECK} logged at WARN or above. */
 	private static boolean warnedByAnotherCheck(LogCapture capture) {

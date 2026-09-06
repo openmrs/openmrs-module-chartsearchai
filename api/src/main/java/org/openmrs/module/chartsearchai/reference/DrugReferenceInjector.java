@@ -572,18 +572,12 @@ public class DrugReferenceInjector {
 			String rendered = renderFinding(finding);
 			// The rating travels STRUCTURALLY beside the record as well as inside its prose (issue
 			// #337). Inside is where the model reads it; beside is where a consumer compares against
-			// it, so "which rating did this finding state" has one answer rather than one per parse —
-			// and the two cannot come apart, because both are this one SafetyWarning. Never read back
-			// out of `rendered`: a DDInter mechanism can itself contain its own rating word, and
-			// thousands of the shipped knowledge base's rows do — ADR Decision 77 carries the
-			// measurement and its date. `statableRating` decides which ratings are worth requiring
-			// an answer to state and is canonical for the two that are not.
-			//
+			// it, so "which rating did this finding state" has one answer rather than one per parse.
 			// resourceKey is NOT a substitute for it: one screening question raises several findings
 			// of one type about one drug, so five records of this loop can share a single key.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING,
 					ChartSearchAiUtils.resourceKey(finding.getType(), finding.getDrug()), null, rendered,
-					null, 0, null, DrugSafetyValidator.statableRating(finding.getSeverity())));
+					null, 0, null, ratingThisRecordStates(finding, rendered)));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;
 		}
@@ -1616,6 +1610,40 @@ public class DrugReferenceInjector {
 	 * the clauses are independent by construction, and a type carrying one without a strength is the
 	 * shape {@link #strengthClause} already warns a future caller it must write for.
 	 */
+	/**
+	 * @return the rating {@code rendered} — this finding's own record, as the model will read it —
+	 *         states and an answer citing it therefore owes back, or {@code null} where there is
+	 *         none. Issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/337">
+	 *         #337</a>'s third round; the sole writer of {@code RecordMapping.getFindingSeverity()}.
+	 *
+	 *         <p><b>Two conditions, and the second is a fact about the DATA rather than about this
+	 *         module.</b> {@link DrugSafetyValidator#statableRating} decides which ratings are worth
+	 *         requiring at all. Then the record must actually STATE it — because
+	 *         {@link #renderFinding} writes none of the rating itself, and neither does
+	 *         {@code DrugSafetyValidator.interactionWarning}: on the bundled knowledge base the
+	 *         rating reaches the model only because {@code DdiDrugReferenceSource.noteFor} prepends
+	 *         {@code "<Severity>. "} to the mechanism it interns. An operator dataset binds
+	 *         {@code severity} and {@code note} from independent fields, so a note that does not
+	 *         restate the rating produces a record carrying none — and an answer cannot have dropped
+	 *         a word it was never given. Without this condition the most faithful answer possible,
+	 *         that record reproduced verbatim, is reported and published on a clinician-facing key,
+	 *         for every finding such an install raises.
+	 *
+	 *         <p>Asking whether the rendered record states a rating already KNOWN is not the
+	 *         derivation this field exists to avoid. Reading a rating OUT of the prose would pick a
+	 *         mechanism's own "major" up as the module's rating; this only ever narrows, and its
+	 *         false-positive direction — a mechanism containing the rating word the rule is rated —
+	 *         costs nothing, since the answer reproducing that mechanism states the word too.
+	 *
+	 *         <p>{@link ChartSearchAiUtils#statesWord} is shared with the check that reads the
+	 *         answer, deliberately: the two must be one rule or a rating stated one way and read the
+	 *         other is reported as dropped.
+	 */
+	private static String ratingThisRecordStates(SafetyWarning finding, String rendered) {
+		String rating = DrugSafetyValidator.statableRating(finding.getSeverity());
+		return rating != null && ChartSearchAiUtils.statesWord(rendered, rating) ? rating : null;
+	}
+
 	static String renderFinding(SafetyWarning finding) {
 		String strength = strengthClause(finding);
 		// Between the detail and the strength clause, so the clause stays SENTENCE-FINAL — which is

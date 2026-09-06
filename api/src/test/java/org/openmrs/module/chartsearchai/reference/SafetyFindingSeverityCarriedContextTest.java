@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -80,10 +81,12 @@ public class SafetyFindingSeverityCarriedContextTest extends BaseModuleContextSe
 
 	@Test
 	public void theRatingIsCarriedStructurallyAndNotReadBackOutOfTheRenderedProse() {
-		// The record's prose states the rating too — that is where the model reads it — so this case
-		// establishes only that the two agree on a finding whose text certainly contains it. What
-		// makes the structural copy necessary rather than redundant is stated at the write site: a
-		// mechanism can contain its own rating word, so a parse is not a safe way to recover this.
+		// On THIS dataset the record's prose states the rating too, because DdiDrugReferenceSource
+		// writes it into the note — which is what makes the arrangement one where the two can be
+		// compared at all. It is not a property of every dataset; the case below on a curated fixture
+		// is the one that pins that. What makes the structural copy necessary rather than redundant
+		// is stated at the write site: a mechanism can contain its own rating word, so DERIVING a
+		// rating from the prose is not safe even where STATING one there is.
 		List<RecordMapping> findings = findingsFor("Simvastatin");
 		assertEquals(1, findings.size(), "one finding expected");
 		RecordMapping finding = findings.get(0);
@@ -126,6 +129,36 @@ public class SafetyFindingSeverityCarriedContextTest extends BaseModuleContextSe
 						+ "finding at all. Chart was: " + chart.getText());
 		assertEquals("Major", findings.get(0).getFindingSeverity(),
 				"the rating handed on must be the form severityRank recognised, not the raw field");
+	}
+
+	@Test
+	public void aRatingTheRECORDDoesNotSTATEIsNotCarriedForAnAnswerToOwe() throws Exception {
+		// The premise the whole check rests on, and it is a property of the DATA rather than of this
+		// module: `renderFinding` writes none of the rating itself. On the bundled knowledge base the
+		// rating reaches the model only because `DdiDrugReferenceSource.noteFor` prepends
+		// "<Severity>. " to the mechanism. An operator's own dataset binds `severity` and `note` from
+		// independent fields, so a note that does not restate the rating produces a record carrying
+		// no rating at all — and an answer cannot have dropped a word it was never given. Carrying
+		// the rating here would report the most faithful answer possible, the record reproduced
+		// verbatim, on a clinician-facing key.
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(
+				DrugReferenceTestSupport.serviceWithGroups(DrugReferenceTestSupport.fixtureEntries(
+						"chartsearchai-test/drug-reference-rating-not-in-note.json"))).injectRecords(
+								DrugReferenceTestSupport.oneRecordChart(),
+								DrugReferenceTestSupport.ctx(60, null,
+										DrugReferenceTestSupport.set("Warfarin"), null, null, null),
+								"Is it safe to give her aspirin?");
+		List<RecordMapping> findings = DrugReferenceTestSupport.injectedFindings(chart);
+		assertEquals(1, findings.size(),
+				"the premise: the rule is rated Major, so it clears the floor and raises a finding. "
+						+ "Chart was: " + chart.getText());
+		assertFalse(findings.get(0).getText().toLowerCase().contains("major"),
+				"and the premise's other half: this record really does state no rating, which is what "
+						+ "makes it the arrangement this case is about. Record was: "
+						+ findings.get(0).getText());
+		assertNull(findings.get(0).getFindingSeverity(),
+				"so no rating is carried — the answer was never given one to carry, and accusing it "
+						+ "of dropping it is the crying-wolf direction this check must not fail in");
 	}
 
 	@Test

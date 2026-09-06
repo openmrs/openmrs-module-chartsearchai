@@ -1416,10 +1416,10 @@ public class ChartSearchAiRestController {
 	 *
 	 * <p><b>The copy is a correctness requirement</b> and not caution — the measurement is at
 	 * {@link #serializeSafetyWarnings}, which takes it for the same reason. What is new here is the
-	 * guard around it: unlike {@code chartOrderBridges()} these two accessors can return null, and
-	 * {@code new ArrayList<>(null)} throws. Its ROUTINE trigger is not a failed check but the
-	 * async-grounding early {@code done}: that answer is handed off before either check has run, so
-	 * {@code LlmInferenceService} passes an explicit {@code null} in both arguments. Mutate a guard
+	 * guard around it: unlike {@code chartOrderBridges()} every one of the answer-check accessors can
+	 * return null, and {@code new ArrayList<>(null)} throws. Its ROUTINE trigger is not a failed
+	 * check but the async-grounding early {@code done}: that answer is handed off before any of them
+	 * has run, so {@code LlmInferenceService} passes an explicit {@code null} for each. Mutate a guard
 	 * away and read the failures — the {@code chartsearchai.grounding.async=true} wire cases lose
 	 * their {@code done} event. The failed-check case reaches it too and no path is known to deliver
 	 * it: ADR Decision 61 records that no TEST reaches it, a record

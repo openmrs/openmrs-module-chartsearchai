@@ -616,11 +616,11 @@ public class PatientChartSerializer {
 	 * dataset attribution into a clinician-facing answer (issue #117). Metadata a client should
 	 * render beside a citation therefore travels as its own field, never as prose.
 	 *
-	 * <p>{@link #getFindingSeverity()} is the one that is deliberately in BOTH: the rating is inside
-	 * the rendered text because the model is meant to read and carry it, and beside the record
-	 * because a consumer asking whether the answer carried it must not have to parse for it
-	 * (issue #337). "Never as prose" is a rule about metadata the model has no business reciting,
-	 * which that rating is not.
+	 * <p>{@link #getFindingSeverity()} is the one that can be in BOTH, and is carried only when it
+	 * is: the rating is beside the record so a consumer need not parse for it, and it is set only
+	 * where the rendered text states it too, since an answer cannot have dropped a word the record
+	 * never gave it (issue #337). "Never as prose" is a rule about metadata the model has no
+	 * business reciting, which that rating is not.
 	 */
 	public static class RecordMapping {
 
@@ -809,10 +809,12 @@ public class PatientChartSerializer {
 		 *         {@code DrugSafetyValidator.statableRating} is canonical for that second case.
 		 *
 		 *         <p>Metadata ABOUT the record and deliberately not part of {@link #getText()}, the
-		 *         discipline this class's own javadoc states — though the rating does also appear
-		 *         inside the rendered prose, because the model is meant to read it there. This field
-		 *         is what a consumer compares against, so that "which rating did this finding state"
-		 *         has one answer rather than one per parse.
+		 *         discipline this class's own javadoc states — with the qualification that this field
+		 *         is non-null only where the rendered text states the rating as well, which is not
+		 *         every dataset. {@code DrugReferenceInjector.ratingThisRecordStates} is canonical for
+		 *         that condition and for why it is a fact about the data rather than about this
+		 *         module. What the field buys is that "which rating did this finding state" has one
+		 *         answer rather than one per parse.
 		 */
 		public String getFindingSeverity() {
 			return findingSeverity;

@@ -606,7 +606,7 @@ public interface ChartSearchService {
 		 * which is what the #284 carve-out publishes for a chart citation whose sentence also rests
 		 * on a {@code safety_finding}.
 		 *
-		 * <p><b>The CITATION and never a word of either text</b>, for the reason its sibling states:
+		 * <p><b>The CITATION and never a word of either text</b>, for the reason its siblings state:
 		 * a client renders its own sentence beside the marker, and the record's prose is not the
 		 * module's to restate here. One index is one entry however many active-order claims cited
 		 * it.

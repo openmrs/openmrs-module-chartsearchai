@@ -20,6 +20,7 @@ import static org.openmrs.module.chartsearchai.ChartSearchAiConstants.RESOURCE_T
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -955,6 +956,53 @@ public class ChartSearchAiUtils {
 	 *          predicate shared by the drug-reference parse boundaries and renderers. */
 	public static boolean isBlank(String value) {
 		return value == null || value.trim().isEmpty();
+	}
+
+	/**
+	 * @return whether {@code text} states {@code word} as a WORD rather than merely containing its
+	 *         letters — case-insensitively, with no letter or digit against either end of it.
+	 *
+	 *         <p>Issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/337">
+	 *         #337</a>'s third round, and it is shared rather than local because its two callers must
+	 *         agree or the check between them is unsound: {@code DrugReferenceInjector} asks it
+	 *         whether an injected finding's RECORD states the finding's rating, and
+	 *         {@code SafetyFindingSeverityFidelityCheck} asks it whether the ANSWER does. Were those
+	 *         two rules to differ, a rating the record states one way and the answer states the other
+	 *         would be reported as dropped, or a rating neither states would be asked for.
+	 *
+	 *         <p><b>Deliberately not {@code DrugReference}'s bounded-token family, and not a fifth
+	 *         member of it.</b> Those are the drug-NAME shapes, whose allowances exist for inflected
+	 *         order names and for prose naming a substance, and the drug-safety instructions require
+	 *         that a caller never choose an allowance of its own (#260). This question has no
+	 *         allowance to choose: the vocabulary it is asked about is the module's own closed set of
+	 *         rating words, with no aliases, no diacritics and no inflection. It is a boundary rule
+	 *         beside that family rather than inside it — {@code DrugReference.boundedTokenIndex}'s
+	 *         javadoc names the three routes that share ITS scan, and this is not one of them.
+	 *
+	 *         <p>The boundary admits every way a rating has been observed to be written — a colon
+	 *         after it, parentheses or markdown emphasis around it, a hyphen before {@code -rated} —
+	 *         and refuses only a longer word it sits inside, {@code majority} being the one that
+	 *         matters, since it is ordinary in clinical prose.
+	 *
+	 *         <p>A null or blank {@code word} answers false rather than matching everything: an empty
+	 *         needle that matched would silence the caller that asks about the answer, and a check
+	 *         silenced by a blank is a check that fails open.
+	 */
+	public static boolean statesWord(String text, String word) {
+		if (text == null || isBlank(word)) {
+			return false;
+		}
+		String haystack = text.toLowerCase(Locale.ROOT);
+		String needle = word.toLowerCase(Locale.ROOT);
+		for (int at = haystack.indexOf(needle); at >= 0; at = haystack.indexOf(needle, at + 1)) {
+			int after = at + needle.length();
+			if ((at == 0 || !Character.isLetterOrDigit(haystack.charAt(at - 1)))
+					&& (after >= haystack.length()
+							|| !Character.isLetterOrDigit(haystack.charAt(after)))) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** @return the first non-blank of {@code values} (as given, untrimmed), or null when none —

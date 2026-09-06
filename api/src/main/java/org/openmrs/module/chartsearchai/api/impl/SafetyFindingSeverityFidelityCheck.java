@@ -13,7 +13,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -53,9 +52,8 @@ import org.slf4j.LoggerFactory;
  * {@code DrugReferenceInjector} off {@code SafetyWarning.getSeverity()} — and this check asks
  * whether that word appears in the answer at all. Reading the rating back out of the record's own
  * rendered text was refused rather than merely not chosen: a knowledge-base mechanism can contain
- * its own rating word — thousands of the shipped knowledge base's rows do, and ADR Decision 77
- * carries the measurement, its date and what it is a count OF — so a parse would attribute a rating
- * this module never assigned.
+ * its own rating word, so a parse would attribute a rating this module never assigned. ADR
+ * Decision 77 carries the measurement of how often, its date and what it is a count OF.
  *
  * <p><b>Which ratings it asks about is not this class's decision.</b>
  * {@code DrugSafetyValidator.statableRating} makes it, at the write site, and is canonical for the
@@ -95,13 +93,11 @@ import org.slf4j.LoggerFactory;
  *       verdict to carry one.</li>
  * </ul>
  *
- * <p><b>Why the bounded scan is written here rather than borrowed.</b> {@code DrugReference}'s
- * bounded-token family is the drug-NAME matcher, and CLAUDE.md's rule for it is that its three
- * shapes are not interchangeable and that a caller must never choose an allowance of its own
- * (#260). Its allowances exist for inflected order names and for prose naming a substance; a rating
- * is a closed vocabulary of English words with no aliases, no diacritics and no inflection to
- * allow. Borrowing that family would be widening one of its shapes to serve a question it was not
- * written for, so the rule this check applies is stated as its own.
+ * <p><b>The scan is {@link ChartSearchAiUtils#statesWord}, and it is shared for a reason.</b> The
+ * other caller is {@code DrugReferenceInjector}, asking whether the RECORD states the rating before
+ * it carries one at all. The two must be one rule: a rating the record states one way and the answer
+ * states the other would otherwise be reported as dropped. That method's javadoc carries the
+ * boundary and why it is not a member of {@code DrugReference}'s drug-name family.
  *
  * <p><b>What it cannot see</b>, stated rather than left to be found:
  * <ul>
@@ -161,36 +157,48 @@ final class SafetyFindingSeverityFidelityCheck {
 			List<Integer> offending = new ArrayList<Integer>();
 			if (cited == null || cited.isEmpty() || mappings == null
 					|| ChartSearchAiUtils.isBlank(answer)) {
-				// A blank or absent answer is silent, and that arm is REACHABLE rather than defensive:
-				// LlmInferenceService.extractCitedReferences deliberately resolves the structured
-				// citations array for a blank answer — its javadoc calls that "the absence of an
-				// answer (a distinct degenerate output)" — so this method can be handed cited findings
-				// with no prose at all. Such an answer states no rating, but it states nothing else
-				// either, and reporting a degenerate output as a fidelity defect is the crying-wolf
-				// direction. Both siblings are silent there too, one by its word floor and one by its
-				// phrase gate; without this arm this check would be the only one that is not.
+				// The blank arm is REACHABLE rather than defensive; the class javadoc's conservatism
+				// list says why, and points at extractCitedReferences' own javadoc for the shape.
 				return offending;
 			}
-			Map<Integer, RecordMapping> byIndex = new HashMap<Integer, RecordMapping>();
+			// The map holds only the records that carry a rating, and it is the GATE as well as the
+			// lookup — on the shipped default `chartsearchai.drugReference.enabled` is false, so the
+			// injector never runs, no record carries a rating, and this returns before touching the
+			// answer at all. Each of the three sibling checks resolves its own cheapest gate first
+			// for the same reason; this one used to build a full index over every chart record and
+			// fold the whole answer before it could learn it had nothing to do.
+			Map<Integer, String> ratings = new HashMap<Integer, String>();
 			for (RecordMapping mapping : mappings) {
-				byIndex.put(Integer.valueOf(mapping.getIndex()), mapping);
+				if (mapping.getFindingSeverity() != null) {
+					ratings.put(Integer.valueOf(mapping.getIndex()), mapping.getFindingSeverity());
+				}
 			}
-			// Lower-cased ONCE for the whole answer rather than per citation: the ratings are a
-			// closed vocabulary, so one fold of the answer serves every comparison below. Not
-			// null-guarded, because the blank arm above has already returned for that.
-			String folded = answer.toLowerCase(Locale.ROOT);
+			if (ratings.isEmpty()) {
+				return offending;
+			}
+			// Memoised per DISTINCT rating, in a per-call local and never a field (#172 binds this
+			// module's memos, and a static utility on a Spring-managed path is no exception). The
+			// vocabulary `DrugSafetyValidator.statableRating` admits has three members, so an answer
+			// citing two hundred findings asks this at most three times rather than two hundred —
+			// which is the unbounded repeat of one identical needle that the same shape forced
+			// ActiveOrderCitationFidelityCheck to bound with a Matcher region.
+			Map<String, Boolean> stated = new HashMap<String, Boolean>();
 			List<String> reasons = new ArrayList<String>();
 			Set<Integer> seen = new LinkedHashSet<Integer>();
 			for (RecordReference citation : cited) {
-				RecordMapping mapping = byIndex.get(Integer.valueOf(citation.getIndex()));
-				if (mapping == null) {
-					// Unreachable rather than lenient: the reference list is built FROM the mappings,
-					// so a cited index always has one. Said so the guard does not look better
-					// defended than it is.
+				String rating = ratings.get(Integer.valueOf(citation.getIndex()));
+				if (rating == null) {
+					// Either the cited record is not a finding, or it is one carrying no rating worth
+					// requiring — `ratingThisRecordStates` is canonical for which those are, and this
+					// check deliberately cannot tell the two apart.
 					continue;
 				}
-				String rating = mapping.getFindingSeverity();
-				if (rating == null || statesRating(folded, rating)) {
+				Boolean answerStatesIt = stated.get(rating);
+				if (answerStatesIt == null) {
+					answerStatesIt = Boolean.valueOf(ChartSearchAiUtils.statesWord(answer, rating));
+					stated.put(rating, answerStatesIt);
+				}
+				if (answerStatesIt.booleanValue()) {
 					continue;
 				}
 				if (seen.add(Integer.valueOf(citation.getIndex()))) {
@@ -219,43 +227,5 @@ final class SafetyFindingSeverityFidelityCheck {
 					patientId, e.toString());
 			return null;
 		}
-	}
-
-	/**
-	 * @return whether {@code foldedAnswer} — the answer, lower-cased — states {@code rating} as a
-	 *         word rather than merely containing its letters.
-	 *
-	 *         <p>The boundary is "not a letter and not a digit on either side", which admits every
-	 *         way an answer has been observed to write a rating (a colon after it, parentheses or
-	 *         markdown emphasis around it, a hyphen before {@code -rated}) and refuses only a longer
-	 *         word it sits inside — {@code majority} being the one that matters, since it is ordinary
-	 *         in clinical prose and a substring test would let it silence every Major finding in the
-	 *         answer.
-	 *
-	 *         <p>Deliberately not {@code DrugReference}'s bounded-token family: those are the
-	 *         drug-NAME shapes, whose allowances exist for inflected order names and for prose naming
-	 *         a substance, and CLAUDE.md's rule for them is that a caller must never choose an
-	 *         allowance of its own (#260). A rating has no aliases, no diacritics and no inflection
-	 *         to allow, so this rule is stated here as its own rather than by widening one of theirs.
-	 */
-	private static boolean statesRating(String foldedAnswer, String rating) {
-		String needle = rating.toLowerCase(Locale.ROOT);
-		if (ChartSearchAiUtils.isBlank(needle)) {
-			// Unreachable through the production write site, which never carries a blank rating; the
-			// guard is here because an empty needle would otherwise match everything, and a check
-			// silenced by a blank is a check that fails open.
-			return false;
-		}
-		for (int at = foldedAnswer.indexOf(needle); at >= 0;
-				at = foldedAnswer.indexOf(needle, at + 1)) {
-			boolean boundedLeft = at == 0 || !Character.isLetterOrDigit(foldedAnswer.charAt(at - 1));
-			int after = at + needle.length();
-			boolean boundedRight = after >= foldedAnswer.length()
-					|| !Character.isLetterOrDigit(foldedAnswer.charAt(after));
-			if (boundedLeft && boundedRight) {
-				return true;
-			}
-		}
-		return false;
 	}
 }

@@ -452,7 +452,8 @@ public class SafetyFindingSeverityFidelityTest {
 
 			// The overload production actually calls: mappings-carrying for echo scoping (issue #105)
 			// and sink-carrying since issue #336. Stubbing a shorter one instead leaves this stub
-			// INERT — production would not reach it.
+			// INERT — production would not reach it — which is why this names both parameters. One
+			// sibling of this file has drifted onto a shorter overload and passes for another reason.
 			@Override
 			public List<SafetyWarning> validate(String answer, String question, Patient patient,
 					List<RecordMapping> mappings, PairChipExtent.Sink pairExtentSink) {

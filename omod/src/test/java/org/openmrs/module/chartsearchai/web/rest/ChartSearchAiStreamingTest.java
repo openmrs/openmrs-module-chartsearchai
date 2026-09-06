@@ -205,6 +205,11 @@ public class ChartSearchAiStreamingTest {
 				"Must not share UserContext across threads");
 	}
 
+	/** How a thread creation is FOUND — the type name with an optional qualifier and whitespace
+	 *  anywhere Java allows it, never the literal {@code "new Thread("}. See the comment at the first
+	 *  assertion in {@link #streamingEndpoint_shouldNotRunOpenmrsWorkOnBackgroundThreads}. */
+	private static final String THREAD_CREATION = "new\\s+(?:\\w+\\s*\\.\\s*)*Thread\\s*\\(";
+
 	/**
 	 * @return how many times {@code needle} occurs in {@code haystack}, counting overlaps
 	 *
@@ -214,11 +219,6 @@ public class ChartSearchAiStreamingTest {
 	 *         form two api tests use — leaving the two guards counting differently with no compile
 	 *         error and no failure.
 	 */
-	/** How a thread creation is FOUND — the type name with an optional qualifier and whitespace
-	 *  anywhere Java allows it, never the literal {@code "new Thread("}. See the comment at the first
-	 *  assertion in {@link #streamingEndpoint_shouldNotRunOpenmrsWorkOnBackgroundThreads}. */
-	private static final String THREAD_CREATION = "new\\s+(?:\\w+\\s*\\.\\s*)*Thread\\s*\\(";
-
 	static int occurrences(String haystack, String needle) {
 		int count = 0;
 		for (int at = haystack.indexOf(needle); at >= 0; at = haystack.indexOf(needle, at + 1)) {

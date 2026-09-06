@@ -44,10 +44,6 @@ public class ArchitectureGuardTest {
 	private static final String CHART_ANSWER_TYPE =
 			"org/openmrs/module/chartsearchai/api/ChartSearchService$ChartAnswer";
 
-	/** What every {@code ChartAnswer} constructor descriptor opens with — the answer text and its
-	 *  references. Used to pick them out of the type's own constant pool rather than listing them. */
-	private static final String CHART_ANSWER_CTOR_PREFIX = "(Ljava/lang/String;Ljava/util/List;";
-
 	/** The descriptor fragment that tells the widest constructor from every shorter one. */
 	private static final String COVERAGE_TYPE =
 			"Lorg/openmrs/module/chartsearchai/reference/DrugReferenceLoad$Coverage;";
@@ -299,16 +295,21 @@ public class ArchitectureGuardTest {
 	 *
 	 * <p>So this reads {@code ChartAnswer}'s own constructor descriptors out of its class file, and
 	 * then asserts that no other production class references any of them except the widest — the one
-	 * ending in {@code DrugReferenceLoad$Coverage}. Nothing is hardcoded: adding a constructor arity
-	 * puts it in the forbidden set automatically, which the enumeration a hardcoded list would need
-	 * cannot do. It also closes what the source form conceded, that it could only see answers built
-	 * in one FILE; this sees every class under {@code api/target/classes}.
+	 * ending in {@code DrugReferenceLoad$Coverage}. The descriptors come from the type's own METHOD
+	 * TABLE, so every constructor it declares is in the forbidden set whatever its signature: a
+	 * review agent added an arity opening on different parameter types and got a coverage-less answer
+	 * past an earlier version of this that picked constructors out of the pool by a hardcoded
+	 * descriptor PREFIX. It also closes what the source form conceded, that it could only see answers
+	 * built in one FILE; this sees every class under {@code api/target/classes}.
 	 *
 	 * <p><b>The residue, named rather than claimed away.</b> It reads api's output only, because omod
 	 * is not compiled when api's tests run — no {@code omod/src/main} class constructs an answer
 	 * today, and one that did would be invisible here. It excludes {@code ChartAnswer} itself, whose
 	 * telescoping constructors legitimately name every arity. And a class that builds an answer
-	 * through a factory rather than a constructor is outside it; no such factory exists.
+	 * through a factory rather than a constructor is outside it, and so is one built REFLECTIVELY —
+	 * {@code ChartAnswer.class.getConstructor(...).newInstance(...)} names no descriptor in the
+	 * caller's pool, and a review agent confirmed it passes. No such factory or reflective
+	 * construction exists.
 	 * And it reads BUILD OUTPUT, so it describes what was last compiled — which is why the module's
 	 * own rule to measure with {@code mvn -o clean install} from the root binds this guard as much as
 	 * any test. Reading compiled output is this repo's own idiom for a rule no behavioural case can
@@ -328,12 +329,7 @@ public class ArchitectureGuardTest {
 		org.junit.jupiter.api.Assertions.assertTrue(java.nio.file.Files.exists(holder),
 				"no ChartAnswer class file at " + holder + ", so this guard would forbid nothing");
 
-		List<String> constructors = new ArrayList<>();
-		for (String entry : constantPoolStrings(holder)) {
-			if (entry.startsWith(CHART_ANSWER_CTOR_PREFIX) && entry.endsWith(")V")) {
-				constructors.add(entry);
-			}
-		}
+		List<String> constructors = constructorDescriptors(holder);
 		org.junit.jupiter.api.Assertions.assertTrue(constructors.size() > 1,
 				"expected ChartAnswer to publish several constructor arities and found "
 						+ constructors.size() + "; with one there is nothing for a coverage-less answer "
@@ -376,6 +372,62 @@ public class ArchitectureGuardTest {
 	}
 
 	/**
+	 * @return the descriptor of every constructor {@code classFile} DECLARES, read from its method
+	 *         table rather than picked out of the constant pool by shape.
+	 *
+	 *         <p>The distinction is the guard's whole correctness. Selecting pool strings by a
+	 *         descriptor prefix hardcodes the leading parameter types, so a constructor added with a
+	 *         different signature never joins the forbidden set and its callers are never checked —
+	 *         measured by a review agent, which added such an arity plus a caller and left the guard
+	 *         green. The method table has no such blind spot, and it costs one more walk: past the
+	 *         pool, the access flags, this/super, the interfaces and the fields, skipping each
+	 *         attribute by its own declared length.
+	 */
+	private static List<String> constructorDescriptors(Path classFile) throws IOException {
+		java.nio.ByteBuffer in = java.nio.ByteBuffer.wrap(java.nio.file.Files.readAllBytes(classFile));
+		List<String> pool = readConstantPool(in);
+		in.position(in.position() + 6);
+		// Read the count into a local FIRST: getShort() advances the buffer, and the argument to
+		// position(...) evaluates in.position() before it does — so the inline form silently loses the
+		// two bytes the count itself occupies. That is what this walk got wrong on its first run, and
+		// it surfaced as an attribute length read out of the middle of a method body.
+		int interfaces = in.getShort() & 0xFFFF;
+		in.position(in.position() + 2 * interfaces);
+		skipFields(in);
+		List<String> descriptors = new ArrayList<>();
+		int methods = in.getShort() & 0xFFFF;
+		for (int i = 0; i < methods; i++) {
+			in.getShort();
+			String name = pool.get(in.getShort() & 0xFFFF);
+			String descriptor = pool.get(in.getShort() & 0xFFFF);
+			skipAttributes(in);
+			if ("<init>".equals(name)) {
+				descriptors.add(descriptor);
+			}
+		}
+		return descriptors;
+	}
+
+	/** Skips the field table, whose entries have a method's shape: access, name, descriptor, attributes. */
+	private static void skipFields(java.nio.ByteBuffer in) {
+		int fields = in.getShort() & 0xFFFF;
+		for (int i = 0; i < fields; i++) {
+			in.position(in.position() + 6);
+			skipAttributes(in);
+		}
+	}
+
+	/** Skips an attribute table by each attribute's own declared length. */
+	private static void skipAttributes(java.nio.ByteBuffer in) {
+		int attributes = in.getShort() & 0xFFFF;
+		for (int i = 0; i < attributes; i++) {
+			in.getShort();
+			int length = in.getInt();
+			in.position(in.position() + length);
+		}
+	}
+
+	/**
 	 * @return every {@code CONSTANT_Utf8} entry in {@code classFile}'s constant pool, walked by the
 	 *         class-file format's own lengths rather than scanned for. A regex over the raw bytes runs
 	 *         past the end of a descriptor into whatever follows it in the pool — measured while
@@ -384,18 +436,41 @@ public class ArchitectureGuardTest {
 	 *         this gets wrong if it does not know it.
 	 */
 	private static List<String> constantPoolStrings(Path classFile) throws IOException {
-		byte[] data = java.nio.file.Files.readAllBytes(classFile);
-		java.nio.ByteBuffer in = java.nio.ByteBuffer.wrap(data);
+		List<String> slots = readConstantPool(
+				java.nio.ByteBuffer.wrap(java.nio.file.Files.readAllBytes(classFile)));
+		List<String> present = new ArrayList<>();
+		for (String slot : slots) {
+			if (slot != null) {
+				present.add(slot);
+			}
+		}
+		return present;
+	}
+
+	/**
+	 * Reads the constant pool and leaves {@code in} positioned immediately after it, so a caller that
+	 * needs the method table can carry on from there.
+	 *
+	 * @return the pool BY SLOT, with a null wherever the entry is not a {@code CONSTANT_Utf8}. Slot
+	 *         indexes are 1-based in the class file and 0-based here, so slot {@code n} is element
+	 *         {@code n - 1}. Returning only the strings, in encounter order, would be the obvious
+	 *         shape and is wrong for the method table, whose name and descriptor indexes are SLOT
+	 *         numbers — every non-Utf8 entry between them would shift the answer.
+	 */
+	private static List<String> readConstantPool(java.nio.ByteBuffer in) {
 		in.position(8);
 		int count = in.getShort() & 0xFFFF;
-		List<String> strings = new ArrayList<>();
+		List<String> slots = new ArrayList<>();
+		for (int i = 0; i < count; i++) {
+			slots.add(null);
+		}
 		for (int slot = 1; slot < count; slot++) {
 			int tag = in.get() & 0xFF;
 			switch (tag) {
 				case 1:
 					byte[] utf = new byte[in.getShort() & 0xFFFF];
 					in.get(utf);
-					strings.add(new String(utf, java.nio.charset.StandardCharsets.UTF_8));
+					slots.set(slot, new String(utf, java.nio.charset.StandardCharsets.UTF_8));
 					break;
 				case 7: case 8: case 16: case 19: case 20:
 					in.position(in.position() + 2);
@@ -412,7 +487,7 @@ public class ArchitectureGuardTest {
 					break;
 			}
 		}
-		return strings;
+		return slots;
 	}
 
 	// --- Infrastructure ---

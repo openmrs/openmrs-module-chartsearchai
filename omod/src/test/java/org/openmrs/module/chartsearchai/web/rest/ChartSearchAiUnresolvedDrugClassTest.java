@@ -217,7 +217,11 @@ public class ChartSearchAiUnresolvedDrugClassTest {
 		assertEquals(1, keys,
 				"the unresolvedDrugClass key must be written in exactly one place, beside the chips and "
 						+ "the extent statement (issue #354). Found " + keys + " writes of it.");
-		int chips = ChartSearchAiStreamingTest.occurrences(source, "putSafetyChips(");
+		// A PATTERN over the name, never the literal: Java allows whitespace between a method name
+		// and its argument list, so a third naming written `putSafetyChips\n\t\t(doneData, answer)`
+		// satisfied the literal form while being exactly the emission site this guards against.
+		// Measured by a review agent on issue #378's harden round; the omod suite stayed green.
+		int chips = ChartSearchAiStreamingTest.matches(source, "putSafetyChips\\s*\\(");
 		assertEquals(2, chips,
 				"putSafetyChips must be named exactly twice — its own declaration and the one call "
 						+ "inside putModuleStatements. A third naming is an emission site taking the "

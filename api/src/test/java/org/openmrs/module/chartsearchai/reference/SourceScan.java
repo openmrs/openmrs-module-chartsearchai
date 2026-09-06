@@ -35,20 +35,13 @@ import org.openmrs.module.chartsearchai.ModuleSourceRoot;
  * and the second of them keeps its file locator apart from {@code ModuleSourceRoot} for a reason its
  * own javadoc states.
  *
- * <p><b>Public, and read from outside this package since issue #378.</b>
- * {@code ArchitectureGuardTest} in {@code api.impl} is the fourth guard to need the walk, and it
- * needs it for a reason worth recording where the next caller will read it: its first version read
- * RAW source, and a comment naming the very construction it forbids carried an unbalanced bracket
- * that made its depth walk swallow every real construction after it. Blanking is why this class
- * exists rather than the walk.
- *
  * <p><b>Every lookup fails LOUDLY rather than answering "not found".</b> A needle that matches nothing
  * leaves a guard forbidding nothing, and one that matches twice cannot say which body it delimited —
  * so both are assertion failures here rather than a best guess returned to the caller. The read
  * asserts the file exists and is not truncated for the same reason: a guard that reads nothing
  * satisfies every "is not called here" assertion by containing nothing.
  */
-public final class SourceScan {
+final class SourceScan {
 
 	private final String relativePath;
 
@@ -56,7 +49,7 @@ public final class SourceScan {
 
 	/** @param relativePath the file under {@code api/}, e.g.
 	 *                     {@code src/main/java/.../DrugSafetyValidator.java} */
-	public SourceScan(String relativePath) throws IOException {
+	SourceScan(String relativePath) throws IOException {
 		this.relativePath = relativePath;
 		Path file = ModuleSourceRoot.apiRoot().resolve(relativePath);
 		assertTrue(Files.exists(file), "no " + relativePath + " under " + ModuleSourceRoot.apiRoot()
@@ -124,7 +117,7 @@ public final class SourceScan {
 	}
 
 	/** @return every match of {@code pattern}. */
-	public List<Integer> matches(Pattern pattern) {
+	List<Integer> matches(Pattern pattern) {
 		List<Integer> found = new ArrayList<Integer>();
 		Matcher matcher = pattern.matcher(source);
 		while (matcher.find()) {
@@ -134,7 +127,7 @@ public final class SourceScan {
 	}
 
 	/** @return the trimmed line {@code at} sits on. */
-	public String statementAt(int at) {
+	String statementAt(int at) {
 		int from = source.lastIndexOf('\n', at) + 1;
 		int to = source.indexOf('\n', at);
 		return source.substring(from, to < 0 ? source.length() : to).trim();
@@ -208,45 +201,8 @@ public final class SourceScan {
 		return new String(text);
 	}
 
-	/**
-	 * The PARENTHESISED argument list of the call whose name starts at {@code at} — the balanced span
-	 * from its opening bracket to the matching close, so a caller can ask what a call was HANDED
-	 * rather than what its line happens to contain.
-	 *
-	 * <p>Added at the fourth guard to need a source walk, beside {@link #body(String)}, which does the
-	 * same for braces. It reads this scan's BLANKED source, which is the whole reason it belongs here
-	 * rather than inline in a test: a walk over raw text counts an unbalanced bracket inside a comment
-	 * and then swallows every real call after it — measured on
-	 * {@code ArchitectureGuardTest.everyAnswerTheInferenceServiceBuildsCarriesTheConditionRuleCoverage},
-	 * where one added comment naming the constructor it forbids took its count from 3 to 1.
-	 *
-	 * @param at an offset at or before the call's opening bracket, as {@link #matches} returns
-	 */
-	public Region argumentsAt(int at) {
-		int open = source.indexOf('(', at);
-		assertTrue(open >= 0, "no argument list after offset " + at + " in " + relativePath);
-		int depth = 0;
-		for (int i = open; i < source.length(); i++) {
-			char c = source.charAt(i);
-			if (c == '(') {
-				depth++;
-			} else if (c == ')') {
-				depth--;
-				if (depth == 0) {
-					return new Region(open, i + 1);
-				}
-			}
-		}
-		throw new AssertionError("unbalanced argument list from offset " + open + " in " + relativePath);
-	}
-
-	/** @return the source between {@code region}'s bounds, comments and string literals blanked. */
-	public String textOf(Region region) {
-		return source.substring(region.start(), region.end());
-	}
-
-	/** A brace- or bracket-delimited span of the source. */
-	public static final class Region {
+	/** A brace-delimited span of the source. */
+	static final class Region {
 
 		private final int start;
 
@@ -257,11 +213,11 @@ public final class SourceScan {
 			this.end = end;
 		}
 
-		public int start() {
+		int start() {
 			return start;
 		}
 
-		public int end() {
+		int end() {
 			return end;
 		}
 

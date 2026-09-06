@@ -40,21 +40,18 @@ public class ArchitectureGuardTest {
 
 	private static final Path SRC_ROOT = ModuleSourceRoot.apiRoot();
 
-	/**
-	 * How a {@code ChartAnswer} construction is FOUND: the type name with an optional qualifier, not
-	 * the literal {@code new ChartAnswer(}. {@code ChartAnswer} is a nested type, so
-	 * {@code new ChartSearchService.ChartAnswer(...)} is legal Java naming the same constructor and
-	 * needing no import change — a review agent defeated the literal form exactly that way, adding a
-	 * fourth answer that carried no coverage and leaving the whole api suite green.
-	 *
-	 * <p><b>Whitespace is allowed around the qualifier's DOT and not only around {@code new}</b>,
-	 * which is the second escape a review agent walked through: {@code new ChartSearchService.}
-	 * followed by {@code ChartAnswer(} on the next line is one construction to javac and was two
-	 * unrelated tokens to the first widening. Neither pom configures a formatter, so nothing
-	 * normalises that away. Reproduce both before trusting a third form.
-	 */
-	private static final java.util.regex.Pattern CHART_ANSWER_CONSTRUCTION =
-			java.util.regex.Pattern.compile("new\\s+(?:\\w+\\s*\\.\\s*)*ChartAnswer\\s*\\(");
+	/** The internal name of the type whose constructions issue #378's guard is about. */
+	private static final String CHART_ANSWER_TYPE =
+			"org/openmrs/module/chartsearchai/api/ChartSearchService$ChartAnswer";
+
+	/** What every {@code ChartAnswer} constructor descriptor opens with — the answer text and its
+	 *  references. Used to pick them out of the type's own constant pool rather than listing them. */
+	private static final String CHART_ANSWER_CTOR_PREFIX = "(Ljava/lang/String;Ljava/util/List;";
+
+	/** The descriptor fragment that tells the widest constructor from every shorter one. */
+	private static final String COVERAGE_TYPE =
+			"Lorg/openmrs/module/chartsearchai/reference/DrugReferenceLoad$Coverage;";
+
 
 	// --- Rules ---
 
@@ -287,59 +284,129 @@ public class ArchitectureGuardTest {
 	}
 
 	/**
-	 * Every answer {@code LlmInferenceService} constructs carries the condition-rule coverage (issue
-	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/378">#378</a>).
+	 * Every answer this module builds carries the condition-rule coverage (issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/378">#378</a>) — asked
+	 * of the CLASS FILES rather than of the source.
 	 *
-	 * <p><b>Structural because the behavioural cases cannot reach the site that matters most.</b>
-	 * That class builds three answers — the one {@code search} returns, the one
-	 * {@code searchStreaming} returns, and the UNGROUNDED one it hands its consumer before grounding,
-	 * which under {@code chartsearchai.grounding.async} is the event a user actually sees. A fourth
-	 * added later would take the shorter constructor and state {@code null} on a key documented as
-	 * always present, and the only thing that reddens is a case somebody remembered to write. This
-	 * reddens instead. It is the same argument {@code ChartSearchAiUnresolvedDrugClassTest} makes for
-	 * the emission surfaces one layer up, where the guard is a call count on
-	 * {@code putSafetyChips}.
+	 * <p><b>The source form of this guard was walked past five times, and the fix was to change the
+	 * question rather than to widen the needle again.</b> Fresh reviewers got a coverage-less answer
+	 * past it with a qualified {@code new ChartSearchService.ChartAnswer(}, with a COMMENT naming the
+	 * construction (whose unbalanced bracket made a raw-text depth walk swallow every real
+	 * construction after it), with a line wrap inside the qualifier, with a unicode escape
+	 * ({@code new \u0043hartAnswer(}), and with a generic witness ({@code new <String> ChartAnswer(}).
+	 * Every one of those is a fact about TYPING. None of them survives compilation: javac writes the
+	 * constructor's descriptor into the calling class's constant pool, identically for all five.
 	 *
-	 * <p>Scanned over the argument REGION of each construction rather than over the file, because a
-	 * file-wide search for the identifier is satisfied by the two resolutions alone and would say
-	 * nothing about whether any answer carries them. The regions span several lines each, so it walks
-	 * brackets, and it does that through {@code SourceScan} — the shared reader whose source has its
-	 * comments and string literals BLANKED. Both of those matter and each was defeated in review: a
-	 * literal {@code new ChartAnswer(} needle misses the legal
-	 * {@code new ChartSearchService.ChartAnswer(}, and a walk over RAW text counts an unbalanced
-	 * bracket inside a comment and then swallows every real construction after it, taking this count
-	 * from 3 to 1 — which the failure message would then report as an added or removed answer. What it
-	 * still cannot see is an answer built somewhere other than this class, or one assembled through a
-	 * factory. <b>The count assertion does not close the first of those</b> — an earlier draft here
-	 * said it did, and a review agent refuted it by adding a coverage-less answer to
-	 * {@code ChartSearchServiceRouter}, which left this green with the count still at three. It
-	 * catches a construction MOVED out of this class, not one ADDED beside it. Closing that means
-	 * scanning every source under {@code api/src/main} and {@code omod/src/main}, which is a change of
-	 * its own.
+	 * <p>So this reads {@code ChartAnswer}'s own constructor descriptors out of its class file, and
+	 * then asserts that no other production class references any of them except the widest — the one
+	 * ending in {@code DrugReferenceLoad$Coverage}. Nothing is hardcoded: adding a constructor arity
+	 * puts it in the forbidden set automatically, which the enumeration a hardcoded list would need
+	 * cannot do. It also closes what the source form conceded, that it could only see answers built
+	 * in one FILE; this sees every class under {@code api/target/classes}.
+	 *
+	 * <p><b>The residue, named rather than claimed away.</b> It reads api's output only, because omod
+	 * is not compiled when api's tests run — no {@code omod/src/main} class constructs an answer
+	 * today, and one that did would be invisible here. It excludes {@code ChartAnswer} itself, whose
+	 * telescoping constructors legitimately name every arity. And a class that builds an answer
+	 * through a factory rather than a constructor is outside it; no such factory exists.
+	 * {@code docs/adr.md} Decision 21 rejected class files for a question about WHERE a statement
+	 * sits, which needs a parser; a descriptor needs only the constant pool.
 	 */
 	@Test
-	public void everyAnswerTheInferenceServiceBuildsCarriesTheConditionRuleCoverage() throws IOException {
-		org.openmrs.module.chartsearchai.reference.SourceScan scan =
-				new org.openmrs.module.chartsearchai.reference.SourceScan(
-						"src/main/java/org/openmrs/module/chartsearchai/api/impl/LlmInferenceService.java");
-		List<Integer> constructions = scan.matches(CHART_ANSWER_CONSTRUCTION);
-		List<String> silent = new ArrayList<>();
-		for (int at : constructions) {
-			String arguments = scan.textOf(scan.argumentsAt(at));
-			if (!arguments.contains("conditionRuleCoverage")) {
-				silent.add(scan.statementAt(at) + " …" + arguments.replaceAll("\\s+", " "));
+	public void everyAnswerThisModuleBuildsCarriesTheConditionRuleCoverage() throws IOException {
+		Path classes = ModuleSourceRoot.apiRoot().resolve("target/classes");
+		org.junit.jupiter.api.Assertions.assertTrue(java.nio.file.Files.isDirectory(classes),
+				"no " + classes + "; a guard that discovers nothing forbids nothing");
+		Path holder = classes.resolve(
+				"org/openmrs/module/chartsearchai/api/ChartSearchService$ChartAnswer.class");
+		org.junit.jupiter.api.Assertions.assertTrue(java.nio.file.Files.exists(holder),
+				"no ChartAnswer class file at " + holder + ", so this guard would forbid nothing");
+
+		List<String> constructors = new ArrayList<>();
+		for (String entry : constantPoolStrings(holder)) {
+			if (entry.startsWith(CHART_ANSWER_CTOR_PREFIX) && entry.endsWith(")V")) {
+				constructors.add(entry);
 			}
 		}
-		org.junit.jupiter.api.Assertions.assertEquals(3, constructions.size(),
-				"precondition: this rule scans every ChartAnswer construction in LlmInferenceService, "
-						+ "and a changed number means one was added or removed — which is exactly when "
-						+ "the assertion below matters, so read it rather than adjusting this figure "
-						+ "without looking. Found " + constructions.size() + ".");
-		org.junit.jupiter.api.Assertions.assertTrue(silent.isEmpty(),
-				"every answer this service builds must carry the condition-rule coverage (issue #378); "
+		org.junit.jupiter.api.Assertions.assertTrue(constructors.size() > 1,
+				"expected ChartAnswer to publish several constructor arities and found "
+						+ constructors.size() + "; with one there is nothing for a coverage-less answer "
+						+ "to be built through and this guard is vacuous");
+		List<String> widest = new ArrayList<>();
+		for (String descriptor : constructors) {
+			if (descriptor.contains(COVERAGE_TYPE)) {
+				widest.add(descriptor);
+			}
+		}
+		org.junit.jupiter.api.Assertions.assertEquals(1, widest.size(),
+				"exactly one ChartAnswer constructor may take the condition-rule coverage — it is the "
+						+ "widest, and every shorter one states null. Found " + widest.size() + ".");
+
+		List<String> violations = new ArrayList<>();
+		int callers = 0;
+		try (java.util.stream.Stream<Path> tree = java.nio.file.Files.walk(classes)) {
+			for (Path file : tree.filter(f -> f.toString().endsWith(".class"))
+					.filter(f -> !f.equals(holder)).collect(java.util.stream.Collectors.toList())) {
+				List<String> pool = constantPoolStrings(file);
+				if (!pool.contains(CHART_ANSWER_TYPE)) {
+					continue;
+				}
+				callers++;
+				for (String entry : pool) {
+					if (constructors.contains(entry) && !entry.contains(COVERAGE_TYPE)) {
+						violations.add(classes.relativize(file) + " builds " + entry);
+					}
+				}
+			}
+		}
+		org.junit.jupiter.api.Assertions.assertTrue(callers > 0,
+				"no production class outside ChartAnswer even NAMES it, so this guard just passed by "
+						+ "finding nothing to check — read " + classes + " before trusting it");
+		org.junit.jupiter.api.Assertions.assertTrue(violations.isEmpty(),
+				"every answer this module builds must carry the condition-rule coverage (issue #378); "
 						+ "one that does not states null on a key the README documents as always "
 						+ "present, and the ungrounded answer is the one a streaming user sees. "
-						+ "Found: " + silent);
+						+ "Found: " + violations);
+	}
+
+	/**
+	 * @return every {@code CONSTANT_Utf8} entry in {@code classFile}'s constant pool, walked by the
+	 *         class-file format's own lengths rather than scanned for. A regex over the raw bytes runs
+	 *         past the end of a descriptor into whatever follows it in the pool — measured while
+	 *         writing this, where it turned three unrelated method descriptors into one 629-character
+	 *         string. Long-and-double entries take two pool slots, which is the one thing a walk like
+	 *         this gets wrong if it does not know it.
+	 */
+	private static List<String> constantPoolStrings(Path classFile) throws IOException {
+		byte[] data = java.nio.file.Files.readAllBytes(classFile);
+		java.nio.ByteBuffer in = java.nio.ByteBuffer.wrap(data);
+		in.position(8);
+		int count = in.getShort() & 0xFFFF;
+		List<String> strings = new ArrayList<>();
+		for (int slot = 1; slot < count; slot++) {
+			int tag = in.get() & 0xFF;
+			switch (tag) {
+				case 1:
+					byte[] utf = new byte[in.getShort() & 0xFFFF];
+					in.get(utf);
+					strings.add(new String(utf, java.nio.charset.StandardCharsets.UTF_8));
+					break;
+				case 7: case 8: case 16: case 19: case 20:
+					in.position(in.position() + 2);
+					break;
+				case 15:
+					in.position(in.position() + 3);
+					break;
+				case 5: case 6:
+					in.position(in.position() + 8);
+					slot++;
+					break;
+				default:
+					in.position(in.position() + 4);
+					break;
+			}
+		}
+		return strings;
 	}
 
 	// --- Infrastructure ---

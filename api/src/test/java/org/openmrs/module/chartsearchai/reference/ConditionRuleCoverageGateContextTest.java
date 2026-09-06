@@ -40,8 +40,9 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * an operator who turned the contraindication arms off has certainly not screened anyone's
  * conditions. It is not the only separating arrangement, and an earlier draft of this sentence
  * claimed it was: the designs also differ with the arms off and the feature off, where a gate states
- * {@code null} and this states {@code UNLOADED}. That one is the same rule with less at stake, so it
- * is named here rather than given a case.
+ * {@code null} and this states {@code UNLOADED}. Both are cases below and both redden under the
+ * rejected gate — which the sentence that used to sit here got wrong twice over, calling the second
+ * uncased and treating it as untouched by the gate.
  */
 public class ConditionRuleCoverageGateContextTest extends BaseModuleContextSensitiveTest {
 
@@ -50,10 +51,10 @@ public class ConditionRuleCoverageGateContextTest extends BaseModuleContextSensi
 	}
 
 	/**
-	 * The discriminating arrangement. Mutate {@code conditionRuleCoverage()} to return {@code null}
-	 * where {@code reportsContraindications()} is false — the rejected design, verbatim — and read
-	 * the failures: measured on the commit that added this, that mutation reddens this case and
-	 * leaves the rest of the suite green.
+	 * The arrangement with the most at stake: the arms off over a dataset that DID load. Mutate
+	 * {@code conditionRuleCoverage()} to return {@code null} where {@code reportsContraindications()}
+	 * is false — the rejected design, verbatim — and read the failures: measured, that mutation
+	 * reddens both cases in this class and nothing outside it.
 	 */
 	@Test
 	public void theVerdictIsStatedEvenWhereTheContraindicationArmsAreSwitchedOff() {

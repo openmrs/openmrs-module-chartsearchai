@@ -2543,8 +2543,8 @@ public class DrugSafetyValidator {
 	 *         {@code drugReference.enabled}, which defaults FALSE — so on a stock install the gate is
 	 *         open and the answer is {@code UNLOADED} either way. Measured by implementing the gate and
 	 *         running the suite, which stayed green. Do not restore that argument;
-	 *         {@code ConditionRuleCoverageGateContextTest} is what now holds the rule, and its
-	 *         discriminating case is the arms OFF over a dataset that DID load.
+	 *         {@code ConditionRuleCoverageGateContextTest} is what now holds the rule; the arrangement
+	 *         that separates the two designs is the arms switched OFF, which both of its cases build.
 	 *
 	 *         <p>With the feature off {@code getLoadStatus()} answers {@code notLoaded()} without
 	 *         loading anything, so reading this can never be what parses a file on an install that

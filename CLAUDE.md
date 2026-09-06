@@ -15,7 +15,9 @@
   3. Are there any regressions — does existing behavior stay intact?
   4. Is anything missing — incomplete implementation, forgotten call sites?
   5. Does it use the real production pipeline, not a simulation or mock?
-  6. Were any tests modified? If so, that's a rule violation — revert and fix the production code instead.
+  6. Were any tests weakened to make them pass — assertions loosened, test data reverted, expected
+     values changed? If so, that's the "tests are the specification" rule above; revert and fix
+     the production code instead.
   7. Were all rules followed — this file's, and those of every nested instruction file
      covering code the change touches?
 - Follow test-driven development: for every bug fix or new feature, first write a failing test that defines the expected behavior, then write production code to make it pass. Write the strictest assertion — if it doesn't fail, tighten it until it does.

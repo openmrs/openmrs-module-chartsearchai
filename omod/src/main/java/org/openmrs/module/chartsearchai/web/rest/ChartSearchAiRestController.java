@@ -1411,10 +1411,11 @@ public class ChartSearchAiRestController {
 	 * {@link #serializeSafetyWarnings}, which takes it for the same reason. What is new here is the
 	 * guard around it: unlike {@code chartOrderBridges()} these two accessors can return null, and
 	 * {@code new ArrayList<>(null)} throws. Its ROUTINE trigger is not a failed check but the
-	 * async-grounding early {@code done}, which is built from a shorter constructor and states null on
-	 * every such request — measured by removing the guard, which breaks the {@code done} event for
-	 * every {@code chartsearchai.grounding.async=true} stream. The failed-check case reaches it too
-	 * and no path is known to deliver it: ADR Decision 61 records that no TEST reaches it, a record
+	 * async-grounding early {@code done}: that answer is handed off before either check has run, so
+	 * {@code LlmInferenceService} passes an explicit {@code null} in both arguments. Mutate a guard
+	 * away and read the failures — the {@code chartsearchai.grounding.async=true} wire cases lose
+	 * their {@code done} event. The failed-check case reaches it too and no path is known to deliver
+	 * it: ADR Decision 61 records that no TEST reaches it, a record
 	 * throwing on read being pre-empted by {@code referenceSlice}, and the one line the check's catch
 	 * is documented as covering — a read of {@code patient.getPatientId()} — is re-read by both answer
 	 * methods in their {@code finally} timing log, so a throw there errors the request instead.

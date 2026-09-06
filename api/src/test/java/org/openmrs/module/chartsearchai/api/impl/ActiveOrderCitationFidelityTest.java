@@ -195,9 +195,9 @@ public class ActiveOrderCitationFidelityTest {
 		// the citations had been examined and found sound. That PRODUCTION states nothing there is
 		// this case's claim; the controller half of it is the wire test's.
 		//
-		// The null assertion alone does NOT establish it, and review measured that: the early answer
-		// is built from a shorter constructor that has no such field, so it states null wherever the
-		// check runs, and moving the check ABOVE the handoff left every case here green. What the
+		// The null assertion alone does NOT establish it, and review measured that: production hands
+		// the early answer an explicit null in that argument, so it states null wherever the check
+		// runs, and moving the check ABOVE the handoff left every case here green. What the
 		// check's POSITION is pinned by is the log snapshot — at handoff time the WARN must not have
 		// been emitted yet.
 		int condition = indexOfType(ChartSearchAiConstants.RESOURCE_TYPE_CONDITION);

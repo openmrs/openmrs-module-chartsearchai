@@ -1,0 +1,259 @@
+{
+  "version": "1.0",
+  "description": "Test fixture (issue #355): one entry per rule shape DrugReferenceInjector.InteractionNote.namesItsPartner distinguishes, so re-derivations of that flag over the two fields it reads are discriminated by one arrangement rather than by one case per re-derivation somebody happened to write (what the arrangement does NOT reach is stated near the end). DrugSafetyValidator.partnerLabel is firstNonBlank(token, atc), so what it can distinguish is the 3x3 product of {absent, blank, non-blank} over those two fields, and the nine cells are filed here as (token state, atc state): Tailtokenshape (non-blank, absent), Tailatcshape (absent, non-blank), Tailbothnamedshape (non-blank, non-blank), Tailblanktokennamedatcshape (blank, non-blank), Tailnamedtokenblankatcshape (non-blank, blank), Tailblanktokenshape (blank, absent), Tailblankatcshape (absent, blank), Tailbothblankshape (blank, blank) and Tailneithershape (absent, absent). The last two of the naming cells are review round 7's: until it this fixture filed seven of the nine, and each empty cell admitted an inlining of partnerLabel that left the whole build green - measured by that round's reviewer, and re-measured here from the other side: with the two cells filed each inlining is red and no other case in the build fails. Every entry is a nameless unrated LONGSTUB paragraph FIRST in dataset order, then a probe row whose token/atc fields are the cell under test and which carries no severity - so DrugSafetyValidator.severityPriority ties the two and nothing but the naming key can order them, and dataset order leaves the paragraph first wherever it cannot. The paragraph is longer than MAX_INTERACTION_RENDER_CHARS, so exactly one of the two rows renders and the loser leaves the record as a withheld count: a shape that names a partner must be the row the record shows, and a shape that names none must not be. The last three entries repeat the three naming cells with no blank field, with NO note, so the probe's compact and full texts are one string and comparing them cannot tell a naming row from a nameless one; a nameless shape with no note renders blank and orderedInteractionNotes drops it before an InteractionNote exists, which is why there is no noteless counterpart of those. What this arrangement does NOT reach is a re-derivation reading a field partnerLabel does not read - every probe row here is unrated, so one admitting a nameless but RATED row is green against it and is held by DrugReferenceInjectorTest.aNamelessRuleCarryingASeverityStillDoesNotDisplaceARowThatNamesItsPartner instead. DrugReference.Interaction.setToken and setAtc normalise nothing and JsonDrugReferenceSource adds none, so a blank field arrives at partnerLabel exactly as written here.",
+  "entries": [
+    {
+      "id": "tailtokenshape-curated",
+      "name": "Tailtokenshape",
+      "drugClass": "Test fixture substance",
+      "aliases": [
+        "tailtokenshape"
+      ],
+      "atcCodes": [
+        "V99AA10"
+      ],
+      "interactions": [
+        {
+          "note": "Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. "
+        },
+        {
+          "token": "warfarin",
+          "note": "Probe row PROBEPARAGRAPH. The row whose token/ATC shape this entry exists to vary. It carries no severity, so DrugSafetyValidator.severityPriority ties it with the LONGSTUB paragraph above and only the naming key can separate the two. "
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "tailatcshape-curated",
+      "name": "Tailatcshape",
+      "drugClass": "Test fixture substance",
+      "aliases": [
+        "tailatcshape"
+      ],
+      "atcCodes": [
+        "V99AA11"
+      ],
+      "interactions": [
+        {
+          "note": "Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. "
+        },
+        {
+          "atc": "B01AA03",
+          "note": "Probe row PROBEPARAGRAPH. The row whose token/ATC shape this entry exists to vary. It carries no severity, so DrugSafetyValidator.severityPriority ties it with the LONGSTUB paragraph above and only the naming key can separate the two. "
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "tailblanktokenshape-curated",
+      "name": "Tailblanktokenshape",
+      "drugClass": "Test fixture substance",
+      "aliases": [
+        "tailblanktokenshape"
+      ],
+      "atcCodes": [
+        "V99AA12"
+      ],
+      "interactions": [
+        {
+          "note": "Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. "
+        },
+        {
+          "token": " ",
+          "note": "Probe row PROBEPARAGRAPH. The row whose token/ATC shape this entry exists to vary. It carries no severity, so DrugSafetyValidator.severityPriority ties it with the LONGSTUB paragraph above and only the naming key can separate the two. "
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "tailblankatcshape-curated",
+      "name": "Tailblankatcshape",
+      "drugClass": "Test fixture substance",
+      "aliases": [
+        "tailblankatcshape"
+      ],
+      "atcCodes": [
+        "V99AA13"
+      ],
+      "interactions": [
+        {
+          "note": "Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. "
+        },
+        {
+          "atc": " ",
+          "note": "Probe row PROBEPARAGRAPH. The row whose token/ATC shape this entry exists to vary. It carries no severity, so DrugSafetyValidator.severityPriority ties it with the LONGSTUB paragraph above and only the naming key can separate the two. "
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "tailbothblankshape-curated",
+      "name": "Tailbothblankshape",
+      "drugClass": "Test fixture substance",
+      "aliases": [
+        "tailbothblankshape"
+      ],
+      "atcCodes": [
+        "V99AA14"
+      ],
+      "interactions": [
+        {
+          "note": "Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. "
+        },
+        {
+          "token": " ",
+          "atc": " ",
+          "note": "Probe row PROBEPARAGRAPH. The row whose token/ATC shape this entry exists to vary. It carries no severity, so DrugSafetyValidator.severityPriority ties it with the LONGSTUB paragraph above and only the naming key can separate the two. "
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "tailneithershape-curated",
+      "name": "Tailneithershape",
+      "drugClass": "Test fixture substance",
+      "aliases": [
+        "tailneithershape"
+      ],
+      "atcCodes": [
+        "V99AA15"
+      ],
+      "interactions": [
+        {
+          "note": "Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. "
+        },
+        {
+          "note": "Probe row PROBEPARAGRAPH. The row whose token/ATC shape this entry exists to vary. It carries no severity, so DrugSafetyValidator.severityPriority ties it with the LONGSTUB paragraph above and only the naming key can separate the two. "
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "tailbothnamedshape-curated",
+      "name": "Tailbothnamedshape",
+      "drugClass": "Test fixture substance",
+      "aliases": [
+        "tailbothnamedshape"
+      ],
+      "atcCodes": [
+        "V99AA16"
+      ],
+      "interactions": [
+        {
+          "note": "Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. "
+        },
+        {
+          "token": "warfarin",
+          "atc": "B01AA03",
+          "note": "Probe row PROBEPARAGRAPH. The row whose token/ATC shape this entry exists to vary. It carries no severity, so DrugSafetyValidator.severityPriority ties it with the LONGSTUB paragraph above and only the naming key can separate the two. "
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "tailblanktokennamedatcshape-curated",
+      "name": "Tailblanktokennamedatcshape",
+      "drugClass": "Test fixture substance",
+      "aliases": [
+        "tailblanktokennamedatcshape"
+      ],
+      "atcCodes": [
+        "V99AA20"
+      ],
+      "interactions": [
+        {
+          "note": "Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. "
+        },
+        {
+          "token": " ",
+          "atc": "B01AA03",
+          "note": "Probe row PROBEPARAGRAPH. The row whose token/ATC shape this entry exists to vary. It carries no severity, so DrugSafetyValidator.severityPriority ties it with the LONGSTUB paragraph above and only the naming key can separate the two. "
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "tailnamedtokenblankatcshape-curated",
+      "name": "Tailnamedtokenblankatcshape",
+      "drugClass": "Test fixture substance",
+      "aliases": [
+        "tailnamedtokenblankatcshape"
+      ],
+      "atcCodes": [
+        "V99AA21"
+      ],
+      "interactions": [
+        {
+          "note": "Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. "
+        },
+        {
+          "token": "warfarin",
+          "atc": " ",
+          "note": "Probe row PROBEPARAGRAPH. The row whose token/ATC shape this entry exists to vary. It carries no severity, so DrugSafetyValidator.severityPriority ties it with the LONGSTUB paragraph above and only the naming key can separate the two. "
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "tailbaretokenshape-curated",
+      "name": "Tailbaretokenshape",
+      "drugClass": "Test fixture substance",
+      "aliases": [
+        "tailbaretokenshape"
+      ],
+      "atcCodes": [
+        "V99AA17"
+      ],
+      "interactions": [
+        {
+          "note": "Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. "
+        },
+        {
+          "token": "warfarin"
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "tailbareatcshape-curated",
+      "name": "Tailbareatcshape",
+      "drugClass": "Test fixture substance",
+      "aliases": [
+        "tailbareatcshape"
+      ],
+      "atcCodes": [
+        "V99AA18"
+      ],
+      "interactions": [
+        {
+          "note": "Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. "
+        },
+        {
+          "atc": "B01AA03"
+        }
+      ],
+      "source": "Test fixture"
+    },
+    {
+      "id": "tailbarebothshape-curated",
+      "name": "Tailbarebothshape",
+      "drugClass": "Test fixture substance",
+      "aliases": [
+        "tailbarebothshape"
+      ],
+      "atcCodes": [
+        "V99AA19"
+      ],
+      "interactions": [
+        {
+          "note": "Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so DrugSafetyValidator.partnerLabel returns null for it, DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to, and its compact form IS its whole mechanism paragraph. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major, so nothing but the naming key can order the probe row beside it. "
+        },
+        {
+          "token": "warfarin",
+          "atc": "B01AA03"
+        }
+      ],
+      "source": "Test fixture"
+    }
+  ]
+}

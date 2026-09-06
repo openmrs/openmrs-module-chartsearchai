@@ -27,7 +27,10 @@ import org.openmrs.module.chartsearchai.api.provider.CancellationSignal;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
+import org.openmrs.module.chartsearchai.reference.DrugReferenceLoad;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
+import org.openmrs.module.chartsearchai.reference.PairChipExtent;
+import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.slf4j.Logger;
@@ -127,6 +130,30 @@ public class LlmInferenceService implements ChartSearchService {
 			PatientChart chart = chartBuildingStrategy.buildChart(patient, question);
 			chart = drugReferenceInjector.inject(chart, patient, question);
 			ensurePromptFits(chart, question);
+			// Resolved once, off the chart that was actually assembled, and carried on the answer —
+			// so the audit row the REST layer writes states the mode instead of re-deriving it
+			// (issue #178). After inject() deliberately: that is the chart the LLM sees.
+			String searchMode = chartBuildingStrategy.searchModeLabel(chart);
+			// And, off the same chart and for the same reason, how much of it is the module's own
+			// reference material (issue #229). After inject() is not incidental: that is the chart the
+			// LLM sees, and the injector is what appends the records being measured. Carried on the
+			// answer because by audit-write time this chart is gone.
+			ChartSearchAiUtils.ReferenceSlice referenceSlice =
+					ChartSearchAiUtils.referenceSlice(chart.getMappings());
+			// And, off the same chart, the drug class the module reports as named-but-unresolved
+			// (issue #354). Read off the injected chart rather than by asking the question again, so
+			// the wire statement and the prompt record cannot disagree — the reason is at
+			// ChartSearchAiUtils.unresolvedDrugClass. It is carried because a prompt record only
+			// reaches a client if the model cites it, which on the issue's own reproduction it did
+			// not.
+			String unresolvedDrugClass = ChartSearchAiUtils.unresolvedDrugClass(chart.getMappings());
+			// And what this install's contraindication screen had to ask the patient's recorded
+			// conditions WITH (issue #378). A load-time verdict rather than a reading of this chart,
+			// so it is resolved here only to keep every module statement in one place; it is carried
+			// for the reason the three above are — nothing a /search consumer reads could otherwise
+			// tell a screen that cannot fire from one that asked and found nothing.
+			DrugReferenceLoad.Coverage conditionRuleCoverage =
+					drugSafetyValidator.conditionRuleCoverage();
 			buildMs = System.currentTimeMillis() - buildStart;
 
 			long llmStart = System.currentTimeMillis();
@@ -136,17 +163,32 @@ public class LlmInferenceService implements ChartSearchService {
 			inputTokens = response.getInputTokens();
 			cachedTokens = response.getCachedTokens();
 
-			List<RecordReference> references = groundReferences(response.getAnswer(),
-					extractCitedReferences(response.getAnswer(), response.getCitations(),
-							chart.getMappings()),
+			List<RecordReference> cited = extractCitedReferences(response.getAnswer(),
+					response.getCitations(), chart.getMappings());
+			ClassCodeFidelityCheck.reportClassCodeDefects(patient, question, response.getAnswer(),
+					cited, chart.getMappings());
+			// The prose check's own answer, carried rather than re-derived (issue #337 round two): a
+			// consumer could not re-ask it if it wanted to, the chart being gone by REST time, and a
+			// second walk would be the two-resolutions-that-agree shape #151 forbids.
+			List<Integer> unfaithfullyRenderedCitations =
+					ReferenceProseFidelityCheck.reportUnfaithfulReferenceProse(patient,
+							response.getAnswer(), cited, chart.getMappings());
+			List<RecordReference> references = groundReferences(response.getAnswer(), cited,
 					chart.getMappings());
+			// A per-call sink, never a field: the validator is a Spring singleton, so a field would be
+			// one slot shared by every concurrent request (issue #172). What it hears is how bounded
+			// the interaction list behind these chips is — the statement issue #336 exists for, and one
+			// no consumer can re-derive from the chips themselves. Which arm states it, and when none
+			// does, is PairChipExtent's and ChartAnswer.getPairChipExtent()'s to say, not a sink site's.
+			PairChipExtent.Sink pairExtent = new PairChipExtent.Sink();
 			DrugSafetyValidator.SafetyCheckResult safetyResult =
-					drugSafetyValidator.validateWithStatus(response.getAnswer(), question, patient,
-							chart.getMappings());
+					drugSafetyValidator.validateWithStatus(response.getAnswer(), question,
+							patient, chart.getMappings(), pairExtent);
 			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
 					response.getInputTokens(), response.getOutputTokens(),
-					response.getCachedTokens(), safetyResult.getWarnings(), safetyResult.getStatus(),
-					safetyResult.toMap());
+					response.getCachedTokens(), safetyResult.getWarnings(), searchMode, referenceSlice,
+					pairExtent.stated(), unresolvedDrugClass, unfaithfullyRenderedCitations,
+					conditionRuleCoverage, safetyResult.getStatus());
 			outcome = "ok";
 			return answer;
 		}
@@ -221,7 +263,11 @@ public class LlmInferenceService implements ChartSearchService {
 	 * querystore migration (#51) produces a question-independent chart prefix, so warmup is viable:
 	 * <ul>
 	 *   <li>{@code preFilter=false} — {@link QueryStoreChartBuilder} returns the patient's full
-	 *       chart via {@code getPatientChart}; bytes are a function of the patient only.</li>
+	 *       chart via {@code getPatientChart}; bytes do not vary with the question, which is what
+	 *       makes warmup viable. They are not, however, permanent: since issue #317 a drug-order
+	 *       record also states whether its order is in force, so an order lapsing moves the bytes
+	 *       from that record onward and warmup's primed prefix is reusable only up to it. See
+	 *       {@code QueryStoreChartBuilder}'s class javadoc for what that costs.</li>
 	 *   <li>{@code preFilter=true} — full chart plus a small trailing "Records ranked by
 	 *       similarity to the query: ..." focus hint. The records section (the bulk of the prompt)
 	 *       is byte-identical across queries; the hint and the question vary only at the very end,
@@ -389,6 +435,27 @@ public class LlmInferenceService implements ChartSearchService {
 			PatientChart chart = chartBuildingStrategy.buildChart(patient, question);
 			chart = drugReferenceInjector.inject(chart, patient, question);
 			ensurePromptFits(chart, question);
+			// One resolution for BOTH answers this method produces (issue #178). The early-done path
+			// audits the ungrounded answer and the classic path audits the returned one, so a mode
+			// each of them derived separately is two audit-write sites that can disagree — which is
+			// half of what #178 was, one layer up.
+			String searchMode = chartBuildingStrategy.searchModeLabel(chart);
+			// The slice too, and for the reason just given about the mode: one resolution for both
+			// answers this method produces (issue #229). Off the post-inject chart, which is the whole
+			// point of the number — see the same pair in search() above.
+			ChartSearchAiUtils.ReferenceSlice referenceSlice =
+					ChartSearchAiUtils.referenceSlice(chart.getMappings());
+			// The class statement too, one resolution for both answers this method produces and for
+			// the same reason (issue #354). Both need it, and the ungrounded one especially: with
+			// async grounding the early "done" is emitted from THAT answer, so a statement set only
+			// on the returned one would be absent from the event the user actually sees.
+			String unresolvedDrugClass = ChartSearchAiUtils.unresolvedDrugClass(chart.getMappings());
+			// The condition-rule coverage too, one resolution for both answers this method produces
+			// and for the same reason (issue #378). The ungrounded one especially: with async
+			// grounding the early "done" is emitted from THAT answer, and this statement is known
+			// before the model is called, so there is no reason for that event to carry less.
+			DrugReferenceLoad.Coverage conditionRuleCoverage =
+					drugSafetyValidator.conditionRuleCoverage();
 			buildMs = System.currentTimeMillis() - buildStart;
 
 			// Progressive reasoning: stream a fast preview reasoning from the focused top-K chart to
@@ -419,9 +486,6 @@ public class LlmInferenceService implements ChartSearchService {
 			List<RecordReference> cited = extractCitedReferences(response.getAnswer(),
 					response.getCitations(), chart.getMappings());
 			citationsConsumer.accept(cited);
-			DrugSafetyValidator.SafetyCheckResult safetyResult =
-					drugSafetyValidator.validateWithStatus(response.getAnswer(), question, patient,
-							chart.getMappings());
 
 			// The answer is complete: hand the whole (not yet grounding-verified) result to the
 			// caller before the grounding pass, so the REST layer can finish the user-visible
@@ -429,18 +493,48 @@ public class LlmInferenceService implements ChartSearchService {
 			// Fires regardless of whether grounding is enabled — see the interface contract.
 			ungroundedAnswerConsumer.accept(new ChartAnswer(response.getAnswer(), cited,
 					response.getInputTokens(), response.getOutputTokens(),
-					response.getCachedTokens(), safetyResult.getWarnings(), safetyResult.getStatus(),
-					safetyResult.toMap()));
+					response.getCachedTokens(), Collections.<SafetyWarning> emptyList(), searchMode,
+					referenceSlice, null, unresolvedDrugClass, null, conditionRuleCoverage,
+					DrugSafetyValidator.STATUS_UNAVAILABLE));
+
+			// After the user-visible handoff, before grounding: two exact comparisons over what the
+			// answer states about the records it cites — the class-code defects a set-membership
+			// comparison can and cannot see (issues #142 and #338), and prose reproduced from a cited
+			// reference record and then rewritten inside the sentence it was copying (issue #337).
+			// Neither blocks: the class-code check reports only to the log, and the prose check's own
+			// answer is carried onto the ChartAnswer this method RETURNS, so no consumer above waits
+			// on either. Not "microseconds", which this comment said and which is true only of the first:
+			// the second is a word-level dynamic program, measured at ~0.7 ms on a realistic chart and
+			// ~1.2 ms at the largest injected record set anyone has swept (ADR Decision 61).
+			ClassCodeFidelityCheck.reportClassCodeDefects(patient, question, response.getAnswer(),
+					cited, chart.getMappings());
+			// Its answer is carried onto the ChartAnswer this method returns (issue #337 round two).
+			// The early one above cannot have it and states null: the check runs HERE, after the
+			// user-visible handoff, and moving it ahead would put a word-level dynamic program in
+			// front of the "done" event for a statement that is not needed to render the answer.
+			List<Integer> unfaithfullyRenderedCitations =
+					ReferenceProseFidelityCheck.reportUnfaithfulReferenceProse(patient,
+							response.getAnswer(), cited, chart.getMappings());
 
 			long groundStart = System.currentTimeMillis();
 			List<RecordReference> references = groundReferences(response.getAnswer(), cited,
 					chart.getMappings());
 			groundMs = System.currentTimeMillis() - groundStart;
 
+			// A per-call sink, never a field: the validator is a Spring singleton, so a field would be
+			// one slot shared by every concurrent request (issue #172). What it hears is how bounded
+			// the interaction list behind these chips is — the statement issue #336 exists for, and one
+			// no consumer can re-derive from the chips themselves. Which arm states it, and when none
+			// does, is PairChipExtent's and ChartAnswer.getPairChipExtent()'s to say, not a sink site's.
+			PairChipExtent.Sink pairExtent = new PairChipExtent.Sink();
+			DrugSafetyValidator.SafetyCheckResult safetyResult =
+					drugSafetyValidator.validateWithStatus(response.getAnswer(), question,
+							patient, chart.getMappings(), pairExtent);
 			ChartAnswer answer = new ChartAnswer(response.getAnswer(), references,
 					response.getInputTokens(), response.getOutputTokens(),
-					response.getCachedTokens(), safetyResult.getWarnings(), safetyResult.getStatus(),
-					safetyResult.toMap());
+					response.getCachedTokens(), safetyResult.getWarnings(), searchMode, referenceSlice,
+					pairExtent.stated(), unresolvedDrugClass, unfaithfullyRenderedCitations,
+					conditionRuleCoverage, safetyResult.getStatus());
 			outcome = "ok";
 			return answer;
 		}

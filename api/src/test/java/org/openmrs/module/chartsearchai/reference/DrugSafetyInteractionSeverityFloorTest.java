@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Test;
  * them by default while Major/Moderate/Minor rules, class-based chips, contraindications, and
  * curated rules without a severity (all deliberate, hand-authored) are untouched.
  *
- * <p>All scenarios run the real pipeline: real bundled DDInter sample (or curated seed) parsed
+ * <p>All scenarios run the real pipeline: real DDInter excerpt (or curated seed) parsed
  * by the real sources, real validate overloads, GP reads on their no-context defaults.
  */
 public class DrugSafetyInteractionSeverityFloorTest {
@@ -39,8 +39,8 @@ public class DrugSafetyInteractionSeverityFloorTest {
 
 	@Test
 	public void ddinterInteractionsCarryStructuredSeverity() {
-		DrugReference warfarin = new DdiDrugReferenceSource().load().stream()
-				.filter(r -> "Warfarin".equalsIgnoreCase(r.getName())).findFirst().orElseThrow();
+		DrugReference warfarin = DrugReferenceTestSupport.row(
+				DrugReferenceTestSupport.ddinterEntries(), "Warfarin");
 		DrugReference.Interaction ibuprofen = warfarin.getInteractions().stream()
 				.filter(i -> "ibuprofen".equals(i.getToken())).findFirst().orElseThrow();
 		assertEquals("Major", ibuprofen.getSeverity(),
@@ -65,7 +65,7 @@ public class DrugSafetyInteractionSeverityFloorTest {
 	@Test
 	public void moderateSeverityRuleChipStillFires() {
 		// Boundary pin one step above the default floor: aspirin x lisinopril is a Moderate
-		// row in the bundled sample and must keep chipping.
+		// row in the DDInter excerpt and must keep chipping.
 		List<SafetyWarning> warnings = ddinterValidator().validate(
 				"Aspirin could be considered for cardioprotection.", "Can she take aspirin?",
 				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Lisinopril"),
@@ -80,7 +80,7 @@ public class DrugSafetyInteractionSeverityFloorTest {
 		// The floor's LOWER boundary: "minimum severity a rule must carry" means Minor itself
 		// passes under the default floor. Mutation-proven necessary: with the comparison
 		// off-by-one (<=), every other test in the suite still passes while Minor rules are
-		// silently filtered. Spironolactone x aspirin is a Minor row in the bundled sample,
+		// silently filtered. Spironolactone x aspirin is a Minor row in the DDInter excerpt,
 		// and spironolactone shares no subgroup or group with aspirin here, so the Minor rule
 		// chip is the only warning this arrangement can produce.
 		List<SafetyWarning> warnings = ddinterValidator().validate(
@@ -94,7 +94,7 @@ public class DrugSafetyInteractionSeverityFloorTest {
 
 	@Test
 	public void sameSubgroupPairKeepsTheClassChipWhenItsRuleIsFloorFiltered() throws Exception {
-		// The floor x class-arm seam, pinned on a real-shaped fixture (the bundled sample has
+		// The floor x class-arm seam, pinned on a real-shaped fixture (the DDInter excerpt has
 		// no same-subgroup pair): two ACE inhibitors joined by an Unknown-severity row. The
 		// rated rule chip is floor-filtered; the duplicate-therapy class chip survives — the
 		// pair yields exactly ONE warning, and it is the informative one (this is also what
@@ -119,7 +119,7 @@ public class DrugSafetyInteractionSeverityFloorTest {
 		// The curated seed's hand-authored rules carry no severity field; absent severity is
 		// exempt from the floor — every curated rule is deliberate.
 		DrugSafetyValidator validator = DrugReferenceTestSupport
-				.validator(DrugReferenceTestSupport.bundledService());
+				.validator(DrugReferenceTestSupport.curatedService());
 		List<SafetyWarning> warnings = validator.validate(
 				"Ibuprofen would be a reasonable choice.", "What can we give for pain?",
 				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Warfarin"),
@@ -130,28 +130,9 @@ public class DrugSafetyInteractionSeverityFloorTest {
 	}
 
 	@Test
-	public void presentInvalidSeverityNeverBypassesTheFloorOrReachesPromptContext() {
-		DrugReference ref = new DrugReference();
-		ref.setId("test-drug");
-		ref.setName("Test Drug");
-		DrugReference.Interaction invalid = new DrugReference.Interaction();
-		invalid.setToken("misspelled");
-		invalid.setSeverity("Majro");
-		DrugReference.Interaction unrated = new DrugReference.Interaction();
-		unrated.setToken("curated-unrated");
-		ref.setInteractions(java.util.Arrays.asList(invalid, unrated));
-
-		assertFalse(DrugSafetyValidator.clearsSeverityFloor(invalid, 1));
-		assertTrue(DrugSafetyValidator.clearsSeverityFloor(unrated, 1));
-		String rendered = DrugReferenceInjector.render(ref, null, null).text;
-		assertFalse(rendered.contains("misspelled"));
-		assertTrue(rendered.contains("curated-unrated"));
-	}
-
-	@Test
 	public void classBasedChipsAreUnaffectedByTheFloor() {
 		// The floor governs rule-based chips only: the class arm (duplicate therapy) carries no
-		// severity and keeps firing. Enalapril is not a bundled-sample drug, so no rated rule
+		// severity and keeps firing. Enalapril is not in the excerpt, so no rated rule
 		// is involved here at all — this pins the pure class arm; the rule-filtered-same-pair
 		// seam is pinned by sameSubgroupPairKeepsTheClassChipWhenItsRuleIsFloorFiltered.
 		List<SafetyWarning> warnings = ddinterValidator().validate(

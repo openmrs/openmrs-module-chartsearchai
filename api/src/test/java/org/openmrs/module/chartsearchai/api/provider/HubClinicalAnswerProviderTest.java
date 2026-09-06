@@ -128,6 +128,48 @@ public class HubClinicalAnswerProviderTest {
 				TurnEventType.ANSWER_VALIDATION, TurnEventType.TURN_DONE), sink.types());
 	}
 
+	@Test
+	public void aTransportFailureAfterDoneDoesNotEmitASecondTerminalEvent() throws Exception {
+		ScriptedHubTransport transport = new ScriptedHubTransport();
+		transport.events = Collections.singletonList(wire("done", answerPayload("Aspirin 81mg.")));
+		transport.failure = new RuntimeException("connection close failed");
+		transport.cancelOnFailure = false;
+		HubClinicalAnswerProvider provider = provider(transport,
+				"http://hub.example/v1/chat/completions");
+		CollectingSink sink = new CollectingSink();
+
+		TurnResult result = provider.execute(request("product-profile-a"), sink,
+				CancellationSignal.NONE).toCompletableFuture().get();
+
+		assertEquals(TurnEventType.TURN_DONE, result.getTerminalState());
+		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.ANSWER_DONE,
+				TurnEventType.TURN_DONE), sink.types());
+		assertTrue(TurnLifecycleValidator
+				.violations(provider.descriptor().getCapabilities(), sink.types()).isEmpty());
+	}
+
+	@Test
+	public void aTransportFailureAfterHubErrorPreservesTheError() throws Exception {
+		ScriptedHubTransport transport = new ScriptedHubTransport();
+		transport.events = Collections.singletonList(wire("error",
+				Collections.<String, Object>singletonMap("code", "upstream_unavailable")));
+		transport.failure = new RuntimeException("connection close failed");
+		transport.cancelOnFailure = false;
+		HubClinicalAnswerProvider provider = provider(transport,
+				"http://hub.example/v1/chat/completions");
+		CollectingSink sink = new CollectingSink();
+
+		TurnResult result = provider.execute(request("product-profile-a"), sink,
+				CancellationSignal.NONE).toCompletableFuture().get();
+
+		assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
+		assertEquals("upstream_unavailable", result.getProblemCode());
+		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.TURN_ERROR),
+				sink.types());
+		assertTrue(TurnLifecycleValidator
+				.violations(provider.descriptor().getCapabilities(), sink.types()).isEmpty());
+	}
+
 	private static HubClinicalAnswerProvider provider(ScriptedHubTransport transport, String endpoint) {
 		return new HubClinicalAnswerProvider(transport) {
 
@@ -176,13 +218,11 @@ public class HubClinicalAnswerProviderTest {
 		Map<String, Object> pending = new LinkedHashMap<>(validated);
 		pending.put("inDepth", Collections.singletonMap("status", "pending"));
 		Map<String, Object> indepthDone = new LinkedHashMap<>(validated);
-		Map<String, Object> inDepth = new LinkedHashMap<>();
-		inDepth.put("status", "needs_review");
-		Map<String, Object> inDepthValidation = new LinkedHashMap<>();
-		inDepthValidation.put("status", "needs_review");
-		inDepthValidation.put("summary", "One claim is not supported by its cited source.");
-		inDepth.put("validation", inDepthValidation);
-		indepthDone.put("inDepth", inDepth);
+		Map<String, Object> finalInDepthPayload = new LinkedHashMap<>();
+		finalInDepthPayload.put("status", "done");
+		finalInDepthPayload.put("validation", Collections.singletonMap("summary",
+				"One claim is not supported by its cited source."));
+		indepthDone.put("inDepth", finalInDepthPayload);
 		Map<String, Object> done = new LinkedHashMap<>(indepthDone);
 		transport.events = Arrays.asList(
 				wire("answer_done", answer),

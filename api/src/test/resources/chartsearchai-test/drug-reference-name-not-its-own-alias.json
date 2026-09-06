@@ -1,0 +1,34 @@
+{
+  "version": "1.0",
+  "source": "hand-authored fixture for issue #209's hardening — not shipped data",
+  "description": "The one shape a hand-authored `json` dataset admits and the DDInter/ATC parsers cannot produce: an entry whose `aliases` omit its own `name`. DdiDrugReferenceSource makes the display name alias[0] and AtcDrugReferenceSource makes it the ONLY alias, so on both of those every entry names itself. Here `Ibuprofen` publishes only the stem `ibuprof`, which the recorded-name matcher reaches by its two-letter inflection allowance but the PROSE matcher does not reach at all. That makes it the strongest claimant on `ibuprofen` while being absent from the prose candidate set for the same word — the shape that empties a candidate set, which nameMatchStrength's javadoc already records as the gap the matchesDrugName gate leaves open. Two presentations then carry `ibuprofen` as an alias, so each is NAMED it at NAME_IS_ANOTHER_NAME and each is in the candidate set — but neither is its DISPLAY name, so neither is the strongest claimant and the ranked resolution reports only the stem row's substance.",
+  "entries": [
+    {
+      "id": "ibuprofen-tablets",
+      "name": "Ibuprofen tablets",
+      "aliases": ["ibuprofen"],
+      "atcCodes": ["M01AE01"],
+      "contraindications": [
+        { "type": "allergy", "token": "ibuprofen", "note": "documented ibuprofen allergy" }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "ibuprofen-suspension",
+      "name": "Ibuprofen suspension",
+      "aliases": ["ibuprofen"],
+      "atcCodes": ["M01AE01"],
+      "contraindications": [
+        { "type": "allergy", "token": "ibuprofen", "note": "documented ibuprofen allergy" }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "ibuprofen",
+      "name": "Ibuprofen",
+      "aliases": ["ibuprof"],
+      "atcCodes": ["M01AE01"],
+      "source": "hand-authored fixture"
+    }
+  ]
+}

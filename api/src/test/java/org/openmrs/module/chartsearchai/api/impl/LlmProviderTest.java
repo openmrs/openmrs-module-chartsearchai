@@ -22,7 +22,9 @@ import java.util.function.Consumer;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
+import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 
 /**
@@ -270,16 +272,31 @@ public class LlmProviderTest {
 				+ "record it rests on. A demonstrated verdict with no citation behind it is exactly "
 				+ "the fabricated-verdict shape the eval gate cannot see (#126), taught by example");
 		// Both branches must stay reachable. #107's abstention is the direction that trades a
-		// missing verdict for a fabricated one, which is the worse defect, so the addressed-case
+		// missing verdict for a fabricated one, which is the worse defect, so EVERY addressed-case
 		// demonstration must sit AFTER the mango abstention and BEFORE the focus-hint banana
-		// abstention — it must not displace either.
+		// abstention — none of them may displace either. There are two since issue #283, which is
+		// why the chain below names both rather than only the first.
 		int mango = prompt.indexOf("Is it safe to deliver mangoes?");
 		int durian = prompt.indexOf("Is it safe to deliver durian?");
+		// The caution demonstration of issue #283 is a SECOND verdict demonstration, so the same
+		// constraint binds it and the chain includes it rather than skipping over it. Found by
+		// mutation: with the chain ending at durian, moving the lychee block after the banana
+		// abstention — leaving a VERDICT as the last thing the few-shot shows, which is the
+		// arrangement this ordering exists to prevent — left every test that reads the prompt green.
+		//
+		// This chain is the ONLY thing here that knows about that demonstration; its record shape,
+		// rating, lead and citations are asserted in SafetyVerdictSeverityGradationTest, beside the
+		// caution rule they belong to. So a THIRD demonstration needs assertions in whichever class
+		// owns its rule as well as an entry in this chain — the citation half of the durian block
+		// below did not travel to the lychee one for exactly that reason, and shipped unguarded until
+		// review mutated it away and found all 1300 tests still green.
+		int lychee = prompt.indexOf("Is it safe to deliver lychees?");
 		int focusHint = prompt.indexOf(LlmProvider.FOCUS_HINT_LABEL);
-		assertTrue(mango > 0 && durian > mango && focusHint > durian,
-				"Few-shot order must be mango abstention -> durian verdict -> focus-hint banana "
-				+ "abstention, so neither abstention demonstration is displaced by the new one. "
-				+ "mango=" + mango + " durian=" + durian + " focusHint=" + focusHint);
+		assertTrue(mango > 0 && durian > mango && lychee > durian && focusHint > lychee,
+				"Few-shot order must be mango abstention -> durian verdict -> lychee caution verdict "
+				+ "-> focus-hint banana abstention, so no abstention demonstration is displaced by a "
+				+ "verdict one. mango=" + mango + " durian=" + durian + " lychee=" + lychee
+				+ " focusHint=" + focusHint);
 		assertTrue(prompt.contains("never \"Yes\" or \"No\""),
 				"The unaddressed branch's #107 guard must survive verbatim");
 	}
@@ -538,6 +555,176 @@ public class LlmProviderTest {
 	}
 
 	@Test
+	public void extractResponse_shouldReadNumericStringCitationsAsIndices() {
+		// Issue #219. The module asks for a json_schema whose citation items are integers, but the
+		// SERVER enforces that, not this parser — so a model may still write its indices as strings.
+		// A strict isInt() check read this array as empty and said nothing: an answer whose
+		// references the model got right arrived with none whenever its prose did not anchor them
+		// inline as well.
+		String response = "{\"answer\": \"CD4 counts are 988.0 [9] and 1191.0 [10].\", "
+				+ "\"citations\": [\"9\", \"10\"]}";
+		LlmProvider.LlmResponse result = LlmProvider.extractResponse(response);
+		assertEquals("CD4 counts are 988.0 [9] and 1191.0 [10].", result.getAnswer());
+		assertEquals(Arrays.asList(9, 10), result.getCitations());
+	}
+
+	@Test
+	public void extractResponse_shouldCoerceOnlyTheTypeNeverWhichValuesAreAdmitted() {
+		// The coercion reads the same VALUES the integer path reads — nothing more, nothing less.
+		// 0 and -1 are not record indices, but they are dropped downstream by
+		// extractCitedReferences (which surfaces only indices with a record behind them), exactly
+		// as the citation-zero-index and citation-negative-index cases pin for the integer path.
+		// Filtering them here instead would move that decision into the parser and hide it.
+		String strings = "{\"answer\": \"Allergy to Beef [5].\", \"citations\": [\"-1\", \"0\", \"5\"]}";
+		String integers = "{\"answer\": \"Allergy to Beef [5].\", \"citations\": [-1, 0, 5]}";
+		assertEquals(LlmProvider.extractResponse(integers).getCitations(),
+				LlmProvider.extractResponse(strings).getCitations(),
+				"a string-typed array must parse to exactly what its integer-typed twin parses to");
+		assertEquals(Arrays.asList(-1, 0, 5), LlmProvider.extractResponse(strings).getCitations());
+	}
+
+	@Test
+	public void extractResponse_shouldStillDropCitationEntriesThatNameNoIndex() {
+		// The bound on the coercion: a string is an index only when the whole string IS one. A
+		// label, a null or an object names no record, so widening the type must not turn the array
+		// into "anything goes" — 8 is the only citation this response carries.
+		String response = "{\"answer\": \"TB is active [8].\", "
+				+ "\"citations\": [8, \"eight\", \"9x\", \"\", null, {\"index\": 9}, 9.7]}";
+		LlmProvider.LlmResponse result = LlmProvider.extractResponse(response);
+		assertEquals(Arrays.asList(8), result.getCitations());
+	}
+
+	@Test
+	public void extractResponse_shouldReportANonConformantCitationsArrayAtWarn() {
+		// Silence was the defect, so recovering the indices is only half the fix: an operator whose
+		// model is off-schema has to be able to find that out. Asserted on the LEVEL rather than the
+		// message, per LogCapture's javadoc — a re-wording must not be able to drop the guard.
+		String offSchema = "{\"answer\": \"CD4 is 988.0 [9].\", \"citations\": [\"9\"]}";
+		try (LogCapture capture = LogCapture.on(LlmAnswerExtractor.class.getName())) {
+			assertEquals(Arrays.asList(9), LlmProvider.extractResponse(offSchema).getCitations());
+			assertTrue(capture.hasEventAtOrAbove(Level.WARN),
+					"a citations array that does not honour the integer schema must be reported, not "
+							+ "silently repaired — the repair is a guess about a model that is "
+							+ "misbehaving in other ways too. Captured: " + capture.describeAll());
+		}
+		String conformant = "{\"answer\": \"CD4 is 988.0 [9].\", \"citations\": [9]}";
+		try (LogCapture capture = LogCapture.on(LlmAnswerExtractor.class.getName())) {
+			assertEquals(Arrays.asList(9), LlmProvider.extractResponse(conformant).getCitations());
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"a schema-conformant array must stay quiet, or the warning is noise every install "
+							+ "learns to ignore. Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void extractResponse_shouldReadAScalarCitationsValueAsTheOneIndexItNames() {
+		// Issue #221 — the CONTAINER case of what #219/#220 fixed for ENTRIES. The isArray() guard
+		// discarded a whole citations field that was not an array, in silence. A scalar has exactly
+		// one reading (an array of one), which is the same test #219 applied to "9": coerce what
+		// cannot be read two ways. Both JSON types citationIndex already accepts appear here, so the
+		// container's admitted types cannot drift from the entries'.
+		LlmProvider.LlmResponse number = LlmProvider.extractResponse(
+				"{\"answer\": \"TB is active [8].\", \"citations\": 8}");
+		assertEquals("TB is active [8].", number.getAnswer());
+		assertEquals(Arrays.asList(8), number.getCitations());
+
+		LlmProvider.LlmResponse text = LlmProvider.extractResponse(
+				"{\"answer\": \"TB is active [8].\", \"citations\": \"8\"}");
+		assertEquals(Arrays.asList(8), text.getCitations(),
+				"a scalar string index reads exactly as its integer twin, as it does inside an array");
+	}
+
+	@Test
+	public void extractResponse_shouldReadAScalarCitationsValueExactlyAsItsOneElementArray() {
+		// The bound, stated as an equality so it cannot rot: coercing the CONTAINER admits no value
+		// the one-element array does not already admit. 0 and -1 are not record indices and are not
+		// filtered here either — extractCitedReferences remains the only thing that decides which
+		// indices become references.
+		for (String value : new String[] { "8", "0", "-1", "\"8\"", "\"-1\"" }) {
+			String scalar = "{\"answer\": \"A [8].\", \"citations\": " + value + "}";
+			String array = "{\"answer\": \"A [8].\", \"citations\": [" + value + "]}";
+			assertEquals(LlmProvider.extractResponse(array).getCitations(),
+					LlmProvider.extractResponse(scalar).getCitations(),
+					"scalar citations " + value + " must parse to exactly what [" + value
+							+ "] parses to");
+		}
+	}
+
+	@Test
+	public void extractResponse_shouldReportAScalarCitationsValueAtWarn() {
+		// Silence was the defect, so recovering the index is only half the fix — same argument as
+		// #220's entry-typing WARN. Asserted on the LEVEL, per LogCapture's javadoc, so a re-wording
+		// cannot drop the guard.
+		try (LogCapture capture = LogCapture.on(LlmAnswerExtractor.class.getName())) {
+			assertEquals(Arrays.asList(8), LlmProvider.extractResponse(
+					"{\"answer\": \"TB is active [8].\", \"citations\": 8}").getCitations());
+			assertTrue(capture.hasEventAtOrAbove(Level.WARN),
+					"a citations field the server should have constrained to an array must be "
+							+ "reported when it is coerced, not silently repaired. Captured: "
+							+ capture.describeAll());
+		}
+	}
+
+	@Test
+	public void extractResponse_shouldStayQuietOnAnExplicitNullCitations() {
+		// The distinction this pins is the load-bearing one, and it is NOT "array versus not an
+		// array" — every other non-array container now warns (see the case above). It is what the
+		// container ASSERTS. null asserts ABSENCE: the same statement as an omitted field, made by a
+		// provider whose answer cites nothing, and this code already does exactly what it says.
+		// Nothing is lost and nothing is guessed, so there is nothing to report — and a channel that
+		// fires on a provider behaving correctly is worth less than no channel. Everything that
+		// reaches readNonArrayCitations asserts PRESENCE of something unusable, which is a loss.
+		//
+		// Captured at DEBUG so the assertion covers every level, not just WARN: this must log
+		// nothing at all, which is what stops the two branches being folded together later.
+		try (LogCapture capture = LogCapture.on(LlmAnswerExtractor.class.getName(), Level.DEBUG)) {
+			LlmProvider.LlmResponse result = LlmProvider.extractResponse(
+					"{\"answer\": \"No records.\", \"citations\": null}");
+			assertEquals("No records.", result.getAnswer());
+			assertTrue(result.getCitations().isEmpty());
+			assertTrue(capture.describeAll().isEmpty(),
+					"an explicit null citations names no defect and must log nothing at all. "
+							+ "Captured: " + capture.describeAll());
+		}
+		// And the same for an omitted field, which is the statement null is equivalent to.
+		try (LogCapture capture = LogCapture.on(LlmAnswerExtractor.class.getName(), Level.DEBUG)) {
+			assertTrue(LlmProvider.extractResponse("{\"answer\": \"No records.\"}")
+					.getCitations().isEmpty());
+			assertTrue(capture.describeAll().isEmpty(),
+					"an omitted citations field must stay indistinguishable from an explicit null. "
+							+ "Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void extractResponse_shouldReportACitationsContainerWithNoSingleReadingAtWarn() {
+		// A container that is neither an array nor a scalar naming an index has no ONE reading, so
+		// there is nothing to coerce and inventing one would be widening a VALUE. The VALUE
+		// behaviour is therefore unchanged — no citations — but the loss is reported at WARN, at the
+		// same level and in the same shape as reportNonConformantCitations, which already warns for
+		// this exact information loss one level in (an array whose ENTRIES name no index). Reporting
+		// the container more quietly would be two channels for one failure.
+		//
+		// This is not a warning on hypothetical data: the branch cannot run unless a provider really
+		// did send a citations field this parser cannot use. An earlier draft logged it at DEBUG on
+		// an "unobserved shape" argument that does not apply, and which the default org.openmrs.*
+		// level of WARN would have made worse — DEBUG is evidence for someone already looking.
+		for (String value : new String[] { "{\"index\": 9}", "\"eight\"", "9.7", "true" }) {
+			String response = "{\"answer\": \"A [9].\", \"citations\": " + value + "}";
+			try (LogCapture capture = LogCapture.on(LlmAnswerExtractor.class.getName())) {
+				LlmProvider.LlmResponse result = LlmProvider.extractResponse(response);
+				assertEquals("A [9].", result.getAnswer(),
+						"the answer is the half that is not in doubt and must survive " + value);
+				assertTrue(result.getCitations().isEmpty(),
+						"citations " + value + " names no index; inventing one would widen a value");
+				assertTrue(capture.hasEventAtOrAbove(Level.WARN),
+						"a citations container this parser cannot use must be reported, not skipped "
+								+ "quietly: " + value + ". Captured: " + capture.describeAll());
+			}
+		}
+	}
+
+	@Test
 	public void normalizeSlashCitations_shouldConvertSlashesToSeparateBrackets() {
 		assertEquals("Tuberculosis [1], [2] and Malaria [3], [4]",
 				LlmProvider.normalizeSlashCitations("Tuberculosis [1/2] and Malaria [3/4]"));
@@ -593,6 +780,19 @@ public class LlmProviderTest {
 		assertEquals("Condition [1].", result.getAnswer());
 		assertTrue(result.getCitations().contains(1),
 				"salvageable in-range citation must survive: " + result.getCitations());
+	}
+
+	@Test
+	public void extractResponse_shouldSalvageNumericStringCitationsFromTruncatedJson() {
+		// The salvage path exists BECAUSE the response is degraded, so it must not be stricter than
+		// the clean path about how the citations are typed: a model that writes "9" for 9 is also a
+		// model that can hit the output-token cap, and dropping both halves of that response leaves
+		// an answer with no references at all.
+		String truncated = "{\"answer\": \"CD4 counts are 988.0 [9] and 1191.0 [10].\", "
+				+ "\"citations\": [\"9\", \"10\"";
+		LlmProvider.LlmResponse result = LlmProvider.extractResponse(truncated);
+		assertEquals("CD4 counts are 988.0 [9] and 1191.0 [10].", result.getAnswer());
+		assertEquals(Arrays.asList(9, 10), result.getCitations());
 	}
 
 	@Test

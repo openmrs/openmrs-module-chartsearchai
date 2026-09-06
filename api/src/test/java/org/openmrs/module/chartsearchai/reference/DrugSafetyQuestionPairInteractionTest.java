@@ -38,7 +38,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * checked against the CHART ({@code hasActiveDrug}), never against the other drug the question
  * named — so a two-drug question was silently reduced to two independent one-drug questions.
  *
- * <p>All scenarios run the real pipeline: real datasets — the bundled DDInter sample and the curated
+ * <p>All scenarios run the real pipeline: real datasets — the DDInter excerpt and the curated
  * seed, plus {@link #PAIR_FIXTURE} for shapes neither carries — parsed by the real sources, real
  * {@code validate}/{@code injectRecords} overloads, GP reads on their no-context defaults.
  */
@@ -46,7 +46,7 @@ public class DrugSafetyQuestionPairInteractionTest {
 
 	private static final String PAIR_QUESTION = "Does warfarin interact with aspirin?";
 
-	/** Shapes the bundled DDInter sample cannot express — route variants sharing a match token, a
+	/** Shapes the DDInter excerpt cannot express — route variants sharing a match token, a
 	 *  pair joined by two differently-tokened rules, an ATC-only rule — each a miniature of a shape
 	 *  the full KB carries; see the fixture's own description. */
 	private static final String PAIR_FIXTURE = "chartsearchai-test/drug-reference-question-pairs.json";
@@ -64,10 +64,11 @@ public class DrugSafetyQuestionPairInteractionTest {
 		return DrugReferenceTestSupport.ctx(60, null, null, null, null, null);
 	}
 
-	/** The real parsed entry for {@code name} (real bundled DDInter sample, real parser). */
+	/** The real parsed entry for {@code name}, from the same DDInter excerpt this class's validator runs
+	 *  over (real parser, real data) — never the bundled default, which since ADR Decision 36 is the whole
+	 *  knowledge base and would make every premise here a statement about data the assertions never see. */
 	private static DrugReference ddinterEntry(String name) {
-		return new DdiDrugReferenceSource().load().stream()
-				.filter(r -> name.equalsIgnoreCase(r.getName())).findFirst().orElseThrow();
+		return DrugReferenceTestSupport.row(DrugReferenceTestSupport.ddinterEntries(), name);
 	}
 
 	/** A service over {@link #PAIR_FIXTURE}, parsed by the real {@link JsonDrugReferenceSource}. */
@@ -139,7 +140,7 @@ public class DrugSafetyQuestionPairInteractionTest {
 		DrugReference simvastatin = ddinterEntry("Simvastatin");
 		assertTrue(simvastatin.getInteractions().stream()
 				.anyMatch(i -> "aspirin".equals(i.getToken()) && "Unknown".equals(i.getSeverity())),
-				"precondition: the sample rates simvastatin x aspirin Unknown, i.e. below the default floor");
+				"precondition: the excerpt rates simvastatin x aspirin Unknown, i.e. below the default floor");
 
 		List<SafetyWarning> warnings = ddinterValidator().validate(
 				"The records do not address the interaction between simvastatin and aspirin.",
@@ -154,7 +155,7 @@ public class DrugSafetyQuestionPairInteractionTest {
 		// The no-false-positive case, on the curated seed (source-independent arm): its Ibuprofen
 		// entry's rules name warfarin and aspirin, and its Paracetamol entry's rule names warfarin —
 		// neither names the other, so naming both in one question must produce nothing.
-		DrugReferenceService curated = DrugReferenceTestSupport.bundledService();
+		DrugReferenceService curated = DrugReferenceTestSupport.curatedService();
 		String question = "Can we give ibuprofen together with paracetamol?";
 		List<DrugReference> resolved = curated.findByQuery(question);
 		assertTrue(resolved.stream().anyMatch(r -> "Ibuprofen".equals(r.getName()))
@@ -380,28 +381,42 @@ public class DrugSafetyQuestionPairInteractionTest {
 		}
 	}
 
-	/** Every drug in the bundled DDInter sample, named in one question — the polypharmacy-review shape
+	/** Every drug in the DDInter excerpt, named in one question — the polypharmacy-review shape
 	 *  a clinician can type in one line, and the arm's worst case, since pairs grow as N²/2. */
-	private static final String POLYPHARMACY_QUESTION = "Reviewing polypharmacy: lisinopril, metformin,"
-			+ " methotrexate, omeprazole, sertraline, simvastatin, spironolactone, tramadol, warfarin,"
-			+ " aspirin, ciprofloxacin, clarithromycin, digoxin, fluconazole, amiodarone and ibuprofen"
-			+ " — any interactions?";
+	private static final String POLYPHARMACY_QUESTION = DrugReferenceTestSupport.POLYPHARMACY_QUESTION;
 
-	/** The severity word the chip's own note leads with, as a rank; -1 when the chip carries none.
-	 *  Read from the segment the pair chip appends after its provenance clause, so a severity word
-	 *  occurring later inside a mechanism paragraph cannot be mistaken for the rule's rating. */
+	/**
+	 * The rank the arm ordered this chip on — {@link SafetyWarning#getSeverity()} put through the one
+	 * definition of that ordering, {@code severityPriority}.
+	 *
+	 * <p>Issue #207: this used to read the severity WORD out of the rendered detail, locating it by
+	 * {@code indexOf("also named in the question — ")}, and returned {@code -1} when it could not find
+	 * that clause — a sentinel the ordering loop skipped. So rewording one clause of clinician-facing
+	 * prose made the helper answer "no opinion" for EVERY chip and
+	 * {@link #thePairChipsAreOrderedBySeverityAndBounded} passed while asserting nothing. Measured on
+	 * {@code ae09928}: with the sort removed the case fails; with the clause reworded to "also mentioned
+	 * in the question" it passes, and it passes with BOTH mutations applied at once. The clause is chip
+	 * text and chip text is reworded routinely (#182, #188, #192, #198, #205, #210 all changed
+	 * neighbouring strings), so the trigger was a normal action rather than a hypothetical.
+	 *
+	 * <p>Now it reads the structured rating the chip carries, so no prose is parsed, and it FAILS rather
+	 * than returning a sentinel when it cannot classify one: a pair chip built from a rated rule that
+	 * arrives with no rating means the ordering key was not carried, which is precisely the state in
+	 * which the ordering assertion below would otherwise silently stop asserting. Every chip this arm
+	 * raises from the DDInter excerpt is rule-rated — the sample assigns every row one of the
+	 * four ratings — so an absent rating here is never the legitimate unrated case.
+	 */
 	private static int chipSeverityRank(SafetyWarning warning) {
-		int at = warning.getDetail().indexOf("also named in the question — ");
-		if (at < 0) {
-			return -1;
+		if (warning.getSeverity() == null) {
+			throw new AssertionError("this chip carries no severity, so the ordering it was sorted on is "
+					+ "not observable and the assertion below would skip it (issue #207): " + warning);
 		}
-		String tail = warning.getDetail().substring(at + "also named in the question — ".length());
-		for (String severity : Arrays.asList("Major", "Moderate", "Minor", "Unknown")) {
-			if (tail.startsWith(severity)) {
-				return DrugSafetyValidator.severityPriority(severity);
-			}
+		if (!Arrays.asList("Major", "Moderate", "Minor", "Unknown").contains(warning.getSeverity())) {
+			throw new AssertionError("unrecognized severity '" + warning.getSeverity() + "' — severityPriority "
+					+ "ranks it above Major as an unrated rule, which for a DDInter-rated chip means the "
+					+ "rating was mangled rather than absent: " + warning);
 		}
-		return -1;
+		return DrugSafetyValidator.severityPriority(warning.getSeverity());
 	}
 
 	@Test
@@ -450,7 +465,7 @@ public class DrugSafetyQuestionPairInteractionTest {
 		assertTrue(named.stream().map(DrugReference::getName).collect(Collectors.toList())
 				.containsAll(Arrays.asList("Warfarin", "Ibuprofen")),
 				"precondition: the ANSWER must name both drugs of a pair the source rates above the"
-						+ " floor (warfarin x ibuprofen is Major in the bundled sample), else this proves"
+						+ " floor (warfarin x ibuprofen is Major in the DDInter excerpt), else this proves"
 						+ " nothing: " + named);
 
 		List<SafetyWarning> warnings = ddinterValidator().validate(answer, "Is ibuprofen safe here?",
@@ -459,6 +474,30 @@ public class DrugSafetyQuestionPairInteractionTest {
 		assertTrue(warnings.isEmpty(),
 				"only the QUESTION's drugs may be paired: the answer naming a second drug must not"
 						+ " produce a pair chip about a combination nobody proposed, was: " + warnings);
+	}
+
+	@Test
+	public void anInteractionChipCarriesTheRatingItWasOrderedOn() {
+		// The property the ordering case above rests on (issue #207). Both arms sort their chips by the
+		// source's rating and then dropped it, leaving the rendered prose as the only trace — so a chip
+		// that stopped carrying it would make the ordering assertion untestable except by parsing
+		// clinician-facing text. Asserted per arm, because they build their chips at different sites: the
+		// question-pair arm and the active-order arm.
+		SafetyWarning pairChip = ddinterValidator()
+				.validate(ABSTAINING_ANSWER, PAIR_QUESTION, patientOnNeitherDrug()).get(0);
+		assertTrue(pairChip.getDetail().contains("named in the question"),
+				"precondition: the pair arm's chip, was: " + pairChip);
+		assertEquals("Major", pairChip.getSeverity(),
+				"the pair chip must carry the source's rating for warfarin x aspirin, was: " + pairChip);
+
+		SafetyWarning orderChip = ddinterValidator().validate(
+				"Warfarin and aspirin together increase bleeding risk.", PAIR_QUESTION,
+				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Aspirin 81mg"),
+						null, null, null)).get(0);
+		assertTrue(orderChip.getDetail().contains("active order"),
+				"precondition: the active-order arm's chip, was: " + orderChip);
+		assertEquals("Major", orderChip.getSeverity(),
+				"and so must the active-order chip for the same pair, was: " + orderChip);
 	}
 
 	@Test
@@ -475,12 +514,17 @@ public class DrugSafetyQuestionPairInteractionTest {
 		assertTrue(interactionChips(warnings) <= 10,
 				"the pair arm must bound what one question can raise, was " + interactionChips(warnings)
 						+ " chips: " + warnings);
+		// Precondition on the INSTRUMENT, not on the arm: an ordering assertion over fewer than two chips
+		// is satisfied by anything, so the case has to know it received a list worth ordering (issue #207 —
+		// the same class of vacuity the helper above carried).
+		assertTrue(interactionChips(warnings) >= 2,
+				"precondition: this question must raise several chips, or there is no ordering to assert,"
+						+ " was: " + warnings);
 		int previous = Integer.MAX_VALUE;
 		for (SafetyWarning warning : warnings) {
+			// No skip: chipSeverityRank now throws rather than returning a sentinel, so a chip this case
+			// cannot classify fails it instead of passing through it.
 			int rank = chipSeverityRank(warning);
-			if (rank < 0) {
-				continue;
-			}
 			assertTrue(rank <= previous,
 					"pair chips must be ordered most-severe first, was: " + warnings);
 			previous = rank;
@@ -523,7 +567,7 @@ public class DrugSafetyQuestionPairInteractionTest {
 		// Keying pairs on the drugs' match tokens is a de-duplication inside a safety net, so its
 		// failure direction is the dangerous one — a key too coarse drops a real interaction silently
 		// — and this pins it against real data: three drugs named in one question, three above-floor
-		// pairs among them in the bundled sample, three chips.
+		// pairs among them in the DDInter excerpt, three chips.
 		List<SafetyWarning> warnings = ddinterValidator().validate(
 				"These are commonly co-prescribed.",
 				"Is it safe to combine lisinopril, spironolactone and ibuprofen?", patientOnNeitherDrug());

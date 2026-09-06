@@ -32,7 +32,6 @@
       "id": "citation-hallucinated-extra",
       "question": "What are the CD4 counts?",
       "simulatedLlmResponse": "{\"answer\": \"The CD4 counts are 988.0 [9] and 1191.0 [10].\", \"citations\": [9, 10, 3]}",
-      "simulatedCitations": [9, 10, 3],
       "expectedRecordIndices": [9, 10],
       "tags": ["citation", "hallucination"]
     },
@@ -124,7 +123,6 @@
       "id": "citation-multiple-hallucinated-mixed",
       "question": "What medications is the patient on?",
       "simulatedLlmResponse": "{\"answer\": \"The patient takes Azithromycin [1] [2], and has other treatments [11] [15] [20].\", \"citations\": [1, 2, 11, 15, 20]}",
-      "simulatedCitations": [1, 2, 11, 15, 20],
       "expectedRecordIndices": [1, 2],
       "tags": ["citation", "hallucination", "multiple"]
     },
@@ -132,7 +130,6 @@
       "id": "citation-partial-overlap",
       "question": "What family planning and allergies?",
       "simulatedLlmResponse": "{\"answer\": \"Family planning: Condoms [6], Diaphragm [7]. Allergies: Beef [5]. Also see [12].\", \"citations\": [6, 7, 5, 12]}",
-      "simulatedCitations": [6, 7, 5, 12],
       "expectedRecordIndices": [5, 6, 7],
       "tags": ["citation", "hallucination", "partial-overlap"]
     },
@@ -154,9 +151,15 @@
       "id": "citation-string-type-citations",
       "question": "What are the CD4 counts?",
       "simulatedLlmResponse": "{\"answer\": \"CD4 counts are 988.0 [9] and 1191.0 [10].\", \"citations\": [\"9\", \"10\"]}",
-      "simulatedCitations": [9, 10],
       "expectedRecordIndices": [9, 10],
       "tags": ["citation", "string-type"]
+    },
+    {
+      "id": "citation-string-type-citations-array-only",
+      "question": "What are the CD4 counts?",
+      "simulatedLlmResponse": "{\"answer\": \"\", \"citations\": [\"9\", \"10\"]}",
+      "expectedRecordIndices": [9, 10],
+      "tags": ["citation", "string-type", "empty-answer"]
     },
     {
       "id": "citation-multiple-same-type",
@@ -191,7 +194,7 @@
       "question": "What medications is the patient on?",
       "simulatedLlmResponse": "{\"answer\": \"Azithromycin [1] [2].\", \"citations\": [1, 2,]}",
       "expectedRecordIndices": [1, 2],
-      "tags": ["citation", "malformed", "trailing-comma"]
+      "tags": ["citation", "trailing-comma"]
     },
     {
       "id": "citation-inline-markers-missing-from-array",

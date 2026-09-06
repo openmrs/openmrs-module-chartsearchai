@@ -1,0 +1,24 @@
+{
+  "version": "1.0",
+  "source": "hand-authored fixture for issue #308 — not shipped data",
+  "description": "The one shape in which the two injected channels can disagree about a COLLAPSED KEY. Levoketoconazole files two self-named allergy rules — 'levo', which carries a note and which an allergy recorded as 'Levocetirizine' reaches only mid-word, and 'ketoconazole', which carries NO note and which an allergy recorded as 'Ketoconazole' names outright. contraindicationFinding keys both on the substance (issue #146), so they are ONE chip and one rendered clause, while each rule is put to the chart on its own token: the first is uncorroborated and the second is corroborated. They also TIE on rank — contraindicationRank answers SELF_NAMED_RULE_MATCHED_BY_CONTAINMENT_ALONE for the first and SELF_NAMED_RULE_WITHOUT_A_NOTE for the second, both 0 — so the ledger's incumbent-keeps tiebreak leaves the noted rule's sentence standing, and the rule ORDER here is deliberate: the uncorroborated one is authored first so it is the incumbent. Before issue #308 resolved the key as a MAX, the record said 'Recorded for this patient' while the finding beside it said the module could not corroborate the match. The second entry exists only so 'Ketoconazole' resolves to a substance that is NOT this one, which is what keeps the corroboration of rule two a leg-1 answer rather than a leg-2 one. No entry carries ATC codes, so no class comparison can chip."
+  ,
+  "entries": [
+    {
+      "id": "levoketoconazole",
+      "name": "Levoketoconazole",
+      "aliases": ["levoketoconazole", "ketoconazole", "levo"],
+      "contraindications": [
+        { "type": "allergy", "token": "levo", "note": "documented levo allergy" },
+        { "type": "allergy", "token": "ketoconazole", "note": "" }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "ketoconazole",
+      "name": "Ketoconazole",
+      "aliases": ["ketoconazole"],
+      "source": "hand-authored fixture"
+    }
+  ]
+}

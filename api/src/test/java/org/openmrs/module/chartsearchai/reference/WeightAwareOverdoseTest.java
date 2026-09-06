@@ -33,7 +33,7 @@ import org.junit.jupiter.api.Test;
 public class WeightAwareOverdoseTest {
 
 	private DrugSafetyValidator validator() {
-		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.bundledService());
+		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService());
 	}
 
 	private PatientClinicalContext ctx(Integer age, Double weightKg) {

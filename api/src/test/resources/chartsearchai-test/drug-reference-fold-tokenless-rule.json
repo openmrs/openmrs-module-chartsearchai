@@ -1,0 +1,24 @@
+{
+  "version": "1.0",
+  "source": "test fixture — a rule filed under an ATC code with no match token",
+  "description": "PatientClinicalContext.hasActiveDrug joins a rule to an active order on the rule's ATC code when it carries no token, and DrugSafetyValidator.partnerLabel then renders that code. The class arm resolves the same order to its dataset entry and renders a name, so the folded detail names one prescription twice — once as a raw ATC code. Reachable only on an operator-edited sourceFormat=json dataset: the ddinter parser always writes a token from the partner row's rxnorm_name. Pins the residue reconciledPartnerName records as its third case.",
+  "entries": [
+    {
+      "id": "lisinopril",
+      "name": "Lisinopril",
+      "aliases": ["lisinopril"],
+      "atcCodes": ["C09AA03"],
+      "interactions": [
+        { "atc": "C09AA05", "note": "additive hyperkalemia and renal impairment risk" }
+      ],
+      "source": "test fixture"
+    },
+    {
+      "id": "ramipril",
+      "name": "Ramipril",
+      "aliases": ["ramipril"],
+      "atcCodes": ["C09AA05"],
+      "source": "test fixture"
+    }
+  ]
+}

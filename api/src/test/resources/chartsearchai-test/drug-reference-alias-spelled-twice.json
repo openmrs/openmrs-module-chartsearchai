@@ -1,0 +1,13 @@
+{
+  "version": "1.0",
+  "source": "Test fixture — an operator-authored entry spelling one of its names twice (issue #330)",
+  "description": "The one reachable data shape in which a DUPLICATE-collapsing edit to DrugReference.foldedAll would shorten the folded alias list: this parser trims an alias but does not lower-case it, so \"Aspirin\" and \"aspirin\" are two distinct RAW aliases that fold to one value. Measured 2026-08-30 through the real loaders and DrugReference.foldedLower, no dataset the module bundles carries such a pair — 0 duplicate slots over the shipped 19 MB knowledge base's 8300, the DDInter excerpt's 132 and the curated seed's 12 — so over those datasets a dedupe changes no length and no index, and a guard run only over them cannot see it. The null BEFORE the first real alias and the third, distinct alias AFTER the duplicated pair are here for the same reason one level along: a null-skip, a filter or a reorder each shifts the folded list against the raw one, and the alias that then sits at the shifted index has to be a DIFFERENT string for the shift to be observable. Read by FoldedOperandTest.everyAliasOfALoadedEntryIsItsOwnWitness; nothing else loads it, so the entry raises no chip anywhere.",
+  "entries": [
+    {
+      "id": "aspirin-name-spelled-twice",
+      "name": "Aspirin",
+      "aliases": [null, "Aspirin", "aspirin", "acetylsalicylic acid"],
+      "source": "Test fixture"
+    }
+  ]
+}

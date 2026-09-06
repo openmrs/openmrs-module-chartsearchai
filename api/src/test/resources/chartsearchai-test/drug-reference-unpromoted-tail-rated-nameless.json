@@ -1,0 +1,29 @@
+{
+  "version": "1.0",
+  "description": "Test fixture (issue #355): the severity-independence half of DrugReferenceInjector.InteractionNote.namesItsPartner. It is drug-reference-unpromoted-tail-nameless.json with a Major severity added to the nameless LONGSTUB row, so that whether a row names a partner and whether it carries a severity stop answering alike. Re-deriving the flag as severity != null then reports TRUE for a paragraph that names no partner, and Major outranks the Moderate row that does name one, so the paragraph takes the one slot the character budget cannot refuse and metformin leaves the record. The two rows are deliberately of very different lengths so the substitution is visible in the record's own size.",
+  "entries": [
+    {
+      "id": "ratednamelessmix-curated",
+      "name": "Ratednamelessmix",
+      "drugClass": "Test fixture substance",
+      "aliases": [
+        "ratednamelessmix"
+      ],
+      "atcCodes": [
+        "V99AA05"
+      ],
+      "interactions": [
+        {
+          "token": "metformin",
+          "severity": "Moderate",
+          "note": "Moderate. A short mechanism note about metformin."
+        },
+        {
+          "note": "Locally curated rule LONGSTUB. This operator-authored row carries no token and no ATC code, so it names no partner and can never match one of the patient's own orders; the Major rating beside it rates nothing nameable. This operator-authored row carries no token and no ATC code, so it names no partner and can never match one of the patient's own orders; the Major rating beside it rates nothing nameable. This operator-authored row carries no token and no ATC code, so it names no partner and can never match one of the patient's own orders; the Major rating beside it rates nothing nameable. This operator-authored row carries no token and no ATC code, so it names no partner and can never match one of the patient's own orders; the Major rating beside it rates nothing nameable. This operator-authored row carries no token and no ATC code, so it names no partner and can never match one of the patient's own orders; the Major rating beside it rates nothing nameable. This operator-authored row carries no token and no ATC code, so it names no partner and can never match one of the patient's own orders; the Major rating beside it rates nothing nameable. This operator-authored row carries no token and no ATC code, so it names no partner and can never match one of the patient's own orders; the Major rating beside it rates nothing nameable. This operator-authored row carries no token and no ATC code, so it names no partner and can never match one of the patient's own orders; the Major rating beside it rates nothing nameable. This operator-authored row carries no token and no ATC code, so it names no partner and can never match one of the patient's own orders; the Major rating beside it rates nothing nameable. ",
+          "severity": "Major"
+        }
+      ],
+      "source": "Test fixture"
+    }
+  ]
+}

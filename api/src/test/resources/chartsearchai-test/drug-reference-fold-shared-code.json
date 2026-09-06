@@ -1,0 +1,36 @@
+{
+  "version": "1.0",
+  "source": "test fixture — a fold whose two arms resolve one ATC code to two different substances",
+  "description": "The shape DrugSafetyValidator.addPartnersForUnmappedOrders records as the bound at the cross-arm fold: a level-5 ATC code published by two substances (the shipped KB's Omeprazole and Esomeprazole share A02BC05). Pantoprazole carries a rated rule whose TOKEN names Esomeprazole and whose atc is that shared code, and Omeprazole is listed first so entryForAtcCode/canonicalRow names the class arm's partner after it. ruleAbout correlates the two arms through the code, so the class sentence about Omeprazole folds onto a rule about Esomeprazole — and the two differing names are the only thing telling a reader that two partners are in play. The fold must therefore NOT displace the rule's own token here. No substanceName is published, so each row is its own substance (DrugReference.substanceGroupKey falls back to the entry).",
+  "entries": [
+    {
+      "id": "pantoprazole",
+      "name": "Pantoprazole",
+      "aliases": ["pantoprazole"],
+      "atcCodes": ["A02BC02"],
+      "interactions": [
+        {
+          "token": "esomeprazole",
+          "atc": "A02BC05",
+          "severity": "Major",
+          "note": "Major. Esomeprazole competes for CYP2C19 and raises pantoprazole exposure."
+        }
+      ],
+      "source": "test fixture"
+    },
+    {
+      "id": "omeprazole",
+      "name": "Omeprazole",
+      "aliases": ["omeprazole"],
+      "atcCodes": ["A02BC05"],
+      "source": "test fixture"
+    },
+    {
+      "id": "esomeprazole",
+      "name": "Esomeprazole",
+      "aliases": ["esomeprazole"],
+      "atcCodes": ["A02BC05"],
+      "source": "test fixture"
+    }
+  ]
+}

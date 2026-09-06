@@ -1,0 +1,1280 @@
+{
+ "metadata": {
+  "schema_version": "1.0",
+  "note": "Verbatim DDInter 2.0 slice for issue #193 - a recorded drug name that denotes SEVERAL substances. Rows are field-for-field their shipped-KB rows in KB order, and the interaction rows are every KB pair among them. Three shapes. (1) One constituent claims the combination name and the others only occur inside it: 'sulfamethoxazole / trimethoprim' is one of Trimethoprim's own CIEL names (claim rank NAME_IS_ANOTHER_NAME) while Sulfamethoxazole merely occurs inside it as a bounded token (NAME_TOKEN_INSIDE_A_NAME), so issue #192's ranked resolution answers Trimethoprim alone and the sulfa moiety - the one that drives that allergy - is never compared: J01EA in place of J01EB. Sulfisoxazole is the J01EB sibling that lets the class arm be observed against the sulfa moiety and not only the identity arm. 'omeprazole / sodium bicarbonate' is the same shape with more at stake: it is one of Sodium bicarbonate's CIEL names, so the answer is B05CB/B05XA and the PPI class A02BC is lost entirely; Pantoprazole is the A02BC sibling it has to be compared against. Esomeprazole is present because Omeprazole's rxnorm_name IS 'esomeprazole' - without it that substance-name family would name one drugbank_id instead of two and the fixture's substance identities would stop matching the shipped KB's (issue #187). (2) SEVERAL constituents claim the name equally: 'abacavir / lamivudine' is a CIEL name of both Abacavir and Lamivudine, which is the 1367-name population issue #193 measures, and both are J05AF - so Zidovudine (J05AF01) shares a class with BOTH and is the subject that shows one recorded name still raises one chip. (3) Three legs of the resolution that the cases above leave unpinned, each with the rows its own measurement needs. 'amoxicillin and clavulanic acid' carries NO '/' and no trailing qualifier, so neither the constituent leg nor the moiety leg can reach it: it is a CIEL name of both Amoxicillin and Clavulanic acid at the alias rank, and only the equal-claimant leg reaches the amoxicillin the patient is allergic to. 'potassium citrate/potassium gluconate' joins its ingredients with a BARE separator and names both of them, which is the shape a structural 'only a spaced separator counts' split would stop reaching. It does NOT isolate that split from the equal-claimant leg - both rows publish the name, so the leg reaches the second ingredient without it, and reverting the split to ' / ' leaves the suite green. See DrugReference.combinationConstituents, which records that measured honestly rather than claiming a pin it does not have. 'benzocaine / clove oil' is the same split's lower bound: the constituent 'clove oil' reaches the Clove row only by CONTAINMENT, which is the rank the gate refuses, and Benzocaine (topical) is the constituent that does resolve, so the case cannot pass by the fixture being inert. 'ketorolac tromethamine' is the equal-claimant leg's own condition: Tromethamine claims that name only by CONTAINMENT, which is the rank issue #192 established is a false claim on a name, and the leg admits only entries making the SAME claim as the strongest, so the buffer is held back; relax that to 'any match' and a patient allergic to the ketorolac salt is told they are allergic to the buffer. Ketorolac (ophthalmic) is present because it shares Ketorolac's substance and must not chip twice.",
+  "source": {
+   "name": "DDInter 2.0",
+   "url": "https://ddinter2.scbdd.com/",
+   "normalization": "RxNorm (NLM)",
+   "bridge": "CIEL v2026-07-20"
+  }
+ },
+ "mechanisms": {
+  "-1": {
+   "text": null,
+   "categories": []
+  },
+  "279": {
+   "text": "Concomitant use of nonsteroidal anti-inflammatory drugs (NSAIDs) with potassium salts may increase the risk of hyperkalemia. NSAIDs may produce potassium retention by reducing renal synthesis of prostaglandin E and impairing the renin-angiotensin system.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "3020": {
+   "text": "Some topical anesthetics can be systemically absorbed and cause methemoglobinemia, particularly when applied to mucous membranes. Coadministration with other oxidizing agents that can also induce methemoglobinemia such as injectable local anesthetics, antimalarials (e.g., chloroquine, primaquine, quinine, tafenoquine), nitrates and nitrites, sulfonamides, acetaminophen, aminosalicylic acid, dapsone, dimethyl sulfoxide, flutamide, metoclopramide, nitrofurantoin, phenazopyridine, phenobarbital, phenytoin, and rasburicase may increase the risk. Additional risk factors include very young age (e.g., infants less than 6 months); application to inflamed/abraded areas or broken skin; anemia; cardiac or pulmonary disease; peripheral vascular disease; liver cirrhosis; shock; sepsis; acidosis; and genetic predisposition (e.g., NADH cytochrome-b5 reductase deficiency; glucose-6-phosphate dehydrogenase (G6PD) deficiency; hemoglobin M).",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "3225": {
+   "text": "In a study with 14 HIV-positive patients, coadministration of trimethoprim/sulfamethoxazole (trimethoprim/sulfamethoxazole DS once a day for 5 days) and lamivudine (300 mg single dose on day 5) resulted in a mean decrease of 35% in lamivudine renal clearance and a mean increase of 43% in lamivudine area under the plasma concentration-time curve. The mechanism of interaction is thought to be competitive inhibition of tubular secretion by trimethoprim. Lamivudine did not affect the pharmacokinetic profile of trimethoprim/sulfamethoxazole. Given the favorable safety profile of lamivudine, this interaction is unlikely to be of clinical significance. However, patients with renal dysfunction should be monitored carefully and the lamivudine dose adjusted if necessary. In addition, it should be noted that the effect of higher dosages of trimethoprim/sulfamethoxazole on lamivudine pharmacokinetics has not been investigated.",
+   "categories": [
+    "excretion"
+   ]
+  },
+  "3266": {
+   "text": "The use of trimethoprim in combination with other potassium-sparing drugs or potassium salts may increase the risk of hyperkalemia. Trimethoprim inhibits sodium reabsorption and potassium excretion by blocking sodium channels in the renal distal tubules.",
+   "categories": [
+    "excretion"
+   ]
+  },
+  "3281": {
+   "text": "Limited clinical data suggest that the concomitant use of zidovudine with nonsteroidal anti-inflammatory agents may increase the risk of hematological toxicity and/or bleeding in HIV-positive patients with hemophilia.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "3976": {
+   "text": "Clove and clove oil may potentiate the effects of anticoagulants and other drugs that may affect hemostasis such as platelet inhibitors, thrombolytic agents, and nonsteroidal anti-inflammatory drugs, possibly increasing the risk of bleeding. Eugenol, the active constituent of clove and clove oil, has been shown to be an inhibitor of platelet activity.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "4734": {
+   "text": "Limited data indicate that zidovudine may significantly increase the serum half-life of both trimethoprim (TMP) and sulfamethoxazole (SMX). The mechanism is not known, but may be related to an increase in the volume of distribution of each drug. In addition, trimethoprim can decrease the renal clearance of zidovudine and its glucuronide metabolite by inhibiting their tubular secretion. However, net clearance is not affected because zidovudine is mostly metabolized and the glucuronide may be eliminated via biliary excretion. This interaction is not likely to be clinically important except when hepatic glucuronidation is also impaired by liver disease or drug inhibition.",
+   "categories": [
+    "synergistic_effect",
+    "excretion"
+   ]
+  },
+  "7960": {
+   "text": "Ester-type local anesthetics are hydrolyzed to paraaminobenzoic acid, which can inhibit the action of sulfonamides.",
+   "categories": [
+    "antagonistic_effect"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter1",
+   "name": "Abacavir",
+   "rxcui": "190521",
+   "rxnorm_name": "abacavir",
+   "drugbank_id": "DB01048",
+   "atc": [
+    "J05AF06"
+   ],
+   "ciel": [
+    {
+     "code": "103166",
+     "uuid": "103166AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Abacavir / lamivudine"
+    },
+    {
+     "code": "165606",
+     "uuid": "165606AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Abacavir / dolutegravir / lamivudine"
+    },
+    {
+     "code": "70056",
+     "uuid": "70056AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Abacavir"
+    },
+    {
+     "code": "70057",
+     "uuid": "70057AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Abacavir sulfate"
+    },
+    {
+     "code": "817",
+     "uuid": "817AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Abacavir / lamivudine / zidovudine"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1010",
+   "name": "Ketorolac",
+   "rxcui": "35827",
+   "rxnorm_name": "ketorolac",
+   "drugbank_id": "DB00465",
+   "atc": [
+    "M01AB15",
+    "S01BC05"
+   ],
+   "ciel": [
+    {
+     "code": "78481",
+     "uuid": "78481AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ketorolac"
+    },
+    {
+     "code": "78482",
+     "uuid": "78482AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ketorolac tromethamine"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1011",
+   "name": "Ketorolac (ophthalmic)",
+   "rxcui": "35827",
+   "rxnorm_name": "ketorolac",
+   "drugbank_id": "DB00465",
+   "atc": [
+    "M01AB15",
+    "S01BC05"
+   ],
+   "ciel": [
+    {
+     "code": "78481",
+     "uuid": "78481AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ketorolac"
+    },
+    {
+     "code": "78482",
+     "uuid": "78482AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ketorolac tromethamine"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1019",
+   "name": "Lamivudine",
+   "rxcui": "68244",
+   "rxnorm_name": "lamivudine",
+   "drugbank_id": "DB00709",
+   "atc": [
+    "J05AF05"
+   ],
+   "ciel": [
+    {
+     "code": "103166",
+     "uuid": "103166AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Abacavir / lamivudine"
+    },
+    {
+     "code": "161361",
+     "uuid": "161361AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Efavirenz / lamivudine / tenofovir disoproxil"
+    },
+    {
+     "code": "161363",
+     "uuid": "161363AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine / stavudine"
+    },
+    {
+     "code": "161364",
+     "uuid": "161364AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine / tenofovir disoproxil"
+    },
+    {
+     "code": "1652",
+     "uuid": "1652AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine / nevirapine / zidovudine"
+    },
+    {
+     "code": "165606",
+     "uuid": "165606AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Abacavir / dolutegravir / lamivudine"
+    },
+    {
+     "code": "165607",
+     "uuid": "165607AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine / tenofovir / zidovudine"
+    },
+    {
+     "code": "168597",
+     "uuid": "b0b9b204-de1f-430b-a55a-56e08a72e926",
+     "name": "Lamivudine / raltegravir"
+    },
+    {
+     "code": "169361",
+     "uuid": "0af318f4-94a2-4dbe-9727-fb1d682e75fb",
+     "name": "Dolutegravir / lamivudine / tenofovir alafenamide"
+    },
+    {
+     "code": "170472",
+     "uuid": "72f7a185-3673-4499-a314-9487a715eabc",
+     "name": "Dolutegravir / lamivudine"
+    },
+    {
+     "code": "170671",
+     "uuid": "b944c518-10b4-4a93-a928-d0e4d10a66e4",
+     "name": "Dolutegravir / lamivudine / tenofovir disoproxil"
+    },
+    {
+     "code": "630",
+     "uuid": "630AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine / zidovudine"
+    },
+    {
+     "code": "78643",
+     "uuid": "78643AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine"
+    },
+    {
+     "code": "792",
+     "uuid": "792AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine / nevirapine / stavudine"
+    },
+    {
+     "code": "817",
+     "uuid": "817AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Abacavir / lamivudine / zidovudine"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1340",
+   "name": "Omeprazole",
+   "rxcui": "283742",
+   "rxnorm_name": "esomeprazole",
+   "drugbank_id": "DB00338",
+   "atc": [
+    "A02BC05"
+   ],
+   "ciel": [
+    {
+     "code": "167977",
+     "uuid": "2d7b158c-5f97-449b-b0e9-46f75c82a42f",
+     "name": "Amoxicillin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167978",
+     "uuid": "cb933181-fd92-4725-91d5-2e851c9eb0b5",
+     "name": "Clarithromycin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167995",
+     "uuid": "a78c9f7d-87b8-4216-9153-53e14e5911aa",
+     "name": "Amoxicillin / clarithromycin / esomeprazole combination kit"
+    },
+    {
+     "code": "75875",
+     "uuid": "75875AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Esomeprazole"
+    },
+    {
+     "code": "75876",
+     "uuid": "75876AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Esomeprazole magnesium"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1388",
+   "name": "Pantoprazole",
+   "rxcui": "40790",
+   "rxnorm_name": "pantoprazole",
+   "drugbank_id": "DB00213",
+   "atc": [
+    "A02BC02"
+   ],
+   "ciel": [
+    {
+     "code": "81550",
+     "uuid": "81550AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Pantoprazole"
+    },
+    {
+     "code": "81551",
+     "uuid": "81551AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Pantoprazole (as pantoprazole sodium sesquihydrate)"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1498",
+   "name": "Potassium citrate",
+   "rxcui": "54993",
+   "rxnorm_name": "potassium citrate",
+   "drugbank_id": "DB09125",
+   "atc": [
+    "A12BA02"
+   ],
+   "ciel": [
+    {
+     "code": "104320",
+     "uuid": "104320AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Citric acid / dextromethorphan / guaifenesin / potassium citrate"
+    },
+    {
+     "code": "104325",
+     "uuid": "104325AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Citric acid / potassium citrate"
+    },
+    {
+     "code": "104326",
+     "uuid": "104326AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Citric acid / potassium citrate / sodium citrate"
+    },
+    {
+     "code": "104379",
+     "uuid": "104379AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Codeine / potassium citrate"
+    },
+    {
+     "code": "104454",
+     "uuid": "104454AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dextromethorphan / guaifenesin / potassium citrate"
+    },
+    {
+     "code": "104791",
+     "uuid": "104791AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Guaifenesin / phenylephrine / potassium citrate"
+    },
+    {
+     "code": "105194",
+     "uuid": "105194AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Potassium acetate / potassium bicarbonate / potassium citrate"
+    },
+    {
+     "code": "105196",
+     "uuid": "105196AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Potassium bicarbonate / potassium citrate"
+    },
+    {
+     "code": "105204",
+     "uuid": "105204AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Potassium citrate / sodium citrate"
+    },
+    {
+     "code": "82353",
+     "uuid": "82353AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Potassium citrate"
+    },
+    {
+     "code": "82354",
+     "uuid": "82354AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Potassium citrate monohydrate"
+    },
+    {
+     "code": "82355",
+     "uuid": "82355AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Potassium citrate/potassium gluconate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1499",
+   "name": "Potassium gluconate",
+   "rxcui": "89903",
+   "rxnorm_name": "potassium gluconate",
+   "drugbank_id": "DB13620",
+   "atc": [
+    "A12BA05"
+   ],
+   "ciel": [
+    {
+     "code": "105200",
+     "uuid": "105200AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Potassium chloride / potassium gluconate"
+    },
+    {
+     "code": "82351",
+     "uuid": "82351AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Potassium chloride-potassium gluconate"
+    },
+    {
+     "code": "82355",
+     "uuid": "82355AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Potassium citrate/potassium gluconate"
+    },
+    {
+     "code": "82359",
+     "uuid": "82359AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Potassium gluconate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1683",
+   "name": "Sodium bicarbonate",
+   "rxcui": "36676",
+   "rxnorm_name": "sodium bicarbonate",
+   "drugbank_id": "DB01390",
+   "atc": [
+    "B05CB04",
+    "B05XA02"
+   ],
+   "ciel": [
+    {
+     "code": "103706",
+     "uuid": "103706AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aspirin / citric acid / sodium bicarbonate"
+    },
+    {
+     "code": "104324",
+     "uuid": "104324AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Citric acid / potassium bicarbonate / sodium bicarbonate"
+    },
+    {
+     "code": "104327",
+     "uuid": "104327AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Citric acid / simethicone / sodium bicarbonate"
+    },
+    {
+     "code": "104328",
+     "uuid": "104328AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Citric acid / sodium bicarbonate"
+    },
+    {
+     "code": "104876",
+     "uuid": "104876AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrogen peroxide / sodium bicarbonate"
+    },
+    {
+     "code": "105012",
+     "uuid": "105012AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Magnesium hydroxide / omeprazole / sodium bicarbonate"
+    },
+    {
+     "code": "105118",
+     "uuid": "105118AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Omeprazole / sodium bicarbonate"
+    },
+    {
+     "code": "105125",
+     "uuid": "105125AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Pancreatin / potassium bicarbonate / sodium bicarbonate"
+    },
+    {
+     "code": "105153",
+     "uuid": "105153AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Phenobarbital / potassium iodide / sodium bicarbonate / theobromine"
+    },
+    {
+     "code": "105183",
+     "uuid": "105183AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Polyethylene glycol 3350 / potassium chloride / sodium bicarbonate / sodium chloride / sodium sulfate"
+    },
+    {
+     "code": "105198",
+     "uuid": "105198AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Potassium bicarbonate / sodium bicarbonate"
+    },
+    {
+     "code": "105199",
+     "uuid": "105199AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Potassium bitartrate / sodium bicarbonate"
+    },
+    {
+     "code": "105259",
+     "uuid": "105259AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Sodium bicarbonate / sodium chloride"
+    },
+    {
+     "code": "105260",
+     "uuid": "105260AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Sodium bicarbonate / sodium citrate"
+    },
+    {
+     "code": "105261",
+     "uuid": "105261AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Sodium bicarbonate / tartaric acid"
+    },
+    {
+     "code": "84041",
+     "uuid": "84041AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Sodium bicarbonate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1724",
+   "name": "Sulfamethoxazole",
+   "rxcui": "10178",
+   "rxnorm_name": "sulfamethazine",
+   "drugbank_id": "DB01015",
+   "atc": [
+    "J01EB03"
+   ],
+   "ciel": [
+    {
+     "code": "105280",
+     "uuid": "105280AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Sulfadiazine / sulfamerazine / sulfamethazine"
+    },
+    {
+     "code": "84469",
+     "uuid": "84469AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Sulfamethazine"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1727",
+   "name": "Sulfisoxazole",
+   "rxcui": "10207",
+   "rxnorm_name": "sulfisoxazole",
+   "drugbank_id": "DB00263",
+   "atc": [
+    "J01EB05",
+    "S01AB02"
+   ],
+   "ciel": [
+    {
+     "code": "104594",
+     "uuid": "104594AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Erythromycin / sulfisoxazole"
+    },
+    {
+     "code": "105146",
+     "uuid": "105146AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Phenazopyridine / sulfisoxazole"
+    },
+    {
+     "code": "70141",
+     "uuid": "70141AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetyl sulfisoxazole"
+    },
+    {
+     "code": "84491",
+     "uuid": "84491AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Sulfisoxazole"
+    },
+    {
+     "code": "84492",
+     "uuid": "84492AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Sulfisoxazole diolamine"
+    }
+   ]
+  },
+  {
+   "id": "DDInter184",
+   "name": "Benzocaine (topical)",
+   "rxcui": "1399",
+   "rxnorm_name": "benzocaine",
+   "drugbank_id": null,
+   "atc": [
+    "C05AD03",
+    "D04AB04",
+    "N01BA05",
+    "R02AD01"
+   ],
+   "ciel": [
+    {
+     "code": "103307",
+     "uuid": "103307AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetic acid / benzocaine"
+    },
+    {
+     "code": "103593",
+     "uuid": "103593AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Antipyrine / benzocaine"
+    },
+    {
+     "code": "103594",
+     "uuid": "103594AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Antipyrine / benzocaine / phenylephrine"
+    },
+    {
+     "code": "103595",
+     "uuid": "103595AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Antipyrine / benzocaine / urea"
+    },
+    {
+     "code": "103814",
+     "uuid": "103814AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzalkonium / benzocaine"
+    },
+    {
+     "code": "103816",
+     "uuid": "103816AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzalkonium / benzocaine / zinc chloride"
+    },
+    {
+     "code": "103827",
+     "uuid": "103827AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzethonium / benzocaine"
+    },
+    {
+     "code": "103833",
+     "uuid": "103833AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / bismuth subnitrate / cerium oxalate"
+    },
+    {
+     "code": "103834",
+     "uuid": "103834AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / boric acid"
+    },
+    {
+     "code": "103835",
+     "uuid": "103835AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / butamben / tetracaine"
+    },
+    {
+     "code": "103836",
+     "uuid": "103836AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / calcium carbonate / magnesium carbonate / phenobarbital"
+    },
+    {
+     "code": "103837",
+     "uuid": "103837AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / cetalkonium chloride"
+    },
+    {
+     "code": "103838",
+     "uuid": "103838AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / cetylpyridinium"
+    },
+    {
+     "code": "103839",
+     "uuid": "103839AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / cetylpyridinium / zinc chloride"
+    },
+    {
+     "code": "103841",
+     "uuid": "103841AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / chloroxylenol"
+    },
+    {
+     "code": "103843",
+     "uuid": "103843AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / chloroxylenol / zinc oxide"
+    },
+    {
+     "code": "103844",
+     "uuid": "103844AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / clove oil"
+    },
+    {
+     "code": "103845",
+     "uuid": "103845AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / coal tar / salicylic acid"
+    },
+    {
+     "code": "103846",
+     "uuid": "103846AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / dequalinium"
+    },
+    {
+     "code": "103847",
+     "uuid": "103847AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / dextromethorphan"
+    },
+    {
+     "code": "103848",
+     "uuid": "103848AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / docusate"
+    },
+    {
+     "code": "103849",
+     "uuid": "103849AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / ephedrine"
+    },
+    {
+     "code": "103850",
+     "uuid": "103850AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / ethanol / methylbenzethonium"
+    },
+    {
+     "code": "103851",
+     "uuid": "103851AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / ethanol / tannic acid"
+    },
+    {
+     "code": "103853",
+     "uuid": "103853AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / hexylresorcinol"
+    },
+    {
+     "code": "103854",
+     "uuid": "103854AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / ichthammol"
+    },
+    {
+     "code": "103855",
+     "uuid": "103855AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / isopropyl alcohol / menthol"
+    },
+    {
+     "code": "103856",
+     "uuid": "103856AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / licorice / menthol"
+    },
+    {
+     "code": "103857",
+     "uuid": "103857AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / menthol"
+    },
+    {
+     "code": "103858",
+     "uuid": "103858AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / methyl salicylate"
+    },
+    {
+     "code": "103859",
+     "uuid": "103859AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / methylbenzethonium"
+    },
+    {
+     "code": "103860",
+     "uuid": "103860AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / methylcellulose"
+    },
+    {
+     "code": "103861",
+     "uuid": "103861AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / oxyquinoline"
+    },
+    {
+     "code": "103862",
+     "uuid": "103862AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / phenol"
+    },
+    {
+     "code": "103863",
+     "uuid": "103863AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / phenylephrine"
+    },
+    {
+     "code": "103864",
+     "uuid": "103864AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / phenylephrine / phenylpropanolamine"
+    },
+    {
+     "code": "103865",
+     "uuid": "103865AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / pyrilamine"
+    },
+    {
+     "code": "103866",
+     "uuid": "103866AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / resorcinol"
+    },
+    {
+     "code": "103867",
+     "uuid": "103867AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / salicylamide"
+    },
+    {
+     "code": "103868",
+     "uuid": "103868AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / sulfur"
+    },
+    {
+     "code": "103869",
+     "uuid": "103869AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / tannic acid"
+    },
+    {
+     "code": "103870",
+     "uuid": "103870AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / tetracaine"
+    },
+    {
+     "code": "103871",
+     "uuid": "103871AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / triclosan"
+    },
+    {
+     "code": "103872",
+     "uuid": "103872AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / trimethobenzamide"
+    },
+    {
+     "code": "103873",
+     "uuid": "103873AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / tyrothricin"
+    },
+    {
+     "code": "103874",
+     "uuid": "103874AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine / zinc chloride"
+    },
+    {
+     "code": "169231",
+     "uuid": "2e143416-400c-46a0-862e-d4088211f98f",
+     "name": "Benzocaine / chlorbutol / paradichlorobenzene / turpentine oil"
+    },
+    {
+     "code": "72049",
+     "uuid": "72049AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzocaine"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1874",
+   "name": "Trimethoprim",
+   "rxcui": "10829",
+   "rxnorm_name": "trimethoprim",
+   "drugbank_id": "DB00440",
+   "atc": [
+    "J01EA01"
+   ],
+   "ciel": [
+    {
+     "code": "105145",
+     "uuid": "105145AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Phenazopyridine / sulfamethoxazole / trimethoprim"
+    },
+    {
+     "code": "105189",
+     "uuid": "105189AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Polymyxin B / trimethoprim"
+    },
+    {
+     "code": "105281",
+     "uuid": "105281AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Sulfamethoxazole / trimethoprim"
+    },
+    {
+     "code": "85498",
+     "uuid": "85498AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Trimethoprim"
+    },
+    {
+     "code": "85499",
+     "uuid": "85499AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Trimethoprim hydrochloride"
+    },
+    {
+     "code": "85500",
+     "uuid": "85500AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Trimethoprim lactate"
+    },
+    {
+     "code": "85501",
+     "uuid": "85501AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Trimethoprim sulfate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1883",
+   "name": "Tromethamine",
+   "rxcui": "10865",
+   "rxnorm_name": "tromethamine",
+   "drugbank_id": "DB03754",
+   "atc": [
+    "B05BB03",
+    "B05XX02"
+   ],
+   "ciel": [
+    {
+     "code": "85590",
+     "uuid": "85590AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Tromethamine"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1961",
+   "name": "Zidovudine",
+   "rxcui": "11413",
+   "rxnorm_name": "zidovudine",
+   "drugbank_id": "DB00495",
+   "atc": [
+    "J05AF01"
+   ],
+   "ciel": [
+    {
+     "code": "160123",
+     "uuid": "160123AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Zidovudine for PMTCT"
+    },
+    {
+     "code": "1652",
+     "uuid": "1652AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine / nevirapine / zidovudine"
+    },
+    {
+     "code": "165607",
+     "uuid": "165607AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine / tenofovir / zidovudine"
+    },
+    {
+     "code": "630",
+     "uuid": "630AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine / zidovudine"
+    },
+    {
+     "code": "817",
+     "uuid": "817AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Abacavir / lamivudine / zidovudine"
+    },
+    {
+     "code": "86663",
+     "uuid": "86663AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Zidovudine"
+    }
+   ]
+  },
+  {
+   "id": "DDInter394",
+   "name": "Clavulanic acid",
+   "rxcui": "48203",
+   "rxnorm_name": "clavulanate",
+   "drugbank_id": "DB00766",
+   "atc": [],
+   "ciel": [
+    {
+     "code": "104331",
+     "uuid": "104331AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Clavulanate / ticarcillin"
+    },
+    {
+     "code": "450",
+     "uuid": "450AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Amoxicillin and clavulanic acid"
+    },
+    {
+     "code": "73503",
+     "uuid": "73503AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Clavulanate"
+    },
+    {
+     "code": "73504",
+     "uuid": "73504AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Clavulanic acid"
+    },
+    {
+     "code": "73505",
+     "uuid": "73505AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Clavulanic acid, monopotassium salt"
+    }
+   ]
+  },
+  {
+   "id": "DDInter417",
+   "name": "Clove",
+   "rxcui": "1364295",
+   "rxnorm_name": "clove preparation",
+   "drugbank_id": "DB10672",
+   "atc": [],
+   "ciel": []
+  },
+  {
+   "id": "DDInter676",
+   "name": "Esomeprazole",
+   "rxcui": "283742",
+   "rxnorm_name": "esomeprazole",
+   "drugbank_id": "DB00736",
+   "atc": [
+    "A02BC05"
+   ],
+   "ciel": [
+    {
+     "code": "167977",
+     "uuid": "2d7b158c-5f97-449b-b0e9-46f75c82a42f",
+     "name": "Amoxicillin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167978",
+     "uuid": "cb933181-fd92-4725-91d5-2e851c9eb0b5",
+     "name": "Clarithromycin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167995",
+     "uuid": "a78c9f7d-87b8-4216-9153-53e14e5911aa",
+     "name": "Amoxicillin / clarithromycin / esomeprazole combination kit"
+    },
+    {
+     "code": "75875",
+     "uuid": "75875AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Esomeprazole"
+    },
+    {
+     "code": "75876",
+     "uuid": "75876AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Esomeprazole magnesium"
+    }
+   ]
+  },
+  {
+   "id": "DDInter83",
+   "name": "Amoxicillin",
+   "rxcui": "723",
+   "rxnorm_name": "amoxicillin",
+   "drugbank_id": "DB01060",
+   "atc": [
+    "J01CA04"
+   ],
+   "ciel": [
+    {
+     "code": "167977",
+     "uuid": "2d7b158c-5f97-449b-b0e9-46f75c82a42f",
+     "name": "Amoxicillin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167995",
+     "uuid": "a78c9f7d-87b8-4216-9153-53e14e5911aa",
+     "name": "Amoxicillin / clarithromycin / esomeprazole combination kit"
+    },
+    {
+     "code": "168005",
+     "uuid": "48f1556f-56e3-41ed-a2ba-773fa4e6de14",
+     "name": "Amoxicillin / floxacillin"
+    },
+    {
+     "code": "168663",
+     "uuid": "39559906-b467-47a7-abaa-499cf6b51562",
+     "name": "Amoxicillin / clarithromycin / vonoprazan combination kit"
+    },
+    {
+     "code": "450",
+     "uuid": "450AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Amoxicillin and clavulanic acid"
+    },
+    {
+     "code": "71160",
+     "uuid": "71160AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Amoxicillin"
+    },
+    {
+     "code": "71161",
+     "uuid": "71161AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Amoxicillin monosodium salt"
+    },
+    {
+     "code": "71162",
+     "uuid": "71162AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Amoxicillin trihydrate"
+    }
+   ]
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter1010",
+   "DDInter1340",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1010",
+   "DDInter1388",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1010",
+   "DDInter1498",
+   "Moderate",
+   "279"
+  ],
+  [
+   "DDInter1010",
+   "DDInter1499",
+   "Moderate",
+   "279"
+  ],
+  [
+   "DDInter1010",
+   "DDInter1683",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1010",
+   "DDInter1961",
+   "Moderate",
+   "3281"
+  ],
+  [
+   "DDInter1010",
+   "DDInter417",
+   "Minor",
+   "3976"
+  ],
+  [
+   "DDInter1010",
+   "DDInter83",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1019",
+   "DDInter1340",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1019",
+   "DDInter1388",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1019",
+   "DDInter1683",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1019",
+   "DDInter1874",
+   "Minor",
+   "3225"
+  ],
+  [
+   "DDInter1019",
+   "DDInter1961",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1019",
+   "DDInter83",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1340",
+   "DDInter1388",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1340",
+   "DDInter1683",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1340",
+   "DDInter1874",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1340",
+   "DDInter1961",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1340",
+   "DDInter83",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1388",
+   "DDInter1683",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1388",
+   "DDInter1874",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1388",
+   "DDInter1961",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1388",
+   "DDInter83",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1498",
+   "DDInter1874",
+   "Major",
+   "3266"
+  ],
+  [
+   "DDInter1499",
+   "DDInter1874",
+   "Major",
+   "3266"
+  ],
+  [
+   "DDInter1683",
+   "DDInter83",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1724",
+   "DDInter184",
+   "Moderate",
+   "7960"
+  ],
+  [
+   "DDInter1724",
+   "DDInter1961",
+   "Minor",
+   "4734"
+  ],
+  [
+   "DDInter1727",
+   "DDInter184",
+   "Moderate",
+   "3020"
+  ],
+  [
+   "DDInter1874",
+   "DDInter1961",
+   "Minor",
+   "4734"
+  ],
+  [
+   "DDInter1874",
+   "DDInter83",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1961",
+   "DDInter83",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1",
+   "DDInter1019",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1",
+   "DDInter1340",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1",
+   "DDInter1388",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1",
+   "DDInter1874",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1",
+   "DDInter1961",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1",
+   "DDInter83",
+   "Unknown",
+   "-1"
+  ]
+ ]
+}

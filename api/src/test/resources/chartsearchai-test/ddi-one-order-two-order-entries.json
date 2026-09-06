@@ -1,0 +1,124 @@
+{
+ "metadata": {
+  "note": "Verbatim DDInter 2.0 slice for issue #339 review round 2 — ONE prescription reached by the rule arm through TWO different active-order entries. Rows are field-for-field their shipped-KB rows in KB order, and the interaction rows are every KB pair among these drugs. Ketoconazole and Levoketoconazole are two SUBSTANCES (two drugbank_ids) publishing one rxnorm_name and one identical ATC list, so a chart recording a single Ketoconazole order with that dictionary's codes resolves BOTH through DrugReferenceService.findForActiveOrders while orderPartners' code walk keys exactly one co-medication on it. Both of Abacavir's rules and Ketoconazole's own rule carry the same match token, so one question naming abacavir and ketoconazole raises two rule chips about that one prescription — one whose partner entry the ladder named the co-medication after and one whose partner entry it did not."
+ },
+ "mechanisms": {
+  "6747": {
+   "text": "Levoketoconazole can cause concentration-dependent, life-threatening prolongation of the QT interval.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "8312": {
+   "text": "Use of hepatotoxic drugs together with ketoconazole or levoketoconazole may potentiate the risk of liver injury.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "8314": {
+   "text": "Use of hepatotoxic drugs together with levoketoconazole may potentiate the risk of liver injury.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter1",
+   "name": "Abacavir",
+   "rxcui": "190521",
+   "rxnorm_name": "abacavir",
+   "drugbank_id": "DB01048",
+   "atc": [
+    "J05AF06"
+   ],
+   "ciel": [
+    {
+     "code": "103166",
+     "uuid": "103166AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Abacavir / lamivudine"
+    },
+    {
+     "code": "165606",
+     "uuid": "165606AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Abacavir / dolutegravir / lamivudine"
+    },
+    {
+     "code": "70056",
+     "uuid": "70056AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Abacavir"
+    },
+    {
+     "code": "70057",
+     "uuid": "70057AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Abacavir sulfate"
+    },
+    {
+     "code": "817",
+     "uuid": "817AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Abacavir / lamivudine / zidovudine"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1008",
+   "name": "Ketoconazole",
+   "rxcui": "6135",
+   "rxnorm_name": "ketoconazole",
+   "drugbank_id": "DB01026",
+   "atc": [
+    "D01AC08",
+    "G01AF11",
+    "H02CA03",
+    "J02AB02"
+   ],
+   "ciel": [
+    {
+     "code": "78476",
+     "uuid": "78476AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ketoconazole"
+    }
+   ]
+  },
+  {
+   "id": "DDInter2007",
+   "name": "Levoketoconazole",
+   "rxcui": "6135",
+   "rxnorm_name": "ketoconazole",
+   "drugbank_id": "DB05667",
+   "atc": [
+    "D01AC08",
+    "G01AF11",
+    "H02CA03",
+    "J02AB02"
+   ],
+   "ciel": [
+    {
+     "code": "78476",
+     "uuid": "78476AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ketoconazole"
+    }
+   ]
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter1008",
+   "DDInter2007",
+   "Major",
+   "6747"
+  ],
+  [
+   "DDInter1",
+   "DDInter1008",
+   "Major",
+   "8312"
+  ],
+  [
+   "DDInter1",
+   "DDInter2007",
+   "Major",
+   "8314"
+  ]
+ ]
+}

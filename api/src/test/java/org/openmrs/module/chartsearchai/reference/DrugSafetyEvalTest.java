@@ -31,10 +31,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 /**
  * Data-driven eval for the post-LLM drug-safety validator. Loads
  * {@code evals/drug-reference/drug-safety-eval.json} and runs each case through the
- * real {@link DrugSafetyValidator} over the real bundled dataset. Model-free — it
+ * real {@link DrugSafetyValidator} over the real bundled CURATED dataset. Model-free — it
  * exercises the deterministic post-check, so it runs in CI without the LLM. Its own
  * small POJO parses the dataset, leaving the shared {@code EvalCase}/{@code EvalDataset}
  * harness untouched.
+ *
+ * <p>Curated, and pinned there rather than following the default format, because these cases specify
+ * the validator's ARMS — including the two that need data only a hand-authored dataset publishes: a
+ * dose ceiling and a hand-authored allergy/condition rule. The shipped default is the DDInter
+ * knowledge base (ADR Decision 36), which publishes neither, so running the eval over it would fail
+ * four cases for a reason that is not the validator's, and relaxing those four to match would delete
+ * the only specification those arms have.
  */
 public class DrugSafetyEvalTest {
 
@@ -74,11 +81,7 @@ public class DrugSafetyEvalTest {
 	@MethodSource("cases")
 	public void drugSafety_perCase(String id, EvalCase c) {
 		DrugSafetyValidator validator = new DrugSafetyValidator();
-		validator.setDrugReferenceService(new DrugReferenceService());
-		// The eval includes class/cross-reactivity behavior, so it explicitly evaluates those
-		// candidate rules as approved. Production uses the package's own review state.
-		validator.setCrossReactivityReviewStateForTest(
-				DrugReferencePackage.REVIEW_CLINICALLY_APPROVED);
+		validator.setDrugReferenceService(DrugReferenceTestSupport.curatedService());
 
 		PatientClinicalContext ctx = new PatientClinicalContext(c.ageYears, c.weightKg,
 				toSet(c.activeDrugs), toSet(c.activeDrugAtcCodes),

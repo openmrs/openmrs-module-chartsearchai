@@ -938,7 +938,7 @@ public class CitationGroundingVerifierTest {
 
 	/**
 	 * The real injected safety-finding record the REAL production chain renders for the canonical
-	 * case — a patient on simvastatin asked about clarithromycin — off the bundled DDInter sample
+	 * case — a patient on simvastatin asked about clarithromycin — off the DDInter excerpt
 	 * (load → parse → validate → injectRecords → renderFinding). The whole mapping rather than only
 	 * its text, unlike {@link #realReferenceRecordText}: the record's own citation index is what an
 	 * answer sentence has to cite, and its real resource type is what the carve-out keys on.
@@ -993,6 +993,13 @@ public class CitationGroundingVerifierTest {
 		// removed the passing verdict. Exempting entirely would discard it, and (since drug_reference
 		// keeps its flag) could only be done for safety_finding alone — a per-type branch in the very
 		// registry this issue exists to stop keying off type names.
+		//
+		// Issue #201 stopped PUBLISHING this verdict — the wire serializes null for every
+		// reference-group citation, because no client could tell "this citation is not about that
+		// record" from "this claim is unsupported". That did not change the pass, and this assertion
+		// is unchanged with it: it is about the verdict the MODULE holds, which is what getGrounded()
+		// returns. Choosing "exempt entirely" instead would still be the per-type branch this
+		// registry exists to avoid, and it would also drop the drug_reference flag with it.
 		RecordMapping finding = realSafetyFinding();
 		String sentence = "The patient's blood pressure is well controlled [" + finding.getIndex() + "].";
 		embeddings.register(sentence, AXIS_A);
@@ -1156,9 +1163,17 @@ public class CitationGroundingVerifierTest {
 	 *
 	 * <p>The carve-out is now DERIVED from the group
 	 * ({@link ChartSearchAiUtils#isGroundingDemoteOnly}), and this sweep is what keeps it derived:
-	 * re-hardcoding it as a list of type names still passes today — today's list and today's groups
-	 * agree — and fails the moment a fourth injected type is added, which is exactly when the omission
-	 * would otherwise ship again. Its counterpart in {@code ChartSearchAiReferenceGroupTest} asserts
+	 * re-hardcoding it as a list of type names used to pass, because the list and the groups agreed, and
+	 * it was to fail the moment a third reference-GROUP type was added. Issue #354 added one
+	 * ({@code drug_class_note}), so that is now live: measured on it, hardcoding
+	 * {@code isGroundingDemoteOnly} to the old pair reddens this case. Which OTHER sites it also
+	 * reddens differs per site; mutate the one being changed rather than reasoning from this one. A
+	 * third reference-group type and not a fourth injected type
+	 * of any kind, which is what this said until #229 measured it: hardcode the predicate, add a
+	 * fourth declared constant that groups as CHART evidence, and this sweep stays green — the
+	 * hardcode and the classification agree that such a type is not demote-only, so nothing here can
+	 * tell them apart. Classify that same constant as reference material instead and it reddens.
+	 * Its counterpart in {@code ChartSearchAiReferenceGroupTest} asserts
 	 * the same rule against the group each constant is RECORDED as, so the two registries cannot drift
 	 * together either.
 	 *
@@ -1208,5 +1223,1170 @@ public class CitationGroundingVerifierTest {
 			}
 		}
 		return -1;
+	}
+
+	// ---- enumerating sentences (issue #278) ----
+
+	/**
+	 * The real answer the live module produces for "any allergies?" — one sentence ENUMERATING three
+	 * chart records. The list-introducing colon is the structural signal that the text after it is a
+	 * series of sibling items rather than one compound claim.
+	 */
+	private static final String ENUMERATION =
+			"Yes — the patient has the following recorded allergies: Lidocaine [1], Ketoconazole [2], and Aspirin [3].";
+
+	/**
+	 * A judge that models what a correct entailment check does with a CONJUNCTION: the record entails
+	 * the statement only if every vocabulary term the statement names is one the record itself names.
+	 * A statement naming three allergens is therefore entailed by no single allergy record — which is
+	 * exactly why issue #278's answer was graded ungrounded on every citation.
+	 */
+	private static class ConjunctionAwareJudge extends LlmProvider {
+
+		private final List<String> vocabulary;
+
+		final List<List<String>> statementsPerCall = new ArrayList<List<String>>();
+
+		ConjunctionAwareJudge(String... vocabulary) {
+			this.vocabulary = Arrays.asList(vocabulary);
+		}
+
+		@Override
+		public List<Boolean> entailsBatch(List<String> sources, List<String> statements) {
+			statementsPerCall.add(new ArrayList<String>(statements));
+			List<Boolean> out = new ArrayList<Boolean>();
+			for (int i = 0; i < sources.size(); i++) {
+				String source = sources.get(i).toLowerCase();
+				String statement = statements.get(i).toLowerCase();
+				boolean entailed = true;
+				for (String term : vocabulary) {
+					if (statement.contains(term) && !source.contains(term)) {
+						entailed = false;
+					}
+				}
+				out.add(Boolean.valueOf(entailed));
+			}
+			return out;
+		}
+	}
+
+	private List<RecordMapping> allergyMappings(String secondAllergen) {
+		return Arrays.asList(mapping(1, "Allergy: Lidocaine (drug allergen)"),
+				mapping(2, "Allergy: " + secondAllergen + " (drug allergen)"),
+				mapping(3, "Allergy: Aspirin (drug allergen)"));
+	}
+
+	private List<RecordReference> threeRefs() {
+		return new ArrayList<RecordReference>(
+				Arrays.asList(reference(1), reference(2), reference(3)));
+	}
+
+	@Test
+	public void splitIntoCitedSentences_enumerationGivesEachCitationThePreambleAndItsOwnItem() {
+		List<CitationGroundingVerifier.Sentence> clauses =
+				CitationGroundingVerifier.splitIntoCitedSentences(ENUMERATION);
+
+		assertEquals(3, clauses.size(), "an enumerating sentence yields one claim per cited record");
+		String preamble = "Yes — the patient has the following recorded allergies: ";
+		assertEquals(preamble + "Lidocaine [1]", clauses.get(0).text);
+		assertEquals(preamble + "Ketoconazole [2]", clauses.get(1).text,
+				"[2]'s claim must name ITS allergen only, not the cumulative list");
+		assertEquals(preamble + "Aspirin [3]", clauses.get(2).text,
+				"the trailing item's separator and conjunction are dropped");
+
+		for (int i = 0; i < 3; i++) {
+			assertTrue(clauses.get(i).cites(i + 1));
+			assertTrue(clauses.get(i).isolate,
+					"enumeration claims share a preamble, so they must not be co-batched");
+		}
+		assertFalse(clauses.get(1).cites(1), "[2]'s claim is attributed to [2] alone");
+		assertFalse(clauses.get(1).cites(3), "[2]'s claim must not reach the later [3]");
+	}
+
+	@Test
+	public void splitIntoClauseScopedSentences_enumerationIsNotTheCumulativePrefix() {
+		List<CitationGroundingVerifier.Sentence> clauses =
+				CitationGroundingVerifier.splitIntoClauseScopedSentences(ENUMERATION);
+
+		assertEquals(3, clauses.size());
+		String preamble = "Yes — the patient has the following recorded allergies: ";
+		assertEquals(preamble + "Ketoconazole [2]", clauses.get(1).text,
+				"clause scope must not hand [2] the prefix that still names Lidocaine");
+		assertEquals(preamble + "Aspirin [3]", clauses.get(2).text);
+	}
+
+	@Test
+	public void splitIntoCitedSentences_compoundSentenceWithoutAListColonStaysOneSentence() {
+		// Invariant guard: only a sentence that ANNOUNCES a list is split. A qualifier-shaped compound
+		// keeps today's behaviour, because its later text re-qualifies one subject rather than naming
+		// a sibling, and the preamble/first-item boundary is not findable there.
+		List<CitationGroundingVerifier.Sentence> sentences =
+				CitationGroundingVerifier.splitIntoCitedSentences("A condition [1] and a diagnosis [2].");
+
+		assertEquals(1, sentences.size());
+		assertTrue(sentences.get(0).cites(1));
+		assertTrue(sentences.get(0).cites(2));
+		assertFalse(sentences.get(0).isolate);
+	}
+
+	@Test
+	public void enumeration_everyCitationGroundsAgainstItsOwnItem_onTheSentenceScopedDefault() {
+		// Issue #278: the SHIPPED default (clauseScoped=false) graded all three false, because each
+		// record was asked to entail the whole three-allergen list.
+		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("lidocaine", "ketoconazole", "aspirin");
+		verifier.setLlmProvider(judge);
+
+		List<RecordReference> result = verifier.verify(ENUMERATION, threeRefs(),
+				allergyMappings("Ketoconazole"), FLOOR, TIER2_ON, false);
+
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded(), "[1] Lidocaine");
+		assertEquals(Boolean.TRUE, result.get(1).getGrounded(), "[2] Ketoconazole");
+		assertEquals(Boolean.TRUE, result.get(2).getGrounded(), "[3] Aspirin");
+	}
+
+	@Test
+	public void enumeration_everyCitationGroundsUnderClauseScopeToo() {
+		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("lidocaine", "ketoconazole", "aspirin");
+		verifier.setLlmProvider(judge);
+
+		List<RecordReference> result = verifier.verify(ENUMERATION, threeRefs(),
+				allergyMappings("Ketoconazole"), FLOOR, TIER2_ON, true);
+
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded());
+		assertEquals(Boolean.TRUE, result.get(1).getGrounded(),
+				"clause scope previously left the second citation false");
+		assertEquals(Boolean.TRUE, result.get(2).getGrounded(),
+				"clause scope previously left the third citation false");
+	}
+
+	@Test
+	public void enumeration_aCitationWhoseRecordDoesNotSupportItsOwnItemStaysUngrounded() {
+		// The split must not become a rubber stamp: record 2 is a PENICILLIN allergy while the answer
+		// attributes Ketoconazole to it, and that citation must still be flagged.
+		ConjunctionAwareJudge judge =
+				new ConjunctionAwareJudge("lidocaine", "ketoconazole", "aspirin", "penicillin");
+		verifier.setLlmProvider(judge);
+
+		List<RecordReference> result = verifier.verify(ENUMERATION, threeRefs(),
+				allergyMappings("Penicillin"), FLOOR, TIER2_ON, false);
+
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded());
+		assertEquals(Boolean.FALSE, result.get(1).getGrounded(),
+				"a mis-attributed allergen must still be caught after the split");
+		assertEquals(Boolean.TRUE, result.get(2).getGrounded());
+	}
+
+	@Test
+	public void enumeration_citationsAreVerifiedInSeparateCallsBecauseTheyShareAPreamble() {
+		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("lidocaine", "ketoconazole", "aspirin");
+		verifier.setLlmProvider(judge);
+
+		verifier.verify(ENUMERATION, threeRefs(), allergyMappings("Ketoconazole"),
+				FLOOR, TIER2_ON, false);
+
+		assertEquals(3, judge.statementsPerCall.size(),
+				"co-batching overlapping enumeration statements lets the LLM couple their verdicts");
+		for (List<String> perCall : judge.statementsPerCall) {
+			assertEquals(1, perCall.size());
+		}
+
+		// Pin the statement text the judge actually RECEIVES, not just the splitter's Sentence.text:
+		// the citation markers are stripped between the two, and asserting only the fragment leaves
+		// that step unverified on this path.
+		List<String> received = new ArrayList<String>();
+		for (List<String> perCall : judge.statementsPerCall) {
+			received.add(perCall.get(0));
+		}
+		String preamble = "Yes — the patient has the following recorded allergies: ";
+		assertTrue(received.contains(preamble + "Lidocaine"), "judge saw: " + received);
+		assertTrue(received.contains(preamble + "Ketoconazole"), "judge saw: " + received);
+		assertTrue(received.contains(preamble + "Aspirin"), "judge saw: " + received);
+	}
+
+	@Test
+	public void splitIntoCitedSentences_aColonFollowedStraightByAMarkerIsNotAnEnumeration() {
+		// The guard has to test the MARKER-STRIPPED item: the raw item always ends in "[N]", so a
+		// plain isEmpty() check could never fire. Here [1] contributes no name of its own, so the
+		// colon is not introducing a list of named items and the sentence must fall back whole
+		// rather than hand [1] a preamble-only claim that asserts nothing.
+		List<CitationGroundingVerifier.Sentence> sentences = CitationGroundingVerifier
+				.splitIntoCitedSentences("Recorded allergies: [1], Ketoconazole [2].");
+
+		assertEquals(1, sentences.size(), "not an enumeration of named items -> no split");
+		assertTrue(sentences.get(0).cites(1));
+		assertTrue(sentences.get(0).cites(2));
+		assertFalse(sentences.get(0).isolate);
+	}
+
+	@Test
+	public void splitIntoCitedSentences_anItemWhoseNameStartsWithOrKeepsIt() {
+		// The \b in LEADING_ITEM_SEPARATOR is load-bearing and was untested: without it the optional
+		// "or" alternative eats the first two letters of a name that merely STARTS with them, and the
+		// claim then asks about "phenadrine", a drug that does not exist.
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoCitedSentences("Active drugs: Orphenadrine [1], Oxycodone [2].");
+
+		assertEquals(2, clauses.size());
+		assertEquals("Active drugs: Orphenadrine [1]", clauses.get(0).text,
+				"a name beginning 'Or' must not be truncated to 'phenadrine'");
+		assertEquals("Active drugs: Oxycodone [2]", clauses.get(1).text);
+	}
+
+	@Test
+	public void splitIntoCitedSentences_theColonNearestTheItemsIsThePreamble() {
+		// lastIndexOf, not indexOf: the introducer is the colon closest to the first item, so the
+		// earlier one stays inside the preamble rather than truncating it.
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoCitedSentences("Findings: recorded allergies: Lidocaine [1], Aspirin [2].");
+
+		assertEquals(2, clauses.size());
+		assertEquals("Findings: recorded allergies: Lidocaine [1]", clauses.get(0).text);
+		assertEquals("Findings: recorded allergies: Aspirin [2]", clauses.get(1).text,
+				"the whole preamble is retained, not just the text after the first colon");
+	}
+
+	@Test
+	public void splitIntoCitedSentences_aColonAfterTheFirstMarkerDoesNotIntroduceAList() {
+		// The colon has to precede the FIRST marker to be introducing the items. One that appears
+		// later belongs to a subsequent clause and says nothing about how item 1 is bounded, so the
+		// sentence keeps today's whole-sentence scoping.
+		List<CitationGroundingVerifier.Sentence> sentences = CitationGroundingVerifier
+				.splitIntoCitedSentences("Aspirin allergy [1] and note: severity is severe [2].");
+
+		assertEquals(1, sentences.size());
+		assertTrue(sentences.get(0).cites(1));
+		assertTrue(sentences.get(0).cites(2));
+		assertFalse(sentences.get(0).isolate);
+	}
+
+	@Test
+	public void splitIntoCitedSentences_enumerationHandlesMultiDigitCitationIndices() {
+		// The live answer that produced issue #278 cited [11], not [3] — a 4-character marker, so the
+		// item boundaries are wider than the single-digit cases above. Offsets come from Matcher.end(),
+		// which is width-agnostic; this pins that.
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoCitedSentences(
+						"Recorded allergies: Lidocaine [1], Ketoconazole [2], and Aspirin [11].");
+
+		assertEquals(3, clauses.size());
+		assertEquals("Recorded allergies: Aspirin [11]", clauses.get(2).text);
+		assertTrue(clauses.get(2).cites(11));
+		assertFalse(clauses.get(2).cites(1));
+	}
+
+	@Test
+	public void splitIntoCitedSentences_enumerationRepeatingOneIndexYieldsAFragmentPerMARKER() {
+		// The split walks MARKERS, while the no-split guard counts DISTINCT cited indexes — so a list
+		// naming one record twice produces two fragments attributed to the same index. That is the
+		// pre-existing multi-candidate shape (selectClaim cosine-picks between them), reached here by a
+		// new route, so pin that it is produced rather than crashing or silently dropping a fragment.
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoCitedSentences("Recorded allergies: Aspirin [1], Ketoconazole [2], and aspirin again [1].");
+
+		assertEquals(3, clauses.size(), "one fragment per marker, not per distinct index");
+		assertEquals("Recorded allergies: Aspirin [1]", clauses.get(0).text);
+		assertEquals("Recorded allergies: Ketoconazole [2]", clauses.get(1).text);
+		assertEquals("Recorded allergies: aspirin again [1]", clauses.get(2).text);
+		assertTrue(clauses.get(0).cites(1));
+		assertTrue(clauses.get(2).cites(1), "both fragments of the repeated index are attributed to it");
+	}
+
+	@Test
+	public void enumeration_repeatingOneIndexStillProducesAVerdictForThatCitation() {
+		// End-to-end guard on the same shape: two candidate fragments must not leave the citation
+		// unverified. selectClaim picks one by cosine and Tier-2 still runs on it.
+		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("aspirin", "ketoconazole");
+		verifier.setLlmProvider(judge);
+		String answer = "Recorded allergies: Aspirin [1], Ketoconazole [2], and aspirin again [1].";
+
+		List<RecordReference> result = verifier.verify(answer,
+				new ArrayList<RecordReference>(Arrays.asList(reference(1), reference(2))),
+				Arrays.asList(mapping(1, "Allergy: Aspirin (drug allergen)"),
+						mapping(2, "Allergy: Ketoconazole (drug allergen)")),
+				FLOOR, TIER2_ON, false);
+
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded(), "the repeated index still gets a verdict");
+		assertEquals(Boolean.TRUE, result.get(1).getGrounded());
+	}
+
+	@Test
+	public void splitIntoCitedSentences_doesNotSplitWhenTheSubjectSitsInsideTheFirstItem() {
+		// The split is only safe while the shared preamble carries the SUBJECT. Here the colon is a
+		// bare lead-in and the subject ("the patient has") lives inside item 1, so splitting would hand
+		// item 2 the claim "Findings: asthma" -- stripped of the subject. A family-history record for
+		// the mother's asthma entails THAT, so a citation the whole-sentence claim correctly refused
+		// would be published grounded=true. Fail open in a verification feature, and precisely the flip
+		// Tier-2 exists to catch, so this shape must keep whole-sentence scoping.
+		List<CitationGroundingVerifier.Sentence> sentences = CitationGroundingVerifier
+				.splitIntoCitedSentences("Findings: the patient has diabetes [1] and asthma [2].");
+
+		assertEquals(1, sentences.size(), "a clause-shaped first item means the preamble is not the subject");
+		assertTrue(sentences.get(0).cites(1));
+		assertTrue(sentences.get(0).cites(2));
+		assertFalse(sentences.get(0).isolate);
+	}
+
+	@Test
+	public void splitIntoCitedSentences_doesNotSplitWhenAnItemCarriesItsOwnSubjectWithinTheWordBound() {
+		// CLAUSE_MARKER, not length, is the subject test — and this is the case that establishes why.
+		// "he has diabetes" sits comfortably inside MAX_ENUMERATION_ITEM_WORDS (a runaway-text backstop,
+		// not a grammar test), so only its grammar can refuse it; without that net item 2's claim loses
+		// the subject and becomes "Findings: asthma". Written when the bound was 3 and this cleared it by
+		// exactly fitting, which is what showed length could not do this job at any value.
+		List<CitationGroundingVerifier.Sentence> sentences = CitationGroundingVerifier
+				.splitIntoCitedSentences("Findings: he has diabetes [1] and asthma [2].");
+
+		assertEquals(1, sentences.size(), "a pronoun-and-verb item is a clause, so the preamble is not the subject");
+		assertTrue(sentences.get(0).cites(1));
+		assertTrue(sentences.get(0).cites(2));
+		assertFalse(sentences.get(0).isolate);
+	}
+
+	@Test
+	public void splitIntoCitedSentences_aQualifiedDrugNameIsStillANameNotAClause() {
+		// The clause test must not swallow the parenthetical-qualified item shape the live answers do
+		// produce: three words, no pronoun, no verb — a name, so the list still splits.
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoCitedSentences(
+						"Recorded allergies: Aspirin (drug allergen) [1], Ketoconazole (drug allergen) [2].");
+
+		assertEquals(2, clauses.size());
+		assertEquals("Recorded allergies: Aspirin (drug allergen) [1]", clauses.get(0).text);
+		assertEquals("Recorded allergies: Ketoconazole (drug allergen) [2]", clauses.get(1).text);
+	}
+
+	@Test
+	public void splitIntoCitedSentences_admitsALongDrugNameCarryingNoClauseMarker() {
+		// The coverage the raised bound buys, and the reason it was raised: 1190 of the 7452 names the
+		// shipped KB publishes are longer than three words, and refusing them left a real citation
+		// mis-scoped for no safety gain — a long noun phrase carries no subject, so splitting is correct.
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoCitedSentences("Recorded allergies: Belladonna alkaloids with phenobarbital [1], "
+						+ "Brompheniramine, phenylephrine and codeine [2].");
+
+		assertEquals(2, clauses.size(), "a multi-word drug name is a name, not a clause");
+		assertEquals("Recorded allergies: Belladonna alkaloids with phenobarbital [1]", clauses.get(0).text);
+		assertEquals("Recorded allergies: Brompheniramine, phenylephrine and codeine [2]", clauses.get(1).text);
+	}
+
+	@Test
+	public void splitIntoCitedSentences_refusesAnItemThatRunsPastTheLengthBackstop() {
+		// What the bound still does once CLAUSE_MARKER owns the subject test: stop runaway text becoming
+		// a "claim". Nine words, deliberately with no pronoun and no finite verb, so only length can
+		// refuse it — this is the test that pins MAX_ENUMERATION_ITEM_WORDS at all.
+		List<CitationGroundingVerifier.Sentence> sentences = CitationGroundingVerifier
+				.splitIntoCitedSentences("Recorded allergies: one two three four five six seven eight nine [1], "
+						+ "Aspirin [2].");
+
+		assertEquals(1, sentences.size(), "past the backstop the sentence keeps whole-sentence scoping");
+		assertTrue(sentences.get(0).cites(1));
+		assertTrue(sentences.get(0).cites(2));
+	}
+
+	@Test
+	public void splitIntoCitedSentences_anOrNameKeepsItsPrefixInALaterPositionToo() {
+		// Position matters to LEADING_ITEM_SEPARATOR: item 1 follows the colon (whitespace only) while a
+		// later item follows ", " or ", and ". Only the later position exercises the conjunction
+		// alternative against a name that starts with those letters, so pin it there as well as first.
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoCitedSentences("Active drugs: Aspirin [1], Orphenadrine [2], and Ornidazole [3].");
+
+		assertEquals(3, clauses.size());
+		assertEquals("Active drugs: Orphenadrine [2]", clauses.get(1).text,
+				"a comma-separated name beginning 'Or' must survive the separator strip");
+		assertEquals("Active drugs: Ornidazole [3]", clauses.get(2).text,
+				"and so must one that follows ', and '");
+	}
+
+	@Test
+	public void enumeration_groundsOnTheTier1OnlyPathToo_whichIsTheShippedEntailmentDefault() {
+		// chartsearchai.grounding.entailment.enabled defaults to FALSE, so Tier-1 cosine alone decides on
+		// the commonest configuration — and the split changes which TEXT is embedded there, not just
+		// which statement Tier-2 judges. Every other enumeration test runs with Tier-2 on, so this path
+		// was altered untested. The whole sentence is registered ORTHOGONAL to all three records, so
+		// these verdicts can only come from each citation being scored against its own item.
+		String preamble = "Yes — the patient has the following recorded allergies: ";
+		embeddings.register(ENUMERATION, AXIS_B);
+		embeddings.register(preamble + "Lidocaine [1]", AXIS_A);
+		embeddings.register(preamble + "Ketoconazole [2]", AXIS_A);
+		embeddings.register(preamble + "Aspirin [3]", AXIS_A);
+		embeddings.register("Allergy: Lidocaine (drug allergen)", AXIS_A);
+		embeddings.register("Allergy: Ketoconazole (drug allergen)", AXIS_A);
+		embeddings.register("Allergy: Aspirin (drug allergen)", AXIS_A);
+
+		List<RecordReference> result = verifier.verify(ENUMERATION, threeRefs(),
+				allergyMappings("Ketoconazole"), FLOOR, TIER1_ONLY, false);
+
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded(), "[1] scored against its own item");
+		assertEquals(Boolean.TRUE, result.get(1).getGrounded(), "[2] scored against its own item");
+		assertEquals(Boolean.TRUE, result.get(2).getGrounded(), "[3] scored against its own item");
+	}
+
+	@Test
+	public void splitIntoCitedSentences_aNegatedPreamblePropagatesToEveryItem() {
+		// The preamble is shared, so a qualifier sitting in it must reach every item's claim. If it did
+		// not, "No recorded allergies except: X [1], Y [2]" would hand each citation a bare drug name and
+		// a record for an allergy the patient does NOT have could ground true. The preamble is provably
+		// marker-free (the colon precedes the first marker), which is what makes this propagation total.
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoCitedSentences("No recorded allergies except: Lidocaine [1], Aspirin [2].");
+
+		assertEquals(2, clauses.size());
+		assertEquals("No recorded allergies except: Lidocaine [1]", clauses.get(0).text);
+		assertEquals("No recorded allergies except: Aspirin [2]", clauses.get(1).text,
+				"a preamble qualifier must not be dropped from later items");
+	}
+
+	// ---- a COMPOUND claim unit: citations attached to different pieces of one statement (#302) ----
+
+	/** The colon-less medication list #302 measured, on the module's most common question. */
+	private static final String COLON_LESS_LIST =
+			"The patient is currently taking Salicylic acid [1] and Methotrexate [2].";
+
+	private List<RecordMapping> twoOrderMappings() {
+		return Arrays.asList(mapping(1, "Drug order: Salicylic acid"),
+				mapping(2, "Drug order: Methotrexate"));
+	}
+
+	private List<RecordReference> twoRefs() {
+		return new ArrayList<RecordReference>(Arrays.asList(reference(1), reference(2)));
+	}
+
+	@Test
+	public void compoundClaim_aCorrectCitationIsNoLongerPublishedUnsupported() {
+		// Issue #302. No colon, so splitEnumeration refuses the split and BOTH citations are handed
+		// the whole conjunction: each order record is asked to entail a statement that also names the
+		// OTHER drug, a correct judge says no to both, and the wire published grounded=false on two
+		// correct, active, unvoided citations. The verdict was right; the question was the wrong size.
+		//
+		// This case EXERCISES the rebuild path — with Tier-2 skipped the reference falls through to the
+		// lazy Tier-1 block, which rebuilds its Tier1Result in cosineVerdict — but do not read it as a
+		// guard on that rebuild. verify() decides from a snapshot taken at claim selection, so this
+		// stays green whether or not cosineVerdict carries the flag across; the rebuild carries it for
+		// a later reader's sake and NOTHING in this suite fails if that is dropped. The hazard the
+		// snapshot removes is real (reading the flag back off the rebuild instead would fail OPEN,
+		// certifying where the module used to flag) and it is removed structurally, not pinned.
+		//
+		// Kept for what it IS rather than for what it uniquely catches: a kill-set measurement over
+		// the api suite found every mutation this case detects is detected by a sibling too, mostly
+		// because one Disposition drives both the Tier-2 exclusion and what Pass 2 publishes, so any
+		// mutation of it also moves the judge-call count a sibling asserts on.
+		// It is #302's own reported arrangement and its regression case, which is reason enough — but
+		// do not cite it as the guard for anything; the exclusive guards are named on the cases that
+		// hold them.
+		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("salicylic acid", "methotrexate");
+		verifier.setLlmProvider(judge);
+		embeddings.register(COLON_LESS_LIST, AXIS_A);
+		embeddings.register("Drug order: Salicylic acid", AXIS_A);
+		embeddings.register("Drug order: Methotrexate", AXIS_A);
+
+		List<RecordReference> result = verifier.verify(COLON_LESS_LIST, twoRefs(), twoOrderMappings(),
+				FLOOR, TIER2_ON, false);
+
+		assertNull(result.get(0).getGrounded(),
+				"[1] Salicylic acid: the module cannot isolate what this citation claims, so it must "
+						+ "say so rather than publish the conjunction's refusal as this citation's verdict");
+		assertNull(result.get(1).getGrounded(), "[2] Methotrexate: likewise");
+		assertEquals(0, judge.statementsPerCall.size(),
+				"a record asked to entail a conjunction it answers for only part of returns no whether "
+						+ "the citation is right or wrong, so the pair must not be put to the judge at all");
+	}
+
+	@Test
+	public void compoundClaim_publishesNothingWhicheverWayTheJudgeWouldHaveAnswered() {
+		// The cell that decided this rule's shape, and the one the suite could not see while every
+		// compound case used ConjunctionAwareJudge — an idealised stub that always refuses a
+		// conjunction, so "a correct judge says no" was assumed rather than exercised. A LENIENT judge
+		// is the real risk: #106 measured 4/4 role-swapped recitations judged entailed.
+		//
+		// Under main, cosine-FAIL + judge-YES published TRUE, the judge rescuing a score diluted by the
+		// items this record is not cited for. An earlier draft of #302 skipped Tier-2 and kept the
+		// cosine FAIL, which turned that cell into a published FALSE — Unsupported on a correct, active
+		// citation, the very harm #302 exists to remove. So a compound claim unit publishes nothing in
+		// either direction. It does NOT earn an exclusive kill, and says so rather than implying one: a
+		// mutation table over the api suite found it never reddens alone, because its assertions need a
+		// published verdict, a verdict needs an embed or a judge call, and the siblings on this same
+		// arrangement assert both counts are zero. What it is for is the historical regression — restore
+		// the lazy cosine and publish it demote-only and this reddens, with two siblings — and for
+		// carrying the lenient-judge stub that showed the premise "a correct judge says no" was never
+		// exercised.
+		StubLlmProvider lenient = new StubLlmProvider(Boolean.TRUE);
+		verifier.setLlmProvider(lenient);
+		embeddings.register(COLON_LESS_LIST, AXIS_A);
+		embeddings.register("Drug order: Salicylic acid", AXIS_B);
+		embeddings.register("Drug order: Methotrexate", AXIS_B);
+
+		List<RecordReference> result = verifier.verify(COLON_LESS_LIST, twoRefs(), twoOrderMappings(),
+				FLOOR, TIER2_ON, false);
+
+		assertEquals(0, lenient.calls, "the judge is not asked about a compound claim unit");
+		assertNull(result.get(0).getGrounded(), "so the yes that would have rescued it is never given");
+		assertNull(result.get(1).getGrounded());
+		// Note what this case does NOT pin: here the claim sentence is unambiguous, so the cosine is
+		// never computed either and the null comes from the lazy-Tier-1 skip rather than from Pass 2.
+		// The eagerly scored path is where Pass 2 does the work — see
+		// compoundClaim_anEagerlyScoredCosineFailIsWithheldToo.
+	}
+
+	@Test
+	public void compoundClaim_anEagerlyScoredCosineFailIsWithheldToo() {
+		// The other half of "publishes nothing", and the only case that reaches it. When one record is
+		// cited by several sentences, selectClaim scores the cosine EAGERLY to choose between them, so
+		// a verdict already exists by the time Pass 2 runs — the lazy-Tier-1 skip cannot produce the
+		// null there, and only Pass 2's unverifiable branch can. Weaken that branch back to demoting a
+		// TRUE alone and this case reddens while every other compound case stays green, because they
+		// all take the deferred path where no cosine is computed at all.
+		//
+		// Record 1's best candidate is the compound sentence (0.35) over the other (-0.94), and 0.35
+		// is under the 0.40 floor — a diluted score of exactly the kind a conjunction produces.
+		String answer = "The patient is currently taking Salicylic acid [1] and Methotrexate [2]. "
+				+ "Salicylic acid remains active [1].";
+		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("salicylic acid", "methotrexate");
+		verifier.setLlmProvider(judge);
+		embeddings.register("The patient is currently taking Salicylic acid [1] and Methotrexate [2].",
+				AXIS_A);
+		embeddings.register("Salicylic acid remains active [1].", new float[] { 0f, -1f });
+		embeddings.register("Drug order: Salicylic acid", new float[] { 0.35f, 0.9368f });
+		embeddings.register("Drug order: Methotrexate", AXIS_A);
+
+		List<RecordReference> result = verifier.verify(answer, twoRefs(), twoOrderMappings(),
+				FLOOR, TIER2_ON, false);
+
+		assertNull(result.get(0).getGrounded(),
+				"a sub-floor cosine against the conjunction is dilution, not evidence against [1]");
+		assertNull(result.get(1).getGrounded());
+	}
+
+	@Test
+	public void compoundClaim_outranksTheReferenceGroupRuleWhereBothApply() {
+		// The precedence between the two dispositions, which nothing pinned. A reference-group citation
+		// inside a compound claim unit is UNVERIFIABLE, not merely DEMOTE_ONLY: reference material keeps
+		// its cosine FAIL, a compound unit does not, and where both apply the stronger rule wins. Swap
+		// the two arms of the Pass-1 ternary and the whole api suite stays green while this citation
+		// publishes false and spends an embedding pass — so the ordering was prose, defended only by
+		// #201 happening to withhold reference-group verdicts at the wire, which is a coincidence at
+		// another layer rather than a guard.
+		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("salicylic acid", "methotrexate");
+		verifier.setLlmProvider(judge);
+		embeddings.register(COLON_LESS_LIST, AXIS_A);
+		embeddings.register("Drug order: Salicylic acid", AXIS_A);
+		// record 2's text is left unregistered, so its cosine is 0 — a Tier-1 FAIL that the
+		// reference-group rule would publish and the compound rule withholds.
+
+		List<RecordReference> result = verifier.verify(COLON_LESS_LIST, twoRefs(),
+				Arrays.asList(mapping(1, "Drug order: Salicylic acid"),
+						drugReferenceMapping(2, "warfarin reference record")),
+				FLOOR, TIER2_ON, false);
+
+		assertNull(result.get(1).getGrounded(),
+				"the compound rule outranks demote-only, so even the off-topic FAIL is withheld");
+		assertEquals(0, embeddings.embedCalls, "and no cosine is computed to produce it");
+		assertEquals(0, judge.statementsPerCall.size());
+	}
+
+	@Test
+	public void compoundClaim_spendsNoEmbeddingOnAVerdictItWillNotPublish() {
+		// The cost half of the same decision. Publishing nothing means the cosine is never needed, so
+		// the lazy Tier-1 block skips these references entirely — which is what keeps the rule from
+		// adding embedding passes on the module's most common answer shape.
+		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("salicylic acid", "methotrexate");
+		verifier.setLlmProvider(judge);
+		embeddings.register(COLON_LESS_LIST, AXIS_A);
+		embeddings.register("Drug order: Salicylic acid", AXIS_A);
+		embeddings.register("Drug order: Methotrexate", AXIS_A);
+
+		verifier.verify(COLON_LESS_LIST, twoRefs(), twoOrderMappings(), FLOOR, TIER2_ON, false);
+
+		assertEquals(0, embeddings.embedCalls,
+				"no tier is asked, so no embedding is spent on a verdict Pass 2 would discard");
+		assertEquals(0, judge.statementsPerCall.size());
+	}
+
+	@Test
+	public void compoundClaim_leavesTheTier1OnlyPathUntouched() {
+		// The withholding is deliberately NOT mode-uniform, unlike the reference-group rule beside it.
+		// #302's defect is Tier-2's refusal of a conjunction, which does not exist when entailment is
+		// off: there every verdict is cosine against the claim text, a compound unit's is no different
+		// in kind, and sentence scope has always compared against the whole compound sentence
+		// (clauseScoped is this module's remedy for that, and #302 does not change it). Withholding here
+		// would cost a correct citation its verdict for no defect removed: with no judge to refuse the
+		// conjunction, there is no wrong verdict to suppress.
+		embeddings.register(COLON_LESS_LIST, AXIS_A);
+		embeddings.register("Drug order: Salicylic acid", AXIS_A);
+		embeddings.register("Drug order: Methotrexate", AXIS_A);
+
+		List<RecordReference> result = verifier.verify(COLON_LESS_LIST, twoRefs(), twoOrderMappings(),
+				FLOOR, TIER1_ONLY, false);
+
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded(),
+				"with no Tier-2 refusal to withhold, the cosine pass still verifies");
+		assertEquals(Boolean.TRUE, result.get(1).getGrounded(), "and so does the second citation's");
+	}
+
+	@Test
+	public void compoundClaim_doesNotConsumeTheEntailmentCapOfSingleClaimCitations() {
+		// Cap-boundary pin, mirroring drugReference_doesNotConsumeTheEntailmentCapOfChartCitations: the
+		// compound sentence comes FIRST and contributes TWO citations, followed by exactly cap-many
+		// single-claim ones. If the exclusion happened inside the budget branch, those two would eat two
+		// slots and the last TWO single-claim citations would fall past the cap onto their Tier-1 FALSE.
+		int cap = ChartSearchAiConstants.GROUNDING_ENTAILMENT_MAX_CHECKS;
+		StringBuilder answer = new StringBuilder(COLON_LESS_LIST).append(" ");
+		List<RecordReference> refs = new ArrayList<RecordReference>(twoRefs());
+		List<RecordMapping> maps = new ArrayList<RecordMapping>(twoOrderMappings());
+		for (int i = 1; i <= cap; i++) {
+			answer.append("claim ").append(i).append(" [").append(i + 2).append("]. ");
+			refs.add(reference(i + 2));
+			maps.add(mapping(i + 2, "record " + i));
+		}
+		llm.verdict = Boolean.TRUE;
+
+		List<RecordReference> result = verifier.verify(answer.toString(), refs, maps, FLOOR, TIER2_ON);
+
+		assertEquals(cap, llm.calls,
+				"the single-claim citations alone fill the cap; the excluded compound pair must not count");
+		assertEquals(Boolean.TRUE, result.get(refs.size() - 1).getGrounded(),
+				"the last single-claim citation must still get its Tier-2 verdict — two consumed slots "
+						+ "would leave it on its Tier-1 FALSE");
+	}
+
+	@Test
+	public void compoundClaim_withNoTier1EmbedderGetsNoVerdictFromEitherTier() {
+		// The combination nothing pinned. Both this class and the entailment GP's own description say
+		// entailment grounding works with no Tier-1 embedding model — true for a single-claim citation
+		// (tier2_absentEmbedder_singleCitingSentenceStillGetsTier2Verdict) and NOT for a compound one,
+		// which #302 keeps out of Tier-2 and which therefore has only the absent tier left. It renders
+		// unverified, which is the honest answer, but it is a real loss on that deployment and it is
+		// pinned here so it cannot change unnoticed.
+		verifier.setEmbedder(null);
+		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("salicylic acid", "methotrexate");
+		verifier.setLlmProvider(judge);
+
+		List<RecordReference> result = verifier.verify(COLON_LESS_LIST, twoRefs(), twoOrderMappings(),
+				FLOOR, TIER2_ON, false);
+
+		assertEquals(0, judge.statementsPerCall.size(), "Tier-2 is not asked for a compound claim");
+		assertNull(result.get(0).getGrounded(), "and no tier is left to answer");
+		assertNull(result.get(1).getGrounded());
+	}
+
+	@Test
+	public void compoundClaim_isDetectedOnTheAmbiguousClaimSelectionBranchToo() {
+		// tier1.compoundClaim is produced at TWO sites in selectClaim — the deterministic branch, when
+		// exactly one sentence cites the record, and the cosine argmax when several do. Every other
+		// case in this class gives each citation a single candidate, so the argmax branch was reachable
+		// and unpinned: setting compoundClaim false there left the whole api suite green while
+		// reinstating #302's symptom for any answer that cites one record from two sentences.
+		//
+		// Here [1] is cited by both sentences and the compound one is registered as its cosine-best, so
+		// selection goes through the argmax. If the flag were lost there, [1] would be put to the judge
+		// against the conjunction and published false — the defect, on a correct citation.
+		String answer = "The patient is currently taking Salicylic acid [1] and Methotrexate [2]. "
+				+ "Salicylic acid remains active [1].";
+		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("salicylic acid", "methotrexate");
+		verifier.setLlmProvider(judge);
+		embeddings.register("The patient is currently taking Salicylic acid [1] and Methotrexate [2].",
+				AXIS_A);
+		embeddings.register("Salicylic acid remains active [1].", AXIS_B);
+		embeddings.register("Drug order: Salicylic acid", AXIS_A);
+		embeddings.register("Drug order: Methotrexate", AXIS_A);
+
+		List<RecordReference> result = verifier.verify(answer, twoRefs(), twoOrderMappings(),
+				FLOOR, TIER2_ON, false);
+
+		assertEquals(0, judge.statementsPerCall.size(),
+				"[1]'s claim was selected by cosine and is still a compound unit, so it is not asked");
+		assertNull(result.get(0).getGrounded(), "[1], selected through the argmax branch");
+		assertNull(result.get(1).getGrounded(), "[2], selected deterministically");
+	}
+
+	@Test
+	public void anArrayOnlyCitationAttributedToACompoundClaimIsWithheldWithIt() {
+		// A citation the model put only in the structured citations array has no marker of its own, so
+		// selectClaim attributes it to whichever sentence matches best. Where that is a compound claim
+		// unit, its statement asserts more than this record is responsible for exactly as it does for
+		// the inline citations, so the judge's refusal is as uninformative here — and it is withheld
+		// with them. Gating the rule on "does this claim unit cite ME" instead would send an array-only
+		// citation back to the judge against the whole conjunction, which is the shape #284 exists to
+		// complain about. What IS given up is stated rather than denied: under entailment nothing is
+		// published for this citation, so a genuinely off-topic one is no longer flagged either — the
+		// cosine that would flag it is measured against the same conjunction and is diluted for a
+		// correct record too, which is why it is not better evidence.
+		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("salicylic acid", "methotrexate");
+		verifier.setLlmProvider(judge);
+		embeddings.register(COLON_LESS_LIST, AXIS_A);
+		embeddings.register("Drug order: Salicylic acid", AXIS_A);
+		embeddings.register("Drug order: Methotrexate", AXIS_A);
+		embeddings.register("Condition: Asthma", AXIS_A);
+
+		List<RecordReference> result = verifier.verify(COLON_LESS_LIST,
+				new ArrayList<RecordReference>(
+						Arrays.asList(reference(1), reference(2), reference(3))),
+				Arrays.asList(mapping(1, "Drug order: Salicylic acid"),
+						mapping(2, "Drug order: Methotrexate"), mapping(3, "Condition: Asthma")),
+				FLOOR, TIER2_ON, false);
+
+		assertEquals(0, judge.statementsPerCall.size(),
+				"the array-only citation reaches the judge only through the compound claim unit, so it "
+						+ "is excluded with the rest of them");
+		assertNull(result.get(2).getGrounded(),
+				"[3], cited only in the array: withheld, not published unsupported");
+	}
+
+	@Test
+	public void coCitationOfThreeRecordsIsStillGraded() {
+		// Both other co-citation cases use exactly TWO adjacent markers, which leaves
+		// claimTextSeparatesCitations' loop advance unguarded: delete `previousEnd = marker.end()` and
+		// the whole reactor stays green while every 3-or-more-marker co-citation reclassifies as a
+		// compound claim unit, because the slice for the second pair then runs from the FIRST marker's
+		// end and picks up the intervening markers as claim text.
+		//
+		// That is not a hypothetical shape. It is the one the class javadoc, README and ADR all name
+		// (`Infections [5], [12], [15]`), and the module manufactures it itself —
+		// LlmAnswerExtractor.normalizeSlashCitations joins a corroborated group of ANY length with
+		// ", ". Losing it would withhold Tier-2 for the module's own normalizer output silently.
+		String answer = "The patient has recurrent infections [1], [2], [3].";
+		embeddings.register(answer, AXIS_A);
+		embeddings.register("record one", AXIS_A);
+		embeddings.register("record two", AXIS_A);
+		embeddings.register("record three", AXIS_A);
+		llm.verdict = Boolean.TRUE;
+
+		List<RecordReference> result = verifier.verify(answer, threeRefs(),
+				Arrays.asList(mapping(1, "record one"), mapping(2, "record two"),
+						mapping(3, "record three")),
+				FLOOR, TIER2_ON, false);
+
+		assertEquals(3, llm.calls, "three records co-cited for one claim are each asked about it");
+		assertEquals(1, llm.batches, "one claim unit, so they co-batch");
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded());
+		assertEquals(Boolean.TRUE, result.get(1).getGrounded());
+		assertEquals(Boolean.TRUE, result.get(2).getGrounded(), "the third marker is the point");
+	}
+
+	@Test
+	public void coCitationJoinedByAConjunctionIsAlsoStillGraded() {
+		// The comma register below is the one LlmAnswerExtractor.normalizeSlashCitations manufactures,
+		// so it is the one least likely to be edited away — and pinning only it leaves the
+		// coordinating-conjunction half of LEADING_ITEM_SEPARATOR unguarded: replacing that strip with
+		// a plain punctuation strip reclassifies this sentence as a compound claim and silences its
+		// Tier-2 verdict entirely. Mutate itemSlice that way — that is where the separator lives since
+		// the boundary was factored out — and read the failures: this case is the one that speaks for
+		// the co-citation property, and splitEnumeration's own cases redden beside it because they
+		// read the same boundary — which is the whole point of factoring it out.
+		String answer = "The patient has recurrent infections [1] and [2].";
+		embeddings.register(answer, AXIS_A);
+		embeddings.register("record one", AXIS_A);
+		embeddings.register("record two", AXIS_A);
+		llm.verdict = Boolean.FALSE;
+
+		List<RecordReference> result = verifier.verify(answer, twoRefs(),
+				Arrays.asList(mapping(1, "record one"), mapping(2, "record two")),
+				FLOOR, TIER2_ON, false);
+
+		assertEquals(2, llm.calls, "markers joined by 'and' with no claim text between are co-citation");
+		assertEquals(Boolean.FALSE, result.get(0).getGrounded());
+		assertEquals(Boolean.FALSE, result.get(1).getGrounded());
+	}
+
+	@Test
+	public void coCitationIsNotACompoundClaimAndKeepsItsFullTier2Grading() {
+		// Several citations of ONE claim is a shape this module MANUFACTURES: for a corroborated group
+		// LlmAnswerExtractor.normalizeSlashCitations rewrites "Infections [5/12/15]" into adjacent
+		// markers, "Infections [5], [12], [15]". Nothing but a list separator stands between the
+		// markers, so every record is cited for the same whole statement — that statement IS each
+		// citation's own claim, the judge's question is well-formed, and both directions of its answer
+		// must still be published. A predicate keyed on "more than one citation" would silence it.
+		// Stubbed TRUE deliberately, and the sibling above stubs FALSE: since the reversal a compound
+		// unit withholds in BOTH directions, so either stub would redden if co-citation were
+		// misclassified. TRUE is the direction that also proves the verdict is published rather than
+		// merely not-flagged.
+		//
+		// Honest about what this case is worth: it is DOMINATED by the sub-shape case below, which
+		// reddens on every mutation this one does and on one more. compoundClaim() reaches the same
+		// answer by the same route for both — the inter-marker text is ", " either way, and
+		// splitEnumeration's differing exit (no colon here, the no-own-text guard there) has no
+		// bearing on the classification. It is kept for the register rather than the coverage: this
+		// is the exact shape LlmAnswerExtractor.normalizeSlashCitations emits, which never carries a
+		// colon, so the case that documents the manufactured shape is this one. Do not cite it as a
+		// second guard.
+		String answer = "The patient has recurrent infections [1], [2].";
+		embeddings.register(answer, AXIS_A);
+		embeddings.register("record one", AXIS_A);
+		embeddings.register("record two", AXIS_A);
+		llm.verdict = Boolean.TRUE;
+
+		List<RecordReference> result = verifier.verify(answer, twoRefs(),
+				Arrays.asList(mapping(1, "record one"), mapping(2, "record two")),
+				FLOOR, TIER2_ON, false);
+
+		assertEquals(2, llm.calls, "co-cited records are each asked their own well-formed question");
+		assertEquals(1, llm.batches, "one claim unit, so its citations co-batch rather than isolate");
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded(),
+				"and a TRUE is published — co-citation is not demote-only");
+		assertEquals(Boolean.TRUE, result.get(1).getGrounded());
+	}
+
+	@Test
+	public void theSubShapeWhoseSplitIsRefusedForWantOfOwnTextIsCoCitationAndStaysGraded() {
+		// #302's closing bullet names this shape and leaves its remedy unsettled: with the colon present
+		// the split is attempted and refused by splitEnumeration's no-own-text guard, because [2]
+		// contributes nothing of its own beyond its marker. It is left graded
+		// here deliberately — it is textually indistinguishable from the normalizer's co-citation shape
+		// above, and reading it as a conjunction with an unnamed second item would silence a verdict
+		// that is well-formed whenever it is not.
+		String answer = "Recorded medications: Salicylic acid [1], [2].";
+		embeddings.register(answer, AXIS_A);
+		embeddings.register("Drug order: Salicylic acid", AXIS_A);
+		embeddings.register("Drug order: Salicylic acid 300mg", AXIS_A);
+		llm.verdict = Boolean.TRUE;
+
+		List<RecordReference> result = verifier.verify(answer, twoRefs(),
+				Arrays.asList(mapping(1, "Drug order: Salicylic acid"),
+						mapping(2, "Drug order: Salicylic acid 300mg")),
+				FLOOR, TIER2_ON, false);
+
+		assertEquals(2, llm.calls, "adjacent markers are co-citation, not a compound claim");
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded());
+		assertEquals(Boolean.TRUE, result.get(1).getGrounded());
+		// Pin the refusal itself, not just its downstream verdict: unsplit, the two citations share
+		// ONE claim unit, so they are non-isolate and share one batch carrying one statement twice.
+		// A split would make them isolate fragments — two calls, and two different statements, the
+		// second of them preamble-only. Delete splitEnumeration's no-own-text guard and this reddens;
+		// the verdict assertions above do not, because each fragment would still cite one record and
+		// the stub would still say TRUE.
+		assertEquals(1, llm.batches, "a refused split leaves one claim unit, so its citations co-batch");
+		assertEquals(2, llm.statementsPerCall.get(0).size());
+		assertEquals(llm.statementsPerCall.get(0).get(0), llm.statementsPerCall.get(0).get(1),
+				"both citations are asked about the same whole sentence");
+	}
+
+	@Test
+	public void splitIntoCitedSentences_aNegationInsideAnItemStaysWithThatItemOnly() {
+		// The mirror case: a qualifier sitting in ONE item must not leak to its siblings and must not be
+		// stripped from its own. "not sulfa" keeps its negation, so a sulfa-allergy record cannot ground
+		// it; "penicillin" does not inherit the negation, so a penicillin record still can.
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoCitedSentences("Recorded allergies: penicillin [1], not sulfa [2].");
+
+		assertEquals(2, clauses.size());
+		assertEquals("Recorded allergies: penicillin [1]", clauses.get(0).text,
+				"item 1 must not inherit item 2's negation");
+		assertEquals("Recorded allergies: not sulfa [2]", clauses.get(1).text,
+				"the separator strip must not eat the negation");
+	}
+
+	// ---- composite claims: a chart citation whose statement also rests on module-supplied
+	// ---- reference material (issue #284) ----
+
+	/**
+	 * The chart half of a drug-safety answer's claim, as the REAL pipeline renders it: the injected
+	 * active-order record for the co-medication the finding names. Numbered just after the finding so
+	 * the two citation numberings cannot collide, exactly as the cap-boundary tests above do.
+	 */
+	private static RecordMapping coMedicationRecord(RecordMapping finding) {
+		return activeDrugOrderMapping(finding.getIndex() + 1, "order-uuid-simvastatin",
+				realActiveOrderRecordText("order-uuid-simvastatin", "Simvastatin 20mg"));
+	}
+
+	/**
+	 * The judge as it behaved on the live cells in issue #284: the co-medication record names its own
+	 * drug and not the one being asked about, so it does not entail a statement asserting an
+	 * interaction between the two. A correct judge answers "no" here — that is the whole point, and
+	 * why the "no" says nothing about the CITATION.
+	 */
+	private ConjunctionAwareJudge useInteractionJudge() {
+		ConjunctionAwareJudge judge = new ConjunctionAwareJudge("clarithromycin", "simvastatin");
+		verifier.setLlmProvider(judge);
+		return judge;
+	}
+
+	/** The enumerating answer of issue #284's shape A, in the wording the current head produces
+	 *  (the drug name repeated rather than a pronoun, so {@code CLAUSE_MARKER} does not veto the
+	 *  split). */
+	private static String compositeEnumeration(RecordMapping order, RecordMapping finding) {
+		return "Clarithromycin can be given, with one caution: Clarithromycin interacts with "
+				+ "active order Simvastatin [" + order.getIndex() + "], a Major problem ["
+				+ finding.getIndex() + "].";
+	}
+
+	private static List<RecordReference> refsFor(RecordMapping order, RecordMapping finding) {
+		return new ArrayList<RecordReference>(
+				Arrays.asList(reference(order.getIndex()), reference(finding.getIndex())));
+	}
+
+	@Test
+	public void compositeClaim_chartCitationCoCitedWithAFindingRendersUnverifiedNotUnsupported() {
+		// Issue #284 shape A, measured live: the answer's claim rests on TWO records — the chart record
+		// for the co-medication and the module's own finding for the RELATIONSHIP — so no single record
+		// entails it and a correct judge answers "no" for the chart half BY CONSTRUCTION. Publishing
+		// that "no" renders the correct citation as "Unsupported", in red. The claim unit here is
+		// already the minimal one: splitEnumeration hands [order] its own item, and issue #284's
+		// comment measured that narrowing no further removes the reference-supplied half.
+		RecordMapping finding = realSafetyFinding();
+		RecordMapping order = coMedicationRecord(finding);
+		// The finding's own citation recites it, so its lazy Tier-1 pass demotes to null — the live
+		// table this case reproduces, where [239] published null and only the chart cite was false.
+		embeddings.register("Clarithromycin can be given, with one caution: a Major problem ["
+				+ finding.getIndex() + "]", AXIS_A);
+		embeddings.register(finding.getText(), AXIS_A);
+		useInteractionJudge();
+
+		List<RecordReference> result = verifier.verify(compositeEnumeration(order, finding),
+				refsFor(order, finding), Arrays.asList(order, finding), FLOOR, TIER2_ON, false);
+
+		assertNull(result.get(0).getGrounded(),
+				"a negative guaranteed by the composition is not a statement about the citation, "
+						+ "so it must render unverified rather than unsupported");
+		assertNull(result.get(1).getGrounded(), "the finding's own demote-only verdict is unchanged");
+	}
+
+	@Test
+	public void compositeClaim_aCitationOnlyInTheCitationsArrayRendersUnverifiedNotUnsupported() {
+		// Issue #284 shape B, also measured live: the chart record carries no inline marker, so the
+		// claim statement is chosen by the whole-answer fallback — and the sentence it lands on is the
+		// one citing the finding. Same composition, reached by the other path.
+		RecordMapping finding = realSafetyFinding();
+		RecordMapping order = coMedicationRecord(finding);
+		useInteractionJudge();
+
+		List<RecordReference> result = verifier.verify(findingCitingSentence(finding),
+				refsFor(order, finding), Arrays.asList(order, finding), FLOOR, TIER2_ON, false);
+
+		assertNull(result.get(0).getGrounded(),
+				"a guessed pairing whose statement rests on the finding cannot publish a denial");
+	}
+
+	@Test
+	public void compositeClaim_aGuessedPairingLooksAtEveryCitationInTheAnswer() {
+		// The fallback picks its statement out of the WHOLE answer, so the sentence it lands on need
+		// not be the one citing the finding — here the cosine argmax lands on a sentence citing
+		// nothing at all. Reading only that sentence's citations would leave the defect standing on a
+		// wording detail, which is the fragility issue #284's comment warns about ("a wording detail,
+		// deciding which of two grounding paths runs"). So for a guessed pairing the question is asked
+		// of every citation in the answer.
+		RecordMapping finding = realSafetyFinding();
+		RecordMapping order = coMedicationRecord(finding);
+		String verdictSentence = "No — clarithromycin should not be given.";
+		String reasonSentence = "It interacts with the patient's active simvastatin order ["
+				+ finding.getIndex() + "].";
+		embeddings.register(verdictSentence, AXIS_A);
+		embeddings.register(reasonSentence, AXIS_B);
+		embeddings.register(order.getText(), AXIS_A); // argmax lands on the citation-free sentence
+		ConjunctionAwareJudge judge = useInteractionJudge();
+
+		List<RecordReference> result = verifier.verify(verdictSentence + " " + reasonSentence,
+				refsFor(order, finding), Arrays.asList(order, finding), FLOOR, TIER2_ON, false);
+
+		assertEquals(Arrays.asList(Arrays.asList(verdictSentence)), judge.statementsPerCall,
+				"premise of this case: the guessed statement is the sentence that cites nothing");
+		assertNull(result.get(0).getGrounded(),
+				"the rule must not turn on which sentence the cosine argmax happened to pick");
+	}
+
+	@Test
+	public void compositeClaim_aPronounCompoundIsWithheldByTheCompoundRuleInstead() {
+		// Where the two rules meet, and the case that pins them disjoint. The wording the module's own
+		// safety few-shot demonstrates ("it spoils the oranges already in store [2], a Major problem
+		// [4]", in LlmProvider's safety demonstration) trips CLAUSE_MARKER, so splitEnumeration
+		// refuses and the whole compound sentence stays ONE claim unit citing both records — which
+		// makes it a compound claim unit (#302), not a composite claim this rule can reach: it never
+		// enters Tier-2, so it carries no negative to withhold. The citation is still not published
+		// as unsupported, which is what matters clinically; it is the OTHER rule that gets it there.
+		RecordMapping finding = realSafetyFinding();
+		RecordMapping order = coMedicationRecord(finding);
+		String answer = "Clarithromycin can be given, with one caution: it interacts with "
+				+ "active order Simvastatin [" + order.getIndex() + "], a Major problem ["
+				+ finding.getIndex() + "].";
+		ConjunctionAwareJudge judge = useInteractionJudge();
+
+		List<RecordReference> result = verifier.verify(answer, refsFor(order, finding),
+				Arrays.asList(order, finding), FLOOR, TIER2_ON, false);
+
+		assertEquals(0, judge.statementsPerCall.size(),
+				"a compound claim unit is never asked, so this rule has nothing to withhold");
+		assertNull(result.get(0).getGrounded(),
+				"and the citation is withheld all the same, by the compound-claim rule");
+	}
+
+	@Test
+	public void compositeClaim_isCoveredUnderClauseScopedGroundingToo() {
+		// The other fragment factory: under clause scope the same compound is cut into cumulative
+		// prefixes, so the chart citation's unit cites only itself while the SENTENCE it came from
+		// cites the finding too. Issue #284's comment measured both modes, so both are pinned.
+		RecordMapping finding = realSafetyFinding();
+		RecordMapping order = coMedicationRecord(finding);
+		String answer = "Clarithromycin can be given, with one caution: it interacts with "
+				+ "active order Simvastatin [" + order.getIndex() + "], a Major problem ["
+				+ finding.getIndex() + "].";
+		useInteractionJudge();
+
+		List<RecordReference> result = verifier.verify(answer, refsFor(order, finding),
+				Arrays.asList(order, finding), FLOOR, TIER2_ON, true);
+
+		assertNull(result.get(0).getGrounded(),
+				"clause scope splits the sentence differently but does not change what the claim "
+						+ "rests on");
+	}
+
+	@Test
+	public void compositeClaim_stillPublishesTheJudgesPositiveVerdict() {
+		// Only the negative is guaranteed by the composition. A "yes" is not, so it still verifies the
+		// citation — which is the check issue #118 injected the active-order record to keep, and the
+		// reason this rule does not simply make a composite citation demote-only.
+		RecordMapping finding = realSafetyFinding();
+		RecordMapping order = coMedicationRecord(finding);
+		llm.verdict = Boolean.TRUE;
+
+		List<RecordReference> result = verifier.verify(compositeEnumeration(order, finding),
+				refsFor(order, finding), Arrays.asList(order, finding), FLOOR, TIER2_ON, false);
+
+		assertEquals(Boolean.TRUE, result.get(0).getGrounded(),
+				"the rule withholds the guaranteed verdict, it does not blank the citation");
+	}
+
+	@Test
+	public void compositeClaim_leavesTier1OnlyModeUnchanged() {
+		// Scoped to the judge's negative: with no Tier-2 verdict there is nothing guaranteed to
+		// withhold, and every measurement on issue #284 was taken with entailment enabled. So Tier-1
+		// -only mode keeps both of its verdicts here, including the off-topic FALSE.
+		RecordMapping finding = realSafetyFinding();
+		RecordMapping order = coMedicationRecord(finding);
+		String answer = compositeEnumeration(order, finding);
+		String item = "Clarithromycin can be given, with one caution: Clarithromycin interacts with "
+				+ "active order Simvastatin [" + order.getIndex() + "]";
+		embeddings.register(item, AXIS_A);
+		embeddings.register(order.getText(), AXIS_A);
+
+		assertEquals(Boolean.TRUE, verifier.verify(answer, refsFor(order, finding),
+				Arrays.asList(order, finding), FLOOR, TIER1_ONLY).get(0).getGrounded(),
+				"a cosine pass still verifies a chart citation when no judge has spoken");
+
+		embeddings.register(order.getText(), AXIS_B); // now orthogonal to its own claim item
+
+		assertEquals(Boolean.FALSE, verifier.verify(answer, refsFor(order, finding),
+				Arrays.asList(order, finding), FLOOR, TIER1_ONLY).get(0).getGrounded(),
+				"and a cosine fail still flags it — this rule never reaches Tier-1-only mode");
+	}
+
+	@Test
+	public void splitIntoCitedSentences_aFragmentCarriesItsParentsCitations() {
+		// The premise the composite-claim rule (issue #284) rests on: an enumeration item's own
+		// citedIndexes is a singleton, so the co-citation that makes its claim composite is only
+		// visible through the set carried down from the sentence it was split from.
+		List<CitationGroundingVerifier.Sentence> items = CitationGroundingVerifier
+				.splitIntoCitedSentences("Recorded allergies: Lidocaine [1], Aspirin [2].");
+
+		assertEquals(2, items.size());
+		for (CitationGroundingVerifier.Sentence item : items) {
+			assertEquals(1, item.citedIndexes.size(), "an item is attributed to one citation");
+			assertEquals(new java.util.HashSet<Integer>(Arrays.asList(1, 2)), item.sourceCitedIndexes,
+					"and carries what the sentence it came from cited");
+		}
+	}
+
+	@Test
+	public void splitIntoClauseScopedSentences_aClauseCarriesItsParentsCitations() {
+		// Same for the other fragment factory, whose text already contains the earlier markers but
+		// whose citedIndexes deliberately does not.
+		List<CitationGroundingVerifier.Sentence> clauses = CitationGroundingVerifier
+				.splitIntoClauseScopedSentences("A condition [1] and a diagnosis [2].");
+
+		assertEquals(2, clauses.size());
+		for (CitationGroundingVerifier.Sentence clause : clauses) {
+			assertEquals(1, clause.citedIndexes.size());
+			assertEquals(new java.util.HashSet<Integer>(Arrays.asList(1, 2)),
+					clause.sourceCitedIndexes);
+		}
+	}
+
+	@Test
+	public void splitIntoCitedSentences_aWholeSentenceIsItsOwnSource() {
+		List<CitationGroundingVerifier.Sentence> sentences = CitationGroundingVerifier
+				.splitIntoCitedSentences("A condition [1] and a diagnosis [2].");
+
+		assertEquals(1, sentences.size());
+		assertEquals(sentences.get(0).citedIndexes, sentences.get(0).sourceCitedIndexes,
+				"an unsplit sentence rests on exactly what it cites");
+	}
+
+	@Test
+	public void compositeClaim_aChartCitationWhoseOwnClaimRestsOnNoFindingIsStillFlagged() {
+		// The scope of the rule, and the case that discriminates it from "the answer mentions a
+		// finding somewhere". Here the chart citation has its own sentence and that sentence rests on
+		// the chart record alone; the finding is a claim of its own, in a sentence of its own. The
+		// judge's "no" is then earned by the record rather than guaranteed by a composition, so it
+		// must still publish. Without this case, replacing the whole claimRestsOn mechanism with
+		// "does this answer cite reference material anywhere" passes the entire suite.
+		RecordMapping finding = realSafetyFinding();
+		RecordMapping order = coMedicationRecord(finding);
+		String chartSentence = "The patient is on clarithromycin [" + order.getIndex() + "].";
+		String findingSentence = "Simvastatin is a Major problem [" + finding.getIndex() + "].";
+		useInteractionJudge();
+
+		List<RecordReference> result = verifier.verify(chartSentence + " " + findingSentence,
+				refsFor(order, finding), Arrays.asList(order, finding), FLOOR, TIER2_ON, false);
+
+		assertEquals(Boolean.FALSE, result.get(0).getGrounded(),
+				"a claim that rests on the chart record alone keeps its denial — the rule is about "
+						+ "what the STATEMENT rests on, not about what the answer mentions");
+	}
+
+	@Test
+	public void compositeClaim_aFindingCitedOnlyInTheCitationsArrayStillMakesTheClaimComposite() {
+		// The mirror of shape B, and the half inline markers cannot see: the model marks up the chart
+		// record and leaves the finding to the structured citations array. The claim is the same
+		// composition, so anchoring the rule on the model's punctuation would publish the same wrong
+		// denial for the same sentence written the other way round.
+		RecordMapping finding = realSafetyFinding();
+		RecordMapping order = coMedicationRecord(finding);
+		String answer = "Clarithromycin interacts with active order Simvastatin ["
+				+ order.getIndex() + "], a Major problem.";
+		useInteractionJudge();
+
+		List<RecordReference> result = verifier.verify(answer, refsFor(order, finding),
+				Arrays.asList(order, finding), FLOOR, TIER2_ON, false);
+
+		assertNull(result.get(0).getGrounded(),
+				"a finding the model listed without a marker is still what the relationship rests on");
+	}
+
+	@Test
+	public void compositeClaim_theWithheldNegativeIsReportedOncePerAnswer() {
+		// The withheld negative is the one verdict this pass computes and keeps nowhere — unlike the
+		// reference-group false, which #201 leaves on the RecordReference and withholds only at the
+		// wire. Without a line it is unobservable on a running server, which is how a grading defect
+		// on this path would survive the way #122's did.
+		RecordMapping finding = realSafetyFinding();
+		RecordMapping order = coMedicationRecord(finding);
+		useInteractionJudge();
+
+		List<String> lines;
+		try (org.openmrs.module.chartsearchai.LogCapture capture = org.openmrs.module.chartsearchai.LogCapture
+				.on(CitationGroundingVerifier.class.getName())) {
+			verifier.verify(compositeEnumeration(order, finding), refsFor(order, finding),
+					Arrays.asList(order, finding), FLOOR, TIER2_ON, false);
+			lines = capture.messagesAt(org.apache.logging.log4j.Level.INFO);
+		}
+
+		assertEquals(1, lines.size(), "one summary per answer, not one line per citation: " + lines);
+		assertTrue(lines.get(0).contains("withheld 1"), "the line names how many: " + lines.get(0));
+	}
+
+	@Test
+	public void verify_aNonFiniteSimilarityStillFlagsRatherThanReportingAnEmbeddingFailure() {
+		// Guard on the claim-selection bookkeeping the composite rule added to the Tier-1-only path:
+		// when every comparison is non-finite no candidate ever wins, and indexing the sentence list
+		// on the unset best would throw into the embedding-failure catch — turning this branch's
+		// FALSE into a null and blaming querystore for an arithmetic edge.
+		String sentence = "Patient has diabetes [1].";
+		embeddings.register(sentence, new float[] { Float.NaN, 0f });
+		embeddings.register("type 2 diabetes mellitus", AXIS_A);
+
+		List<RecordReference> result = verifier.verify(sentence,
+				new ArrayList<RecordReference>(Arrays.asList(reference(1))),
+				Arrays.asList(mapping(1, "type 2 diabetes mellitus")), FLOOR, TIER1_ONLY);
+
+		assertEquals(Boolean.FALSE, result.get(0).getGrounded(),
+				"nothing cleared the floor, so the citation is not grounded — and no failure is claimed");
 	}
 }

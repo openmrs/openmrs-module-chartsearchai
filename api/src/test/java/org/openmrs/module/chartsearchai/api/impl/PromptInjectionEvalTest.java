@@ -13,12 +13,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -27,8 +21,6 @@ import java.util.stream.Stream;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -61,7 +53,7 @@ public class PromptInjectionEvalTest {
 
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
-	private static final String DEFAULT_ENDPOINT = "http://localhost:18085/v1/chat/completions";
+	private static final String ENDPOINT_PROPERTY = "chartsearchai.prompt.injection.endpoint";
 
 	private static final String SYSTEM_PROMPT = LlmProvider.DEFAULT_SYSTEM_PROMPT;
 
@@ -94,22 +86,7 @@ public class PromptInjectionEvalTest {
 	}
 
 	private static String getEndpoint() {
-		String explicit = System.getProperty("chartsearchai.prompt.injection.endpoint");
-		return (explicit != null && !explicit.isEmpty()) ? explicit : DEFAULT_ENDPOINT;
-	}
-
-	private static boolean isEndpointReachable() {
-		try {
-			String healthUrl = getEndpoint().replace("/v1/chat/completions", "/health");
-			HttpResponse<String> response = HttpClient.newHttpClient().send(
-					HttpRequest.newBuilder().uri(URI.create(healthUrl))
-							.timeout(Duration.ofSeconds(5)).GET().build(),
-					HttpResponse.BodyHandlers.ofString());
-			return response.statusCode() == 200;
-		}
-		catch (Exception e) {
-			return false;
-		}
+		return LlmEndpointTestSupport.endpoint(ENDPOINT_PROPERTY);
 	}
 
 	static Stream<Arguments> injectionPayloads() {
@@ -127,10 +104,9 @@ public class PromptInjectionEvalTest {
 	@ParameterizedTest(name = "[{index}] {0}")
 	@MethodSource("injectionPayloads")
 	public void injectionPayload_shouldProduceSafeResponse(String caseId, EvalCase evalCase) throws Exception {
+		LlmEndpointTestSupport.assumeOptedIn("chartsearchai.prompt.injection.test");
 		org.junit.jupiter.api.Assumptions.assumeTrue(
-				"true".equalsIgnoreCase(System.getProperty("chartsearchai.prompt.injection.test")),
-				"Skipping: set -Dchartsearchai.prompt.injection.test=true to run");
-		org.junit.jupiter.api.Assumptions.assumeTrue(isEndpointReachable(),
+				LlmEndpointTestSupport.isReachable(getEndpoint()),
 				"Skipping: LLM endpoint not reachable at " + getEndpoint());
 
 		String payload = evalCase.getPayload();
@@ -195,49 +171,6 @@ public class PromptInjectionEvalTest {
 	}
 
 	private static String callLlm(String systemPrompt, String userMessage) throws Exception {
-		ObjectNode root = MAPPER.createObjectNode();
-		root.put("temperature", 0.0);
-		root.put("max_tokens", 512);
-		root.put("stream", false);
-
-		ObjectNode responseFormat = MAPPER.createObjectNode();
-		responseFormat.put("type", "json_object");
-		root.set("response_format", responseFormat);
-
-		ArrayNode messages = MAPPER.createArrayNode();
-		ObjectNode sysMsg = MAPPER.createObjectNode();
-		sysMsg.put("role", "system");
-		sysMsg.put("content", systemPrompt);
-		messages.add(sysMsg);
-
-		ObjectNode userMsg = MAPPER.createObjectNode();
-		userMsg.put("role", "user");
-		userMsg.put("content", userMessage);
-		messages.add(userMsg);
-		root.set("messages", messages);
-
-		HttpResponse<String> response = HttpClient.newHttpClient().send(
-				HttpRequest.newBuilder()
-						.uri(URI.create(getEndpoint()))
-						.timeout(Duration.ofSeconds(120))
-						.header("Content-Type", "application/json")
-						.POST(HttpRequest.BodyPublishers.ofString(
-								MAPPER.writeValueAsString(root), StandardCharsets.UTF_8))
-						.build(),
-				HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-
-		if (response.statusCode() != 200) {
-			throw new IOException("LLM endpoint returned HTTP " + response.statusCode());
-		}
-
-		JsonNode respRoot = MAPPER.readTree(response.body());
-		JsonNode choices = respRoot.get("choices");
-		if (choices != null && choices.isArray() && !choices.isEmpty()) {
-			JsonNode message = choices.get(0).get("message");
-			if (message != null && message.has("content")) {
-				return message.get("content").asText("");
-			}
-		}
-		return "";
+		return LlmEndpointTestSupport.complete(getEndpoint(), systemPrompt, userMessage, 512);
 	}
 }

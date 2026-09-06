@@ -1,0 +1,817 @@
+{
+  "metadata": {
+    "note": "Verbatim DDInter 2.0 slice for issue #167 - the two residual-bucket arms and the case that bounds the exclusion. Rows are field-for-field their KB rows in KB order, and the interaction rows are every KB pair among these drugs. Acetylsalicylic acid and Epinephrine share A01AD 'Other agents for local oral treatment' and NOTHING else, which is the duplicate-therapy claim measured live on Agnes Adams; Potassium Iodide and Acetylcysteine share S01XA 'Other ophthalmologicals' and V03AB 'Antidotes' and nothing else, which is the cross-reactivity claim. Loratadine and Desloratadine are the boundary: R06AX is residual too, but its parent R06A is 'ANTIHISTAMINES FOR SYSTEMIC USE', so both members really are antihistamines and the claim must survive. The Acetylsalicylic acid x Epinephrine and Loratadine x Desloratadine rows are rated Unknown with no mechanism, so they carry no mechanism text and cannot clear the severity floor - every chip these drugs raise here comes from the class arm alone."
+  },
+  "mechanisms": {
+    "-1": {
+      "text": null,
+      "categories": []
+    }
+  },
+  "drugs": [
+    {
+      "id": "DDInter1091",
+      "name": "Loratadine",
+      "rxcui": "28889",
+      "rxnorm_name": "loratadine",
+      "drugbank_id": "DB00455",
+      "atc": [
+        "R06AX13"
+      ],
+      "ciel": [
+        {
+          "code": "104995",
+          "uuid": "104995AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Loratadine / pseudoephedrine"
+        },
+        {
+          "code": "79053",
+          "uuid": "79053AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Loratadine"
+        }
+      ]
+    },
+    {
+      "id": "DDInter1500",
+      "name": "Potassium Iodide",
+      "rxcui": "8597",
+      "rxnorm_name": "potassium iodide",
+      "drugbank_id": "DB06715",
+      "atc": [
+        "R05CA02",
+        "S01XA04",
+        "V03AB21"
+      ],
+      "ciel": [
+        {
+          "code": "103547",
+          "uuid": "103547AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aminophylline / ephedrine / phenobarbital / potassium iodide"
+        },
+        {
+          "code": "103551",
+          "uuid": "103551AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aminophylline / potassium iodide"
+        },
+        {
+          "code": "104211",
+          "uuid": "104211AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Chlorpheniramine / codeine / phenylephrine / potassium iodide"
+        },
+        {
+          "code": "104469",
+          "uuid": "104469AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Dextromethorphan / potassium iodide"
+        },
+        {
+          "code": "104576",
+          "uuid": "104576AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Ephedrine / phenobarbital / potassium iodide / theophylline"
+        },
+        {
+          "code": "104579",
+          "uuid": "104579AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Ephedrine / potassium iodide"
+        },
+        {
+          "code": "104937",
+          "uuid": "104937AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Iodine / potassium iodide"
+        },
+        {
+          "code": "105101",
+          "uuid": "105101AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Niacinamide / potassium iodide"
+        },
+        {
+          "code": "105153",
+          "uuid": "105153AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Phenobarbital / potassium iodide / sodium bicarbonate / theobromine"
+        },
+        {
+          "code": "105207",
+          "uuid": "105207AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Potassium iodide / theophylline"
+        },
+        {
+          "code": "82364",
+          "uuid": "82364AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Potassium iodide"
+        }
+      ]
+    },
+    {
+      "id": "DDInter19",
+      "name": "Acetylcysteine",
+      "rxcui": "197",
+      "rxnorm_name": "acetylcysteine",
+      "drugbank_id": "DB06151",
+      "atc": [
+        "R05CB01",
+        "S01XA08",
+        "V03AB23"
+      ],
+      "ciel": [
+        {
+          "code": "103316",
+          "uuid": "103316AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Acetylcysteine / l-methylfolate / mecobalamin"
+        },
+        {
+          "code": "70148",
+          "uuid": "70148AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Acetylcysteine"
+        },
+        {
+          "code": "70149",
+          "uuid": "70149AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Acetylcysteine sodium"
+        }
+      ]
+    },
+    {
+      "id": "DDInter20",
+      "name": "Acetylsalicylic acid",
+      "rxcui": "1191",
+      "rxnorm_name": "aspirin",
+      "drugbank_id": "DB00945",
+      "atc": [
+        "A01AD05",
+        "B01AC06",
+        "N02BA01"
+      ],
+      "ciel": [
+        {
+          "code": "103170",
+          "uuid": "103170AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Acetaminophen / aluminum hydroxide / aspirin / caffeine / magnesium hydroxide"
+        },
+        {
+          "code": "103171",
+          "uuid": "103171AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Acetaminophen / aluminum hydroxide / aspirin / salicylamide"
+        },
+        {
+          "code": "103172",
+          "uuid": "103172AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Acetaminophen / aspirin"
+        },
+        {
+          "code": "103173",
+          "uuid": "103173AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Acetaminophen / aspirin / caffeine"
+        },
+        {
+          "code": "103174",
+          "uuid": "103174AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Acetaminophen / aspirin / caffeine / calcium gluconate"
+        },
+        {
+          "code": "103175",
+          "uuid": "103175AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Acetaminophen / aspirin / caffeine / codeine / salicylamide"
+        },
+        {
+          "code": "103176",
+          "uuid": "103176AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Acetaminophen / aspirin / caffeine / hydrocodone"
+        },
+        {
+          "code": "103177",
+          "uuid": "103177AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Acetaminophen / aspirin / caffeine / salicylamide"
+        },
+        {
+          "code": "103178",
+          "uuid": "103178AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Acetaminophen / aspirin / codeine"
+        },
+        {
+          "code": "103179",
+          "uuid": "103179AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Acetaminophen / aspirin / phenylpropanolamine"
+        },
+        {
+          "code": "103304",
+          "uuid": "103304AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Acetanilide / aspirin / caffeine / ephedrine"
+        },
+        {
+          "code": "103520",
+          "uuid": "103520AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aluminum hydroxide / aspirin / calcium carbonate / magnesium hydroxide"
+        },
+        {
+          "code": "103521",
+          "uuid": "103521AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aluminum hydroxide / aspirin / codeine / magnesium hydroxide"
+        },
+        {
+          "code": "103522",
+          "uuid": "103522AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aluminum hydroxide / aspirin / magnesium hydroxide"
+        },
+        {
+          "code": "103680",
+          "uuid": "103680AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / brompheniramine / dextromethorphan / phenylpropanolamine"
+        },
+        {
+          "code": "103681",
+          "uuid": "103681AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / butalbital"
+        },
+        {
+          "code": "103683",
+          "uuid": "103683AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / butalbital / caffeine / codeine"
+        },
+        {
+          "code": "103684",
+          "uuid": "103684AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / butalbital / caffeine / phenacetin"
+        },
+        {
+          "code": "103685",
+          "uuid": "103685AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / caffeine"
+        },
+        {
+          "code": "103686",
+          "uuid": "103686AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / caffeine / chlorpheniramine"
+        },
+        {
+          "code": "103687",
+          "uuid": "103687AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / caffeine / cinnamedrine"
+        },
+        {
+          "code": "103688",
+          "uuid": "103688AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / caffeine / codeine"
+        },
+        {
+          "code": "103689",
+          "uuid": "103689AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / caffeine / dihydrocodeine"
+        },
+        {
+          "code": "103690",
+          "uuid": "103690AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / caffeine / dihydrocodeine / promethazine"
+        },
+        {
+          "code": "103691",
+          "uuid": "103691AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / caffeine / hydrocodone"
+        },
+        {
+          "code": "103692",
+          "uuid": "103692AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / caffeine / ipecac / opium"
+        },
+        {
+          "code": "103693",
+          "uuid": "103693AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / caffeine / magnesium salicylate"
+        },
+        {
+          "code": "103694",
+          "uuid": "103694AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / caffeine / orphenadrine"
+        },
+        {
+          "code": "103695",
+          "uuid": "103695AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / caffeine / propoxyphene"
+        },
+        {
+          "code": "103696",
+          "uuid": "103696AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / caffeine / salicylamide"
+        },
+        {
+          "code": "103697",
+          "uuid": "103697AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / calcium carbonate"
+        },
+        {
+          "code": "103699",
+          "uuid": "103699AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / carisoprodol"
+        },
+        {
+          "code": "103700",
+          "uuid": "103700AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / carisoprodol / codeine"
+        },
+        {
+          "code": "103701",
+          "uuid": "103701AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / chlorpheniramine"
+        },
+        {
+          "code": "103702",
+          "uuid": "103702AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / chlorpheniramine / dextromethorphan"
+        },
+        {
+          "code": "103703",
+          "uuid": "103703AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / chlorpheniramine / dextromethorphan / phenylpropanolamine"
+        },
+        {
+          "code": "103704",
+          "uuid": "103704AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / chlorpheniramine / phenylpropanolamine"
+        },
+        {
+          "code": "103705",
+          "uuid": "103705AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / chlorpheniramine / pseudoephedrine"
+        },
+        {
+          "code": "103706",
+          "uuid": "103706AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / citric acid / sodium bicarbonate"
+        },
+        {
+          "code": "103707",
+          "uuid": "103707AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / codeine"
+        },
+        {
+          "code": "103709",
+          "uuid": "103709AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / diphenhydramine"
+        },
+        {
+          "code": "103710",
+          "uuid": "103710AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / diphenhydramine / phenylpropanolamine"
+        },
+        {
+          "code": "103711",
+          "uuid": "103711AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / dipyridamole"
+        },
+        {
+          "code": "103712",
+          "uuid": "103712AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / ethoheptazine / meprobamate"
+        },
+        {
+          "code": "103713",
+          "uuid": "103713AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / glycine"
+        },
+        {
+          "code": "103714",
+          "uuid": "103714AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / hydrocodone"
+        },
+        {
+          "code": "103715",
+          "uuid": "103715AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / isosorbide"
+        },
+        {
+          "code": "103716",
+          "uuid": "103716AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / meprobamate"
+        },
+        {
+          "code": "103717",
+          "uuid": "103717AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / methocarbamol"
+        },
+        {
+          "code": "103718",
+          "uuid": "103718AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / oxycodone"
+        },
+        {
+          "code": "103720",
+          "uuid": "103720AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / pentazocine"
+        },
+        {
+          "code": "103721",
+          "uuid": "103721AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / phenobarbital"
+        },
+        {
+          "code": "103722",
+          "uuid": "103722AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / phenylephrine"
+        },
+        {
+          "code": "103723",
+          "uuid": "103723AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / phenylpropanolamine"
+        },
+        {
+          "code": "103724",
+          "uuid": "103724AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / phenyltoloxamine"
+        },
+        {
+          "code": "103725",
+          "uuid": "103725AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / pravastatin"
+        },
+        {
+          "code": "103726",
+          "uuid": "103726AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / promethazine / pseudoephedrine"
+        },
+        {
+          "code": "103727",
+          "uuid": "103727AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / propoxyphene"
+        },
+        {
+          "code": "103728",
+          "uuid": "103728AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin / pseudoephedrine"
+        },
+        {
+          "code": "169229",
+          "uuid": "1304b943-339f-403f-aca9-c47b7779c9c7",
+          "name": "Aspirin / clopidogrel"
+        },
+        {
+          "code": "71617",
+          "uuid": "71617AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Aspirin"
+        },
+        {
+          "code": "72488",
+          "uuid": "72488AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Buffered aspirin"
+        }
+      ]
+    },
+    {
+      "id": "DDInter506",
+      "name": "Desloratadine",
+      "rxcui": "275635",
+      "rxnorm_name": "desloratadine",
+      "drugbank_id": "DB00967",
+      "atc": [
+        "R06AX27"
+      ],
+      "ciel": [
+        {
+          "code": "104420",
+          "uuid": "104420AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Desloratadine / pseudoephedrine"
+        },
+        {
+          "code": "74557",
+          "uuid": "74557AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Desloratadine"
+        }
+      ]
+    },
+    {
+      "id": "DDInter652",
+      "name": "Epinephrine",
+      "rxcui": "3992",
+      "rxnorm_name": "epinephrine",
+      "drugbank_id": "DB00668",
+      "atc": [
+        "A01AD01",
+        "B02BC09",
+        "C01CA24",
+        "R01AA14",
+        "R03AA01",
+        "S01EA01"
+      ],
+      "ciel": [
+        {
+          "code": "103606",
+          "uuid": "103606AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Articaine / epinephrine"
+        },
+        {
+          "code": "103957",
+          "uuid": "103957AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Bupivacaine / epinephrine"
+        },
+        {
+          "code": "103963",
+          "uuid": "103963AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Butabarbital / epinephrine / theophylline"
+        },
+        {
+          "code": "104355",
+          "uuid": "104355AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Cocaine / epinephrine"
+        },
+        {
+          "code": "104582",
+          "uuid": "104582AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Epinephrine / etidocaine"
+        },
+        {
+          "code": "104583",
+          "uuid": "104583AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Epinephrine / guanethidine"
+        },
+        {
+          "code": "104584",
+          "uuid": "104584AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Epinephrine / lidocaine"
+        },
+        {
+          "code": "104585",
+          "uuid": "104585AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Epinephrine / mepivacaine"
+        },
+        {
+          "code": "104586",
+          "uuid": "104586AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Epinephrine / pilocarpine"
+        },
+        {
+          "code": "104587",
+          "uuid": "104587AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Epinephrine / prilocaine"
+        },
+        {
+          "code": "104588",
+          "uuid": "104588AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Epinephrine / zinc chloride"
+        },
+        {
+          "code": "70293",
+          "uuid": "70293AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Adrenaline bitartrate"
+        },
+        {
+          "code": "70294",
+          "uuid": "70294AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Adrenaline hydrochloride"
+        },
+        {
+          "code": "75744",
+          "uuid": "75744AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Epinephrine"
+        },
+        {
+          "code": "75746",
+          "uuid": "75746AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Epinephryl borate"
+        }
+      ]
+    },
+    {
+      "id": "DDInter653",
+      "name": "Epinephrine (ophthalmic)",
+      "rxcui": "3992",
+      "rxnorm_name": "epinephrine",
+      "drugbank_id": "DB00668",
+      "atc": [
+        "A01AD01",
+        "B02BC09",
+        "C01CA24",
+        "R01AA14",
+        "R03AA01",
+        "S01EA01"
+      ],
+      "ciel": [
+        {
+          "code": "103606",
+          "uuid": "103606AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Articaine / epinephrine"
+        },
+        {
+          "code": "103957",
+          "uuid": "103957AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Bupivacaine / epinephrine"
+        },
+        {
+          "code": "103963",
+          "uuid": "103963AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Butabarbital / epinephrine / theophylline"
+        },
+        {
+          "code": "104355",
+          "uuid": "104355AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Cocaine / epinephrine"
+        },
+        {
+          "code": "104582",
+          "uuid": "104582AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Epinephrine / etidocaine"
+        },
+        {
+          "code": "104583",
+          "uuid": "104583AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Epinephrine / guanethidine"
+        },
+        {
+          "code": "104584",
+          "uuid": "104584AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Epinephrine / lidocaine"
+        },
+        {
+          "code": "104585",
+          "uuid": "104585AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Epinephrine / mepivacaine"
+        },
+        {
+          "code": "104586",
+          "uuid": "104586AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Epinephrine / pilocarpine"
+        },
+        {
+          "code": "104587",
+          "uuid": "104587AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Epinephrine / prilocaine"
+        },
+        {
+          "code": "104588",
+          "uuid": "104588AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Epinephrine / zinc chloride"
+        },
+        {
+          "code": "70293",
+          "uuid": "70293AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Adrenaline bitartrate"
+        },
+        {
+          "code": "70294",
+          "uuid": "70294AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Adrenaline hydrochloride"
+        },
+        {
+          "code": "75744",
+          "uuid": "75744AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Epinephrine"
+        },
+        {
+          "code": "75746",
+          "uuid": "75746AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Epinephryl borate"
+        }
+      ]
+    },
+    {
+      "id": "DDInter654",
+      "name": "Epinephrine (topical)",
+      "rxcui": "3992",
+      "rxnorm_name": "epinephrine",
+      "drugbank_id": "DB00668",
+      "atc": [
+        "A01AD01",
+        "B02BC09",
+        "C01CA24",
+        "R01AA14",
+        "R03AA01",
+        "S01EA01"
+      ],
+      "ciel": [
+        {
+          "code": "103606",
+          "uuid": "103606AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Articaine / epinephrine"
+        },
+        {
+          "code": "103957",
+          "uuid": "103957AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Bupivacaine / epinephrine"
+        },
+        {
+          "code": "103963",
+          "uuid": "103963AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Butabarbital / epinephrine / theophylline"
+        },
+        {
+          "code": "104355",
+          "uuid": "104355AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Cocaine / epinephrine"
+        },
+        {
+          "code": "104582",
+          "uuid": "104582AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Epinephrine / etidocaine"
+        },
+        {
+          "code": "104583",
+          "uuid": "104583AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Epinephrine / guanethidine"
+        },
+        {
+          "code": "104584",
+          "uuid": "104584AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Epinephrine / lidocaine"
+        },
+        {
+          "code": "104585",
+          "uuid": "104585AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Epinephrine / mepivacaine"
+        },
+        {
+          "code": "104586",
+          "uuid": "104586AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Epinephrine / pilocarpine"
+        },
+        {
+          "code": "104587",
+          "uuid": "104587AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Epinephrine / prilocaine"
+        },
+        {
+          "code": "104588",
+          "uuid": "104588AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Epinephrine / zinc chloride"
+        },
+        {
+          "code": "70293",
+          "uuid": "70293AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Adrenaline bitartrate"
+        },
+        {
+          "code": "70294",
+          "uuid": "70294AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Adrenaline hydrochloride"
+        },
+        {
+          "code": "75744",
+          "uuid": "75744AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Epinephrine"
+        },
+        {
+          "code": "75746",
+          "uuid": "75746AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Epinephryl borate"
+        }
+      ]
+    }
+  ],
+  "interactions": [
+    [
+      "DDInter1091",
+      "DDInter19",
+      "Unknown",
+      "-1"
+    ],
+    [
+      "DDInter1091",
+      "DDInter20",
+      "Unknown",
+      "-1"
+    ],
+    [
+      "DDInter1091",
+      "DDInter506",
+      "Unknown",
+      "-1"
+    ],
+    [
+      "DDInter1091",
+      "DDInter652",
+      "Unknown",
+      "-1"
+    ],
+    [
+      "DDInter19",
+      "DDInter20",
+      "Unknown",
+      "-1"
+    ],
+    [
+      "DDInter19",
+      "DDInter506",
+      "Unknown",
+      "-1"
+    ],
+    [
+      "DDInter19",
+      "DDInter652",
+      "Unknown",
+      "-1"
+    ],
+    [
+      "DDInter20",
+      "DDInter506",
+      "Unknown",
+      "-1"
+    ],
+    [
+      "DDInter20",
+      "DDInter652",
+      "Unknown",
+      "-1"
+    ],
+    [
+      "DDInter506",
+      "DDInter652",
+      "Unknown",
+      "-1"
+    ]
+  ]
+}

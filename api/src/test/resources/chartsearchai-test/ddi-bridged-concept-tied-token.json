@@ -1,0 +1,79 @@
+{
+  "metadata": {
+    "schema_version": "1.0",
+    "note": "Issue #353, review round 4: the same bridged concept as ddi-bridged-concept-two-substances.json, arranged so the rule token the election ranks TIES between the two substances. Everything here is that file's verbatim slice of the shipped knowledge base except ONE field, and the exception is the whole point: the two rows' rxnorm_name is 'esomeprazole magnesium trihydrate' where the shipped rows both publish 'esomeprazole'. DdiDrugReferenceSource writes a rule's match token from the partner's rxnorm_name and files that same string in the partner's own aliases, so the shipped pair is SEPARABLE by it - 'esomeprazole' is Esomeprazole's display name and only Omeprazole's alias, which is what DrugSafetyValidator.activeOrderEntryFor's ranking elects on. Changed to a string that is an alias of both rows and the display name of neither, both score DrugReference.NAME_IS_ANOTHER_NAME and the ranking cannot separate them, which is the residue that method's javadoc names and BridgedConceptOrderResolutionTest.aTiedTokenIsAnsweredByTheFirstOfTheTiedRowsFromEitherRowOrder pins. Authored rather than sliced because the population where this tie would be observable does not carry it: measured through the production accessors, none of the 122 bridged concepts whose recorded name does not name every substance they answer with carries a rule token that ties at NAME_IS_ANOTHER_NAME between two of those substances, one named by the bridge and one not. The one tie found in that population at any rank is CIEL 103715 'Aspirin / isosorbide' at token 'isosorbide dinitrate', and it is at the CONTAINMENT rank rather than this one. The bridge row is untouched, so CIEL 75876 'Esomeprazole magnesium' still names Esomeprazole and not Omeprazole; both Major interaction rows and their absent mechanism text are that file's, so this fixture invents no clinical prose and no rating."
+  },
+  "mechanisms": {
+    "-1": {
+      "text": null,
+      "categories": []
+    }
+  },
+  "drugs": [
+    {
+      "id": "DDInter1340",
+      "name": "Omeprazole",
+      "rxcui": "283742",
+      "rxnorm_name": "esomeprazole magnesium trihydrate",
+      "drugbank_id": "DB00338",
+      "atc": [
+        "A02BC05"
+      ],
+      "ciel": [
+        {
+          "code": "75876",
+          "uuid": "75876AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Esomeprazole magnesium"
+        }
+      ]
+    },
+    {
+      "id": "DDInter676",
+      "name": "Esomeprazole",
+      "rxcui": "283742",
+      "rxnorm_name": "esomeprazole magnesium trihydrate",
+      "drugbank_id": "DB00736",
+      "atc": [
+        "A02BC05"
+      ],
+      "ciel": [
+        {
+          "code": "75876",
+          "uuid": "75876AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Esomeprazole magnesium"
+        }
+      ]
+    },
+    {
+      "id": "DDInter413",
+      "name": "Clopidogrel",
+      "rxcui": "32968",
+      "rxnorm_name": "clopidogrel",
+      "drugbank_id": "DB00758",
+      "atc": [
+        "B01AC04"
+      ],
+      "ciel": [
+        {
+          "code": "73602",
+          "uuid": "73602AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Clopidogrel"
+        }
+      ]
+    }
+  ],
+  "interactions": [
+    [
+      "DDInter1340",
+      "DDInter413",
+      "Major",
+      "-1"
+    ],
+    [
+      "DDInter413",
+      "DDInter676",
+      "Major",
+      "-1"
+    ]
+  ]
+}

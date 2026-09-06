@@ -1,0 +1,33 @@
+{
+  "version": "1.0",
+  "source": "hand-authored fixture for issue #308 — not shipped data",
+  "description": "The OTHER direction of the cross-row residue ADR Decision 44 declares, and the one the sibling fixtures do not reach: here the row the record is RENDERED for is the corroborated one, and the uncorroborated sentence is the sibling's. Both Levoketoconazole rows declare substanceName 'levoketoconazole', so contraindicationFinding keys both self-named allergy rules on the substance and ContraindicationChips holds ONE chip for them, while DrugReferenceInjector injects one record for the substance and renders it for canonicalRow's row. The BARE row is the canonical one (namesNoRoute elects it over the route-qualified tablets row), and its 'ketoconazole' rule is named outright by an allergy recorded as 'Ketoconazole' — corroborated, so that record states its clause as recorded. The tablets row rules on 'levo' with a note, which an allergy recorded as 'Levocetirizine' reaches only mid-word and nothing corroborates. They TIE at rank 0 (SELF_NAMED_RULE_MATCHED_BY_CONTAINMENT_ALONE against SELF_NAMED_RULE_WITHOUT_A_NOTE), and the tablets rule is authored FIRST so it is the ledger's incumbent and its sentence survives the tie — bringing its own uncorroborated answer beside a record that asserts. The standalone Ketoconazole entry exists so that allergen resolves to a substance that is NOT this one, keeping the bare row's corroboration a leg-1 answer.",
+  "entries": [
+    {
+      "id": "levoketoconazole-tablets",
+      "name": "Levoketoconazole (tablets)",
+      "substanceName": "levoketoconazole",
+      "aliases": ["levoketoconazole (tablets)", "levoketoconazole", "levo"],
+      "contraindications": [
+        { "type": "allergy", "token": "levo", "note": "documented levo allergy" }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "levoketoconazole",
+      "name": "Levoketoconazole",
+      "substanceName": "levoketoconazole",
+      "aliases": ["levoketoconazole", "ketoconazole"],
+      "contraindications": [
+        { "type": "allergy", "token": "ketoconazole", "note": "" }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "ketoconazole",
+      "name": "Ketoconazole",
+      "aliases": ["ketoconazole"],
+      "source": "hand-authored fixture"
+    }
+  ]
+}

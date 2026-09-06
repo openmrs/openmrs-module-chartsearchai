@@ -13,17 +13,14 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.regex.Pattern;
 
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -47,177 +44,141 @@ public class CrossReactivityGroupsLoader {
 
 	static final String CLASSPATH_DEFAULT = "/chartsearchai/cross-reactivity-groups.json";
 
+	/**
+	 * What this dataset is called, in log lines and in the {@code format} position of a
+	 * {@link DrugReferenceValidity} finding. One constant because those two must not drift: a finding
+	 * reading "a 'cross-reactivity groups' document must declare [groups]" is what an operator matches
+	 * against the log line beside it. It is deliberately NOT a
+	 * {@code chartsearchai.drugReference.sourceFormat} value — this file is loaded alongside every format
+	 * and has a global property of its own.
+	 */
+	static final String DATASET_LABEL = "cross-reactivity groups";
+
+	/** What a groups document would have produced, for the finding that says it produced none — see
+	 *  {@link DrugReferenceValidity#datasetMissingARequiredTable}. Groups, not entries. */
+	private static final String DATASET_ITEMS = "groups";
+
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
-	private static final Pattern ATC_GROUP_PREFIX =
-			Pattern.compile("[A-Z]\\d{2}(?:[A-Z](?:[A-Z](?:\\d{2})?)?)?");
+	private volatile String lastLoadOrigin = ReferenceDataFiles.ORIGIN_NONE;
 
-	private volatile ParsedDataset parsedDuringLoad;
+	private volatile String lastConfiguredPath = "";
 
-	private volatile DrugReferencePackage lastLoadPackage;
+	private volatile List<DrugReferenceValidity.Finding> lastLoadFindings = Collections.emptyList();
 
+	/**
+	 * @return the parsed groups, from the operator file if it could be read and from the bundled default
+	 *         otherwise. What the load found wrong reaches the log here AND is retained for
+	 *         {@link #lastLoadFindings()}, which {@link DrugReferenceService} reads on this same instance
+	 *         immediately afterwards and publishes as {@link CrossReactivityGroupsLoad} — issue #266.
+	 *         Until then it reached the log alone, which cannot answer after a lazy load (issue #154) and
+	 *         is not a channel an operator can be expected to be watching when a module starts; issue
+	 *         #156's second case, the default path naming a file the module never creates, was confirmed
+	 *         live on exactly that gap.
+	 */
 	public List<CrossReactivityGroup> load() {
-		parsedDuringLoad = null;
 		ReferenceDataFiles.Loaded<CrossReactivityGroup> loaded = ReferenceDataFiles.loadWithClasspathFallback(
-				ChartSearchAiConstants.GP_DRUG_REFERENCE_CROSS_REACTIVITY_FILE_PATH, CLASSPATH_DEFAULT,
-				"cross-reactivity groups", this::parseAndCapture);
-		lastLoadPackage = parsedDuringLoad == null
-				? unavailablePackage(loaded.getOrigin())
-				: parsedDuringLoad.toPackage(loaded.getOrigin());
+				ChartSearchAiConstants.GP_DRUG_REFERENCE_CROSS_REACTIVITY_FILE_PATH,
+				ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_CROSS_REACTIVITY_FILE_PATH, CLASSPATH_DEFAULT,
+				DATASET_LABEL, CrossReactivityGroupsLoader::parse);
+		lastLoadOrigin = loaded.getOrigin();
+		lastConfiguredPath = loaded.getConfiguredPath();
+		lastLoadFindings = loaded.getValidity().getFindings();
+		loaded.getValidity().logTo(log);
 		return loaded.getItems();
 	}
 
-	public DrugReferencePackage lastLoadPackage() {
-		return lastLoadPackage;
-	}
-
-	private static DrugReferencePackage unavailablePackage(String origin) {
-		return new DrugReferencePackage("unavailable-cross-reactivity-package", "json", null,
-				Collections.<String, Object> singletonMap("origin", origin),
-				DrugReferencePackage.REVIEW_PROPOSED,
-				Collections.singletonList("cross_reactivity_source_unavailable"));
+	/**
+	 * @return where the groups {@link #load()} last returned were read from, in
+	 *         {@link ReferenceDataFiles}' origin vocabulary. Read on the same instance immediately after
+	 *         {@code load()} and retained beside the groups, for the same reason
+	 *         {@link DrugReferenceSource#lastLoadOrigin()} is: the load is lazy, so a log line cannot be
+	 *         trusted to describe the load that is in force (issue #149).
+	 */
+	public String lastLoadOrigin() {
+		return lastLoadOrigin;
 	}
 
 	/**
-	 * Parse a groups stream. Groups with a blank {@code name} or no usable {@code atcPrefixes}
-	 * are dropped (with a warning): a name-less group would render
-	 * {@code "… is in the same cross-reactivity group (null) …"} into a safety warning, and a
-	 * prefix-less one can never match. Package-private and static so tests can exercise the real parser against
-	 * the real dataset.
+	 * @return the groups path global property's value as the resolution that produced
+	 *         {@link #lastLoadOrigin()} read it; never null. Reported beside that origin because the two
+	 *         are what an operator is told to compare, and taken from the resolution rather than re-read
+	 *         so the reported pair provably comes from ONE read of the property.
+	 */
+	public String lastConfiguredPath() {
+		return lastConfiguredPath;
+	}
+
+	/**
+	 * @return what the validity check found while {@link #load()} resolved AND parsed the groups file:
+	 *         the configuration rule only the resolution knows
+	 *         ({@link DrugReferenceValidity#configuredDataFileNotRead}) and the document rule only the
+	 *         parser knows ({@link DrugReferenceValidity#datasetMissingARequiredTable}). Never null; read
+	 *         on the same instance immediately after {@code load()}, exactly as
+	 *         {@link DrugReferenceSource#lastLoadFindings()} is.
+	 */
+	public List<DrugReferenceValidity.Finding> lastLoadFindings() {
+		return lastLoadFindings;
+	}
+
+	/**
+	 * The form for a caller that wants only the groups — package-private and static so tests can
+	 * exercise the real parser against the real dataset. Delegates; see {@link #parse(InputStream,
+	 * DrugReferenceValidity)} for what parsing this dataset means, and what the parser reports about the
+	 * DOCUMENT still reaches the log from here.
 	 */
 	static List<CrossReactivityGroup> parse(InputStream in) throws IOException {
-		return parseDataset(in).groups;
+		DrugReferenceValidity validity = new DrugReferenceValidity();
+		List<CrossReactivityGroup> parsed = parse(in, validity);
+		validity.logTo(log);
+		return parsed;
 	}
 
-	static DrugReferencePackage parsePackage(InputStream in, String origin) throws IOException {
-		return parseDataset(in).toPackage(origin);
-	}
-
-	private List<CrossReactivityGroup> parseAndCapture(InputStream in) throws IOException {
-		ParsedDataset parsed = parseDataset(in);
-		parsedDuringLoad = parsed;
-		return parsed.groups;
-	}
-
-	private static ParsedDataset parseDataset(InputStream in) throws IOException {
-		JsonNode root = MAPPER.readTree(in);
-		if (root == null || !root.isObject()) {
-			return ParsedDataset.invalid();
-		}
-		List<String> issues = new ArrayList<String>();
-		String packageId = text(root, "packageId");
-		String version = text(root, "version");
-		String source = text(root, "source");
-		if (packageId == null || version == null || source == null) {
-			issues.add("cross_reactivity_package_identity_incomplete");
-		}
-		JsonNode rawGroups = root.get("groups");
-		if (rawGroups == null || !rawGroups.isArray()) {
-			issues.add("cross_reactivity_data_invalid");
-			return new ParsedDataset(Collections.<CrossReactivityGroup> emptyList(),
-					packageId, version, source,
-					text(root, "reviewState"), issues);
+	/**
+	 * Parse a groups stream, reporting what only this parser can see about the document to
+	 * {@code validity} — the {@link ReferenceDataFiles.DatasetParser} form, and the one the load takes.
+	 * Groups with a blank {@code name} or no usable {@code atcPrefixes} are dropped (with a warning): a
+	 * name-less group would render {@code "… is in the same cross-reactivity group (null) …"} into a
+	 * safety warning, and a prefix-less one can never match.
+	 *
+	 * <p>A document declaring no {@code groups} table reports
+	 * {@link DrugReferenceValidity#DATASET_MISSING_A_REQUIRED_TABLE} — issue #242's rule, on the third
+	 * dataset that has its shape, and issue #266's second half. Until then this parse returned empty in
+	 * silence, and unlike the entry datasets there is no {@link DrugReferenceLoad#isInert()} verdict to
+	 * make even the emptiness loud, so a groups file of another shape produced no signal at all.
+	 *
+	 * <p>What is asked of the table is that it be DECLARED, not that it be usable, exactly as
+	 * {@link DdiDrugReferenceSource#parse(InputStream, DrugReferenceValidity)} asks it: a document
+	 * declaring {@code "groups": []} has said it carries no families, which is a legitimate deployment
+	 * choice, and reporting it would make this rule fire on a decision rather than on a defect.
+	 */
+	static List<CrossReactivityGroup> parse(InputStream in, DrugReferenceValidity validity)
+			throws IOException {
+		Dataset dataset = MAPPER.readValue(in, Dataset.class);
+		if (dataset == null || dataset.groups == null) {
+			validity.datasetMissingARequiredTable(DATASET_LABEL,
+					Collections.singletonList(DATASET_ITEMS), DATASET_ITEMS, 0);
+			return Collections.emptyList();
 		}
 		List<CrossReactivityGroup> usable = new ArrayList<CrossReactivityGroup>();
 		int dropped = 0;
-		boolean partial = false;
-		for (JsonNode rawGroup : rawGroups) {
-			CrossReactivityGroup group;
-			try {
-				group = rawGroup != null && rawGroup.isObject()
-						? MAPPER.treeToValue(rawGroup, CrossReactivityGroup.class) : null;
-			}
-			catch (IOException | RuntimeException e) {
-				group = null;
-			}
+		for (CrossReactivityGroup group : dataset.groups) {
 			if (group == null || ChartSearchAiUtils.isBlank(group.getName())
 					|| group.normalizedAtcPrefixes().isEmpty()) {
 				dropped++;
 				continue;
 			}
-			if (invalidPrefixes(rawGroup)) {
-				dropped++;
-				partial = true;
-				continue;
-			}
 			usable.add(group);
 		}
 		if (dropped > 0) {
-			log.warn("Dropped {} unusable cross-reactivity groups (invalid name or atcPrefixes)", dropped);
-			partial = true;
+			log.warn("Dropped {} unusable cross-reactivity groups (blank name or no usable atcPrefixes)", dropped);
 		}
-		String reviewState = text(root, "reviewState");
-		if (!validReviewState(reviewState)) {
-			partial = true;
-		}
-		if (partial) {
-			issues.add("cross_reactivity_data_partially_invalid");
-		}
-		return new ParsedDataset(usable, packageId, version, source, reviewState, issues);
+		return usable;
 	}
 
-	private static boolean invalidPrefixes(JsonNode group) {
-		JsonNode prefixes = group == null ? null : group.get("atcPrefixes");
-		if (prefixes == null || !prefixes.isArray()) {
-			return true;
-		}
-		for (JsonNode prefix : prefixes) {
-			if (prefix == null || !prefix.isTextual() || ChartSearchAiUtils.isBlank(prefix.asText())
-					|| !ATC_GROUP_PREFIX.matcher(prefix.asText().trim()
-							.toUpperCase(java.util.Locale.ROOT)).matches()) {
-				return true;
-			}
-		}
-		return false;
-	}
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	private static class Dataset {
 
-	private static String text(JsonNode node, String field) {
-		JsonNode value = node == null ? null : node.get(field);
-		return value != null && value.isTextual() && !ChartSearchAiUtils.isBlank(value.asText())
-				? value.asText().trim() : null;
-	}
-
-	private static boolean validReviewState(String value) {
-		return DrugReferencePackage.REVIEW_PROPOSED.equals(value)
-				|| DrugReferencePackage.REVIEW_EVIDENCE_CURATED.equals(value)
-				|| DrugReferencePackage.REVIEW_CLINICALLY_APPROVED.equals(value)
-				|| DrugReferencePackage.REVIEW_RETIRED.equals(value);
-	}
-
-	private static final class ParsedDataset {
-
-		private final List<CrossReactivityGroup> groups;
-		private final String packageId;
-		private final String version;
-		private final String source;
-		private final String reviewState;
-		private final List<String> issues;
-
-		private ParsedDataset(List<CrossReactivityGroup> groups, String packageId,
-				String version, String source, String reviewState, List<String> issues) {
-			this.groups = groups;
-			this.packageId = packageId;
-			this.version = version;
-			this.source = source;
-			this.reviewState = reviewState;
-			this.issues = issues;
-		}
-
-		private static ParsedDataset invalid() {
-			return new ParsedDataset(Collections.<CrossReactivityGroup> emptyList(), null, null,
-					null, DrugReferencePackage.REVIEW_PROPOSED,
-					Collections.singletonList("cross_reactivity_data_invalid"));
-		}
-
-		private DrugReferencePackage toPackage(String origin) {
-			Map<String, Object> provenance = new LinkedHashMap<String, Object>();
-			provenance.put("origin", origin);
-			if (source != null) {
-				provenance.put("source", source);
-			}
-			return new DrugReferencePackage(
-					packageId == null ? "unidentified-cross-reactivity-package" : packageId,
-					"json", version, provenance, reviewState, issues);
-		}
+		public List<CrossReactivityGroup> groups;
 	}
 }

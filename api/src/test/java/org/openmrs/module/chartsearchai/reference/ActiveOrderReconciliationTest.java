@@ -53,15 +53,13 @@ public class ActiveOrderReconciliationTest {
 
 	private static final String ASPIRIN_ORDER_UUID = "66666666-7777-8888-9999-000000000000";
 
-	/** The injector with the validator wired, exactly as {@code DrugReferenceInjectorTest} builds it
-	 *  — so the safety findings of #110 flow too and these tests see the whole injected record set,
-	 *  not a reconciliation-only subset. */
+	/** The injector with the validator wired — so the safety findings of #110 flow too and these tests
+	 *  see the whole injected record set, not a reconciliation-only subset. Through the shared
+	 *  arrangement rather than a copy of it, so "exactly as the other files build it" is a fact instead
+	 *  of a promise. */
 	private DrugReferenceInjector injector() {
-		DrugReferenceService service = DrugReferenceTestSupport.ddinterService();
-		service.setCrossReactivityGroups(DrugReferenceTestSupport.bundledGroups());
-		DrugReferenceInjector injector = DrugReferenceTestSupport.injector(service);
-		injector.setDrugSafetyValidator(DrugReferenceTestSupport.validator(service));
-		return injector;
+		return DrugReferenceTestSupport
+				.injectorWithSafety(DrugReferenceTestSupport.ddinterServiceWithGroups());
 	}
 
 	/** A context holding one active simvastatin order — the shape of the observed case. */
@@ -364,7 +362,8 @@ public class ActiveOrderReconciliationTest {
 			}
 		}
 		assertTrue(activeOrder > 0 && reference > 0 && finding > 0,
-				"precondition: this question must inject all three kinds of record, else the ordering "
+				"precondition: this question must inject all three of the kinds whose ordering this "
+						+ "asserts, else the ordering "
 						+ "claim is untested (activeOrder=" + activeOrder + " reference=" + reference
 						+ " finding=" + finding + ")");
 		assertTrue(activeOrder < reference && reference < finding,

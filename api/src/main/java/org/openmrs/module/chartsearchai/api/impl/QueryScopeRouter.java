@@ -16,6 +16,8 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+
 /**
  * Maps a clinician's question to the record types whose records belong <em>complete</em> in a
  * query-scoped slice chart ({@code chartsearchai.chartMode=queryScoped}). For an enumeration
@@ -47,9 +49,13 @@ import java.util.regex.Pattern;
  * plus {@code patient} and {@code obs}, which this router never scopes ({@code patient} is
  * always included by the builder; {@code obs} is the similarity path's domain).
  *
- * <p>Public only so the drug-safety layer can reuse {@link #isInteractionScreening} — question
- * intent is classified here and must not be classified a second time elsewhere. Every other member
- * stays package-private.
+ * <p>Public only so the drug-safety layer can reuse this router's classification of a question —
+ * {@link #isInteractionScreening}, and the three domain predicates {@link #asksAboutMedications},
+ * {@link #asksAboutAllergies} and {@link #asksAboutConditions} that scope its contraindication arm.
+ * Question intent is classified here and must not be classified a second time elsewhere, which is the
+ * whole of what earns a member its {@code public}: every member that is not read outside this package
+ * stays package-private, and a new one becomes public only by being a classification a caller would
+ * otherwise re-derive.
  */
 public final class QueryScopeRouter {
 
@@ -143,6 +149,42 @@ public final class QueryScopeRouter {
 	}
 
 	/**
+	 * Whether {@code question} is in the MEDICATION domain, by the router's own classification.
+	 *
+	 * <p>Public for the same reason {@link #isInteractionScreening} is, and reusing
+	 * {@link #matchedIntents} for the same reason it does: one definition of "medication-domain
+	 * question", never a second drug vocabulary. The drug-safety layer asks it as a WIDENING signal
+	 * on the drug side of a contraindication — a question about what the patient is taking makes her
+	 * whole active-order list the response's subject matter even when the prose writes no individual
+	 * drug name, which a gate reading only the words would miss. It never narrows anything: a
+	 * question naming a drug the dataset recognises carries no cue word here ("Can I give her
+	 * bupivacaine?" matches none of the cues) and is already handled by the drug-in-play arm.
+	 */
+	public static boolean asksAboutMedications(String question) {
+		return matchedIntents(question).contains(Intent.MEDICATIONS);
+	}
+
+	/**
+	 * As {@link #asksAboutMedications}, for the ALLERGY domain — one of the two widening signals on the
+	 * FINDING side. A question about her allergies makes her recorded allergies the subject matter, so a
+	 * drug one of them contraindicates is worth a chip even where the answer names neither.
+	 */
+	public static boolean asksAboutAllergies(String question) {
+		return matchedIntents(question).contains(Intent.ALLERGIES);
+	}
+
+	/**
+	 * As {@link #asksAboutAllergies}, for the CONDITION domain — the other widening signal on the
+	 * finding side, because the finding a contraindication rule fires on is an allergy OR a condition
+	 * and the two lists have equal claim to being what was asked about. Kept a separate predicate rather
+	 * than folded into one "asks about her records": the drug-safety layer widens per LIST, so a
+	 * question about her problem list must not put her allergy records in scope as well.
+	 */
+	public static boolean asksAboutConditions(String question) {
+		return matchedIntents(question).contains(Intent.CONDITIONS);
+	}
+
+	/**
 	 * Every enumeration intent whose cues match {@code question}, in {@link Intent} declaration
 	 * order; empty for null/blank/cue-free questions (the TOPICAL, similarity-only case). The
 	 * result never contains {@link Intent#TOPICAL}. Multi-cue questions return every matched
@@ -189,11 +231,15 @@ public final class QueryScopeRouter {
 		return Collections.unmodifiableSet(union);
 	}
 
-	/** The querystore resource types included complete for {@code intent}; empty for TOPICAL. */
+	/** The querystore resource types included complete for {@code intent}; empty for TOPICAL.
+	 *  {@code drug_order} reads {@link ChartSearchAiConstants#RESOURCE_TYPE_DRUG_ORDER} because this
+	 *  module declares that type and three other places read it; the rest are querystore contract
+	 *  strings this module has never declared, and declaring one is a reference-group decision
+	 *  ({@code ChartSearchAiReferenceGroupTest} sweeps every declared type) rather than a rename. */
 	static Set<String> typedSlice(Intent intent) {
 		switch (intent) {
 			case MEDICATIONS:
-				return setOf("drug_order", "medication_dispense");
+				return setOf(ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER, "medication_dispense");
 			case ALLERGIES:
 				return setOf("allergy");
 			case PROGRAMS:
@@ -203,7 +249,7 @@ public final class QueryScopeRouter {
 			case VISITS:
 				return setOf("visit", "encounter");
 			case ORDERS:
-				return setOf("drug_order", "test_order", "referral_order");
+				return setOf(ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER, "test_order", "referral_order");
 			default:
 				return Collections.emptySet();
 		}

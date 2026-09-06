@@ -14,6 +14,7 @@ import java.util.Date;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 
 import org.openmrs.Allergy;
 import org.openmrs.Concept;
@@ -59,12 +60,9 @@ final class PatientClinicalContextBuilder {
 		Set<String> conditionTokens = new LinkedHashSet<String>();
 		List<PatientClinicalContext.ActiveDrugOrder> activeOrders =
 				new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
-		boolean exposureComplete = true;
-		int activeOrderCount = 0;
 
 		if (patient == null) {
-			return new PatientClinicalContext(null, null, drugNames, atcCodes, allergyTokens,
-					conditionTokens, activeOrders, false, 0);
+			return new PatientClinicalContext(null, null, drugNames, atcCodes, allergyTokens, conditionTokens);
 		}
 
 		try {
@@ -83,19 +81,20 @@ final class PatientClinicalContextBuilder {
 		}
 
 		// Active drug orders -> names + ATC codes (for interaction checks and order-driven injection),
-		// plus the orders themselves — names AND codes attributed per order, for reconciling this read
-		// against the serialized chart (#118) and so the interaction screen can exclude a subject's own
-		// order from witnessing it (#132).
+		// plus the orders themselves — names, codes AND what the chart records about where the drug is
+		// applied (#234), attributed per order, for reconciling this read against the serialized chart
+		// (#118) and so the interaction screen can exclude a subject's own order from witnessing it
+		// (#132). ActiveDrugOrder's own javadoc is the authority on what an order carries; this is a
+		// pointer, not a second list.
 		try {
 			for (Order order : Context.getOrderService().getActiveOrders(patient, null, null, null)) {
 				if (!(order instanceof DrugOrder)) {
 					continue;
 				}
-				activeOrderCount++;
 				DrugOrder drugOrder = (DrugOrder) order;
 				// Per-order names, collected BEFORE they are folded into the flattened set: the
 				// reconciliation must be able to tell one order's names from another's, which the
-				// flattened set (drug name AND concept name, all orders together) cannot.
+				// flattened set (every name of every order together) cannot.
 				Set<String> orderNames = new LinkedHashSet<String>();
 				addDrugName(orderNames, drugOrder);
 				drugNames.addAll(orderNames);
@@ -107,36 +106,90 @@ final class PatientClinicalContextBuilder {
 				// same concept: flattened, a code cannot be attributed to the order carrying it, so ONE
 				// order's two codes read as two orders and the order witnesses its own interaction
 				// (issue #132). The flattened union is still assembled here — the class arms and
-				// findByActiveOrders want exactly that, and the nameless-order gap below contributes to
-				// it without contributing an ActiveDrugOrder.
+				// findByActiveOrders want exactly that. Since issue #290 it no longer holds codes that
+				// no ActiveDrugOrder accounts for: an order the module cannot NAME reaches the
+				// per-order list below too, and one carrying no ATC code at all contributes to neither.
 				Set<String> orderAtcCodes = new LinkedHashSet<String>();
 				addAtcCodes(orderAtcCodes, concept);
 				atcCodes.addAll(orderAtcCodes);
-				// An order with no readable name at all is skipped: it can be neither rendered as a
-				// record nor matched against chart text, and injecting it would put a nameless line
-				// ("Active drug order: null") in front of a clinician.
+				// Where the chart says the drug is APPLIED (issue #234). Per order only — there is no
+				// flattened counterpart and there must not be one, because the whole point of it is to
+				// narrow ONE prescription's classification and a union over the medication list would
+				// attribute one order's route to another.
+				Set<String> orderAdministration = new LinkedHashSet<String>();
+				addAdministration(orderAdministration, drugOrder);
+				// Resolved once and read by both the skip test and the label below, so the two cannot
+				// answer differently about which codes this order has.
+				Set<String> normalizedCodes = DrugReference.normalizeAtcTokens(orderAtcCodes);
+				// An order the module cannot NAME still reaches this list, labelled by the ATC codes it
+				// carries (issue #290). Skipping it left its codes in the flattened union with no order
+				// behind them, and DrugSafetyValidator.orderPartners keys such a code on the raw code
+				// string — but ONLY a code the dataset cannot NAME, since a covered one takes the entry
+				// rung above that and is keyed on substanceGroupKey(). So the defect was one chip per
+				// UNNAMEABLE code, each labelled by the bare code; a fully covered order is one partner
+				// per covered substance before and after, which is deliberate (see OrderPartner.substances
+				// — two covered codes must stay two partners). Measured through the real validate over the
+				// CURATED SEED, which carries neither code: 2 chips for a 2-code order, 1 once the same
+				// order has a name; and over a fixture that covers BOTH codes, 2 chips either way. The
+				// decision, and the three trades it accepts, are ADR Decision 38.
 				//
-				// KNOWN GAP, to follow with the reconciliation's other corpus issue: skipping is the
-				// one outcome that reproduces issue #118 rather than repairing it. addAtcCodes above
-				// needs no name, and a safety chip's drug name comes from the KB entry the ATC code
-				// resolves to (DrugSafetyValidator's displayLabelForAtcCode), not from the order — so
-				// a nameless order can still raise a chip reading "as active order simvastatin" while
-				// being invisible to the reconciliation that exists to substantiate it. Reachable, not
-				// theoretical: addConceptName swallows a RuntimeException from concept.getName() (a
-				// detached/lazy-init proxy) in its own try, and addAtcCodes then runs in a separate
-				// one and can still succeed; likewise a concept named only outside the current locale
-				// yields a null name with its ATC mappings intact. The fix is a fallback display
-				// rather than a skip, so the record can be injected with the order's real uuid.
+				// One thing about getName() belongs HERE rather than in the ADR, because issue #290's
+				// first plan was built on getting it wrong: a concept named only outside the current
+				// locale does NOT yield null. getName() walks LocaleUtility.getLocalesInOrder(), then
+				// falls back to the first fully-specified name in ANY locale, then to any synonym. What
+				// reaches this branch is a name that could not be READ — addConceptName swallowing a
+				// RuntimeException from a detached or lazy-init proxy while addAtcCodes succeeds in a
+				// separate try, voided names, or a blank recorded name (addRaw drops it, so getName()
+				// need not be null at all).
+				//
+				// The name set stays EMPTY because it is matched against chart prose, so a code in it
+				// would match free text; the cost of that is in the ADR. The display is built from the
+				// normalized codes rather than the raw ones so that the label, the test below and the
+				// codes ActiveDrugOrder stores cannot disagree — NOT as a defence against a blank code,
+				// which addRaw already dropped. An order with no name and no code is still skipped:
+				// nothing can name it and no chip can be raised for it, which is what the old skip was
+				// right about. The WARN is the only trace that a chip is speaking for an order the module
+				// could not name; it does not distinguish a name that could not be read from a concept
+				// that has none, because no consumer behaves differently on that today. It REPEATS, and
+				// that is accepted rather than overlooked: build() is called once by
+				// DrugReferenceInjector.inject and once by DrugSafetyValidator.validate, so one such
+				// order emits two identical lines per /search for as long as the dictionary defect
+				// stands. Not deduped, because the only dedup available here is a JVM-lifetime set of
+				// order uuids — unbounded on per-patient keys, and it would answer for whoever asked
+				// first, so an operator who turns to the log later would find no trace at all. The
+				// neighbouring reconciliation WARN (DrugReferenceInjector) repeats on the same terms:
+				// its condition, a querystore index behind the OrderService read, also persists until
+				// someone acts on it.
+				// The concept the order was written against, read off the SAME resolved local the ATC
+				// codes above came from and never off drugOrder.getConcept() again (issue #353): where
+				// the order carries a coded Drug those two differ, and keying one join on each would
+				// let two layers disagree about which concept one prescription is — issue #151's shape.
+				String orderConceptUuid = conceptUuid(concept);
 				if (!orderNames.isEmpty()) {
-					activeOrders.add(new PatientClinicalContext.ActiveDrugOrder(drugOrder.getUuid(),
-							orderNames.iterator().next(), orderNames, orderAtcCodes));
+					activeOrders.add(PatientClinicalContext.ActiveDrugOrder.named(drugOrder.getUuid(),
+							orderNames.iterator().next(), orderNames, orderAtcCodes, orderAdministration,
+							orderConceptUuid));
+				} else if (!normalizedCodes.isEmpty()) {
+					String codeOnlyDisplay = codeOnlyDisplay(normalizedCodes);
+					log.warn("Active drug order {} has no readable name; it will be identified by its ATC "
+							+ "codes as {}. A safety chip for it is labelled that way unless the reference "
+							+ "data can name one of those codes, and the order cannot be matched against "
+							+ "chart text at all.", drugOrder.getUuid(), codeOnlyDisplay);
+					activeOrders.add(PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly(
+							drugOrder.getUuid(), codeOnlyDisplay, orderAtcCodes, orderAdministration,
+							orderConceptUuid));
 				}
 			}
 		}
 		catch (RuntimeException e) {
-			exposureComplete = false;
 			log.debug("Could not read active orders for drug-reference context", e);
 		}
+
+		// Whether the two contraindication reads below actually happened. Each catch degrades its
+		// dimension to an empty set, which is right for a chip and wrong for a record that would report
+		// that emptiness as a fact about the patient (issue #208 item 2) — so the failure is recorded
+		// rather than only logged.
+		boolean contraindicationRecordsRead = true;
 
 		// Active allergies -> allergen tokens (for contraindication checks).
 		try {
@@ -148,8 +201,8 @@ final class PatientClinicalContextBuilder {
 			}
 		}
 		catch (RuntimeException e) {
-			exposureComplete = false;
 			log.debug("Could not read allergies for drug-reference context", e);
+			contraindicationRecordsRead = false;
 		}
 
 		// Active conditions -> condition tokens (for contraindication checks).
@@ -163,12 +216,12 @@ final class PatientClinicalContextBuilder {
 			}
 		}
 		catch (RuntimeException e) {
-			exposureComplete = false;
 			log.debug("Could not read conditions for drug-reference context", e);
+			contraindicationRecordsRead = false;
 		}
 
-		return new PatientClinicalContext(age, weightKg, drugNames, atcCodes, allergyTokens,
-				conditionTokens, activeOrders, exposureComplete, activeOrderCount);
+		return new PatientClinicalContext(age, weightKg, drugNames, atcCodes, allergyTokens, conditionTokens,
+				activeOrders, null, contraindicationRecordsRead);
 	}
 
 	/** The most recent positive-numeric, non-stale obs for {@code concept}, or {@code null}. Shared by
@@ -227,11 +280,165 @@ final class PatientClinicalContextBuilder {
 		return parsed > 0 ? parsed : ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_WEIGHT_MAX_AGE_DAYS;
 	}
 
+	/**
+	 * The names one active drug order is identified by, in the order they are collected — which is also
+	 * their rank, because the caller takes the FIRST of them as the order's display.
+	 *
+	 * <p>Three sources since issue #293, and the middle one is that issue. A drug order the clinician
+	 * recorded as free text normally carries no coded {@code Drug} but does carry a concept, so wherever
+	 * that concept's name could be read it was not NAMELESS — it arrived carrying the WRONG name, which
+	 * is a state issue #290's code-only rung is not about.
+	 * {@code OrderServiceImpl.ensureConceptIsSet} assigns such an order
+	 * {@code OrderService.getNonCodedDrugConcept()} — the concept the {@code drugOrder.drugOther} global
+	 * property names ("the concept which represents drug other non coded") — whenever it reaches
+	 * {@code saveOrder} with no concept of its own, and {@code DrugOrderValidator} treats exactly that
+	 * concept as the non-coded shape. So the concept of a free-text order is the platform's own
+	 * placeholder wherever the client supplied none; a client MAY supply one and keep it, which is the
+	 * shape the cost paragraphs below turn on. Either way it is not the drug, while
+	 * {@code getDrugNonCoded()} holds what the clinician actually typed — and that field had no
+	 * production caller in this module at all. The asymmetry is the tell: {@code build} above already
+	 * reads the free-text half of the two other records it collects, {@code getNonCodedAllergen()} and
+	 * a condition's {@code getNonCoded()}, through this same {@code addRaw}. Orders were the one
+	 * record type read coded-only.
+	 *
+	 * <p><b>Additive, and ranked between the two existing sources.</b> Nothing is removed: the concept
+	 * name stays, so the set of names an order carries only GROWS, and what it grows by is the name the
+	 * record itself gives for the drug the clinician recorded. (That is a statement about this method
+	 * alone. The whitespace collapse on {@link #addRaw} is a separate change and does move matches in
+	 * both directions — its own javadoc has the two measured cases.) It leads the concept name because for a
+	 * non-coded order the concept is not the drug, so the display must be the recorded text. It follows
+	 * the coded drug's name because a coded identity outranks free text — and that rank is REACHABLE
+	 * rather than a legacy concern: {@code DrugOrderValidator} rejects a row carrying both
+	 * ({@code DrugOrder.error.onlyOneOfDrugOrNonCodedShouldBeSet}) only inside
+	 * {@code validateForRequireDrug}, which returns immediately unless the {@code drugOrder.requireDrug}
+	 * global property is true — and that property is {@code false} on a stock install (read off the
+	 * 3.7.1 reference-application demo database). So a coded order's display is untouched by this
+	 * change under either setting, and
+	 * {@code NonCodedDrugOrderNameTest.aCodedDrugsNameStillLeadsWhenARowCarriesFreeTextBesideIt}
+	 * pins that.
+	 *
+	 * <p><b>What being additive costs, pinned rather than argued.</b> Every name of an order is
+	 * resolved on its own, so where a client supplies a concept naming one drug and the clinician
+	 * types another, one prescription now reports both instead of only the concept's —
+	 * {@code NonCodedDrugOrderNameTest.anOrderWhoseConceptAndTextNameDifferentDrugsReportsBoth} is
+	 * that case, and it is the right answer rather than something to tune away: the record itself
+	 * says two things, and choosing between them would be guessing. The alternative — dropping the
+	 * concept name whenever {@code drugNonCoded} is set — loses a real match on an order whose text is
+	 * unusable and whose concept is not, a silent fail-CLOSED, which is the failure mode issues #193
+	 * and #195 exist to prevent. On the placeholder shape it costs nothing, and that was measured
+	 * rather than reasoned: driven through the production accessor
+	 * {@code DrugReferenceService.findImpliedByDrugName} over
+	 * {@code DrugReferenceTestSupport.shippedEntries()}, generic {@code drugOrder.drugOther} spellings
+	 * — {@code Other}, {@code Other non-coded}, {@code Drug other non coded}, {@code Unknown drug},
+	 * {@code Medication} among those tried — each put NO entries in play. Try another spelling the same
+	 * way rather than trusting that list.
+	 *
+	 * <p><b>And the largest cost is that this set now contains PROSE.</b> Both earlier sources were
+	 * dictionary-controlled single drug names; {@code drugNonCoded} is 255 characters a clinician may
+	 * write anything into, and {@code PatientClinicalContext.hasActiveDrug}'s order-name arm is
+	 * boundary-matched CONTAINMENT ({@code DrugReference.matchesOrderName}), which is what lets it find
+	 * {@code aspirin} inside {@code Aspirine Co 81mg}. So every drug name occurring anywhere in that
+	 * text is read as a drug the patient is on — including one the same sentence says was STOPPED.
+	 * Measured through the real builder and the real {@code validate} over the pinned DDInter excerpt,
+	 * a free text of {@code "Aspirin 81mg - warfarin stopped 2024"} raises a MAJOR
+	 * ibuprofen-versus-warfarin chip, which {@code DrugSafetyValidator.licensesWithholding} grades as a
+	 * reason to withhold, beside an injected order record rendering that same text verbatim — two
+	 * citable records of one prescription in contradiction. It is the failure class issue #317 exists
+	 * to prevent, reached by a channel neither {@code SerializedRecord.getOrderActive()} nor
+	 * {@code DrugReferenceInjector.describesEndedOrder} can see, because the carrying prescription
+	 * really is active. Not closable by refusing free text on suspicion — that is the fix — and not
+	 * closable by parsing it, which is the reading-clinical-prose problem this module does not solve
+	 * here. Pinned AS WRONG by
+	 * {@code NonCodedDrugOrderNameTest.freeTextNamingADrugTheSameSentenceSaysWasStoppedStillRaisesAChip},
+	 * so a change that closes it reddens a test.
+	 *
+	 * <p><b>And prose reaching the DISPLAY costs a legible sentence, which this module has already
+	 * decided is worth fixing for the sibling field and does not fix here.</b> The display is printed
+	 * unquoted into a chip detail whose own delimiters are em dashes
+	 * ({@code … as active order <display> — possible duplicate therapy}) and thence, through
+	 * {@code DrugReferenceInjector.renderFinding}, into a citable {@code safety_finding}. Measured
+	 * through the real pipeline, a free text of {@code "Naproxen 500mg — hold from 1 Jan. Restart
+	 * later"} renders as one sentence carrying two em-dashed clauses and a full stop inside the order
+	 * name, with nothing telling a reader which punctuation is the chart's. That is verbatim the hazard
+	 * {@code DrugSafetyValidator.quotedToken()} records for {@code nonCodedAllergen} and closes by
+	 * quoting the value. It is NOT closed here, and the reason is scope rather than disagreement:
+	 * quoting every order display would move what every existing chip naming a coded order says, and
+	 * quoting only a free-text one needs {@code ActiveDrugOrder} to carry which source its display came
+	 * from, a second flag on that value object. That is a scope choice and nothing standing forbids it
+	 * — an earlier wording cited ADR Decision 40 here, which governs {@code OrderPartner}'s flags and
+	 * says nothing about this class. If we ship without it, a clinician reads a chip whose sentence boundaries are partly the chart's and the
+	 * model reads the same string as evidence; nothing is asserted falsely, and legibility is what is
+	 * lost. Pinned by
+	 * {@code NonCodedDrugOrderNameTest.aFreeTextDisplayIsPrintedIntoTheChipUnquoted}, so whoever closes
+	 * it reddens a test.
+	 *
+	 * <p>The same divergence reaches the CLASS arm, and there it costs a true sentence rather than an
+	 * extra one: that arm labels a co-medication from the order's display while citing a subgroup taken
+	 * from the order's CONCEPT, so where the two disagree the chip states a class relationship about a
+	 * drug the cited subgroup does not classify. Recorded on {@code DrugSafetyValidator.nameByOrder},
+	 * whose premise it weakens, and on ADR Decision 38, which already accepts the same shape for a
+	 * nameless order; pinned AS WRONG by
+	 * {@code NonCodedDrugOrderNameTest.aClassChipCanNameAnOrderAfterTextTheCitedSubgroupDoesNotClassify}.
+	 * The folded chip's RULE sentence is guarded against it by
+	 * {@code DrugSafetyValidator.namesNamingOrder}; the class sentence has no such gate available,
+	 * because the branch is entered precisely when no code resolved an entry.
+	 *
+	 * <p><b>It also moves orders OFF issue #290's code-only rung</b>, which is a rung migration and not
+	 * merely a relabel: that rung takes an order no name could be READ for (the block in {@code build}
+	 * above enumerates the shapes), and free text is now enough to keep such an order on the named rung
+	 * — {@code hasKnownName()} true where it was false, so {@code OrderPartner.nameByOrder} and
+	 * {@code DrugSafetyValidator.displayNamesADrug} are handed a real name where they had an
+	 * {@code [ATC …]} stand-in. The direction is the safe one, since that stand-in is the ABSENCE of a
+	 * name; what shrinks is the population issue #290 and ADR Decision 38 reason about.
+	 *
+	 * <p>A second cost has no test because its subject is chart prose this module does not author:
+	 * these names are also matched against that prose by {@code ActiveDrugOrder.namedIn}, so free text
+	 * that is a common word rather than a drug name can substantiate an order against unrelated text
+	 * and suppress the issue #118 WARN. Nothing here can tell a drug name from junk, and refusing free
+	 * text on suspicion would cost the fix.
+	 *
+	 * <p>Read through {@code addRaw} rather than behind an {@code isNonCodedDrug()} gate: that method IS
+	 * {@code StringUtils.isNotBlank(drugNonCoded)}, and {@code addRaw} already drops null, blank and
+	 * whitespace-only values, so the gate would be a second spelling of the same test — two places to
+	 * keep in step for no answer either could give alone. Unguarded for the same reason
+	 * {@code getDrug()} beside it is: it is a plain String column on a {@code DrugOrder} the caller has
+	 * already materialized, not a lazy association like the concept {@code addConceptName} wraps.
+	 */
 	private static void addDrugName(Set<String> names, DrugOrder drugOrder) {
 		if (drugOrder.getDrug() != null && drugOrder.getDrug().getName() != null) {
 			addRaw(names, drugOrder.getDrug().getName());
 		}
+		addRaw(names, drugOrder.getDrugNonCoded());
 		addConceptName(names, drugOrder.getConcept());
+	}
+
+	/**
+	 * @return {@code concept}'s uuid, or null when there is no concept or the read throws — the same
+	 *         degrade-to-nothing every other concept read in the active-order loop takes
+	 *         ({@link #addConceptName}, {@link #addConceptNames}, {@link #addAtcCodes} each open their
+	 *         own {@code try} for it).
+	 *
+	 *         <p><b>Its own {@code try}, and that is the point of the method</b> (issue #353). The
+	 *         association is a Hibernate proxy and it is the property read that initialises it, so an
+	 *         order whose concept cannot be loaded throws HERE. The loop's own {@code catch} is outside
+	 *         the {@code for}, so an unguarded read would abandon the whole active-order list at the
+	 *         first such order — every later order dropped, the flattened name and code sets left
+	 *         half-built, and nothing but a {@code log.debug} to say so. That is worse than the state
+	 *         before this leg existed, where the same failure cost that one order its ATC codes and
+	 *         left the order itself on the list. A missing uuid costs exactly the bridged-concept leg
+	 *         for one order, which is the degradation the rest of this loop is built for.
+	 */
+	private static String conceptUuid(Concept concept) {
+		if (concept == null) {
+			return null;
+		}
+		try {
+			return concept.getUuid();
+		}
+		catch (RuntimeException e) {
+			log.debug("Could not read the concept uuid of an active drug order", e);
+			return null;
+		}
 	}
 
 	private static void addConceptName(Set<String> tokens, Concept concept) {
@@ -246,6 +453,69 @@ final class PatientClinicalContextBuilder {
 		}
 		catch (RuntimeException e) {
 			log.debug("Could not read concept name", e);
+		}
+	}
+
+	/**
+	 * Collects EVERY name the dictionary publishes for {@code concept}, not the one
+	 * {@code Concept.getName()} elects — for {@link #addAdministration} and nothing else.
+	 *
+	 * <p><b>Why the elected name is not enough, and why widening is scoped here.</b>
+	 * {@code Concept.getName()} walks the allowed locales and returns the locale-PREFERRED name before
+	 * the fully specified one, so a dictionary that publishes a colloquial preferred spelling hides the
+	 * formal one this module's vocabulary is written in. Read off the 3.7.1 reference dictionary's
+	 * 17-member "Route of administration" set: concept 874 is preferred {@code In both eyes} with the
+	 * fully specified name {@code Bilateral eye administration}, 877 is {@code In both ears} against
+	 * {@code Bilateral ear administration}, and 872 — the only vaginal route there is — is
+	 * {@code Vaginally} against {@code Vaginal administration}. {@code DrugReference}'s matching takes
+	 * no trailing letters, deliberately, so {@code eyes} does not reach the term {@code eye} nor
+	 * {@code Vaginally} the term {@code vaginal}: reading one name left issue #234's own defect
+	 * standing for the standard bilateral eye route, the standard bilateral ear route and the only
+	 * vaginal route that dictionary publishes — three of its nine site-naming routes, unfixed and
+	 * silently, with no exception, no log line and a chip identical to the pre-fix one. The words those
+	 * three elected names are built on are terms in their own right now ({@code eyes},
+	 * {@code ears}, {@code vaginally}, see {@code DrugReference.SITE_TERMS}), so on that dictionary
+	 * either mechanism alone reaches them; the two are independent and neither replaces the other. What this read
+	 * covers that a term list cannot is the open set beyond those three — the same dictionary elects
+	 * {@code OU}, {@code OD} and {@code OS} for its three eye routes, which no vocabulary of site
+	 * WORDS carries and which reach a site only because another name of the same concept does.
+	 *
+	 * <p><b>Not by widening {@link #addConceptName}</b>, which the order-NAME path shares: what counts
+	 * as a name there decides which reference entries an order can reach at all
+	 * ({@code DrugReferenceService.findImpliedByDrugName}), and admitting a concept's every synonym
+	 * there is a change to drug matching this issue has no evidence about.
+	 *
+	 * <p><b>Which direction the widening fails in.</b> More names matched is more evidence, and it cuts
+	 * both ways rather than only towards narrowing: a term naming a site narrows the codes (removing a
+	 * chip), and a term naming a route of ENTRY refuses the whole record (keeping one). Both halves are
+	 * reached here — the same dictionary prefers {@code Rectally} and {@code Per NG tube}, whose fully
+	 * specified names {@code Rectal administration} and {@code Nasogastric tube administration} are
+	 * what {@code DrugReference}'s route-of-entry refusal is spelled for.
+	 *
+	 * <p>The read is NOT scoped to a locale. A name in another language contributes nothing to an
+	 * English term vocabulary, so the ordinary outcome is inert; the residue is a foreign spelling that
+	 * happens to be an English site word, which no locale-free vocabulary can exclude and which would
+	 * narrow rather than refuse. Scoping to {@code Context.getLocale()} instead would drop the very
+	 * spelling that carries the site wherever a dictionary files it in a locale the session is not in,
+	 * which is the failure this method exists to remove.
+	 *
+	 * <p>{@code getNames()} excludes voided names and is the same lazy association
+	 * {@link #addConceptName} wraps, so the read keeps that method's {@code try} and its degrade-to-
+	 * nothing behaviour: nothing recorded is the reading that narrows nothing.
+	 */
+	private static void addConceptNames(Set<String> tokens, Concept concept) {
+		if (concept == null) {
+			return;
+		}
+		try {
+			for (ConceptName name : concept.getNames()) {
+				if (name != null) {
+					addRaw(tokens, name.getName());
+				}
+			}
+		}
+		catch (RuntimeException e) {
+			log.debug("Could not read concept names", e);
 		}
 	}
 
@@ -270,9 +540,117 @@ final class PatientClinicalContextBuilder {
 		}
 	}
 
+	/**
+	 * Collects where the chart says {@code drugOrder} is APPLIED — the names its route concept
+	 * publishes and the names its drug's dosage-form concept publishes (issue #234).
+	 *
+	 * <p><b>Both, because neither alone covers the shapes that matter.</b> Measured on the 3.7.1
+	 * reference dictionary, the "Route of administration" set has 17 members and not one of them names
+	 * the skin, so a topical presentation reaches this module only through the dose FORM; and a form
+	 * is recorded on the {@code Drug}, which a non-coded order does not have, so an order typed as free
+	 * text can only ever say it through the route.
+	 *
+	 * <p>Through {@link #addConceptNames} for both — EVERY name the dictionary publishes for the
+	 * concept and not the one {@code Concept.getName()} elects, which is that method's whole subject
+	 * and where the reason lives. Not {@link #addConceptName}: that one is the order-NAME path's read
+	 * and widening it would change which reference entries an order reaches. {@code getRoute()} and
+	 * {@code getDrug()} are evaluated outside the try like {@code addDrugName}'s {@code getDrug()} is
+	 * and for the same reason — reading the association returns the proxy, and it is the name read on
+	 * it that can throw.
+	 *
+	 * <p>A failed read degrades to nothing recorded, which is the reading that narrows nothing, so the
+	 * failure is fail-SAFE here in a way it is not for a contraindication record (issue #208 item 2)
+	 * and needs no flag beside it.
+	 *
+	 * <p>{@link #addRaw} also collapses whitespace runs, so a concept named irregularly is normalized
+	 * the one way (issue #293) and a blank name is dropped rather than stored as a term that matches
+	 * nothing.
+	 */
+	private static void addAdministration(Set<String> terms, DrugOrder drugOrder) {
+		addConceptNames(terms, drugOrder.getRoute());
+		if (drugOrder.getDrug() != null) {
+			addConceptNames(terms, drugOrder.getDrug().getDosageForm());
+		}
+	}
+
+	/**
+	 * The display for an order no name could be read for: the codes it carries, labelled as codes.
+	 *
+	 * <p>Takes the ALREADY-normalized set the caller tested for emptiness, so the label and that test
+	 * read one set rather than agreeing because the same function was run twice. Sorted, so the label
+	 * does not depend on the order the dictionary returned the mappings in — and it names ALL of them,
+	 * because the label identifies the ORDER rather than whichever of its codes a particular chip
+	 * matched on.
+	 *
+	 * <p>Rendered so it reads correctly in both templates that consume a display: the chip's
+	 * {@code "as active order <label>"} and {@code DrugReferenceInjector.renderActiveOrder}'s
+	 * {@code "Active drug order: <label>."}. The same {@code "ATC "}-then-comma-joined shape
+	 * {@code DrugReferenceInjector} renders a reference row's codes in.
+	 */
+	private static String codeOnlyDisplay(Set<String> normalizedCodes) {
+		return "[ATC " + String.join(", ", new TreeSet<String>(normalizedCodes)) + "]";
+	}
+
+	/**
+	 * Collects one recorded string as a token: trimmed, internal whitespace collapsed to single spaces,
+	 * blanks dropped.
+	 *
+	 * <p><b>The collapse is a safety property, not tidiness.</b> This method collects every recorded
+	 * string the builder reads — drug and concept names and ATC codes as well — and three of them are
+	 * free text written by whoever can record the order or the allergy: {@code drugNonCoded} since
+	 * issue #293, {@code nonCodedAllergen} and a condition's {@code getNonCoded()} before it. Those
+	 * TWO of them are PRINTED and reach the LLM prompt as one line of a numbered, citable chart: an
+	 * order's through {@code DrugReferenceInjector.renderActiveOrder}
+	 * ({@code "Active drug order: <display>."}), and an allergen's through the contraindication chip's
+	 * charted-token sentence and thence {@code renderFinding} — that second one on the branch where the
+	 * recorded name does not NAME the entry, which is argued from the code path rather than measured —
+	 * the one arrangement tried took the other branch, which prints the rule's own note, so the chart
+	 * came back with no forged line whether the collapse was applied or not
+	 * ({@code NonCodedDrugOrderNameTest.aRecordedAllergenWithANewlineStaysOneToken} records that). A condition's is not — it is read as a
+	 * boolean by {@code PatientClinicalContext.hasConditionToken} and the chip prints the RULE's note or
+	 * token, never the recorded value — so for that one the collapse is a matching normalization only,
+	 * which the measured paragraph below is about. The chart is assembled one record per line with the
+	 * index in front, so an embedded newline in one of the printed two forges a line with an index of
+	 * the author's choosing and no {@code RecordMapping} behind it.
+	 *
+	 * <p><b>What this does NOT restore is the chart's line structure in general</b>, and an earlier
+	 * wording of the closing sentence below claimed it did. Every other line comes from
+	 * {@code PatientChartSerializer.serialize}, which appends a record's text verbatim — measured, a
+	 * {@code drug_order} record whose text carries a newline still authors a second numbered line with
+	 * no {@code RecordMapping} behind it. That is also the more common path for this very free text:
+	 * {@code DrugReferenceInjector.renderActiveOrder} runs only for an order the chart could NOT
+	 * substantiate, so an order querystore already rendered reaches the model through querystore's own
+	 * record text, uncollapsed. Measured through the real builder and the real {@code injectRecords}, a
+	 * {@code drugNonCoded} of {@code "Warfarin 5mg\n[99] Allergy: none recorded"} put
+	 * {@code [99] Allergy: none recorded.} into the chart as a citable line.
+	 *
+	 * <p>Collapsing rather than rejecting, because the string is still the best name the record has and
+	 * refusing it would fail closed. It is done HERE rather than at the renderers because there are
+	 * several of those and one of this — the same reason the loader's validity rules are not per call
+	 * site. It does not make the prompt injection-proof: the value can still be a whole sentence. What
+	 * it restores is narrower than the line/index structure of the chart — it is that the two strings
+	 * THIS module renders cannot author a line of it.
+	 *
+	 * <p><b>It also moves the match paths, on values carrying no newline at all</b>, and that is stated
+	 * rather than waved past — an earlier wording of this javadoc claimed a collapsed token "never
+	 * matched anything sensible", which is refused by the second consequence below. Both were measured
+	 * through the real builder. It ADMITS a multi-word curated token against a recorded value that was
+	 * spaced irregularly: a condition recorded as {@code "Peptic  ulcer disease"} now matches the
+	 * shipped seed's {@code peptic ulcer} contraindication token and raises a chip {@code main} does
+	 * not raise, which is the arm working rather than a side effect. And it would have LOST a
+	 * {@code ActiveDrugOrder.namedIn} match, because that predicate searches these names inside
+	 * querystore's verbatim record prose, which renders the value as it was typed — so
+	 * {@code namedIn} collapses its haystack on the same terms, and the two sides stay in one normal
+	 * form. That symmetry is the fix; without it an order the chart plainly carries is reported
+	 * unrepresented.
+	 */
 	private static void addRaw(Set<String> set, String value) {
-		if (value != null && !value.trim().isEmpty()) {
-			set.add(value.trim());
+		if (value == null) {
+			return;
+		}
+		String collapsed = DrugReference.collapseWhitespace(value).trim();
+		if (!collapsed.isEmpty()) {
+			set.add(collapsed);
 		}
 	}
 }

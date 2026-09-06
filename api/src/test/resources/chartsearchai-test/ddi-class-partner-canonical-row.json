@@ -1,0 +1,108 @@
+{
+  "metadata": {
+    "note": "Verbatim DDInter 2.0 slice for issue #174 site 1 - the class chip's PARTNER label. Rows are field-for-field their KB rows in KB order, and the interaction rows are every KB pair among these drugs. Cyclosporine is one of the four shipped substances that list a route-qualified row FIRST and carry ATC codes, so dataset order and DrugReference.canonicalRow disagree here: both rows publish L04AD01, and an order mapped to it is labelled by whichever row a scan reaches first. Tacrolimus shares L04AD with it and the KB rates the pair Major, so the label appears inside a FOLDED chip - the shape a systemic cyclosporine order actually produces."
+  },
+  "mechanisms": {
+    "2778": {
+      "text": "Coadministration of tacrolimus and cyclosporine may increase the risk and severity of nephrotoxicity due to additive effects on the kidney. Clinical experience indicates that the combination is associated with increased renal toxicity as evidenced by increased serum creatinine and decreased glomerular filtration rate. In vitro and animal data also suggest that tacrolimus may inhibit the intestinal first-pass metabolism of cyclosporine via CYP450 3A4, resulting in significantly increased bioavailability of the latter.",
+      "categories": [
+        "synergistic_effect",
+        "metabolism"
+      ]
+    }
+  },
+  "drugs": [
+    {
+      "id": "DDInter1735",
+      "name": "Tacrolimus",
+      "rxcui": "42316",
+      "rxnorm_name": "tacrolimus",
+      "drugbank_id": "DB00864",
+      "atc": [
+        "D11AH01",
+        "L04AD02"
+      ],
+      "ciel": [
+        {
+          "code": "71307",
+          "uuid": "71307AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Anhydrous tacrolimus"
+        },
+        {
+          "code": "84646",
+          "uuid": "84646AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Tacrolimus"
+        },
+        {
+          "code": "84647",
+          "uuid": "84647AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Tacrolimus monohydrate"
+        }
+      ]
+    },
+    {
+      "id": "DDInter2146",
+      "name": "Cyclosporine (ophthalmic)",
+      "rxcui": "3008",
+      "rxnorm_name": "cyclosporine",
+      "drugbank_id": "DB00091",
+      "atc": [
+        "L04AD01",
+        "S01XA18"
+      ],
+      "ciel": [
+        {
+          "code": "74125",
+          "uuid": "74125AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Cyclosporine"
+        },
+        {
+          "code": "74126",
+          "uuid": "74126AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Cyclosporine microemulsion"
+        },
+        {
+          "code": "74127",
+          "uuid": "74127AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Cyclosporine, modified"
+        }
+      ]
+    },
+    {
+      "id": "DDInter458",
+      "name": "Cyclosporine",
+      "rxcui": "3008",
+      "rxnorm_name": "cyclosporine",
+      "drugbank_id": "DB00091",
+      "atc": [
+        "L04AD01",
+        "S01XA18"
+      ],
+      "ciel": [
+        {
+          "code": "74125",
+          "uuid": "74125AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Cyclosporine"
+        },
+        {
+          "code": "74126",
+          "uuid": "74126AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Cyclosporine microemulsion"
+        },
+        {
+          "code": "74127",
+          "uuid": "74127AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "name": "Cyclosporine, modified"
+        }
+      ]
+    }
+  ],
+  "interactions": [
+    [
+      "DDInter1735",
+      "DDInter458",
+      "Major",
+      "2778"
+    ]
+  ]
+}

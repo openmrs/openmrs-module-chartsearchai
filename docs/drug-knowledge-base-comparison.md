@@ -53,7 +53,7 @@ Their `data/drug_knowledge_base.json` entry shape is the ancestor of our
 
 Deterministic alias resolution is also shared in spirit: their
 `KnowledgeLoader.find_drug()` (exact match on generic/name/alias) ≈ our
-`DrugReferenceService.findByQuery` / `lookupByToken`.
+`DrugReferenceService.findImpliedByQuery` / `lookupByToken`.
 
 ---
 
@@ -88,7 +88,8 @@ What they *do* with it diverges:
 **chartsearchai** — on every query:
 - `DrugReferenceInjector` injects matching reference entries into the serialized
   chart as **numbered, citable records** the LLM grounds on (question-driven by
-  alias + order-driven by ATC, relevance-scoped — see ADR Decision 24). Dosing is
+  alias + order-driven by whatever an active order resolves to — by its concept's ATC
+  code or by any name it carries (its coded drug's, a clinician's free text, or its concept's) — relevance-scoped, see ADR Decision 24). Dosing is
   age-gated.
 - `DrugSafetyValidator` runs **after** the answer and *computes* the checks
   deterministically: it parses the dose the answer states and flags **overdose**
@@ -140,7 +141,7 @@ and the `AtcDrugReferenceSource` consumes a WHO ATC export as a pluggable
 classification source (ADR Decision 24). Documented boundary: ATC's tree does not
 capture cross-*branch* cross-reactivity (aspirin `N02BA01` vs ibuprofen `M01AE01`),
 which needs curated data — **closed 2026-07 as data** by
-`cross-reactivity-groups.json` (curated ATC-prefix families loaded alongside either
+`cross-reactivity-groups.json` (curated ATC-prefix families loaded alongside any
 source; ADR Decision 27). This is the local, offline equivalent of the RxClass
 cross-reactivity lookup their allergy agent does via a live API.
 

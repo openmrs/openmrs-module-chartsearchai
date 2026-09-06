@@ -46,17 +46,18 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  *
  * <p><b>The fixture</b> is a verbatim excerpt of that dataset — {@code Ledipasvir} and {@code
  * Leucovorin}, two of the 444, plus {@code Ciprofloxacin} and {@code Levofloxacin} as a real
- * classified pair — parsed by the real {@link DdiDrugReferenceSource}. The bundled sample cannot host
+ * classified pair — parsed by the real {@link DdiDrugReferenceSource}. The DDInter excerpt cannot host
  * these cases: all 16 of its drugs carry ATC codes, which is why no existing test covered a direct
  * allergy to an unclassified drug.
  *
  * <p>That pair shares <em>two</em> level-4 subgroups, not one — {@code J01MA} (J01MA02/J01MA12,
  * fluoroquinolone antibacterials) and {@code S01AE} (S01AE03/S01AE05, ophthalmic
- * fluoroquinolones) — because DDInter files both substances under several ATC codes. {@code
- * sharedClass} returns the first of the allergen's subgroups that the drug in play also carries, so
- * the case below asserting {@code (J01MA)} is pinning the dataset's own code order as well as the
- * match; a KB refresh that reordered Ciprofloxacin's {@code atc} array would report {@code S01AE}
- * with the behaviour unchanged.
+ * fluoroquinolones) — because DDInter files both substances under several ATC codes. Since issue
+ * #161 {@code sharedClass} prefers the subgroup that classifies the substance over one that
+ * classifies a locally applied formulation, so {@code J01MA} is chosen over the ophthalmic
+ * {@code S01AE} whichever order the arrays are in, and the case below asserting {@code (J01MA)} no
+ * longer pins the dataset's code order. Both halves of what this paragraph used to say were
+ * falsified by that change and have been removed rather than renumbered.
  *
  * <p>The curated cross-reactivity groups are loaded in every case here, deliberately: the identity
  * chip has to appear for an entry the real curated data genuinely cannot classify, not merely for
@@ -64,7 +65,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  */
 public class DirectAllergyContraindicationTest {
 
-	private static final String FIXTURE = "chartsearchai-test/ddi-unclassified-allergen.json";
+	private static final String FIXTURE = DrugReferenceTestSupport.DDI_UNCLASSIFIED_ALLERGEN;
 
 	/** The ATC-less entry the patient is allergic to; {@code Leucovorin} is the second one. */
 	private static final String UNCLASSIFIED = "Ledipasvir";
@@ -126,8 +127,13 @@ public class DirectAllergyContraindicationTest {
 						"Is it safe to give her ledipasvir?"));
 
 		assertEquals(1, findings.size(), "the finding must be injected exactly once, was: " + findings);
+		// Plus the strength clause a contraindication record states since #283, from the constant —
+		// its literal is pinned in SafetyFindingSeverityStrengthTest, which is where a reword should
+		// fail. What this case is about, the chip reaching the prompt as one citable record, is
+		// unchanged.
 		assertEquals(DrugReferenceInjector.FINDING_PREFIX
-				+ "Ledipasvir: The patient has a recorded allergy to Ledipasvir.",
+				+ "Ledipasvir: The patient has a recorded allergy to Ledipasvir."
+				+ DrugReferenceInjector.STRENGTH_WITHHOLD,
 				findings.get(0).getText(), "the record carries the chip's own detail verbatim");
 	}
 
@@ -192,9 +198,10 @@ public class DirectAllergyContraindicationTest {
 
 	@Test
 	public void twoAliasesOfOneUnclassifiedAllergyWarnOnce() throws IOException {
-		// The seenAllergens dedup, on a path that could not run before: "Leucovorin" and "Leucovorin
-		// calcium" are both aliases the dataset gives that one entry (its CIEL concept names), so two
-		// allergy records resolve to one allergen and must produce ONE chip.
+		// The recorded-allergen dedup (DrugSafetyValidator.recordedAllergens since issues #193/#195, the
+		// seenAllergens set inside the arm before that), on a path that could not run before:
+		// "Leucovorin" and "Leucovorin calcium" are both aliases the dataset gives that one entry (its
+		// CIEL concept names), so two allergy records resolve to one allergen and must produce ONE chip.
 		List<SafetyWarning> warnings = fixtureValidator().validate(
 				"", "Is leucovorin safe for her?",
 				DrugReferenceTestSupport.ctx(60, null, null, null,
@@ -251,20 +258,23 @@ public class DirectAllergyContraindicationTest {
 		// field-for-field identical to their KB rows and both carrying no ATC code — so no new fixture
 		// is needed. (Field-for-field, not byte-for-byte: the slice is pretty-printed, the KB is not.)
 		//
-		// Verbatim in CONTENT, but the slice REORDERS them, and order is what the label below turns on.
-		// lookupByToken takes the earliest matching entry, and in the full KB DDInter2187 (index 1320)
-		// precedes DDInter975 (index 2256) — so on the shipped KB an allergy recorded as "Iron"
-		// resolves to "Iron (bisglycinate)", making this very pair one of the 53 mis-labelled entries
-		// addAllergyContraindications' javadoc counts. The slice lists DDInter975 first, so here it
-		// resolves to itself. That is deliberate: this case is about the CHIP COUNT with a sibling row
-		// in play, and resolving to itself is what isolates that from the labelling defect. Regenerate
-		// the slice in KB order and the count assertion still holds while the detail assertion flips.
+		// Verbatim in CONTENT, but the slice REORDERS them: DDInter975, whose display name IS "Iron",
+		// is listed first, while in the full KB DDInter2187 "Iron (bisglycinate)" (index 1320) precedes
+		// it (index 2256). Under the earliest-match resolution this test was written against, that
+		// ordering was what made an allergy recorded as "Iron" resolve to DDInter975 here and to
+		// "Iron (bisglycinate)" on the shipped KB — this very pair being one of the mis-labelled entries
+		// addAllergyContraindications' javadoc counted. Since issue #176 the resolution prefers the row
+		// the recorded name NAMES, so both orderings answer "Iron" with DDInter975 and the slice's order
+		// no longer decides the label. It is left as it is: this case is about the CHIP COUNT with a
+		// sibling row in play, and regenerating the slice would change nothing it asserts.
 		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(
 				DrugReferenceTestSupport.ddiFixtureEntries(DrugReferenceTestSupport.DDI_ROUTE_VARIANTS));
 		service.setCrossReactivityGroups(DrugReferenceTestSupport.bundledGroups());
 
-		// Precondition, through the production matcher the validator itself uses: the question really
-		// does resolve to BOTH rows, so the case is the multi-entry one and not a single-entry retest.
+		// Precondition on the fixture's shape, through the unranked primitive: the question really does
+		// match BOTH rows, so the case is the multi-entry one and not a single-entry retest. Both rows are
+		// one substance, so the ranking above it (findImpliedByQuery, issue #209) keeps both — the verdict
+		// is taken per substance and applied to every matched row of it.
 		List<DrugReference> inPlay = service.findByQuery("Is it safe to give her iron?");
 		assertEquals(2, inPlay.size(), "the question must put both Iron rows in play, was: " + inPlay);
 		for (DrugReference entry : inPlay) {

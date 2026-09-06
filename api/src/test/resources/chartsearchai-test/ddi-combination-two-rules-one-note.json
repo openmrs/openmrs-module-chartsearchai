@@ -1,0 +1,176 @@
+{
+ "metadata": {
+  "note": "Verbatim DDInter 2.0 slice for issue #339 review round 12 \u2014 ONE fixed-dose combination prescription whose TWO constituents the data rules on alike. Rows are field-for-field their shipped-KB rows in KB order, and the interaction rows are every KB pair among these drugs. Emtricitabine and Tenofovir disoproxil are the two halves of the marketed product Truvada, and each carries a Moderate rule against Bedaquiline whose mechanism text \u2014 two different mechanism ids, 5040 and 8283 \u2014 is the same class-level sentence about hepatotoxicity, because it is about bedaquiline and 'other agents' rather than about either half. A chart recording that product as one order mapped to the combination code J05AR03, which this data covers no entry for, therefore reaches the co-medication ladder as ONE order-rung partner carrying both substances, while bestRulePerPartner keys the two rules on the two partner ENTRIES and keeps them as two chips. Since issue #339 named both chips after the prescription rather than after the two rule tokens, the two details are equal byte for byte."
+ },
+ "mechanisms": {
+  "5040": {
+   "text": "Coadministration of bedaquiline with other agents known to induce hepatotoxicity may potentiate the risk of liver injury.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "8283": {
+   "text": "Coadministration of bedaquiline with other agents known to induce hepatotoxicity may potentiate the risk of liver injury.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter170",
+   "name": "Bedaquiline",
+   "rxcui": "1364504",
+   "rxnorm_name": "bedaquiline",
+   "drugbank_id": "DB08903",
+   "atc": [
+    "J04AK05"
+   ],
+   "ciel": [
+    {
+     "code": "163143",
+     "uuid": "163143AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Bedaquiline"
+    }
+   ]
+  },
+  {
+   "id": "DDInter2087",
+   "name": "Tenofovir disoproxil",
+   "rxcui": "300195",
+   "rxnorm_name": "tenofovir disoproxil",
+   "drugbank_id": "DB00300",
+   "atc": [
+    "J05AF07"
+   ],
+   "ciel": [
+    {
+     "code": "104565",
+     "uuid": "104565AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Efavirenz / emtricitabine / tenofovir disoproxil"
+    },
+    {
+     "code": "104567",
+     "uuid": "104567AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Emtricitabine / tenofovir disoproxil"
+    },
+    {
+     "code": "161361",
+     "uuid": "161361AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Efavirenz / lamivudine / tenofovir disoproxil"
+    },
+    {
+     "code": "161364",
+     "uuid": "161364AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lamivudine / tenofovir disoproxil"
+    },
+    {
+     "code": "168596",
+     "uuid": "9c05d277-c75d-4a38-b889-137e114886e2",
+     "name": "Cobicistat / elvitegravir / emtricitabine / tenofovir disoproxil"
+    },
+    {
+     "code": "168601",
+     "uuid": "651ca448-8ea9-4f17-9c98-62eafc40c7a3",
+     "name": "Emtricitabine / rilpivirine / tenofovir disoproxil"
+    },
+    {
+     "code": "170671",
+     "uuid": "b944c518-10b4-4a93-a928-d0e4d10a66e4",
+     "name": "Dolutegravir / lamivudine / tenofovir disoproxil"
+    },
+    {
+     "code": "84796",
+     "uuid": "84796AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Tenofovir disoproxil"
+    },
+    {
+     "code": "84797",
+     "uuid": "84797AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Tenofovir disoproxil fumarate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter637",
+   "name": "Emtricitabine",
+   "rxcui": "276237",
+   "rxnorm_name": "emtricitabine",
+   "drugbank_id": "DB00879",
+   "atc": [
+    "J05AF09"
+   ],
+   "ciel": [
+    {
+     "code": "104565",
+     "uuid": "104565AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Efavirenz / emtricitabine / tenofovir disoproxil"
+    },
+    {
+     "code": "104567",
+     "uuid": "104567AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Emtricitabine / tenofovir disoproxil"
+    },
+    {
+     "code": "167206",
+     "uuid": "167206AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Bictegravir / emtricitabine / tenofovir alafenamide"
+    },
+    {
+     "code": "168596",
+     "uuid": "9c05d277-c75d-4a38-b889-137e114886e2",
+     "name": "Cobicistat / elvitegravir / emtricitabine / tenofovir disoproxil"
+    },
+    {
+     "code": "168598",
+     "uuid": "1be568da-5cbc-4097-b062-0ebe88bc386d",
+     "name": "Cobicistat / elvitegravir / emtricitabine / tenofovir alafenamide"
+    },
+    {
+     "code": "168599",
+     "uuid": "91e52c3a-c901-41e7-a53d-cf40f9d59f9f",
+     "name": "Emtricitabine / rilpivirine / tenofovir alafenamide"
+    },
+    {
+     "code": "168601",
+     "uuid": "651ca448-8ea9-4f17-9c98-62eafc40c7a3",
+     "name": "Emtricitabine / rilpivirine / tenofovir disoproxil"
+    },
+    {
+     "code": "168603",
+     "uuid": "b568a6e6-f4e7-4632-a65e-b7d185e5e1d7",
+     "name": "Emtricitabine / tenofovir alafenamide"
+    },
+    {
+     "code": "169360",
+     "uuid": "7ce189ae-2c16-4b21-b9e0-dfb7a9900489",
+     "name": "Cobicistat / darunavir / emtricitabine / tenofovir alafenamide"
+    },
+    {
+     "code": "170670",
+     "uuid": "7e00083b-c345-4c2d-9b87-81be50eff8b1",
+     "name": "Dolutegravir / emtricitabine / tenofovir alafenamide"
+    },
+    {
+     "code": "75628",
+     "uuid": "75628AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Emtricitabine"
+    }
+   ]
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter170",
+   "DDInter2087",
+   "Moderate",
+   "8283"
+  ],
+  [
+   "DDInter170",
+   "DDInter637",
+   "Moderate",
+   "5040"
+  ]
+ ]
+}

@@ -1,0 +1,253 @@
+{
+ "version": "1.0",
+ "source": "test fixture \u2014 issue #270: substances whose published names NEST, so a stated dose ties between them",
+ "description": "Four substances, each publishing a 1 mg/day ceiling so any stated dose above it must warn once it reaches the substance it belongs to. Two pairs pose the two ways the distance metric can tie. Estrone/Estrone sulfate nest at the START, which ties when the dose PRECEDES them. Clavulanate/Amoxicillin and clavulanate nest at the END, which ties when the dose FOLLOWS them \u2014 the metric is (idx - pos) on one side and (pos - end) on the other, so co-location is not the same fact on both. Estrone and Clavulanate do not nest at all and their names differ in length, which is what keeps the ambiguity control from going vacuous: a blanket longer-wins tie-breaker would silence one of them and the sub-span rule must not. Every entry carries a distinct level-4 ATC subgroup so no class arm fires beside the dose warnings. No bundled dataset can pose any of this: ddinter and atc never emit ageBands, and the curated seed's twelve aliases do not nest. Two further substances publish the SAME alias, which is the shape #187/#196 describe: their occurrences are identical spans, so neither may disqualify the other. A non-strict containment test would have each discard the other's occurrence and BOTH lose the dose \u2014 a lost overdose warning, this arm's forbidden direction. The two LAST entries pose the shape the round-1 review of #270 found. Framycetin nests at the END of Dexamethasone and framycetin, so with the dose AFTER them the container is near only because the constituent's name is its dose-facing edge; and the container publishes NO band, so where its nearness takes the number away from a mention the clause makes on its own, nothing warns about that number at all \u2014 a lost overdose warning rather than a re-attributed one. Estrone/Estrone sulfate pose the opposite edge with the same nesting, which is what bounds the remedy: there the container's dose-facing edge is its own word, so it vetoes like any independent rival. The three entries after those pose the round-2 review's finding, which is the same principle read off the RIVAL rather than off the subject. Potassium nests inside Clavulanate potassium, which nests inside Amoxicillin and clavulanate potassium, so a clause carrying the whole phrase names potassium only inside two longer names. The OUTERMOST publishes no band, so where the innermost name is allowed to veto the middle one there is again no warning of any kind. Potassium publishes a band of its own, which is what stops that case passing for the wrong reason: it CAN warn, so the assertion that it does not is about the nesting rather than about the fixture. The same three pose the BOUND on that rule as well \u2014 with the dose stated for potassium alone, the innermost name is independently named there and still takes the number away from the substance whose name contains it. Every combination row here also carries its LEADING CONSTITUENT as a row of its own (Amoxicillin, Dexamethasone), which is what the round-3 review found missing: without them no rival can be nested in the same container as the subject, so a rival named only inside ANOTHER rival's name \u2014 the shape the round-3 bar exists for \u2014 could not be posed at all, so round 2's declined-ledger entry for it read as a measurement when it was a property of this file. Dexamethasone publishes NO band, so where it vetoes there is again no warning of any kind; Amoxicillin publishes one, which is what stops the assertions about it passing for the wrong reason. Adding them also moved a pinned attribution that had been resting on a row's absence rather than on the rule (the constituent's far standalone mention), so the fixture is deliberately larger than the minimum any one case needs.",
+ "entries": [
+  {
+   "id": "estrone",
+   "name": "Estrone",
+   "substanceName": "estrone",
+   "aliases": [
+    "estrone"
+   ],
+   "atcCodes": [
+    "G03CA07"
+   ],
+   "ageBands": [
+    {
+     "minYears": 0,
+     "maxYears": 120,
+     "mgPerKgMin": 0,
+     "mgPerKgMax": 0,
+     "maxDailyDoseMg": 1
+    }
+   ],
+   "source": "test fixture"
+  },
+  {
+   "id": "estrone-sulfate",
+   "name": "Estrone sulfate",
+   "substanceName": "estrone sulfate",
+   "aliases": [
+    "estrone sulfate"
+   ],
+   "atcCodes": [
+    "J01CE01"
+   ],
+   "ageBands": [
+    {
+     "minYears": 0,
+     "maxYears": 120,
+     "mgPerKgMin": 0,
+     "mgPerKgMax": 0,
+     "maxDailyDoseMg": 1
+    }
+   ],
+   "source": "test fixture"
+  },
+  {
+   "id": "clavulanate",
+   "name": "Clavulanate",
+   "substanceName": "clavulanate",
+   "aliases": [
+    "clavulanate"
+   ],
+   "atcCodes": [
+    "J01CR02"
+   ],
+   "ageBands": [
+    {
+     "minYears": 0,
+     "maxYears": 120,
+     "mgPerKgMin": 0,
+     "mgPerKgMax": 0,
+     "maxDailyDoseMg": 1
+    }
+   ],
+   "source": "test fixture"
+  },
+  {
+   "id": "amoxicillin",
+   "name": "Amoxicillin",
+   "substanceName": "amoxicillin",
+   "aliases": [
+    "amoxicillin"
+   ],
+   "atcCodes": [
+    "J01CA04"
+   ],
+   "ageBands": [
+    {
+     "minYears": 0,
+     "maxYears": 120,
+     "mgPerKgMin": 0,
+     "mgPerKgMax": 0,
+     "maxDailyDoseMg": 1
+    }
+   ],
+   "source": "test fixture"
+  },
+  {
+   "id": "amoxicillin-and-clavulanate",
+   "name": "Amoxicillin and clavulanate",
+   "substanceName": "amoxicillin and clavulanate",
+   "aliases": [
+    "amoxicillin and clavulanate"
+   ],
+   "atcCodes": [
+    "A10BA02"
+   ],
+   "ageBands": [
+    {
+     "minYears": 0,
+     "maxYears": 120,
+     "mgPerKgMin": 0,
+     "mgPerKgMax": 0,
+     "maxDailyDoseMg": 1
+    }
+   ],
+   "source": "test fixture"
+  },
+  {
+   "id": "menotrophin-a",
+   "name": "Menotrophin A",
+   "substanceName": "menotrophin a",
+   "aliases": [
+    "menotrophin"
+   ],
+   "atcCodes": [
+    "G03GA02"
+   ],
+   "ageBands": [
+    {
+     "minYears": 0,
+     "maxYears": 120,
+     "mgPerKgMin": 0,
+     "mgPerKgMax": 0,
+     "maxDailyDoseMg": 1
+    }
+   ],
+   "source": "test fixture"
+  },
+  {
+   "id": "menotrophin-b",
+   "name": "Menotrophin B",
+   "substanceName": "menotrophin b",
+   "aliases": [
+    "menotrophin"
+   ],
+   "atcCodes": [
+    "H01CB02"
+   ],
+   "ageBands": [
+    {
+     "minYears": 0,
+     "maxYears": 120,
+     "mgPerKgMin": 0,
+     "mgPerKgMax": 0,
+     "maxDailyDoseMg": 1
+    }
+   ],
+   "source": "test fixture"
+  },
+  {
+   "id": "framycetin",
+   "name": "Framycetin",
+   "substanceName": "framycetin",
+   "aliases": [
+    "framycetin"
+   ],
+   "atcCodes": [
+    "S01AA07"
+   ],
+   "ageBands": [
+    {
+     "minYears": 0,
+     "maxYears": 120,
+     "mgPerKgMin": 0,
+     "mgPerKgMax": 0,
+     "maxDailyDoseMg": 1
+    }
+   ],
+   "source": "test fixture"
+  },
+  {
+   "id": "dexamethasone",
+   "name": "Dexamethasone",
+   "substanceName": "dexamethasone",
+   "aliases": [
+    "dexamethasone"
+   ],
+   "atcCodes": [
+    "H02AB02"
+   ],
+   "source": "test fixture"
+  },
+  {
+   "id": "dexamethasone-and-framycetin",
+   "name": "Dexamethasone and framycetin",
+   "substanceName": "dexamethasone and framycetin",
+   "aliases": [
+    "dexamethasone and framycetin"
+   ],
+   "atcCodes": [
+    "S02CA02"
+   ],
+   "source": "test fixture"
+  },
+  {
+   "id": "potassium",
+   "name": "Potassium",
+   "substanceName": "potassium",
+   "aliases": [
+    "potassium"
+   ],
+   "atcCodes": [
+    "A12BA01"
+   ],
+   "ageBands": [
+    {
+     "minYears": 0,
+     "maxYears": 120,
+     "mgPerKgMin": 0,
+     "mgPerKgMax": 0,
+     "maxDailyDoseMg": 1
+    }
+   ],
+   "source": "test fixture"
+  },
+  {
+   "id": "clavulanate-potassium",
+   "name": "Clavulanate potassium",
+   "substanceName": "clavulanate potassium",
+   "aliases": [
+    "clavulanate potassium"
+   ],
+   "atcCodes": [
+    "M01AE01"
+   ],
+   "ageBands": [
+    {
+     "minYears": 0,
+     "maxYears": 120,
+     "mgPerKgMin": 0,
+     "mgPerKgMax": 0,
+     "maxDailyDoseMg": 1
+    }
+   ],
+   "source": "test fixture"
+  },
+  {
+   "id": "amoxicillin-and-clavulanate-potassium",
+   "name": "Amoxicillin and clavulanate potassium",
+   "substanceName": "amoxicillin and clavulanate potassium",
+   "aliases": [
+    "amoxicillin and clavulanate potassium"
+   ],
+   "atcCodes": [
+    "C07AB02"
+   ],
+   "source": "test fixture"
+  }
+ ]
+}

@@ -53,7 +53,7 @@ public class DrugReferenceRenderRobustnessTest {
 	}
 
 	@Test
-	public void nullAndBlankRuleElementsAreRemovedWithoutLosingValidSiblings() throws IOException {
+	public void nullAndBlankRuleElementsRenderBestEffortWithoutThrowing() throws IOException {
 		DrugReferenceInjector injector = DrugReferenceTestSupport
 				.injector(DrugReferenceTestSupport.serviceWith(fixtureEntries()));
 
@@ -66,8 +66,8 @@ public class DrugReferenceRenderRobustnessTest {
 				"the real warning must survive its null/blank siblings: " + injected);
 		assertTrue(injected.contains("test condition"),
 				"the usable contraindication rule must still render: " + injected);
-		assertFalse(injected.contains("note-only interaction"),
-				"an interaction without a token or ATC must not reach model context: " + injected);
+		assertTrue(injected.contains("note-only interaction"),
+				"an interaction with only a note must render the note: " + injected);
 		assertFalse(injected.contains("null"),
 				"no null element may leak the literal 'null' into the citable record: " + injected);
 	}

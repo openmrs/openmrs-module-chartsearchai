@@ -1,0 +1,55 @@
+{
+  "version": "1.0",
+  "source": "hand-authored fixture for issue #223 — not shipped data",
+  "description": "Shapes about WHICH MATCH lets a self-named allergy rule claim the identity chip's rank. (1) Opium's rule names the entry and carries a note, and Opium publishes a SECOND name ('papaveretum') that does not contain the rule's token — so a patient allergic to papaveretum and, separately, to Tiotropium gives the rule a mid-word containment match ('tiotropium' contains 'opium') while the allergen arm corroborates the substance from the other record. That is the only arrangement in which an accidental match and a genuine identity chip meet on one key. (2) Tiotropium is a real entry, so the accidental allergen resolves to something rather than to nothing. (3) Ibuprofen's rule names the entry and is exercised against an allergen recorded with a Romance inflection ('Ibuprofène'), which the drug-NAME rule's two-letter tail allowance reaches and a symmetric word boundary does not. (4) Ketoconazole (oral) and Levoketoconazole both publish 'ketoconazole' — the borrowed-alias shape of issue #224, authored so the two TIE on nameMatchStrength and the allergen arm therefore reaches both. (5) Levothyroxine publishes 'thyroxine' among its own names and rules on THAT name, so a patient whose allergy is recorded as 'Levothyroxine' matches the rule only mid-word while the ENTRY is exactly what the chart named — the shape that separates asking the question of the entry from asking it of the token, and the one a token-scoped rule demotes wrongly. No entry carries ATC codes, so no class comparison can chip and every count is the allergy arms' own.",
+  "entries": [
+    {
+      "id": "opium",
+      "name": "Opium",
+      "aliases": ["opium", "papaveretum"],
+      "contraindications": [
+        { "type": "allergy", "token": "opium", "note": "documented opium allergy" }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "tiotropium",
+      "name": "Tiotropium",
+      "aliases": ["tiotropium"],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "ibuprofen",
+      "name": "Ibuprofen",
+      "aliases": ["ibuprofen"],
+      "contraindications": [
+        { "type": "allergy", "token": "ibuprofen", "note": "documented ibuprofen allergy" }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "ketoconazole-oral",
+      "name": "Ketoconazole (oral)",
+      "aliases": ["ketoconazole (oral)", "ketoconazole"],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "levoketoconazole",
+      "name": "Levoketoconazole",
+      "aliases": ["levoketoconazole", "ketoconazole"],
+      "contraindications": [
+        { "type": "allergy", "token": "ketoconazole", "note": "documented ketoconazole allergy" }
+      ],
+      "source": "hand-authored fixture"
+    },
+    {
+      "id": "levothyroxine",
+      "name": "Levothyroxine",
+      "aliases": ["levothyroxine", "thyroxine"],
+      "contraindications": [
+        { "type": "allergy", "token": "thyroxine", "note": "documented thyroxine allergy — anaphylaxis" }
+      ],
+      "source": "hand-authored fixture"
+    }
+  ]
+}

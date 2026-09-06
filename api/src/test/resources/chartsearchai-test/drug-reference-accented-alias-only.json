@@ -1,0 +1,17 @@
+{
+  "version": "1.0",
+  "source": "Test fixture — an entry whose every name carries an accent (issue #330)",
+  "description": "Measured 2026-08-30 through the real loader, exactly one of the shipped knowledge base's 8300 alias slots (5169 distinct) carries a character above U+007F, and it is an EN DASH rather than a combining mark, so DrugReference.foldDiacritics changes nothing on that dataset either: a folded alias list is INDISTINGUISHABLE from the raw one there, and a guard comparing the two proves nothing. This ENTRY is the one shape where the reference side of the fold is load-bearing — the shape containsBoundedToken's javadoc says it exists for, 'a hand-authored json KB may carry an accented alias' — so the entry deliberately carries NO unaccented sibling alias, unlike drug-reference-accented-tokens.json whose entries each carry one. Its one alias carries an upper-case letter as well as its combining marks, because DrugReference.foldedLower is a lower-case AND a diacritic fold and DrugReference.foldedAll is the sole producer of both folded lists: with a lower-case alias only the diacritic half was load-bearing here, and a foldedAll spelled foldDiacritics(value) left the whole api suite green. A chart recording \"Ketoprofene 100mg\" reaches this entry only if the alias was lower-cased AND diacritic-stripped. It holds ONE entry, which keeps it on findImpliedByQuery/findImpliedByDrugName's matched.size() < 2 early return and so pins the STORING of the folded list without the scans that read it; drug-reference-accented-alias-with-sibling.json is this fixture plus the second matching entry those scans need to run at all.",
+  "entries": [
+    {
+      "id": "ketoprofene-accented-only",
+      "name": "Kétoprofène",
+      "drugClass": "AINS",
+      "aliases": ["Kétoprofène"],
+      "contraindications": [
+        { "type": "allergy", "token": "aspirine", "note": "hypersensibilité croisée aux salicylés" }
+      ],
+      "source": "Test fixture"
+    }
+  ]
+}

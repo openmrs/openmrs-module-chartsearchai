@@ -89,7 +89,7 @@ public class ChartSearchAiStreamEventOrderTest {
 			throws Exception {
 		controller.setChartSearchService(new LiveStubService());
 
-		controller.streamAnswer(out, patient(), "any infections?", user(), "full-chart", true);
+		controller.streamAnswer(out, patient(), "any infections?", user(), true);
 
 		List<String> types = eventTypes();
 		int doneIdx = types.indexOf("done");
@@ -117,7 +117,7 @@ public class ChartSearchAiStreamEventOrderTest {
 	public void syncGrounding_keepsClassicSingleDoneWithVerdicts() throws Exception {
 		controller.setChartSearchService(new LiveStubService());
 
-		controller.streamAnswer(out, patient(), "any infections?", user(), "full-chart", false);
+		controller.streamAnswer(out, patient(), "any infections?", user(), false);
 
 		List<String> types = eventTypes();
 		assertFalse(types.contains("grounded"),
@@ -135,7 +135,7 @@ public class ChartSearchAiStreamEventOrderTest {
 		// (with verdicts) and no grounded event, even though async mode is on.
 		controller.setChartSearchService(new CacheHitStubService());
 
-		controller.streamAnswer(out, patient(), "any infections?", user(), "full-chart", true);
+		controller.streamAnswer(out, patient(), "any infections?", user(), true);
 
 		List<String> types = eventTypes();
 		assertEquals(1, frequency(types, "done"), "exactly one done event; got " + types);
@@ -150,7 +150,7 @@ public class ChartSearchAiStreamEventOrderTest {
 	public void asyncGrounding_emitsExactlyOneDone() throws Exception {
 		controller.setChartSearchService(new LiveStubService());
 
-		controller.streamAnswer(out, patient(), "any infections?", user(), "full-chart", true);
+		controller.streamAnswer(out, patient(), "any infections?", user(), true);
 
 		assertEquals(1, frequency(eventTypes(), "done"),
 				"async mode must not double-emit done; got " + eventTypes());
@@ -174,7 +174,7 @@ public class ChartSearchAiStreamEventOrderTest {
 			}
 		});
 
-		controller.streamAnswer(out, patient(), "any infections?", user(), "full-chart", true);
+		controller.streamAnswer(out, patient(), "any infections?", user(), true);
 
 		assertEquals(1, frequency(eventTypes(), "done"),
 				"a misbehaving double-fire must not double-emit done; got " + eventTypes());
@@ -206,7 +206,7 @@ public class ChartSearchAiStreamEventOrderTest {
 	public void streamAnswer_emitsPreliminaryEvent_whenServiceStreamsPreviewReasoning() throws Exception {
 		controller.setChartSearchService(new PreliminaryStubService());
 
-		controller.streamAnswer(out, patient(), "any infections?", user(), "full-chart", true);
+		controller.streamAnswer(out, patient(), "any infections?", user(), true);
 
 		List<String> types = eventTypes();
 		assertTrue(types.contains("preliminary"),

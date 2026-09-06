@@ -42,8 +42,20 @@ public class CrossReactivityGroup {
 		return name;
 	}
 
+	/**
+	 * Stores the name TRIMMED, since issue #354 — the sole writer, so a padded operator-authored name
+	 * cannot reach any reader.
+	 *
+	 * <p>At the producer and not at each reader, which is the same placement and the same reason
+	 * {@link DrugReference#setAliases} trims: this name is PRINTED by the chip arms
+	 * ({@code DrugSafetyValidator}'s cross-reactivity and duplicate-class sentences) and, since #354,
+	 * REPORTED as a class by {@code DrugClassTerms}, and those two surfaces co-occur in one response.
+	 * Trimming at one reader would have named one family two ways in one answer; trimming at each
+	 * reader is the same rule written twice. The loader's own blank check is unaffected — a
+	 * whitespace-only name trims to the empty string, which it still rejects.
+	 */
 	public void setName(String name) {
-		this.name = name;
+		this.name = name == null ? null : name.trim();
 	}
 
 	public String getNote() {
@@ -73,21 +85,55 @@ public class CrossReactivityGroup {
 
 	/** @return true when the given normalized (upper-cased) ATC code falls under any of this group's prefixes. */
 	public boolean containsCode(String normalizedAtcCode) {
-		if (normalizedAtcCode == null || normalizedAtcCode.isEmpty()) {
-			return false;
-		}
-		for (String prefix : normalizedAtcPrefixes()) {
-			if (normalizedAtcCode.startsWith(prefix)) {
+		return fallsUnder(normalizedAtcCode, normalizedAtcPrefixes());
+	}
+
+	/**
+	 * @return true when any of the given normalized ATC codes falls under any of this group's
+	 *         prefixes.
+	 *
+	 *         <p>Normalizes this group's prefixes ONCE per call rather than once per code:
+	 *         {@link #normalizedAtcPrefixes()} rebuilds the set every time it is asked, and this
+	 *         runs inside {@code DrugSafetyValidator}'s per-pair screening across the candidate
+	 *         set, so asking per code cost one normalization per (group, code) pair (issue #230).
+	 *         No speedup was measured and none is claimed: the shipped file carries one group with
+	 *         two prefixes. This is about not carrying a shape that scales with (groups × codes)
+	 *         into a deployment that expands the curated groups, which is what that path is for
+	 *         (#183).
+	 *
+	 *         <p>The normalized set is held in a LOCAL and never in a field. {@link #setAtcPrefixes} is
+	 *         the write path — Jackson calls it, and so does anything wiring groups programmatically —
+	 *         and it has to stay authoritative AFTER a membership question has been asked, which a set
+	 *         cached on the instance would not: it would go on answering with the prefixes the group
+	 *         used to carry, and silently, because no other test REPLACES a group's prefixes after
+	 *         asking. (Being asked twice is not the trigger and is entirely ordinary:
+	 *         {@link CrossReactivityGroupsLoader} asks every group it keeps for its prefixes once, as
+	 *         its own drop filter, before any caller does.) Same rule as issue #172's "in a local,
+	 *         never in a field", pinned by
+	 *         {@code CrossReactivityGroupsTest#replacedPrefixesAreSeenOnTheNextQuestion_soTheNormalizationIsNeverCachedOnTheInstance}.
+	 */
+	public boolean containsAnyCode(Set<String> normalizedAtcCodes) {
+		Set<String> prefixes = normalizedAtcPrefixes();
+		for (String code : normalizedAtcCodes) {
+			if (fallsUnder(code, prefixes)) {
 				return true;
 			}
 		}
 		return false;
 	}
 
-	/** @return true when any of the given normalized ATC codes falls under any of this group's prefixes. */
-	public boolean containsAnyCode(Set<String> normalizedAtcCodes) {
-		for (String code : normalizedAtcCodes) {
-			if (containsCode(code)) {
+	/** The one membership rule both accessors above answer with, so the two cannot drift apart.
+	 *  Deliberately NOT shared with {@code DrugReference}'s private {@code fallsUnderAnyGroup}, which
+	 *  runs the same loop over the hardcoded ATC group constants on that side: the two sides answer
+	 *  for different data (curated prefixes loaded from a file here; compiled-in group constants
+	 *  there) and each says so in its own javadoc. Merging them would put one refinement in front of
+	 *  both. */
+	private static boolean fallsUnder(String normalizedAtcCode, Set<String> normalizedPrefixes) {
+		if (normalizedAtcCode == null || normalizedAtcCode.isEmpty()) {
+			return false;
+		}
+		for (String prefix : normalizedPrefixes) {
+			if (normalizedAtcCode.startsWith(prefix)) {
 				return true;
 			}
 		}
@@ -118,27 +164,27 @@ public class CrossReactivityGroup {
 	 *         {@code null} when the two drugs share no curated group.
 	 */
 	public static CrossReactivityGroup sharedGroup(List<CrossReactivityGroup> refGroups, DrugReference other) {
-		Set<String> otherCodes = other.normalizedAtcCodes();
-		if (otherCodes.isEmpty()) {
-			return null;
-		}
-		for (CrossReactivityGroup group : refGroups) {
-			if (group.containsAnyCode(otherCodes)) {
-				return group;
-			}
-		}
-		return null;
+		return sharedGroupForCodes(refGroups, other.normalizedAtcCodes());
 	}
 
 	/**
-	 * @return the first of {@code refGroups} that the (normalized) ATC code {@code atcCode}
-	 *         also falls under, or {@code null}. The order-code variant of
+	 * @return the first of {@code refGroups} that any of the (normalized) ATC codes
+	 *         {@code atcCodes} falls under, or {@code null}. The order-code variant of
 	 *         {@link #sharedGroup(List, DrugReference)} for active orders whose substance
-	 *         may not be present in the loaded dataset.
+	 *         may not be present in the loaded dataset — a SET, because one order's concept can map
+	 *         to several codes and they are one co-medication, not several (issue #171).
+	 *
+	 *         <p>Scanning the groups rather than the codes is what makes the answer independent of the
+	 *         order the codes arrive in: the groups are curated data in dataset order, the codes are
+	 *         whatever a concept dictionary happened to publish.
 	 */
-	public static CrossReactivityGroup sharedGroupForCode(List<CrossReactivityGroup> refGroups, String atcCode) {
+	public static CrossReactivityGroup sharedGroupForCodes(List<CrossReactivityGroup> refGroups,
+			Set<String> atcCodes) {
+		if (atcCodes.isEmpty()) {
+			return null;
+		}
 		for (CrossReactivityGroup group : refGroups) {
-			if (group.containsCode(atcCode)) {
+			if (group.containsAnyCode(atcCodes)) {
 				return group;
 			}
 		}

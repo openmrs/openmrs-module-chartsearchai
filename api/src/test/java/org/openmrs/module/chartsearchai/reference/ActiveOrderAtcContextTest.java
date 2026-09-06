@@ -16,10 +16,6 @@ import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.openmrs.Concept;
-import org.openmrs.ConceptMap;
-import org.openmrs.ConceptReferenceTerm;
-import org.openmrs.ConceptSource;
 import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
@@ -51,8 +47,7 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  */
 public class ActiveOrderAtcContextTest extends BaseModuleContextSensitiveTest {
 
-	private static final String SCREENING_QUESTION =
-			"Are there any drug interactions with her current medications?";
+	private static final String SCREENING_QUESTION = DrugReferenceTestSupport.SCREENING_QUESTION;
 
 	/** Concept 88 (ASPIRIN) — the concept behind patient 7's single active drug order. */
 	private static final int ORDERED_CONCEPT = 88;
@@ -79,22 +74,7 @@ public class ActiveOrderAtcContextTest extends BaseModuleContextSensitiveTest {
 	 * {@link PatientClinicalContextBuilder} recognises.
 	 */
 	private void mapOrderedConceptToAtc(String... codes) {
-		ConceptSource whoAtc = new ConceptSource();
-		whoAtc.setName("WHOATC");
-		whoAtc.setDescription("WHO ATC classification (test)");
-		Context.getConceptService().saveConceptSource(whoAtc);
-		Concept concept = Context.getConceptService().getConcept(ORDERED_CONCEPT);
-		for (String code : codes) {
-			ConceptReferenceTerm term = new ConceptReferenceTerm();
-			term.setName(code);
-			term.setCode(code);
-			term.setConceptSource(whoAtc);
-			Context.getConceptService().saveConceptReferenceTerm(term);
-			concept.addConceptMapping(
-					new ConceptMap(term, Context.getConceptService().getDefaultConceptMapType()));
-		}
-		Context.getConceptService().saveConcept(concept);
-		Context.flushSession();
+		DrugReferenceTestSupport.mapConceptToAtc(ORDERED_CONCEPT, codes);
 	}
 
 	private static long interactionChips(List<SafetyWarning> warnings) {
@@ -141,7 +121,7 @@ public class ActiveOrderAtcContextTest extends BaseModuleContextSensitiveTest {
 		// Silent for the RIGHT reason. This entry point fails safe — any RuntimeException degrades to an
 		// empty list — so "no chips" alone cannot tell a correct suppression from a broken pipeline. The
 		// same validator, patient and knowledge base must still chip for a drug that genuinely interacts
-		// with this patient's own order: warfarin x aspirin is Major in the bundled sample, and the
+		// with this patient's own order: warfarin x aspirin is Major in the DDInter excerpt, and the
 		// order's own NAME is what witnesses it, so this control is independent of the codes mapped
 		// above. (That question raises other chips too — warfarin against the two entries those codes
 		// resolve to — which is the drug-in-play arm doing its own job against the chart, so the named

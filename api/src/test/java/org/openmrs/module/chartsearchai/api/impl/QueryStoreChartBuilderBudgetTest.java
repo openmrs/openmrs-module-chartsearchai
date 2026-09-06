@@ -112,7 +112,7 @@ public class QueryStoreChartBuilderBudgetTest {
 	@BeforeEach
 	public void setUp() {
 		queryStore = new CountingQueryStoreStub();
-		builder = new TestableScopedBuilder(queryStore);
+		builder = new TestableScopedBuilder(queryStore.asService());
 		builder.setChartSerializer(new PatientChartSerializer());
 		tokenCounter = new FakeTokenCounter();
 		builder.setTokenCounter(tokenCounter);

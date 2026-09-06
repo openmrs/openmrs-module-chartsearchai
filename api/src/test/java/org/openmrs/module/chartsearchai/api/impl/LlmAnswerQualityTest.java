@@ -13,14 +13,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -28,11 +20,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import org.junit.jupiter.api.Test;
 
@@ -46,9 +33,7 @@ import org.junit.jupiter.api.Test;
  */
 public class LlmAnswerQualityTest {
 
-	private static final ObjectMapper MAPPER = new ObjectMapper();
-
-	private static final String DEFAULT_ENDPOINT = "http://localhost:18085/v1/chat/completions";
+	private static final String ENDPOINT_PROPERTY = "chartsearchai.llm.quality.endpoint";
 
 	// 28 records grouped by concept, matching production pipeline output.
 	private static final String RECORDS =
@@ -97,71 +82,14 @@ public class LlmAnswerQualityTest {
 	private static final Pattern CITATION_PATTERN = Pattern.compile("\\[(\\d+)]");
 
 	private static String getEndpoint() {
-		String explicit = System.getProperty("chartsearchai.llm.quality.endpoint");
-		return (explicit != null && !explicit.isEmpty()) ? explicit : DEFAULT_ENDPOINT;
+		return LlmEndpointTestSupport.endpoint(ENDPOINT_PROPERTY);
 	}
 
-	private static boolean isEndpointReachable() {
-		try {
-			String healthUrl = getEndpoint().replace("/v1/chat/completions", "/health");
-			HttpResponse<String> response = HttpClient.newHttpClient().send(
-					HttpRequest.newBuilder().uri(URI.create(healthUrl))
-							.timeout(Duration.ofSeconds(5)).GET().build(),
-					HttpResponse.BodyHandlers.ofString());
-			return response.statusCode() == 200;
-		}
-		catch (Exception e) {
-			return false;
-		}
-	}
-
-	private static String runLlm(String systemPrompt) throws IOException, InterruptedException {
-		ObjectNode root = MAPPER.createObjectNode();
-		root.put("temperature", 0.0);
-		root.put("max_tokens", 2048);
-		root.put("stream", false);
-
-		ObjectNode responseFormat = MAPPER.createObjectNode();
-		responseFormat.put("type", "json_object");
-		root.set("response_format", responseFormat);
-
-		ArrayNode messages = MAPPER.createArrayNode();
-		ObjectNode sysMsg = MAPPER.createObjectNode();
-		sysMsg.put("role", "system");
-		sysMsg.put("content", systemPrompt);
-		messages.add(sysMsg);
-
-		ObjectNode userMsg = MAPPER.createObjectNode();
-		userMsg.put("role", "user");
-		userMsg.put("content",
+	private static String runLlm(String systemPrompt) throws Exception {
+		return LlmEndpointTestSupport.complete(getEndpoint(), systemPrompt,
 				"Patient records (grouped by type, most recent first within each group):\n"
-						+ RECORDS + "\nQuestion: " + QUESTION);
-		messages.add(userMsg);
-		root.set("messages", messages);
-
-		HttpResponse<String> response = HttpClient.newHttpClient().send(
-				HttpRequest.newBuilder()
-						.uri(URI.create(getEndpoint()))
-						.timeout(Duration.ofSeconds(120))
-						.header("Content-Type", "application/json")
-						.POST(HttpRequest.BodyPublishers.ofString(
-								MAPPER.writeValueAsString(root), StandardCharsets.UTF_8))
-						.build(),
-				HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-
-		if (response.statusCode() != 200) {
-			throw new IOException("LLM endpoint returned HTTP " + response.statusCode());
-		}
-
-		JsonNode respRoot = MAPPER.readTree(response.body());
-		JsonNode choices = respRoot.get("choices");
-		if (choices != null && choices.isArray() && !choices.isEmpty()) {
-			JsonNode message = choices.get(0).get("message");
-			if (message != null && message.has("content")) {
-				return message.get("content").asText("");
-			}
-		}
-		return "";
+						+ RECORDS + "\nQuestion: " + QUESTION,
+				2048);
 	}
 
 	private static Set<Integer> extractTextCitations(String answer) {
@@ -185,10 +113,9 @@ public class LlmAnswerQualityTest {
 
 	@Test
 	public void trendQuery_shouldCiteRecordsAndCoverAllConcepts() throws Exception {
+		LlmEndpointTestSupport.assumeOptedIn("chartsearchai.llm.quality.test");
 		org.junit.jupiter.api.Assumptions.assumeTrue(
-				"true".equalsIgnoreCase(System.getProperty("chartsearchai.llm.quality.test")),
-				"Skipping: set -Dchartsearchai.llm.quality.test=true to run");
-		org.junit.jupiter.api.Assumptions.assumeTrue(isEndpointReachable(),
+				LlmEndpointTestSupport.isReachable(getEndpoint()),
 				"Skipping: LLM endpoint not reachable at " + getEndpoint());
 
 		List<String> promptVariations = buildPromptVariations();

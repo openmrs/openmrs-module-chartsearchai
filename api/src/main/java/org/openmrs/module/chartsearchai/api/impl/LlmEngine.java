@@ -53,9 +53,33 @@ public interface LlmEngine {
 	/**
 	 * Run inference with streaming, calling the consumer for each token fragment.
 	 *
+	 * <p>{@link LocalLlmEngine} and {@link RemoteLlmEngine} both spend this on a JDK
+	 * {@code HttpRequest.timeout()}, which stops applying once the inference server's response
+	 * headers arrive; the token stream is then read lazily out of
+	 * {@code BodyHandlers.ofInputStream()} and is bounded by nothing. So {@code timeoutSeconds} caps
+	 * the wait for the FIRST output and not the call. Measured 2026-08-20 against a local
+	 * {@code llama-server} on CPU ({@code -ngl 0}, Llama-3.2-3B-Q4_K_M): a cold prefill raised
+	 * {@code HttpTimeoutException} at 2.0s and at 8.0s against timeouts of exactly those lengths,
+	 * while a cache-warm request under a 20s timeout returned headers at 117ms and then streamed for
+	 * 23.8s without raising one. Those figures come from a standalone client issuing the same two
+	 * calls both of them make here, {@code HttpRequest.timeout(...)} and
+	 * {@code send(request, BodyHandlers.ofInputStream())}, rather than from this method, which needs a
+	 * running module: the model and the prompt decide only how long the prefill takes, which is what
+	 * the 2.0s and 8.0s runs turn on, and neither reaches the JDK behaviour being measured. The same
+	 * behaviour reproduces with no inference server at all, against a socket that sends headers and
+	 * then stalls, on Java 11, 17 and 21 alike and with {@code ofString()} as well. It is also a
+	 * PER-CALL budget rather than a per-invocation one: {@link LocalLlmEngine} spends it again on
+	 * each KV-cache slot call the six-argument form below can make around the completion.</p>
+	 *
+	 * <p>The non-streaming forms, {@link #infer(String, String, int)} and
+	 * {@link #warmup(String, String, int)}, keep the "maximum wall-clock seconds" wording
+	 * deliberately: whether a server that does not stream withholds its headers until the answer is
+	 * complete was not measured, and if it does then that wording holds there.</p>
+	 *
 	 * @param systemPrompt the system prompt
 	 * @param userMessage the user message (patient records + question)
-	 * @param timeoutSeconds maximum wall-clock seconds for the request
+	 * @param timeoutSeconds seconds to wait for the inference server's first output, NOT a bound on
+	 *        the token stream that follows it — see above
 	 * @param tokenConsumer called with each token fragment as it is generated
 	 * @return the inference result containing the full generated text and input/output token counts
 	 */

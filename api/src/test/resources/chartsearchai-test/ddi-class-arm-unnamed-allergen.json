@@ -1,0 +1,204 @@
+{
+ "metadata": {
+  "note": "Verbatim DDInter 2.0 slice for issue #268's CLASS arm — real shipped rows, unedited. All four of Levofloxacin, Omeprazole, Esomeprazole and Amoxicillin publish `amoxicillin / esomeprazole / levofloxacin combination kit` among their own names, so a patient recorded allergic to that kit reaches all four substances — but the kit does not NAME Omeprazole: the KB reaches that row only because it publishes `esomeprazole` as its rxnorm_name, which is issue #196's borrowed-alias shape and the reason the two proton-pump rows share one ATC code. Lansoprazole is the class partner: A02BC like both of them, and not implied by the kit, so it is the subject the class arm reports a cross-reactivity FOR. The arm walks the implied substances in order and stops at the first sharing the class, which is Omeprazole — the one the record does not name — so this is where the class sentence used to assert an allergy to a drug the chart never mentions, beside an identity chip that had just declined to."
+ },
+ "mechanisms": {
+  "-1": {
+   "text": null,
+   "categories": []
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter1055",
+   "name": "Levofloxacin",
+   "rxcui": "82122",
+   "rxnorm_name": "levofloxacin",
+   "drugbank_id": "DB01137",
+   "atc": [
+    "J01MA12",
+    "S01AE05"
+   ],
+   "ciel": [
+    {
+     "code": "167977",
+     "uuid": "2d7b158c-5f97-449b-b0e9-46f75c82a42f",
+     "name": "Amoxicillin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167978",
+     "uuid": "cb933181-fd92-4725-91d5-2e851c9eb0b5",
+     "name": "Clarithromycin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "78788",
+     "uuid": "78788AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Levofloxacin"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1340",
+   "name": "Omeprazole",
+   "rxcui": "283742",
+   "rxnorm_name": "esomeprazole",
+   "drugbank_id": "DB00338",
+   "atc": [
+    "A02BC05"
+   ],
+   "ciel": [
+    {
+     "code": "167977",
+     "uuid": "2d7b158c-5f97-449b-b0e9-46f75c82a42f",
+     "name": "Amoxicillin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167978",
+     "uuid": "cb933181-fd92-4725-91d5-2e851c9eb0b5",
+     "name": "Clarithromycin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167995",
+     "uuid": "a78c9f7d-87b8-4216-9153-53e14e5911aa",
+     "name": "Amoxicillin / clarithromycin / esomeprazole combination kit"
+    },
+    {
+     "code": "75875",
+     "uuid": "75875AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Esomeprazole"
+    },
+    {
+     "code": "75876",
+     "uuid": "75876AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Esomeprazole magnesium"
+    }
+   ]
+  },
+  {
+   "id": "DDInter676",
+   "name": "Esomeprazole",
+   "rxcui": "283742",
+   "rxnorm_name": "esomeprazole",
+   "drugbank_id": "DB00736",
+   "atc": [
+    "A02BC05"
+   ],
+   "ciel": [
+    {
+     "code": "167977",
+     "uuid": "2d7b158c-5f97-449b-b0e9-46f75c82a42f",
+     "name": "Amoxicillin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167978",
+     "uuid": "cb933181-fd92-4725-91d5-2e851c9eb0b5",
+     "name": "Clarithromycin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167995",
+     "uuid": "a78c9f7d-87b8-4216-9153-53e14e5911aa",
+     "name": "Amoxicillin / clarithromycin / esomeprazole combination kit"
+    },
+    {
+     "code": "75875",
+     "uuid": "75875AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Esomeprazole"
+    },
+    {
+     "code": "75876",
+     "uuid": "75876AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Esomeprazole magnesium"
+    }
+   ]
+  },
+  {
+   "id": "DDInter83",
+   "name": "Amoxicillin",
+   "rxcui": "723",
+   "rxnorm_name": "amoxicillin",
+   "drugbank_id": "DB01060",
+   "atc": [
+    "J01CA04"
+   ],
+   "ciel": [
+    {
+     "code": "167977",
+     "uuid": "2d7b158c-5f97-449b-b0e9-46f75c82a42f",
+     "name": "Amoxicillin / Esomeprazole / Levofloxacin combination kit"
+    },
+    {
+     "code": "167995",
+     "uuid": "a78c9f7d-87b8-4216-9153-53e14e5911aa",
+     "name": "Amoxicillin / clarithromycin / esomeprazole combination kit"
+    },
+    {
+     "code": "168005",
+     "uuid": "48f1556f-56e3-41ed-a2ba-773fa4e6de14",
+     "name": "Amoxicillin / floxacillin"
+    },
+    {
+     "code": "168663",
+     "uuid": "39559906-b467-47a7-abaa-499cf6b51562",
+     "name": "Amoxicillin / clarithromycin / vonoprazan combination kit"
+    },
+    {
+     "code": "450",
+     "uuid": "450AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Amoxicillin and clavulanic acid"
+    },
+    {
+     "code": "71160",
+     "uuid": "71160AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Amoxicillin"
+    },
+    {
+     "code": "71161",
+     "uuid": "71161AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Amoxicillin monosodium salt"
+    },
+    {
+     "code": "71162",
+     "uuid": "71162AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Amoxicillin trihydrate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1022",
+   "name": "Lansoprazole",
+   "rxcui": "17128",
+   "rxnorm_name": "lansoprazole",
+   "drugbank_id": "DB00448",
+   "atc": [
+    "A02BC03"
+   ],
+   "ciel": [
+    {
+     "code": "78657",
+     "uuid": "78657AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lansoprazole"
+    }
+   ]
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter1022",
+   "DDInter1340",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1022",
+   "DDInter83",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1340",
+   "DDInter83",
+   "Unknown",
+   "-1"
+  ]
+ ]
+}

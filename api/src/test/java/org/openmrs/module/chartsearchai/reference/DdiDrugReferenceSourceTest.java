@@ -14,27 +14,29 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
+import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 
 /**
  * Exercises the real {@link DdiDrugReferenceSource} and its behaviour through the real injector
  * and validator (via {@link DrugReferenceTestSupport}). With no OpenMRS context available the
- * source falls back to the bundled {@code /chartsearchai/ddi-knowledge-base.json} sample — the
- * production default — so these run the real load/parse/inject/validate paths against real data.
+ * source falls back to the bundled {@code /chartsearchai/ddi-knowledge-base.json} — the production
+ * default, and since ADR Decision 36 the whole 2283-substance knowledge base rather than the 16-drug
+ * excerpt it used to be — so these run the real load/parse/inject/validate paths against the data a
+ * default install actually reasons over.
  *
- * <p>The tests that need a KB slice the 60-mechanism bundled sample does not contain feed the real
- * {@link DdiDrugReferenceSource#parse} a fixture instead (through the shared
- * {@link DrugReferenceTestSupport#ddiFixtureEntries}); the pipeline exercised is the same, only the
- * dataset is narrowed.
+ * <p>The tests that need a slice the knowledge base does not contain, or a bounded one whose partner
+ * lists they can state, feed the real {@link DdiDrugReferenceSource#parse} a fixture instead (through
+ * the shared {@link DrugReferenceTestSupport#ddiFixtureEntries}, or
+ * {@link DrugReferenceTestSupport#ddinterEntries()} for the excerpt); the pipeline exercised is the
+ * same, only the dataset is narrowed.
  *
  * <p>Not only parser behaviour: six of these cases specify {@link DrugSafetyValidator}'s
  * one-chip-per-(drug, active order) collapse of issue #115, because the shape that motivates it —
@@ -112,24 +114,6 @@ public class DdiDrugReferenceSourceTest {
 		String severityWord = nsaid.getNote().split("[ .]", 2)[0];
 		assertTrue(SEVERITY.contains(severityWord),
 				"the note should begin with the DDInter severity, was: " + nsaid.getNote());
-	}
-
-	@Test
-	public void malformedSeverityRowsAreDroppedAtTheDdiAdapterBoundary() throws IOException {
-		String json = "{\"drugs\":["
-				+ "{\"id\":\"a\",\"name\":\"Drug A\",\"rxnorm_name\":\"drug a\"},"
-				+ "{\"id\":\"b\",\"name\":\"Drug B\",\"rxnorm_name\":\"drug b\"}],"
-				+ "\"mechanisms\":{\"1\":{\"text\":\"mechanism\"}},"
-				+ "\"interactions\":[[\"a\",\"b\",\"Majro\",\"1\"],"
-				+ "[\"a\",\"b\",\"Major\",\"1\"]]}";
-
-		List<DrugReference> entries = DdiDrugReferenceSource.parse(new ByteArrayInputStream(
-				json.getBytes(StandardCharsets.UTF_8)));
-		DrugReference a = entries.stream().filter(entry -> "Drug A".equals(entry.getName()))
-				.findFirst().orElseThrow();
-
-		assertEquals(1, a.getInteractions().size());
-		assertEquals("Major", a.getInteractions().get(0).getSeverity());
 	}
 
 	@Test
@@ -229,6 +213,34 @@ public class DdiDrugReferenceSourceTest {
 	}
 	private static List<DrugReference> markerFixtureEntries() throws Exception {
 		return DrugReferenceTestSupport.ddiFixtureEntries(MARKER_FIXTURE);
+	}
+
+	/**
+	 * Issue #242's other half — the same silence inside a test run rather than on a deployment. A fixture
+	 * omitting {@code interactions} parses to nothing, so every assertion written against it holds
+	 * whatever the production code does. Issue #242 records two tests of issue #183's measurement pass as
+	 * having been in that state, relayed rather than re-derived; no such fixture was ever committed here,
+	 * which is why this is a guard rather than a repair.
+	 *
+	 * <p>{@link DrugReferenceTestSupport#ddiFixtureEntries} is the path every fixture test here takes, and
+	 * it reaches the one-argument {@link DdiDrugReferenceSource#parse} form — which has no load status to
+	 * report a finding into, and so is exactly where a report could have been dropped for want of a
+	 * channel. It is loud instead.
+	 */
+	@Test
+	public void aFixtureOmittingItsInteractionsTableIsLoudWithNoLoadStatusToReportInto() throws Exception {
+		List<DrugReference> parsed;
+		try (LogCapture capture = LogCapture.on(DrugReferenceTestSupport.REFERENCE_LOGGER)) {
+			parsed = DrugReferenceTestSupport.ddiFixtureEntries(
+					DrugReferenceTestSupport.DDI_NO_INTERACTIONS_TABLE);
+			assertTrue(
+					capture.messagesAt(Level.WARN).toString()
+							.contains(DrugReferenceValidity.DATASET_MISSING_A_REQUIRED_TABLE),
+					"the WARN must name the rule rather than merely be some warning. Captured: "
+							+ capture.describeAll());
+		}
+		assertTrue(parsed.isEmpty(),
+				"and the parse still returns nothing: issue #242's remedy is a report, not a repair");
 	}
 
 	private static DrugReference.Interaction interaction(List<DrugReference> entries, String drug, String token) {
@@ -356,8 +368,13 @@ public class DdiDrugReferenceSourceTest {
 
 		assertEquals(1, findings.size(),
 				"the fixture pair must yield exactly one citable safety finding, was: " + result.getText());
+		// The strength clause every injected finding now states (#283) is taken from the production
+		// constant rather than spelled out: this assertion guards the field marker and the sentence
+		// shape, and its wording is pinned by literal in SafetyFindingSeverityStrengthTest, which is
+		// where a reword should fail. Spelling it out here would make one property fail in two files.
 		assertEquals("Safety finding — Dolutegravir: Dolutegravir interacts with active order iron — Major. "
-				+ DOLUTEGRAVIR_MECHANISM, findings.get(0).getText(),
+				+ DOLUTEGRAVIR_MECHANISM + DrugReferenceInjector.STRENGTH_WITHHOLD,
+				findings.get(0).getText(),
 				"the finding line the model reads first must read as a sentence, with no field marker");
 		assertFalse(result.getText().contains("INTERVAL"),
 				"no field marker may reach the prompt through either renderer, was: " + result.getText());
@@ -480,15 +497,22 @@ public class DdiDrugReferenceSourceTest {
 	}
 
 	@Test
-	public void replacingAGroupsWinnerLeavesTheChipsInDatasetOrderOfFirstAppearance() throws Exception {
+	public void theMostSevereChipLeadsEvenWhereItsGroupsWinnerWasDecidedLast() throws Exception {
 		// Real slice: Dolutegravir's rows in dataset order are phenytoin (Major), iron (Major, the
 		// shorter note), dexamethasone (Minor), iron (Major, the fuller note). With iron AND
 		// dexamethasone both active, iron's group is opened first, dexamethasone's group is opened
 		// next, and only THEN does iron's second row take its group — so this is the arrangement in
 		// which a collapse that re-inserts a replaced winner (a HashMap, or remove-then-put) puts
-		// dexamethasone's chip ahead of iron's. Chip order is first-appearance order and the
-		// clinician reads the list top-down, so the most severe finding must not be demoted by the
-		// mechanics of the collapse.
+		// dexamethasone's chip ahead of iron's. The clinician reads the list top-down, so the most
+		// severe finding must not be demoted by the mechanics of the collapse.
+		//
+		// Since issue #346 that outcome is over-determined here: iron is Major and dexamethasone
+		// Minor, so the arm's own ordering puts iron first whatever the collapse does, and this case
+		// no longer reddens on the re-insertion. What still pins the collapse is
+		// replacingAGroupsWinnerLeavesATiedPartnerBehindIt, over partners the severity ordering
+		// cannot separate. What this case still states, and what its name now says, is the outcome
+		// rather than the mechanism: the Major chip leads, whichever order the collapse left the two
+		// groups in.
 		List<SafetyWarning> warnings = routeVariantValidator().validate(
 				"Dolutegravir could be started.", "Is it safe to start dolutegravir?",
 				DrugReferenceTestSupport.ctx(60, null,
@@ -501,11 +525,55 @@ public class DdiDrugReferenceSourceTest {
 		// business, and pinning its opening words here would couple this case to the note text.
 		assertTrue(warnings.get(0).getDetail()
 				.startsWith("Dolutegravir interacts with active order iron — Major. "),
-				"iron's row appears first in the dataset, so its chip must come first even though its"
-						+ " group's winner was decided last, was: " + warnings.get(0).getDetail());
+				"iron is Major and dexamethasone Minor, so the arm's ordering must lead with iron even"
+						+ " though iron's group winner was decided last — before issue #346 what kept"
+						+ " it there was the dataset's own order of first appearance, was: "
+						+ warnings.get(0).getDetail());
 		assertTrue(warnings.get(1).getDetail()
 				.startsWith("Dolutegravir interacts with active order dexamethasone — Minor. "),
 				"dexamethasone's chip must stay second, was: " + warnings.get(1).getDetail());
+	}
+
+	/**
+	 * The collapse's own half of the chip order, over partners the arm's ordering cannot separate.
+	 *
+	 * <p>Issue #346 made this arm append its findings strongest first, which took the collapse's
+	 * positional guard away from
+	 * {@link #theMostSevereChipLeadsEvenWhereItsGroupsWinnerWasDecidedLast} — that case's iron is Major
+	 * and its dexamethasone Minor, so the sort now decides their order on its own and a re-inserted
+	 * winner is invisible to it. This case restores the guard, on the same slice under a different
+	 * SUBJECT.
+	 *
+	 * <p>Sirolimus and Sirolimus (protein-bound) are one substance, so this arm rules over both rows.
+	 * The plain row opens lapatinib's group at Moderate, then phenytoin's at Major, then voxelotor's at
+	 * Moderate; the protein-bound row afterwards raises lapatinib and voxelotor to Major, and leaves
+	 * phenytoin's group alone — Major ties Major, and the route step keeps the unqualified row. So all
+	 * three partners end Major, nothing about severity can separate them, and their order is
+	 * {@code bestRulePerPartner}'s grouping alone. Phenytoin is the reference point precisely because
+	 * it is the one group NOT replaced: a LinkedHashMap keeps a re-put key where it was and leaves
+	 * lapatinib ahead of it, while a HashMap or a remove-then-put moves lapatinib behind it.
+	 */
+	@Test
+	public void replacingAGroupsWinnerLeavesATiedPartnerBehindIt() throws Exception {
+		List<SafetyWarning> warnings = routeVariantValidator().validate(
+				"Sirolimus could be started.", "Is it safe to start sirolimus?",
+				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport
+						.set("Lapatinib 250mg", "Phenytoin 100mg", "Voxelotor 500mg"), null, null, null));
+
+		assertEquals(3, warnings.size(),
+			"three active partners must raise three chips, was: " + warnings);
+		for (SafetyWarning warning : warnings) {
+			assertEquals("Major", warning.getSeverity(),
+				"all three partners end Major, so nothing about severity may separate them, was: "
+						+ warnings);
+		}
+		assertTrue(warnings.get(0).getDetail()
+				.startsWith("Sirolimus interacts with active order lapatinib — Major. "),
+			"lapatinib's group is opened before phenytoin's, so replacing its winner afterwards must"
+					+ " not move it behind phenytoin, was: " + warnings.get(0).getDetail());
+		assertTrue(warnings.get(1).getDetail()
+				.startsWith("Sirolimus interacts with active order phenytoin — Major. "),
+			"phenytoin's chip must stay second, was: " + warnings.get(1).getDetail());
 	}
 
 	@Test

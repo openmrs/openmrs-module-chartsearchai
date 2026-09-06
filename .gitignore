@@ -12,3 +12,11 @@ bin/
 models/
 de/
 /chartsearchai/
+
+# Python bytecode from running the eval harnesses locally
+__pycache__/
+*.pyc
+
+# The post-deploy gate installs playwright into the repo root (see
+# .github/workflows/deploy.yml); nothing here is a checked-in dependency.
+node_modules/

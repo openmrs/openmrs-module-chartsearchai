@@ -114,7 +114,7 @@ public class ChartSearchAiReferenceGroupingTest {
 	@Test
 	public void doneEvent_tagsEveryReferenceWithItsGroup() throws Exception {
 		controller.streamAnswer(out, patient(), "is it safe to give her aspirin?", new User(3),
-				"full-chart", false);
+				false);
 
 		List<JsonNode> refs = referencesOf("done");
 		assertEquals(3, refs.size(), "all three citations must survive serialization");
@@ -132,7 +132,7 @@ public class ChartSearchAiReferenceGroupingTest {
 	@Test
 	public void doneEvent_ordersChartEvidenceBeforeReferenceMaterial() throws Exception {
 		controller.streamAnswer(out, patient(), "is it safe to give her aspirin?", new User(3),
-				"full-chart", false);
+				false);
 
 		List<JsonNode> refs = referencesOf("done");
 		List<String> groups = new ArrayList<String>();
@@ -146,7 +146,7 @@ public class ChartSearchAiReferenceGroupingTest {
 	@Test
 	public void doneEvent_regroupingPreservesWithinGroupOrder() throws Exception {
 		controller.streamAnswer(out, patient(), "is it safe to give her aspirin?", new User(3),
-				"full-chart", false);
+				false);
 
 		List<JsonNode> refs = referencesOf("done");
 		List<Integer> indexes = new ArrayList<Integer>();
@@ -160,7 +160,7 @@ public class ChartSearchAiReferenceGroupingTest {
 	@Test
 	public void referencesEvent_carriesTheSameGroupingAsDone() throws Exception {
 		controller.streamAnswer(out, patient(), "is it safe to give her aspirin?", new User(3),
-				"full-chart", false);
+				false);
 
 		// Compared against the done event itself rather than a repeated literal: a client renders the
 		// early event and then replaces it wholesale from done, so what matters is that the two agree.
@@ -184,7 +184,7 @@ public class ChartSearchAiReferenceGroupingTest {
 		// grounded event. That trailing event is its own serializeReferences call site, so it needs
 		// its own assertion — a client that only consumes grounded must still get the grouping.
 		controller.streamAnswer(out, patient(), "is it safe to give her aspirin?", new User(3),
-				"full-chart", true);
+				true);
 
 		assertEquals(Arrays.asList("chart:230", "chart:8", "reference:231"),
 				groupsAndIndexesOf("grounded"),
@@ -194,7 +194,7 @@ public class ChartSearchAiReferenceGroupingTest {
 	@Test
 	public void groupingDoesNotDisturbTheExistingReferenceFields() throws Exception {
 		controller.streamAnswer(out, patient(), "is it safe to give her aspirin?", new User(3),
-				"full-chart", false);
+				false);
 
 		JsonNode drugRef = referencesOf("done").get(2);
 		assertEquals(231, drugRef.get("index").asInt());
@@ -204,9 +204,13 @@ public class ChartSearchAiReferenceGroupingTest {
 		// unconditionally. Presence rather than value, because every fixture record is null-dated
 		// (see the class javadoc for why that is the realistic shape here).
 		assertTrue(drugRef.has("date"), "the date key must survive grouping, null value included");
-		// Passthrough only: the fixture supplies a null verdict, so this pins that grouping did not
-		// disturb the tri-state `grounded` field. The demote-only RULE that produces the null for a
-		// drug_reference lives in CitationGroundingVerifier and is tested there.
+		// The fixture supplies a null verdict, so this pins that grouping did not disturb the
+		// `grounded` field it serializes alongside. It is no longer a passthrough for THIS record:
+		// since issue #201 the serializer withholds the verdict of every reference-group citation,
+		// so a drug_reference reads null whatever the fixture attached. That withholding, and the
+		// chart-group passthrough that must survive it, are pinned in
+		// ChartSearchAiReferenceGroundingWithholdingTest; the demote-only GRADING rule upstream of
+		// it lives in CitationGroundingVerifier and is tested there.
 		assertTrue(drugRef.get("grounded").isNull(),
 				"grouping must not disturb the tri-state grounded verdict it serializes alongside");
 	}
@@ -254,7 +258,7 @@ public class ChartSearchAiReferenceGroupingTest {
 		controller.setChartSearchService(service);
 
 		controller.streamAnswer(out, patient(), "is it safe to give her aspirin?", new User(3),
-				"full-chart", false);
+				false);
 
 		// Assert the event actually fired first: without this the guard below would pass vacuously
 		// if the references event ever stopped being emitted, since an untouched list is also an

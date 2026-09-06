@@ -46,12 +46,19 @@ import org.junit.jupiter.api.Test;
  * trailing {@code -e}/{@code -s} of {@code Pénicillines}, so no boundary or inflection rule is added
  * here. The last case pins that, because it is what separates this relaxation from the boundary rule
  * the order-name arm needs — a token deliberately matches a FRAGMENT of allergy/condition free text
- * ({@code nsaid} inside "NSAIDs", {@code peptic ulcer} inside "history of peptic ulcer disease"), and
- * a boundary rule would silently stop matching the rules that exist.
+ * ({@code penicillin} inside {@code benzylpenicillin}, which both boundary rules refuse; issue #223
+ * measured that loss), and a boundary rule would silently stop matching the rules that exist.
+ * The two examples that stood here until 2026-09-03 do not carry that argument and were deleted
+ * rather than reworded: {@code peptic ulcer} inside "history of peptic ulcer disease" is accepted by
+ * {@link DrugReference#containsWord} AND by {@link DrugReference#matchesOrderName}, and
+ * {@code nsaid} inside "NSAIDs" is accepted by {@code matchesOrderName} — the very rule named here —
+ * its two-letter tail allowance covering the plural. The cases below still assert what they always
+ * asserted; only the reason given for them moved.
  *
  * <p>Every case runs the real pipeline: the real
  * {@link DrugSafetyValidator#validate(String, String, PatientClinicalContext)} over the real curated
- * dataset (the bundled classpath default, which is what an unset {@code sourceFormat} GP selects) or
+ * dataset (the bundled curated file, which an unset {@code sourceFormat} GP selected until ADR Decision
+ * 36 moved the default to {@code ddinter}; these cases pin it explicitly through the shared accessor) or
  * over a fixture parsed by the real {@link JsonDrugReferenceSource}.
  */
 public class ContraindicationTokenDiacriticFoldTest {
@@ -66,7 +73,7 @@ public class ContraindicationTokenDiacriticFoldTest {
 
 	/** The shipped curated dataset, through the production classpath default. */
 	private DrugSafetyValidator curatedValidator() {
-		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.bundledService());
+		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService());
 	}
 
 	private PatientClinicalContext allergicTo(String allergen) {
@@ -189,10 +196,14 @@ public class ContraindicationTokenDiacriticFoldTest {
 	@Test
 	public void deliberateFragmentMatchingIsUnchanged() {
 		// What this relaxation must NOT become. The allergy/condition haystacks are free text where a
-		// curated rule is meant to match a FRAGMENT, so the order-name arm's boundary rule would break
-		// the rules that exist: "nsaid" is not a whole word of "NSAIDs" and "peptic ulcer" is not the
-		// whole of "history of peptic ulcer disease". Both pass before and after the fold, and both fail
-		// if the fold is mistaken for a licence to give this haystack a boundary rule too.
+		// curated rule is meant to match a FRAGMENT, and a boundary rule here would break rules that
+		// exist — the measured loss being #223's class token 'penicillin' inside 'benzylpenicillin',
+		// which both DrugReference.containsWord and DrugReference.matchesOrderName refuse.
+		// Both cases below pass before and after the fold. Which boundary rule would break WHICH of
+		// them was misstated here until 2026-09-03 and is now measured: containsWord refuses
+		// 'nsaid' in 'NSAIDs' (so that case does guard against giving this haystack the PROSE rule) and
+		// ACCEPTS 'peptic ulcer' in 'History of peptic ulcer disease' (so the condition case guards the
+		// containment, not a boundary); matchesOrderName accepts both. The assertions are unchanged.
 		DrugSafetyValidator validator = curatedValidator();
 		String question = "Is it safe to give her ibuprofen?";
 		String answer = "Ibuprofen could be given.";

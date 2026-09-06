@@ -1,0 +1,319 @@
+/**
+ * This Source Code Form is subject to the terms of the Mozilla Public License,
+ * v. 2.0. If a copy of the MPL was not distributed with this file, You can
+ * obtain one at http://mozilla.org/MPL/2.0/. OpenMRS is also distributed under
+ * the terms of the Healthcare Disclaimer located at http://openmrs.org/license.
+ *
+ * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
+ * graphic logo is a trademark of OpenMRS Inc.
+ */
+package org.openmrs.module.chartsearchai.web.rest;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.io.ByteArrayOutputStream;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Consumer;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.openmrs.Patient;
+import org.openmrs.User;
+import org.openmrs.module.chartsearchai.api.ChartSearchService;
+import org.openmrs.module.chartsearchai.reference.PairChipExtent;
+import org.openmrs.module.chartsearchai.reference.SafetyWarning;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+/**
+ * A bounded pairwise interaction list says so ON THE WIRE (issue
+ * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/336">#336</a>).
+ *
+ * <p>Measured on the 3.7.1 standalone before this change: a screen found 18 above-floor pairs and
+ * reported 10, and the response carried no trace of the other eight — the answer text ended in an
+ * ordinary enumeration, the chip array simply stopped, and every
+ * {@code references[].withheldInteractions} read {@code 0}. The withheld eight existed in a
+ * server-side WARN and nowhere a client could read. So the contract
+ * these cases hold is that {@code interactionPairs} reaches EVERY surface that carries chips —
+ * there are three — and that the key is present even when nothing was stated, since a client reads
+ * it unconditionally.
+ *
+ * <p>The last case is the one that survives a refactor: the three sites are three because someone
+ * counted them today, and a fourth added later would publish chips with no statement beside them
+ * unless it goes through the one helper. That is asserted structurally, on the controller's own
+ * source, rather than by keeping a list of sites here — the list is what goes stale.
+ *
+ * <p>The counts themselves are not this class's business: they are pinned through the real
+ * {@code validate} by {@code PairChipExtentContextTest}, and their transport to the answer by
+ * {@code LlmInferenceServicePairChipExtentTest}. The fixture here states them through
+ * {@link PairChipExtent.Sink}, the producer's own channel, because that is the only way to make one.
+ */
+public class ChartSearchAiInteractionPairExtentTest {
+
+	private static final ObjectMapper MAPPER = new ObjectMapper();
+
+	/** The ticket's own measurement: 18 pairs found, 10 reported, 8 withheld in silence. */
+	private static final int FOUND = 18;
+
+	private static final int REPORTED = 10;
+
+	private ChartSearchAiRestController controller;
+
+	private ByteArrayOutputStream out;
+
+	private final RestControllerContext openmrsContext = new RestControllerContext();
+
+	/** Null for the answer that states nothing; set per case before the handler runs. */
+	private PairChipExtent stated;
+
+	@BeforeEach
+	public void setUp() {
+		stated = extent(FOUND, REPORTED);
+		controller = new ChartSearchAiRestController();
+		controller.setAuditLogService(new StubAuditLogService());
+		controller.setChartSearchService(new CappedScreenStubService());
+		controller.setPatientAccessCheck((user, patient) -> true);
+		out = new ByteArrayOutputStream();
+		openmrsContext.install();
+	}
+
+	@AfterEach
+	public void restoreContext() {
+		openmrsContext.restore();
+	}
+
+	/** Built through the producer's own channel — {@code of} is not public, deliberately. */
+	private static PairChipExtent extent(int found, int reported) {
+		PairChipExtent.Sink sink = new PairChipExtent.Sink();
+		sink.record(found, reported);
+		return sink.stated();
+	}
+
+	private static Patient patient() {
+		Patient p = new Patient();
+		p.setPatientId(7);
+		p.setUuid("uuid-7");
+		return p;
+	}
+
+	private ChartSearchService.ChartAnswer answer() {
+		return new ChartSearchService.ChartAnswer("Ten interactions were found [1].",
+				Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
+				Arrays.asList(new SafetyWarning("interaction", "Warfarin",
+						"Warfarin interacts with active order Amiodarone — Major.")),
+				null, null, stated);
+	}
+
+	/** The {@code /search} response body. */
+	@SuppressWarnings("unchecked")
+	private Map<String, Object> searchPayload() {
+		Map<String, String> body = new HashMap<String, String>();
+		body.put("patient", RestControllerContext.PATIENT_UUID);
+		body.put("question", "Please screen her current medications for drug interactions.");
+
+		ResponseEntity<Object> response = controller.search(body);
+		assertEquals(HttpStatus.OK, response.getStatusCode(), "the handler must have reached serialization");
+		Map<String, Object> payload = (Map<String, Object>) response.getBody();
+		assertNotNull(payload, "no response body");
+		return payload;
+	}
+
+	private JsonNode eventData(String eventType) throws Exception {
+		return SseEvents.dataOfType(out, eventType, MAPPER);
+	}
+
+	@Test
+	public void theSearchResponseSaysHowManyPairsWereFoundBesideHowManyItReported() {
+		Map<String, Object> payload = searchPayload();
+
+		assertTrue(payload.containsKey("interactionPairs"),
+				"the blocking /search response must state how bounded its chip list is: " + payload);
+		@SuppressWarnings("unchecked")
+		Map<String, Object> pairs = (Map<String, Object>) payload.get("interactionPairs");
+		assertNotNull(pairs, "this answer states an extent, so the key must carry it");
+		assertEquals(FOUND, pairs.get("found"));
+		assertEquals(REPORTED, pairs.get("reported"));
+		// The defect itself: the chips alone could not tell this response from a complete screen.
+		assertEquals(1, ((List<?>) payload.get("safetyWarnings")).size(),
+				"precondition: the chips beside it say nothing about the eight that were withheld");
+	}
+
+	@Test
+	public void theKeyIsPresentAndNullWhenNothingWasStated() {
+		// Absence of a measurement is itself something a client must be able to read, and it is not
+		// "the screen was complete". Present-and-null rather than omitted, like `source` and
+		// `grounded` beside it, so a client reads one field unconditionally.
+		stated = null;
+		Map<String, Object> payload = searchPayload();
+
+		assertTrue(payload.containsKey("interactionPairs"),
+				"the key must be present even when the producer stated no measurement: " + payload);
+		assertEquals(null, payload.get("interactionPairs"));
+	}
+
+	@Test
+	public void theDoneEventSaysItToo() throws Exception {
+		controller.streamAnswer(out, patient(), "Please screen her current medications.", new User(3),
+				false);
+
+		JsonNode pairs = eventData("done").get("interactionPairs");
+		assertNotNull(pairs, "the done event carried no interactionPairs key");
+		assertEquals(FOUND, pairs.get("found").asInt());
+		assertEquals(REPORTED, pairs.get("reported").asInt());
+	}
+
+	@Test
+	public void theTrailingGroundedEventSaysItToo() throws Exception {
+		// With async grounding the chips arrive on `grounded`, not on `done` — so that event is the
+		// one a client consuming safety chips has to read, and a statement missing there once left
+		// exactly the clients that render chips unable to tell a capped list from a complete one.
+		// Since issue #370 a missing statement there is also a REACHABLE production state rather than
+		// only a defect: a screening pass a cede left with no pair of its own states nothing beside
+		// real chips, which ADR Decision 71 accepts as this fix's cost. So this case pins that the arm's
+		// statement TRAVELS to the trailing event, never that one is promised there — the sibling
+		// below is the other half, and README's `interactionPairs` section is the client contract.
+		controller.streamAnswer(out, patient(), "Please screen her current medications.", new User(3),
+				true);
+
+		JsonNode grounded = eventData("grounded");
+		assertTrue(grounded.has("safetyWarnings"),
+				"precondition: the trailing event is where the chips arrive in async mode");
+		JsonNode pairs = grounded.get("interactionPairs");
+		assertNotNull(pairs, "the grounded event carried no interactionPairs key");
+		assertEquals(FOUND, pairs.get("found").asInt());
+		assertEquals(REPORTED, pairs.get("reported").asInt());
+
+		// And the done event that preceded it states nothing, because the answer behind it carries no
+		// chips yet — which is what stops a client reading a completeness claim beside an empty
+		// list. Scoped to the early `done`: it is not an invariant that a null accompanies no chips,
+		// and since issue #370 the reverse arrangement is reachable (the sibling below drives it).
+		// README documents this shape; nothing else pins it.
+		JsonNode done = eventData("done");
+		assertTrue(done.has("interactionPairs"), "the key must be present on the early done event too");
+		assertTrue(done.get("interactionPairs").isNull(),
+				"the early done event carries no chips, so it may state no extent: " + done);
+		assertEquals(0, done.get("safetyWarnings").size(),
+				"precondition: it is the empty-chip answer, which is why it may state no extent");
+	}
+
+	@Test
+	public void theTrailingGroundedEventCarriesChipsBesideAnAbsentStatementWhereTheProducerMadeNone()
+			throws Exception {
+		// The arrangement issue #370 creates, at the surface where it reaches a client: a screening
+		// pass a cede left with no pair of its own states nothing, so the trailing event carries the
+		// chips with no statement about how bounded they are. `theKeyIsPresentAndNullWhenNothingWasStated`
+		// pins the same shape on the `/search` body; this is the SSE half of it, which is the half a
+		// streaming client reads, and it is the cost ADR Decision 71 signs off rather than a defect.
+		stated = null;
+		controller.streamAnswer(out, patient(), "Please screen her current medications.", new User(3),
+				true);
+
+		JsonNode grounded = eventData("grounded");
+		assertTrue(grounded.get("safetyWarnings").size() > 0,
+				"precondition: the trailing event must carry the chips, or this measures the empty "
+						+ "answer rather than the arrangement: " + grounded);
+		assertTrue(grounded.has("interactionPairs"),
+				"the key must be present even beside chips the producer stated no measurement about, "
+						+ "so a client reads one field unconditionally: " + grounded);
+		assertTrue(grounded.get("interactionPairs").isNull(),
+				"and it must be null rather than a zeroed object, which asserts a complete screen: "
+						+ grounded);
+	}
+
+	@Test
+	public void noEmissionSiteCanPublishChipsWithoutSayingHowBoundedTheyAre() throws Exception {
+		// Structural, and it is what makes the three cases above hold for a site nobody has written
+		// yet: the chips and the statement about them are written by ONE method, so a fourth payload
+		// added later cannot carry one and forget the other. Two payload sites kept in step by hand
+		// is the condition the search_mode column's own comment records as having held one value for
+		// 6036 rows.
+		// Through ChartSearchAiStreamingTest's resolver, not a second one of our own: it is taught
+		// both layouts and asserts the file was found. A guard that silently cannot read its subject
+		// passes, which is the failure that resolver's own javadoc exists to prevent.
+		String source = ChartSearchAiStreamingTest.controllerSource();
+
+		// The KEY, not the helper, is what a payload actually carries — so this is the assertion that
+		// also catches a site inlining the serialization loop instead of calling the helper.
+		int keys = ChartSearchAiStreamingTest.occurrences(source, "\"safetyWarnings\"");
+		assertEquals(1, keys,
+				"the safetyWarnings key must be written in exactly one place, beside the statement of "
+						+ "how bounded those chips are (issue #336). Found " + keys + " writes of it.");
+		int calls = ChartSearchAiStreamingTest.occurrences(source, "serializeSafetyWarnings(");
+		assertEquals(2, calls,
+				"serializeSafetyWarnings must be named exactly twice — its own declaration and the one "
+						+ "call inside putSafetyChips. A third naming is an emission site building the "
+						+ "chip array for itself. Found " + calls + ".");
+		// Scoped to putSafetyChips's OWN BODY, not to the file: asked of the whole source, both
+		// literals keep matching once they live in two different methods, so splitting the helper into
+		// a chips-writer and an extent-writer passed the guard whose message forbids exactly that
+		// (measured — the split builds green under a file-wide read). A later site can then call the
+		// chips half alone, which is #336 with the guard still green.
+		String body = bodyOf(source, "private void putSafetyChips(");
+		assertTrue(body.contains("target.put(\"safetyWarnings\", serializeSafetyWarnings(answer.getSafetyWarnings()));")
+				&& body.contains("target.put(\"interactionPairs\", serializePairChipExtent(answer.getPairChipExtent()));"),
+				"putSafetyChips must write BOTH keys ITSELF; splitting them across methods re-opens the "
+						+ "defect, and a file-wide read cannot see that: " + body);
+		// What this does NOT reach: a payload that publishes the chips under some OTHER key name. No
+		// source scan can, and nothing in the module does it today — mutate a site and read which of
+		// the three assertions above answers, rather than trusting this one to answer for all of them.
+	}
+
+	/** @return the source text of the method whose declaration starts with {@code declaration}, from
+	 *          its opening brace to the closing brace in the first column of a member. Fails naming
+	 *          the declaration when it is absent, so a rename cannot leave the guard reading an empty
+	 *          string and passing. */
+	private static String bodyOf(String source, String declaration) {
+		int at = source.indexOf(declaration);
+		assertTrue(at >= 0, "no method declared \"" + declaration + "\" — the guard would otherwise "
+				+ "assert about an empty body and pass");
+		int open = source.indexOf('{', at);
+		int close = source.indexOf("\n\t}", open);
+		assertTrue(open >= 0 && close > open, "could not delimit the body of \"" + declaration + "\"");
+		return source.substring(open, close);
+	}
+
+	private class CappedScreenStubService implements ChartSearchService {
+
+		@Override
+		public ChartAnswer search(Patient patient, String question) {
+			return answer();
+		}
+
+		@Override
+		public ChartAnswer searchStreaming(Patient patient, String question,
+				Consumer<String> tokenConsumer) {
+			return searchStreaming(patient, question, tokenConsumer, r -> { }, c -> { }, a -> { });
+		}
+
+		@Override
+		public ChartAnswer searchStreaming(Patient patient, String question,
+				Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
+				Consumer<List<RecordReference>> citationsConsumer,
+				Consumer<ChartAnswer> ungroundedAnswerConsumer) {
+			tokenConsumer.accept("Ten interactions were found [1].");
+			citationsConsumer.accept(answer().getReferences());
+			// Production's own early-done shape: built before validation runs, so it carries neither
+			// chips nor a statement about them (LlmInferenceService's eight-argument construction).
+			// A fixture that handed it the full answer would let the async case below pass on a
+			// payload production never emits.
+			ungroundedAnswerConsumer.accept(new ChartSearchService.ChartAnswer(
+					"Ten interactions were found [1].",
+					Collections.<ChartSearchService.RecordReference> emptyList()));
+			return answer();
+		}
+
+		@Override
+		public void warmup(Patient patient) {
+		}
+	}
+}

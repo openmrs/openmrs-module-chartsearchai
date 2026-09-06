@@ -314,7 +314,7 @@ public class LlmInferenceServiceTest {
 		// so a client can render provenance on the citation chip instead. This is the hop that makes
 		// that reachable: without it the two facts stop at the mapping and are effectively lost.
 		//
-		// Real mappings from the real injector over the real bundled DDInter sample, so the values
+		// Real mappings from the real injector over the real DDInter excerpt, so the values
 		// asserted are the ones production computes, not hand-set stand-ins.
 		List<RecordMapping> mappings = org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport
 				.injectedDdinterMappings("is warfarin safe to add?");
@@ -471,11 +471,14 @@ public class LlmInferenceServiceTest {
 		});
 		service.setDrugSafetyValidator(new org.openmrs.module.chartsearchai.reference.DrugSafetyValidator() {
 
-			// overrides the mappings-carrying overload production actually calls (issue #105)
+			// The overload production actually calls: mappings-carrying for echo scoping (issue #105)
+			// and sink-carrying since issue #336. Stubbing the four-argument one instead leaves this
+			// stub INERT — production would not reach it — which is why it names both parameters.
 			@Override
 			public java.util.List<org.openmrs.module.chartsearchai.reference.SafetyWarning> validate(
 					String answer, String question, org.openmrs.Patient patient,
-					java.util.List<RecordMapping> mappings) {
+					java.util.List<RecordMapping> mappings,
+					org.openmrs.module.chartsearchai.reference.PairChipExtent.Sink pairExtentSink) {
 				return java.util.Collections.emptyList();
 			}
 		});

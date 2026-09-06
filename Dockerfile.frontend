@@ -19,7 +19,65 @@ WORKDIR /app
 
 RUN openmrs assemble --mode config --config spa-build-config.json
 
+# Give the assembled SPA the pre-compressed siblings the base image's nginx
+# expects. Without them the base's own siblings answer for these files — see
+# the deletion in the next stage.
+#
+# This runs in the BUILDPLATFORM stage on purpose. It compressed 6031 files in
+# 61s here, natively; the final stage is built once per target platform, so
+# doing it there would run the whole pass under qemu for linux/arm64 — where,
+# measured 2026-08-25, a shell loop doing only the gzip half took 441s in an
+# emulated amd64 container.
+COPY precompress-spa.mjs /app/precompress-spa.mjs
+RUN node /app/precompress-spa.mjs /app/dist
+
 # Use the official O3 frontend image as the base — it has the correct
 # index.html (with SPA bootstrap), nginx config, and env var substitution.
 FROM openmrs/openmrs-reference-application-3-frontend:nightly
+
+# Drop the base's pre-compressed siblings BEFORE the copy below, never after —
+# the copy brings the assembled SPA's own siblings with it.
+#
+# The base's nginx answers a request with <file>.br or <file>.gz when one
+# exists, picking the encoding from Accept-Encoding via a map in its config,
+# and it tries .br first. It pre-compresses its own assembly (3900 of each) and
+# `openmrs assemble` emitted none, so the copy replaced importmap.json and
+# routes.registry.json while leaving the base's stale siblings beside them.
+# nginx then handed every browser the base's 46-module importmap, which does
+# not name @openmrs/esm-chartsearchai-app. The ESM's own bundle shipped and was
+# reachable — a new filename has no stale sibling to shadow it — the app simply
+# never imported it, so no icon appeared on the patient chart.
+#
+# A plain curl sends no Accept-Encoding and read the correct plain file, which
+# is why this survived every check that was not a browser. Measured 2026-08-25
+# against the image published that morning: the plain importmap.json named the
+# ESM, importmap.json.gz and importmap.json.br both did not.
+#
+# Both variants matter and neither is redundant: .br is what a browser gets, so
+# a pattern covering only .gz would have left the defect in place. Anything
+# added to the nginx encoding map later belongs in this pattern too.
+#
+# The base's own module bundles stay behind, now uncompressed and unreferenced
+# by the new importmap, exactly as unreferenced as they were before.
+RUN find /usr/share/nginx/html \( -name '*.gz' -o -name '*.br' \) -delete
+
 COPY --from=build-spa /app/dist /usr/share/nginx/html
+
+# Guard the two files that decide whether the ESM is loaded at all.
+#
+# The .gz halves are checked by content. The .br halves are checked by mtime
+# against their source, because this stage has no brotli decompressor and
+# precompress-spa.mjs stamps every sibling with its source's mtime — so a
+# sibling the base image left behind carries the base's timestamp and fails,
+# while one that came from the assembly matches.
+#
+# This fails the build on the shape described above: against the image
+# published before this commit, both greps exit 1.
+RUN set -eux; \
+    cd /usr/share/nginx/html; \
+    gzip -cd importmap.json.gz | grep -q '@openmrs/esm-chartsearchai-app'; \
+    gzip -cd routes.registry.json.gz | grep -q 'chartsearchai'; \
+    for f in importmap.json routes.registry.json; do \
+      test -f "$f.br"; \
+      test "$(stat -c %Y "$f.br")" = "$(stat -c %Y "$f")"; \
+    done

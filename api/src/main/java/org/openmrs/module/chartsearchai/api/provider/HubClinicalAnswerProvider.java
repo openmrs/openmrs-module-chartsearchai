@@ -119,6 +119,11 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 							doneSeen), cancellation);
 		}
 		catch (HubTransportException e) {
+			CompletionStage<TurnResult> settled = settledTerminalResult(request.getMode(),
+					latestAnswer.get(), streamError.get(), doneSeen[0]);
+			if (settled != null) {
+				return settled;
+			}
 			if (latestAnswer.get() != null) {
 				return completedWithPartialAnswer(events, sequence, request.getMode(),
 						latestAnswer.get(), emitted);
@@ -127,6 +132,11 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 		}
 		catch (RuntimeException e) {
 			AnswerEnvelope current = latestAnswer.get();
+			CompletionStage<TurnResult> settled = settledTerminalResult(request.getMode(),
+					current, streamError.get(), doneSeen[0]);
+			if (settled != null) {
+				return settled;
+			}
 			if (current != null) {
 				return completedWithPartialAnswer(events, sequence, request.getMode(), current, emitted);
 			}
@@ -150,6 +160,24 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 		}
 		return CompletableFuture.completedFuture(
 				TurnResult.done(PROVIDER_ID, request.getMode(), answer));
+	}
+
+	/**
+	 * Returns the result already established by a terminal hub event. A transport can report a
+	 * socket-close failure after delivering {@code done} or {@code error}; that late failure must
+	 * not emit a second terminal event or replace the hub's result.
+	 */
+	private CompletionStage<TurnResult> settledTerminalResult(ProviderMode mode,
+			AnswerEnvelope answer, String problemCode, boolean terminalSeen) {
+		if (!terminalSeen) {
+			return null;
+		}
+		if (problemCode != null) {
+			return CompletableFuture.completedFuture(
+					TurnResult.error(PROVIDER_ID, mode, problemCode));
+		}
+		return CompletableFuture.completedFuture(
+				TurnResult.done(PROVIDER_ID, mode, answer));
 	}
 
 	private CompletionStage<TurnResult> completedWithPartialAnswer(TurnEventSink events,

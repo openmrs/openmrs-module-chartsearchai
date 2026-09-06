@@ -30,7 +30,7 @@ import org.junit.jupiter.api.Test;
 public class DrugSafetyValidatorTest {
 
 	private DrugSafetyValidator validator() {
-		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.bundledService());
+		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService());
 	}
 
 	/**
@@ -113,9 +113,12 @@ public class DrugSafetyValidatorTest {
 	public void noFalsePositiveWhenAnswerNeedsNoReference() {
 		// Chart-sufficient answer naming no reference drug -> no warnings. Read the arrangement, not
 		// only the assertion: since issue #143 that is no longer an unconditional property of the
-		// module. The patient's own active orders are checked against her allergies on every question,
-		// so what keeps this case at zero is that her one order (warfarin) resolves to no entry in the
-		// bundled dataset — give her an order the dataset carries and the same call warns.
+		// module, because the patient's own active orders are checked against her allergies too. TWO
+		// things keep this case at zero, and neither alone would be worth relying on: her one order
+		// (warfarin) resolves to no entry in the curated dataset this case runs on, and the response is
+		// about her blood pressure, which the subject-matter scoping of that arm requires it not to be.
+		// Give her an order the dataset carries and this call still warns about nothing — it takes a
+		// response about the drug or about the allergy as well.
 		List<SafetyWarning> warnings = validator().validate(
 				"The patient's most recent blood pressure is 120/80 mmHg [1].",
 				ctx(40, set("warfarin"), set("nsaid"), null));
@@ -222,7 +225,7 @@ public class DrugSafetyValidatorTest {
 	public void contraindicationFiresWhenQuestionNamesDrugButAnswerDoesNot() throws IOException {
 		// Reliability fix: the clinician asks about ibuprofen and the patient has a recorded ibuprofen
 		// allergy, but the LLM's answer phrases it by class ("an NSAID allergy") and NEVER writes
-		// "ibuprofen". The safety net must still fire — it keys off the QUESTION (findByQuery), not only
+		// "ibuprofen". The safety net must still fire — it keys off the QUESTION (findImpliedByQuery), not only
 		// the answer's word choice. Pre-fix, the answer named no drug, so nothing was checked.
 		List<SafetyWarning> warnings = atcValidator().validate(
 				"The patient has an allergy to NSAID (drug allergen).",
@@ -262,9 +265,10 @@ public class DrugSafetyValidatorTest {
 	@Test
 	public void drugInBothQuestionAndAnswerWarnsOnlyOnce() throws IOException {
 		// A drug named in BOTH the question and the answer must be checked once, not twice. The
-		// question∪answer union dedups by identity, which holds only because findByQuery resolves
-		// against the shared getAll() cache; this pins that contract so a future findByQuery that
-		// returned copies (breaking dedup) would fail here rather than silently double-warn.
+		// question∪answer union dedups by identity, which holds only because findImpliedByQuery returns
+		// the shared getAll() cache's own objects (it filters that walk in place rather than copying rows);
+		// this pins that contract so a future findImpliedByQuery that returned copies (breaking dedup)
+		// would fail here rather than silently double-warn.
 		List<SafetyWarning> warnings = atcValidator().validate(
 				"Ibuprofen 200 mg as needed.",
 				"Is ibuprofen safe for her?",

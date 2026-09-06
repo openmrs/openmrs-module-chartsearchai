@@ -6,14 +6,39 @@ on:
   pull_request:
     branches: [ main ]
   workflow_dispatch:
+  # For build-against-querystore-head ONLY. An upstream break can land on a day when nothing in
+  # this repository changes, and neither push nor pull_request would notice it until the next
+  # chartsearchai PR, which then wears a failure it did not cause. Every OTHER job in this file
+  # opts out with `if: github.event_name != 'schedule'` — the trigger exists for one job, and
+  # `build` would additionally re-deploy an unchanged SNAPSHOT to the Maven repository daily.
+  # Keep that opt-out on any job added here unless it genuinely wants a daily run.
+  #
+  # `owasp-dependency-check` is a separate question this deliberately does not open: a new CVE
+  # also lands on days when nothing here changes, which is this trigger's own argument — but
+  # whether the NVD scan wants a daily run is not #181's to decide, so it is opted out too and
+  # its behaviour is unchanged.
+  #
+  # Off-the-hour minute: GitHub queues scheduled runs heavily at the top of the hour.
+  schedule:
+    - cron: '17 4 * * *'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # The scheduled run gets its own lane, and ONLY the scheduled run. Sharing main's group with
+  # pushes would lose it silently: GitHub keeps just one PENDING run per group, so a push landing
+  # while the daily run is queued cancels it — the "you don't find out" failure the job below
+  # exists to prevent. Every other event keeps the single lane it has always had, deliberately:
+  # splitting push from workflow_dispatch would let two runs of `build` deploy the same SNAPSHOT
+  # coordinates at once.
+  group: ${{ github.workflow }}-${{ github.event_name == 'schedule' && 'schedule' || 'shared' }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
-    if: github.event_name != 'pull_request' || github.head_ref != 'harness-integration'
+    # Opted out of the daily schedule — see the `schedule:` comment above. This one publishes a
+    # SNAPSHOT from main, so a daily run would deploy an unchanged artifact every day.
+    # The paired build below owns the harness-integration PR because it first installs the exact
+    # QueryStore source that this provider branch consumes.
+    if: ${{ github.event_name != 'schedule' && (github.event_name != 'pull_request' || github.head_ref != 'harness-integration') }}
     uses: openmrs/openmrs-contrib-gha-workflows/.github/workflows/build-backend-module.yml@main
     secrets:
       MAVEN_REPO_USERNAME: ${{ secrets.MAVEN_REPO_USERNAME }}
@@ -41,7 +66,7 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: pmanko/openmrs-module-querystore
-          ref: 8dc6ef9b411ee02dedce54a8f40250493d4f36d8
+          ref: 6436ab6e02eba6464066605d8f3ba81645cf7693
           path: .paired/querystore
 
       - name: Set up Java ${{ matrix.java }}
@@ -95,6 +120,8 @@ jobs:
   # sixth a test failure instead of a discovery.
   harness-selftests:
     name: eval harness selftests
+    # Opted out of the daily schedule — see the `schedule:` comment above.
+    if: ${{ github.event_name != 'schedule' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -104,11 +131,181 @@ jobs:
         run: python3 eval/drift-metric/score_directness.py --selftest
       - name: metric_score.py
         run: python3 eval/drift-metric/metric_score.py --selftest
-      - name: build_gold_rc2.py
+      - name: build_gold_rc2.py (classify boundaries + the pinned-cohort refusal)
         run: python3 eval/drift-metric/build_gold_rc2.py --selftest
+      # Added by #179. Both instruments reported success without checking anything: compare_arms
+      # printed one lead-rate under two different metrics' names and had no exit code at all, and
+      # kv_prefill_gate discarded the count that was the only evidence its "cold" arm was cold.
+      # Neither selftest needs a server or a model.
+      - name: compare_arms.py (report, not a gate — two named rates + integrity exits)
+        run: python3 eval/drift-metric/compare_arms.py --selftest
+      - name: kv_prefill_gate.py (refuses to measure without a real KV cache dir)
+        run: python3 eval/latency/kv_prefill_gate.py --selftest
+
+  # backend-init.sh is the demo backend's ENTRYPOINT, and until this job existed nothing in CI
+  # parsed it. Dockerfile.backend only COPYs it, so a syntax error builds a perfectly good image,
+  # build-docker publishes it, the deploy reports success and the container exits at startup —
+  # a green pipeline and a dead demo. `sh -n` is the gate that matters (the script is #!/bin/sh
+  # and written for POSIX sh, not bash); shellcheck at -S warning catches the live bugs — unquoted
+  # expansions, unreachable branches — while staying below the style noise the file would
+  # otherwise fail on. Both are clean as of this commit, so a red run here means a new defect,
+  # not a pre-existing one.
+  entrypoint-lint:
+    name: backend-init.sh lint (the demo entrypoint nothing else parses)
+    # Opted out of the daily schedule — see the `schedule:` comment above.
+    if: ${{ github.event_name != 'schedule' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: sh -n (POSIX syntax — a failure here bricks the container at startup)
+        run: sh -n backend-init.sh
+      - name: shellcheck (warnings and above)
+        run: shellcheck -s sh -S warning backend-init.sh
+
+  # Issue #181. `api/pom.xml` declares querystore-api at 1.0.0-SNAPSHOT, so what this module
+  # compiles against is whatever snapshot was published remotely last (CI) or `mvn install`ed
+  # locally last (a developer). When querystore changes a method this module calls, the local build
+  # breaks while CI stays green — three times in one day on the development box, each time as an
+  # error naming a chartsearchai class rather than the dependency that moved. Keep the two halves
+  # of that apart, because #181 does: the three observed breaks were on the TEST side (a locally
+  # installed querystore added `getContextSlice`; chartsearchai stopped test-compiling while CI
+  # stayed green), and #181 records the PRODUCTION-side exposure as reasoned from the shared
+  # `1.0.0-SNAPSHOT` declaration rather than observed. This PR's verification closed that half:
+  # renaming `QueryStoreService.getPatientChart` upstream broke QueryStoreChartBuilder, i.e. src/main.
+  # `clean install` below covers both source roots. So `build` above being green is evidence only
+  # that this module works against the last PUBLISHED snapshot; this job asks about querystore HEAD.
+  #
+  # Deliberately NOT in the required set, and deliberately WITHOUT continue-on-error. Those are two
+  # halves of one decision: the job has to be able to go red, because a job that cannot fail is not
+  # a signal — and its red X must not block an unrelated chartsearchai PR, because an upstream
+  # break is not that PR's fault and its fix belongs upstream. A visible, non-gating failure is the
+  # whole point. Which checks gate a merge is branch protection's business, not this file's; keep
+  # this job out of the required set there.
+  #
+  # Not fixed by pinning querystore to a released version instead (the alternative #181 lists):
+  # a pin defers incompatibilities into one big-bang bump and still never tells you WHEN upstream
+  # broke you, which is the actual defect here.
+  build-against-querystore-head:
+    name: build against querystore HEAD (not a required check)
+    runs-on: ubuntu-latest
+    # Least privilege, declared here and not on the neighbouring jobs because the exposure is this
+    # job's own: it builds a SECOND repository's source, so it runs Maven plugins this repository
+    # does not gate. Checking out two public repos needs nothing but read.
+    permissions:
+      contents: read
+    steps:
+      # persist-credentials: false on both, for the same reason as the permissions block above —
+      # querystore HEAD's unreviewed Maven plugins run in this job, and there is no need to leave a
+      # token in a .git/config while they do. Nothing here pushes, and `git log` needs no auth.
+      - name: Check out chartsearchai
+        uses: actions/checkout@v4
+        with:
+          path: chartsearchai
+          persist-credentials: false
+
+      - name: Check out querystore at HEAD
+        uses: actions/checkout@v4
+        with:
+          repository: openmrs/openmrs-module-querystore
+          path: querystore
+          persist-credentials: false
+
+      - name: Set up JDK 11
+        # One JDK, not the required build's 11/17/21 matrix: the variable this job isolates is the
+        # querystore artifact, not the JDK. 11 is the lowest of that matrix and the version
+        # querystore itself releases on, so it builds both sides.
+        #
+        # No `cache: maven`, deliberately. This job installs a querystore-api SNAPSHOT into
+        # ~/.m2, and a cached ~/.m2 is restorable by prefix — so caching it here is a way for a
+        # locally-installed querystore build to reach another job's dependency resolution, which
+        # is the very divergence #181 is about. Not worth a minute of download time.
+        #
+        # It is also why these steps are hand-rolled rather than reusing the org's
+        # openmrs-contrib-gha-workflows `maven-build` composite action, which is otherwise exactly
+        # this shape: it pins `cache: maven`. (`build-backend-module.yml`, which the `build` job
+        # above calls, is not an option either — a reusable-workflow `uses:` job cannot have the
+        # querystore checkout and install steps in front of it.)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+
+      - name: Report the querystore commit under test
+        # The first thing a triager needs when this is the only red job: WHICH upstream commit.
+        run: git -C querystore log -1 --format='querystore HEAD = %H %ci %s'
+
+      - name: Install querystore HEAD into the local Maven repository
+        # -DskipTests deliberately: the question is whether chartsearchai still builds against
+        # querystore's current API, not whether querystore's own suite passes — that is querystore
+        # CI's job, and running it here would paint this job red for failures that say nothing
+        # about this module.
+        #
+        # `install` is the whole mechanism, and it is measured rather than assumed: a locally
+        # installed SNAPSHOT shadows the published one even for an ONLINE build. Renaming a method
+        # upstream and installing made the next step fail to compile with the network available and
+        # no querystore artifact fetched — so a green run here really is a run against HEAD.
+        run: mvn --batch-mode -DskipTests install -f querystore/pom.xml
+
+      - name: Fail loudly if the two repos no longer agree on the querystore version
+        # Without this the job's own failure mode is a FALSE GREEN — the exact shape it exists to
+        # remove, re-created inside it. `api/pom.xml` names querystore-api at a literal version;
+        # the step above installs whatever querystore HEAD declares. Today they coincide. The
+        # moment upstream bumps or cuts a release they stop coinciding, the build below resolves
+        # the PUBLISHED artifact instead of the one just built, and this job goes green having
+        # tested nothing at all — with no diagnostic, because nothing is wrong from Maven's side.
+        # Both plugins are pinned. This job deliberately has no Maven cache, so an unpinned prefix
+        # resolves the newest plugin on every run — and a change to dependency:list's output format
+        # would empty the parse and fail the job for a reason other than the one it reports.
+        # -DincludeGroupIds/-DincludeArtifactIds are dependency:list's real parameters; `-Dincludes`
+        # belongs to dependency:tree, and on `list` it is silently accepted and ignored (measured:
+        # 239 dependencies listed, not 1 — this check's own first draft got that wrong).
+        # `-pl api` scopes it to the module that declares querystore-api. Scanning the whole reactor
+        # instead would make omod resolve chartsearchai-api from the PUBLISHED snapshot — nothing has
+        # built this module locally yet at this point — so the check would depend on exactly the
+        # published state the job exists to be independent of. If the dependency ever moves to
+        # another module this reads empty and the guard below says so, which is the right failure.
+        run: |
+          set -euo pipefail
+          # `tee /dev/stderr` on both: Maven writes [ERROR] to STDOUT, and both commands consume
+          # stdout (command substitution / a pipe), so without it a Maven failure leaves this step
+          # red with a COMPLETELY EMPTY log — measured, 0 lines, for both an unresolvable module
+          # and an unresolvable querystore-api. That is the same "red with no diagnostic" this step
+          # exists to prevent, one level down. stdout only, deliberately: merging stderr with 2>&1
+          # captures runner noise such as "Picked up JAVA_TOOL_OPTIONS:" into the version itself.
+          head_version="$(mvn -q --batch-mode -f querystore/pom.xml -pl api \
+            org.apache.maven.plugins:maven-help-plugin:3.4.0:evaluate \
+            -Dexpression=project.version -DforceStdout | tee /dev/stderr)"
+          wanted_version="$(mvn --batch-mode -f chartsearchai/pom.xml -pl api \
+            org.apache.maven.plugins:maven-dependency-plugin:3.6.0:list \
+            -DincludeGroupIds=org.openmrs.module -DincludeArtifactIds=querystore-api \
+            | tee /dev/stderr \
+            | sed -n 's/^\[INFO\][[:space:]]*org\.openmrs\.module:querystore-api:jar:\([^:[:space:]]*\):[a-z]*.*/\1/p' \
+            | sort -u)"
+          echo "querystore HEAD builds:  ${head_version}"
+          echo "chartsearchai asks for:  ${wanted_version}"
+          if [ -z "${head_version}" ] || [ -z "${wanted_version}" ]; then
+            echo "::error::Could not read one of the two versions (querystore='${head_version}', chartsearchai='${wanted_version}'), so this check did not run. Do NOT read the build below as evidence about querystore HEAD until this is fixed."
+            exit 1
+          fi
+          if [ "$(printf '%s\n' "${wanted_version}" | wc -l)" -ne 1 ]; then
+            echo "::error::chartsearchai's modules disagree about which querystore-api version they want: $(printf '%s' "${wanted_version}" | tr '\n' ' ')"
+            exit 1
+          fi
+          if [ "${head_version}" != "${wanted_version}" ]; then
+            echo "::error::chartsearchai asks for querystore-api ${wanted_version} but querystore HEAD builds ${head_version}. The build below would silently resolve the PUBLISHED artifact, so this job would test nothing. Update the querystore-api version in api/pom.xml to ${head_version}."
+            exit 1
+          fi
+
+      - name: Build chartsearchai against it
+        # `clean install`, the same goals the required build runs (it adds `-Dmaven.deploy.skip`,
+        # which changes nothing about what is compiled and tested). The querystore artifact
+        # installed above is therefore the variable this job adds, and the check before it is what
+        # makes "installed above" true rather than assumed.
+        run: mvn --batch-mode clean install -f chartsearchai/pom.xml
 
   owasp-dependency-check:
-    if: ${{ github.event_name != 'pull_request' }}
+    # `!= 'schedule'`: opted out of the daily schedule — see the `schedule:` comment above.
+    if: ${{ github.event_name != 'pull_request' && github.event_name != 'schedule' }}
     uses: openmrs/openmrs-contrib-gha-workflows/.github/workflows/owasp-dependency-check.yml@main
     secrets:
       NVD_API_KEY: ${{ secrets.NVD_API_KEY }}

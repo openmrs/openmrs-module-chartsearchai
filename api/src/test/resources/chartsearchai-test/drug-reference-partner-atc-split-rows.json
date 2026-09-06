@@ -1,0 +1,42 @@
+{
+  "version": "1.0",
+  "description": "Test fixture (issue #174 site 2, hardening): a curated entry filing ONE partner as two rows that carry the SAME match token and DIFFERENT ATC codes. That is a shape in which the two halves of PatientClinicalContext.hasActiveDrug disagree between two rows of one partner group — they share a token, so only the ATC arm can separate them. Whether the order-driven grouping branch (activeOrderEntryFor) admits a second shape is not settled here, and this file does not claim to be the only one; drug-reference-partner-atc-split-subfloor-rows.json poses the sub-floor version of it and carries the same caveat — the token arm answers the same for both, the ATC arm does not — so the row that wins DrugSafetyValidator.outranksOnRule on severity can be a row the patient does not match while a discarded sibling is the row that raises the chip. The curated source is the only one that can pose it: DdiDrugReferenceSource writes each rule's ATC from its partner row, so every rule of one partner in the shipped 19 MB KB carries an identical (token, atc) pair (measured 2026-08-07 through the real parser: 0 label groups whose rules differ on either field). The two filler partners ahead of warfarin are long on purpose. Before issue #355 that padding was load-bearing: together the two full mechanism paragraphs exceeded DrugReferenceInjector.MAX_INTERACTION_RENDER_CHARS, so a warfarin note that reached neither patient-specific segment was pushed out of the record entirely rather than merely reworded (measured 2026-09-02 by driving the real injectRecords over this fixture on origin/main at 85da86fb, context on nothing, question 'is it safe to give voriconazole?': Interactions section 880 chars, warfarin absent, withheldInteractions 2). Since #355, with nothing patient-specific shown the tail renders the compact 'name (Severity)' form instead of full paragraphs, so the same two fillers cost only a few characters apiece, the budget never bites, and warfarin is named (measured the same way on the merged head: Interactions section 73 chars, 'Interactions: rifabutin (Major); carbamazepine (Major); warfarin (Major).', withheldInteractions 0). The fixture still exercises what it names in its first sentence — the survivor rule choosing a row the patient does not match — via InjectedInteractionNoteCollapseTest.thePartnerTheChipWarnsAboutSurvivesTheCollapse, which asserts the surviving note names the Moderate row the chip quotes rather than the more severe row it does not. Parsed by the real JsonDrugReferenceSource parser.",
+  "entries": [
+    {
+      "id": "voriconazole-curated",
+      "name": "Voriconazole",
+      "drugClass": "Triazole antifungal",
+      "aliases": [
+        "voriconazole"
+      ],
+      "atcCodes": [
+        "J02AC03"
+      ],
+      "interactions": [
+        {
+          "token": "rifabutin",
+          "severity": "Major",
+          "note": "Major. Rifabutin induces CYP450 3A4 and CYP2C19 and markedly reduces voriconazole plasma concentrations, while voriconazole inhibits rifabutin metabolism and raises rifabutin exposure enough to precipitate uveitis, leukopenia and arthralgia. Concomitant use is generally avoided. Where the combination cannot be avoided the voriconazole maintenance dose is doubled and the patient is monitored with full blood counts and for rifabutin toxicity throughout, with slit-lamp examination if visual symptoms appear. The interaction is bidirectional, so neither dose adjustment on its own restores both exposures, and the effect persists for a period after rifabutin is withdrawn because enzyme induction resolves only as the induced protein turns over. Therapeutic drug monitoring of voriconazole trough concentrations is recommended wherever it is available."
+        },
+        {
+          "token": "carbamazepine",
+          "severity": "Major",
+          "note": "Major. Carbamazepine is a potent inducer of CYP450 3A4 and substantially lowers voriconazole plasma concentrations, to a degree that has produced breakthrough invasive fungal infection during treatment. The reduction is not reliably overcome by increasing the voriconazole dose, because the extent of induction varies between patients and cannot be predicted from the carbamazepine dose alone. Coadministration is contraindicated in most labelling. Where antifungal therapy is required in a patient established on carbamazepine, an agent that is not a CYP450 3A4 substrate should be selected instead, and where carbamazepine is being started in a patient on voriconazole the antifungal regimen should be reviewed before the inducer is introduced rather than after breakthrough infection is observed."
+        },
+        {
+          "token": "warfarin",
+          "atc": "B01AA03",
+          "severity": "Major",
+          "note": "Major. This row identifies its partner by the ATC code of racemic warfarin, which THIS patient is not on. It is the more severe of the two rows, so it wins the survivor rule on severity alone."
+        },
+        {
+          "token": "warfarin",
+          "atc": "B01AA07",
+          "severity": "Moderate",
+          "note": "Moderate. This row identifies its partner by the ATC code of acenocoumarol, which the patient IS on, so it is the row that raises the chip and the row the record must quote."
+        }
+      ],
+      "source": "Test fixture"
+    }
+  ]
+}

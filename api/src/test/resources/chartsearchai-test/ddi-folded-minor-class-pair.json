@@ -1,0 +1,62 @@
+{
+ "metadata": {
+  "note": "Verbatim DDInter 2.0 slice for issue #283 \u2014 the FOLDED chip: one co-medication that is both a RATED interaction partner and class-related, so DrugSafetyValidator.interactionWarning appends the class arm's duplicate-therapy sentence to the rated rule's chip and one finding asserts two things. Methylphenidate and Modafinil are the shipped KB's own rows, their interaction row is the KB's own (rated Minor), and both publish N06BA \u2014 a subgroup named for a pharmacological action, so the duplicate-therapy claim is licensed rather than vetoed. The pair was FOUND by scanning the shipped KB for Minor-rated rows whose drugs share a level-4 subgroup (108 such rows exist, i.e. 56 unordered pairs), and the fold itself is asserted by driving the production validator, not by that scan."
+ },
+ "mechanisms": {
+  "2500": {
+   "text": "In single-dose pharmacokinetic studies, healthy volunteers given modafinil (200 mg) with dextroamphetamine (10 mg) or methylphenidate (40 mg) exhibited a delay in the absorption of modafinil by approximately 1 hour. The mechanism of interaction is unknown. No other alterations in the pharmacokinetics of any of the drugs were observed. Although not studied, the interaction is likely to also occur with the various prodrug, racemic, and enantiomeric formulations of these drugs (e.g., amphetamine, lisdexamfetamine, dexmethylphenidate, armodafinil).",
+   "categories": [
+    "absorption"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter1189",
+   "name": "Methylphenidate",
+   "rxcui": "6901",
+   "rxnorm_name": "methylphenidate",
+   "drugbank_id": "DB00422",
+   "atc": [
+    "N06BA04"
+   ],
+   "ciel": [
+    {
+     "code": "79739",
+     "uuid": "79739AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Methylphenidate"
+    },
+    {
+     "code": "79740",
+     "uuid": "79740AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Methylphenidate hydrochloride"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1236",
+   "name": "Modafinil",
+   "rxcui": "30125",
+   "rxnorm_name": "modafinil",
+   "drugbank_id": "DB00745",
+   "atc": [
+    "N06BA07"
+   ],
+   "ciel": [
+    {
+     "code": "80016",
+     "uuid": "80016AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Modafinil"
+    }
+   ]
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter1189",
+   "DDInter1236",
+   "Minor",
+   "2500"
+  ]
+ ]
+}

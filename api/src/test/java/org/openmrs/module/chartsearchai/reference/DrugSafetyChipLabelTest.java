@@ -27,6 +27,13 @@ import org.junit.jupiter.api.Test;
  * of the full KB's 276 diverging names, most are INN-vs-USAN pairs or worse, and the lidocaine
  * route variants share one RxNorm name — a swap mistranslates or collapses them. So display
  * names stay, and labels append the generic as a parenthetical when it genuinely diverges.
+ *
+ * <p>The three parser-model cases here read the BUNDLED dataset, which since ADR Decision 36 is the whole
+ * knowledge base — deliberately, and unlike the cases that reach for
+ * {@link DrugReferenceTestSupport#ddinterEntries()}: each is a statement about what the parser does to
+ * any real DDInter document rather than about one bounded slice, and the interning case reasons about the
+ * full KB's ~300k rows explicitly, so the shipped dataset is the honest data for it rather than merely a
+ * larger one.
  */
 public class DrugSafetyChipLabelTest {
 
@@ -117,16 +124,21 @@ public class DrugSafetyChipLabelTest {
 
 	@Test
 	public void displayLabelNeverLeaksIntoTheRenderedRecordText() {
-		// Prompt stability is this slice's own settled priority: the injected record the LLM
-		// sees renders getName(), never the synonym-augmented label. Every "Drug reference — X"
+		// Prompt stability is this slice's own settled priority: the injected DRUG_REFERENCE record the
+		// LLM sees renders getName(), never the synonym-augmented label. Every "Drug reference — X"
 		// containment assertion elsewhere would still pass if render() switched to the label
 		// (the label starts with the name), so the absence needs its own pin.
+		//
+		// The method name's "the rendered record text" is this record's, and that scope is the whole of
+		// what is pinned: the SAFETY_FINDING record does carry the label, because renderFinding copies a
+		// chip detail verbatim and interactionWarning builds it from displayLabel(). displayLabel's own
+		// javadoc used to claim it never enters prompt text at all, which is corrected there.
 		String rendered = DrugReferenceTestSupport
 				.injectedDdinterReferenceText("Is it safe to give her aspirin?");
 		assertTrue(rendered.contains("Acetylsalicylic acid"),
 				"precondition: the aspirin reference record renders its display name");
 		assertTrue(!rendered.contains("Acetylsalicylic acid (aspirin)"),
-				"the synonym-augmented label is chip-display only and must never enter prompt text");
+				"the synonym-augmented label is chip-display only and must not enter THIS record's text");
 	}
 
 	@Test

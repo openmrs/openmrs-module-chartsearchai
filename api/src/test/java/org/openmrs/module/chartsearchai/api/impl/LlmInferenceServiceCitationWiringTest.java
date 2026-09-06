@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
@@ -65,24 +66,44 @@ public class LlmInferenceServiceCitationWiringTest {
 				return chart;
 			}
 		});
-		// Production calls the status-aware, mappings-carrying overload (echo scoping, issue #105).
-		// Override that exact path so the test cannot pass through an obsolete list-only seam.
+		// Production calls the mappings-carrying 4-arg overload (echo scoping, issue #105) —
+		// override THAT one; a 3-arg override would be dead code the real 4-arg body bypasses.
 		recordingValidator = new RecordingValidator();
 		service.setDrugSafetyValidator(recordingValidator);
 	}
 
-	/** Recording seam over the production status-aware overload. */
+	/** Recording seam over the production 4-arg overload: captures the mappings production
+	 *  hands the validator, then returns empty — the real body never runs (no OpenMRS context
+	 *  here would make it return empty anyway; recording keeps the assertion explicit rather
+	 *  than accidental). */
 	private static final class RecordingValidator
 			extends org.openmrs.module.chartsearchai.reference.DrugSafetyValidator {
 
 		java.util.List<RecordMapping> mappingsSeen;
 
+		/** Which overload production reached. The status-carrying entry point also receives the
+		 *  mappings and pair-extent sink, so recording it keeps this seam aligned with the response
+		 *  contract rather than silently intercepting a legacy overload. */
+		String arityUsed;
+
 		@Override
-		public SafetyCheckResult validateWithStatus(
+		public java.util.List<org.openmrs.module.chartsearchai.reference.SafetyWarning> validate(
 				String answer, String question, org.openmrs.Patient patient,
 				java.util.List<RecordMapping> mappings) {
 			this.mappingsSeen = mappings;
-			return super.validateWithStatus(answer, question, patient, mappings);
+			this.arityUsed = "four-argument";
+			return java.util.Collections.emptyList();
+		}
+
+		@Override
+		public SafetyCheckResult validateWithStatus(
+				String answer, String question, org.openmrs.Patient patient,
+				java.util.List<RecordMapping> mappings,
+				org.openmrs.module.chartsearchai.reference.PairChipExtent.Sink pairExtentSink) {
+			this.mappingsSeen = mappings;
+			this.arityUsed = "status-carrying";
+			return new SafetyCheckResult(STATUS_CHECKED,
+					java.util.Collections.emptyList());
 		}
 	}
 
@@ -133,6 +154,11 @@ public class LlmInferenceServiceCitationWiringTest {
 	}
 
 	private void assertMappingsSeenIncludeIndex(int index) {
+		// Both overloads are stubbed, so this cannot pass by production having reached neither — which
+		// is exactly what a one-overload stub allows once production prefers the other (issue #336).
+		assertEquals("status-carrying", recordingValidator.arityUsed,
+				"production must reach the overload that publishes both validation status and how "
+						+ "bounded the answer's interaction list is");
 		assertTrue(recordingValidator.mappingsSeen != null && !recordingValidator.mappingsSeen.isEmpty(),
 				"the validator must receive the chart's record mappings for echo scoping");
 		boolean found = false;

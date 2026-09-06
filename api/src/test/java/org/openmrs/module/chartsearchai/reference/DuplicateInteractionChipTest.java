@@ -107,11 +107,14 @@ public class DuplicateInteractionChipTest {
 						DrugReferenceTestSupport.set("aspirin 81mg"),
 						DrugReferenceTestSupport.set("N02BA01"), null, null));
 
-		assertEquals("Ibuprofen interacts with active order aspirin — Major. Ibuprofen blunts the "
-				+ "irreversible platelet inhibition of low-dose aspirin. Ibuprofen is in the same "
-				+ "cross-reactivity group (NSAID) as active order Acetylsalicylic acid (aspirin) — "
-				+ "possible additive or duplicate-class therapy", onlyDetail(warnings),
-				"one chip must carry the rule's partner, its mechanism and the class relationship");
+		assertEquals("Ibuprofen interacts with active order Acetylsalicylic acid (aspirin) — Major. "
+				+ "Ibuprofen blunts the irreversible platelet inhibition of low-dose aspirin. Ibuprofen "
+				+ "is in the same cross-reactivity group (NSAID) as active order Acetylsalicylic acid "
+				+ "(aspirin) — possible additive or duplicate-class therapy", onlyDetail(warnings),
+				"one chip must carry the rule's partner, its mechanism and the class relationship — and"
+						+ " name that partner ONCE (issue #292): the rule sentence read \"active order"
+						+ " aspirin\" beside the class sentence's resolved entry name until the fold"
+						+ " reconciled them");
 	}
 
 	@Test
@@ -145,12 +148,15 @@ public class DuplicateInteractionChipTest {
 
 		assertEquals("Acetylsalicylic acid (aspirin)", warnings.get(0).getDrug(),
 				"the chip's drug must keep the dual-vocabulary display label");
-		assertEquals("Acetylsalicylic acid (aspirin) interacts with active order ibuprofen — Major. "
+		assertEquals("Acetylsalicylic acid (aspirin) interacts with active order Ibuprofen — Major. "
 				+ "Ibuprofen blunts the irreversible platelet inhibition of low-dose aspirin. "
 				+ "Acetylsalicylic acid (aspirin) is in the same cross-reactivity group (NSAID) as "
 				+ "active order Ibuprofen — possible additive or duplicate-class therapy",
 				onlyDetail(warnings),
-				"both sentences of the folded detail must use the display label");
+				"both sentences of the folded detail must use the display label — for the SUBJECT, which"
+						+ " is what this case is about, and since issue #292 for the PARTNER too, which"
+						+ " the rule sentence used to call \"ibuprofen\" beside the class sentence's"
+						+ " \"Ibuprofen\"");
 	}
 
 	@Test
@@ -179,6 +185,11 @@ public class DuplicateInteractionChipTest {
 		// fold applies to must render byte-identically to what it always did — the fold must not leak a
 		// trailing sentence, or a full stop, into single-arm chips. The one test here that passes
 		// against the pre-fold validator as well, which is exactly what it is for.
+		//
+		// It still does after issue #339, which makes an unfolded chip ask the same reconciliation a
+		// folded one asks: this context carries NO ATC codes and no per-order list, so orderPartners
+		// resolves no co-medication at all and the reconciliation declines. What that issue moved is
+		// the name on a chip whose partner the ladder DID reach; this arrangement is not one.
 		List<SafetyWarning> warnings = foldValidator().validate("Ibuprofen could help with the pain.",
 				"Can I give ibuprofen?", DrugReferenceTestSupport.ctx(60, null,
 						DrugReferenceTestSupport.set("aspirin 81mg"), null, null, null));
@@ -195,18 +206,21 @@ public class DuplicateInteractionChipTest {
 		// and a folded chip is that arm's chip PLUS a sentence, so an exact-string test stops
 		// recognising it and the screen re-reports the pair. #88's duplicate would come straight back,
 		// now in two wordings, one folded and one not. A screening question names no drug, so the
-		// subject reaches "in play" through the ANSWER (uncited, so echo scoping does not exempt it) —
-		// the shape #127 measured this suppression against.
+		// subject reaches "in play" through the ANSWER (the mappings-less overload below, so echo
+		// scoping has no record to attribute the mention to — not "uncited", which since issue #360 is
+		// no longer the same thing) — the shape #127 measured this suppression against.
 		List<SafetyWarning> warnings = foldValidator().validate("Ibuprofen is on the list.",
-				"Are there any drug interactions with her current medications?",
+				DrugReferenceTestSupport.SCREENING_QUESTION,
 				DrugReferenceTestSupport.ctx(60, null,
 						DrugReferenceTestSupport.set("ibuprofen 400mg", "aspirin 81mg"),
 						DrugReferenceTestSupport.set("M01AE01", "N02BA01"), null, null));
 
-		assertEquals("Ibuprofen interacts with active order aspirin — Major. Ibuprofen blunts the "
-				+ "irreversible platelet inhibition of low-dose aspirin. Ibuprofen is in the same "
-				+ "cross-reactivity group (NSAID) as active order Acetylsalicylic acid (aspirin) — "
-				+ "possible additive or duplicate-class therapy", onlyDetail(warnings),
-				"one chip for the one pair, and it is the FOLDED one — not the screen's plainer chip");
+		assertEquals("Ibuprofen interacts with active order Acetylsalicylic acid (aspirin) — Major. "
+				+ "Ibuprofen blunts the irreversible platelet inhibition of low-dose aspirin. Ibuprofen "
+				+ "is in the same cross-reactivity group (NSAID) as active order Acetylsalicylic acid "
+				+ "(aspirin) — possible additive or duplicate-class therapy", onlyDetail(warnings),
+				"one chip for the one pair, and it is the FOLDED one — not the screen's plainer chip."
+						+ " Its partner is named once since issue #292; the suppression itself keys on"
+						+ " the PAIR and not on this text, which is why InteractionPairs exists");
 	}
 }

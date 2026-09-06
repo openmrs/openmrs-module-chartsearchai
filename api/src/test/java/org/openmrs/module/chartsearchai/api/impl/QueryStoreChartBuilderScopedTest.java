@@ -82,7 +82,7 @@ public class QueryStoreChartBuilderScopedTest {
 	@BeforeEach
 	public void setUp() {
 		queryStore = new CountingQueryStoreStub();
-		builder = new TestableScopedBuilder(queryStore);
+		builder = new TestableScopedBuilder(queryStore.asService());
 		builder.setChartSerializer(new PatientChartSerializer());
 		// A chart in date-desc order: patient record, then interleaved types.
 		queryStore.stubChart = new ArrayList<QueryDocument>(Arrays.asList(

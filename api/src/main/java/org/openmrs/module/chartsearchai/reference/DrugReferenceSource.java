@@ -9,12 +9,14 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
+import java.util.Collections;
 import java.util.List;
 
 /**
  * A source of {@link DrugReference} entries. Decouples the drug-reference data
- * <em>layer</em> from any one file format. Selecting an adapter describes how data is
- * parsed; it does not establish clinical approval or permit the data to emit warnings.
+ * <em>layer</em> from any one file format so the feature can consume datasets
+ * published by authoritative bodies (e.g. the WHO ATC classification) by simply
+ * pointing at them, rather than hand-maintaining a chartsearchai-specific file.
  *
  * <p>Each implementation maps one external format to the internal model;
  * {@link DrugReferenceService} selects the active source by the
@@ -57,11 +59,34 @@ public interface DrugReferenceSource {
 	}
 
 	/**
-	 * @return metadata parsed from the same package that produced {@link #load()}, or null when the
-	 *         source format has no package metadata. The service supplies an explicit proposed default
-	 *         for such sources; format selection alone never implies clinical approval.
+	 * @return what the validity check found while {@link #load()} resolved AND parsed its dataset — the
+	 *         two kinds of rule that only this implementation can see. The configuration rules, which
+	 *         only the resolution knows (see {@link DrugReferenceValidity#configuredDataFileNotRead}),
+	 *         and the document rules, which only the PARSER knows because they are about the file's
+	 *         shape rather than the entries (see
+	 *         {@link DrugReferenceValidity#datasetMissingARequiredTable}). Empty on a HEALTHY load, which
+	 *         is what an empty list usually means and what every production source returns when its
+	 *         dataset trips no rule; empty UNCONDITIONALLY only where the implementation runs neither
+	 *         check, which of the implementations that exist is the test seam alone. Those two are
+	 *         indistinguishable from the outside, which is the whole reason the second is guarded rather
+	 *         than stated: this method is DEFAULTED, so a source that does not override it reports an
+	 *         empty {@code findings} list for its whole format with nothing erroring and no log line —
+	 *         what {@link AtcDrugReferenceSource} did for as long as it resolved its own file (issue
+	 *         #266). {@code DrugReferenceSourceValidityChannelTest} is what fails the build on it.
+	 *
+	 *         <p><b>A new source format's parser reports here.</b> Worth stating plainly, because the
+	 *         alternative is issue #242 one format over: a parser that returns no entries for a document
+	 *         it cannot read is the whole defect that issue records, and by the time
+	 *         {@link DrugReferenceService} sees the result, the document is gone and only a count of zero
+	 *         is left — which cannot tell an empty file from one whose content was discarded.
+	 *
+	 *         <p>Read immediately after {@code load()} on the same instance and retained beside the
+	 *         entries, for the same reason as {@link #lastLoadOrigin()}: the load is lazy, so a log line
+	 *         cannot be trusted to describe the load that is in force. The content rules are NOT here —
+	 *         they need the loaded model rather than a stream, so {@link DrugReferenceService} runs them
+	 *         once for every format instead of each source running its own version.
 	 */
-	default DrugReferencePackage lastLoadPackage() {
-		return null;
+	default List<DrugReferenceValidity.Finding> lastLoadFindings() {
+		return Collections.emptyList();
 	}
 }

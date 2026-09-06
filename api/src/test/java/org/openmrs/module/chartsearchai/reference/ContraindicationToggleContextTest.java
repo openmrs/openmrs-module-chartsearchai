@@ -33,12 +33,27 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  *
  * <p>What the switch means matters here more than for the arms it already gated. Those fire only for a
  * drug the question or the answer names, so an operator who turns them off is declining an answer-scoped
- * annotation. This arm fires on EVERY question about an allergy-bearing patient on a related drug, and
- * every chip it raises is also injected into the prompt as a citable finding (issue #110) — so an arm
- * that ignored the flag would keep writing contraindications into the context window of a deployment
- * that had switched contraindication reporting off, and the answer could assert one with no chip beside
- * it. Both directions are asserted, because a 0-chip assertion under a disabled flag proves nothing
- * unless the same arrangement provably chips when it is enabled.
+ * annotation. This arm takes its SUBJECTS from the chart rather than from any wording — it can chip
+ * about a prescription nothing in the response names individually — and a chip it raises can also be
+ * injected into the prompt as a citable finding (issue #110), so an arm that ignored the flag would keep
+ * writing contraindications into the context window of a deployment that had switched contraindication
+ * reporting off, and the answer could assert one with no chip beside it. Both directions are asserted,
+ * because a 0-chip assertion under a disabled flag proves nothing unless the same arrangement provably
+ * chips when it is enabled.
+ *
+ * <p>"Can", not "every": that used to be every, and the subject-matter scoping made it a subset. The
+ * prompt is built from a pass over the QUESTION alone, so a chip this arm raises because the ANSWER or
+ * a cited record put the drug in subject matter has no finding in the prompt behind it — measured in
+ * {@code SubjectMatterScopedContraindicationTest
+ * .theQuestionAloneCanLeaveThePreAnswerPassWithNothingToPromote}, which is that arrangement exactly.
+ * The toggle argument is unaffected, since it only needs the two channels to share this flag.
+ *
+ * <p><b>The question in the fixture below is load-bearing and reads as if it were incidental.</b> This
+ * class used to say the arm "fires on EVERY question", which was true when it was written and is not
+ * since {@code DrugSafetyValidator.SubjectMatter} bounded the arm to what the response is about. What
+ * keeps the enabled case chipping is that "What are her current medications?" is a medication-domain
+ * question, so her whole active-order list is subject matter; swap it for a cue-free one and the
+ * enabled assertion goes red for a reason that has nothing to do with the toggle.
  */
 public class ContraindicationToggleContextTest extends BaseModuleContextSensitiveTest {
 
@@ -53,7 +68,7 @@ public class ContraindicationToggleContextTest extends BaseModuleContextSensitiv
 	 * to it, asked a question that names no drug — so nothing but this arm can raise a contraindication.
 	 */
 	private List<SafetyWarning> chipsForAPrescribedAllergy() {
-		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.bundledService()).validate("",
+		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService()).validate("",
 				"What are her current medications?",
 				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set("Ibuprofen 400mg"),
 						null, DrugReferenceTestSupport.set("ibuprofen"), null));
@@ -74,7 +89,7 @@ public class ContraindicationToggleContextTest extends BaseModuleContextSensitiv
 		// this reads the same GP through the same path and the pair of cases isolates the flag itself.
 		configureContraindicationWarnings("true");
 
-		assertEquals(2, chipsForAPrescribedAllergy().size(),
-				"with the switch on, the prescribed allergy must still raise its two chips");
+		assertEquals(1, chipsForAPrescribedAllergy().size(),
+				"with the switch on, the prescribed allergy must still raise its chip");
 	}
 }

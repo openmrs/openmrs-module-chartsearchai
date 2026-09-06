@@ -110,12 +110,28 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-dependency-plugin</artifactId>
 				<executions>
+					<!--
+						Runs at prepare-package, NOT at generate-resources. unpack-dependencies needs a
+						PACKAGED artifact, and `mvn test` never packages the api module, so at an earlier
+						phase the reactor has no jar to offer and Maven falls back to whatever
+						chartsearchai-api happens to be installed in the local repository. That silently
+						unpacked STALE api classes into this module's own target/classes, ahead of the
+						reactor's fresh ones on the classpath: `mvn test` then failed to compile against
+						any api method added since the last `mvn install`, or worse, passed while testing
+						old api code. See MDEP-98.
+
+						At prepare-package the api jar exists (api builds before omod in the reactor) and
+						the unpacked content still lands in target/classes before `package` reads it, so
+						the .omod is byte-for-byte what it was. Compiling and testing this module never
+						needed the unpack: the ordinary chartsearchai-api dependency supplies those
+						classes, from the reactor when there is one. Do not move this earlier.
+					-->
 					<execution>
 						<id>Expand moduleApplicationContext and messages</id>
 						<goals>
 							<goal>unpack-dependencies</goal>
 						</goals>
-						<phase>generate-resources</phase>
+						<phase>prepare-package</phase>
 						<configuration>
 							<includeGroupIds>${project.parent.groupId}</includeGroupIds>
 							<includeArtifactIds>${project.parent.artifactId}-api</includeArtifactIds>

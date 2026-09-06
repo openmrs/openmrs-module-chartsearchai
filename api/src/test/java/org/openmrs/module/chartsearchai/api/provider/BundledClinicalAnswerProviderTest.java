@@ -211,6 +211,9 @@ public class BundledClinicalAnswerProviderTest {
 		assertEquals(100, result.getAnswer().getPayload().get("inputTokens"));
 		assertEquals(20, result.getAnswer().getPayload().get("outputTokens"));
 		assertEquals(5, result.getAnswer().getPayload().get("cachedTokens"));
+		Map<?, ?> safetyCheck = (Map<?, ?>) result.getAnswer().getPayload().get("safetyCheck");
+		assertEquals("drug_safety.v1", safetyCheck.get("schema_version"));
+		assertEquals("unavailable", safetyCheck.get("status"));
 		assertNull(result.getProblemCode());
 	}
 

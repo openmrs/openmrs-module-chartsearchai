@@ -11,9 +11,9 @@ path) swaps in a small custom knowledge base.
 > ([#114](https://github.com/openmrs/openmrs-module-chartsearchai/issues/114)), the
 > interaction screen ([#113](https://github.com/openmrs/openmrs-module-chartsearchai/issues/113))
 > and the active-order contraindication join
-> ([#143](https://github.com/openmrs/openmrs-module-chartsearchai/issues/143), which fires
-> on this seeded patient — see the note above the cheat-sheet). The README's GP table is the
-> authoritative list of what the feature does; this document is only the demo data.
+> ([#143](https://github.com/openmrs/openmrs-module-chartsearchai/issues/143), which can fire
+> on this seeded patient, on the questions the note above the cheat-sheet names). The README's GP
+> table is the authoritative list of what the feature does; this document is only the demo data.
 
 For the feature itself — config reference, design, API/SSE shape — see the
 [README "Drug-reference injection & safety validation"](../README.md#drug-reference-injection--safety-validation)
@@ -32,16 +32,26 @@ section and [ADR Decisions 23 & 24](adr.md). This document is only the **demo da
 | 1 | Question-driven injection | a KB drug name/alias in the question → a `drug_reference` citation is injected |
 | 2 | Contraindication — allergy | patient allergy token matches a KB contraindication (coded + non-coded) |
 | 3 | Contraindication — condition | patient condition token matches a KB contraindication (coded + non-coded) |
-| 4 | Contraindication — "recorded allergy to X" (ATC class) | allergy resolves to the very drug asked about |
+| 4 | Contraindication — "recorded allergy to X" (ATC class) | allergy resolves to the very drug asked about. **Not reachable on the seeded allergies since [#146](https://github.com/openmrs/openmrs-module-chartsearchai/issues/146)**: where the KB also carries an allergy rule *naming that drug* the two are ONE chip and the rule's note is the wording kept, and both seeded allergens that resolve to a bundled entry (Ibuprofen, Paracetamol) have such a rule. To see this path's own wording, record an allergy to **Gentamicin** — the one bundled entry whose allergy rule names a class rather than itself |
 | 5 | Interaction — active order | a patient's active order matches a KB interaction token |
 | 6 | Interaction — duplicate therapy (ATC class) | an active order shares the asked drug's ATC level-4 subgroup |
 | 7 | Order-driven injection | a reference is injected from an active order (needs `injectFromQuery=false` to see in isolation) |
-| 8 | Cross-reactivity (ATC class) | an allergy to a *different* drug in the same ATC subgroup as the asked drug |
+| 8 | Cross-reactivity (ATC class) | an allergy to a *different* drug in the same ATC subgroup as the asked drug — one whose own published name names chemistry or a molecular target, not merely a purpose ([Decision 34](adr.md#decision-34-an-atc-subgroup-licenses-only-the-claim-its-own-name-asserts)) |
 | 9 | Overdose | the answer states a dose above the KB maximum (LLM-output dependent — see [caveat](#overdose-caveat)) |
 
-The bundled KB has four drugs: **ibuprofen** (`M01AE01`), **paracetamol** (`N02BE01`),
-**amoxicillin** (`J01CA04`), **gentamicin** (`J01GB03`). Paths 1–7 work against the bundled
-KB; path 8 needs the [custom KB](#step-4-cross-reactivity-custom-kb) (it adds Naproxen,
+This demo runs against the **curated** KB, which has four drugs: **ibuprofen** (`M01AE01`),
+**paracetamol** (`N02BE01`), **amoxicillin** (`J01CA04`), **gentamicin** (`J01GB03`).
+
+> **That is no longer the module's default**, so Step 1 selects it explicitly. Since
+> [ADR Decision 36](adr.md#decision-36-the-shipped-default-is-the-whole-ddinter-knowledge-base) the
+> default is the whole DDInter knowledge base (2283 substances), which publishes interactions only —
+> so on the default, paths 2, 3 and 9 have no data to fire on (no hand-authored allergy/condition
+> rules, no dose ceilings) while paths 1, 5, 6, 7 and 8 fire far more widely than this seed can
+> illustrate. The four curated drugs are still the dataset that exercises every path in one place,
+> which is why this document pins them.
+
+Paths 1–7 work against the curated
+KB — except path 4, which since [#146](https://github.com/openmrs/openmrs-module-chartsearchai/issues/146) needs an allergy the seed does not carry (see its row above); path 8 needs the [custom KB](#step-4-cross-reactivity-custom-kb) (it adds Naproxen,
 `M01AE02`, sharing ibuprofen's subgroup).
 
 ---
@@ -72,6 +82,9 @@ short-circuit to empty when it is `false`, regardless of `validateAnswers`.
 
 ```bash
 gp chartsearchai.drugReference.enabled true
+# the curated four-drug KB, which is what every path below is written against.
+# NOT the default any more (that is the whole DDInter knowledge base) — see the note above.
+gp chartsearchai.drugReference.sourceFormat json
 # these default to true already; shown for completeness
 gp chartsearchai.drugSafety.validateAnswers true
 gp chartsearchai.drugReference.injectFromQuery true
@@ -168,7 +181,7 @@ UNION ALL SELECT 'active_drug_orders', COUNT(*) FROM orders WHERE patient_id=@pi
 
 | Type | Items | Drives |
 |------|-------|--------|
-| Allergies | Ibuprofen `77897…`, Penicillins `162297…`, Paracetamol `70116…`, non-coded "Aminoglycoside" (on "Other" `5622…`) | paths 2, 4, 8 |
+| Allergies | Ibuprofen `77897…`, Penicillins `162297…`, Paracetamol `70116…`, non-coded "Aminoglycoside" (on "Other" `5622…`) | paths 2, 8 (**not 4** — see path 4 above) |
 | Conditions | Peptic ulcer `114262…`, non-coded "Active GI bleed" / "Severe hepatic impairment" / "Significant renal impairment" | path 3 |
 | Active orders | Warfarin `5e97fe35…`, Aspirin `71617…`, Methotrexate `017dcf18…`, Furosemide `9f6c3927…` | path 5 |
 
@@ -178,6 +191,11 @@ UNION ALL SELECT 'active_drug_orders', COUNT(*) FROM orders WHERE patient_id=@pi
 
 Adds WHO-ATC mappings to real, correctly-classified concepts plus four more active orders, so
 the **duplicate-therapy** (path 6) and **order-driven injection** (path 7) paths can fire.
+Path 7 no longer needs the ATC **mappings** since [#151](https://github.com/openmrs/openmrs-module-chartsearchai/issues/151)
+— an order is recognised by any name it carries too (its coded drug's, a clinician's free text, or its concept's), and the class relationship the path tests comes from
+the KB entries' own ATC codes — though it still needs this script's Amoxicillin order. Path 6 still
+needs the mappings: the duplicate-therapy chip resolves a co-medication from the **order's** ATC codes,
+so an unmapped concept raises none.
 Ampicillin (`J01CA01`) is a sibling of amoxicillin (`J01CA04`); Amikacin (`J01GB06`) a sibling
 of gentamicin (`J01GB03`). Run **after** the seed:
 
@@ -255,8 +273,11 @@ SELECT order_number, (SELECT cn.name FROM concept_name cn WHERE cn.concept_id=o.
 > rules. It is *data*, not logic: the code that injects citations, parses doses, and derives the
 > ATC-class warnings lives in the module, not in the file. The active dataset comes from one of
 > two sources:
-> - **Bundled default** — `drug-reference.json` shipped inside the module (the four drugs above).
->   Used automatically when no override is configured.
+> - **Bundled** — a dataset shipped inside the module and used when no override is configured. There
+>   are two: `ddi-knowledge-base.json`, the whole DDInter knowledge base, which
+>   `sourceFormat=ddinter` selects and which is the module's default; and `drug-reference.json`, the
+>   curated four drugs above, which `sourceFormat=json` selects and which Step 1 sets because this
+>   document is written against it.
 > - **External override** — any file `chartsearchai.drugReference.dataFilePath` points at (within
 >   the app-data directory). When set, it **replaces** the bundled dataset entirely — it does
 >   **not** merge with it. So a custom file must contain *all* the drugs you want, not just the
@@ -266,9 +287,9 @@ SELECT order_number, (SELECT cn.name FROM concept_name cn WHERE cn.concept_id=o.
 > while `dataFilePath` points at it, it *is* the live knowledge base and the bundled one is
 > dormant. Clearing the GP (and restarting) reverts to the bundled dataset. *(A third option:
 > `sourceFormat=atc` reads a WHO-ATC classification export instead of JSON — classification only,
-> no hand-authored rules; the default `json` format is the curated, rule-bearing KB.)*
+> no hand-authored rules; `json` is the curated, rule-bearing KB and the only one carrying doses.)*
 
-Cross-reactivity (path 8) needs two KB drugs sharing an ATC subgroup. The bundled four are all
+Cross-reactivity (path 8) needs two KB drugs sharing an ATC subgroup that names chemistry or a molecular target — a purpose-named one such as `S01AA` "Antibiotics" licenses path 6 and not path 8 ([Decision 34](adr.md#decision-34-an-atc-subgroup-licenses-only-the-claim-its-own-name-asserts)). The bundled four are all
 in different subgroups, so this path is unreachable by patient data alone. Extend the KB via
 the external-file mechanism (no rebuild):
 
@@ -323,7 +344,7 @@ Reference for authoring a custom KB (the `json` source format). The top-level fi
 | `name` | string | injection, validator | **Required** — an entry with a blank `name` is dropped at load (it would render a null display name). Shown in the injected reference and in `safetyWarnings[].drug`. |
 | `drugClass` | string | injection | Human-readable class label rendered in the reference text (e.g. "NSAID"). Informational only — class **logic** uses `atcCodes`, not this. |
 | `aliases` | string[] | injection, validator | Lowercase names matched **whole-word, case-insensitive** against the question and the answer ("advil" matches "is advil safe?"; "amox" won't spuriously match). Drives question-driven injection and which drug a warning is attributed to. |
-| `atcCodes` | string[] | injection, validator | WHO-ATC codes. Used two ways: **exact code** → order-driven injection / interaction match against an active order's ATC; **level-4 prefix** (`M01AE01` → `M01AE`) → the class-based cross-reactivity & duplicate-therapy checks. Two drugs are "same class" iff their level-4 subgroups intersect. |
+| `atcCodes` | string[] | injection, validator | WHO-ATC codes. Used two ways: **exact code** → order-driven injection (or, since [#151](https://github.com/openmrs/openmrs-module-chartsearchai/issues/151), any name the order carries — its coded drug's, a clinician's free text, or its concept's) / interaction match against an active order's ATC; **level-4 prefix** (`M01AE01` → `M01AE`) → the class-based cross-reactivity & duplicate-therapy checks. Two drugs are "same class" when their level-4 subgroups intersect in a subgroup that classifies the substances — a residual bucket ATC fills by exclusion inside a group it defines by site of application, and everything under `V03A`/`V07A`, are skipped (issue #167; see `DrugReference.isUnclassifyingAtcCode`) — since #184 so are six residues whose ancestry asserts nothing at any level, and since #183 the cross-reactivity arm alone skips 117 further subgroups whose names state only a purpose (`DrugReference.isPurposeOnlyAtcCode`). |
 | `ageBands` | object[] | injection, overdose | Age-banded dosing (below). The band whose range contains the patient's age is selected; **no matching band → no numeric dosing rendered and no overdose check** (this is the age-gating that stops a pediatric max being shown for an adult). |
 | `warnings` | string[] | injection | Optional free-text prose warnings (e.g. a Reye-syndrome caution) rendered verbatim into the injected, citable record so the LLM can ground and cite them. **Display-only** — no matchable token, so the validator never fires on them; enforceable facts belong in the rule fields. |
 | `interactions` | object[] | interaction warning | Drug–drug interaction rules (below). |
@@ -346,7 +367,7 @@ Reference for authoring a custom KB (the `json` source format). The top-level fi
 | `token` | string | Matched (case-insensitive) against the patient's active-order drug names by **word start**, tolerating up to two trailing letters so localized spellings still match (issue #86): `iron` matches `Iron IR 325mg` and `aspirin` matches the French `Aspirine Co 81mg`, but `iron` does **not** match `Spironolactone`. Write the token as the drug's own name, not a fragment of it. |
 | `atc` | string | ATC code matched against the active order's ATC mapping (an alternative to `token`). |
 | `note` | string | Free text appended to the interaction warning (e.g. "increased risk of GI bleeding"). |
-| `severity` | string, optional | Source-assigned rating (`Unknown`/`Minor`/`Moderate`/`Major`). **Rating a rule opts it into the severity floor** (`chartsearchai.drugSafety.minInteractionSeverity`, default `minor`): a rule rated below the floor raises no warning. Omit it (the usual case for hand-authored rules) and the rule always fires. |
+| `severity` | string, optional | Source-assigned rating (`Unknown`/`Minor`/`Moderate`/`Major`). **Rating a rule opts it into the severity floor** (`chartsearchai.drugSafety.minInteractionSeverity`, default `minor`): a rule rated below the floor raises no warning. Omit it (the usual case for hand-authored rules) and the rule always fires. **Whatever you write here is published verbatim** to clients as `safetyWarnings[].severity` ([#340](https://github.com/openmrs/openmrs-module-chartsearchai/issues/340)) — the module neither normalizes it nor checks it against a vocabulary, and a word outside the four above is treated internally exactly as an omitted one, i.e. as unrated. So write one of the four unless you mean "unrated", and remember that this field and the rule's `note` are independent: nothing makes the note you author agree with the rating you set. |
 
 **`contraindications[]` object**
 
@@ -364,7 +385,7 @@ Reference for authoring a custom KB (the `json` source format). The top-level fi
 ## Cross-reactivity groups file schema
 
 A second, independent data file (`chartsearchai.drugReference.crossReactivityGroupsFilePath`,
-bundled fallback `cross-reactivity-groups.json`) loaded alongside **either** source format. It
+bundled fallback `cross-reactivity-groups.json`) loaded alongside **any** source format (`json`, `atc` and `ddinter` alike). It
 carries the cross-*branch* family knowledge ATC's tree cannot express (ADR Decision 27). The
 top-level file is `{ "version": ..., "description": ..., "groups": [ ... ] }`.
 
@@ -397,8 +418,14 @@ entry dataset).
 > :8081 instance **already carries** an `N02BA01` mapping on Aspirin — live-verified 2026-07-10:
 > the ibuprofen query there shows an extra *"Ibuprofen is in the same cross-reactivity group
 > (NSAID) as active order N02BA01 — possible additive or duplicate-class therapy"* chip (the
-> bare code appears because no KB entry carries `N02BA01`; wording as of the sentence-detail
-> refactor — the 2026-07-10 capture predates the leading subject). Both Decision-27 paths were live-verified end-to-end that day
+> bare code appeared because no KB entry carries `N02BA01`; wording as of the sentence-detail
+> refactor — the 2026-07-10 capture predates the leading subject). **Issue #155 has since removed
+> the bare code from that chip**: the partner is named by the dataset's entry, else by the ORDER's
+> own display name, and only then by the code. What that produces for this exact configuration is
+> pinned by `ClassChipPartnerLabelTest.anOrderTheDatasetDoesNotCoverIsNamedByItsOwnDisplayName`,
+> which drives the real bundled seed through the real validator — read the assertion there rather
+> than trusting this paragraph. The 2026-07-10 capture is left as recorded rather than rewritten,
+> because it is what was measured that day. Both Decision-27 paths were live-verified end-to-end that day
 > (weight arm: `~1000 mg exceeds the 15 mg/kg per-dose maximum (~750 mg) … weight 50 kg`,
 > driven by the bundled CIEL default with no GP row).
 
@@ -408,14 +435,18 @@ entry dataset).
 
 Run on **Margaret Holloway** (`dkb00000-0000-0000-0000-000000000001`) unless noted.
 
-> **Since [#143](https://github.com/openmrs/openmrs-module-chartsearchai/issues/143) a query does
-> NOT surface only the warnings for the drug it names.** Every question additionally has this
-> patient's own active orders checked against her own allergies and conditions, so every row below
-> that runs on Margaret also carries chips about drugs the query never mentions. (The last row is
-> scoped to any patient; on a stock demo patient, who has neither an allergy nor a condition, the
-> arm returns before it looks at any order.) With the bundled KB and **Steps 1-3 run**,
-> two of her orders resolve to an entry her own records contraindicate, and they contribute three
-> chips:
+> **Since [#143](https://github.com/openmrs/openmrs-module-chartsearchai/issues/143) a query need
+> NOT surface only the warnings for the drug it names.** This patient's own active orders are also
+> checked against her own allergies and conditions, so a row below can carry chips about drugs the
+> query never mentions. **Which rows, since the subject-matter scoping of that arm, depends on the
+> question**: the chips appear where either side of one is part of what the response is about — the
+> drug or the recorded finding named by the question, the answer or a record the answer cited — and a
+> question in the medication, allergy or condition domain keeps the corresponding list in scope
+> wholesale. Off-topic questions get none of them, which is the whole point of the scoping; see the
+> per-row note under the table. (The last row is scoped to any patient; on a stock demo patient, who
+> has neither an allergy nor a condition, the arm returns before it looks at any order.) With the
+> bundled KB and **Steps 1-3 run**, two of her orders resolve to an entry her own records
+> contraindicate, and they can contribute three chips:
 >
 > - **Amoxicillin** (`DKB-ORD-6`) — its curated `penicillin` rule against her seeded penicillin-class
 >   allergy (`162297…`, which the table above calls *Penicillins* and the current demo DB names
@@ -424,11 +455,23 @@ Run on **Margaret Holloway** (`dkb00000-0000-0000-0000-000000000001`) unless not
 > - **Gentamicin** (`DKB-ORD-8`) — twice, off her non-coded *Aminoglycoside* allergy and her
 >   *Significant renal impairment*.
 >
-> All three are EXTRA only on a query that names neither drug. A query that does name one of them puts
-> that entry in play, and the arm skips an entry already in play, so the chip comes from the
-> drug-in-play loop instead and the row's own stated expectation already covers it — the amoxicillin
-> row gains the two Gentamicin chips and no second penicillin chip, and the gentamicin row gains only
-> the Amoxicillin one.
+> **No row in the table below carries these three as extras any more.** A query that NAMES one of the
+> two drugs puts that entry in play, the arm skips an entry already in play, and the chip comes from
+> the drug-in-play loop instead — which is what the row's own stated expectation already covers, so
+> the amoxicillin row shows its penicillin chip once and not twice. What it does NOT pick up is the
+> other drug's chips: *Is amoxicillin safe for this patient?* carries no medication, allergy or
+> condition cue and names neither *gentamicin*, *aminoglycoside* nor *renal impairment*, so nothing
+> puts that order or those findings in the response's subject matter, and the two Gentamicin chips
+> are absent. The gentamicin row loses the Amoxicillin one for the mirror-image reason. So do the
+> rows naming neither: *Can this patient take paracetamol?*, *Can this patient take ibuprofen?* and
+> *Is naproxen safe for this patient?*. In every case the escape hatch is the same — if the model's
+> answer or a record it cites happens to name one of those drugs or findings, that side is in subject
+> matter and the chip returns, so a run may show more than the row promises.
+>
+> That is the scoping working, not a broken deployment. To demonstrate the arm deliberately, ask a
+> medication-domain question that names no drug — *"What are her current medications?"* — which keeps
+> her whole active-order list in scope and brings all three back. *"Does she have any allergies?"*
+> brings back the two that rest on an allergy, and *"What conditions does she have?"* the renal one.
 >
 > Her Warfarin, Aspirin, Methotrexate, Furosemide, Ampicillin and Amikacin orders resolve to no
 > bundled entry, so they add nothing. Note **how** Gentamicin resolves: `DKB-ORD-8` is on
@@ -444,13 +487,17 @@ Run on **Margaret Holloway** (`dkb00000-0000-0000-0000-000000000001`) unless not
 > arm contributes nothing at all.
 >
 > That is the point of the fix: an allergy to a drug she is already taking is a prescribing error the
-> chart already contains, and no wording of a question should hide it.
+> chart already contains, and the ANSWER's wording alone should not hide it — a prescribed drug turns
+> up in a cited `drug_order` record, which is exactly what echo scoping was reading as a recitation.
+> What the module deliberately no longer does is announce it on a response about something else; that
+> finding needs a surface with acknowledgement
+> ([#280](https://github.com/openmrs/openmrs-module-chartsearchai/issues/280)).
 
 | Query | Expected `safetyWarnings` / injection |
 |-------|----------------------------------------|
-| *Can this patient take ibuprofen?* | injected `ibuprofen`; contraindication (ibuprofen allergy, GI bleed, peptic ulcer), "The patient has a recorded allergy to Ibuprofen.", interaction (warfarin, aspirin) — plus, where the Aspirin order is `N02BA`-mapped (the live :8081 instance is), an "Ibuprofen is in the same cross-reactivity group (NSAID)…" interaction |
+| *Can this patient take ibuprofen?* | injected `ibuprofen`; contraindication — "Ibuprofen is contraindicated by an active allergy: documented ibuprofen allergy" (**one** chip: the curated `ibuprofen` rule and the identity check are one finding since [#146](https://github.com/openmrs/openmrs-module-chartsearchai/issues/146)), GI bleed, peptic ulcer — interaction (warfarin, aspirin) — plus, where the Aspirin order is `N02BA`-mapped (the live :8081 instance is), an "Ibuprofen is in the same cross-reactivity group (NSAID)…" interaction |
 | *Is amoxicillin safe for this patient?* | injected `amoxicillin`; contraindication (penicillin-class), interaction (methotrexate), **duplicate therapy J01CA** (Ampicillin) |
-| *Can this patient take paracetamol?* | injected `paracetamol`; contraindication (severe hepatic), "The patient has a recorded allergy to Paracetamol.", interaction (warfarin) |
+| *Can this patient take paracetamol?* | injected `paracetamol`; contraindication (severe hepatic), "Paracetamol is contraindicated by an active allergy: documented paracetamol allergy" (one chip — see [#146](https://github.com/openmrs/openmrs-module-chartsearchai/issues/146)), interaction (warfarin) |
 | *Is gentamicin appropriate for this patient?* | injected `gentamicin`; contraindication (aminoglycoside allergy, renal impairment), interaction (furosemide), **duplicate therapy J01GB** (Amikacin) |
 | *Is naproxen safe for this patient?* | injected `naproxen`; **cross-reactivity** "Naproxen is in the same ATC class (M01AE) as the patient's allergy to Ibuprofen…" *(needs Step 4)* |
 | any KB alias (brufen, advil, panadol, tylenol, amoxil…) on **any** patient | a `drug_reference` citation (question-driven injection needs no patient data) |

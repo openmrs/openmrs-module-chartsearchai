@@ -9,9 +9,14 @@
  */
 package org.openmrs.module.chartsearchai;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
+
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
 import org.openmrs.api.context.Context;
 import org.openmrs.scheduler.SchedulerService;
@@ -24,6 +29,58 @@ public class ChartSearchAiModuleActivatorTest extends BaseModuleContextSensitive
 
 	private static final String LEGACY_BACKFILL_TASK_NAME =
 			ChartSearchAiModuleActivator.LEGACY_BACKFILL_TASK_NAME;
+
+	/**
+	 * Issue #315. A custom system prompt REPLACES the built-in one, so a deployment that set the
+	 * property before this rule existed silently keeps the defect the rule fixes.
+	 *
+	 * <p>The reason this is a LOG line and not left to the property's own description: OpenMRS writes
+	 * a module's {@code config.xml} description onto a {@code global_property} row only when creating
+	 * it, or when it exists with a NULL description ({@code Context.checkCoreDataset}). The row is
+	 * created by this module's own first startup with the description from {@code config.xml}, so
+	 * every install that has ever run chartsearchai has a non-null description and never receives a
+	 * revised one. The description reaches only installs that have never run the module, which cannot
+	 * have the problem.
+	 */
+	@Test
+	public void aCustomSystemPromptIsWarnedAboutAtStartupBecauseItDropsTheBuiltInRules() {
+		Context.getAdministrationService().setGlobalProperty(
+				ChartSearchAiConstants.GP_SYSTEM_PROMPT, "You are a clinical assistant. Be brief.");
+		try (LogCapture capture = LogCapture.on(ChartSearchAiModuleActivator.class.getName())) {
+			new ChartSearchAiModuleActivator().started();
+
+			List<String> warnings = capture.messagesAt(Level.WARN);
+			boolean named = false;
+			for (String message : warnings) {
+				if (message.contains(ChartSearchAiConstants.GP_SYSTEM_PROMPT)
+						&& message.contains("no longer in force")) {
+					named = true;
+				}
+			}
+			assertTrue(named, "startup must WARN that a custom system prompt drops the built-in rules, "
+					+ "naming the property and the #315 rule it drops — the property's own description "
+					+ "cannot reach an install that already has the row. Warnings were: " + warnings);
+		}
+	}
+
+	/**
+	 * The converse, and the half that matters for noise: the default install sets no custom prompt and
+	 * must say nothing. A warning on every startup of every deployment is the noise this module's own
+	 * loudness rule is written against.
+	 */
+	@Test
+	public void theDefaultInstallIsSilentAboutTheSystemPrompt() {
+		Context.getAdministrationService().setGlobalProperty(ChartSearchAiConstants.GP_SYSTEM_PROMPT, "");
+		try (LogCapture capture = LogCapture.on(ChartSearchAiModuleActivator.class.getName())) {
+			new ChartSearchAiModuleActivator().started();
+
+			for (String message : capture.messagesAt(Level.WARN)) {
+				assertFalse(message.contains(ChartSearchAiConstants.GP_SYSTEM_PROMPT),
+						"an install that has not overridden the prompt must not be warned about it: "
+								+ message);
+			}
+		}
+	}
 
 	@Test
 	public void removeLegacyBackfillTask_shouldDeleteLeftoverTaskAndBeIdempotent() {

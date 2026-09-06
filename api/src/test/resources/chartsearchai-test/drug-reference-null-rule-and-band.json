@@ -1,0 +1,15 @@
+{
+ "version": "1.0",
+ "source": "test fixture — a null element inside contraindications and inside ageBands, which the parsers do not filter (they drop null ENTRIES only)",
+ "entries": [
+  {
+   "id": "ibuprofen",
+   "name": "Ibuprofen",
+   "aliases": ["ibuprofen"],
+   "atcCodes": ["M01AE01"],
+   "ageBands": [null],
+   "contraindications": [null],
+   "source": "test fixture"
+  }
+ ]
+}

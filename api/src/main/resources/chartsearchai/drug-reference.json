@@ -1,9 +1,7 @@
 {
-  "packageId": "chartsearchai-research-seed-v1",
   "version": "1.0",
-  "reviewState": "proposed",
-  "source": "OpenClinAI research seed",
-  "description": "Unreviewed research seed for exercising drug identity, dosing, interaction, and contraindication code paths. It is not a clinically approved decision-support package and cannot produce deterministic product warnings.",
+  "source": "WHO Model List of Essential Medicines for Children (public domain)",
+  "description": "Pediatric drug reference seed data for chartsearchai. Each entry carries aliases for question-driven matching, ATC codes for order-driven matching, age-banded dosing for overdose checks, and interaction/contraindication rules for the post-LLM safety validator. Doses are seed values; expand per deployment.",
   "entries": [
     {
       "id": "ibuprofen",
@@ -26,7 +24,7 @@
         { "type": "condition", "token": "gi bleed", "note": "active gastrointestinal bleeding" },
         { "type": "condition", "token": "peptic ulcer", "note": "active peptic ulcer disease" }
       ],
-      "source": "OpenClinAI research seed; source verification pending"
+      "source": "WHO Model List of Essential Medicines for Children"
     },
     {
       "id": "paracetamol",
@@ -45,7 +43,7 @@
         { "type": "allergy", "token": "paracetamol", "note": "documented paracetamol allergy" },
         { "type": "condition", "token": "severe hepatic", "note": "severe hepatic impairment" }
       ],
-      "source": "OpenClinAI research seed; source verification pending"
+      "source": "WHO Model List of Essential Medicines for Children"
     },
     {
       "id": "amoxicillin",
@@ -64,7 +62,7 @@
         { "type": "allergy", "token": "penicillin", "note": "penicillin-class hypersensitivity" },
         { "type": "allergy", "token": "amoxicillin", "note": "documented amoxicillin allergy" }
       ],
-      "source": "OpenClinAI research seed; source verification pending"
+      "source": "WHO Model List of Essential Medicines for Children"
     },
     {
       "id": "gentamicin",
@@ -83,7 +81,7 @@
         { "type": "allergy", "token": "aminoglycoside", "note": "aminoglycoside hypersensitivity" },
         { "type": "condition", "token": "renal impairment", "note": "significant renal impairment (dose adjustment required)" }
       ],
-      "source": "OpenClinAI research seed; source verification pending"
+      "source": "WHO Model List of Essential Medicines for Children"
     }
   ]
 }

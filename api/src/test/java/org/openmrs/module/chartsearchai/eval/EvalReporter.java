@@ -17,13 +17,32 @@ import java.time.Instant;
 import java.util.Map;
 
 /**
- * Utility that appends per-case and summary metrics to
- * {@code target/eval-results.csv} so that eval runs produce a
- * machine-readable artifact alongside the normal test output.
+ * Appends per-case and summary metrics to {@code target/eval-results.csv} so that eval runs
+ * produce a machine-readable artifact alongside the normal test output.
+ * <p>
+ * <b>This is a report, not a gate, and it has no consumer.</b> Nothing reads the CSV — no
+ * workflow uploads it, no script parses it, and {@link #appendResult} deliberately swallows its
+ * own {@link IOException} rather than failing the test that called it. So a row appearing here is
+ * not evidence a case passed, and a suite that never calls this class is not thereby less gated:
+ * what gates all four {@code *EvalTest} suites is their own JUnit assertions.
+ * <p>
+ * That distinction is the whole of #179's second item, which read the two non-reporting suites
+ * ({@code AbsentDataEvalTest}, {@code DrugSafetyEvalTest}) as able to "pass or fail without
+ * appearing in the report a reviewer reads". There is no such report. Wiring them in would add
+ * rows to a file with no reader; the CSV says as much in its own first line so the inference is
+ * harder to draw a second time.
  */
 public final class EvalReporter {
 
 	private static final String CSV_PATH = "target/eval-results.csv";
+
+	/**
+	 * Written above the header, because a file that looks like a results artifact gets cited like
+	 * one. Nothing parses this file, so the extra line costs nothing. ASCII only: the writes below
+	 * go through {@link FileWriter}, which encodes with the platform default charset.
+	 */
+	private static final String NOT_A_GATE_NOTE = "# informational only - nothing reads this file; "
+			+ "a row here is not a pass. The gate is the suite's JUnit assertions (#179).";
 
 	private static final String HEADER = "timestamp,suite,caseId,metric_name,metric_value";
 
@@ -71,6 +90,7 @@ public final class EvalReporter {
 		if (!file.exists()) {
 			file.getParentFile().mkdirs();
 			try (PrintWriter pw = new PrintWriter(new FileWriter(file))) {
+				pw.println(NOT_A_GATE_NOTE);
 				pw.println(HEADER);
 			}
 			catch (IOException e) {

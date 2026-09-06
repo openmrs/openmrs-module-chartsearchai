@@ -86,8 +86,7 @@ public class RuleTokenAliasOrderMatchingTest {
 	 *  screening arm is the only thing that can chip and an assertion about it cannot be satisfied by
 	 *  a question-driven arm. The empty answer is the PRE-answer production shape
 	 *  ({@code DrugReferenceInjector.preAnswerFindings} calls the validator exactly that way). */
-	private static final String SCREENING_QUESTION =
-			"Are there any drug interactions with her current medications?";
+	private static final String SCREENING_QUESTION = DrugReferenceTestSupport.SCREENING_QUESTION;
 
 	private DrugReferenceService service() throws IOException {
 		return DrugReferenceTestSupport
@@ -128,7 +127,13 @@ public class RuleTokenAliasOrderMatchingTest {
 	@Test
 	public void theChipStillNamesTheRulesOwnTokenNotTheAliasItMatched() throws IOException {
 		// The label decision issue #136 records: a rule matched THROUGH an alias still says the token,
-		// which is what partnerLabel renders, so no client sees a partner's spelling change under it.
+		// which is what partnerLabel renders. That last clause — "so no
+	// client sees a partner's spelling change under it" — stopped being true at issue #292 and stopped
+	// being true more widely at issue #339: a chip renders reconciledPartnerName's answer wherever the
+	// ladder resolved a co-medication for its partner and the gate permits the displacement, folded or
+	// not, so this same pair reads "active order Acetylsalicylic acid (aspirin)" on a chart the ladder
+	// can reach. This case is unaffected — its context carries names only, so orderPartners produces no
+	// partner, nothing is reconciled, and what it pins is unchanged.
 		// Which alias the order matched is not part of the chip; the grouping key is a separate
 		// decision (bestRulePerPartner keys on the partner ENTRY, see its javadoc).
 		List<SafetyWarning> warnings = validator().validate(WARFARIN_ANSWER, WARFARIN_QUESTION,

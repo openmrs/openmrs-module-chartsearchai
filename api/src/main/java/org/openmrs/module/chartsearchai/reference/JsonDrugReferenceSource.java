@@ -13,20 +13,15 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.regex.Pattern;
 
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
  * {@link DrugReferenceSource} for the chartsearchai-native JSON format
@@ -38,9 +33,14 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  * so the module ships with working defaults (the shared
  * {@link ReferenceDataFiles} resolution).
  *
- * <p>This is the curated/hand-authored source. For authoritative datasets
- * (e.g. WHO ATC) see {@link AtcDrugReferenceSource}; the source is chosen by
- * {@code chartsearchai.drugReference.sourceFormat}.
+ * <p>This is the curated/hand-authored source, selected by
+ * {@code chartsearchai.drugReference.sourceFormat=json}. It was the DEFAULT until ADR Decision 36 moved
+ * that to {@link DdiDrugReferenceSource}, and what it is still the only source of is DOSING: its four
+ * seeded entries carry the age bands the dose-excess check needs, which neither DDInter nor a WHO ATC
+ * export publishes. It also remains the parser a mistyped {@code sourceFormat} falls through to, so a
+ * document of another format reaching it is a live case rather than a hypothetical — see
+ * {@code DrugReferenceService.effectiveFormat}. For authoritative datasets see
+ * {@link AtcDrugReferenceSource} and {@link DdiDrugReferenceSource}.
  */
 public class JsonDrugReferenceSource implements DrugReferenceSource {
 
@@ -52,22 +52,16 @@ public class JsonDrugReferenceSource implements DrugReferenceSource {
 
 	private volatile String lastLoadOrigin;
 
-	private volatile DrugReferencePackage lastLoadPackage;
-
-	private volatile ParsedDataset parsedDuringLoad;
-
-	private static final Pattern ATC_LEVEL_5 = Pattern.compile("[A-Z]\\d{2}[A-Z]{2}\\d{2}");
+	private volatile List<DrugReferenceValidity.Finding> lastLoadFindings = Collections.emptyList();
 
 	@Override
 	public List<DrugReference> load() {
-		parsedDuringLoad = null;
 		ReferenceDataFiles.Loaded<DrugReference> loaded = ReferenceDataFiles.loadWithClasspathFallback(
-				ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH, CLASSPATH_DEFAULT,
-				"drug-reference entries", this::parseAndCapture);
+				ChartSearchAiConstants.GP_DRUG_REFERENCE_DATA_FILE_PATH,
+				ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_DATA_FILE_PATH, CLASSPATH_DEFAULT,
+				"drug-reference entries", JsonDrugReferenceSource::parse);
 		lastLoadOrigin = loaded.getOrigin();
-		lastLoadPackage = parsedDuringLoad == null
-				? unavailablePackage(lastLoadOrigin)
-				: parsedDuringLoad.toPackage(lastLoadOrigin);
+		lastLoadFindings = loaded.getValidity().getFindings();
 		return loaded.getItems();
 	}
 
@@ -77,439 +71,67 @@ public class JsonDrugReferenceSource implements DrugReferenceSource {
 	}
 
 	@Override
-	public DrugReferencePackage lastLoadPackage() {
-		return lastLoadPackage;
-	}
-
-	private static DrugReferencePackage unavailablePackage(String origin) {
-		return new DrugReferencePackage("unavailable-json-package", "json", null,
-				Collections.<String, Object> singletonMap("origin", origin),
-				DrugReferencePackage.REVIEW_PROPOSED,
-				Collections.singletonList("source_unavailable"));
+	public List<DrugReferenceValidity.Finding> lastLoadFindings() {
+		return lastLoadFindings;
 	}
 
 	/**
-	 * Parse a dataset stream into reference entries. Entries with a blank {@code id} or
-	 * {@code name} are dropped (with a warning): a name-less entry would render
-	 * {@code "Drug reference — null"} into the citable record and a {@code null} drug into the
-	 * safety warnings, and an id-less one has no stable citation {@code resourceUuid}.
-	 * Package-private and static so tests can exercise the real parser against the real dataset.
+	 * The form for a caller that wants only the entries — package-private and static so tests can
+	 * exercise the real parser against the real dataset. Delegates; see {@link #parse(InputStream,
+	 * DrugReferenceValidity)} for what parsing this dataset means, and
+	 * {@link DdiDrugReferenceSource#parse(InputStream)} for why what the parser found wrong with the
+	 * DOCUMENT still reaches the log from here.
 	 */
 	static List<DrugReference> parse(InputStream in) throws IOException {
-		return parseDataset(in).entries;
+		DrugReferenceValidity validity = new DrugReferenceValidity();
+		List<DrugReference> parsed = parse(in, validity);
+		validity.logTo(log);
+		return parsed;
 	}
 
-	static DrugReferencePackage parsePackage(InputStream in, String origin) throws IOException {
-		return parseDataset(in).toPackage(origin);
-	}
-
-	private List<DrugReference> parseAndCapture(InputStream in) throws IOException {
-		ParsedDataset parsed = parseDataset(in);
-		parsedDuringLoad = parsed;
-		return parsed.entries;
-	}
-
-	private static ParsedDataset parseDataset(InputStream in) throws IOException {
-		JsonNode root = MAPPER.readTree(in);
-		if (root == null || !root.isObject()) {
-			return ParsedDataset.invalid();
-		}
-		List<String> issues = new ArrayList<String>();
-		String packageId = text(root, "packageId");
-		String version = text(root, "version");
-		String source = text(root, "source");
-		if (packageId == null || version == null || source == null) {
-			issues.add("source_package_identity_incomplete");
-		}
-		JsonNode rawEntries = root.get("entries");
-		if (rawEntries == null || !rawEntries.isArray()) {
-			issues.add("source_data_invalid");
-			return new ParsedDataset(Collections.<DrugReference> emptyList(),
-					packageId, version, source,
-					text(root, "reviewState"), issues);
+	/**
+	 * Parse a dataset stream into reference entries, reporting what only this parser can see about the
+	 * document to {@code validity} — the {@link ReferenceDataFiles.DatasetParser} form, and the one the
+	 * load takes. Entries with a blank {@code id} or {@code name} are dropped (with a warning): a
+	 * name-less entry would render {@code "Drug reference — null"} into the citable record and a
+	 * {@code null} drug into the safety warnings, and an id-less one has no stable citation
+	 * {@code resourceUuid}.
+	 *
+	 * <p>The curated schema is the DEFAULT format, so the document this parser is likeliest to be handed
+	 * by mistake is one of another format — a DDInter export named by {@code dataFilePath} while
+	 * {@code sourceFormat} was left alone. That declares no {@code entries}, and used to load as zero in
+	 * the same silence issue #242 records on the DDInter side. Nothing is counted as discarded: a
+	 * document with no {@code entries} carries nothing this parser can read, which is what tells an
+	 * operator it is a file of another format rather than a mis-shaped one of this.
+	 */
+	static List<DrugReference> parse(InputStream in, DrugReferenceValidity validity) throws IOException {
+		Dataset dataset = MAPPER.readValue(in, Dataset.class);
+		if (dataset == null || dataset.entries == null) {
+			// The format's NAME, not "whatever the default is" — those are equal today and mean
+			// different things, and only one of them stays right if the default moves.
+			validity.datasetMissingARequiredTable(ChartSearchAiConstants.DRUG_REFERENCE_SOURCE_JSON,
+					Collections.singletonList("entries"), "entries", 0);
+			return Collections.emptyList();
 		}
 		List<DrugReference> usable = new ArrayList<DrugReference>();
 		int dropped = 0;
-		boolean partial = false;
-		for (JsonNode rawEntry : rawEntries) {
-			DrugReference entry = parseEntry(rawEntry);
+		for (DrugReference entry : dataset.entries) {
 			if (entry == null || ChartSearchAiUtils.isBlank(entry.getId())
 					|| ChartSearchAiUtils.isBlank(entry.getName())) {
 				dropped++;
 				continue;
 			}
-			if (hasRejectedContent(rawEntry)) {
-				partial = true;
-			}
-			sanitizeEntry(entry);
 			usable.add(entry);
 		}
 		if (dropped > 0) {
 			log.warn("Dropped {} unusable drug-reference entries (blank id or name)", dropped);
-			partial = true;
 		}
-		String reviewState = text(root, "reviewState");
-		if (!validReviewState(reviewState)) {
-			partial = true;
-		}
-		if (partial) {
-			issues.add("source_data_partially_invalid");
-		}
-		return new ParsedDataset(usable, packageId, version, source, reviewState, issues);
+		return usable;
 	}
 
-	private static DrugReference parseEntry(JsonNode raw) {
-		if (raw == null || !raw.isObject() || text(raw, "id") == null || text(raw, "name") == null) {
-			return null;
-		}
-		ObjectNode safe = ((ObjectNode) raw).deepCopy();
-		for (String field : new String[] { "id", "name", "genericName", "drugClass", "source" }) {
-			sanitizeTextField(safe, field);
-		}
-		sanitizeTextArray(safe, "aliases", false);
-		sanitizeTextArray(safe, "atcCodes", true);
-		sanitizeTextArray(safe, "warnings", false);
-		sanitizeAgeBands(safe);
-		sanitizeInteractions(safe);
-		sanitizeContraindications(safe);
-		try {
-			return MAPPER.treeToValue(safe, DrugReference.class);
-		}
-		catch (IOException | RuntimeException e) {
-			return null;
-		}
-	}
+	@JsonIgnoreProperties(ignoreUnknown = true)
+	private static class Dataset {
 
-	private static void sanitizeTextField(ObjectNode object, String field) {
-		JsonNode value = object.get(field);
-		if (value != null && (!value.isTextual() || ChartSearchAiUtils.isBlank(value.asText()))) {
-			object.remove(field);
-		}
-	}
-
-	private static void sanitizeTextArray(ObjectNode object, String field, boolean atcCodes) {
-		JsonNode values = object.get(field);
-		if (values == null) {
-			return;
-		}
-		ArrayNode safe = MAPPER.createArrayNode();
-		if (values.isArray()) {
-			for (JsonNode value : values) {
-				if (value != null && value.isTextual() && !ChartSearchAiUtils.isBlank(value.asText())
-						&& (!atcCodes || validAtcCode(value.asText()))) {
-					safe.add(value.asText());
-				}
-			}
-		}
-		object.set(field, safe);
-	}
-
-	private static void sanitizeAgeBands(ObjectNode object) {
-		JsonNode values = object.get("ageBands");
-		if (values == null) {
-			return;
-		}
-		ArrayNode safe = MAPPER.createArrayNode();
-		if (values.isArray()) {
-			for (JsonNode value : values) {
-				if (validAgeBand(value)) {
-					ObjectNode band = MAPPER.createObjectNode();
-					band.put("minYears", value.get("minYears").asInt());
-					band.put("maxYears", value.get("maxYears").asInt());
-					copyNumber(value, band, "mgPerKgMin");
-					copyNumber(value, band, "mgPerKgMax");
-					copyNumber(value, band, "maxDailyDoseMg");
-					safe.add(band);
-				}
-			}
-		}
-		object.set("ageBands", safe);
-	}
-
-	private static void copyNumber(JsonNode source, ObjectNode target, String field) {
-		JsonNode value = source.get(field);
-		if (value != null && !value.isNull()) {
-			target.put(field, value.asDouble());
-		}
-	}
-
-	private static void sanitizeInteractions(ObjectNode object) {
-		JsonNode values = object.get("interactions");
-		if (values == null) {
-			return;
-		}
-		ArrayNode safe = MAPPER.createArrayNode();
-		if (values.isArray()) {
-			for (JsonNode value : values) {
-				if (value != null && value.isObject() && !invalidInteractions(MAPPER.createArrayNode().add(value))) {
-					ObjectNode interaction = MAPPER.createObjectNode();
-					copyText(value, interaction, "token");
-					copyText(value, interaction, "atc");
-					copyText(value, interaction, "note");
-					copyText(value, interaction, "severity");
-					safe.add(interaction);
-				}
-			}
-		}
-		object.set("interactions", safe);
-	}
-
-	private static void sanitizeContraindications(ObjectNode object) {
-		JsonNode values = object.get("contraindications");
-		if (values == null) {
-			return;
-		}
-		ArrayNode safe = MAPPER.createArrayNode();
-		if (values.isArray()) {
-			for (JsonNode value : values) {
-				if (value != null && value.isObject()
-						&& !invalidContraindications(MAPPER.createArrayNode().add(value))) {
-					ObjectNode contraindication = MAPPER.createObjectNode();
-					copyText(value, contraindication, "type");
-					copyText(value, contraindication, "token");
-					copyText(value, contraindication, "note");
-					safe.add(contraindication);
-				}
-			}
-		}
-		object.set("contraindications", safe);
-	}
-
-	private static void copyText(JsonNode source, ObjectNode target, String field) {
-		String value = text(source, field);
-		if (value != null) {
-			target.put(field, value);
-		}
-	}
-
-	private static boolean hasRejectedContent(JsonNode raw) {
-		if (invalidTextArray(raw, "aliases") || invalidTextArray(raw, "atcCodes")
-				|| invalidTextArray(raw, "warnings")) {
-			return true;
-		}
-		JsonNode atcCodes = raw.get("atcCodes");
-		if (atcCodes != null && atcCodes.isArray()) {
-			for (JsonNode code : atcCodes) {
-				if (code == null || !code.isTextual() || !validAtcCode(code.asText())) {
-					return true;
-				}
-			}
-		}
-		JsonNode ageBands = raw.get("ageBands");
-		if (ageBands != null && (!ageBands.isArray() || invalidAgeBand(ageBands))) {
-			return true;
-		}
-		JsonNode interactions = raw.get("interactions");
-		if (interactions != null && (!interactions.isArray() || invalidInteractions(interactions))) {
-			return true;
-		}
-		JsonNode contraindications = raw.get("contraindications");
-		return contraindications != null
-				&& (!contraindications.isArray() || invalidContraindications(contraindications));
-	}
-
-	private static void sanitizeEntry(DrugReference entry) {
-		entry.setAliases(validText(entry.getAliases()));
-		entry.setWarnings(validText(entry.getWarnings()));
-		List<String> atcCodes = new ArrayList<String>();
-		for (String code : validText(entry.getAtcCodes())) {
-			if (ATC_LEVEL_5.matcher(code.trim().toUpperCase(java.util.Locale.ROOT)).matches()) {
-				atcCodes.add(code);
-			}
-		}
-		entry.setAtcCodes(atcCodes);
-
-		List<DrugReference.AgeBand> ageBands = new ArrayList<DrugReference.AgeBand>();
-		for (DrugReference.AgeBand band : entry.getAgeBands()) {
-			if (band != null && band.getMinYears() >= 0 && band.getMaxYears() >= band.getMinYears()
-					&& finiteNonNegative(band.getMgPerKgMin())
-					&& finiteNonNegative(band.getMgPerKgMax())
-					&& finiteNonNegative(band.getMaxDailyDoseMg())) {
-				ageBands.add(band);
-			}
-		}
-		entry.setAgeBands(ageBands);
-
-		List<DrugReference.Interaction> interactions = new ArrayList<DrugReference.Interaction>();
-		for (DrugReference.Interaction interaction : entry.getInteractions()) {
-			String token = interaction == null ? null : interaction.getToken();
-			String atc = interaction == null ? null : interaction.getAtc();
-			if (interaction != null && (!ChartSearchAiUtils.isBlank(token)
-					|| validAtcCode(atc))) {
-				if (ChartSearchAiUtils.isBlank(atc) || validAtcCode(atc)) {
-					interactions.add(interaction);
-				}
-			}
-		}
-		entry.setInteractions(interactions);
-
-		List<DrugReference.Contraindication> contraindications =
-				new ArrayList<DrugReference.Contraindication>();
-		for (DrugReference.Contraindication contraindication : entry.getContraindications()) {
-			String type = contraindication == null ? null : contraindication.getType();
-			if (contraindication != null
-					&& ("allergy".equalsIgnoreCase(type) || "condition".equalsIgnoreCase(type))
-					&& !ChartSearchAiUtils.isBlank(contraindication.getToken())) {
-				contraindications.add(contraindication);
-			}
-		}
-		entry.setContraindications(contraindications);
-	}
-
-	private static List<String> validText(List<String> values) {
-		List<String> out = new ArrayList<String>();
-		for (String value : values) {
-			if (!ChartSearchAiUtils.isBlank(value)) {
-				out.add(value);
-			}
-		}
-		return out;
-	}
-
-	private static boolean validAtcCode(String value) {
-		return !ChartSearchAiUtils.isBlank(value)
-				&& ATC_LEVEL_5.matcher(value.trim().toUpperCase(java.util.Locale.ROOT)).matches();
-	}
-
-	private static boolean finiteNonNegative(double value) {
-		return !Double.isNaN(value) && !Double.isInfinite(value) && value >= 0;
-	}
-
-	private static boolean invalidTextArray(JsonNode object, String field) {
-		JsonNode values = object.get(field);
-		if (values == null) {
-			return false;
-		}
-		if (!values.isArray()) {
-			return true;
-		}
-		for (JsonNode value : values) {
-			if (value == null || !value.isTextual() || ChartSearchAiUtils.isBlank(value.asText())) {
-				return true;
-			}
-		}
-		return false;
-	}
-
-	private static boolean invalidAgeBand(JsonNode values) {
-		for (JsonNode value : values) {
-			if (!validAgeBand(value)) {
-				return true;
-			}
-		}
-		return false;
-	}
-
-	private static boolean validAgeBand(JsonNode value) {
-		return value != null && value.isObject() && value.path("minYears").isIntegralNumber()
-				&& value.path("maxYears").isIntegralNumber()
-				&& value.path("minYears").canConvertToInt()
-				&& value.path("maxYears").canConvertToInt()
-				&& value.path("minYears").asInt() >= 0
-				&& value.path("maxYears").asInt() >= value.path("minYears").asInt()
-				&& validOptionalDose(value, "mgPerKgMin")
-				&& validOptionalDose(value, "mgPerKgMax")
-				&& validOptionalDose(value, "maxDailyDoseMg");
-	}
-
-	private static boolean validOptionalDose(JsonNode object, String field) {
-		JsonNode value = object.get(field);
-		if (value == null || value.isNull()) {
-			return true;
-		}
-		if (!value.isNumber()) {
-			return false;
-		}
-		double number = value.asDouble();
-		return finiteNonNegative(number);
-	}
-
-	private static boolean invalidInteractions(JsonNode values) {
-		for (JsonNode value : values) {
-			String atc = text(value, "atc");
-			if (value == null || !value.isObject()
-					|| (ChartSearchAiUtils.isBlank(text(value, "token"))
-							&& ChartSearchAiUtils.isBlank(atc))
-					|| (!ChartSearchAiUtils.isBlank(atc) && !validAtcCode(atc))
-					|| !validInteractionSeverity(value)) {
-				return true;
-			}
-		}
-		return false;
-	}
-
-	private static boolean validInteractionSeverity(JsonNode interaction) {
-		JsonNode severity = interaction == null ? null : interaction.get("severity");
-		if (severity == null || severity.isNull()) {
-			return true;
-		}
-		if (!severity.isTextual() || ChartSearchAiUtils.isBlank(severity.asText())) {
-			return false;
-		}
-		String value = severity.asText().trim();
-		return "unknown".equalsIgnoreCase(value) || "minor".equalsIgnoreCase(value)
-				|| "moderate".equalsIgnoreCase(value) || "major".equalsIgnoreCase(value);
-	}
-
-	private static boolean invalidContraindications(JsonNode values) {
-		for (JsonNode value : values) {
-			String type = text(value, "type");
-			if (value == null || !value.isObject()
-					|| !("allergy".equalsIgnoreCase(type) || "condition".equalsIgnoreCase(type))
-					|| ChartSearchAiUtils.isBlank(text(value, "token"))) {
-				return true;
-			}
-		}
-		return false;
-	}
-
-	private static String text(JsonNode node, String field) {
-		JsonNode value = node == null ? null : node.get(field);
-		return value != null && value.isTextual() && !ChartSearchAiUtils.isBlank(value.asText())
-				? value.asText().trim() : null;
-	}
-
-	private static boolean validReviewState(String value) {
-		return DrugReferencePackage.REVIEW_PROPOSED.equals(value)
-				|| DrugReferencePackage.REVIEW_EVIDENCE_CURATED.equals(value)
-				|| DrugReferencePackage.REVIEW_CLINICALLY_APPROVED.equals(value)
-				|| DrugReferencePackage.REVIEW_RETIRED.equals(value);
-	}
-
-	private static final class ParsedDataset {
-
-		private final List<DrugReference> entries;
-		private final String packageId;
-		private final String version;
-		private final String source;
-		private final String reviewState;
-		private final List<String> issues;
-
-		private ParsedDataset(List<DrugReference> entries, String packageId, String version,
-				String source, String reviewState, List<String> issues) {
-			this.entries = entries;
-			this.packageId = packageId;
-			this.version = version;
-			this.source = source;
-			this.reviewState = reviewState;
-			this.issues = issues;
-		}
-
-		private static ParsedDataset invalid() {
-			return new ParsedDataset(Collections.<DrugReference> emptyList(), null, null, null,
-					DrugReferencePackage.REVIEW_PROPOSED,
-					Collections.singletonList("source_data_invalid"));
-		}
-
-		private DrugReferencePackage toPackage(String origin) {
-			Map<String, Object> provenance = new LinkedHashMap<String, Object>();
-			provenance.put("origin", origin);
-			if (source != null) {
-				provenance.put("source", source);
-			}
-			return new DrugReferencePackage(
-					packageId == null ? "unidentified-json-package" : packageId,
-					"json", version, provenance, reviewState, issues);
-		}
+		public List<DrugReference> entries;
 	}
 }

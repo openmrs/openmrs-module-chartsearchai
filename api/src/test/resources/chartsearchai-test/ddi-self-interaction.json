@@ -1,0 +1,705 @@
+{
+ "metadata": {
+  "note": "Verbatim DDInter 2.0 slice for issue #152 — self-interaction rows. DDInter225 x DDInter225 is the shipped KB's only row pairing a drug with ITSELF (1 of 295,184); the two Lidocaine rows pair one substance's route variants with each other, which is the same nonsense one collapse-key away. Kanamycin x Botulinum toxin and Metoclopramide x Lidocaine are the negative controls: genuine cross-substance pairs in the same slice that must still be reported."
+ },
+ "mechanisms": {
+  "3020": {
+   "text": "Some topical anesthetics can be systemically absorbed and cause methemoglobinemia, particularly when applied to mucous membranes. Coadministration with other oxidizing agents that can also induce methemoglobinemia such as injectable local anesthetics, antimalarials (e.g., chloroquine, primaquine, quinine, tafenoquine), nitrates and nitrites, sulfonamides, acetaminophen, aminosalicylic acid, dapsone, dimethyl sulfoxide, flutamide, metoclopramide, nitrofurantoin, phenazopyridine, phenobarbital, phenytoin, and rasburicase may increase the risk. Additional risk factors include very young age (e.g., infants less than 6 months); application to inflamed/abraded areas or broken skin; anemia; cardiac or pulmonary disease; peripheral vascular disease; liver cirrhosis; shock; sepsis; acidosis; and genetic predisposition (e.g., NADH cytochrome-b5 reductase deficiency; glucose-6-phosphate dehydrogenase (G6PD) deficiency; hemoglobin M).",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "3730": {
+   "text": "The effects of botulinum toxin may be potentiated by neuromuscular blockers, aminoglycoside antibiotics, and other drugs that can interfere with neuromuscular transmission. Botulinum toxin inhibits the release of acetylcholine from peripheral cholinergic nerve endings, thus additive neuromuscular blocking effects may occur when these agents are used together.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "3905": {
+   "text": "Limited in vitro data suggest that some aminoglycosides may enhance the neuromuscular blocking properties of lidocaine. Data are available for neomycin only. No special precautions are necessary.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "6466": {
+   "text": "Some topical anesthetics can be systemically absorbed and cause methemoglobinemia, particularly when applied to mucous membranes.  Coadministration with other oxidizing agents that can also induce methemoglobinemia such as injectable local anesthetics, antimalarials (e.g., chloroquine, primaquine, quinine, tafenoquine), nitrates and nitrites, sulfonamides, aminosalicylic acid, dapsone, dimethyl sulfoxide, flutamide, metoclopramide, nitrofurantoin, phenazopyridine, phenobarbital, phenytoin, and rasburicase may increase the risk.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "6669": {
+   "text": "Coadministration of local anesthetics with other oxidizing agents that can also induce methemoglobinemia such as antimalarials (e.g., chloroquine, primaquine, quinine, tafenoquine), nitrates and nitrites, sulfonamides, aminosalicylic acid, dapsone, dimethyl sulfoxide, flutamide, metoclopramide, nitrofurantoin, phenazopyridine, phenobarbital, phenytoin, and rasburicase may increase the risk.",
+   "categories": [
+    "synergistic_effect"
+   ]
+  },
+  "7257": {
+   "text": "The effect of administering different botulinum neurotoxin serotypes concurrently or within several months of one another is unknown.  Excessive weakness may be exacerbated by another administration of botulinum toxin prior to the resolution of the effects of a previously administered botulinum toxin.",
+   "categories": [
+    "others"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter1004",
+   "name": "Kanamycin",
+   "rxcui": "6099",
+   "rxnorm_name": "kanamycin",
+   "drugbank_id": "DB01172",
+   "atc": [
+    "A07AA08",
+    "J01GB04",
+    "S01AA24"
+   ],
+   "ciel": [
+    {
+     "code": "78385",
+     "uuid": "78385AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Kanamycin"
+    },
+    {
+     "code": "78386",
+     "uuid": "78386AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Kanamycin sulfate"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1066",
+   "name": "Lidocaine",
+   "rxcui": "6387",
+   "rxnorm_name": "lidocaine",
+   "drugbank_id": "DB00281",
+   "atc": [
+    "C01BB01",
+    "C05AD01",
+    "D04AB01",
+    "N01BB02",
+    "R02AD02",
+    "S01HA07",
+    "S02DA01"
+   ],
+   "ciel": [
+    {
+     "code": "103769",
+     "uuid": "103769AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Bacitracin / lidocaine / neomycin"
+    },
+    {
+     "code": "103770",
+     "uuid": "103770AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Bacitracin / lidocaine / neomycin / polymyxin B"
+    },
+    {
+     "code": "103771",
+     "uuid": "103771AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Bacitracin / lidocaine / polymyxin B"
+    },
+    {
+     "code": "103822",
+     "uuid": "103822AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzalkonium / lidocaine"
+    },
+    {
+     "code": "103829",
+     "uuid": "103829AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzethonium / lidocaine"
+    },
+    {
+     "code": "103960",
+     "uuid": "103960AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Bupivacaine / lidocaine"
+    },
+    {
+     "code": "104100",
+     "uuid": "104100AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Capsaicin / lidocaine"
+    },
+    {
+     "code": "104165",
+     "uuid": "104165AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Cetylpyridinium / lidocaine"
+    },
+    {
+     "code": "104176",
+     "uuid": "104176AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chlorhexidine / lidocaine"
+    },
+    {
+     "code": "104203",
+     "uuid": "104203AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chloroxylenol / lidocaine"
+    },
+    {
+     "code": "104423",
+     "uuid": "104423AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / lidocaine"
+    },
+    {
+     "code": "104545",
+     "uuid": "104545AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Domiphen / lidocaine"
+    },
+    {
+     "code": "104584",
+     "uuid": "104584AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Epinephrine / lidocaine"
+    },
+    {
+     "code": "104735",
+     "uuid": "104735AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Glucose / lidocaine"
+    },
+    {
+     "code": "104859",
+     "uuid": "104859AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / lidocaine"
+    },
+    {
+     "code": "104976",
+     "uuid": "104976AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / menthol"
+    },
+    {
+     "code": "104977",
+     "uuid": "104977AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / methylprednisolone"
+    },
+    {
+     "code": "104978",
+     "uuid": "104978AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / neomycin / polymyxin B"
+    },
+    {
+     "code": "104979",
+     "uuid": "104979AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / oxytetracycline"
+    },
+    {
+     "code": "104980",
+     "uuid": "104980AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / phenol"
+    },
+    {
+     "code": "104981",
+     "uuid": "104981AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / phenylephrine"
+    },
+    {
+     "code": "104982",
+     "uuid": "104982AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / povidone-iodine"
+    },
+    {
+     "code": "104983",
+     "uuid": "104983AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / prilocaine"
+    },
+    {
+     "code": "104984",
+     "uuid": "104984AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / tetracaine"
+    },
+    {
+     "code": "162167",
+     "uuid": "162167AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Betamethasone / lidocaine / phenylephrine"
+    },
+    {
+     "code": "165454",
+     "uuid": "165454AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aluminium subacetate / hydrocortisone acetate / lidocaine / zinc oxide"
+    },
+    {
+     "code": "170030",
+     "uuid": "0b9b9edc-1add-4cd2-ac95-69870f1c8ab2",
+     "name": "Clotrimazole / lidocaine"
+    },
+    {
+     "code": "170559",
+     "uuid": "939843c3-daca-4efd-a945-79f35532197c",
+     "name": "Hyaluronic acid / lidocaine"
+    },
+    {
+     "code": "170568",
+     "uuid": "c92eeb46-c9f8-4578-83fd-2d6911088901",
+     "name": "Cetrimide / lidocaine"
+    },
+    {
+     "code": "170698",
+     "uuid": "20207304-5dc0-4368-af80-aae03041affe",
+     "name": "Lidocaine / phenazone"
+    },
+    {
+     "code": "78849",
+     "uuid": "78849AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine"
+    },
+    {
+     "code": "78850",
+     "uuid": "78850AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine hydrochloride"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1067",
+   "name": "Lidocaine (ophthalmic)",
+   "rxcui": "6387",
+   "rxnorm_name": "lidocaine",
+   "drugbank_id": "DB00281",
+   "atc": [
+    "C01BB01",
+    "C05AD01",
+    "D04AB01",
+    "N01BB02",
+    "R02AD02",
+    "S01HA07",
+    "S02DA01"
+   ],
+   "ciel": [
+    {
+     "code": "103769",
+     "uuid": "103769AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Bacitracin / lidocaine / neomycin"
+    },
+    {
+     "code": "103770",
+     "uuid": "103770AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Bacitracin / lidocaine / neomycin / polymyxin B"
+    },
+    {
+     "code": "103771",
+     "uuid": "103771AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Bacitracin / lidocaine / polymyxin B"
+    },
+    {
+     "code": "103822",
+     "uuid": "103822AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzalkonium / lidocaine"
+    },
+    {
+     "code": "103829",
+     "uuid": "103829AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzethonium / lidocaine"
+    },
+    {
+     "code": "103960",
+     "uuid": "103960AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Bupivacaine / lidocaine"
+    },
+    {
+     "code": "104100",
+     "uuid": "104100AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Capsaicin / lidocaine"
+    },
+    {
+     "code": "104165",
+     "uuid": "104165AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Cetylpyridinium / lidocaine"
+    },
+    {
+     "code": "104176",
+     "uuid": "104176AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chlorhexidine / lidocaine"
+    },
+    {
+     "code": "104203",
+     "uuid": "104203AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chloroxylenol / lidocaine"
+    },
+    {
+     "code": "104423",
+     "uuid": "104423AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / lidocaine"
+    },
+    {
+     "code": "104545",
+     "uuid": "104545AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Domiphen / lidocaine"
+    },
+    {
+     "code": "104584",
+     "uuid": "104584AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Epinephrine / lidocaine"
+    },
+    {
+     "code": "104735",
+     "uuid": "104735AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Glucose / lidocaine"
+    },
+    {
+     "code": "104859",
+     "uuid": "104859AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / lidocaine"
+    },
+    {
+     "code": "104976",
+     "uuid": "104976AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / menthol"
+    },
+    {
+     "code": "104977",
+     "uuid": "104977AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / methylprednisolone"
+    },
+    {
+     "code": "104978",
+     "uuid": "104978AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / neomycin / polymyxin B"
+    },
+    {
+     "code": "104979",
+     "uuid": "104979AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / oxytetracycline"
+    },
+    {
+     "code": "104980",
+     "uuid": "104980AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / phenol"
+    },
+    {
+     "code": "104981",
+     "uuid": "104981AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / phenylephrine"
+    },
+    {
+     "code": "104982",
+     "uuid": "104982AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / povidone-iodine"
+    },
+    {
+     "code": "104983",
+     "uuid": "104983AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / prilocaine"
+    },
+    {
+     "code": "104984",
+     "uuid": "104984AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / tetracaine"
+    },
+    {
+     "code": "162167",
+     "uuid": "162167AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Betamethasone / lidocaine / phenylephrine"
+    },
+    {
+     "code": "165454",
+     "uuid": "165454AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aluminium subacetate / hydrocortisone acetate / lidocaine / zinc oxide"
+    },
+    {
+     "code": "170030",
+     "uuid": "0b9b9edc-1add-4cd2-ac95-69870f1c8ab2",
+     "name": "Clotrimazole / lidocaine"
+    },
+    {
+     "code": "170559",
+     "uuid": "939843c3-daca-4efd-a945-79f35532197c",
+     "name": "Hyaluronic acid / lidocaine"
+    },
+    {
+     "code": "170568",
+     "uuid": "c92eeb46-c9f8-4578-83fd-2d6911088901",
+     "name": "Cetrimide / lidocaine"
+    },
+    {
+     "code": "170698",
+     "uuid": "20207304-5dc0-4368-af80-aae03041affe",
+     "name": "Lidocaine / phenazone"
+    },
+    {
+     "code": "78849",
+     "uuid": "78849AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine"
+    },
+    {
+     "code": "78850",
+     "uuid": "78850AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine hydrochloride"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1068",
+   "name": "Lidocaine (topical)",
+   "rxcui": "6387",
+   "rxnorm_name": "lidocaine",
+   "drugbank_id": "DB00281",
+   "atc": [
+    "C01BB01",
+    "C05AD01",
+    "D04AB01",
+    "N01BB02",
+    "R02AD02",
+    "S01HA07",
+    "S02DA01"
+   ],
+   "ciel": [
+    {
+     "code": "103769",
+     "uuid": "103769AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Bacitracin / lidocaine / neomycin"
+    },
+    {
+     "code": "103770",
+     "uuid": "103770AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Bacitracin / lidocaine / neomycin / polymyxin B"
+    },
+    {
+     "code": "103771",
+     "uuid": "103771AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Bacitracin / lidocaine / polymyxin B"
+    },
+    {
+     "code": "103822",
+     "uuid": "103822AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzalkonium / lidocaine"
+    },
+    {
+     "code": "103829",
+     "uuid": "103829AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Benzethonium / lidocaine"
+    },
+    {
+     "code": "103960",
+     "uuid": "103960AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Bupivacaine / lidocaine"
+    },
+    {
+     "code": "104100",
+     "uuid": "104100AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Capsaicin / lidocaine"
+    },
+    {
+     "code": "104165",
+     "uuid": "104165AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Cetylpyridinium / lidocaine"
+    },
+    {
+     "code": "104176",
+     "uuid": "104176AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chlorhexidine / lidocaine"
+    },
+    {
+     "code": "104203",
+     "uuid": "104203AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Chloroxylenol / lidocaine"
+    },
+    {
+     "code": "104423",
+     "uuid": "104423AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Dexamethasone / lidocaine"
+    },
+    {
+     "code": "104545",
+     "uuid": "104545AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Domiphen / lidocaine"
+    },
+    {
+     "code": "104584",
+     "uuid": "104584AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Epinephrine / lidocaine"
+    },
+    {
+     "code": "104735",
+     "uuid": "104735AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Glucose / lidocaine"
+    },
+    {
+     "code": "104859",
+     "uuid": "104859AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Hydrocortisone / lidocaine"
+    },
+    {
+     "code": "104976",
+     "uuid": "104976AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / menthol"
+    },
+    {
+     "code": "104977",
+     "uuid": "104977AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / methylprednisolone"
+    },
+    {
+     "code": "104978",
+     "uuid": "104978AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / neomycin / polymyxin B"
+    },
+    {
+     "code": "104979",
+     "uuid": "104979AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / oxytetracycline"
+    },
+    {
+     "code": "104980",
+     "uuid": "104980AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / phenol"
+    },
+    {
+     "code": "104981",
+     "uuid": "104981AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / phenylephrine"
+    },
+    {
+     "code": "104982",
+     "uuid": "104982AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / povidone-iodine"
+    },
+    {
+     "code": "104983",
+     "uuid": "104983AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / prilocaine"
+    },
+    {
+     "code": "104984",
+     "uuid": "104984AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine / tetracaine"
+    },
+    {
+     "code": "162167",
+     "uuid": "162167AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Betamethasone / lidocaine / phenylephrine"
+    },
+    {
+     "code": "165454",
+     "uuid": "165454AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Aluminium subacetate / hydrocortisone acetate / lidocaine / zinc oxide"
+    },
+    {
+     "code": "170030",
+     "uuid": "0b9b9edc-1add-4cd2-ac95-69870f1c8ab2",
+     "name": "Clotrimazole / lidocaine"
+    },
+    {
+     "code": "170559",
+     "uuid": "939843c3-daca-4efd-a945-79f35532197c",
+     "name": "Hyaluronic acid / lidocaine"
+    },
+    {
+     "code": "170568",
+     "uuid": "c92eeb46-c9f8-4578-83fd-2d6911088901",
+     "name": "Cetrimide / lidocaine"
+    },
+    {
+     "code": "170698",
+     "uuid": "20207304-5dc0-4368-af80-aae03041affe",
+     "name": "Lidocaine / phenazone"
+    },
+    {
+     "code": "78849",
+     "uuid": "78849AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine"
+    },
+    {
+     "code": "78850",
+     "uuid": "78850AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Lidocaine hydrochloride"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1197",
+   "name": "Metoclopramide",
+   "rxcui": "6915",
+   "rxnorm_name": "metoclopramide",
+   "drugbank_id": "DB01233",
+   "atc": [
+    "A03FA01"
+   ],
+   "ciel": [
+    {
+     "code": "103279",
+     "uuid": "103279AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / metoclopramide"
+    },
+    {
+     "code": "79755",
+     "uuid": "79755AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Metoclopramide"
+    },
+    {
+     "code": "79756",
+     "uuid": "79756AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Metoclopramide dihydrochloride"
+    },
+    {
+     "code": "79757",
+     "uuid": "79757AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Metoclopramide hydrochloride"
+    }
+   ]
+  },
+  {
+   "id": "DDInter225",
+   "name": "Botulinum toxin type A",
+   "rxcui": "1712",
+   "rxnorm_name": "botulinum toxin type A",
+   "drugbank_id": "DB00083",
+   "atc": [],
+   "ciel": [
+    {
+     "code": "72303",
+     "uuid": "72303AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Botulinum toxin type A"
+    },
+    {
+     "code": "72305",
+     "uuid": "72305AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Botulinum type A toxin-haemagglutinin complex"
+    }
+   ]
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter1004",
+   "DDInter1066",
+   "Minor",
+   "3905"
+  ],
+  [
+   "DDInter1004",
+   "DDInter225",
+   "Major",
+   "3730"
+  ],
+  [
+   "DDInter1066",
+   "DDInter1067",
+   "Moderate",
+   "6466"
+  ],
+  [
+   "DDInter1066",
+   "DDInter1068",
+   "Moderate",
+   "6466"
+  ],
+  [
+   "DDInter1066",
+   "DDInter1197",
+   "Major",
+   "6669"
+  ],
+  [
+   "DDInter1067",
+   "DDInter1197",
+   "Moderate",
+   "3020"
+  ],
+  [
+   "DDInter1068",
+   "DDInter1197",
+   "Moderate",
+   "3020"
+  ],
+  [
+   "DDInter225",
+   "DDInter225",
+   "Moderate",
+   "7257"
+  ]
+ ]
+}

@@ -1,0 +1,33 @@
+{
+  "version": "1.0",
+  "description": "Test fixture (issue #355): a curated entry whose named row carries a severity but NO mechanism note, beside nameless unrated paragraphs. It exists to discriminate WHERE InteractionNote.namesItsPartner comes from. For a row with a token and a severity and no note, DrugReferenceInjector.orderedInteractionNotes renders full as just the token, then builds the compact form as `token (Severity)` — which is LONGER, so the guard resets compact to the full text and the two coincide. So re-deriving the flag as !compact.equals(rendered) reports FALSE for this row even though it names its partner, the nameless unrated paragraphs then outrank it under severityPriority, and the row that names a partner is pushed out of the record by the character budget. The named row sits third in dataset order so that the ordering rather than dataset position is what puts it first.",
+  "entries": [
+    {
+      "id": "notelessstub-curated",
+      "name": "Notelessstub",
+      "drugClass": "Test fixture substance",
+      "aliases": [
+        "notelessstub"
+      ],
+      "atcCodes": [
+        "V99AA03"
+      ],
+      "interactions": [
+        {
+          "note": "Locally curated rule ALPHA. This operator-authored row carries no token and no ATC code, so DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to and its compact form IS its full text. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major. The paragraph is padded to a realistic mechanism length so that a handful of these rows exceeds MAX_INTERACTION_RENDER_CHARS between them, exactly as several real DDInter mechanism notes do, which is what makes the loss of the named row below visible in the rendered record."
+        },
+        {
+          "note": "Locally curated rule BRAVO. This operator-authored row carries no token and no ATC code, so DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to and its compact form IS its full text. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major. The paragraph is padded to a realistic mechanism length so that a handful of these rows exceeds MAX_INTERACTION_RENDER_CHARS between them, exactly as several real DDInter mechanism notes do, which is what makes the loss of the named row below visible in the rendered record."
+        },
+        {
+          "token": "warfarin",
+          "severity": "Major"
+        },
+        {
+          "note": "Locally curated rule CHARLIE. This operator-authored row carries no token and no ATC code, so DrugReferenceInjector.orderedInteractionNotes has no name to shorten it to and its compact form IS its full text. Being operator-authored it is also unrated, which DrugSafetyValidator.severityPriority ranks above Major. The paragraph is padded to a realistic mechanism length so that a handful of these rows exceeds MAX_INTERACTION_RENDER_CHARS between them, exactly as several real DDInter mechanism notes do, which is what makes the loss of the named row below visible in the rendered record."
+        }
+      ],
+      "source": "Test fixture"
+    }
+  ]
+}

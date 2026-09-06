@@ -1,0 +1,54 @@
+{
+ "version": "1.0",
+ "source": "test fixture — issue #339: two rules about ONE combination prescription, named two ways",
+ "description": "A partly-covered COMBINATION order, the shape ADR Decision 39 records having seen live: one payload holding 'active order Isoniazid / Rifapentine' beside 'active order isoniazid'. The order's own combination code J04AC51 is not in the dataset, so DrugSafetyValidator.orderPartners falls to soleSubstanceOf, which resolves the covered J04AB05 to Rifapentine, and OrderPartner.nameByOrder then renames that partner after the ORDER. A rule about the OTHER half resolves the Isoniazid entry, so a partner index keyed on the ladder's labelEntry alone cannot reach it — OrderPartner.substances, what the order's own names imply, is what does. Carbamazepine carries a rule about each half so that ONE prescription produces TWO chips in ONE response, which is the arrangement the divergence needs.",
+ "entries": [
+  {
+   "id": "carbamazepine",
+   "name": "Carbamazepine",
+   "aliases": [
+    "carbamazepine"
+   ],
+   "atcCodes": [
+    "N03AF01"
+   ],
+   "interactions": [
+    {
+     "token": "isoniazid",
+     "atc": "J04AC01",
+     "severity": "Major",
+     "note": "Isoniazid inhibits carbamazepine metabolism and raises its plasma concentration."
+    },
+    {
+     "token": "rifapentine",
+     "atc": "J04AB05",
+     "severity": "Moderate",
+     "note": "Rifapentine induces CYP3A4 and lowers carbamazepine exposure."
+    }
+   ],
+   "source": "test fixture"
+  },
+  {
+   "id": "isoniazid",
+   "name": "Isoniazid",
+   "aliases": [
+    "isoniazid"
+   ],
+   "atcCodes": [
+    "J04AC01"
+   ],
+   "source": "test fixture"
+  },
+  {
+   "id": "rifapentine",
+   "name": "Rifapentine",
+   "aliases": [
+    "rifapentine"
+   ],
+   "atcCodes": [
+    "J04AB05"
+   ],
+   "source": "test fixture"
+  }
+ ]
+}

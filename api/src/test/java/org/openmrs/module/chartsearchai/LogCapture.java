@@ -57,10 +57,10 @@ public final class LogCapture implements AutoCloseable {
 
 	private final Level restoreLevel;
 
-	private LogCapture(String loggerName) {
+	private LogCapture(String loggerName, Level level) {
 		this.loggerName = loggerName;
 		this.restoreLevel = ((Logger) LogManager.getLogger(loggerName)).getLevel();
-		Configurator.setLevel(loggerName, Level.INFO);
+		Configurator.setLevel(loggerName, level);
 		this.logger = (Logger) LogManager.getLogger(loggerName);
 		this.appender = new CollectingAppender(events);
 		this.appender.start();
@@ -72,7 +72,29 @@ public final class LogCapture implements AutoCloseable {
 	 *            captured
 	 */
 	public static LogCapture on(String loggerName) {
-		return new LogCapture(loggerName);
+		return new LogCapture(loggerName, Level.INFO);
+	}
+
+	/**
+	 * {@link #on(String)} at a level of the caller's choosing, for the outputs whose only surface is a
+	 * line logged BELOW info — issue #163's drug-reference ENTRY character total, which exists precisely
+	 * because the REST response returns only CITED references and so cannot show what the injected
+	 * entries cost, leaving a test no other way to observe it. Say "entry total" and not "the reference
+	 * slice": since issue #229 that is a named type ({@code ChartSearchAiUtils.ReferenceSlice}) counting
+	 * a strictly larger population — every reference-group record, findings included — and its size IS
+	 * now readable from REST, on the audit row. The two are printed side by side on that DEBUG line for
+	 * exactly this reason.
+	 *
+	 * <p>{@code INFO} stays the default rather than becoming a parameter everywhere, because the reason
+	 * for it is specific to the assertions this class was built for: see the class javadoc — capturing
+	 * INFO alongside WARN is what stops "no WARN was logged" passing vacuously. A caller lowering the
+	 * level gets strictly more events, so that protection is not weakened, only widened.
+	 *
+	 * @param loggerName as {@link #on(String)}
+	 * @param level the level to raise the logger CONFIG to for the duration; restored on {@link #close()}
+	 */
+	public static LogCapture on(String loggerName, Level level) {
+		return new LogCapture(loggerName, level);
 	}
 
 	/** @return true when at least one captured event was logged at {@code level} or more severe. */
@@ -98,6 +120,28 @@ public final class LogCapture implements AutoCloseable {
 			}
 		}
 		return out;
+	}
+
+	/**
+	 * @return whether one captured message at {@code level} carries every one of {@code needles}.
+	 *
+	 *         <p>Here rather than copied per suite: every assertion the two fidelity checks make is a
+	 *         {@code contains} over a log line, so a change to how {@link #messagesAt} renders a
+	 *         message, or to the line a check emits, must be able to redden both files at once. Two
+	 *         private copies of this loop is how it would instead leave one of them silently matching
+	 *         nothing — a green test, not a red one.
+	 */
+	public boolean hasMessageAt(Level level, String... needles) {
+		for (String message : messagesAt(level)) {
+			boolean all = true;
+			for (String needle : needles) {
+				all = all && message.contains(needle);
+			}
+			if (all) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** @return every captured event rendered as {@code LEVEL message}, for assertion failure text. */

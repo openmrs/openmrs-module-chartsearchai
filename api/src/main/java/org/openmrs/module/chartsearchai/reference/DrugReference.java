@@ -10,14 +10,19 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import java.text.Normalizer;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 /**
@@ -30,8 +35,14 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
  *
  * <p>Matching keys:
  * <ul>
- *   <li>{@link #getAliases()} — lowercase free-text names for question-driven matching.</li>
- *   <li>{@link #getAtcCodes()} — ATC codes for order-driven matching against active orders.</li>
+ *   <li>{@link #getAliases()} — lowercase free-text names, for question-driven matching and (through
+ *       {@link #matchesDrugName}) for resolving an active order's own display name.</li>
+ *   <li>{@link #getAtcCodes()} — ATC codes for order-driven matching against an active order's concept
+ *       mappings. One of the keys that join is built on since issue #151, not the only one — see
+ *       {@link DrugReferenceService#findForActiveOrders}.</li>
+ *   <li>{@link #getBridgedConcepts()} — the dictionary concepts the dataset bridges this entry to, the
+ *       third key of that join since issue #353: the one that does not depend on which of a concept's
+ *       names a session's locale elects. Empty for every source but {@code ddinter}.</li>
  * </ul>
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -44,9 +55,74 @@ public class DrugReference {
 	/** Diverging everyday generic name, or null — see {@link #getGenericName()}. */
 	private String genericName;
 
+	/** The reference data's own canonical name for the SUBSTANCE, or null — see
+	 *  {@link #getSubstanceName()}. */
+	private String substanceName;
+
+	/** The reference data's own IDENTITY for that substance, or null — see {@link #getSubstanceId()}. */
+	private String substanceId;
+
 	private String drugClass;
 
 	private List<String> aliases = Collections.emptyList();
+
+	/**
+	 * {@link #aliases}, each element in {@link #foldedLower} form and INDEX-ALIGNED with it, so a
+	 * witness accessor scanning this list reports the raw alias beside it. Derived in
+	 * {@link #setAliases}, which is the only writer of either list.
+	 *
+	 * <p><b>Derived, not memoised</b> (issue #330). {@link #setAliases} already derives what it stores
+	 * ({@code trimmedAliases}); this is the same assignment carrying one more form of the same value,
+	 * so there is no moment at which the two describe different aliases and CLAUDE.md's rule against
+	 * memo FIELDS — which is about values derived from {@code getAll()} on a Spring singleton — does
+	 * not reach it. The initialiser mirrors {@link #aliases}' so an entry whose aliases were never set
+	 * scans an empty list rather than throwing.
+	 *
+	 * <p><b>Two assignments, and what makes them visible together.</b> {@link #setAliases} writes both
+	 * lists, and a reader indexing one by a position taken from the other would misalign if it could
+	 * see one write without the other. It cannot: the setter is reached only while a dataset is being
+	 * built — by the three parsers and by {@code DrugReferenceValidity}'s repairs — and the entries
+	 * become reachable to another thread only through {@code DrugReferenceService}'s VOLATILE
+	 * {@code dataset} field, whose write happens after all of it. A caller invoking the setter on an
+	 * entry already published would race — and it would race DIFFERENTLY from before this field
+	 * existed, which is the part not to round off: one list alone could be seen stale but never
+	 * inconsistent with itself, whereas two non-final fields written in sequence can be seen TORN, a
+	 * new {@link #aliases} beside the old folded view. Do not add a writer reachable after publication
+	 * without making the pair one assignment.
+	 *
+	 * <p><b>What it costs.</b> One list per entry, and on both bundled datasets no duplicated strings
+	 * at all: {@link #foldDiacritics} returns its argument unchanged for pure-ASCII input and
+	 * {@link String#toLowerCase} returns {@code this} when no character changes, so each element here
+	 * is the very instance {@link #aliases} holds. Measured 2026-08-30 by reading the two lists off
+	 * every entry through the real loaders: 0 of the shipped knowledge base's 8300 alias slots
+	 * (5169 distinct) folds to a different String, and 0 of the curated seed's 12. The KNOWLEDGE
+	 * BASE's one alias above U+007F carries an EN DASH rather than a combining mark, so the fold leaves
+	 * it alone; the curated seed carries no non-ASCII alias at all.
+	 * What WOULD allocate is an alias the fold actually changes — a combining mark, or an upper-case
+	 * letter in a hand-authored {@code json} KB, since that parser trims its aliases without
+	 * lower-casing them.
+	 */
+	private List<String> foldedAliases = Collections.emptyList();
+
+	/** {@link #nameKeys()}'s answer, derived where the alias list is stored. */
+	private Set<String> nameKeys = Collections.emptySet();
+
+	/**
+	 * The dictionary concepts the reference dataset BRIDGES this entry to — the {@code ciel[]} rows of
+	 * the DDInter knowledge base, each carrying the concept's uuid and the one name the bridge records
+	 * for it. Empty for every other source, and empty for an entry a caller built by hand.
+	 *
+	 * <p><b>Why the entry keeps the uuid at all</b> (issue #353): the bridge is the only place the
+	 * reference data says which SUBSTANCES a dictionary concept is, and the parser used to read
+	 * {@code ciel[].name} into the alias list and drop the identity beside it. What that cost, and what
+	 * the join does with it, are on {@link DrugReferenceService#findByBridgedConcept} and in ADR
+	 * Decision 68.
+	 *
+	 * <p>The NAME is kept beside the uuid rather than derived from the aliases, because an entry's
+	 * alias list is a flat union of every bridge row's name and cannot say which name came from which
+	 * concept — and that name is what makes the join RANKED rather than a bare identity claim.
+	 */
+	private List<BridgedConcept> bridgedConcepts = Collections.emptyList();
 
 	private List<String> atcCodes = Collections.emptyList();
 
@@ -91,24 +167,688 @@ public class DrugReference {
 	 * renders only when the two genuinely diverge (neither contains the other, case-insensitive):
 	 * route variants like {@code Lidocaine (topical)} and redundancy like
 	 * {@code Kava (kava preparation)} render unchanged — the check lives here, not only in the
-	 * ddinter parser, because a curated json file can bind {@code genericName} directly. Never
-	 * used in prompt text — record rendering keeps {@link #getName()} — so this is a
-	 * chip-display concern only.
+	 * ddinter parser, because a curated json file can bind {@code genericName} directly.
+	 *
+	 * <p><b>It DOES reach prompt text, and this javadoc said otherwise until August 2026.</b> The
+	 * claim was "never used in prompt text — record rendering keeps {@code getName()}", and what is
+	 * true is the narrower half of it: the {@code drug_reference} record's own text keeps
+	 * {@link #getName()}, which {@code DrugSafetyChipLabelTest.displayLabelNeverLeaksIntoTheRenderedRecordText}
+	 * pins. The {@code safety_finding} record does not: {@code DrugSafetyValidator.interactionWarning}
+	 * builds both a chip's drug and its detail from this label, and
+	 * {@code DrugReferenceInjector.renderFinding} copies both verbatim into prompt text — measured
+	 * through the real {@code validate} over the bundled DDInter sample,
+	 * {@code Safety finding — Acetylsalicylic acid (aspirin): Acetylsalicylic acid (aspirin) interacts
+	 * with active order warfarin — Major. …}. So do not cite the old sentence as a reason two surfaces
+	 * cannot share a string; say which RECORD is meant.
 	 */
 	public String displayLabel() {
+		return appendsGenericName() ? name + " (" + genericName + ")" : name;
+	}
+
+	/**
+	 * @return whether {@link #displayLabel()} appends {@link #getGenericName()} as a synonym — the
+	 *         divergence test itself, extracted so that {@link #labelNameOccursIn} can ask which names
+	 *         the printed label is actually BUILT from without restating the rule. Two spellings of it
+	 *         would let a caller admit a generic the label never prints, which is the whole point of
+	 *         asking.
+	 */
+	private boolean appendsGenericName() {
 		if (genericName == null || genericName.isEmpty() || name == null) {
-			return name;
+			return false;
 		}
 		String n = name.toLowerCase(Locale.ROOT);
 		String g = genericName.toLowerCase(Locale.ROOT);
-		if (n.contains(g) || g.contains(n)) {
-			return name;
+		return !n.contains(g) && !g.contains(n);
+	}
+
+	/**
+	 * Whether a clinician-entered drug NAME carries one of the names {@link #displayLabel()} is built
+	 * from — the display name, and the generic only where the label actually appends it.
+	 *
+	 * <p>The question a caller about to PRINT that label asks of the chart's own string (issue #268):
+	 * "The patient has a recorded allergy to X." reports a record, so X may be this entry's label only
+	 * where the record says it. It reads two names where {@link #matchesDrugName} scans every alias,
+	 * and an alias is precisely how a row comes to be reached by a name belonging to a different
+	 * substance — the shape this is asked to separate. Narrower than that scan for any entry whose
+	 * aliases carry its own name and generic, which the {@code ddinter} and {@code atc} parsers
+	 * guarantee and a hand-authored {@code json} entry need not: there this can answer true where
+	 * {@code matchesDrugName} answers false. Not reachable through the caller — {@code
+	 * findNamedSubstances} only ever sees rows {@code findImpliedSubstances} already gated on that
+	 * scan — so it is a bound on the accessor rather than on the arm.
+	 *
+	 * <p>Gated on what the label PRINTS rather than on {@link #getName()} alone because the two must
+	 * be one string. A row whose generic diverges renders as {@code Acetylsalicylic acid (aspirin)},
+	 * and an allergy recorded as {@code aspirin} does name that label even though it does not carry
+	 * {@code Acetylsalicylic acid}. Where the label does NOT append the generic the generic is not part
+	 * of what is printed, so it cannot license printing it: a chart recording
+	 * {@code dextroamphetamine sulfate} carries {@code Amphetamine}'s {@code rxnorm_name} and not its
+	 * name, and {@code displayLabel()} prints no synonym there because the name is a substring of the
+	 * generic — so the recorded string does not name that row, which is a different substance.
+	 *
+	 * <p>Measured 2026-08-24 over the shipped KB, the two halves of this accessor pull in opposite
+	 * directions and both earn their place: the appended generic ADMITS 512 (name, row) pairs the
+	 * display name alone would refuse, and the {@code appendsGenericName()} guard REFUSES 7 that
+	 * nothing else names — {@code esomeprazole magnesium} and three combination kits reaching
+	 * {@code Omeprazole} (issue #185's shape), {@code dexfenfluramine hydrochloride} reaching
+	 * {@code Fenfluramine}, and the two {@code dextroamphetamine} salts reaching {@code Amphetamine}.
+	 *
+	 * <p>An earlier version of this paragraph offered the three shipped {@code gallium} rows as the
+	 * example, and they do not exercise this half at all: {@code DdiDrugReferenceSource} sets
+	 * {@code genericName} only where the display name does NOT contain the {@code rxnorm_name}, and
+	 * every gallium display name contains it, so those rows carry no generic for the gate to test.
+	 * They are refused by the display-name half.
+	 *
+	 * <p>By {@link #matchesOrderName}'s rule, since both operands are that shape: a clinician-entered
+	 * name on one side and a reference name on the other. So {@code trastuzumab} names
+	 * {@code ado-trastuzumab emtansine} — the hyphen is a boundary — and {@code ketoconazole} does not
+	 * name {@code Levoketoconazole}, where the token sits inside a longer word (issue #86).
+	 */
+	boolean labelNameOccursIn(String recordedName) {
+		if (matchesOrderName(recordedName, name)) {
+			return true;
 		}
-		return name + " (" + genericName + ")";
+		return appendsGenericName() && matchesOrderName(recordedName, genericName);
 	}
 
 	public void setName(String name) {
 		this.name = name;
+	}
+
+	/**
+	 * @return the reference data's own canonical name for the SUBSTANCE this entry is a row of — the
+	 *         DDInter {@code rxnorm_name} — or null for a source that publishes none: the {@code atc}
+	 *         adapter, which has no such field, and the shipped curated {@code json} dataset, whose
+	 *         entries carry none. Null there is the dataset's silence, not a schema ban — the curated
+	 *         schema binds this class directly, so a hand-authored file that sets this field opts into
+	 *         the grouping below. Unlike {@link #getGenericName()}, which
+	 *         is a chip-label synonym and is deliberately null whenever the display name already
+	 *         contains it, this is set whether or not the two agree: it is an identity, not a label,
+	 *         and it is exactly the field that is EQUAL across a substance's route/formulation rows
+	 *         ({@code Dexamethasone}, {@code Dexamethasone (nasal)}, … all publish
+	 *         {@code dexamethasone}). Consumed by {@link #substanceKey()}.
+	 */
+	public String getSubstanceName() {
+		return substanceName;
+	}
+
+	public void setSubstanceName(String substanceName) {
+		this.substanceName = substanceName;
+	}
+
+	/**
+	 * @return the identity the reference data gives the SUBSTANCE this row is a row of, at a
+	 *         granularity {@link #getSubstanceName()} does not have — or {@code null} where the data
+	 *         cannot supply one. Written by the loading source, not by the dataset: it is a
+	 *         determination over all the rows sharing a substance name, so no row can carry it on its
+	 *         own. {@link DdiDrugReferenceSource} resolves it from the DDInter {@code drugbank_id};
+	 *         {@link AtcDrugReferenceSource} and the curated {@code json} dataset publish no substance
+	 *         registry and leave it null, which is why the fallback below has to be the one that was
+	 *         there before.
+	 *
+	 *         <p>Deliberately package-private, unlike {@link #getSubstanceName()}: that field is part
+	 *         of the curated schema and a hand-authored file may set it, while this one is a
+	 *         source-side derivation and binding it from a file would let a dataset assert a
+	 *         resolution nothing had made.
+	 */
+	String getSubstanceId() {
+		return substanceId;
+	}
+
+	void setSubstanceId(String substanceId) {
+		this.substanceId = substanceId;
+	}
+
+	/** A trailing parenthesized qualifier on a display name — the route or formulation a DDInter row
+	 *  is distinguished from its siblings by ({@code Dexamethasone (nasal)},
+	 *  {@code Amphotericin B (lipid complex)}, {@code Tozinameran (5y-11y)}). Anchored at the END, so a
+	 *  parenthetical in the middle of a name is left alone. {@link #displayStem} applies it repeatedly,
+	 *  so a name carrying more than one trailing qualifier reduces fully rather than partly. */
+	private static final Pattern TRAILING_QUALIFIER = Pattern.compile("\\s*\\([^()]*\\)\\s*$");
+
+	/**
+	 * The substance-level identity of this entry, or {@code null} when the loaded source publishes no
+	 * substance name and this entry can therefore only stand for itself.
+	 *
+	 * <p><b>What it is for.</b> One substance is filed as several rows, so one clinician-facing string
+	 * resolves several entries and a per-entry safety chip becomes several chips for one clinical fact
+	 * (issue #145 on the contraindication arms; #115/#121 solved the partner side of the same problem
+	 * for interactions). This is the key those chips group on. It is deliberately NOT
+	 * {@link #displayLabel()}: grouping on a rendered label is the mistake issue #148 had to undo.
+	 *
+	 * <p><b>Two components, each load-bearing, both measured over the shipped 19 MB KB (2283 entries;
+	 * re-measure before relying on the figures).</b>
+	 * <ul>
+	 *   <li>{@link #getSubstanceName()} — the data's own claim that two rows are one substance. 142
+	 *       values are shared by more than one entry, across 332 entries, and the {@code rxcui}
+	 *       partitions those entries identically (0 families disagreeing in either direction), so this
+	 *       is the dataset's substance identity rather than a spelling coincidence.</li>
+	 *   <li>{@link #getSubstanceId()} — the data's own IDENTITY for that substance, which either
+	 *       CONFIRMS the claim or withdraws it, because the claim over-merges. Among those 142 families
+	 *       sit pairs of genuinely different substances: {@code Omeprazole}/{@code Esomeprazole} (one
+	 *       {@code rxnorm_name}, one {@code rxcui}, one ATC code),
+	 *       {@code Amphetamine}/{@code Dextroamphetamine}, {@code Fenfluramine}/{@code Dexfenfluramine},
+	 *       {@code Gabapentin}/{@code Gabapentin enacarbil}, {@code Netupitant}/{@code Fosnetupitant},
+	 *       {@code Ketoconazole}/{@code Levoketoconazole}, {@code Fenofibrate}/{@code Fenofibric acid},
+	 *       {@code Atropine}/{@code Hyoscyamine}, {@code Hydrocortisone}/{@code Hydrocortisone butyrate},
+	 *       {@code Estrone}/{@code Estrone sulfate} — each of them the
+	 *       {@code enalapril}/{@code enalaprilat} shape issue #121 decided must stay two chips. 19 of the
+	 *       142 families name two or more DrugBank substances and are exactly these. There the id is
+	 *       withheld — {@link DdiDrugReferenceSource} sets none, because it cannot say which of the two
+	 *       a given row is — and the veto falls to the DISPLAY STEM, which separates every one of
+	 *       them.</li>
+	 * </ul>
+	 *
+	 * <p><b>Why the stem is the fallback and not the veto (issue #164).</b> It used to be the veto, and
+	 * it cannot tell a second SUBSTANCE from a second NAME: it separates the two PPIs correctly and
+	 * separates {@code Tozinameran} from {@code Pfizer-BioNTech Covid-19 Vaccine} — one {@code rxcui},
+	 * one {@code rxnorm_name}, one DrugBank substance — incorrectly, and likewise
+	 * {@code Botulinum toxin type A} from {@code Daxibotulinumtoxina}. Both were reported live as a
+	 * substance cross-reactive, or interacting, with itself. A substance registry can tell them apart
+	 * and a display name cannot, so where the reference data supplies one it decides, and the stem is
+	 * left to the families it cannot speak for. Widening the substance NAME alone was never the
+	 * alternative: it merges the two PPIs.
+	 *
+	 * <p>Neither half works alone. Where one stem covers two substances the stem alone merges them and
+	 * the substance name is what refuses: {@code Varicella Zoster Vaccine (Recombinant)} against
+	 * {@code (live/attenuated)} — a distinction that decides whether an immunocompromised patient may
+	 * have it at all — and likewise {@code Manganese (chloride)}/{@code (sulfate)},
+	 * {@code Dextran (-1)}/{@code (low molecular weight)}, {@code Insulin human}/{@code (isophane)},
+	 * {@code Insulin lispro}/{@code (protamine)}, {@code Iron}/{@code (polysaccharide)}. A few more
+	 * one-stem groups are kept apart because a row publishes NO substance name rather than a differing
+	 * one ({@code Typhoid vaccine (live)}/{@code (inactivated)}) — that is the null-key fallback below,
+	 * not this comparison. Together the three reduce those 332 entries to 163 substances (177 while the
+	 * stem was the veto), and no resulting group holds two DrugBank substances.
+	 *
+	 * <p>Conservative where it cannot tell, and now in ONE direction rather than both. A name that
+	 * extends the family's stem by a WORD rather than a qualifier keeps its own key, and so its own
+	 * chip, only where the registry agrees it is another substance ({@code Hydrocortisone butyrate},
+	 * {@code Estrone sulfate}, {@code Procaine benzylpenicillin}); where the KB is naming one substance
+	 * two ways it no longer does ({@code Thallous Chloride}/{@code Thallous chloride tl-201},
+	 * {@code Typhoid vaccine (live)}/{@code Typhoid vaccine live}). Over-reporting one chip is still the
+	 * safe direction for a non-blocking advisory, and dropping a real one is not — but a chip reporting
+	 * a substance against ITSELF is not a real one, which is what makes those merges a gain rather than
+	 * a relaxation.
+	 *
+	 * @return an opaque key, equal exactly for two entries this module treats as one substance
+	 */
+	Object substanceKey() {
+		return substanceKey(name, substanceName, substanceId);
+	}
+
+	/**
+	 * {@link #substanceKey()} over the three fields it reads, for a caller holding those fields but no
+	 * {@link DrugReference} yet: {@link DdiDrugReferenceSource}'s parse-time rows, which have to answer
+	 * "are these two rows one substance?" before any entry exists (issue #152's self-pair guard). One
+	 * definition, so a load-time guard and the chip grouping cannot come to disagree about what one
+	 * substance is — the failure that would leave a self-pair loaded for exactly the rows the chips then
+	 * merge, and the reason issue #164's interaction arm needed no change of its own.
+	 *
+	 * @return the key described at {@link #substanceKey()}, or null when {@code substanceName} is blank
+	 */
+	static Object substanceKey(String name, String substanceName, String substanceId) {
+		String substance = normalizeName(substanceName);
+		if (substance == null) {
+			return null;
+		}
+		String identity = normalizeName(substanceId);
+		return Arrays.asList(substance, identity != null ? identity : displayStem(name));
+	}
+
+	/**
+	 * @return the substance this entry stands for ({@link #substanceKey()}), else the entry itself. The
+	 *         two are different types — a {@link List} and a {@link DrugReference} — so the two key
+	 *         spaces cannot collide, and an entry from a source publishing no substance name keys on
+	 *         its own identity and therefore groups with nothing.
+	 *
+	 *         <p>The key for grouping the ROWS OF ONE SUBSTANCE inside one request, shared by the
+	 *         contraindication chip ledger ({@code DrugSafetyValidator.ContraindicationChips}, issue
+	 *         #145), the interaction arms' subject side (#162) and the class arm's co-medication
+	 *         grouping ({@code DrugSafetyValidator.orderPartners}, issue #171), so no two of them can
+	 *         merge different sets of rows. Identity is the right fallback for all of them because
+	 *         every set they group is resolved against {@link DrugReferenceService}'s shared
+	 *         {@code getAll()} cache, so one row is one object.
+	 *         {@link DrugReferenceInjector#matchingEntries} deliberately falls back to
+	 *         {@link #getId()} instead, not to this — see there.
+	 */
+	Object substanceGroupKey() {
+		Object substance = substanceKey();
+		return substance != null ? substance : this;
+	}
+
+	/**
+	 * @return whether this entry's display name names the substance with NO trailing route/formulation
+	 *         qualifier — {@code Dexamethasone} rather than {@code Dexamethasone (nasal)}. At most one
+	 *         row of a substance normally answers true, and it is the row a question naming the bare
+	 *         substance is about: nothing in a QUESTION tells this module which route is in play, and
+	 *         the data cannot help either, since every variant publishes the same aliases and the same
+	 *         ATC list — the data-side gap issue #115 records — so the only route this predicate can
+	 *         honestly assert is none.
+	 *
+	 *         <p><b>An ORDER can now say, and it makes no difference here</b> (issue #234). The
+	 *         builder reads a {@code DrugOrder}'s route and dose form, so the sentence above no longer
+	 *         holds of an order; what still holds is why that cannot move THIS choice. Every row of a
+	 *         substance publishes the same ATC list — measured over the shipped KB, all 129 of its
+	 *         multi-row substances and none differing — so preferring the row whose qualifier matches a
+	 *         recorded route would change which name a chip prints and nothing about what it claims.
+	 *         That is why {@link #codesForRecordedAdministration} narrows the CODES instead, and why
+	 *         issue #234 left this predicate alone.
+	 *
+	 *         <p><b>A trailing parenthetical is a QUALIFIER only where it distinguishes the row from its
+	 *         substance</b> (issue #250). Where the data files the family under that very string —
+	 *         {@code Tick-borne encephalitis vaccine (whole virus, inactivated)}, whose own
+	 *         {@code substanceName} is that name character for character — it qualifies nothing, and the
+	 *         syntactic reading alone called such a row route-qualified. Measured over the shipped KB,
+	 *         <b>4 of 2283 rows</b> are in that class: the influenza A/Vietnam and A/California antigens,
+	 *         the Yersinia pestis 195/P antigen and the tick-borne row. That is why this reads
+	 *         {@link #namesItsSubstance()} as well as the stem.
+	 *
+	 *         <p><b>And what that trusts, said plainly.</b> Nothing here can tell
+	 *         {@code (formaldehyde inactivated)} from {@code (ophthalmic)} — reading the parenthetical's
+	 *         CONTENT would be the pattern-match-a-label mistake issue #148 undid — so what admits the
+	 *         first is only that the data files the family under it. A family filed under a
+	 *         route-qualified substance name that ALSO holds a plain row would therefore have its
+	 *         presentation elected, which is the shape issues #174 and #187 removed. The shipped dataset
+	 *         has exactly one family whose elected row carries a trailing parenthetical while a plain
+	 *         sibling exists, and
+	 *         {@code SubstanceNameRowTest.everyFamilyElectingAQualifiedRowOverAPlainSiblingIsNamedRatherThanCounted}
+	 *         names its members rather than counting them, so a refresh that adds one reddens with the
+	 *         offending name.
+	 *
+	 *         <p>It stays a UNARY property — one row's display name against THAT SAME ROW's own
+	 *         {@code substanceName} — which is why it needs none of the same-substance scoping
+	 *         {@link #canonicalRow}'s second rung has: that rung's conclusion is RELATIONAL ("this row
+	 *         represents THIS family") and applying it across substances renamed {@code A02BC05
+	 *         Omeprazole} to {@code Esomeprazole}, while nothing here asks anything about the other row.
+	 *         Do not conclude from that alone that the cross-family fold is unreachable: what makes it
+	 *         unreachable on this dataset is that none of those 4 rows publishes an ATC code, so
+	 *         {@code DrugSafetyValidator.entryForAtcCode} never sees one, and
+	 *         {@code SubstanceNameRowTest.aRowWhoseTrailingParentheticalIsItsOwnSubstanceNameCarriesNoQualifier}
+	 *         reddens if a refresh gives one a code.
+	 *
+	 *         <p>Consumed by {@link #canonicalRow} — where the collapses that need it agree on one
+	 *         answer — and by {@code DrugSafetyValidator.outranks}, which reads it to decide whose
+	 *         MECHANISM PROSE a chip renders. Both consumers asked the same question and got the same
+	 *         wrong answer for those 4 rows, which is why issue #250 corrected the predicate rather than
+	 *         either call site. Measured over the shipped 19 MB KB (2026-08-07; re-measured 2026-08-13
+	 *         for issue #206, and 2026-08-30 for issue #250 by driving {@link #substanceGroupKey()}, this
+	 *         predicate and {@link #canonicalRow} over the shipped file on both sides of the correction;
+	 *         re-measure before relying on the figures): of the 129 substances filed as more than one
+	 *         row, <b>120</b> have such a row and <b>9</b> do not —
+	 *         {@code Oxymetazoline (nasal)}/{@code (ophthalmic)}/{@code (topical)},
+	 *         {@code Iobenguane (I-123)}/{@code (I-131)} — and in <b>8</b> of the 120 it is NOT the
+	 *         family's first row, which is why the choice cannot be left to dataset order. Those were
+	 *         119/10/7 before the correction. WHICH family accounts for a given delta is NOT stated here:
+	 *         two copies of that attribution have been written in this repo and both named the wrong
+	 *         family, so re-measure it by diffing the NAMED lists rather than the counts. CLAUDE.md's
+	 *         identity bullet and {@link #canonicalRow}'s own measured paragraph each attribute one of
+	 *         the two deltas; this sentence claimed they were the only home and that claim was itself
+	 *         wrong, which is why it now says where to look instead of how many places say it.
+	 */
+	boolean namesNoRoute() {
+		String normalized = normalizeName(name);
+		if (normalized == null) {
+			return false;
+		}
+		// The trailing parenthetical this reads for is a QUALIFIER only where it distinguishes the row
+		// from its substance. Where the data files the family under that very string it qualifies
+		// nothing, and stripping it is what made the syntactic reading call the row route-qualified
+		// (issue #250). A row's own claim about its own family, so this stays a UNARY property and needs
+		// none of the same-substance scoping canonicalRow's second rung has.
+		return normalized.equals(displayStem(name)) || namesItsSubstance();
+	}
+
+	/**
+	 * @return whether this entry's display name IS the name the data files it under — {@code Estradiol}
+	 *         against a {@code substanceName} of {@code estradiol}, compared through
+	 *         {@link #normalizeName} like every other identity between two reference strings. The row a
+	 *         family is NAMED after, as distinct from the row that names no route
+	 *         ({@link #namesNoRoute()}): a family can hold several of the second and this asks which one
+	 *         the data itself calls the substance.
+	 *
+	 *         <p>The FULL display name and not {@link #displayStem}, which is the difference that makes
+	 *         it answer for a substance whose own name carries a parenthetical: the shipped
+	 *         {@code Tick-borne encephalitis vaccine (whole virus, inactivated)} row is filed under that
+	 *         very string, and its paediatric sibling under the same one, so both stems are
+	 *         {@code tick-borne encephalitis vaccine} and a stem comparison separates neither.
+	 *
+	 *         <p><b>The closest neighbour is {@link #nameMatchStrength}'s top rank, and the two are
+	 *         measured identical on the shipped data.</b> The expression here is the one
+	 *         {@code nameMatchStrength} uses for {@link #NAME_IS_THE_DISPLAY_NAME}, with this row's own
+	 *         {@code substanceName} as the operand, and over the shipped KB
+	 *         {@code nameMatchStrength(getSubstanceName()) == NAME_IS_THE_DISPLAY_NAME} agrees with this
+	 *         predicate on all 2283 rows and elects the same row for all 129 multi-row families. It is
+	 *         still not reused, and the second reason is the one that would bite: that method is for a
+	 *         CLINICIAN-ENTERED name, and CLAUDE.md keeps identity, ranking and widening apart; and it is
+	 *         gated on {@link #matchesDrugName}, which its own javadoc says excludes "a hand-authored
+	 *         {@code json} entry whose {@code aliases} omit its own {@code name}" — so on such a dataset
+	 *         it answers false where this answers true, i.e. fails CLOSED. Recorded because the
+	 *         measurement is what makes the two look interchangeable to whoever reads them next.
+	 *
+	 *         <p>Read by {@link #canonicalRow} and, since issue #250, by {@link #namesNoRoute()} — a row
+	 *         whose trailing parenthetical is the name the data files its family under carries no
+	 *         qualifier — plus the cases that state its premises. It is not a claim that the row is
+	 *         the substance — {@code DrugReferenceValidity.derivesFromItsOwnSubstance} asks a different
+	 *         and narrower question about the same two fields (does this row's stem carry the substance's
+	 *         name without naming it as a word, i.e. is it a DERIVATIVE) and reusing that here fixes 1 of
+	 *         the 3 families this rung is for, measured through the shipped KB. Null-safe on both sides:
+	 *         a source publishing no {@code substanceName} — the {@code atc} adapter, a curated file that
+	 *         sets none — answers false for every row, so the fold behaves exactly as it did before this
+	 *         predicate existed.
+	 */
+	boolean namesItsSubstance() {
+		String substance = normalizeName(substanceName);
+		return substance != null && substance.equals(normalizeName(name));
+	}
+
+	/**
+	 * Which of two rows of ONE substance should represent it — the row a collapsed chip is named after
+	 * ({@code DrugSafetyValidator.interactionSubject}, issue #162, and since issues #206/#236 every chip
+	 * arm through {@code DrugSafetyValidator.SubstanceSubjects}), the row a collapsed reference
+	 * record is rendered from ({@link DrugReferenceInjector#matchingEntries}, issue #163), and the row a
+	 * class chip names its PARTNER by ({@code DrugSafetyValidator.entryForAtcCode}, issue #174 site 1 —
+	 * where the ambiguity is not two rows a question resolved but the several rows that all publish the
+	 * one ATC code being looked up). Shared rather than decided three times, because those surfaces
+	 * describe the same substance to the same clinician and to the same model: a chip naming the
+	 * substance beside a record naming one of its routes is the chip-versus-prose divergence this module
+	 * keeps having to remove.
+	 *
+	 * <p><b>A fourth caller since issue #353, and it displays nothing</b>:
+	 * {@link DrugReferenceService#substancesNamedByBridge} elects the row a substance's claim on a
+	 * dictionary bridge's own recorded name is judged by. So this fold decides a NAMING answer there
+	 * rather than a rendered name — and keeping the first row instead made that answer, and therefore
+	 * whether a finding may state which prescription a substance came from, a fact about the order the
+	 * knowledge-base file lists its rows in. That caller's javadoc carries the measurement and what the
+	 * election leaves unsettled.
+	 *
+	 * <p>At the CHIP-SUBJECT site this is the second step rather than the whole answer since issue #194:
+	 * {@code DrugSafetyValidator.interactionSubject} asks {@link #nameMatchStrength} first — the row the
+	 * patient's own record names is the truthful subject (#187) — and folds only the rows tied on that.
+	 * This fold is unchanged and still decides every case where the record names none of them, which is
+	 * most of them.
+	 *
+	 * <p><b>Do not add the recorded-name step here</b> — but not for the reason this used to give. It
+	 * said {@code DrugReferenceInjector.matchingEntries} and the class-partner site "have no recorded
+	 * name to anchor on", and since issues #237/#259 that is false of the first: {@code matchingEntries}
+	 * takes the patient's context and asks {@code interactionSubject} which row this response names each
+	 * substance by. The reasons it must still not move are two, and both are stronger than the one they
+	 * replace. First, this fold is the tie-break INSIDE {@code interactionSubject}, so a recorded-name
+	 * step here would be applied twice at every chip-subject site. Second, {@code matchingEntries} calls
+	 * this to choose the row a reference record is RENDERED from, and moving that to the charted row was
+	 * measured and declined — the route-unspecified row carries the breadth, and rendering the charted
+	 * one loses the patient's own interaction partner in 74 of the shipped KB's 129 multi-row families
+	 * against 0 the other way. The injector says which row it rendered instead
+	 * ({@code DrugReferenceInjector.rowAttribution}). The class-partner site genuinely still has no
+	 * recorded name.
+	 *
+	 * <p><b>Two rungs since issue #250, in this order.</b> First {@link #namesNoRoute()}: the
+	 * route-unspecified row wins wherever the family has one. Then, among rows agreeing on THAT and
+	 * belonging to one substance, {@link #namesItsSubstance()}: the row the data files the family under
+	 * wins. Otherwise the first row seen keeps the role. The second rung exists because the first one
+	 * ties on any family holding two rows that both name no route, and dataset order then answered — so
+	 * the shipped KB elected {@code Fluoroestradiol f-18}, a diagnostic PET tracer at index 1282, to
+	 * speak for the estradiol substance against {@code Estradiol} at 1927, and every rated partner of
+	 * that substance took the tracer as its chip subject. It did not stay in the chip either: live on a
+	 * 3.7.1 standalone, a question naming estradiol was answered <em>"No — Fluoroestradiol f-18 should
+	 * not be given"</em>, the substance the clinician asked about named nowhere in the response.
+	 *
+	 * <p><b>The rung ORDER no longer decides anything, and that is issue #250's second half rather than
+	 * a lapse.</b> It used to: placing the second rung above the first renamed a fourth shipped family —
+	 * the influenza A/Vietnam antigen, whose elected row carried a display name with a dropped leading
+	 * "I" — and did so by electing a row {@code namesNoRoute()} called route-qualified while the family
+	 * held one it called unqualified, falsifying this method's own first rung. What that argument never
+	 * asked is WHY the predicate said that, and the answer was that it was wrong: the parenthetical it
+	 * read as a qualifier is part of that row's own {@code substanceName}, character for character. With
+	 * {@link #namesNoRoute()} corrected to say so, {@code namesItsSubstance()} IMPLIES
+	 * {@code namesNoRoute()}, so the second rung can no longer elect a row the first calls qualified —
+	 * on any dataset, not merely this one — and the two placements are indistinguishable. Nothing pins
+	 * the order because nothing can; what the order guard protected substantively is pinned instead by
+	 * {@code SubstanceNameRowTest.aFamilyWithAnUnqualifiedRowElectsOneAndNoOtherRowSpeaksForIt}, whose
+	 * second assertion states the invariant on RAW SYNTAX so that a weakening of either predicate cannot
+	 * satisfy it. Mutate {@code namesItsSubstance()} to compare display stems and read the
+	 * failures; that mutation elects {@code Salicylic acid (sodium)} for a family holding a plain
+	 * {@code Salicylic acid} row. That mutation is not invisible to the suite as a whole — it reddens
+	 * many cases — but that FAMILY's election was reached by none of them before the assertion existed.
+	 *
+	 * <p><b>It guards a weakening of the PREDICATES and nothing else — in particular not a KB
+	 * refresh</b>, and that scope is stated because two earlier texts ran the two together. With the
+	 * predicates as they stand the raw equality is ENTAILED by the election: a row carrying a trailing
+	 * parenthetical is elected over a plain sibling only by answering {@link #namesNoRoute()}, whose
+	 * syntactic disjunct is false for it, so {@link #namesItsSubstance()} — the very equality asserted
+	 * — holds. Measured rather than left there: a synthetic two-row family appended to the shipped
+	 * entries through the real {@code DdiDrugReferenceSource.parse} (a plain {@code Zzprobe} row and a
+	 * {@code Zzprobe (ophthalmic)} row whose own {@code substanceName} is that name) reddens
+	 * {@code SubstanceNameRowTest.everyFamilyElectingAQualifiedRowOverAPlainSiblingIsNamedRatherThanCounted}
+	 * alone and leaves that case green. The named list is the guard a data change reaches; the two
+	 * cases cover different mutations rather than ratcheting one another.
+	 *
+	 * <p>Below the first rung the fold never moves AWAY from {@code namesNoRoute()}, and that is
+	 * structural rather than a property of the shipped data: the first rung RETURNS whenever the two rows
+	 * disagree on it, so the second is only ever reached between rows that agree, and it therefore cannot
+	 * replace an unqualified row with a qualified one. It can still move LATERALLY between two rows that
+	 * agree — which is what all three of its shipped moves are — so "monotone" here means the weaker
+	 * thing; {@link DrugReferenceInjector#matchingEntries}' bullet says so at its own site. Read that in
+	 * the predicate's terms and not the raw string's: since issue #250 an elected row may CARRY a
+	 * trailing parenthetical where that parenthetical is its own substance name, which is what the
+	 * A/Vietnam family now does.
+	 *
+	 * <p><b>What it moves, measured 2026-08-24 through the real parse and this method on BOTH sides</b> —
+	 * the baseline is this same method as it stands before the rung, driven from a second worktree, rather
+	 * than a re-expression of it; re-measure before relying on the figures. Of the 129 multi-row families,
+	 * <b>3 change subject</b> and 126 do not: {@code Fluoroestradiol f-18}/{@code Estradiol},
+	 * {@code Daxibotulinumtoxina}/{@code Botulinum toxin type A}, and the paediatric tick-borne
+	 * encephalitis vaccine/the row the data files that family under. All three moves were LATERAL in route
+	 * terms, and the count of families electing a route-qualified row was 10 before and 10 after.
+	 *
+	 * <p><b>That paragraph is a historical measurement and must be read against the PRE-issue-#250
+	 * predicate, which is what produced it.</b> Do not carry any of its three claims forward: re-measured
+	 * 2026-08-30 against the corrected {@link #namesNoRoute()}, disabling this rung still moves 3 of the
+	 * 129 families but a DIFFERENT three — {@code Fluoroestradiol f-18}/{@code Estradiol}, the influenza
+	 * A/Vietnam typo row/the row the data files that family under, and
+	 * {@code Daxibotulinumtoxina}/{@code Botulinum toxin type A}. The tick-borne family is now decided by
+	 * rung ONE and is not a rung-two move at all. The A/Vietnam move is lateral in the PREDICATE's terms
+	 * like the other two — rung two is only ever reached between rows that agree on rung one — while over
+	 * the RAW strings it replaces a display name carrying no trailing parenthetical with one that does.
+	 * That is why a count over the predicate and a count over the string now move in opposite directions;
+	 * the paragraph below states both with their units. At the one
+	 * {@code canonicalRow} site whose row set is NOT one substance
+	 * ({@code DrugSafetyValidator.entryForAtcCode}, over every row publishing one ATC code, 30 of the
+	 * KB's 2148 codes spanning more than one substance) exactly 1 fold moves, and within one substance.
+	 * The rules the RENDERED record then carries move with the row: the vaccine family gains 19 partners
+	 * and loses none, botulinum is identical at 110, and estradiol goes from the tracer's 4 partners to
+	 * 578. Those are counts of the elected ROW's rated partners in the dataset and NOT of anything a
+	 * clinician sees — the chip arm is scoped to the patient's own active orders, so the response for the
+	 * ticket's own patient carries five interaction chips before and after, live-verified. Read 578 as
+	 * breadth available to a record, never as chips gained. The estradiol row loses
+	 * {@code bazedoxifene} and {@code toremifene}, which only the tracer row rates, and
+	 * rendering {@code ospemifene} and {@code tamoxifen} at the substance row's own rating rather than
+	 * the tracer's. The CHIP arm is unaffected there, because it pools every row of the substance
+	 * ({@code DrugSafetyValidator.bestRulePerPartner}): that pool is 580 partners before and after.
+	 *
+	 * <p><b>What issue #250's SECOND half moves, measured 2026-08-30 the same way</b> — the real parse of
+	 * the shipped KB and this method on both sides of the {@link #namesNoRoute()} correction, the baseline
+	 * being that same predicate unmutated; re-measure before relying on the figures. Of the 129 multi-row
+	 * families <b>exactly 1 election moves</b>, the influenza A/Vietnam antigen, to the row the data files
+	 * it under. <b>State which reading a qualification count is on, because the correction is exactly what
+	 * makes the two diverge</b>: elected rows that ANSWER {@code !namesNoRoute()} go 10 → 9, while elected
+	 * rows whose raw display name carries a trailing parenthetical go 10 → <b>11</b> — the A/Vietnam row
+	 * joins, and its parenthetical is its own substance name. Both are true and they count different
+	 * things. At {@code DrugSafetyValidator.entryForAtcCode} <b>0 of 2148</b> folds move, which is
+	 * ENTAILED rather than independently observed: none of the 4 rows the correction reaches publishes an
+	 * ATC code, so none appears in any code's row set. The RENDERED record for that family moves with the
+	 * row, from the typo row's 251 rules to 239 — <b>239 → 228 distinct partners, 12 lost and 1 gained</b>,
+	 * 11 of the 12 lost being other vaccines, the twelfth {@code umbralisib} and the gain
+	 * {@code trifluridine}. The CHIP arm is unaffected: it pools every row of the substance, and that pool
+	 * is <b>240 partners before and after</b>.
+	 *
+	 * <p><b>The residue of the same-substance gate, stated rather than left to be found.</b> Where the
+	 * row set spans substances the second rung is skipped per PAIR, so the answer can depend on the order
+	 * the rows arrive in — a row of one substance interposed between two rows of another is compared
+	 * against neither of them on that rung. This fold was already order-sensitive there, and the gate
+	 * does not make it more so: re-folding each of the 2148 ATC codes' rows reversed, and under 40 random
+	 * permutations each, changes the elected row for <b>49</b> codes with this rung and <b>50</b> without
+	 * it — the one it removes being {@code G03CA03}, which the rung now decides outright. Nothing here is
+	 * a claim that the ordering is sound; what would make it sound is grouping by substance before
+	 * folding, and that is a change to {@code DrugSafetyValidator.entryForAtcCode} rather than to this
+	 * method.
+	 *
+	 * @return {@code candidate} where it outranks {@code incumbent} on {@link #namesNoRoute()}, or — for
+	 *         two rows of one substance agreeing on that — on {@link #namesItsSubstance()}; else
+	 *         {@code incumbent}. For a family that holds no row answering {@link #namesNoRoute()} at all
+	 *         the survivor still carries a qualifier: the KB publishes no unqualified name for those
+	 *         substances, and manufacturing one by stripping a display name is the pattern-match-a-label
+	 *         mistake issue #148 had to undo. How MANY such families the shipped KB has is NOT restated
+	 *         here: this sentence carried a figure for one reading while {@link #namesNoRoute()}'s
+	 *         javadoc carried the other, and the two came apart the moment the predicate changed. That
+	 *         javadoc carries it with the reading it is counted on. Older copies elsewhere are stale on
+	 *         their base as well as their count, so re-measure rather than reconciling them.
+	 */
+	static DrugReference canonicalRow(DrugReference incumbent, DrugReference candidate) {
+		if (incumbent == null) {
+			return candidate;
+		}
+		if (candidate.namesNoRoute() != incumbent.namesNoRoute()) {
+			return candidate.namesNoRoute() ? candidate : incumbent;
+		}
+		// Rung two, and only where the two rows are one substance: "is this row the one the family is
+		// named after" is a question about a family, and this method is also folded over row sets that
+		// are NOT one — DrugSafetyValidator.entryForAtcCode folds every row publishing one ATC code, and
+		// 30 of the shipped KB's 2148 codes span more than one substance. Ungated the rung renames three
+		// of those across substances, including A02BC05 Omeprazole -> Esomeprazole: the shipped
+		// Omeprazole row carries rxnorm_name esomeprazole, so it does not name its own substance while
+		// Esomeprazole does, and the pair is the one DrugReference.substanceKey exists to keep apart.
+		if (incumbent.substanceGroupKey().equals(candidate.substanceGroupKey())
+		        && candidate.namesItsSubstance() && !incumbent.namesItsSubstance()) {
+			return candidate;
+		}
+		return incumbent;
+	}
+
+	/**
+	 * @return {@link #canonicalRow(DrugReference, DrugReference)} folded over {@code rows} in
+	 *         iteration order — the row that represents the substance for a caller that already holds
+	 *         the whole group rather than accumulating it as it scans. {@code null} for an empty
+	 *         {@code rows}, which is the only way this can answer nothing.
+	 *
+	 *         <p>Shared rather than written out at each site for the reason the pairwise form exists at
+	 *         all: every surface that must describe one substance to one clinician chooses its
+	 *         representative row here, and a fold written once per surface is one chance per surface for
+	 *         them to iterate in an order the others do not. Grep the callers rather than trusting a count
+	 *         here — every issue that finds another surface adds one. Since #206 for three arms and #236
+	 *         for the last two, the CHIP subjects share
+	 *         one per-{@code validate} lookup ({@code DrugSafetyValidator.SubstanceSubjects}) that ranks the
+	 *         patient's recorded names before folding — and since issue #238 the rows it folds are the
+	 *         question's and the patient's own, so the two {@code validate} passes of one request reach the
+	 *         same answer from the same chart read, even though the lookup itself is per pass — that
+	 *         qualifier is load-bearing, and {@code DrugSafetyValidator.SubstanceSubjects} states the
+	 *         bound; a caller with no recorded name to rank by asks this directly.
+	 */
+	static DrugReference canonicalRow(Iterable<DrugReference> rows) {
+		DrugReference canonical = null;
+		for (DrugReference row : rows) {
+			canonical = canonicalRow(canonical, row);
+		}
+		return canonical;
+	}
+
+	/**
+	 * The separator this reference data joins a COMBINATION PRODUCT's ingredient names with —
+	 * RxNorm's, and so the KB's: {@code sulfamethoxazole / trimethoprim},
+	 * {@code abacavir / dolutegravir / lamivudine}. A structural marker in the string itself, which is
+	 * why {@link #combinationConstituents} can read a multi-substance name off it rather than guessing
+	 * from pharmacology: a name joined this way denotes every ingredient it lists.
+	 *
+	 * <p>Sufficient, not necessary, and the difference matters. Its absence says nothing — the KB also
+	 * spells combinations with a word or a hyphen ({@code amoxicillin and clavulanic acid},
+	 * {@code potassium chloride-potassium gluconate}), which is what
+	 * {@link DrugReferenceService#findImpliedSubstances}'s equal-claimant leg is for. So this reads only
+	 * one way: a name carrying the separator lists ingredients, while a name without it may be one drug
+	 * however many words it has ({@code digoxin antibodies fab fragments},
+	 * {@code ciprofloxacin lactate}) or a combination this rule cannot see.
+	 */
+	private static final char COMBINATION_SEPARATOR = '/';
+
+	/** {@link #COMBINATION_SEPARATOR} as a split pattern, compiled once — {@code /} is not a regex
+	 *  metacharacter, so the pattern is the character itself. */
+	private static final Pattern COMBINATION_SPLIT = Pattern.compile(String.valueOf(COMBINATION_SEPARATOR));
+
+	/**
+	 * @return the ingredient names a recorded COMBINATION name lists, trimmed and in the order the name
+	 *         lists them — empty for a name carrying no {@value #COMBINATION_SEPARATOR}, which is every
+	 *         single-drug name. Each is a candidate, not a resolution: the caller decides what counts as
+	 *         an entry claiming one, and {@link DrugReferenceService#findImpliedSubstances} requires the
+	 *         KB to be NAMED it, which is what discards the fragments a separator inside a parenthesized
+	 *         qualifier produces ({@code Varicella zoster vaccine (live/attenuated)} splits into
+	 *         {@code varicella zoster vaccine (live} and {@code attenuated)}, and no entry is named
+	 *         either).
+	 *
+	 *         <p>The whole name is deliberately NOT among them: it is the caller's starting point, not
+	 *         a constituent, and returning it here would make the empty answer above indistinguishable
+	 *         from "one constituent".
+	 *
+	 *         <p><b>And deliberately not gated on a SPACED separator</b>, which is the obvious way to
+	 *         make the safety above structural rather than data-dependent — nearly every combination the
+	 *         KB publishes spaces its separator, while the strain designations and the qualifiers that
+	 *         contain one do not. It is refused because such a gate can only ever DROP an ingredient,
+	 *         and the KB does publish combinations that join their ingredients bare
+	 *         ({@code potassium citrate/potassium gluconate}). Dropping is the one direction this
+	 *         widening exists to prevent; the gate above is what handles the other.
+	 *
+	 *         <p>Nothing pins that choice, and the honest reason is worth recording rather than
+	 *         discovering twice: reverting this to {@code " / "} leaves the whole suite green (measured
+	 *         by mutation, 2026-08-09), because the one bare-separator combination the shipped KB names
+	 *         both ingredients of is ALSO claimed by both of them, so
+	 *         {@link DrugReferenceService#findImpliedSubstances}'s equal-claimant leg reaches it without
+	 *         this split. The dataset therefore offers no case that isolates the two, and a test
+	 *         asserting one would be asserting the other. What IS pinned, by
+	 *         {@code CombinationAllergenResolutionTest}, is the gate: a fragment the KB only CONTAINS
+	 *         must not be reached.
+	 */
+	static List<String> combinationConstituents(String recordedName) {
+		if (recordedName == null || recordedName.indexOf(COMBINATION_SEPARATOR) < 0) {
+			return Collections.emptyList();
+		}
+		List<String> out = new ArrayList<String>();
+		for (String part : COMBINATION_SPLIT.split(recordedName)) {
+			String trimmed = part.trim();
+			if (!trimmed.isEmpty()) {
+				out.add(trimmed);
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * @return the name of the PARENT MOIETY a recorded PRESENTATION name is a presentation of — the
+	 *         recorded name with its trailing qualifier(s) removed ({@code Insulin lispro (protamine)}
+	 *         → {@code insulin lispro}) — or {@code null} when the name carries no qualifier and so
+	 *         names no moiety apart from itself.
+	 *
+	 *         <p>A derivation, not a claim: unlike a {@link #combinationConstituents constituent}, which
+	 *         the recorded string asserts is an ingredient, this is only what is left after removing a
+	 *         qualifier. That is why {@link DrugReferenceService#findImpliedSubstances} accepts it only
+	 *         from an entry that is CALLED it ({@link #NAME_IS_THE_DISPLAY_NAME}) — see there.
+	 */
+	static String parentMoietyName(String recordedName) {
+		String normalized = normalizeName(recordedName);
+		if (normalized == null) {
+			return null;
+		}
+		String stem = displayStem(recordedName);
+		return stem.isEmpty() || stem.equals(normalized) ? null : stem;
+	}
+
+	/** @return {@code name} with any trailing parenthesized qualifier(s) removed, normalized by
+	 *          {@link #normalizeName} — the empty string when the name is blank or is nothing but a
+	 *          qualifier, which keeps the key total. */
+	static String displayStem(String name) {
+		String stem = name == null ? "" : name;
+		String previous;
+		do {
+			previous = stem;
+			stem = TRAILING_QUALIFIER.matcher(stem).replaceFirst("");
+		} while (!stem.equals(previous));
+		String normalized = normalizeName(stem);
+		return normalized == null ? "" : normalized;
 	}
 
 	public String getDrugClass() {
@@ -120,11 +860,229 @@ public class DrugReference {
 	}
 
 	public List<String> getAliases() {
-		return aliases;
+		// Unmodifiable since issue #330, and that is a correctness guard rather than tidiness: two
+		// index-aligned lists are now derived here, aliasesIn and aliasesNaming index one by a position
+		// taken from the other, and an in-place add or remove through this getter would desynchronise
+		// them — a silently invisible alias, or an IndexOutOfBoundsException out of the safety pipeline.
+		// No caller mutates it today; this is what keeps that true. Jackson binds through setAliases.
+		return Collections.unmodifiableList(aliases);
 	}
 
+	/**
+	 * Stores the alias list TRIMMED, which is what keeps this class's two name predicates from
+	 * disagreeing about the same pair (issue #296).
+	 *
+	 * <p>{@link #isNamed} compares through {@link #normalizeName}, which trims both operands;
+	 * {@link #matchesDrugName} hands the alias to {@link #containsBoundedToken} as the needle and trims
+	 * nothing. So a stored alias carrying padding IS one of the entry's names by the first predicate and
+	 * matches nothing by the second, and {@link #nameMatchStrength} — gated on the second — then answers
+	 * {@link #NAME_NO_MATCH} for a name the entry demonstrably has. Both directions of that are wrong
+	 * where a caller gates on one and ranks with the other: measured through the real
+	 * {@code JsonDrugReferenceSource} and the real {@code DrugSafetyValidator.validate}, a curated entry
+	 * named only by {@code " warfarin"} lost a folded-chip reconciliation it had, and the same padding on
+	 * a RIVAL row let that row drop out of the ranking contest and licensed a displacement — one
+	 * substance's rated mechanism under another's name, the #161/#187/#194 failure.
+	 *
+	 * <p>Trimming here rather than in either predicate, because the disagreement is a property of the
+	 * stored string and this is the one place every source writes it — {@code ddinter}, {@code atc}, the
+	 * curated {@code json} parser and {@code DrugReferenceValidity}'s own repairs all arrive here. It
+	 * changes no bundled dataset: 0 padded aliases over the shipped 19 MB knowledge base, the curated
+	 * seed and the DDInter excerpt. And it is exhaustive for the disagreement rather than a patch on one
+	 * shape of it — searched over both operands across space, tab, NBSP, NUL, precomposed and decomposed
+	 * accents, dotted capital I, hyphen, period and digits, every pair where {@code isNamed} holds and
+	 * {@code nameMatchStrength} answers below {@link #NAME_IS_ANOTHER_NAME} has an alias differing from
+	 * its own {@code trim()} (a folds-to-empty alias is the other, and {@code DrugReferenceValidity}
+	 * drops that at load). Both halves are needed and the second is the loader's: an alias of combining
+	 * marks alone survives this trim, still answers {@code isNamed}, and folds to an empty needle that
+	 * {@code containsBoundedToken} can never match. So the implication {@code isNamed} implies
+	 * {@code matchesDrugName} is a property of a LOADED dataset, resting on this trim and on
+	 * {@code DrugReferenceValidity.sanitizeAliases} leaving no alias that names nothing — not of this
+	 * setter alone, and not of an entry pushed through the {@code setEntries} seam.
+	 *
+	 * <p>Null elements are passed through untouched, as they were: {@link #normalizeName} and
+	 * {@code namesAnything} both answer for them, and dropping them here would move a decision the
+	 * loader's validity pass owns.
+	 */
 	public void setAliases(List<String> aliases) {
-		this.aliases = aliases != null ? aliases : Collections.<String> emptyList();
+		this.aliases = aliases != null ? trimmedAliases(aliases) : Collections.<String> emptyList();
+		this.foldedAliases = foldedAll(this.aliases);
+		this.nameKeys = normalizedAll(this.aliases);
+	}
+
+	/**
+	 * @return the one name the reference dataset's bridge records for {@code conceptUuid} on THIS entry,
+	 *         or null when the bridge does not file this entry under that concept. Both the membership
+	 *         test and the name in one answer, because the join needs both and asking twice would walk
+	 *         the same list twice for every entry in the dataset.
+	 */
+	String bridgedConceptName(String conceptUuid) {
+		if (conceptUuid == null) {
+			return null;
+		}
+		for (BridgedConcept bridged : bridgedConcepts) {
+			if (conceptUuid.equals(bridged.getConceptUuid())) {
+				return bridged.getConceptName();
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * @return the dictionary concepts this entry is bridged to, unmodifiable and never null — see
+	 *         {@link #bridgedConcepts}. Empty for every source but {@code ddinter}.
+	 *
+	 *         <p><b>Not bindable from the curated {@code json} format — which is what the
+	 *         {@code @JsonIgnore} below is for.</b> That format declares no bridge, and the class's
+	 *         {@code ignoreUnknown} covers only properties Jackson does not KNOW; a public accessor
+	 *         makes {@code bridgedConcepts} known. So the paragraph that follows is a COUNTERFACTUAL
+	 *         and not a description of this class: an earlier draft of it stated the counterfactual as
+	 *         current behaviour.
+	 *
+	 *         <p>WITHOUT the annotation an authored file carrying that key would bind it or fail, and
+	 *         what the failure costs was MEASURED rather than assumed. It is not the load going
+	 *         silently empty: {@code MAPPER.readValue} throws,
+	 *         {@code ReferenceDataFiles.loadWithClasspathFallback} catches it and falls back to the
+	 *         BUNDLED curated file, so the operator's own entries vanish and the bundled ones stand in
+	 *         their place — under a {@code configured-data-file-not-read} finding, which is a
+	 *         CONFIGURATION rule and therefore LOUD whatever the origin. The failure would be
+	 *         reported; what it would cost is the operator's dataset, swapped for another. Not issue
+	 *         #149's inert layer; do not cite it as one.
+	 *
+	 *         <p>WITH the annotation none of that happens — the key is ignored and the entries beside
+	 *         it load, which is what
+	 *         {@code BridgedConceptOrderResolutionTest.aCuratedFileCarryingABridgeStillLoadsTheEntriesBesideIt}
+	 *         asserts. Either accessor's annotation alone would suffice, because Jackson ignores a
+	 *         property annotated on either side: removing just one of them leaves that case green and
+	 *         removing BOTH is what reddens it (measured). Both are kept so that neither reads as the
+	 *         one that may go.
+	 */
+	@JsonIgnore
+	public List<BridgedConcept> getBridgedConcepts() {
+		return Collections.unmodifiableList(bridgedConcepts);
+	}
+
+	/**
+	 * The sole writer of {@link #bridgedConcepts}. Rows with a blank uuid or a blank name are dropped:
+	 * the pair is what the join needs and half of one answers neither question.
+	 */
+	@JsonIgnore
+	public void setBridgedConcepts(List<BridgedConcept> bridgedConcepts) {
+		if (bridgedConcepts == null) {
+			this.bridgedConcepts = Collections.emptyList();
+			return;
+		}
+		List<BridgedConcept> usable = new ArrayList<BridgedConcept>(bridgedConcepts.size());
+		for (BridgedConcept bridged : bridgedConcepts) {
+			if (bridged != null && bridged.getConceptUuid() != null && bridged.getConceptName() != null) {
+				usable.add(bridged);
+			}
+		}
+		this.bridgedConcepts = usable;
+	}
+
+	/**
+	 * One dictionary concept the reference dataset bridges an entry to: the concept's uuid, and the one
+	 * name the bridge records for it.
+	 *
+	 * <p>Immutable, and both halves are required — {@link DrugReference#setBridgedConcepts} drops a row
+	 * missing either. The uuid alone is a bare identity claim, which is not what the join uses it for;
+	 * the name is what {@link DrugReferenceService#findByBridgedConcept} resolves through the ranked
+	 * recorded-name accessor, so that the answer for a concept is a subset of what a session electing
+	 * the bridge's own spelling already gets today.
+	 */
+	public static final class BridgedConcept {
+
+		private final String conceptUuid;
+
+		private final String conceptName;
+
+		public BridgedConcept(String conceptUuid, String conceptName) {
+			this.conceptUuid = blankToNull(conceptUuid);
+			this.conceptName = blankToNull(conceptName);
+		}
+
+		/** @return the dictionary concept's uuid, trimmed; null when the dataset recorded none. */
+		public String getConceptUuid() {
+			return conceptUuid;
+		}
+
+		/** @return the one name the bridge records for that concept, trimmed; null when it recorded
+		 *          none. NOT the entry's own name and not one of its aliases in general — it is the
+		 *          dictionary's name for the concept, which for a combination product names substances
+		 *          this entry is only one of. */
+		public String getConceptName() {
+			return conceptName;
+		}
+
+		private static String blankToNull(String value) {
+			if (value == null) {
+				return null;
+			}
+			String trimmed = value.trim();
+			return trimmed.isEmpty() ? null : trimmed;
+		}
+	}
+
+	/**
+	 * @return the distinct {@link #normalizeName}d forms of {@code names}, in first-appearance order,
+	 *         unmodifiable, blanks dropped — {@link #nameKeys()}'s derivation, and the inverse of the
+	 *         alias loop in {@link #isNamed}.
+	 *
+	 *         <p>The parameter is {@code names} and not {@code aliases} on purpose:
+	 *         {@code FoldedOperandTest.everyAliasScanReadsTheStoredFoldedList} reads TEXT rather than
+	 *         scopes, so a parameter of that name inside this class reads as the field to it — which
+	 *         is what its own failure message asks a caller to rename.
+	 */
+	private static Set<String> normalizedAll(List<String> names) {
+		Set<String> keys = new LinkedHashSet<String>();
+		for (String name : names) {
+			String key = normalizeName(name);
+			if (key != null) {
+				keys.add(key);
+			}
+		}
+		return Collections.unmodifiableSet(keys);
+	}
+
+	/**
+	 * @return every element of {@code values} in {@link #foldedLower} form, in order and index-aligned
+	 *         with it, unmodifiable; nulls are carried through untouched, for the reason
+	 *         {@link #setAliases} carries them.
+	 *
+	 *         <p>Here rather than at its two call sites — {@link #setAliases} and
+	 *         {@code PatientClinicalContext}'s own folded view of the patient's order names — for the
+	 *         reason {@link #foldedLower} itself is one method: a collection's folded view is the form
+	 *         one side of a comparison must be in, and two spellings of it is how the two sides come
+	 *         apart. Issue #330 added both in one commit, which is exactly when a third becomes likely.
+	 *
+	 *         <p><b>Index alignment is what {@link #aliasesIn} and {@link #aliasesNaming} rest on, and
+	 *         this method decides the sequence half of it.</b> Both walk the folded list and report the
+	 *         raw alias at the same index, so any edit leaving this list a different SEQUENCE from the
+	 *         raw one — a null skipped, a duplicate collapsed, an element filtered or reordered — makes
+	 *         a witness the wrong alias, which is what {@code DrugReferenceService.namesSubstanceOf}
+	 *         narrows a candidate set by: issue #209's surface, fail-closed and silent.
+	 *         {@code FoldedOperandTest.everyAliasOfALoadedEntryIsItsOwnWitness} is what fails on it, by
+	 *         asking of whole loaded datasets that every name an entry carries is found as ITSELF;
+	 *         mutate this line and read the failures rather than trusting that the shape you have in
+	 *         mind is covered.
+	 */
+	static List<String> foldedAll(Collection<String> values) {
+		List<String> folded = new ArrayList<String>(values.size());
+		for (String value : values) {
+			folded.add(value == null ? null : foldedLower(value));
+		}
+		return Collections.unmodifiableList(folded);
+	}
+
+	/** @return {@code aliases} with every non-null element trimmed — {@link #setAliases}'s whole rule,
+	 *          split out so the setter reads as the one-line assignment it is. The list is copied, so a
+	 *          caller keeping its own reference cannot un-trim what this stored. */
+	private static List<String> trimmedAliases(List<String> aliases) {
+		List<String> trimmed = new ArrayList<String>(aliases.size());
+		for (String alias : aliases) {
+			trimmed.add(alias == null ? null : alias.trim());
+		}
+		return trimmed;
 	}
 
 	public List<String> getAtcCodes() {
@@ -172,24 +1130,954 @@ public class DrugReference {
 
 	/** An ATC level-4 (chemical subgroup) code is the {@value #ATC_SUBGROUP_PREFIX_LENGTH}-character
 	 *  prefix of a level-5 substance code ({@code M01AE01} -> {@code M01AE}). Two drugs sharing a
-	 *  subgroup are structurally related (ibuprofen/naproxen, both {@code M01AE}). */
+	 *  subgroup are USUALLY structurally related (ibuprofen/naproxen, both {@code M01AE}) — but not
+	 *  always: see {@link #isUnclassifyingAtcCode} for the subgroups where sharing means nothing. */
 	public static final int ATC_SUBGROUP_PREFIX_LENGTH = 5;
 
 	/**
 	 * @return this entry's ATC level-4 chemical subgroups — the {@link #ATC_SUBGROUP_PREFIX_LENGTH}-char
 	 *         prefixes of its {@link #normalizedAtcCodes()} (codes shorter than that contribute none).
-	 *         Two entries are in the same ATC class iff their subgroup sets intersect. This is the one
-	 *         shared definition used by both the order-relevance scoping ({@code DrugReferenceInjector})
-	 *         and the class-based safety checks ({@code DrugSafetyValidator}).
+	 *         This is the one shared REDUCTION, used by both the order-relevance scoping
+	 *         ({@code DrugReferenceInjector}) and the class-based safety checks
+	 *         ({@code DrugSafetyValidator}), so neither can reach a different set of subgroups from the
+	 *         same codes.
+	 *         <p>An intersection of two entries' subgroups is where "same ATC class" starts, not where
+	 *         it ends: since issue #167 the safety checks additionally discard a shared subgroup that
+	 *         {@link #isUnclassifyingAtcCode} recognises, and the injector's relevance scoping
+	 *         deliberately does not — it is deciding what to put in front of the model, where an extra
+	 *         record is noise, not what to assert to a clinician. Since issues #183/#184 that discard
+	 *         is no longer uniform across the safety checks either: the CROSS-REACTIVITY arm discards
+	 *         strictly more, everything {@link #isPurposeOnlyAtcCode} recognises, because a shared
+	 *         purpose is enough to call two drugs duplicate therapy and not enough to call them
+	 *         chemically related. So there are three widths of the same intersection here, and which
+	 *         one a caller wants is decided by what it is about to assert.
+	 *
+	 *         <p>Issue #151 widened the injector's candidate set from ATC-mapped orders to every order
+	 *         the reference data resolves, so that divergence is reached far more often and its cost was
+	 *         measured rather than left as a judgement. Applying the #167 veto to the injector's gate as
+	 *         well would remove 6 of the 491 records injected across a 24-patient x 21-question sweep of
+	 *         the 3.7.1 demo instance's real active orders against the 19 MB knowledge base (measured
+	 *         2026-08-13 by running the real {@code DrugReferenceInjector.injectRecords} with and without
+	 *         the veto), and 0 of the records that were injected before #151. That figure was taken while
+	 *         {@link #isUnclassifyingAtcCode} held 30 groups; issues #183/#184 took it to 36 and added a
+	 *         second, wider predicate, so re-measure it before quoting it for either. Two of the six are the
+	 *         noise the veto is for (neomycin beside a ciprofloxacin question, related only through
+	 *         "both are also sold as ear drops"); four are pairs a clinician wants — diclofenac beside an
+	 *         ibuprofen question, budesonide beside a prednisolone one — that the veto would drop because
+	 *         every subgroup they share is one it vetoes, the class relation they really have being one
+	 *         this knowledge base does not otherwise express. That trade is a
+	 *         question about the relevance rule and belongs to its own issue, not to #151.
+	 *
+	 *         <p>A third CONSUMER since issue #285 — consumer, not caller; by call site this method has
+	 *         six. {@code DrugReferenceLoad}'s per-arm capability report counts the entries whose codes
+	 *         survive this reduction, because that is what the class comparison consumes. So this
+	 *         method's output is now an operator-facing wire value too.
 	 */
 	public Set<String> atcSubgroups() {
+		return atcSubgroups(normalizedAtcCodes());
+	}
+
+	/**
+	 * @return the level-4 subgroups of already-normalized {@code codes} — the same reduction
+	 *         {@link #atcSubgroups()} applies to an entry's own codes, for a caller holding a bare code
+	 *         SET. That caller is {@code DrugSafetyValidator.classRelationships}, whose co-medications
+	 *         carry the codes an ACTIVE ORDER's concept maps to, which may belong to no entry (the
+	 *         loaded dataset need not carry the substance they identify) — and, since issue #228, the
+	 *         codes of the reference row an unmapped order's NAME resolves, which belong to exactly one.
+	 *         One definition either way, so a co-medication and an entry cannot come to be in "the same
+	 *         ATC class" by two different reductions.
+	 */
+	static Set<String> atcSubgroups(Set<String> codes) {
 		Set<String> out = new LinkedHashSet<String>();
-		for (String code : normalizedAtcCodes()) {
+		for (String code : codes) {
 			if (code.length() >= ATC_SUBGROUP_PREFIX_LENGTH) {
 				out.add(code.substring(0, ATC_SUBGROUP_PREFIX_LENGTH));
 			}
 		}
 		return out;
+	}
+
+	/**
+	 * ATC groups that classify a LOCALLY APPLIED formulation rather than the substance itself, each
+	 * identified by the route or site of application in the group's own published name — bar the one
+	 * exception noted at {@code C05B}: {@code D}
+	 * "Dermatologicals" and {@code S} "Sensory organs" (whole anatomical main groups), {@code A01}
+	 * "Stomatological preparations", {@code A07A} "Intestinal antiinfectives" and {@code A07E}
+	 * "Intestinal antiinflammatory agents" (its {@code A07EA} is "Corticosteroids acting locally"),
+	 * {@code B02BC} "Local hemostatics" (its {@code B02BX} sibling is "Other systemic hemostatics"),
+	 * {@code B05C} "Irrigating solutions", {@code C05A} "Antihemorrhoidals for topical use",
+	 * {@code C05B} "Antivaricose therapy" — the exception: that name is an indication, not a route, and
+	 * this entry rests on its subgroups' names instead ({@code C05BA} "Heparins or heparinoids for
+	 * topical use", {@code C05BB} "Sclerosing agents for local injection"); it changes no pair in the
+	 * shipped KB, whose only {@code C05B} subgroup is {@code C05BA} —
+	 * {@code G01} "Gynecological antiinfectives and antiseptics", {@code G02CC} "Antiinflammatory
+	 * products for vaginal administration" (its {@code G02CB} sibling, prolactine inhibitors, is
+	 * systemic), {@code M02} "Topical products for joint and muscular pain", {@code P03A}
+	 * "Ectoparasiticides, incl. scabicides", {@code R01} "Nasal preparations", {@code R02} "Throat
+	 * preparations", and {@code R03A} / {@code R03B}, the two <em>inhalant</em> subgroups of R03 —
+	 * their {@code R03C} / {@code R03D} siblings are for systemic use and are deliberately absent,
+	 * which is why this list cannot be written at main-group granularity throughout.
+	 *
+	 * <p>Deliberately NOT here: {@code N01B} "Anesthetics, local". Its name is the drug class, not the
+	 * site of application — the codes classify the substance, and two local anaesthetics sharing
+	 * {@code N01BB} is exactly the cross-reactivity statement a clinician wants.
+	 *
+	 * <p>Prefixes, and not an exhaustive partition of ATC: anything unlisted counts as classifying the
+	 * substance. Neither direction of error is free, which is why the criterion is ATC's own wording
+	 * about a GROUP rather than pharmacological judgement about a substance. A group wrongly listed
+	 * here demotes a class that does explain a cross-reactivity concern. A group missing from it does
+	 * NOT merely leave the pre-existing answer in place: it becomes the answer as soon as it sorts
+	 * ahead of the systemic subgroup the pair also shares, since {@link DrugSafetyValidator}'s scan
+	 * takes the first shared subgroup this method does not veto.
+	 *
+	 * <p>That is how {@code A07A}, {@code B02BC}, {@code B05C} and {@code G02CC} came to be here.
+	 * Without them, 46 of the shipped KB's 1090 multi-subgroup ROW pairs named one of the four — among
+	 * them ibuprofen/naproxen reading {@code G02CC} instead of {@code M01AE} — and 21 of the 46 had been
+	 * moved onto one by this rule itself rather than merely left there (measured 2026-08-06). ROW
+	 * pairs: that base and the substance-pair one, and the conversion between them, are defined at
+	 * {@code DrugSafetyValidator.sharedClass}, which also carries this 1090's substance-pair
+	 * counterpart (issue #243). Over that counterpart the same two counts are <b>19 of the 319
+	 * multi-subgroup SUBSTANCE pairs, 2 of them moved</b> (issue #263) — the magnitude in the unit a
+	 * chip is raised for, since a chip names a substance and not a row.
+	 *
+	 * <p>That conversion was re-measured 2026-08-29, and the run reproduced 46 and 21 on the ROW base
+	 * before 19 and 2 were quoted: the shipped KB loaded through {@code DdiDrugReferenceSource.load},
+	 * the substance base through {@link #substanceGroupKey()} and {@link #canonicalRow}, and the
+	 * choice itself through {@code DrugSafetyValidator.sharedClass} with the four prefixes struck out
+	 * of the list below, and with the claim filters OFF — the state that method was in when 46 and 21
+	 * were taken, since they date from issue #166 ({@code 45c1cc4a}, 2026-08-06) while
+	 * {@link #UNCLASSIFYING_ATC_GROUPS} first appears the following day at issue #182
+	 * ({@code 078a3d54}). "Moved" means the answer differs from the one the same scan gives with this
+	 * whole list emptied: the preference passed over an alphabetically earlier shared subgroup to
+	 * reach one of the four, rather than finding it there.
+	 *
+	 * <p><b>All four of those figures are answers under a configuration of THIS list, so a change to
+	 * it is what makes them due again</b> — extending it, trimming it, or moving one of the
+	 * {@link #SYSTEMIC_USE_EXCEPTIONS} nested inside it, since {@link #isLocallyAppliedAtcCode} reads
+	 * both. That is the shape issue #263 was filed over, one list along, and
+	 * {@link #UNCLASSIFYING_ATC_GROUPS}' javadoc invites the change in as many words ("extend that
+	 * list and it has to be re-derived against the same index"). {@code LocallyAppliedAtcGroupKeyTest}
+	 * reddens when such a change reaches a subgroup the shipped KB publishes; that class's javadoc
+	 * says what it leaves uncovered, and it is not the two partition guards in
+	 * {@code UnmappedOrderAdministrationSiteTest}, which an edit adding the new group to a site
+	 * satisfies. Measured 2026-08-30 by adding {@code A06AD} here and to {@code SITE_GUT} — the
+	 * completed edit, the one those guards leave green: 1 of the api suite's 1571 cases red, and it is
+	 * that one. PR #331's first review round measured the same edit on head {@code 97445233}, where no
+	 * such case existed, taking 46 to 47 and 19 to 20 with the suite green throughout.
+	 *
+	 * <p>{@code CrossReactivityClassChoiceTest} pins one case per group for those four prefixes, save
+	 * {@code B02BC}: its only shipped-KB pairs are epinephrine route variants, which issue #160
+	 * collapses to an identity chip before this arm can name a class at all.
+	 */
+	private static final List<String> LOCALLY_APPLIED_ATC_GROUPS = Collections
+			.unmodifiableList(Arrays.asList("A01", "A07A", "A07E", "B02BC", "B05C", "C05A", "C05B",
+					"D", "G01", "G02CC", "M02", "P03A", "R01", "R02", "R03A", "R03B", "S"));
+
+	/** The administration sites {@link #ATC_GROUPS_BY_SITE} and {@link #SITE_TERMS} are both keyed on —
+	 *  named constants so the two halves cannot drift apart on a typo. */
+	static final String SITE_SKIN = "skin";
+
+	static final String SITE_EYE = "eye";
+
+	static final String SITE_EAR = "ear";
+
+	static final String SITE_NOSE = "nose";
+
+	static final String SITE_THROAT = "throat";
+
+	static final String SITE_AIRWAY = "airway";
+
+	static final String SITE_VAGINA = "vagina";
+
+	static final String SITE_MOUTH = "mouth";
+
+	static final String SITE_GUT = "gut";
+
+	static final String SITE_ANORECTAL = "anorectal";
+
+	/**
+	 * The groups nested INSIDE {@link #LOCALLY_APPLIED_ATC_GROUPS} that ATC itself names "for systemic
+	 * use" — {@code D01B} antifungals, {@code D02BB} UV-radiation protectives, {@code D05B}
+	 * antipsoriatics, {@code D10B} anti-acne preparations, {@code R01B} nasal decongestants. Same
+	 * criterion as the list above, applied to the same words: a group is read as locally applied when
+	 * its own name says where it is applied, and these five say the opposite. Without them a main-group
+	 * prefix would be wrong in exactly the way this whole rule exists to fix.
+	 *
+	 * <p>Enumerated rather than asserted, which is what makes "these five" a claim and not a hope: the
+	 * shipped KB uses 117 level-4 subgroups under one of the prefixes above, and exactly six of them are
+	 * named for systemic use — {@code D01BA}, {@code D02BB}, {@code D05BA}, {@code D05BB},
+	 * {@code D10BA}, {@code R01BA}, either in their own name or their level-3 parent's — all six covered
+	 * by the five prefixes here (measured 2026-08-06). Only {@code D05B} changes any pair in that KB:
+	 * three ROW pairs, all psoralens, since methoxsalen and trioxsalen share {@code D05AD} (topical)
+	 * and {@code D05BA} (systemic) and would be reported as sharing the topical one. Two of the three
+	 * are across those substances and collapse to the ONE substance pair; the third is methoxsalen
+	 * against its own second row, which issue #160 collapses to an identity chip before this arm can
+	 * name a class (re-measured 2026-08-14 for issue #243; the two bases are defined at
+	 * {@code DrugSafetyValidator.sharedClass}). The other four change none and are here on the
+	 * criterion rather than on measured impact. What this sentence went on to say until issue #263 —
+	 * that removing them breaks no test — no longer holds, and had already stopped holding for
+	 * {@code D01B} at issue #234, whose {@code UnmappedOrderAdministrationSiteTest} case
+	 * {@code aGroupNamedForSystemicUseIsNotKeptByTheSiteItsPrefixSitsUnder} reddens on that removal,
+	 * over an unmapped-order arrangement rather than a KB pair. Since issue #263 removing any ONE of
+	 * the five reddens {@code LocallyAppliedAtcGroupKeyTest} as well, each of the five covering at
+	 * least one of the six subgroups just enumerated and that case pinning which published subgroups
+	 * {@link #isLocallyAppliedAtcCode} reads as locally applied (measured 2026-08-30, one run per
+	 * prefix). Neither case says the group BELONGS — one reports that a published figure's key has
+	 * moved, the other that a site kept a systemic code — so the criterion and not the test suite
+	 * still has to decide membership.
+	 *
+	 * <p>An exception list here, while R03's systemic halves are handled by leaving {@code R03C} and
+	 * {@code R03D} out of the list above, because the shapes differ: under D and R01 the locally
+	 * applied part is nearly all of the group, so naming the exceptions is the shorter thing to write,
+	 * while R03 splits evenly and its two inhalant halves are shorter to name than the group plus two
+	 * exceptions.
+	 */
+	private static final List<String> SYSTEMIC_USE_EXCEPTIONS = Collections
+			.unmodifiableList(Arrays.asList("D01B", "D02BB", "D05B", "D10B", "R01B"));
+
+	/**
+	 * @return whether {@code code} — a full ATC code or any prefix of one, normalized here the same
+	 *         way {@link #normalizedAtcCodes()} normalizes an entry's — sits in one of the
+	 *         {@link #LOCALLY_APPLIED_ATC_GROUPS} and not in one of the
+	 *         {@link #SYSTEMIC_USE_EXCEPTIONS} nested inside them. A substance marketed by several
+	 *         routes carries one code per route, so this is what separates the code that classifies
+	 *         the SUBSTANCE from the codes that classify a locally applied presentation of it. Null and
+	 *         blank are not locally applied, like every other ATC comparison here treats them: nothing
+	 *         is known about them at all.
+	 *         <p>Package-private on purpose: it is a rule about ATC's own group names, not a fact about
+	 *         a substance, so nothing outside this package should be asking it. TWO callers since issue
+	 *         #234, and they ask it for different claims — which is the thing to keep straight before
+	 *         adding a third. {@code DrugSafetyValidator.sharedClass} PREFERS among candidate subgroups
+	 *         and can still return a locally applied one when that is all a pair shares;
+	 *         {@link #codesAtSites} can DROP a code outright, so that a {@code D01B} systemic
+	 *         antifungal is not read as a skin presentation however plainly it sits under {@code D}.
+	 *         The difference is not a change of mind about the predicate: the second caller holds
+	 *         independent evidence about the presentation the patient was actually given, which the
+	 *         first has none of, and the dropping is decided by {@link #ATC_GROUPS_BY_SITE} against
+	 *         that evidence with this predicate only refusing the {@link #SYSTEMIC_USE_EXCEPTIONS}
+	 *         nested inside a matched site. A caller with no such evidence gets the preference and
+	 *         never the veto.
+	 */
+	static boolean isLocallyAppliedAtcCode(String code) {
+		String normalized = normalizeAtcToken(code);
+		return normalized != null && !fallsUnderAnyGroup(normalized, SYSTEMIC_USE_EXCEPTIONS)
+				&& fallsUnderAnyGroup(normalized, LOCALLY_APPLIED_ATC_GROUPS);
+	}
+
+	/**
+	 * The application SITE each {@link #LOCALLY_APPLIED_ATC_GROUPS} member is named for, and the whole
+	 * of that list — this map together with {@link #LOCALLY_APPLIED_GROUPS_NAMING_NO_SITE} is a
+	 * PARTITION of it, deliberately, so that it cannot go stale relative to the list it partitions
+	 * (issue #234). Written as a partition rather than freehand because the first draft of it was
+	 * freehand and dropped {@code S03}: the shipped KB files neomycin's ear codes as
+	 * {@code {S02AA07, S03AA01}}, so an order recorded at the ear would have had one of its own site's
+	 * codes discarded by a rule whose whole purpose is to keep them. That is the failure mode
+	 * {@link #LOCALLY_APPLIED_ATC_GROUPS}'s own javadoc records for issue #161's hand-picked list.
+	 *
+	 * <p><b>The criterion is the same one that list uses, read the other way round</b>: a group is
+	 * locally applied when its own published name says WHERE it is applied, so this map records WHAT
+	 * that name says. {@code A01} "Stomatological preparations" -&gt; mouth; {@code A07A} "Intestinal
+	 * antiinfectives" and {@code A07E} "Intestinal antiinflammatory agents" -&gt; gut; {@code C05A}
+	 * "Antihemorrhoidals for topical use" -&gt; anorectal — spelled as
+	 * {@link #LOCALLY_APPLIED_ATC_GROUPS}'s javadoc spells it, because three other texts cite that one
+	 * as this module's record of ATC's published name and two records of one name is one too many;
+	 * {@code D} "Dermatologicals", {@code M02} "Topical products for joint and muscular pain" and
+	 * {@code P03A} "Ectoparasiticides, incl. scabicides" -&gt; skin; {@code G01} "Gynecological
+	 * antiinfectives and antiseptics" and {@code G02CC} "Antiinflammatory products for vaginal
+	 * administration" -&gt; vagina; {@code R01} "Nasal preparations" -&gt; nose; {@code R02} "Throat
+	 * preparations" -&gt; throat; {@code R03A} / {@code R03B}, both "inhalants" -&gt; airway.
+	 *
+	 * <p><b>{@code S} is expanded here and nowhere else.</b> That list writes it at main-group
+	 * granularity ("Sensory organs"), which names two sites at once, so it is taken apart into ATC's
+	 * own three level-2 children: {@code S01} "Ophthalmologicals" -&gt; eye, {@code S02}
+	 * "Otologicals" -&gt; ear, and {@code S03} "Ophthalmological and otological preparations" -&gt;
+	 * BOTH. Those three are the whole of main group S in the WHO index, and measured over the shipped
+	 * 19 MB KB every {@code S} code it publishes falls under one of them ({@code S01A}-{@code S01X},
+	 * {@code S02A}/{@code S02B}/{@code S02D}, {@code S03A}/{@code S03B}).
+	 *
+	 * <p>Do not add a member without re-deriving it from the group's published name and recording the
+	 * measured KB impact, which is the rule {@code CLAUDE.md} states for
+	 * {@link #LOCALLY_APPLIED_ATC_GROUPS} and binds this map for the same reason. Measured 2026-08-28
+	 * through {@link DdiDrugReferenceSource#parse}, {@link #substanceGroupKey()},
+	 * {@link #normalizedAtcCodes()} and {@link #isLocallyAppliedAtcCode} over the shipped KB — per
+	 * site, the substances filed there / of those, the ones this map narrows / the ones already filed
+	 * only there: skin 139/106/33, eye 134/101/33, ear 20/20/0, nose 24/24/0, airway 24/19/5, vagina
+	 * 22/20/2, throat 12/12/0.
+	 */
+	private static final Map<String, List<String>> ATC_GROUPS_BY_SITE;
+
+	/**
+	 * The three {@link #LOCALLY_APPLIED_ATC_GROUPS} members whose published name states a PROPERTY
+	 * rather than a place, so no recorded route or dose form can select them: {@code B02BC} "Local
+	 * hemostatics" (the name says "local", never where), {@code B05C} "Irrigating solutions", and
+	 * {@code C05B} "Antivaricose therapy", whose name is the condition — the same {@code C05B} that
+	 * {@link #LOCALLY_APPLIED_ATC_GROUPS}'s javadoc already carries as its one named exception to
+	 * "identified by the route or site of application in the group's own published name".
+	 *
+	 * <p>The other half of the partition. A code under one of these is never kept by a site and never
+	 * counts as unaccounted for — {@link #namesNoAdministrationSite} is how a caller tells those two
+	 * apart, and {@code UnmappedOrderAdministrationSiteTest} is what fails if a fourth group appears
+	 * in neither half.
+	 */
+	private static final List<String> LOCALLY_APPLIED_GROUPS_NAMING_NO_SITE = unmodifiable("B02BC",
+			"B05C", "C05B");
+
+	/**
+	 * Recorded words that name a route of ENTRY rather than a site of action, and so refuse the site
+	 * walk outright — whatever site word the same recorded string may also contain.
+	 *
+	 * <p>The criterion is {@link #SITE_TERMS}' own, applied to the other half of the vocabulary: a term
+	 * names a site when it says where the drug ACTS, and it names a route of entry when it says how the
+	 * drug gets in. {@code transdermal}, {@code sublingual} and {@code buccal} name a surface and
+	 * deliver through it; {@code subcutaneous}, {@code intradermal}, {@code intravenous},
+	 * {@code intramuscular}, {@code intraosseous}, {@code intrathecal}, {@code epidural} and
+	 * {@code parenteral} name a compartment; {@code oral}, {@code rectal} and {@code nasogastric} name
+	 * a way in that serves locally-acting and systemic preparations alike, which is the same reason
+	 * mouth, gut and anorectal have no term in {@link #SITE_TERMS}.
+	 *
+	 * <p><b>Why a refusal and not merely an absence.</b> Absence is not enough where a systemic route's
+	 * recorded name CONTAINS a site word: measured, {@code "transdermal skin patch"} matched
+	 * {@code skin} and narrowed a systemic presentation to the skin, silencing a real chip. Refusing
+	 * first makes the site walk unreachable for such a string. Refusing narrows nothing, which is the
+	 * fail-safe direction, so a term wrongly listed here costs a correction and never a false silence.
+	 *
+	 * <p><b>The refusal is of the whole recorded SET, not of the string it fired on.</b> An order
+	 * records a route and a dose form, and this refuses on either — so {@code "Oral administration"}
+	 * beside {@code "Cutaneous cream"} narrows nothing, though the second names the skin. That is
+	 * deliberate rather than incidental: a record naming a route of entry AND a site of action
+	 * contradicts itself, and narrowing on the half one prefers would silence a chip on the strength
+	 * of a record the module cannot reconcile. Declining keeps the answer the arm already had. It does
+	 * cost the two-source design its one contradictory case — the dose form is otherwise the only leg
+	 * that reaches the skin, see {@code PatientClinicalContextBuilder.addAdministration} — and
+	 * {@code UnmappedOrderAdministrationSiteTest.aRouteOfEntryRefusesTheSiteADoseFormNames} is what
+	 * pins it, so a reader who thinks the other reading is right has a case to move rather than a
+	 * silence to interpret.
+	 *
+	 * <p><b>Two residues, named rather than claimed away.</b> This is word matching after the hyphen
+	 * strip, so it reaches {@code sub-cutaneous} but not {@code sub cutaneous} spaced — that spelling
+	 * still matches {@code cutaneous} and narrows to the skin. And {@code "Oral inhalation solution"}
+	 * is a real dose form that names the airway in the same breath as a route of entry, so it declines
+	 * by the paragraph above. Both cost a narrowing rather than causing a false one.
+	 */
+	private static final List<String> ROUTES_OF_ENTRY = unmodifiable("transdermal", "sublingual",
+			"buccal", "subcutaneous", "intradermal", "intravenous", "intramuscular", "intraosseous",
+			"intrathecal", "epidural", "parenteral", "oral", "rectal", "nasogastric");
+
+	/**
+	 * The recorded route and dose-form words that NAME each site — matched against what the chart
+	 * records for an order ({@code PatientClinicalContext.ActiveDrugOrder.getAdministrationTerms()}),
+	 * never against the drug's name.
+	 *
+	 * <p><b>A term must name the SITE, not the form.</b> {@code cream}, {@code ointment} and
+	 * {@code lotion} were in the first draft and are deliberately absent: a cream is made for the
+	 * skin, the vagina or the anorectum alike, so reading one as "skin" asserts something the record
+	 * did not say — and reading it as all three is worse rather than more cautious, because
+	 * hydrocortisone's {@code C05AA01} then survives and a chip that said {@code H02AB} says
+	 * {@code C05AA} instead, which is a haemorrhoid preparation and no more true. A form word is
+	 * admitted only where the form serves ONE site and no other, which is why {@code inhaler} is here
+	 * and those three are not.
+	 *
+	 * <p><b>Mouth, gut and anorectal have no term, deliberately</b>, and neither do
+	 * {@code transdermal}, {@code sublingual} and {@code buccal}. {@code Oral administration} and
+	 * {@code Rectal administration} are the systemic routes in the reference dictionary AND the way an
+	 * {@code A01}/{@code A07}/{@code C05A} presentation is given, so the recorded term cannot separate
+	 * the two readings; the other three name a surface and deliver through it. All five are members of
+	 * {@link #ROUTES_OF_ENTRY}, so none of them merely fails to match here — each refuses the whole
+	 * record, which is that constant's own distinction and applies to every word in this sentence.
+	 *
+	 * <p><b>A prefixed or suffixed spelling needs its own entry.</b> Matching is
+	 * {@link #containsWord}, whose prose boundary is symmetric, so {@code nasal} does not reach
+	 * {@code intranasal} and {@code inhaled} does not reach {@code inhaler}; each such spelling is
+	 * listed in its own right rather than the boundary being loosened, because loosening it is what
+	 * would let {@code cutaneous} reach {@code subcutaneous}. Everything this list fails to recognise
+	 * narrows nothing, which is the fail-safe direction.
+	 *
+	 * <p><b>An INFLECTION of a term already here is one of those spellings.</b> {@code eyes},
+	 * {@code ears} and {@code vaginally} are the words carried by the names the 3.7.1 reference
+	 * dictionary ELECTS for its bilateral eye route (874, {@code In both eyes}), its bilateral ear
+	 * route (877, {@code In both ears}) and the only vaginal route it publishes (872,
+	 * {@code Vaginally}), and {@code containsWord} takes no trailing letters, so the singular
+	 * {@code eye} does not reach {@code In both eyes}. They are carried BESIDE
+	 * {@code PatientClinicalContextBuilder.addConceptNames} reading every name a concept publishes,
+	 * not instead of it: on that dictionary either mechanism alone reaches those three routes, and a
+	 * dictionary that publishes only one of the two spellings still narrows. Neither makes this list
+	 * complete, and it does not claim to be — the same dictionary also elects {@code OU}, {@code OD}
+	 * and {@code OS} for its three eye routes, which no vocabulary of site WORDS carries and which
+	 * reach a site here only through another name of the same concept.
+	 */
+	private static final Map<String, List<String>> SITE_TERMS;
+
+	static {
+		Map<String, List<String>> groups = new LinkedHashMap<String, List<String>>();
+		groups.put(SITE_SKIN, unmodifiable("D", "M02", "P03A"));
+		groups.put(SITE_EYE, unmodifiable("S01", "S03"));
+		groups.put(SITE_EAR, unmodifiable("S02", "S03"));
+		groups.put(SITE_NOSE, unmodifiable("R01"));
+		groups.put(SITE_THROAT, unmodifiable("R02"));
+		groups.put(SITE_AIRWAY, unmodifiable("R03A", "R03B"));
+		groups.put(SITE_VAGINA, unmodifiable("G01", "G02CC"));
+		groups.put(SITE_MOUTH, unmodifiable("A01"));
+		groups.put(SITE_GUT, unmodifiable("A07A", "A07E"));
+		groups.put(SITE_ANORECTAL, unmodifiable("C05A"));
+		ATC_GROUPS_BY_SITE = Collections.unmodifiableMap(groups);
+
+		Map<String, List<String>> terms = new LinkedHashMap<String, List<String>>();
+		terms.put(SITE_SKIN, unmodifiable("cutaneous", "skin"));
+		terms.put(SITE_EYE, unmodifiable("eye", "eyes", "ophthalmic", "ocular", "intraocular",
+				"conjunctival", "subconjunctival"));
+		terms.put(SITE_EAR, unmodifiable("ear", "ears", "otic", "aural", "auricular"));
+		terms.put(SITE_NOSE, unmodifiable("nasal", "intranasal", "nose"));
+		terms.put(SITE_THROAT, unmodifiable("throat", "oropharyngeal"));
+		terms.put(SITE_AIRWAY, unmodifiable("inhaled", "inhalation", "inhaler", "nebulised",
+				"nebulized", "nebuliser", "nebulizer"));
+		terms.put(SITE_VAGINA, unmodifiable("vaginal", "vaginally", "intravaginal"));
+		terms.put(SITE_MOUTH, Collections.<String> emptyList());
+		terms.put(SITE_GUT, Collections.<String> emptyList());
+		terms.put(SITE_ANORECTAL, Collections.<String> emptyList());
+		SITE_TERMS = Collections.unmodifiableMap(terms);
+	}
+
+	/**
+	 * @return {@code codes} narrowed to the ones that classify a presentation given at the site
+	 *         {@code recordedTerms} names — the entry point for reading a chart-recorded route or dose
+	 *         form against an ATC code list (issue #234). {@link #narrowsAnyCode} is the only other
+	 *         thing that reads them, answering whether narrowing is possible at all, and the two are
+	 *         built from the same pair of primitives so they cannot disagree about what a record can
+	 *         express. {@code DrugSafetyValidator.codesForThisSubstancesPresentations} is the single
+	 *         production caller of both.
+	 *
+	 *         <p><b>What it is for.</b> An active order the concept dictionary did not classify is
+	 *         compared on every code the reference dataset files its SUBSTANCE under, which covers
+	 *         every presentation that substance is marketed as; a dictionary-MAPPED order is compared
+	 *         on the one code the dictionary published. So an unmapped {@code Hydrocortisone cream 1%}
+	 *         was named in a systemic {@code H02AB} duplicate-therapy chip that the same order, mapped
+	 *         to {@code D07AA02}, correctly does not raise — mapping an order more correctly made the
+	 *         module quieter. This narrows the first to the second wherever the chart says where the
+	 *         drug is applied.
+	 *
+	 *         <p><b>Two ways it declines, and both return {@code codes} untouched.</b> No recorded
+	 *         term names a site this module can attribute — which is every order built before issue
+	 *         #234 and, measured on the 3.7.1 demo, all 46 of its active drug orders. Or the substance
+	 *         publishes no code at that site at all, in which case its classification is the only one
+	 *         there is and narrowing would silence the arm rather than correct it (an inhaled
+	 *         aminoglycoside filed only under {@code J01GB} is the shape). Declining is not the same
+	 *         as suppressing the co-medication: this method can only ever remove CODES, never the
+	 *         partner, so the arm keeps whatever answer it has today.
+	 *
+	 *         <p><b>{@link #isLocallyAppliedAtcCode} is asked here as well as the site groups</b>, so
+	 *         {@link #SYSTEMIC_USE_EXCEPTIONS} are honoured without a second copy of them: a
+	 *         {@code D01B} systemic antifungal is not a skin presentation however plainly it sits
+	 *         under {@code D}. That is a stricter use than {@code DrugSafetyValidator.sharedClass}
+	 *         makes of the same predicate — there it prefers among candidates, here it can drop one —
+	 *         and the difference is that this method holds independent evidence about the presentation
+	 *         the patient was actually given, which that arm has none of.
+	 */
+	static Set<String> codesForRecordedAdministration(Set<String> codes, Set<String> recordedTerms) {
+		if (codes == null || codes.isEmpty() || recordedTerms == null || recordedTerms.isEmpty()) {
+			return codes;
+		}
+		// No emptiness guard on the SITES: codesAtSites keeps nothing for an empty site set, and the
+		// tail below already returns codes for that. The two isEmpty() disjuncts above are cost
+		// short-circuits and not a second decline rule — the tail returns codes for either of them
+		// anyway. The two NULL disjuncts are a different thing and are load-bearing: recordedSites
+		// reads recordedTerms.size() and codesAtSites iterates codes, so removing either turns a null
+		// argument from a returned value into an NPE. That is the asymmetry narrowsAnyCode's javadoc
+		// states from its own side, where a null code set throws because that method has no such guard.
+		//
+		// The tail is UNREACHABLE from the one production caller today, and stays because it is this
+		// method's contract rather than that caller's convenience: since the caller admits an order
+		// only where narrowsAnyCode is true of it, the union it passes keeps at least that order's
+		// codes. A CASE discriminates it even so —
+		// ActiveOrderAdministrationTermsTest.aRouteThatNamesNoSiteIsCarriedAndSelectsNothing, whose
+		// recorded term is the standard dataset's own route "unknown" against a non-empty code set, so
+		// returning kept unguarded is the one failure that mutation produces. The method must never
+		// hand back an empty classification, and a second caller would need that whether or not it
+		// asked narrowsAnyCode first.
+		Set<String> kept = codesAtSites(codes, recordedSites(recordedTerms));
+		return kept.isEmpty() ? codes : kept;
+	}
+
+	/**
+	 * @return the sites {@code recordedTerms} names, in {@link #ATC_GROUPS_BY_SITE} order; empty when
+	 *         they name none.
+	 *
+	 *         <p>Hyphens are removed from the recorded term before matching, which is what stops
+	 *         {@code sub-cutaneous} being read as the skin: {@link #containsWord}'s left boundary
+	 *         accepts any non-alphanumeric, so a hyphen would open one where the unhyphenated
+	 *         {@code subcutaneous} correctly has none. The same removal costs {@code eye-drops} its
+	 *         match, which is the fail-safe direction and the reason it is done here rather than by
+	 *         widening the boundary rule several arms share.
+	 */
+	private static Set<String> recordedSites(Set<String> recordedTerms) {
+		// De-hyphenated once, before the site walk: the transformation depends only on the recorded
+		// term, and inside the two loops it was recomputed once per (site term x recorded term) pair.
+		// The null filter comes with it, so the hot test does not repeat that either.
+		List<String> matchable = new ArrayList<String>(recordedTerms.size());
+		for (String recorded : recordedTerms) {
+			if (recorded != null) {
+				matchable.add(recorded.replace("-", ""));
+			}
+		}
+		for (String recorded : matchable) {
+			for (String entry : ROUTES_OF_ENTRY) {
+				if (containsWord(recorded, entry)) {
+					return Collections.emptySet();
+				}
+			}
+		}
+		Set<String> sites = new LinkedHashSet<String>();
+		for (Map.Entry<String, List<String>> site : SITE_TERMS.entrySet()) {
+			for (String term : site.getValue()) {
+				for (String recorded : matchable) {
+					if (containsWord(recorded, term)) {
+						sites.add(site.getKey());
+					}
+				}
+			}
+		}
+		return sites;
+	}
+
+	/**
+	 * @return whether {@code recordedTerms} narrows {@code codes} at all — the question a caller asks
+	 *         when it must decide about SEVERAL orders of one substance together
+	 *         ({@code DrugSafetyValidator.codesForThisSubstancesPresentations}).
+	 *
+	 *         <p><b>Narrows, not "names a site", and the difference is a defect that shipped between
+	 *         two passes of this change.</b> The two answers come apart for an order this module CAN
+	 *         place at a site the substance is filed under no code for — a nasal hydrocortisone, say,
+	 *         where the KB publishes no {@code R01}. Asked the weaker question that order passes, and
+	 *         its own decline then depends on {@link #codesForRecordedAdministration}'s empty-set
+	 *         fallback, which is evaluated once over the UNION of every order's terms — so a sibling
+	 *         order that DOES narrow rescues the union from emptiness and the nasal order's codes are
+	 *         dropped with it. Measured through the real {@code validate}: that patient's systemic chip
+	 *         stood for the nasal order alone and vanished when a cutaneous cream was prescribed
+	 *         beside it, which is the direction the whole-substance decline exists to prevent.
+	 *
+	 *         <p>Built from the same two primitives the narrowing itself uses, so the decline and the
+	 *         narrowing cannot come to disagree about what this RECORD can express. That is a claim
+	 *         about the site walk and about nothing else: the two do not share
+	 *         {@link #codesForRecordedAdministration}'s guard on {@code codes}, so a null code set
+	 *         returns unchanged there and throws here. Deliberately not guarded to match — the single
+	 *         production caller passes {@code DrugReference.normalizedAtcCodes()}, which is never null,
+	 *         and an unreachable branch here would be one no case can pin, stated the way
+	 *         {@code CLAUDE.md} states it for {@code describesEndedOrder}'s unreachable null checks. A
+	 *         second caller holding a nullable code set guards at its own site or asks for the guard
+	 *         here; what it must not do is read the sentence above as covering it.
+	 */
+	static boolean narrowsAnyCode(Set<String> codes, Set<String> recordedTerms) {
+		return recordedTerms != null && !codesAtSites(codes, recordedSites(recordedTerms)).isEmpty();
+	}
+
+	/**
+	 * @return the members of {@code codes} that classify a presentation given at one of {@code sites}.
+	 *         UNGUARDED — it does not fall back to {@code codes} when nothing survives, which is what
+	 *         makes it the right thing for the partition guard to drive and the wrong thing for the
+	 *         class arm to call. {@link #codesForRecordedAdministration} is the guarded entry point.
+	 */
+	static Set<String> codesAtSites(Set<String> codes, Set<String> sites) {
+		Set<String> kept = new LinkedHashSet<String>();
+		for (String code : codes) {
+			String normalized = normalizeAtcToken(code);
+			if (normalized == null || !isLocallyAppliedAtcCode(normalized)) {
+				continue;
+			}
+			for (String site : sites) {
+				List<String> groups = ATC_GROUPS_BY_SITE.get(site);
+				if (groups != null && fallsUnderAnyGroup(normalized, groups)) {
+					kept.add(code);
+					break;
+				}
+			}
+		}
+		return kept;
+	}
+
+	/**
+	 * @return whether {@code code}'s locally-applied group is one whose published name states a
+	 *         property rather than a place, so that no site can claim it — see
+	 *         {@link #LOCALLY_APPLIED_GROUPS_NAMING_NO_SITE}. The other half of the partition, and the
+	 *         thing that tells "this group deliberately has no site" from "this group was left out".
+	 */
+	static boolean namesNoAdministrationSite(String code) {
+		String normalized = normalizeAtcToken(code);
+		return normalized != null && fallsUnderAnyGroup(normalized, LOCALLY_APPLIED_GROUPS_NAMING_NO_SITE);
+	}
+
+	/** @return the locally-applied ATC groups {@link #ATC_GROUPS_BY_SITE} and
+	 *          {@link #LOCALLY_APPLIED_GROUPS_NAMING_NO_SITE} partition — for the guard that checks
+	 *          they still do, which is the only thing that can see a member left out of BOTH halves.
+	 *          The data guard beside it cannot: it walks the shipped KB's codes, so a group that KB
+	 *          publishes nothing under escapes it, which a mutation adding {@code V07AY} to this list
+	 *          demonstrated on a green build. */
+	static List<String> locallyAppliedGroups() {
+		return LOCALLY_APPLIED_ATC_GROUPS;
+	}
+
+	/** @return the group prefixes {@code site} claims — for that same guard, which has to relate the
+	 *          two halves prefix-wise in EITHER direction: {@code S} is covered by {@code S01} /
+	 *          {@code S02} / {@code S03}, which are longer than it, while a longer member would be
+	 *          covered by a shorter site prefix the other way round. */
+	static List<String> groupsForSite(String site) {
+		List<String> groups = ATC_GROUPS_BY_SITE.get(site);
+		return groups != null ? groups : Collections.<String> emptyList();
+	}
+
+	/** @return the administration sites this module can attribute a code to, in a stable order —
+	 *          for the partition guard, which has to drive every one of them. */
+	static Set<String> administrationSites() {
+		return ATC_GROUPS_BY_SITE.keySet();
+	}
+
+	/** @return the recorded route and dose-form words that name {@code site}; empty for the three
+	 *          sites no recorded term can select — see {@link #SITE_TERMS}. */
+	static List<String> termsForSite(String site) {
+		List<String> terms = SITE_TERMS.get(site);
+		return terms != null ? terms : Collections.<String> emptyList();
+	}
+
+	/** {@code Arrays.asList} is fixed-size but its elements are still settable, and both maps above are
+	 *  handed out — {@link #termsForSite} returns one of these lists directly. Wrapped for the same
+	 *  reason {@link #LOCALLY_APPLIED_ATC_GROUPS} is, so the two constants cannot be immutable in
+	 *  different degrees. */
+	private static List<String> unmodifiable(String... values) {
+		return Collections.unmodifiableList(Arrays.asList(values));
+	}
+
+	/**
+	 * The ATC groups that assert NOTHING about the substances filed under them, so that two drugs
+	 * sharing one are not thereby related at all (issue #167). Prefixes at whatever level ATC states
+	 * the property at — mostly level-4 subgroups, but {@code V03A} and {@code V07A} are level-3, which
+	 * is why this is named for GROUPS the way {@link #LOCALLY_APPLIED_ATC_GROUPS} is and not for the
+	 * {@value #ATC_SUBGROUP_PREFIX_LENGTH}-character subgroups the matching itself compares.
+	 *
+	 * <p><b>Why a residual bucket is not automatically one of these.</b> ATC files a residue in most of
+	 * its groups — a level-4 subgroup whose published name begins "Other" or "Various", meaning
+	 * "everything in the group above that is not classified so far". The shipped 19 MB KB uses 97 of
+	 * them. But a residue INHERITS whatever the group containing it asserts: {@code R06AX} is "Other
+	 * antihistamines for systemic use", and its parent {@code R06A} is "ANTIHISTAMINES FOR SYSTEMIC
+	 * USE", so two drugs sharing {@code R06AX} really are both antihistamines and one really is
+	 * duplicate therapy for the other. Same for {@code J01GB} "Other aminoglycosides" (already pinned
+	 * by {@code CrossReactivityClassChoiceTest}), {@code N06AX} antidepressants, {@code N03AX}
+	 * antiepileptics, {@code N02AX} opioids. Vetoing every residue would drop a class claim from
+	 * <b>1816 of the KB's 7783 ROW pairs</b> that share a subgroup and <b>1598 of the 5550 SUBSTANCE
+	 * pairs</b>; <b>1331 ROW / 1291 SUBSTANCE of those keep it under the 36 groups this list holds
+	 * today</b>. The two bases, and the conversion between them, are defined at
+	 * {@code DrugSafetyValidator.sharedClass} (issue #243). <b>Those keeps are a set difference of two
+	 * runs, not a subtraction of the two counts</b>, because this list's veto is not a subset of a
+	 * residue veto: 158 ROW / 143 SUBSTANCE pairs go the other way, dropped here and by no residue at
+	 * all, under the non-residue members of this list the re-measurement paragraphs below name. So of
+	 * this list's own 643 ROW / 450 SUBSTANCE drop, 485 ROW / 307 SUBSTANCE are inside the residue
+	 * counterfactual and the rest is not. That 1331 read 1488 until issue #263, and the 1816 / 1598
+	 * read 1974 / 1741 until round 2 of the same issue; the measurement paragraphs further down this
+	 * javadoc say why, and how each was taken.
+	 *
+	 * <p><b>The families, and the reading of ATC's words that puts each here:</b>
+	 * <ul>
+	 *   <li>a residue inside a group ATC defines by SITE OF APPLICATION — the groups
+	 *       {@link #isLocallyAppliedAtcCode} already recognises. {@code A01AD} "Other agents for local
+	 *       oral treatment" under {@code A01} "Stomatological preparations" is the whole of what
+	 *       acetylsalicylic acid ({@code A01AD05}, a mouth rinse) and epinephrine ({@code A01AD01}, a
+	 *       dental haemostatic) have in common, and the chip built on it told a clinician that
+	 *       adrenaline duplicates aspirin. Its siblings {@code A01AA}/{@code AB}/{@code AC} name what
+	 *       their members ARE (caries prophylactics, antiinfectives, corticosteroids) and are
+	 *       deliberately absent — being applied in one place is not a shared property, being a
+	 *       corticosteroid is. <b>This family over-reaches, knowingly</b>: the level-3 groups nested
+	 *       inside these do not all stop at a site — {@code D06A} is "Antibiotics for topical use",
+	 *       {@code D01A} "Antifungals for topical use", {@code S01G} "Decongestants and antiallergics"
+	 *       — so their residue does assert something about its members. Telling those groups from the ones that
+	 *       assert nothing is a per-group pharmacological judgement, which is what this rule exists to
+	 *       avoid making; the cost of not making it is counted below;</li>
+	 *   <li>everything under {@code V03A} "ALL OTHER THERAPEUTIC PRODUCTS" and under {@code V07A} "ALL
+	 *       OTHER NON-THERAPEUTIC PRODUCTS" — the only two groups in the index whose own published name
+	 *       begins "ALL OTHER", and both are filed directly under {@code V} "VARIOUS", so nothing above
+	 *       them names a body system or a property either. Their children partition a residue by the
+	 *       accident each product is used for rather than by what it is: {@code V03AB} "Antidotes"
+	 *       holds potassium iodide beside acetylcysteine, naloxone and dimercaprol, and reporting two
+	 *       of them as cross-reacting states a chemical relationship that does not exist. Written at
+	 *       the group rather than per child so a KB refresh cannot add a child that quietly escapes the
+	 *       rule;</li>
+	 *   <li>{@code S02DC} "Indifferent preparations", under {@code S02D} "OTHER OTOLOGICALS" — a bucket
+	 *       ATC fills by exclusion inside a locally applied group, whose published name happens to say
+	 *       nothing about its members WITHOUT beginning "Other" or "Various". The name test that
+	 *       derives the first family structurally cannot find it, so it is named here instead. WHOCC's
+	 *       own name search returns exactly this one row for "indifferent" and nothing at all for
+	 *       "miscellaneous", which is the evidence that naming one such bucket is enough. Its sibling
+	 *       {@code S02DA} "Analgesics and anesthetics" says what its members are and is deliberately
+	 *       absent, the same distinction as {@code A01AD}'s. Not the same case as {@code D09AX} "Soft
+	 *       paraffin dressings" or {@code D07XA}–{@code D07XD} "Corticosteroids, …, other combinations",
+	 *       also inside {@code D} and also not named "Other …": those name what their members are, so
+	 *       they classify and stay out.</li>
+	 * </ul>
+	 *
+	 * <p><b>Enumerated, not sampled.</b> The first family is every level-4 subgroup in the WHO ATC index
+	 * whose own published name begins "Other"/"Various" AND that falls under
+	 * {@link #LOCALLY_APPLIED_ATC_GROUPS} — 27 subgroups, each name read off the WHOCC index itself.
+	 * Derived from the index rather than from the defect, which is what makes the list complete rather
+	 * than a patch of the two reported cases — the failure mode issue #161's own list hit, where four
+	 * missing groups reproduced the defect it had just fixed. The shipped KB uses 20 of the 27, plus 8
+	 * of {@code V03A}'s children; {@code S02DC} and {@code V07A} match no shipped-KB entry at all and
+	 * are here on the criterion rather than on measured impact, exactly as four of the
+	 * {@link #SYSTEMIC_USE_EXCEPTIONS} are — removing {@code S02DC} or {@code V07A} breaks no test,
+	 * this KB publishing no subgroup under either, which is why the criterion and not the test suite
+	 * has to decide membership. The analogy stops at the criterion: since issue #263 removing one of
+	 * those four DOES redden a case, for the reason that list's own javadoc gives. The first family is
+	 * complete only WITH RESPECT TO {@link #LOCALLY_APPLIED_ATC_GROUPS}: extend that list and it has to
+	 * be re-derived against the same index — and, since issue #263, the figures published on that list
+	 * have to be re-taken with it ({@code LocallyAppliedAtcGroupKeyTest}).
+	 *
+	 * <p><b>The fourth family, added for issue #184: a residue whose ancestry asserts nothing at any
+	 * level.</b> The reading above is that a residue inherits its parent's assertion; apply it
+	 * recursively and the parent may be a residue too, in which case the walk continues upward and can
+	 * reach the top without ever meeting a name that states a property. {@code A16AX} "Various
+	 * alimentary tract and metabolism products" sits under {@code A16A} "OTHER ALIMENTARY TRACT AND
+	 * METABOLISM PRODUCTS" under {@code A16} (the same words again) under {@code A} "ALIMENTARY TRACT
+	 * AND METABOLISM" — an anatomical main group, which by ATC's own level definitions states where the
+	 * drug acts and not what it is. Two drugs sharing it are related by nothing. {@code D11AX} is the
+	 * tell that this family was already half-caught: it is exactly this shape and was vetoed only
+	 * incidentally, because dermatologicals happen to be locally applied.
+	 *
+	 * <p>Enumerated the same way as the first family — every level-4 subgroup in the WHO ATC index
+	 * whose own name begins "Other"/"Various", which contributes no term its ancestors' names do not
+	 * already carry, and whose assertion, followed upward through further residues, resolves to nothing
+	 * at all or to a bare LEVEL-1 name: ATC's anatomical main group, a body system, which asserts no
+	 * shared purpose either. Six are new here — {@code A16AX}, {@code B06AX}, {@code G02CX},
+	 * {@code M09AX}, {@code N07XX}, {@code R07AX} — and {@code D11AX}, {@code R03BX}, {@code S01XA} and
+	 * {@code V03AX}/{@code V07AY} were already vetoed by the families above.
+	 *
+	 * <p><b>Level 1 and not level 2, which is where this rule was first drawn and was wrong.</b> ATC's
+	 * level 2 is its THERAPEUTIC tier, so a residue inheriting one does assert something — "ANTIBACTERIALS
+	 * FOR SYSTEMIC USE" for {@code J01XX}, "ANTINEOPLASTIC AGENTS" for {@code L01XX}, "DIAGNOSTIC AGENTS"
+	 * for {@code V04CX}. Two drugs sharing it are not chemically related and ARE duplicate therapy, so
+	 * they belong in {@link #PURPOSE_ONLY_ATC_GROUPS} below, not here. Stopping at level 1 instead cost
+	 * this list 17 of the 23 members it briefly had, and with them 381 of the 538 duplicate-therapy
+	 * claims it would otherwise have withdrawn — among them two erythropoiesis-stimulating agents
+	 * ({@code B03XA}) and every pair of systemic antibacterials ATC files as "other" ({@code J01XX}).
+	 * Issue #184 reports {@code V04CX} as one of its six; the criterion puts it in the other list, and
+	 * the criterion decides.
+	 *
+	 * <p>The "contributes no term of its own" clause is what stops the walk eating a residue that does
+	 * classify: {@code J01DI} "Other cephalosporins and penems" sits under "OTHER BETA-LACTAM
+	 * ANTIBACTERIALS" under "ANTIBACTERIALS FOR SYSTEMIC USE" and would otherwise inherit a therapeutic
+	 * tier, when its own name names the chemical family that is the whole reason a cephalosporin
+	 * allergy says anything about another cephalosporin. Same shape: {@code M03AC} "Other quaternary
+	 * ammonium compounds" under "MUSCLE RELAXANTS".
+	 *
+	 * <p>The family costs real relationships too, and the cost is taken deliberately: {@code G02CX}
+	 * bremelanotide × flibanserin, {@code M09AX} onasemnogene × risdiplam and {@code A16AX} miglustat ×
+	 * eliglustat are genuine pairs that lose their claim, because no rule over ATC's words can tell
+	 * them from eliglustat × givosiran, which is not one. Measured over the shipped KB by driving
+	 * {@link DrugSafetyValidator#validate} over each of the 5550 substance pairs the KB relates by a
+	 * level-4 subgroup (2026-08-13; re-measure before relying on a figure): these six remove 157 of the
+	 * 5271 duplicate-therapy claims, 14 of them for a pair DDInter also rates. Unlike issue #183's
+	 * family below, the duplicate-therapy claim goes too — that is the whole difference between
+	 * "asserts nothing" and "asserts a purpose".
+	 *
+	 * <p>Measured over the shipped KB for the 30 groups this list held at issue #182 (2026-08-06,
+	 * re-measured independently 2026-08-07; re-measure before relying on a figure): of the 7783 ROW
+	 * pairs sharing at least one level-4 subgroup, 486 lose their class claim entirely, 54 keep one and
+	 * name a subgroup that does classify the substances instead, and 7243 are untouched. Over the
+	 * <em>36</em> groups the list holds today the drop is <b>643 ROW / 450 SUBSTANCE pairs</b> (issue
+	 * #263, taken by the re-measurement recorded below; ADR Decision 33 carries the full three-way
+	 * split on both bases) — quoted here because it is what the residue counterfactual is differenced
+	 * against, and because the arithmetic closes only once its OVERLAP with that counterfactual is
+	 * stated: 485 of this 643 are among the 1816 a residue veto drops, so 1816 = 1331 kept here + 485
+	 * lost under both, and the remaining 158 are dropped here and by no residue. Over substance pairs,
+	 * 307 of this 450, so 1598 = 1291 + 307, the remaining 143 dropped here alone. The 1488 / 1448 the
+	 * paragraph above records for the 30-group list is the same difference taken against that list's
+	 * 486 / 293, and 158 / 143 are the same pairs there. Attributing each pair to the subgroup the
+	 * unvetoed scan chose for it, the largest contributors among those that LOSE the claim are, on
+	 * the 30-group split, {@code V03AB} (134 ROW pairs), {@code D11AX} "Other dermatologicals" (115),
+	 * {@code S01XA} "Other ophthalmologicals" (99) and {@code D06AX} "Other antibiotics for topical
+	 * use" (33); on the 36-group split {@code A16AX} (91) and {@code N07XX} (55) come in fourth and
+	 * fifth and push {@code D06AX} to sixth.
+	 *
+	 * <p><b>Those four 30-group figures read 135/130/99/68 until issue #263, and were not wrong — they
+	 * were on an unstated base.</b> Same attribution, wider population: every pair the scan gave that
+	 * subgroup, whether the veto went on to cost it its claim or merely to move it. 135 = 134 + 1,
+	 * 130 = 115 + 15, 99 = 99 + 0, 68 = 33 + 35, and those moved pairs are the whole of the 54 the
+	 * paragraph above states ({@code D06AX} 35, {@code D11AX} 15, {@code D01AE} 3, {@code V03AB} 1).
+	 * The missing base is what made the 68 read as a contradiction of the {@code D06AX} 33 the cost
+	 * breakdown below states, which counts losses alone — issue #243's pattern, one level down.
+	 *
+	 * <p><b>That 1331 read 1488 until issue #263, and the reason is worth keeping.</b> 1488 is the
+	 * answer over the <em>30</em> groups this list held at issue #182 — the scope the 486/54/7243
+	 * triple above states for itself — and issue #184 (PR #241) added six more without re-measuring
+	 * it, so a figure whose own wording says "keep it <em>here</em>" came to describe a rule this
+	 * class no longer applies. The residue counterfactual beside it did not move, because all six
+	 * additions are themselves residues and a blanket residue veto already covered them; that is
+	 * exactly why nothing looked wrong, only the surviving half having drifted. The same six moved
+	 * the class-claim drop by 157 on BOTH pair bases (486 to 643 ROW, 293 to 450 SUBSTANCE), which is
+	 * also the number the claim-base sentence above states for them — three identical deltas on three
+	 * bases, and issue #263 did not check whether they count the same pairs.
+	 *
+	 * <p>The re-measurement, 2026-08-29, retaken in round 2 of the same issue on head
+	 * {@code 3084cd80}: the shipped KB loaded through {@code DdiDrugReferenceSource.load}, the
+	 * substance base from {@link #substanceGroupKey()} and {@link #canonicalRow}, the choice from
+	 * {@code DrugSafetyValidator.sharedClass} reached by reflection and never re-expressed. Each veto
+	 * configuration is one dump of every pair sharing a level-4 subgroup with the answer of that
+	 * method beside it, so a counterfactual is a DIFF of two dumps line for line rather than a
+	 * recomputation. The round-2 run reproduced the 7783 / 5550 pair bases and the unmutated 643 / 450
+	 * byte for byte against the first run's dumps before anything was re-quoted. The residue set is
+	 * the <b>98</b> of the 594 level-4 subgroups {@link #atcSubgroups()} yields over this KB whose WHO
+	 * ATC/DDD published name begins "Other"/"Various", the names read off the WHO index snapshot of
+	 * 2026-04-25. It is counted over the same population as the 97 this javadoc records and is one
+	 * more than that 97; neither pass held the snapshot the 97 was read from, so the discrepancy is
+	 * recorded rather than resolved. Restricting the 98 to {@link #LOCALLY_APPLIED_ATC_GROUPS} gives
+	 * the same 20 the "shipped KB uses 20 of the 27" sentence records.
+	 *
+	 * <p><b>The counterfactual read 1974 ROW / 1741 SUBSTANCE for one round, and the base is why.</b>
+	 * Those are the drop under the 98 residues UNIONED with this list's own 36 members — a veto nobody
+	 * proposes, and not the "vetoing every residue" the sentence publishing them describes. The union
+	 * was taken because under it this list's drop is a subset of the counterfactual's, so 1974 minus
+	 * 643 closes as a subtraction. Vetoing exactly the 98 does not close that way and gives
+	 * <b>1816 ROW / 1598 SUBSTANCE</b>. The 158 ROW / 143 SUBSTANCE gap between the two readings is
+	 * carried by the seven of the 34 subgroups this list refuses over the shipped KB that are not
+	 * residues at all — {@code V03AB} (134 ROW / 119 SUBSTANCE pairs), {@code V03AF} (15 / 15),
+	 * {@code V03AE} (6 / 6) and {@code V03AC} (3 / 3), attributed by the subgroup the residue-only run
+	 * chose for each pair; {@code V03AH}, {@code V03AN} and {@code V03AZ} are the other three and
+	 * carry none.
+	 * What did NOT move is the KEPT counts, on this KB: 1331 ROW / 1291 SUBSTANCE against the 36 and
+	 * 1488 / 1448 against the 30 come out identical under both vetoes, pair for pair, because a set
+	 * difference is what they always were.
+	 *
+	 * <p>{@code UnclassifyingAtcVetoSetTest} now reddens when a change to this list reaches a subgroup
+	 * the shipped KB publishes, which is less than "whenever this list moves"; that class's javadoc
+	 * says what it leaves uncovered.
+	 *
+	 * <p><b>What that costs, counted rather than rounded down</b> — over that same 30-group 486, not
+	 * the 643. 116 of the 486 name a subgroup whose own published name states a therapy or an
+	 * indication, so the claim they lose was defensible:
+	 * {@code D06AX} 33, {@code D05AX} 26, {@code D01AE} 25, {@code S01GX} 12, {@code V03AE} 6,
+	 * {@code D10AX} 5, {@code V03AC} 3, {@code G01AX} 3, {@code S01AX} 2, {@code M02AX} 1. Concretely:
+	 * calcipotriol and calcitriol are both topical vitamin-D analogues and share only {@code D05AX};
+	 * azelastine and cetirizine are both H1 antihistamines and share only {@code S01GX}; the iron
+	 * chelators ({@code V03AC}) and the potassium/phosphate binders ({@code V03AE}) do share a mechanism
+	 * and lose the claim with the rest of {@code V03A}. 451 of the 486 carry no DDInter rating either,
+	 * so for those the class chip was the only chip. The price is paid deliberately: the alternative is
+	 * the per-group or per-child judgement named above, and what this module does have instead is the
+	 * curated cross-reactivity groups, which every vetoed pair still falls through to.
+	 */
+	private static final List<String> UNCLASSIFYING_ATC_GROUPS = Collections
+			.unmodifiableList(Arrays.asList("A01AD", "A07AX", "B05CX", "C05AX", "C05BX", "D01AE",
+					"D02AX", "D03AX", "D04AX", "D05AX", "D06AX", "D06BX", "D08AX", "D10AX", "D11AX",
+					"G01AX", "M02AX", "P03AX", "R01AX", "R02AX", "R03BX", "S01AX", "S01EX", "S01GX",
+					"S01JX", "S01KX", "S01XA", "S02DC", "V03A", "V07A",
+					// issue #184: a residue that adds no term of its own and whose assertion, followed up
+					// through further residues, resolves to nothing at all or to a bare LEVEL-1 anatomical
+					// main group -- a body system, which asserts no shared purpose either
+					"A16AX", "B06AX", "G02CX", "M09AX", "N07XX", "R07AX"));
+
+	/**
+	 * @return whether {@code code} — a full ATC code or any prefix of one, normalized as
+	 *         {@link #isLocallyAppliedAtcCode} normalizes its argument — sits in one of the
+	 *         {@link #UNCLASSIFYING_ATC_GROUPS}, i.e. whether it is a residual bucket that tells a
+	 *         reader nothing about the substances in it. Null and blank are not: nothing is known about
+	 *         them at all, which is a different answer from "known to mean nothing".
+	 *         <p>Package-private for the same reason as its siblings: it is a rule about ATC's own
+	 *         group names, not a fact about a substance. Two callers since issue #183 —
+	 *         {@code DrugSafetyValidator.justifiesClaim} for the duplicate-therapy arm, and
+	 *         {@link #isPurposeOnlyAtcCode}, which subsumes it for the cross-reactivity one.
+	 */
+	static boolean isUnclassifyingAtcCode(String code) {
+		String normalized = normalizeAtcToken(code);
+		return normalized != null && fallsUnderAnyGroup(normalized, UNCLASSIFYING_ATC_GROUPS);
+	}
+
+	/**
+	 * The ATC groups whose published name says only what their members are FOR — an indication, an
+	 * organism acted against, a therapeutic area, a diagnostic use — and nothing about what they ARE
+	 * (issue #183). Sharing one is a statement about PURPOSE, so it justifies a duplicate-therapy
+	 * claim and not a cross-reactivity one: two ophthalmic antibiotics really are duplicate therapy
+	 * for one another, and really do not thereby cross-react. That is the whole of the difference from
+	 * {@link #UNCLASSIFYING_ATC_GROUPS}, which asserts nothing to either arm.
+	 *
+	 * <p><b>The reading, and where it draws its one hard line.</b> A name states a CLASS when it names
+	 * a structural family ({@code J01CA} "Penicillins with extended spectrum", {@code M01AE}
+	 * "Propionic acid derivatives", {@code N05BA} "Benzodiazepine derivatives"), a derivative class, or
+	 * a molecular TARGET ({@code C10AA} "HMG CoA reductase inhibitors", {@code A02BC} "Proton pump
+	 * inhibitors", {@code C09AA} "ACE inhibitors"). It states a PURPOSE when it names the condition or
+	 * the organism instead. The line runs through ATC's {@code anti-} names and not around them:
+	 * {@code S01AA} "Antibiotics" and {@code J04AB} "Antibiotics" name an organism to kill, while
+	 * {@code R06AX} "Other antihistamines" names a receptor, {@code N06DA} "Anticholinesterases" an
+	 * enzyme and {@code C01BD} "Antiarrhythmics, class III" a channel — those three are classes and
+	 * stay out. {@code N01B} "Anesthetics, local" and its {@code S01HA}/{@code C05AD}/{@code R02AD}
+	 * counterparts stay out for the same reason, which is the reading
+	 * {@link #LOCALLY_APPLIED_ATC_GROUPS} already records for {@code N01B}.
+	 *
+	 * <p><b>Enumerated from the index, not from the reported cases.</b> Every level-4 subgroup in the
+	 * WHO ATC index was read: the subgroup's own name where it names anything, and — for a residue that
+	 * adds no term of its own, following issue #182's rule — the name of the nearest ancestor that
+	 * does. 117 subgroups state a purpose and no chemistry without already being vetoed outright by
+	 * {@link #UNCLASSIFYING_ATC_GROUPS}, and they are the list below. Deriving it from the index rather
+	 * than from the three subgroups issue #183 names is the point: issue #161's list was hand-picked
+	 * and its hardening found it incomplete in a way that reproduced the defect it was fixing.
+	 * {@code S01AA}, {@code A07AA} and {@code S02AA} are here because the criterion reaches them, not
+	 * because they were reported.
+	 *
+	 * <p><b>Why this is a per-ARM rule and not another veto.</b> The alternative put to this work was
+	 * that ATC classifies purpose and route rather than chemistry, so it should license duplicate
+	 * therapy only and cross-reactivity should come from the curated groups alone. Measured over the
+	 * shipped 19 MB KB by driving {@link DrugSafetyValidator#validate} over each of the 5550 substance
+	 * pairs the KB relates by a level-4 subgroup (2026-08-13; re-measure before relying on a figure):
+	 * the blanket rule removes all 5266 cross-reactivity claims, of which 3701 rest on a subgroup that
+	 * does name chemistry or a molecular target — the penicillins, the cephalosporins, the
+	 * aminoglycosides, the benzodiazepines, the statins — and 1565 on purpose or on nothing, while the
+	 * one cross-reactivity group the module ships replaces 24 of the 5266. It loses real signal at 2.4
+	 * times the rate it removes false claims, so it is not what shipped. This list and the one above
+	 * remove the 1565 between them, keep the 3701, and rename 4; 586 of the 1565 are for a pair
+	 * DDInter also rates, so for those the interaction chip survives and only the class claim goes.
+	 * The largest contributors are {@code L01XX} "Other antineoplastic agents" (276 claims),
+	 * {@code N06AX} "Other antidepressants" (132), {@code S01AA} "Antibiotics" (118), {@code N03AX}
+	 * "Other antiepileptics" (91) and {@code B05XA} "Electrolyte solutions" (73).
+	 */
+	private static final List<String> PURPOSE_ONLY_ATC_GROUPS = Collections
+			.unmodifiableList(Arrays.asList(
+					"A01AB", "A02BX", "A03AX", "A03CC", "A03DC", "A03EA", "A03ED", "A04AD", "A05AB",
+					"A05AX", "A06AB", "A06AG", "A06AX", "A07AA", "A07DA", "A07EB", "A07XA", "A10XX",
+					"A11HA", "B01AX", "B02BX", "B03XA", "B05BA", "B05BB", "B05BC", "B05CA", "B05CB",
+					"B05XA", "B06AC", "C01EB", "C02KN", "C02KX", "C02LX", "C05AB", "C05AE", "C05XX",
+					"C09XX", "D01AA", "D01BA", "D05BX", "D06BB", "D09AA", "D10AB", "D10AF", "D11AA",
+					"D11AH", "G01AA", "G01BA", "G01BD", "G03AD", "G03XX", "G04BD", "G04BE", "G04CX",
+					"J01XX", "J02AA", "J02AX", "J04AB", "J04AK", "J04BA", "J05AP", "J05AR", "L01XU",
+					"L01XX", "M01AX", "M02AA", "M02AC", "M03AX", "M03BX", "M04AA", "M04AB", "M04AC",
+					"M05BX", "N02BG", "N03AX", "N04CX", "N05AX", "N05CM", "N05CX", "N06AX", "N06CA",
+					"N07BA", "N07BB", "N07BC", "N07CA", "P01AX", "P01CX", "R01AC", "R02AA", "R02AB",
+					"R03BC", "R03DX", "R05CA", "R05DB", "R05FB", "S01AA", "S01AD", "S01BC", "S01CC",
+					"S01LA", "S02AA", "S03AA", "V04CA", "V04CB", "V04CC", "V04CD", "V04CE", "V04CG",
+					"V04CH", "V04CJ", "V04CK", "V04CL", "V04CM", "V04CX", "V09XX", "V10AX", "V10XX"));
+
+	/**
+	 * @return whether {@code code} — a full ATC code or any prefix of one, normalized as
+	 *         {@link #isUnclassifyingAtcCode} normalizes its argument — asserts no chemistry: either it
+	 *         asserts nothing at all, or it sits in one of the {@link #PURPOSE_ONLY_ATC_GROUPS} and so
+	 *         asserts only a purpose. This is the question the CROSS-REACTIVITY arm asks; the
+	 *         duplicate-therapy arm asks {@link #isUnclassifyingAtcCode}, which is strictly weaker.
+	 *         <p>Subsuming its sibling is a contract and not a convenience: a group that asserts
+	 *         nothing cannot assert a purpose either, so refusing it for duplicate therapy while
+	 *         admitting it for cross-reactivity would have the two arms disagree about which claim is
+	 *         the stronger one. {@code AtcCrossReactivityLicensingTest} pins that ordering.
+	 *         <p>Package-private with one caller ({@code DrugSafetyValidator.justifiesClaim}) for the
+	 *         same reason as its siblings: it is a rule about ATC's own group names, not a fact about a
+	 *         substance.
+	 */
+	static boolean isPurposeOnlyAtcCode(String code) {
+		String normalized = normalizeAtcToken(code);
+		return normalized != null && (isUnclassifyingAtcCode(normalized)
+				|| fallsUnderAnyGroup(normalized, PURPOSE_ONLY_ATC_GROUPS));
+	}
+
+	/** @return whether the already-normalized {@code code} sits under any of {@code groups} — the one
+	 *  definition of "an ATC code falls under a group prefix" on this side, matching what
+	 *  {@link CrossReactivityGroup#containsCode} is for curated group prefixes, so that a future
+	 *  refinement (level-boundary guarding, say) has one place to happen rather than two. */
+	private static boolean fallsUnderAnyGroup(String code, List<String> groups) {
+		for (String group : groups) {
+			if (code.startsWith(group)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	public List<AgeBand> getAgeBands() {
@@ -268,11 +2156,24 @@ public class DrugReference {
 	 *         {@link #matchesDrugName}; see there for why one matcher cannot serve both.
 	 */
 	public boolean matchesText(String lowerText) {
-		if (lowerText == null) {
-			return false;
-		}
-		for (String alias : aliases) {
-			if (containsWord(lowerText, alias)) {
+		return lowerText != null && matchesFoldedText(foldedLower(lowerText));
+	}
+
+	/**
+	 * @return {@link #matchesText}'s answer for prose a caller has already folded — the form
+	 *         {@code DrugReferenceService.findByQuery} uses, so one question or answer is folded once
+	 *         for the whole dataset sweep rather than once per entry (issue #330). The aliases arrive
+	 *         folded from {@link #foldedAliases}, so nothing here folds at all.
+	 *
+	 *         <p>A plain {@code String} and not a {@link FoldedName}, deliberately: this operand is
+	 *         PROSE, and prose already has a folded shape in this class — {@link #namedOccurrences}'
+	 *         {@code foldedLowerText}, which its caller must hold itself because it hands back
+	 *         positions into that exact string. A second carrier for the same operand shape is what
+	 *         that type's own javadoc says it is not.
+	 */
+	boolean matchesFoldedText(String foldedLowerText) {
+		for (String foldedAlias : foldedAliases) {
+			if (foldedWordMatch(foldedLowerText, foldedAlias)) {
 				return true;
 			}
 		}
@@ -280,10 +2181,55 @@ public class DrugReference {
 	}
 
 	/**
+	 * @return WHICH of this entry's names {@code lowerText} carries — {@link #matchesText}'s witnesses,
+	 *         in alias order, empty exactly when that returns false. Same rule, same primitive
+	 *         ({@link #foldedWordMatch}, which is {@link #containsWord}'s rule for operands already
+	 *         folded), so the two cannot come to disagree about what prose carries; the boolean stays
+	 *         separate because it is the hot path and must not allocate.
+	 *
+	 *         <p><b>No folded arity, unlike its boolean</b> ({@link #matchesFoldedText}), and that is a
+	 *         cost decision rather than an oversight: this is asked of the entries a scan already
+	 *         MATCHED rather than of the dataset, so the per-call fold is bounded by the answer.
+	 *         Measured through the real {@code validate} over the shipped knowledge base: 0 calls in a
+	 *         one-drug pass and 9 in a ten-drug one, against the ~1.4M folds issue #330 removed.
+	 *
+	 *         <p><b>Why a caller needs the witness and not only the answer (issue #209).</b> A boolean
+	 *         says an entry is mentioned; it does not say by WHICH name, and that is what decides whether
+	 *         the mention is about this entry's substance. One alias is routinely shared by two
+	 *         substances — {@code hydrocortisone} is the display name of {@code Hydrocortisone} and an
+	 *         alias of {@code Hydrocortisone butyrate}, {@code esomeprazole} likewise for the two PPI rows
+	 *         the KB files under one {@code rxnorm_name} — so a set built by iterating the boolean admits
+	 *         both, and only the name actually carried can be ranked. See
+	 *         {@link DrugReferenceService#findImpliedByQuery}.
+	 */
+	List<String> aliasesIn(String lowerText) {
+		if (lowerText == null) {
+			return Collections.emptyList();
+		}
+		List<String> carried = new ArrayList<String>();
+		String foldedText = foldedLower(lowerText);
+		for (int i = 0; i < foldedAliases.size(); i++) {
+			if (foldedWordMatch(foldedText, foldedAliases.get(i))) {
+				// The RAW alias, which is what a witness is: the folded list is an index-aligned view
+				// of it and exists only to keep this scan from re-deriving one.
+				carried.add(aliases.get(i));
+			}
+		}
+		return carried;
+	}
+
+	/**
 	 * @return true when this entry names the drug in {@code drugName} — a single clinician-entered
-	 *         drug NAME rather than prose: an active order's display name, an allergen as recorded.
+	 *         drug NAME: an active order's display name, an allergen as recorded.
 	 *         Case- and diacritic-insensitive; a null name never matches. Not restricted to
 	 *         lowercased input, unlike {@link #matchesText}.
+	 *
+	 *         <p>This used to read "a drug NAME rather than prose", and issue #293 retired that half:
+	 *         an order's names now include the free text a clinician typed, and an allergen "as
+	 *         recorded" was always free text. The matcher choice is unchanged — see the tail-allowance
+	 *         argument on {@link #matchesOrderName} — but what it is applied to is no longer all one
+	 *         shape, and the cost of that is recorded on
+	 *         {@code PatientClinicalContextBuilder.addDrugName}.
 	 *
 	 *         <p><b>Why this exists (issue #147).</b> Such a string reached {@link #matchesText}
 	 *         by default, and the prose rule's symmetric boundary is wrong for it: a localized
@@ -309,14 +2255,175 @@ public class DrugReference {
 	 *         624 — 75 gained, 0 lost — and the whole #86/#128/#129 kill set was re-scored in this
 	 *         direction, 0 of 21 nesting pairs resolving to the nested drug. On the 2533 order names,
 	 *         117 more (order name, entry) pairs resolve and none stops resolving.
+	 *
+	 *         <p><b>Three populations, none of them an ATC pair base</b> (issue #263). The 549 and the
+	 *         624 count NAMES, out of that dictionary's 1219 allergen candidates. A NESTING PAIR is a
+	 *         pair of drug NAMES one of which sits inside the other; the 21 is the size of the
+	 *         curated #86/#128/#129 kill set, which is a hand-assembled list of known collisions and
+	 *         not a population derived from a corpus, so it has no substance-pair counterpart to
+	 *         convert to. The 117 counts (order name, ENTRY) pairs — an entry publishes many names, so
+	 *         this is a pair kind of its own — and it is over that dictionary's 2533 ORDER names,
+	 *         whereas {@link #matchesOrderName}'s own table has a corpus of 2531; this pass held
+	 *         neither dictionary, so that discrepancy is recorded rather than resolved.
+	 *
+	 *         <p>All three corpora — the 1219 allergen candidates, the 2533 order names and that
+	 *         table's 2531 — are the 3.7.1 demo dictionary, which this repo does not carry, so none of
+	 *         the three counts is re-derivable here; what is stated is which population each is over,
+	 *         not a new measurement of it.
 	 */
 	boolean matchesDrugName(String drugName) {
-		for (String alias : aliases) {
-			if (matchesOrderName(drugName, alias)) {
+		return matchesDrugName(fold(drugName));
+	}
+
+	/**
+	 * @return {@link #matchesDrugName}'s answer for a name a caller has already folded — the form a
+	 *         SCAN uses, so the recorded name is folded once for the whole scan rather than once per
+	 *         entry (issue #330). Same rule and the same primitive, not a fourth one: both arities
+	 *         reach {@link #foldedOrderNameMatch}, so the boundary rule and the fold each stay in one
+	 *         place. A null operand never matches, as a null name never did.
+	 */
+	boolean matchesDrugName(FoldedName drugName) {
+		if (drugName == null) {
+			return false;
+		}
+		for (String foldedAlias : foldedAliases) {
+			if (foldedOrderNameMatch(drugName.folded, foldedAlias)) {
 				return true;
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * @return WHICH of this entry's names {@code drugName} carries — {@link #matchesDrugName}'s witnesses,
+	 *         in alias order, empty exactly when that returns false. The recorded-name counterpart of
+	 *         {@link #aliasesIn}, and separate from it for the reason {@link #matchesDrugName} is separate
+	 *         from {@link #matchesText}: the two boundary rules differ, so the set of names a recorded
+	 *         display name carries is not the set its prose reading would carry ({@code Aspirine Co 81mg}
+	 *         carries {@code aspirin} under this rule and nothing under the prose one, issue #147). Each
+	 *         witness accessor calls the same primitive as its own boolean
+	 *         ({@link #foldedOrderNameMatch} here, {@link #foldedWordMatch} there — since issue #330 the
+	 *         folded arities of the two rules, which is what both members of each pair now reach), so
+	 *         neither pair can drift.
+	 *
+	 *         <p><b>No production caller since issue #330</b> — its one caller holds a name it has
+	 *         already folded for the scan that produced these candidates, so it reaches the
+	 *         {@link FoldedName} arity below, which is the witness accessor CLAUDE.md's rule is about.
+	 *         Kept for a caller holding a raw string; the callers it has today are test cases stating a
+	 *         premise about which of its names a row carries — grep the name rather than trusting a
+	 *         count written here, which is what went stale.
+	 */
+	List<String> aliasesNaming(String drugName) {
+		return aliasesNaming(fold(drugName));
+	}
+
+	/** @return {@link #aliasesNaming}'s answer for an already-folded name, the witness counterpart of
+	 *          {@link #matchesDrugName(FoldedName)} and calling the same primitive it does, so the
+	 *          boolean and its witnesses cannot drift. The witnesses are the RAW aliases. */
+	List<String> aliasesNaming(FoldedName drugName) {
+		List<String> carried = new ArrayList<String>();
+		if (drugName == null) {
+			return carried;
+		}
+		for (int i = 0; i < foldedAliases.size(); i++) {
+			if (foldedOrderNameMatch(drugName.folded, foldedAliases.get(i))) {
+				carried.add(aliases.get(i));
+			}
+		}
+		return carried;
+	}
+
+	/** {@link #nameMatchStrength}: this entry does not name {@code drugName} at all. */
+	static final int NAME_NO_MATCH = -1;
+
+	/** {@link #nameMatchStrength}: one of this entry's names occurs INSIDE {@code drugName} — as a
+	 *  bounded token, give or take an inflectional tail. That direction and not the reverse:
+	 *  {@link #matchesDrugName} hands the recorded name to {@link #containsBoundedToken} as the text and
+	 *  the entry's alias as the token, which is how an allergy recorded as {@code Ciprofloxacin lactate}
+	 *  reaches a {@code Lactic acid} row whose CIEL name is {@code Lactate}. The weakest claim, and the
+	 *  only one the resolution used to make. */
+	static final int NAME_TOKEN_INSIDE_A_NAME = 0;
+
+	/** {@link #nameMatchStrength}: {@code drugName} IS one of this entry's names, but not its display
+	 *  name — its {@code rxnorm_name} or one of its CIEL names. */
+	static final int NAME_IS_ANOTHER_NAME = 1;
+
+	/** {@link #nameMatchStrength}: {@code drugName} IS this entry's own display name. The strongest
+	 *  claim an entry can make on a name, and the one nothing can outrank. */
+	static final int NAME_IS_THE_DISPLAY_NAME = 2;
+
+	/**
+	 * How strongly this entry claims a clinician-entered drug NAME — an allergen as the chart records
+	 * it, an order's display name. {@link DrugReferenceService#lookupByToken} resolves such a name to
+	 * the entry with the strongest claim on it, so that ONE definition orders the three kinds of claim
+	 * rather than each caller re-deciding what "the same drug" means.
+	 *
+	 * <p><b>Since issue #296 one caller asks it of a REFERENCE string</b> — a rule's own match token,
+	 * through {@link DrugReferenceService#uniqueStrongestClaimant}, to decide which of the substances a
+	 * token names it denotes. Only the top two ranks are in play there, and the two rungs below are shut
+	 * for DIFFERENT reasons — one of which does not involve the trim, so do not read the trim as holding
+	 * both. {@link #NAME_TOKEN_INSIDE_A_NAME} is returned from one expression below and only where
+	 * {@link #isNamed} is false, which {@code DrugSafetyValidator.unambiguouslyNames} has already
+	 * required to be TRUE of every row it ranks — the ladder's entry and each rival alike — so that
+	 * rung is shut by that gate, trimmed list or not. {@link #NAME_NO_MATCH} is the one the
+	 * trim shuts: on a LOADED dataset identity with a trimmed alias implies containment, so the gate
+	 * cannot admit a pair this method then answers it for. Loaded, because the trim is only half of it
+	 * — see {@link #setAliases} for the other half and for what an entry bypassing the loader can still
+	 * do. Without the trim that rung reopens on a padded alias, in the two directions
+	 * {@code DrugSafetyValidator.unambiguouslyNames} records. Noted because it widens what this method
+	 * is asked about, and ADR Decision 52 carries the argument for accepting that over a second
+	 * spelling of the comparison.
+	 *
+	 * <p><b>Why a rank and not first-past-the-post (issue #176).</b> Resolution took the earliest
+	 * matching entry, and reference names nest: 206 of the shipped KB's 2283 entries did not resolve to
+	 * themselves, 54 of them landing on a different SUBSTANCE (measured 2026-08-08 through
+	 * {@link DrugReferenceService#lookupByToken} itself, before and after; re-measure before relying on
+	 * the figures).
+	 * Since issue #187 that row is what the contraindication chips NAME, so a chip reported an allergy
+	 * to a drug the chart does not record — {@code Botulinum toxin type A} as
+	 * {@code Daxibotulinumtoxina}, {@code Esomeprazole} as {@code Omeprazole}. It is not the
+	 * unanchored-substring hazard of issues #86/#128: those names match as whole strings, so no
+	 * boundary rule separates them, and it is not {@link #canonicalRow}'s question either — that fold
+	 * picks a substance's representative row for DISPLAY, while this picks which row the chart's own
+	 * string is about, and applying it here would rename a charted {@code Ketorolac (ophthalmic)}
+	 * allergy to {@code Ketorolac}.
+	 *
+	 * <p>The two do COMPOSE at one site, in that order and only there: since issue #194
+	 * {@code DrugSafetyValidator.interactionSubject} asks this first and folds only the rows that tie,
+	 * because a chip about the patient's own order should name the row their chart records. Composing
+	 * them the other way round is the #187 regression above.
+	 *
+	 * <p><b>Gated on {@link #matchesDrugName} first</b>, so the entries a name can resolve to are
+	 * exactly the ones it resolved to before and only the CHOICE among them changes: this can never
+	 * resolve a name that resolved to nothing, and never fail to resolve one that resolved to
+	 * something. The one shape that gate excludes is a hand-authored {@code json} entry whose
+	 * {@code aliases} omit its own {@code name} — for it the display name is not a match at all, which
+	 * is the pre-existing answer and not this method's to widen.
+	 *
+	 * @return one of {@link #NAME_NO_MATCH}, {@link #NAME_TOKEN_INSIDE_A_NAME},
+	 *         {@link #NAME_IS_ANOTHER_NAME}, {@link #NAME_IS_THE_DISPLAY_NAME} — higher is a stronger
+	 *         claim on {@code drugName}
+	 */
+	int nameMatchStrength(String drugName) {
+		return nameMatchStrength(fold(drugName));
+	}
+
+	/**
+	 * @return {@link #nameMatchStrength}'s answer for an already-folded name — the form the two
+	 *         whole-dataset scans that rank a name use ({@code DrugReferenceService.lookupByToken} and
+	 *         {@code findImpliedSubstances}), so the name is folded once for the scan (issue #330).
+	 *         The carrier keeps the raw string beside the folded one, which is why the identity rungs
+	 *         below need no second operand and cannot be handed the wrong string.
+	 */
+	int nameMatchStrength(FoldedName drugName) {
+		if (drugName == null || !matchesDrugName(drugName)) {
+			return NAME_NO_MATCH;
+		}
+		String recorded = normalizeName(drugName.raw);
+		if (recorded != null && recorded.equals(normalizeName(name))) {
+			return NAME_IS_THE_DISPLAY_NAME;
+		}
+		return isNamed(drugName.raw) ? NAME_IS_ANOTHER_NAME : NAME_TOKEN_INSIDE_A_NAME;
 	}
 
 	/**
@@ -325,6 +2432,15 @@ public class DrugReference {
 	 *         strings (a rule's match token against an entry's own alias list), so the question is name
 	 *         identity; {@code DrugSafetyValidator.identifies} records what scanning them instead
 	 *         produced (a multi-word token naming every drug called after one of its words).
+	 *
+	 *         <p>Also the middle rank of {@link #nameMatchStrength}, whose second operand is usually a
+	 *         clinician-entered name rather than a reference one — though since issue #296 it is a
+	 *         reference token at one caller, which reaches that rank through this very method. It stays
+	 *         unfolded there for the reason
+	 *         {@link #normalizeName} records: an accented chart string therefore reaches no exact rank
+	 *         and falls through to the folded matcher, which is exactly what it did before — the fold's
+	 *         own measurement says the reference side carries no combining mark, so the gap is on the
+	 *         chart side and widening it needs its own measurement.
 	 */
 	boolean isNamed(String token) {
 		String name = normalizeName(token);
@@ -337,6 +2453,42 @@ public class DrugReference {
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * The keys under which this entry answers {@link #isNamed} — every alias, {@link #normalizeName}d,
+	 * blanks dropped and duplicates collapsed.
+	 *
+	 * <p><b>The INVERSE of {@link #isNamed}, and it exists so that "every loaded entry this token
+	 * names" can be answered without walking the dataset.</b> That question is asked by
+	 * {@code DrugSafetyValidator.unambiguouslyNames}, which since issue #339 is asked once per rule
+	 * chip rather than once per folded chip, and a {@code getAll()} walk per ask grows with the drugs
+	 * in play — the very thing
+	 * {@code CoMedicationResolutionPerPassTest.theCoMedicationResolutionDoesNotGrowWithTheDrugsInPlay}
+	 * forbids. So {@link DrugReferenceService#nameIndex()} inverts the whole dataset once per pass and
+	 * reads it back through {@link DrugReferenceService#entriesNamedBy}.
+	 *
+	 * <p>Here rather than at the service, and derived from the same field through the same
+	 * normalisation as the predicate directly above, because the two must answer identically: an index
+	 * built from a second reading of what a name IS would silently admit or lose a claimant, and the
+	 * claimant set is what decides whether one substance's rated mechanism may be printed under
+	 * another's name (issue #296). {@code NameIndexAgreesWithIsNamedTest} asks that of whole loaded
+	 * datasets rather than of a hand-written pair.
+	 *
+	 * <p>Derived in {@link #setAliases}, the sole writer, exactly as {@link #foldedAliases} is and for
+	 * the reason CLAUDE.md gives about that field: a value computed where the input is stored is not a
+	 * memo, so issue #172's rule does not reach it. Deriving it per call is not merely wasteful, it is
+	 * forbidden here — {@code FoldedOperandTest.everyAliasScanReadsTheStoredFoldedList} whitelists the
+	 * bodies that may read the RAW alias list, and the whole point of that guard is that a helper
+	 * extracted out of a scan to loop that list is the shape which beat its earlier form.
+	 *
+	 * <p><b>A SET, and so deliberately NOT index-aligned with the alias list</b>, unlike
+	 * {@link #foldedAliases}: two aliases differing only in case or padding are ONE name to
+	 * {@link #isNamed} and must be one key here, or an entry would appear twice among its own
+	 * claimants. Nothing may read a witness out of it by index.
+	 */
+	Set<String> nameKeys() {
+		return nameKeys;
 	}
 
 	/**
@@ -366,13 +2518,34 @@ public class DrugReference {
 	 *         ("chlorothiazide" is not a whole word in "hydrochlorothiazide"), while a real token
 	 *         still matches ("aspirin" in "Aspirin 81 mg"). Case-insensitive and
 	 *         diacritic-insensitive (see {@link #containsBoundedToken}); a null or empty word
-	 *         never matches. Backs {@link #matchesText} (alias-in-prose); the active-order
-	 *         counterpart is {@link #matchesOrderName}, which shares this rule's left boundary but
-	 *         not its right one — see there for why one matcher cannot serve both.
+	 *         never matches. The prose rule; the active-order counterpart is
+	 *         {@link #matchesOrderName}, which shares this rule's left boundary but not its right one
+	 *         — see there for why one matcher cannot serve both. {@link #matchesText} used to reach
+	 *         the rule through here and since issue #330 reaches it through {@link #foldedWordMatch}
+	 *         instead, its operands both being folded already; that is the same rule and the same
+	 *         allowance constant, not a second one.
 	 */
 	static boolean containsWord(String text, String word) {
-		return containsBoundedToken(text, word, 0);
+		return containsBoundedToken(text, word, PROSE_TRAILING_LETTERS);
 	}
+
+	/**
+	 * How many trailing letters PROSE may carry past a matched drug token before the token stops naming
+	 * that drug. None: prose is words, so the boundary is symmetric — the "symmetric boundary" row of
+	 * {@link #matchesOrderName}'s measured table, which is the rule a question, an answer or a rendered
+	 * record gets.
+	 *
+	 * <p>A constant rather than a literal for the same reason {@link #MAX_ORDER_NAME_INFLECTION_LETTERS}
+	 * is one, and since issue #260 for a sharper one: prose is asked in more than one shape — as a
+	 * boolean over unfolded operands ({@link #containsWord}), as a boolean over folded ones
+	 * ({@link #foldedWordMatch}, issue #330, which is what {@link #matchesText} and
+	 * {@code DrugReferenceService.findByQuery} now reach), and as a position ({@link #wordIndex}) —
+	 * and a literal at any of them would be a decision about which of the two boundary rules prose
+	 * gets, which is the drift #260 was, one level up.
+	 * {@link #namedOccurrences} also depends on it arithmetically: its {@code end} is
+	 * {@code idx + w.length()}, which is the whole match only while this is zero.
+	 */
+	private static final int PROSE_TRAILING_LETTERS = 0;
 
 	/**
 	 * How many trailing letters an active-order display name may carry past a matched drug token
@@ -404,9 +2577,12 @@ public class DrugReference {
 	 * {@code cipr|ofloxacin}.
 	 *
 	 * <p>The right-hand side is where this deliberately differs from {@link #containsWord}, because
-	 * the two kinds of string differ: prose is words, an order name is one localized, inflected
-	 * display name with a dose appended. Measured over the 3.7.1 demo dictionary (2531 drug and
-	 * drug-concept names x the full KB's 2093 rule tokens), by tolerated trailing letters:
+	 * the two kinds of string differ: prose is words, an order name is typically one localized,
+	 * inflected display name with a dose appended. Typically, not always — since issue #293 an order's
+	 * names include the free text a clinician typed, which can be a sentence; the allowance is still
+	 * right for the display-name shape it was measured on, and what it is applied to is now wider.
+	 * Measured over the 3.7.1 demo dictionary (2531 drug and drug-concept names x the full KB's 2093
+	 * rule tokens), by tolerated trailing letters:
 	 *
 	 * <pre>
 	 *   rule                    matches   nested-name collisions leaking   what enters at this step
@@ -420,7 +2596,7 @@ public class DrugReference {
 	 *                                              Multi-Vitamin Adult ~ vitamin a)
 	 * </pre>
 	 *
-	 * A symmetric boundary would therefore stop checking a patient on {@code Aspirine Co 81mg} for
+	 * <p>A symmetric boundary would therefore stop checking a patient on {@code Aspirine Co 81mg} for
 	 * aspirin interactions at all — trading a false positive for a false NEGATIVE, the wrong
 	 * direction for a safety net, and one that looks exactly like the noise being removed. Two is the
 	 * far edge of the plateau where every legitimate name is matched and no false positive has yet
@@ -451,13 +2627,18 @@ public class DrugReference {
 	 *   this matcher, folded (#129)       907     0 of 9   (0 of 12 accented)     10 of 10
 	 * </pre>
 	 *
-	 * 224 of the 2531 names carry a diacritic. Folding both operands makes the change a pure
-	 * relaxation — 78 pairs added, <em>0 removed</em> — which is what let this widening be scored
-	 * against #128's kill set instead of argued about, and the kill set includes the accented
-	 * spellings, which are the ones folding could newly break: {@code nitroglycérine} folds to
-	 * {@code nitroglycerine}, i.e. {@code glycerin} plus one inflectional letter, so it becomes a
-	 * candidate for that token at the very moment {@code glycérine} legitimately does, and only the
-	 * LEFT boundary separates them.
+	 * <p>That 2531 x 2093 product is a (NAME, TOKEN) population of its own, and neither of the ATC
+	 * pair bases {@code DrugSafetyValidator.sharedClass} defines — issue #263, which labels the 78
+	 * below on it and did not re-derive the unit of the {@code matches} column itself, the corpus
+	 * behind that column being a dictionary this repo does not carry.
+	 *
+	 * <p>224 of the 2531 names carry a diacritic. Folding both operands makes the change a pure
+	 * relaxation — 78 (NAME, TOKEN) pairs added over the 2531 x 2093 product, <em>0 removed</em> —
+	 * which is what let this widening be scored against #128's kill set instead of argued about, and
+	 * the kill set includes the accented spellings, which are the ones folding could newly break:
+	 * {@code nitroglycérine} folds to {@code nitroglycerine}, i.e. {@code glycerin} plus one
+	 * inflectional letter, so it becomes a candidate for that token at the very moment
+	 * {@code glycérine} legitimately does, and only the LEFT boundary separates them.
 	 *
 	 * <p>76 of the 78 are an accented spelling of the token's own drug ({@code héparine} ~ heparin,
 	 * {@code lévofloxacine} ~ levofloxacin, {@code énoxaparine} ~ enoxaparin). The other two, for the
@@ -481,9 +2662,28 @@ public class DrugReference {
 	}
 
 	/**
-	 * The one boundary-aware containment scan, shared by prose matching ({@link #containsWord}) and
-	 * order-name matching ({@link #matchesOrderName}) so the boundary rule cannot drift between
-	 * them. A match needs {@code token} to start at a word boundary in {@code text} and to end at
+	 * @return {@link #matchesOrderName}'s answer with BOTH operands already in {@link #foldedLower}
+	 *         form — the shape {@link PatientClinicalContext#hasActiveDrug} needs, where the order
+	 *         names it scans and the rule token it scans for are BOTH fixed for the pass and were both
+	 *         re-derived once per comparison (issue #330). The token arrives in the carrier and the
+	 *         haystack as a plain string because that is what each side already holds: the context
+	 *         folds its order names once when it is built, and the token is folded once per call.
+	 *         Same rule and the same primitive as the arity above.
+	 */
+	static boolean matchesFoldedOrderName(String foldedOrderName, FoldedName token) {
+		return token != null && foldedOrderNameMatch(foldedOrderName, token.folded);
+	}
+
+	/**
+	 * Whether {@code text} carries {@code token} under the boundary rule: the boolean view of
+	 * {@link #boundedTokenIndex}, which is the one scan. Its sharers reach it three ways and the rule
+	 * therefore cannot drift between them: through here, where the operands still need folding
+	 * ({@link #containsWord} and {@link #matchesOrderName}); through {@link #foldedWordMatch} and
+	 * {@link #foldedOrderNameMatch}, the same two rules for operands a caller folded once where they
+	 * were produced (issue #330); and through {@link #wordIndex} for {@link #namedOccurrences}, which
+	 * since issue #260 needs the POSITION rather than the answer. Every one of those routes takes its
+	 * allowance from the same constant as the rule it is, which is what keeps them one rule apiece.
+	 * A match needs {@code token} to start at a word boundary in {@code text} and to end at
 	 * one, give or take up to {@code maxTrailingLetters} letters. Letters only: a digit is never an
 	 * inflection, so a digit sitting against the token is neither stepped over nor treated as the
 	 * end of the name, and a display name that glues its strength straight onto the drug name
@@ -493,19 +2693,23 @@ public class DrugReference {
 	 * treating a digit as the end of the name instead scores identically over that corpus (829
 	 * either way), so the two are indistinguishable on real data and this is the conservative one.
 	 * Case-insensitive; a null or empty token never matches. Whitespace-only is the caller's
-	 * business, deliberately not this method's: {@link PatientClinicalContext#hasActiveDrug} trims
-	 * its token, and the {@code ddinter} and {@code atc} sources drop blank aliases at parse. A
-	 * hand-authored {@code json} KB is NOT sanitized, so a blank alias there is scanned like any other
-	 * token and can match — measured, and wider under the tail allowance than under the symmetric rule,
-	 * so #147 giving allergens the tail allowance widened it. Pre-existing, still not this method's to
-	 * decide, and an authoring guard belongs in that parser; reported separately.
+	 * business, deliberately not this method's: {@link PatientClinicalContext#hasActiveDrug} trims its
+	 * token, and since issue #150 EVERY format's load drops an alias that names nothing —
+	 * {@link DrugReferenceValidity#checkEntries} runs {@code sanitizeAliases} on the parsed entries
+	 * whatever parsed them, so such a token no longer reaches this scan from a loaded dataset. (This
+	 * paragraph used to say a hand-authored {@code json} KB was unsanitized and that the guard belonged
+	 * in that parser. Both were true before #150 and neither is now: the guard is one shared load-time
+	 * rule, which is the arrangement CLAUDE.md's validity bullet requires.) It still matters that the
+	 * scan itself would match one, because the {@code setEntries} seam bypasses the load — and it is
+	 * wider under the tail allowance than under the symmetric rule, so #147 giving allergens the tail
+	 * allowance widened it.
 	 *
 	 * <p>Diacritic-insensitive on BOTH sides (issue #129), which is why the fold lives here rather
 	 * than in either named matcher: the same accented order name reaches both of them — as the
 	 * haystack when a rule token is matched against it ({@link #matchesOrderName}) and as the
 	 * haystack again when the order-driven arms resolve that order's own reference entry
-	 * ({@link DrugReferenceService#findForActiveOrders} → {@code findByDrugName} →
-	 * {@link #matchesDrugName}, which is this rule again since issue #147),
+	 * ({@link DrugReferenceService#findForActiveOrders} → {@code findImpliedByDrugName} →
+	 * {@code findByDrugName} → {@link #matchesDrugName}, which is this rule again since issue #147),
 	 * and as the NEEDLE when an order name is looked for in a rendered record
 	 * ({@code PatientClinicalContext.ActiveDrugOrder.namedIn}). Folding one matcher would leave the
 	 * same patient half-checked; folding one SIDE would break that third case, whose needle is the
@@ -518,19 +2722,175 @@ public class DrugReference {
 	 * combining mark, and no two tokens fold together. It is there because a hand-authored
 	 * {@code json} KB may carry an accented alias, and a one-sided fold would then silently stop
 	 * matching the accented order name it was written for.
+	 *
+	 * <p><b>Some callers fold for themselves, and that is deliberate rather than a second copy of the
+	 * rule</b> — every one of them goes through {@link #foldedLower}, so there is still exactly one
+	 * expression of what this scan's operands must be. Since issue #260 {@link #namedOccurrences}
+	 * takes its haystack already folded, because it returns a POSITION and the fold is not
+	 * length-preserving. Since issue #330 an entry's own aliases are folded once in
+	 * {@link #setAliases} and a scan's recorded name once in a {@link FoldedName}, because each is
+	 * fixed while the loop that compares it runs: folding at THIS level meant deriving both operands
+	 * again for every alias of every entry, measured at 1,420,480 {@link #foldedLower} calls in a
+	 * one-drug {@code validate} pass over the shipped knowledge base and a 43-order chart.
 	 */
 	private static boolean containsBoundedToken(String text, String token, int maxTrailingLetters) {
 		if (text == null || token == null) {
 			return false;
 		}
-		String t = foldDiacritics(text.toLowerCase(Locale.ROOT));
-		String w = foldDiacritics(token.toLowerCase(Locale.ROOT));
-		if (w.isEmpty()) {
-			// After the fold, not before: a token of nothing but combining marks folds to empty, and
-			// the empty token matches almost anything below.
-			return false;
+		return foldedMatch(foldedLower(text), foldedLower(token), maxTrailingLetters);
+	}
+
+	/**
+	 * {@link #matchesOrderName}'s rule with both operands already folded — one named entry point per
+	 * (rule, operand shape), which is what keeps the allowance a property of the RULE rather than of
+	 * the call site. It does not make the constant appear once: {@link #MAX_ORDER_NAME_INFLECTION_LETTERS}
+	 * is now spelled here and in {@link #matchesOrderName}, and {@link #PROSE_TRAILING_LETTERS} in
+	 * {@link #containsWord}, {@link #foldedWordMatch} and {@link #wordIndex}. What each of those sites
+	 * is, is one shape of one rule — a boolean over unfolded operands, a boolean over folded ones, a
+	 * position — and none of them CHOOSES an allowance. Choosing one, which is the drift
+	 * {@code PROSE_TRAILING_LETTERS}' own javadoc records, would be a caller handing
+	 * {@link #boundedTokenIndex} a number of its own.
+	 */
+	private static boolean foldedOrderNameMatch(String foldedText, String foldedToken) {
+		return foldedMatch(foldedText, foldedToken, MAX_ORDER_NAME_INFLECTION_LETTERS);
+	}
+
+	/** {@link #containsWord}'s rule with both operands already folded — the prose counterpart of
+	 *  {@link #foldedOrderNameMatch}, and here for the same reason. */
+	private static boolean foldedWordMatch(String foldedText, String foldedWord) {
+		return foldedMatch(foldedText, foldedWord, PROSE_TRAILING_LETTERS);
+	}
+
+	/** The one scan, for operands already in {@link #foldedLower} form: {@link #containsBoundedToken}'s
+	 *  own body minus the fold, shared with it so nothing below can differ between the two. A null
+	 *  operand never matches, which is the rule the unfolded arity states. */
+	private static boolean foldedMatch(String foldedText, String foldedToken, int maxTrailingLetters) {
+		return foldedText != null && foldedToken != null
+				&& boundedTokenIndex(foldedText, foldedToken, maxTrailingLetters, 0) >= 0;
+	}
+
+	/**
+	 * @return {@code value} lowercased ({@link Locale#ROOT}) and then {@link #foldDiacritics}-folded —
+	 *         the form both operands of {@link #boundedTokenIndex} must be in, named once so that a
+	 *         caller preparing them itself cannot apply half of it or apply the two in the other order.
+	 *
+	 *         <p><b>{@code toLowerCase} is idempotent, and that alone is what lets a caller holding an
+	 *         already-lowercased string pass it straight in</b> ({@code DrugSafetyValidator.attributedDoses}
+	 *         does). <b>The composition is NOT.</b> Measured 2026-08-14 through this method: the sequence
+	 *         {@code a}, U+1D16D, U+0E31, U+1D165 folds to {@code a}, U+1D16D, U+1D165 and folding THAT
+	 *         gives {@code a}, U+1D165, U+1D16D — stripping a combining mark of canonical class 0 from
+	 *         between two of higher class merges two canonical-ordering runs, and the next NFD reorders
+	 *         them. No reference or chart string reaches that shape, but do not build an argument on
+	 *         re-folding being free; {@code DrugSafetyValidator.substanceOwnsDose} records what it cost
+	 *         at the one place a string USED to be folded twice, which issue #330 closed.
+	 */
+	static String foldedLower(String value) {
+		return foldDiacritics(value.toLowerCase(Locale.ROOT));
+	}
+
+	/**
+	 * A clinician-entered drug NAME together with its {@link #foldedLower} form, derived ONCE — what a
+	 * caller holding one name across a scan of many entries hands to {@link #matchesDrugName} and
+	 * {@link #nameMatchStrength} instead of the raw string (issue #330).
+	 *
+	 * <p><b>Why a type rather than a parameter named for its contents.</b> {@link #foldedLower} is
+	 * documented as NOT idempotent, so a pre-folded value must never re-enter the unfolded path; a
+	 * {@code String} parameter cannot say which of the two it is holding, and getting it wrong costs
+	 * either a silent second fold or the whole hoist. It also carries the RAW string beside the folded
+	 * one, so {@link #nameMatchStrength} — which needs {@link #normalizeName} of the same name — takes
+	 * ONE operand rather than two same-typed ones a caller could pair wrongly.
+	 *
+	 * <p><b>What it is not.</b> It is not a second expression of the fold rule: {@link #fold} calls
+	 * {@link #foldedLower} and nothing here re-expresses it. And it is not a rival to
+	 * {@link #namedOccurrences}' {@code foldedLowerText} parameter, which is PROSE folded under the
+	 * prose rule and handed back POSITIONS into that exact string — a length contract this type
+	 * deliberately does not make, and one whose caller must therefore hold the folded string itself.
+	 */
+	static final class FoldedName {
+
+		// No equals/hashCode, deliberately: this is a carrier for one scan's operand, never a value to
+		// key on, and FoldedOperandTest asks by identity whether a whole scan was handed ONE of them.
+
+		/** The name as the caller holds it — for {@link #normalizeName}, which is a different form. */
+		private final String raw;
+
+		private final String folded;
+
+		private FoldedName(String raw) {
+			this.raw = raw;
+			this.folded = foldedLower(raw);
 		}
-		int idx = t.indexOf(w);
+
+		/** The name, so an identity assertion's failure message names the operand rather than a hash. */
+		@Override
+		public String toString() {
+			return raw;
+		}
+	}
+
+	/** @return {@code value} and its {@link #foldedLower} form, or {@code null} for a null name — the
+	 *          sole producer of a {@link FoldedName}, so there is no way to assemble one whose folded
+	 *          half was derived by anything else. */
+	static FoldedName fold(String value) {
+		return value == null ? null : new FoldedName(value);
+	}
+
+	/** Any run of whitespace, for {@link #collapseWhitespace}. */
+	private static final Pattern WHITESPACE_RUN = Pattern.compile("\\s+");
+
+	/**
+	 * @return {@code value} with every run of whitespace collapsed to one space, or {@code null} for a
+	 *         null input. NOT trimmed — a caller wanting that does it itself, because the two sides of
+	 *         the comparison this exists for want different things: a recorded token is trimmed on the
+	 *         way in, and a haystack of chart prose must not be.
+	 *
+	 *         <p>Here, and named once, for the reason {@link #foldedLower} is: it is the form BOTH
+	 *         operands of one comparison must be in, and two copies of it is how the two sides come
+	 *         apart. Since issue #293 {@code PatientClinicalContextBuilder.addRaw} collapses every
+	 *         recorded string it collects and {@code PatientClinicalContext.ActiveDrugOrder.namedIn}
+	 *         collapses the chart prose it searches them in; those were two independent
+	 *         {@code Pattern.compile("\\s+")} constants, and review measured that widening one and not
+	 *         the other — to fold {@code U+00A0}, say, for a name pasted out of a word processor —
+	 *         reddened NOTHING in the whole suite while silently making a name unfindable in the record
+	 *         that renders it. One definition makes that state unconstructible rather than untested.
+	 */
+	static String collapseWhitespace(String value) {
+		return value == null ? null : WHITESPACE_RUN.matcher(value).replaceAll(" ");
+	}
+
+	/**
+	 * The boundary rule above, as a POSITION rather than a boolean.
+	 *
+	 * <p>Split out so that a caller needing to know WHERE one of these names sits shares the rule with
+	 * every caller needing only whether it occurs, instead of re-expressing the boundary conditions
+	 * beside it. That was issue #260: {@code DrugSafetyValidator}'s dose arm gated a clause on
+	 * {@link #matchesText} and then located the name in that same clause with {@link String#indexOf}, so
+	 * the two disagreed in both directions — a name the prose rule does not find ({@code penicillin}
+	 * inside {@code penicillins}) was located anyway and vetoed a real dose, and a name it does find
+	 * ({@code paracetamol} written {@code paracétamol}) was not located and the subject could not claim
+	 * its own dose. Both silently, which is the direction the dose arm exists to prevent.
+	 *
+	 * <p><b>Operands pre-folded and pre-lowercased, and that is a contract rather than an economy.</b>
+	 * Neither transform preserves length — the fold decomposes and drops combining marks, and
+	 * {@code toLowerCase} turns the single character {@code İ} into two — so an index into the
+	 * transformed string is not an index into the string it came from, and doing either transform HERE
+	 * would silently shift every index this returns. A caller comparing this index against any other
+	 * position must have produced that position in the SAME transformed text — which is why
+	 * {@link DrugSafetyValidator} folds a clause once and reads every position out of that one string.
+	 *
+	 * @param t the haystack, already lowercased and {@link #foldDiacritics}-folded
+	 * @param w the needle, likewise
+	 * @return the index of the first occurrence of {@code w} in {@code t} at or after {@code from} that
+	 *         satisfies the rule, or -1 when there is none
+	 */
+	private static int boundedTokenIndex(String t, String w, int maxTrailingLetters, int from) {
+		if (w.isEmpty()) {
+			// The FOLDED form, which is what the contract above delivers and why the check reads well
+			// here even though nothing here folds: a token of nothing but combining marks folds to
+			// empty, and the empty token matches almost anything below.
+			return -1;
+		}
+		int idx = t.indexOf(w, from);
 		while (idx >= 0) {
 			if (idx == 0 || !Character.isLetterOrDigit(t.charAt(idx - 1))) {
 				int end = idx + w.length();
@@ -541,13 +2901,143 @@ public class DrugReference {
 						break;
 					}
 					if (at >= t.length() || !Character.isLetterOrDigit(t.charAt(at))) {
-						return true;
+						return idx;
 					}
 				}
 			}
 			idx = t.indexOf(w, idx + 1);
 		}
-		return false;
+		return -1;
+	}
+
+	/**
+	 * @return EVERY occurrence of one of this entry's names in {@code foldedLowerText}, each carrying its
+	 *         distance from {@code pos} and the span it covers; empty — and then immutable, so a caller
+	 *         pools the answer rather than appending to it — when none of them occurs. Where
+	 *         this entry is NAMED, answered by the same rule {@link #matchesText} answers whether it is
+	 *         named at all. A distance is zero when {@code pos} falls inside that occurrence.
+	 *
+	 *         <p><b>All of them, not the nearest, and that is the whole of issue #270's second half.</b>
+	 *         The dose arm has to ask whether an occurrence is a sub-span of some rival's — a name
+	 *         present only as part of a longer name the same clause carries is not independently named
+	 *         there — and that is a question about EACH occurrence. Answer it against one reported
+	 *         occurrence and a substance the clause names twice, once nested and once on its own, is
+	 *         judged on whichever the scan happened to keep: it loses a dose it plainly owns, and which
+	 *         way it goes depends on alias order. Measured on {@code amoxicillin and clavulanate was at
+	 *         2.5 mg, clavulanate was stopped} — both of Clavulanate's occurrences sit at the same
+	 *         distance, so the substance IS independently named at the minimum, and reporting the nested
+	 *         one silenced it.
+	 *
+	 *         <p><b>The span, and not merely the matched length</b> (issue #270). A caller comparing two
+	 *         substances at the same distance needs to know whether one occurrence CONTAINS the other,
+	 *         and length alone cannot answer that: the metric is {@code idx - pos} on one side and
+	 *         {@code pos - end} on the other, so with a dose sitting BETWEEN two names an equal-distance
+	 *         rival on the far side that is merely longer looks like a container and is not one.
+	 *
+	 *         <p><b>The PROSE rule</b>, through {@link #wordIndex}, which is the same binding of
+	 *         {@link #boundedTokenIndex} that {@link #containsWord} and {@link #foldedWordMatch} are —
+	 *         so this shares the rule by construction rather than by all of them spelling the same
+	 *         allowance. Its needles are this entry's aliases in {@link #foldedLower} form, which since
+	 *         issue #330 it reads off {@link #foldedAliases} rather than deriving per call; the value
+	 *         is the same expression it used to compute, so no position it returns
+	 *         moves. Prose gets symmetric word
+	 *         boundaries and a clinician-entered drug NAME gets {@link #matchesOrderName}'s left boundary
+	 *         plus a short tail, and widening one to serve the other was issues #86, #128, #147 and #209.
+	 *         Its caller has already gated the clause on {@link #matchesText}, so answering the WHERE by a
+	 *         different rule than the WHETHER is the same mistake one level down — which is what issue
+	 *         #260 was.
+	 *
+	 *         <p>{@code foldedLowerText} must be in {@link #foldedLower} form and {@code pos} an index
+	 *         into THAT string; see {@link #boundedTokenIndex} for why positions from the two forms may
+	 *         not be mixed. The names read are this entry's {@code aliases} — the same list
+	 *         {@link #matchesText} reads.
+	 *
+	 *         <p>The metric is asymmetric by one, and always was: {@code end} is exclusive and the test
+	 *         is {@code pos > end}, so a name ending immediately before {@code pos} scores 0 while one
+	 *         starting immediately after it scores 1, and a tie therefore goes to the earlier name. Not
+	 *         reachable from the dose arm — {@code DOSE_MG} starts on a digit, and a digit at {@code end}
+	 *         fails the right-boundary test, so no accepted occurrence ends exactly at the dose.
+	 *
+	 *         <p>Here rather than in the caller because this is a question about the entry's own names,
+	 *         and because keeping it beside them is what lets it share the boundary rule instead of
+	 *         restating it — the whole of the defect it closes.
+	 */
+	List<NamedOccurrence> namedOccurrences(String foldedLowerText, int pos) {
+		if (foldedLowerText == null) {
+			return Collections.emptyList();
+		}
+		// Allocated on the first hit and not before: the dose arm asks this of EVERY entry in the
+		// knowledge base per stated dose, and most entries are named nowhere in the clause, so most calls
+		// allocate nothing. Thrift, not a fix for a cost anyone measured — and the empty answer is shared
+		// with the null-text path above so both return one shape.
+		List<NamedOccurrence> found = null;
+		for (String w : foldedAliases) {
+			if (w == null) {
+				continue;
+			}
+			int idx = wordIndex(foldedLowerText, w, 0);
+			while (idx >= 0) {
+				// w.length() is the whole match only because the prose rule allows no trailing letters;
+				// under matchesOrderName's allowance the match can run past it and every distance on the
+				// right-hand side would be overstated. wordIndex is what keeps that true.
+				int end = idx + w.length();
+				int distance = pos < idx ? idx - pos : (pos > end ? pos - end : 0);
+				if (found == null) {
+					found = new ArrayList<NamedOccurrence>();
+				}
+				found.add(new NamedOccurrence(distance, idx, end));
+				idx = wordIndex(foldedLowerText, w, idx + 1);
+			}
+		}
+		return found != null ? found : Collections.<NamedOccurrence> emptyList();
+	}
+
+	/**
+	 * One occurrence of one of an entry's own names in a clause: how far it sits from a position, and the
+	 * span it covers there. Immutable, and package-private because the only question it answers is the
+	 * dose arm's (issue #270).
+	 */
+	static final class NamedOccurrence {
+
+		private final int distance;
+
+		private final int start;
+
+		private final int end;
+
+		NamedOccurrence(int distance, int start, int end) {
+			this.distance = distance;
+			this.start = start;
+			this.end = end;
+		}
+
+		int getDistance() {
+			return distance;
+		}
+
+		/**
+		 * @return whether this occurrence strictly CONTAINS {@code other} — covers all of it and more. The
+		 *         fact the dose arm settles a claim by: a name present only as part of a longer name the
+		 *         same clause carries is not independently named there, whichever side of it the dose
+		 *         falls on. Strictly, so two occurrences of the same span never each contain the other.
+		 *
+		 *         <p>It answers only that. Whether the container is near the dose BY the name it contains
+		 *         is a second question — a longer name can reach the dose with a word of its own — and the
+		 *         dose arm asks it by pairing this with the two distances; see
+		 *         {@code DrugSafetyValidator.nearnessInheritedFrom}, which is where that pairing lives so
+		 *         no caller has to remember it.
+		 */
+		boolean strictlyContains(NamedOccurrence other) {
+			return start <= other.start && end >= other.end
+					&& (end - start) > (other.end - other.start);
+		}
+	}
+
+	/** @return {@link #containsWord}'s rule as a POSITION — {@link #boundedTokenIndex} with the prose
+	 *          allowance bound once, so the boolean and the index cannot come to disagree about which of
+	 *          the two boundary rules prose gets. Operands in {@link #foldedLower} form. */
+	private static int wordIndex(String foldedLowerText, String foldedLowerWord, int from) {
+		return boundedTokenIndex(foldedLowerText, foldedLowerWord, PROSE_TRAILING_LETTERS, from);
 	}
 
 	/** Unicode non-spacing marks — the combining accents an NFD decomposition separates out. */
@@ -556,8 +3046,11 @@ public class DrugReference {
 	/**
 	 * @return {@code value} with its diacritics folded away — canonically decomposed (NFD) and
 	 *         stripped of combining non-spacing marks, so {@code budésonide} compares as
-	 *         {@code budesonide}. The one definition, used on both operands of
-	 *         {@link #containsBoundedToken}; never call {@link Normalizer} for this elsewhere.
+	 *         {@code budesonide}. The one definition; never call {@link Normalizer} for this elsewhere.
+	 *
+	 *         <p><b>Not length-preserving</b>, so an index into the folded string is not an index into
+	 *         the string it was folded from. Anything reading POSITIONS out of folded text has to fold
+	 *         once and take every position from that one form — see {@link #boundedTokenIndex}.
 	 *
 	 *         <p>Decompose-and-strip rather than a hand-rolled character map: a map has to be
 	 *         maintained per language and silently stops folding the first accent nobody listed
@@ -577,8 +3070,8 @@ public class DrugReference {
 	 *         identically, so matching within those scripts is unchanged.
 	 *
 	 *         <p>ASCII returns unchanged without normalizing: every reference token is ASCII and so
-	 *         is most order-name text, and this runs once per (rule token, order name) pair — up to a
-	 *         few hundred rules per question — so the common path must not allocate.
+	 *         is most order-name text, and this runs on hot paths — once per (rule token, order name)
+	 *         pair, up to a few hundred rules per question — so the common path must not allocate.
 	 */
 	static String foldDiacritics(String value) {
 		for (int i = 0; i < value.length(); i++) {

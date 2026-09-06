@@ -46,7 +46,9 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
  *       ({@code Nitroglycérine ~ glycerin}, {@code Budésonide ~ desonide},
  *       {@code Lévofloxacine/Ciprofloxacine ~ ofloxacin}), which are the ones folding could newly
  *       break.</li>
- *   <li><b>Every matcher the same name reaches.</b> The fold lives in the one shared boundary scan, so
+ *   <li><b>Every matcher the same name reaches.</b> The fold lives in the boundary matcher all of these
+ *       arms go through ({@link DrugReference#containsBoundedToken} — since issue #260 the scan beneath
+ *       it does no folding of its own, and that matcher is where these operands are prepared), so
  *       these also cover the arms where the accented name is not a rule token's haystack: the two
  *       that resolve an order's own reference entry through {@link DrugReference#matchesText} (the
  *       interaction screen, and — since issue #143 — the active-order contraindication arm, both
@@ -72,7 +74,7 @@ public class DrugSafetyDiacriticOrderNameTest {
 	/**
 	 * A verbatim slice of the full DDInter KB (2283 drugs / 295,184 rows): four subject drugs whose
 	 * rule lists carry, between them, every token of the #128 kill set above the {@code minor} floor,
-	 * plus the partners the accented names must resolve to. The bundled 16-drug sample contains none
+	 * plus the partners the accented names must resolve to. The 16-drug DDInter excerpt contains none
 	 * of them, and {@code ddi-order-name-collisions.json} carries only the two collisions #128
 	 * reproduced live — same reason {@code ddi-severity-floor-pair.json} exists.
 	 */

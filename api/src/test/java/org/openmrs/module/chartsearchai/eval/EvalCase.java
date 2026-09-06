@@ -29,11 +29,11 @@ public class EvalCase {
 
 	private List<String> expectedAnswerContains;
 
+	private List<String> expectedAnswerContainsAny;
+
 	private List<String> expectedAnswerNotContains;
 
 	private String simulatedLlmResponse;
-
-	private List<Integer> simulatedCitations;
 
 	private String payload;
 
@@ -79,6 +79,27 @@ public class EvalCase {
 		this.expectedAnswerContains = expectedAnswerContains;
 	}
 
+	/**
+	 * Alternative names for the one thing the answer must name, of which <b>any one</b> suffices —
+	 * the OR counterpart to {@link #getExpectedAnswerContains()}, whose elements are all required.
+	 *
+	 * <p>Exists because a topic can have more than one correct name that share no substring, so no
+	 * single literal accepts every correct answer and a second AND element only makes it stricter
+	 * (issue #216): asked "Are there any X-ray or radiology reports?", both <i>"No x-ray reports are
+	 * recorded."</i> and <i>"No radiology reports are recorded."</i> name the topic.
+	 *
+	 * <p>An OR element is weaker than an AND element, so a case should carry the narrowest set that
+	 * covers the genuinely-correct wordings. {@code AbsentDataEvalTest} asserts that bound rather
+	 * than trusting it: an answer naming no topic at all must still fail every case.
+	 */
+	public List<String> getExpectedAnswerContainsAny() {
+		return expectedAnswerContainsAny;
+	}
+
+	public void setExpectedAnswerContainsAny(List<String> expectedAnswerContainsAny) {
+		this.expectedAnswerContainsAny = expectedAnswerContainsAny;
+	}
+
 	public List<String> getExpectedAnswerNotContains() {
 		return expectedAnswerNotContains;
 	}
@@ -87,20 +108,22 @@ public class EvalCase {
 		this.expectedAnswerNotContains = expectedAnswerNotContains;
 	}
 
+	/**
+	 * The raw text a simulated LLM returned, parsed by the production extractor exactly as a real
+	 * reply is.
+	 *
+	 * <p>There is deliberately no companion field for the citations that response carries. One
+	 * existed ({@code simulatedCitations}) and {@code CitationEvalTest} used it INSTEAD of the parsed
+	 * value, which made the one case where the two differed assert against a value production never
+	 * produced — issue #219. A case states its input here and its expectation in
+	 * {@link #getExpectedRecordIndices()}; anything in between is production's to compute.
+	 */
 	public String getSimulatedLlmResponse() {
 		return simulatedLlmResponse;
 	}
 
 	public void setSimulatedLlmResponse(String simulatedLlmResponse) {
 		this.simulatedLlmResponse = simulatedLlmResponse;
-	}
-
-	public List<Integer> getSimulatedCitations() {
-		return simulatedCitations;
-	}
-
-	public void setSimulatedCitations(List<Integer> simulatedCitations) {
-		this.simulatedCitations = simulatedCitations;
 	}
 
 	public String getPayload() {

@@ -1,0 +1,28 @@
+{
+ "questionId": "4902",
+ "answer": "Yes, simvastatin is documented in the records and can be continued [1].",
+ "references": [
+  {
+   "index": 41,
+   "resourceType": "drug_reference",
+   "resourceUuid": "20112",
+   "date": null,
+   "grounded": null,
+   "group": "reference",
+   "source": "DDInter 2.0 (via openmrs-ddi-knowledge-base)",
+   "withheldInteractions": 412
+  },
+  {
+   "index": 42,
+   "resourceType": "safety_finding",
+   "resourceUuid": "interaction:Simvastatin",
+   "date": null,
+   "grounded": null,
+   "group": "reference",
+   "source": null,
+   "withheldInteractions": 0
+  }
+ ],
+ "safetyWarnings": [],
+ "disclaimer": "This response is AI-generated and may not be accurate. It is not a substitute for clinical judgment. Always verify against the patient's medical records."
+}

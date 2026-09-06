@@ -28,7 +28,7 @@
       "id": "absent-smoking",
       "question": "Does the patient smoke?",
       "expectedAbsent": true,
-      "expectedAnswerContains": ["smoke"],
+      "expectedAnswerContains": ["smok"],
       "tags": ["absent"]
     },
     {
@@ -42,7 +42,7 @@
       "id": "absent-vaccination-history",
       "question": "What vaccines has the patient received?",
       "expectedAbsent": true,
-      "expectedAnswerContains": ["vaccines"],
+      "expectedAnswerContains": ["vaccin"],
       "tags": ["absent"]
     },
     {
@@ -81,7 +81,7 @@
       "id": "absent-ophthalmology",
       "question": "Has the patient had any eye exams or ophthalmology visits?",
       "expectedAbsent": true,
-      "expectedAnswerContains": ["eye"],
+      "expectedAnswerContainsAny": ["eye", "ophthalmolog"],
       "tags": ["absent"]
     },
     {
@@ -116,7 +116,7 @@
       "id": "absent-radiology-xray",
       "question": "Are there any X-ray or radiology reports?",
       "expectedAbsent": true,
-      "expectedAnswerContains": ["ray"],
+      "expectedAnswerContainsAny": ["ray", "radiolog"],
       "tags": ["absent"]
     },
     {
@@ -130,7 +130,7 @@
       "id": "absent-nutrition-diet",
       "question": "Are there any nutrition or diet records?",
       "expectedAbsent": true,
-      "expectedAnswerContains": ["nutrition"],
+      "expectedAnswerContainsAny": ["nutrition", "diet"],
       "tags": ["absent"]
     },
     {

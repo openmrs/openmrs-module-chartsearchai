@@ -467,9 +467,12 @@ once Phase 2 deleted its only readers/writers (the indexers + retrieval pipeline
   `replacePatientEmbeddings`, `getIndexedPatientIds`) — all had zero callers post-Phase-2.
 - The `chartsearchai-001` liquibase changeset (the `chartsearchai_embedding` table + FK/index/unique
   constraint). Deleted outright rather than adding a `dropTable` (no production deployments; the
-  module is unreleased `1.0.0-SNAPSHOT`, matching the liquibase.xml pre-production "consolidate, don't
-  append" header policy). Existing dev DBs keep a harmless orphaned empty table; liquibase doesn't
-  error on a removed changeset.
+  module is unreleased `1.0.0-SNAPSHOT`, matching the liquibase.xml pre-production policy of
+  consolidating changesets every instance has already run). Existing dev DBs keep a harmless orphaned
+  empty table; liquibase doesn't error on a removed changeset. Note that this describes REMOVING a
+  changeset whose effect is gone; the rule for ADDING one is the opposite and lives at the head of
+  `liquibase.xml` — a new column takes a new changeset with a never-used id, and is folded only at a
+  later deliberate consolidation.
 - Tests: deleted `ChartEmbeddingTest`; pared `HibernateChartSearchAiDAOTest` 20→11 (removed the 9
   embedding tests + `createEmbedding` helper + UUID constants, kept all audit/query-count tests).
 - Kept the audit-log store entirely (`ChartSearchAuditLog` + `chartsearchai-002`).

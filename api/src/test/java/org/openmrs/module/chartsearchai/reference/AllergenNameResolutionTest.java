@@ -41,8 +41,11 @@ import org.junit.jupiter.api.Test;
  * candidate names (locale-preferred and fully-specified names of the {@code Drug}, {@code MedSet}
  * and {@code Pharmacologic Drug Class} classes, the three allergen concept sets, and the
  * {@code Allergy to …} concepts) against the full 19MB KB's 2283 entries: the prose matcher resolved
- * 549 of those names, the drug-name matcher resolves <b>624 — 75 newly resolved, 0 lost</b>, and 2
- * resolve to a different constituent of a multi-drug name. The whole #86/#128/#129 kill set was
+ * 549 of those names, the drug-name matcher resolves <b>624 — 75 newly resolved, 0 lost</b>. These are
+ * counts of WHETHER a name resolves, which is {@code matchesDrugName}'s question and is untouched by
+ * issue #176; the count of names resolving to a different constituent of a multi-drug product, which
+ * that issue does move, stood here and is removed rather than restated unmeasured. The whole
+ * #86/#128/#129 kill set was
  * re-scored in the allergen direction as well: 0 of 21 nesting pairs resolve to the nested drug.
  *
  * <p>Every case runs the real pipeline: a verbatim KB slice through the real
@@ -55,7 +58,7 @@ public class AllergenNameResolutionTest {
 	/** Warfarin, aspirin, clarithromycin, simvastatin and four nested-name pairs — see the fixture's
 	 *  own {@code metadata.note}. Shared with {@link RuleTokenAliasOrderMatchingTest}, which pins the
 	 *  order-name half of the same asymmetry. */
-	static final String FIXTURE = "chartsearchai-test/ddi-alias-drug-names.json";
+	static final String FIXTURE = DrugReferenceTestSupport.DDI_ALIAS_DRUG_NAMES;
 
 	private DrugSafetyValidator validator() throws IOException {
 		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport

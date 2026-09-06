@@ -1,0 +1,56 @@
+{
+  "version": "1.0",
+  "source": "test fixture — issue #339 review round 4, kept for review round 7: one combination prescription, two chip SUBJECTS, one of which the prescription's display names",
+  "description": "drug-reference-combination-order-self-named.json with a THIRD drug that also rules on rifapentine, so ONE response raises two rule chips about the SAME co-medication from two different subjects. The order's own combination code J04AC51 is not in the dataset, so DrugSafetyValidator.orderPartners falls to soleSubstanceOf, resolves the covered J04AB05 to Rifapentine and OrderPartner.nameByOrder renames that partner after the ORDER. The display names Isoniazid, so review round 3's refusal, keyed on the CHIP'S subject, refused the isoniazid chip and admitted the carbamazepine one — one prescription, two names, which is the defect issue #339 exists to remove. Round 4 keyed it on the RESPONSE's subjects and round 7 removed it altogether, so both chips take the display; the invariant the case pins is the same under all three.",
+  "entries": [
+    {
+      "id": "isoniazid",
+      "name": "Isoniazid",
+      "aliases": [
+        "isoniazid"
+      ],
+      "atcCodes": [
+        "J04AC01"
+      ],
+      "interactions": [
+        {
+          "token": "rifapentine",
+          "atc": "J04AB05",
+          "severity": "Moderate",
+          "note": "Rifapentine induces CYP3A4 and lowers isoniazid exposure."
+        }
+      ],
+      "source": "test fixture"
+    },
+    {
+      "id": "carbamazepine",
+      "name": "Carbamazepine",
+      "aliases": [
+        "carbamazepine"
+      ],
+      "atcCodes": [
+        "N03AF01"
+      ],
+      "interactions": [
+        {
+          "token": "rifapentine",
+          "atc": "J04AB05",
+          "severity": "Moderate",
+          "note": "Rifapentine induces CYP3A4 and lowers carbamazepine exposure."
+        }
+      ],
+      "source": "test fixture"
+    },
+    {
+      "id": "rifapentine",
+      "name": "Rifapentine",
+      "aliases": [
+        "rifapentine"
+      ],
+      "atcCodes": [
+        "J04AB05"
+      ],
+      "source": "test fixture"
+    }
+  ]
+}

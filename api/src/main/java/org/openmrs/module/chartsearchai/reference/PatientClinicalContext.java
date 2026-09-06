@@ -10,10 +10,10 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -24,7 +24,9 @@ import java.util.Set;
  * order-driven injection), the active drug orders themselves — names and codes attributed to the
  * order they came from, both for reconciling the safety layer's read against the serialized chart
  * (see {@link DrugReferenceInjector#unrepresentedActiveOrders}) and so the interaction screen can
- * exclude a subject's own order from witnessing it — lowercased text tokens
+ * exclude a subject's own order from witnessing it, each also carrying what the chart records about
+ * where the drug is APPLIED (issue #234 — see
+ * {@link ActiveDrugOrder#getAdministrationTerms()}) — lowercased text tokens
  * from active allergies and conditions (for contraindication checks), and the names the loaded
  * reference data gives those same active drugs (issue #136 — see
  * {@link #getActiveDrugReferenceNames()}).
@@ -46,6 +48,22 @@ public class PatientClinicalContext {
 
 	private final Set<String> activeDrugNames;
 
+	/**
+	 * {@link #activeDrugNames}, each in {@link DrugReference#foldedLower} form — the haystack side of
+	 * {@link #hasActiveDrug}'s scan, folded once when this context is built rather than once per
+	 * comparison (issue #330). Beside the raw set and not instead of it:
+	 * {@link #getActiveDrugNames()} is read by {@code DrugReferenceService.findForActiveOrders} and by
+	 * the chip sentences, which need the name the chart records.
+	 *
+	 * <p>Derived through {@link DrugReference#foldedAll}, which is where a collection's folded view is
+	 * expressed, and a {@code List} because that method returns one — its other caller needs index
+	 * alignment with the raw list. Nothing here does: {@link #hasActiveDrug} iterates this and ORs, so
+	 * a duplicate would be unobservable and the shape is not load-bearing. Only the ORDER of the two
+	 * derivations is: this reads {@link #activeDrugNames} after {@code lower} has normalised it, so the
+	 * folded view is of what this context stores rather than of what a caller passed.
+	 */
+	private final List<String> foldedActiveDrugNames;
+
 	private final Set<String> activeDrugAtcCodes;
 
 	private final Set<String> allergyTokens;
@@ -56,18 +74,19 @@ public class PatientClinicalContext {
 
 	private final Set<String> activeDrugReferenceNames;
 
-	private final boolean exposureComplete;
-
-	private final boolean mappingComplete;
-
-	private final int activeOrderCount;
-
-	private final int mappedActiveOrderCount;
+	/** Whether the two chart lists a contraindication rule is put to — allergies and conditions — were
+	 *  actually READ, as opposed to read and found empty. {@link PatientClinicalContextBuilder} swallows
+	 *  a failure of either read and degrades that dimension to an empty set, which is right for a chip
+	 *  (a finding it cannot substantiate is a finding it must not raise) and wrong for the injected
+	 *  record's NEGATIVE half, which would otherwise tell the model this patient records none of a
+	 *  drug's contraindications because the module could not look (issue #208 item 2). Every other
+	 *  reader is unaffected and should stay that way: this says nothing about whether the lists are
+	 *  empty, only about whether the emptiness means anything. */
+	private final boolean contraindicationRecordsRead;
 
 	public PatientClinicalContext(Integer ageYears, Double weightKg, Set<String> activeDrugNames,
 			Set<String> activeDrugAtcCodes, Set<String> allergyTokens, Set<String> conditionTokens) {
-		this(ageYears, weightKg, activeDrugNames, activeDrugAtcCodes, allergyTokens, conditionTokens,
-				null, null, true, true, 0, 0);
+		this(ageYears, weightKg, activeDrugNames, activeDrugAtcCodes, allergyTokens, conditionTokens, null);
 	}
 
 	/**
@@ -83,18 +102,7 @@ public class PatientClinicalContext {
 			Set<String> activeDrugAtcCodes, Set<String> allergyTokens, Set<String> conditionTokens,
 			List<ActiveDrugOrder> activeDrugOrders) {
 		this(ageYears, weightKg, activeDrugNames, activeDrugAtcCodes, allergyTokens, conditionTokens,
-				activeDrugOrders, null, true, true,
-				activeDrugOrders == null ? 0 : activeDrugOrders.size(),
-				activeDrugOrders == null ? 0 : activeDrugOrders.size());
-	}
-
-	PatientClinicalContext(Integer ageYears, Double weightKg, Set<String> activeDrugNames,
-			Set<String> activeDrugAtcCodes, Set<String> allergyTokens, Set<String> conditionTokens,
-			List<ActiveDrugOrder> activeDrugOrders, boolean exposureComplete,
-			int activeOrderCount) {
-		this(ageYears, weightKg, activeDrugNames, activeDrugAtcCodes, allergyTokens, conditionTokens,
-				activeDrugOrders, null, exposureComplete, activeOrderCount == 0,
-				activeOrderCount, 0);
+				activeDrugOrders, null);
 	}
 
 	/**
@@ -106,22 +114,32 @@ public class PatientClinicalContext {
 	 */
 	private PatientClinicalContext(Integer ageYears, Double weightKg, Set<String> activeDrugNames,
 			Set<String> activeDrugAtcCodes, Set<String> allergyTokens, Set<String> conditionTokens,
+			List<ActiveDrugOrder> activeDrugOrders, Set<String> activeDrugReferenceNames) {
+		this(ageYears, weightKg, activeDrugNames, activeDrugAtcCodes, allergyTokens, conditionTokens,
+				activeDrugOrders, activeDrugReferenceNames, true);
+	}
+
+	/**
+	 * As above, additionally recording whether the allergy and condition reads SUCCEEDED — see
+	 * {@link #contraindicationRecordsRead}. Package-private and defaulted to {@code true} everywhere
+	 * else on purpose: only {@link PatientClinicalContextBuilder}, which performs those reads, is in a
+	 * position to say otherwise, and a caller assembling a context by hand knows what it put in it.
+	 */
+	PatientClinicalContext(Integer ageYears, Double weightKg, Set<String> activeDrugNames,
+			Set<String> activeDrugAtcCodes, Set<String> allergyTokens, Set<String> conditionTokens,
 			List<ActiveDrugOrder> activeDrugOrders, Set<String> activeDrugReferenceNames,
-			boolean exposureComplete, boolean mappingComplete, int activeOrderCount,
-			int mappedActiveOrderCount) {
+			boolean contraindicationRecordsRead) {
+		this.contraindicationRecordsRead = contraindicationRecordsRead;
 		this.ageYears = ageYears;
 		this.weightKg = weightKg;
 		this.activeDrugNames = lower(activeDrugNames);
+		this.foldedActiveDrugNames = DrugReference.foldedAll(this.activeDrugNames);
 		this.activeDrugAtcCodes = upper(activeDrugAtcCodes);
 		this.allergyTokens = lower(allergyTokens);
 		this.conditionTokens = lower(conditionTokens);
 		this.activeDrugOrders = activeDrugOrders == null ? Collections.<ActiveDrugOrder> emptyList()
 				: Collections.unmodifiableList(new ArrayList<ActiveDrugOrder>(activeDrugOrders));
 		this.activeDrugReferenceNames = lower(activeDrugReferenceNames);
-		this.exposureComplete = exposureComplete;
-		this.mappingComplete = mappingComplete;
-		this.activeOrderCount = Math.max(0, activeOrderCount);
-		this.mappedActiveOrderCount = Math.max(0, mappedActiveOrderCount);
 	}
 
 	/**
@@ -130,15 +148,15 @@ public class PatientClinicalContext {
 	 */
 	PatientClinicalContext withActiveDrugReferenceNames(Set<String> referenceNames) {
 		return new PatientClinicalContext(ageYears, weightKg, activeDrugNames, activeDrugAtcCodes,
-				allergyTokens, conditionTokens, activeDrugOrders, referenceNames, exposureComplete,
-				mappingComplete, activeOrderCount, mappedActiveOrderCount);
+				allergyTokens, conditionTokens, activeDrugOrders, referenceNames,
+				contraindicationRecordsRead);
 	}
 
-	PatientClinicalContext withActiveDrugReferenceNames(Set<String> referenceNames,
-			int mappedOrderCount) {
-		return new PatientClinicalContext(ageYears, weightKg, activeDrugNames, activeDrugAtcCodes,
-				allergyTokens, conditionTokens, activeDrugOrders, referenceNames, exposureComplete,
-				mappedOrderCount == activeOrderCount, activeOrderCount, mappedOrderCount);
+	/** @return whether the allergy and condition lists were read at all — see
+	 *          {@link #contraindicationRecordsRead}. A reader that makes a NEGATIVE claim out of their
+	 *          emptiness has to ask; a reader that only acts on what IS in them does not. */
+	boolean contraindicationRecordsRead() {
+		return contraindicationRecordsRead;
 	}
 
 	/** Pre-weight constructor, retained for test convenience (production uses the weight-carrying
@@ -186,7 +204,10 @@ public class PatientClinicalContext {
 		return weightKg;
 	}
 
-	/** @return lowercased display names of the patient's active drug orders. */
+	/** @return lowercased names the patient's active drug orders carry — the flattened union of each
+	 *          order's {@link ActiveDrugOrder#getNames()}, not their displays alone: a coded drug's
+	 *          name, the free text a clinician typed for a non-coded one (issue #293), and a concept's
+	 *          name all reach it. */
 	public Set<String> getActiveDrugNames() {
 		return activeDrugNames;
 	}
@@ -200,7 +221,8 @@ public class PatientClinicalContext {
 	 *
 	 *         <p>Held separately from {@link #getActiveDrugNames()} rather than folded into it because
 	 *         the two are matched by DIFFERENT rules and must stay distinguishable: an order's display
-	 *         name is a localized string scanned with {@link DrugReference#matchesOrderName}, while
+	 *         name is a localized string scanned under {@link DrugReference#matchesOrderName}'s rule
+	 *         (since issue #330 {@link #hasActiveDrug} reaches it through the folded arity), while
 	 *         these are canonical reference names compared by identity. Folding them together would
 	 *         scan a rule token across a combination product's alias, which is exactly the wrong
 	 *         answer — see {@link #hasActiveDrug}.
@@ -214,10 +236,11 @@ public class PatientClinicalContext {
 	 *         order, which is what the class-based arms and
 	 *         {@link DrugReferenceService#findByActiveOrders} want (neither asks which order a code came
 	 *         from). Held independently rather than derived from {@link #getActiveDrugOrders()}: a
-	 *         caller may supply only the flattened sets (issue #118 deliberately kept that fallback),
-	 *         and even in production the per-order list can be narrower than this set — an order with no
-	 *         readable name is skipped there while its codes still land here (the builder's KNOWN GAP).
-	 *         Deriving this from the list would silently drop those codes; a caller that needs to know
+	 *         caller may supply only the flattened sets (issue #118 deliberately kept that fallback), so
+	 *         this set can hold codes no {@link ActiveDrugOrder} accounts for. In production it no
+	 *         longer can: since issue #290 an order the module cannot name still reaches the per-order
+	 *         list, and one with no codes contributes none here either, so the two agree. Deriving this
+	 *         from the list would still drop the flattened caller's codes; one that needs to know
 	 *         WHICH order a code belongs to reads {@link ActiveDrugOrder#getAtcCodes()} instead.
 	 */
 	public Set<String> getActiveDrugAtcCodes() {
@@ -229,22 +252,6 @@ public class PatientClinicalContext {
 	 *          only the flattened name/ATC sets. */
 	public List<ActiveDrugOrder> getActiveDrugOrders() {
 		return activeDrugOrders;
-	}
-
-	public boolean isExposureComplete() {
-		return exposureComplete;
-	}
-
-	public boolean isMappingComplete() {
-		return mappingComplete;
-	}
-
-	public int getActiveOrderCount() {
-		return activeOrderCount;
-	}
-
-	public int getMappedActiveOrderCount() {
-		return mappedActiveOrderCount;
 	}
 
 	/** @return lowercased allergen text of the patient's active allergies — the coded allergen's name
@@ -263,14 +270,22 @@ public class PatientClinicalContext {
 	/**
 	 * @return true when any active-order name, any reference name of a drug those orders resolve to,
 	 *         or any active-order ATC code matches the given interaction rule. Both callers — the chip
-	 *         decision in {@link DrugSafetyValidator} and the prompt-promotion predicate in
-	 *         {@link DrugReferenceInjector} — reach every one of those arms only through here, which is
-	 *         what keeps the chips and the promoted prose agreeing about which orders a rule matches.
+	 *         decision in {@link DrugSafetyValidator} and, since issue #357, the relevance predicate in
+	 *         {@link DrugReferenceInjector} that now decides TWO boundaries (which rules are promoted,
+	 *         and which of the rest the chart still names ahead of the dataset tail) rather than one —
+	 *         reach every one of those arms only through here, which is what keeps the chips and the
+	 *         rendered prose agreeing about which orders a rule matches.
 	 *
-	 *         <p><b>The order-name arm</b> goes through {@link DrugReference#matchesOrderName} — not
-	 *         bare containment, which reported drugs the patient had never taken because drug names
-	 *         nest ("tiotropium" contains "opium"; issue #86), and not the prose rule either, because
-	 *         an order's display name is localized and inflected rather than prose (see there).
+	 *         <p><b>The order-name arm</b> goes through {@link DrugReference#matchesOrderName}'s rule —
+	 *         since issue #330 through its folded arity {@link DrugReference#matchesFoldedOrderName},
+	 *         both operands being fixed for the pass, which is the same rule and the same allowance —
+	 *         not bare containment, which reported drugs the patient had never taken because drug
+	 *         names nest ("tiotropium" contains "opium"; issue #86), and not the prose rule either,
+	 *         because an order's display name is localized and inflected (see there). Since issue
+	 *         #293 this set
+	 *         also holds the free text a clinician typed for a non-coded order, which CAN be prose; the
+	 *         matcher is unchanged and the cost of applying it to prose is recorded on
+	 *         {@code PatientClinicalContextBuilder.addDrugName}.
 	 *
 	 *         <p><b>The reference-name arm</b> (issue #136) exists because a rule carries ONE token for
 	 *         its partner while the reference data knows that drug by several names, and the chart may
@@ -294,48 +309,309 @@ public class PatientClinicalContext {
 	 *         it, which is the same predicate that formulation applies to the partner. Where the two
 	 *         differ is the ATC leg, which this one also reaches — an order mapped to an entry's exact
 	 *         level-5 code is that substance, so the entry's names are the patient's names too.)
+	 *
+	 *         <p><b>The reference-name arm is asked FIRST</b> since issue #330, though which of the two
+	 *         answers comes back is immaterial — both return true — and the order is not part of the
+	 *         contract. It is one hash lookup, against a scan of every order the patient is on.
 	 */
 	boolean hasActiveDrug(String nameToken, String atcCode) {
-		if (nameToken != null && !nameToken.trim().isEmpty()) {
-			String n = nameToken.trim();
-			for (String drug : activeDrugNames) {
-				if (DrugReference.matchesOrderName(drug, n)) {
-					return true;
-				}
-			}
+		String n = normalizedToken(nameToken);
+		if (!n.isEmpty()) {
+			// The identity arm first: it is one hash lookup and the name arm below is a scan of every
+			// order the patient is on, so asking the cheap question second cost the whole scan whenever
+			// the answer was yes. Which of the two answers is immaterial — both arms return true, and
+			// both operands are pure — so this is an ordering, not a change of rule (issue #330).
 			if (activeDrugReferenceNames.contains(DrugReference.normalizeName(n))) {
 				return true;
+			}
+			// BOTH operands of the scan below are fixed for the pass — the order names since this
+			// context was built, the token for this call — so each is folded once above the loop
+			// rather than once per comparison (issue #330).
+			// Emptiness before the fold, so a chart with no readable drug order pays neither the
+			// allocation nor the NFD scan — which is what the pre-#330 code did by simply not entering
+			// the loop, and this arm is asked once per above-floor rule of every in-play entry.
+			if (!foldedActiveDrugNames.isEmpty()) {
+				DrugReference.FoldedName token = DrugReference.fold(n);
+				for (String folded : foldedActiveDrugNames) {
+					if (DrugReference.matchesFoldedOrderName(folded, token)) {
+						return true;
+					}
+				}
 			}
 		}
 		String normalizedAtc = DrugReference.normalizeAtcToken(atcCode);
 		return normalizedAtc != null && activeDrugAtcCodes.contains(normalizedAtc);
 	}
 
-	/** @return true when any allergy token contains the given (lowercased) contraindication token. */
+	/** @return true when any allergy token contains the given (lowercased) contraindication token — see
+	 *          {@link #containsToken}, which is where the bare-containment rule and the measurement
+	 *          behind it live, and {@link #allergensMatching} for WHICH tokens it matched. */
 	boolean hasAllergyToken(String token) {
 		return containsToken(allergyTokens, token);
 	}
 
-	/** @return true when any condition token contains the given (lowercased) contraindication token. */
+	/**
+	 * @return WHICH recorded allergens {@link #hasAllergyToken} matched — its witnesses, in the order
+	 *         the chart lists them, empty exactly when that returns false. The allergy list's
+	 *         counterpart of {@link DrugReference#aliasesIn} / {@link DrugReference#aliasesNaming}, and
+	 *         here for the same reason those are (issue #223): the boolean says a curated token reached
+	 *         the allergy list, and it does not say by WHICH record — which is what decides whether the
+	 *         rule reports the allergen arm's fact, because the token may have reached a record about a
+	 *         different drug entirely ({@code opium} inside an allergen recorded as {@code Tiotropium}).
+	 *         Only the record actually matched can be put to the drug.
+	 *
+	 *         <p>Through {@link #recordsMatching}, which shares {@link #containsToken}'s own primitives
+	 *         rather than re-expressing the scan, so the witnesses and the boolean cannot drift — the
+	 *         rule CLAUDE.md states for {@code matchesDrugName}/{@code aliasesNaming}. Read by
+	 *         {@code DrugSafetyValidator.aMatchedRecordNamesTheEntry}, which pairs each witness with
+	 *         {@link DrugReference#matchesDrugName}: the entry side of that question is about the
+	 *         reference dataset, which this value object deliberately knows nothing about, so it is asked
+	 *         there and not here. That method is read by {@code contraindicationRank} for the chip's rank
+	 *         and by {@code DrugReferenceInjector.corroborated} for the injected record's reading (issue
+	 *         #269), which is why it carries a name of its own.
+	 */
+	List<String> allergensMatching(String token) {
+		return recordsMatching(allergyTokens, token);
+	}
+
+	/** @return true when any condition token contains the given (lowercased) contraindication token —
+	 *          see {@link #containsToken}, which is where the bare-containment rule lives, and where the
+	 *          measurement behind it lives for the condition list as well as the allergy one (issue
+	 *          #309). {@link #conditionsMatching} is WHICH tokens it matched. */
 	boolean hasConditionToken(String token) {
 		return containsToken(conditionTokens, token);
 	}
 
 	/**
+	 * @return WHICH recorded conditions {@link #hasConditionToken} matched — its witnesses, in the order
+	 *         the chart lists them, empty exactly when that returns false. The condition list's
+	 *         counterpart of {@link #allergensMatching}, and here for the reason that one is: the
+	 *         boolean says a curated token reached the condition list and does not say by WHICH record,
+	 *         and the token may have reached a record about a different finding entirely ({@code liver}
+	 *         inside a condition recorded as {@code Status Post Cesarean Delivery}).
+	 *
+	 *         <p>Read by {@code DrugSafetyValidator.aMatchedConditionCarriesTheToken}, which puts each
+	 *         witness to {@link DrugReference#containsWord} for the injected record's patient-specific
+	 *         reading (issue #309). The BOUNDARY question is asked there and not here for the reason
+	 *         {@link #allergensMatching}'s own second question is: this value object knows about the
+	 *         chart and deliberately not about the rules a matcher applies to it.
+	 */
+	List<String> conditionsMatching(String token) {
+		return recordsMatching(conditionTokens, token);
+	}
+
+	/**
+	 * The one witness scan behind {@link #allergensMatching} and {@link #conditionsMatching}, standing
+	 * to them exactly as {@link #containsToken} stands to {@link #hasAllergyToken} and
+	 * {@link #hasConditionToken} — one rule, one expression of it, two named entry points that say
+	 * which recorded list is being asked about.
+	 *
+	 * <p>Shares {@link #containsToken}'s own primitives rather than re-expressing the scan, so the
+	 * witnesses and the boolean cannot drift — the rule CLAUDE.md states for
+	 * {@code matchesDrugName}/{@code aliasesNaming}. That is what makes "the boolean is true" and "these
+	 * are the records that made it true" the same fact rather than two scans that agree today.
+	 */
+	private static List<String> recordsMatching(Collection<String> haystack, String token) {
+		if (!matchableToken(token)) {
+			return Collections.emptyList();
+		}
+		String folded = foldedToken(token);
+		List<String> out = new ArrayList<String>();
+		for (String value : haystack) {
+			if (containsFolded(value, folded)) {
+				out.add(value);
+			}
+		}
+		return Collections.unmodifiableList(out);
+	}
+
+	/**
+	 * @return whether {@code token} is something this class could match a record AGAINST at all — the
+	 *         emptiness half of {@link #containsToken}, extracted so a second reader can ask it without
+	 *         re-deriving it (issue #208 item 2: the injected record has to tell "the chart does not
+	 *         record this" apart from "the module cannot evaluate this rule", and a blank token is the
+	 *         second). Both emptiness checks live here, including the post-fold one {@link #containsToken} documents.
+	 */
+	static boolean matchableToken(String token) {
+		return !normalizedToken(token).isEmpty() && !foldedToken(token).isEmpty();
+	}
+
+	/**
+	 * @return {@code token} in the form this class matches a record AGAINST, before folding — the
+	 *         unfolded half of {@link #foldedToken}, named so that a caller putting the SAME token to a
+	 *         different matcher can ask for the same string rather than writing the normalization again.
+	 *
+	 *         <p>Issue #309 is why it has a name. Its condition leg finds witnesses here and then puts
+	 *         the token to {@link DrugReference#containsWord}; with the two normalizations written
+	 *         independently they disagreed, and a rule whose token carried stray whitespace found its
+	 *         witness and then failed to match it. One expression, so a later widening of this — NFKC,
+	 *         punctuation — cannot reach one side and not the other.
+	 *
+	 *         <p>Null-tolerant, returning the empty string, because every caller would otherwise pair it
+	 *         with a null guard of its own and they had already grown two shapes. An empty result is what
+	 *         {@link #matchableToken} refuses anyway, so a null token reaches no matcher either way.
+	 *
+	 *         <p><b>The rule token family, not only this class's own matchers.</b>
+	 *         {@code DrugSafetyValidator.namesNamingOrder} puts a token to
+	 *         {@link DrugReference#matchesOrderName} rather than to anything here, and needs the same
+	 *         pre-fold form for the same reason: {@code containsBoundedToken} folds but never trims.
+	 */
+	static String normalizedToken(String token) {
+		return token == null ? "" : token.trim();
+	}
+
+	/**
 	 * Deliberately still bare containment, unlike the order-name arm above (issue #86): these
 	 * haystacks are free text — an allergen name, a condition in the clinician's own wording — where a
-	 * curated rule is meant to match a fragment ({@code nsaid} inside "NSAIDs", {@code peptic ulcer}
-	 * inside "history of peptic ulcer disease"), so the word-start rule would silently stop matching
-	 * the rules that exist. The nesting risk is the same in principle ({@code opium} against an
-	 * allergen recorded as "Tiotropium") and wants its own measurement over real allergy and condition
-	 * text, not the order-name corpus that settled #86. Exposure today is confined to hand-authored
+	 * curated rule is meant to match a fragment ({@code penicillin} inside {@code benzylpenicillin},
+	 * which both boundary rules refuse), so a boundary rule here would silently stop matching
+	 * the rules that exist. <b>Two other examples stood here until 2026-09-03 and were deleted rather
+	 * than reworded, because measurement refuted them</b>: {@code peptic ulcer} inside "history of
+	 * peptic ulcer disease" is ACCEPTED by {@link DrugReference#containsWord} and by
+	 * {@link DrugReference#matchesOrderName} alike, and {@code nsaid} inside "NSAIDs" is accepted by
+	 * the order-name rule (its two-letter tail allowance covers the plural) and refused only by
+	 * {@code containsWord}. Neither is a case for bare containment; the one above is, and it is
+	 * #223's own measured witness below. The nesting risk is the same in principle ({@code opium} against an
+	 * allergen recorded as "Tiotropium") and this javadoc used to ask for its own measurement over
+	 * allergy text rather than the order-name corpus that settled #86.
+	 *
+	 * <p><b>That measurement was made (issue #223)</b>, and it is why this stayed as it is. Over the
+	 * shipped 19 MB KB's 5169 published names as the allergen corpus, of the ten rules the bundled
+	 * curated file publishes, moving this match to the drug-NAME rule loses 5 real allergen names and
+	 * every one is on the CLASS token {@code penicillin} ({@code benzylpenicillin},
+	 * {@code phenoxymethylpenicillin}, {@code procaine benzylpenicillin} …); the three tokens that name
+	 * their own entry lose nothing. So the token shapes really do want different rules, and what moved
+	 * instead are the two decisions the nesting risk had made dangerous — which chip sentence a
+	 * self-named rule may speak in ({@code DrugSafetyValidator.contraindicationRank}, issue #223) and
+	 * whether an injected record may state its clause as the chart's own reading
+	 * ({@code DrugReferenceInjector.corroborated}, issue #269). Both read
+	 * {@link #allergensMatching} for the witnesses this method does not report.
+	 *
+	 * <p>What that corpus bounds, stated rather than implied: published reference NAMES, the shape a
+	 * coded allergen carries. It is not the localized dictionary {@link PatientClinicalContextBuilder}
+	 * actually reads a coded allergen's name out of (unreachable when this was measured), and not free
+	 * text at all, which is what a {@code nonCodedAllergen} is. It bounds the CLASS-token loss, which is
+	 * what the decision turned on; re-measure on the dictionary before reopening it.
+	 *
+	 * <p><b>The CONDITION list was measured too (issue #309), and it did NOT stay as it is.</b> The
+	 * question the ticket asked was whether a plausible curated condition token nests inside a plausible
+	 * recorded condition the way {@code opium} nests inside {@code Tiotropium}. It does, and the false
+	 * matches are clinical. Measured over the OpenMRS 3.7.1 reference-application demo dictionary,
+	 * through this method and the real {@link PatientClinicalContextBuilder} normalization, against two
+	 * corpora: the 704 distinct concepts actually RECORDED in that database's {@code conditions} table
+	 * (853 rows), and the 2581 Diagnosis/Finding/Symptom concepts that table's {@code condition_coded}
+	 * CAN hold. Both are {@code en} locale-preferred concept names, which is what
+	 * {@code PatientClinicalContextBuilder.addConceptName} reads through {@code Concept.getName()} — so
+	 * these bound an {@code en} deployment, and #141's {@code Pénicilline G} paragraph above is the
+	 * standing reminder that a francophone one reads different strings for the same concepts.
+	 *
+	 * <p>The hazard, over the candidate corpus, as (values matched / matched only inside a longer word),
+	 * under {@link DrugReference#containsWord}: {@code liver} 30/20, every one of the twenty a
+	 * deliver/delivery form ({@code Status Post Cesarean Delivery}, {@code Preterm Delivery});
+	 * {@code deficiency} 14/7, every one an immunoDEFICIENCY; {@code mania} 8/6
+	 * ({@code Leishmaniasis}, {@code Kleptomania}); {@code psoriasis} 4/2 ({@code Large plaque
+	 * parapsoriasis}, a different disease); {@code renal} 7/1 ({@code Malignant tumor of adrenal
+	 * gland}); {@code gi} 112/111. A hepatic or renal contraindication is the most
+	 * ordinary curated condition rule there is, so this is not an exotic shape.
+	 *
+	 * <p><b>What the fix could NOT be, and this is the part worth keeping.</b> The ticket proposed a
+	 * token-shape validity rule — "a condition token too short or too generic to be safe". No threshold
+	 * over the TOKEN separates safe from unsafe: taking every contiguous word run of a corpus value as a
+	 * plausible token (13908 distinct over the candidate corpus, 4968 over the recorded one), the
+	 * hazardous ones occur at 35 distinct character lengths spanning 1 to 46 and at every word count
+	 * from 1 to 6, and the longest — {@code traumatic intracranial subarachnoid hemorrhage} — nests
+	 * inside {@code Nontraumatic intracranial subarachnoid hemorrhage}, which is to say inside its own
+	 * NEGATION. Hazard is a property of the (token, recorded value) PAIR, and the loader holds no
+	 * condition corpus to pair against. A length rule is still defensible as a REPORTED loader finding
+	 * (at one to three characters a single-word token is hazardous 61-100% of the time on both corpora),
+	 * and it was declined because it warns rather than fixes, is silent on five of the six witnesses
+	 * above (every one but {@code gi} is five characters or more), and is silent by construction on
+	 * every shipped dataset — ADR Decision 73 carries the three together.
+	 *
+	 * <p><b>What the fix IS: a boundary, asked of the match rather than of the token.</b>
+	 * {@code DrugSafetyValidator.aMatchedConditionCarriesTheToken} — the third leg of
+	 * {@code corroboratedByTheChart}, carrying its own residue. The ticket's premise, that a condition
+	 * has no corroborating question because no arm resolves it to a reference substance, is true of the
+	 * two ALLERGY legs and does not settle the matter: what redeems a condition match is whether the
+	 * token reached the record as a WORD of it. This match itself is untouched and stays bare, for the
+	 * reason the paragraph above gives.
+	 *
+	 * <p>The LOSS of that boundary rule over the two corpora above is ZERO, and <b>what that zero is a
+	 * loss OF is ONE token, whose matches are counted per corpus and never summed into a total</b> —
+	 * 5 of the 2581 candidate values and 1 of the 704 recorded ones. State it that way wherever it is
+	 * published, because "all four tokens verified" reads as four confirmations and it is one, and a
+	 * single total reads as a larger evidence base than either corpus supplies (issue #243's rule; the
+	 * unbounded form had reached every document carrying this claim before it was measured, and the
+	 * summed form that replaced it then reached every one of them too).
+	 * "The curated condition population" below means the one this repo SHIPS; an
+	 * operator's own file is by definition unmeasured, which is what the loader-rule paragraph is about.
+	 * The four condition tokens the bundled seed publishes ({@code gi bleed}, {@code peptic
+	 * ulcer}, {@code severe hepatic}, {@code renal impairment} — the TOKENS, and not the four strings
+	 * #309's own body names in their place: two of those are these rules' {@code note} fields
+	 * ({@code active gastrointestinal bleeding}, {@code active peptic ulcer disease}) and the other two
+	 * ({@code avoid in CKD stage 4 or worse}, {@code avoid in severe hepatic impairment}) are neither a
+	 * token nor a note of any rule the seed ships, so a token set re-derived from the ticket finds two
+	 * of its four strings nowhere) match 1 value over the recorded corpus and 5 over the
+	 * candidate one, and every one of those matched values carries its token as a whole word.
+	 * Per token, and this is the part the aggregate hides: {@code peptic ulcer} accounts for ALL of
+	 * them — 5 candidate, 1 recorded, none mid-word — while {@code gi bleed}, {@code severe hepatic}
+	 * and {@code renal impairment} match nothing at all in either corpus, so the claim is vacuously
+	 * true for three of the four and neither corpus says anything about what the boundary rule would
+	 * do to them. Not a total of six: the recorded
+	 * concepts are a subset of the candidate ones, so those counts overlap and must not be summed. That
+	 * is the proxy issue #223 used to settle the allergy side, run for conditions — with the same
+	 * weakness that proxy always had, three of these four tokens being as unmeasured against a coded
+	 * corpus as an operator's own file is. Measured 2026-09-03 by driving each corpus value through
+	 * {@link #hasConditionToken} and then through
+	 * {@code DrugSafetyValidator.aMatchedConditionCarriesTheToken}, over the rules
+	 * {@code DrugSafetyValidator.isConditionRule} selects from the shipped curated seed.
+	 *
+	 * <p><b>Both corpora are CODED concept names, and the rule DOES cost the free-text half — including
+	 * on the shipped seed's own tokens.</b> A condition a clinician types as {@code GI bleeding} is
+	 * hedged against {@code gi bleed}, and {@code peptic ulceration} against {@code peptic ulcer}: an
+	 * INFLECTION, the commonest shape in free text and one neither corpus can exhibit. Neither of the
+	 * module's two allowances reaches them — 0 letters for prose and 2 for an order name, against tails
+	 * of three and five — and inventing a third at a call site is what issue #260 forbids, so what
+	 * would actually close this is morphology rather than a wider tail. The other shape is a prefix or
+	 * suffix compound that is clinically the same finding: {@code edema} 13/7, {@code carcinoma} 8/2
+	 * ({@code Adenocarcinoma}), {@code arthritis} 10/3 ({@code Osteoarthritis of knee}),
+	 * {@code cerebral} 10/2, {@code ulcer} 21/2. Both are hedged rather than dropped — the section
+	 * asserts nothing and denies nothing, the contraindication is still listed and the chip still fires
+	 * — and both are cases rather than sentences:
+	 * {@code ConditionRuleBoundaryCorroborationTest.anInflectionOfAShippedTokenIsHedged} and
+	 * {@code .aClinicallyRightCompoundIsHedgedToo}.
+	 *
+	 * <p><b>That the chip survives is a residue as well as a mitigation, and it must not be cited as
+	 * only the second.</b> On the HAZARD case the surviving chip is the false claim: for a patient
+	 * whose one recorded condition is {@code Status Post Cesarean Delivery}, the injected record and
+	 * the {@code safety_finding} now hedge, and the clinician-facing chip still reads
+	 * "… is contraindicated by an active condition: acute hepatitis or liver failure" — an unqualified
+	 * assertion about the chart, on the one surface with no third section to hedge into. Measured
+	 * 2026-09-03 by driving {@code DrugSafetyValidator.validate} over
+	 * {@code chartsearchai-test/drug-reference-condition-token-nesting.json}. #309 fixed the
+	 * model-facing half only; the chip half is untracked, and tightening this match is NOT its remedy
+	 * (it is fail-open — see the boundary rule's free-text cost above). ADR Decision 73 carries it as
+	 * a trade-off.
+	 *
+	 * <p>That the corpora cannot reach free text is a property of the source: that database's
+	 * {@code condition_non_coded} column holds ONE placeholder string across all 853 rows, so a
+	 * condition recorded in the clinician's own wording — the shape the fragment rationale above is
+	 * really about — is unmeasured on both sides of this rule, and the two inflections above are
+	 * reasoned from the rule rather than counted. This repo does not carry that dictionary, so none of
+	 * these figures is re-derivable here; what is stated is which population each is over. What CAN be
+	 * pinned here is the token set the zero-cost claim is ABOUT, and it is:
+	 * {@code ConditionRuleBoundaryCorroborationTest.theShippedSeedPublishesExactlyTheFourConditionTokensTheMeasurementWasOver}.
+	 *
+	 * <p>Exposure today is confined to hand-authored
 	 * contraindication rules: neither the {@code ddinter} nor the {@code atc} source emits any, and the
 	 * allergy contraindication arm ({@code DrugSafetyValidator.addAllergyContraindications}) resolves
-	 * allergens through {@link DrugReferenceService#lookupByToken}, which is boundary-aware.
-	 * Boundary-aware is not the same as correct, though, and this is not a clean contrast: that
-	 * resolver takes the EARLIEST entry one of whose aliases matches, so a multi-word allergen still
-	 * mis-resolves when the matched alias is only a fragment of it (measured, and reported
-	 * separately). What it does rule out is this method's failure mode — a token matching mid-word.
+	 * allergens through {@link DrugReferenceService#findImpliedSubstances}, and so through
+	 * {@link DrugReferenceService#lookupByToken} beneath it, which is boundary-aware.
+	 * Boundary-aware is not the same as correct, though, and this is not a clean contrast: since issue
+	 * #176 that resolver prefers an entry the allergen NAMES over one whose alias merely occurs inside the
+	 * allergen, which settles the fragment case for every name the KB itself publishes, but an allergen
+	 * recorded as free text that names no entry at all still resolves by containment or not at all.
+	 * What it does rule out is this method's failure mode — a token matching mid-word.
 	 *
 	 * <p><b>Diacritics are folded on both sides (issue #141)</b>, through the one shared
 	 * {@link DrugReference#foldDiacritics}. This was the matcher #129/#138 did not reach: that work
@@ -359,23 +635,46 @@ public class PatientClinicalContext {
 	 * and the same strings feed {@code lookupByToken}, so a comment would be read as the allergen
 	 * itself and fabricate an allergy. A reaction is a symptom, not a drug. The fragment rationale
 	 * above survives on {@code nonCodedAllergen}, which is genuinely free text.
+	 *
+	 * <p><b>Package-private, and taking a {@link Collection} rather than a {@code Set}</b> since the
+	 * subject-matter scoping of the active-order contraindication arm: that gate asks whether the
+	 * finding a rule FIRED ON is part of what the response is about, and it must ask it with the same
+	 * matcher the firing used, or "did not match" and "is not what was asked about" drift apart. One
+	 * definition — never a second copy here. That caller's haystack is PROSE rather than recorded
+	 * values, and lower-cased on the way in, because {@link #containsFolded} folds a value but does not
+	 * case-fold it.
 	 */
-	private static boolean containsToken(Set<String> haystack, String token) {
-		if (token == null || token.trim().isEmpty()) {
+	static boolean containsToken(Collection<String> haystack, String token) {
+		if (!matchableToken(token)) {
+			// A token of nothing but combining marks folds to empty AFTER the fold, not before — and the
+			// empty string is contained in everything, so both emptiness checks live in matchableToken.
 			return false;
 		}
-		String t = DrugReference.foldDiacritics(token.trim().toLowerCase(Locale.ROOT));
-		if (t.isEmpty()) {
-			// After the fold, not before — a token of nothing but combining marks folds to empty, and
-			// the empty string is contained in everything.
-			return false;
-		}
+		String folded = foldedToken(token);
 		for (String value : haystack) {
-			if (DrugReference.foldDiacritics(value).contains(t)) {
+			if (containsFolded(value, folded)) {
 				return true;
 			}
 		}
 		return false;
+	}
+
+	/** The needle {@link #containsToken} scans for, folded once — shared with
+	 *  {@link #recordsMatching}, and so with both witness accessors over it, so the booleans and their
+	 *  witnesses fold alike, and with
+	 *  {@link #matchableToken}, whose whole subject is whether this expression comes out empty. */
+	private static String foldedToken(String token) {
+		// Through DrugReference.foldedLower, not a second spelling of it: that method is "named once so
+		// that a caller preparing them itself cannot apply half of it or apply the two in the other
+		// order", and this was the hand-written copy its javadoc warns against (issue #330).
+		return DrugReference.foldedLower(normalizedToken(token));
+	}
+
+	/** The one comparison behind {@link #containsToken} and {@link #recordsMatching} — and so behind
+	 *  all four of the accessors over them: a recorded value contains an already-folded token. Extracted rather than written twice, so the witnesses
+	 *  cannot come to disagree with the boolean about what matched. */
+	private static boolean containsFolded(String value, String foldedToken) {
+		return DrugReference.foldDiacritics(value).contains(foldedToken);
 	}
 
 	/**
@@ -398,6 +697,24 @@ public class PatientClinicalContext {
 	 * must not hold one fact and present it two ways, and a second dose-rendering path beside
 	 * querystore's is exactly that. The display name already carries the strength in real data
 	 * ("Simvastatin Co 20mg"), and the citation resolves to the order itself for the rest.
+	 *
+	 * <p><b>One class of order is identified LESS well than the above, deliberately</b> (issue #290):
+	 * {@link #namedByCodesOnly} stands in for an order no name could be read for, so its display is a
+	 * list of its own ATC codes and it has no names at all. Of the identity described above it carries
+	 * only the uuid: no name identifies it in record text, so the reconciliation can match it by uuid
+	 * alone, and its display carries no strength because it is not a drug name. Ask
+	 * {@link #hasKnownName()} before letting the display DISPLACE a name some other source supplied;
+	 * labelling something that has no other name is what the display is for. It is still far
+	 * better than the alternative it replaced: such an order used to be omitted entirely while its codes
+	 * still reached {@link #getActiveDrugAtcCodes()}, which made one prescription look like one partner
+	 * per code the loaded dataset could not name — a covered code is keyed on its substance either way,
+	 * so that half is unchanged and deliberate.
+	 *
+	 * <p><b>Beside its identity it carries one thing about the prescription itself</b> (issue #234):
+	 * where the chart says the drug is applied, as {@link #getAdministrationTerms()}. It is on every
+	 * rung including the code-only one, and it is read by exactly one arm — see that accessor and
+	 * {@link #namedByCodesOnly(String, String, Set, Set)}, which records why the rung it cannot reach
+	 * carries it anyway.
 	 */
 	public static final class ActiveDrugOrder {
 
@@ -409,6 +726,34 @@ public class PatientClinicalContext {
 
 		private final Set<String> atcCodes;
 
+		/**
+		 * The uuid of the concept this order was written against — the SAME concept
+		 * {@link #getAtcCodes()} was read off, which is the order's drug's concept where the order
+		 * carries a coded {@code Drug} and the order's own concept otherwise. Null where the module
+		 * could not read one, and null on every order a caller built through the public constructors:
+		 * only {@link PatientClinicalContextBuilder} records it.
+		 *
+		 * <p>Issue #353. The reference dataset bridges dictionary concepts to substances
+		 * ({@link DrugReference#getBridgedConcepts()}), and this is the other half of that join — the
+		 * key that does not depend on which of a concept's names the session's locale elects.
+		 * Deliberately NOT folded into {@link #getNames()}: that set is matched against chart prose,
+		 * and it is {@code DrugSafetyValidator.recordsANameOf}'s operand, so a uuid in it would both
+		 * match free text and make the issue #349 bridge believe the chart named the substance.
+		 */
+		private final String conceptUuid;
+
+		/** The administration the chart records for THIS order — the names its route concept publishes
+		 *  and the names its drug's dosage-form concept publishes, whichever of the two is recorded
+		 *  (issue #234). */
+		private final Set<String> administrationTerms;
+
+		/** Whether {@link #display} is a name for this order, as opposed to a stand-in the module
+		 *  synthesized because it could not read one — see {@link #namedByCodesOnly}. Asked, rather
+		 *  than inferred from {@link #names} being empty, because that is a PROXY: a caller may hand
+		 *  this a real display with no match tokens, and the answer decides whether a real drug name
+		 *  gets displaced on a chip (issue #290, {@code OrderPartner.nameByOrder}). */
+		private final boolean nameKnown;
+
 		/** An order whose concept carries no ATC map — the majority in practice: only 85 of the 616
 		 *  Drug-class concepts in the 3.7.1 reference demo dictionary carry one (measured 2026-08-04,
 		 *  the same count {@code DrugReferenceService.findForActiveOrders} cites) — so the code-carrying
@@ -418,6 +763,90 @@ public class PatientClinicalContext {
 		}
 
 		public ActiveDrugOrder(String uuid, String display, Set<String> names, Set<String> atcCodes) {
+			this(uuid, display, names, atcCodes, null);
+		}
+
+		/**
+		 * An order carrying the ADMINISTRATION the chart records for it — issue #234.
+		 *
+		 * <p>A separate overload rather than a fifth argument on the two above, so that every existing
+		 * caller keeps the "nothing is recorded" reading it already had, which is the reading that
+		 * narrows nothing.
+		 */
+		public ActiveDrugOrder(String uuid, String display, Set<String> names, Set<String> atcCodes,
+				Set<String> administrationTerms) {
+			this(uuid, display, names, atcCodes, administrationTerms, true);
+		}
+
+		/**
+		 * An order the module could not read a name for, standing in with its ATC codes (issue #290).
+		 *
+		 * <p>Its {@link #getNames()} is empty on purpose — that set is matched against chart prose, and
+		 * a code in it would match free text — so this order cannot be found by name anywhere, and the
+		 * #118 reconciliation substantiates it by uuid alone. A separate factory rather than a fifth
+		 * argument on the public constructor, so that no existing caller can produce this state by
+		 * accident and the one place that does is named.
+		 */
+		static ActiveDrugOrder namedByCodesOnly(String uuid, String display, Set<String> atcCodes) {
+			return namedByCodesOnly(uuid, display, atcCodes, null);
+		}
+
+		/**
+		 * As {@link #namedByCodesOnly(String, String, Set)}, for an order that records where it is
+		 * applied even though no name for it could be read (issue #234). Two overloads rather than one
+		 * for the reason the constructors above have three: a caller that says nothing about
+		 * administration must keep meaning "nothing is recorded".
+		 *
+		 * <p><b>Nothing READS those terms on an order built here today, and that is a property of the
+		 * builder rather than of this class.</b> The site narrowing they exist for is applied in
+		 * {@code DrugSafetyValidator.addPartnersForUnmappedOrders}, which resolves a partner from an
+		 * order's NAMES — and this rung has none. {@link PatientClinicalContextBuilder} only reaches it
+		 * for an order carrying ATC codes, which the same builder folds into
+		 * {@link PatientClinicalContext#getActiveDrugAtcCodes()}, so such an order is grouped by the
+		 * code walk and never offered to that leg at all. They are carried anyway because this class
+		 * records what the chart says about an order and not what some arm currently asks of it; a
+		 * hand-built context can put a code-only order outside the flattened set, and a future rung
+		 * that reads administration off the code walk would otherwise find the field empty for exactly
+		 * the orders it was added for.
+		 */
+		static ActiveDrugOrder namedByCodesOnly(String uuid, String display, Set<String> atcCodes,
+				Set<String> administrationTerms) {
+			return namedByCodesOnly(uuid, display, atcCodes, administrationTerms, null);
+		}
+
+		/**
+		 * As {@link #namedByCodesOnly(String, String, Set, Set)}, recording the concept the order was
+		 * written against (issue #353). An order the module could read no NAME for can still be joined
+		 * to the reference data by its concept, which is exactly the population that join exists for.
+		 */
+		static ActiveDrugOrder namedByCodesOnly(String uuid, String display, Set<String> atcCodes,
+				Set<String> administrationTerms, String conceptUuid) {
+			return new ActiveDrugOrder(uuid, display, null, atcCodes, administrationTerms, false,
+					conceptUuid);
+		}
+
+		/**
+		 * As the public constructors, additionally recording the concept the order was written against
+		 * (issue #353). Package-private and not a fourth public constructor: only
+		 * {@link PatientClinicalContextBuilder} can know that the uuid it passes is the concept the ATC
+		 * codes beside it were read off, and that agreement is the whole point of the field.
+		 */
+		static ActiveDrugOrder named(String uuid, String display, Set<String> names,
+				Set<String> atcCodes, Set<String> administrationTerms, String conceptUuid) {
+			return new ActiveDrugOrder(uuid, display, names, atcCodes, administrationTerms, true,
+					conceptUuid);
+		}
+
+		private ActiveDrugOrder(String uuid, String display, Set<String> names, Set<String> atcCodes,
+				Set<String> administrationTerms, boolean nameKnown) {
+			this(uuid, display, names, atcCodes, administrationTerms, nameKnown, null);
+		}
+
+		private ActiveDrugOrder(String uuid, String display, Set<String> names, Set<String> atcCodes,
+				Set<String> administrationTerms, boolean nameKnown, String conceptUuid) {
+			this.conceptUuid = conceptUuid;
+			this.nameKnown = nameKnown;
+			this.administrationTerms = lower(administrationTerms);
 			this.uuid = uuid;
 			this.display = display;
 			this.names = lower(names);
@@ -432,14 +861,43 @@ public class PatientClinicalContext {
 			return uuid;
 		}
 
-		/** @return the order's display name, as a record renders it. */
+		/** @return the order's display name, as a record renders it — or, since issue #290, the code-only
+		 *          stand-in {@link #namedByCodesOnly} builds for an order no name could be read for, which
+		 *          is not a name at all. Ask {@link #hasKnownName()} before treating it as one. */
 		public String getDisplay() {
 			return display;
 		}
 
-		/** @return lowercased names identifying this order (drug name and/or concept name). */
+		/** @return true when {@link #getDisplay()} is a name this order actually carries, false when it
+		 *          is the code-only stand-in {@link #namedByCodesOnly} builds. Ask this before letting
+		 *          the display DISPLACE a name another source supplied — that is the one decision it
+		 *          exists for ({@code DrugSafetyValidator.OrderPartner.nameByOrder}). Using the display
+		 *          to label something that has no other name does NOT need this test, and the chip's
+		 *          own "as active order &lt;label&gt;" is that case. */
+		public boolean hasKnownName() {
+			return nameKnown;
+		}
+
+		/** @return lowercased names identifying this order — the coded {@code Drug}'s name, the free
+		 *          text a clinician typed for a non-coded order ({@code drugNonCoded}, issue #293),
+		 *          and the order concept's name, in that rank; {@link #getDisplay()} is the first of
+		 *          them for an order the builder names — a caller may supply a display that is not among
+		 *          them at all. Empty on the code-only rung {@link #namedByCodesOnly} builds, and possibly
+		 *          empty on a caller-built order carrying a real display and no match tokens — ask
+		 *          {@link #hasKnownName()} to tell the two apart, never {@code getNames().isEmpty()},
+		 *          which is the proxy
+		 *          {@code NamelessActiveOrderPartnerTest.aRealDisplayWithNoMatchTokensStillOutranksTheDatasetName}
+		 *          exists to rule out. */
 		public Set<String> getNames() {
 			return names;
+		}
+
+		/** @return the uuid of the concept this order was written against, or null when the module could
+		 *          not read one — and null on every order built through this class's public
+		 *          constructors, which is the ordinary state of a hand-built context. See
+		 *          {@link #conceptUuid} for why it is not one of {@link #getNames()}. */
+		public String getConceptUuid() {
+			return conceptUuid;
 		}
 
 		/** @return the uppercased ATC codes THIS order's concept maps to; empty when it maps to none.
@@ -448,6 +906,31 @@ public class PatientClinicalContext {
 		 *          legitimately wants. */
 		public Set<String> getAtcCodes() {
 			return atcCodes;
+		}
+
+		/**
+		 * @return the administration the chart records for this order, normalized the same way its
+		 *         {@link #getNames()} are — EVERY name the order's route concept publishes and every
+		 *         name its drug's dosage-form concept publishes, either source or both, empty when
+		 *         neither is recorded or neither could be read (issue #234).
+		 *
+		 *         <p>Every name and not the one {@code Concept.getName()} elects, which returns the
+		 *         locale-PREFERRED spelling first: on the 3.7.1 reference dictionary that hides the
+		 *         formal spelling of the bilateral eye and ear routes and of the only vaginal one.
+		 *         {@code PatientClinicalContextBuilder.addConceptNames} is where that is argued.
+		 *
+		 *         <p>Both sources and not one: measured on the 3.7.1 reference dictionary, its route set
+		 *         has 17 members and none of them names the skin, so a locally applied presentation of
+		 *         that kind can only reach this module through the dose FORM. Read by
+		 *         {@code DrugReference.codesForRecordedAdministration}, which is the one thing that
+		 *         decides what a recorded term means; nothing here interprets it.
+		 *
+		 *         <p>Empty is "nothing is recorded", never "administered nowhere" — the same reading the
+		 *         two constructors above give an order built before this field existed, and the reading
+		 *         that narrows nothing.
+		 */
+		public Set<String> getAdministrationTerms() {
+			return administrationTerms;
 		}
 
 		/**
@@ -468,13 +951,29 @@ public class PatientClinicalContext {
 		 *         suppresses the repair and the WARN together, so the stricter rule is the safe
 		 *         direction. See {@code matchesOrderName}'s javadoc for why one matcher cannot serve
 		 *         both.
+		 *
+		 *         <p><b>Both sides in ONE normal form (issue #293).</b> These names had their whitespace
+		 *         runs collapsed on the way in ({@code PatientClinicalContextBuilder.addRaw}), and the
+		 *         haystack is querystore's verbatim record prose, which renders a recorded value as it
+		 *         was typed — so a name a clinician spaced irregularly would otherwise fail to be found
+		 *         inside the record that renders that very value, and the order would be reported
+		 *         unrepresented against a chart that plainly carries it. Measured: the name
+		 *         {@code "warfarin  5mg"} collapses to {@code "warfarin 5mg"} and is not found in
+		 *         {@code "drug order: warfarin  5mg, 1 tablet daily"} without this. Collapsed here rather
+		 *         than inside {@link DrugReference#containsWord}, which several arms share and whose
+		 *         haystacks are not all prose. Through {@link DrugReference#collapseWhitespace}, which is
+		 *         the ONE definition of that form — the needle side goes through the same method — so the
+		 *         two sides cannot come apart the way two local copies of it could. One pass over the
+		 *         drug-order text per active order; the operation is idempotent, so a caller that has
+		 *         already normalized loses nothing.
 		 */
 		boolean namedIn(String lowercasedText) {
 			if (lowercasedText == null || lowercasedText.isEmpty()) {
 				return false;
 			}
+			String haystack = DrugReference.collapseWhitespace(lowercasedText);
 			for (String name : names) {
-				if (DrugReference.containsWord(lowercasedText, name)) {
+				if (DrugReference.containsWord(haystack, name)) {
 					return true;
 				}
 			}

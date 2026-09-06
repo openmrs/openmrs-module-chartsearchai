@@ -57,7 +57,7 @@ public class DrugSafetyWeightContextTest extends BaseModuleContextSensitiveTest 
 				.setGlobalProperty(ChartSearchAiConstants.GP_DRUG_REFERENCE_ENABLED, "true");
 		Context.getAdministrationService()
 				.setGlobalProperty(ChartSearchAiConstants.GP_DRUG_SAFETY_WEIGHT_CONCEPT_UUID, WEIGHT_CONCEPT_UUID);
-		validator = DrugReferenceTestSupport.validator(DrugReferenceTestSupport.bundledService());
+		validator = DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService());
 		patient = Context.getPatientService().getPatient(7);
 	}
 

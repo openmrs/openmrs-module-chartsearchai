@@ -47,26 +47,23 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * <p>Context-sensitive because the point is the GP: the cases write a real global property through the
  * admin service and read it back through the real {@code validate} path, so a cap assertion cannot pass
  * on a hardcoded default (the exception is the absent-row case, whose whole point is to write none).
- * The knowledge base is the real bundled DDInter sample parsed by the real source; its 16 drugs are
+ * The knowledge base is the real DDInter excerpt parsed by the real source; its 16 drugs are
  * exactly the 16 the question below names, and they carry <b>72</b> above-floor pairs (23 Major,
  * 40 Moderate, 9 Minor) — enough to outrun every cap tested here.
  */
 public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 
 	/** The 16-drug polypharmacy question, live-measured at 72 above-floor pairs on the full KB and on
-	 *  the bundled sample alike — the shape a cap exists for. */
-	private static final String POLYPHARMACY_QUESTION = "Reviewing polypharmacy: lisinopril, metformin,"
-			+ " methotrexate, omeprazole, sertraline, simvastatin, spironolactone, tramadol, warfarin,"
-			+ " aspirin, ciprofloxacin, clarithromycin, digoxin, fluconazole, amiodarone and ibuprofen"
-			+ " — any interactions?";
+	 *  the DDInter excerpt alike — the shape a cap exists for. Shared with the extent cases, which
+	 *  assert about the same 72 from the other side; see the constant's own javadoc. */
+	private static final String POLYPHARMACY_QUESTION = DrugReferenceTestSupport.POLYPHARMACY_QUESTION;
 
-	private static final String SCREENING_QUESTION =
-			"Are there any drug interactions with her current medications?";
+	private static final String SCREENING_QUESTION = DrugReferenceTestSupport.SCREENING_QUESTION;
 
-	/** Above-floor pairs among the sample's 16 drugs — the candidate count every cap here cuts. */
+	/** Above-floor pairs among the excerpt's 16 drugs — the candidate count every cap here cuts. */
 	private static final int CANDIDATE_PAIRS = 72;
 
-	/** How many of those the sample rates Major, i.e. what a cap of 25 or more shows in full. */
+	/** How many of those the excerpt rates Major, i.e. what a cap of 25 or more shows in full. */
 	private static final int MAJOR_PAIRS = 23;
 
 	private DrugSafetyValidator validator;
@@ -92,20 +89,8 @@ public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 	/** The screening arm over six active orders interacting 15 ways, 10 of them Major — the same
 	 *  arrangement the un-capped screening test uses, so the two cannot drift apart. */
 	private List<SafetyWarning> screeningChips() {
-		return validator.validate("", SCREENING_QUESTION, DrugReferenceTestSupport.ctx(60, null,
-				DrugReferenceTestSupport.set("Simvastatin", "Warfarin", "Ciprofloxacin", "Clarithromycin",
-						"Fluconazole", "Amiodarone"),
-				DrugReferenceTestSupport.set("C10AA01", "B01AA03", "J01MA02", "J01FA09", "J02AC01",
-						"C01BD01"),
-				null, null));
-	}
-
-	private static List<String> details(List<SafetyWarning> warnings) {
-		List<String> out = new ArrayList<String>();
-		for (SafetyWarning warning : warnings) {
-			out.add(warning.getDetail());
-		}
-		return out;
+		return validator.validate("", SCREENING_QUESTION,
+				DrugReferenceTestSupport.screenedSixOrderChart());
 	}
 
 	/** Chips whose SOURCE RATING is Major. Matched on the severity segment both arms render ahead of
@@ -159,7 +144,7 @@ public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 		assertEquals(3, lowered.size(), "a lowered cap must be honoured, was: " + lowered.size());
 		assertEquals(3, majors(lowered),
 				"and what survives a lowered cap must be the most severe, not the dataset's first: "
-						+ details(lowered));
+						+ DrugReferenceTestSupport.details(lowered));
 	}
 
 	@Test
@@ -190,12 +175,12 @@ public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 		// most-severe-first ordering. A future change that sorted after cutting, or capped while
 		// collecting, would still be descending at every setting and would still break this.
 		configureCap("1000");
-		List<String> full = details(questionPairChips());
+		List<String> full = DrugReferenceTestSupport.details(questionPairChips());
 		assertEquals(CANDIDATE_PAIRS, full.size(), "precondition: the uncut list is every candidate");
 
 		for (int cap : new int[] { 1, 3, 10, 25, 71 }) {
 			configureCap(String.valueOf(cap));
-			assertEquals(full.subList(0, cap), details(questionPairChips()),
+			assertEquals(full.subList(0, cap), DrugReferenceTestSupport.details(questionPairChips()),
 					"at cap " + cap + " the shown chips must be the first " + cap + " of the ordered list");
 		}
 	}
@@ -210,7 +195,7 @@ public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 		List<SafetyWarning> capped = screeningChips();
 		assertEquals(3, capped.size(), "the screening arm must honour the cap too, was: " + capped.size());
 		assertEquals(3, majors(capped),
-				"and keep the most severe pairs: " + details(capped));
+				"and keep the most severe pairs: " + DrugReferenceTestSupport.details(capped));
 
 		configureCap("15");
 		assertEquals(15, screeningChips().size(),
@@ -219,9 +204,10 @@ public class PairChipCapContextTest extends BaseModuleContextSensitiveTest {
 
 	@Test
 	public void theQuestionPairWarnNamesTheWithheldPairsAndTheConfiguredCap() {
-		// The withheld pairs exist only in this log line — chips have no per-question container to show
-		// "3 of 72" in — so it is the only thing standing between a capped list and a clinician reading
-		// it as complete. It must report the CAP THAT ACTUALLY CUT, not the compiled-in default.
+		// WHICH pairs went, and at what ratings, exists only in this log line: since issue #336 the
+		// response states the COUNTS (PairChipExtentContextTest) but deliberately not the list, so this
+		// is still the only place an operator can see what was dropped. It must report the CAP THAT
+		// ACTUALLY CUT, not the compiled-in default.
 		configureCap("3");
 		List<String> logged = capturedWarnings(new Runnable() {
 

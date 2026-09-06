@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""KV-prefill measurement gate: how much first-query latency would a KV prewarm remove?
+"""KV-prefill MEASUREMENT: how much first-query latency would a KV prewarm remove?
+
+This is a measurement with a hard precondition, not a pass/fail gate — it reports a delta
+and has no ship bar to compare it against, despite the `_gate` in its filename. What it
+DOES now enforce, and exits non-zero on, is its own precondition: that the "cold" arm is
+actually cold. Read the delta; do not read exit 0 as a verdict.
 
 For each patient, on a fresh llama-server process (empty RAM prompt-cache pool):
   1. reindex (warm the querystore index WITHOUT touching the LLM, so the cold reading
@@ -11,20 +16,52 @@ For each patient, on a fresh llama-server process (empty RAM prompt-cache pool):
   delta = prefill_cold - prefill_warm  == exactly what ANY prewarm (reactive or bootstrap)
   could remove from a first query. This is the number the prewarm-bootstrap decision hinges on.
 
+WHY THE PRECONDITION IS THE WHOLE POINT (#179 item 7). Step 2 is the only thing making the
+cold arm cold, and its result was thrown away: `delete_kv(uuid)` returned a count that no
+caller read, and `KVDIR` was a hardcoded absolute path into a `3.7.0-SNAPSHOT` install that
+no longer exists on this box. A wrong directory therefore deleted nothing, every "cold" arm
+ran against a warm on-disk cache, and the script printed a small, believable, entirely
+fabricated DELTA — the failure mode where the instrument reports success because it never
+did anything. Measured 2026-08-09: the old constant resolved to a directory that is absent,
+while the real cache held 8 `.bin` files, 4 of them for corpus patients. So it would have
+deleted nothing for every patient, silently.
+
+Now: KVDIR is resolved from CHARTSEARCHAI_KVDIR (falling back to the 3.7.1 standalone), and
+before ANY request is made the directory must exist, hold at least one `.bin`, and hold one
+for every patient about to be measured — see `require_cold_cache_dir`. The per-patient check
+is up front rather than in the loop so a worthless reading costs nothing to discover instead
+of a 300s streaming pair, and the loop still prints each deleted count so a zero is visible.
+
+That third condition is not hypothetical either. Measured 2026-08-09 against the real cache:
+all SIX patients below have no `.bin`, so this cohort is as stale as the path was. The run
+now refuses and names them instead of reporting a median over six warm "cold" arms.
+
 Run against the live standalone on :8081. Prints a per-patient table + median delta.
+
+Usage: kv_prefill_gate.py
+       kv_prefill_gate.py --selftest   (precondition checks only; needs no server and no LLM)
 """
 import base64
 import glob
 import json
 import os
 import statistics
+import subprocess
+import sys
 import time
 import urllib.request
 
 BASE = "http://localhost:8081/openmrs/ws/rest/v1"
 AUTH = base64.b64encode(b"admin:Admin123").decode()
-KVDIR = ("/Users/danielkayiwa/Projects/openmrs/test/"
-         "referenceapplication-standalone-3.7.0-SNAPSHOT/appdata/chartsearchai/kvcache")
+# Overridable because the previous hardcoded constant rotted into a dead path and nothing
+# noticed. The default is the standalone this harness is run against; an explicit env value
+# wins. Either way `require_cold_cache_dir()` below refuses to proceed on a directory that
+# does not look like a KV cache.
+KVDIR = os.environ.get("CHARTSEARCHAI_KVDIR") or os.path.expanduser(
+    "~/Downloads/referenceapplication-standalone-3.7.1/appdata/chartsearchai/kvcache")
+
+GP_RATE = "chartsearchai.rateLimitPerMinute"
+GP_PROGRESSIVE = "chartsearchai.progressiveReasoning.enabled"
 
 PATIENTS = {
     # Large-chart patients (KV .bin 78-142MB) -- the case a prewarm is meant to help.
@@ -53,18 +90,83 @@ def req(path, data=None, method="GET", timeout=180):
         return json.loads(b) if b else {}
 
 
-def set_gp(name, value):
+def _exact_gp(name):
+    """The row whose `property` IS `name`. `?q=` is a SUBSTRING search, so it can return a sibling
+    (or nothing), and both callers below used to take rows[0] blind: the write then silently
+    no-opped, leaving both arms on the same config while the run printed a plausible baseline, and
+    the read captured a SIBLING's value which the restore later wrote over the real property.
+    Raises rather than returning None, because no caller here has a correct behaviour without it."""
     rows = req("/systemsetting?q=%s&v=full" % name).get("results", [])
-    if rows:
-        req("/systemsetting/" + rows[0]["uuid"], {"value": str(value)}, "POST")
+    for r in rows:
+        if r.get("property") == name:
+            return r
+    raise SystemExit("ERROR: global property %r not found (search returned %d row(s): %s) — "
+                     "refusing to continue, since an unset GP leaves both arms identical"
+                     % (name, len(rows), [r.get("property") for r in rows][:4]))
+
+
+def get_gp(name):
+    return _exact_gp(name).get("value")
+
+
+def set_gp(name, value):
+    req("/systemsetting/" + _exact_gp(name)["uuid"], {"value": str(value)}, "POST")
+
+
+def kv_files(uuid):
+    return glob.glob(os.path.join(KVDIR, uuid + "-*.bin"))
 
 
 def delete_kv(uuid):
     n = 0
-    for f in glob.glob(os.path.join(KVDIR, uuid + "-*.bin")):
+    for f in kv_files(uuid):
         os.remove(f)
         n += 1
     return n
+
+
+def patients_without_kv(patients):
+    """The patients with no on-disk KV to delete, so no cold arm can be created for them.
+
+    Split out from the run loop and checked UP FRONT deliberately. Discovering this per patient
+    mid-loop meant spending a 300s-timeout streaming pair before learning the reading was worthless,
+    and — the actual #179 defect — the old code never learned it at all, because `delete_kv`'s
+    count was thrown away. A pure function over the filesystem, so the refusal is provable without
+    a server (see selftest); the loop then only has to report the count it already knows."""
+    return [name for name, uuid in patients.items() if not kv_files(uuid)]
+
+
+def require_cold_cache_dir(patients=None):
+    """Refuses to measure anything until a genuine cold arm is possible.
+
+    This runs BEFORE any network call so the failure is cheap and unambiguous. Three distinct
+    conditions, because they need different responses from an operator: a directory that is
+    absent or not a directory is a stale/wrong KVDIR (the #179 defect); a directory that exists
+    but holds no `.bin` at all means llama-server was never launched with --slot-save-path, so
+    there is no on-disk KV to delete and `cold` and `warm` would differ only by RAM cache; and a
+    directory that has some `.bin` but none for a given patient makes THAT patient's delta
+    unattributable while the median silently absorbs it."""
+    if not os.path.isdir(KVDIR):
+        raise SystemExit(
+            "ERROR: KVDIR is not a directory: %s\n"
+            "  Nothing would be deleted, so every 'cold' arm would run against a warm on-disk\n"
+            "  cache and the DELTA would be fabricated. Set CHARTSEARCHAI_KVDIR to the running\n"
+            "  standalone's <appdata>/chartsearchai/kvcache." % KVDIR)
+    bins = glob.glob(os.path.join(KVDIR, "*.bin"))
+    if not bins:
+        raise SystemExit(
+            "ERROR: no *.bin in KVDIR: %s\n"
+            "  The disk KV cache is empty, so there is no cold arm to create. Check that\n"
+            "  chartsearchai.llm.kvCache.path is set and the server was launched with\n"
+            "  --slot-save-path, then run one query per patient to populate it." % KVDIR)
+    print("KVDIR ok: %s (%d .bin present)" % (KVDIR, len(bins)))
+    missing = patients_without_kv(patients if patients is not None else PATIENTS)
+    if missing:
+        raise SystemExit(
+            "ERROR: %d of %d patients have no .bin in %s, so their 'cold' arm would not be a cold\n"
+            "  full prefill and the median would not be attributable: %s\n"
+            "  Run one query per patient to populate the cache, or drop them from PATIENTS."
+            % (len(missing), len(PATIENTS), KVDIR, missing))
 
 
 def stream_prefill(uuid, q):
@@ -105,39 +207,137 @@ def stream_prefill(uuid, q):
     return total, prefill, 0.0, tk1 - tk0, cites
 
 
-# --- config: disable rate limit so the run isn't throttled; record + restore -------------
-rl = req("/systemsetting?q=chartsearchai.rateLimitPerMinute&v=full").get("results", [])
-orig_rl = rl[0].get("value") if rl else None
-set_gp("chartsearchai.rateLimitPerMinute", "0")
-# Turn progressiveReasoning OFF so the first 'thinking' event is the full-chart prefill
-# boundary with no preview pass in front of it. Restored in finally.
-pr = req("/systemsetting?q=chartsearchai.progressiveReasoning.enabled&v=full").get("results", [])
-orig_pr = pr[0].get("value") if pr else None
-set_gp("chartsearchai.progressiveReasoning.enabled", "false")
-print("KV-prefill gate | model=E2B | box=M1 Max (GPU/Metal) | progressiveReasoning OFF for clean prefill\n")
-print("%-15s %6s | %8s %8s | %7s | %6s" %
-      ("patient", "cites", "cold_pf", "warm_pf", "DELTA", "cold_tot"))
+def main():
+    # The precondition first, before any request: a wrong KVDIR must cost nothing to discover,
+    # and must not be discoverable only by reading a fabricated DELTA afterwards.
+    require_cold_cache_dir()
 
-deltas = []
-try:
-    for name, uuid in PATIENTS.items():
-        req("/querystore/reindex", {"patient": uuid}, "POST")     # warm index, no LLM
-        delete_kv(uuid)                                            # force genuine cold prefill
-        time.sleep(1)
-        c_tot, c_pf, _, _, c_ct = stream_prefill(uuid, Q_COLD)     # COLD: full prefill
-        time.sleep(2)
-        _, w_pf, _, _, _ = stream_prefill(uuid, Q_WARM)            # WARM: KV reused
-        d = c_pf - w_pf
-        deltas.append(d)
-        print("%-15s %6d | %7.2fs %7.2fs | %6.2fs | %6.1fs" %
-              (name, c_ct, c_pf, w_pf, d, c_tot))
-        time.sleep(2)
-finally:
-    set_gp("chartsearchai.rateLimitPerMinute", orig_rl if orig_rl else "10")
-    set_gp("chartsearchai.progressiveReasoning.enabled", orig_pr if orig_pr else "true")
+    # --- config: disable rate limit so the run isn't throttled; record + restore -------------
+    orig_rl = get_gp(GP_RATE)
+    set_gp(GP_RATE, "0")
+    # Turn progressiveReasoning OFF so the first 'thinking' event is the full-chart prefill
+    # boundary with no preview pass in front of it. Restored in finally.
+    orig_pr = get_gp(GP_PROGRESSIVE)
+    set_gp(GP_PROGRESSIVE, "false")
+    print("KV-prefill measurement | model=E2B | progressiveReasoning OFF for clean prefill\n")
+    print("%-15s %6s %5s | %8s %8s | %7s | %6s" %
+          ("patient", "cites", "kvdel", "cold_pf", "warm_pf", "DELTA", "cold_tot"))
 
-print("\n----- KV-prefill delta (cold - warm), n=%d -----" % len(deltas))
-print("  median=%.2fs  min=%.2fs  max=%.2fs  mean=%.2fs" %
-      (statistics.median(deltas), min(deltas), max(deltas), statistics.mean(deltas)))
-print("  >>> a prewarm removes ~%.1fs (median) from a first query on THIS box <<<"
-      % statistics.median(deltas))
+    deltas, not_cold = [], []
+    try:
+        for name, uuid in PATIENTS.items():
+            req("/querystore/reindex", {"patient": uuid}, "POST")   # warm index, no LLM
+            # The count is READ now. 0 means this patient had no on-disk KV to remove, so the
+            # "cold" arm is only as cold as the RAM pool happens to be — not a cold full
+            # prefill, and its delta is not the number this script claims to report.
+            # A backstop, not the primary check: require_cold_cache_dir() already refused above
+            # if any patient lacked a .bin. This catches the gap between that check and here —
+            # an LRU eviction or a concurrent run — and prints the count either way, so a zero
+            # is visible in the table rather than inferred. Keep both.
+            deleted = delete_kv(uuid)
+            if deleted == 0:
+                not_cold.append(name)
+            time.sleep(1)
+            c_tot, c_pf, _, _, c_ct = stream_prefill(uuid, Q_COLD)  # COLD: full prefill
+            time.sleep(2)
+            _, w_pf, _, _, _ = stream_prefill(uuid, Q_WARM)         # WARM: KV reused
+            d = c_pf - w_pf
+            deltas.append(d)
+            print("%-15s %6d %5s | %7.2fs %7.2fs | %6.2fs | %6.1fs" %
+                  (name, c_ct, deleted if deleted else "NONE", c_pf, w_pf, d, c_tot))
+            time.sleep(2)
+    finally:
+        set_gp(GP_RATE, orig_rl if orig_rl else "10")
+        set_gp(GP_PROGRESSIVE, orig_pr if orig_pr else "true")
+
+    if not deltas:
+        raise SystemExit("ERROR: no cells completed — nothing to report")
+    print("\n----- KV-prefill delta (cold - warm), n=%d -----" % len(deltas))
+    print("  median=%.2fs  min=%.2fs  max=%.2fs  mean=%.2fs" %
+          (statistics.median(deltas), min(deltas), max(deltas), statistics.mean(deltas)))
+    print("  >>> a prewarm removes ~%.1fs (median) from a first query on THIS box <<<"
+          % statistics.median(deltas))
+    if not_cold:
+        print("\n  !! %d patient(s) had NO .bin to delete, so their 'cold' arm was not a cold "
+              "full prefill and the median above is not attributable: %s"
+              % (len(not_cold), not_cold))
+        print("  Exiting 3. This is the #179 failure mode — re-run after populating the cache "
+              "for these patients, or drop them from PATIENTS.")
+        sys.exit(3)
+    print("\n  MEASUREMENT (not a gate): there is no ship bar here. Exit 0 means the cold arms "
+          "were genuinely cold, not that the delta is acceptable.")
+
+
+def _run_with_kvdir(kvdir):
+    """Runs this script as a subprocess with KVDIR overridden. A subprocess rather than an
+    in-process call on purpose: it is the only way to show the precondition fires BEFORE the first
+    request, since with no server up any network attempt surfaces as a connection error."""
+    p = subprocess.Popen([sys.executable, os.path.abspath(__file__)],
+                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                         env=dict(os.environ, CHARTSEARCHAI_KVDIR=kvdir))
+    return p.communicate()[0].decode("utf-8", "replace"), p.returncode
+
+
+def selftest():
+    """Precondition checks only — no server, no LLM, no model. Runs in CI.
+
+    Pins the three conditions under which no genuine cold arm exists, each of which the old script
+    ran straight past into a fabricated DELTA: a stale KVDIR, an empty one, and one holding no
+    `.bin` for a patient it is about to measure."""
+    import shutil
+    import tempfile
+    failures = []
+
+    def check(name, kvdir, *want):
+        out, rc = _run_with_kvdir(kvdir)
+        if rc == 0:
+            failures.append("%s: exited 0 — the precondition did not fire\n%s" % (name, out))
+        elif "urlopen" in out or "Connection refused" in out:
+            failures.append("%s: reached the network before checking KVDIR\n%s" % (name, out))
+        else:
+            missing = [w for w in want if w not in out]
+            if missing:
+                failures.append("%s: missing %r\n%s" % (name, missing, out))
+            else:
+                print("  ok  %-24s exit=%d" % (name, rc))
+
+    check("absent-kvdir", os.path.join(tempfile.gettempdir(), "kv-does-not-exist-179"),
+          "KVDIR is not a directory")
+
+    empty = tempfile.mkdtemp(prefix="kv-empty-")
+    try:
+        check("empty-kvdir", empty, "no *.bin in KVDIR")
+    finally:
+        shutil.rmtree(empty, ignore_errors=True)
+
+    # A cache holding SOME .bin but none for ONE patient — the case the old code folded silently
+    # into the median. Populated for every patient but the last, so passing requires naming that
+    # patient, not merely noticing the directory is non-empty.
+    partial = tempfile.mkdtemp(prefix="kv-partial-")
+    try:
+        names = list(PATIENTS)
+        for name in names[:-1]:
+            open(os.path.join(partial, "%s-%s.bin" % (PATIENTS[name], "0" * 64)), "w").close()
+        check("partial-kvdir", partial, "have no .bin in", names[-1])
+    finally:
+        shutil.rmtree(partial, ignore_errors=True)
+
+    # The predicate itself, over the real PATIENTS constant rather than invented UUIDs.
+    if patients_without_kv({}) != []:
+        failures.append("patients_without_kv({}) must be empty")
+    if sorted(patients_without_kv(PATIENTS)) != sorted(n for n, u in PATIENTS.items()
+                                                       if not kv_files(u)):
+        failures.append("patients_without_kv disagrees with the filesystem")
+
+    if failures:
+        for f in failures:
+            print("\nFAIL %s" % f)
+        sys.exit("selftest FAILED (%d)" % len(failures))
+    print("selftest OK (3 precondition cases + the predicate)")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "--selftest":
+        selftest()
+    else:
+        main()

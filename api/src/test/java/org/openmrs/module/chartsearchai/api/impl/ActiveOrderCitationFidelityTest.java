@@ -324,11 +324,53 @@ public class ActiveOrderCitationFidelityTest {
 	}
 
 	@Test
+	public void aCitationInTheNEXTCLAUSEOfTheSameSentenceIsNotAttributedToTheClaim() {
+		// Round 1 of this PR's review, verbatim: the citation belongs to the clause it sits in, and
+		// attributing it to the order claim reports a CORRECT citation — into a wire key a client
+		// renders, which is #201's harm in a new place. The run may only BEGIN before the claim's own
+		// clause ends.
+		int condition = indexOfType(ChartSearchAiConstants.RESOURCE_TYPE_CONDITION);
+		service.setLlmProvider(answering("Clarithromycin" + PHRASE + "Simvastatin, which she has "
+				+ "been taking since 2024 for her benign thyroid neoplasm [" + condition + "]."));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			ChartAnswer answer = service.search(patient(), QUESTION);
+			assertFalse(capture.describeAll().isEmpty(),
+					"the capture must receive the pipeline's own INFO lines, or the assertion below "
+							+ "passes vacuously");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"a citation in the clause after the claim's own is that clause's. Captured: "
+							+ capture.describeAll());
+			assertTrue(answer.getMisattributedOrderCitations().isEmpty(),
+					"and nothing reaches the wire either");
+		}
+	}
+
+	@Test
+	public void theTicketsOwnRunStillBeginsBeforeItsClauseEnds() {
+		// The other half of the clause bound, and what stops it from silencing the defect this check
+		// exists for: in the reported answer the markers sit between the partner's name and the comma
+		// that ends the claim, so the bound never reaches them.
+		int condition = indexOfType(ChartSearchAiConstants.RESOURCE_TYPE_CONDITION);
+		service.setLlmProvider(answering(sentenceFragment("Simvastatin", condition,
+				findingsStatingThePhrase().get(0)) + ", Clarithromycin" + PHRASE + "Digoxin."));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			ChartAnswer answer = service.search(patient(), QUESTION);
+			assertTrue(warnStating(capture, "[" + condition + "]"),
+					"the markers precede the comma, so the claim's own run carries them. Captured: "
+							+ capture.describeAll());
+			assertEquals(Collections.singletonList(Integer.valueOf(condition)),
+					answer.getMisattributedOrderCitations(), "and it reaches the wire");
+		}
+	}
+
+	@Test
 	public void aLoneCitationInAClaimWithNoRunOfItsOwnIsAttributedToIt() {
 		// Pins a residue rather than a defect, at the shape review found it in. The run is the FIRST
 		// one after the phrase and nothing bounds the gap — the partner's name sits there and a name
-		// has no fixed length, so a budget on it could only be arbitrary. So where the claim carries
-		// no markers of its own, the next citation in the sentence is read as offered for it. That
+		// has no fixed length, so a budget on it could only be arbitrary. Round 1 of this PR's review
+		// narrowed it with a CLAUSE bound, which a length budget is not — but punctuation is all that
+		// bound reads, so a coordinating conjunction with no comma before it, as here, still annexes
+		// the next citation. That
 		// reading is defensible (a lone citation at the end of a sentence is conventionally offered
 		// for the sentence, and this sentence asserts the order), but it is wider than the shape the
 		// ticket measured, so it is recorded here as a decision. Narrowing it later must argue with

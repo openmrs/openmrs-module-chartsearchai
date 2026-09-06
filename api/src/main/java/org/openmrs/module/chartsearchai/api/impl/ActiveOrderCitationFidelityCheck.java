@@ -303,6 +303,14 @@ final class ActiveOrderCitationFidelityCheck {
 	 *         cannot carry: where each marker sits, so the run can be told from the next claim's.
 	 */
 	private static String firstMarkerRun(String sentence, int from, int limit) {
+		// Where the claim's own clause ends. The run may only BEGIN before it — a claim whose clause
+		// carries no markers takes none, rather than annexing the next clause's. Round 1 of this PR's
+		// review found the unbounded form crying wolf on
+		// "…active order Prednisone, which she has been taking since 2024 for her benign thyroid
+		// neoplasm [177]", where [177] is a correct citation for the clause it sits in and this key
+		// is published to a client. It bounds the START only: a comma is a legitimate separator
+		// BETWEEN two markers of one run ("[1], [2]"), which is why RUN_SEPARATORS carries one.
+		int startBound = clauseBound(sentence, from, limit);
 		// The region is what keeps this linear. Matcher.find scans to the end of the INPUT, not to a
 		// bound the caller applies afterwards, so a phrase occurrence with no marker after it used to
 		// pay for a scan of the whole remaining sentence — once per occurrence, which is quadratic in
@@ -317,6 +325,9 @@ final class ActiveOrderCitationFidelityCheck {
 		int end = -1;
 		while (marker.find()) {
 			if (start < 0) {
+				if (marker.start() >= startBound) {
+					break;
+				}
 				start = marker.start();
 			}
 			else if (!onlySeparators(sentence, end, marker.start())) {
@@ -325,6 +336,33 @@ final class ActiveOrderCitationFidelityCheck {
 			end = marker.end();
 		}
 		return start < 0 ? "" : sentence.substring(start, end);
+	}
+
+	/**
+	 * @return the offset of the first clause separator in {@code sentence} between {@code from} and
+	 *         {@code limit}, or {@code limit} where there is none.
+	 *
+	 *         <p>Punctuation only, and deliberately not a vocabulary: a comma or a semicolon says a
+	 *         new clause has begun whatever words follow, while a rule reading {@code and},
+	 *         {@code which} or {@code but} would be a list of conjunctions nobody enumerated — the
+	 *         claim shape this module's instructions forbid. What that gives up is a coordinating
+	 *         conjunction with no comma before it, which still annexes the next clause's citation:
+	 *         {@code ActiveOrderCitationFidelityTest.aLoneCitationInAClaimWithNoRunOfItsOwnIsAttributedToIt}
+	 *         is that residue, pinned rather than left to be found.
+	 *
+	 *         <p>It fails toward SILENCE in both directions, which is this check's own direction. A
+	 *         partner name carrying a comma truncates the search and the claim reports nothing; a
+	 *         model that puts its markers after the clause break rather than before it is not
+	 *         attributed. Neither can manufacture a report.
+	 */
+	private static int clauseBound(String sentence, int from, int limit) {
+		for (int at = from; at < limit; at++) {
+			char c = sentence.charAt(at);
+			if (c == ',' || c == ';') {
+				return at;
+			}
+		}
+		return limit;
 	}
 
 	/** @return whether {@code text} between {@code from} and {@code to} is nothing but

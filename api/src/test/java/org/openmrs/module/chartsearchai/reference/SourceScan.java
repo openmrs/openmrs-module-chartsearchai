@@ -35,6 +35,13 @@ import org.openmrs.module.chartsearchai.ModuleSourceRoot;
  * and the second of them keeps its file locator apart from {@code ModuleSourceRoot} for a reason its
  * own javadoc states.
  *
+ * <p><b>Public, and read from outside this package since issue #378.</b>
+ * {@code ArchitectureGuardTest} in {@code api.impl} is the fourth guard to need the walk, and it
+ * needs it for a reason worth recording where the next caller will read it: its first version read
+ * RAW source, and a comment naming the very construction it forbids carried an unbalanced bracket
+ * that made its depth walk swallow every real construction after it. Blanking is why this class
+ * exists rather than the walk.
+ *
  * <p><b>Every lookup fails LOUDLY rather than answering "not found".</b> A needle that matches nothing
  * leaves a guard forbidding nothing, and one that matches twice cannot say which body it delimited —
  * so both are assertion failures here rather than a best guess returned to the caller. The read

@@ -18,10 +18,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.Consumer;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
+import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.springframework.http.HttpStatus;
@@ -113,26 +116,33 @@ public class ChartSearchAiChartAlertsTest {
 	}
 
 	/**
-	 * A finding reaches a client shaped exactly as a {@code /search} chip is — through the one
-	 * serializer, so the same finding cannot be rendered two ways on two surfaces.
+	 * A finding reaches a client shaped exactly as a {@code /search} chip is — so the same finding
+	 * cannot be rendered two ways on two surfaces.
 	 *
-	 * <p>Asserted as "every key a chip carries", read off a {@code /search} chip built by the same
-	 * controller rather than listed here, because a list would go stale the next time a chip gains a
-	 * field and would go stale SILENTLY: this surface would simply stop carrying it, and a client
-	 * reusing its chip renderer would find the field missing on one surface and present on the other.
+	 * <p><b>The key set is read off a real {@code /search} chip built by this same controller, never
+	 * listed here.</b> A literal list would go stale the next time a chip gains a field, and it would
+	 * go stale SILENTLY: this surface would simply stop carrying the new key, and a client reusing its
+	 * chip renderer would find the field present on one surface and missing on the other. Reading it
+	 * from the other surface is also what makes this a comparison rather than a restatement — the two
+	 * share {@code serializeSafetyWarnings} today, and this is what would notice if one of them
+	 * stopped.
+	 *
+	 * <p>Both payloads are built from the SAME fixture warnings, so a key difference is a difference
+	 * in the surfaces and not in what they were given.
 	 */
 	@Test
 	public void everyFindingIsShapedExactlyAsASearchChipIs() {
 		List<Map<String, Object>> alerts = alertsOf(okBody(RestControllerContext.PATIENT_UUID));
+		Set<String> searchChipKeys = aSearchChipsKeys();
 
 		assertEquals(fixtureAlerts().size(), alerts.size(),
 				"every standing finding must survive serialization, was: " + alerts);
-		for (String key : Arrays.asList("type", "drug", "detail", "severity", "chartOrderBridges")) {
-			for (Map<String, Object> alert : alerts) {
-				assertTrue(alert.containsKey(key),
-						"a standing alert must carry the chip key '" + key + "' a /search chip "
-								+ "carries, so a client reads one shape on both surfaces: " + alert);
-			}
+		assertFalse(searchChipKeys.isEmpty(),
+				"precondition: the /search chip must have carried keys, or this compares against nothing");
+		for (Map<String, Object> alert : alerts) {
+			assertEquals(searchChipKeys, alert.keySet(),
+					"a standing alert must carry exactly the keys a /search chip carries, so a client "
+							+ "reads one shape on both surfaces: " + alert);
 		}
 		Map<String, Object> first = alerts.get(0);
 		assertEquals(SafetyWarning.TYPE_CONTRAINDICATION, first.get("type"), "was: " + first);
@@ -158,10 +168,10 @@ public class ChartSearchAiChartAlertsTest {
 	 * install whose drug-safety validator is switched off returns an EMPTY alerts array, which is
 	 * byte-identical to a chart that holds no such finding.
 	 *
-	 * <p>It also pins that the handler does not ask the validator for findings it has just been told
-	 * are not screened for: one read decides both keys, so neither is derived from the other. What
-	 * that does not buy is atomicity against an operator flipping a toggle between the handler's read
-	 * and the validator's own — see the handler's javadoc, which names that residue.
+	 * <p>It also pins that the two keys come back from ONE call, which is what makes them incapable of
+	 * describing different passes — an earlier shape asked a predicate and then asked for the
+	 * findings, and a toggle flipped between the two reads (or a chart whose records could not be
+	 * read) made the flag answer for a pass that was not the published one.
 	 */
 	@Test
 	public void anUnscreenedInstallSaysSoRatherThanReportingAnEmptyChart() {
@@ -173,8 +183,9 @@ public class ChartSearchAiChartAlertsTest {
 				"an install that does not run the standing screen must say so: " + body);
 		assertTrue(alertsOf(body).isEmpty(),
 				"and it must report nothing rather than a finding it did not screen for: " + body);
-		assertEquals(0, validator.standingCalls,
-				"the handler must not ask for findings on an install it has just read as unscreened");
+		assertEquals(1, validator.standingCalls,
+				"and it must have asked ONCE — the flag and the list come back from one call, so "
+						+ "neither can answer for a different pass than the other");
 	}
 
 	/**
@@ -224,6 +235,61 @@ public class ChartSearchAiChartAlertsTest {
 		XmlPayloads.assertMarshals(okBody(RestControllerContext.PATIENT_UUID), "an unscreened install");
 	}
 
+	/**
+	 * @return the keys of a {@code safetyWarnings} chip on the blocking {@code /search} response,
+	 *         built by this same controller from the same fixture warnings.
+	 */
+	@SuppressWarnings("unchecked")
+	private Set<String> aSearchChipsKeys() {
+		controller.setChartSearchService(new SearchStubService());
+		openmrsContext.install();
+		try {
+			ResponseEntity<Object> response = controller.search(
+					RestControllerContext.searchBody("Any interactions with her current medications?"));
+			assertEquals(HttpStatus.OK, response.getStatusCode(), "the /search handler must have "
+					+ "reached serialization, or there is no chip to compare against: " + response);
+			Map<String, Object> payload = (Map<String, Object>) response.getBody();
+			List<Map<String, Object>> chips = (List<Map<String, Object>>) payload.get("safetyWarnings");
+			assertNotNull(chips, "the /search response carried no safetyWarnings array: " + payload);
+			assertEquals(fixtureAlerts().size(), chips.size(),
+					"precondition: /search must have serialized this fixture, was: " + chips);
+			return chips.get(0).keySet();
+		}
+		finally {
+			openmrsContext.restore();
+		}
+	}
+
+	/** Serves the same fixture findings as an ANSWER's chips, so the two surfaces are compared over
+	 *  one input. */
+	private static class SearchStubService implements ChartSearchService {
+
+		@Override
+		public ChartAnswer search(Patient patient, String question) {
+			return new ChartAnswer("Two contraindications were found.",
+					new ArrayList<RecordReference>(), 0, 0, 0,
+					new ArrayList<SafetyWarning>(fixtureAlerts()));
+		}
+
+		@Override
+		public ChartAnswer searchStreaming(Patient patient, String question,
+				Consumer<String> tokenConsumer) {
+			return search(patient, question);
+		}
+
+		@Override
+		public ChartAnswer searchStreaming(Patient patient, String question,
+				Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
+				Consumer<List<RecordReference>> citationsConsumer,
+				Consumer<ChartAnswer> ungroundedAnswerConsumer) {
+			return search(patient, question);
+		}
+
+		@Override
+		public void warmup(Patient patient) {
+		}
+	}
+
 	/** Returns the fixture findings, and records what the handler asked it for. */
 	private static class StandingAlertStubValidator extends DrugSafetyValidator {
 
@@ -232,14 +298,11 @@ public class ChartSearchAiChartAlertsTest {
 		private int standingCalls;
 
 		@Override
-		public boolean reportsStandingChartAlerts() {
-			return screens;
-		}
-
-		@Override
-		public List<SafetyWarning> standingChartAlerts(Patient patient) {
+		public StandingChartAlerts standingChartAlerts(Patient patient) {
 			standingCalls++;
-			return new ArrayList<SafetyWarning>(fixtureAlerts());
+			return screens
+					? StandingChartAlerts.screened(new ArrayList<SafetyWarning>(fixtureAlerts()))
+					: StandingChartAlerts.notScreened();
 		}
 	}
 }

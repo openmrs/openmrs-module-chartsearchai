@@ -11,11 +11,13 @@ package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
@@ -68,9 +70,9 @@ public class StandingChartAlertsToggleContextTest extends BaseModuleContextSensi
 	 */
 	private List<SafetyWarning> alertsForAPrescribedAllergy() {
 		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService())
-				.standingChartAlerts(DrugReferenceTestSupport.ctx(60, null,
-						DrugReferenceTestSupport.set("Ibuprofen 400mg"), null,
-						DrugReferenceTestSupport.set("ibuprofen"), null));
+				.standingChartAlerts(DrugReferenceTestSupport.prescribedIbuprofenChart(
+						DrugReferenceTestSupport.set("ibuprofen"), null))
+				.getAlerts();
 	}
 
 	@Test
@@ -112,6 +114,46 @@ public class StandingChartAlertsToggleContextTest extends BaseModuleContextSensi
 			configure(off, "false");
 			assertFalse(validator.reportsStandingChartAlerts(),
 					"the published screened statement must be false with " + off + " off");
+			configure(off, "true");
+		}
+	}
+
+	/**
+	 * The PUBLIC entry, executed — gate, chart read and all — rather than reasoned about.
+	 *
+	 * <p><b>Nothing else in the suite runs that method's body.</b> Every case above enters the
+	 * package-private {@code PatientClinicalContext} seam beneath it, and the omod wire test overrides
+	 * the public method outright, so before this case the entry was covered only by a source scan —
+	 * and a review agent showed what that is worth: keeping the literal
+	 * {@code if (!reportsStandingChartAlerts()) {} while replacing the RETURN inside it left the whole
+	 * suite green, on a surface that then serves standing alerts to an install where the screen stands
+	 * down. A guard over TEXT cannot see what a body does; this one does.
+	 *
+	 * <p>It asserts the flag in BOTH directions over one real patient, because the enabled direction is
+	 * what makes the disabled one discriminating rather than an observation of the shipped
+	 * {@code drugReference.enabled=false}. The patient's own findings are beside the point — the
+	 * standard test patient is prescribed nothing this dataset contraindicates — so this asserts
+	 * {@code isScreened()} and not the list, which is exactly the half a text scan could not reach.
+	 */
+	@Test
+	public void thePublicEntryHonoursTheGateWhenItIsActuallyRun() {
+		DrugSafetyValidator validator =
+				DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService());
+		Patient patient = Context.getPatientService().getPatient(7);
+		assertNotNull(patient, "precondition: the standard test patient must exist");
+
+		for (String gate : GATES) {
+			configure(gate, "true");
+		}
+		assertTrue(validator.standingChartAlerts(patient).isScreened(),
+				"precondition: with every switch on, a readable chart must come back screened — "
+						+ "otherwise the disabled directions below observe something else");
+
+		for (String off : GATES) {
+			configure(off, "false");
+			assertFalse(validator.standingChartAlerts(patient).isScreened(),
+					"the public entry must honour " + off + " when it is actually run, not merely name "
+							+ "the predicate that reads it");
 			configure(off, "true");
 		}
 	}

@@ -290,6 +290,70 @@ public class DrugSafetyValidator {
 	}
 
 	/**
+	 * What a standing chart-alert pass produced, and whether it ran at all (issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/280">#280</a>).
+	 *
+	 * <p><b>One object rather than two calls, because {@code screened} must not be able to disagree
+	 * with the list beside it.</b> Its first form was a separate predicate the caller asked before
+	 * asking for the findings, and that could answer for a different pass than the one it published:
+	 * a toggle flipped between the two reads, and — the case that made this a defect rather than a
+	 * race — a chart whose allergy or condition read FAILED. {@code PatientClinicalContextBuilder}
+	 * swallows such a failure into an EMPTY set and logs at DEBUG, which core's shipped log level
+	 * discards, so the surface reported {@code screened: true} beside an empty array for a patient
+	 * nobody had looked at. That is
+	 * {@code api/src/main/java/…/reference/CLAUDE.md}'s "a chart the module could not read is not a
+	 * chart that records nothing", on the one surface whose WHOLE payload can be empty.
+	 *
+	 * <p>So {@link #isScreened()} is true only where all three held: the toggles were on, the chart's
+	 * contraindication records were read, and the pass completed. A pass that threw is not screened
+	 * either, which is what the fail-safe would otherwise have published as a clean chart.
+	 */
+	public static final class StandingChartAlerts {
+
+		private final boolean screened;
+
+		private final List<SafetyWarning> alerts;
+
+		private StandingChartAlerts(boolean screened, List<SafetyWarning> alerts) {
+			this.screened = screened;
+			this.alerts = alerts;
+		}
+
+		/** A chart that was NOT screened, and so states no findings. Public for the reason
+		 *  {@link SafetyWarning}'s constructors are: the omod wire tests build payload fixtures and
+		 *  {@code omod/pom.xml} declares no api test-jar. The only PRODUCTION producer of either
+		 *  factory is {@link DrugSafetyValidator#standingChartAlerts(Patient)}. */
+		public static StandingChartAlerts notScreened() {
+			return new StandingChartAlerts(false, new ArrayList<SafetyWarning>());
+		}
+
+		/** A chart that WAS screened, stating {@code alerts} — which may legitimately be empty, and
+		 *  is then a measurement of none. See {@link #notScreened()} on the visibility. */
+		public static StandingChartAlerts screened(List<SafetyWarning> alerts) {
+			return new StandingChartAlerts(true, alerts);
+		}
+
+		/**
+		 * @return whether this patient's chart was actually screened. <b>False is not "no findings"</b>
+		 *         — it says the screen did not run, and {@link #getAlerts()} is then empty for that
+		 *         reason rather than for the chart's. It does not say WHICH of the reasons applies;
+		 *         {@code GET /chartsearchai/drugreferencestatus} publishes the master switch, and the
+		 *         module's log carries a failed chart read.
+		 */
+		public boolean isScreened() {
+			return screened;
+		}
+
+		/**
+		 * @return the standing findings, in the order the arm raised them; never null, and <b>empty is
+		 *         a measurement of none only where {@link #isScreened()} is true.</b>
+		 */
+		public List<SafetyWarning> getAlerts() {
+			return alerts;
+		}
+	}
+
+	/**
 	 * The patient's STANDING chart findings: every active order her own allergy and condition records
 	 * contraindicate, asked of the chart rather than of a response (issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/280">#280</a>). This is
@@ -297,11 +361,17 @@ public class DrugSafetyValidator {
 	 * for an unbounded pass; see {@link SubjectMatterScope#UNBOUNDED}.
 	 *
 	 * <p><b>Why it exists.</b> {@link SubjectMatter} bounds the active-order contraindication arm to
-	 * what a response is about, because an unconditional finding on every answer is an alert with none
-	 * of an alerting system's machinery. What that gives up is announcing a prescribing error nobody
-	 * asks a drug-shaped question about, and this is the surface it was given up TO: a client asks for
-	 * it, so nothing rides an unrelated answer, and the finding is available to a clinician who never
-	 * ran a search.
+	 * what a response is about. What that gives up is announcing a prescribing error nobody asks a
+	 * drug-shaped question about, and this is the surface it was given up TO: a client asks for it,
+	 * so nothing rides an unrelated answer, and the finding is available to a clinician who never ran
+	 * a search. ADR Decision 77 is canonical for the measurement behind the bound.
+	 *
+	 * <p>One read this pass makes and does not use, stated so it is not rediscovered:
+	 * {@code PatientClinicalContextBuilder} fetches the patient's latest weight, whose only consumer
+	 * is the dose arm, and that arm iterates the in-play set this pass leaves empty. Measured: the
+	 * same chart with a weight, without one, and without an age returns byte-identical alerts.
+	 * Skipping it needs a parameter on {@code build} that the answer path would then carry, to save
+	 * about two milliseconds of a five-millisecond pass, so it is left alone.
 	 *
 	 * <p><b>Contraindications only, and not by a filter.</b> Nothing here selects a type. Every other
 	 * arm is silent on a pass with no question and no answer by its own anchor:
@@ -328,17 +398,17 @@ public class DrugSafetyValidator {
 	 *         screen ran at all, and the {@code chartalerts} response publishes it beside the list for
 	 *         exactly that reason.
 	 */
-	public List<SafetyWarning> standingChartAlerts(Patient patient) {
+	public StandingChartAlerts standingChartAlerts(Patient patient) {
 		try {
 			if (!reportsStandingChartAlerts()) {
-				return new ArrayList<SafetyWarning>();
+				return StandingChartAlerts.notScreened();
 			}
 			return standingChartAlerts(PatientClinicalContextBuilder.build(patient));
 		}
 		catch (RuntimeException e) {
-			log.warn("Standing chart alerts failed; returning none — the surface degrades to silence "
-					+ "rather than to an error", e);
-			return new ArrayList<SafetyWarning>();
+			log.warn("Standing chart alerts failed; the surface reports this chart as NOT screened "
+					+ "rather than reporting it clean", e);
+			return StandingChartAlerts.notScreened();
 		}
 	}
 
@@ -354,8 +424,12 @@ public class DrugSafetyValidator {
 	 * read inside {@code validate} where both surfaces share it
 	 * ({@code StandingChartAlertsToggleContextTest}).
 	 */
-	List<SafetyWarning> standingChartAlerts(PatientClinicalContext context) {
-		return validate(null, null, context, null, null, null, SubjectMatterScope.UNBOUNDED);
+	StandingChartAlerts standingChartAlerts(PatientClinicalContext context) {
+		if (context == null || !context.contraindicationRecordsRead()) {
+			return StandingChartAlerts.notScreened();
+		}
+		return StandingChartAlerts.screened(
+			validate(null, null, context, null, null, null, SubjectMatterScope.UNBOUNDED));
 	}
 
 	/**
@@ -378,7 +452,7 @@ public class DrugSafetyValidator {
 	 *         whether the loaded dataset can supply a rule, which is
 	 *         {@code GET /chartsearchai/drugreferencestatus}, and not whether any order was resolvable.
 	 */
-	public boolean reportsStandingChartAlerts() {
+	boolean reportsStandingChartAlerts() {
 		return ChartSearchAiUtils.isDrugReferenceEnabled() && reportsContraindications();
 	}
 
@@ -455,8 +529,8 @@ public class DrugSafetyValidator {
 		/** {@link #standingChartAlerts(PatientClinicalContext)} and nothing else. There is no response
 		 *  to be about, so the gate has no referent and every finding the chart supports is stated.
 		 *  <b>Do not reach for this from a pass that produces an ANSWER</b> — that is issue #143's
-		 *  over-reach, measured live on the 3.7.1 standalone as four unrelated questions returning the
-		 *  same two chips byte for byte, and the reason the bound exists at all. */
+		 *  over-reach, which ADR Decision 77 records with its measurement, and the reason the bound
+		 *  exists at all. */
 		UNBOUNDED
 	}
 
@@ -1515,12 +1589,18 @@ public class DrugSafetyValidator {
 		 * unconditionally — {@link SubjectMatterScope#UNBOUNDED}, which
 		 * {@link #standingChartAlerts(PatientClinicalContext)} alone asks for.
 		 *
-		 * <p>All three predicates short-circuit on it, though only {@link #names(DrugReference)} is
-		 * reachable that way: it holds for every order entry, so
-		 * {@link #addActiveOrderContraindications} takes its first branch and the other two are never
-		 * asked. They short-circuit anyway so that this class states ONE rule about an unbounded pass
-		 * rather than a rule plus an argument about which of its methods a caller happens to reach —
-		 * an argument a later change to that arm's branching would silently invalidate.
+		 * <p><b>The three short-circuits are mutually REDUNDANT on such a pass, and no test
+		 * discriminates any one of them.</b> Measured: removing any one or any two leaves the suite
+		 * green, and removing all three reddens five cases. The reason is
+		 * {@link #addActiveOrderContraindications}'s two branches, which under this flag do the same
+		 * thing — the second passes {@code askedAbout} on, and every question it is then put to
+		 * answers true — so nothing observes which branch the pass took.
+		 *
+		 * <p><b>Do not act on that by deleting the two that look unreachable.</b> Keeping all three
+		 * is what makes this ONE rule about an unbounded pass rather than a rule plus an argument
+		 * about which method a caller happens to reach — and that argument is a property of the arm's
+		 * branching, which a later change may alter without anything here going red. Trimmed to one,
+		 * the surface would rest on a branch nothing pins.
 		 */
 		private final boolean unbounded;
 

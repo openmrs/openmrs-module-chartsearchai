@@ -268,6 +268,18 @@ public class ChartSearchAiInteractionPairExtentTest {
 				"the third naming must be the standing chart-alert surface's own; a third caller "
 						+ "elsewhere is an answer payload building the chip array without the statement "
 						+ "of how bounded those chips are (issue #336).");
+		// And the completeness statement itself is written ONCE, which the count above does not say.
+		// Licensing a second chips site licenses nothing about what that site publishes BESIDE the
+		// chips: measured by a review agent, adding an interactionPairs of {found:0, reported:0} to
+		// chartAlerts — a payload asserting a complete screen of zero pairs on a surface that ran no
+		// screen at all, which is exactly what putSafetyChips's javadoc says routing it there would
+		// assert — left this class and the whole omod suite green. A surface with no interaction chips
+		// has no extent to state, and a zeroed one is a measurement it did not make.
+		int extents = ChartSearchAiStreamingTest.occurrences(source, "\"interactionPairs\"");
+		assertEquals(1, extents,
+				"the interactionPairs key must be written in exactly one place — beside the chips it is "
+						+ "about, in putSafetyChips. Found " + extents + " writes of it; a second is a "
+						+ "payload stating how bounded an interaction list it never built (issue #280).");
 		// Scoped to putSafetyChips's OWN BODY, not to the file: asked of the whole source, both
 		// literals keep matching once they live in two different methods, so splitting the helper into
 		// a chips-writer and an extent-writer passed the guard whose message forbids exactly that

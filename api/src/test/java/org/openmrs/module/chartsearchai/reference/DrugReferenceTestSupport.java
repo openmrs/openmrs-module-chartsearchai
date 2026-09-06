@@ -1160,6 +1160,44 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/**
+	 * @return the contraindication chips of {@code warnings}, in order — the WARNINGS themselves, where
+	 *         {@link #contraindicationDetails} answers with their sentences. Two questions, two
+	 *         accessors: a case counting chips must not have to go through a list of strings, and a
+	 *         case comparing wording must not have to reach into a warning.
+	 *
+	 *         <p>Here for the reason that method's javadoc gives, and this one had reached THREE copies
+	 *         before it was extracted ({@code ActiveOrderContraindicationTest},
+	 *         {@code SubjectMatterScopedContraindicationTest}, {@code StandingChartAlertsTest}) —
+	 *         which is past the threshold that method deferred, so all three are migrated here rather
+	 *         than a fourth being added beside them.
+	 */
+	static List<SafetyWarning> contraindications(List<SafetyWarning> warnings) {
+		List<SafetyWarning> out = new ArrayList<SafetyWarning>();
+		for (SafetyWarning warning : warnings) {
+			if (SafetyWarning.TYPE_CONTRAINDICATION.equals(warning.getType())) {
+				out.add(warning);
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * The chart issue #280 is specified on, and the one {@code ActiveOrderContraindicationTest}
+	 * measures the ANSWER surface on: one active ibuprofen order, plus whatever the case records
+	 * against it. Shared so the two surfaces are compared over one chart rather than over two that
+	 * happen to be spelled alike.
+	 *
+	 * @param allergies recorded allergy tokens, or null for none
+	 * @param conditions recorded condition tokens, or null for none
+	 */
+	static PatientClinicalContext prescribedIbuprofenChart(Set<String> allergies, Set<String> conditions) {
+		return ctx(60, null, set(IBUPROFEN_ORDER), null, allergies, conditions);
+	}
+
+	/** The order name as a chart carries it, and what {@code getActiveDrugNames} holds. */
+	static final String IBUPROFEN_ORDER = "Ibuprofen 400mg";
+
+	/**
 	 * The {@code Interactions:} section of a rendered record, lowercased — everything from the header
 	 * to the end of the text, which is where the section sits.
 	 *

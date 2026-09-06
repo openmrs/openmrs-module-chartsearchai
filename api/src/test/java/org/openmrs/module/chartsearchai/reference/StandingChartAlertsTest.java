@@ -15,11 +15,6 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -30,10 +25,8 @@ import org.junit.jupiter.api.Test;
  * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/280">#280</a>).
  *
  * <p><b>What it is for.</b> Issue #143's active-order contraindication arm ran on every question, and
- * that was withdrawn: measured live on the 3.7.1 standalone, four questions about allergies,
- * interactions, cancer and a date of birth returned the same two contraindication chips byte for byte,
- * which is an alert riding whatever answer a clinician happened to ask for. The arm is now bounded by
- * {@code DrugSafetyValidator.SubjectMatter}. What that gives up is stated in the reversal it produced,
+ * that was withdrawn — ADR Decision 77 carries the measurement. The arm is now bounded by
+ * {@code DrugSafetyValidator.SubjectMatter}, and what that gives up is stated in the reversal it produced,
  * {@code ActiveOrderContraindicationTest.aPrescribedAllergyIsNotRaisedWhereTheResponseIsAboutSomethingElse}:
  * a clinician who never asks a drug-shaped question is no longer told that the patient is actively
  * prescribed the drug she is recorded as allergic to. This class covers the surface that gives it back
@@ -61,23 +54,24 @@ import org.junit.jupiter.api.Test;
  */
 public class StandingChartAlertsTest {
 
-	/** The order name as a chart carries it, and what {@code getActiveDrugNames} holds — the same
-	 *  prescription {@code ActiveOrderContraindicationTest} measures the answer surface on, so the two
-	 *  classes differ in the surface and in nothing else. */
-	private static final String IBUPROFEN_ORDER = "Ibuprofen 400mg";
-
 	private static DrugSafetyValidator curatedValidator() {
 		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService());
 	}
 
 	private static List<SafetyWarning> contraindications(List<SafetyWarning> warnings) {
-		List<SafetyWarning> out = new ArrayList<SafetyWarning>();
-		for (SafetyWarning warning : warnings) {
-			if (SafetyWarning.TYPE_CONTRAINDICATION.equals(warning.getType())) {
-				out.add(warning);
-			}
-		}
-		return out;
+		return DrugReferenceTestSupport.contraindications(warnings);
+	}
+
+	/** The findings of a screened pass, asserting it WAS screened — so a case measuring an empty list
+	 *  cannot be satisfied by a pass that never ran. {@link #aChartWhoseRecordsCouldNotBeReadIsNotScreened}
+	 *  is the case that asserts the other verdict. */
+	private static List<SafetyWarning> alertsOf(DrugSafetyValidator validator,
+			PatientClinicalContext chart) {
+		DrugSafetyValidator.StandingChartAlerts standing = validator.standingChartAlerts(chart);
+		assertTrue(standing.isScreened(),
+				"precondition: this chart must have been screened, or the findings below are the "
+						+ "absence of a pass rather than the absence of a finding");
+		return standing.getAlerts();
 	}
 
 	/**
@@ -91,9 +85,9 @@ public class StandingChartAlertsTest {
 	 */
 	@Test
 	public void aPrescribedDrugTheChartRecordsAnAllergyToIsAStandingAlert() {
-		List<SafetyWarning> alerts = curatedValidator().standingChartAlerts(
-				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set(IBUPROFEN_ORDER),
-						null, DrugReferenceTestSupport.set("ibuprofen"), null));
+		List<SafetyWarning> alerts = alertsOf(curatedValidator(), 
+				DrugReferenceTestSupport.prescribedIbuprofenChart(
+						DrugReferenceTestSupport.set("ibuprofen"), null));
 
 		assertEquals(1, contraindications(alerts).size(),
 				"a prescribed drug the chart records an allergy to must be a standing alert, was: "
@@ -112,9 +106,9 @@ public class StandingChartAlertsTest {
 	 */
 	@Test
 	public void aPrescribedDrugTheChartRecordsAContraindicatingConditionForIsAStandingAlertToo() {
-		List<SafetyWarning> alerts = curatedValidator().standingChartAlerts(
-				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set(IBUPROFEN_ORDER),
-						null, null, DrugReferenceTestSupport.set("peptic ulcer")));
+		List<SafetyWarning> alerts = alertsOf(curatedValidator(), 
+				DrugReferenceTestSupport.prescribedIbuprofenChart(
+						null, DrugReferenceTestSupport.set("peptic ulcer")));
 
 		assertEquals(1, contraindications(alerts).size(),
 				"the condition rule for the active order must reach the standing surface, was: "
@@ -136,13 +130,12 @@ public class StandingChartAlertsTest {
 	 */
 	@Test
 	public void theAnswerSurfaceStillWithholdsTheSameFindingFromAResponseAboutSomethingElse() {
-		PatientClinicalContext chart = DrugReferenceTestSupport.ctx(60, null,
-				DrugReferenceTestSupport.set(IBUPROFEN_ORDER), null,
+		PatientClinicalContext chart = DrugReferenceTestSupport.prescribedIbuprofenChart(
 				DrugReferenceTestSupport.set("ibuprofen"), null);
 
 		List<SafetyWarning> onTheAnswer = curatedValidator().validate(
 				"Her most recent blood pressure is 120/80 mmHg.", "What is her blood pressure?", chart);
-		List<SafetyWarning> standing = curatedValidator().standingChartAlerts(chart);
+		List<SafetyWarning> standing = alertsOf(curatedValidator(), chart);
 
 		assertEquals(0, contraindications(onTheAnswer).size(),
 				"a response about her blood pressure must still carry no chips about her "
@@ -176,8 +169,7 @@ public class StandingChartAlertsTest {
 						"C01BD01"),
 				DrugReferenceTestSupport.set("warfarin"), null);
 
-		List<SafetyWarning> alerts = DrugReferenceTestSupport.validator(excerpt)
-				.standingChartAlerts(screened);
+		List<SafetyWarning> alerts = alertsOf(DrugReferenceTestSupport.validator(excerpt), screened);
 
 		assertEquals(1, contraindications(alerts).size(),
 				"precondition: the recorded warfarin allergy must reach her warfarin order, or this "
@@ -197,14 +189,48 @@ public class StandingChartAlertsTest {
 	 */
 	@Test
 	public void aChartRecordingNothingToBeContraindicatedByRaisesNoStandingAlert() {
-		List<SafetyWarning> alerts = curatedValidator().standingChartAlerts(
-				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set(IBUPROFEN_ORDER),
-						null, null, null));
+		List<SafetyWarning> alerts = alertsOf(curatedValidator(), 
+				DrugReferenceTestSupport.prescribedIbuprofenChart(null, null));
 
 		assertEquals(0, alerts.size(),
 				"nothing in the chart contraindicates the order, so there is nothing to alert on, "
 						+ "was: " + alerts);
 	}
+
+	/**
+	 * A chart whose allergy or condition read FAILED is not a screened chart, and must not be
+	 * published as one.
+	 *
+	 * <p>This is the shape the surface is most exposed to and the one that has no other signal.
+	 * {@code PatientClinicalContextBuilder} swallows a failed read into an EMPTY token set and logs at
+	 * DEBUG — which core's shipped {@code log4j2.xml} discards, since it puts {@code org.openmrs} at
+	 * WARN — so before this the endpoint answered {@code screened: true} with an empty array for a
+	 * patient nobody had looked at. A role holding {@code AI Query Patient Data} without core's
+	 * {@code Get Allergies} is exactly that role.
+	 *
+	 * <p>It is the rule {@code reference/CLAUDE.md} states as "a chart the module could not read is not
+	 * a chart that records nothing", met on the one surface whose WHOLE payload can be empty. The
+	 * fixture is {@code DrugReferenceTestSupport.unreadableRecordsCtx}, which is the context the real
+	 * builder produces for that failure — its token sets are empty for that reason and cannot be
+	 * supplied, which is what stops this case being an arrangement no production path reaches.
+	 */
+	@Test
+	public void aChartWhoseRecordsCouldNotBeReadIsNotScreened() {
+		DrugSafetyValidator.StandingChartAlerts standing = curatedValidator()
+				.standingChartAlerts(DrugReferenceTestSupport.unreadableRecordsCtx(60, null));
+
+		assertFalse(standing.isScreened(),
+				"a chart the module could not read must not be published as a screened one");
+		assertTrue(standing.getAlerts().isEmpty(),
+				"and it states no findings, since it has none to state");
+	}
+
+	/** The one arity of {@code standingChartAlerts} the two global properties sit above. */
+	private static final String STANDING_ENTRY =
+			"public StandingChartAlerts standingChartAlerts(Patient patient) {";
+
+	private static final String RELATIVE_SOURCE =
+			"src/main/java/org/openmrs/module/chartsearchai/reference/DrugSafetyValidator.java";
 
 	/**
 	 * The gate above the seam every other case here drives, pinned STRUCTURALLY because no behavioural
@@ -214,63 +240,91 @@ public class StandingChartAlertsTest {
 	 * the gate exactly as {@code validate}'s own package-private seam does; the omod wire test cannot
 	 * see it either, since it stubs the public method outright. So a public entry that forgot the gate,
 	 * or that read its own combination of switches, would leave every one of them green while serving
-	 * standing alerts on an install where the screen stands down.
+	 * standing alerts on an install where the screen stands down. This case is the only thing in the
+	 * suite that stops that.
 	 *
-	 * <p>What it asserts is that the entry gates on {@code reportsStandingChartAlerts()} and on nothing
-	 * else it spells for itself — which is the whole of the coupling worth pinning, because that
-	 * predicate is also the {@code screened} value the response publishes, and what it MEANS is
-	 * measured per switch by {@code StandingChartAlertsToggleContextTest}. Together the two say the
-	 * flag a client reads is the condition the pass ran under. A structural assertion for the SHAPE and
-	 * a behavioural one for the meaning is what this repo does with a rule that is real and
-	 * unobservable ({@code OrderPartnerNameSourceWritePathTest} scans for a write-path shape for the
-	 * same reason).
+	 * <p><b>Through {@link SourceScan}, which is not a convenience.</b> That class reads the file with
+	 * its comments and string literals BLANKED, and a hand-rolled reader is why this guard failed both
+	 * ways when it had one: a review agent measured that an explanatory {@code //} comment naming
+	 * {@code isDrugReferenceEnabled()} inside this method turned the case red with no behaviour
+	 * changed, and — the direction that matters — that deleting the gate outright and leaving
+	 * {@code // gate: if (!reportsStandingChartAlerts()) {} in its place left the whole class GREEN.
+	 * {@code SourceScan} also fails loudly on a needle that matches nothing or twice, which a
+	 * "not found" answer would turn into a guard forbidding nothing.
 	 *
-	 * <p>It reads the body rather than the whole file so that naming the predicate anywhere else — in
-	 * the seam below, in a javadoc — cannot satisfy it. What it cannot see is a gate that calls the
-	 * predicate AND short-circuits on something else first; mutate the body and read the failures.
+	 * <p>What it asserts is that the entry gates on {@code reportsStandingChartAlerts()} and spells no
+	 * switch of its own — which is the whole of the coupling worth pinning, because that predicate is
+	 * also the {@code screened} value the response publishes, and what it MEANS is measured per switch
+	 * by {@code StandingChartAlertsToggleContextTest}. Together the two say the flag a client reads is
+	 * the condition the pass ran under. What it cannot see is a gate that calls the predicate AND
+	 * short-circuits on something else first; mutate the body and read the failures.
 	 */
 	@Test
 	public void theStandingEntryGatesOnThePredicateItPublishes() throws IOException {
-		String body = bodyOf(validatorSource(),
-				"public List<SafetyWarning> standingChartAlerts(Patient patient) {");
+		SourceScan scan = new SourceScan(RELATIVE_SOURCE);
+		SourceScan.Region gate = scan.body(STANDING_ENTRY);
 
-		assertTrue(body.contains("if (!reportsStandingChartAlerts()) {"),
+		assertTrue(namedInside(scan, gate, "if (!reportsStandingChartAlerts()) {"),
 				"the standing entry must gate on the predicate it publishes as `screened`, so the two "
-						+ "cannot come apart (issue #280), and its body was: " + body);
-		assertFalse(body.contains("GP_DRUG_SAFETY_VALIDATE_ANSWERS")
-				|| body.contains("isDrugReferenceEnabled()"),
-				"and it must not re-spell a switch of its own beside that predicate — a second "
-						+ "spelling is how the gate and the published flag would diverge: " + body);
+						+ "cannot come apart (issue #280)");
+		for (String switchOfItsOwn : new String[] { "ChartSearchAiConstants.GP_DRUG_SAFETY_VALIDATE_ANSWERS",
+				"ChartSearchAiUtils.isDrugReferenceEnabled()" }) {
+			assertFalse(namedInside(scan, gate, switchOfItsOwn),
+					"the standing entry must not re-spell " + switchOfItsOwn + " beside that predicate — "
+							+ "a second spelling is how the gate and the published flag would diverge");
+		}
 	}
 
-	/** @return {@code DrugSafetyValidator}'s production source. Fails rather than skips when it cannot
-	 *          be found: a source scan that silently reads nothing passes, which is the failure this
-	 *          module has met before ({@code ChartSearchAiStreamingTest.resolveSourceFile}). */
-	private static String validatorSource() throws IOException {
-		String relative = "src/main/java/org/openmrs/module/chartsearchai/reference/DrugSafetyValidator.java";
-		for (Path candidate : new Path[] { Paths.get(relative), Paths.get("api").resolve(relative) }) {
-			if (Files.isRegularFile(candidate)) {
-				return new String(Files.readAllBytes(candidate), StandardCharsets.UTF_8);
+	/**
+	 * The unbounded pass has ONE decider, and a second one cannot be added silently.
+	 *
+	 * <p>{@code reference/CLAUDE.md} states it as a directive — "the ONE unbounded pass is the standing
+	 * surface, and there must never be a second" — and until this case nothing pinned it: the
+	 * behavioural cases here would catch the CURRENT answer path going unbounded, but not a new
+	 * answer-producing path added later, which is exactly what the directive is written against. The
+	 * repo pins comparable directives with a count plus a body, and so does this.
+	 *
+	 * <p>Two namings, and they are different acts. {@code standingChartAlerts} DECIDES to run
+	 * unbounded; {@code SubjectMatter.of} merely translates the scope it was handed into the gate's own
+	 * flag, and would be reached by any caller. So the count alone would let a third site decide, and
+	 * the bodies are what say which naming is which.
+	 *
+	 * <p>Over the source with comments and string literals blanked, so a {@code @link} to the constant
+	 * is not a use of it. What it cannot see is a caller that reaches the unbounded gate without naming
+	 * the constant — through a variable, or a scope handed down from elsewhere; nothing does that
+	 * today, and the widest {@code validate} arity's own parameter is what a reader should follow.
+	 */
+	@Test
+	public void nothingButTheStandingSurfaceDecidesToRunUnbounded() throws IOException {
+		SourceScan scan = new SourceScan(RELATIVE_SOURCE);
+		List<Integer> namings = scan.literalOffsets("SubjectMatterScope.UNBOUNDED");
+
+		assertEquals(2, namings.size(),
+				"SubjectMatterScope.UNBOUNDED must be named exactly twice in production — where the "
+						+ "standing surface asks for it, and where SubjectMatter translates it — and was "
+						+ "named at lines " + scan.linesOf(namings) + ". A third naming is a second "
+						+ "unbounded pass, which is issue #143's over-reach (issue #280).");
+		SourceScan.Region decider = scan.body(
+				"StandingChartAlerts standingChartAlerts(PatientClinicalContext context) {");
+		SourceScan.Region translator = scan.body(
+				"private static SubjectMatter of(SubjectMatterScope scope, String question, String answer,");
+		assertTrue(decider.contains(namings.get(0)),
+				"the first naming must be the standing surface asking for the unbounded gate, and was at "
+						+ "line " + scan.lineOf(namings.get(0)));
+		assertTrue(translator.contains(namings.get(1)),
+				"the second must be SubjectMatter translating the scope it was handed, and was at line "
+						+ scan.lineOf(namings.get(1)) + " — a decider anywhere else is a second unbounded "
+						+ "pass however the count reads");
+	}
+
+	/** @return whether {@code needle} occurs inside {@code region}, in the source with comments and
+	 *          string literals blanked. */
+	private static boolean namedInside(SourceScan scan, SourceScan.Region region, String needle) {
+		for (Integer at : scan.literalOffsets(needle)) {
+			if (region.contains(at)) {
+				return true;
 			}
 		}
-		throw new IllegalStateException("could not locate " + relative + " from "
-				+ Paths.get("").toAbsolutePath() + " — this guard must fail rather than assert about "
-				+ "an empty string");
-	}
-
-	/** @return the source between {@code declaration}'s opening brace and the closing brace in the
-	 *          first column of a member. Fails naming the declaration when it is absent, so a rename
-	 *          cannot leave this reading an empty string and passing. */
-	private static String bodyOf(String source, String declaration) {
-		int at = source.indexOf(declaration);
-		assertNotEquals(-1, at, "no method declared \"" + declaration + "\" in DrugSafetyValidator — "
-				+ "this guard would otherwise assert about an empty body and pass");
-		assertEquals(-1, source.indexOf(declaration, at + 1),
-				"\"" + declaration + "\" is declared more than once, so this guard cannot say which "
-						+ "body it read");
-		int open = source.indexOf('{', at + declaration.length() - 1);
-		int close = source.indexOf("\n\t}", open);
-		assertTrue(open >= 0 && close > open, "could not delimit the body of \"" + declaration + "\"");
-		return source.substring(open, close);
+		return false;
 	}
 }

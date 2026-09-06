@@ -136,13 +136,7 @@ public class ActiveOrderContraindicationTest {
 	}
 
 	private static List<SafetyWarning> contraindications(List<SafetyWarning> warnings) {
-		List<SafetyWarning> out = new ArrayList<SafetyWarning>();
-		for (SafetyWarning warning : warnings) {
-			if (SafetyWarning.TYPE_CONTRAINDICATION.equals(warning.getType())) {
-				out.add(warning);
-			}
-		}
-		return out;
+		return DrugReferenceTestSupport.contraindications(warnings);
 	}
 
 	@Test

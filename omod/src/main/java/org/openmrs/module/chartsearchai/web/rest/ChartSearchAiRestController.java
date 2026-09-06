@@ -383,37 +383,38 @@ public class ChartSearchAiRestController {
 	 * contraindicate, outside the answer thread (issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/280">#280</a>).
 	 *
-	 * <p><b>Why it is an endpoint of its own and not a key on {@code /search}.</b>
-	 * {@code DrugSafetyValidator}'s active-order contraindication arm once ran on every question, and
-	 * put the identical chips on every answer — measured live on the 3.7.1 standalone, four questions
-	 * about allergies, interactions, cancer and a date of birth returned the same two byte for byte,
-	 * which is the shape that trains a clinician to stop reading the box. That arm is now bounded to
-	 * what the response is about, and what the bound gives up is announcing a prescribing error nobody
-	 * asks a drug-shaped question about. This is the surface it was given up TO: the finding is
-	 * available to a client that did not run a search, and nothing rides an unrelated answer.
+	 * <p><b>Why it is an endpoint of its own and not a key on {@code /search}.</b> The active-order
+	 * contraindication arm is bounded to what the response is about, and what that bound gives up is
+	 * announcing a prescribing error nobody asks a drug-shaped question about. This is the surface it
+	 * was given up TO: a client asks for it, so the finding reaches a clinician who ran no search and
+	 * nothing rides an unrelated answer. ADR Decision 77 carries the measurement behind the bound.
 	 *
 	 * <p>Gated on the same clinical privilege as {@code /search} and resolved through the same
-	 * {@link #resolvePatient}, so the per-patient access check is the one the answer path uses. It is
-	 * NOT rate-limited: the limiter counts this user's audit rows, and a deterministic read that runs
-	 * no model and writes no row can neither be counted by it nor pay for the LLM capacity it
-	 * protects. No audit row for the same reason — the row is question-shaped, and there is no
-	 * question here.
+	 * {@link #resolvePatient}, so the per-patient access check is the one the answer path uses.
+	 *
+	 * <p><b>Deliberately not rate-limited, and the numbers are the argument rather than the
+	 * limiter's shape.</b> Measured 2026-09-07 by driving the real
+	 * {@code DrugSafetyValidator.standingChartAlerts} over the shipped 2283-entry knowledge base,
+	 * best of 15 after 5 warm-up rounds: <b>2.2 ms</b> on an 8-order chart with an allergy and two
+	 * conditions, <b>4.9 ms</b> on a 30-order one — three to five times CHEAPER than the drug-safety
+	 * pass {@code /search} already runs on the same chart (8.7 ms and 25.6 ms), which is itself a
+	 * rounding error beside that endpoint's model call. The precedent that settles it is
+	 * {@link #warmup}: same privilege, same {@code resolvePatient}, no limiter, no audit row, and it
+	 * spawns a background thread that builds a whole chart. This surface is strictly cheaper and
+	 * better bounded than one already shipped. What the existing limiter could not do for it either
+	 * way is count it — it counts this user's audit rows — and there is no row here because the row
+	 * is question-shaped and there is no question.
 	 *
 	 * <p><b>{@code screened} is not decoration.</b> An empty {@code alerts} array otherwise carries
 	 * two unrelated meanings — this chart holds no such finding, and nobody looked — which is the
 	 * distinction issue #378 drew for the condition-rule arm and issue #336 for the interaction
-	 * extent. It answers the TOGGLES and not the outcome:
-	 * {@link DrugSafetyValidator#standingChartAlerts(org.openmrs.Patient)} fails safe to no alerts, so
-	 * a pass that threw is published as {@code screened: true} beside an empty array, and the module's
-	 * log is what separates that from an honest miss. One read decides both keys, so neither is derived from the other. The validator's own
-	 * entry re-reads the same toggles as its gate, which is defence in depth rather than a second
-	 * source of truth: an operator flipping one BETWEEN the two reads gets {@code screened: true}
-	 * beside an empty list for that one request. Named rather than closed — every global property in
-	 * this predicate reads is read live, through the accessor every drug-safety toggle goes through,
-	 * and a lock over the three for one deterministic read is not worth its cost. What it does NOT answer is whether the loaded dataset can supply a rule
-	 * at all: that is {@code GET /chartsearchai/drugreferencestatus}, whose
+	 * extent, here on the one surface whose WHOLE payload can be empty. The validator decides it and
+	 * hands both back in one object, so the flag cannot answer for a different pass than the list
+	 * beside it; see {@link DrugSafetyValidator.StandingChartAlerts}, which is canonical for what
+	 * {@code false} covers. It answers whether this chart was SCREENED, not what the loaded dataset
+	 * could have found: that is {@code GET /chartsearchai/drugreferencestatus}, whose
 	 * {@code arms.conditionRules.coverage} tells a screen that had no condition rule to ask from one
-	 * that asked and found nothing — and which is deliberately not gated on the drug-safety toggles,
+	 * that asked and found nothing, and which is deliberately not gated on the drug-safety toggles,
 	 * so it answers even where {@code screened} is false.
 	 *
 	 * <p>The chips are the {@code /search} chips, through the one serializer, so a finding cannot be
@@ -432,14 +433,12 @@ public class ChartSearchAiRestController {
 					errorResponse(resolved.errorMessage), resolved.errorStatus);
 		}
 
-		boolean screened = drugSafetyValidator.reportsStandingChartAlerts();
-		List<SafetyWarning> alerts = screened
-				? drugSafetyValidator.standingChartAlerts(resolved.patient)
-				: Collections.<SafetyWarning> emptyList();
+		DrugSafetyValidator.StandingChartAlerts standing =
+				drugSafetyValidator.standingChartAlerts(resolved.patient);
 
 		Map<String, Object> body = new LinkedHashMap<String, Object>();
-		body.put("screened", screened);
-		body.put("alerts", serializeSafetyWarnings(alerts));
+		body.put("screened", standing.isScreened());
+		body.put("alerts", serializeSafetyWarnings(standing.getAlerts()));
 		return new ResponseEntity<Object>(body, HttpStatus.OK);
 	}
 
@@ -1420,9 +1419,12 @@ public class ChartSearchAiRestController {
 	 * withheld, 0 signals — so the completeness statement must travel with the chips it is about,
 	 * and a fourth emission site added later must not be able to publish one without the other. Two
 	 * sites kept in step by hand is the structural condition the {@code search_mode} column's own
-	 * comment above records as having held one value for 6036 rows;
-	 * {@code ChartSearchAiInteractionPairExtentTest} fails the build on a call to
-	 * {@link #serializeSafetyWarnings} outside this method.
+	 * comment above records as having held one value for 6036 rows.
+	 * {@code ChartSearchAiInteractionPairExtentTest} counts the callers of
+	 * {@link #serializeSafetyWarnings} and pins each to the body it belongs in — this one, and
+	 * since issue #280 {@link #chartAlerts}, which is not an answer payload. A caller anywhere
+	 * else fails the build; do not read that as "any caller but this one", which is what it
+	 * asserted before that surface existed.
 	 *
 	 * <p>{@code interactionPairs} is always present and is {@code null} where the interaction check
 	 * stated nothing — see {@code PairChipExtent}, which is canonical for what that does and does

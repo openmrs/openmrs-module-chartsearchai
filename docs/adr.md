@@ -82,6 +82,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 74: A divergence the prose check finds is stated on the response, not only in the log](#decision-74-a-divergence-the-prose-check-finds-is-stated-on-the-response-not-only-in-the-log)
 - [Decision 75: A contraindication screen states whether it had a condition rule to ask](#decision-75-a-contraindication-screen-states-whether-it-had-a-condition-rule-to-ask)
 - [Decision 76: A chart citation that cannot be the active order a sentence names is stated on the response](#decision-76-a-chart-citation-that-cannot-be-the-active-order-a-sentence-names-is-stated-on-the-response)
+- [Decision 77: A finding's chart-order attribution names the record number its order is](#decision-77-a-findings-chart-order-attribution-names-the-record-number-its-order-is)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)

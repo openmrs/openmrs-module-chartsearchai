@@ -5504,7 +5504,7 @@ It reports at `WARN` and it **publishes**, as `ChartAnswer.getMisattributedOrder
 
 The reported answer put all five findings in **one** sentence, two of them citing correct drug orders. A sentence-scoped comparison passes it — the sentence does cite drug orders — so the unit is the run of citation markers immediately following each occurrence of the phrase: markers separated by nothing but spaces, tabs and commas, ending at the first other character, and bounded by the sentence.
 
-The next occurrence of the phrase bounds the SCAN — see *What it costs* — and nothing else: removing it as a bound on attribution was measured byte-identical over two independently generated corpora of tens of thousands of arrangements, because a run reaching past the next occurrence is already stopped at that occurrence's own letters, and a run beyond it is attributed to that occurrence instead.
+The next occurrence of the phrase bounds the SCAN — see *What it costs* — and nothing else: removing it as a bound on attribution was measured byte-identical over 66,429 generated arrangements of the phrase, markers, separators and a terminator, because a run reaching past the next occurrence is already stopped at that occurrence's own letters, and a run beyond it is attributed to that occurrence instead.
 
 The run rule is not only how the ticket's case is caught; it is what keeps the check quiet. *"…active order Simvastatin [3] [61], and her thyroid neoplasm [9] is unrelated"* does not attribute `[9]` to the order claim, and reporting it would be the check crying wolf on correct prose.
 

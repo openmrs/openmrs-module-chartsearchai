@@ -218,6 +218,10 @@ public class ActiveOrderCitationFidelityTest {
 			assertEquals(null, early.get(0),
 					"the check runs after the user-visible handoff, so the early answer states no "
 							+ "measurement");
+			assertTrue(capture.describeAll().toString().contains("active drug order"),
+					"the capture must have received the check's own WARN by the end, or the negative "
+							+ "below is satisfied by a capture that was never attached — the vacuity "
+							+ "this file's PACKAGE constant names. Captured: " + capture.describeAll());
 			assertFalse(loggedByHandoff.get(0).toString().contains("active drug order"),
 					"and the check must not have RUN by then — moving it ahead of the handoff puts a "
 							+ "comparison in front of the event a user sees. Captured at handoff: "

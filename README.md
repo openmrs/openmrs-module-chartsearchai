@@ -513,6 +513,8 @@ Two readings a client must keep apart. `found == reported` says the check that s
 
 **Render it as "this citation cannot be the order named", never as "this claim is unsupported."** The finding behind these sentences is deterministic and, on the reported answer, clinically correct — it is the chart evidence attached to it that is wrong. A red *Unsupported* badge here is [#201](https://github.com/openmrs/openmrs-module-chartsearchai/issues/201)'s miscarriage in a new place. And an **absent** entry is not a certificate: the check sees only an answer that reproduces the module's own phrase, only the citation markers directly following it, and it cannot tell a citation of the wrong drug order from a citation of the right one — so `[]` says the check ran and named none, never that every citation was checked and found sound.
 
+**Render it BESIDE the other statements about that citation, never over them.** Two responses are reachable in which this key and its neighbours disagree, and in both the neighbour may be the one that is right. The order-currency arm fires when the chart marks an order out of force, and the chart's mark and the drug-safety layer's own `OrderService` read are taken at different instants — so a `safetyWarnings` chip can name *"active order X"* while this key says the citation for it cannot be that order. And the check does not consult grounding, so a cited record can carry `grounded: true` and appear here at the same time. A UI that lets this key suppress, red-flag or override a chip or a verdict will contradict itself on those responses; one that renders it as an additional caveat will not.
+
 ### Streaming search (SSE)
 
 For real-time token-by-token streaming:

@@ -258,8 +258,9 @@ public class ChartSearchAiInteractionPairExtentTest {
 		// a chips-writer and an extent-writer passed the guard whose message forbids exactly that
 		// (measured — the split builds green under a file-wide read). A later site can then call the
 		// chips half alone, which is #336 with the guard still green.
-		String body = bodyOf(source, "private void putSafetyChips(");
-		assertTrue(body.contains("target.put(\"safetyWarnings\", serializeSafetyWarnings(answer.getSafetyWarnings()));")
+		String body = bodyOf(source, "private List<Map<String, Object>> putSafetyChips(");
+		assertTrue(body.contains("List<Map<String, Object>> warnings = serializeSafetyWarnings(answer.getSafetyWarnings());")
+				&& body.contains("target.put(\"safetyWarnings\", warnings);")
 				&& body.contains("target.put(\"interactionPairs\", serializePairChipExtent(answer.getPairChipExtent()));"),
 				"putSafetyChips must write BOTH keys ITSELF; splitting them across methods re-opens the "
 						+ "defect, and a file-wide read cannot see that: " + body);

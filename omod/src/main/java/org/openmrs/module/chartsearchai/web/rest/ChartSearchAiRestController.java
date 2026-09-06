@@ -1909,9 +1909,11 @@ public class ChartSearchAiRestController {
 	 * drug-in-play arm raises chips for drugs only the ANSWER named and unrated class chips this
 	 * counts nowhere, so a client must render this as a ratio of pairs, not of chips.
 	 */
-	private void putSafetyChips(Map<String, Object> target, ChartAnswer answer) {
-		target.put("safetyWarnings", serializeSafetyWarnings(answer.getSafetyWarnings()));
+	private List<Map<String, Object>> putSafetyChips(Map<String, Object> target, ChartAnswer answer) {
+		List<Map<String, Object>> warnings = serializeSafetyWarnings(answer.getSafetyWarnings());
+		target.put("safetyWarnings", warnings);
 		target.put("interactionPairs", serializePairChipExtent(answer.getPairChipExtent()));
+		return warnings;
 	}
 
 	/**
@@ -1974,8 +1976,16 @@ public class ChartSearchAiRestController {
 	 */
 	private void putModuleStatements(Map<String, Object> target, ChartAnswer answer) {
 		target.put("safetyStatus", answer.getSafetyStatus());
-		target.put("safetyCheck", answer.getSafetyCheck());
-		putSafetyChips(target, answer);
+		List<Map<String, Object>> safetyWarningsForWire = putSafetyChips(target, answer);
+		Map<String, Object> safetyCheck = answer.getSafetyCheck();
+		if (safetyCheck == null) {
+			target.put("safetyCheck", null);
+		} else {
+			Map<String, Object> safetyCheckForWire =
+				new LinkedHashMap<String, Object>(safetyCheck);
+			safetyCheckForWire.put("warnings", safetyWarningsForWire);
+			target.put("safetyCheck", safetyCheckForWire);
+		}
 		target.put("unresolvedDrugClass", answer.getUnresolvedDrugClass());
 		List<Integer> unfaithful = answer.getUnfaithfullyRenderedCitations();
 		target.put("unfaithfullyRenderedCitations",

@@ -4,7 +4,7 @@ An OpenMRS module that lets clinicians ask natural-language questions about a pa
 
 ## Get oriented fast
 
-- **Read first:** `CLAUDE.md` (project rules — TDD, root-cause-over-patch, and the authoritative API-surface rules), `README.md` (setup + platform notes), `docs/adr.md` (decision log).
+- **Read first:** `CLAUDE.md` (project rules — TDD, root-cause-over-patch, and the cross-cutting API-surface rules), `api/src/main/java/org/openmrs/module/chartsearchai/reference/CLAUDE.md` (the drug-reference and drug-safety API-surface rules, which are most of them), `README.md` (setup + platform notes), `docs/adr.md` (decision log).
 - **Retrieval lives in querystore, not here.** chartsearchai has no in-process embedding/Lucene/scoring pipeline. Retrieval and citation grounding both use querystore's e5-base-v2 model. Retrieval changes and retrieval-quality eval belong in `openmrs-module-querystore`.
 - **Two engines:** `chartsearchai.llm.engine` = `local` (bundled `llama-server` subprocess, default — data stays on the host) or `remote` (OpenAI-compatible API; see [ADR Decision 17](docs/adr.md#decision-17-remote-llm-backend-support)).
 - **The prompt carries a slice, not the whole chart.** `chartsearchai.chartMode` defaults to `queryScoped`: the question's typed scope complete, plus the querystore similarity top-K, plus demographics. `fullChart` is the other mode and it changes which machinery is live — see [ADR Decision 28](docs/adr.md#decision-28-query-scoped-slice-charts-chartmodequeryscoped).
@@ -29,7 +29,7 @@ Extract it, then `java -jar openmrs-standalone.jar` (login `admin` / `Admin123`;
 
 ## API-surface rules (do not bypass)
 
-`CLAUDE.md` holds the authoritative list of methods that are the only correct entry point for their operation — prefixed text, cosine similarity, diacritic folding, the three drug-name matching shapes, chart assembly, the test datasets and category hints, and the inline-citation pattern. Read it there rather than from a copy here; a second list is a second thing to fall out of date.
+Two files hold the authoritative list of methods that are the only correct entry point for their operation. `CLAUDE.md` carries the cross-cutting ones — prefixed text, cosine similarity, citations and grounding, chart assembly, the test datasets and category hints. `api/src/main/java/org/openmrs/module/chartsearchai/reference/CLAUDE.md` carries the drug-reference and drug-safety ones, which are the bulk of them: diacritic folding, the three drug-name matching shapes, substance identity, and how a partner is named. Read them there rather than from a copy here; a second list is a second thing to fall out of date.
 
 ## REST endpoints
 

@@ -352,7 +352,9 @@ public class ArchitectureGuardTest {
 			for (String v : violations) {
 				sb.append("  - ").append(v).append("\n");
 			}
-			sb.append("\nSee CLAUDE.md 'API surface rules' for the correct methods to use.");
+			sb.append("\nSee the 'API surface rules' of CLAUDE.md, and of "
+					+ "api/src/main/java/org/openmrs/module/chartsearchai/reference/CLAUDE.md for the "
+					+ "drug-safety ones, for the correct methods to use.");
 			fail(sb.toString());
 		}
 	}

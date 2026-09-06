@@ -566,10 +566,20 @@ public class DrugReferenceInjector {
 			index++;
 		}
 
+		// Resolved HERE and not earlier: the reconciliation above may have appended an
+		// `active_drug_order` record for an order the chart carried none for, and that record is the
+		// one an attribution to that order must cite (issue #379). Once for the whole injection, like
+		// every other per-chart answer in this method — and only where a finding will read it, since
+		// the findings loop below is its one consumer and the early return above admits arrangements
+		// that raise none (an unrepresented order, a matched entry or the class note alone).
+		Map<String, Integer> orderRecordNumbers = findings.isEmpty()
+				? Collections.<String, Integer>emptyMap()
+				: orderRecordNumbers(mappings, context);
+
 		// After the reference records, so a finding's citation number always follows the reference it
 		// was derived from — the clinician reads cause then conclusion in chart order.
 		for (SafetyWarning finding : findings) {
-			String rendered = renderFinding(finding);
+			String rendered = renderFinding(finding, orderRecordNumbers);
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING,
 					ChartSearchAiUtils.resourceKey(finding.getType(), finding.getDrug()), null, rendered));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
@@ -682,11 +692,22 @@ public class DrugReferenceInjector {
 	 * indexes its {@code drug_order} document under exactly that — its
 	 * {@code DrugOrderRecordSerializer} contract, so the match is exact), or failing that by a
 	 * drug-order record whose text names the drug and that is not a record of an order that has
-	 * ENDED. The name fallback is deliberate insurance in the
+	 * ENDED. Since issue #379 that is not a walk of its own: substantiated is defined AS
+	 * {@link DrugOrderRecords#numbersFor} answering with anything, so this test and the citation
+	 * reading beside it are built from one index of the chart rather than from two walks of it. They
+	 * are not the same RULE — {@link DrugOrderRecords#citableNumberFor} refuses more, and says why.
+	 *
+	 * <p>The name fallback is deliberate insurance in the
 	 * conservative direction: were the uuid contract to change, uuid-only matching would report
 	 * every order as missing on every query, and a WARN that fires always reports nothing. A
 	 * <em>live</em> drug-order record naming the drug already tells the model the patient has an
 	 * order for it, so there is nothing for the answer to deny and nothing to repair.
+	 *
+	 * <p><b>That argument is about THIS question only, and issue #379 added one it does not cover.</b>
+	 * Over-matching is free where the answer is "do not WARN, do not inject"; it is a false claim where
+	 * the answer is a citation naming WHICH prescription a record is. So the citation reading applies a
+	 * refusal of its own rather than borrowing this leg unchanged —
+	 * {@link DrugOrderRecords#citableNumberFor}, which carries the measured case.
 	 *
 	 * <p>That insurance is unavailable for one class of order, and it is worth naming because the
 	 * failure it guards against would be silent for it: an order no name could be read for
@@ -737,55 +758,16 @@ public class DrugReferenceInjector {
 			return Collections.emptyList();
 		}
 
-		Set<String> chartResourceUuids = new HashSet<String>();
-		// One entry per admitted drug-order record, NOT one concatenated buffer. A record boundary is a
-		// real boundary: an order name must be found inside ONE record that names it, never spanning
-		// two. That distinction became load-bearing when ActiveDrugOrder.namedIn began collapsing
-		// whitespace runs in its haystack (issue #293) — the separator this used to append was a
-		// newline, which the collapse turns into a space, so a multi-word name could match across the
-		// join and substantiate an order neither record names. Fail-OPEN, since substantiated means the
-		// WARN and the injected record are both suppressed. Measured: one order named "Warfarin 5mg"
-		// against records "Drug order: Warfarin" and "5mg tablet, 1 daily" was reported substantiated.
-		List<String> liveDrugOrderTexts = new ArrayList<String>();
-		List<RecordMapping> mappings = chart.getMappings();
-		for (RecordMapping mapping : mappings == null ? Collections.<RecordMapping>emptyList() : mappings) {
-			// Uuid matching is type-agnostic: a resource uuid is globally unique, so a record
-			// carrying this order's uuid IS this order however it is typed.
-			if (mapping.getResourceUuid() != null) {
-				chartResourceUuids.add(mapping.getResourceUuid());
-			}
-			if (QUERYSTORE_DRUG_ORDER_TYPE.equals(mapping.getResourceType()) && mapping.getText() != null) {
-				// Only records describing a LIVE order may substantiate one. A stopped or
-				// discontinued order's record names the drug while saying the patient is no longer
-				// on it, so counting it would answer "the chart already covers this order" with a
-				// record that in fact tells the model the opposite.
-				//
-				// Two tests, AND-ed (issue #317). The chart builder now reads OrderService and
-				// records, per drug-order record, whether that order is in force; a record is
-				// admitted only where the prose and that answer both leave it live. Neither
-				// overrules the other and each can only exclude more, which is what makes adding
-				// the second safe: it cannot re-admit anything the prose already refused.
-				//
-				// Each covers what the other cannot. Prose cannot see an order that lapsed by its
-				// auto_expire_date, because querystore renders no marker for one — the limitation
-				// describesEndedOrder's own javadoc records, and the one that turns a lapsed record
-				// into a substantiation for the live order that replaced it. And wherever the read
-				// has no answer at all — SerializedRecord.getOrderActive() enumerates when, and is
-				// the ONLY place that does — the text is the only evidence there is, which is also
-				// what leaves the name fallback intact for the drifted-uuid record it was added for.
-				String lower = mapping.getText().toLowerCase(Locale.ROOT);
-				if (!describesEndedOrder(lower) && !Boolean.FALSE.equals(mapping.getOrderActive())) {
-					liveDrugOrderTexts.add(lower);
-				}
-			}
-		}
+		// One RULE with issue #379's record numbering, over an index each builds for the mapping list
+		// it asks about: substantiated is exactly "this chart holds a record that IS this order", which
+		// is that resolution answering with anything. Sharing the rule rather than writing a second one
+		// is what stops the two coming apart about which records are this order.
+		DrugOrderRecords records = new DrugOrderRecords(chart.getMappings());
 
 		List<PatientClinicalContext.ActiveDrugOrder> unrepresented =
 				new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
 		for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
-			boolean substantiated = (order.getUuid() != null && chartResourceUuids.contains(order.getUuid()))
-					|| namedInAny(order, liveDrugOrderTexts);
-			if (!substantiated) {
+			if (records.numbersFor(order).isEmpty()) {
 				unrepresented.add(order);
 			}
 		}
@@ -804,18 +786,250 @@ public class DrugReferenceInjector {
 		return unrepresented;
 	}
 
-	/** @return true when {@code order} is named inside ONE of {@code recordTexts} — asked per record so
-	 *          that a name cannot be assembled across a record boundary. See the comment in
-	 *          {@link #unrepresentedActiveOrders} for why the boundary has to be structural rather than
-	 *          a separator character. */
-	private static boolean namedInAny(PatientClinicalContext.ActiveDrugOrder order,
-			List<String> recordTexts) {
-		for (String text : recordTexts) {
-			if (order.namedIn(text)) {
-				return true;
+	/**
+	 * The chart's own records, indexed so that ONE walk answers "which numbered record IS this active
+	 * order" for both callers that ask it — {@link #unrepresentedActiveOrders}, which needs only
+	 * whether there is one (issue #118), and {@link #orderRecordNumbers}, which needs WHICH (issue
+	 * #379).
+	 *
+	 * <p><b>One resolution read two ways, and not two resolutions that agree.</b> Before issue #379
+	 * this walk lived inside the reconciliation and threw the identity of the matching record away, so
+	 * a second walk was the only way to recover it — and the two could then disagree about which
+	 * records substantiate an order, which is the shape issue #151 forbids. Substantiated is now
+	 * defined AS {@link #numbersFor} answering with anything.
+	 *
+	 * <p>One WALK and not one instance: the two callers ask about different mapping lists — the chart
+	 * as it arrived, and the chart with the reconciliation's own records appended — so each builds its
+	 * own. A per-call local either way, which is issue #172's rule met by the shape.
+	 *
+	 * <p><b>It carries no {@code isCompleteFor} gate</b>, deliberately. That gate answers "is an
+	 * ABSENCE meaningful", which is the reconciliation's question and not this one: a query-scoped
+	 * chart can carry the drug-order record an order is, and gating on completeness would refuse to
+	 * cite a record that is sitting in the prompt. What it costs is not quantified here — a
+	 * medications question does declare the drug-order type complete, so the population it changes is
+	 * the scoped charts that do not.
+	 */
+	private static final class DrugOrderRecords {
+
+		/** Resource uuid to the number of the record carrying it — the LAST, where a chart somehow
+		 *  carried two, which nothing depends on. Type-agnostic: a resource uuid is globally unique, so
+		 *  a record carrying this order's uuid IS this order however it is typed. */
+		private final Map<String, Integer> byResourceUuid = new LinkedHashMap<String, Integer>();
+
+		/** Record number to lowercased text, for the records that may substantiate a LIVE order — one
+		 *  ENTRY per admitted record, NOT one concatenated buffer. A record boundary is a real
+		 *  boundary: an order name must be found inside ONE record that names it, never spanning two.
+		 *  That distinction became load-bearing when {@code ActiveDrugOrder.namedIn} began collapsing
+		 *  whitespace runs in its haystack (issue #293) — the separator this used to append was a
+		 *  newline, which the collapse turns into a space, so a multi-word name could match across the
+		 *  join and substantiate an order neither record names. Fail-OPEN, since substantiated means
+		 *  the WARN and the injected record are both suppressed. Measured: one order named
+		 *  {@code "Warfarin 5mg"} against records {@code "Drug order: Warfarin"} and
+		 *  {@code "5mg tablet, 1 daily"} was reported substantiated. */
+		private final Map<Integer, String> liveDrugOrderTexts = new LinkedHashMap<Integer, String>();
+
+		private DrugOrderRecords(List<RecordMapping> mappings) {
+			for (RecordMapping mapping : mappings == null
+					? Collections.<RecordMapping>emptyList() : mappings) {
+				if (mapping.getResourceUuid() != null) {
+					// Unconditional: a later record under one uuid replaces an earlier one. A first-wins
+					// guard here discriminates no test, measured by mutation. Three successive attempts
+					// to write down which records share this key were each measured false, so none is
+					// written here: instrument the constructor and read the types it admits.
+					byResourceUuid.put(mapping.getResourceUuid(), Integer.valueOf(mapping.getIndex()));
+				}
+				if (QUERYSTORE_DRUG_ORDER_TYPE.equals(mapping.getResourceType())
+						&& mapping.getText() != null) {
+					// Only records describing a LIVE order may substantiate one. A stopped or
+					// discontinued order's record names the drug while saying the patient is no longer
+					// on it, so counting it would answer "the chart already covers this order" with a
+					// record that in fact tells the model the opposite.
+					//
+					// Two tests, AND-ed (issue #317). The chart builder now reads OrderService and
+					// records, per drug-order record, whether that order is in force; a record is
+					// admitted only where the prose and that answer both leave it live. Neither
+					// overrules the other and each can only exclude more, which is what makes adding
+					// the second safe: it cannot re-admit anything the prose already refused.
+					//
+					// Each covers what the other cannot. Prose cannot see an order that lapsed by its
+					// auto_expire_date, because querystore renders no marker for one — the limitation
+					// describesEndedOrder's own javadoc records, and the one that turns a lapsed record
+					// into a substantiation for the live order that replaced it. And wherever the read
+					// has no answer at all — SerializedRecord.getOrderActive() enumerates when, and is
+					// the ONLY place that does — the text is the only evidence there is, which is also
+					// what leaves the name fallback intact for the drifted-uuid record it was added
+					// for.
+					String lower = mapping.getText().toLowerCase(Locale.ROOT);
+					if (!describesEndedOrder(lower) && !Boolean.FALSE.equals(mapping.getOrderActive())) {
+						liveDrugOrderTexts.put(Integer.valueOf(mapping.getIndex()), lower);
+					}
+				}
 			}
 		}
-		return false;
+
+		/**
+		 * @return the numbers of the chart records that ARE {@code order} — the uuid-matched record
+		 *         alone where there is one, else every live drug-order record naming it, asked per
+		 *         record so that a name cannot be assembled across a record boundary.
+		 *
+		 *         <p>The uuid leg answers alone rather than being unioned with the name leg: querystore
+		 *         indexes a {@code drug_order} document under its {@code Order} uuid, so a uuid match
+		 *         is the exact answer and a sibling record that merely NAMES the same drug is not a
+		 *         second answer to the same question. The name leg is the drifted-uuid insurance issue
+		 *         #118 added, and is the only leg that can return more than one.
+		 */
+		private List<Integer> numbersFor(PatientClinicalContext.ActiveDrugOrder order) {
+			Integer exact = numberByUuid(order);
+			if (exact != null) {
+				return Collections.singletonList(exact);
+			}
+			List<Integer> named = new ArrayList<Integer>();
+			for (Map.Entry<Integer, String> record : liveDrugOrderTexts.entrySet()) {
+				if (order.namedIn(record.getValue())) {
+					named.add(record.getKey());
+				}
+			}
+			return named;
+		}
+
+		/** @return the number of the record carrying {@code order}'s own uuid, or null. The EXACT leg
+		 *          of {@link #numbersFor}, named so {@link #orderRecordNumbers} can ask which records
+		 *          are already some order's own without re-deriving the lookup. */
+		private Integer numberByUuid(PatientClinicalContext.ActiveDrugOrder order) {
+			return order.getUuid() == null ? null : byResourceUuid.get(order.getUuid());
+		}
+
+		/**
+		 * @return the number of the ONE chart record that may be CITED as {@code order}, or null where
+		 *         the module cannot say which — the stricter reading of {@link #numbersFor}, and the
+		 *         one a {@code safety_finding}'s attribution takes (issue #379).
+		 *
+		 *         <p><b>It is stricter for a reason the boolean does not have.</b> Issue #118's name
+		 *         leg is fail-OPEN by design: it exists to suppress a WARN and an injected record where
+		 *         a live drug-order record already tells the model the patient has an order for the
+		 *         drug, and over-matching there costs nothing. Citing is an affirmative claim about
+		 *         WHICH prescription, so the same over-match becomes false. ADR Decision 75 carries the
+		 *         measured case, and {@code .aRecordAnotherOrderIsCannotBeCitedForThisOne} reproduces it.
+		 *
+		 *         <p><b>What the refusal buys is the FIRST order's correct number, not the second's
+		 *         silence.</b> Remove it and the injectivity rule in {@link #orderRecordNumbers} still
+		 *         refuses the pair — both items go bare, the correct one included. Measured by mutation;
+		 *         do not read the refusal as the only thing standing between the model and a false
+		 *         citation here.
+		 *
+		 *         <p>It refuses a record claimed by an ACTIVE order and no other. A second index
+		 *         document for an order this patient no longer has is not in that set, so the name leg
+		 *         can still reach it; that is #118's fail-open leg and no test states the cell.
+		 *
+		 *         <p>So a record that is ANOTHER order's own — {@code claimedByUuid}, the records some
+		 *         active order carries the uuid of — is not a candidate for the name leg. The uuid leg
+		 *         is untouched by it: a record carrying this order's uuid IS this order, and it cannot
+		 *         be in that set for anyone else.
+		 */
+		private Integer citableNumberFor(PatientClinicalContext.ActiveDrugOrder order,
+				Set<Integer> claimedByUuid) {
+			Integer exact = numberByUuid(order);
+			if (exact != null) {
+				return exact;
+			}
+			Integer only = null;
+			for (Map.Entry<Integer, String> record : liveDrugOrderTexts.entrySet()) {
+				if (!order.namedIn(record.getValue()) || claimedByUuid.contains(record.getKey())) {
+					continue;
+				}
+				if (only != null) {
+					return null;
+				}
+				only = record.getKey();
+			}
+			return only;
+		}
+	}
+
+	/**
+	 * The chart record number each active order's DISPLAY may be cited by, keyed on that display —
+	 * issue #379, and what turns a finding's {@code "<Substance> from <order display>"} attribution
+	 * into one the model can cite instead of joining for itself. Resolved once per injection that
+	 * raises a finding — its one consumer — and never per record.
+	 *
+	 * <p><b>Keyed on the display because that is the string the bridge carries</b>, and it is the very
+	 * string {@code DrugSafetyValidator.addChartOrderBridge} put there — {@code order.getDisplay()}
+	 * trimmed — so this is string IDENTITY and not a second, looser join. It recovers order → RECORD,
+	 * which is a different question from the substance → order resolution the drug-safety instruction
+	 * file reserves to {@code DrugSafetyValidator.chartOrderBridges}: no bridge is re-derived here and
+	 * no silence test is re-asked.
+	 *
+	 * <p><b>THREE ways the answer is no, and the third was found by review.</b> One display two orders
+	 * resolve to different records by; one order the drifted-uuid name leg matched in two records at
+	 * once ({@link DrugOrderRecords#citableNumberFor}); and one record two ORDERS reach, which is the
+	 * same false claim arriving from the other side. In each case the module
+	 * cannot say which record a model should read, and naming one would put a citation it cannot stand
+	 * behind into a citable record stating a clinical call — so it names none, per ITEM: an unambiguous
+	 * neighbour in the same clause keeps its number. An order the chart holds no record for is not a
+	 * fourth case; it simply has no candidate.
+	 *
+	 * <p>A blank display is skipped so the map cannot hold a key nothing will look up —
+	 * {@code chartOrderClause} keys on {@code SafetyWarning.ChartOrderBridge.getOrderDisplay()}, and
+	 * {@code DrugSafetyValidator.displayNamesADrug} requires a non-blank display before an order can be
+	 * bridged at all, so such an order has no item to number. It is NOT what prevents an NPE — the
+	 * null-safe read below that is — and saying so keeps the clause from looking better defended than
+	 * it is; it discriminates no test.
+	 *
+	 * <p>A null {@code context} states nothing, which is the same answer an empty order list gives and
+	 * is the shape {@link #unrepresentedActiveOrders} already guards: {@link #injectRecords} runs to
+	 * completion without one — the question-driven leg needs no orders — and dereferencing it here
+	 * would be caught by {@code inject}'s degrade-to-the-unmodified-chart and silently drop the whole
+	 * injection.
+	 *
+	 * @param mappings the chart's records AS THEY STAND at the call — which must be after the
+	 *        reconciliation has appended its own {@code active_drug_order} records, so an order that
+	 *        had no record resolves to the one just injected for it (each carries that order's uuid)
+	 */
+	private static Map<String, Integer> orderRecordNumbers(List<RecordMapping> mappings,
+			PatientClinicalContext context) {
+		if (context == null) {
+			return Collections.emptyMap();
+		}
+		List<PatientClinicalContext.ActiveDrugOrder> orders = context.getActiveDrugOrders();
+		DrugOrderRecords records = new DrugOrderRecords(mappings);
+		// The records that are some order's OWN, by uuid. Resolved before anything is cited, because
+		// the name leg's candidates are judged against it — see citableNumberFor.
+		Set<Integer> claimedByUuid = new HashSet<Integer>();
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			Integer exact = records.numberByUuid(order);
+			if (exact != null) {
+				claimedByUuid.add(exact);
+			}
+		}
+		Map<String, Integer> byDisplay = new LinkedHashMap<String, Integer>();
+		Set<String> ambiguous = new HashSet<String>();
+		Map<Integer, String> displayByNumber = new LinkedHashMap<Integer, String>();
+		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+			String display = order.getDisplay() == null ? null : order.getDisplay().trim();
+			if (ChartSearchAiUtils.isBlank(display)) {
+				continue;
+			}
+			Integer number = records.citableNumberFor(order, claimedByUuid);
+			if (number == null) {
+				ambiguous.add(display);
+				continue;
+			}
+			Integer already = byDisplay.put(display, number);
+			if (already != null && !already.equals(number)) {
+				ambiguous.add(display);
+			}
+			// One record cannot be two prescriptions. Counted per ORDER and not per display — each turn
+			// of this loop is one order, so a second put on a number IS a second prescription, and
+			// keying it on the display instead let two orders SHARING one display keep the number.
+			// Both claimants lose it rather than the later one, because nothing here ranks them.
+			String claimant = displayByNumber.put(number, display);
+			if (claimant != null) {
+				ambiguous.add(display);
+				ambiguous.add(claimant);
+			}
+		}
+		byDisplay.keySet().removeAll(ambiguous);
+		return byDisplay;
 	}
 
 	/** Lowercased marker querystore renders a drug order's END date under. It emits
@@ -1500,7 +1714,9 @@ public class DrugReferenceInjector {
 	 * name each order DISPLAYS does not name them (issue #349; the silence test was every name the
 	 * order RECORDS until issue #347, and {@code DrugSafetyValidator.displaysANameOfAny} is where the
 	 * change and its residues live) — the lead of a clause whose items follow it, {@code "; "}-joined,
-	 * each reading {@code "<Substance> from <order display>"}.
+	 * each reading {@code "<Substance> from <order display> [N]"} — the number being the chart record
+	 * that order IS, since issue #379, and absent where {@link #orderRecordNumbers} could not resolve
+	 * one.
 	 *
 	 * <p><b>What it is for.</b> A finding names its substances in the KNOWLEDGE BASE's vocabulary,
 	 * which is right and is #339's settlement. Where the module reached those substances from an active
@@ -1593,7 +1809,10 @@ public class DrugReferenceInjector {
 	 * names also states which of this patient's active orders each was resolved from, ahead of both
 	 * clauses above — see {@link #FINDING_CHART_ORDER_LEAD} for why the finding is otherwise unciteable,
 	 * and {@code DrugSafetyValidator.chartOrderBridges} for which orders may be named. It adds words and
-	 * moves no call: the strength clause is unchanged and the chip's own detail is untouched.
+	 * moves no call: the strength clause is unchanged and the chip's own detail is untouched. Since
+	 * issue #379 each of those attributions also names the NUMBER of the record its order is, which is
+	 * why this method takes that resolution as a parameter rather than deriving it — it is a fact about
+	 * the chart being built, and only {@link #injectRecords} holds it.
 	 *
 	 * <p>The full-stop guard asks about ALL THREE clauses, and TWO of its three halves cannot fire today. Only a
 	 * contraindication can carry provenance and {@link #strengthClause} answers one unconditionally for
@@ -1604,7 +1823,7 @@ public class DrugReferenceInjector {
 	 * the clauses are independent by construction, and a type carrying one without a strength is the
 	 * shape {@link #strengthClause} already warns a future caller it must write for.
 	 */
-	static String renderFinding(SafetyWarning finding) {
+	static String renderFinding(SafetyWarning finding, Map<String, Integer> orderRecordNumbers) {
 		String strength = strengthClause(finding);
 		// Between the detail and the strength clause, so the clause stays SENTENCE-FINAL — which is
 		// where the prompt's own two format demonstrations put it, and what its graded-safety rule
@@ -1621,7 +1840,7 @@ public class DrugReferenceInjector {
 		// green, while moving either AFTER the strength clause reddens
 		// InteractionFindingChartOrderBridgeTest.theStrengthClauseStaysSentenceFinal and cases in
 		// UncorroboratedFindingProvenanceTest. It survives on this comment.
-		String chartOrders = chartOrderClause(finding);
+		String chartOrders = chartOrderClause(finding, orderRecordNumbers);
 		String detail = strength.isEmpty() && provenance.isEmpty() && chartOrders.isEmpty()
 				? finding.getDetail()
 				: DrugSafetyValidator.endSentence(finding.getDetail());
@@ -1704,27 +1923,37 @@ public class DrugReferenceInjector {
 
 	/**
 	 * The bridge clause of one finding, or the empty string — {@link #FINDING_CHART_ORDER_LEAD}
-	 * followed by one {@code "<Substance> from <order display>"} item per attribution, {@code "; "}
-	 * -joined and closed with a full stop (issue #349).
+	 * followed by one {@code "<Substance> from <order display> [N]"} item per attribution,
+	 * {@code "; "}-joined and closed with a full stop (issues #349, #379).
 	 *
 	 * <p>Rendered here and decided in {@code DrugSafetyValidator.chartOrderBridges}, which is where
-	 * both the scoping argument and the silence test live. This method adds no rule of its own: an
-	 * empty list renders nothing, and every list it is handed is one the validator already decided may
-	 * be printed. That division is the same one {@link #FINDING_UNCORROBORATED_MATCH} has — the words
-	 * are the injector's, the answer is the validator's — and it is what stops a second copy of the
-	 * conditions appearing on the render side.
+	 * both the scoping argument and the silence test live. This method adds no rule about WHICH
+	 * attributions may be printed: an empty list renders nothing, and every list it is handed is one
+	 * the validator already decided may be printed. That division is the same one
+	 * {@link #FINDING_UNCORROBORATED_MATCH} has — the words are the injector's, the answer is the
+	 * validator's — and it is what stops a second copy of the conditions appearing on the render side.
+	 *
+	 * <p><b>The number is ADDITIVE and suppresses nothing</b> (issue #379). It is the injector's own
+	 * answer rather than the validator's, and necessarily so: the validator runs before any record is
+	 * numbered. Every bridge the validator admitted still renders; an attribution
+	 * {@link #orderRecordNumbers} could not resolve renders as it did before that issue, so the
+	 * absence of a number is silence and never a refusal to state the attribution.
 	 *
 	 * <p>The items carry {@link SafetyWarning.ChartOrderBridge#toString()}'s own spelling rather than a
-	 * second format string, so the pair a debug dump prints and the pair a model reads cannot differ.
+	 * second format string, so the pair a debug dump prints and the pair a model reads cannot differ;
+	 * the number is appended to it rather than interpolated into it, which is why that method — whose
+	 * two fields are issue #347's wire contract — did not have to change.
 	 */
-	private static String chartOrderClause(SafetyWarning finding) {
+	private static String chartOrderClause(SafetyWarning finding,
+			Map<String, Integer> orderRecordNumbers) {
 		List<SafetyWarning.ChartOrderBridge> bridges = finding.chartOrderBridges();
 		if (bridges.isEmpty()) {
 			return "";
 		}
 		List<String> items = new ArrayList<String>(bridges.size());
 		for (SafetyWarning.ChartOrderBridge bridge : bridges) {
-			items.add(bridge.toString());
+			Integer number = orderRecordNumbers.get(bridge.getOrderDisplay());
+			items.add(number == null ? bridge.toString() : bridge.toString() + " [" + number + "]");
 		}
 		StringBuilder clause = new StringBuilder();
 		appendSection(clause, FINDING_CHART_ORDER_LEAD, items);

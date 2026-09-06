@@ -734,7 +734,11 @@ public class SafetyWarning {
 	 *
 	 * <p><b>{@link #toString()} is the only reader that PRINTS them as one string</b>, and the
 	 * PROMPT-side renderer must keep taking that spelling, so that the pair a debug dump prints and
-	 * the pair a model reads cannot differ. The two getters beside it are the WIRE's (issue #347) and
+	 * the pair a model reads cannot differ. <b>Since issue #379 the model reads one thing MORE</b>:
+	 * {@code DrugReferenceInjector.chartOrderClause} appends the number of the chart record the order
+	 * is, to this string rather than into it, which is why that issue changed nothing here. So the two
+	 * agree about the PAIR and no longer about the whole item — do not close that gap by moving the
+	 * number in, which would put a prompt-side index on the wire keys issue #347 fixed. The two getters beside it are the WIRE's (issue #347) and
 	 * exist so that a client is handed two fields rather than a sentence to parse — the same reason
 	 * issue #340 publishes {@code severity} instead of leaving a client to substring-match
 	 * {@link SafetyWarning#getDetail()}. They are named {@code getSubstance} rather than

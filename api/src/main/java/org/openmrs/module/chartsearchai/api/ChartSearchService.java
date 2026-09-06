@@ -16,6 +16,7 @@ import java.util.function.Consumer;
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
+import org.openmrs.module.chartsearchai.reference.DrugReferenceLoad;
 import org.openmrs.module.chartsearchai.reference.PairChipExtent;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 
@@ -232,6 +233,8 @@ public interface ChartSearchService {
 
 		private final List<Integer> misattributedOrderCitations;
 
+		private final DrugReferenceLoad.Coverage conditionRuleCoverage;
+
 		public ChartAnswer(String answer, List<RecordReference> references) {
 			this(answer, references, 0, 0, 0);
 		}
@@ -290,17 +293,32 @@ public interface ChartSearchService {
 				List<SafetyWarning> safetyWarnings, String searchMode,
 				ChartSearchAiUtils.ReferenceSlice referenceSlice, PairChipExtent pairChipExtent,
 				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations) {
-			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings,
-					searchMode, referenceSlice, pairChipExtent, unresolvedDrugClass,
-					unfaithfullyRenderedCitations, null);
+			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, searchMode,
+					referenceSlice, pairChipExtent, unresolvedDrugClass, unfaithfullyRenderedCitations,
+					null, null);
 		}
 
+		/**
+		 * The widest form, and the ONLY one that takes the condition-rule coverage —
+		 * {@code ArchitectureGuardTest.everyAnswerThisModuleBuildsCarriesTheConditionRuleCoverage}
+		 * requires exactly one, so that no production site can build an answer stating null on a key
+		 * README documents as always present.
+		 *
+		 * <p>There is deliberately no twelve-argument overload beside it in either direction. Issues
+		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/377">#377</a> and
+		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/378">#378</a> each
+		 * added a twelfth argument independently and this is where they met: two twelve-argument
+		 * forms distinguishable only by their last parameter's type would make a caller passing a
+		 * bare {@code null} there ambiguous, and a second one taking the coverage would fail that
+		 * guard outright.
+		 */
 		public ChartAnswer(String answer, List<RecordReference> references,
 				int inputTokens, int outputTokens, int cachedTokens,
 				List<SafetyWarning> safetyWarnings, String searchMode,
 				ChartSearchAiUtils.ReferenceSlice referenceSlice, PairChipExtent pairChipExtent,
 				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations,
-				List<Integer> misattributedOrderCitations) {
+				List<Integer> misattributedOrderCitations,
+				DrugReferenceLoad.Coverage conditionRuleCoverage) {
 			this.answer = answer;
 			this.references = java.util.Collections.unmodifiableList(
 					new java.util.ArrayList<>(references));
@@ -324,6 +342,7 @@ public interface ChartSearchService {
 			this.misattributedOrderCitations = misattributedOrderCitations == null ? null
 					: java.util.Collections.unmodifiableList(
 							new java.util.ArrayList<Integer>(misattributedOrderCitations));
+			this.conditionRuleCoverage = conditionRuleCoverage;
 		}
 
 		/**
@@ -587,7 +606,7 @@ public interface ChartSearchService {
 		 * not a certificate.</b> The check is recall-limited by construction: it sees only an answer
 		 * that reproduces {@code DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE}, only the run
 		 * of citation markers that follows it, and it cannot tell a citation of the WRONG drug order
-		 * from a citation of the right one. ADR Decision 75 enumerates that. <b>And empty says less
+		 * from a citation of the right one. ADR Decision 76 enumerates that. <b>And empty says less
 		 * than it looks on a stock install</b>: {@code chartsearchai.drugReference.enabled} defaults
 		 * to false, and its own description says no safety warnings are produced then — so no finding
 		 * carries the phrase for an answer to reproduce, and this list is empty for a reason that is
@@ -601,6 +620,77 @@ public interface ChartSearchService {
 		 */
 		public List<Integer> getMisattributedOrderCitations() {
 			return misattributedOrderCitations;
+		}
+
+		/**
+		 * What the loaded drug-reference dataset publishes for the hand-authored <b>condition</b>-rule
+		 * arm of the contraindication screen — what the {@code conditionRuleCoverage} key on the
+		 * {@code /search} response and on the {@code done} and {@code grounded} SSE events publishes
+		 * (issue
+		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/378">#378</a>).
+		 *
+		 * <p><b>Why the module states it rather than leaving it to the answer.</b> Under the shipped
+		 * {@code sourceFormat=ddinter} default the dataset publishes no hand-authored allergy or
+		 * condition rule at all, so the condition leg has no rule to evaluate and this patient's
+		 * recorded conditions reach no rule at all — and nothing on the response said so, while
+		 * {@link #getPairChipExtent()} beside it made a completeness claim for the arm that had
+		 * nothing to hide. That is issue #336's argument with the count at zero, and this is the same
+		 * remedy: the module states what it could do, on a key, rather than depending on the wording
+		 * of a generated answer.
+		 *
+		 * <p><b>It is a statement about the loaded DATASET and never about this patient.</b>
+		 * {@code ABSENT} says a dataset was read and no entry publishes a condition rule the module
+		 * could put to a chart. {@code PUBLISHED} says the dataset publishes such rules and nothing
+		 * more — not that any fired, and not that every condition a chart records is screened.
+		 * {@code UNLOADED} says nothing was read, so nothing is known; on a stock install
+		 * {@code chartsearchai.drugReference.enabled} is {@code false} and that is the value. Keeping
+		 * "we looked and there is none" apart from "nobody looked" is the whole point, which is why
+		 * this is a three-valued verdict and not a boolean —
+		 * {@code SerializedRecord.getOrderActive()} keeps the same discipline one layer down.
+		 *
+		 * <p><b>What this value cannot speak to. This javadoc is the one home for that list</b>, and
+		 * {@code README.md}'s client-facing paragraph is the second — the second because it is the only
+		 * one a frontend author reads, which is the same two-homes arrangement {@code PairChipExtent}
+		 * keeps for the same reason. Everything else points here rather than restating it: a copy is a
+		 * second thing to forget to update, which is the rule
+		 * {@code SerializedRecord.getOrderActive()}'s own field javadoc states one layer down. ADR
+		 * Decision 75 is not a third copy — it records the two OPEN DEFECTS below with the evidence
+		 * for each, which is a decision's own business and not this list. Three things, none of them
+		 * closed by issue #378:
+		 *
+		 * <ul>
+		 * <li>Whether the contraindication arms are switched ON at all.
+		 * {@code chartsearchai.drugSafety.validateAnswers} and
+		 * {@code chartsearchai.drugSafety.warnOnContraindications} govern that and are deliberately not
+		 * folded in: a load-time capability is knowable whether or not a screen ran, so gating this on
+		 * them would withhold a knowable fact exactly where the arms are off.
+		 * {@code DrugSafetyValidator.conditionRuleCoverage()} carries that argument, and the refuted
+		 * one a first draft gave for the same rule.</li>
+		 * <li>Whether the patient's condition list was READ. A failed read degrades to an empty set,
+		 * which {@code PatientClinicalContext.contraindicationRecordsRead()} records for the injected
+		 * record's benefit and this key does not carry.</li>
+		 * <li>ENCOUNTER DIAGNOSES. The contraindication screen builds its condition tokens from
+		 * OpenMRS's ACTIVE CONDITIONS alone ({@code PatientClinicalContextBuilder}), so a recorded
+		 * diagnosis reaches no contraindication rule whatever this says. It still reaches the chart the
+		 * model reads, like any other record, and the module reads a {@code Diagnosis} elsewhere to
+		 * invalidate a cached answer — the limit is on what the SCREEN sees, not on the module's
+		 * reach.</li>
+		 * </ul>
+		 *
+		 * <p>The producer states it and no consumer derives it, the discipline
+		 * {@link #getUnresolvedDrugClass()} follows: {@code LlmInferenceService} resolves it once per
+		 * method through {@code DrugSafetyValidator.conditionRuleCoverage()} and sets it on every
+		 * answer that method produces — the ungrounded one included, because the early {@code done}
+		 * event is emitted from that answer and is what the user sees. Like the class statement and
+		 * unlike {@link #getPairChipExtent()}, it is known before the model is called.
+		 *
+		 * @return the verdict, or null where the module stated none. The three constants above cover
+		 *         every case the producer can answer, so a null reaching a client means
+		 *         {@code DrugSafetyValidator.conditionRuleCoverage()} could not read the load status —
+		 *         that accessor's javadoc carries what it withholds and why
+		 */
+		public DrugReferenceLoad.Coverage getConditionRuleCoverage() {
+			return conditionRuleCoverage;
 		}
 	}
 

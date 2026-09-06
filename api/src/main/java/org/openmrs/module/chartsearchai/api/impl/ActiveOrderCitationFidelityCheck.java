@@ -143,7 +143,7 @@ import org.slf4j.LoggerFactory;
  * sentence is a larger decision than this check is licensed to make.
  *
  * <p><b>Where it runs.</b> Both answer paths, {@link LlmInferenceService#search} and
- * {@code searchStreaming}, so the endpoint users hit is covered. &rarr; ADR Decision 75, canonical
+ * {@code searchStreaming}, so the endpoint users hit is covered. &rarr; ADR Decision 76, canonical
  * for the reasoning, for the alternatives measured and rejected, and for the residues.
  *
  * <p>Not the progressive-reasoning
@@ -169,7 +169,7 @@ final class ActiveOrderCitationFidelityCheck {
 	 *  already split on {@link ChartSearchAiUtils#SENTENCE_BOUNDARY}, whose line-break arm means no
 	 *  string reaching here can carry one. What that costs is a real residue rather than nothing: a
 	 *  model that hard-wraps BETWEEN two markers of one run puts them in two units, and only the
-	 *  first is attributed. ADR Decision 75 records it.
+	 *  first is attributed. ADR Decision 76 records it.
 	 *
 	 *  <p>Deliberately narrower than {@code CitationGroundingVerifier}'s {@code LEADING_ITEM_SEPARATOR},
 	 *  the nearest neighbouring alphabet, which also admits {@code ;} and a leading {@code and} or
@@ -209,7 +209,7 @@ final class ActiveOrderCitationFidelityCheck {
 				// same 66,429 arrangements, because examine's own per-sentence indexOf is what
 				// scopes the check to an active-order claim. What it buys is that the overwhelmingly
 				// common answer, which states no such claim, costs one containment scan and neither
-				// map below — ADR Decision 75 carries the figures, and carries them once.
+				// map below — ADR Decision 76 carries the figures, and carries them once.
 				return offending;
 			}
 			Map<Integer, RecordMapping> byIndex = new HashMap<Integer, RecordMapping>();

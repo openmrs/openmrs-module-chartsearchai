@@ -108,7 +108,7 @@ import org.springframework.stereotype.Service;
  * answer is also published — as {@code unfaithfullyRenderedCitations}, and deliberately not as a
  * verdict on these citations, which stay withheld. {@link ActiveOrderCitationFidelityCheck} runs
  * after every answer too and is NOT one of these: it reads no reference content, asking instead
- * which CHART record a sentence cited (ADR Decision 75). NOT by the
+ * which CHART record a sentence cited (ADR Decision 76). NOT by the
  * {@code DrugSafetyValidator} chips, which this javadoc named until #337: they carry the
  * deterministic text but are an independent list nothing reconciles against the answer. Accepted
  * cost: under entailment mode these citations now take the lazy Tier-1 path (up to two

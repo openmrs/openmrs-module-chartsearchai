@@ -25,6 +25,7 @@ import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
+import org.openmrs.module.chartsearchai.reference.DrugReferenceLoad;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.PairChipExtent;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
@@ -135,6 +136,13 @@ public class LlmInferenceService implements ChartSearchService {
 			// reaches a client if the model cites it, which on the issue's own reproduction it did
 			// not.
 			String unresolvedDrugClass = ChartSearchAiUtils.unresolvedDrugClass(chart.getMappings());
+			// And what this install's contraindication screen had to ask the patient's recorded
+			// conditions WITH (issue #378). A load-time verdict rather than a reading of this chart,
+			// so it is resolved here only to keep every module statement in one place; it is carried
+			// for the reason the three above are — nothing a /search consumer reads could otherwise
+			// tell a screen that cannot fire from one that asked and found nothing.
+			DrugReferenceLoad.Coverage conditionRuleCoverage =
+					drugSafetyValidator.conditionRuleCoverage();
 			buildMs = System.currentTimeMillis() - buildStart;
 
 			long llmStart = System.currentTimeMillis();
@@ -174,7 +182,7 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
 					pairExtent.stated(), unresolvedDrugClass, unfaithfullyRenderedCitations,
-					misattributedOrderCitations);
+					misattributedOrderCitations, conditionRuleCoverage);
 			outcome = "ok";
 			return answer;
 		}
@@ -425,6 +433,12 @@ public class LlmInferenceService implements ChartSearchService {
 			// async grounding the early "done" is emitted from THAT answer, so a statement set only
 			// on the returned one would be absent from the event the user actually sees.
 			String unresolvedDrugClass = ChartSearchAiUtils.unresolvedDrugClass(chart.getMappings());
+			// The condition-rule coverage too, one resolution for both answers this method produces
+			// and for the same reason (issue #378). The ungrounded one especially: with async
+			// grounding the early "done" is emitted from THAT answer, and this statement is known
+			// before the model is called, so there is no reason for that event to carry less.
+			DrugReferenceLoad.Coverage conditionRuleCoverage =
+					drugSafetyValidator.conditionRuleCoverage();
 			buildMs = System.currentTimeMillis() - buildStart;
 
 			// Progressive reasoning: stream a fast preview reasoning from the focused top-K chart to
@@ -463,7 +477,7 @@ public class LlmInferenceService implements ChartSearchService {
 			ungroundedAnswerConsumer.accept(new ChartAnswer(response.getAnswer(), cited,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), Collections.<SafetyWarning> emptyList(), searchMode,
-					referenceSlice, null, unresolvedDrugClass));
+					referenceSlice, null, unresolvedDrugClass, null, null, conditionRuleCoverage));
 
 			// After the user-visible handoff, before grounding: the exact comparisons over what the
 			// answer did with the records it cites — the class-code defects a set-membership
@@ -511,7 +525,7 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
 					pairExtent.stated(), unresolvedDrugClass, unfaithfullyRenderedCitations,
-					misattributedOrderCitations);
+					misattributedOrderCitations, conditionRuleCoverage);
 			outcome = "ok";
 			return answer;
 		}

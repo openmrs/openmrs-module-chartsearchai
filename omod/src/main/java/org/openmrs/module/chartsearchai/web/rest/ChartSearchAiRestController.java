@@ -52,6 +52,7 @@ import org.openmrs.module.chartsearchai.api.impl.PrewarmBootstrapService;
 import org.openmrs.module.chartsearchai.api.impl.PrewarmStatus;
 import org.openmrs.module.chartsearchai.api.impl.WarmupExecutor;
 import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
+import org.openmrs.module.chartsearchai.reference.DrugReferenceLoad;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceService;
 import org.openmrs.module.chartsearchai.reference.PairChipExtent;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
@@ -1324,8 +1325,9 @@ public class ChartSearchAiRestController {
 	/**
 	 * Writes an answer's drug-safety chips AND the statement of how bounded the interaction list
 	 * behind them is, into one payload map. Every emission surface goes through here, since
-	 * issue #354 by way of {@link #putModuleStatements} — which composes this with the class
-	 * statement, and is this method's only caller.
+	 * issue #354 by way of {@link #putModuleStatements} — which composes this with the module's other
+	 * statements, and is this method's only caller. Read that method for what those are; a list here
+	 * is one that falls behind, which it already had once.
 	 *
 	 * <p>Named for the CHIPS and not for "findings", deliberately: {@code safety_finding} is a
 	 * reference resource type — the citable record form of a chip — and this method has nothing to
@@ -1393,6 +1395,18 @@ public class ChartSearchAiRestController {
 	 * reaches this method rather than {@code putSafetyChips} for the reason
 	 * {@code unfaithfullyRenderedCitations} does: it is a statement about the ANSWER, not a chip.
 	 *
+	 * <p>{@code conditionRuleCoverage} is the same remedy again, from the issue beside it
+	 * (<a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/378">#378</a>): what
+	 * the loaded dataset publishes for the hand-authored CONDITION-rule arm, so a client can tell a
+	 * contraindication screen that had no rule to ask from one that asked and found nothing. Always
+	 * present. A bare token rather than an object, like {@code unresolvedDrugClass} and for the same
+	 * reason — it carries one datum. Spelled through {@code DrugReferenceLoad.Coverage.wireToken()},
+	 * the same method {@code GET /chartsearchai/drugreferencestatus} spells
+	 * {@code arms.conditionRules.coverage} with, so one verdict cannot be named two ways on two
+	 * surfaces. {@code ChartAnswer.getConditionRuleCoverage()} is canonical for what each value does
+	 * and does not assert — in particular that it is a statement about the DATASET and never that any
+	 * recorded condition was screened.
+	 *
 	 * <p><b>The copy is a correctness requirement</b> and not caution — the measurement is at
 	 * {@link #serializeSafetyWarnings}, which takes it for the same reason. What is new here is the
 	 * guard around it: unlike {@code chartOrderBridges()} these two accessors can return null, and
@@ -1405,7 +1419,7 @@ public class ChartSearchAiRestController {
 	 * is documented as covering — a read of {@code patient.getPatientId()} — is re-read by both answer
 	 * methods in their {@code finally} timing log, so a throw there errors the request instead.
 	 * {@code misattributedOrderCitations} has an identically shaped failure branch, which ADR
-	 * Decision 75 records and Decision 61 does not cover. The guard stays because it costs one
+	 * Decision 76 records and Decision 61 does not cover. The guard stays because it costs one
 	 * comparison and the alternative is a 500.
 	 */
 	private void putModuleStatements(Map<String, Object> target, ChartAnswer answer) {
@@ -1417,6 +1431,9 @@ public class ChartSearchAiRestController {
 		List<Integer> misattributed = answer.getMisattributedOrderCitations();
 		target.put("misattributedOrderCitations",
 			misattributed == null ? null : new ArrayList<Integer>(misattributed));
+		DrugReferenceLoad.Coverage conditionRules = answer.getConditionRuleCoverage();
+		target.put("conditionRuleCoverage",
+			conditionRules == null ? null : conditionRules.wireToken());
 	}
 
 	/**

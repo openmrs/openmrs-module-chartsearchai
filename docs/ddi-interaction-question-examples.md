@@ -70,7 +70,8 @@ On a correctly configured instance the interesting fields are:
     "doseCeilings":      { "coverage": "absent",    "entriesPublishing": 0 },
     "handAuthoredRules": { "coverage": "absent",    "entriesPublishing": 0 },
     "atcCodes":          { "coverage": "published", "entriesPublishing": 1839 },
-    "interactions":      { "coverage": "published", "entriesPublishing": 2283 }
+    "interactions":      { "coverage": "published", "entriesPublishing": 2283 },
+    "conditionRules":    { "coverage": "absent",    "entriesPublishing": 0 }
   },
   "crossReactivity": { "loaded": true, "groupCount": 1 }
 }
@@ -82,8 +83,12 @@ Read three things off it:
   the *curated* parser instead and is reported here as a `configured-source-format-not-used`
   finding.
 - **`inert: false`.** An inert load is a safety layer that will never warn about anything.
-- **`arms.doseCeilings` and `arms.handAuthoredRules` are `absent`, and that is correct.**
-  DDInter's V1 scope is drug–drug interactions only. Do **not** write dose-excess or
+- **`arms.doseCeilings`, `arms.handAuthoredRules` and `arms.conditionRules` are `absent`, and that
+  is correct.** DDInter's V1 scope is drug–drug interactions only. The third is the second's
+  `condition` leg, reported separately since
+  [#378](https://github.com/openmrs/openmrs-module-chartsearchai/issues/378) and also published on
+  the `/search` response as `conditionRuleCoverage`, so a clinician's client can say this install did
+  not screen her conditions. Do **not** write dose-excess or
   hand-authored allergy/condition test cases against `ddinter` — they belong to
   `sourceFormat=json`. The allergy warnings in [section 4](#4-allergy-cross-reactivity-and-duplicate-therapy)
   come from the patient's own chart crossed with ATC classes and the curated cross-reactivity
@@ -111,7 +116,7 @@ curl -s -u admin:Admin123 -H 'Content-Type: application/json' \
   http://localhost:8081/openmrs/ws/rest/v1/chartsearchai/search | jq
 ```
 
-Six fields of the response matter for these tests:
+These fields of the response matter for these tests:
 
 | Field | What it is |
 |---|---|
@@ -121,6 +126,7 @@ Six fields of the response matter for these tests:
 | `references` | the records the answer actually **cited** — `drug_order`, `allergy`, `condition`, `safety_finding`, `drug_reference`, and since [#354](https://github.com/openmrs/openmrs-module-chartsearchai/issues/354) `drug_class_note` for a question that names a drug class no reference entry is indexed by |
 | `unfaithfullyRenderedCitations` | the citations whose rendering IN THE ANSWER the module found unfaithful to the record they point at ([#337](https://github.com/openmrs/openmrs-module-chartsearchai/issues/337)) — one entry per record however many times the answer diverged from it. This is what turns the rough edge recorded below from a log line into something a test can read. `null` is the absence of a measurement (the early `done` under async grounding states it); `[]` says the check named no citation and is **not** a certificate that the answer was compared and found faithful. `README.md` is canonical for what a client may and may not put beside it |
 | `unresolvedDrugClass` | the drug **class** the question named and the module resolved to no substance, or `null` where it states none ([#354](https://github.com/openmrs/openmrs-module-chartsearchai/issues/354)). Deterministic like the chips: the same statement is injected as a citable `drug_class_note` record, but that reaches the response only if the model cites it — so this is what a test on a class-term question reads. `null` is the absence of a statement, never a denial |
+| `conditionRuleCoverage` | what the loaded dataset publishes for the hand-authored **condition**-rule arm ([#378](https://github.com/openmrs/openmrs-module-chartsearchai/issues/378)) — `absent`, `published` or `unloaded`. On every `ddinter` cell below it reads **`absent`**, because DDInter publishes no such rule. Two other readings are diagnostic rather than surprising: **`unloaded`** means nothing was read at all, which on a `ddinter`-configured instance almost always means `chartsearchai.drugReference.enabled` was left at its default of `false` — check the master switch before `sourceFormat` or `dataFilePath`; **`published`** on this source means something other than the shipped dataset was loaded. It is a statement about the DATASET: `absent` says the screen had no rule to ask the patient's conditions with, never that no contraindication chip can be raised — the same-drug allergy, shared-subgroup and curated legs are untouched by it. `README.md` is canonical for what a client may read into each value |
 
 > **Judge the chips, not only the prose.** The chips are the tested, deterministic layer; the
 > prose is a small local model's rendering of it. Several examples below are cases where the

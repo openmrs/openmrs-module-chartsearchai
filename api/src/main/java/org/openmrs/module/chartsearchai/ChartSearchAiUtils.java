@@ -262,7 +262,7 @@ public class ChartSearchAiUtils {
 	 * withheld. Faithfulness of reference content is checked deterministically instead, by two exact
 	 * comparisons, which are the deterministic post-answer checks that read reference content and not
 	 * all of them — {@code ActiveOrderCitationFidelityCheck} (issue #377) reads none, asking instead
-	 * which CHART record a sentence cited, and ADR Decision 75 is where they are enumerated. The two
+	 * which CHART record a sentence cited, and ADR Decision 76 is where they are enumerated. The two
 	 * that read reference content are {@code ClassCodeFidelityCheck}, for an ATC class code
 	 * the answer states that no cited record does (issue #142), report-only, and
 	 * {@code ReferenceProseFidelityCheck} for an answer that reproduces a cited reference record's
@@ -344,7 +344,7 @@ public class ChartSearchAiUtils {
 	 * same type covers {@code "Test order:"} and {@code "Referral order:"} — admitting it would admit
 	 * a lab order as evidence of a medication one. And this is not
 	 * {@code QueryScopeRouter.typedSlice}'s MEDICATIONS slice: that is a RETRIEVAL scope and cannot
-	 * carry {@code active_drug_order}, a type retrieval never returns. &rarr; ADR Decision 75,
+	 * carry {@code active_drug_order}, a type retrieval never returns. &rarr; ADR Decision 76,
 	 * canonical for both arguments and for what admitting the dispense type gives up.
 	 *
 	 * @param resourceType the cited record's resource type, may be null

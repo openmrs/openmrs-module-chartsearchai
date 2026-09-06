@@ -39,8 +39,9 @@ public class ChartSearchAiUtils {
 	 * single source of truth for citation-marker parsing, shared by every consumer
 	 * {@link #citedIndexes} names — citation extraction ({@code LlmInferenceService}),
 	 * grounding ({@code CitationGroundingVerifier}), safety echo-scoping
-	 * ({@code DrugSafetyValidator}) and the class-code parenthetical check
-	 * ({@code ClassCodeFidelityCheck}) — so they cannot drift apart.
+	 * ({@code DrugSafetyValidator}), the class-code parenthetical check
+	 * ({@code ClassCodeFidelityCheck}) and the active-order citation check
+	 * ({@code ActiveOrderCitationFidelityCheck}) — so they cannot drift apart.
 	 *
 	 * <p>Deliberately single-index. Small local models also emit compact shorthand —
 	 * {@code [6, 7]} (measured on the rc.2 standalone, 2026-07-21: the #76 guard read such
@@ -144,9 +145,12 @@ public class ChartSearchAiUtils {
 	 * citation extraction ({@code LlmInferenceService}), grounding
 	 * ({@code CitationGroundingVerifier}), safety echo-scoping ({@code DrugSafetyValidator}) and —
 	 * since issue #338 — the check that asks whether a marker sits INSIDE a class-code parenthetical
-	 * ({@code ClassCodeFidelityCheck}), so those consumers cannot drift. (The clause-scoped splitter
-	 * keeps its own matcher — it needs each marker's text offset, which a set of indexes cannot
-	 * carry.) Returns an empty set for null/blank text.
+	 * ({@code ClassCodeFidelityCheck}) and — since issue #377 — the active-order citation check
+	 * ({@code ActiveOrderCitationFidelityCheck}), so those consumers cannot drift. TWO callers match
+	 * {@link #INLINE_CITATION} directly instead, and each needs the one thing a set of indexes cannot
+	 * carry, a marker's text offset: the clause-scoped splitter, and
+	 * {@code ActiveOrderCitationFidelityCheck}, which must find where a RUN of markers ends before it
+	 * has a substring to decode. Returns an empty set for null/blank text.
 	 */
 	public static Set<Integer> citedIndexes(String text) {
 		Set<Integer> indexes = new java.util.LinkedHashSet<Integer>();
@@ -257,8 +261,9 @@ public class ChartSearchAiUtils {
 	 * A passing verdict is therefore false assurance. A FAILING verdict still carries information — it
 	 * says the citation is not about the record at all — so the flag is kept and only the pass is
 	 * withheld. Faithfulness of reference content is checked deterministically instead, by two exact
-	 * comparisons — two of the three deterministic checks that run after every answer, the third
-	 * ({@code ActiveOrderCitationFidelityCheck}, issue #377) reading no reference content at all:
+	 * comparisons, which are the deterministic post-answer checks that read reference content and not
+	 * all of them — {@code ActiveOrderCitationFidelityCheck} (issue #377) reads none, asking instead
+	 * which CHART record a sentence cited. ADR Decision 75 enumerates them; this does not:
 	 * {@code ClassCodeFidelityCheck} for an ATC class code
 	 * the answer states that no cited record does (issue #142), report-only, and
 	 * {@code ReferenceProseFidelityCheck} for an answer that reproduces a cited reference record's
@@ -336,20 +341,12 @@ public class ChartSearchAiUtils {
 	 * drug, and reporting a clinician-legible citation of one would be the check crying wolf. What
 	 * that gives up is naming a dispense cited for an ORDER claim.
 	 *
-	 * <p><b>{@link ChartSearchAiConstants#RESOURCE_TYPE_ORDER} is deliberately OUT.</b> Its only
-	 * production appearance is inside {@code getEmbeddingPrefix}, which nothing in this module calls
-	 * any more — the residue of the in-process embedding pipeline issue #51 moved to querystore — and
-	 * that switch reads {@code "Test order:"} and {@code "Referral order:"} under the same type, so
-	 * admitting it would admit a lab order and a referral as evidence of a medication order. The one
-	 * live producer of it is {@code TestDatasetHelper}, which types every
-	 * {@code "Medication prescription:"} record as {@code order}: a chart built from those datasets
-	 * would be reported, and that is test data rather than anything an install serves.
-	 *
-	 * <p><b>It is not {@code QueryScopeRouter}'s MEDICATIONS slice and must not be folded into it.</b>
-	 * That one is a RETRIEVAL scope — which types to ask querystore for — and cannot carry
-	 * {@code active_drug_order}, a type retrieval never returns because this module mints it after
-	 * the fact. This one is an EVIDENCE test over records already in hand. The two agree on the
-	 * types they share and are not two spellings of one question.
+	 * <p><b>{@link ChartSearchAiConstants#RESOURCE_TYPE_ORDER} is deliberately OUT</b>, because the
+	 * same type covers {@code "Test order:"} and {@code "Referral order:"} — admitting it would admit
+	 * a lab order as evidence of a medication one. And this is not
+	 * {@code QueryScopeRouter.typedSlice}'s MEDICATIONS slice: that is a RETRIEVAL scope and cannot
+	 * carry {@code active_drug_order}, a type retrieval never returns. &rarr; ADR Decision 75,
+	 * canonical for both arguments and for what admitting the dispense type gives up.
 	 *
 	 * @param resourceType the cited record's resource type, may be null
 	 * @return true when a record of this type could be a medication order or dispensing of one

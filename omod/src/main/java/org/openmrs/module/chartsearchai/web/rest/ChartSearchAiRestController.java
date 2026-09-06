@@ -1395,7 +1395,7 @@ public class ChartSearchAiRestController {
 	 *
 	 * <p><b>The copy is a correctness requirement</b> and not caution — the measurement is at
 	 * {@link #serializeSafetyWarnings}, which takes it for the same reason. What is new here is the
-	 * guard around it: unlike {@code chartOrderBridges()} this accessor can return null, and
+	 * guard around it: unlike {@code chartOrderBridges()} these two accessors can return null, and
 	 * {@code new ArrayList<>(null)} throws. Its ROUTINE trigger is not a failed check but the
 	 * async-grounding early {@code done}, which is built from a shorter constructor and states null on
 	 * every such request — measured by removing the guard, which breaks the {@code done} event for
@@ -1403,8 +1403,10 @@ public class ChartSearchAiRestController {
 	 * and no path is known to deliver it: ADR Decision 61 records that no TEST reaches it, a record
 	 * throwing on read being pre-empted by {@code referenceSlice}, and the one line the check's catch
 	 * is documented as covering — a read of {@code patient.getPatientId()} — is re-read by both answer
-	 * methods in their {@code finally} timing log, so a throw there errors the request instead. The
-	 * guard stays because it costs one comparison and the alternative is a 500.
+	 * methods in their {@code finally} timing log, so a throw there errors the request instead.
+	 * {@code misattributedOrderCitations} has an identically shaped failure branch, which ADR
+	 * Decision 75 records and Decision 61 does not cover. The guard stays because it costs one
+	 * comparison and the alternative is a 500.
 	 */
 	private void putModuleStatements(Map<String, Object> target, ChartAnswer answer) {
 		putSafetyChips(target, answer);

@@ -75,8 +75,9 @@ import org.slf4j.LoggerFactory;
  * {@code "…active order Simvastatin [3] [61], and her thyroid neoplasm [9] is unrelated"} does not
  * attribute {@code [9]} to the order claim. Sentences still bound the scan
  * ({@link ChartSearchAiUtils#SENTENCE_BOUNDARY}, the SPLITTING question over the shared terminator
- * set) so a phrase occurrence with no run after it cannot reach into the next sentence for one, and
- * so does the next phrase occurrence.
+ * set) so a phrase occurrence with no run after it cannot reach into the next sentence for one. The
+ * next phrase occurrence bounds the scan as well, though only the scan — {@link #examine} records
+ * what removing that bound was measured to change, which is nothing.
  *
  * <p><b>Not a fourth claim-unit rule.</b> {@code CitationGroundingVerifier}'s {@code splitEnumeration}
  * and {@code splitIntoClauseScopedSentences} partition a sentence for GRADING, into cumulative
@@ -96,7 +97,12 @@ import org.slf4j.LoggerFactory;
  *       the system prompt's safety few-shot teaches the composite SHAPE but not this wording, which
  *       the model copies from the finding record — and on the ticket's own reproduction it fires;</li>
  *   <li>it considers only indexes the answer's own resolution admitted, so a bracketed clinical
- *       value the chart has no record for is not a citation here either;</li>
+ *       value the chart has no record for is not a citation here either. That filter and
+ *       {@link #refusal}'s null-mapping arm are ONE conservatism and not two — {@code
+ *       extractCitedReferences} admits every in-range index, so removing either leaves the other
+ *       answering, and removing this one was measured byte-identical. It is the one kept because
+ *       CLAUDE.md's inline-citation rule states it: an index is not a citation until the answer's
+ *       own resolution admits it;</li>
  *   <li>reference-group citations in the run are untouched. Every one of these runs carries the
  *       module's own {@code safety_finding} beside the chart citation — that is the shape the ticket
  *       measured — and it is cited legitimately;</li>
@@ -137,7 +143,10 @@ import org.slf4j.LoggerFactory;
  * sentence is a larger decision than this check is licensed to make.
  *
  * <p><b>Where it runs.</b> Both answer paths, {@link LlmInferenceService#search} and
- * {@code searchStreaming}, so the endpoint users hit is covered. Not the progressive-reasoning
+ * {@code searchStreaming}, so the endpoint users hit is covered. &rarr; ADR Decision 75, canonical
+ * for the reasoning, for the alternatives measured and rejected, and for the residues.
+ *
+ * <p>Not the progressive-reasoning
  * preview, which discards its answer and resolves no citations, and not a cached answer, which was
  * checked when it was produced — the same scoping {@link ClassCodeFidelityCheck} states.
  */
@@ -148,7 +157,12 @@ final class ActiveOrderCitationFidelityCheck {
 	/** The characters that may separate two markers of one run. Whitespace because that is how the
 	 *  model writes them, and a comma because {@code LlmAnswerExtractor.normalizeSlashCitations}
 	 *  rewrites {@code [6, 7]} into two markers and leaves the separator behind. Nothing else: a
-	 *  word between two markers means the second one attributes a different clause. */
+	 *  word between two markers means the second one attributes a different clause.
+	 *
+	 *  <p>Deliberately narrower than {@code CitationGroundingVerifier}'s {@code LEADING_ITEM_SEPARATOR},
+	 *  the nearest neighbouring alphabet, which also admits {@code ;} and a leading {@code and} or
+	 *  {@code or} because it separates ITEMS of one enumeration. Widening this to match would make a
+	 *  second claim's markers part of the first claim's run; the narrowing fails toward silence. */
 	private static final String RUN_SEPARATORS = " \t\r\n,";
 
 	private ActiveOrderCitationFidelityCheck() {
@@ -179,8 +193,11 @@ final class ActiveOrderCitationFidelityCheck {
 			List<Integer> offending = new ArrayList<Integer>();
 			if (answer == null
 					|| !answer.contains(DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE)) {
-				// The gate. Without it this stops being a rule about active-order claims and becomes
-				// a rule about which records an answer may cite at all.
+				// A short-circuit and NOT the rule — deleting it was measured byte-identical over the
+				// same 66,429 arrangements, because examine's own per-sentence indexOf is what
+				// scopes the check to an active-order claim. What it buys is that the overwhelmingly
+				// common answer, which states no such claim, costs one containment scan and neither
+				// map below: 0.45 us against 66-90 us for an answer that does state one.
 				return offending;
 			}
 			Map<Integer, RecordMapping> byIndex = new HashMap<Integer, RecordMapping>();
@@ -240,8 +257,13 @@ final class ActiveOrderCitationFidelityCheck {
 		int at = sentence.indexOf(phrase);
 		while (at >= 0) {
 			int next = sentence.indexOf(phrase, at + phrase.length());
-			// The claim's own text ends where the next claim begins, so a phrase occurrence with no
-			// run of its own cannot borrow the next one's.
+			// Where the next claim begins. It bounds the SCAN and not the answer: removing it and
+			// passing sentence.length() was measured byte-identical over 66,429 generated
+			// arrangements of the phrase, markers, separators and a terminator — a run that would
+			// reach past the next occurrence is already stopped by onlySeparators, the gap carrying
+			// that occurrence's own letters, and a run beyond it is attributed to that occurrence
+			// instead, in the same order. It stays because firstMarkerRun makes it the region bound
+			// that keeps the scan linear.
 			int limit = next < 0 ? sentence.length() : next;
 			for (Integer index : ChartSearchAiUtils.citedIndexes(
 					firstMarkerRun(sentence, at + phrase.length(), limit))) {
@@ -269,13 +291,19 @@ final class ActiveOrderCitationFidelityCheck {
 	 *         cannot carry: where each marker sits, so the run can be told from the next claim's.
 	 */
 	private static String firstMarkerRun(String sentence, int from, int limit) {
-		Matcher marker = ChartSearchAiUtils.INLINE_CITATION.matcher(sentence);
+		// The region is what keeps this linear. Matcher.find scans to the end of the INPUT, not to a
+		// bound the caller applies afterwards, so a phrase occurrence with no marker after it used to
+		// pay for a scan of the whole remaining sentence — once per occurrence, which is quadratic in
+		// the occurrences of one sentence. Measured by calling this class's own entry point from a
+		// throwaway same-package case, best of five rounds of fifty after fifty warm-up iterations,
+		// over an answer that is nothing but repeated claims with no markers: at 40 occurrences 207
+		// us without the region and 103 us with it, at 320 occurrences 10.7 ms without and 574 us
+		// with. The pattern has no anchor and no lookaround, so narrowing the region cannot change
+		// what it matches; INLINE_CITATION's javadoc is where that property is stated.
+		Matcher marker = ChartSearchAiUtils.INLINE_CITATION.matcher(sentence).region(from, limit);
 		int start = -1;
 		int end = -1;
-		while (marker.find(from)) {
-			if (marker.start() >= limit) {
-				break;
-			}
+		while (marker.find()) {
 			if (start < 0) {
 				start = marker.start();
 			}
@@ -283,7 +311,6 @@ final class ActiveOrderCitationFidelityCheck {
 				break;
 			}
 			end = marker.end();
-			from = marker.end();
 		}
 		return start < 0 ? "" : sentence.substring(start, end);
 	}
@@ -324,7 +351,10 @@ final class ActiveOrderCitationFidelityCheck {
 			return null;
 		}
 		if (!ChartSearchAiUtils.mayDescribeAMedicationOrder(mapping.getResourceType())) {
-			return "a " + mapping.getResourceType() + " record";
+			// No article: the types this reaches begin with vowels as often as not ("encounter",
+			// "obs", "allergy"), and a maintainer-facing line reading "a encounter record" invites a
+			// fix to the grammar rather than to the citation.
+			return mapping.getResourceType() + " record";
 		}
 		if (Boolean.FALSE.equals(mapping.getOrderActive())) {
 			return "an order the chart marks as no longer in force";

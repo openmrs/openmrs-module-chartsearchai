@@ -282,6 +282,28 @@ public class ActiveOrderCitationFidelityTest {
 	}
 
 	@Test
+	public void aCitationInTheNEXTSentenceIsNotAttributedToTheClaim() {
+		// The cross-sentence twin of the later-clause case below, and what pins the per-sentence
+		// split. Review measured that replacing that split with one whole-answer pass left every
+		// other case in this file green while changing 1,856 of 66,429 generated arrangements: the
+		// claim here carries no markers of its own, so without the split the next sentence's
+		// citation becomes the claim's — a correct citation of a condition, reported. Silence is the
+		// direction this check must fail in.
+		int condition = indexOfType(ChartSearchAiConstants.RESOURCE_TYPE_CONDITION);
+		service.setLlmProvider(answering("Clarithromycin" + PHRASE + "Simvastatin. She also has a "
+				+ "benign thyroid neoplasm [" + condition + "]."));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			service.search(patient(), QUESTION);
+			assertFalse(capture.describeAll().isEmpty(),
+					"the capture must receive the pipeline's own INFO lines, or the assertion below "
+							+ "passes vacuously");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"a citation in the following sentence is that sentence's. Captured: "
+							+ capture.describeAll());
+		}
+	}
+
+	@Test
 	public void aLoneCitationInAClaimWithNoRunOfItsOwnIsAttributedToIt() {
 		// Pins a residue rather than a defect, at the shape review found it in. The run is the FIRST
 		// one after the phrase and nothing bounds the gap — the partner's name sits there and a name
@@ -343,7 +365,7 @@ public class ActiveOrderCitationFidelityTest {
 				+ withInjectedOrder.getText());
 		TestableService onInjected = newService(withInjectedOrder);
 		int finding = -1;
-		for (RecordMapping mapping : DrugReferenceTestSupport.injectedFindingsIn(withInjectedOrder)) {
+		for (RecordMapping mapping : DrugReferenceTestSupport.injectedFindings(withInjectedOrder)) {
 			if (mapping.getText() != null && mapping.getText().contains(PHRASE)) {
 				finding = mapping.getIndex();
 				break;
@@ -464,7 +486,7 @@ public class ActiveOrderCitationFidelityTest {
 	 *  file chose. */
 	private List<Integer> findingsStatingThePhrase() {
 		List<Integer> out = new ArrayList<Integer>();
-		for (RecordMapping mapping : DrugReferenceTestSupport.injectedFindingsIn(chart)) {
+		for (RecordMapping mapping : DrugReferenceTestSupport.injectedFindings(chart)) {
 			if (mapping.getText() != null && mapping.getText().contains(PHRASE)) {
 				out.add(Integer.valueOf(mapping.getIndex()));
 			}
@@ -524,6 +546,10 @@ public class ActiveOrderCitationFidelityTest {
 		});
 		created.setDrugSafetyValidator(new DrugSafetyValidator() {
 
+			// The overload production actually calls: mappings-carrying for echo scoping (issue #105)
+			// and sink-carrying since issue #336. Stubbing a shorter one instead leaves this stub
+			// INERT — production would not reach it — which is why this names both parameters. One
+			// sibling of this file has drifted onto a shorter overload and passes for another reason.
 			@Override
 			public List<SafetyWarning> validate(String answer, String question, Patient patient,
 					List<RecordMapping> mappings, PairChipExtent.Sink pairExtentSink) {

@@ -101,9 +101,11 @@ import org.springframework.stereotype.Service;
  * claim unit under entailment, the stronger rule below wins and even the fail is withheld — no
  * consumer can see the difference, since #201 withholds every reference-group verdict at the wire.)
  * Faithfulness of reference content is
- * checked deterministically instead, by two exact comparisons over what the answer states
- * about the record (a third deterministic check, {@link ActiveOrderCitationFidelityCheck}, reads no
- * reference content and is not one of them — it asks which CHART record a sentence cited): {@link ClassCodeFidelityCheck} for an ATC class code the model edited while
+ * checked deterministically instead, by the exact comparisons over what the answer states about
+ * the record. {@link ActiveOrderCitationFidelityCheck} runs after every answer too and is NOT one
+ * of them: it reads no reference content, asking instead which CHART record a sentence cited. ADR
+ * Decision 75 enumerates the post-answer checks and this javadoc does not.
+ * {@link ClassCodeFidelityCheck} for an ATC class code the model edited while
  * citing the record that carries it (issue #142), report-only, and {@link ReferenceProseFidelityCheck}
  * for a recitation the model diverged from inside the sentence it was copying (issue #337), whose
  * answer is also published — as {@code unfaithfullyRenderedCitations}, and deliberately not as a

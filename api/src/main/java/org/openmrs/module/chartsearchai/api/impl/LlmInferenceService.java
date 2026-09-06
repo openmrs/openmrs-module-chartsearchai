@@ -472,10 +472,13 @@ public class LlmInferenceService implements ChartSearchService {
 			// and, since issue #377, the chart citations offered as evidence of an active drug order
 			// that cannot be one. None blocks: the class-code check reports only to the log, and the
 			// other two carry their answers onto the ChartAnswer this method RETURNS, so no consumer
-			// above waits on any of them. Not "microseconds", which this comment said and which is
-			// true only of the first: the prose check is a word-level dynamic program, measured at
-			// ~0.7 ms on a realistic chart and ~1.2 ms at the largest injected record set anyone has
-			// swept (ADR Decision 61).
+			// above waits on any of them. Microseconds for the first and the third — measured by
+			// calling their own entry points from a throwaway same-package case, the active-order
+			// check costs 0.93 us on an answer stating no active-order claim, which is the ordinary
+			// one, and 171 us on a five-claim answer over a 400-record chart. The prose check is the
+			// outlier and is why this comment stopped saying microseconds of all of them: it is a
+			// word-level dynamic program, ~0.7 ms on a realistic chart and ~1.2 ms at the largest
+			// injected record set anyone has swept (ADR Decision 61).
 			ClassCodeFidelityCheck.reportClassCodeDefects(patient, question, response.getAnswer(),
 					cited, chart.getMappings());
 			// Its answer is carried onto the ChartAnswer this method returns (issue #337 round two).

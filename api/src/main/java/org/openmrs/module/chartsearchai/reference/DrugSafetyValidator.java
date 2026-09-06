@@ -171,8 +171,9 @@ public class DrugSafetyValidator {
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/377">#377</a>):
 	 * {@code ActiveOrderCitationFidelityCheck} recognises this claim in an ANSWER in order to ask
 	 * what chart record was cited for it, so the renderer and the recogniser are now one string.
-	 * Re-inlining the literal below would leave the whole behavioural suite green while the
-	 * recogniser silently stopped matching what the renderer writes, which is why
+	 * Re-inlining the literal below breaks nothing on the day it is done — the two spellings are
+	 * equal and the whole behavioural suite stays green, measured — which is exactly the problem: it
+	 * removes the coupling, so a later edit to either side diverges silently. That is why
 	 * {@code ActiveOrderInteractionPhraseTest} reads the SOURCE rather than the behaviour.
 	 */
 	public static final String ACTIVE_ORDER_INTERACTION_PHRASE = " interacts with active order ";

@@ -451,21 +451,16 @@ public final class DrugReferenceTestSupport {
 	 * filter cannot drift between the test files that assert HOW MANY records a chip yields. Returns
 	 * the list rather than the first, because that count is the assertion in every caller but
 	 * {@link #injectedSafetyFinding}, which layers its own throw-on-empty contract on top.
+	 *
+	 * <p>Public for the cross-package reason {@link #safetyFindingIn} is: a test in another package
+	 * whose assertion is about WHICH of several findings an answer sentence cited needs them all
+	 * rather than the first. Widened rather than aliased — two public names for one matcher is the
+	 * drift this file exists to prevent.
 	 */
-	static List<RecordMapping> injectedFindings(PatientChart chart) {
+	public static List<RecordMapping> injectedFindings(PatientChart chart) {
 		return chart.getMappings().stream()
 				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(m.getResourceType()))
 				.collect(Collectors.toList());
-	}
-
-	/**
-	 * {@link #injectedFindings}, public for the cross-package callers {@link #safetyFindingIn} is
-	 * public for — a test in another package that needs EVERY finding rather than the first, because
-	 * its assertion is about which of several findings an answer sentence cited. Delegates rather
-	 * than filtering again, so there is still one matcher for "the injected findings".
-	 */
-	public static List<RecordMapping> injectedFindingsIn(PatientChart chart) {
-		return injectedFindings(chart);
 	}
 
 	/**

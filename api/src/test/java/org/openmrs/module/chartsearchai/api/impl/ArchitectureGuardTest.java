@@ -309,8 +309,14 @@ public class ArchitectureGuardTest {
 	 * today, and one that did would be invisible here. It excludes {@code ChartAnswer} itself, whose
 	 * telescoping constructors legitimately name every arity. And a class that builds an answer
 	 * through a factory rather than a constructor is outside it; no such factory exists.
-	 * {@code docs/adr.md} Decision 21 rejected class files for a question about WHERE a statement
-	 * sits, which needs a parser; a descriptor needs only the constant pool.
+	 * And it reads BUILD OUTPUT, so it describes what was last compiled — which is why the module's
+	 * own rule to measure with {@code mvn -o clean install} from the root binds this guard as much as
+	 * any test. Reading compiled output is this repo's own idiom for a rule no behavioural case can
+	 * see, rather than a departure from it: {@code ChartSearchAiReferenceGroundingWithholdingTest}
+	 * reads every class file the controller compiles to and fails the build on a hardcoded
+	 * resource-type name, and ADR Decision 40 cites it as the precedent for pinning a behaviour-neutral
+	 * rule structurally. What that one needs from the pool is a NAME; what this one needs is a
+	 * DESCRIPTOR. Neither needs a bytecode parser.
 	 */
 	@Test
 	public void everyAnswerThisModuleBuildsCarriesTheConditionRuleCoverage() throws IOException {

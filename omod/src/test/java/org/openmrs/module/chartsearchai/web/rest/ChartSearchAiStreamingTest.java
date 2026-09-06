@@ -98,9 +98,8 @@ public class ChartSearchAiStreamingTest {
 	 * the identical read spelled {@code Context.getAuthenticatedUser()} failed the scan and nothing
 	 * else — so the scan works and it was the spelling that admitted it. The remedy is the import
 	 * assertion below, which is deliberately over the WHOLE file rather than the class body, since an
-	 * import sits above it; it needs no region canary, because the positive
-	 * {@code source.contains("new Thread(")} at the top of this method already fails if the source ever
-	 * reads empty. Placement matters to the measurement and not to the hole: the same read put BEFORE
+	 * import sits above it; it needs no region canary, because the positive thread-creation assertion
+	 * at the top of this method already fails if the source ever reads empty. Placement matters to the measurement and not to the hole: the same read put BEFORE
 	 * the write reddens six behavioural cases instead, because then no comment is ever written, which
 	 * is the case {@code RestControllerContext}'s javadoc records.</p>
 	 *

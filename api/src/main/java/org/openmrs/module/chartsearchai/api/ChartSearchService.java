@@ -230,6 +230,8 @@ public interface ChartSearchService {
 
 		private final List<Integer> unfaithfullyRenderedCitations;
 
+		private final List<Integer> misattributedOrderCitations;
+
 		public ChartAnswer(String answer, List<RecordReference> references) {
 			this(answer, references, 0, 0, 0);
 		}
@@ -288,6 +290,17 @@ public interface ChartSearchService {
 				List<SafetyWarning> safetyWarnings, String searchMode,
 				ChartSearchAiUtils.ReferenceSlice referenceSlice, PairChipExtent pairChipExtent,
 				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations) {
+			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings,
+					searchMode, referenceSlice, pairChipExtent, unresolvedDrugClass,
+					unfaithfullyRenderedCitations, null);
+		}
+
+		public ChartAnswer(String answer, List<RecordReference> references,
+				int inputTokens, int outputTokens, int cachedTokens,
+				List<SafetyWarning> safetyWarnings, String searchMode,
+				ChartSearchAiUtils.ReferenceSlice referenceSlice, PairChipExtent pairChipExtent,
+				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations,
+				List<Integer> misattributedOrderCitations) {
 			this.answer = answer;
 			this.references = java.util.Collections.unmodifiableList(
 					new java.util.ArrayList<>(references));
@@ -306,6 +319,11 @@ public interface ChartSearchService {
 			this.unfaithfullyRenderedCitations = unfaithfullyRenderedCitations == null ? null
 					: java.util.Collections.unmodifiableList(
 							new java.util.ArrayList<Integer>(unfaithfullyRenderedCitations));
+			// Same rule, same reason (issue #377): null is the absence of a measurement and empty is
+			// a measurement of none, so neither is normalised into the other.
+			this.misattributedOrderCitations = misattributedOrderCitations == null ? null
+					: java.util.Collections.unmodifiableList(
+							new java.util.ArrayList<Integer>(misattributedOrderCitations));
 		}
 
 		/**
@@ -542,6 +560,42 @@ public interface ChartSearchService {
 		 */
 		public List<Integer> getUnfaithfullyRenderedCitations() {
 			return unfaithfullyRenderedCitations;
+		}
+
+		/**
+		 * The chart citations this answer offered as evidence of an ACTIVE DRUG ORDER that cannot be
+		 * one — <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/377">issue
+		 * #377</a>. {@code ActiveOrderCitationFidelityCheck} reports them, and this is the same
+		 * remedy {@link #getUnfaithfullyRenderedCitations()} is for the same failure one issue over:
+		 * the reported answer named five active orders, cited a condition, a visit and an encounter
+		 * for three of them, and nothing a consumer of the response could read separated those three
+		 * from the two that were right — every citation in it serialized {@code grounded: null},
+		 * which is what the #284 carve-out publishes for a chart citation whose sentence also rests
+		 * on a {@code safety_finding}.
+		 *
+		 * <p><b>The CITATION and never a word of either text</b>, for the reason its sibling states:
+		 * a client renders its own sentence beside the marker, and the record's prose is not the
+		 * module's to restate here. One index is one entry however many active-order claims cited
+		 * it.
+		 *
+		 * <p><b>It is not a grounding verdict.</b> It says the record cannot be evidence of an active
+		 * order, not that the claim is unsupported — the finding behind these sentences is
+		 * deterministic and, on the reported answer, correct. Rendering it as "unsupported" is issue
+		 * #201's miscarriage in a new place.
+		 *
+		 * <p><b>Null is the absence of a measurement; empty is a measurement of none — and empty is
+		 * not a certificate.</b> The check is recall-limited by construction: it sees only an answer
+		 * that reproduces {@code DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE}, only the run
+		 * of citation markers that follows it, and it cannot tell a citation of the WRONG drug order
+		 * from a citation of the right one. ADR Decision 75 enumerates that. Null's reachable cause
+		 * is the async-grounding path's early {@code done}, built before the check runs; on a cache
+		 * hit the ORIGINAL request's list is replayed with the rest of the answer.
+		 *
+		 * @return the distinct citation indexes, in the order the answer states them, or null where
+		 *         none was stated
+		 */
+		public List<Integer> getMisattributedOrderCitations() {
+			return misattributedOrderCitations;
 		}
 	}
 

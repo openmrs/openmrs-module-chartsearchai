@@ -1385,6 +1385,14 @@ public class ChartSearchAiRestController {
 	 * why no prose travels with it, and for the difference between {@code null} and an empty list — a
 	 * difference this method preserves rather than flattening.
 	 *
+	 * <p>{@code misattributedOrderCitations} is that remedy once more, one issue later
+	 * (<a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/377">#377</a>): the
+	 * chart citations the answer offered as evidence of an active drug order that cannot be one.
+	 * {@code ChartAnswer.getMisattributedOrderCitations()} is canonical for what it states, for why
+	 * no prose travels with it, and for the difference between {@code null} and an empty list. It
+	 * reaches this method rather than {@code putSafetyChips} for the reason
+	 * {@code unfaithfullyRenderedCitations} does: it is a statement about the ANSWER, not a chip.
+	 *
 	 * <p><b>The copy is a correctness requirement</b> and not caution — the measurement is at
 	 * {@link #serializeSafetyWarnings}, which takes it for the same reason. What is new here is the
 	 * guard around it: unlike {@code chartOrderBridges()} this accessor can return null, and
@@ -1404,6 +1412,9 @@ public class ChartSearchAiRestController {
 		List<Integer> unfaithful = answer.getUnfaithfullyRenderedCitations();
 		target.put("unfaithfullyRenderedCitations",
 			unfaithful == null ? null : new ArrayList<Integer>(unfaithful));
+		List<Integer> misattributed = answer.getMisattributedOrderCitations();
+		target.put("misattributedOrderCitations",
+			misattributed == null ? null : new ArrayList<Integer>(misattributed));
 	}
 
 	/**

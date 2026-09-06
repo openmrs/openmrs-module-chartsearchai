@@ -257,7 +257,9 @@ public class ChartSearchAiUtils {
 	 * A passing verdict is therefore false assurance. A FAILING verdict still carries information — it
 	 * says the citation is not about the record at all — so the flag is kept and only the pass is
 	 * withheld. Faithfulness of reference content is checked deterministically instead, by two exact
-	 * comparisons that run after every answer: {@code ClassCodeFidelityCheck} for an ATC class code
+	 * comparisons — two of the three deterministic checks that run after every answer, the third
+	 * ({@code ActiveOrderCitationFidelityCheck}, issue #377) reading no reference content at all:
+	 * {@code ClassCodeFidelityCheck} for an ATC class code
 	 * the answer states that no cited record does (issue #142), report-only, and
 	 * {@code ReferenceProseFidelityCheck} for an answer that reproduces a cited reference record's
 	 * prose and then substitutes its own words inside the sentence it was copying (issue #337), whose
@@ -305,6 +307,57 @@ public class ChartSearchAiUtils {
 	 */
 	private static boolean isReferenceMaterial(String resourceType) {
 		return ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE.equals(referenceGroup(resourceType));
+	}
+
+	/**
+	 * Whether a cited chart record's resource type can describe a medication the patient was
+	 * PRESCRIBED or GIVEN at all — the admissibility half of
+	 * {@code ActiveOrderCitationFidelityCheck} (issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/377">#377</a>), which
+	 * asks it of the chart citation an answer offers as evidence of an active drug order. A
+	 * condition, a visit and an encounter answer false, and those were the three the reported answer
+	 * cited.
+	 *
+	 * <p><b>An ALLOW-LIST, so a type nobody here declared answers false.</b> That direction is
+	 * forced: the two types the ticket's own measurement caught — querystore's {@code visit} and
+	 * {@code encounter} — are contract strings this module never declares, so a deny-list could not
+	 * have named them. What it costs is stated rather than implied: a deployment whose retrieval
+	 * types prescriptions as something outside this list would have every active-order sentence
+	 * reported. The WARN carries the type for exactly that reason, so one log line diagnoses it.
+	 *
+	 * <p><b>Three members, and the third is not an order.</b>
+	 * {@link ChartSearchAiConstants#RESOURCE_TYPE_DRUG_ORDER} is querystore's prescription contract —
+	 * the ticket's own table measured the patient's real orders arriving under it.
+	 * {@link ChartSearchAiConstants#RESOURCE_TYPE_ACTIVE_DRUG_ORDER} is this module's own record for
+	 * an active order the retrieved chart is missing (issue #118); it groups as chart evidence and
+	 * carries the real {@code Order} uuid, so it is the authoritative read of one.
+	 * {@link ChartSearchAiConstants#RESOURCE_TYPE_MEDICATION_DISPENSE} is admitted deliberately
+	 * although a dispensing event is not an order: it is a record of this patient being given the
+	 * drug, and reporting a clinician-legible citation of one would be the check crying wolf. What
+	 * that gives up is naming a dispense cited for an ORDER claim.
+	 *
+	 * <p><b>{@link ChartSearchAiConstants#RESOURCE_TYPE_ORDER} is deliberately OUT.</b> Its only
+	 * production appearance is inside {@code getEmbeddingPrefix}, which nothing in this module calls
+	 * any more — the residue of the in-process embedding pipeline issue #51 moved to querystore — and
+	 * that switch reads {@code "Test order:"} and {@code "Referral order:"} under the same type, so
+	 * admitting it would admit a lab order and a referral as evidence of a medication order. The one
+	 * live producer of it is {@code TestDatasetHelper}, which types every
+	 * {@code "Medication prescription:"} record as {@code order}: a chart built from those datasets
+	 * would be reported, and that is test data rather than anything an install serves.
+	 *
+	 * <p><b>It is not {@code QueryScopeRouter}'s MEDICATIONS slice and must not be folded into it.</b>
+	 * That one is a RETRIEVAL scope — which types to ask querystore for — and cannot carry
+	 * {@code active_drug_order}, a type retrieval never returns because this module mints it after
+	 * the fact. This one is an EVIDENCE test over records already in hand. The two agree on the
+	 * types they share and are not two spellings of one question.
+	 *
+	 * @param resourceType the cited record's resource type, may be null
+	 * @return true when a record of this type could be a medication order or dispensing of one
+	 */
+	public static boolean mayDescribeAMedicationOrder(String resourceType) {
+		return ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER.equals(resourceType)
+				|| ChartSearchAiConstants.RESOURCE_TYPE_ACTIVE_DRUG_ORDER.equals(resourceType)
+				|| ChartSearchAiConstants.RESOURCE_TYPE_MEDICATION_DISPENSE.equals(resourceType);
 	}
 
 	/**

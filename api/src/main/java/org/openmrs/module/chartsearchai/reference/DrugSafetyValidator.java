@@ -160,6 +160,23 @@ public class DrugSafetyValidator {
 
 	private static final Logger log = LoggerFactory.getLogger(DrugSafetyValidator.class);
 
+	/**
+	 * What an interaction chip's detail puts between the subject's own label and the name of the
+	 * active order it is about — the whole of the sentence this module renders for that
+	 * relationship, and the ONE spelling of it. Both spaces belong to the phrase: what precedes it
+	 * is {@link DrugReference#displayLabel()} and what follows is the partner's name, so a caller
+	 * matching it against answer prose is matching what {@link #interactionWarning} really wrote.
+	 *
+	 * <p><b>It is a constant because a second reader arrived</b> (issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/377">#377</a>):
+	 * {@code ActiveOrderCitationFidelityCheck} recognises this claim in an ANSWER in order to ask
+	 * what chart record was cited for it, so the renderer and the recogniser are now one string.
+	 * Re-inlining the literal below would leave the whole behavioural suite green while the
+	 * recogniser silently stopped matching what the renderer writes, which is why
+	 * {@code ActiveOrderInteractionPhraseTest} reads the SOURCE rather than the behaviour.
+	 */
+	public static final String ACTIVE_ORDER_INTERACTION_PHRASE = " interacts with active order ";
+
 	private static final Pattern DOSE_MG = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*mg\\b");
 
 	private static final Pattern EVERY_N_HOURS = Pattern.compile("(?:every\\s+(\\d+)\\s*(?:hours|hrs|hr|h)\\b|q(\\d+)h\\b|(\\d+)\\s*hourly\\b)");
@@ -5303,7 +5320,7 @@ public class DrugSafetyValidator {
 		// (issue #292) and two chips of one response cannot either (issue #339). That method is where
 		// the conditions under which the ladder's name may displace this one are stated, along with
 		// what remains of #121's invariant once it does.
-		String detail = ref.displayLabel() + " interacts with active order " + partnerName;
+		String detail = ref.displayLabel() + ACTIVE_ORDER_INTERACTION_PHRASE + partnerName;
 		if (i.getNote() != null && !i.getNote().isEmpty()) {
 			detail += " — " + i.getNote();
 		}

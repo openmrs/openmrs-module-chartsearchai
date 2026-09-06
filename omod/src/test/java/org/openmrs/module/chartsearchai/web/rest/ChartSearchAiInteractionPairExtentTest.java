@@ -233,10 +233,14 @@ public class ChartSearchAiInteractionPairExtentTest {
 	@Test
 	public void noEmissionSiteCanPublishChipsWithoutSayingHowBoundedTheyAre() throws Exception {
 		// Structural, and it is what makes the three cases above hold for a site nobody has written
-		// yet: the chips and the statement about them are written by ONE method, so a fourth payload
+		// yet: an ANSWER's chips and the statement about them are written by ONE method, so a payload
 		// added later cannot carry one and forget the other. Two payload sites kept in step by hand
 		// is the condition the search_mode column's own comment records as having held one value for
 		// 6036 rows.
+		// Since issue #280 the file also carries a surface that publishes chips with no answer behind
+		// them — the standing chart alerts — which is why the third naming below is pinned to that
+		// handler's own body rather than merely counted. It raises no interaction chip, so it has no
+		// extent to state; routing it through putSafetyChips would assert a screen that never ran.
 		// Through ChartSearchAiStreamingTest's resolver, not a second one of our own: it is taught
 		// both layouts and asserts the file was found. A guard that silently cannot read its subject
 		// passes, which is the failure that resolver's own javadoc exists to prevent.

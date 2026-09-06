@@ -1397,11 +1397,18 @@ public class ChartSearchAiRestController {
 	}
 
 	/**
-	 * Writes an answer's drug-safety chips AND the statement of how bounded the interaction list
-	 * behind them is, into one payload map. Every emission surface goes through here, since
-	 * issue #354 by way of {@link #putModuleStatements} — which composes this with the module's other
-	 * statements, and is this method's only caller. Read that method for what those are; a list here
-	 * is one that falls behind, which it already had once.
+	 * Writes an ANSWER's drug-safety chips AND the statement of how bounded the interaction list
+	 * behind them is, into one payload map. Every surface that emits an answer goes through here,
+	 * since issue #354 by way of {@link #putModuleStatements} — which composes this with the
+	 * module's other statements, and is this method's only caller. Read that method for what those
+	 * are; a list here is one that falls behind, which it already had once.
+	 *
+	 * <p><b>"Every surface that emits an answer" is the whole of the claim, and since issue #280 it
+	 * is narrower than "every surface that emits chips".</b> {@link #chartAlerts} publishes chips
+	 * with no answer behind them: it raises no interaction chip, so there is no extent to state,
+	 * and it says instead whether the screen ran. It shares {@link #serializeSafetyWarnings} so a
+	 * finding is shaped one way on both surfaces, and it must NOT be routed through this method —
+	 * an {@code interactionPairs} key there would assert a screen that never ran.
 	 *
 	 * <p>Named for the CHIPS and not for "findings", deliberately: {@code safety_finding} is a
 	 * reference resource type — the citable record form of a chip — and this method has nothing to
@@ -1429,8 +1436,14 @@ public class ChartSearchAiRestController {
 	}
 
 	/**
-	 * Writes every statement this module makes about a response OF ITS OWN — as distinct from the
-	 * answer text, which is the model's. Each emission surface calls this one method.
+	 * Writes every statement this module makes about an ANSWER of its own — as distinct from the
+	 * answer text, which is the model's. Each surface that emits an answer calls this one method.
+	 *
+	 * <p>Scoped to an answer, and since issue #280 that is narrower than "every payload":
+	 * {@link #chartAlerts} carries no answer, so none of these statements is about anything it
+	 * holds. It makes one of its own instead, {@code screened}, which is about the SCREEN and not
+	 * about a response — see {@link #putSafetyChips}, whose claim narrowed the same way and for
+	 * the same reason.
 	 *
 	 * <p><b>One entry point for the same reason {@link #putSafetyChips} is one</b> (issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/336">#336</a>): a

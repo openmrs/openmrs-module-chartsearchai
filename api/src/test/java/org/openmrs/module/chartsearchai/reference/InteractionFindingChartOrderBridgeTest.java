@@ -685,6 +685,49 @@ public class InteractionFindingChartOrderBridgeTest extends BaseModuleContextSen
 	}
 
 	/**
+	 * Issue #379 round two: the display-collision rule's other half — one order of a shared display
+	 * resolves and its SIBLING resolves to nothing, so the item they share states no number.
+	 *
+	 * <p>{@link #twoOrdersOfTheSameDisplayAreNamedOnce} is the half where both orders resolve, to
+	 * DIFFERENT records, and it is the only half the equality branch of that rule can see. Here only
+	 * one order resolves: the chart carries record [1] under {@code order-zolvimix-a}'s own uuid, and
+	 * {@code order-zolvimix-b} — a second prescription spelling the same display — reaches that same
+	 * record by issue #118's name leg alone, where {@code claimedByUuid} strikes it out as order-a's
+	 * own. So order-b comes back with null while order-a comes back with [1], and the clause item
+	 * keyed on {@code Zolvimix} covers both prescriptions. Stating [1] on it would tell the model that
+	 * record IS the Zolvimix prescription while the patient holds two of them and only one is that
+	 * record — the same false claim the two cases above refuse, inside text closing with a
+	 * change-of-therapy call.
+	 *
+	 * <p>Delete the {@code ambiguous.add(display)} on {@code orderRecordNumbers}' null branch, leaving
+	 * the {@code continue}, and this is the case that reddens. Klarizom keeps its number, so the
+	 * refusal is per item. Found by a clean-context review agent.
+	 */
+	@Test
+	public void aDisplayWhoseSecondOrderCanCiteNothingStatesNoNumberEither() throws Exception {
+		String finding = onlyFinding(
+			chartNaming("order-zolvimix-a", "Zolvimix", "order-klarizom", "Klarizom"),
+			DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set("Zolvimix", "Klarizom"),
+				DrugReferenceTestSupport.set("C10AA01", "J01FA09"), null, null,
+				Arrays.asList(
+					DrugReferenceTestSupport.activeOrder("order-zolvimix-a", "Zolvimix",
+						DrugReferenceTestSupport.set("Zolvimix"),
+						DrugReferenceTestSupport.set("C10AA01")),
+					DrugReferenceTestSupport.activeOrder("order-zolvimix-b", "Zolvimix",
+						DrugReferenceTestSupport.set("Zolvimix"),
+						DrugReferenceTestSupport.set("C10AA01")),
+					DrugReferenceTestSupport.activeOrder("order-klarizom", "Klarizom",
+						DrugReferenceTestSupport.set("Klarizom"),
+						DrugReferenceTestSupport.set("J01FA09")))),
+			SCREENING_QUESTION);
+
+		assertEquals("Simvastatin from Zolvimix; Clarithromycin from Klarizom [2].", bridgeOf(finding),
+			"one of the two prescriptions spelling this display is record [1] and the other is not, "
+					+ "so the item they share states no number (issue #379), was: " + finding);
+	}
+
+	/**
 	 * Issue #379's rendering is OFF on a stock install, and this is the case that says so.
 	 *
 	 * <p>The ticket's own chart, where both numbers ARE resolvable — {@link #ticketFinding} asserts

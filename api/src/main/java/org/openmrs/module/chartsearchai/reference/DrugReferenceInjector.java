@@ -823,8 +823,8 @@ public class DrugReferenceInjector {
 	private static final class DrugOrderRecords {
 
 		/** Resource uuid to the number of the record carrying it — the LAST, where a chart somehow
-		 *  carried two, which nothing depends on. Type-agnostic: a resource uuid is globally unique, so
-		 *  a record carrying this order's uuid IS this order however it is typed. */
+		 *  carried two. Type-agnostic: a resource uuid is globally unique, so a record carrying this
+		 *  order's uuid IS this order however it is typed. */
 		private final Map<String, Integer> byResourceUuid = new LinkedHashMap<String, Integer>();
 
 		/** Record number to lowercased text, for the records that may substantiate a LIVE order — one
@@ -1019,15 +1019,20 @@ public class DrugReferenceInjector {
 	 * file reserves to {@code DrugSafetyValidator.chartOrderBridges}: no bridge is re-derived here and
 	 * no silence test is re-asked.
 	 *
-	 * <p><b>THREE ways the answer is no, and both review rounds found one.</b> One order the
+	 * <p><b>THREE ways the answer is no, and the third has two halves.</b> One order the
 	 * drifted-uuid name leg matched in two records at once, and one record two orders NAME — both
 	 * {@link DrugOrderRecords#citableNumberFor}, which is where every rule about a RECORD's claimant
-	 * now sits; and, here, one DISPLAY two orders resolve to different records by, which is a rule
-	 * about the clause ITEM rather than about a record. In each case the module
-	 * cannot say which record a model should read, and naming one would put a citation it cannot stand
-	 * behind into a citable record stating a clinical call — so it names none, per ITEM: an unambiguous
-	 * neighbour in the same clause keeps its number. An order the chart holds no record for is not a
-	 * fourth case; it simply has no candidate.
+	 * now sits; and, here, one DISPLAY two orders do not resolve ALIKE by, which is a rule about the
+	 * clause ITEM rather than about a record. Alike is not "to different records": the two orders may
+	 * resolve to different records ({@code .twoOrdersOfTheSameDisplayAreNamedOnce}), or one may resolve
+	 * while the other resolves to NOTHING
+	 * ({@code .aDisplayWhoseSecondOrderCanCiteNothingStatesNoNumberEither}), and the second half is
+	 * invisible to the first's equality test — a null takes the {@code continue} before the display is
+	 * put, so there is never a second value to compare. Each half needs its own case. In each case the
+	 * module cannot say which record a model should read, and naming one would put a citation it cannot
+	 * stand behind into a citable record stating a clinical call — so it names none, per ITEM: an
+	 * unambiguous neighbour in the same clause keeps its number. An order the chart holds no record for
+	 * is not a fourth case; it simply has no candidate.
 	 *
 	 * <p><b>The record-side rule is asked of CANDIDACY, not of the numbers orders resolved TO</b>
 	 * (issue #379 round two). A resolved-number injectivity check here — which is what this method
@@ -1082,6 +1087,10 @@ public class DrugReferenceInjector {
 			}
 			Integer number = records.citableNumberFor(order, claimedByUuid, contested);
 			if (number == null) {
+				// Two effects, and only the first is obvious: this order's item states no number, AND
+				// the display is struck, so a SIBLING order spelling it that did resolve cannot number
+				// an item that covers this one too. The equality branch below cannot reach that second
+				// case — nothing is put here, so there is never a second value for it to compare.
 				ambiguous.add(display);
 				continue;
 			}

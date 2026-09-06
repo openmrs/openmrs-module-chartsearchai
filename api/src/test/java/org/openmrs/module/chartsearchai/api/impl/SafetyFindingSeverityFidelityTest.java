@@ -238,6 +238,31 @@ public class SafetyFindingSeverityFidelityTest {
 	}
 
 	@Test
+	public void aBlankAnswerCarryingResolvedCitationsIsSilent() {
+		// A degenerate output, and a REACHABLE one: extractCitedReferences resolves the structured
+		// citations array for a blank answer on purpose — its javadoc calls that "the absence of an
+		// answer" — so this check can be handed cited findings with no prose. Such an answer states
+		// no rating and nothing else either; reporting it would make this the only one of the four
+		// checks that accuses a degenerate output. Delete the blank arm and this reddens.
+		Integer finding = indexesRated("Major").get(0);
+		service.setLlmProvider(new StubProvider("   ",
+				Collections.singletonList(finding)));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			ChartAnswer answer = service.search(patient(), QUESTION);
+			assertFalse(capture.describeAll().isEmpty(),
+					"the capture must receive the pipeline's own INFO lines, or the assertion below "
+							+ "passes vacuously");
+			assertFalse(warnedByThisCheck(capture),
+					"a blank answer is not a dropped rating. Captured: " + capture.describeAll());
+			assertTrue(answer.getUnstatedFindingSeverities().isEmpty(),
+					"and the measurement is a measurement of none, not a report");
+			assertFalse(answer.getReferences().isEmpty(),
+					"the premise: the structured array really did resolve for this blank answer, so "
+							+ "the check was handed a cited finding and chose to stay silent");
+		}
+	}
+
+	@Test
 	public void searchStreaming_reportsItOnThePrimaryProductionPathToo() {
 		// /search/stream is the path users hit: a check wired only into search() would be absent from
 		// production traffic while every non-streaming case here stayed green.
@@ -377,6 +402,18 @@ public class SafetyFindingSeverityFidelityTest {
 		return capture.hasMessageAt(Level.WARN, required);
 	}
 
+	/** @return whether THIS check warned, for a case that captures the package — so the pipeline's
+	 *          own INFO line proves the capture is live — but claims silence only of this check.
+	 *
+	 *          <p>It asks for this check's own WARN by its wording rather than by composing two
+	 *          package-wide questions. The composed form is what this helper first was, and it was
+	 *          wrong for its name: "something warned AND nothing but this check warned" is false
+	 *          whenever a NEIGHBOUR warns too, so the negative it serves would have passed on a
+	 *          response where this check reported and a sibling reported beside it. */
+	private static boolean warnedByThisCheck(LogCapture capture) {
+		return capture.hasMessageAt(Level.WARN, "states no rating for cited finding");
+	}
+
 	private static Patient patient() {
 		Patient p = new Patient();
 		p.setPatientId(1);
@@ -462,12 +499,21 @@ public class SafetyFindingSeverityFidelityTest {
 
 		private final String answer;
 
+		private final List<Integer> citations;
+
 		private StubProvider(String answer) {
+			this(answer, Collections.<Integer> emptyList());
+		}
+
+		/** The structured-citations arity: the one arrangement that reaches this check with cited
+		 *  records and no prose to read them in. */
+		private StubProvider(String answer, List<Integer> citations) {
 			this.answer = answer;
+			this.citations = citations;
 		}
 
 		private LlmResponse canned() {
-			return new LlmResponse(answer, Collections.<Integer> emptyList());
+			return new LlmResponse(answer, citations);
 		}
 
 		@Override

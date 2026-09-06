@@ -914,7 +914,14 @@ public class DrugSafetyValidator {
 	 * @return that same severity where an answer stating the finding should state it, else null
 	 */
 	static String statableRating(String severity) {
-		return severityRank(severity) > severityRank("unknown") ? severity : null;
+		// TRIMMED, and that is a correctness requirement rather than tidiness. severityRank trims
+		// before it recognises a rating, and nothing else does: DrugReference.Interaction.severity is
+		// bound straight out of an operator's JSON. So the module can treat "  Major  " as Major
+		// throughout — clearing the floor, withholding, ordering the chips — while a consumer handed
+		// the raw field compares answer prose against a needle with spaces in it and accuses an
+		// answer that plainly states "Major". Hand on the form that was RECOGNISED.
+		// → SafetyFindingSeverityCarriedContextTest.anOperatorDatasetsPaddedRatingIsCarriedInTheFormTheModuleRECOGNISED
+		return severityRank(severity) > severityRank("unknown") ? severity.trim() : null;
 	}
 
 	/**

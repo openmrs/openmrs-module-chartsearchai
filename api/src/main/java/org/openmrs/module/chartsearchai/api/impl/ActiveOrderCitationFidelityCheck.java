@@ -30,7 +30,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Reports the chart citations an answer offers as evidence of an ACTIVE DRUG ORDER that cannot be
  * one — issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/377">#377</a>.
- * A deterministic, exact comparison, like its two siblings and for the same reason: no model call,
+ * A deterministic, exact comparison, like its siblings and for the same reason: no model call,
  * no embedding, no cosine floor.
  *
  * <p><b>The failure.</b> Measured live on a real standalone. A "can I start her on clarithromycin?"

@@ -105,6 +105,30 @@ public class SafetyFindingSeverityCarriedContextTest extends BaseModuleContextSe
 	}
 
 	@Test
+	public void anOperatorDatasetsPaddedRatingIsCarriedInTheFormTheModuleRECOGNISED() throws Exception {
+		// The seam between two individually-correct mechanisms. `severityRank` trims before it
+		// recognises a rating, so the whole module treats this rule as Major — it clears the floor,
+		// it withholds. Nothing else trims: `DrugReference.Interaction.severity` is bound straight
+		// from the JSON. Hand the raw field to a consumer and it compares answer prose against a
+		// needle with spaces in it, so an answer that plainly states "Major" is accused of dropping
+		// the rating — a false accusation on a clinician-facing key, silently, for every finding an
+		// operator's dataset raises. Drop the trim in `statableRating` and this reddens.
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(
+				DrugReferenceTestSupport.serviceWithGroups(DrugReferenceTestSupport.fixtureEntries(
+						"chartsearchai-test/drug-reference-padded-severity.json"))).injectRecords(
+								DrugReferenceTestSupport.oneRecordChart(),
+								DrugReferenceTestSupport.ctx(60, null,
+										DrugReferenceTestSupport.set("Warfarin"), null, null, null),
+								"Is it safe to give her aspirin?");
+		List<RecordMapping> findings = DrugReferenceTestSupport.injectedFindings(chart);
+		assertEquals(1, findings.size(),
+				"the premise: the padded rating still clears the floor, so the arrangement raises a "
+						+ "finding at all. Chart was: " + chart.getText());
+		assertEquals("Major", findings.get(0).getFindingSeverity(),
+				"the rating handed on must be the form severityRank recognised, not the raw field");
+	}
+
+	@Test
 	public void theShippedFloorLeavesTheUnknownRatedPairWithNoFindingAtAll() {
 		// The precondition for the case below: without it, that one could pass by raising nothing.
 		assertTrue(findingsFor("Lisinopril").isEmpty(),

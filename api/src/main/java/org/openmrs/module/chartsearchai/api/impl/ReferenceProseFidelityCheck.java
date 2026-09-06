@@ -71,7 +71,10 @@ import org.slf4j.LoggerFactory;
  *       ends its sentence, it has stated nothing the record does not, and reporting it would fire
  *       on every answer that quotes one clause of a 150-word mechanism — which is most of them.
  *       That under-reports the ticket's weaker cousin, a hazard dropped by stopping early, and it
- *       is the safe direction for a check whose failure mode is being ignored;</li>
+ *       is the safe direction for a check whose failure mode is being ignored. Half of that cousin
+ *       is covered since the same issue's third round, by {@link SafetyFindingSeverityFidelityCheck}:
+ *       a finding's RATING is a deterministic word rather than prose, so whether it survived needs
+ *       no reproduction threshold. The mechanism half still needs one and still has none;</li>
  *   <li>it treats a record SENTENCE reproduced whole as faithful however the answer goes on. That
  *       exit is also what keeps the clauses {@code DrugReferenceInjector.renderFinding} appends out
  *       of the comparison at the seam: the detail is passed through

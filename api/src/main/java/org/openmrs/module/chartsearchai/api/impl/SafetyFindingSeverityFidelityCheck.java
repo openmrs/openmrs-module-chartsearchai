@@ -74,6 +74,9 @@ import org.slf4j.LoggerFactory;
  * <ul>
  *   <li>it says nothing about a record carrying no rating worth requiring, which is every record
  *       that is not an injected safety finding and every finding {@code statableRating} declines;</li>
+ *   <li>a BLANK or absent answer is silent. That arm is reachable rather than defensive —
+ *       {@code LlmInferenceService.extractCitedReferences} resolves the structured citations array
+ *       for a blank answer deliberately — and a degenerate output is not a fidelity defect;</li>
  *   <li>it considers only the citations the answer's own resolution admitted
  *       ({@code LlmInferenceService.extractCitedReferences}), so a bracketed clinical value the
  *       chart has no record for is not a citation here either — CLAUDE.md's inline-citation rule
@@ -156,7 +159,16 @@ final class SafetyFindingSeverityFidelityCheck {
 			// that could throw, and the promise this catch makes is structural or it is nothing.
 			patientId = patient == null ? null : patient.getPatientId();
 			List<Integer> offending = new ArrayList<Integer>();
-			if (cited == null || cited.isEmpty() || mappings == null) {
+			if (cited == null || cited.isEmpty() || mappings == null
+					|| ChartSearchAiUtils.isBlank(answer)) {
+				// A blank or absent answer is silent, and that arm is REACHABLE rather than defensive:
+				// LlmInferenceService.extractCitedReferences deliberately resolves the structured
+				// citations array for a blank answer — its javadoc calls that "the absence of an
+				// answer (a distinct degenerate output)" — so this method can be handed cited findings
+				// with no prose at all. Such an answer states no rating, but it states nothing else
+				// either, and reporting a degenerate output as a fidelity defect is the crying-wolf
+				// direction. Both siblings are silent there too, one by its word floor and one by its
+				// phrase gate; without this arm this check would be the only one that is not.
 				return offending;
 			}
 			Map<Integer, RecordMapping> byIndex = new HashMap<Integer, RecordMapping>();
@@ -164,8 +176,9 @@ final class SafetyFindingSeverityFidelityCheck {
 				byIndex.put(Integer.valueOf(mapping.getIndex()), mapping);
 			}
 			// Lower-cased ONCE for the whole answer rather than per citation: the ratings are a
-			// closed vocabulary, so one fold of the answer serves every comparison below.
-			String folded = answer == null ? "" : answer.toLowerCase(Locale.ROOT);
+			// closed vocabulary, so one fold of the answer serves every comparison below. Not
+			// null-guarded, because the blank arm above has already returned for that.
+			String folded = answer.toLowerCase(Locale.ROOT);
 			List<String> reasons = new ArrayList<String>();
 			Set<Integer> seen = new LinkedHashSet<Integer>();
 			for (RecordReference citation : cited) {

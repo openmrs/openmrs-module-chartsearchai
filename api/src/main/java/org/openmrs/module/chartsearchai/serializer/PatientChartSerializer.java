@@ -609,12 +609,18 @@ public class PatientChartSerializer {
 	/**
 	 * Maps a sequential index used in the LLM prompt back to the OpenMRS resource.
 	 *
-	 * <p>{@link #getText()} is the record's content — the part the LLM reads and may quote.
-	 * {@link #getSource()} and {@link #getWithheldInteractions()} are <em>about</em> the record
-	 * rather than part of it, and are deliberately kept off the text: anything inside it is
+	 * <p>{@link #getText()} is the record's content — the part the LLM reads and may quote. The other
+	 * accessors are <em>about</em> the record rather than part of it, and {@link #getSource()} and
+	 * {@link #getWithheldInteractions()} are deliberately kept off the text: anything inside it is
 	 * quotable, and a model told to cite records recited the module's own truncation counter and
 	 * dataset attribution into a clinician-facing answer (issue #117). Metadata a client should
 	 * render beside a citation therefore travels as its own field, never as prose.
+	 *
+	 * <p>{@link #getFindingSeverity()} is the one that is deliberately in BOTH: the rating is inside
+	 * the rendered text because the model is meant to read and carry it, and beside the record
+	 * because a consumer asking whether the answer carried it must not have to parse for it
+	 * (issue #337). "Never as prose" is a rule about metadata the model has no business reciting,
+	 * which that rating is not.
 	 */
 	public static class RecordMapping {
 

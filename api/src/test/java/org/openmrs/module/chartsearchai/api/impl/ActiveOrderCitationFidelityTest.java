@@ -50,9 +50,9 @@ import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
  * <p>Nothing could see it. Every citation in that response serialized {@code grounded: null},
  * because a chart citation whose sentence also rests on a {@code safety_finding} has its entailment
  * negative withheld (issue #284) — a carve-out {@link CitationGroundingVerifier}'s own javadoc
- * names, along with the residue it accepts. The two exact comparisons that do run compare what the
- * answer states about the REFERENCE records it cites, not which CHART record a sentence was
- * attached to.
+ * names, along with the residue it accepts. The two exact comparisons that ran before this one
+ * compare what the answer states about the REFERENCE records it cites, not which CHART record a
+ * sentence was attached to.
  *
  * <p>What this file pins is the deterministic check that closes the reported class: where the
  * answer states the module's own active-order phrase, the chart citations offered for that claim
@@ -189,6 +189,57 @@ public class ActiveOrderCitationFidelityTest {
 	}
 
 	@Test
+	public void searchStreaming_statesItOnTheAnswerItReturnsAndNotOnTheEarlyOne() {
+		// The early `done` of the async-grounding path is built BEFORE this check runs, so it has no
+		// measurement to state — and null says exactly that, where an empty list would tell a client
+		// the citations had been examined and found sound. That PRODUCTION states nothing there is
+		// this case's claim; the controller half of it is the wire test's.
+		int condition = indexOfType(ChartSearchAiConstants.RESOURCE_TYPE_CONDITION);
+		service.setLlmProvider(answering(sentenceFragment("Simvastatin", condition,
+				findingsStatingThePhrase().get(0)) + "."));
+		final List<List<Integer>> early = new ArrayList<List<Integer>>();
+
+		ChartAnswer answer = service.searchStreaming(patient(), QUESTION, token -> { },
+				reasoning -> { }, citations -> { },
+				ungrounded -> early.add(ungrounded.getMisattributedOrderCitations()));
+
+		assertEquals(1, early.size(), "the early-done consumer must have fired");
+		assertEquals(null, early.get(0),
+				"the check runs after the user-visible handoff, so the early answer states no "
+						+ "measurement");
+		assertEquals(Collections.singletonList(Integer.valueOf(condition)),
+				answer.getMisattributedOrderCitations(),
+				"and the answer this method RETURNS carries it");
+	}
+
+	@Test
+	public void aCitedRecordWhoseTypeTheModuleCouldNotReadIsNotAccused() {
+		// The allow-list refuses an unrecognised type, and a type that was never READ is not an
+		// unrecognised one — referenceGroup's fail-safe calls it chart evidence, so without its own
+		// guard this record is reported as "a null record", which is an accusation about metadata
+		// nobody read. Silence is the direction this check must fail in.
+		PatientChart untyped = new PatientChart(
+				"Patient" + System.lineSeparator() + System.lineSeparator()
+						+ "[1] Simvastatin 20mg" + System.lineSeparator(),
+				Arrays.<RecordMapping> asList(
+						new RecordMapping(1, null, "record-uuid-untyped", null, "Simvastatin 20mg")),
+				Collections.<Integer> emptyList());
+		TestableService onUntyped = newService(untyped);
+		onUntyped.setLlmProvider(answering(sentenceFragment("Simvastatin", 1, 1) + "."));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			ChartAnswer answer = onUntyped.search(patient(), QUESTION);
+			assertFalse(capture.describeAll().isEmpty(),
+					"the capture must receive the pipeline's own INFO lines, or the assertion below "
+							+ "passes vacuously");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"a record with no readable type cannot be said not to be an order. Captured: "
+							+ capture.describeAll());
+			assertTrue(answer.getMisattributedOrderCitations().isEmpty(),
+					"and nothing reaches the wire either");
+		}
+	}
+
+	@Test
 	public void anAnswerThatNeverStatesThePhraseIsNotChecked() {
 		// The gate. Without it this stops being a rule about active-order claims and becomes a rule
 		// about which records an answer may cite at all — every condition cited in any answer would
@@ -227,6 +278,27 @@ public class ActiveOrderCitationFidelityTest {
 			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
 					"only the run of markers immediately after the phrase is offered for the claim. "
 							+ "Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void aLoneCitationInAClaimWithNoRunOfItsOwnIsAttributedToIt() {
+		// Pins a residue rather than a defect, at the shape review found it in. The run is the FIRST
+		// one after the phrase and nothing bounds the gap — the partner's name sits there and a name
+		// has no fixed length, so a budget on it could only be arbitrary. So where the claim carries
+		// no markers of its own, the next citation in the sentence is read as offered for it. That
+		// reading is defensible (a lone citation at the end of a sentence is conventionally offered
+		// for the sentence, and this sentence asserts the order), but it is wider than the shape the
+		// ticket measured, so it is recorded here as a decision. Narrowing it later must argue with
+		// this case rather than drift past it.
+		int condition = indexOfType(ChartSearchAiConstants.RESOURCE_TYPE_CONDITION);
+		service.setLlmProvider(answering("Clarithromycin" + PHRASE + "Simvastatin and she also has a "
+				+ "benign thyroid neoplasm [" + condition + "]."));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			service.search(patient(), QUESTION);
+			assertTrue(warnStating(capture, "[" + condition + "]"),
+					"today this is reported; the case exists so that stops being a surprise and "
+							+ "starts being a decision. Captured: " + capture.describeAll());
 		}
 	}
 

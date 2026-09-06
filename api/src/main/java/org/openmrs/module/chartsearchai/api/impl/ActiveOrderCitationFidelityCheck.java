@@ -100,10 +100,26 @@ import org.slf4j.LoggerFactory;
  *   <li>reference-group citations in the run are untouched. Every one of these runs carries the
  *       module's own {@code safety_finding} beside the chart citation — that is the shape the ticket
  *       measured — and it is cited legitimately;</li>
+ *   <li>a record whose resource type the module could not read is not accused. The allow-list
+ *       refuses a type it does not recognise, and a type nobody READ is not one of those —
+ *       {@link ChartSearchAiUtils#referenceGroup}'s fail-safe would call it chart evidence and the
+ *       report would read "a null record";</li>
  *   <li>it reports the CITATION and never the record's text or the answer's, both of which carry
  *       patient data. The type travels instead, which is what makes an unexpected retrieval contract
  *       diagnosable from one line.</li>
  * </ul>
+ *
+ * <p><b>What the run rule attributes that a reader might not.</b> The run is the first one after the
+ * phrase, and nothing bounds how far after — the partner's name sits in between and a name has no
+ * fixed length, so no budget on that gap could be anything but arbitrary. Where the claim carries no
+ * markers of its own, the next citation in the sentence is therefore read as offered for it:
+ * {@code "…interacts with active order Warfarin and she also has hypertension [42]"} attributes
+ * {@code [42]}. That is a decision rather than an oversight — a lone citation at the end of a
+ * sentence is conventionally offered for the sentence, and this sentence asserts the order — and it
+ * is pinned by
+ * {@code ActiveOrderCitationFidelityTest.aLoneCitationInAClaimWithNoRunOfItsOwnIsAttributedToIt}, so
+ * narrowing it later has to be argued rather than drifted into. It is bounded on the other side:
+ * once a claim HAS a run, nothing after that run is attributed to it.
  *
  * <p><b>What it cannot see.</b> A citation that IS an in-force drug order but the WRONG one passes:
  * the check tests what a record can be, never which order the finding was computed from. Closing
@@ -289,12 +305,21 @@ final class ActiveOrderCitationFidelityCheck {
 	 *         own {@code safety_finding} is what these runs cite beside the chart record, and it is
 	 *         not chart evidence about an order to begin with.
 	 *
-	 *         <p>A null mapping answers null too. A cited index always has a mapping — the reference
-	 *         list is built from the mappings — so this is unreachable rather than lenient, and is
-	 *         said so the guard does not look better defended than it is.
+	 *         <p>A null mapping answers null too, and that arm is unreachable rather than lenient: a
+	 *         cited index always has a mapping, the reference list being built from the mappings.
+	 *         Said so the guard does not look better defended than it is. The blank-TYPE arm beside
+	 *         it is a different matter and is reachable — {@code PatientChartSerializer} passes
+	 *         through whatever querystore retrieved.
 	 */
 	private static String refusal(RecordMapping mapping) {
-		if (mapping == null || !ChartSearchAiConstants.REFERENCE_GROUP_CHART
+		if (mapping == null || ChartSearchAiUtils.isBlank(mapping.getResourceType())) {
+			// A record whose type the module could not read is one it cannot say anything about, and
+			// this is NOT covered by the allow-list refusal below: referenceGroup's fail-safe calls
+			// an unknown type chart evidence, so a null would otherwise be reported as "a null
+			// record" — an accusation made about metadata nobody read.
+			return null;
+		}
+		if (!ChartSearchAiConstants.REFERENCE_GROUP_CHART
 				.equals(ChartSearchAiUtils.referenceGroup(mapping.getResourceType()))) {
 			return null;
 		}

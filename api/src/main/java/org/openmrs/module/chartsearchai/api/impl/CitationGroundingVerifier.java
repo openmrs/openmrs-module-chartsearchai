@@ -278,7 +278,11 @@ import org.springframework.stereotype.Service;
  * <p>The cost, stated rather than implied: a chart citation the model attached to the WRONG record
  * now renders unverified instead of unsupported wherever its graded statement rests on reference
  * material, so the mis-attribution signal #122 deliberately kept for reference citations has no
- * counterpart here. Read "its graded statement", not "its sentence", and not "a safety sentence" —
+ * counterpart here AS A VERDICT — and since issue #377 there is a counterpart of another kind, which
+ * this paragraph goes on to scope: {@link ActiveOrderCitationFidelityCheck} covers part of what
+ * follows, deterministically and outside grounding entirely. Issue #377's body points a maintainer
+ * at this sentence as the sole record of the residue, so read the scoping below before concluding
+ * from it that nothing looks. Read "its graded statement", not "its sentence", and not "a safety sentence" —
  * both are wider than they look. An enumeration ITEM is graded on its own text but rests on its
  * parent sentence's citations, so one item citing a finding withholds every sibling item's negative;
  * and an UNANCHORED finding rests on the whole answer, so it withholds the negative of every chart

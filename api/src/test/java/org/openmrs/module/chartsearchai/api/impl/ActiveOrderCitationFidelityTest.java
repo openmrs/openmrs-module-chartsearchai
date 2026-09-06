@@ -324,6 +324,29 @@ public class ActiveOrderCitationFidelityTest {
 	}
 
 	@Test
+	public void aCommaSeparatedRunKeepsItsSecondMarker() {
+		// Round 2 of this PR's review: the comma member of RUN_SEPARATORS was the one mechanism in
+		// the check that no case pinned — deleting it left the whole build green. It is not
+		// decoration. `LlmAnswerExtractor.rewriteShorthand` joins the markers it rewrites with a
+		// comma and a space, so a model that writes the compact group `[finding, chart]` reaches
+		// this check as `[finding], [chart]`; without the comma the run stops at the finding, which
+		// is reference-group and passes, and the misattributed chart citation — the ticket's own
+		// defect — is dropped from the WARN and from the wire with nothing to say so.
+		int condition = indexOfType(ChartSearchAiConstants.RESOURCE_TYPE_CONDITION);
+		int finding = findingsStatingThePhrase().get(0);
+		service.setLlmProvider(answering("Clarithromycin" + PHRASE + "Simvastatin [" + finding
+				+ "], [" + condition + "]."));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			ChartAnswer answer = service.search(patient(), QUESTION);
+			assertTrue(warnStating(capture, "[" + condition + "]"),
+					"the second marker of a comma-separated run is part of that run. Captured: "
+							+ capture.describeAll());
+			assertEquals(Collections.singletonList(Integer.valueOf(condition)),
+					answer.getMisattributedOrderCitations(), "and it reaches the wire");
+		}
+	}
+
+	@Test
 	public void aCitationInTheNEXTCLAUSEOfTheSameSentenceIsNotAttributedToTheClaim() {
 		// Round 1 of this PR's review, verbatim: the citation belongs to the clause it sits in, and
 		// attributing it to the order claim reports a CORRECT citation — into a wire key a client

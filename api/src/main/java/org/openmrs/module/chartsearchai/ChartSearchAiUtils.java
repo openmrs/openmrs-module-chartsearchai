@@ -39,8 +39,9 @@ public class ChartSearchAiUtils {
 	 * single source of truth for citation-marker parsing, shared by every consumer
 	 * {@link #citedIndexes} names — citation extraction ({@code LlmInferenceService}),
 	 * grounding ({@code CitationGroundingVerifier}), safety echo-scoping
-	 * ({@code DrugSafetyValidator}) and the class-code parenthetical check
-	 * ({@code ClassCodeFidelityCheck}) — so they cannot drift apart.
+	 * ({@code DrugSafetyValidator}), the class-code parenthetical check
+	 * ({@code ClassCodeFidelityCheck}) and the active-order citation check
+	 * ({@code ActiveOrderCitationFidelityCheck}) — so they cannot drift apart.
 	 *
 	 * <p>Deliberately single-index. Small local models also emit compact shorthand —
 	 * {@code [6, 7]} (measured on the rc.2 standalone, 2026-07-21: the #76 guard read such
@@ -144,9 +145,11 @@ public class ChartSearchAiUtils {
 	 * citation extraction ({@code LlmInferenceService}), grounding
 	 * ({@code CitationGroundingVerifier}), safety echo-scoping ({@code DrugSafetyValidator}) and —
 	 * since issue #338 — the check that asks whether a marker sits INSIDE a class-code parenthetical
-	 * ({@code ClassCodeFidelityCheck}), so those consumers cannot drift. (The clause-scoped splitter
-	 * keeps its own matcher — it needs each marker's text offset, which a set of indexes cannot
-	 * carry.) Returns an empty set for null/blank text.
+	 * ({@code ClassCodeFidelityCheck}) and — since issue #377 — the active-order citation check
+	 * ({@code ActiveOrderCitationFidelityCheck}), so those consumers cannot drift. A caller matches
+	 * {@link #INLINE_CITATION} directly only for what a set of indexes cannot carry — a marker's text
+	 * offset, or the text with markers removed — which is the two-reason split CLAUDE.md's own
+	 * inline-citation rule states. Returns an empty set for null/blank text.
 	 */
 	public static Set<Integer> citedIndexes(String text) {
 		Set<Integer> indexes = new java.util.LinkedHashSet<Integer>();
@@ -257,7 +260,10 @@ public class ChartSearchAiUtils {
 	 * A passing verdict is therefore false assurance. A FAILING verdict still carries information — it
 	 * says the citation is not about the record at all — so the flag is kept and only the pass is
 	 * withheld. Faithfulness of reference content is checked deterministically instead, by two exact
-	 * comparisons that run after every answer: {@code ClassCodeFidelityCheck} for an ATC class code
+	 * comparisons, which are the deterministic post-answer checks that read reference content and not
+	 * all of them — {@code ActiveOrderCitationFidelityCheck} (issue #377) reads none, asking instead
+	 * which CHART record a sentence cited, and ADR Decision 76 is where they are enumerated. The two
+	 * that read reference content are {@code ClassCodeFidelityCheck}, for an ATC class code
 	 * the answer states that no cited record does (issue #142), report-only, and
 	 * {@code ReferenceProseFidelityCheck} for an answer that reproduces a cited reference record's
 	 * prose and then substitutes its own words inside the sentence it was copying (issue #337), whose
@@ -277,8 +283,8 @@ public class ChartSearchAiUtils {
 	 *
 	 * <p><strong>The unrecognised-type fallback grades normally</strong>, following
 	 * {@link #referenceGroup}'s fail-safe, and that is deliberate in this direction too: querystore
-	 * passes through chart types this module declares no constant for ({@code drug_order},
-	 * {@code visit}, {@code encounter} …), so demoting unknown types would silently stop verifying
+	 * passes through chart types this module declares no constant for ({@code visit},
+	 * {@code encounter} …), so demoting unknown types would silently stop verifying
 	 * most real chart citations. The cost is that a module-supplied type introduced as a bare string
 	 * literal — rather than as a {@code RESOURCE_TYPE_*} constant, which
 	 * {@code ChartSearchAiReferenceGroupTest}'s sweep would catch — would be graded as chart evidence;
@@ -305,6 +311,49 @@ public class ChartSearchAiUtils {
 	 */
 	private static boolean isReferenceMaterial(String resourceType) {
 		return ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE.equals(referenceGroup(resourceType));
+	}
+
+	/**
+	 * Whether a cited chart record's resource type can describe a medication the patient was
+	 * PRESCRIBED or GIVEN at all — the admissibility half of
+	 * {@code ActiveOrderCitationFidelityCheck} (issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/377">#377</a>), which
+	 * asks it of the chart citation an answer offers as evidence of an active drug order. A
+	 * condition, a visit and an encounter answer false, and those were the three the reported answer
+	 * cited.
+	 *
+	 * <p><b>An ALLOW-LIST, so a type nobody here declared answers false.</b> That direction is
+	 * forced: the two types the ticket's own measurement caught — querystore's {@code visit} and
+	 * {@code encounter} — are contract strings this module never declares, so a deny-list could not
+	 * have named them. What it costs is stated rather than implied: a deployment whose retrieval
+	 * types prescriptions as something outside this list would have every active-order sentence
+	 * reported. The WARN carries the type for exactly that reason, so one log line diagnoses it.
+	 *
+	 * <p><b>Three members, and the third is not an order.</b>
+	 * {@link ChartSearchAiConstants#RESOURCE_TYPE_DRUG_ORDER} is querystore's prescription contract —
+	 * the ticket's own table measured the patient's real orders arriving under it.
+	 * {@link ChartSearchAiConstants#RESOURCE_TYPE_ACTIVE_DRUG_ORDER} is this module's own record for
+	 * an active order the retrieved chart is missing (issue #118); it groups as chart evidence and
+	 * carries the real {@code Order} uuid, so it is the authoritative read of one.
+	 * {@link ChartSearchAiConstants#RESOURCE_TYPE_MEDICATION_DISPENSE} is admitted deliberately
+	 * although a dispensing event is not an order: it is a record of this patient being given the
+	 * drug, and reporting a clinician-legible citation of one would be the check crying wolf. What
+	 * that gives up is naming a dispense cited for an ORDER claim.
+	 *
+	 * <p><b>{@link ChartSearchAiConstants#RESOURCE_TYPE_ORDER} is deliberately OUT</b>, because the
+	 * same type covers {@code "Test order:"} and {@code "Referral order:"} — admitting it would admit
+	 * a lab order as evidence of a medication one. And this is not
+	 * {@code QueryScopeRouter.typedSlice}'s MEDICATIONS slice: that is a RETRIEVAL scope and cannot
+	 * carry {@code active_drug_order}, a type retrieval never returns. &rarr; ADR Decision 76,
+	 * canonical for both arguments and for what admitting the dispense type gives up.
+	 *
+	 * @param resourceType the cited record's resource type, may be null
+	 * @return true when a record of this type could be a medication order or dispensing of one
+	 */
+	public static boolean mayDescribeAMedicationOrder(String resourceType) {
+		return ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER.equals(resourceType)
+				|| ChartSearchAiConstants.RESOURCE_TYPE_ACTIVE_DRUG_ORDER.equals(resourceType)
+				|| ChartSearchAiConstants.RESOURCE_TYPE_MEDICATION_DISPENSE.equals(resourceType);
 	}
 
 	/**

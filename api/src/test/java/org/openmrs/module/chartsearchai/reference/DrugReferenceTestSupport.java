@@ -391,6 +391,50 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/**
+	 * The chart the REAL pipeline produces when {@code base} — a chart a caller assembled with the
+	 * real {@link org.openmrs.module.chartsearchai.serializer.PatientChartSerializer} — is put
+	 * through the real {@code DrugSafetyValidator} behind the real {@code injectRecords}, for a
+	 * patient on {@code activeDrugs} (whose concepts map to {@code activeAtcCodes}) asked
+	 * {@code question}. The bundled DDInter knowledge base and the shipped cross-reactivity groups,
+	 * so a caller reads the findings the shipped data really raises.
+	 *
+	 * <p>Public, and taking the base chart, for the reason {@link #injectedSafetyFindingChart} is
+	 * public and does NOT: that one injects over {@link #oneRecordChart}, so a cross-package test
+	 * cannot put the patient's own {@code drug_order} records — or records of any other type — in
+	 * the chart the findings are injected into. A check that asks which chart record a finding
+	 * sentence cites needs both halves in one chart, and needs the finding half to be production's
+	 * own rendering rather than an imitation of it.
+	 *
+	 * @throws IllegalStateException when the arrangement raises no finding at all, so a caller
+	 *         cannot silently assert nothing — the contract {@link #injectedAllergyFindingChart}
+	 *         carries for its own arm
+	 */
+	public static PatientChart injectedFindingsOver(PatientChart base, String question,
+			Set<String> activeDrugs, Set<String> activeAtcCodes) {
+		return injectedFindingsOver(base, question, activeDrugs, activeAtcCodes, null);
+	}
+
+	/**
+	 * {@link #injectedFindingsOver(PatientChart, String, Set, Set)} with the patient's own active
+	 * orders carried as STRUCTURE rather than only as a flattened name/code set — which is what the
+	 * #118 reconciliation reads, so this is the overload a caller needs when the arrangement is
+	 * about an {@code active_drug_order} record the injector mints for an order the chart cannot
+	 * substantiate.
+	 */
+	public static PatientChart injectedFindingsOver(PatientChart base, String question,
+			Set<String> activeDrugs, Set<String> activeAtcCodes,
+			List<PatientClinicalContext.ActiveDrugOrder> orders) {
+		PatientChart chart = injectorWithSafety(ddinterServiceWithGroups())
+				.injectRecords(base,
+						ctx(60, null, activeDrugs, activeAtcCodes, null, null, orders), question);
+		if (injectedFindings(chart).isEmpty()) {
+			throw new IllegalStateException("no safety finding was injected for drugs " + activeDrugs
+					+ " and question: " + question);
+		}
+		return chart;
+	}
+
+	/**
 	 * The first injected {@code safety_finding} in a chart a caller already holds — {@link
 	 * #injectedFindings}' single-record form, public for the same cross-package reason
 	 * {@link #injectedSafetyFindingChart} is: a test that serves a chart and cites a record out of
@@ -407,8 +451,13 @@ public final class DrugReferenceTestSupport {
 	 * filter cannot drift between the test files that assert HOW MANY records a chip yields. Returns
 	 * the list rather than the first, because that count is the assertion in every caller but
 	 * {@link #injectedSafetyFinding}, which layers its own throw-on-empty contract on top.
+	 *
+	 * <p>Public for the cross-package reason {@link #safetyFindingIn} is: a test in another package
+	 * whose assertion is about WHICH of several findings an answer sentence cited needs them all
+	 * rather than the first. Widened rather than aliased — two public names for one matcher is the
+	 * drift this file exists to prevent.
 	 */
-	static List<RecordMapping> injectedFindings(PatientChart chart) {
+	public static List<RecordMapping> injectedFindings(PatientChart chart) {
 		return chart.getMappings().stream()
 				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(m.getResourceType()))
 				.collect(Collectors.toList());

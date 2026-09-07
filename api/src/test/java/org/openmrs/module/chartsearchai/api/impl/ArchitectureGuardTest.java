@@ -76,9 +76,9 @@ public class ArchitectureGuardTest {
 	 *
 	 * <p><b>Asked of the BYTECODE, and the earlier source-text form is gone rather than patched.</b>
 	 * That form matched the literal {@code "new RecordMapping("} and counted commas, and review
-	 * defeated it three times: a fully-qualified {@code new
-	 * …PatientChartSerializer.RecordMapping(} was invisible to the literal (as is a newline before
-	 * the paren), and the comment-stripping added to fix an inline-comment miscount ate the tail of
+	 * defeated it twice, measured: a fully-qualified {@code new
+	 * …PatientChartSerializer.RecordMapping(} was invisible to the literal, and the
+	 * comment-stripping added to fix an inline-comment miscount ate the tail of
 	 * any line holding a {@code //} inside a STRING — an argument such as a URL — which dropped the
 	 * counted arity and skipped the construction with no signal at all. That is the fail-open
 	 * direction, and it was claimed to fail closed. What ends that sequence is a different KIND of

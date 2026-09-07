@@ -68,7 +68,9 @@ import org.openmrs.module.chartsearchai.ModuleSourceRoot;
  * context-sensitive patient carrying both a real drug order and a real allergy the bundled dataset
  * relates, and the toggle class's public-entry case runs that path on the standard test patient, who
  * is prescribed nothing this dataset contraindicates, so it asserts the VERDICT and not a finding.
- * The fail-safe {@code catch} in that method is executed by nothing. And every chart here passes a
+ * The fail-safe {@code catch} in that method is executed by nothing HERE — that is
+ * {@code StandingChartAlertsToggleContextTest.aPassThatThrowsReportsTheChartAsNotScreenedRatherThanAsClean},
+ * which fails the dataset read the pass makes. And every chart here passes a
  * flattened name set with no per-order {@code ActiveDrugOrder} list, which production always builds
  * (issues #118, #290) — so the surface is measured over the shape the arm falls back to rather than
  * the one it usually gets.
@@ -512,20 +514,34 @@ public class StandingChartAlertsTest {
 	}
 
 	/**
-	 * And no OTHER production class names the standing pass at all.
+	 * The TWO ways a class in this package could reach the unbounded pass, neither of which the
+	 * source scan above can see. Both members are package-private — the seam
+	 * {@code standingChartAlerts(PatientClinicalContext)} and {@code SubjectMatterScope} alike — so
+	 * {@code DrugReferenceInjector}, which already calls {@code validate}, could call either without
+	 * appearing in a scan of one file.
 	 *
-	 * <p>The case above reads one file. {@code standingChartAlerts(PatientClinicalContext)} is
-	 * package-private, so {@code DrugReferenceInjector}, {@code DrugReferenceService} and every other
-	 * class in {@code reference} can call it without appearing in that scan — and a second caller is
-	 * the directive {@code reference/CLAUDE.md} states as "there must never be a second". Walks the
-	 * whole api source tree rather than a list of files, so a class added later is covered without this
-	 * case changing.
+	 * <p>The second needle is the one that was missing: the case above counts
+	 * {@code SubjectMatterScope.UNBOUNDED} inside {@code DrugSafetyValidator.java} ONLY, and this walk
+	 * searched for the seam's name ONLY, so a sibling handing the seven-argument {@code validate} the
+	 * unbounded scope itself was seen by neither.
+	 */
+	private static final String[] UNBOUNDED_PASS_NEEDLES = { "standingChartAlerts",
+			"SubjectMatterScope.UNBOUNDED" };
+
+	/**
+	 * And no OTHER production class reaches the unbounded pass at all — by the seam's name or by the
+	 * scope constant. See {@link #UNBOUNDED_PASS_NEEDLES} for why those are the two ways in.
+	 *
+	 * <p>The case above reads one file, and a second decider anywhere else is the directive
+	 * {@code reference/CLAUDE.md} states as "there must never be a second". Walks the whole api source
+	 * tree rather than a list of files, so a class added later is covered without this case changing.
 	 *
 	 * <p>It FAILS on an empty walk: a guard that discovers its own subject returns the same clean
-	 * result whether the subject was compliant or absent.
+	 * result whether the subject was compliant or absent. What it still cannot see is a caller that
+	 * reaches either without naming it — through a variable, or a scope handed down from elsewhere.
 	 */
 	@Test
-	public void noOtherProductionClassNamesTheStandingPass() throws IOException {
+	public void noOtherProductionClassReachesTheUnboundedPass() throws IOException {
 		final List<String> naming = new ArrayList<String>();
 		final int[] scanned = { 0 };
 		Path root = ModuleSourceRoot.apiRoot().resolve("src/main/java");
@@ -537,10 +553,15 @@ public class StandingChartAlertsTest {
 					return FileVisitResult.CONTINUE;
 				}
 				scanned[0]++;
-				if (!file.getFileName().toString().equals("DrugSafetyValidator.java")
-						&& withoutComments(new String(Files.readAllBytes(file), StandardCharsets.UTF_8))
-								.contains("standingChartAlerts")) {
-					naming.add(root.relativize(file).toString());
+				if (file.getFileName().toString().equals("DrugSafetyValidator.java")) {
+					return FileVisitResult.CONTINUE;
+				}
+				String source =
+						withoutComments(new String(Files.readAllBytes(file), StandardCharsets.UTF_8));
+				for (String needle : UNBOUNDED_PASS_NEEDLES) {
+					if (source.contains(needle)) {
+						naming.add(root.relativize(file) + " names " + needle);
+					}
 				}
 				return FileVisitResult.CONTINUE;
 			}
@@ -549,8 +570,9 @@ public class StandingChartAlertsTest {
 		assertTrue(scanned[0] > 50, "only " + scanned[0] + " source files were walked under " + root
 				+ "; a guard that reads nothing forbids nothing");
 		assertEquals(Collections.<String> emptyList(), naming,
-				"only DrugSafetyValidator may name the standing pass — a caller elsewhere is a second "
-						+ "unbounded pass, which the count in the case above cannot see because the seam "
-						+ "is package-private (issue #280)");
+				"only DrugSafetyValidator may reach the unbounded pass — a caller of the seam or a "
+						+ "second site asking for the unbounded scope is a second unbounded pass, and the "
+						+ "count in the case above sees neither: the seam is package-private, and that "
+						+ "count reads DrugSafetyValidator.java alone (issue #280)");
 	}
 }

@@ -49,12 +49,13 @@ import org.springframework.http.ResponseEntity;
  * javadoc gives: {@code omod/pom.xml} declares no {@code chartsearchai-api} test-jar, so the fixtures
  * that drive the real {@code DrugSafetyValidator} are not reachable from here.
  *
- * <p>The stub overrides the ONE method the handler calls, and returns both states through it — a
- * screen that ran and found something, and a screen that did not run. That the handler makes one call
- * is itself the contract: the flag and the list come back together, so neither can answer for a
- * different pass than the other. {@link #anUnscreenedInstallSaysSoRatherThanReportingAnEmptyChart} is
- * the case that would be missing if {@code screened} were dropped, and it is the reason the key
- * exists.
+ * <p>The stub overrides the ONE method the handler calls, and returns all three of its states through
+ * it — see {@link StandingScreen}, whose middle state is the only arrangement on which {@code screened}
+ * and the emptiness of {@code alerts} disagree, and so the only one that can tell a handler PUBLISHING
+ * the verdict from one deriving it from the list. That the handler makes one call is itself the
+ * contract: the flag and the list come back together, so neither can answer for a different pass than
+ * the other. {@link #anUnscreenedInstallSaysSoRatherThanReportingAnEmptyChart} is the case that would
+ * be missing if {@code screened} were dropped, and it is the reason the key exists.
  */
 public class ChartSearchAiChartAlertsTest {
 
@@ -170,6 +171,36 @@ public class ChartSearchAiChartAlertsTest {
 	}
 
 	/**
+	 * The payload that will dominate production, and the ONE arrangement on which the two keys
+	 * disagree: a chart that WAS screened and holds no such finding. Most patients are prescribed
+	 * nothing their own chart contraindicates, so this is the ordinary response rather than an edge.
+	 *
+	 * <p>Without it, every case here has {@code screened} agreeing with the emptiness of
+	 * {@code alerts}, so nothing can tell the handler reading {@code standing.isScreened()} from one
+	 * deriving the flag off the list. Measured by a review agent: substituting
+	 * {@code !standing.getAlerts().isEmpty()} for the published verdict left the whole build green
+	 * while inverting the key exactly here — the module looks, finds nothing, and tells a banner that
+	 * nobody looked. It throws nothing and answers 200, so the cost lands on the clinician reading the
+	 * banner and never on CI.
+	 *
+	 * <p>The api side already pins the validator's half of this ({@code StandingChartAlertsTest}'s
+	 * {@code alertsOf} asserts {@code isScreened()} before any case reads an empty list); this is the
+	 * wire's, which that class cannot reach.
+	 */
+	@Test
+	public void aScreenThatRanAndFoundNothingIsNotAChartNobodyLookedAt() {
+		validator.screen = StandingScreen.RAN_AND_FOUND_NOTHING;
+
+		Map<String, Object> body = okBody(RestControllerContext.PATIENT_UUID);
+
+		assertTrue(alertsOf(body).isEmpty(), "precondition: this screen found nothing: " + body);
+		assertEquals(Boolean.TRUE, body.get("screened"),
+				"a screen that ran and found nothing must still say it ran: an empty alerts array is a "
+						+ "measurement of none HERE, and the absence of a pass in the unscreened case, and "
+						+ "this key is the only thing that tells a client which it is holding: " + body);
+	}
+
+	/**
 	 * This payload states nothing about how bounded an interaction list is, because it built none.
 	 *
 	 * <p>Asserted on the BODY, not on the controller's source. {@code ChartSearchAiInteractionPairExtentTest}
@@ -191,13 +222,13 @@ public class ChartSearchAiChartAlertsTest {
 
 	/** The payload of an install whose standing screen does not run. */
 	private Map<String, Object> unscreenedBody() {
-		boolean was = validator.screens;
-		validator.screens = false;
+		StandingScreen was = validator.screen;
+		validator.screen = StandingScreen.DID_NOT_RUN;
 		try {
 			return okBody(RestControllerContext.PATIENT_UUID);
 		}
 		finally {
-			validator.screens = was;
+			validator.screen = was;
 		}
 	}
 
@@ -213,7 +244,7 @@ public class ChartSearchAiChartAlertsTest {
 	 */
 	@Test
 	public void anUnscreenedInstallSaysSoRatherThanReportingAnEmptyChart() {
-		validator.screens = false;
+		validator.screen = StandingScreen.DID_NOT_RUN;
 
 		Map<String, Object> body = okBody(RestControllerContext.PATIENT_UUID);
 
@@ -311,7 +342,7 @@ public class ChartSearchAiChartAlertsTest {
 	public void theWholePayloadMarshalsForAnXmlClient() throws Exception {
 		XmlPayloads.assertMarshals(okBody(RestControllerContext.PATIENT_UUID), "a screened chart");
 
-		validator.screens = false;
+		validator.screen = StandingScreen.DID_NOT_RUN;
 		XmlPayloads.assertMarshals(okBody(RestControllerContext.PATIENT_UUID), "an unscreened install");
 	}
 
@@ -370,19 +401,34 @@ public class ChartSearchAiChartAlertsTest {
 		}
 	}
 
+	/**
+	 * The three states a standing pass can hand the handler. Three and not two: a screen that RAN and
+	 * found nothing is the state whose {@code screened} does not follow from its {@code alerts}, and a
+	 * suite carrying only the outer two grades a handler that derives one key from the other as
+	 * correct.
+	 */
+	private enum StandingScreen {
+		RAN_AND_FOUND_SOMETHING, RAN_AND_FOUND_NOTHING, DID_NOT_RUN
+	}
+
 	/** Returns the fixture findings, and records what the handler asked it for. */
 	private static class StandingAlertStubValidator extends DrugSafetyValidator {
 
-		private boolean screens = true;
+		private StandingScreen screen = StandingScreen.RAN_AND_FOUND_SOMETHING;
 
 		private int standingCalls;
 
 		@Override
 		public StandingChartAlerts standingChartAlerts(Patient patient) {
 			standingCalls++;
-			return screens
-					? StandingChartAlerts.screened(new ArrayList<SafetyWarning>(fixtureAlerts()))
-					: StandingChartAlerts.notScreened();
+			switch (screen) {
+				case RAN_AND_FOUND_SOMETHING:
+					return StandingChartAlerts.screened(new ArrayList<SafetyWarning>(fixtureAlerts()));
+				case RAN_AND_FOUND_NOTHING:
+					return StandingChartAlerts.screened(new ArrayList<SafetyWarning>());
+				default:
+					return StandingChartAlerts.notScreened();
+			}
 		}
 	}
 }

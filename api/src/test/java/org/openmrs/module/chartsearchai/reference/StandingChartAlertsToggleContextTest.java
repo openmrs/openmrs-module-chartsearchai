@@ -218,4 +218,60 @@ public class StandingChartAlertsToggleContextTest extends BaseModuleContextSensi
 		assertEquals(1, alertsForAPrescribedAllergy().size(),
 				"with the switch on, the prescribed allergy must still be a standing alert");
 	}
+
+	/**
+	 * A pass that THROWS reports this chart as NOT screened, rather than as a clean one.
+	 *
+	 * <p><b>Nothing executed that {@code catch} before this case.</b> {@code StandingChartAlertsTest}'s
+	 * class javadoc said so, while {@code README.md}, ADR Decision 77 and
+	 * {@code DrugSafetyValidator.StandingChartAlerts}'s own javadoc all state "and when the pass itself
+	 * failed" as part of what the published {@code screened} key guarantees — a documented contract with
+	 * no test. Measured by a review agent: replacing the catch's
+	 * {@code return StandingChartAlerts.notScreened()} with a SCREENED result carrying no alerts left the
+	 * whole build green, and that payload is a chart reported clean because the screen crashed.
+	 *
+	 * <p>The failure is injected where the pass actually reads the dataset —
+	 * {@code findForActiveOrders} is the first call {@code validate} makes, before any arm runs — so the
+	 * throw travels the production path out of the seam rather than being handed to the entry. Everything
+	 * else about the service is real.
+	 *
+	 * <p>The screened precondition above it is what makes the verdict discriminating: without it, this
+	 * would pass on a patient whose chart could not be read at all, which is a different reason for the
+	 * same {@code false}.
+	 */
+	@Test
+	public void aPassThatThrowsReportsTheChartAsNotScreenedRatherThanAsClean() {
+		for (String gate : GATES) {
+			configure(gate, "true");
+		}
+		Patient patient = Context.getPatientService().getPatient(7);
+		assertNotNull(patient, "precondition: the standard test patient must exist");
+		assertTrue(DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService())
+				.standingChartAlerts(patient).isScreened(),
+				"precondition: this chart screens when the pass completes, or the verdict below is "
+						+ "observing an unreadable chart rather than the failed pass");
+
+		DrugSafetyValidator.StandingChartAlerts standing =
+				DrugReferenceTestSupport.validator(new FailingDrugReferenceService())
+						.standingChartAlerts(patient);
+
+		assertFalse(standing.isScreened(),
+				"a standing pass that threw must report this chart as NOT screened — a screen that "
+						+ "crashed is not a chart found clean");
+		assertTrue(standing.getAlerts().isEmpty(),
+				"and it must state no findings, the pass having produced none");
+	}
+
+	/**
+	 * A real {@code DrugReferenceService} whose one dataset read fails, in the call {@code validate}
+	 * makes before any arm runs. Nothing else about it differs, so the throw is the only variable
+	 * between this case and the precondition above it.
+	 */
+	private static class FailingDrugReferenceService extends DrugReferenceService {
+
+		@Override
+		public List<DrugReference> findForActiveOrders(PatientClinicalContext context) {
+			throw new IllegalStateException("the dataset read failed");
+		}
+	}
 }

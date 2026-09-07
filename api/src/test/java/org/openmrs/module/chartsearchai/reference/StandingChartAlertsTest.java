@@ -25,6 +25,7 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import org.openmrs.module.chartsearchai.ModuleSourceRoot;
@@ -324,7 +325,7 @@ public class StandingChartAlertsTest {
 	}
 
 	/**
-	 * The chart-read stamp survives the enrichment {@code validate} applies to the context, so a
+	 * Both chart-read stamps survive the enrichment {@code validate} applies to the context, so a
 	 * verdict cannot be lost between the read and the screen.
 	 *
 	 * <p><b>This pins a FAIL-OPEN shape, and it was open.</b> {@code validate} rebuilds the context
@@ -341,30 +342,36 @@ public class StandingChartAlertsTest {
 	 * {@code unreadableRecordsCtxWithOrders} and is a real shape: the builder reads orders and
 	 * allergies in separate try blocks.
 	 *
-	 * <p><b>The ORDER stamp's own carry is unreachable and is stated rather than pinned.</b> That stamp
-	 * is false only where the order read threw, which leaves no orders, which leaves no reference names
-	 * — so the copy is never taken with it false, in a test or in production. Do not write a case for
-	 * it; write one if the enrichment ever stops depending on the orders.
+	 * <p><b>Both stamps, and the second was once called unreachable here.</b> That claim — that an
+	 * order read which threw leaves no orders and so no reference names, so the copy is never taken
+	 * with that stamp false — was falsified by running the real builder: its order loop sits inside ONE
+	 * {@code try}, so a throw partway through leaves the orders already collected in place and the
+	 * stamp false. {@code partiallyReadOrdersCtx} is that shape.
 	 *
 	 * <p>Driven through the real enrichment the real pass performs — {@code findForActiveOrders} then
 	 * {@code withReferenceNames} — rather than by calling the copy constructor, so it measures the
 	 * production route.
 	 */
 	@Test
-	public void theRecordReadStampSurvivesTheEnrichmentThePassApplies() {
+	public void bothChartReadStampsSurviveTheEnrichmentThePassApplies() {
 		DrugReferenceService service = DrugReferenceTestSupport.curatedService();
-		PatientClinicalContext unreadable = DrugReferenceTestSupport.unreadableRecordsCtxWithOrders(
-				DrugReferenceTestSupport.set(DrugReferenceTestSupport.IBUPROFEN_ORDER));
-		List<DrugReference> orderEntries = service.findForActiveOrders(unreadable);
-		assertFalse(orderEntries.isEmpty(),
-				"precondition: an order must resolve a reference entry, or withReferenceNames returns "
-						+ "the context untouched and this case cannot reach the copy at all");
+		Set<String> order = DrugReferenceTestSupport.set(DrugReferenceTestSupport.IBUPROFEN_ORDER);
 
-		PatientClinicalContext enriched = service.withReferenceNames(unreadable, orderEntries);
+		for (PatientClinicalContext unreadable : new PatientClinicalContext[] {
+				DrugReferenceTestSupport.unreadableRecordsCtxWithOrders(order),
+				DrugReferenceTestSupport.partiallyReadOrdersCtx(order) }) {
+			List<DrugReference> orderEntries = service.findForActiveOrders(unreadable);
+			assertFalse(orderEntries.isEmpty(),
+					"precondition: an order must resolve a reference entry, or withReferenceNames returns "
+							+ "the context untouched and this case cannot reach the copy at all");
 
-		assertFalse(DrugReferenceTestSupport.validator(service).standingChartAlerts(enriched).isScreened(),
-				"a chart the module could not read must still say so after the pass has enriched it "
-						+ "with the reference data's own names for its orders");
+			PatientClinicalContext enriched = service.withReferenceNames(unreadable, orderEntries);
+
+			assertFalse(DrugReferenceTestSupport.validator(service).standingChartAlerts(enriched)
+					.isScreened(),
+					"a chart the module could not read must still say so after the pass has enriched it "
+							+ "with the reference data's own names for its orders");
+		}
 	}
 
 	/**

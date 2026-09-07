@@ -494,14 +494,16 @@ public class DrugSafetyValidator {
 	 *         composed answer to "may this module report a contraindication" and is therefore not
 	 *         re-spelled here.
 	 *
-	 *         <p><b>One expression, read by both consumers.</b> {@link #standingChartAlerts(Patient)}
-	 *         gates on this and the {@code chartalerts} handler publishes it, so the flag a client
-	 *         reads is the condition the pass ran under rather than a second predicate that happens
-	 *         to agree. Its three switches are asserted one at a time, through the real admin
-	 *         service, in {@code StandingChartAlertsToggleContextTest}.
+	 *         <p><b>The GATE, and not the published flag.</b> {@link #standingChartAlerts(Patient)}
+	 *         gates on this; what a client is handed is {@link StandingChartAlerts#isScreened()},
+	 *         which is STRICTLY NARROWER — it also requires that the chart's records were read and
+	 *         that the pass completed, so the two diverge in exactly the cases the flag exists for.
+	 *         <b>Do not publish this one.</b> Its three switches are asserted one at a time, through
+	 *         the real admin service, in {@code StandingChartAlertsToggleContextTest}.
 	 *
-	 *         <p><b>It is published</b>, as the {@code chartalerts} response's {@code screened} key,
-	 *         because an empty {@code alerts} array otherwise carries two unrelated meanings: this
+	 *         <p><b>It is the TOGGLE HALF of the {@code chartalerts} response's {@code screened}</b>
+	 *         key, which exists because an empty {@code alerts} array otherwise carries two
+	 *         unrelated meanings: this
 	 *         chart holds no such finding, and nobody looked. That distinction is the one issue #378
 	 *         drew for the condition-rule arm and issue #336 for the interaction extent; a new
 	 *         clinical surface must not ship without it. It answers only whether the SCREEN runs — not
@@ -532,8 +534,10 @@ public class DrugSafetyValidator {
 	 * reads the dose from the answer, so a question-only drug with no stated dose yields no overdose.
 	 *
 	 * <p>Two checks have no drug in play at all, so the union above is not the whole subject set: the
-	 * patient's own active orders are checked against their own allergy and condition records on every
-	 * question ({@link #addActiveOrderContraindications}, issue #143), and — when the question asks to be
+	 * patient's own active orders are checked against their own allergy and condition records —
+	 * on every question the arm is REACHED, though what it raises there is bounded by
+	 * {@link SubjectMatter} ({@link #addActiveOrderContraindications}, issue #143), and, when the
+	 * question asks to be
 	 * SCREENED for interactions and names no drug — screened against each other
 	 * ({@link #addActiveOrderPairInteractions}, issue #113).
 	 */

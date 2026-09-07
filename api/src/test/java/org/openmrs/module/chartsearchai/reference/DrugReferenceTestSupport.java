@@ -944,7 +944,7 @@ public final class DrugReferenceTestSupport {
 	 * <p>{@link DrugReferenceService#getLoadStatus()} on the returned service describes the format the
 	 * GP selects rather than the injected adapter (the seam says so), so no case here may assert it.
 	 */
-	static DrugReferenceService curatedService() {
+	public static DrugReferenceService curatedService() {
 		DrugReferenceService service = new DrugReferenceService();
 		service.setSource(new JsonDrugReferenceSource());
 		return service;
@@ -1396,8 +1396,13 @@ public final class DrugReferenceTestSupport {
 	 *  the dataset twice, so the injector and the validator would hold different DrugReference objects
 	 *  for the same row and the safety arms' identity comparisons would miss. That is about two services,
 	 *  NOT about a reload — there is none; see DrugReferenceService's class javadoc, which retires the
-	 *  reload reading of this same sentence at nine other sites. */
-	static DrugReferenceInjector injectorWithSafety(DrugReferenceService service) {
+	 *  reload reading of this same sentence at nine other sites.
+	 *
+	 *  <p>Public, with {@link #curatedService}, for the cross-package reason {@link #injectedSafetyFindingChart}
+	 *  is: {@code LlmInferenceServiceFindingProvenanceContextTest} drives the real {@code search} with
+	 *  the real injector AND the real validator over ONE service, and a chart it built itself would
+	 *  bypass exactly the seam it asserts about. */
+	public static DrugReferenceInjector injectorWithSafety(DrugReferenceService service) {
 		DrugReferenceInjector injector = injector(service);
 		injector.setDrugSafetyValidator(validator(service));
 		return injector;
@@ -1491,6 +1496,31 @@ public final class DrugReferenceTestSupport {
 	 *  and its resourceUuid is the Order uuid (its {@code DrugOrderRecordSerializer} contract). */
 	static RecordMapping drugOrderRecord(int index, String orderUuid, String drugText) {
 		return new RecordMapping(index, "drug_order", orderUuid, null, "Drug order: " + drugText);
+	}
+
+	/**
+	 * A querystore allergy chart record: its resource type is querystore's {@code allergy} and its
+	 * resourceUuid is the {@code Allergy} uuid.
+	 *
+	 * <p>That contract is querystore's {@code AllergyRecordSerializer.getResourceUuid(Allergy)}, which
+	 * returns {@code Allergy.getUuid()} — read off the built {@code querystore-api} jar with
+	 * {@code javap} on 2026-09-07 rather than assumed, because issue #305's provenance join is that
+	 * uuid and a helper that got it wrong would make every case here pass against a chart production
+	 * never produces.
+	 */
+	static RecordMapping allergyRecord(int index, String allergyUuid, String text) {
+		return new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_ALLERGY, allergyUuid, null,
+				text);
+	}
+
+	/**
+	 * A querystore condition chart record: its resource type is querystore's {@code condition} and its
+	 * resourceUuid is the {@code Condition} uuid — {@code ConditionRecordSerializer}'s contract, read
+	 * the same way {@link #allergyRecord} records.
+	 */
+	static RecordMapping conditionRecord(int index, String conditionUuid, String text) {
+		return new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_CONDITION, conditionUuid,
+				null, text);
 	}
 
 	/** An obs chart record, for filling a chart with records that are not drug orders. */

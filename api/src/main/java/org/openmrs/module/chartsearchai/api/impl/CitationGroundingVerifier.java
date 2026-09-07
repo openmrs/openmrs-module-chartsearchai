@@ -408,9 +408,20 @@ public class CitationGroundingVerifier {
 		DEMOTE_ONLY,
 
 		/**
-		 * A compound claim unit under entailment (#302): neither tier is asked a question that is this
-		 * citation's own, so nothing is published in either direction and no embedding is spent. Ranks
-		 * above {@link #DEMOTE_ONLY} — a reference-group citation inside a compound unit is
+		 * Nothing is published in either direction and no embedding is spent, because neither tier is
+		 * asked a question that is this citation's own. Two arrangements reach it, and they arrive from
+		 * opposite directions.
+		 *
+		 * <p>A compound claim unit under entailment (#302): the statement attaches different citations
+		 * to different pieces of itself, so no single record entails it.
+		 *
+		 * <p>A citation the MODULE attached rather than the model (#305): the model made no claim about
+		 * this record at all, so there is no pairing to check. Unlike the first, this one is NOT scoped
+		 * to entailment mode — with Tier-2 off the cosine would stand in for a judge that was never
+		 * asked, and publishing its FALSE would render the module's own deterministic provenance as
+		 * <em>Unsupported</em>, which is issue #201's defect one record over.
+		 *
+		 * <p>Ranks above {@link #DEMOTE_ONLY} — a reference-group citation inside a compound unit is
 		 * unverifiable, not merely demotable. That precedence is why this is one ordered choice rather
 		 * than two independent flags — though the ordering lives in the arms of the Pass-1 ternary, not
 		 * in this declaration order, which nothing reads. It is pinned by
@@ -635,13 +646,23 @@ public class CitationGroundingVerifier {
 		List<String> isolateStatements = new ArrayList<String>();
 		for (int i = 0; i < references.size(); i++) {
 			RecordReference reference = references.get(i);
-			Tier1Result tier1 = entailmentEnabled
-					? selectClaim(reference.getIndex(), textByIndex, sentences, citations,
-							floor, recordVectors, sentenceVectors, embedder, stats)
-					: verdictTier1(reference.getIndex(), textByIndex, sentences, citations,
-							floor, recordVectors, sentenceVectors, embedder, stats);
+			// A citation the MODULE attached carries no claim of the model's, so neither tier has a
+			// question to ask about it and no claim is selected at all (issue #305). Asked BEFORE the
+			// selection rather than only in the disposition below, because it is what makes the
+			// "no embedding is spent" half of UNVERIFIABLE true here: such a citation is anchored by no
+			// sentence, so selectClaim's candidate set is EVERY sentence — the ambiguous branch, where
+			// the cosine argmax runs eagerly and would be paid for a verdict Pass 2 discards.
+			boolean attachedByTheModule = reference.isAttachedByTheModule();
+			Tier1Result tier1 = attachedByTheModule
+					? new Tier1Result(null, null, null, false)
+					: entailmentEnabled
+							? selectClaim(reference.getIndex(), textByIndex, sentences, citations,
+									floor, recordVectors, sentenceVectors, embedder, stats)
+							: verdictTier1(reference.getIndex(), textByIndex, sentences, citations,
+									floor, recordVectors, sentenceVectors, embedder, stats);
 			tier1Results[i] = tier1;
-			disposition[i] = entailmentEnabled && tier1.compoundClaim ? Disposition.UNVERIFIABLE
+			disposition[i] = attachedByTheModule || (entailmentEnabled && tier1.compoundClaim)
+					? Disposition.UNVERIFIABLE
 					: demoteOnlyIndexes.contains(Integer.valueOf(reference.getIndex()))
 							? Disposition.DEMOTE_ONLY
 							: Disposition.GRADED;
@@ -749,6 +770,10 @@ public class CitationGroundingVerifier {
 				withheldNegatives++;
 			}
 			if (disposition[i] == Disposition.UNVERIFIABLE) {
+				// Two arrangements reach here and both publish nothing; see the enum constant, which is
+				// canonical for the pair. A citation the module attached (issue #305) has no claim of
+				// the model's to check at all, in either mode.
+				//
 				// A compound claim unit under entailment publishes nothing (issue #302). Neither tier
 				// asked a question about THIS citation: the judge was handed a conjunction the record
 				// answers for only part of, and the cosine that would stand in for it is measured

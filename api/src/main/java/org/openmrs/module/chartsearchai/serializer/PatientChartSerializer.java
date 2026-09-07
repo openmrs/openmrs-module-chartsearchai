@@ -640,6 +640,15 @@ public class PatientChartSerializer {
 		 */
 		private final Boolean orderActive;
 
+	/**
+	 * The numbers of the chart records this record was DERIVED from, empty where it was not derived
+	 * from any — the provenance of a record this module injected, and the form a consumer reads
+	 * rather than parsing it out of {@link #getText()} (issue #305).
+	 *
+	 * <p>See {@link #getDerivedFrom()} for what it is written for and by whom.
+	 */
+	private final List<Integer> derivedFrom;
+
 		/**
 		 * Backward-compatible constructor that carries no source text. Mappings
 		 * built this way cannot be grounding-checked; the grounding verifier
@@ -676,6 +685,18 @@ public class PatientChartSerializer {
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive) {
+			this(index, resourceType, resourceUuid, date, text, source, withheldInteractions, orderActive,
+					null);
+		}
+
+		/**
+		 * Full constructor, including the provenance of an injected record — see
+		 * {@link #getDerivedFrom()}. Every shorter constructor defaults it to empty, "derived from no
+		 * chart record", which is right for a chart record (it IS the record) and for every injected
+		 * record whose provenance the module could not resolve.
+		 */
+		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
+				String source, int withheldInteractions, Boolean orderActive, List<Integer> derivedFrom) {
 			this.index = index;
 			this.resourceType = resourceType;
 			this.resourceUuid = resourceUuid;
@@ -684,6 +705,12 @@ public class PatientChartSerializer {
 			this.source = source;
 			this.withheldInteractions = withheldInteractions;
 			this.orderActive = orderActive;
+			// Copied and wrapped rather than stored as handed, for the reason SafetyWarning gives of its
+			// own list: this travels onto a PatientChart a caller keeps reasoning over. Never null, so no
+			// reader branches on absence — empty is the honest answer wherever nothing was resolved.
+			this.derivedFrom = derivedFrom == null || derivedFrom.isEmpty()
+					? Collections.<Integer> emptyList()
+					: Collections.unmodifiableList(new ArrayList<Integer>(derivedFrom));
 		}
 
 		public int getIndex() {
@@ -766,6 +793,30 @@ public class PatientChartSerializer {
 		 */
 		public Boolean getOrderActive() {
 			return orderActive;
+		}
+
+		/**
+		 * @return the numbers of the chart records this record was DERIVED from, most often empty.
+		 *
+		 *         <p>Written in exactly one place — {@code DrugReferenceInjector}, for the
+		 *         {@code safety_finding} records it appends (issue #305) — and read in exactly one
+		 *         place, {@code LlmInferenceService.extractCitedReferences}, which surfaces these
+		 *         records as citations whenever the record carrying them is itself cited. A chart
+		 *         record's own list is always empty: it IS the record, so there is nothing behind it.
+		 *
+		 *         <p>Empty is not a denial. It covers a record with no provenance to state, an
+		 *         injected record whose provenance this chart carries no record for (a query-scoped
+		 *         slice need not carry the patient's allergies at all), and one the module could
+		 *         resolve to no single record. A consumer must therefore not read emptiness as "this
+		 *         claim rests on nothing in the chart".
+		 *
+		 *         <p>Structural rather than appended to {@link #getText()}, like {@link #getSource()}
+		 *         and {@link #getWithheldInteractions()} and for the same measured reason: anything
+		 *         inside the text is quotable, and the model has recited the module's own bookkeeping
+		 *         into a clinician-facing answer (issue #117).
+		 */
+		public List<Integer> getDerivedFrom() {
+			return derivedFrom;
 		}
 	}
 }

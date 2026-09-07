@@ -624,6 +624,37 @@ public class LlmInferenceService implements ChartSearchService {
 			seen.addAll(inline);
 		}
 
+		// The chart records the model's own citations were DERIVED from (issue #305) — a recorded
+		// allergy or condition an injected safety_finding fired on, resolved deterministically by
+		// DrugReferenceInjector and carried on the mapping. Attached here because this method is the
+		// only thing that decides which indices become references, and attaching a citation anywhere
+		// else is how the deterministic layer and the answer come apart.
+		//
+		// AFTER the abstention carve-out above and never before it: an answer that is real prose and
+		// anchors nothing inline surfaces no references at all, so it has no cited finding to bring a
+		// record with it. Ahead of that return, this would attach the patient's own allergy record to a
+		// "the records do not address this" answer.
+		//
+		// A SECOND pass over what the model cited, not an accumulation inside the walk below: a
+		// derived record is not itself a finding, so nothing here is transitive, and iterating one set
+		// while adding to it is a concurrent modification waiting for a chart that carries two.
+		Set<Integer> attached = new LinkedHashSet<Integer>();
+		for (Integer index : seen) {
+			RecordMapping mapping = indexMap.get(index);
+			if (mapping == null) {
+				continue;
+			}
+			for (Integer derived : mapping.getDerivedFrom()) {
+				// Already cited by the model is a no-op, and it must stay the MODEL's citation: it
+				// carries a claim of the model's, so it is graded like any other (issue #305's own
+				// first measured form).
+				if (!seen.contains(derived) && indexMap.containsKey(derived)) {
+					attached.add(derived);
+				}
+			}
+		}
+		seen.addAll(attached);
+
 		List<RecordReference> references = new ArrayList<RecordReference>();
 		for (Integer index : seen) {
 			RecordMapping mapping = indexMap.get(index);
@@ -633,7 +664,7 @@ public class LlmInferenceService implements ChartSearchService {
 				// the citation chip, so the record has nothing about itself for the model to recite.
 				references.add(new RecordReference(index, mapping.getResourceType(),
 						mapping.getResourceUuid(), mapping.getDate(), null, mapping.getSource(),
-						mapping.getWithheldInteractions()));
+						mapping.getWithheldInteractions(), attached.contains(index)));
 			} else {
 				log.warn("LLM cited record [{}] which does not exist in the provided records", index);
 			}

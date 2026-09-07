@@ -2264,7 +2264,8 @@ public class DrugSafetyValidator {
 					SafetyWarning.contraindication(subject.displayLabel(),
 							subject.displayLabel() + " is contraindicated by an " + recorded + ": "
 									+ ChartSearchAiUtils.firstNonBlank(c.getNote(), c.getToken()),
-							uncorroborated, subjectIsACurrentMedication));
+							uncorroborated, subjectIsACurrentMedication,
+							matchedContraindicationRecords(c, context)));
 		}
 	}
 
@@ -2513,6 +2514,45 @@ public class DrugSafetyValidator {
 			return "active condition";
 		}
 		return null;
+	}
+
+	/**
+	 * @return the chart records a MATCHED contraindication rule fired on — the uuids of the recorded
+	 *         allergies or conditions its token reached, so a finding built from it can name them
+	 *         (issue #305). Empty where the rule matched nothing, where the context states no
+	 *         provenance, and for a rule of any other type.
+	 *
+	 *         <p><b>The same two type-exclusive legs {@link #recordedContraindicationKind} asks, asked
+	 *         of the same predicates.</b> An {@code allergy} rule takes its witnesses from the allergy
+	 *         list alone and a {@code condition} rule from the condition list alone, so a token naming
+	 *         a drug the patient is allergic to cannot bring back a condition record. Asked of
+	 *         {@link #isAllergyRule}/{@link #isConditionRule} rather than of the WORD that method
+	 *         returns, because a rule's provenance and a rule's kind must not be two readings that
+	 *         agree today: mutate either leg here and
+	 *         {@code FindingChartRecordProvenanceContextTest} reddens.
+	 *
+	 *         <p>Through the WITNESS accessors ({@link PatientClinicalContext#allergensMatching} /
+	 *         {@link PatientClinicalContext#conditionsMatching}) and never the boolean, for the reason
+	 *         {@link #aMatchedRecordNamesTheEntry} reads them: the boolean says a token reached the
+	 *         list and does not say by which record, and the record is the whole answer here.
+	 */
+	private static Set<String> matchedContraindicationRecords(DrugReference.Contraindication c,
+			PatientClinicalContext context) {
+		if (context == null) {
+			return Collections.emptySet();
+		}
+		Set<String> out = new LinkedHashSet<String>();
+		if (isAllergyRule(c)) {
+			for (String allergen : context.allergensMatching(c.getToken())) {
+				out.addAll(context.allergyRecordsNaming(allergen));
+			}
+		}
+		if (isConditionRule(c)) {
+			for (String condition : context.conditionsMatching(c.getToken())) {
+				out.addAll(context.conditionRecordsNaming(condition));
+			}
+		}
+		return out;
 	}
 
 	/**
@@ -7210,7 +7250,8 @@ public class DrugSafetyValidator {
 				// for the three ways a name names a row and for what the second form gives up.
 				chips.add(sameSubstance, sameSubstance.substanceGroupKey(), ContraindicationChips.IDENTITY,
 						SafetyWarning.recordedAllergenContraindication(sameSubstance.displayLabel(),
-								recorded.identitySentence(sameSubstance), subjectIsACurrentMedication),
+								recorded.identitySentence(sameSubstance), subjectIsACurrentMedication,
+								recorded.chartRecords()),
 						recorded.names(sameSubstance));
 				continue;
 			}
@@ -7229,7 +7270,8 @@ public class DrugSafetyValidator {
 							SafetyWarning.recordedAllergenContraindication(subject.displayLabel(),
 									subject.displayLabel() + " is in the same ATC class (" + shared
 											+ ") as the patient's allergy to " + recorded.allergenName(implied)
-											+ " — possible cross-reactivity", subjectIsACurrentMedication),
+											+ " — possible cross-reactivity", subjectIsACurrentMedication,
+									recorded.chartRecords()),
 							recorded.names(implied));
 					chipped = true;
 					break;
@@ -7246,7 +7288,7 @@ public class DrugSafetyValidator {
 									subject.displayLabel() + " is in the same cross-reactivity group ("
 											+ group.getName() + ") as the patient's allergy to "
 											+ recorded.allergenName(implied) + " — possible cross-reactivity",
-									subjectIsACurrentMedication),
+									subjectIsACurrentMedication, recorded.chartRecords()),
 							recorded.names(implied));
 					break;
 				}
@@ -7470,12 +7512,17 @@ public class DrugSafetyValidator {
 				continue;
 			}
 			List<DrugReference> named = drugReferenceService.findNamedSubstances(allergyToken, implied);
+			// The records this token was read off, asked of the WITNESS the context holds rather than
+			// resolved by a scan of its own — see PatientClinicalContext.allergyRecordsNaming. The token
+			// iterated here IS an element of getAllergyTokens(), so it is a key by construction.
+			Set<String> records = context.allergyRecordsNaming(allergyToken);
 			RecordedAllergen seen = resolvedAlike(out, implied);
 			if (seen == null) {
-				out.add(new RecordedAllergen(allergyToken, implied, named));
+				out.add(new RecordedAllergen(allergyToken, implied, named, records));
 			}
 			else {
 				seen.alsoNames(named);
+				seen.alsoRecordedIn(records);
 			}
 		}
 		return out;
@@ -7520,11 +7567,17 @@ public class DrugSafetyValidator {
 
 		private final List<DrugReference> named;
 
+		/** The uuids of the chart records this recorded allergen was read off — one per spelling
+		 *  {@link #alsoNames} has merged in, and the provenance the finding it raises carries
+		 *  (issue #305). */
+		private final Set<String> chartRecords;
+
 		private RecordedAllergen(String token, List<DrugReference> substances,
-				List<DrugReference> named) {
+				List<DrugReference> named, Set<String> chartRecords) {
 			this.token = token;
 			this.substances = substances;
 			this.named = new ArrayList<DrugReference>(named);
+			this.chartRecords = new LinkedHashSet<String>(chartRecords);
 		}
 
 		/**
@@ -7550,6 +7603,25 @@ public class DrugSafetyValidator {
 					named.add(row);
 				}
 			}
+		}
+
+		/**
+		 * Folds in the chart records ANOTHER spelling of this same allergy was read off (issue #305).
+		 *
+		 * <p>Unioned for the reason {@link #alsoNames} unions naming: the merged spellings are one
+		 * clinical fact recorded in two rows, and either row is a record of the fact the surviving
+		 * sentence states — so keeping only the first spelling's row would make the clinician's
+		 * click-through depend on the order {@code PatientService} returned the allergies in, which is
+		 * the dependence this merge exists to remove.
+		 */
+		private void alsoRecordedIn(Set<String> records) {
+			chartRecords.addAll(records);
+		}
+
+		/** @return the chart records this recorded allergen was read off, unmodifiable — what a finding
+		 *          raised on it carries as {@code SafetyWarning.chartRecords()}. */
+		private Set<String> chartRecords() {
+			return Collections.unmodifiableSet(chartRecords);
 		}
 
 		/** The substances this recorded name implies — what the class comparisons reason over, and the

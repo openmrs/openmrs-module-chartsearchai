@@ -713,6 +713,10 @@ public interface ChartSearchService {
 
 		private final int withheldInteractions;
 
+		/** Whether the MODULE put this citation on the answer rather than the model — see
+		 *  {@link #isAttachedByTheModule()} (issue #305). */
+		private final boolean attachedByTheModule;
+
 		public RecordReference(int index, String resourceType, String resourceUuid, Date date) {
 			this(index, resourceType, resourceUuid, date, null);
 		}
@@ -728,6 +732,16 @@ public interface ChartSearchService {
 		 */
 		public RecordReference(int index, String resourceType, String resourceUuid, Date date, Boolean grounded,
 				String source, int withheldInteractions) {
+			this(index, resourceType, resourceUuid, date, grounded, source, withheldInteractions, false);
+		}
+
+		/**
+		 * Full constructor, additionally saying who put this citation on the answer — see
+		 * {@link #isAttachedByTheModule()}. Every shorter constructor answers {@code false}, which is
+		 * a model-emitted citation's real shape and the only shape that existed before issue #305.
+		 */
+		public RecordReference(int index, String resourceType, String resourceUuid, Date date, Boolean grounded,
+				String source, int withheldInteractions, boolean attachedByTheModule) {
 			this.index = index;
 			this.resourceType = resourceType;
 			this.resourceUuid = resourceUuid;
@@ -735,6 +749,7 @@ public interface ChartSearchService {
 			this.grounded = grounded;
 			this.source = source;
 			this.withheldInteractions = withheldInteractions;
+			this.attachedByTheModule = attachedByTheModule;
 		}
 
 		public int getIndex() {
@@ -804,11 +819,50 @@ public interface ChartSearchService {
 		}
 
 		/**
+		 * @return whether the MODULE attached this citation rather than the model emitting it — a
+		 *         chart record an injected {@code safety_finding} the model DID cite was derived
+		 *         from, resolved by
+		 *         {@link org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping#getDerivedFrom()}
+		 *         (issue #305). {@code false} for every citation the model emitted, inline or in its
+		 *         structured array, and so for every citation that existed before that issue.
+		 *
+		 *         <p>Two things turn on it, and neither is cosmetic. It is why
+		 *         {@link #getGrounded()} is {@code null} here: grounding asks whether the claim the
+		 *         MODEL attached to a citation is supported by the record it pointed at, and the
+		 *         module attached no claim — so the citation is UNVERIFIABLE inside
+		 *         {@code CitationGroundingVerifier} rather than graded, which is what stops a cosine
+		 *         floor rendering the module's own deterministic provenance as <em>Unsupported</em>
+		 *         (issue #201's shape). And it is published, because the answer prose carries no
+		 *         {@code [N]} marker for such a citation: a client that highlights the marker for a
+		 *         reference chip has nothing to highlight, and one reading the {@code null} verdict
+		 *         needs to know nothing is being withheld from it.
+		 *
+		 *         <p>It says who ATTACHED the citation, never how good the evidence is. A record the
+		 *         module attached is one it resolved deterministically from the finding's own match;
+		 *         a record the model cited is the model's claim. ADR Decision 78 carries why the
+		 *         module may publish one at all.
+		 */
+		public boolean isAttachedByTheModule() {
+			return attachedByTheModule;
+		}
+
+		/**
 		 * @return a copy of this reference carrying the given grounding verdict
+		 *
+		 *         <p>Every other field travels with it, {@link #isAttachedByTheModule()} included.
+		 *         This is a hand-written copy rather than a mutation, so a field added above and
+		 *         forgotten here is dropped SILENTLY and fail-open — the shape that has cost this
+		 *         module twice over the chart-assembly stamps. Every grounded answer passes through
+		 *         here, so dropping that one would relabel the module's own citation as the model's
+		 *         wherever grounding is on:
+		 *         {@code CitationGroundingVerifierTest.aCitationTheModuleAttachedPublishesNoVerdictAndSpendsNothing}
+		 *         asserts the flag on what {@code verify} returns, which is this copy, and is what
+		 *         reddens. The wire keys are pinned separately, in
+		 *         {@code ChartSearchAiFindingProvenanceTest}.
 		 */
 		public RecordReference withGrounded(Boolean verdict) {
 			return new RecordReference(index, resourceType, resourceUuid, date, verdict, source,
-					withheldInteractions);
+					withheldInteractions, attachedByTheModule);
 		}
 	}
 }

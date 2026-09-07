@@ -56,10 +56,12 @@ import org.slf4j.LoggerFactory;
  * Decision 77 carries the measurement of how often, its date and what it is a count OF.
  *
  * <p><b>Which ratings it asks about is not this class's decision.</b>
- * {@code DrugSafetyValidator.statableRating} makes it, at the write site, and is canonical for the
- * two that answer null — an UNRATED finding, which has no word at all, and {@code unknown}, which
- * has a word that says nothing. This class never sees them and states no vocabulary of its own; it
- * has no severity literal in it, which is what keeps that decision in one place.
+ * {@code DrugReferenceInjector.ratingThisRecordStates} makes it, at the write site, over two
+ * conditions — which ratings are worth requiring ({@code DrugSafetyValidator.statableRating}, whose
+ * javadoc is canonical for the two it declines: an UNRATED finding, which has no word at all, and
+ * {@code unknown}, which has a word that says nothing) and whether the record STATES the rating at
+ * all. This class never sees any of those three cases and states no vocabulary of its own; it has no
+ * severity literal in it, which is what keeps that decision in one place.
  *
  * <p><b>It asks of the WHOLE answer, and that is the conservative choice rather than the thorough
  * one.</b> The unit could have been the sentence citing the finding, or the citation run its sibling
@@ -70,8 +72,10 @@ import org.slf4j.LoggerFactory;
  *
  * <p><b>Conservative by construction</b>, for the reason its siblings are:
  * <ul>
- *   <li>it says nothing about a record carrying no rating worth requiring, which is every record
- *       that is not an injected safety finding and every finding {@code statableRating} declines;</li>
+ *   <li>it says nothing about a record carrying no rating for it to ask after — every record that
+ *       is not an injected safety finding, every finding {@code statableRating} declines, and every
+ *       finding whose own record does not state its rating. It cannot tell those apart, by
+ *       construction: what reaches it is one nullable field;</li>
  *   <li>a BLANK or absent answer is silent. That arm is reachable rather than defensive —
  *       {@code LlmInferenceService.extractCitedReferences} resolves the structured citations array
  *       for a blank answer deliberately — and a degenerate output is not a fidelity defect. Every
@@ -100,7 +104,8 @@ import org.slf4j.LoggerFactory;
  * states the other would otherwise be reported as dropped. That method's javadoc carries the
  * boundary and why it is not a member of {@code DrugReference}'s drug-name family.
  *
- * <p><b>What it cannot see</b>, stated rather than left to be found:
+ * <p><b>What it cannot see</b>, stated rather than left to be found — and the write site's own
+ * javadoc names one more, a record whose mechanism happens to contain the rating word:
  * <ul>
  *   <li>an answer that states one Major finding's rating and drops a second Major finding's. The
  *       whole-answer unit is what buys the silence above and this is what it costs;</li>

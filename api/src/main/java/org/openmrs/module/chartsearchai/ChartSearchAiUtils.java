@@ -991,8 +991,13 @@ public class ChartSearchAiUtils {
 	 *         matters, since it is ordinary in clinical prose.
 	 *
 	 *         <p>A null or blank {@code word} answers false rather than matching everything: an empty
-	 *         needle that matched would silence the caller that asks about the answer, and a check
-	 *         silenced by a blank is a check that fails open.
+	 *         needle would otherwise match at the first position with non-alphanumeric neighbours —
+	 *         any {@code ". "} — and a check silenced by a blank is a check that fails open. <b>The
+	 *         blank half of that guard is UNPINNED</b>: weakening it to a null test leaves the suite
+	 *         green, because no production caller can reach here with a blank
+	 *         ({@code statableRating} answers a trimmed non-blank or null). It is contract for a
+	 *         public method rather than a reachable path, and said so rather than left looking
+	 *         better defended than it is.
 	 */
 	public static boolean statesWord(String text, String word) {
 		if (text == null || isBlank(word)) {

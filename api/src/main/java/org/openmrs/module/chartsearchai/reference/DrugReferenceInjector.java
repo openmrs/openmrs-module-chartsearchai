@@ -1654,10 +1654,21 @@ public class DrugReferenceInjector {
 	 *         for every finding such an install raises.
 	 *
 	 *         <p>Asking whether the rendered record states a rating already KNOWN is not the
-	 *         derivation this field exists to avoid. Reading a rating OUT of the prose would pick a
-	 *         mechanism's own "major" up as the module's rating; this only ever narrows, and its
-	 *         false-positive direction — a mechanism containing the rating word the rule is rated —
-	 *         costs nothing, since the answer reproducing that mechanism states the word too.
+	 *         derivation this field exists to avoid: reading a rating OUT of the prose would pick a
+	 *         mechanism's own "major" up as the module's rating, where this only ever narrows.
+	 *
+	 *         <p><b>But it narrows the crying-wolf case rather than closing it, and the residue is
+	 *         the same mechanism word.</b> A dataset whose note states no rating but whose MECHANISM
+	 *         happens to contain the rating word — "…the risk of major haemorrhage", on a rule rated
+	 *         Major — satisfies this condition, so the rating is carried although nothing in the
+	 *         record states it AS a rating, and an answer that enumerates without reproducing is
+	 *         still reported. That is precisely the answer shape issue #337 measured, so the case is
+	 *         not hypothetical; what makes it small is that it needs an operator dataset, the bundled
+	 *         one always writing the rating as a prefix. Closing it means telling this method where a
+	 *         finding's lead ends, which is knowledge {@link #renderFinding} owns. Recorded rather
+	 *         than closed, and NOT to be described as costing nothing — an earlier draft said so, on
+	 *         the reasoning that an answer reproducing the mechanism states the word too, which is
+	 *         false of every answer this check exists for.
 	 *
 	 *         <p>{@link ChartSearchAiUtils#statesWord} is shared with the check that reads the
 	 *         answer, deliberately: the two must be one rule or a rating stated one way and read the

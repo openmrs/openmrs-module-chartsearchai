@@ -663,9 +663,10 @@ public interface ChartSearchService {
 		 * not a certificate.</b> The check is recall-limited by construction and
 		 * {@code SafetyFindingSeverityFidelityCheck} enumerates how: it asks only whether the rating
 		 * appears ANYWHERE in the answer, so an answer that states one Major finding's rating and
-		 * drops another's is silent; it says nothing about a finding whose rating carries no word
-		 * worth requiring ({@code DrugSafetyValidator.statableRating}); and it is satisfied by the
-		 * word appearing for any reason, including inside a mechanism the answer reproduced. <b>And
+		 * drops another's is silent; it says nothing about a finding whose record carries no rating
+		 * for it to ask after, which is three different cases
+		 * ({@code DrugReferenceInjector.ratingThisRecordStates}); and it is satisfied by the word
+		 * appearing for any reason, including inside a mechanism the answer reproduced. <b>And
 		 * empty says less than it looks on a stock install</b>: {@code
 		 * chartsearchai.drugReference.enabled} defaults to false, so no finding exists to have a
 		 * rating dropped — the same qualification both siblings carry, for the same GP. Null's

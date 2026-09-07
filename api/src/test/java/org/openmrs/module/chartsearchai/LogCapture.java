@@ -146,10 +146,10 @@ public final class LogCapture implements AutoCloseable {
 	 * check's logger is.
 	 *
 	 * <p>The arity that exists so a caller does not spell the excluded logger as a string literal no
-	 * compiler checks — three sibling test files did, and one of them kept the literal after the
-	 * other two were fixed. It also gives the argument for excluding one logger a single home: two
-	 * of those files had carried a byte-identical constant, wrapper and eight-line justification, and
-	 * ADR Decision 77 predicts a fifth check meeting the same collision.
+	 * compiler checks — three sibling test files did. It also gives the argument for excluding one
+	 * logger a single home: two of those files had carried a byte-identical constant, wrapper and
+	 * eight-line justification, and ADR Decision 77 predicts a fifth check meeting the same
+	 * collision.
 	 *
 	 * @param level as {@link #hasEventAtOrAbove(Level)}
 	 * @param excludedLogger the class whose logger's events do not count

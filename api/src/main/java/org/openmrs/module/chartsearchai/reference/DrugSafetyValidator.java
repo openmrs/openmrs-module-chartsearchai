@@ -7516,8 +7516,10 @@ public class DrugSafetyValidator {
 			}
 			List<DrugReference> named = drugReferenceService.findNamedSubstances(allergyToken, implied);
 			// The records this token was read off, asked of the WITNESS the context holds rather than
-			// resolved by a scan of its own — see PatientClinicalContext.allergyRecordsNaming. The token
-			// iterated here IS an element of getAllergyTokens(), so it is a key by construction.
+			// resolved by a scan of its own — see PatientClinicalContext.allergyRecordsNaming, which
+			// is canonical for when it answers empty. The token iterated here is in the KEY FORM,
+			// which is what the normalization rule buys; whether the map has an entry for it is that
+			// accessor's question, not one to restate here.
 			Set<String> records = context.allergyRecordsNaming(allergyToken);
 			RecordedAllergen seen = resolvedAlike(out, implied);
 			if (seen == null) {

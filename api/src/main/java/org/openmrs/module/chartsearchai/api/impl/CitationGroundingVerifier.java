@@ -413,14 +413,12 @@ public class CitationGroundingVerifier {
 		 * Nothing is published in either direction, because neither tier is asked a question that is
 		 * this citation's own. Two arrangements reach it, and they arrive from opposite directions.
 		 *
-		 * <p><b>Whether an embedding is spent getting here differs between them</b>, and this said
-		 * otherwise until review measured it. A compound claim unit reached through
-		 * {@link #selectClaim}'s AMBIGUOUS branch has already paid an eager cosine argmax by the time
-		 * {@code compoundClaim} is known — Pass 2's own withholding names
-		 * {@code compoundClaim_anEagerlyScoredCosineFailIsWithheldToo}, which is exactly such a
-		 * computed cosine. Only the attached-citation arm spends nothing, because it is decided
-		 * BEFORE claim selection. So read "no embedding is spent" as a property of that arm, stated at
-		 * its own site, and not as a shared premise.
+		 * <p><b>Do not read "nothing is published" as "nothing is spent".</b> Two drafts of a rule
+		 * about which arm pays an embedding have now been refuted by measurement, so none is made
+		 * here: what a given arrangement costs depends on which branch of {@link #selectClaim} it
+		 * took, and the answer is read off that method rather than from a rule in this declaration.
+		 * The attached-citation arm's own site states what it is decided before, and why that
+		 * matters there.
 		 *
 		 * <p>A compound claim unit under entailment (#302): the statement attaches different citations
 		 * to different pieces of itself, so no single record entails it.

@@ -658,8 +658,8 @@ public class LlmInferenceService implements ChartSearchService {
 		// A SECOND pass over what the model cited, and ONE level: the derivations read here are the
 		// model's own citations', never those of a record this step added, so the walk cannot chain.
 		// That is the rule rather than a property of today's data — no chart record carries a
-		// derivation at all — and it is what makes iterating `seen` safe instead of a concurrent
-		// modification waiting for the arrangement that chains.
+		// derivation at all. What keeps the iteration safe is separate and simpler: additions go into
+		// `attached` and reach `seen` only after the loop.
 		Set<Integer> attached = new LinkedHashSet<Integer>();
 		for (Integer index : seen) {
 			RecordMapping mapping = indexMap.get(index);

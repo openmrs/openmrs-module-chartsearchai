@@ -217,9 +217,10 @@ public class LlmInferenceServiceFindingProvenanceContextTest extends BaseModuleC
 	 * carve-out matters. It does not: the carve-out returns an unconditional empty list, so nothing
 	 * `seen` holds at that point can reach a client, and moving the attach step ahead of it leaves
 	 * this case — and the whole suite — green. Measured, and said here because the comment at the
-	 * attach site claimed otherwise. What the position DOES decide is
-	 * {@link #attachesNothingToARecordTheModelAlreadyCitedInlineOnly}. This case's own claim is
-	 * narrower and still worth pinning: the abstention-dump behaviour is unchanged by issue #305.
+	 * attach site claimed otherwise. What the position DOES decide is pinned by
+	 * {@code LlmInferenceServiceTest.extractCitedReferences_shouldNotClaimARecordTheModelCitedInlineOnly}.
+	 * This case's own claim is narrower and still worth pinning: the abstention-dump behaviour is
+	 * unchanged by issue #305.
 	 */
 	@Test
 	public void anAnswerThatAnchorsNoCitationInlineAcquiresNothing() {

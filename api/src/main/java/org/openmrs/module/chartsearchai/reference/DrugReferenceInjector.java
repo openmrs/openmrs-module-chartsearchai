@@ -806,10 +806,12 @@ public class DrugReferenceInjector {
 	}
 
 	/**
-	 * The chart's own records, indexed so that ONE walk answers "which numbered record IS this active
-	 * order" for both callers that ask it — {@link #unrepresentedActiveOrders}, which needs only
-	 * whether there is one (issue #118), and {@link #orderRecordNumbers}, which needs WHICH (issue
-	 * #379).
+	 * The chart's own records, indexed so that ONE walk answers "which numbered record IS this
+	 * uuid" for every caller that asks it — {@link #unrepresentedActiveOrders}, which needs only
+	 * whether there is one for an order (issue #118); {@link #orderRecordNumbers}, which needs WHICH
+	 * (issue #379); and {@link #chartRecordNumbers}, which asks it of a chart record a finding fired
+	 * on (issue #305). The readings differ and {@link #numberOfRecord}'s javadoc is where that is
+	 * drawn.
 	 *
 	 * <p><b>One resolution read two ways, and not two resolutions that agree.</b> Before issue #379
 	 * this walk lived inside the reconciliation and threw the identity of the matching record away, so
@@ -817,9 +819,11 @@ public class DrugReferenceInjector {
 	 * records substantiate an order, which is the shape issue #151 forbids. Substantiated is now
 	 * defined AS {@link #numbersFor} answering with anything.
 	 *
-	 * <p>One WALK and not one instance: the two callers ask about different mapping lists — the chart
-	 * as it arrived, and the chart with the reconciliation's own records appended — so each builds its
-	 * own. A per-call local either way, which is issue #172's rule met by the shape.
+	 * <p>One WALK and not one instance: the reconciliation asks about the chart as it ARRIVED and
+	 * everything after it about the chart with the reconciliation's own records appended, so there are
+	 * two instances over two mapping lists — and since issue #305 the second is built once at the
+	 * injection site and HANDED to both of its readers, rather than each building one. A per-call
+	 * local either way, which is issue #172's rule met by the shape.
 	 *
 	 * <p><b>It carries no {@code isCompleteFor} gate</b>, deliberately. That gate answers "is an
 	 * ABSENCE meaningful", which is the reconciliation's question and not this one: a query-scoped

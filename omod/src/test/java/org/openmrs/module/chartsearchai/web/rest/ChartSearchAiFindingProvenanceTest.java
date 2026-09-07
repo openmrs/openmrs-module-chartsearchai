@@ -156,8 +156,11 @@ public class ChartSearchAiFindingProvenanceTest {
 	@Test
 	public void groundedEvent_saysItToo_whenAsyncGroundingIsOn() throws Exception {
 		// Its own serializeReferences call site, and the only one a client consuming verdicts has to
-		// read. With literals rather than a comparison against done, because "identical to done" is
-		// also satisfied by both sites dropping the key together.
+		// read. With literals rather than a comparison against done — not because a comparison could
+		// survive both sites dropping the key, which attributionOf's own presence assertion refuses
+		// (measured: removing the wire key reddens four of the five cases here, this file's
+		// same-as-done case among them), but because a literal says what the trailing event must
+		// carry without a reader having to look at another case to find out.
 		controller.streamAnswer(out, RestControllerContext.patient(), "can I give ibuprofen?",
 				RestControllerContext.user(), true);
 

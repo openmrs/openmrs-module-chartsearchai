@@ -150,8 +150,8 @@ def search(patient, question):
         # the MODULE attached carries grounded=null because there is no claim of the model's to check,
         # and printing that as None reads as "unverified" — the distinction that whole issue turns on.
         # A STRING again, so the True/False classes cannot match it and the #302 null-side classes,
-        # which test `is None`, cannot either; the three counted classes each require a non-null on
-        # one side, so no tally moves. Do not tag it None.
+        # which test `is None`, cannot either; every counted class requires a non-null on one side or
+        # a True/False match, so no tally moves. Do not tag it None.
         #
         # It deliberately does NOT share drift-metric's `model_cited` predicate, which is the one home
         # of the rule for the scorers that EXCLUDE such a citation. This harness tags rather than

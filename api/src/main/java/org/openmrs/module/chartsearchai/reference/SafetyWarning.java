@@ -96,9 +96,8 @@ public class SafetyWarning {
 	private final boolean aboutACurrentMedication;
 
 	/**
-	 * The chart records this finding fired on — see {@link #chartRecords()} (issue #305). Never null;
-	 * empty for every shape but a contraindication, and for a contraindication whose context stated no
-	 * provenance.
+	 * The chart records this finding fired on — see {@link #chartRecords()} (issue #305), which is
+	 * where what empty covers is said. Never null.
 	 */
 	private final Set<String> chartRecords;
 

@@ -2519,8 +2519,11 @@ public class DrugSafetyValidator {
 	/**
 	 * @return the chart records a MATCHED contraindication rule fired on — the uuids of the recorded
 	 *         allergies or conditions its token reached, so a finding built from it can name them
-	 *         (issue #305). Empty where the rule matched nothing, where the context states no
-	 *         provenance, and for a rule of any other type.
+	 *         (issue #305). Empty where the context states no provenance — the only one of those
+	 *         reachable from the single call site, which is guarded on
+	 *         {@link #recordedContraindicationKind} having answered. What an empty answer means
+	 *         downstream is {@code RecordMapping.getDerivedFrom()}'s to enumerate, not this
+	 *         method's.
 	 *
 	 *         <p><b>The same two type-exclusive legs {@link #recordedContraindicationKind} asks, asked
 	 *         of the same predicates.</b> An {@code allergy} rule takes its witnesses from the allergy

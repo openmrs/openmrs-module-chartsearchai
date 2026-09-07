@@ -142,12 +142,12 @@ def main():
         # The MODEL's own citations, and not every entry of the array — see model_cited, which is the
         # one home of that rule and of the wire key's spelling.
         #
-        # ON THIS GATE'S OWN PROTOCOL the filtered population is EMPTY, and saying so is the point:
-        # capture_eval.sh sets querystore.enabled and embedding.preFilter and nothing else, and the
-        # arm that raises a contraindication finding needs chartsearchai.drugReference.enabled, whose
-        # default is false. So a capture taken as the README prescribes is unaffected and the figures
-        # it records are over the same population they always were. The filter is for a capture taken
-        # on an install that has the feature ON.
+        # HOW MANY citations it removes from a given capture is deliberately not claimed here. Two
+        # drafts of that claim were written and both were measured false, in opposite directions:
+        # the README's protocol does not pin chartsearchai.drugReference.enabled either way, so
+        # whether a capture carries an attached citation at all is a property of the standalone it
+        # was taken against and not of this gate. What IS certain is the direction: a capture with
+        # none scores bit-identically, because the key is absent and the filter removes nothing.
         cited = list(dict.fromkeys(r.get('resourceUuid') for r in model_cited(refs)
                                    if r.get('resourceUuid')))
         s = score_cell(cited, g['present'], set(g['ontopic']), set(g['focus_uuids']),

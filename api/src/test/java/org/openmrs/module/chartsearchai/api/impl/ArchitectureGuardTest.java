@@ -86,12 +86,13 @@ public class ArchitectureGuardTest {
 	 * call site actually invokes, so qualification, whitespace, comments and string literals are all
 	 * out of the picture.
 	 *
-	 * <p><b>What it cannot answer, and what does.</b> The pool says which CLASS invokes the wide
-	 * constructor, not which of that class's four mapping constructions passes a non-empty list. The
-	 * within-injector question is behavioural and
-	 * {@code FindingChartRecordProvenanceContextTest.aChartRecordNamesNoProvenanceOfItsOwn} is where
-	 * it is asked, over a real arrangement. The two halves are different kinds of question on
-	 * purpose; neither alone is the property those three judgements need.
+	 * <p><b>What it cannot answer, and what does — both halves measured.</b> The pool says which
+	 * CLASS invokes the wide constructor, not which of that class's four mapping constructions passes
+	 * a non-empty list. A second caller reddens THIS case; giving the injector's own
+	 * {@code drug_reference} construction a one-element derivation leaves it green and reddens
+	 * {@code FindingChartRecordProvenanceContextTest.aChartRecordNamesNoProvenanceOfItsOwn} instead,
+	 * over a real arrangement that injects such a record. The two halves are different kinds of
+	 * question on purpose; neither alone is the property those three judgements need.
 	 *
 	 * <p>Every canary here fails on an empty discovery, because a guard that finds nothing forbids
 	 * nothing: the classes directory, the mapping's own class file, more than one constructor arity,

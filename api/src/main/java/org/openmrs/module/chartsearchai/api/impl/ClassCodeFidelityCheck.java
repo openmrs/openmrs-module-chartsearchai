@@ -202,14 +202,13 @@ final class ClassCodeFidelityCheck {
 	 * @param cited the references the answer cites, as resolved by
 	 *            {@link LlmInferenceService#extractCitedReferences} — the union of the inline
 	 *            {@code [N]} markers and the structured citations array — plus, since issue #305, the
-	 *            chart records the module attached, which the note below is about. Taking
+	 *            chart records the module attached. Taking
 	 *            the accessor's own output rather than re-deriving it from the prose is what keeps
 	 *            "which records were cited" a single answer, and it is also what the clinician can
 	 *            click. An answer that cites nothing cites no code-bearing record either, so it
-	 *            takes the "nothing to copy" exit above like any other. <b>Since issue #305 that
-	 *            list can also carry a citation the MODULE attached</b> — a chart record an injected
-	 *            {@code safety_finding} was derived from — and this method skips those, at the walk
-	 *            below and for the reason stated there.
+	 *            takes the "nothing to copy" exit above like any other. <b>This method skips a
+	 *            citation the MODULE attached</b>, at the walk below and for the reason stated
+	 *            there.
 	 * @param mappings the chart's records, cited or not — the carrier of the cited records' text.
 	 *            Support is pooled across the records the ANSWER cited rather than matched per
 	 *            citation: an answer citing [3] and [7] may state any code either of them carries,

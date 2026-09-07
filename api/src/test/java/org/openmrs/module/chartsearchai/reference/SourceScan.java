@@ -201,7 +201,6 @@ final class SourceScan {
 		return new String(text);
 	}
 
-	/** A brace-delimited span of the source. */
 	/**
 	 * @return whether {@code needle} occurs inside {@code region}, in this file's blanked source — so
 	 *         a comment or a string literal naming it is not an occurrence of it.
@@ -224,6 +223,7 @@ final class SourceScan {
 		return false;
 	}
 
+	/** A brace-delimited span of the source. */
 	static final class Region {
 
 		private final int start;

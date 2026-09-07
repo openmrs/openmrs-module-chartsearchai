@@ -170,6 +170,38 @@ public class ChartSearchAiChartAlertsTest {
 	}
 
 	/**
+	 * This payload states nothing about how bounded an interaction list is, because it built none.
+	 *
+	 * <p>Asserted on the BODY, not on the controller's source. {@code ChartSearchAiInteractionPairExtentTest}
+	 * counts the {@code "interactionPairs"} literal, and a review agent defeated that by writing the
+	 * key as {@code "interaction" + "Pairs"} — it compiled and the whole omod suite stayed green while
+	 * this surface published {@code {found: 0, reported: 0}}, a complete screen of zero pairs from a
+	 * pass that ran no screen. A count of a literal cannot see an assembled key; a read of the payload
+	 * can, and neither replaces the other — the count reaches sites this class does not drive.
+	 */
+	@Test
+	public void thePayloadStatesNoInteractionExtent() {
+		for (Map<String, Object> body : Arrays.asList(okBody(RestControllerContext.PATIENT_UUID),
+				unscreenedBody())) {
+			assertFalse(body.containsKey("interactionPairs"),
+					"a surface that raises no interaction chip has no extent to state, and a zeroed one "
+							+ "asserts a screen it never ran: " + body);
+		}
+	}
+
+	/** The payload of an install whose standing screen does not run. */
+	private Map<String, Object> unscreenedBody() {
+		boolean was = validator.screens;
+		validator.screens = false;
+		try {
+			return okBody(RestControllerContext.PATIENT_UUID);
+		}
+		finally {
+			validator.screens = was;
+		}
+	}
+
+	/**
 	 * The case {@code screened} exists for, and the one a client cannot get right without it: an
 	 * install whose drug-safety validator is switched off returns an EMPTY alerts array, which is
 	 * byte-identical to a chart that holds no such finding.

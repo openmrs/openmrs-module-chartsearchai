@@ -304,9 +304,11 @@ public class DrugSafetyValidator {
 	 * {@code api/src/main/java/…/reference/CLAUDE.md}'s "a chart the module could not read is not a
 	 * chart that records nothing", on the one surface whose WHOLE payload can be empty.
 	 *
-	 * <p>So {@link #isScreened()} is true only where all three held: the toggles were on, the chart's
-	 * contraindication records were read, and the pass completed. A pass that threw is not screened
-	 * either, which is what the fail-safe would otherwise have published as a clean chart.
+	 * <p>So {@link #isScreened()} is true only where every one of these held: the toggles were on,
+	 * the chart's allergy and condition records were read, its active orders were read, and the pass
+	 * completed. Both reads, because this surface IS their join — the order half was missed for a
+	 * round and published a false clean chart on its own. A pass that threw is not screened either,
+	 * which is what the fail-safe would otherwise have published as a clean chart.
 	 */
 	public static final class StandingChartAlerts {
 
@@ -335,14 +337,15 @@ public class DrugSafetyValidator {
 			// changing what this object says. Not an unmodifiable WRAPPER, deliberately — the wire
 			// serializer's own comment records XStreamMarshaller refusing java.util.Collections'
 			// immutable wrappers, the empty case included, and this list travels to it.
-			return new StandingChartAlerts(true, new ArrayList<SafetyWarning>(alerts));
+			return new StandingChartAlerts(true,
+				alerts == null ? new ArrayList<SafetyWarning>() : new ArrayList<SafetyWarning>(alerts));
 		}
 
 		/**
 		 * @return whether this patient's chart was actually screened. <b>False is not "no findings"</b>
 		 *         — it says the screen did not run, and {@link #getAlerts()} is then empty for that
 		 *         reason rather than for the chart's. <b>Its unit is the whole pass</b>: a chart one of
-		 *         whose two record reads failed reports {@code false} and no findings, even where the
+		 *         whose chart reads failed reports {@code false} and no findings, even where the
 		 *         other read would have supported one — fail-closed, and a real cost on a safety
 		 *         surface, taken because the alternative is a partial verdict a client would have to
 		 *         be taught to read. It does not say WHICH of the reasons applies, and
@@ -359,9 +362,16 @@ public class DrugSafetyValidator {
 		/**
 		 * @return the standing findings, in the order the arm raised them; never null, and <b>empty is
 		 *         a measurement of none only where {@link #isScreened()} is true.</b>
+		 *
+		 *         <p>Unmodifiable, and copied on the way in besides — both halves, because either
+		 *         alone leaves this object able to say something it was not built to say: a review
+		 *         agent added a warning to what {@code notScreened()} returned and got an unscreened
+		 *         result stating a finding. Safe to wrap here and not at the serializer, which
+		 *         ITERATES this list and marshals an {@code ArrayList} of its own — the shape
+		 *         {@code XStreamMarshaller} requires.
 		 */
 		public List<SafetyWarning> getAlerts() {
-			return alerts;
+			return Collections.unmodifiableList(alerts);
 		}
 	}
 
@@ -395,9 +405,13 @@ public class DrugSafetyValidator {
 	 * which measures it over a chart whose orders the data relates many ways — not by this paragraph.
 	 *
 	 * <p>Gated on {@link #reportsStandingChartAlerts()} and on nothing of its own, which is what makes
-	 * the {@code screened} statement this surface publishes true OF it: the value a client is handed
-	 * and the condition this pass ran under are one expression, so neither can move without the
-	 * other. It reaches one switch further than
+	 * the {@code screened} statement this surface publishes true OF it: the verdict a client is
+	 * handed is decided by the same call that decides whether the pass runs, so the two cannot be
+	 * changed apart. Not atomic, and the residue is named rather than closed —
+	 * {@code warnOnContraindications} is read here and again inside {@code validate}, so an
+	 * operator flipping it between the two reads gets {@code screened: true} from an arm that
+	 * stood down. Every global property this module reads is read live; a lock over one for a
+	 * deterministic read would cost more than the residue. It reaches one switch further than
 	 * {@link #validate(String, String, Patient, List, PairChipExtent.Sink)}'s gate —
 	 * {@code warnOnContraindications}, which on the answer path stands the ARM down inside the pass
 	 * and here stands the whole surface down, there being nothing else on it. Fails safe to no

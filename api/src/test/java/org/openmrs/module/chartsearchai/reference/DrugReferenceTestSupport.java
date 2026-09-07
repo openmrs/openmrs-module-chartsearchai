@@ -802,6 +802,21 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/**
+	 * As {@link #unreadableRecordsCtx}, but carrying the patient's active orders — the shape the
+	 * builder produces when {@code getActiveOrders} SUCCEEDS and the allergy or condition read throws.
+	 *
+	 * <p>It exists because it is the only arrangement that reaches
+	 * {@code PatientClinicalContext.withActiveDrugReferenceNames}: {@code withReferenceNames} returns
+	 * the context untouched when no order resolves a reference entry, so a chart with no orders cannot
+	 * exercise the copy at all, whatever its stamps say.
+	 */
+	static PatientClinicalContext unreadableRecordsCtxWithOrders(Set<String> drugs) {
+		return new PatientClinicalContext(60, null, drugs, Collections.<String> emptySet(),
+				Collections.<String> emptySet(), Collections.<String> emptySet(), null, null, false,
+				true);
+	}
+
+	/**
 	 * As {@link #ctx}, but for a context whose ACTIVE-ORDER read FAILED — the shape
 	 * {@link PatientClinicalContextBuilder} produces when {@code getActiveOrders} throws and it
 	 * degrades that dimension to an empty list. The order sets are empty for exactly that reason,

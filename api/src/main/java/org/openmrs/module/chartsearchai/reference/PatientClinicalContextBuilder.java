@@ -62,7 +62,13 @@ final class PatientClinicalContextBuilder {
 				new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
 
 		if (patient == null) {
-			return new PatientClinicalContext(null, null, drugNames, atcCodes, allergyTokens, conditionTokens);
+			// Stamped as READ BY NOTHING, both dimensions. The shorter constructors default both to
+			// true, which is right for a caller assembling a context by hand and wrong here: this is
+			// the one path that performs no read at all, so its empty sets mean the least of any
+			// context this builder produces. Left defaulted, DrugSafetyValidator.standingChartAlerts
+			// certified a patient that does not exist as a screened, clear chart.
+			return new PatientClinicalContext(null, null, drugNames, atcCodes, allergyTokens,
+				conditionTokens, activeOrders, null, false, false);
 		}
 
 		try {

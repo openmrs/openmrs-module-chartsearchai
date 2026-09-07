@@ -11,13 +11,23 @@ package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.openmrs.module.chartsearchai.ModuleSourceRoot;
 
 /**
  * The standing surface: "is this patient prescribed something her own chart contraindicates?", asked
@@ -249,6 +259,23 @@ public class StandingChartAlertsTest {
 		assertTrue(standing.getAlerts().isEmpty(), "and it states no findings, having screened nothing");
 	}
 
+	/**
+	 * A chart whose allergy or condition read FAILED is not a screened chart, and must not be published
+	 * as one.
+	 *
+	 * <p>{@code PatientClinicalContextBuilder} swallows such a failure into an EMPTY token set and logs
+	 * at DEBUG — which core's shipped {@code log4j2.xml} discards, putting {@code org.openmrs} at WARN
+	 * — so before this the endpoint answered {@code screened: true} with an empty array for a patient
+	 * nobody had looked at. A role holding {@code AI Query Patient Data} without core's
+	 * {@code Get Allergies} is exactly that role.
+	 *
+	 * <p>It is {@code reference/CLAUDE.md}'s "a chart the module could not read is not a chart that
+	 * records nothing", met on the surface whose WHOLE payload can be empty. The fixture is
+	 * {@code unreadableRecordsCtx}, whose token sets are empty for that reason and cannot be supplied —
+	 * which is what stops this being an arrangement no production path reaches. It carries no orders
+	 * either, so it is narrower than the real failure, where the order read succeeds; that shape is
+	 * {@code unreadableRecordsCtxWithOrders}, used by the enrichment case below.
+	 */
 	@Test
 	public void aChartWhoseRecordsCouldNotBeReadIsNotScreened() {
 		DrugSafetyValidator.StandingChartAlerts standing = curatedValidator()
@@ -258,6 +285,115 @@ public class StandingChartAlertsTest {
 				"a chart the module could not read must not be published as a screened one");
 		assertTrue(standing.getAlerts().isEmpty(),
 				"and it states no findings, since it has none to state");
+	}
+
+	/**
+	 * The value object cannot be made to state something it was not built to state.
+	 *
+	 * <p>Three shapes, all found by review against earlier drafts of this class and all reachable
+	 * because its factories are public — they are public so the omod wire tests can build a payload
+	 * fixture, {@code omod/pom.xml} declaring no api test-jar. A caller adding to what
+	 * {@code notScreened()} returned got an unscreened result carrying a finding; a caller mutating the
+	 * list it handed {@code screened} changed the object afterwards; and {@code screened(null)} first
+	 * returned an object whose {@code getAlerts()} was null against a javadoc saying "never null", then
+	 * threw.
+	 */
+	@Test
+	public void aStandingResultCannotBeMadeToStateWhatItWasNotBuiltToState() {
+		DrugSafetyValidator.StandingChartAlerts unscreened = DrugSafetyValidator.StandingChartAlerts
+				.notScreened();
+		assertThrows(UnsupportedOperationException.class,
+				() -> unscreened.getAlerts().add(new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION,
+						"Ibuprofen", "added by a caller")),
+				"an unscreened result must not be able to acquire a finding");
+
+		List<SafetyWarning> callers = new ArrayList<SafetyWarning>();
+		callers.add(new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, "Ibuprofen", "the one"));
+		DrugSafetyValidator.StandingChartAlerts screened =
+				DrugSafetyValidator.StandingChartAlerts.screened(callers);
+		callers.clear();
+		assertEquals(1, screened.getAlerts().size(),
+				"the result must be the findings it was built with, not a view of a list the caller "
+						+ "still holds");
+
+		assertTrue(DrugSafetyValidator.StandingChartAlerts.screened(null).getAlerts().isEmpty(),
+				"and no factory may hand back an object whose findings are null, which getAlerts's own "
+						+ "contract forbids");
+	}
+
+	/**
+	 * A patient the module was never given is not a screened chart.
+	 *
+	 * <p>{@code PatientClinicalContextBuilder} answers a null patient from an early return that
+	 * performs no read at all, and the shorter constructors default both read stamps to {@code true} —
+	 * right for a caller assembling a context by hand, wrong for the one path that reads nothing. Until
+	 * this, {@code standingChartAlerts(null)} certified a patient that does not exist as screened and
+	 * clear. The validator is a Spring bean and the endpoint is not its only possible caller.
+	 */
+	@Test
+	public void aPatientTheModuleWasNeverGivenIsNotAScreenedChart() {
+		DrugSafetyValidator.StandingChartAlerts standing = curatedValidator()
+				.standingChartAlerts(PatientClinicalContextBuilder.build(null));
+
+		assertFalse(standing.isScreened(),
+				"a chart nothing was read for must not be published as a screened one");
+		assertTrue(standing.getAlerts().isEmpty(), "and it states no findings");
+	}
+
+	/**
+	 * The chart-read stamp survives the enrichment {@code validate} applies to the context, so a
+	 * verdict cannot be lost between the read and the screen.
+	 *
+	 * <p><b>This pins a FAIL-OPEN shape, and it was open.</b> {@code validate} rebuilds the context
+	 * through {@code DrugReferenceService.withReferenceNames}, which copies every field by hand into a
+	 * fresh {@code PatientClinicalContext}; a stamp dropped there is lost silently and in the direction
+	 * that publishes an unscreenable chart as a clean one. This module's own instructions record the
+	 * identical shape costing two regressions on a different stamp.
+	 *
+	 * <p><b>The fixture is what makes it discriminating, and the obvious one is not.</b>
+	 * {@code withReferenceNames} returns the context UNTOUCHED where no order resolves a reference
+	 * entry, so a chart with no orders never reaches the copy — measured: written over
+	 * {@code unreadableOrdersCtx}, this case stayed green under a mutation that dropped the stamp
+	 * outright. It needs orders the dataset resolves AND a failed record read, which is
+	 * {@code unreadableRecordsCtxWithOrders} and is a real shape: the builder reads orders and
+	 * allergies in separate try blocks.
+	 *
+	 * <p><b>The ORDER stamp's own carry is unreachable and is stated rather than pinned.</b> That stamp
+	 * is false only where the order read threw, which leaves no orders, which leaves no reference names
+	 * — so the copy is never taken with it false, in a test or in production. Do not write a case for
+	 * it; write one if the enrichment ever stops depending on the orders.
+	 *
+	 * <p>Driven through the real enrichment the real pass performs — {@code findForActiveOrders} then
+	 * {@code withReferenceNames} — rather than by calling the copy constructor, so it measures the
+	 * production route.
+	 */
+	@Test
+	public void theRecordReadStampSurvivesTheEnrichmentThePassApplies() {
+		DrugReferenceService service = DrugReferenceTestSupport.curatedService();
+		PatientClinicalContext unreadable = DrugReferenceTestSupport.unreadableRecordsCtxWithOrders(
+				DrugReferenceTestSupport.set(DrugReferenceTestSupport.IBUPROFEN_ORDER));
+		List<DrugReference> orderEntries = service.findForActiveOrders(unreadable);
+		assertFalse(orderEntries.isEmpty(),
+				"precondition: an order must resolve a reference entry, or withReferenceNames returns "
+						+ "the context untouched and this case cannot reach the copy at all");
+
+		PatientClinicalContext enriched = service.withReferenceNames(unreadable, orderEntries);
+
+		assertFalse(DrugReferenceTestSupport.validator(service).standingChartAlerts(enriched).isScreened(),
+				"a chart the module could not read must still say so after the pass has enriched it "
+						+ "with the reference data's own names for its orders");
+	}
+
+	/**
+	 * @return {@code source} with block and line comments blanked, which is the minimum needed to tell
+	 *         a CALL from a javadoc reference — several classes in this package name the standing pass
+	 *         in prose and none of them calls it. {@link SourceScan} does this properly, and per FILE;
+	 *         this walk is over many files with no regions, so it takes the crude form deliberately
+	 *         rather than constructing a scan per class, which asserts a minimum file size this tree
+	 *         does not meet everywhere.
+	 */
+	private static String withoutComments(String source) {
+		return source.replaceAll("(?s)/\\*.*?\\*/", " ").replaceAll("(?m)//.*$", " ");
 	}
 
 	/** The one arity of {@code standingChartAlerts} the two global properties sit above. */
@@ -352,5 +488,75 @@ public class StandingChartAlertsTest {
 				"the second must be SubjectMatter translating the scope it was handed, and was at line "
 						+ scan.lineOf(namings.get(1)) + " — a decider anywhere else is a second unbounded "
 						+ "pass however the count reads");
+
+		// And the SEAM itself, which is the cheaper way in. Counting the constant catches a second site
+		// that asks for UNBOUNDED; it does not catch one that calls standingChartAlerts(context), which
+		// is package-private and reachable from DrugReferenceInjector, DrugReferenceService and every
+		// other class in this package. Measured by a review agent: folding a standing pass into the
+		// public ANSWER entry — issue #143's over-reach reinstated on every response — spelled no
+		// UNBOUNDED and left the whole api suite green.
+		List<Integer> seamNamings = scan.literalOffsets("standingChartAlerts(");
+		assertEquals(3, seamNamings.size(),
+				"standingChartAlerts must be named exactly three times in production — the two "
+						+ "declarations and the public entry's one call to the seam — and was named at "
+						+ "lines " + scan.linesOf(seamNamings) + ". A fourth is a second caller of the "
+						+ "unbounded pass (issue #280).");
+		// Which of the three is the CALL is decided by where it sits, not by its index: a body() region
+		// runs from the opening brace, so a declaration's own text is outside its body and only the
+		// delegation lands inside one.
+		int insideTheEntry = 0;
+		for (Integer at : seamNamings) {
+			assertFalse(decider.contains(at),
+					"the seam must not call itself, and line " + scan.lineOf(at) + " is inside it");
+			if (scan.body(STANDING_ENTRY).contains(at)) {
+				insideTheEntry++;
+			}
+		}
+		assertEquals(1, insideTheEntry,
+				"exactly one naming must be the public entry delegating to the seam, and " + insideTheEntry
+						+ " were inside its body");
+	}
+
+	/**
+	 * And no OTHER production class names the standing pass at all.
+	 *
+	 * <p>The case above reads one file. {@code standingChartAlerts(PatientClinicalContext)} is
+	 * package-private, so {@code DrugReferenceInjector}, {@code DrugReferenceService} and every other
+	 * class in {@code reference} can call it without appearing in that scan — and a second caller is
+	 * the directive {@code reference/CLAUDE.md} states as "there must never be a second". Walks the
+	 * whole api source tree rather than a list of files, so a class added later is covered without this
+	 * case changing.
+	 *
+	 * <p>It FAILS on an empty walk: a guard that discovers its own subject returns the same clean
+	 * result whether the subject was compliant or absent.
+	 */
+	@Test
+	public void noOtherProductionClassNamesTheStandingPass() throws IOException {
+		final List<String> naming = new ArrayList<String>();
+		final int[] scanned = { 0 };
+		Path root = ModuleSourceRoot.apiRoot().resolve("src/main/java");
+		Files.walkFileTree(root, new SimpleFileVisitor<Path>() {
+
+			@Override
+			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+				if (!file.toString().endsWith(".java")) {
+					return FileVisitResult.CONTINUE;
+				}
+				scanned[0]++;
+				if (!file.getFileName().toString().equals("DrugSafetyValidator.java")
+						&& withoutComments(new String(Files.readAllBytes(file), StandardCharsets.UTF_8))
+								.contains("standingChartAlerts")) {
+					naming.add(root.relativize(file).toString());
+				}
+				return FileVisitResult.CONTINUE;
+			}
+		});
+
+		assertTrue(scanned[0] > 50, "only " + scanned[0] + " source files were walked under " + root
+				+ "; a guard that reads nothing forbids nothing");
+		assertEquals(Collections.<String> emptyList(), naming,
+				"only DrugSafetyValidator may name the standing pass — a caller elsewhere is a second "
+						+ "unbounded pass, which the count in the case above cannot see because the seam "
+						+ "is package-private (issue #280)");
 	}
 }

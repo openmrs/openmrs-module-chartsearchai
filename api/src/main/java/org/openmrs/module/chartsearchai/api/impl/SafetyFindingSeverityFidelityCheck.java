@@ -123,8 +123,11 @@ import org.slf4j.LoggerFactory;
  * <p><b>It reports and it publishes.</b> The WARN is the maintainer's channel;
  * {@code ChartAnswer.getUnstatedFindingSeverities()} is the clinician's, through the
  * {@code unstatedFindingSeverities} response key, and it exists for the reason ADR Decision 74 gave
- * for publishing the first of these answers — on the reported response every observable field read
- * exactly as a clean answer's would.
+ * for publishing the first of these answers: when the response was measured, nothing observable on
+ * it distinguished a degraded rendering from a faithful one. Stated that way rather than as "every
+ * observable field read as a clean answer's would", which is no longer true of that response — the
+ * issue's own comment notes it also carries issue #377, whose key flags three of its chart
+ * citations. Nothing flagged, or flags, the dropped rating.
  *
  * <p><b>Where it runs.</b> Both answer paths, {@link LlmInferenceService#search} and
  * {@code searchStreaming}, so the endpoint users hit is covered. Not the progressive-reasoning

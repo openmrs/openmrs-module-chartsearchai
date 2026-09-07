@@ -117,7 +117,10 @@ public class ChartSearchAiUnstatedFindingSeverityTest {
 
 	/**
 	 * The defect, on the wire: an answer that dropped the rating of the findings it states now says
-	 * so, where before this key every observable field read exactly as a faithful answer's would.
+	 * so, where before this key nothing on the response distinguished it from a faithful one. (Not
+	 * "every observable field read as a faithful answer's would" — the same reported response also
+	 * carries issue #377, whose key flags three of its chart citations. What nothing flagged is the
+	 * dropped rating.)
 	 */
 	@Test
 	public void theSearchResponseNamesTheFindingsWhoseRatingTheAnswerDropped() {

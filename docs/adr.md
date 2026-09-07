@@ -5623,7 +5623,7 @@ What made the residue tractable is that the missing datum is not prose. `SafetyW
 
 A fourth deterministic check runs after every answer on both answer paths: **`SafetyFindingSeverityFidelityCheck`**. Where the answer cites a safety finding that carries a rating, and that rating's word appears nowhere in the answer, the citation is reported at `WARN` and **published**, as `ChartAnswer.getUnstatedFindingSeverities()` / the `unstatedFindingSeverities` response key.
 
-Publishing is Decision 74's trigger met a third time: on the reported response every observable field read exactly as a clean answer's would, and the thing that is wrong — a Major rating that never reached the clinician — is precisely what a client would want to render beside the sentence. It never rewrites the answer, for the reason all three siblings refuse to.
+Publishing is Decision 74's trigger met a third time: when the response was measured nothing observable on it distinguished a degraded rendering from a faithful one, and the thing that is wrong — a Major rating that never reached the clinician — is precisely what a client would want to render beside the sentence. Not "every observable field read as a clean answer's would": the issue's own comment records that the same response also carries [#377](https://github.com/openmrs/openmrs-module-chartsearchai/issues/377), whose key — shipped between that measurement and this decision — flags three of its chart citations. What nothing flagged, and nothing else flags now, is the dropped rating. It never rewrites the answer, for the reason all three siblings refuse to.
 
 ### The rating travels structurally, and is never parsed back out
 

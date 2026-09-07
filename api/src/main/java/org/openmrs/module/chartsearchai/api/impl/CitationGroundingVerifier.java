@@ -658,12 +658,12 @@ public class CitationGroundingVerifier {
 		List<String> isolateStatements = new ArrayList<String>();
 		for (int i = 0; i < references.size(); i++) {
 			RecordReference reference = references.get(i);
-			// A citation the MODULE attached carries no claim of the model's, so neither tier has a
-			// question to ask about it and no claim is selected at all (issue #305). Asked BEFORE the
-			// selection rather than only in the disposition below, because it is what makes the
-			// "no embedding is spent" half of UNVERIFIABLE true here: such a citation is anchored by no
-			// sentence, so selectClaim's candidate set is EVERY sentence — the ambiguous branch, where
-			// the cosine argmax runs eagerly and would be paid for a verdict Pass 2 discards.
+			// A citation the MODULE attached selects no claim at all (issue #305) — why, is on
+			// Disposition.UNVERIFIABLE, which is canonical for it. Asked BEFORE the selection rather
+			// than only in the disposition below, because that is what makes the "no embedding is
+			// spent" half true HERE: such a citation is anchored by no sentence, so selectClaim's
+			// candidate set is EVERY sentence — the ambiguous branch, where the cosine argmax runs
+			// eagerly and would be paid for a verdict Pass 2 discards.
 			//
 			// ONE local, read at both sites, so the skip and the disposition cannot be edited apart.
 			// They are not equally observable and it is worth knowing which: measured, removing the

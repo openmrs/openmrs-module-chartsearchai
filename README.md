@@ -424,7 +424,7 @@ Response:
 
 `questionId` is a string identifier for this query, used to submit feedback (see below). It is omitted if audit logging fails.
 
-Each reference carries a `grounded` field — `true` / `false` once [citation grounding](#citation-grounding) has verified it, or `null` when grounding is disabled (the default, shown above), did not check that citation, checked it but could not certify it (a compound claim unit, or the negative on a composite claim — see [citation grounding](#citation-grounding)), the citation is `reference`-group (always, see below), or the module ATTACHED the citation rather than the model emitting it (`attachedByTheModule`, see below — there is no claim of the model's to check). The key is always present.
+Each reference carries a `grounded` field — `true` / `false` once [citation grounding](#citation-grounding) has verified it, or `null` when grounding is disabled (the default, shown above), did not check that citation, checked it but could not certify it (a compound claim unit, or the negative on a composite claim — see [citation grounding](#citation-grounding)), the citation is `reference`-group (always, see below), or the module ATTACHED the citation rather than the model emitting it (`attachedByTheModule`, see below). The key is always present.
 
 Each reference also carries a `group`, derived from its `resourceType`, telling a client what kind of source it is:
 

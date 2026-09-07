@@ -1119,13 +1119,9 @@ public class ChartSearchAiRestController {
 			refMap.put("source", ref.getSource());
 			refMap.put("withheldInteractions", ref.getWithheldInteractions());
 			// Who put this citation on the answer (issue #305). True for a chart record an injected
-			// safety_finding the model DID cite was derived from — the module resolved it
-			// deterministically from the finding's own match, so it is published whatever the model
-			// wrote. Two things a client needs it for, and neither is cosmetic: the answer prose carries
-			// no [N] marker for such a citation, so there is nothing to highlight when the chip is
-			// clicked; and its `grounded` is always null, because there is no claim of the model's to
-			// check rather than a verdict being withheld. Never a statement about how good the evidence
-			// is.
+			// safety_finding the model DID cite was derived from. What a client does with it, and why
+			// it is not derivable from the other fields, is on RecordReference.isAttachedByTheModule
+			// and in README's own section; do not restate it here.
 			refMap.put("attachedByTheModule", ref.isAttachedByTheModule());
 			refs.add(refMap);
 		}

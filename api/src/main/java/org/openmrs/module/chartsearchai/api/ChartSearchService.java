@@ -827,12 +827,9 @@ public interface ChartSearchService {
 		 *         structured array, and so for every citation that existed before that issue.
 		 *
 		 *         <p>Two things turn on it, and neither is cosmetic. It is why
-		 *         {@link #getGrounded()} is {@code null} here: grounding asks whether the claim the
-		 *         MODEL attached to a citation is supported by the record it pointed at, and the
-		 *         module attached no claim — so the citation is UNVERIFIABLE inside
-		 *         {@code CitationGroundingVerifier} rather than graded, which is what stops a cosine
-		 *         floor rendering the module's own deterministic provenance as <em>Unsupported</em>
-		 *         (issue #201's shape). And it is published, because the answer prose carries no
+		 *         {@link #getGrounded()} is {@code null} here — such a citation is UNVERIFIABLE inside
+		 *         {@code CitationGroundingVerifier} rather than graded, and that enum constant is
+		 *         canonical for why. And it is published, because the answer prose carries no
 		 *         {@code [N]} marker for such a citation: a client that highlights the marker for a
 		 *         reference chip has nothing to highlight, and one reading the {@code null} verdict
 		 *         needs to know nothing is being withheld from it.

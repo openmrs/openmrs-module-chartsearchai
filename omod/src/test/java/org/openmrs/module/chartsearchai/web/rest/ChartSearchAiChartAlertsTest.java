@@ -29,6 +29,7 @@ import org.openmrs.api.context.Context;
 import org.openmrs.api.context.UserContext;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
+import org.openmrs.module.chartsearchai.reference.DrugReferenceLoad;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.springframework.http.HttpStatus;
@@ -258,6 +259,74 @@ public class ChartSearchAiChartAlertsTest {
 	}
 
 	/**
+	 * Beside what the SCREEN did, the payload states what the loaded DATASET had to ask with — the
+	 * {@code conditionRuleCoverage} key issue #378 put on {@code /search}, on the surface that needs it
+	 * most.
+	 *
+	 * <p><b>{@code screened: true} beside an empty {@code alerts} is a measurement of none, and on the
+	 * SHIPPED default it is a measurement of none taken with no condition rule to ask.</b> DDInter
+	 * publishes interaction rules and class codes and no hand-authored condition rule at all, so a
+	 * patient prescribed a drug her recorded condition contraindicates gets exactly that payload —
+	 * which a banner renders as "no alerts". That is #378's own distinction, met here for the same
+	 * reason {@code screened} is: this is the one surface whose WHOLE payload can be empty, and it has
+	 * no prose to hedge in.
+	 *
+	 * <p>Routing a client to {@code GET /chartsearchai/drugreferencestatus} instead was what the first
+	 * draft did, and it does not hold: that endpoint gates on core's {@code Get Global Properties},
+	 * which is a different privilege from the {@code AI Query Patient Data} this one requires. It
+	 * happens to sit on {@code Authenticated} on a stock install — the README says so where it explains
+	 * why {@code origin} is relative — and a hardened site can take it away, leaving a chart-alerts
+	 * client with no channel for the verdict at all.
+	 *
+	 * <p>All three verdicts and the no-statement case, because the token is what carries the
+	 * distinction: {@code absent} is "we looked and this dataset has none", {@code unloaded} is "nobody
+	 * looked", and a {@code null} is the producer stating nothing. A handler hardcoding any one of them
+	 * passes a single-value case.
+	 */
+	@Test
+	public void thePayloadStatesWhatTheLoadedDatasetHadToAskWith() {
+		for (DrugReferenceLoad.Coverage coverage : DrugReferenceLoad.Coverage.values()) {
+			validator.coverage = coverage;
+
+			Map<String, Object> body = okBody(RestControllerContext.PATIENT_UUID);
+
+			assertTrue(body.containsKey("conditionRuleCoverage"),
+					"the standing payload carried no conditionRuleCoverage key: " + body);
+			assertEquals(coverage.wireToken(), body.get("conditionRuleCoverage"),
+					"and it must be the dataset's own verdict, spelled the way "
+							+ "/chartsearchai/drugreferencestatus spells it: " + body);
+		}
+
+		validator.coverage = null;
+		Map<String, Object> body = okBody(RestControllerContext.PATIENT_UUID);
+		assertTrue(body.containsKey("conditionRuleCoverage"),
+				"present and null where the module states nothing, never absent — an absent key is a "
+						+ "client's own guess: " + body);
+		assertEquals(null, body.get("conditionRuleCoverage"), "was: " + body);
+	}
+
+	/**
+	 * And it is stated where the screen did NOT run, which is where it is most worth having.
+	 *
+	 * <p>The verdict is a property of the loaded dataset and is knowable whether or not a screen ran,
+	 * so gating it on {@code screened} would withhold a knowable fact exactly on the install where
+	 * conditions are certainly not being checked. That is the rule
+	 * {@code DrugSafetyValidator.conditionRuleCoverage()} carries for {@code /search}, and a second
+	 * spelling of the key here is how the two surfaces would come to disagree about it.
+	 */
+	@Test
+	public void theDatasetVerdictIsStatedEvenWhereTheScreenDidNotRun() {
+		validator.screen = StandingScreen.DID_NOT_RUN;
+		validator.coverage = DrugReferenceLoad.Coverage.ABSENT;
+
+		Map<String, Object> body = okBody(RestControllerContext.PATIENT_UUID);
+
+		assertEquals(Boolean.FALSE, body.get("screened"), "precondition: this screen did not run: " + body);
+		assertEquals("absent", body.get("conditionRuleCoverage"),
+				"a dataset verdict is knowable whether or not the screen ran: " + body);
+	}
+
+	/**
 	 * A patient this user may not read answers 403 and reports nothing about her.
 	 *
 	 * <p>Asserted rather than left to "it calls the same {@code resolvePatient} as {@code /search}":
@@ -416,7 +485,17 @@ public class ChartSearchAiChartAlertsTest {
 
 		private StandingScreen screen = StandingScreen.RAN_AND_FOUND_SOMETHING;
 
+		/** What the loaded dataset publishes for the condition-rule arm. Read by the handler through
+		 *  the production accessor, so a handler that re-derived it from anything else would not see
+		 *  this. */
+		private DrugReferenceLoad.Coverage coverage = DrugReferenceLoad.Coverage.ABSENT;
+
 		private int standingCalls;
+
+		@Override
+		public DrugReferenceLoad.Coverage conditionRuleCoverage() {
+			return coverage;
+		}
 
 		@Override
 		public StandingChartAlerts standingChartAlerts(Patient patient) {

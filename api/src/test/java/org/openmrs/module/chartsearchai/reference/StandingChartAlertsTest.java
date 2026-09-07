@@ -328,13 +328,25 @@ public class StandingChartAlertsTest {
 
 	/**
 	 * Both chart-read stamps survive the enrichment {@code validate} applies to the context, so a
-	 * verdict cannot be lost between the read and the screen.
+	 * reader on the far side of the copy is asking the flag the chart read actually set.
 	 *
-	 * <p><b>This pins a FAIL-OPEN shape, and it was open.</b> {@code validate} rebuilds the context
-	 * through {@code DrugReferenceService.withReferenceNames}, which copies every field by hand into a
-	 * fresh {@code PatientClinicalContext}; a stamp dropped there is lost silently and in the direction
-	 * that publishes an unscreenable chart as a clean one. This module's own instructions record the
-	 * identical shape costing two regressions on a different stamp.
+	 * <p><b>What this is NOT.</b> It is not a failure mode of the published {@code screened} verdict:
+	 * the seam reads both stamps off the RAW builder output and decides that verdict BEFORE
+	 * {@code validate} performs the enrichment, so a stamp the copy dropped could not move it. Three
+	 * drafts said otherwise. The reader that does ask a stamp of an ENRICHED context is
+	 * {@code DrugReferenceInjector}, through
+	 * {@code statesTheChartsContraindicationReading} — where a dropped
+	 * {@code contraindicationRecordsRead} is lost silently and fail-OPEN, the shorter constructors
+	 * defaulting it to {@code true}, and the record goes back to asserting "not recorded for this
+	 * patient" about a chart nobody read. That consumer is driven on the production path by
+	 * {@code InjectedContraindicationPatientReadingTest.aStampTheEnrichmentDroppedWouldPutTheNegativeClaimBack}.
+	 *
+	 * <p>What THIS case is for is the copy itself, over BOTH stamps: {@code standingChartAlerts} is the
+	 * only reader that asks for both, so it is the instrument here rather than the subject.
+	 * {@code activeDrugOrdersRead} has no enriched-context reader today — it is pinned so that the copy
+	 * and the flag cannot come apart before one arrives, which is a cheaper guard than the audit that
+	 * would otherwise be owed. This module's own instructions record the identical copy shape costing
+	 * two regressions on a different stamp.
 	 *
 	 * <p><b>The fixture is what makes it discriminating, and the obvious one is not.</b>
 	 * {@code withReferenceNames} returns the context UNTOUCHED where no order resolves a reference
@@ -371,8 +383,8 @@ public class StandingChartAlertsTest {
 
 			assertFalse(DrugReferenceTestSupport.validator(service).standingChartAlerts(enriched)
 					.isScreened(),
-					"a chart the module could not read must still say so after the pass has enriched it "
-							+ "with the reference data's own names for its orders");
+					"the enriched copy must still carry the stamp the raw context set — read back here "
+							+ "through the one reader that asks for both");
 		}
 	}
 

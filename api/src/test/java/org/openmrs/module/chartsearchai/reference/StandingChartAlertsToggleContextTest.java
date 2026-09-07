@@ -165,22 +165,21 @@ public class StandingChartAlertsToggleContextTest extends BaseModuleContextSensi
 	}
 
 	/**
-	 * The BUILDER's own record of a failed order read, driven by taking the privilege away.
+	 * Drives the PUBLIC entry over the standard test patient twice — once holding every privilege, once
+	 * refusing {@code privilege} — and asserts the second is not published as a screened chart.
 	 *
-	 * <p>Everything else that covers this stamp uses a hand-built context
-	 * ({@code DrugReferenceTestSupport.unreadableOrdersCtx}), so the production WRITE — one assignment
-	 * in {@code PatientClinicalContextBuilder}'s order catch — was deletable with the whole build
-	 * green. Measured by a review agent, and this case is what closes it: deleting that assignment now
-	 * reddens here.
+	 * <p>It fails the read the way production does rather than by throwing a stub: core annotates each
+	 * of the three service calls {@code PatientClinicalContextBuilder} makes with an {@code @Authorized}
+	 * privilege ({@code getActiveOrders}/{@code Get Orders}, {@code getAllergies}/{@code Get Allergies},
+	 * {@code getActiveConditions}/{@code Get Conditions}), so a user context that refuses exactly one and
+	 * grants the rest reproduces the role each of these defects is about — a site that grants
+	 * {@code AI Query Patient Data} without one of core's chart-read privileges. The user context is
+	 * restored whatever happens; this class shares a JVM with the rest of the suite.
 	 *
-	 * <p>It fails the read the way production does rather than by throwing a stub: core annotates
-	 * {@code OrderService.getActiveOrders} with {@code @Authorized(GET_ORDERS)}, so a user context that
-	 * refuses that one privilege and grants the rest reproduces the exact role this defect is about — a
-	 * site that grants {@code AI Query Patient Data} without core's {@code Get Orders}. The user context
-	 * is restored whatever happens; this class shares a JVM with the rest of the suite.
+	 * <p>The all-privileges precondition is what makes a refusal discriminating rather than an
+	 * observation of some other reason for the same {@code false}.
 	 */
-	@Test
-	public void aRoleThatCannotReadOrdersGetsAChartTheBuilderMarksUnread() {
+	private void assertARoleRefusingIsNotAScreenedChart(String privilege, String records) {
 		for (String gate : GATES) {
 			configure(gate, "true");
 		}
@@ -195,18 +194,72 @@ public class StandingChartAlertsToggleContextTest extends BaseModuleContextSensi
 		Context.setUserContext(new UserContext(null) {
 
 			@Override
-			public boolean hasPrivilege(String privilege) {
-				return !PrivilegeConstants.GET_ORDERS.equals(privilege);
+			public boolean hasPrivilege(String held) {
+				return !privilege.equals(held);
 			}
 		});
 		try {
 			assertFalse(validator.standingChartAlerts(patient).isScreened(),
-					"a role that cannot read this patient's orders must get a chart the builder marks "
-							+ "unread, not one reported clean");
+					"a role that cannot read this patient's " + records + " must get a chart the builder "
+							+ "marks unread, not one reported clean");
 		}
 		finally {
 			Context.setUserContext(prior);
 		}
+	}
+
+	/**
+	 * The BUILDER's own record of a failed order read, driven by taking the privilege away.
+	 *
+	 * <p>Everything else that covers this stamp uses a hand-built context
+	 * ({@code DrugReferenceTestSupport.unreadableOrdersCtx}), so the production WRITE — one assignment
+	 * in {@code PatientClinicalContextBuilder}'s order catch — was deletable with the whole build
+	 * green. Measured by a review agent, and this case is what closes it: deleting that assignment now
+	 * reddens here.
+	 *
+	 * <p>How the read is failed — a user context refusing exactly the one {@code @Authorized} privilege
+	 * core annotates the service call with — is {@link #assertARoleRefusingIsNotAScreenedChart}, shared
+	 * with the two record-stamp cases below so the three cannot fail the read three different ways.
+	 */
+	@Test
+	public void aRoleThatCannotReadOrdersGetsAChartTheBuilderMarksUnread() {
+		assertARoleRefusingIsNotAScreenedChart(PrivilegeConstants.GET_ORDERS, "orders");
+	}
+
+	/**
+	 * The same, for the RECORDS stamp's allergy write — {@code contraindicationRecordsRead = false} in
+	 * {@code PatientClinicalContextBuilder}'s allergy catch.
+	 *
+	 * <p>That stamp is older than this endpoint and was read only by the injector, which states a
+	 * negative claim inside a record; this PR is what turns it into a published clinical wire value, so
+	 * it now needs the cover the order stamp beside it was given. Everything else that reaches it uses a
+	 * hand-built context ({@code DrugReferenceTestSupport.unreadableRecordsCtx} and its variants), so
+	 * the production WRITE was deletable with the whole build green — measured by a review agent, which
+	 * deleted BOTH assignments (the allergy catch and the condition one below it), leaving the local a
+	 * constant {@code true}, and got a green {@code mvn -o clean install}. Deleting either now reddens
+	 * one of these two cases.
+	 *
+	 * <p>What it stops is the endpoint answering HTTP 200 with {@code screened: true} beside an empty
+	 * {@code alerts} for a patient prescribed a drug she is documented allergic to, because the role
+	 * holds {@code AI Query Patient Data} without core's {@code Get Allergies} — a banner renders that
+	 * as "no alerts", and nothing throws, so nothing else can see it.
+	 */
+	@Test
+	public void aRoleThatCannotReadAllergiesGetsAChartTheBuilderMarksUnread() {
+		assertARoleRefusingIsNotAScreenedChart(PrivilegeConstants.GET_ALLERGIES, "allergy records");
+	}
+
+	/**
+	 * And for the same stamp's CONDITION write, in the second catch.
+	 *
+	 * <p>Two cases rather than one because the two assignments are two lines in two {@code try} blocks:
+	 * a case for the allergy read alone stays green when the condition one is deleted, which is how the
+	 * pair was measured. The stamp they share is what makes them one bullet in the README and two cases
+	 * here.
+	 */
+	@Test
+	public void aRoleThatCannotReadConditionsGetsAChartTheBuilderMarksUnread() {
+		assertARoleRefusingIsNotAScreenedChart(PrivilegeConstants.GET_CONDITIONS, "condition records");
 	}
 
 	@Test

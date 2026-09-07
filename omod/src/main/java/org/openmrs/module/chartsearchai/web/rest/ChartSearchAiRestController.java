@@ -411,11 +411,24 @@ public class ChartSearchAiRestController {
 	 * extent, here on the one surface whose WHOLE payload can be empty. The validator decides it and
 	 * hands both back in one object, so the flag cannot answer for a different pass than the list
 	 * beside it; see {@link DrugSafetyValidator.StandingChartAlerts}, which is canonical for what
-	 * {@code false} covers. It answers whether this chart was SCREENED, not what the loaded dataset
-	 * could have found: that is {@code GET /chartsearchai/drugreferencestatus}, whose
-	 * {@code arms.conditionRules.coverage} tells a screen that had no condition rule to ask from one
-	 * that asked and found nothing, and which is deliberately not gated on the drug-safety toggles,
-	 * so it answers even where {@code screened} is false.
+	 * {@code false} covers.
+	 *
+	 * <p><b>And {@code screened} answers only for the CHART.</b> What the loaded DATASET had to ask
+	 * with is a second question, and on the shipped default the answer is nothing: DDInter publishes no
+	 * hand-authored condition rule, so a patient prescribed a drug her recorded condition
+	 * contraindicates gets {@code screened: true} beside an empty {@code alerts}, which this endpoint's
+	 * README section defines as a measurement of none. That is issue #378's distinction, and it is
+	 * stated here the way #378 states it on {@code /search} — the {@code conditionRuleCoverage} key,
+	 * through the shared {@link #putConditionRuleCoverage} so the two surfaces cannot spell one verdict
+	 * two ways, and ungated for the reason {@code DrugSafetyValidator.conditionRuleCoverage()} gives:
+	 * the verdict is knowable whether or not a screen ran, and withholding it where the arms are off
+	 * withholds it exactly where it is worth having. Routing a client to
+	 * {@code GET /chartsearchai/drugreferencestatus} instead is what the first draft did, and it does
+	 * not hold: that endpoint gates on core's {@code Get Global Properties}, a different privilege from
+	 * the one this endpoint requires, which happens to sit on {@code Authenticated} on a stock install
+	 * and which a hardened site can take away. It still answers the WIDER question — every arm, and
+	 * {@code arms.handAuthoredRules.coverage} beside the condition leg — and is still where a client
+	 * goes for that.
 	 *
 	 * <p>The chips are the {@code /search} chips, through the one serializer, so a finding cannot be
 	 * shaped two ways on two surfaces. They carry no {@code interactionPairs} statement because this
@@ -438,6 +451,7 @@ public class ChartSearchAiRestController {
 
 		Map<String, Object> body = new LinkedHashMap<String, Object>();
 		body.put("screened", standing.isScreened());
+		putConditionRuleCoverage(body, drugSafetyValidator.conditionRuleCoverage());
 		body.put("alerts", serializeSafetyWarnings(standing.getAlerts()));
 		return new ResponseEntity<Object>(body, HttpStatus.OK);
 	}
@@ -1521,9 +1535,27 @@ public class ChartSearchAiRestController {
 		List<Integer> misattributed = answer.getMisattributedOrderCitations();
 		target.put("misattributedOrderCitations",
 			misattributed == null ? null : new ArrayList<Integer>(misattributed));
-		DrugReferenceLoad.Coverage conditionRules = answer.getConditionRuleCoverage();
-		target.put("conditionRuleCoverage",
-			conditionRules == null ? null : conditionRules.wireToken());
+		putConditionRuleCoverage(target, answer.getConditionRuleCoverage());
+	}
+
+	/**
+	 * Writes the {@code conditionRuleCoverage} key, and is the one place that key is SPELLED.
+	 *
+	 * <p>Two surfaces state it and neither derives it from the other: {@link #putModuleStatements}
+	 * takes it off the answer, where {@code LlmInferenceService} resolved it once per method, and
+	 * {@link #chartAlerts} asks {@code DrugSafetyValidator.conditionRuleCoverage()} directly, having no
+	 * answer to read it off. What must not diverge is the KEY and the token, which is why the write
+	 * itself is shared rather than copied — {@code ChartSearchAiConditionRuleCoverageTest.theKeyIsWrittenInExactlyOnePlace}
+	 * counts the literal and fails on a second spelling of it.
+	 *
+	 * <p>{@code null} is present-and-null, never absent: an omitted key is a client's own guess, and
+	 * {@code ChartAnswer.getConditionRuleCoverage()} is canonical for what each value does and does not
+	 * assert — in particular that it is a statement about the DATASET and never that any recorded
+	 * condition was screened.
+	 */
+	private static void putConditionRuleCoverage(Map<String, Object> target,
+			DrugReferenceLoad.Coverage coverage) {
+		target.put("conditionRuleCoverage", coverage == null ? null : coverage.wireToken());
 	}
 
 	/**

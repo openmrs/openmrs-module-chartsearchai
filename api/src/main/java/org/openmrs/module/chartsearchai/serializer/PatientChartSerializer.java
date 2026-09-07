@@ -806,11 +806,22 @@ public class PatientChartSerializer {
 		 *         records as citations whenever the record carrying them is itself cited. A chart
 		 *         record's own list is always empty: it IS the record, so there is nothing behind it.
 		 *
-		 *         <p>Empty is not a denial. It covers a record with no provenance to state, an
-		 *         injected record whose provenance this chart carries no record for (a query-scoped
-		 *         slice need not carry the patient's allergies at all), and one the module could
-		 *         resolve to no single record. A consumer must therefore not read emptiness as "this
-		 *         claim rests on nothing in the chart".
+		 *         <p><b>Empty is not a denial, and the situations it covers are enumerated HERE and
+		 *         nowhere else</b> — the rule the nested drug-safety instructions state for
+		 *         {@code SerializedRecord.orderActive}, for the reason that one records: the list grew
+		 *         each time a refusal was added, and every other site went on stating the shorter one.
+		 *         So the upstream carriers document their own layer and point here; do not restate this
+		 *         list at any of them. A consumer must not read emptiness as "this claim rests on
+		 *         nothing in the chart".
+		 *
+		 *         <p>Five situations, from the two layers above this one. From
+		 *         {@code SafetyWarning.chartRecords()}: the record is not a contraindication finding at
+		 *         all (an interaction's evidence is an ORDER, attributed on issue #379's own path); the
+		 *         context stated no provenance, which is every context assembled by hand; or the module
+		 *         could read no allergy or condition rows for this patient. From
+		 *         {@code DrugReferenceInjector.chartRecordNumbers}: this chart carries no record for the
+		 *         uuid — a query-scoped slice need not carry the patient's allergies at all — or it
+		 *         carries more than one, which the citing reading refuses rather than guessing between.
 		 *
 		 *         <p>Structural rather than appended to {@link #getText()}, like {@link #getSource()}
 		 *         and {@link #getWithheldInteractions()} and for the same measured reason: anything

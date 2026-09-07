@@ -5,7 +5,9 @@ Usage:
   metric_score.py <capture_dir> [offtopic_adj.json] [metric_gold.json]
   metric_score.py --selftest
 
-  capture_dir: per-cell response JSON {answer, references:[{resourceUuid,index,resourceType}]}
+  capture_dir: per-cell response JSON {answer, references:[{resourceUuid,index,resourceType,
+      attachedByTheModule}]}. A reference the MODULE attached rather than the model citing it is
+      not scored — see the filter in main(); an older capture carrying no such key scores as before.
   offtopic_adj.json (default: alongside this script): out-of-focus cited records adjudicated.
       {"<patientUuid|topic>": ["uuid",...]}  -> OFF-topic
       {"_ontopic": {"<cell>": ["uuid",...]}} -> ON-topic
@@ -117,7 +119,20 @@ def main():
         cell = uuid + '|' + topic
         g = gold[cell]
         refs = d.get('references', []); ans = d.get('answer', '') or ''
-        cited = list(dict.fromkeys(r.get('resourceUuid') for r in refs if r.get('resourceUuid')))
+        # The MODEL's own citations, and not every entry of the array. Since issue #305 the module
+        # publishes the chart record an injected safety_finding was derived from whenever the model
+        # cites that finding, marked attachedByTheModule — a deterministic record the answer never
+        # reached for. Counted here it moves this gate's number without the model's behaviour
+        # moving: inside the gold on-topic set it lifts precision and recall, outside it lands in
+        # `unk` and is summed into the published drift total. Two of the eight gold topics are
+        # `allergies` and `medications`, which is exactly where the order-driven contraindication
+        # arm fires, so this is the ordinary case rather than a corner one. Drift this scorer must
+        # not read is the lesson Decision 37 records of score_probe_safety.py, one metric over.
+        #
+        # A capture taken before #305 carries no such key, so `.get` defaulting to false keeps every
+        # historical capture scoring exactly as it did.
+        cited = list(dict.fromkeys(r.get('resourceUuid') for r in refs
+                                   if r.get('resourceUuid') and not r.get('attachedByTheModule')))
         s = score_cell(cited, g['present'], set(g['ontopic']), set(g['focus_uuids']),
                        set(adj.get(cell, [])), set(adj_on.get(cell, [])))
         scored.add(cell)

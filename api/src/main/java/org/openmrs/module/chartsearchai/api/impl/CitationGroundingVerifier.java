@@ -83,7 +83,8 @@ import org.springframework.stereotype.Service;
  * answer where each line cites its own record runs no Tier-1 embeds at all. A consequence pinned in
  * tests: a broken or absent Tier-1 embedding model no longer blocks Tier-2 verdicts for unambiguous
  * claim sentences the judge is ASKED about — previously it silently downgraded every citation to
- * "unverified". Since issue #302 it is not asked about a compound claim unit, which on such a
+ * "unverified". Since issue #302 it is not asked about a compound claim unit, and since #305 not
+ * about a citation the module attached either (see {@link Disposition#UNVERIFIABLE}); the former on such a
  * deployment has no tier left and renders unverified; see the compound-claim paragraph below.
  *
  * <p><strong>Module-supplied reference citations are demote-only.</strong> A record whose
@@ -357,7 +358,8 @@ public class CitationGroundingVerifier {
 	 * as retrieval and no separate chartsearchai embedding model has to be installed. Returns
 	 * {@code null} when querystore's provider can't be resolved — Tier-1 cosine checks are then
 	 * skipped and Tier-2 entailment (the authoritative pass) still applies to every citation it is
-	 * asked about. Since issue #302 it is not asked about a citation of a compound claim unit, which
+	 * asked about. Since issue #302 it is not asked about a citation of a compound claim unit — nor,
+	 * since #305, one the module attached, which selects no claim at all — the former of which
 	 * renders unverified on any deployment, so an absent embedder cannot change its verdict. It can
 	 * still change the LOG: where several sentences cite the record, claim selection embeds to choose
 	 * between them, and that failure is counted in the run's embedding-failure summary. Never throws.
@@ -496,8 +498,9 @@ public class CitationGroundingVerifier {
 	 * tests can exercise the grounding logic without an OpenMRS context.
 	 *
 	 * <p>When {@code entailmentEnabled}, every reference with a resolvable claim sentence and
-	 * record text — except two kinds that never enter Tier-2, citations of module-supplied reference
-	 * material and citations of a COMPOUND claim unit (both in the class javadoc) — is confirmed by a
+	 * record text — except three kinds that never enter Tier-2: citations of module-supplied reference
+	 * material, citations of a COMPOUND claim unit (both in the class javadoc) and, since issue #305,
+	 * a citation the MODULE attached ({@link Disposition#UNVERIFIABLE}) — is confirmed by a
 	 * Tier-2 LLM entailment verdict that is authoritative
 	 * (cosine errs in both directions, and the dangerous error — a high-overlap
 	 * but unsupported citation — is exactly the case Tier-1 cannot self-detect,
@@ -666,17 +669,15 @@ public class CitationGroundingVerifier {
 			// eagerly and would be paid for a verdict Pass 2 discards.
 			//
 			// ONE local, read at both sites, so the skip and the disposition cannot be edited apart.
-			// They are not equally observable and it is worth knowing which: measured, removing the
-			// skip alone reddens
-			// aCitationTheModuleAttachedPublishesNoVerdictAndSpendsNothing's embedding assertion (2
-			// passes spent, verdicts unchanged); removing the disposition arm alone leaves the whole
-			// of CitationGroundingVerifierTest GREEN, because the empty Tier1Result then withholds by
-			// accident — no claim sentence means no Tier-2 candidate and no deferred cosine; removing
-			// BOTH publishes `true` and reddens two verdict assertions. So the arm below is the
-			// STATEMENT that such a citation may be given no verdict, and nothing behavioural pins it
-			// on its own. It stays because candidacy is expressed as `== GRADED` (see Disposition):
-			// a later change that gave the skipped result a claim sentence would make an attached
-			// citation a judge candidate the moment this arm was gone.
+			// They are NOT equally observable: the arm below is a statement of intent that no case
+			// discriminates, because with it gone the empty Tier1Result withholds by accident — no
+			// claim sentence means no Tier-2 candidate and no deferred cosine. Which mutation reddens
+			// what is measured and recorded once, beside the cases, in
+			// CitationGroundingVerifierTest.aCitationTheModuleAttachedPublishesNoVerdictAndSpendsNothing;
+			// a tally here would be a second home for a count that tracks the suite. The arm stays
+			// because candidacy is expressed as `== GRADED` (see Disposition): a later change that
+			// gave the skipped result a claim sentence would make an attached citation a judge
+			// candidate the moment this arm was gone.
 			boolean attachedByTheModule = reference.isAttachedByTheModule();
 			Tier1Result tier1 = attachedByTheModule
 					? new Tier1Result(null, null, null, false)
@@ -795,9 +796,9 @@ public class CitationGroundingVerifier {
 				withheldNegatives++;
 			}
 			if (disposition[i] == Disposition.UNVERIFIABLE) {
-				// Two arrangements reach here and both publish nothing; see the enum constant, which is
-				// canonical for the pair. A citation the module attached (issue #305) has no claim of
-				// the model's to check at all, in either mode.
+				// Two arrangements reach here and both publish nothing, one of them a citation the
+				// module attached (issue #305), in either mode. The enum constant is canonical for the
+				// pair and for why; what follows is #302's own half, which predates it.
 				//
 				// A compound claim unit under entailment publishes nothing (issue #302). Neither tier
 				// asked a question about THIS citation: the judge was handed a conjunction the record

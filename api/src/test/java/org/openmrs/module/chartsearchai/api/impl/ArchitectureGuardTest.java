@@ -9,9 +9,11 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -50,6 +52,140 @@ public class ArchitectureGuardTest {
 
 
 	// --- Rules ---
+
+	/**
+	 * Only a {@code safety_finding} mapping may be constructed with a provenance list (issue #305).
+	 *
+	 * <p>Three judgements elsewhere rest on this and none of them could see it. The residue
+	 * disclosure on {@code CitationGroundingVerifier.AnswerCitations.unanchored} and
+	 * {@code ReferenceProseFidelityCheck}'s "needs no filter" note both argue from "an attached index
+	 * is always chart-group", which holds only because the sole writer of {@code derivedFrom} is the
+	 * findings loop — allergy and condition uuids resolve to chart records, and the
+	 * {@code safety_finding} mappings are appended after the uuid index is built, so a finding cannot
+	 * attach a finding. Give a {@code drug_reference}, {@code drug_class_note} or
+	 * {@code active_drug_order} mapping a derivation and both break silently and in opposite
+	 * directions: the prose check would examine and could publish an {@code unfaithfullyRenderedCitations}
+	 * index for a reference record the answer never cited, and {@code restsOnReferenceMaterial} would
+	 * find a demote-only member in EVERY claim's rests-on set, withholding issue #284's negative for
+	 * every chart citation in the answer.
+	 *
+	 * <p>A SOURCE scan because the property is about the write SITE rather than about any one
+	 * arrangement: {@code FindingChartRecordProvenanceContextTest} asserts that today's chart records
+	 * carry no derivation, which a new write site would leave green. It scans the whole of
+	 * {@code api/src/main} rather than one file, so moving the construction does not escape it, and an
+	 * empty discovery FAILS — a scan that found no provenance-carrying construction at all would
+	 * otherwise pass on a change that deleted the feature.
+	 */
+	@Test
+	public void onlyASafetyFindingMappingIsGivenAProvenanceList() throws IOException {
+		List<String> violations = new ArrayList<String>();
+		int carrying = 0;
+		for (Path file : productionJavaFilesUnder(SRC_ROOT)) {
+			String src = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
+			for (String args : constructorArguments(src, "new RecordMapping(")) {
+				// ARITY, not a token. The 9-argument constructor is the only one that takes a
+				// derivation, and the compiler's own overload set is what says so — a predicate
+				// looking for the word `chartRecordNumbers` or `derivedFrom` was the first version of
+				// this guard and a construction passing `Collections.emptyList()` walked straight
+				// past it, measured. There is no token to relocate here: to escape this, a caller has
+				// to stop using the constructor that can carry a derivation. Three escapes were tried
+				// against the arity form and all three redden: an `emptyList()`, a bare `null`, and an
+				// unrelated named local. Against the token form the first walked straight past.
+				if (topLevelArgumentCount(args) != 9) {
+					continue;
+				}
+				carrying++;
+				if (!args.contains("RESOURCE_TYPE_SAFETY_FINDING")) {
+					violations.add(SRC_ROOT.relativize(file) + ": a RecordMapping is given a provenance "
+							+ "list without being a safety_finding — see this test's javadoc for the two "
+							+ "checks that break silently. Arguments were: " + args.replaceAll("\\s+", " "));
+				}
+			}
+		}
+		assertTrue(carrying > 0, "the scan matched no provenance-carrying RecordMapping construction at "
+				+ "all, so it asserts nothing — issue #305's write site has moved or gone");
+		assertTrue(violations.isEmpty(), String.join("\n", violations));
+	}
+
+	/**
+	 * Every PRODUCTION {@code .java} file under {@code root}, so a scan cannot be escaped by moving
+	 * code within the module.
+	 *
+	 * <p>{@code main/java} and not the whole tree: {@code ModuleSourceRoot.apiRoot()} is
+	 * {@code api/src}, so an unscoped walk also reads the tests — and a test that builds a
+	 * provenance-carrying mapping as a FIXTURE is the point of having them. Measured: without this
+	 * filter the guard reddens on {@code LlmInferenceServiceTest}'s own two cases.
+	 */
+	private static List<Path> productionJavaFilesUnder(Path root) throws IOException {
+		final List<Path> out = new ArrayList<Path>();
+		try (java.util.stream.Stream<Path> tree = Files.walk(root)) {
+			tree.filter(path -> path.toString().endsWith(".java"))
+					.filter(path -> path.toString().contains("main" + java.io.File.separator + "java"))
+					.forEach(out::add);
+		}
+		return out;
+	}
+
+	/**
+	 * How many arguments {@code args} carries — commas at nesting depth zero, outside string and
+	 * character literals, so a nested call, a generic witness or a comma inside a string is not
+	 * miscounted. Zero for an empty list.
+	 */
+	private static int topLevelArgumentCount(String args) {
+		if (args.trim().isEmpty()) {
+			return 0;
+		}
+		int count = 1;
+		int depth = 0;
+		boolean inString = false;
+		boolean inChar = false;
+		for (int i = 0; i < args.length(); i++) {
+			char c = args.charAt(i);
+			boolean escaped = i > 0 && args.charAt(i - 1) == '\\';
+			if (c == '"' && !inChar && !escaped) {
+				inString = !inString;
+			} else if (c == '\'' && !inString && !escaped) {
+				inChar = !inChar;
+			} else if (!inString && !inChar) {
+				if (c == '(' || c == '[' || c == '{') {
+					depth++;
+				} else if (c == ')' || c == ']' || c == '}') {
+					depth--;
+				} else if (c == ',' && depth == 0) {
+					count++;
+				}
+			}
+		}
+		return count;
+	}
+
+	/**
+	 * The argument list of every {@code call} in {@code src}, brace-balanced so a multi-line
+	 * construction — which every interesting one here is — comes back whole rather than as its first
+	 * line.
+	 */
+	private static List<String> constructorArguments(String src, String call) {
+		List<String> out = new ArrayList<String>();
+		int from = src.indexOf(call);
+		while (from >= 0) {
+			int depth = 0;
+			int open = from + call.length() - 1;
+			for (int i = open; i < src.length(); i++) {
+				char c = src.charAt(i);
+				if (c == '(') {
+					depth++;
+				} else if (c == ')') {
+					depth--;
+					if (depth == 0) {
+						out.add(src.substring(open + 1, i));
+						break;
+					}
+				}
+			}
+			from = src.indexOf(call, from + call.length());
+		}
+		return out;
+	}
 
 	/**
 	 * No file outside ChartSearchAiConstants should call getEmbeddingPrefix().

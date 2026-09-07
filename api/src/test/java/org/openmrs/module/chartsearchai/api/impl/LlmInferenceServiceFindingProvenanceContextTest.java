@@ -42,11 +42,10 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * surface it is about: the chart record a cited finding fired on reaches the answer's REFERENCE list,
  * so the clinician's click-through no longer depends on the model having cited it.
  *
- * <p><b>The measured defect.</b> {@code Can I give ibuprofen?} returned references {@code [11]} (the
- * allergy) and {@code [239]} (the finding) on 13 identical runs; {@code Can i give ibuprofen?} — one
- * character apart — returned {@code [239]} alone on 14. Everything upstream of the model was
- * byte-identical, so the divergence was entirely in whether the model put the record in its
- * structured {@code citations} array.
+ * <p><b>The measured defect.</b> Two wordings of one question, a single character apart, returned
+ * different reference sets over many identical runs each, with everything upstream of the model
+ * byte-identical — so the divergence was entirely in whether the model put the record in its
+ * structured {@code citations} array. ADR Decision 78 has the counts and the arrangement.
  *
  * <p><b>The stub provider is the second form.</b> It answers in the issue's own words, asserts the
  * allergy, and cites the finding ALONE — reading the finding's number out of the numbered records it
@@ -317,14 +316,14 @@ public class LlmInferenceServiceFindingProvenanceContextTest extends BaseModuleC
 
 		@Override
 		PatientChart buildChart(Patient patient, String question) {
-			// Through the shared helpers, not hand-built: allergyRecord's javadoc carries the querystore
-			// resourceType/uuid contract this whole path joins on, read off the built jar with javap.
-			// A local mapping here would be the one chart production never produces.
-			List<RecordMapping> mappings = Arrays.asList(
+			// Through the shared helpers, not hand-built — the mappings AND the numbered rendering.
+			// allergyRecord's javadoc carries the querystore resourceType/uuid contract this whole
+			// path joins on, and chartOf is the one home of the "[N] text" rendering the serializer
+			// produces; a local copy of either is the chart production never produces, which is what
+			// the answer's own finding number is then parsed back out of.
+			return DrugReferenceTestSupport.chartOf(
 					DrugReferenceTestSupport.obsRecord(OBS_RECORD, obsText),
 					DrugReferenceTestSupport.allergyRecord(ALLERGY_RECORD, allergyUuid, allergyText));
-			return new PatientChart("[" + OBS_RECORD + "] " + obsText + "\n[" + ALLERGY_RECORD + "] "
-					+ allergyText + "\n", mappings, Collections.<Integer> emptyList());
 		}
 
 		@Override

@@ -42,11 +42,11 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  *
  * <p><b>The defect.</b> An answer can assert a fact about the patient's chart — "the patient's
  * allergy to Acetylsalicylic acid" — and cite no chart record for it, leaving only the module's own
- * {@code safety_finding} cited. Measured on the 3.7.1 standalone: {@code Can I give ibuprofen?}
- * returned references {@code [11]} (the allergy) and {@code [239]} (the finding) on 13 runs, while
- * {@code Can i give ibuprofen?} — one character apart — returned {@code [239]} alone on 14. Nothing
- * upstream of the model differed (identical {@code inputTokens}, identical chips), so the
- * click-through to the source record was decided by the wording of the question.
+ * {@code safety_finding} cited. Measured on the 3.7.1 standalone over two wordings of one question
+ * a single character apart, agreeing on everything upstream of the model and disagreeing on whether
+ * the allergy record was cited at all — so the click-through to the source record was decided by the
+ * wording of the question. ADR Decision 78 carries the run counts and the arrangement; they are not
+ * repeated here, because a measurement with three homes is a correction that reaches one of them.
  *
  * <p><b>Why it was unfixable downstream.</b> The provenance was discarded at read time:
  * {@link PatientClinicalContextBuilder} read the patient's allergies and conditions into flat token

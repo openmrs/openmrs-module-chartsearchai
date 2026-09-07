@@ -198,10 +198,9 @@ final class PatientClinicalContextBuilder {
 		// off: a finding raised on a recorded allergy has to be able to name the record the clinician
 		// clicks through to, and everything downstream sees the flattened token sets alone.
 		//
-		// The uuid is the record's, and that is a measured contract rather than a convention: querystore
-		// indexes an allergy document under Allergy.getUuid() and a condition document under
-		// Condition.getUuid() (its AllergyRecordSerializer / ConditionRecordSerializer), so the join
-		// from here to a chart record is exact and needs no name matching.
+		// The uuid is the record's, which makes the join from here to a chart record exact and free of
+		// name matching. That is a measured contract rather than a convention, and ADR Decision 78 is
+		// its one home — including what about it is NOT measured. Do not restate it here.
 		//
 		// Keyed on the RAW string each collector added, and re-keyed by PatientClinicalContext through
 		// the same rule that normalizes the token sets themselves — see its lowerKeys. Keying them here

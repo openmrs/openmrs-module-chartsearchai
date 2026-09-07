@@ -146,8 +146,9 @@ public class ChartSearchAiAuditReferenceSliceTest {
 	@Test
 	public void theAuditListingPublishesTheSliceBesideTheCitationCount() {
 		// The row is only durable if it can be read back without SQL. The listing already exposes
-		// referenceCount — the citations IN the answer — and these two are a different population:
-		// the reference material put IN FRONT of the model, most of which is never cited.
+		// referenceCount — what the answer PUBLISHED, which since issue #305 is not the same as what
+		// the model cited — and these two are a different population again: the reference material
+		// put IN FRONT of the model, most of which is never cited.
 		ChartSearchAuditLog row = new ChartSearchAuditLog();
 		row.setReferenceCount(1);
 		row.setReferenceSliceRecords(4);

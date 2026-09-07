@@ -29,7 +29,11 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.openmrs.Allergen;
+import org.openmrs.AllergenType;
+import org.openmrs.Allergy;
 import org.openmrs.Concept;
+import org.openmrs.Patient;
 import org.openmrs.ConceptMap;
 import org.openmrs.ConceptReferenceTerm;
 import org.openmrs.ConceptSource;
@@ -1305,6 +1309,40 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/**
+	 * Saves a recorded allergy to {@code allergen} as FREE TEXT, and returns the saved
+	 * {@code Allergy}'s uuid — which is what a querystore {@code allergy} chart record carries as its
+	 * resource uuid (see {@link #allergyRecord}).
+	 *
+	 * <p>The awkward part is not this module's: a free-text allergen still needs a coded allergen
+	 * (the column is not-null, and {@code AllergyValidator} requires it to BE the concept the
+	 * {@code allergy.concept.otherNonCoded} global property names), and the standard test dataset
+	 * nominates none. So one is nominated here. That is the platform's own "Other, non-coded" shape
+	 * rather than a contrivance, and it is a requirement of {@code AllergyValidator} rather than of
+	 * anything here — which is exactly why it belongs in one place: three files in two packages had
+	 * written it out, so a platform change to that rule would redden all three and be fixed in one.
+	 *
+	 * <p>Context-sensitive by nature: it saves through {@code PatientService}, so only a
+	 * {@code BaseModuleContextSensitiveTest} may call it.
+	 *
+	 * @param patient the patient to record it against
+	 * @param placeholderConceptId the concept to nominate as {@code allergy.concept.otherNonCoded}
+	 * @param allergen the clinician's own words
+	 */
+	public static String recordFreeTextAllergy(Patient patient, int placeholderConceptId,
+			String allergen) {
+		Concept otherNonCoded = Context.getConceptService().getConcept(placeholderConceptId);
+		Context.getAdministrationService()
+				.setGlobalProperty("allergy.concept.otherNonCoded", otherNonCoded.getUuid());
+		Allergy allergy = new Allergy(patient,
+				new Allergen(AllergenType.DRUG, otherNonCoded, allergen), null,
+				null, null);
+		Context.getPatientService().saveAllergy(allergy);
+		Context.flushSession();
+		Context.clearSession();
+		return allergy.getUuid();
+	}
+
+	/**
 	 * Renames {@code conceptId}'s FULLY SPECIFIED name, which is what {@code Concept.getName()} yields
 	 * for these fixtures.
 	 *
@@ -1482,7 +1520,7 @@ public final class DrugReferenceTestSupport {
 	/** A chart of {@code records}, rendered as the numbered "[N] text" lines
 	 *  {@link org.openmrs.module.chartsearchai.serializer.PatientChartSerializer} produces — so a
 	 *  test can place a real drug-order record in the chart, or leave it out. */
-	static PatientChart chartOf(RecordMapping... records) {
+	public static PatientChart chartOf(RecordMapping... records) {
 		StringBuilder text = new StringBuilder("Patient\n\n");
 		for (RecordMapping record : records) {
 			text.append("[").append(record.getIndex()).append("] ").append(record.getText()).append("\n");
@@ -1499,47 +1537,12 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/**
-	 * Saves a recorded allergy to {@code allergen} as FREE TEXT, and returns the saved
-	 * {@code Allergy}'s uuid — which is what a querystore {@code allergy} chart record carries as its
-	 * resource uuid (see {@link #allergyRecord}).
-	 *
-	 * <p>The awkward part is not this module's: a free-text allergen still needs a coded allergen
-	 * (the column is not-null, and {@code AllergyValidator} requires it to BE the concept the
-	 * {@code allergy.concept.otherNonCoded} global property names), and the standard test dataset
-	 * nominates none. So one is nominated here. That is the platform's own "Other, non-coded" shape
-	 * rather than a contrivance, and it is a requirement of {@code AllergyValidator} rather than of
-	 * anything here — which is exactly why it belongs in one place: three files in two packages had
-	 * written it out, so a platform change to that rule would redden all three and be fixed in one.
-	 *
-	 * <p>Context-sensitive by nature: it saves through {@code PatientService}, so only a
-	 * {@code BaseModuleContextSensitiveTest} may call it.
-	 *
-	 * @param patient the patient to record it against
-	 * @param placeholderConceptId the concept to nominate as {@code allergy.concept.otherNonCoded}
-	 * @param allergen the clinician's own words
-	 */
-	public static String recordFreeTextAllergy(org.openmrs.Patient patient, int placeholderConceptId,
-			String allergen) {
-		org.openmrs.Concept otherNonCoded = Context.getConceptService().getConcept(placeholderConceptId);
-		Context.getAdministrationService()
-				.setGlobalProperty("allergy.concept.otherNonCoded", otherNonCoded.getUuid());
-		org.openmrs.Allergy allergy = new org.openmrs.Allergy(patient,
-				new org.openmrs.Allergen(org.openmrs.AllergenType.DRUG, otherNonCoded, allergen), null,
-				null, null);
-		Context.getPatientService().saveAllergy(allergy);
-		Context.flushSession();
-		Context.clearSession();
-		return allergy.getUuid();
-	}
-
-	/**
 	 * A querystore allergy chart record: its resource type is querystore's {@code allergy} and its
 	 * resourceUuid is the {@code Allergy} uuid.
 	 *
-	 * <p>That contract is querystore's {@code AllergyRecordSerializer.getResourceUuid(Allergy)}, which
-	 * returns {@code Allergy.getUuid()} — read off the built {@code querystore-api} jar with
-	 * {@code javap} on 2026-09-07 rather than assumed, because issue #305's provenance join is that
-	 * uuid and a helper that got it wrong would make every case here pass against a chart production
+	 * <p>That contract is querystore's, and ADR Decision 78 is where it is recorded with its
+	 * provenance and its limits. It is stated rather than assumed because issue #305's whole join is
+	 * that uuid: a helper that got it wrong would make every case here pass against a chart production
 	 * never produces.
 	 *
 	 * <p>Public, with {@link #conditionRecord} and {@link #obsRecord}, for the cross-package reason

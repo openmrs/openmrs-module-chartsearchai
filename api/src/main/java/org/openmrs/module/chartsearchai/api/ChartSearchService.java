@@ -354,7 +354,11 @@ public interface ChartSearchService {
 		}
 
 		/**
-		 * The ordered list of record references cited in the answer.
+		 * The ordered list of record references this answer PUBLISHES. Mostly the ones it cites, and
+		 * since issue #305 not only those: a chart record an injected {@code safety_finding} was
+		 * derived from joins the list whenever the model cites that finding, and says so through
+		 * {@link RecordReference#isAttachedByTheModule()}. Read it as what a client renders, not as
+		 * the model's citation set.
 		 */
 		public List<RecordReference> getReferences() {
 			return references;
@@ -695,7 +699,9 @@ public interface ChartSearchService {
 	}
 
 	/**
-	 * Identifies a source record in OpenMRS cited by the LLM answer.
+	 * Identifies a source record in OpenMRS offered as evidence for the LLM answer — cited by the
+	 * model, or, since issue #305, attached by the MODULE because a record the model DID cite was
+	 * derived from it. {@link #isAttachedByTheModule()} is which.
 	 */
 	class RecordReference {
 

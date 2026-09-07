@@ -921,7 +921,7 @@ public class DrugReferenceInjector {
 		 *         it does not carry is the mechanical reason {@link #contestedUuids} exists, which is
 		 *         that the map cannot be read for a count it has already collapsed.
 		 *
-		 *         <p><b>Three readers, and the third does not follow the split.</b>
+		 *         <p><b>A third reader, and it does not follow the split.</b>
 		 *         {@link #citableNumberFor} is issue #379's order-record citation — as affirmative as
 		 *         this one — and its uuid leg goes through {@link #numberByUuid}, which does not
 		 *         consult {@link #contestedUuids}. So on a chart carrying two records under one order

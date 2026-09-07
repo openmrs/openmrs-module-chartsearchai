@@ -68,7 +68,8 @@ public class ArchitectureGuardTest {
 	 * {@code RecordMapping}'s widest constructor is public and reachable — would leave {@code callers}
 	 * equal to the expected singleton and this case green. The omod builds no mappings today.
 	 *
-	 * <p>Three judgements elsewhere rest on this and none of them could see it. The residue
+	 * <p>Judgements elsewhere rest on this and none of them could see it — how many is not a count
+	 * kept here, since each states its own dependence where it is written. The residue
 	 * disclosure on {@code CitationGroundingVerifier.AnswerCitations.unanchored} and
 	 * {@code ReferenceProseFidelityCheck}'s "needs no filter" note both argue from "an attached index
 	 * is always chart-group", which holds only because the sole writer of {@code derivedFrom} is
@@ -79,6 +80,11 @@ public class ArchitectureGuardTest {
 	 * publish an {@code unfaithfullyRenderedCitations} index for, a reference record the answer never
 	 * cited, and {@code restsOnReferenceMaterial} would find a demote-only member in EVERY claim's
 	 * rests-on set, withholding issue #284's negative for every chart citation in the answer.
+	 * {@code SafetyFindingSeverityFidelityCheck}'s note of its own exemption argues from the last
+	 * clause of that property rather than from the group — an attached index is never a
+	 * {@code safety_finding} record, so it carries no rating for that check to require — and a rated
+	 * mapping built with a derivation would have it publish an {@code unstatedFindingSeverities}
+	 * entry against a citation the model never made.
 	 *
 	 * <p><b>Asked of the BYTECODE, and the earlier source-text form is gone rather than patched.</b>
 	 * That form matched the literal {@code "new RecordMapping("} and counted commas, and review
@@ -143,7 +149,7 @@ public class ArchitectureGuardTest {
 				"org/openmrs/module/chartsearchai/reference/DrugReferenceInjector.class"), callers,
 				"the constructor that carries a provenance list may be invoked from DrugReferenceInjector "
 						+ "and nowhere else in this module's classes, which is what this walk reads — see "
-						+ "this test's javadoc for the two checks that break silently otherwise. Callers "
+						+ "this test's javadoc for the checks that break silently otherwise. Callers "
 						+ "found: " + callers);
 	}
 

@@ -76,6 +76,22 @@ def selftest():
     # absent: abstain vs drift
     assert score_cell([], False, O(), O(), O(), O())['abstain_ok'] is True
     assert score_cell(['p'], False, O(), O('p'), O(), O())['abstain_ok'] is False
+    # `model_cited`, and the wire key spelled as a LITERAL: every reader defaults it to falsy, so a
+    # rename of it disables the filter in the fail-OPEN direction — the attached citations re-enter
+    # this gate's precision/recall and temporal_probe_rc2.py's `cited == 0` abstain test, and what a
+    # reader sees is a gate number that moved with no model behaviour behind it.
+    #
+    # The two cases discriminate separately, measured rather than assumed: rename the key in
+    # `model_cited` and the first reddens alone, the second carrying the key nowhere; default the
+    # absent key to attached (`r.get(..., True)`) and the second reddens alone.
+    model = {'resourceUuid': 'a', 'attachedByTheModule': False}
+    assert model_cited([model, {'resourceUuid': 'b', 'attachedByTheModule': True}]) == [model], \
+        'a citation the module attached must not be scored as the model\'s'
+    # A capture taken before issue #305 carries the key on no reference at all, and every one of
+    # them is the model's own — the default this gate's continuity with older captures rests on.
+    older = [{'resourceUuid': 'a'}, {'resourceUuid': 'b'}]
+    assert model_cited(older) == older, 'a pre-#305 capture must score exactly as it did'
+    assert model_cited(None) == [] and model_cited([]) == [], 'no references is no citations'
     print('selftest OK')
 
 
@@ -114,9 +130,11 @@ def model_cited(references):
     cites that finding, marked `attachedByTheModule` — a record the answer never reached for, which
     no gate over the model's citation behaviour may score. Every reader of it defaults the key to
     falsy so a pre-#305 capture scores exactly as it always did; that default also means a RENAME of
-    the wire key silently disables the filter and fails OPEN, re-admitting every attached citation
-    with nothing raised. Four copies of that default meant four places a rename had to reach and a
-    grep for the key had four hits; one means the key is spelled once.
+    the wire key disables the filter in the fail-OPEN direction, re-admitting every attached
+    citation. `selftest` spells the key as a literal for that reason and CI runs it, so a rename
+    reddens `--selftest` instead of moving a gate number. Four copies of that default meant four
+    places a rename had to reach and a grep for the key had four hits; one means the key is spelled
+    once.
 
     Callers: this module's own scorer, resolve_unknowns.py and temporal_probe_rc2.py.
     eval/grounding-scope/grounding_scope_ab.py deliberately does NOT share it — it TAGS such a

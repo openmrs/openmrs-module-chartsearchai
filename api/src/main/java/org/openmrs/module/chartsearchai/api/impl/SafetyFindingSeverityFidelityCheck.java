@@ -152,7 +152,15 @@ final class SafetyFindingSeverityFidelityCheck {
 	 * @param patient whose answer it is — logged so a line is attributable under concurrent requests
 	 * @param answer the answer prose, unchanged by this method
 	 * @param cited the references the answer cites, as resolved by
-	 *            {@link LlmInferenceService#extractCitedReferences}
+	 *            {@link LlmInferenceService#extractCitedReferences}. Since issue #305 that list can
+	 *            carry a citation the MODULE attached; this check needs no filter for it, because the
+	 *            {@code ratings} map below holds only records carrying a {@code findingSeverity},
+	 *            which on the production path {@code DrugReferenceInjector}'s findings loop alone
+	 *            writes — and an attached index names a record that was already in the mapping list
+	 *            when that loop ran, so the walk's own {@code rating == null} arm skips it. The
+	 *            residue is a CALLER handing this method mappings of its own making, since nothing
+	 *            here re-derives a rating; the write site is pinned by
+	 *            {@code ArchitectureGuardTest.theProvenanceCarryingMappingConstructorHasOneCaller}
 	 * @param mappings the chart's records, cited or not — the carrier of each cited record's rating
 	 * @return the offending citation indexes in CITATION order — {@code cited}'s own order, taken
 	 *         rather than re-derived so that "which records were cited, and in what order" has one

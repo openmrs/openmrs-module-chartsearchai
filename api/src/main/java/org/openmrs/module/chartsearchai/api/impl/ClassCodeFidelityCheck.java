@@ -248,7 +248,10 @@ final class ClassCodeFidelityCheck {
 					// Asked HERE rather than of the list this method is handed, because it is this
 					// walk's premise that narrows: the @param note calls support pooled across the
 					// records the ANSWER cited, and the answer's reach is what makes pooling sound at
-					// all. The two sibling checks need no such filter and their javadoc says why.
+					// all. A sibling check handed the same list states in its own `@param cited`
+					// whether it needs a filter of its own — no count of them is kept here, since
+					// LlmInferenceService's uses of extractCitedReferences' output are what enumerate
+					// the consumers of that list.
 					if (reference.isAttachedByTheModule()) {
 						continue;
 					}

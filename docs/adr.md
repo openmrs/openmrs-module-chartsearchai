@@ -5695,7 +5695,7 @@ Measured on 2026-09-07 by calling `SafetyFindingSeverityFidelityCheck.reportUnst
 
 ### What this does not do
 
-**It says nothing about a blank answer**, though that answer can arrive with citations resolved — `extractCitedReferences` resolves the structured array for one on purpose, calling it "the absence of an answer (a distinct degenerate output)". Reporting it would have made this the only one of the four checks that accuses a degenerate output; every sibling is silent there — by an empty class-code set, by a word floor, by a phrase gate. Found by re-reading the composed path rather than by either half's review.
+**It says nothing about a blank answer**, though that answer can arrive with citations resolved — `extractCitedReferences` resolves the structured array for one on purpose, calling it "the absence of an answer (a distinct degenerate output)". Reporting it would have made this the only check in the family that accuses a degenerate output; every sibling is silent there — by an empty class-code set, by a word floor, by a phrase gate. Found by re-reading the composed path rather than by either half's review.
 
 **It does not stop the paraphrase**, any more than its siblings do; it makes one visible.
 

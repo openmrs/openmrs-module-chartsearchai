@@ -27,7 +27,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Reports a safety finding whose RATING the answer states nowhere — issue
  * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/337">#337</a>, round
- * three. A deterministic, exact comparison, like its three siblings and for the same reason: no
+ * three. A deterministic, exact comparison, like every check beside it and for the same reason: no
  * model call, no embedding, no cosine floor, no reproduction threshold.
  *
  * <p><b>The failure.</b> Measured live on a RefApp 3.7.1 standalone against the bundled knowledge
@@ -57,12 +57,11 @@ import org.slf4j.LoggerFactory;
  * Decision 77 carries the measurement of how often, its date and what it is a count OF.
  *
  * <p><b>Which ratings it asks about is not this class's decision.</b>
- * {@code DrugReferenceInjector.ratingThisRecordStates} makes it, at the write site, over two
- * conditions — which ratings are worth requiring ({@code DrugSafetyValidator.statableRating}, whose
- * javadoc is canonical for the two it declines: an UNRATED finding, which has no word at all, and
- * {@code unknown}, which has a word that says nothing) and whether the record STATES the rating at
- * all. This class never sees any of those three cases and states no vocabulary of its own; it has no
- * severity literal in it, which is what keeps that decision in one place.
+ * {@code DrugReferenceInjector.ratingThisRecordStates} makes it, at the write site, and is canonical
+ * for every case that answers null — the ratings {@code DrugSafetyValidator.statableRating} declines,
+ * and a record that does not state its own rating. This class sees none of them: what reaches it is
+ * one nullable field. It states no vocabulary of its own and has no severity literal in it, which is
+ * what keeps that decision in one place.
  *
  * <p><b>It asks of the WHOLE answer, and that is the conservative choice rather than the thorough
  * one.</b> The unit could have been the sentence citing the finding, or the citation run its sibling
@@ -101,7 +100,7 @@ import org.slf4j.LoggerFactory;
  *
  * <p><b>The scan is {@link ChartSearchAiUtils#statesWord}, and it is shared for a reason.</b> The
  * other caller is {@code DrugReferenceInjector}, asking whether the RECORD states the rating before
- * it carries one at all. The two must be one rule: a rating the record states one way and the answer
+ * it carries one at all. Its callers must share one rule: a rating the record states one way and the answer
  * states the other would otherwise be reported as dropped. That method's javadoc carries the
  * boundary and why it is not a member of {@code DrugReference}'s drug-name family.
  *
@@ -183,9 +182,9 @@ final class SafetyFindingSeverityFidelityCheck {
 			// The map holds only the records that carry a rating, and it is the GATE as well as the
 			// lookup — on the shipped default `chartsearchai.drugReference.enabled` is false, so the
 			// injector never runs, no record carries a rating, and this returns before touching the
-			// answer at all. Each of the three sibling checks resolves its own cheapest gate first
-			// for the same reason; this one used to build a full index over every chart record and
-			// fold the whole answer before it could learn it had nothing to do.
+			// answer at all. Every sibling check resolves its own cheapest gate first for the same
+			// reason; this one used to build a full index over every chart record and fold the whole
+			// answer before it could learn it had nothing to do.
 			Map<Integer, String> ratings = new HashMap<Integer, String>();
 			for (RecordMapping mapping : mappings) {
 				if (mapping.getFindingSeverity() != null) {
@@ -197,12 +196,13 @@ final class SafetyFindingSeverityFidelityCheck {
 			}
 			// Memoised per distinct rating, in a per-call local and never a field (#172 binds this
 			// module's memos, and a static utility on a Spring-managed path is no exception). The
-			// vocabulary `statableRating` admits has three members, so an answer citing two hundred
-			// findings asks this at most three times rather than two hundred — the unbounded repeat
-			// of one identical needle that the same shape forced ActiveOrderCitationFidelityCheck to
-			// bound with a Matcher region.
+			// walks are bounded by the SIZE OF THE VOCABULARY `statableRating` admits rather than by
+			// the citation count, so an answer citing two hundred findings asks this a handful of
+			// times rather than two hundred — the unbounded repeat of one identical needle that the
+			// same shape forced ActiveOrderCitationFidelityCheck to bound with a Matcher region.
 			//
-			// The key is LOWER-CASED, and that is what makes "three" true rather than a hope.
+			// The key is LOWER-CASED, and that is what makes the bound the vocabulary's size rather
+			// than a hope.
 			// `statableRating` hands on the dataset's own spelling trimmed, not canonicalised —
 			// `severityRank` lower-cases to RECOGNISE a rating and nothing lower-cases what is
 			// returned — so an operator file writing `Major` and `major` yields two keys for one
@@ -216,7 +216,7 @@ final class SafetyFindingSeverityFidelityCheck {
 				if (rating == null) {
 					// Either the cited record is not a finding, or it is one carrying no rating worth
 					// requiring — `ratingThisRecordStates` is canonical for which those are, and this
-					// check deliberately cannot tell the two apart.
+					// check deliberately cannot tell those cases apart.
 					continue;
 				}
 				String key = rating.toLowerCase(Locale.ROOT);

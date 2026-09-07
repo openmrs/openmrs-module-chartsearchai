@@ -963,7 +963,7 @@ public class ChartSearchAiUtils {
 	 *         letters — case-insensitively, with no letter or digit against either end of it.
 	 *
 	 *         <p>Issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/337">
-	 *         #337</a>'s third round, and it is shared rather than local because its two callers must
+	 *         #337</a>'s third round, and it is shared rather than local because its callers must
 	 *         agree or the check between them is unsound: {@code DrugReferenceInjector} asks it
 	 *         whether an injected finding's RECORD states the finding's rating, and
 	 *         {@code SafetyFindingSeverityFidelityCheck} asks it whether the ANSWER does. Were those
@@ -982,8 +982,8 @@ public class ChartSearchAiUtils {
 	 *         what an answer may say. And {@code containsWord} is package-private in the drug-safety
 	 *         package, so reaching it from {@code api.impl} means widening the drug-name matcher out
 	 *         of the package whose instructions bind it (#260). It is a boundary rule beside that
-	 *         family rather than inside it — {@code DrugReference.boundedTokenIndex}'s javadoc names
-	 *         the three routes that share ITS scan, and this is not one of them.
+	 *         family rather than inside it — {@code DrugReference.boundedTokenIndex}'s javadoc
+	 *         enumerates the routes that share ITS scan, and this is not one of them.
 	 *
 	 *         <p>The boundary admits every way a rating has been observed to be written — a colon
 	 *         after it, parentheses or markdown emphasis around it, a hyphen before {@code -rated} —

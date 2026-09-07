@@ -138,8 +138,9 @@ import org.slf4j.LoggerFactory;
  * <p><b>It reports and it publishes.</b> The WARN is the maintainer's channel;
  * {@code ChartAnswer.getMisattributedOrderCitations()} is the clinician's, through the
  * {@code misattributedOrderCitations} response key, and it exists for the reason ADR Decision 74
- * gave for publishing its sibling's answer — on the reported response every observable field read
- * exactly as a clean answer's would. It never rewrites the answer: editing a clinician-facing
+ * gave for publishing its sibling's answer — when the reported response was measured, every
+ * observable field on it read exactly as a clean answer's would. (No longer true of that response:
+ * issue #337's third round added a key that flags it too, for a different defect.) It never rewrites the answer: editing a clinician-facing
  * sentence is a larger decision than this check is licensed to make.
  *
  * <p><b>Where it runs.</b> Both answer paths, {@link LlmInferenceService#search} and

@@ -407,7 +407,9 @@ public class SafetyWarning {
 	 *
 	 * <p><b>Since issue #337's third round there is a further reader whose answer reaches a
 	 * clinician-facing published key</b> — not the only one, this value having reached the wire as
-	 * each chip's own {@code severity} since #207, raw and untrimmed where that reader trims:
+	 * each chip's own {@code severity} since issue #340 — #207 exposed the field for the api-side
+	 * ordering and scoped itself to that, as the paragraph above says — raw and untrimmed where that
+	 * reader trims:
 	 * {@code DrugSafetyValidator.statableRating},
 	 * through {@code DrugReferenceInjector.ratingThisRecordStates}, which carries the rating onto the
 	 * injected record's mapping so a check can ask whether the ANSWER stated it

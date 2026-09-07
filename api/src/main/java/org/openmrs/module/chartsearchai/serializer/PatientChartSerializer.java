@@ -678,10 +678,12 @@ public class PatientChartSerializer {
 		 * {@code text} (see the class doc). A chart record has neither, so the shorter constructors
 		 * default them to "no attribution, nothing withheld".
 		 *
-		 * <p>Not the full constructor — it defaults {@link #orderActive} to {@code null}, "the
-		 * module cannot say". The one below is the full one, and the distinction is worth the name
+		 * <p>Not the full constructor — it defaults {@link #orderActive} to {@code null} ("the module
+		 * cannot say") and, since issue #337, {@link #findingSeverity} as well. The full one is the
+		 * WIDEST, which is two rungs below rather than one, and the distinction is worth the name
 		 * because a caller reaching for "the full constructor" through this javadoc would silently
-		 * drop a drug-order record's currency answer.
+		 * drop a drug-order record's currency answer or a finding's rating. Do not name the next rung
+		 * as the full one: this sentence did, and the ladder grew under it.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions) {

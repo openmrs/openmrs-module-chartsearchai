@@ -145,11 +145,14 @@ public final class LogCapture implements AutoCloseable {
 	 * {@link #hasEventAtOrAbove(Level, String)} for a logger named after a class, which is what a
 	 * check's logger is.
 	 *
-	 * <p>The arity that exists so a caller does not spell the excluded logger as a string literal no
-	 * compiler checks — three sibling test files did. It also gives the argument for excluding one
-	 * logger a single home: two of those files had carried a byte-identical constant, wrapper and
-	 * eight-line justification, and ADR Decision 77 predicts a fifth check meeting the same
-	 * collision.
+	 * <p><b>It exists to give the argument for excluding one logger a single home</b>, and that is
+	 * the whole of the reason: two sibling test files had carried a byte-identical constant, a
+	 * one-line wrapper and an eight-line justification of it, and ADR Decision 77 predicts a fifth
+	 * check meeting the same collision. It is NOT that those callers spelled a class name the
+	 * compiler could not check — they wrote {@code …Check.class.getName()} — and the one file that
+	 * does pass string literals here ({@code LogCaptureExclusionTest}) names fixture loggers with no
+	 * class behind them and could not take this arity. An earlier draft of this paragraph said the
+	 * opposite of both.
 	 *
 	 * @param level as {@link #hasEventAtOrAbove(Level)}
 	 * @param excludedLogger the class whose logger's events do not count

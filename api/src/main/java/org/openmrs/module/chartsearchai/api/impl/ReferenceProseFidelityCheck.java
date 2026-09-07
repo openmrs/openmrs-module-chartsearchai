@@ -86,7 +86,10 @@ import org.slf4j.LoggerFactory;
  *       sentence rather than introducing its items with a colon: the lead alone clears
  *       {@link #MIN_REPRODUCED_WORDS}, so joined to the items it would put invariant
  *       boilerplate inside a sentence whose interior carries order displays. Its ITEMS are
- *       still interior, and that is inherent to carrying variable content. That residue is
+ *       still interior, and that is inherent to carrying variable content. A citation marker
+ *       issue #379 appends to an item is invisible here, by {@link #wordsWithoutMarkers} and
+ *       deliberately; so are punctuation and case, which {@link Words#of} drops for every
+ *       operand. That residue is
  *       accepted rather than excluded:
  *       excluding it means teaching this check where a finding's own prose ends, which is knowledge
  *       that belongs to {@code renderFinding} and would be a second copy of it here;</li>
@@ -259,16 +262,12 @@ final class ReferenceProseFidelityCheck {
 						+ "reference record", patientId);
 				return Collections.emptyList();
 			}
-			// Replaced with a space rather than removed, so a marker can never weld its neighbours
-			// into one token. Every marker this module has been observed to receive already has
-			// whitespace on both sides, so nothing in the suite tells the two apart; the space is the
-			// choice that cannot be wrong rather than the one a measurement demanded.
-			Words answerWords = Words.of(answer == null ? ""
-					: ChartSearchAiUtils.INLINE_CITATION.matcher(answer).replaceAll(" "));
+			Words answerWords = wordsWithoutMarkers(answer);
 			Reproductions found = new Reproductions();
 			if (answerWords.size() >= MIN_REPRODUCED_WORDS) {
 				for (RecordMapping mapping : reference) {
-					examine(answerWords, Words.of(mapping.getText()), mapping.getIndex(), found);
+					examine(answerWords, wordsWithoutMarkers(mapping.getText()), mapping.getIndex(),
+						found);
 				}
 			}
 			if (!found.any()) {
@@ -367,6 +366,36 @@ final class ReferenceProseFidelityCheck {
 	private static boolean isModuleSuppliedReferenceProse(String resourceType) {
 		return ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE.equals(
 				ChartSearchAiUtils.referenceGroup(resourceType));
+	}
+
+	/**
+	 * The comparable words of one text: {@link ChartSearchAiUtils#INLINE_CITATION} markers removed,
+	 * then tokenised.
+	 *
+	 * <p><b>ONE rule over BOTH operands</b>, which is what makes the comparison marker-blind rather
+	 * than marker-blind on one side. The answer's markers were stripped from the first version of this
+	 * check because the answer is where markers are emitted; the RECORD side was left alone because no
+	 * record carried one. Issue #379 gave a {@code safety_finding}'s chart-order attribution the number
+	 * of the record it names, and the asymmetry then had a failure of its own: {@link Words#of}
+	 * tokenises runs of letters and digits, so a record's {@code "[14]"} becomes the record word
+	 * {@code "14"} that the stripped answer can never reproduce — and an answer copying that
+	 * attribution VERBATIM, which is exactly what the number is for, would break its reproduction there
+	 * and be reported as having substituted words. A published report (see
+	 * {@code ChartAnswer.getUnfaithfullyRenderedCitations}) manufactured by the faithful behaviour.
+	 *
+	 * <p>Replaced with a SPACE rather than removed, so a marker can never weld its neighbours into one
+	 * token. Every marker this module has been observed to receive already has whitespace on both
+	 * sides, so nothing in the suite tells the two apart; the space is the choice that cannot be wrong
+	 * rather than the one a measurement demanded. <b>That is why this is not
+	 * {@code CitationGroundingVerifier.stripCitationMarkers}</b>, which sits in this same package and
+	 * replaces with the EMPTY string: that method hands a statement to a judge reading prose, where a
+	 * welded token is a wording; here the output is TOKENISED and compared for equality, where a
+	 * welded token is a false substitution report. Do not consolidate the two on the empty-string
+	 * form.
+	 */
+	private static Words wordsWithoutMarkers(String text) {
+		return Words.of(text == null ? "" : ChartSearchAiUtils.INLINE_CITATION.matcher(text)
+				.replaceAll(" "));
 	}
 
 	/**

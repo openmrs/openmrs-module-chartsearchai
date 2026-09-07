@@ -98,11 +98,16 @@ public class ActiveOrderResolutionPerPassTest {
 				ORDER_NAMES.toArray(new String[0]));
 	}
 
-	/** {@code findings} as the injector renders them — its own renderer, not a second expression. */
+	/** {@code findings} as the injector renders them — its own renderer, not a second expression.
+	 *  The record-number resolution issue #379 added is passed empty, and nothing is lost by it: this
+	 *  arrangement raises no chart-order bridge, so there is no attribution to number. Were it to grow
+	 *  one, this helper would render an unnumbered clause where production renders a numbered one —
+	 *  what the attributions cite is that issue's own question, asked in its own file. */
 	private static List<String> rendered(List<SafetyWarning> findings) {
 		List<String> rendered = new ArrayList<String>();
 		for (SafetyWarning finding : findings) {
-			rendered.add(DrugReferenceInjector.renderFinding(finding));
+			rendered.add(DrugReferenceInjector.renderFinding(finding,
+				Collections.<String, Integer>emptyMap()));
 		}
 		return rendered;
 	}

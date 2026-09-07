@@ -9,6 +9,7 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -46,6 +47,10 @@ public class ArchitectureGuardTest {
 	private static final String CHART_ANSWER_TYPE =
 			"org/openmrs/module/chartsearchai/api/ChartSearchService$ChartAnswer";
 
+	/** The descriptor tail that tells RecordMapping's provenance-carrying constructor from every
+	 *  shorter one: it is the only one whose LAST parameter is a list (issue #305). */
+	private static final String DERIVED_FROM_TAIL = "Ljava/util/List;)V";
+
 	/** The descriptor fragment that tells the widest constructor from every shorter one. */
 	private static final String COVERAGE_TYPE =
 			"Lorg/openmrs/module/chartsearchai/reference/DrugReferenceLoad$Coverage;";
@@ -54,167 +59,86 @@ public class ArchitectureGuardTest {
 	// --- Rules ---
 
 	/**
-	 * Only a {@code safety_finding} mapping may be constructed with a provenance list (issue #305).
+	 * The constructor that can carry a provenance list is invoked from exactly one production class
+	 * (issue #305).
 	 *
 	 * <p>Three judgements elsewhere rest on this and none of them could see it. The residue
 	 * disclosure on {@code CitationGroundingVerifier.AnswerCitations.unanchored} and
 	 * {@code ReferenceProseFidelityCheck}'s "needs no filter" note both argue from "an attached index
-	 * is always chart-group", which holds only because the sole writer of {@code derivedFrom} is the
-	 * findings loop — allergy and condition uuids resolve to chart records, and the
-	 * {@code safety_finding} mappings are appended after the uuid index is built, so a finding cannot
-	 * attach a finding. Give a {@code drug_reference}, {@code drug_class_note} or
-	 * {@code active_drug_order} mapping a derivation and both break silently and in opposite
-	 * directions: the prose check would examine and could publish an {@code unfaithfullyRenderedCitations}
-	 * index for a reference record the answer never cited, and {@code restsOnReferenceMaterial} would
-	 * find a demote-only member in EVERY claim's rests-on set, withholding issue #284's negative for
-	 * every chart citation in the answer.
+	 * is always chart-group", which holds only because the sole writer of {@code derivedFrom} is
+	 * {@code DrugReferenceInjector}'s findings loop — allergy and condition uuids resolve to chart
+	 * records, and the {@code safety_finding} mappings are appended after the uuid index is built, so
+	 * a finding cannot attach a finding. Let another class construct a mapping with a derivation and
+	 * both break silently and in opposite directions: the prose check would examine, and could
+	 * publish an {@code unfaithfullyRenderedCitations} index for, a reference record the answer never
+	 * cited, and {@code restsOnReferenceMaterial} would find a demote-only member in EVERY claim's
+	 * rests-on set, withholding issue #284's negative for every chart citation in the answer.
 	 *
-	 * <p>A SOURCE scan because the property is about the write SITE rather than about any one
-	 * arrangement: {@code FindingChartRecordProvenanceContextTest} asserts that today's chart records
-	 * carry no derivation, which a new write site would leave green. It scans the whole of
-	 * {@code api/src/main} rather than one file, so moving the construction does not escape it.
+	 * <p><b>Asked of the BYTECODE, and the earlier source-text form is gone rather than patched.</b>
+	 * That form matched the literal {@code "new RecordMapping("} and counted commas, and review
+	 * defeated it three times: a fully-qualified {@code new
+	 * …PatientChartSerializer.RecordMapping(} was invisible to the literal (as is a newline before
+	 * the paren), and the comment-stripping added to fix an inline-comment miscount ate the tail of
+	 * any line holding a {@code //} inside a STRING — an argument such as a URL — which dropped the
+	 * counted arity and skipped the construction with no signal at all. That is the fail-open
+	 * direction, and it was claimed to fail closed. What ends that sequence is a different KIND of
+	 * question rather than another spelling on the list: the constant pool records the descriptor a
+	 * call site actually invokes, so qualification, whitespace, comments and string literals are all
+	 * out of the picture.
 	 *
-	 * <p><b>It walks its own directory, so it owes itself the pair {@link #getSourceCache()} demands
-	 * of such a rule</b> — that the scan found something, and that it read the RIGHT tree, the sibling
-	 * {@code omod} module having the same package path. The {@code carrying > 0} assertion is both at
-	 * once, and deliberately so: what it requires is a 9-argument {@code RecordMapping} construction
-	 * naming {@code RESOURCE_TYPE_SAFETY_FINDING}, which exists in this module's {@code api} main
-	 * tree and nowhere else. Measured — pointed at {@code omod/src} it scans files, finds none and
-	 * fails, rather than passing on the wrong tree, which asserting that the intended root merely
-	 * EXISTS would not achieve, as that javadoc records.
+	 * <p><b>What it cannot answer, and what does.</b> The pool says which CLASS invokes the wide
+	 * constructor, not which of that class's four mapping constructions passes a non-empty list. The
+	 * within-injector question is behavioural and
+	 * {@code FindingChartRecordProvenanceContextTest.aChartRecordNamesNoProvenanceOfItsOwn} is where
+	 * it is asked, over a real arrangement. The two halves are different kinds of question on
+	 * purpose; neither alone is the property those three judgements need.
 	 *
-	 * <p>It walks rather than reading that cache because the cache is keyed on file NAME and holds
-	 * LINES: this rule needs whole-file text, since every interesting construction spans several
-	 * lines, and it needs the PATH, to tell main from test. Re-joining the lines and losing the path
-	 * would be the worse duplication in a class that exists to forbid one.
+	 * <p>Every canary here fails on an empty discovery, because a guard that finds nothing forbids
+	 * nothing: the classes directory, the mapping's own class file, more than one constructor arity,
+	 * exactly one that takes a list, and at least one caller.
 	 */
 	@Test
-	public void onlyASafetyFindingMappingIsGivenAProvenanceList() throws IOException {
-		List<String> violations = new ArrayList<String>();
-		int carrying = 0;
-		for (Path file : productionJavaFilesUnder(SRC_ROOT)) {
-			String src = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
-			for (String args : constructorArguments(src, "new RecordMapping(")) {
-				// ARITY, not a token. The 9-argument constructor is the only one that takes a
-				// derivation, and the compiler's own overload set is what says so — a predicate
-				// looking for the word `chartRecordNumbers` or `derivedFrom` was the first version of
-				// this guard and a construction passing `Collections.emptyList()` walked straight
-				// past it, measured. There is no token to relocate here: to escape this, a caller has
-				// to stop using the constructor that can carry a derivation. Three escapes were tried
-				// against the arity form and all three redden: an `emptyList()`, a bare `null`, and an
-				// unrelated named local. Against the token form the first walked straight past.
-				if (topLevelArgumentCount(args) != 9) {
-					continue;
-				}
-				carrying++;
-				if (!args.contains("RESOURCE_TYPE_SAFETY_FINDING")) {
-					violations.add(SRC_ROOT.relativize(file) + ": a RecordMapping is given a provenance "
-							+ "list without being a safety_finding — see this test's javadoc for the two "
-							+ "checks that break silently. Arguments were: " + args.replaceAll("\\s+", " "));
+	public void theProvenanceCarryingMappingConstructorHasOneCaller() throws IOException {
+		Path classes = ModuleSourceRoot.apiRoot().resolve("target/classes");
+		assertTrue(Files.isDirectory(classes),
+				"no " + classes + "; a guard that discovers nothing forbids nothing");
+		Path mapping = classes.resolve(
+				"org/openmrs/module/chartsearchai/serializer/PatientChartSerializer$RecordMapping.class");
+		assertTrue(Files.exists(mapping),
+				"no RecordMapping class file at " + mapping + ", so this guard would forbid nothing");
+
+		List<String> constructors = constructorDescriptors(mapping);
+		assertTrue(constructors.size() > 1,
+				"expected RecordMapping to publish several constructor arities and found "
+						+ constructors.size() + "; with one there is no narrower one for a caller with no "
+						+ "provenance to use and this guard is vacuous");
+		List<String> carrying = new ArrayList<>();
+		for (String descriptor : constructors) {
+			if (descriptor.endsWith(DERIVED_FROM_TAIL)) {
+				carrying.add(descriptor);
+			}
+		}
+		assertEquals(1, carrying.size(),
+				"exactly one RecordMapping constructor may take a provenance list — it is the widest, "
+						+ "and every shorter one defaults it to empty. Found " + carrying.size() + ": "
+						+ carrying);
+
+		List<String> callers = new ArrayList<>();
+		try (java.util.stream.Stream<Path> tree = Files.walk(classes)) {
+			for (Path file : tree.filter(f -> f.toString().endsWith(".class"))
+					.filter(f -> !f.equals(mapping)).collect(java.util.stream.Collectors.toList())) {
+				if (constantPoolStrings(file).contains(carrying.get(0))) {
+					callers.add(classes.relativize(file).toString());
 				}
 			}
 		}
-		assertTrue(carrying > 0, "the scan matched no provenance-carrying RecordMapping construction at "
-				+ "all, so it asserts nothing — issue #305's write site has moved or gone");
-		assertTrue(violations.isEmpty(), String.join("\n", violations));
+		assertEquals(java.util.Collections.singletonList(
+				"org/openmrs/module/chartsearchai/reference/DrugReferenceInjector.class"), callers,
+				"the constructor that carries a provenance list may be invoked from DrugReferenceInjector "
+						+ "and nowhere else — see this test's javadoc for the two checks that break "
+						+ "silently otherwise. Callers found: " + callers);
 	}
 
-	/**
-	 * Every PRODUCTION {@code .java} file under {@code root}, so a scan cannot be escaped by moving
-	 * code within the module.
-	 *
-	 * <p>{@code main/java} and not the whole tree: {@code ModuleSourceRoot.apiRoot()} is
-	 * {@code api/src}, so an unscoped walk also reads the tests — and a test that builds a
-	 * provenance-carrying mapping as a FIXTURE is the point of having them. Measured: without this
-	 * filter the guard reddens on {@code LlmInferenceServiceTest}'s own two cases.
-	 */
-	private static List<Path> productionJavaFilesUnder(Path root) throws IOException {
-		final List<Path> out = new ArrayList<Path>();
-		try (java.util.stream.Stream<Path> tree = Files.walk(root)) {
-			tree.filter(path -> path.toString().endsWith(".java"))
-					.filter(path -> path.toString().contains("main" + java.io.File.separator + "java"))
-					.forEach(out::add);
-		}
-		return out;
-	}
-
-	/**
-	 * How many arguments {@code args} carries — commas at nesting depth zero, outside comments and
-	 * outside string and character literals, so a nested call, a generic witness, a comma inside a
-	 * string and a comma inside an inline comment are none of them miscounted. Zero for an empty
-	 * list.
-	 *
-	 * <p>Comments are stripped rather than tolerated because this codebase writes them INSIDE a
-	 * multi-line construction constantly, and one there would otherwise unbalance the parse. That
-	 * fails closed — the construction goes unmatched, {@code carrying} drops to zero and the canary
-	 * fires — but a puzzling failure is still a failure. {@code SourceScan.blanked} in the
-	 * {@code reference} test package does this more thoroughly and was the alternative; sharing it
-	 * means promoting a package-private helper out of that package, which is a change of its own,
-	 * and what is needed here is the two comment forms rather than that method's full treatment.
-	 */
-	private static int topLevelArgumentCount(String args) {
-		args = withoutComments(args);
-		if (args.trim().isEmpty()) {
-			return 0;
-		}
-		int count = 1;
-		int depth = 0;
-		boolean inString = false;
-		boolean inChar = false;
-		for (int i = 0; i < args.length(); i++) {
-			char c = args.charAt(i);
-			boolean escaped = i > 0 && args.charAt(i - 1) == '\\';
-			if (c == '"' && !inChar && !escaped) {
-				inString = !inString;
-			} else if (c == '\'' && !inString && !escaped) {
-				inChar = !inChar;
-			} else if (!inString && !inChar) {
-				if (c == '(' || c == '[' || c == '{') {
-					depth++;
-				} else if (c == ')' || c == ']' || c == '}') {
-					depth--;
-				} else if (c == ',' && depth == 0) {
-					count++;
-				}
-			}
-		}
-		return count;
-	}
-
-	/** {@code text} with {@code //}-to-end-of-line and {@code /* … *}{@code /} runs removed, so a
-	 *  comma or a bracket written inside one cannot reach the counter above. */
-	private static String withoutComments(String text) {
-		String out = text.replaceAll("(?s)/\\*.*?\\*/", "");
-		return out.replaceAll("//[^\n]*", "");
-	}
-
-	/**
-	 * The argument list of every {@code call} in {@code src}, brace-balanced so a multi-line
-	 * construction — which every interesting one here is — comes back whole rather than as its first
-	 * line.
-	 */
-	private static List<String> constructorArguments(String src, String call) {
-		List<String> out = new ArrayList<String>();
-		int from = src.indexOf(call);
-		while (from >= 0) {
-			int depth = 0;
-			int open = from + call.length() - 1;
-			for (int i = open; i < src.length(); i++) {
-				char c = src.charAt(i);
-				if (c == '(') {
-					depth++;
-				} else if (c == ')') {
-					depth--;
-					if (depth == 0) {
-						out.add(src.substring(open + 1, i));
-						break;
-					}
-				}
-			}
-			from = src.indexOf(call, from + call.length());
-		}
-		return out;
-	}
 
 	/**
 	 * No file outside ChartSearchAiConstants should call getEmbeddingPrefix().
@@ -680,11 +604,13 @@ public class ArchitectureGuardTest {
 	 * leave this class entirely green. It no longer does; the cache asserts its own sanity before
 	 * any rule reads it, and the same mutation now reddens the rules that read it.
 	 *
-	 * <p><b>A rule that walks its own tree rather than this cache owes itself both assertions
+	 * <p><b>A rule that reads its own tree rather than this cache owes itself both assertions
 	 * inline</b>, and needs both: existence alone is not enough, because the sibling {@code omod}
-	 * module has the same package path, so a root pointed there exists and scans the wrong tree. No
-	 * count of such rules is published here and none should be — it has already gone from one to two
-	 * — so look for the pair in any rule that walks, rather than for a list of which ones do.
+	 * module has the same package path, so a root pointed there exists and reads the wrong tree. No
+	 * count of such rules is published here and none should be — look for the pair in any rule that
+	 * reads its own tree, rather than for a list of which ones do. The two that do today read
+	 * {@code target/classes}, and each carries the pair as a canary on what it FOUND rather than on
+	 * the root merely existing, which is the stronger form: a wrong root reads something.
 	 */
 	private static java.util.Map<String, List<String>> getSourceCache()
 			throws IOException {

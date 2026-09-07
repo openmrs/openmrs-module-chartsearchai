@@ -386,7 +386,7 @@ public class DrugSafetyValidator {
 	 * what a response is about. What that gives up is announcing a prescribing error nobody asks a
 	 * drug-shaped question about, and this is the surface it was given up TO: a client asks for it,
 	 * so nothing rides an unrelated answer, and the finding is available to a clinician who never ran
-	 * a search. ADR Decision 78 is canonical for the measurement behind the bound.
+	 * a search. ADR Decision 79 is canonical for the measurement behind the bound.
 	 *
 	 * <p>One read this pass makes and does not use, stated so it is not rediscovered:
 	 * {@code PatientClinicalContextBuilder} fetches the patient's latest weight, whose only consumer
@@ -588,7 +588,7 @@ public class DrugSafetyValidator {
 		/** {@link #standingChartAlerts(PatientClinicalContext)} and nothing else. There is no response
 		 *  to be about, so the gate has no referent and every finding the chart supports is stated.
 		 *  <b>Do not reach for this from a pass that produces an ANSWER</b> — that is issue #143's
-		 *  over-reach, which ADR Decision 78 records with its measurement, and the reason the bound
+		 *  over-reach, which ADR Decision 79 records with its measurement, and the reason the bound
 		 *  exists at all. */
 		UNBOUNDED
 	}
@@ -1144,8 +1144,70 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * The same question asked of a whole FINDING rather than of a rating, and the form
-	 * {@link DrugReferenceInjector#renderFinding} must use.
+	 * The rating a finding carries where an ANSWER stating that finding ought to state the rating
+	 * too, or {@code null} where there is no such word — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/337">#337</a>. The one
+	 * decision of that question, read at {@link DrugReferenceInjector}'s {@code safety_finding}
+	 * mapping so a consumer never re-derives it, and in particular never from the rendered prose: a
+	 * DDInter mechanism can itself contain its own rating word, and reading one out of the text would
+	 * attribute a rating this module never assigned.
+	 *
+	 * <p><b>A different question from {@link #ratingLicensesWithholding}, and it must not be folded
+	 * into it.</b> That one asks how strongly a finding licenses a clinical call. This one asks
+	 * whether there is a WORD whose absence from an answer means something — a question about the
+	 * vocabulary, not about the call — so a caution's rating is as much wanted here as a withholding
+	 * one.
+	 *
+	 * <p><b>The prompt asks for the rating in three of its four cells, and the fourth is a named
+	 * residue rather than a claim this method makes.</b> {@code LlmProvider}'s governing safety
+	 * sentence — "then the finding itself, carrying its own severity" — is gated on a finding naming
+	 * the drug ASKED about, so it covers both proposal cells; the current-medication WITHHOLD
+	 * sentence repeats it. The current-medication CAUTION sentence does not, and nothing else
+	 * reaches it, because those two branches are gated on the finding's clause rather than on the
+	 * question (Decision 72). So a {@code minor}-rated finding about a drug the patient is already
+	 * taking — reachable at the shipped floor — can be rendered exactly as the prompt asked and
+	 * still be reported. That cell was found by a review pass and is recorded rather than closed:
+	 * narrowing here would need the REFERENT axis, which the record does not carry, and widening the
+	 * prompt is a change measured elsewhere. Do not restate this as "the prompt asks for it either
+	 * way", which is what an earlier draft said.
+	 *
+	 * <p><b>Two ratings answer null and they are not the same case.</b> An UNRATED finding — a
+	 * curated hand-authored rule, or an ATC-subgroup or cross-reactivity join — has no word at all;
+	 * {@link #severityRank} answers {@code -1}, which is also its answer for an operator dataset's
+	 * own spelling that this module does not recognise, so such a rating is left alone by the same
+	 * arm that leaves a curated rule alone. And {@code unknown} has a word that says nothing: DDInter
+	 * rates 14% of its links that way and those rows carry no mechanism text at all, which is why
+	 * {@link ChartSearchAiConstants#DEFAULT_DRUG_SAFETY_MIN_INTERACTION_SEVERITY} filters them out of
+	 * findings entirely. They become reachable exactly where the property's own documentation points
+	 * an operator — lowering the floor to audit the knowledge base — and requiring an answer to write
+	 * the word "Unknown" there would accuse a large share of that operator's findings of dropping a
+	 * rating that communicates nothing.
+	 *
+	 * <p>The boundary is expressed against {@link #severityRank} for the reason
+	 * {@link #ratingLicensesWithholding}'s is: written as a number or as a list of members it could
+	 * fall out of step with that switch, and this one has to move with it in BOTH directions — a
+	 * rating added below {@code unknown} would be excluded and one added above it included, without
+	 * this method changing.
+	 *
+	 * @param severity the source-assigned severity, or null where the source rates nothing
+	 * @return that same severity where an answer stating the finding should state it, else null
+	 */
+	static String statableRating(String severity) {
+		// TRIMMED, and that is a correctness requirement rather than tidiness. severityRank trims
+		// before it recognises a rating, and nothing else does: DrugReference.Interaction.severity is
+		// bound straight out of an operator's JSON. So the module can treat "  Major  " as Major
+		// throughout — clearing the floor, withholding, ordering the chips — while a consumer handed
+		// the raw field compares answer prose against a needle with spaces in it and accuses an
+		// answer that plainly states "Major". Hand on the form that was RECOGNISED.
+		// → SafetyFindingSeverityCarriedContextTest.anOperatorDatasetsPaddedRatingIsCarriedInTheFormTheModuleRECOGNISED
+		return severityRank(severity) > severityRank("unknown") ? severity.trim() : null;
+	}
+
+	/**
+	 * {@link #ratingLicensesWithholding}'s question asked of a whole FINDING rather than of a
+	 * rating, and the form {@link DrugReferenceInjector#renderFinding} must use. (Named rather than
+	 * located: {@code statableRating} now sits between the two, and it is a DIFFERENT question that
+	 * its own javadoc insists must not be folded into this one.)
 	 *
 	 * <p>A finding can assert more than its rating covers. Issue #171's fold puts the class arm's
 	 * duplicate-therapy or cross-reactivity sentence onto a rated rule's chip when both arms are about

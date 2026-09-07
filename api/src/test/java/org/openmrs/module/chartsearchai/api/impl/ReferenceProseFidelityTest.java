@@ -579,7 +579,7 @@ public class ReferenceProseFidelityTest {
 			service.search(patient(), QUESTION);
 			assertFalse(capture.describeAll().isEmpty(),
 					"the capture must receive the pipeline's own INFO lines, or this passes vacuously");
-			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN, SafetyFindingSeverityFidelityCheck.class),
 					"a reproduction one word short of the floor is not evidence of copying. Captured: "
 							+ capture.describeAll());
 		}

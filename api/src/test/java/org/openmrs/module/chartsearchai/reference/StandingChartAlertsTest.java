@@ -36,7 +36,7 @@ import org.openmrs.module.chartsearchai.ModuleSourceRoot;
  * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/280">#280</a>).
  *
  * <p><b>What it is for.</b> Issue #143's active-order contraindication arm ran on every question, and
- * that was withdrawn — ADR Decision 78 carries the measurement. The arm is now bounded by
+ * that was withdrawn — ADR Decision 79 carries the measurement. The arm is now bounded by
  * {@code DrugSafetyValidator.SubjectMatter}, and what that gives up is stated in the reversal it produced,
  * {@code ActiveOrderContraindicationTest.aPrescribedAllergyIsNotRaisedWhereTheResponseIsAboutSomethingElse}:
  * a clinician who never asks a drug-shaped question is no longer told that the patient is actively

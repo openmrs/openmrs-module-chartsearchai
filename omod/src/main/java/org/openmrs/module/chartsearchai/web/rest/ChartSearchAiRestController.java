@@ -387,7 +387,7 @@ public class ChartSearchAiRestController {
 	 * contraindication arm is bounded to what the response is about, and what that bound gives up is
 	 * announcing a prescribing error nobody asks a drug-shaped question about. This is the surface it
 	 * was given up TO: a client asks for it, so the finding reaches a clinician who ran no search and
-	 * nothing rides an unrelated answer. ADR Decision 78 carries the measurement behind the bound.
+	 * nothing rides an unrelated answer. ADR Decision 79 carries the measurement behind the bound.
 	 *
 	 * <p>Gated on the same clinical privilege as {@code /search} and resolved through the same
 	 * {@link #resolvePatient}, so the per-patient access check is the one the answer path uses.
@@ -1498,6 +1498,13 @@ public class ChartSearchAiRestController {
 	 * reaches this method rather than {@code putSafetyChips} for the reason
 	 * {@code unfaithfullyRenderedCitations} does: it is a statement about the ANSWER, not a chip.
 	 *
+	 * <p>{@code unstatedFindingSeverities} is that remedy a third time, back on the issue the first
+	 * one came from (<a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/337">issue
+	 * #337</a>, round three): the citations of safety findings whose RATING the answer states nowhere. It
+	 * reaches this method rather than {@code putSafetyChips} for the reason its two neighbours do —
+	 * it is a statement about the ANSWER, not a chip — and it is emphatically not a restatement of
+	 * the chips' own {@code severity}, which is what the answer was supposed to carry and did not.
+	 *
 	 * <p>{@code conditionRuleCoverage} is the same remedy again, from the issue beside it
 	 * (<a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/378">#378</a>): what
 	 * the loaded dataset publishes for the hand-authored CONDITION-rule arm, so a client can tell a
@@ -1512,19 +1519,21 @@ public class ChartSearchAiRestController {
 	 *
 	 * <p><b>The copy is a correctness requirement</b> and not caution — the measurement is at
 	 * {@link #serializeSafetyWarnings}, which takes it for the same reason. What is new here is the
-	 * guard around it: unlike {@code chartOrderBridges()} these two accessors can return null, and
-	 * {@code new ArrayList<>(null)} throws. Its ROUTINE trigger is not a failed check but the
-	 * async-grounding early {@code done}: that answer is handed off before either check has run, so
-	 * {@code LlmInferenceService} passes an explicit {@code null} in both arguments. Mutate a guard
+	 * guard around it: unlike {@code chartOrderBridges()} every one of the answer-check accessors can
+	 * return null, and {@code new ArrayList<>(null)} throws. Its ROUTINE trigger is not a failed
+	 * check but the async-grounding early {@code done}: that answer is handed off before any of them
+	 * has run, so {@code LlmInferenceService} passes an explicit {@code null} for each. Mutate a guard
 	 * away and read the failures — the {@code chartsearchai.grounding.async=true} wire cases lose
-	 * their {@code done} event. The failed-check case reaches it too and no path is known to deliver
-	 * it: ADR Decision 61 records that no TEST reaches it, a record
-	 * throwing on read being pre-empted by {@code referenceSlice}, and the one line the check's catch
-	 * is documented as covering — a read of {@code patient.getPatientId()} — is re-read by both answer
-	 * methods in their {@code finally} timing log, so a throw there errors the request instead.
-	 * {@code misattributedOrderCitations} has an identically shaped failure branch, which ADR
-	 * Decision 76 records and Decision 61 does not cover. The guard stays because it costs one
-	 * comparison and the alternative is a 500.
+	 * their {@code done} event. The failed-check case reaches it too, and whether any path DELIVERS one
+	 * differs by accessor. For the prose and active-order checks none is known: ADR Decision 61
+	 * records that no test reaches theirs, a record throwing on read being pre-empted by
+	 * {@code referenceSlice}, and the one line their catch is documented as covering — a read of
+	 * {@code patient.getPatientId()} — is re-read by both answer methods in their {@code finally}
+	 * timing log, so a throw there errors the request instead; Decision 76 records the same of
+	 * {@code misattributedOrderCitations}. {@code unstatedFindingSeverities} is the exception and
+	 * Decision 78 records it: {@code getFindingSeverity()} is read by nothing else on the answer
+	 * path, so a record that throws on it reaches that check and no earlier one, and a test does.
+	 * The guard stays because it costs one comparison and the alternative is a 500.
 	 */
 	private void putModuleStatements(Map<String, Object> target, ChartAnswer answer) {
 		putSafetyChips(target, answer);
@@ -1535,6 +1544,9 @@ public class ChartSearchAiRestController {
 		List<Integer> misattributed = answer.getMisattributedOrderCitations();
 		target.put("misattributedOrderCitations",
 			misattributed == null ? null : new ArrayList<Integer>(misattributed));
+		List<Integer> unstatedSeverities = answer.getUnstatedFindingSeverities();
+		target.put("unstatedFindingSeverities",
+			unstatedSeverities == null ? null : new ArrayList<Integer>(unstatedSeverities));
 		putConditionRuleCoverage(target, answer.getConditionRuleCoverage());
 	}
 

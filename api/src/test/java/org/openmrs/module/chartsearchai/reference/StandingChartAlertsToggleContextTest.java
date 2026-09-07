@@ -276,7 +276,7 @@ public class StandingChartAlertsToggleContextTest extends BaseModuleContextSensi
 	 * A pass that THROWS reports this chart as NOT screened, rather than as a clean one.
 	 *
 	 * <p><b>Nothing executed that {@code catch} before this case.</b> {@code StandingChartAlertsTest}'s
-	 * class javadoc said so, while {@code README.md}, ADR Decision 78 and
+	 * class javadoc said so, while {@code README.md}, ADR Decision 79 and
 	 * {@code DrugSafetyValidator.StandingChartAlerts}'s own javadoc all state "and when the pass itself
 	 * failed" as part of what the published {@code screened} key guarantees — a documented contract with
 	 * no test. Measured by a review agent: replacing the catch's

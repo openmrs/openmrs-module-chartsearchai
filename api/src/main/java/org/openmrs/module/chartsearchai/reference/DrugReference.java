@@ -2683,6 +2683,13 @@ public class DrugReference {
 	 * were produced (issue #330); and through {@link #wordIndex} for {@link #namedOccurrences}, which
 	 * since issue #260 needs the POSITION rather than the answer. Every one of those routes takes its
 	 * allowance from the same constant as the rule it is, which is what keeps them one rule apiece.
+	 * <b>"The one scan" is scoped to those sharers and not to the module.</b> Since issue #337
+	 * {@code ChartSearchAiUtils.statesWord} answers a boundary question of its own, over the closed
+	 * rating vocabulary rather than over drug names. At {@code PROSE_TRAILING_LETTERS} the two
+	 * conditions are the same one, measured; what separates them is that this family folds
+	 * diacritics and that one deliberately does not, and that {@link #containsWord} is
+	 * package-private here. It is deliberately not a fourth route into this scan and must not become
+	 * one, but a change to the boundary definition here does not reach it, so consider both.
 	 * A match needs {@code token} to start at a word boundary in {@code text} and to end at
 	 * one, give or take up to {@code maxTrailingLetters} letters. Letters only: a digit is never an
 	 * inflection, so a digit sitting against the token is neither stepped over nor treated as the

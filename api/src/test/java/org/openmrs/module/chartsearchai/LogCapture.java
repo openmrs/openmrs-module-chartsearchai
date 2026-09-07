@@ -109,6 +109,69 @@ public final class LogCapture implements AutoCloseable {
 		return false;
 	}
 
+	/**
+	 * As {@link #hasEventAtOrAbove(Level)}, ignoring events logged by {@code excludedLogger} and the
+	 * loggers beneath it.
+	 *
+	 * <p>It exists for the collision a PACKAGE-scoped capture invites. A case whose claim is that its
+	 * own check said nothing captures the package rather than the class, so that the pipeline's own
+	 * INFO line proves the capture is live ({@link #on(String)} and this class's javadoc) — and the
+	 * cost of that is a negative which also fails when a DIFFERENT check in the package reports a
+	 * different property of the same canned answer. Issue #337's third round added a fourth such
+	 * check, which is where this first bit.
+	 *
+	 * <p>Naming the one logger to ignore is deliberately narrower than narrowing the capture to the
+	 * caller's own class, which was the other way out: that would give up the assertion's reach over
+	 * every OTHER logger in the package, and one of the things these negatives have caught is a WARN
+	 * from a neighbour nobody expected. Excluding by name keeps that reach and gives up only the
+	 * logger the caller says is another case's subject.
+	 *
+	 * @param level as {@link #hasEventAtOrAbove(Level)}
+	 * @param excludedLogger a logger or package name whose events do not count
+	 */
+	public boolean hasEventAtOrAbove(Level level, String excludedLogger) {
+		synchronized (events) {
+			for (LogEvent event : events) {
+				if (event.getLevel().isMoreSpecificThan(level)
+						&& !isFrom(event.getLoggerName(), excludedLogger)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * {@link #hasEventAtOrAbove(Level, String)} for a logger named after a class, which is what a
+	 * check's logger is.
+	 *
+	 * <p><b>It exists to give the argument for excluding one logger a single home</b>, and that is
+	 * the whole of the reason: two sibling test files had carried a byte-identical constant, a
+	 * one-line wrapper and an eight-line justification of it, and ADR Decision 78 predicts a fifth
+	 * check meeting the same collision. It is NOT that those callers spelled a class name the
+	 * compiler could not check — they wrote {@code …Check.class.getName()} — and the one file that
+	 * does pass string literals here ({@code LogCaptureExclusionTest}) names fixture loggers with no
+	 * class behind them and could not take this arity. An earlier draft of this paragraph said the
+	 * opposite of both.
+	 *
+	 * @param level as {@link #hasEventAtOrAbove(Level)}
+	 * @param excludedLogger the class whose logger's events do not count
+	 */
+	public boolean hasEventAtOrAbove(Level level, Class<?> excludedLogger) {
+		return hasEventAtOrAbove(level,
+				excludedLogger == null ? null : excludedLogger.getName());
+	}
+
+	/** @return whether {@code loggerName} IS {@code ancestor} or sits beneath it — the same
+	 *          "and every logger beneath it" relation {@link #on(String)} captures by, so an
+	 *          exclusion cannot cover more or less than a capture of the same name would. The dot
+	 *          test is what stops {@code …FidelityChecker} being read as beneath
+	 *          {@code …FidelityCheck}. */
+	private static boolean isFrom(String loggerName, String ancestor) {
+		return loggerName != null && ancestor != null
+				&& (loggerName.equals(ancestor) || loggerName.startsWith(ancestor + "."));
+	}
+
 	/** @return the formatted messages captured at exactly {@code level}, in order. */
 	public List<String> messagesAt(Level level) {
 		List<String> out = new ArrayList<String>();

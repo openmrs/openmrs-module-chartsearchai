@@ -407,6 +407,20 @@ public class SafetyWarning {
 	 * three-argument constructor), because a recorded allergy is not a caution at any rating. The null
 	 * rule above is what carries the most weight where the value IS read: unrated is not low-rated,
 	 * and reading it as a caution would soften a curated rule an implementation authored deliberately.
+	 *
+	 * <p><b>Since issue #337's third round there is a further reader whose answer reaches a
+	 * clinician-facing published key</b> — not the only one, this value having reached the wire as
+	 * each chip's own {@code severity} since issue #340 — #207 exposed the field for the api-side
+	 * ordering and scoped itself to that, as the paragraph above says — raw and untrimmed where that
+	 * reader trims:
+	 * {@code DrugSafetyValidator.statableRating},
+	 * through {@code DrugReferenceInjector.ratingThisRecordStates}, which carries the rating onto the
+	 * injected record's mapping so a check can ask whether the ANSWER stated it
+	 * ({@code unstatedFindingSeverities}). It asks a different question from every reader above —
+	 * whether there is a WORD whose absence means something, rather than how strongly the finding
+	 * licenses a call — so do not fold it into the withholding split. Note what the paragraph above
+	 * refuses to claim about WHERE the rating sits in the rendered detail: that reader is exactly the
+	 * thing that now asks it per record, and it answers by scanning rather than by assuming.
 	 */
 	public String getSeverity() {
 		return severity;

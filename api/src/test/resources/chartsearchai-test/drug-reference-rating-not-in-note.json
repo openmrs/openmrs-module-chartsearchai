@@ -1,0 +1,30 @@
+{
+ "version": "1.0",
+ "description": "Test fixture for issue #337 round three: an operator-authored dataset whose interaction NOTE does not restate the rating. DrugReference.Interaction.severity and .note are independent fields bound straight from the file, and DrugReferenceInjector.renderFinding writes none of the rating itself — on the bundled DDInter data the rating reaches the model only because DdiDrugReferenceSource.noteFor prepends '<Severity>. ' to the mechanism. Here nothing does, so the record the model reads carries no rating, and an answer cannot have dropped one it was never given.",
+ "entries": [
+  {
+   "id": "aspirin",
+   "name": "Aspirin",
+   "aliases": [
+    "aspirin"
+   ],
+   "interactions": [
+    {
+     "token": "warfarin",
+     "severity": "Major",
+     "note": "Coadministration may increase the risk of bleeding."
+    }
+   ],
+   "source": "Test fixture"
+  },
+  {
+   "id": "warfarin",
+   "name": "Warfarin",
+   "aliases": [
+    "warfarin"
+   ],
+   "interactions": [],
+   "source": "Test fixture"
+  }
+ ]
+}

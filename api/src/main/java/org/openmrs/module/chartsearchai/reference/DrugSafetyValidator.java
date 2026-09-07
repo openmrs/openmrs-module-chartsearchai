@@ -332,11 +332,10 @@ public class DrugSafetyValidator {
 		/** A chart that WAS screened, stating {@code alerts} — which may legitimately be empty, and
 		 *  is then a measurement of none. See {@link #notScreened()} on the visibility. */
 		public static StandingChartAlerts screened(List<SafetyWarning> alerts) {
-			// Copied on the way IN rather than wrapped on the way out: this class is public with public
-			// factories, so the list is a caller's, and the copy is what stops a later mutation of it
-			// changing what this object says. Not an unmodifiable WRAPPER, deliberately — the wire
-			// serializer's own comment records XStreamMarshaller refusing java.util.Collections'
-			// immutable wrappers, the empty case included, and this list travels to it.
+			// Copied on the way IN as well as wrapped on the way out: this class is public with public
+			// factories, so the list is a caller's, and each half closes a way the object could be made
+			// to say what it was not built to say — the copy stops a later mutation of the caller's
+			// list, the wrapper stops one of what getAlerts hands back.
 			return new StandingChartAlerts(true,
 				alerts == null ? new ArrayList<SafetyWarning>() : new ArrayList<SafetyWarning>(alerts));
 		}
@@ -366,9 +365,10 @@ public class DrugSafetyValidator {
 		 *         <p>Unmodifiable, and copied on the way in besides — both halves, because either
 		 *         alone leaves this object able to say something it was not built to say: a review
 		 *         agent added a warning to what {@code notScreened()} returned and got an unscreened
-		 *         result stating a finding. Safe to wrap here and not at the serializer, which
-		 *         ITERATES this list and marshals an {@code ArrayList} of its own — the shape
-		 *         {@code XStreamMarshaller} requires.
+		 *         result stating a finding. Safe to wrap, because this list never reaches a
+		 *         marshaller: {@code ChartSearchAiRestController.serializeSafetyWarnings} ITERATES it
+		 *         and builds an {@code ArrayList} of maps of its own, which is the shape
+		 *         {@code XStreamMarshaller} requires and the wrapper it would refuse.
 		 */
 		public List<SafetyWarning> getAlerts() {
 			return Collections.unmodifiableList(alerts);
@@ -417,12 +417,11 @@ public class DrugSafetyValidator {
 	 * and here stands the whole surface down, there being nothing else on it. Fails safe to no
 	 * alerts for the reason {@code validate} does.
 	 *
-	 * @return the standing findings, newest arm order preserved; empty when the feature is off, when
-	 *         the chart records nothing an order could be contraindicated by, or when the pass
-	 *         degraded — <b>so an empty list is not a certificate that this chart holds no such
-	 *         finding.</b> {@link #reportsStandingChartAlerts()} is what tells a caller whether the
-	 *         screen ran at all, and the {@code chartalerts} response publishes it beside the list for
-	 *         exactly that reason.
+	 * @return the verdict AND the findings, in one object — never null. Read
+	 *         {@link StandingChartAlerts#isScreened()} before the list: an empty
+	 *         {@link StandingChartAlerts#getAlerts()} is a measurement of none only where that is
+	 *         true, and otherwise says the screen did not run. That class is canonical for what
+	 *         {@code false} covers.
 	 */
 	public StandingChartAlerts standingChartAlerts(Patient patient) {
 		try {
@@ -445,25 +444,31 @@ public class DrugSafetyValidator {
 	 *
 	 * <p>It is BELOW the two global properties the public entry reads, so a case entering here cannot
 	 * see them — which is what
-	 * {@code StandingChartAlertsTest.theStandingEntryGatesOnThePredicateItPublishes} exists
+	 * {@code StandingChartAlertsTest.theStandingEntryGatesOnTheSharedTogglePredicate} exists
 	 * to cover. {@code chartsearchai.drugSafety.warnOnContraindications} IS reachable from here, being
 	 * read inside {@code validate} where both surfaces share it
 	 * ({@code StandingChartAlertsToggleContextTest}).
 	 */
 	StandingChartAlerts standingChartAlerts(PatientClinicalContext context) {
-		if (context == null || !context.contraindicationRecordsRead()
-				|| !context.activeDrugOrdersRead()) {
-			// WARN, and it is the only signal an operator gets for this state. The builder's own two
-			// catches log at DEBUG, which core's shipped log4j2.xml discards by putting org.openmrs at
-			// WARN — right for the answer path, where a missing record only narrows a chip, and wrong
-			// here, where it is the whole payload. The commonest cause is a role holding
-			// AI Query Patient Data without core's Get Allergies or Get Conditions, which is a
-			// configuration fault an operator can fix, and this file's own loudness rule is that a
-			// configuration rule is loud wherever the data came from.
-			log.warn("Standing chart alerts: this patient's allergy, condition or active-order records "
-					+ "could not be read, so the chart is reported as NOT screened rather than as clear. Check "
-					+ "that the querying role holds core's Get Allergies, Get Conditions and Get Orders "
-					+ "privileges.");
+		if (context == null) {
+			// No read was attempted, so the message below would assert one. This is unreachable through
+			// the handler, which resolves the patient first; the public entry is not its only caller.
+			return StandingChartAlerts.notScreened();
+		}
+		if (!context.contraindicationRecordsRead() || !context.activeDrugOrdersRead()) {
+			// WARN, and the only signal an operator gets for this state. The builder's own catches log
+			// at DEBUG, which core's shipped log4j2.xml discards by putting org.openmrs at WARN — right
+			// for the answer path, where a missing record only narrows a chip, and wrong here, where it
+			// is the whole payload. It names WHICH side failed, because the two stamps are separate and
+			// a message that lists every privilege makes an operator check three. A configuration fault
+			// an operator can fix, which this package's loudness rule says is loud wherever the data
+			// came from. Once per request per patient, deliberately: the state is persistent and a
+			// polling banner will repeat it, but a throttle would hide the one line a diagnosis needs.
+			log.warn("Standing chart alerts: this patient's {} could not be read, so the chart is "
+					+ "reported as NOT screened rather than as clear. Check that the querying role holds "
+					+ "core's {}.",
+				context.contraindicationRecordsRead() ? "active orders" : "allergy or condition records",
+				context.contraindicationRecordsRead() ? "Get Orders" : "Get Allergies and Get Conditions");
 			return StandingChartAlerts.notScreened();
 		}
 		return StandingChartAlerts.screened(

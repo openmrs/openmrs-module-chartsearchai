@@ -20,7 +20,9 @@ import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.api.context.UserContext;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
+import org.openmrs.util.PrivilegeConstants;
 
 /**
  * {@code chartsearchai.drugSafety.warnOnContraindications} silences the standing surface (issue #280)
@@ -41,7 +43,7 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * {@code Patient}-taking entry, whose chart read needs a patient with a real allergy and a real active
  * order — but that entry gates on nothing but {@code reportsStandingChartAlerts()}, which
  * {@link #theScreenedStatementIsFalseWhereverASwitchThatSilencesTheSurfaceIsOff} measures here, one
- * switch at a time. {@code StandingChartAlertsTest.theStandingEntryGatesOnThePredicateItPublishes}
+ * switch at a time. {@code StandingChartAlertsTest.theStandingEntryGatesOnTheSharedTogglePredicate}
  * pins the other half: that the entry consults that predicate and spells no switch of its own.
  */
 public class StandingChartAlertsToggleContextTest extends BaseModuleContextSensitiveTest {
@@ -85,8 +87,12 @@ public class StandingChartAlertsToggleContextTest extends BaseModuleContextSensi
 	}
 
 	/**
-	 * The {@code screened} statement the {@code chartalerts} response publishes is false wherever any
-	 * one of the three switches that silence the surface is off.
+	 * The toggle predicate the published {@code screened} verdict rests on is false wherever any one of
+	 * the three switches that silence the surface is off.
+	 *
+	 * <p>The predicate is not the verdict: {@code StandingChartAlerts.isScreened()} narrows it with the
+	 * chart reads and the pass completing. What this pins is the toggle half, which is the half no
+	 * other case can reach.
 	 *
 	 * <p>Nothing else in the suite measures the real predicate: the omod wire test overrides it, and
 	 * the cases above enter below the two switches the {@code Patient} entry reads. So without this,
@@ -113,7 +119,7 @@ public class StandingChartAlertsToggleContextTest extends BaseModuleContextSensi
 		for (String off : GATES) {
 			configure(off, "false");
 			assertFalse(validator.reportsStandingChartAlerts(),
-					"the published screened statement must be false with " + off + " off");
+					"the gate the published verdict rests on must be false with " + off + " off");
 			configure(off, "true");
 		}
 	}
@@ -155,6 +161,51 @@ public class StandingChartAlertsToggleContextTest extends BaseModuleContextSensi
 					"the public entry must honour " + off + " when it is actually run, not merely name "
 							+ "the predicate that reads it");
 			configure(off, "true");
+		}
+	}
+
+	/**
+	 * The BUILDER's own record of a failed order read, driven by taking the privilege away.
+	 *
+	 * <p>Everything else that covers this stamp uses a hand-built context
+	 * ({@code DrugReferenceTestSupport.unreadableOrdersCtx}), so the production WRITE — one assignment
+	 * in {@code PatientClinicalContextBuilder}'s order catch — was deletable with the whole build
+	 * green. Measured by a review agent, and this case is what closes it: deleting that assignment now
+	 * reddens here.
+	 *
+	 * <p>It fails the read the way production does rather than by throwing a stub: core annotates
+	 * {@code OrderService.getActiveOrders} with {@code @Authorized(GET_ORDERS)}, so a user context that
+	 * refuses that one privilege and grants the rest reproduces the exact role this defect is about — a
+	 * site that grants {@code AI Query Patient Data} without core's {@code Get Orders}. The user context
+	 * is restored whatever happens; this class shares a JVM with the rest of the suite.
+	 */
+	@Test
+	public void aRoleThatCannotReadOrdersGetsAChartTheBuilderMarksUnread() {
+		for (String gate : GATES) {
+			configure(gate, "true");
+		}
+		Patient patient = Context.getPatientService().getPatient(7);
+		DrugSafetyValidator validator =
+				DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService());
+		assertTrue(validator.standingChartAlerts(patient).isScreened(),
+				"precondition: with every privilege held this chart screens, or the refusal below is "
+						+ "observing something other than the missing privilege");
+
+		UserContext prior = Context.getUserContext();
+		Context.setUserContext(new UserContext(null) {
+
+			@Override
+			public boolean hasPrivilege(String privilege) {
+				return !PrivilegeConstants.GET_ORDERS.equals(privilege);
+			}
+		});
+		try {
+			assertFalse(validator.standingChartAlerts(patient).isScreened(),
+					"a role that cannot read this patient's orders must get a chart the builder marks "
+							+ "unread, not one reported clean");
+		}
+		finally {
+			Context.setUserContext(prior);
 		}
 	}
 

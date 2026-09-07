@@ -206,8 +206,10 @@ final class SourceScan {
 	 *         a comment or a string literal naming it is not an occurrence of it.
 	 *
 	 *         <p>Extracted at the THIRD caller, the threshold this class's own javadoc records for
-	 *         itself: {@code FoldedOperandTest}'s two assertion helpers were the first two and
-	 *         {@code StandingChartAlertsTest} the third. The walk it replaces is three lines and is
+	 *         itself: {@code FoldedOperandTest}'s two assertion helpers and
+	 *         {@code StandingChartAlertsTest}. Only {@code assertContains} was migrated onto it;
+	 *         {@code assertForbids} still inlines the INVERTED walk, which this method's shape does not
+	 *         serve — it reports the offending offset, which a boolean cannot carry. The walk it replaces is three lines and is
 	 *         exactly the shape a hand-rolled copy gets wrong — one written for issue #280 read the
 	 *         file UNBLANKED, and a commented-out gate satisfied the guard that was the only thing
 	 *         watching it. {@code CoMedicationResolutionPerPassTest} and

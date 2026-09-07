@@ -424,11 +424,13 @@ public class StandingChartAlertsTest {
 	 * "not found" answer would turn into a guard forbidding nothing.
 	 *
 	 * <p>What it asserts is that the entry gates on {@code reportsStandingChartAlerts()} and spells no
-	 * switch of its own — which is the whole of the coupling worth pinning, because that predicate is
-	 * also the {@code screened} value the response publishes, and what it MEANS is measured per switch
-	 * by {@code StandingChartAlertsToggleContextTest}. Together the two say the flag a client reads is
-	 * the condition the pass ran under. What it cannot see is a gate that calls the predicate AND
-	 * short-circuits on something else first; mutate the body and read the failures.
+	 * switch of its own — which is the coupling worth pinning, because the published
+	 * {@code screened} verdict rests on that same predicate and then NARROWS it. <b>The two are not
+	 * equal, and this case's name once said they were</b>: {@code StandingChartAlerts.isScreened()}
+	 * additionally requires the chart reads and the pass completing, so it is false in cases the
+	 * toggles are fine for. What the predicate MEANS is measured per switch by
+	 * {@code StandingChartAlertsToggleContextTest}. What this cannot see is a gate that calls the
+	 * predicate AND short-circuits on something else first; mutate the body and read the failures.
 	 */
 	@Test
 	public void theStandingEntryGatesOnThePredicateItPublishes() throws IOException {

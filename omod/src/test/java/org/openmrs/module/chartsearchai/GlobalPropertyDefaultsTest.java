@@ -56,6 +56,27 @@ public class GlobalPropertyDefaultsTest {
 						+ "falls back to");
 	}
 
+	/**
+	 * A BEHAVIOUR flag whose two declarations must agree, which is a different reason from the three
+	 * above rather than a fourth instance of theirs. Those are compared by the validity check to
+	 * decide whether to be loud; this one decides what an install RENDERS. The constant is what
+	 * {@code getBooleanGlobalProperty} falls back to where no property is set — every contextless test
+	 * in this build — while {@code config.xml}'s value is what OpenMRS writes into a real install. Let
+	 * them drift and the api suite pins one rendering while every install ships the other, with
+	 * nothing failing: exactly the silent-and-plausible shape this class exists for.
+	 *
+	 * <p>Written as a comparison of the STRINGS both sides publish rather than of a parsed boolean, so
+	 * a {@code config.xml} value that is neither {@code true} nor {@code false} fails here rather than
+	 * being quietly read as off.
+	 */
+	@Test
+	public void theRecordNumberFlagShipsTheDefaultItsConstantAsserts() throws Exception {
+		assertEquals(String.valueOf(ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_CITE_ORDER_RECORDS),
+				declaredDefaults().get(ChartSearchAiConstants.GP_DRUG_SAFETY_CITE_ORDER_RECORDS),
+				"issue #379's record number is off until an install asks for it, and the constant every "
+						+ "contextless test falls back to has to say the same thing config.xml ships");
+	}
+
 	/** @return every {@code <property>} in {@code config.xml} that declares a {@code <defaultValue>}. */
 	private static Map<String, String> declaredDefaults() throws Exception {
 		Map<String, String> defaults = new LinkedHashMap<String, String>();

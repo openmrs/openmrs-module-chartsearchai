@@ -147,7 +147,7 @@ public final class LogCapture implements AutoCloseable {
 	 *
 	 * <p><b>It exists to give the argument for excluding one logger a single home</b>, and that is
 	 * the whole of the reason: two sibling test files had carried a byte-identical constant, a
-	 * one-line wrapper and an eight-line justification of it, and ADR Decision 77 predicts a fifth
+	 * one-line wrapper and an eight-line justification of it, and ADR Decision 78 predicts a fifth
 	 * check meeting the same collision. It is NOT that those callers spelled a class name the
 	 * compiler could not check — they wrote {@code …Check.class.getName()} — and the one file that
 	 * does pass string literals here ({@code LogCaptureExclusionTest}) names fixture loggers with no

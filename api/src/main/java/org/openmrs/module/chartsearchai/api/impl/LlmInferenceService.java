@@ -499,7 +499,7 @@ public class LlmInferenceService implements ChartSearchService {
 			// check costs 0.93 us on an answer stating no active-order claim, which is the ordinary
 			// one, and 171 us on a five-claim answer over a 400-record chart. The finding-severity
 			// check is in the same band, 6.2 us on a stock install and 87 us on the reported shape
-			// (ADR Decision 77). The prose check is the outlier and is why this comment stopped
+			// (ADR Decision 78). The prose check is the outlier and is why this comment stopped
 			// saying microseconds of all of them: it is a word-level dynamic program, ~0.7 ms on a
 			// realistic chart and ~1.2 ms at the largest injected record set anyone has swept (ADR
 			// Decision 61).

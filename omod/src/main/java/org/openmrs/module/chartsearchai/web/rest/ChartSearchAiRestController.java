@@ -1428,7 +1428,7 @@ public class ChartSearchAiRestController {
 	 * {@code patient.getPatientId()} — is re-read by both answer methods in their {@code finally}
 	 * timing log, so a throw there errors the request instead; Decision 76 records the same of
 	 * {@code misattributedOrderCitations}. {@code unstatedFindingSeverities} is the exception and
-	 * Decision 77 records it: {@code getFindingSeverity()} is read by nothing else on the answer
+	 * Decision 78 records it: {@code getFindingSeverity()} is read by nothing else on the answer
 	 * path, so a record that throws on it reaches that check and no earlier one, and a test does.
 	 * The guard stays because it costs one comparison and the alternative is a 500.
 	 */

@@ -57,7 +57,7 @@ import org.slf4j.LoggerFactory;
  * whether that word appears in the answer at all. Reading the rating back out of the record's own
  * rendered text was refused rather than merely not chosen: a knowledge-base mechanism can contain
  * its own rating word, so a parse would attribute a rating this module never assigned. ADR
- * Decision 77 carries the measurement of how often, its date and what it is a count OF.
+ * Decision 78 carries the measurement of how often, its date and what it is a count OF.
  *
  * <p><b>Which ratings it asks about is not this class's decision.</b>
  * {@code DrugReferenceInjector.ratingThisRecordStates} makes it, at the write site, and is canonical
@@ -136,7 +136,7 @@ import org.slf4j.LoggerFactory;
  * {@code searchStreaming}, so the endpoint users hit is covered. Not the progressive-reasoning
  * preview, which discards its answer and resolves no citations, and not a cached answer, which was
  * checked when it was produced — the same scoping {@link ClassCodeFidelityCheck} states.
- * &rarr; ADR Decision 77.
+ * &rarr; ADR Decision 78.
  */
 final class SafetyFindingSeverityFidelityCheck {
 

@@ -221,6 +221,60 @@ public class SafetyFindingSeverityFidelityTest {
 	}
 
 	@Test
+	public void aWordENDINGInTheRatingDoesNotCountAsStatingItEither() {
+		// The other half of the boundary, and it was unpinned until a review pass mutated it: the
+		// case above only holds the RIGHT side, since "majority" extends past the rating. Nothing
+		// held the LEFT side, so replacing it with `true` left the whole build green and the next
+		// change could have deleted it for free. "immoderate" is the ordinary English word that
+		// ends in one of these ratings.
+		List<Integer> moderate = indexesRated("Moderate");
+		assertFalse(moderate.isEmpty(), "the premise: this arrangement raises a Moderate finding");
+		service.setLlmProvider(answering("Her response to therapy has been immoderate. "
+				+ enumerationCiting(moderate)));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			ChartAnswer answer = service.search(patient(), QUESTION);
+			assertEquals(moderate, answer.getUnstatedFindingSeverities(),
+					"\"immoderate\" is not the word \"Moderate\". Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void aRatingBothInsideALongerWordAndStatedOnItsOwnIsStated() {
+		// The composition of the two boundary cases, and the shape most likely in real prose: an
+		// answer that says "majority" somewhere AND states the rating properly. Nothing covered it,
+		// so a scan that judged only the FIRST occurrence of the needle and stopped stayed green —
+		// and under that mutant this correct answer is reported as having dropped its rating.
+		List<Integer> major = indexesRated("Major");
+		service.setLlmProvider(answering("The majority of her medications interact. "
+				+ enumerationCiting(major) + " Each of those is Major."));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			ChartAnswer answer = service.search(patient(), QUESTION);
+			assertFalse(warnedByThisCheck(capture),
+					"the rating IS stated, after an earlier word that merely contains it. Captured: "
+							+ capture.describeAll());
+			assertTrue(answer.getUnstatedFindingSeverities().isEmpty(),
+					"and nothing is published against a correct answer");
+		}
+	}
+
+	@Test
+	public void theStatementIsInTHEANSWERSCitationOrderAndNotSortedByIndex() {
+		// The published contract says "citation order", and every other case here happens to cite in
+		// ascending index order — so a change that sorted the list would have shipped green while
+		// contradicting the accessor. Cite the findings backwards and the statement must come back
+		// backwards.
+		List<Integer> descending = new ArrayList<Integer>(ratedFindings.keySet());
+		Collections.reverse(descending);
+		service.setLlmProvider(answering(enumerationCiting(descending)));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			ChartAnswer answer = service.search(patient(), QUESTION);
+			assertEquals(descending, answer.getUnstatedFindingSeverities(),
+					"the order is the order the answer cites them in, not ascending index order. "
+							+ "Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
 	public void aCitedChartRecordIsNeverAccused() {
 		// A chart record carries no rating, so there is nothing for an answer to have dropped. The
 		// citation beside the finding is the ordinary shape of one of these sentences and it must

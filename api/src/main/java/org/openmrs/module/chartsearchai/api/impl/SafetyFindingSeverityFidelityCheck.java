@@ -74,7 +74,8 @@ import org.slf4j.LoggerFactory;
  *       that is not an injected safety finding and every finding {@code statableRating} declines;</li>
  *   <li>a BLANK or absent answer is silent. That arm is reachable rather than defensive —
  *       {@code LlmInferenceService.extractCitedReferences} resolves the structured citations array
- *       for a blank answer deliberately — and a degenerate output is not a fidelity defect;</li>
+ *       for a blank answer deliberately — and a degenerate output is not a fidelity defect. Every
+ *       sibling is silent there too, by an empty class-code set, a word floor or a phrase gate;</li>
  *   <li>it considers only the citations the answer's own resolution admitted
  *       ({@code LlmInferenceService.extractCitedReferences}), so a bracketed clinical value the
  *       chart has no record for is not a citation here either — CLAUDE.md's inline-citation rule
@@ -142,10 +143,19 @@ final class SafetyFindingSeverityFidelityCheck {
 	 * @param cited the references the answer cites, as resolved by
 	 *            {@link LlmInferenceService#extractCitedReferences}
 	 * @param mappings the chart's records, cited or not — the carrier of each cited record's rating
-	 * @return the distinct offending citation indexes in CITATION order — {@code cited}'s own order,
-	 *         taken rather than re-derived so that "which records were cited, and in what order" has
-	 *         one answer. Empty when the check ran and found none, and null only when the check
-	 *         itself failed
+	 * @return the offending citation indexes in CITATION order — {@code cited}'s own order, taken
+	 *         rather than re-derived so that "which records were cited, and in what order" has one
+	 *         answer, and pinned by
+	 *         {@code SafetyFindingSeverityFidelityTest.theStatementIsInTHEANSWERSCitationOrderAndNotSortedByIndex}
+	 *         rather than left indistinguishable from ascending index order. Empty when the check
+	 *         ran and found none, and null only when the check itself failed.
+	 *
+	 *         <p>The set the walk accumulates into de-duplicates, and that is belt and braces rather
+	 *         than load-bearing: {@code LlmInferenceService.extractCitedReferences} already collects
+	 *         indexes into a {@code LinkedHashSet} and emits one reference per index, so
+	 *         {@code cited} cannot carry a repeat today. Said so the guard does not look better
+	 *         defended than it is — a review pass swapped the set for a list that always adds and the
+	 *         whole build stayed green. What the set IS load-bearing for is the order above
 	 */
 	static List<Integer> reportUnstatedFindingSeverities(Patient patient, String answer,
 			List<RecordReference> cited, List<RecordMapping> mappings) {

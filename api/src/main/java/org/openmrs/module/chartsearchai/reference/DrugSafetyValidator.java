@@ -886,11 +886,20 @@ public class DrugSafetyValidator {
 	 * into it.</b> That one asks how strongly a finding licenses a clinical call. This one asks
 	 * whether there is a WORD whose absence from an answer means something — a question about the
 	 * vocabulary, not about the call — so a caution's rating is as much wanted here as a withholding
-	 * one. The prompt asks for it either way: {@code LlmProvider}'s governing safety sentence tells
-	 * the answer to state the finding "carrying its own severity", and the current-medication
-	 * sentence repeats it. (The withhold/caution sentences after each of those decide which LEAD the
-	 * answer opens with and say nothing about the rating; reading them as narrowing it is what an
-	 * earlier draft of this method did.)
+	 * one.
+	 *
+	 * <p><b>The prompt asks for the rating in three of its four cells, and the fourth is a named
+	 * residue rather than a claim this method makes.</b> {@code LlmProvider}'s governing safety
+	 * sentence — "then the finding itself, carrying its own severity" — is gated on a finding naming
+	 * the drug ASKED about, so it covers both proposal cells; the current-medication WITHHOLD
+	 * sentence repeats it. The current-medication CAUTION sentence does not, and nothing else
+	 * reaches it, because those two branches are gated on the finding's clause rather than on the
+	 * question (Decision 72). So a {@code minor}-rated finding about a drug the patient is already
+	 * taking — reachable at the shipped floor — can be rendered exactly as the prompt asked and
+	 * still be reported. That cell was found by a review pass and is recorded rather than closed:
+	 * narrowing here would need the REFERENT axis, which the record does not carry, and widening the
+	 * prompt is a change measured elsewhere. Do not restate this as "the prompt asks for it either
+	 * way", which is what an earlier draft said.
 	 *
 	 * <p><b>Two ratings answer null and they are not the same case.</b> An UNRATED finding — a
 	 * curated hand-authored rule, or an ATC-subgroup or cross-reactivity join — has no word at all;
@@ -925,8 +934,10 @@ public class DrugSafetyValidator {
 	}
 
 	/**
-	 * The same question asked of a whole FINDING rather than of a rating, and the form
-	 * {@link DrugReferenceInjector#renderFinding} must use.
+	 * {@link #ratingLicensesWithholding}'s question asked of a whole FINDING rather than of a
+	 * rating, and the form {@link DrugReferenceInjector#renderFinding} must use. (Named rather than
+	 * located: {@code statableRating} now sits between the two, and it is a DIFFERENT question that
+	 * its own javadoc insists must not be folded into this one.)
 	 *
 	 * <p>A finding can assert more than its rating covers. Issue #171's fold puts the class arm's
 	 * duplicate-therapy or cross-reactivity sentence onto a rated rule's chip when both arms are about

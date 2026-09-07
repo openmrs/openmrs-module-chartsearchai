@@ -27,7 +27,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Reports a safety finding whose RATING the answer states nowhere — issue
  * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/337">#337</a>, round
- * three. A deterministic, exact comparison, like every check beside it and for the same reason: no
+ * three. A deterministic, exact comparison, like its sibling checks and for the same reason: no
  * model call, no embedding, no cosine floor, no reproduction threshold.
  *
  * <p><b>The failure.</b> Measured live on a RefApp 3.7.1 standalone against the bundled knowledge

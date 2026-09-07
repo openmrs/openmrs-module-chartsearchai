@@ -238,6 +238,25 @@ public class SafetyFindingSeverityFidelityTest {
 	}
 
 	@Test
+	public void aRatingWithADIGITAgainstItIsNotTheWordEither() {
+		// The third axis of the same boundary, and the third time this slice has found one half of it
+		// unpinned: `isLetterOrDigit` at both ends can be weakened to `isLetter` with the whole
+		// reactor green. The digit half is what keeps this scan in step with
+		// `DrugReference.boundedTokenIndex`, whose own javadoc argues the digit rule from measured
+		// data — so weakening it silently ends the equivalence the shared-scan argument rests on.
+		// It fails toward SILENCE, which is the direction hardest to notice in production.
+		List<Integer> major = indexesRated("Major");
+		service.setLlmProvider(answering("Reviewed against the 2024Major formulary update. "
+				+ enumerationCiting(major)));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			ChartAnswer answer = service.search(patient(), QUESTION);
+			assertEquals(major, answer.getUnstatedFindingSeverities(),
+					"a rating with a digit glued to it is not the word. Captured: "
+							+ capture.describeAll());
+		}
+	}
+
+	@Test
 	public void aRatingBothInsideALongerWordAndStatedOnItsOwnIsStated() {
 		// The composition of the two boundary cases, and the shape most likely in real prose: an
 		// answer that says "majority" somewhere AND states the rating properly. Nothing covered it,
@@ -295,8 +314,8 @@ public class SafetyFindingSeverityFidelityTest {
 		// A degenerate output, and a REACHABLE one: extractCitedReferences resolves the structured
 		// citations array for a blank answer on purpose — its javadoc calls that "the absence of an
 		// answer" — so this check can be handed cited findings with no prose. Such an answer states
-		// no rating and nothing else either; reporting it would make this the only one of the four
-		// checks that accuses a degenerate output. Delete the blank arm and this reddens.
+		// no rating and nothing else either; reporting it would make this the only check in the
+		// family that accuses a degenerate output. Delete the blank arm and this reddens.
 		Integer finding = indexesRated("Major").get(0);
 		service.setLlmProvider(new StubProvider("   ",
 				Collections.singletonList(finding)));

@@ -970,8 +970,8 @@ public class ChartSearchAiUtils {
 	 *         two rules to differ, a rating the record states one way and the answer states the other
 	 *         would be reported as dropped, or a rating neither states would be asked for.
 	 *
-	 *         <p><b>Deliberately not {@code DrugReference}'s bounded-token family, and not a fifth
-	 *         member of it — but not because the rules differ.</b> At {@code PROSE_TRAILING_LETTERS}
+	 *         <p><b>Deliberately not {@code DrugReference}'s bounded-token family, and not a member
+	 *         of it — but not because the rules differ.</b> At {@code PROSE_TRAILING_LETTERS}
 	 *         (zero) that family's {@code containsWord} reduces to this same condition, and a review
 	 *         pass drove both over 175 pairs to confirm it: they agree on every one but an accented
 	 *         needle. So the reason is NOT that this question "has no allowance to choose", which an

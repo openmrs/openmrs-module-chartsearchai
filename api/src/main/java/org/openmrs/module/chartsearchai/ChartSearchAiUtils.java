@@ -261,17 +261,11 @@ public class ChartSearchAiUtils {
 	 * A passing verdict is therefore false assurance. A FAILING verdict still carries information — it
 	 * says the citation is not about the record at all — so the flag is kept and only the pass is
 	 * withheld. Faithfulness of reference content is checked deterministically instead, by exact
-	 * comparisons — some, not all, of the deterministic post-answer checks:
-	 * {@code ActiveOrderCitationFidelityCheck} (issue #377) reads no reference content, asking
-	 * instead which CHART record a sentence cited, and ADR Decision 76 is where the family is
-	 * enumerated. The ones that read reference content are {@code ClassCodeFidelityCheck}, for an
-	 * ATC class code the answer states that no cited record does (issue #142), report-only;
-	 * {@code ReferenceProseFidelityCheck} for an answer that reproduces a cited reference record's
-	 * prose and then substitutes its own words inside the sentence it was copying (issue #337), whose
-	 * answer is published as {@code unfaithfullyRenderedCitations}; and
-	 * {@code SafetyFindingSeverityFidelityCheck} for a cited safety finding whose rating the answer
-	 * states nowhere (the same issue, round three), published as
-	 * {@code unstatedFindingSeverities}. NOT
+	 * comparisons that run after every answer — and {@code CitationGroundingVerifier}'s class javadoc
+	 * is where they are enumerated, along with the post-answer check that is NOT one of them because
+	 * it reads no reference content at all. Pointed at rather than copied: this sentence carried its
+	 * own list and its own pointer, and when the family grew both went stale while the neighbouring
+	 * homes of that list were being re-pointed at the one home. NOT
 	 * by the {@code DrugSafetyValidator} chips, which this javadoc said until #337: they carry the
 	 * deterministic text but are an independent list nothing reconciles against the answer.
 	 *

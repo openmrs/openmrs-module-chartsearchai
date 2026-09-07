@@ -775,8 +775,8 @@ public class CitationGroundingVerifier {
 				// pass, and not the DrugSafetyValidator chips, which this comment named until #337
 				// and which are an independent list nothing reconciles against the answer. Named
 				// rather than listed here deliberately: this comment and ADR Decision 25 are the two
-				// homes of that list which defeated the previous two sweeps of it, by carrying a
-				// COUNT of a family that grows.
+				// homes of that list which defeated the previous two sweeps of it — ADR Decision 61
+				// records what defeated each.
 				verdict = null;
 			}
 			annotated.add(references.get(i).withGrounded(verdict));

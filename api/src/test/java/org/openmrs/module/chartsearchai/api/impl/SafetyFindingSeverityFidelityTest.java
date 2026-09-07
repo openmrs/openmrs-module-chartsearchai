@@ -82,8 +82,7 @@ public class SafetyFindingSeverityFidelityTest {
 
 	/** The check's own logger: the narrowest capture that can satisfy a "it was reported" assertion,
 	 *  so no other class's WARN can stand in for this check's. */
-	private static final String CHECK =
-			"org.openmrs.module.chartsearchai.api.impl.SafetyFindingSeverityFidelityCheck";
+	private static final String CHECK = SafetyFindingSeverityFidelityCheck.class.getName();
 
 	/** The package, for every assertion whose claim is SILENCE. A class-scoped capture of a silent
 	 *  class receives nothing, which is exactly the state that makes "no WARN was logged" pass

@@ -155,7 +155,7 @@ final class SafetyFindingSeverityFidelityCheck {
 	 *         indexes into a {@code LinkedHashSet} and emits one reference per index, so
 	 *         {@code cited} cannot carry a repeat today. Said so the guard does not look better
 	 *         defended than it is — a review pass swapped the set for a list that always adds and the
-	 *         whole build stayed green. What the set IS load-bearing for is the order above
+	 *         whole build stayed green. What the set IS load-bearing for is the order above.
 	 */
 	static List<Integer> reportUnstatedFindingSeverities(Patient patient, String answer,
 			List<RecordReference> cited, List<RecordMapping> mappings) {

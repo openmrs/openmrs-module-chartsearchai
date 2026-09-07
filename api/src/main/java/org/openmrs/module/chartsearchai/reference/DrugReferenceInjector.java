@@ -1610,6 +1610,30 @@ public class DrugReferenceInjector {
 	 * the clauses are independent by construction, and a type carrying one without a strength is the
 	 * shape {@link #strengthClause} already warns a future caller it must write for.
 	 */
+	static String renderFinding(SafetyWarning finding) {
+		String strength = strengthClause(finding);
+		// Between the detail and the strength clause, so the clause stays SENTENCE-FINAL — which is
+		// where the prompt's own two format demonstrations put it, and what its graded-safety rule
+		// reads to decide how the answer opens. Provenance is about the evidence and belongs beside
+		// the sentence it qualifies; the call the finding states is the last word either way.
+		String provenance = finding.restsOnAnUncorroboratedChartMatch()
+				? FINDING_UNCORROBORATED_MATCH
+				: "";
+		// Ahead of provenance, and for a reason rather than by chance: this clause says what the names
+		// INSIDE the detail stand for in this chart, so it reads as a gloss on the sentence it follows,
+		// while provenance qualifies how a rule reached the chart at all. The two cannot co-occur today
+		// (only a contraindication carries provenance and only an interaction carries a bridge), so
+		// nothing behavioural pins the order — measured: swapping these two leaves the whole build
+		// green, while moving either AFTER the strength clause reddens
+		// InteractionFindingChartOrderBridgeTest.theStrengthClauseStaysSentenceFinal and cases in
+		// UncorroboratedFindingProvenanceTest. It survives on this comment.
+		String chartOrders = chartOrderClause(finding);
+		String detail = strength.isEmpty() && provenance.isEmpty() && chartOrders.isEmpty()
+				? finding.getDetail()
+				: DrugSafetyValidator.endSentence(finding.getDetail());
+		return FINDING_PREFIX + finding.getDrug() + ": " + detail + chartOrders + provenance + strength;
+	}
+
 	/**
 	 * @return the rating {@code rendered} — this finding's own record, as the model will read it —
 	 *         states and an answer citing it therefore owes back, or {@code null} where there is
@@ -1642,30 +1666,6 @@ public class DrugReferenceInjector {
 	private static String ratingThisRecordStates(SafetyWarning finding, String rendered) {
 		String rating = DrugSafetyValidator.statableRating(finding.getSeverity());
 		return rating != null && ChartSearchAiUtils.statesWord(rendered, rating) ? rating : null;
-	}
-
-	static String renderFinding(SafetyWarning finding) {
-		String strength = strengthClause(finding);
-		// Between the detail and the strength clause, so the clause stays SENTENCE-FINAL — which is
-		// where the prompt's own two format demonstrations put it, and what its graded-safety rule
-		// reads to decide how the answer opens. Provenance is about the evidence and belongs beside
-		// the sentence it qualifies; the call the finding states is the last word either way.
-		String provenance = finding.restsOnAnUncorroboratedChartMatch()
-				? FINDING_UNCORROBORATED_MATCH
-				: "";
-		// Ahead of provenance, and for a reason rather than by chance: this clause says what the names
-		// INSIDE the detail stand for in this chart, so it reads as a gloss on the sentence it follows,
-		// while provenance qualifies how a rule reached the chart at all. The two cannot co-occur today
-		// (only a contraindication carries provenance and only an interaction carries a bridge), so
-		// nothing behavioural pins the order — measured: swapping these two leaves the whole build
-		// green, while moving either AFTER the strength clause reddens
-		// InteractionFindingChartOrderBridgeTest.theStrengthClauseStaysSentenceFinal and cases in
-		// UncorroboratedFindingProvenanceTest. It survives on this comment.
-		String chartOrders = chartOrderClause(finding);
-		String detail = strength.isEmpty() && provenance.isEmpty() && chartOrders.isEmpty()
-				? finding.getDetail()
-				: DrugSafetyValidator.endSentence(finding.getDetail());
-		return FINDING_PREFIX + finding.getDrug() + ": " + detail + chartOrders + provenance + strength;
 	}
 
 	/**

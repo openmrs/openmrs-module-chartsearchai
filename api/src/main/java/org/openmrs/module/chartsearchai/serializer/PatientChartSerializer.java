@@ -616,11 +616,13 @@ public class PatientChartSerializer {
 	 * dataset attribution into a clinician-facing answer (issue #117). Metadata a client should
 	 * render beside a citation therefore travels as its own field, never as prose.
 	 *
-	 * <p>{@link #getFindingSeverity()} is the one that can be in BOTH, and is carried only when it
-	 * is: the rating is beside the record so a consumer need not parse for it, and it is set only
-	 * where the rendered text states it too, since an answer cannot have dropped a word the record
-	 * never gave it (issue #337). "Never as prose" is a rule about metadata the model has no
-	 * business reciting, which that rating is not.
+	 * <p>{@link #getFindingSeverity()} is carried only where the rendered text states it too, since
+	 * an answer cannot have dropped a word the record never gave it (issue #337). It is beside the
+	 * record so a consumer need not parse for it — which is exactly {@link #getOrderActive()}'s rule
+	 * (issue #317: never re-derive it, and in particular never from the rendered text), and that
+	 * field is in both places as well, {@code orderCurrencyLabel} rendering it into the body. So is
+	 * {@link #getDate()}. "Never as prose" is a rule about metadata the model has no business
+	 * reciting, which none of those three is.
 	 */
 	public static class RecordMapping {
 

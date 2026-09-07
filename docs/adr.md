@@ -5617,7 +5617,7 @@ Two of those five are rated **Major** and carry mechanism text about adrenal sup
 
 Nothing on the response said so, and each layer was behaving correctly. The `safetyWarnings` chips carried all five ratings, but they are a parallel list nothing reconciles against the prose. `unfaithfullyRenderedCitations` read `[]`, which is a measurement rather than a miss: Decision 61's check requires a reproduction of at least `MIN_REPRODUCED_WORDS` before it will judge anything, and a flat enumeration reproduces nothing. `ActiveOrderCitationFidelityCheck` ([Decision 76](#decision-76-a-chart-citation-that-cannot-be-the-active-order-a-sentence-names-is-stated-on-the-response)) asks whether the chart citations can be the orders named, which is a different question. And a reference-group citation skips Tier-2 entailment entirely, so nothing graded these sentences.
 
-What made the residue tractable is that the missing datum is not prose. `SafetyWarning.getSeverity()` is the source's own rating, it is populated on every one of those five findings, and `DrugReferenceInjector.renderFinding` writes it into the record the model reads. The module also asks for it back: `LlmProvider`'s governing safety sentence tells the answer to state the finding "carrying its own severity", and the current-medication sentence repeats it. So the question "did the answer carry the rating?" is answerable with no model call, no embedding and no reproduction threshold.
+What made the residue tractable is that the missing datum is not prose. `SafetyWarning.getSeverity()` is the source's own rating, it is populated on every one of those five findings, and `DrugReferenceInjector.renderFinding` writes it into the record the model reads. The module also asks for it back, in three of the prompt's four safety cells: the governing safety sentence tells the answer to state the finding "carrying its own severity", and the current-medication WITHHOLD sentence repeats it — the current-medication CAUTION sentence does not, which is the residue named below. So the question "did the answer carry the rating?" is answerable with no model call, no embedding and no reproduction threshold.
 
 ### Decision
 
@@ -5641,7 +5641,7 @@ That was found in Phase 2 of hardening by driving the real injector and the real
 
 The shipped `curated` file was safe only by accident — its entries set no severity at all, so `statableRating` already returned null there. That is not evidence the premise held.
 
-`ChartSearchAiUtils.statesWord` is the one scan both sides use, and sharing it is a correctness requirement rather than tidiness: the injector asks whether the RECORD states the rating and the check asks whether the ANSWER does, so a rating stated one way and read the other would be reported as dropped. It is a boundary rule beside `DrugReference`'s bounded-token family rather than a member of it — those are the drug-NAME shapes, whose allowances exist for inflected order names, and this question has no allowance to choose.
+`ChartSearchAiUtils.statesWord` is the one scan both sides use, and sharing it is a correctness requirement rather than tidiness: the injector asks whether the RECORD states the rating and the check asks whether the ANSWER does, so a rating stated one way and read the other would be reported as dropped. It is a boundary rule beside `DrugReference`'s bounded-token family rather than a member of it, and **not because the rules differ**: at `PROSE_TRAILING_LETTERS` (zero) that family's `containsWord` reduces to the same condition, and a review pass drove both over 175 pairs to confirm they agree on all but an accented needle. What separates them is that the family folds diacritics and this deliberately does not, and that `containsWord` is package-private in the drug-safety package, so reaching it from `api.impl` would widen the drug-name matcher out of the package whose instructions bind it. An earlier draft of this decision said "no allowance to choose", which is false of `containsWord` too.
 
 ### Which ratings are asked about, and the two that are not
 
@@ -5655,7 +5655,7 @@ And **`unknown`** has a word that says nothing. This is the one the plan for thi
 
 The same rawness still reaches the wire as each chip's `severity`, which predates this change and is untouched by it.
 
-**It makes no strength judgement, and must not be given one.** `licensesWithholding` answers how strongly a finding licenses a clinical call; this asks whether there is a word whose absence means something. A caution's rating is as much wanted as a withholding one — the prompt asks for it either way — so a `minor` finding's rating is carried like the rest.
+**It makes no strength judgement, and must not be given one.** `licensesWithholding` answers how strongly a finding licenses a clinical call; this asks whether there is a word whose absence means something. A caution's rating is as much wanted as a withholding one, so a `minor` finding's rating is carried like the rest. **Not because "the prompt asks for it either way"** — that wording is measured false and `statableRating`'s javadoc forbids restating it: the governing safety sentence is gated on a finding naming the drug ASKED about, and the current-medication CAUTION branch is gated on the finding's clause instead, so nothing asks for the rating in that one cell. It is a named residue there, and that javadoc is its home.
 
 ### The unit is the whole answer
 
@@ -5663,7 +5663,7 @@ The check fires only where the rating appears nowhere in the answer. The alterna
 
 What that costs is stated rather than implied: **an answer that states one Major finding's rating and drops a second Major finding's is silent.** So is one where the word reaches the answer for the wrong reason — inside a reproduced mechanism, or stated for a different finding.
 
-The rating is matched on a word boundary, case-insensitively, so *"major"*, *"**Major**"*, *"(Major)"* and *"Major-rated"* all satisfy it while *"majority"* does not — which matters, because *"the majority of her medications"* is ordinary clinical prose and a substring test would let it silence every Major finding in an answer. The scan is written in the check rather than borrowed from `DrugReference`'s bounded-token family: those are the drug-NAME shapes, their allowances exist for inflected order names and for prose naming a substance, and the rule for them is that a caller must never choose an allowance of its own. A rating has no aliases, no diacritics and no inflection to allow.
+The rating is matched on a word boundary, case-insensitively, so *"major"*, *"**Major**"*, *"(Major)"* and *"Major-rated"* all satisfy it while *"majority"* does not — which matters, because *"the majority of her medications"* is ordinary clinical prose and a substring test would let it silence every Major finding in an answer. The scan is `ChartSearchAiUtils.statesWord`, shared with the write site — see *And only where the RECORD states it* above, which is where the sharing is a correctness requirement rather than a tidiness one.
 
 ### What it costs
 
@@ -5679,7 +5679,9 @@ Measured on 2026-09-07 by calling `SafetyFindingSeverityFidelityCheck.reportUnst
 
 **Both of those figures are the fix rather than the design**, and Phase 2 of hardening is what produced them. As first written the check built an index over every chart record and lower-cased the whole answer before it could discover it had nothing to do, which is 17.6 µs on a stock install at 400 records and 84 µs at 5,000 — for a check that structurally cannot fire there, `chartsearchai.drugReference.enabled` being false by default. It is now gated on a map of the rated records alone, which is empty in that arrangement. Each of the three sibling checks resolves its own cheapest gate first, and this one did not.
 
-**And the third row is why the fourth is not larger.** The scan was one walk of the answer per cited finding, which reads as linear and is the defect: `statableRating` admits a three-word vocabulary, so two hundred cited findings meant two hundred walks looking for the same needle — 2.2 ms, past Decision 61's prose check at ~0.7 ms, which the ADR had called this family's outlier. Memoising per distinct rating in a per-call local caps it at three walks however many findings are cited, which is what makes the two-hundred row indistinguishable from the five. It is the same unbounded repeat [Decision 76](#decision-76-a-chart-citation-that-cannot-be-the-active-order-a-sentence-names-is-stated-on-the-response) had to bound with a `Matcher` region, in a different disguise.
+**And the third row is why the fourth is not larger.** The scan was one walk of the answer per cited finding, which reads as linear and is the defect: `statableRating` admits a three-word vocabulary, so two hundred cited findings meant two hundred walks looking for the same needle — 2.2 ms, past Decision 61's prose check at ~0.7 ms, which the ADR had called this family's outlier. Memoising per distinct rating in a per-call local caps **the scan** at three walks however many findings are cited. It is the same unbounded repeat [Decision 76](#decision-76-a-chart-citation-that-cannot-be-the-active-order-a-sentence-names-is-stated-on-the-response) had to bound with a `Matcher` region, in a different disguise.
+
+**The scan is what is capped; the row is not flat, and the table above should not be read as saying so.** The two-hundred row sits a little *below* the five-finding row, which is noise rather than a result — an independent re-measurement had it consistently above. What still grows with the finding count is everything that is not the scan: the rated-record map, the walk over the citations, and the `WARN` of a two-hundred-element reason list. Isolating the scan by asking an answer that states every rating: five findings 53 µs, two hundred 67 µs, two hundred sharing ONE rating 35 µs.
 
 ### Alternatives considered
 
@@ -5689,7 +5691,7 @@ Measured on 2026-09-07 by calling `SafetyFindingSeverityFidelityCheck.reportUnst
 
 **Reconcile the answer against the `safetyWarnings` chips.** Refused. The chips come from the post-answer `validate` pass and the injected findings from the pre-answer one, so they are two populations, and the chip carries no citation index to join on. Comparing the answer against the record it actually cites is both sounder and simpler.
 
-**Scope it to withholding-class ratings** (`moderate`, `major`). Refused: it would borrow `licensesWithholding`'s split for a question about vocabulary rather than about a clinical call, and the prompt asks for the rating on a caution too.
+**Scope it to withholding-class ratings** (`moderate`, `major`). Refused: it would borrow `licensesWithholding`'s split for a question about vocabulary rather than about a clinical call, and the rating of a caution is as much a datum as a withholding one. (Not "the prompt asks for it on a caution too" — see the residue named above.)
 
 ### What this does not do
 

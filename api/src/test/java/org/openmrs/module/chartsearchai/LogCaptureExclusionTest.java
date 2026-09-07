@@ -95,12 +95,33 @@ public class LogCaptureExclusionTest {
 	@Test
 	public void aNullExclusionExcludesNothing() {
 		// Not decoration: isFrom guards both operands, and a caller passing null must get the
-		// unfiltered answer rather than a swallowed one.
+		// unfiltered answer rather than a swallowed one. Both arities are asked, and the casts are
+		// required rather than stylistic — a bare null is ambiguous between them, which is a compile
+		// error and therefore the loud direction.
 		try (LogCapture capture = LogCapture.on(PACKAGE)) {
 			LoggerFactory.getLogger(OTHER).warn("from a logger nobody excluded");
-			assertTrue(capture.hasEventAtOrAbove(Level.WARN, null),
-					"a null exclusion must not silence the capture. Captured: "
+			assertTrue(capture.hasEventAtOrAbove(Level.WARN, (String) null),
+					"a null logger name must not silence the capture. Captured: "
 							+ capture.describeAll());
+			assertTrue(capture.hasEventAtOrAbove(Level.WARN, (Class<?>) null),
+					"nor a null class. Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void theClassArityExcludesThatClassesOwnLogger() {
+		// The arity the sibling test files actually call, so that the logger they exclude is a symbol
+		// the compiler resolves rather than a string literal nothing checks. It must agree with the
+		// named arity or those files exclude something other than what they name.
+		try (LogCapture capture = LogCapture.on("org.openmrs.module.chartsearchai")) {
+			LoggerFactory.getLogger(LogCaptureExclusionTest.class).warn("from this very class");
+			assertTrue(capture.hasEventAtOrAbove(Level.WARN),
+					"precondition: the WARN was captured");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN, LogCaptureExclusionTest.class),
+					"the class's own logger must not count. Captured: " + capture.describeAll());
+			assertTrue(capture.hasEventAtOrAbove(Level.WARN, LogCapture.class),
+					"and excluding a DIFFERENT class must leave it counting, or the arity swallows "
+							+ "everything. Captured: " + capture.describeAll());
 		}
 	}
 }

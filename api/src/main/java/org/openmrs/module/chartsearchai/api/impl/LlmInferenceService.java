@@ -491,8 +491,9 @@ public class LlmInferenceService implements ChartSearchService {
 			// comparison can and cannot see (issues #142 and #338), prose reproduced from a cited
 			// reference record and then rewritten inside the sentence it was copying (issue #337),
 			// and, since issue #377, the chart citations offered as evidence of an active drug order
-			// that cannot be one. None blocks: the class-code check reports only to the log, and the
-			// other two carry their answers onto the ChartAnswer this method RETURNS, so no consumer
+			// that cannot be one, and, since #337's third round, a cited finding whose RATING the
+			// answer states nowhere. None blocks: the class-code check reports only to the log and
+			// the rest carry their answers onto the ChartAnswer this method RETURNS, so no consumer
 			// above waits on any of them. Microseconds for the first and the third — measured by
 			// calling their own entry points from a throwaway same-package case, the active-order
 			// check costs 0.93 us on an answer stating no active-order claim, which is the ordinary

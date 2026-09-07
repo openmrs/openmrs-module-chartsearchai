@@ -971,13 +971,19 @@ public class ChartSearchAiUtils {
 	 *         would be reported as dropped, or a rating neither states would be asked for.
 	 *
 	 *         <p><b>Deliberately not {@code DrugReference}'s bounded-token family, and not a fifth
-	 *         member of it.</b> Those are the drug-NAME shapes, whose allowances exist for inflected
-	 *         order names and for prose naming a substance, and the drug-safety instructions require
-	 *         that a caller never choose an allowance of its own (#260). This question has no
-	 *         allowance to choose: the vocabulary it is asked about is the module's own closed set of
-	 *         rating words, with no aliases, no diacritics and no inflection. It is a boundary rule
-	 *         beside that family rather than inside it — {@code DrugReference.boundedTokenIndex}'s
-	 *         javadoc names the three routes that share ITS scan, and this is not one of them.
+	 *         member of it — but not because the rules differ.</b> At {@code PROSE_TRAILING_LETTERS}
+	 *         (zero) that family's {@code containsWord} reduces to this same condition, and a review
+	 *         pass drove both over 175 pairs to confirm it: they agree on every one but an accented
+	 *         needle. So the reason is NOT that this question "has no allowance to choose", which an
+	 *         earlier draft of this javadoc said in four places and which is false of
+	 *         {@code containsWord} too. Two reasons hold. That family FOLDS DIACRITICS and this
+	 *         deliberately does not — a rating is the module's own closed vocabulary, so an accented
+	 *         spelling of it is not a thing to accommodate, while folding one silently would widen
+	 *         what an answer may say. And {@code containsWord} is package-private in the drug-safety
+	 *         package, so reaching it from {@code api.impl} means widening the drug-name matcher out
+	 *         of the package whose instructions bind it (#260). It is a boundary rule beside that
+	 *         family rather than inside it — {@code DrugReference.boundedTokenIndex}'s javadoc names
+	 *         the three routes that share ITS scan, and this is not one of them.
 	 *
 	 *         <p>The boundary admits every way a rating has been observed to be written — a colon
 	 *         after it, parentheses or markdown emphasis around it, a hyphen before {@code -rated} —

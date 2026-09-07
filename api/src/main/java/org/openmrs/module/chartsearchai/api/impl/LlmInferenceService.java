@@ -165,9 +165,18 @@ public class LlmInferenceService implements ChartSearchService {
 			// And the third of them (issue #377): the chart citations the answer offered as evidence
 			// of an active drug order that cannot be one. Carried rather than re-derived for the
 			// reason its neighbour is — the chart is gone by REST time.
-			List<Integer> misattributedOrderCitations =
-					ActiveOrderCitationFidelityCheck.reportMisattributedOrderCitations(patient,
+			// Both of its answers come off ONE report: the citations that cannot be the order, and
+			// how many active-order claims the answer made against how many offered no chart record
+			// at all (issue #379). Destructured here rather than re-asked, because a second walk is
+			// the two-resolutions-that-agree shape #151 forbids — and because a failed check must
+			// state no measurement on BOTH keys, which one null report gives and two calls could not.
+			ActiveOrderCitationFidelityCheck.Report activeOrderReport =
+					ActiveOrderCitationFidelityCheck.examineActiveOrderClaims(patient,
 							response.getAnswer(), cited, chart.getMappings());
+			List<Integer> misattributedOrderCitations =
+					activeOrderReport == null ? null : activeOrderReport.getMisattributed();
+			ActiveOrderClaims activeOrderClaims =
+					activeOrderReport == null ? null : activeOrderReport.getClaims();
 			// And the fourth (issue #337 round three): the cited safety findings whose RATING the
 			// answer states nowhere. Carried rather than re-derived for the reason its neighbours
 			// are — the chart, which is where the rating travels, is gone by REST time.
@@ -188,7 +197,8 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
 					pairExtent.stated(), unresolvedDrugClass, unfaithfullyRenderedCitations,
-					misattributedOrderCitations, unstatedFindingSeverities, conditionRuleCoverage);
+					misattributedOrderCitations, unstatedFindingSeverities, activeOrderClaims,
+					conditionRuleCoverage);
 			outcome = "ok";
 			return answer;
 		}
@@ -483,7 +493,7 @@ public class LlmInferenceService implements ChartSearchService {
 			ungroundedAnswerConsumer.accept(new ChartAnswer(response.getAnswer(), cited,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), Collections.<SafetyWarning> emptyList(), searchMode,
-					referenceSlice, null, unresolvedDrugClass, null, null, null,
+					referenceSlice, null, unresolvedDrugClass, null, null, null, null,
 					conditionRuleCoverage));
 
 			// After the user-visible handoff, before grounding: the exact comparisons over what the
@@ -514,9 +524,14 @@ public class LlmInferenceService implements ChartSearchService {
 							response.getAnswer(), cited, chart.getMappings());
 			// Its answer is carried the same way and states null on the early `done` for the same
 			// reason (issue #377): the check runs here, after the user-visible handoff.
-			List<Integer> misattributedOrderCitations =
-					ActiveOrderCitationFidelityCheck.reportMisattributedOrderCitations(patient,
+			// One report, two answers, for the reason search() states.
+			ActiveOrderCitationFidelityCheck.Report activeOrderReport =
+					ActiveOrderCitationFidelityCheck.examineActiveOrderClaims(patient,
 							response.getAnswer(), cited, chart.getMappings());
+			List<Integer> misattributedOrderCitations =
+					activeOrderReport == null ? null : activeOrderReport.getMisattributed();
+			ActiveOrderClaims activeOrderClaims =
+					activeOrderReport == null ? null : activeOrderReport.getClaims();
 			// The fourth, carried the same way and stating null on the early `done` for the same
 			// reason (issue #337 round three): the check runs here, after the user-visible handoff.
 			List<Integer> unstatedFindingSeverities =
@@ -540,7 +555,8 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
 					pairExtent.stated(), unresolvedDrugClass, unfaithfullyRenderedCitations,
-					misattributedOrderCitations, unstatedFindingSeverities, conditionRuleCoverage);
+					misattributedOrderCitations, unstatedFindingSeverities, activeOrderClaims,
+					conditionRuleCoverage);
 			outcome = "ok";
 			return answer;
 		}

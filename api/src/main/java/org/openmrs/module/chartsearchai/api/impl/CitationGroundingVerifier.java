@@ -112,7 +112,9 @@ import org.springframework.stereotype.Service;
  * states nowhere (the same issue, round three), published as {@code unstatedFindingSeverities}.
  * None of those is published as a verdict on these citations, which stay withheld.
  * {@link ActiveOrderCitationFidelityCheck} runs after every answer too and is NOT one of them: it
- * reads no reference content, asking instead which CHART record a sentence cited (ADR Decision 76). NOT by the
+ * reads no reference content, asking instead which CHART record a sentence cited, published as
+ * {@code misattributedOrderCitations}, and on the same walk whether any was offered at all,
+ * published as {@code activeOrderClaims} (ADR Decisions 76, 81). NOT by the
  * {@code DrugSafetyValidator} chips, which this javadoc named until #337: they carry the
  * deterministic text but are an independent list nothing reconciles against the answer. Accepted
  * cost: under entailment mode these citations now take the lazy Tier-1 path (up to two
@@ -307,8 +309,12 @@ import org.springframework.stereotype.Service;
  * module's own {@code DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE}, whether the chart
  * citations offered for it can be the order at all — a condition, a visit and an encounter cannot,
  * and those were the three the ticket measured. It is a test of what a record CAN be, so a citation
- * of the WRONG in-force drug order still passes it, and it sees nothing at all unless the answer
- * reproduces that phrase and puts its markers directly after it. Everything else this paragraph
+ * of the WRONG in-force drug order still passes it, and it ACCUSES nothing unless the answer
+ * reproduces that phrase and puts its markers directly after it. Since issue #379 that check answers
+ * a second question on the same walk, published as {@code activeOrderClaims} — how many such claims
+ * the answer made and how many offered no chart record — and THAT half is exactly what a claim
+ * whose markers do not directly follow it produces, so the sentence above is about the accusation
+ * and not about the check. Everything else this paragraph
  * describes is untouched: an enumeration ITEM resting on a sibling's finding, an UNANCHORED finding
  * withholding every chart citation in the answer, and any composite sentence whose claim is not an
  * active-order one. The {@code DrugSafetyValidator} chips are still not it — this javadoc named them

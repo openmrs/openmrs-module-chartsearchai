@@ -83,6 +83,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 75: A contraindication screen states whether it had a condition rule to ask](#decision-75-a-contraindication-screen-states-whether-it-had-a-condition-rule-to-ask)
 - [Decision 76: A chart citation that cannot be the active order a sentence names is stated on the response](#decision-76-a-chart-citation-that-cannot-be-the-active-order-a-sentence-names-is-stated-on-the-response)
 - [Decision 77: A finding's chart-order attribution names the record number its order is](#decision-77-a-findings-chart-order-attribution-names-the-record-number-its-order-is)
+- [Decision 78: The standing chart finding is served by a surface a client asks for, not by every answer](#decision-78-the-standing-chart-finding-is-served-by-a-surface-a-client-asks-for-not-by-every-answer)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)

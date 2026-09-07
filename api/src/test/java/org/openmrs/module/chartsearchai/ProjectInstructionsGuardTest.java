@@ -99,7 +99,7 @@ public class ProjectInstructionsGuardTest {
 	 * <p><b>The reference budget was raised from 72,000 to 75,000 on 2026-09-07, and the raise is
 	 * recorded rather than quietly taken.</b> The paragraph above calls a raise in the same commit as
 	 * the prose that overflowed it illegitimate, and this is the state it did not cover: two branches
-	 * each added one rule, and the first to merge (#379) left the file 18 bytes under the cap, so the
+	 * each added one rule, and the first to merge (#379) left the file 19 bytes under the cap, so the
 	 * second (#280) could not record a rule of any size. Trimming came first and is what makes the
 	 * number honest — #280 folded its own new sub-bullet into the one above it, which framed the same
 	 * decision twice, and cut its amendment to the chart-read bullet — and the residue that would not

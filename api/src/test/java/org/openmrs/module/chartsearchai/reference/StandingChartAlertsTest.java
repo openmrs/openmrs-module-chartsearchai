@@ -433,8 +433,10 @@ public class StandingChartAlertsTest {
 		for (String switchOfItsOwn : new String[] { "ChartSearchAiConstants.GP_DRUG_SAFETY_VALIDATE_ANSWERS",
 				"ChartSearchAiUtils.isDrugReferenceEnabled()" }) {
 			assertFalse(scan.names(gate, switchOfItsOwn),
-					"the standing entry must not re-spell " + switchOfItsOwn + " beside that predicate — "
-							+ "a second spelling is how the gate and the published flag would diverge");
+					"the standing entry must not re-spell " + switchOfItsOwn + " beside that predicate. "
+							+ "This forbids the two the answer surface's own gate names, not every spelling "
+							+ "a gate could take; what the entry DOES honour, per switch, is measured by "
+							+ "StandingChartAlertsToggleContextTest");
 		}
 	}
 

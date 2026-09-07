@@ -534,10 +534,9 @@ public class DrugSafetyValidator {
 	 * reads the dose from the answer, so a question-only drug with no stated dose yields no overdose.
 	 *
 	 * <p>Two checks have no drug in play at all, so the union above is not the whole subject set: the
-	 * patient's own active orders are checked against their own allergy and condition records —
-	 * on every question the arm is REACHED, though what it raises there is bounded by
-	 * {@link SubjectMatter} ({@link #addActiveOrderContraindications}, issue #143), and, when the
-	 * question asks to be
+	 * patient's own active orders are checked against their own allergy and condition records
+	 * ({@link #addActiveOrderContraindications}, issue #143 — read that method for when it runs and
+	 * what {@link SubjectMatter} lets it raise), and, when the question asks to be
 	 * SCREENED for interactions and names no drug — screened against each other
 	 * ({@link #addActiveOrderPairInteractions}, issue #113).
 	 */

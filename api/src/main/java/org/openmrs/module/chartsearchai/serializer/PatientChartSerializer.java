@@ -642,14 +642,14 @@ public class PatientChartSerializer {
 		 */
 		private final Boolean orderActive;
 
-	/**
-	 * The numbers of the chart records this record was DERIVED from, empty where it was not derived
-	 * from any — the provenance of a record this module injected, and the form a consumer reads
-	 * rather than parsing it out of {@link #getText()} (issue #305).
-	 *
-	 * <p>See {@link #getDerivedFrom()} for what it is written for and by whom.
-	 */
-	private final List<Integer> derivedFrom;
+		/**
+		 * The numbers of the chart records this record was DERIVED from, empty where it was not
+		 * derived from any — the provenance of a record this module injected, and the form a consumer
+		 * reads rather than parsing it out of {@link #getText()} (issue #305).
+		 *
+		 * <p>See {@link #getDerivedFrom()} for what it is written for and by whom.
+		 */
+		private final List<Integer> derivedFrom;
 
 		/**
 		 * Backward-compatible constructor that carries no source text. Mappings

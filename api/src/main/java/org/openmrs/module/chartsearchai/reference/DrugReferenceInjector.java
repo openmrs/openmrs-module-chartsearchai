@@ -896,17 +896,6 @@ public class DrugReferenceInjector {
 		}
 
 		/**
-		 * @return the numbers of the chart records that ARE {@code order} — the uuid-matched record
-		 *         alone where there is one, else every live drug-order record naming it, asked per
-		 *         record so that a name cannot be assembled across a record boundary.
-		 *
-		 *         <p>The uuid leg answers alone rather than being unioned with the name leg: querystore
-		 *         indexes a {@code drug_order} document under its {@code Order} uuid, so a uuid match
-		 *         is the exact answer and a sibling record that merely NAMES the same drug is not a
-		 *         second answer to the same question. The name leg is the drifted-uuid insurance issue
-		 *         #118 added, and is the only leg that can return more than one.
-		 */
-		/**
 		 * @return the number of the chart record carrying {@code resourceUuid}, or {@code null} where
 		 *         this chart carries none — or carries MORE than one, which it refuses rather than
 		 *         answering with the last (issue #305).
@@ -928,6 +917,17 @@ public class DrugReferenceInjector {
 					: byResourceUuid.get(resourceUuid);
 		}
 
+		/**
+		 * @return the numbers of the chart records that ARE {@code order} — the uuid-matched record
+		 *         alone where there is one, else every live drug-order record naming it, asked per
+		 *         record so that a name cannot be assembled across a record boundary.
+		 *
+		 *         <p>The uuid leg answers alone rather than being unioned with the name leg: querystore
+		 *         indexes a {@code drug_order} document under its {@code Order} uuid, so a uuid match
+		 *         is the exact answer and a sibling record that merely NAMES the same drug is not a
+		 *         second answer to the same question. The name leg is the drifted-uuid insurance issue
+		 *         #118 added, and is the only leg that can return more than one.
+		 */
 		private List<Integer> numbersFor(PatientClinicalContext.ActiveDrugOrder order) {
 			Integer exact = numberByUuid(order);
 			if (exact != null) {

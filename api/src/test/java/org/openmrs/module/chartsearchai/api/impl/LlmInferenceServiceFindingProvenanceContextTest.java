@@ -29,7 +29,9 @@ import org.openmrs.Allergy;
 import org.openmrs.Concept;
 import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
+import org.apache.logging.log4j.Level;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
@@ -72,6 +74,10 @@ public class LlmInferenceServiceFindingProvenanceContextTest extends BaseModuleC
 
 	/** The chart record the allergy IS — the one the second form asserted and cited nothing for. */
 	private static final int ALLERGY_RECORD = 2;
+
+	/** The obs record, which the class-code cases below have the model cite so that the check has a
+	 *  support pool at all — its first gate exits when no cited record states a class code. */
+	private static final int OBS_RECORD = 1;
 
 	/** Reads the finding's own number out of the numbered chart the provider is handed. */
 	private static final Pattern FINDING_LINE = Pattern.compile("\\[(\\d+)\\] Safety finding");
@@ -217,8 +223,15 @@ public class LlmInferenceServiceFindingProvenanceContextTest extends BaseModuleC
 	/**
 	 * The abstention-dump carve-out is upstream of this and stays that way: an answer that is real
 	 * prose and anchors NO citation inline surfaces nothing, so it cannot acquire a chart record
-	 * either. Adding the provenance BEFORE that carve-out would attach the patient's allergy to a
-	 * "nothing found" answer.
+	 * either.
+	 *
+	 * <p><b>What this case cannot tell you</b> is that the attach step's POSITION relative to that
+	 * carve-out matters. It does not: the carve-out returns an unconditional empty list, so nothing
+	 * `seen` holds at that point can reach a client, and moving the attach step ahead of it leaves
+	 * this case — and the whole suite — green. Measured, and said here because the comment at the
+	 * attach site claimed otherwise. What the position DOES decide is
+	 * {@link #attachesNothingToARecordTheModelAlreadyCitedInlineOnly}. This case's own claim is
+	 * narrower and still worth pinning: the abstention-dump behaviour is unchanged by issue #305.
 	 */
 	@Test
 	public void anAnswerThatAnchorsNoCitationInlineAcquiresNothing() {
@@ -230,6 +243,60 @@ public class LlmInferenceServiceFindingProvenanceContextTest extends BaseModuleC
 						+ "cited finding to bring a record with it. Was: " + indexes(answer));
 	}
 
+	/**
+	 * The class-code check pools its support across the records the ANSWER reached for, and a record
+	 * the MODULE attached is not one of them (issue #142's check, meeting issue #305).
+	 *
+	 * <p>The arrangement is the defect: the allergy record the module attaches carries the class code
+	 * {@code M01AE01}, no record the model cited carries it, and the answer states it. Pooled, the
+	 * attached record's code makes the answer's own code look copied — so a fabricated class code goes
+	 * unreported for no reason but that the module happened to attach a record containing it. That is
+	 * the check's whole subject reversed.
+	 *
+	 * <p>The obs record is cited so the check has a pool at all: its first gate exits when no cited
+	 * record states a class code, which would make this case pass for the wrong reason.
+	 */
+	@Test
+	public void aRecordTheModuleAttachedIsNotSupportForAClassCodeTheAnswerStates() {
+		TestableService service = serviceUnderTest(new StatesAClassCode("M01AE01"));
+		service.setChartBuildingStrategy(new StubStrategy(allergyUuid,
+				"Serum creatinine 1.1 (C09AA01)", "Allergy: Ibuprofen (drug), class M01AE01"));
+
+		try (LogCapture capture = LogCapture.on(ClassCodeFidelityCheck.class.getName())) {
+			service.search(patient, QUESTION);
+
+			assertTrue(capture.hasMessageAt(Level.WARN, "M01AE01"),
+					"the answer states a class code only the ATTACHED record carries, so no record the "
+							+ "answer cited supports it and the check must say so. Captured: "
+							+ capture.describeAll());
+		}
+	}
+
+	/**
+	 * And a record the module attached cannot ABSTAIN the check either. The walk returns for the whole
+	 * answer on the first cited record whose text is blank, which is right for a record the model
+	 * cited — it may be the one that stated the code — and wrong for one the module supplied: an
+	 * empty querystore document would then silence issue #142's check for every answer whose cited
+	 * finding derives from it.
+	 *
+	 * <p>{@code QueryStoreChartBuilder} admits an empty text ({@code doc.getText() == null ? "" :
+	 * doc.getText()}), so this is a reachable chart rather than a constructed one.
+	 */
+	@Test
+	public void aBlankTextedAttachedRecordDoesNotAbstainTheClassCodeCheck() {
+		TestableService service = serviceUnderTest(new StatesAClassCode("M01AE01"));
+		service.setChartBuildingStrategy(new StubStrategy(allergyUuid,
+				"Serum creatinine 1.1 (C09AA01)", ""));
+
+		try (LogCapture capture = LogCapture.on(ClassCodeFidelityCheck.class.getName())) {
+			service.search(patient, QUESTION);
+
+			assertTrue(capture.hasMessageAt(Level.WARN, "M01AE01"),
+					"a blank ATTACHED record must not abstain the check for the whole answer. "
+							+ "Captured: " + capture.describeAll());
+		}
+	}
+
 	/** Exposes the seams, and keeps warmup out of a test about a reference list. */
 	private static final class TestableService extends LlmInferenceService {
 
@@ -239,24 +306,35 @@ public class LlmInferenceServiceFindingProvenanceContextTest extends BaseModuleC
 		}
 	}
 
-	/** A two-record chart: an obs, and the allergy record the finding will name. */
+	/** A two-record chart: an obs, and the allergy record the finding will name. Both texts are
+	 *  parameters because the class-code cases below turn on what each of them states. */
 	private static final class StubStrategy extends ChartBuildingStrategy {
 
 		private final String allergyUuid;
 
+		private final String obsText;
+
+		private final String allergyText;
+
 		private StubStrategy(String allergyUuid) {
+			this(allergyUuid, "BP 120/80", "Allergy: Ibuprofen (drug)");
+		}
+
+		private StubStrategy(String allergyUuid, String obsText, String allergyText) {
 			this.allergyUuid = allergyUuid;
+			this.obsText = obsText;
+			this.allergyText = allergyText;
 		}
 
 		@Override
 		PatientChart buildChart(Patient patient, String question) {
 			List<RecordMapping> mappings = Arrays.asList(
-					new RecordMapping(1, ChartSearchAiConstants.RESOURCE_TYPE_OBS, "obs-uuid-1", null,
-							"BP 120/80"),
+					new RecordMapping(OBS_RECORD, ChartSearchAiConstants.RESOURCE_TYPE_OBS, "obs-uuid-1",
+							null, obsText),
 					new RecordMapping(ALLERGY_RECORD, ChartSearchAiConstants.RESOURCE_TYPE_ALLERGY,
-							allergyUuid, null, "Allergy: Ibuprofen (drug)"));
-			return new PatientChart("[1] BP 120/80\n[" + ALLERGY_RECORD + "] Allergy: Ibuprofen (drug)\n",
-					mappings, Collections.<Integer> emptyList());
+							allergyUuid, null, allergyText));
+			return new PatientChart("[" + OBS_RECORD + "] " + obsText + "\n[" + ALLERGY_RECORD + "] "
+					+ allergyText + "\n", mappings, Collections.<Integer> emptyList());
 		}
 
 		@Override
@@ -307,6 +385,28 @@ public class LlmInferenceServiceFindingProvenanceContextTest extends BaseModuleC
 			return new LlmResponse("No — Ibuprofen should not be given: the patient has a recorded "
 					+ "allergy to Ibuprofen [" + ALLERGY_RECORD + "][" + finding + "].",
 					Arrays.asList(Integer.valueOf(ALLERGY_RECORD), Integer.valueOf(finding)));
+		}
+	}
+
+	/**
+	 * Cites the finding and the OBS record, and states {@code code} — the shape the class-code check
+	 * needs: a support pool from a record the model really cited, and one asserted code.
+	 */
+	private static final class StatesAClassCode extends CitesTheFindingAlone {
+
+		private final String code;
+
+		private StatesAClassCode(String code) {
+			this.code = code;
+		}
+
+		@Override
+		LlmResponse answer(String numberedRecords) {
+			int finding = findingNumber(numberedRecords);
+			return new LlmResponse("No — Ibuprofen (" + code + ") should not be given: the patient has "
+					+ "a recorded allergy to Ibuprofen [" + finding + "], and her renal function is "
+					+ "stable [" + OBS_RECORD + "].",
+					Arrays.asList(Integer.valueOf(finding), Integer.valueOf(OBS_RECORD)));
 		}
 	}
 

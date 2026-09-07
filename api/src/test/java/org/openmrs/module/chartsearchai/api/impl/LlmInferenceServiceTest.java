@@ -23,8 +23,10 @@ import java.util.List;
 import java.util.function.Consumer;
 
 import org.junit.jupiter.api.Test;
+import org.apache.logging.log4j.Level;
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
+import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
@@ -209,6 +211,76 @@ public class LlmInferenceServiceTest {
 		}
 		Collections.sort(indices);
 		assertEquals(Arrays.asList(8, 9), indices);
+	}
+
+	/**
+	 * A record the model cited INLINE ONLY stays the model's citation, even though the finding it is
+	 * the provenance of was cited too (issue #305).
+	 *
+	 * <p>This is the case that pins WHERE the attach step sits, and the mutation it reddens on is
+	 * precise: not moving the block, but having its {@code !seen.contains(derived)} check read the
+	 * citations array alone — the state before {@code seen.addAll(inline)}. Record [1] is then not yet
+	 * one of the model's citations, so it is admitted and published as
+	 * {@code attachedByTheModule} — the module claiming a citation the model wrote, which a client
+	 * would render without the {@code [N]} highlight the prose does carry. Iterating a pre-inline
+	 * snapshot while leaving that check on {@code seen} moves nothing; measured both ways.
+	 *
+	 * <p>Deliberately NOT the abstention carve-out: a first draft of the attach site claimed the
+	 * position mattered relative to that, and it does not — the carve-out returns an unconditional
+	 * empty list, so moving the step across it leaves every case green.
+	 */
+	@Test
+	public void extractCitedReferences_shouldNotClaimARecordTheModelCitedInlineOnly() {
+		List<RecordMapping> mappings = Arrays.asList(
+				new RecordMapping(1, "allergy", uuid(456), null, "Allergy: Aspirin"),
+				new RecordMapping(2, "safety_finding", "contraindication:Ibuprofen", null,
+						"Safety finding", null, 0, null, Arrays.asList(Integer.valueOf(1))));
+
+		List<RecordReference> result = LlmInferenceService.extractCitedReferences(
+				"Ibuprofen should not be given: she is allergic to aspirin [1].",
+				Arrays.asList(Integer.valueOf(2)), mappings);
+
+		assertEquals(2, result.size(), "both records resolve, was: " + result.size());
+		for (RecordReference reference : result) {
+			assertFalse(reference.isAttachedByTheModule(), "reference [" + reference.getIndex()
+					+ "] was cited by the model — inline for [1], in the array for [2] — so neither is "
+					+ "the module's citation");
+		}
+	}
+
+	/**
+	 * A derivation naming an index this mapping list has no record for adds nothing, and says nothing
+	 * about it (issue #305).
+	 *
+	 * <p>Reachable through this entry point and no other: on the production path the derivation is
+	 * resolved off the very list that arrives here, so every derived index maps. A caller that hands
+	 * this method a different list is what the guard is for, and it fails closed — dropping the
+	 * attachment rather than publishing a reference to nothing, and without the
+	 * "cited record which does not exist" WARN, because an unmapped derivation is the module's own
+	 * bookkeeping and not something the model claimed.
+	 */
+	@Test
+	public void extractCitedReferences_shouldIgnoreADerivationWithNoMappingOfItsOwn() {
+		List<RecordMapping> mappings = Arrays.asList(
+				new RecordMapping(2, "safety_finding", "contraindication:Ibuprofen", null,
+						"Safety finding", null, 0, null, Arrays.asList(Integer.valueOf(9))));
+
+		try (LogCapture capture = LogCapture.on(LlmInferenceService.class.getName())) {
+			List<RecordReference> result = LlmInferenceService.extractCitedReferences(
+					Arrays.asList(Integer.valueOf(2)), mappings);
+
+			assertEquals(1, result.size(), "only the cited finding resolves, was: " + result);
+			assertEquals(2, result.get(0).getIndex());
+			assertFalse(result.get(0).isAttachedByTheModule(),
+					"the finding itself is the model's citation");
+			// The discriminating assertion, and the reference COUNT is not it: without the guard,
+			// index 9 joins `seen` and the reference walk then takes its unmapped branch, which
+			// produces the same one-reference result and this WARN. Drop the conjunct and only this
+			// line reddens.
+			assertFalse(capture.hasMessageAt(Level.WARN, "[9]"),
+					"an unmapped DERIVATION is the module's own bookkeeping, so it must not be "
+							+ "reported as a record the LLM cited. Captured: " + capture.describeAll());
+		}
 	}
 
 	@Test

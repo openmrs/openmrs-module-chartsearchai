@@ -408,9 +408,17 @@ public class CitationGroundingVerifier {
 		DEMOTE_ONLY,
 
 		/**
-		 * Nothing is published in either direction and no embedding is spent, because neither tier is
-		 * asked a question that is this citation's own. Two arrangements reach it, and they arrive from
-		 * opposite directions.
+		 * Nothing is published in either direction, because neither tier is asked a question that is
+		 * this citation's own. Two arrangements reach it, and they arrive from opposite directions.
+		 *
+		 * <p><b>Whether an embedding is spent getting here differs between them</b>, and this said
+		 * otherwise until review measured it. A compound claim unit reached through
+		 * {@link #selectClaim}'s AMBIGUOUS branch has already paid an eager cosine argmax by the time
+		 * {@code compoundClaim} is known — Pass 2's own withholding names
+		 * {@code compoundClaim_anEagerlyScoredCosineFailIsWithheldToo}, which is exactly such a
+		 * computed cosine. Only the attached-citation arm spends nothing, because it is decided
+		 * BEFORE claim selection. So read "no embedding is spent" as a property of that arm, stated at
+		 * its own site, and not as a shared premise.
 		 *
 		 * <p>A compound claim unit under entailment (#302): the statement attaches different citations
 		 * to different pieces of itself, so no single record entails it.
@@ -593,8 +601,8 @@ public class CitationGroundingVerifier {
 		Tier1Result[] tier1Results = new Tier1Result[references.size()];
 		// How much of a verdict each citation may be given: one ordered Disposition, decided ONCE per
 		// reference and read at all three sites below (judge candidacy, the lazy Tier-1 skip, and what
-		// Pass 2 publishes). Two reasons feed it and they do NOT share a treatment, which is why this
-		// is a three-valued choice rather than a boolean. Decided from the
+		// Pass 2 publishes). Three reasons feed it and they do NOT share a treatment, which is why
+		// this is a three-valued choice rather than a boolean. Decided from the
 		// value claim selection returned, never re-read off tier1Results (cosineVerdict REBUILDS those
 		// for every reference reaching the lazy Tier-1 block, and a flag lost in a rebuild would fail
 		// open). Wiring a new reason into only one site is not hypothetical: #110's safety_finding was
@@ -607,6 +615,10 @@ public class CitationGroundingVerifier {
 		//     source whether or not it swapped roles. Where a reference-group citation is ALSO inside a
 		//     compound claim unit, the stronger rule below wins and its fail is withheld too; nothing
 		//     downstream can tell, because #201 withholds every reference-group verdict at the wire.
+		//   * the MODULE attached the citation rather than the model emitting it (issue #305), in
+		//     either mode: UNVERIFIABLE. There is no pairing to check — the model made no claim about
+		//     this record — so a claim would have to be selected FOR it out of the whole answer, at
+		//     whatever floor the operator set. Asked before claim selection, so none runs.
 		//   * its CLAIM UNIT is compound and entailment is on (issue #302): UNVERIFIABLE, no verdict in
 		//     either direction. Both tiers are asking the wrong-sized question there — the judge is
 		//     asked to entail a conjunction the record answers for only part of, and cosine is measured

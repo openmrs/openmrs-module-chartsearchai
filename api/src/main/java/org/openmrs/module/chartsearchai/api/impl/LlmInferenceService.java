@@ -598,6 +598,15 @@ public class LlmInferenceService implements ChartSearchService {
 	 * absence of an answer (a distinct degenerate output), not an answer that
 	 * failed to anchor its citations, so the array still resolves there — as does
 	 * the legacy {@code answer == null} entry point.
+	 *
+	 * <p><b>A third source, and the only one that is not the model's</b> (issue #305): a record the
+	 * model DID cite may declare, through {@link RecordMapping#getDerivedFrom()}, the chart records
+	 * it was derived from — an injected {@code safety_finding} names the recorded allergy or
+	 * condition its match fired on. Those records join the reference list and are marked
+	 * {@link RecordReference#isAttachedByTheModule()}. It is a ONE-LEVEL step by construction here:
+	 * the derivation is read off what the model cited and never off what this step added, so a
+	 * record that later carried a derivation of its own would not be followed. Resolved after both
+	 * of the reads above — see the comment at the walk for which one is load-bearing and why.
 	 */
 	static List<RecordReference> extractCitedReferences(String answer, List<Integer> citations,
 			List<RecordMapping> mappings) {
@@ -630,14 +639,25 @@ public class LlmInferenceService implements ChartSearchService {
 		// only thing that decides which indices become references, and attaching a citation anywhere
 		// else is how the deterministic layer and the answer come apart.
 		//
-		// AFTER the abstention carve-out above and never before it: an answer that is real prose and
-		// anchors nothing inline surfaces no references at all, so it has no cited finding to bring a
-		// record with it. Ahead of that return, this would attach the patient's own allergy record to a
-		// "the records do not address this" answer.
+		// AFTER the two reads above, and the reason is the SECOND of them rather than the carve-out.
+		// Measured: moving this block ahead of the carve-out leaves the whole suite green, because
+		// that carve-out returns an unconditional empty list — whatever `seen` held cannot reach a
+		// client, so an abstaining answer acquires nothing either way.
 		//
-		// A SECOND pass over what the model cited, not an accumulation inside the walk below: a
-		// derived record is not itself a finding, so nothing here is transitive, and iterating one set
-		// while adding to it is a concurrent modification waiting for a chart that carries two.
+		// What the position does decide is narrower than "this block runs late", and the mutation
+		// that shows it is not a move: it is which set `!seen.contains(derived)` below reads. Have it
+		// read the citations array ALONE — the state before `seen.addAll(inline)` — and a record the
+		// model cited INLINE ONLY, its finding in the array, is admitted here and published as
+		// `attachedByTheModule`: the module claiming a citation the model wrote. Iterating a
+		// pre-inline snapshot while leaving that check on `seen` changes nothing, measured. So keep
+		// this after both reads, and read `seen`. →
+		// LlmInferenceServiceTest.extractCitedReferences_shouldNotClaimARecordTheModelCitedInlineOnly
+		//
+		// A SECOND pass over what the model cited, and ONE level: the derivations read here are the
+		// model's own citations', never those of a record this step added, so the walk cannot chain.
+		// That is the rule rather than a property of today's data — no chart record carries a
+		// derivation at all — and it is what makes iterating `seen` safe instead of a concurrent
+		// modification waiting for the arrangement that chains.
 		Set<Integer> attached = new LinkedHashSet<Integer>();
 		for (Integer index : seen) {
 			RecordMapping mapping = indexMap.get(index);

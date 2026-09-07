@@ -404,10 +404,12 @@ public class DrugSafetyValidator {
 	 * {@code StandingChartAlertsTest.theStandingSurfaceReportsNoInteractionsEvenBetweenInteractingActiveOrders},
 	 * which measures it over a chart whose orders the data relates many ways — not by this paragraph.
 	 *
-	 * <p>Gated on {@link #reportsStandingChartAlerts()} and on nothing of its own, which is what makes
-	 * the {@code screened} statement this surface publishes true OF it: the verdict a client is
-	 * handed is decided by the same call that decides whether the pass runs, so the two cannot be
-	 * changed apart. Not atomic, and the residue is named rather than closed —
+	 * <p>Gated on {@link #reportsStandingChartAlerts()} and on nothing of its own, so the toggles that
+	 * decide whether this pass runs are the same ones the published verdict rests on. <b>The verdict
+	 * is NOT that predicate</b> — {@link StandingChartAlerts#isScreened()} narrows it further, with
+	 * the chart reads and the pass completing, and the two diverge in exactly the cases the flag
+	 * exists for. What they cannot do is be changed apart, which the separate-predicate shape this
+	 * replaced could not say. Not atomic, and the residue is named rather than closed —
 	 * {@code warnOnContraindications} is read here and again inside {@code validate}, so an
 	 * operator flipping it between the two reads gets {@code screened: true} from an arm that
 	 * stood down. Every global property this module reads is read live; a lock over one for a
@@ -459,16 +461,27 @@ public class DrugSafetyValidator {
 			// WARN, and the only signal an operator gets for this state. The builder's own catches log
 			// at DEBUG, which core's shipped log4j2.xml discards by putting org.openmrs at WARN — right
 			// for the answer path, where a missing record only narrows a chip, and wrong here, where it
-			// is the whole payload. It names WHICH side failed, because the two stamps are separate and
-			// a message that lists every privilege makes an operator check three. A configuration fault
-			// an operator can fix, which this package's loudness rule says is loud wherever the data
-			// came from. Once per request per patient, deliberately: the state is persistent and a
-			// polling banner will repeat it, but a throttle would hide the one line a diagnosis needs.
-			log.warn("Standing chart alerts: this patient's {} could not be read, so the chart is "
+			// is the whole payload. A configuration fault an operator can fix, which this package's
+			// loudness rule says is loud wherever the data came from.
+			//
+			// It names EVERY side that failed, not the first: a two-branch form said only "allergy or
+			// condition records" where BOTH reads had failed, so an operator granted those two would
+			// fix them, see screened:false still, and read the same line again. That is also the
+			// null-patient shape, which stamps both flags unread. "Were not read" rather than "could
+			// not be", because for a null patient there was nothing to read.
+			//
+			// Once per request per patient, deliberately: the state is persistent and a polling banner
+			// will repeat it, but a throttle would hide the one line a diagnosis needs.
+			List<String> unread = new ArrayList<String>();
+			if (!context.contraindicationRecordsRead()) {
+				unread.add("allergy and condition records (core's Get Allergies, Get Conditions)");
+			}
+			if (!context.activeDrugOrdersRead()) {
+				unread.add("active orders (core's Get Orders)");
+			}
+			log.warn("Standing chart alerts: {} were not read for this patient, so the chart is "
 					+ "reported as NOT screened rather than as clear. Check that the querying role holds "
-					+ "core's {}.",
-				context.contraindicationRecordsRead() ? "active orders" : "allergy or condition records",
-				context.contraindicationRecordsRead() ? "Get Orders" : "Get Allergies and Get Conditions");
+					+ "the privileges named.", unread);
 			return StandingChartAlerts.notScreened();
 		}
 		return StandingChartAlerts.screened(

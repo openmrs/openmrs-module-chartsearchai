@@ -396,9 +396,9 @@ public class ChartSearchAiRestController {
 	 * limiter's shape.</b> Measured 2026-09-07 by driving the real
 	 * {@code DrugSafetyValidator.standingChartAlerts} over the shipped 2283-entry knowledge base,
 	 * best of 15 after 5 warm-up rounds: <b>2.2 ms</b> on an 8-order chart with an allergy and two
-	 * conditions, <b>4.9 ms</b> on a 30-order one — three to five times CHEAPER than the drug-safety
-	 * pass {@code /search} already runs on the same chart (8.7 ms and 25.6 ms), which is itself a
-	 * rounding error beside that endpoint's model call. The precedent that settles it is
+	 * conditions, <b>4.9 ms</b> on a 30-order one — CHEAPER than the drug-safety pass
+	 * {@code /search} already runs on the same charts, which measured 8.7 ms and 25.6 ms, and that
+	 * pass is itself a rounding error beside that endpoint's model call. The precedent that settles it is
 	 * {@link #warmup}: same privilege, same {@code resolvePatient}, no limiter, no audit row, and it
 	 * spawns a background thread that builds a whole chart. This surface is strictly cheaper and
 	 * better bounded than one already shipped. What the existing limiter could not do for it either

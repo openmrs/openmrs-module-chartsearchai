@@ -58,7 +58,7 @@ import org.openmrs.module.chartsearchai.ModuleSourceRoot;
  * {@code standingChartAlerts(PatientClinicalContext)}, which is where {@code validate}'s own
  * package-private seam sits and what every contextless case in
  * {@code ActiveOrderContraindicationTest} already drives; the two GPs above it are covered by
- * {@link #theStandingEntryGatesOnThePredicateItPublishes} and by
+ * {@link #theStandingEntryGatesOnTheSharedTogglePredicate} and by
  * {@code StandingChartAlertsToggleContextTest}, which needs a real {@code Context} and so cannot live
  * here.
  *
@@ -217,23 +217,6 @@ public class StandingChartAlertsTest {
 						+ "was: " + alerts);
 	}
 
-	/**
-	 * A chart whose allergy or condition read FAILED is not a screened chart, and must not be
-	 * published as one.
-	 *
-	 * <p>This is the shape the surface is most exposed to and the one that has no other signal.
-	 * {@code PatientClinicalContextBuilder} swallows a failed read into an EMPTY token set and logs at
-	 * DEBUG — which core's shipped {@code log4j2.xml} discards, since it puts {@code org.openmrs} at
-	 * WARN — so before this the endpoint answered {@code screened: true} with an empty array for a
-	 * patient nobody had looked at. A role holding {@code AI Query Patient Data} without core's
-	 * {@code Get Allergies} is exactly that role.
-	 *
-	 * <p>It is the rule {@code reference/CLAUDE.md} states as "a chart the module could not read is not
-	 * a chart that records nothing", met on the one surface whose WHOLE payload can be empty. The
-	 * fixture is {@code DrugReferenceTestSupport.unreadableRecordsCtx}, which is the context the real
-	 * builder produces for that failure — its token sets are empty for that reason and cannot be
-	 * supplied, which is what stops this case being an arrangement no production path reaches.
-	 */
 	/**
 	 * The same rule on the OTHER side of the join: a chart whose ACTIVE-ORDER read failed is not a
 	 * screened chart either.
@@ -433,13 +416,13 @@ public class StandingChartAlertsTest {
 	 * predicate AND short-circuits on something else first; mutate the body and read the failures.
 	 */
 	@Test
-	public void theStandingEntryGatesOnThePredicateItPublishes() throws IOException {
+	public void theStandingEntryGatesOnTheSharedTogglePredicate() throws IOException {
 		SourceScan scan = new SourceScan(RELATIVE_SOURCE);
 		SourceScan.Region gate = scan.body(STANDING_ENTRY);
 
 		assertTrue(scan.names(gate, "if (!reportsStandingChartAlerts()) {"),
-				"the standing entry must gate on the predicate it publishes as `screened`, so the two "
-						+ "cannot come apart (issue #280)");
+				"the standing entry must gate on the shared toggle predicate, which is what the published "
+						+ "verdict then narrows (issue #280)");
 		for (String switchOfItsOwn : new String[] { "ChartSearchAiConstants.GP_DRUG_SAFETY_VALIDATE_ANSWERS",
 				"ChartSearchAiUtils.isDrugReferenceEnabled()" }) {
 			assertFalse(scan.names(gate, switchOfItsOwn),

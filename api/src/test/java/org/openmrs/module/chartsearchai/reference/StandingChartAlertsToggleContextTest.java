@@ -19,8 +19,8 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
-import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.api.context.UserContext;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 import org.openmrs.util.PrivilegeConstants;
 

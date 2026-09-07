@@ -249,6 +249,36 @@ public class LlmInferenceServiceTest {
 	}
 
 	/**
+	 * The walk's SUBJECT is what the model cited, not the chart: a finding the model never cited
+	 * surfaces none of its derivations (issue #305). ADR Decision 80 rejected "attach the record
+	 * unconditionally, whether or not the finding was cited", and this is that alternative expressed
+	 * as an arrangement — record [3] derives from [2], and the answer reaches only for [1].
+	 *
+	 * <p>The mutation is one token at the attach loop's header: iterate {@code indexMap.keySet()}
+	 * rather than {@code seen}. Every mapping's derivations are then collected regardless of what the
+	 * answer cited, and this case reddens — the allergy record joins the reference list carrying
+	 * {@code attachedByTheModule}, which is the module stating that the answer reached for a record
+	 * it never mentioned. The inner {@code !seen.contains(derived)} check cannot see this: [2] is not
+	 * in {@code seen} either way, which is exactly why the sibling case above leaves it green.
+	 */
+	@Test
+	public void extractCitedReferences_shouldNotSurfaceADerivationOfAFindingTheModelDidNotCite() {
+		List<RecordMapping> mappings = Arrays.asList(
+				new RecordMapping(1, "obs", uuid(456), null, "BP 120/80"),
+				new RecordMapping(2, "allergy", uuid(201), null, "Allergy: Ibuprofen (drug)"),
+				new RecordMapping(3, "safety_finding", "contraindication:Ibuprofen", null,
+						"Safety finding", null, 0, null, null, Arrays.asList(Integer.valueOf(2))));
+
+		List<RecordReference> result = LlmInferenceService.extractCitedReferences(
+				"Her blood pressure is 120/80 [1].", Arrays.asList(Integer.valueOf(1)), mappings);
+
+		assertEquals(1, result.size(), "only the record the answer cited resolves, was: " + result);
+		assertEquals(1, result.get(0).getIndex());
+		assertFalse(result.get(0).isAttachedByTheModule(),
+				"the model cited [1] itself, so it is the model's citation");
+	}
+
+	/**
 	 * A derivation naming an index this mapping list has no record for adds nothing, and says nothing
 	 * about it (issue #305).
 	 *

@@ -675,6 +675,14 @@ public class LlmInferenceService implements ChartSearchService {
 		// That is the rule rather than a property of today's data — no chart record carries a
 		// derivation at all. What keeps the iteration safe is separate and simpler: additions go into
 		// `attached` and reach `seen` only after the loop.
+		//
+		// The loop's SUBJECT carries the gate, and it is a mutation of its own — distinct from the
+		// check inside, which cannot see it. Iterate `indexMap.keySet()` rather than `seen` and every
+		// mapping's derivations are collected whatever the model cited, which is ADR Decision 80's
+		// refused alternative: attach the record unconditionally. Reddens →
+		// LlmInferenceServiceTest.extractCitedReferences_shouldNotSurfaceADerivationOfAFindingTheModelDidNotCite
+		// and, over the real injector, →
+		// LlmInferenceServiceFindingProvenanceContextTest.aFindingTheModelDidNotCiteBringsNoChartRecordIntoTheReferences
 		Set<Integer> attached = new LinkedHashSet<Integer>();
 		for (Integer index : seen) {
 			RecordMapping mapping = indexMap.get(index);

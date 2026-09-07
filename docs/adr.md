@@ -4307,9 +4307,10 @@ KB in twenty-six days, 94% of it drug-safety narrative, with one bullet at 39,60
 whose bulk was the review rounds of #339. The reasoning it carried is in the decisions above and
 in the javadoc — `DrugSafetyValidator` is 74% comment lines, `DrugReference` 69%. These figures
 were the exception. Every `N of M` / `N → M` ratio in that file was extracted and checked
-against `api/src`, `omod/src`, `eval/` and this document; the six below had no other home, and
-the seventh — the #339 sweep — is recorded only for the two figures Decision 63 does not carry.
-Each sits under the rule it was measured for. The check was pattern-based, so a measurement
+against `api/src`, `omod/src`, `eval/` and this document; the six from that pass had no other home,
+and its seventh entry — the #339 sweep — is recorded only for the two figures Decision 63 does not
+carry. Each sits under the rule it was measured for. LATER trims add to this appendix too, and such
+an entry names the trim that displaced it. The check was pattern-based, so a measurement
 phrased outside those two shapes could have been missed.
 
 **The ATC dictionary is sparse and the reference data is not** (#151, #228; Decisions 54, 58).
@@ -4351,6 +4352,19 @@ what the sweep's 216 responses were generated from. Against the reconciliation D
 sweep reads **94 divergent responses and 7 case-only divergences** — so the rung removes every
 response the widening added and adds none. See Decision 63 for the head-to-head figures and the
 reproduction method.
+
+**Keeping Bash output scoped** (#312; the Rules section). Measured 2026-08-25 over one full
+`resolve-ticket` run, the #250 one, and recorded in commit `8189cd76`'s message; displaced from
+`CLAUDE.md` by the #305 trim, which needed the room for a rule. Bash results were **22% of that
+run's context window** — 329 calls, ~460k characters, ~115k tokens — and the distribution is a
+tail: **33 of those 329 calls produced 52% of it**. Three habits account for most of that and none
+of them contributed a finding: `cat`-ing a file that was about to be grepped (one call printed two
+state files whole, 11k characters, to read four fields); recursive greps scoped to `.` rather than
+the source tree (one returned 9k characters of worktree hits and had to be re-run scoped); and
+reporting a build by every `Tests run:` line rather than failures plus a computed total (12% of all
+output across ~15 builds). **File-region reads were the largest single category at 38%**, and they
+are where that run's findings came from — which is why the rule deliberately does not reach reading
+production code. The savings on offer are overhead, not evidence.
 
 **A note on suite-size denominators.** The trimmed file drops the quoted totals (1058, 1171,
 1173, 1192, 1347/1350, 1585) because every one had gone stale against a suite that held about 1596 `@Test` methods when this was written (2026-08-31). Where a measurement's force depends on a denominator, state the

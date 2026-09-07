@@ -59,8 +59,14 @@ public class ArchitectureGuardTest {
 	// --- Rules ---
 
 	/**
-	 * The constructor that can carry a provenance list is invoked from exactly one production class
-	 * (issue #305).
+	 * The constructor that can carry a provenance list is invoked from exactly one class in THIS
+	 * module, which is all this walk can see (issue #305).
+	 *
+	 * <p><b>The api module is the scope, and it is not the whole of production.</b> The walk reads
+	 * {@code api/target/classes}; {@code ModuleSourceRoot} exposes {@code apiRoot()} and no omod root,
+	 * and api's test phase runs before omod is built in any case. So a construction in omod — where
+	 * {@code RecordMapping}'s widest constructor is public and reachable — would leave {@code callers}
+	 * equal to the expected singleton and this case green. The omod builds no mappings today.
 	 *
 	 * <p>Three judgements elsewhere rest on this and none of them could see it. The residue
 	 * disclosure on {@code CitationGroundingVerifier.AnswerCitations.unanchored} and
@@ -136,8 +142,9 @@ public class ArchitectureGuardTest {
 		assertEquals(java.util.Collections.singletonList(
 				"org/openmrs/module/chartsearchai/reference/DrugReferenceInjector.class"), callers,
 				"the constructor that carries a provenance list may be invoked from DrugReferenceInjector "
-						+ "and nowhere else — see this test's javadoc for the two checks that break "
-						+ "silently otherwise. Callers found: " + callers);
+						+ "and nowhere else in this module's classes, which is what this walk reads — see "
+						+ "this test's javadoc for the two checks that break silently otherwise. Callers "
+						+ "found: " + callers);
 	}
 
 

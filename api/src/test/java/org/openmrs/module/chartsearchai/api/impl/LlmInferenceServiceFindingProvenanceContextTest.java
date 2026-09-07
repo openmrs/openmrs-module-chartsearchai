@@ -233,6 +233,45 @@ public class LlmInferenceServiceFindingProvenanceContextTest extends BaseModuleC
 	}
 
 	/**
+	 * The attachment is gated on the model's own citation: a finding the model did NOT cite brings
+	 * nothing with it, even though the derivation is sitting in the chart the model was handed
+	 * (issue #305). ADR Decision 80 refused the alternative — "attach the record unconditionally,
+	 * whether or not the finding was cited" — and this is the case that pins the refusal.
+	 *
+	 * <p><b>Both halves run over the same arrangement</b>, which is what keeps the first from passing
+	 * vacuously: the second answer cites the finding and the allergy record IS attached there, so the
+	 * derivation this chart carries is the very one the first answer declined to reach for. Without
+	 * that half, an arrangement that had stopped injecting a finding at all would pass the first.
+	 *
+	 * <p><b>The mutation it reddens on is the attach walk's SUBJECT</b>, one token at its loop header:
+	 * iterate {@code indexMap.keySet()} instead of {@code seen} and every mapping's derivations are
+	 * collected whatever the model cited, so this answer — which reached for an obs and nothing else —
+	 * publishes the patient's allergy record as {@code attachedByTheModule}, with no {@code [N]} in
+	 * the prose and no grounding verdict, which is what a clinician reads as the answer's evidence.
+	 */
+	@Test
+	public void aFindingTheModelDidNotCiteBringsNoChartRecordIntoTheReferences() {
+		ChartAnswer answer = serviceUnderTest(new CitesTheObsAlone()).search(patient, QUESTION);
+
+		assertFalse(indexes(answer).contains(Integer.valueOf(ALLERGY_RECORD)),
+				"the answer cited the obs and nothing else, so the module has no citation of the "
+						+ "model's to surface a derivation off and must attach nothing. References "
+						+ "were: " + indexes(answer) + " for answer: " + answer.getAnswer());
+		for (RecordReference reference : answer.getReferences()) {
+			assertFalse(reference.isAttachedByTheModule(), reference.getResourceType() + " ["
+					+ reference.getIndex() + "] was cited by the model, so nothing here is the "
+					+ "module's citation");
+		}
+
+		ChartAnswer whenCited = serviceUnderTest(new CitesTheFindingAlone()).search(patient, QUESTION);
+		RecordReference attached = referenceAt(whenCited, ALLERGY_RECORD);
+		assertTrue(attached != null && attached.isAttachedByTheModule(),
+				"and the arrangement really does carry the derivation: cite the finding over the same "
+						+ "chart and the allergy record is attached. References were: "
+						+ indexes(whenCited));
+	}
+
+	/**
 	 * The class-code check pools its support across the records the ANSWER reached for, and a record
 	 * the MODULE attached is not one of them (issue #142's check, meeting issue #305).
 	 *
@@ -375,6 +414,19 @@ public class LlmInferenceServiceFindingProvenanceContextTest extends BaseModuleC
 			return new LlmResponse("No — Ibuprofen should not be given: the patient has a recorded "
 					+ "allergy to Ibuprofen [" + ALLERGY_RECORD + "][" + finding + "].",
 					Arrays.asList(Integer.valueOf(ALLERGY_RECORD), Integer.valueOf(finding)));
+		}
+	}
+
+	/** Cites the OBS record alone: a real answer, anchored inline, that never reaches for the
+	 *  module's finding. Still parses the finding's number, so an arrangement that stopped injecting
+	 *  one fails loudly instead of making the case above vacuous. */
+	private static final class CitesTheObsAlone extends CitesTheFindingAlone {
+
+		@Override
+		LlmResponse answer(String numberedRecords) {
+			findingNumber(numberedRecords);
+			return new LlmResponse("Her blood pressure is 120/80 [" + OBS_RECORD + "].",
+					Collections.singletonList(Integer.valueOf(OBS_RECORD)));
 		}
 	}
 

@@ -168,6 +168,12 @@ public class LlmInferenceService implements ChartSearchService {
 			List<Integer> misattributedOrderCitations =
 					ActiveOrderCitationFidelityCheck.reportMisattributedOrderCitations(patient,
 							response.getAnswer(), cited, chart.getMappings());
+			// And the fourth (issue #337 round three): the cited safety findings whose RATING the
+			// answer states nowhere. Carried rather than re-derived for the reason its neighbours
+			// are — the chart, which is where the rating travels, is gone by REST time.
+			List<Integer> unstatedFindingSeverities =
+					SafetyFindingSeverityFidelityCheck.reportUnstatedFindingSeverities(patient,
+							response.getAnswer(), cited, chart.getMappings());
 			List<RecordReference> references = groundReferences(response.getAnswer(), cited,
 					chart.getMappings());
 			// A per-call sink, never a field: the validator is a Spring singleton, so a field would be
@@ -182,7 +188,7 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
 					pairExtent.stated(), unresolvedDrugClass, unfaithfullyRenderedCitations,
-					misattributedOrderCitations, conditionRuleCoverage);
+					misattributedOrderCitations, unstatedFindingSeverities, conditionRuleCoverage);
 			outcome = "ok";
 			return answer;
 		}
@@ -477,22 +483,26 @@ public class LlmInferenceService implements ChartSearchService {
 			ungroundedAnswerConsumer.accept(new ChartAnswer(response.getAnswer(), cited,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), Collections.<SafetyWarning> emptyList(), searchMode,
-					referenceSlice, null, unresolvedDrugClass, null, null, conditionRuleCoverage));
+					referenceSlice, null, unresolvedDrugClass, null, null, null,
+					conditionRuleCoverage));
 
 			// After the user-visible handoff, before grounding: the exact comparisons over what the
 			// answer did with the records it cites — the class-code defects a set-membership
 			// comparison can and cannot see (issues #142 and #338), prose reproduced from a cited
 			// reference record and then rewritten inside the sentence it was copying (issue #337),
 			// and, since issue #377, the chart citations offered as evidence of an active drug order
-			// that cannot be one. None blocks: the class-code check reports only to the log, and the
-			// other two carry their answers onto the ChartAnswer this method RETURNS, so no consumer
+			// that cannot be one, and, since #337's third round, a cited finding whose RATING the
+			// answer states nowhere. None blocks: the class-code check reports only to the log and
+			// the rest carry their answers onto the ChartAnswer this method RETURNS, so no consumer
 			// above waits on any of them. Microseconds for the first and the third — measured by
 			// calling their own entry points from a throwaway same-package case, the active-order
 			// check costs 0.93 us on an answer stating no active-order claim, which is the ordinary
-			// one, and 171 us on a five-claim answer over a 400-record chart. The prose check is the
-			// outlier and is why this comment stopped saying microseconds of all of them: it is a
-			// word-level dynamic program, ~0.7 ms on a realistic chart and ~1.2 ms at the largest
-			// injected record set anyone has swept (ADR Decision 61).
+			// one, and 171 us on a five-claim answer over a 400-record chart. The finding-severity
+			// check is in the same band, 6.2 us on a stock install and 87 us on the reported shape
+			// (ADR Decision 78). The prose check is the outlier and is why this comment stopped
+			// saying microseconds of all of them: it is a word-level dynamic program, ~0.7 ms on a
+			// realistic chart and ~1.2 ms at the largest injected record set anyone has swept (ADR
+			// Decision 61).
 			ClassCodeFidelityCheck.reportClassCodeDefects(patient, question, response.getAnswer(),
 					cited, chart.getMappings());
 			// Its answer is carried onto the ChartAnswer this method returns (issue #337 round two).
@@ -506,6 +516,11 @@ public class LlmInferenceService implements ChartSearchService {
 			// reason (issue #377): the check runs here, after the user-visible handoff.
 			List<Integer> misattributedOrderCitations =
 					ActiveOrderCitationFidelityCheck.reportMisattributedOrderCitations(patient,
+							response.getAnswer(), cited, chart.getMappings());
+			// The fourth, carried the same way and stating null on the early `done` for the same
+			// reason (issue #337 round three): the check runs here, after the user-visible handoff.
+			List<Integer> unstatedFindingSeverities =
+					SafetyFindingSeverityFidelityCheck.reportUnstatedFindingSeverities(patient,
 							response.getAnswer(), cited, chart.getMappings());
 
 			long groundStart = System.currentTimeMillis();
@@ -525,7 +540,7 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
 					pairExtent.stated(), unresolvedDrugClass, unfaithfullyRenderedCitations,
-					misattributedOrderCitations, conditionRuleCoverage);
+					misattributedOrderCitations, unstatedFindingSeverities, conditionRuleCoverage);
 			outcome = "ok";
 			return answer;
 		}

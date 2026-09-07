@@ -591,8 +591,14 @@ public class DrugReferenceInjector {
 		// was derived from — the clinician reads cause then conclusion in chart order.
 		for (SafetyWarning finding : findings) {
 			String rendered = renderFinding(finding, orderRecordNumbers);
+			// The rating travels STRUCTURALLY beside the record as well as inside its prose (issue
+			// #337). Inside is where the model reads it; beside is where a consumer compares against
+			// it, so "which rating did this finding state" has one answer rather than one per parse.
+			// resourceKey is NOT a substitute for it: one screening question raises several findings
+			// of one type about one drug, so five records of this loop can share a single key.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING,
-					ChartSearchAiUtils.resourceKey(finding.getType(), finding.getDrug()), null, rendered));
+					ChartSearchAiUtils.resourceKey(finding.getType(), finding.getDrug()), null, rendered,
+					null, 0, null, ratingThisRecordStates(finding, rendered)));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;
 		}
@@ -1935,6 +1941,51 @@ public class DrugReferenceInjector {
 				? finding.getDetail()
 				: DrugSafetyValidator.endSentence(finding.getDetail());
 		return FINDING_PREFIX + finding.getDrug() + ": " + detail + chartOrders + provenance + strength;
+	}
+
+	/**
+	 * @return the rating {@code rendered} — this finding's own record, as the model will read it —
+	 *         states and an answer citing it therefore owes back, or {@code null} where there is
+	 *         none. Issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/337">
+	 *         #337</a>'s third round; the sole writer of {@code RecordMapping.getFindingSeverity()}.
+	 *
+	 *         <p><b>Two conditions, and the second is a fact about the DATA rather than about this
+	 *         module.</b> {@link DrugSafetyValidator#statableRating} decides which ratings are worth
+	 *         requiring at all. Then the record must actually STATE it — because
+	 *         {@link #renderFinding} writes none of the rating itself, and neither does
+	 *         {@code DrugSafetyValidator.interactionWarning}: on the bundled knowledge base the
+	 *         rating reaches the model only because {@code DdiDrugReferenceSource.noteFor} prepends
+	 *         {@code "<Severity>. "} to the mechanism it interns. An operator dataset binds
+	 *         {@code severity} and {@code note} from independent fields, so a note that does not
+	 *         restate the rating produces a record carrying none — and an answer cannot have dropped
+	 *         a word it was never given. Without this condition the most faithful answer possible,
+	 *         that record reproduced verbatim, is reported and published on a clinician-facing key,
+	 *         for every finding such an install raises.
+	 *
+	 *         <p>Asking whether the rendered record states a rating already KNOWN is not the
+	 *         derivation this field exists to avoid: reading a rating OUT of the prose would pick a
+	 *         mechanism's own "major" up as the module's rating, where this only ever narrows.
+	 *
+	 *         <p><b>But it narrows the crying-wolf case rather than closing it, and the residue is
+	 *         the same mechanism word.</b> A dataset whose note states no rating but whose MECHANISM
+	 *         happens to contain the rating word — "…the risk of major haemorrhage", on a rule rated
+	 *         Major — satisfies this condition, so the rating is carried although nothing in the
+	 *         record states it AS a rating, and an answer that enumerates without reproducing is
+	 *         still reported. That is precisely the answer shape issue #337 measured, so the case is
+	 *         not hypothetical; what makes it small is that it needs an operator dataset, the bundled
+	 *         one always writing the rating as a prefix. Closing it means telling this method where a
+	 *         finding's lead ends, which is knowledge {@link #renderFinding} owns. Recorded rather
+	 *         than closed, and NOT to be described as costing nothing — an earlier draft said so, on
+	 *         the reasoning that an answer reproducing the mechanism states the word too, which is
+	 *         false of every answer this check exists for.
+	 *
+	 *         <p>{@link ChartSearchAiUtils#statesWord} is shared with the check that reads the
+	 *         answer, deliberately: the two must be one rule or a rating stated one way and read the
+	 *         other is reported as dropped.
+	 */
+	private static String ratingThisRecordStates(SafetyWarning finding, String rendered) {
+		String rating = DrugSafetyValidator.statableRating(finding.getSeverity());
+		return rating != null && ChartSearchAiUtils.statesWord(rendered, rating) ? rating : null;
 	}
 
 	/**

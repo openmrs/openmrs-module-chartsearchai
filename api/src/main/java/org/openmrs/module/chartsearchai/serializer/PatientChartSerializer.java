@@ -609,12 +609,20 @@ public class PatientChartSerializer {
 	/**
 	 * Maps a sequential index used in the LLM prompt back to the OpenMRS resource.
 	 *
-	 * <p>{@link #getText()} is the record's content — the part the LLM reads and may quote.
-	 * {@link #getSource()} and {@link #getWithheldInteractions()} are <em>about</em> the record
-	 * rather than part of it, and are deliberately kept off the text: anything inside it is
+	 * <p>{@link #getText()} is the record's content — the part the LLM reads and may quote. The other
+	 * accessors are <em>about</em> the record rather than part of it, and {@link #getSource()} and
+	 * {@link #getWithheldInteractions()} are deliberately kept off the text: anything inside it is
 	 * quotable, and a model told to cite records recited the module's own truncation counter and
 	 * dataset attribution into a clinician-facing answer (issue #117). Metadata a client should
 	 * render beside a citation therefore travels as its own field, never as prose.
+	 *
+	 * <p>{@link #getFindingSeverity()} is carried only where the rendered text states it too, since
+	 * an answer cannot have dropped a word the record never gave it (issue #337). It is beside the
+	 * record so a consumer need not parse for it — which is exactly {@link #getOrderActive()}'s rule
+	 * (issue #317: never re-derive it, and in particular never from the rendered text), and that
+	 * field is in both places as well, {@code orderCurrencyLabel} rendering it into the body. So is
+	 * {@link #getDate()}. "Never as prose" is a rule about metadata the model has no business
+	 * reciting, which none of those three is.
 	 */
 	public static class RecordMapping {
 
@@ -641,6 +649,17 @@ public class PatientChartSerializer {
 		private final Boolean orderActive;
 
 		/**
+		 * The rating an injected {@code safety_finding} states, where an answer stating that finding
+		 * ought to state the rating too — {@code null} on every other record, and on a finding whose
+		 * rating has no word worth requiring (issue #337). Written in exactly ONE place,
+		 * {@code DrugReferenceInjector}'s finding mapping, off {@code SafetyWarning.getSeverity()}
+		 * through {@code DrugSafetyValidator.statableRating}, which is canonical for which ratings
+		 * answer null and why. Never re-derived from {@link #getText()}: a knowledge-base mechanism
+		 * can itself contain a rating word.
+		 */
+		private final String findingSeverity;
+
+		/**
 		 * Backward-compatible constructor that carries no source text. Mappings
 		 * built this way cannot be grounding-checked; the grounding verifier
 		 * treats a null/blank text as "cannot verify" and leaves the citation
@@ -659,10 +678,12 @@ public class PatientChartSerializer {
 		 * {@code text} (see the class doc). A chart record has neither, so the shorter constructors
 		 * default them to "no attribution, nothing withheld".
 		 *
-		 * <p>Not the full constructor — it defaults {@link #orderActive} to {@code null}, "the
-		 * module cannot say". The one below is the full one, and the distinction is worth the name
+		 * <p>Not the full constructor — it defaults {@link #orderActive} to {@code null} ("the module
+		 * cannot say") and, since issue #337, {@link #findingSeverity} as well. The full one is the
+		 * WIDEST, which is two rungs below rather than one, and the distinction is worth the name
 		 * because a caller reaching for "the full constructor" through this javadoc would silently
-		 * drop a drug-order record's currency answer.
+		 * drop a drug-order record's currency answer or a finding's rating. Do not name the next rung
+		 * as the full one: this sentence did, and the ladder grew under it.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions) {
@@ -670,12 +691,28 @@ public class PatientChartSerializer {
 		}
 
 		/**
-		 * Full constructor, including the order-currency answer. Every shorter constructor defaults it
-		 * to {@code null} — "the module cannot say" — which is right for an injected record (no
-		 * {@code Order} behind it) and for every caller that has not read the patient's orders.
+		 * The order-currency overload. Every shorter constructor defaults that answer to {@code null}
+		 * — "the module cannot say" — which is right for an injected record (no {@code Order} behind
+		 * it) and for every caller that has not read the patient's orders.
+		 *
+		 * <p>Not the full constructor since issue #337: it defaults {@link #findingSeverity} to
+		 * {@code null}, which is right for every record that is not an injected safety finding. The
+		 * one below is the full one, named so a caller reaching through this javadoc for "the full
+		 * constructor" cannot silently drop a finding's rating.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive) {
+			this(index, resourceType, resourceUuid, date, text, source, withheldInteractions,
+					orderActive, null);
+		}
+
+		/**
+		 * Full constructor, including the finding's stated rating. Every shorter constructor defaults
+		 * it to {@code null} — "this record states no rating an answer owes" — which is right for
+		 * every record but an injected {@code safety_finding}, the one thing that has a rating at all.
+		 */
+		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
+				String source, int withheldInteractions, Boolean orderActive, String findingSeverity) {
 			this.index = index;
 			this.resourceType = resourceType;
 			this.resourceUuid = resourceUuid;
@@ -684,6 +721,7 @@ public class PatientChartSerializer {
 			this.source = source;
 			this.withheldInteractions = withheldInteractions;
 			this.orderActive = orderActive;
+			this.findingSeverity = findingSeverity;
 		}
 
 		public int getIndex() {
@@ -766,6 +804,24 @@ public class PatientChartSerializer {
 		 */
 		public Boolean getOrderActive() {
 			return orderActive;
+		}
+
+		/**
+		 * @return the rating this record states that an answer citing it ought to state too, or
+		 *         {@code null} where there is none — every record that is not an injected
+		 *         {@code safety_finding}, and a finding whose rating carries no word worth requiring.
+		 *         {@code DrugSafetyValidator.statableRating} is canonical for that second case.
+		 *
+		 *         <p>Metadata ABOUT the record and deliberately not part of {@link #getText()}, the
+		 *         discipline this class's own javadoc states — with the qualification that this field
+		 *         is non-null only where the rendered text states the rating as well, which is not
+		 *         every dataset. {@code DrugReferenceInjector.ratingThisRecordStates} is canonical for
+		 *         that condition and for why it is a fact about the data rather than about this
+		 *         module. What the field buys is that "which rating did this finding state" has one
+		 *         answer rather than one per parse.
+		 */
+		public String getFindingSeverity() {
+			return findingSeverity;
 		}
 	}
 }

@@ -20,6 +20,7 @@ import static org.openmrs.module.chartsearchai.ChartSearchAiConstants.RESOURCE_T
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -267,15 +268,11 @@ public class ChartSearchAiUtils {
 	 * recitations were judged entailed while the one faithful recitation was judged not (issue #106).
 	 * A passing verdict is therefore false assurance. A FAILING verdict still carries information — it
 	 * says the citation is not about the record at all — so the flag is kept and only the pass is
-	 * withheld. Faithfulness of reference content is checked deterministically instead, by two exact
-	 * comparisons, which are the deterministic post-answer checks that read reference content and not
-	 * all of them — {@code ActiveOrderCitationFidelityCheck} (issue #377) reads none, asking instead
-	 * which CHART record a sentence cited, and ADR Decision 76 is where they are enumerated. The two
-	 * that read reference content are {@code ClassCodeFidelityCheck}, for an ATC class code
-	 * the answer states that no cited record does (issue #142), report-only, and
-	 * {@code ReferenceProseFidelityCheck} for an answer that reproduces a cited reference record's
-	 * prose and then substitutes its own words inside the sentence it was copying (issue #337), whose
-	 * answer is also published as {@code unfaithfullyRenderedCitations}. NOT
+	 * withheld. Faithfulness of reference content is checked deterministically instead, by exact
+	 * comparisons that run after every answer — and {@code CitationGroundingVerifier}'s class javadoc
+	 * is where they are enumerated, along with the post-answer check that is NOT one of them because
+	 * it reads no reference content at all. Pointed at rather than copied here, so that this site
+	 * cannot fall behind the family again. NOT
 	 * by the {@code DrugSafetyValidator} chips, which this javadoc said until #337: they carry the
 	 * deterministic text but are an independent list nothing reconciles against the answer.
 	 *
@@ -960,6 +957,64 @@ public class ChartSearchAiUtils {
 	 *          predicate shared by the drug-reference parse boundaries and renderers. */
 	public static boolean isBlank(String value) {
 		return value == null || value.trim().isEmpty();
+	}
+
+	/**
+	 * @return whether {@code text} states {@code word} as a WORD rather than merely containing its
+	 *         letters — case-insensitively, with no letter or digit against either end of it.
+	 *
+	 *         <p>Issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/337">
+	 *         #337</a>'s third round, and it is shared rather than local because its callers must
+	 *         agree or the check between them is unsound: {@code DrugReferenceInjector} asks it
+	 *         whether an injected finding's RECORD states the finding's rating, and
+	 *         {@code SafetyFindingSeverityFidelityCheck} asks it whether the ANSWER does. Were those
+	 *         two rules to differ, a rating the record states one way and the answer states the other
+	 *         would be reported as dropped, or a rating neither states would be asked for.
+	 *
+	 *         <p><b>Deliberately not {@code DrugReference}'s bounded-token family, and not a member
+	 *         of it — but not because the rules differ.</b> At {@code PROSE_TRAILING_LETTERS}
+	 *         (zero) that family's {@code containsWord} reduces to this same condition, and a review
+	 *         pass drove both over 175 pairs to confirm it: they agree on every one but an accented
+	 *         needle. So the reason is NOT that this question "has no allowance to choose", which an
+	 *         earlier draft of this javadoc said in four places and which is false of
+	 *         {@code containsWord} too. Two reasons hold. That family FOLDS DIACRITICS and this
+	 *         deliberately does not — a rating is the module's own closed vocabulary, so an accented
+	 *         spelling of it is not a thing to accommodate, while folding one silently would widen
+	 *         what an answer may say. And {@code containsWord} is package-private in the drug-safety
+	 *         package, so reaching it from {@code api.impl} means widening the drug-name matcher out
+	 *         of the package whose instructions bind it (#260). It is a boundary rule beside that
+	 *         family rather than inside it — {@code DrugReference.boundedTokenIndex}'s javadoc
+	 *         enumerates the routes that share ITS scan, and this is not one of them.
+	 *
+	 *         <p>The boundary admits every way a rating has been observed to be written — a colon
+	 *         after it, parentheses or markdown emphasis around it, a hyphen before {@code -rated} —
+	 *         and refuses only a longer word it sits inside, {@code majority} being the one that
+	 *         matters, since it is ordinary in clinical prose.
+	 *
+	 *         <p>A null or blank {@code word} answers false rather than matching everything: an empty
+	 *         needle would otherwise match at the first position with non-alphanumeric neighbours —
+	 *         any {@code ". "} — and a check silenced by a blank is a check that fails open. <b>The
+	 *         blank half of that guard is UNPINNED</b>: weakening it to a null test leaves the suite
+	 *         green, because no production caller can reach here with a blank
+	 *         ({@code statableRating} answers a trimmed non-blank or null). It is contract for a
+	 *         public method rather than a reachable path, and said so rather than left looking
+	 *         better defended than it is.
+	 */
+	public static boolean statesWord(String text, String word) {
+		if (text == null || isBlank(word)) {
+			return false;
+		}
+		String haystack = text.toLowerCase(Locale.ROOT);
+		String needle = word.toLowerCase(Locale.ROOT);
+		for (int at = haystack.indexOf(needle); at >= 0; at = haystack.indexOf(needle, at + 1)) {
+			int after = at + needle.length();
+			if ((at == 0 || !Character.isLetterOrDigit(haystack.charAt(at - 1)))
+					&& (after >= haystack.length()
+							|| !Character.isLetterOrDigit(haystack.charAt(after)))) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** @return the first non-blank of {@code values} (as given, untrimmed), or null when none —

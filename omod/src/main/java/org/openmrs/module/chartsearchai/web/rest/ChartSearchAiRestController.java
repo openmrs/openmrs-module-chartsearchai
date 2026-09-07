@@ -387,7 +387,7 @@ public class ChartSearchAiRestController {
 	 * contraindication arm is bounded to what the response is about, and what that bound gives up is
 	 * announcing a prescribing error nobody asks a drug-shaped question about. This is the surface it
 	 * was given up TO: a client asks for it, so the finding reaches a clinician who ran no search and
-	 * nothing rides an unrelated answer. ADR Decision 77 carries the measurement behind the bound.
+	 * nothing rides an unrelated answer. ADR Decision 78 carries the measurement behind the bound.
 	 *
 	 * <p>Gated on the same clinical privilege as {@code /search} and resolved through the same
 	 * {@link #resolvePatient}, so the per-patient access check is the one the answer path uses.

@@ -621,6 +621,46 @@ public class ReferenceProseFidelityTest {
 		}
 	}
 
+	/**
+	 * Issue #379: a citation marker inside a RECORD is not a word the answer can be held to.
+	 *
+	 * <p>The answer here reproduces its cited record to the last word, marker included — the faithful
+	 * behaviour, and since #379 the behaviour a numbered chart-order attribution exists to produce.
+	 * The comparison strips {@code ChartSearchAiUtils.INLINE_CITATION} from the answer, so before this
+	 * case the record's own marker tokenised to a bare number the stripped answer could never
+	 * reproduce: the run broke there, the gap {@code " ["} carries no sentence
+	 * terminator so nothing explained it, and a verbatim copy was reported as a substitution — at WARN
+	 * and on {@code unfaithfullyRenderedCitations}, which a client reads. Both operands now go through
+	 * one marker-stripping step.
+	 *
+	 * <p>The record is assembled, for the reason this file's other assembled cases give: the check is
+	 * a pure function of an answer and a record's TEXT, and what the injector actually numbers is
+	 * pinned where it is decided, by {@code InteractionFindingChartOrderBridgeTest}.
+	 */
+	@Test
+	public void aCitationMarkerInsideARecordIsNotAWordTheAnswerMustReproduce() {
+		// The marker inside the record names record [2], which this chart carries: in production a
+		// chart-order attribution's number is read off the mappings, so it always names a record that
+		// exists, and a number that did not would raise a phantom-citation WARN of its own and make
+		// this case green for the wrong reason.
+		String record = "Aspirin and warfarin together raise the risk of serious bleeding in patients "
+				+ "on both [2] and this needs monitoring.";
+		TestableService onMarked = newService(referenceRecordsStating(record,
+			"Paracetamol is recorded with neither of them."));
+		onMarked.setLlmProvider(answering(record + " [1]"));
+		try (LogCapture capture = LogCapture.on(PACKAGE)) {
+			ChartAnswer answer = onMarked.search(patient(), QUESTION);
+			assertFalse(capture.describeAll().isEmpty(),
+					"the capture must receive the pipeline's own INFO lines, or this passes vacuously");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+					"an answer that reproduces its record to the last word, marker included, has "
+							+ "substituted nothing. Captured: " + capture.describeAll());
+			assertEquals(Collections.<Integer> emptyList(),
+					answer.getUnfaithfullyRenderedCitations(),
+					"and the published statement must not name it either");
+		}
+	}
+
 	@Test
 	public void aCitedChartRecordIsNeverComparedAgainstTheAnswer() {
 		// The scope of the check, which is the classification and not a type name. A chart record is

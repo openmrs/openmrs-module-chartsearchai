@@ -386,7 +386,7 @@ public class DrugSafetyValidator {
 	 * what a response is about. What that gives up is announcing a prescribing error nobody asks a
 	 * drug-shaped question about, and this is the surface it was given up TO: a client asks for it,
 	 * so nothing rides an unrelated answer, and the finding is available to a clinician who never ran
-	 * a search. ADR Decision 77 is canonical for the measurement behind the bound.
+	 * a search. ADR Decision 78 is canonical for the measurement behind the bound.
 	 *
 	 * <p>One read this pass makes and does not use, stated so it is not rediscovered:
 	 * {@code PatientClinicalContextBuilder} fetches the patient's latest weight, whose only consumer
@@ -588,7 +588,7 @@ public class DrugSafetyValidator {
 		/** {@link #standingChartAlerts(PatientClinicalContext)} and nothing else. There is no response
 		 *  to be about, so the gate has no referent and every finding the chart supports is stated.
 		 *  <b>Do not reach for this from a pass that produces an ANSWER</b> — that is issue #143's
-		 *  over-reach, which ADR Decision 77 records with its measurement, and the reason the bound
+		 *  over-reach, which ADR Decision 78 records with its measurement, and the reason the bound
 		 *  exists at all. */
 		UNBOUNDED
 	}

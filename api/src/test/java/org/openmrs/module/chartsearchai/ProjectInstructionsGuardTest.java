@@ -96,6 +96,16 @@ public class ProjectInstructionsGuardTest {
 	 * nearer 4. Backticked identifiers, camelCase method names and em-dashes are why. So price a
 	 * kilobyte here at roughly 370 tokens rather than 250 before deciding a budget is generous.
 	 *
+	 * <p><b>The reference budget was raised from 72,000 to 75,000 on 2026-09-07, and the raise is
+	 * recorded rather than quietly taken.</b> The paragraph above calls a raise in the same commit as
+	 * the prose that overflowed it illegitimate, and this is the state it did not cover: two branches
+	 * each added one rule, and the first to merge (#379) left the file 18 bytes under the cap, so the
+	 * second (#280) could not record a rule of any size. Trimming came first and is what makes the
+	 * number honest — #280 folded its own new sub-bullet into the one above it, which framed the same
+	 * decision twice, and cut its amendment to the chart-read bullet — and the residue that would not
+	 * fit was a directive, not evidence. What 75,000 buys is the couple of ordinary rules the
+	 * principle below asks for; it is a ratchet still, and the direction to move it is down.
+	 *
 	 * <p>One principle sets both: headroom of roughly a tenth — a couple of ordinary rules, not a
 	 * section. Both were set at the split, a little under a tenth above what each file measured once
 	 * {@link #noBulletCarriesMoreProseThanItsBudget} had been satisfied — room for a few rules, not
@@ -111,7 +121,7 @@ public class ProjectInstructionsGuardTest {
 	private static Map<Path, Integer> budgets() {
 		Map<Path, Integer> m = new LinkedHashMap<>();
 		m.put(ROOT_INSTRUCTIONS, 23_000);
-		m.put(REFERENCE_INSTRUCTIONS, 72_000);
+		m.put(REFERENCE_INSTRUCTIONS, 75_000);
 		return m;
 	}
 

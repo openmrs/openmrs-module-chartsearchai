@@ -841,15 +841,18 @@ public interface ChartSearchService {
 		 * verification ran (see {@code chartsearchai.grounding.enabled});
 		 * {@code null} when verification was disabled, could not run for this
 		 * reference (e.g. the record carried no text to compare against), or ran
-		 * and could not certify it — a citation of a compound claim unit under
-		 * entailment (issue #302), a chart citation whose claim also rests on
-		 * module-supplied reference material and whose judge said no (issue
-		 * #284), or a {@code reference}-group citation whose Tier-1 cosine
-		 * PASSED. A reference-group cosine FAIL is kept and returns
-		 * {@code FALSE} here; only the wire withholds it unconditionally, which
-		 * is the distinction the next paragraph draws — and note the #284 case
-		 * is unlike both, withheld INSIDE the verifier, so no verdict survives
-		 * here to read. Its count is logged once per answer instead. A
+		 * and could not certify it. That last set of reasons is enumerated once,
+		 * in ADR Decision 11's {@code grounded} paragraph, and is not restated
+		 * here; what this accessor adds is which of them leave a verdict standing
+		 * on IT. A {@code reference}-group citation is demote-only, so its Tier-1
+		 * cosine PASS renders {@code null} here while its FAIL is kept and returns
+		 * {@code FALSE} — only the wire withholds that unconditionally, which is
+		 * the distinction the next paragraph draws. A withholding the VERIFIER
+		 * itself applies leaves no verdict here to read at all: a compound claim
+		 * unit under entailment (issue #302); the judge's negative on a composite
+		 * claim (issue #284, whose count is logged once per answer instead); and a
+		 * citation the MODULE attached rather than the model emitting it (issue
+		 * #305), in either mode. A
 		 * {@code null} verdict must be rendered as "unverified", never as
 		 * "verified".
 		 *

@@ -68,10 +68,12 @@ finding is unlikely to be injected at all -- but that has not been re-measured,
 and "unlikely" is not "cannot". Do not quote a tally here over a change to the
 #284 rule.
 
-Only CHART-group citations are measurable here: a reference-group citation
-publishes no verdict at all (issue #201), so its cells read `withheld` and a
-scoping flip on one cannot be seen from the wire. The gate below is therefore a
-statement about chart citations.
+Only the MODEL's own CHART-group citations are measurable here. A reference-group
+citation publishes no verdict at all (issue #201), so its cells read `withheld`;
+and since issue #305 a chart-group citation the MODULE attached carries none
+either, so its cells read `attached` (both tags are set in `search`, which says
+why neither may be printed as None). A scoping flip on either cannot be seen from
+the wire, so the gate below is a statement about the model's own chart citations.
 
 The GP is saved before and restored after. Answers are grounding-independent,
 so a differing answer between modes signals LLM nondeterminism (reported).

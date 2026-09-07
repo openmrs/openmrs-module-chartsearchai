@@ -67,7 +67,10 @@ import org.springframework.stereotype.Service;
  *
  * <p>That one classification also decides whether the citation can be grounding-verified (issue
  * #122): reference material is demote-only, so its verdict is never {@code true}, while chart
- * evidence is graded normally. Both consequences follow from the single provenance judgement and
+ * evidence is graded normally so far as PROVENANCE decides it. Who made the CLAIM is a second axis
+ * this classification does not reach — a citation the MODULE attached is chart evidence and is still
+ * not graded (issue #305) — and ADR Decision 80 draws that axis rather than this javadoc. Both
+ * consequences of the classification follow from the single provenance judgement and
  * both are asserted by that guard — they used to be two separate registrations, and the second was
  * missed when {@code safety_finding} was added. Since issue #201 it decides a third thing: a
  * reference-group citation publishes no verdict at all, serializing {@code grounded: null} however

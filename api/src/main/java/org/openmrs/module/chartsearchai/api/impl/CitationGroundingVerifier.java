@@ -55,9 +55,10 @@ import org.springframework.stereotype.Service;
  * {@code chartsearchai.grounding.entailment.enabled} is set, the cited references are
  * confirmed by a yes/no LLM entailment verdict that is authoritative, except where its answer is
  * decided by the pairing rather than earned by the record. This is what
- * catches the subject/polarity flips cosine cannot — for chart records; three kinds of citation are
- * excepted and all three are below: module-supplied reference material, a COMPOUND claim unit, and
- * — for its NEGATIVE only — a COMPOSITE claim. It runs on Tier-1 passes
+ * catches the subject/polarity flips cosine cannot — for chart records; the citations excepted from
+ * it are module-supplied reference material, a COMPOUND claim unit, a citation the MODULE attached
+ * ({@link Disposition#UNVERIFIABLE}, issue #305) and — for its NEGATIVE only — a COMPOSITE claim,
+ * each below or on the constant named for it. It runs on Tier-1 passes
  * <em>and</em> failures — the dangerous case (a high-overlap but unsupported
  * citation) is a Tier-1 pass, so confirming only failures would miss it. References are verified
  * in a SINGLE batched call ({@link LlmProvider#entailsBatch}) — except for the citations of ONE
@@ -459,18 +460,22 @@ public class CitationGroundingVerifier {
 
 	/**
 	 * Returns a copy of {@code references} with each entry's grounding verdict
-	 * set. A reference is grounded when its record's text is at least
+	 * set. A citation the MODEL emitted is grounded when its record's text is at least
 	 * {@link ChartSearchAiUtils#getGroundingMinCosine()} cosine-similar to the
 	 * best-matching answer sentence that cites it (or, when no sentence cites it
 	 * inline — e.g. it appeared only in the structured citations array — to the
-	 * best-matching sentence anywhere in the answer). References whose record
+	 * best-matching sentence anywhere in the answer). That whole-answer argmax is NOT applied to a
+	 * citation the MODULE attached: such a citation is anchored by no sentence by construction, and
+	 * grading it against a claim selected for it out of the whole answer is exactly what ADR
+	 * Decision 80 refuses (issue #305) — no statement is selected for it and nothing is published.
+	 * References whose record
 	 * carries no text, or that cannot be embedded, are returned with a
-	 * {@code null} verdict ("could not verify"). Two kinds of citation are held back from a verdict,
-	 * by different amounts and under different conditions: module-supplied reference material is
-	 * demote-only in either mode (a cosine pass renders {@code null}, a cosine fail still flags), and
-	 * a COMPOUND claim unit — a statement attaching its citations to different pieces of itself —
-	 * publishes nothing in either direction, but only when entailment is enabled; with Tier-2 off it
-	 * is graded like any other citation. See the class javadoc for both.
+	 * {@code null} verdict ("could not verify"). Citations are also held back deliberately, by
+	 * different amounts and under different conditions: module-supplied reference material, a
+	 * COMPOUND claim unit under entailment, and a citation the MODULE attached, in either mode.
+	 * {@link Disposition} says how much each is held back and the class javadoc says why; the
+	 * reasons a published {@code grounded} reads {@code null} are enumerated once, in ADR
+	 * Decision 11's {@code grounded} paragraph, and neither set is restated here.
 	 *
 	 * @param answer the full answer prose, with inline {@code [N]} markers
 	 * @param references the index-validated references to annotate
@@ -500,7 +505,7 @@ public class CitationGroundingVerifier {
 	 * tests can exercise the grounding logic without an OpenMRS context.
 	 *
 	 * <p>When {@code entailmentEnabled}, every reference with a resolvable claim sentence and
-	 * record text — except three kinds that never enter Tier-2: citations of module-supplied reference
+	 * record text — except the kinds that never enter Tier-2: citations of module-supplied reference
 	 * material, citations of a COMPOUND claim unit (both in the class javadoc) and, since issue #305,
 	 * a citation the MODULE attached ({@link Disposition#UNVERIFIABLE}) — is confirmed by a
 	 * Tier-2 LLM entailment verdict that is authoritative

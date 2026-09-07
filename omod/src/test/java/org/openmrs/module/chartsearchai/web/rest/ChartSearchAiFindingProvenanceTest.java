@@ -45,10 +45,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * than a verdict being withheld.
  *
  * <p>Neither is derivable from the other fields — an unmarked citation is indistinguishable on the
- * wire from one the model listed in its structured array alone, which is a shape that has always
- * existed and IS graded. So the fact is published, and this is what pins that it reaches the client:
- * without the key the module's own citation reads as the model's, and a {@code null} verdict on it
- * reads as one that could not be verified.
+ * wire from one the model listed in its structured array alone, a shape that has always existed and
+ * whose own {@code grounded} reads {@code null} too whenever grounding is off or a rule withheld the
+ * verdict (those reasons are enumerated once, in ADR Decision 11's {@code grounded} paragraph). So
+ * {@code chart} group, no marker and a {@code null} verdict together do not say who cited the
+ * record. The fact is published instead, and this is what pins that it reaches the client: without
+ * the key the module's own citation reads as the model's, and a {@code null} verdict on it reads as
+ * one that could not be verified.
  *
  * <p>Asserted against the real controller's real serialization, on every surface that carries
  * references — the blocking {@code /search} response and all three SSE events — since a client may

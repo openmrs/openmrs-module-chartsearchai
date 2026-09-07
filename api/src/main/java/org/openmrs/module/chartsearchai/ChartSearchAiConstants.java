@@ -343,10 +343,12 @@ public class ChartSearchAiConstants {
 	 * sentence whose claim statements overlap get single-pair calls — a clause-scoped
 	 * compound, or an enumerating sentence in either mode), and the Tier-1 cosine
 	 * verdict is computed lazily only where Tier-2 yields none, so the marginal
-	 * cost is one LLM round-trip per answer. Two kinds of citation are never put to
-	 * the judge at all: module-supplied reference material (issue #106/#122) and a
+	 * cost is one LLM round-trip per answer. Some citations are never put to
+	 * the judge at all: module-supplied reference material (issue #106/#122); a
 	 * COMPOUND claim unit, a statement attaching its citations to different pieces of
-	 * itself (issue #302). Still a separate opt-in from the
+	 * itself (issue #302); and a citation the MODULE attached rather than the model
+	 * emitting it (issue #305). {@code CitationGroundingVerifier.Disposition} is
+	 * canonical for that set and for how much each is held back. Still a separate opt-in from the
 	 * cheap Tier-1 pass. Default {@code false}. See {@code CitationGroundingVerifier}.
 	 */
 	public static final String GP_GROUNDING_ENTAILMENT_ENABLED = "chartsearchai.grounding.entailment.enabled";

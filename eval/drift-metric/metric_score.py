@@ -124,10 +124,16 @@ def main():
         # cites that finding, marked attachedByTheModule — a deterministic record the answer never
         # reached for. Counted here it moves this gate's number without the model's behaviour
         # moving: inside the gold on-topic set it lifts precision and recall, outside it lands in
-        # `unk` and is summed into the published drift total. Two of the eight gold topics are
-        # `allergies` and `medications`, which is exactly where the order-driven contraindication
-        # arm fires, so this is the ordinary case rather than a corner one. Drift this scorer must
-        # not read is the lesson Decision 37 records of score_probe_safety.py, one metric over.
+        # `unk` and is summed into the published drift total. Drift this scorer must not read is the
+        # lesson Decision 37 records of score_probe_safety.py, one metric over.
+        #
+        # ON THIS GATE'S OWN PROTOCOL the filtered population is EMPTY, and saying so is the point:
+        # capture_eval.sh sets querystore.enabled and embedding.preFilter and nothing else, and the
+        # arm that raises a contraindication finding needs chartsearchai.drugReference.enabled, whose
+        # default is false. So a capture taken as the README prescribes is unaffected, and the figures
+        # it records are over the same population they always were. The filter is for a capture taken
+        # on an install that has the feature ON — where two of the eight gold topics are `allergies`
+        # and `medications`, which is where that arm fires.
         #
         # A capture taken before #305 carries no such key, so `.get` defaulting to false keeps every
         # historical capture scoring exactly as it did.

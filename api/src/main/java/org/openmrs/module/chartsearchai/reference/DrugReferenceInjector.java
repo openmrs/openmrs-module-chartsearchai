@@ -908,13 +908,21 @@ public class DrugReferenceInjector {
 		 *         licenses: a resource uuid is globally unique, so a record carrying one IS that
 		 *         resource however it is typed. Sharing the index rather than walking the mappings
 		 *         again is the one-RULE constraint the record-numbering bullet in this package's
-		 *         {@code CLAUDE.md} states; what is NOT shared is the READING, and the difference is
-		 *         the same one ADR Decision 77 drew for the order legs. {@link #numbersFor} is issue
-		 *         #118's fail-open substantiation boolean, so last-wins costs it nothing. Citing is an
-		 *         affirmative claim about WHICH record, so a collapsed duplicate would attach a
-		 *         finding to a record chosen by mapping ORDER — hence the refusal, and hence
-		 *         {@link #contestedUuids} being accumulated rather than the map being read for a count
-		 *         it cannot give.
+		 *         {@code CLAUDE.md} states; what is NOT shared is the READING —
+		 *         {@link #numbersFor} is issue #118's fail-open substantiation boolean, so last-wins
+		 *         costs it nothing, and citing is an affirmative claim about WHICH record. <b>ADR
+		 *         Decision 78 is canonical for that argument</b> and carries the residue below; what
+		 *         it does not carry is the mechanical reason {@link #contestedUuids} exists, which is
+		 *         that the map cannot be read for a count it has already collapsed.
+		 *
+		 *         <p><b>Three readers, and the third does not follow the split.</b>
+		 *         {@link #citableNumberFor} is issue #379's order-record citation — as affirmative as
+		 *         this one — and its uuid leg goes through {@link #numberByUuid}, which does not
+		 *         consult {@link #contestedUuids}. So on a chart carrying two records under one order
+		 *         uuid, #379 cites the last one indexed and #305 cites neither. Not resolved here:
+		 *         that rendering ships behind {@code chartsearchai.drugSafety.citeOrderRecords} and is
+		 *         OFF, and narrowing its leg is a change to Decision 77's gated decision without its
+		 *         measurement. Stated so whoever flips that flag knows what is owed.
 		 */
 		private Integer numberOfRecord(String resourceUuid) {
 			return resourceUuid == null || contestedUuids.contains(resourceUuid) ? null
@@ -1068,10 +1076,12 @@ public class DrugReferenceInjector {
 	 * {@code LlmInferenceService.extractCitedReferences} sorts the reference list by DATE, so a dated
 	 * provenance record is reordered against an undated one.
 	 *
-	 * <p>Empty for every finding whose {@code chartRecords()} is empty — an interaction, whose evidence
-	 * is an ORDER, and any contraindication whose context stated no provenance — and for a uuid this
-	 * chart carries no record for, or carries two of. Additive in every one of those cases: the record
-	 * is injected exactly as it was before issue #305.
+	 * <p>THIS layer refuses two ways: a uuid this chart carries no record for, and a uuid it carries
+	 * more than one record for. It is also empty for anything {@code SafetyWarning.chartRecords()} was
+	 * already empty for — and what THAT covers is not restated here, because the whole list across
+	 * both layers is enumerated in one place, {@code RecordMapping.getDerivedFrom()}. (A draft of this
+	 * paragraph restated it and dropped one of the five, which is exactly what that declaration exists
+	 * to stop.) Additive in every case: the record is injected as it was before issue #305.
 	 *
 	 * <p>The {@code records == null} half of the guard is defensive and unreached: the index is null
 	 * only where {@code findings} is empty, and the one call site is inside the loop over those

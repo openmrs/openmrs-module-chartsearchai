@@ -691,8 +691,8 @@ public class LlmInferenceService implements ChartSearchService {
 			}
 			for (Integer derived : mapping.getDerivedFrom()) {
 				// Already cited by the model is a no-op, and it must stay the MODEL's citation: it
-				// carries a claim of the model's, so it is graded like any other (issue #305's own
-				// first measured form).
+				// carries a claim of the model's, so grounding reads it as the model's like every
+				// other citation the model emitted (issue #305's own first measured form).
 				// The mapping check is for a CALLER mismatch and not for the injector: a derivation is
 				// resolved off the same mapping list that arrives here, so on the production path
 				// every derived index maps. It bites where a caller hands this method a different

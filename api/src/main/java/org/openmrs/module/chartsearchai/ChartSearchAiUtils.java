@@ -263,9 +263,8 @@ public class ChartSearchAiUtils {
 	 * withheld. Faithfulness of reference content is checked deterministically instead, by exact
 	 * comparisons that run after every answer — and {@code CitationGroundingVerifier}'s class javadoc
 	 * is where they are enumerated, along with the post-answer check that is NOT one of them because
-	 * it reads no reference content at all. Pointed at rather than copied: this sentence carried its
-	 * own list and its own pointer, and when the family grew both went stale while the neighbouring
-	 * homes of that list were being re-pointed at the one home. NOT
+	 * it reads no reference content at all. Pointed at rather than copied here, so that this site
+	 * cannot fall behind the family again. NOT
 	 * by the {@code DrugSafetyValidator} chips, which this javadoc said until #337: they carry the
 	 * deterministic text but are an independent list nothing reconciles against the answer.
 	 *

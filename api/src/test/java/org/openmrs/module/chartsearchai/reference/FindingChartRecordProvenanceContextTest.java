@@ -132,6 +132,35 @@ public class FindingChartRecordProvenanceContextTest extends BaseModuleContextSe
 		return allergy.getUuid();
 	}
 
+	/**
+	 * Saves an active condition recorded as a CODED concept — the fourth of the builder's four
+	 * attribution legs, and the one no other case here reaches.
+	 *
+	 * <p>Its own case rather than a variant of the free-text one because the legs are siblings that
+	 * fail independently: {@code addConceptName} and {@code addRaw} are separate collectors, asked of
+	 * separate columns, once per list. Three of the four were covered and this was the fourth, so a
+	 * coded condition's provenance could have been dropped with the suite green.
+	 *
+	 * @return the saved {@code Condition}'s uuid
+	 */
+	private String recordCodedConditionOf(String conceptName) {
+		Concept coded = new Concept();
+		coded.addName(new ConceptName(conceptName, Locale.ENGLISH));
+		coded.setDatatype(Context.getConceptService().getConceptDatatypeByName("N/A"));
+		coded.setConceptClass(Context.getConceptService().getConceptClassByName("Diagnosis"));
+		Context.getConceptService().saveConcept(coded);
+		Condition c = new Condition();
+		c.setPatient(patient);
+		c.setClinicalStatus(ConditionClinicalStatus.ACTIVE);
+		CodedOrFreeText value = new CodedOrFreeText();
+		value.setCoded(coded);
+		c.setCondition(value);
+		Context.getConditionService().saveCondition(c);
+		Context.flushSession();
+		Context.clearSession();
+		return c.getUuid();
+	}
+
 	/** Saves an active condition recorded as free text, and returns its uuid. */
 	private String recordConditionOf(String condition) {
 		Condition c = new Condition();
@@ -224,6 +253,24 @@ public class FindingChartRecordProvenanceContextTest extends BaseModuleContextSe
 	}
 
 	/**
+	 * The coded-condition leg, which is the sibling of the coded-allergen one below and the fourth of
+	 * the four attribution legs. Same rule, a different collector and a different column.
+	 */
+	@Test
+	public void aCodedConditionsRecordIsNamedToo() {
+		String conditionUuid = recordCodedConditionOf("Peptic ulcer");
+
+		PatientChart injected = inject(DrugReferenceTestSupport.chartOf(
+				DrugReferenceTestSupport.conditionRecord(1, conditionUuid,
+						"Condition: Peptic ulcer (active)")));
+
+		RecordMapping finding = contraindicationFinding(injected);
+		assertEquals(Collections.singletonList(Integer.valueOf(1)), finding.getDerivedFrom(),
+				"a condition the chart records as a CODED concept names its record exactly as a "
+						+ "free-text one does. Finding was: " + finding.getText());
+	}
+
+	/**
 	 * An INTERACTION finding names nothing, and that is the scope line rather than an omission: its
 	 * provenance is the patient's active ORDERS, which issue #379 already resolves to record numbers
 	 * on a separate, flag-gated path. Two findings of one response, and only the one whose evidence is
@@ -239,6 +286,12 @@ public class FindingChartRecordProvenanceContextTest extends BaseModuleContextSe
 		List<RecordMapping> interactions = findings(injected, true);
 		assertEquals(1, interactions.size(), "the active aspirin order must raise one interaction "
 				+ "finding through the curated NSAID group, was: " + interactions);
+		// The positive control, and it is the whole point of asserting the two in ONE arrangement: a
+		// green emptiness below says nothing unless something in the same chart is non-empty. Without
+		// this, a change that stopped resolving provenance altogether would leave the case green.
+		assertEquals(Collections.singletonList(Integer.valueOf(1)),
+				contraindicationFinding(injected).getDerivedFrom(),
+				"control: the contraindication finding of this same response names record [1]");
 		assertTrue(interactions.get(0).getDerivedFrom().isEmpty(),
 				"an interaction finding's evidence is an ORDER, not a contraindication record, so it "
 						+ "names no derivation here. Was: " + interactions.get(0).getDerivedFrom());
@@ -315,6 +368,12 @@ public class FindingChartRecordProvenanceContextTest extends BaseModuleContextSe
 	 * would make the click-through depend on the order {@code PatientService} returned them in — the
 	 * dependence that merge exists to remove.
 	 *
+	 * <p><b>The residue, stated rather than implied:</b> nothing here discriminates the ASCENDING
+	 * sort {@code chartRecordNumbers} applies. Whether an unsorted implementation would produce
+	 * {@code [1, 2]} or {@code [2, 1]} depends on the order {@code getAllergies} returns the two
+	 * rows in, which no case controls, so a case built to catch it would pass a wrong implementation
+	 * whenever that order went the other way. The sort is defensive determinism, read off the code.
+	 *
 	 * <p>Paracetamol rather than the Ibuprofen entry the other cases use, and the reason is the fold:
 	 * the seed files a self-named {@code ibuprofen} allergy rule, which #146 keys onto the same
 	 * SUBSTANCE as the allergen arm's chip and which wins that key — so an ibuprofen arrangement would
@@ -342,6 +401,43 @@ public class FindingChartRecordProvenanceContextTest extends BaseModuleContextSe
 						+ finding.getDerivedFrom());
 	}
 
+	/**
+	 * The provenance is the SURVIVING sentence's own evidence, never a union over the rules a
+	 * contraindication key collapsed.
+	 *
+	 * <p>The arrangement is the merge case's, on the Ibuprofen entry instead of Paracetamol — and the
+	 * difference is the fold. The curated seed files a self-named {@code ibuprofen} allergy rule,
+	 * which issue #146 keys onto the same SUBSTANCE as the allergen arm's chip, and the rule wins that
+	 * key: one finding, stating the rule's sentence. Its witnesses are the allergens the token
+	 * {@code ibuprofen} reached, which is the first record and not the second, while the
+	 * {@code RecordedAllergen} the losing chip was built from had merged BOTH.
+	 *
+	 * <p>So the two are distinguishable here, and the published list is the winner's. That is the
+	 * decision rather than an accident: a citation is offered as evidence for the sentence the finding
+	 * states, and naming a record that supported a sentence the ledger discarded would attach it to a
+	 * claim it did not ground. Union the two at the fold and this case reddens; the merge case beside
+	 * it, whose rule matches neither spelling, is what keeps the union itself pinned.
+	 */
+	@Test
+	public void aFoldedFindingNamesTheRecordsOfTheSentenceItStatesAndNotOfTheOneItDiscarded() {
+		String matchedByTheRule = recordAllergyTo("Ibuprofen");
+		String reachedOnlyByTheAllergenArm = recordCodedAllergyTo("Brufen");
+
+		PatientChart injected = inject(DrugReferenceTestSupport.chartOf(
+				DrugReferenceTestSupport.allergyRecord(1, matchedByTheRule, "Allergy: Ibuprofen (drug)"),
+				DrugReferenceTestSupport.allergyRecord(2, reachedOnlyByTheAllergenArm,
+						"Allergy: Brufen (drug)")));
+
+		RecordMapping finding = contraindicationFinding(injected);
+		assertTrue(finding.getText().contains("contraindicated by an active allergy"),
+				"the premise: the curated RULE's sentence is the one that won the key, so this case is "
+						+ "about the winner's evidence. Was: " + finding.getText());
+		assertEquals(Collections.singletonList(Integer.valueOf(1)), finding.getDerivedFrom(),
+				"only record [1] is evidence for the sentence this finding states — record [2] "
+						+ "supported the allergen arm's sentence, which the fold discarded. Was: "
+						+ finding.getDerivedFrom());
+	}
+
 	/** The chart's own records name no provenance: an allergy record IS the allergy, so there is
 	 *  nothing behind it, and only the records this module injects can carry a derivation. */
 	@Test
@@ -351,6 +447,12 @@ public class FindingChartRecordProvenanceContextTest extends BaseModuleContextSe
 		PatientChart injected = inject(DrugReferenceTestSupport.chartOf(
 				DrugReferenceTestSupport.allergyRecord(1, allergyUuid, "Allergy: Ibuprofen (drug)")));
 
+		// Control first, for the reason the interaction case gives: this walk asserts emptiness of
+		// everything BUT the finding, so it has to be run on a chart where the finding itself is
+		// non-empty or it passes on a pipeline that resolved nothing at all.
+		assertEquals(Collections.singletonList(Integer.valueOf(1)),
+				contraindicationFinding(injected).getDerivedFrom(),
+				"control: the finding in this same chart names record [1]");
 		for (RecordMapping mapping : injected.getMappings()) {
 			assertNotNull(mapping.getDerivedFrom(), mapping.getResourceType()
 					+ ": the list is never null, so no reader branches on absence");

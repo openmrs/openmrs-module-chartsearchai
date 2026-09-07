@@ -17,13 +17,17 @@ import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
 import org.openmrs.User;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -47,8 +51,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * without the key the module's own citation reads as the model's, and a {@code null} verdict on it
  * reads as one that could not be verified.
  *
- * <p>Asserted against the real controller's real serialization, on every event that carries
- * references, since a client may render any one of them alone.
+ * <p>Asserted against the real controller's real serialization, on every surface that carries
+ * references — the blocking {@code /search} response and all three SSE events — since a client may
+ * render any one of them alone. {@code serializeReferences} is shared between them and its javadoc
+ * says so; driving all four is what makes that a measurement rather than an argument.
  */
 public class ChartSearchAiFindingProvenanceTest {
 
@@ -64,12 +70,23 @@ public class ChartSearchAiFindingProvenanceTest {
 
 	private ByteArrayOutputStream out;
 
+	/** Driving {@code search()} needs more of the OpenMRS static context than the SSE path — see
+	 *  {@code ChartSearchAiSearchResponseGroupingTest}, which shares this fixture. */
+	private final RestControllerContext openmrsContext = new RestControllerContext();
+
 	@BeforeEach
 	public void setUp() {
 		controller = new ChartSearchAiRestController();
 		controller.setAuditLogService(new StubAuditLogService());
 		controller.setChartSearchService(new AttachedCitationStubService());
+		controller.setPatientAccessCheck((user, patient) -> true);
 		out = new ByteArrayOutputStream();
+		openmrsContext.install();
+	}
+
+	@AfterEach
+	public void restoreContext() {
+		openmrsContext.restore();
 	}
 
 	private static Patient patient() {
@@ -151,6 +168,34 @@ public class ChartSearchAiFindingProvenanceTest {
 		assertEquals(Arrays.asList(ATTACHED + ":true", CITED_FINDING + ":false"),
 				attributionOf("grounded"),
 				"the trailing grounded event must publish the attribution as well");
+	}
+
+	/**
+	 * The BLOCKING {@code /search} response, which is a separate handler from the SSE path and the one
+	 * a non-streaming client reads. {@code serializeReferences} is shared between them, and its javadoc
+	 * says so — this is what makes that a measurement rather than an argument from shared code.
+	 */
+	@Test
+	public void searchResponse_saysWhichCitationTheModuleAttached() {
+		ResponseEntity<Object> response = controller.search(
+				RestControllerContext.searchBody("can I give ibuprofen?"));
+		assertEquals(HttpStatus.OK, response.getStatusCode(),
+				"the handler must have reached serialization");
+
+		@SuppressWarnings("unchecked")
+		Map<String, Object> payload = (Map<String, Object>) response.getBody();
+		assertNotNull(payload, "no response body");
+		@SuppressWarnings("unchecked")
+		List<Map<String, Object>> refs = (List<Map<String, Object>>) payload.get("references");
+		assertNotNull(refs, "the response carried no references array");
+		List<String> attribution = new ArrayList<String>();
+		for (Map<String, Object> ref : refs) {
+			assertTrue(ref.containsKey("attachedByTheModule"),
+					"reference [" + ref.get("index") + "] carries no attachedByTheModule key: " + ref);
+			attribution.add(ref.get("index") + ":" + ref.get("attachedByTheModule"));
+		}
+		assertEquals(Arrays.asList(ATTACHED + ":true", CITED_FINDING + ":false"), attribution,
+				"the blocking response must attribute the citations exactly as the SSE events do");
 	}
 
 	/**

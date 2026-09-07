@@ -163,6 +163,8 @@ public class SafetyWarning {
 	 * @param uncorroboratedChartMatch see {@link #restsOnAnUncorroboratedChartMatch()}
 	 * @param aboutACurrentMedication see {@link #isAboutACurrentMedication()} — true where the arm
 	 *        walking the patient's own active orders raised it (issue #348)
+	 * @param chartRecords see {@link #chartRecords()} — the recorded allergies or conditions this
+	 *        rule's token matched, from the list {@code recordedContraindicationKind}'s own leg names
 	 */
 	static SafetyWarning contraindication(String drug, String detail,
 			boolean uncorroboratedChartMatch, boolean aboutACurrentMedication,
@@ -191,6 +193,8 @@ public class SafetyWarning {
 	 * {@code addActiveOrderContraindications} (true — the subject is an active order).
 	 *
 	 * @param aboutACurrentMedication see {@link #isAboutACurrentMedication()}
+	 * @param chartRecords see {@link #chartRecords()} — the records the {@code RecordedAllergen} this
+	 *        sentence was built from was read off, unioned across the spellings its merge folded in
 	 */
 	static SafetyWarning recordedAllergenContraindication(String drug, String detail,
 			boolean aboutACurrentMedication, Collection<String> chartRecords) {

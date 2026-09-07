@@ -610,11 +610,13 @@ public class PatientChartSerializer {
 	 * Maps a sequential index used in the LLM prompt back to the OpenMRS resource.
 	 *
 	 * <p>{@link #getText()} is the record's content — the part the LLM reads and may quote.
-	 * {@link #getSource()} and {@link #getWithheldInteractions()} are <em>about</em> the record
-	 * rather than part of it, and are deliberately kept off the text: anything inside it is
-	 * quotable, and a model told to cite records recited the module's own truncation counter and
-	 * dataset attribution into a clinician-facing answer (issue #117). Metadata a client should
-	 * render beside a citation therefore travels as its own field, never as prose.
+	 * {@link #getSource()}, {@link #getWithheldInteractions()} and {@link #getDerivedFrom()} are
+	 * <em>about</em> the record rather than part of it, and are deliberately kept off the text:
+	 * anything inside it is quotable, and a model told to cite records recited the module's own
+	 * truncation counter and dataset attribution into a clinician-facing answer (issue #117).
+	 * Anything of that kind therefore travels as its own field, never as prose — whether a client
+	 * renders it beside the citation (the first two) or the module reads it back to decide what to
+	 * publish (the third).
 	 */
 	public static class RecordMapping {
 

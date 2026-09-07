@@ -180,6 +180,41 @@ public class LlmInferenceServiceFindingProvenanceContextTest extends BaseModuleC
 	}
 
 	/**
+	 * The STREAMING path, which is the one users hit. Its own {@code extractCitedReferences} call
+	 * site, and its citations reach a client twice before the returned answer exists — on the early
+	 * {@code references} event and on the early {@code done} — so a fix present only on the blocking
+	 * path would be absent from every surface a user sees. {@code LlmInferenceServiceCitationWiringTest}
+	 * exists for exactly this asymmetry and its class javadoc records why.
+	 */
+	@Test
+	public void searchStreaming_bringsTheRecordOnTheEarlyCitationsAndTheEarlyDoneToo() {
+		final List<List<Integer>> earlyCitations = new ArrayList<List<Integer>>();
+		final List<List<Integer>> earlyDone = new ArrayList<List<Integer>>();
+
+		ChartAnswer answer = serviceUnderTest(new CitesTheFindingAlone()).searchStreaming(patient,
+			QUESTION, token -> { }, reasoning -> { },
+			citations -> {
+				List<Integer> seen = new ArrayList<Integer>();
+				for (RecordReference reference : citations) {
+					seen.add(Integer.valueOf(reference.getIndex()));
+				}
+				earlyCitations.add(seen);
+			},
+			early -> earlyDone.add(indexes(early)));
+
+		assertEquals(1, earlyCitations.size(), "the citations consumer must have fired");
+		assertTrue(earlyCitations.get(0).contains(Integer.valueOf(ALLERGY_RECORD)),
+				"the early citations event is what a client renders while the grounding tail runs, so "
+						+ "the attached record has to be on it. Was: " + earlyCitations.get(0));
+		assertEquals(1, earlyDone.size(), "the early-done consumer must have fired");
+		assertTrue(earlyDone.get(0).contains(Integer.valueOf(ALLERGY_RECORD)),
+				"and on the early done, which under chartsearchai.grounding.async is the terminal "
+						+ "event a user sees. Was: " + earlyDone.get(0));
+		assertTrue(indexes(answer).contains(Integer.valueOf(ALLERGY_RECORD)),
+				"and on the answer this method returns. Was: " + indexes(answer));
+	}
+
+	/**
 	 * The abstention-dump carve-out is upstream of this and stays that way: an answer that is real
 	 * prose and anchors NO citation inline surfaces nothing, so it cannot acquire a chart record
 	 * either. Adding the provenance BEFORE that carve-out would attach the patient's allergy to a

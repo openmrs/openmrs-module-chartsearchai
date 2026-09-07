@@ -648,6 +648,14 @@ public class LlmInferenceService implements ChartSearchService {
 				// Already cited by the model is a no-op, and it must stay the MODEL's citation: it
 				// carries a claim of the model's, so it is graded like any other (issue #305's own
 				// first measured form).
+				// The mapping check is for a CALLER mismatch and not for the injector: a derivation is
+				// resolved off the same mapping list that arrives here, so on the production path
+				// every derived index maps. It bites where a caller hands this method a different
+				// list than the one the numbers were resolved against — which the legacy
+				// answer-less entry point makes possible — and it fails closed there, dropping the
+				// attachment rather than publishing a reference to nothing. Unlike the array path
+				// above it does not WARN, because an unmapped derivation is the module's own
+				// bookkeeping and not something the model claimed.
 				if (!seen.contains(derived) && indexMap.containsKey(derived)) {
 					attached.add(derived);
 				}

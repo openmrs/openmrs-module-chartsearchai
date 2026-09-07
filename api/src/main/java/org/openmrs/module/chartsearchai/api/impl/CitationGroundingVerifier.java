@@ -652,6 +652,19 @@ public class CitationGroundingVerifier {
 			// "no embedding is spent" half of UNVERIFIABLE true here: such a citation is anchored by no
 			// sentence, so selectClaim's candidate set is EVERY sentence — the ambiguous branch, where
 			// the cosine argmax runs eagerly and would be paid for a verdict Pass 2 discards.
+			//
+			// ONE local, read at both sites, so the skip and the disposition cannot be edited apart.
+			// They are not equally observable and it is worth knowing which: measured, removing the
+			// skip alone reddens
+			// aCitationTheModuleAttachedPublishesNoVerdictAndSpendsNothing's embedding assertion (2
+			// passes spent, verdicts unchanged); removing the disposition arm alone leaves the whole
+			// of CitationGroundingVerifierTest GREEN, because the empty Tier1Result then withholds by
+			// accident — no claim sentence means no Tier-2 candidate and no deferred cosine; removing
+			// BOTH publishes `true` and reddens two verdict assertions. So the arm below is the
+			// STATEMENT that such a citation may be given no verdict, and nothing behavioural pins it
+			// on its own. It stays because candidacy is expressed as `== GRADED` (see Disposition):
+			// a later change that gave the skipped result a claim sentence would make an attached
+			// citation a judge candidate the moment this arm was gone.
 			boolean attachedByTheModule = reference.isAttachedByTheModule();
 			Tier1Result tier1 = attachedByTheModule
 					? new Tier1Result(null, null, null, false)

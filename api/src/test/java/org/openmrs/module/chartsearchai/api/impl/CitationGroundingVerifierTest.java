@@ -1180,8 +1180,15 @@ public class CitationGroundingVerifierTest {
 	 * <p>The two counts are the "no embedding is spent" half of {@code Disposition.UNVERIFIABLE}, which
 	 * the compound-claim case gets for free from claim DEFERRAL and this one cannot: with nothing
 	 * anchoring it, {@code selectClaim}'s candidate set is every sentence, which is the ambiguous
-	 * branch where the cosine argmax runs eagerly. Mutate the {@code attachedByTheModule} arm out of
-	 * the Pass-1 selection and the verdict assertions stay green while these two redden.
+	 * branch where the cosine argmax runs eagerly.
+	 *
+	 * <p><b>Which mutation reddens which assertion, measured rather than assumed.</b> Removing the
+	 * Pass-1 claim-selection SKIP alone reddens the embedding count here (2 passes spent) and moves no
+	 * verdict. Removing the disposition ARM alone reddens nothing in this class — the skipped result
+	 * then withholds by accident, having no claim sentence to be a judge candidate with. Removing BOTH
+	 * publishes {@code true} and reddens the verdict assertion here and in
+	 * {@link #theModelsOwnChartCitationIsStillGradedBesideAnAttachedOne}. So the arm is a statement of
+	 * intent that no case discriminates; the comment at that site says why it stays.
 	 */
 	@Test
 	public void aCitationTheModuleAttachedPublishesNoVerdictAndSpendsNothing() {

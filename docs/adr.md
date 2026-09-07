@@ -5609,7 +5609,7 @@ The predicate is not `QueryScopeRouter.typedSlice`'s MEDICATIONS slice and must 
 
 [Decision 61](#decision-61-prose-the-answer-reproduces-from-a-cited-reference-record-must-be-reproduced-faithfully) closed the shape #337 was filed for — an answer that reproduces a cited reference record's prose and then states different words inside the sentence it was copying — and named, in the same breath, the residue it was leaving open: the check "reports a SUBSTITUTION and never a truncation", which "under-reports the ticket's weaker cousin, a hazard dropped by stopping early."
 
-That residue was then measured, on stock configuration, and reported on the issue. A *"Is it safe to start her on clarithromycin?"* answer, on a RefApp 3.7.1 standalone carrying the bundled knowledge base, enumerated five interaction findings in one `Furthermore` clause:
+That residue was then measured and reported on the issue, with the drug-reference layer enabled — which any finding at all requires, it being off by default — and `chartMode=fullChart`. The issue's own comment calls that "stock GPs" while naming the second of them; neither is the shipped default, and a verifier reproduced the answer below byte-identically under the same two. A *"Is it safe to start her on clarithromycin?"* answer, on a RefApp 3.7.1 standalone carrying the bundled knowledge base, enumerated five interaction findings in one `Furthermore` clause:
 
 > Furthermore, Clarithromycin interacts with active order Methylprednisolone [177] [350], Clarithromycin interacts with active order Budesonide [166] [351], Clarithromycin interacts with active order Prednisone [155] [352], …
 

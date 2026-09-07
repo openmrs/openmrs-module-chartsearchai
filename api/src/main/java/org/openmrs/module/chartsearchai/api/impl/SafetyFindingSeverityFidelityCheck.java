@@ -33,7 +33,8 @@ import org.slf4j.LoggerFactory;
  * successive attempts to word that comparison were each false of one of them.
  *
  * <p><b>The failure.</b> Measured live on a RefApp 3.7.1 standalone against the bundled knowledge
- * base, stock global properties, three runs byte-identical. A <em>"Is it safe to start her on
+ * base, with the drug-reference layer enabled and {@code chartMode=fullChart}, three runs
+ * byte-identical. A <em>"Is it safe to start her on
  * clarithromycin?"</em> answer enumerated five interaction findings in one clause — <em>"…
  * Clarithromycin interacts with active order Methylprednisolone [177] [350], Clarithromycin
  * interacts with active order Budesonide [166] [351], …"</em> — and stated no rating for any of

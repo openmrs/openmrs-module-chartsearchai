@@ -281,6 +281,49 @@ public class InjectedContraindicationPatientReadingTest {
 						+ record);
 	}
 
+	/**
+	 * The same chart, on the one arrangement that reaches the ENRICHMENT — so the readability stamp has
+	 * to survive being COPIED, not merely be set.
+	 *
+	 * <p><b>This pins a FAIL-OPEN shape.</b> {@code injectRecords} rebuilds the context through
+	 * {@code DrugReferenceService.withReferenceNames}, which copies every field by hand into a fresh
+	 * {@code PatientClinicalContext}. A stamp dropped there is lost silently and in the direction that
+	 * puts the negative claim back: the shorter constructors default it to {@code true}, so the record
+	 * would again name every rule as "not recorded for this patient" about a chart nobody read.
+	 *
+	 * <p><b>The fixture is what makes it discriminating, and the case above is not.</b>
+	 * {@code withReferenceNames} returns the context UNTOUCHED where no order resolves a reference
+	 * entry, so {@code unreadableRecordsCtx} — which carries no orders, its own javadoc says why —
+	 * cannot reach the copy at all. This needs orders the dataset resolves AND a failed record read,
+	 * which is {@code unreadableRecordsCtxWithOrders} and is a real shape: the builder reads orders and
+	 * allergies in separate {@code try} blocks.
+	 *
+	 * <p>The injector is the one production reader that asks this stamp of an ENRICHED context;
+	 * {@code DrugSafetyValidator.standingChartAlerts} reads both stamps off the RAW builder output,
+	 * before {@code validate} enriches anything, which is why
+	 * {@code StandingChartAlertsTest.bothChartReadStampsSurviveTheEnrichmentThePassApplies} observes
+	 * the copy rather than a verdict of its own.
+	 */
+	@Test
+	public void aStampTheEnrichmentDroppedWouldPutTheNegativeClaimBack() throws Exception {
+		PatientClinicalContext unreadable = DrugReferenceTestSupport.unreadableRecordsCtxWithOrders(
+				DrugReferenceTestSupport.set(DrugReferenceTestSupport.IBUPROFEN_ORDER));
+		assertFalse(DrugReferenceTestSupport.curatedService().findForActiveOrders(unreadable).isEmpty(),
+				"precondition: an order must resolve a reference entry, or withReferenceNames returns "
+						+ "the context untouched and this case cannot reach the copy at all");
+
+		String record = ibuprofenRecord(unreadable);
+
+		assertNull(sentenceAfter(record, RECORDED_MARKER),
+				"a chart that could not be read supports no claim either way, after the enrichment as "
+						+ "before it, was: " + record);
+		assertNull(sentenceAfter(record, NOT_RECORDED_MARKER),
+				"least of all a negative one, was: " + record);
+		assertTrue(record.contains(RULE_LIST_MARKER + String.join("; ", SHIPPED_IBUPROFEN_RULES) + "."),
+				"while the drug's own list is reference material and is rendered either way, was: "
+						+ record);
+	}
+
 	@Test
 	public void anEntryWithNoContraindicationRulesClaimsNothingEitherWay() throws Exception {
 		// The bound on the prompt cost, and on what may be asserted: the ddinter and atc sources publish

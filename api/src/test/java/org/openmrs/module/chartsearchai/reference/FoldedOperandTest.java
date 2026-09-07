@@ -718,10 +718,8 @@ public class FoldedOperandTest {
 	/** @param what names the body in the failure message. */
 	private static void assertContains(SourceScan scan, SourceScan.Region body, String needle,
 			String what) {
-		for (Integer at : scan.literalOffsets(needle)) {
-			if (body.contains(at)) {
-				return;
-			}
+		if (scan.names(body, needle)) {
+			return;
 		}
 		throw new AssertionFailedError("\"" + needle + "\" is gone from " + what + "; that call is what "
 				+ "the guard requires, and requiring it is what forbids every spelling that is not it — "

@@ -373,11 +373,14 @@ public class SafetyWarning {
 	 * clause left {@code thePairChipsAreOrderedBySeverityAndBounded} green while it asserted nothing at
 	 * all.
 	 *
-	 * <p><b>Published on the wire since issue #340</b>, as the {@code severity} key of every
-	 * {@code safetyWarnings} chip — on the blocking {@code /search} response and on both SSE events
-	 * that carry chips, since all three reach
-	 * {@code ChartSearchAiRestController.serializeSafetyWarnings} through the one
-	 * {@code putSafetyChips} payload writer. Verbatim and UNNORMALIZED, which is
+	 * <p><b>Published on the wire since issue #340</b>, as the {@code severity} key of every chip this
+	 * module serializes — the blocking {@code /search} response and both SSE events that carry
+	 * chips, which reach {@code ChartSearchAiRestController.serializeSafetyWarnings} through the one
+	 * {@code putSafetyChips} payload writer, and since issue #280 the {@code alerts} array of
+	 * {@code GET /chartsearchai/chartalerts}, which reaches that same serializer WITHOUT
+	 * {@code putSafetyChips} because it carries no answer to state an interaction extent about.
+	 * The field is therefore read the same way on every surface — always present, {@code null} on a
+	 * contraindication, which is what every standing alert is. Verbatim and UNNORMALIZED, which is
 	 * deliberate rather than lazy: the field is the dataset's rating, and coercing it would put the
 	 * wire at odds with the very prose a client is being told to stop parsing. What it publishes is the
 	 * SOURCE's rating, not this module's judgment about what may be done — which is the separate thing
@@ -433,6 +436,20 @@ public class SafetyWarning {
 	 * three-argument constructor), because a recorded allergy is not a caution at any rating. The null
 	 * rule above is what carries the most weight where the value IS read: unrated is not low-rated,
 	 * and reading it as a caution would soften a curated rule an implementation authored deliberately.
+	 *
+	 * <p><b>Since issue #337's third round there is a further reader whose answer reaches a
+	 * clinician-facing published key</b> — not the only one, this value having reached the wire as
+	 * each chip's own {@code severity} since issue #340 — #207 exposed the field for the api-side
+	 * ordering and scoped itself to that, as the paragraph above says — raw and untrimmed where that
+	 * reader trims:
+	 * {@code DrugSafetyValidator.statableRating},
+	 * through {@code DrugReferenceInjector.ratingThisRecordStates}, which carries the rating onto the
+	 * injected record's mapping so a check can ask whether the ANSWER stated it
+	 * ({@code unstatedFindingSeverities}). It asks a different question from every reader above —
+	 * whether there is a WORD whose absence means something, rather than how strongly the finding
+	 * licenses a call — so do not fold it into the withholding split. Note what the paragraph above
+	 * refuses to claim about WHERE the rating sits in the rendered detail: that reader is exactly the
+	 * thing that now asks it per record, and it answers by scanning rather than by assuming.
 	 */
 	public String getSeverity() {
 		return severity;
@@ -758,7 +775,7 @@ public class SafetyWarning {
 	 *         may read back. Not part of the wire-facing chip shape, unlike
 	 *         {@link #chartOrderBridges()} — that one is prose the model reads and so needs a
 	 *         deterministic wire home of its own, while this is a pointer the citation list publishes.
-	 *         ADR Decision 78 carries that argument.
+	 *         ADR Decision 80 carries that argument.
 	 */
 	Set<String> chartRecords() {
 		return chartRecords;

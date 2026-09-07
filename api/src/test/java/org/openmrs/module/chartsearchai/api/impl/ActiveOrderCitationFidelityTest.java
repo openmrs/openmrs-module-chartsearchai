@@ -162,7 +162,7 @@ public class ActiveOrderCitationFidelityTest {
 			assertFalse(capture.describeAll().isEmpty(),
 					"the capture must receive the pipeline's own INFO lines, or the assertion below "
 							+ "passes vacuously");
-			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN, SafetyFindingSeverityFidelityCheck.class),
 					"a citation that points at the patient's own drug order is the shape this check "
 							+ "exists to leave alone. Captured: " + capture.describeAll());
 			assertTrue(answer.getMisattributedOrderCitations().isEmpty(),
@@ -295,7 +295,7 @@ public class ActiveOrderCitationFidelityTest {
 			assertFalse(capture.describeAll().isEmpty(),
 					"the capture must receive the pipeline's own INFO lines, or the assertion below "
 							+ "passes vacuously");
-			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN, SafetyFindingSeverityFidelityCheck.class),
 					"only the run of markers immediately after the phrase is offered for the claim. "
 							+ "Captured: " + capture.describeAll());
 		}
@@ -462,7 +462,7 @@ public class ActiveOrderCitationFidelityTest {
 			assertFalse(capture.describeAll().isEmpty(),
 					"the capture must receive the pipeline's own INFO lines, or the assertion below "
 							+ "passes vacuously");
-			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN, SafetyFindingSeverityFidelityCheck.class),
 					"the module's own record of an active order IS evidence of one. Captured: "
 							+ capture.describeAll());
 			assertTrue(answer.getMisattributedOrderCitations().isEmpty(),

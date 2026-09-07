@@ -45,7 +45,7 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * <p><b>The measured defect.</b> Two wordings of one question, a single character apart, returned
  * different reference sets over many identical runs each, with everything upstream of the model
  * byte-identical — so the divergence was entirely in whether the model put the record in its
- * structured {@code citations} array. ADR Decision 78 has the counts and the arrangement.
+ * structured {@code citations} array. ADR Decision 80 has the counts and the arrangement.
  *
  * <p><b>The stub provider is the second form.</b> It answers in the issue's own words, asserts the
  * allergy, and cites the finding ALONE — reading the finding's number out of the numbered records it

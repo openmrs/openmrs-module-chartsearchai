@@ -97,8 +97,9 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  */
 public class ActiveOrderContraindicationTest {
 
-	/** The order name as a chart carries it, and what {@code getActiveDrugNames} holds. */
-	private static final String IBUPROFEN_ORDER = "Ibuprofen 400mg";
+	/** The order name as a chart carries it, and what {@code getActiveDrugNames} holds — the shared
+	 *  one, so this class and the standing surface cannot come to measure two charts spelled alike. */
+	private static final String IBUPROFEN_ORDER = DrugReferenceTestSupport.IBUPROFEN_ORDER;
 
 	/** A question that resolves NO reference drug and is not an interaction screen, so neither
 	 *  question-driven arm nor the screen has an anchor — the shape the defect needs. */
@@ -125,8 +126,7 @@ public class ActiveOrderContraindicationTest {
 
 	/** Context: one active ibuprofen order, plus whatever allergy/condition tokens a case needs. */
 	private static PatientClinicalContext ctx(Set<String> allergies, Set<String> conditions) {
-		return DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set(IBUPROFEN_ORDER),
-				null, allergies, conditions);
+		return DrugReferenceTestSupport.prescribedIbuprofenChart(allergies, conditions);
 	}
 
 	/** A chart holding an obs and that drug-order record, as the serializer numbers them. */
@@ -136,13 +136,7 @@ public class ActiveOrderContraindicationTest {
 	}
 
 	private static List<SafetyWarning> contraindications(List<SafetyWarning> warnings) {
-		List<SafetyWarning> out = new ArrayList<SafetyWarning>();
-		for (SafetyWarning warning : warnings) {
-			if (SafetyWarning.TYPE_CONTRAINDICATION.equals(warning.getType())) {
-				out.add(warning);
-			}
-		}
-		return out;
+		return DrugReferenceTestSupport.contraindications(warnings);
 	}
 
 	@Test
@@ -214,8 +208,11 @@ public class ActiveOrderContraindicationTest {
 		// that still fires (see aPrescribedDrugTheAnswerOnlyEchoesIsStillCheckedAgainstTheAllergyList
 		// above, unchanged). What is withdrawn is the claim on responses about something else. The
 		// replacement rule and everything it deliberately gives up live in
-		// SubjectMatterScopedContraindicationTest; the standing-alert case belongs on a surface with
-		// acknowledgement (order entry, a chart banner, CDS hooks), not on every answer.
+		// SubjectMatterScopedContraindicationTest; the standing-alert case has a surface of its own
+		// since issue #280, GET /chartsearchai/chartalerts, which a client asks for — see
+		// StandingChartAlertsTest, whose first case is this same arrangement answered there. What that
+		// surface still does not carry is acknowledgement state; that stays order entry's or a chart
+		// banner's.
 		//
 		// This question and this chart are the shape that reversal is about: a blood-pressure answer
 		// citing the obs record, with the ibuprofen order sitting uncited in the same chart.

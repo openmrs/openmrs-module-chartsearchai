@@ -64,12 +64,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * word is a different rating. Both are pinned, in
  * {@link #theRatingIsPublishedEvenWhereTheProseNamesItNowhere}.
  *
- * <p>Driven through the real controller, at all three emission sites: the blocking {@code /search}
- * handler, the SSE {@code done} event, and the {@code grounded} event of the async-grounding path.
- * Since issue #336 those three reach the serializer through {@code putSafetyChips} rather than each
- * naming it, so one edit governs all three — but covering one site would still prove the serializer
- * and not that the other two emit at all, which is the reason
- * {@code ChartSearchAiSearchResponseGroupingTest} exists for its own endpoint. The two SSE sites are also the ones whose ACTUAL JSON can be read back, since the
+ * <p>Driven through the real controller, at all three ANSWER emission sites: the blocking
+ * {@code /search} handler, the SSE {@code done} event, and the {@code grounded} event of the
+ * async-grounding path. Since issue #336 those three reach the serializer through
+ * {@code putSafetyChips} rather than each naming it, so one edit governs all three — but covering one
+ * site would still prove the serializer and not that the other two emit at all, which is the reason
+ * {@code ChartSearchAiSearchResponseGroupingTest} exists for its own endpoint. A fourth surface
+ * carries chips since issue #280 — {@code GET /chartsearchai/chartalerts} — and is deliberately NOT
+ * driven here: it publishes no answer, so nothing above about {@code putSafetyChips} governs it, and
+ * {@code ChartSearchAiChartAlertsTest} is its own wire contract. What that class asserts, and what
+ * keeps the two surfaces one shape, is that its {@code alerts} objects carry the same keys a
+ * {@code /search} chip carries — read off a {@code /search} chip rather than listed. The two SSE sites are also the ones whose ACTUAL JSON can be read back, since the
  * controller serializes those payloads itself with a default {@link ObjectMapper}; so it is there
  * that "the key is present and null" is asserted of the bytes a client receives, rather than of a
  * {@code Map} Spring has not serialized yet.

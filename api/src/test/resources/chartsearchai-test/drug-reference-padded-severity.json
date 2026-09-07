@@ -1,0 +1,30 @@
+{
+ "version": "1.0",
+ "description": "Test fixture for issue #337 round three: an operator-authored dataset whose interaction severity carries surrounding whitespace. DrugSafetyValidator.severityRank trims before recognising a rating, so the module treats this rule as Major everywhere — the floor admits it, the strength clause withholds on it, the chips order by it. Nothing else trims, because DrugReference.Interaction.severity is bound straight from the JSON. So the rating a consumer is handed must be the form the module RECOGNISED, not the raw field, or a comparison against answer prose is made against a padded needle.",
+ "entries": [
+  {
+   "id": "aspirin",
+   "name": "Aspirin",
+   "aliases": [
+    "aspirin"
+   ],
+   "interactions": [
+    {
+     "token": "warfarin",
+     "severity": "  Major  ",
+     "note": "Major. Coadministration may increase the risk of bleeding."
+    }
+   ],
+   "source": "Test fixture"
+  },
+  {
+   "id": "warfarin",
+   "name": "Warfarin",
+   "aliases": [
+    "warfarin"
+   ],
+   "interactions": [],
+   "source": "Test fixture"
+  }
+ ]
+}

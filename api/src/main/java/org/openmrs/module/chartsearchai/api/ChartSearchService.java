@@ -233,6 +233,8 @@ public interface ChartSearchService {
 
 		private final List<Integer> misattributedOrderCitations;
 
+		private final List<Integer> unstatedFindingSeverities;
+
 		private final DrugReferenceLoad.Coverage conditionRuleCoverage;
 
 		public ChartAnswer(String answer, List<RecordReference> references) {
@@ -295,7 +297,7 @@ public interface ChartSearchService {
 				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations) {
 			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, searchMode,
 					referenceSlice, pairChipExtent, unresolvedDrugClass, unfaithfullyRenderedCitations,
-					null, null);
+					null, null, null);
 		}
 
 		/**
@@ -303,6 +305,11 @@ public interface ChartSearchService {
 		 * {@code ArchitectureGuardTest.everyAnswerThisModuleBuildsCarriesTheConditionRuleCoverage}
 		 * requires exactly one, so that no production site can build an answer stating null on a key
 		 * README documents as always present.
+		 *
+		 * <p><b>It is also the only form that grows.</b> A statement added to the answer takes a new
+		 * parameter HERE rather than a new overload, because a second constructor carrying the
+		 * coverage would fail that guard outright — which is what fixes the position of
+		 * {@code conditionRuleCoverage} last and puts each new list before it.
 		 *
 		 * <p>There is deliberately no twelve-argument overload beside it in either direction. Issues
 		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/377">#377</a> and
@@ -318,6 +325,7 @@ public interface ChartSearchService {
 				ChartSearchAiUtils.ReferenceSlice referenceSlice, PairChipExtent pairChipExtent,
 				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations,
 				List<Integer> misattributedOrderCitations,
+				List<Integer> unstatedFindingSeverities,
 				DrugReferenceLoad.Coverage conditionRuleCoverage) {
 			this.answer = answer;
 			this.references = java.util.Collections.unmodifiableList(
@@ -342,6 +350,12 @@ public interface ChartSearchService {
 			this.misattributedOrderCitations = misattributedOrderCitations == null ? null
 					: java.util.Collections.unmodifiableList(
 							new java.util.ArrayList<Integer>(misattributedOrderCitations));
+			// And once more (issue #337 round three), under the same rule as the two above rather
+			// than a rule of its own: null is the absence of a measurement, empty a measurement of
+			// none, and normalising either into the other loses the difference the accessors state.
+			this.unstatedFindingSeverities = unstatedFindingSeverities == null ? null
+					: java.util.Collections.unmodifiableList(
+							new java.util.ArrayList<Integer>(unstatedFindingSeverities));
 			this.conditionRuleCoverage = conditionRuleCoverage;
 		}
 
@@ -596,7 +610,7 @@ public interface ChartSearchService {
 		 * which is what the #284 carve-out publishes for a chart citation whose sentence also rests
 		 * on a {@code safety_finding}.
 		 *
-		 * <p><b>The CITATION and never a word of either text</b>, for the reason its sibling states:
+		 * <p><b>The CITATION and never a word of either text</b>, for the reason its siblings state:
 		 * a client renders its own sentence beside the marker, and the record's prose is not the
 		 * module's to restate here. One index is one entry however many active-order claims cited
 		 * it.
@@ -624,6 +638,53 @@ public interface ChartSearchService {
 		 */
 		public List<Integer> getMisattributedOrderCitations() {
 			return misattributedOrderCitations;
+		}
+
+		/**
+		 * The citations of safety findings whose RATING this answer states nowhere —
+		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/337">issue #337</a>,
+		 * round three. {@code SafetyFindingSeverityFidelityCheck} reports them, and this is the same
+		 * remedy as its two siblings for the third face of one failure: a deterministic safety string
+		 * reaching the clinician weaker than the module wrote it.
+		 *
+		 * <p>The reported answer enumerated five interaction findings in one clause — <em>"…
+		 * Clarithromycin interacts with active order Methylprednisolone [177] [350], Clarithromycin
+		 * interacts with active order Budesonide [166] [351], …"</em> — and stated no rating for any
+		 * of them. Two were Major. A clinician reading the prose had no way to rank them, and
+		 * "interacts with" was doing the work that "Major" was supposed to do. Nothing on the
+		 * response said so: {@link #getUnfaithfullyRenderedCitations()} correctly read empty, because
+		 * that check reports a SUBSTITUTION inside a long reproduction and this answer reproduced
+		 * nothing.
+		 *
+		 * <p><b>The CITATION and never a word of either text</b>, for the reason both siblings state.
+		 * One index is one entry.
+		 *
+		 * <p><b>It is not a grounding verdict and not a claim that the finding is wrong.</b> The
+		 * finding behind such a sentence is deterministic and was, on the reported answer, correct;
+		 * what this says is that the answer's rendering of it dropped the rating the record carries.
+		 *
+		 * <p><b>Null is the absence of a measurement; empty is a measurement of none — and empty is
+		 * not a certificate.</b> The check is recall-limited by construction and
+		 * {@code SafetyFindingSeverityFidelityCheck} enumerates how: it asks only whether the rating
+		 * appears ANYWHERE in the answer, so an answer that states one Major finding's rating and
+		 * drops another's is silent; it says nothing about a finding whose record carries no rating
+		 * for it to ask after, which is three different cases
+		 * ({@code DrugReferenceInjector.ratingThisRecordStates}); and it is satisfied by the word
+		 * appearing for any reason, including inside a mechanism the answer reproduced. <b>And
+		 * empty says less than it looks on a stock install</b>: {@code
+		 * chartsearchai.drugReference.enabled} defaults to false, so no finding exists to have a
+		 * rating dropped — the same qualification both siblings carry, for the same GP. Null's
+		 * reachable cause is the async-grounding path's early {@code done}, built before the check
+		 * runs; on a cache hit the ORIGINAL request's list is replayed with the rest of the answer.
+		 *
+		 * @return the distinct citation indexes in CITATION order — the order
+		 *         {@code LlmInferenceService.extractCitedReferences} resolved them, which is the
+		 *         order the answer states them in wherever the model anchored them inline and did
+		 *         not also supply a structured array in some other order. Null where none was
+		 *         stated.
+		 */
+		public List<Integer> getUnstatedFindingSeverities() {
+			return unstatedFindingSeverities;
 		}
 
 		/**
@@ -842,7 +903,7 @@ public interface ChartSearchService {
 		 *
 		 *         <p>It says who ATTACHED the citation, never how good the evidence is. A record the
 		 *         module attached is one it resolved deterministically from the finding's own match;
-		 *         a record the model cited is the model's claim. ADR Decision 78 carries why the
+		 *         a record the model cited is the model's claim. ADR Decision 80 carries why the
 		 *         module may publish one at all.
 		 */
 		public boolean isAttachedByTheModule() {

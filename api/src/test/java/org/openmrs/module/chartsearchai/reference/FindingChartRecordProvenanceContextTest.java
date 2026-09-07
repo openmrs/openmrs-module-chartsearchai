@@ -45,7 +45,7 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * {@code safety_finding} cited. Measured on the 3.7.1 standalone over two wordings of one question
  * a single character apart, agreeing on everything upstream of the model and disagreeing on whether
  * the allergy record was cited at all — so the click-through to the source record was decided by the
- * wording of the question. ADR Decision 78 carries the run counts and the arrangement; they are not
+ * wording of the question. ADR Decision 80 carries the run counts and the arrangement; they are not
  * repeated here, because a measurement with three homes is a correction that reaches one of them.
  *
  * <p><b>Why it was unfixable downstream.</b> The provenance was discarded at read time:

@@ -106,6 +106,9 @@ public class PatientClinicalContext {
 	 *  empty, only about whether the emptiness means anything. */
 	private final boolean contraindicationRecordsRead;
 
+	/** @see #activeDrugOrdersRead() */
+	private final boolean activeDrugOrdersRead;
+
 	public PatientClinicalContext(Integer ageYears, Double weightKg, Set<String> activeDrugNames,
 			Set<String> activeDrugAtcCodes, Set<String> allergyTokens, Set<String> conditionTokens) {
 		this(ageYears, weightKg, activeDrugNames, activeDrugAtcCodes, allergyTokens, conditionTokens, null);
@@ -138,21 +141,22 @@ public class PatientClinicalContext {
 			Set<String> activeDrugAtcCodes, Set<String> allergyTokens, Set<String> conditionTokens,
 			List<ActiveDrugOrder> activeDrugOrders, Set<String> activeDrugReferenceNames) {
 		this(ageYears, weightKg, activeDrugNames, activeDrugAtcCodes, allergyTokens, conditionTokens,
-				activeDrugOrders, activeDrugReferenceNames, true);
+				activeDrugOrders, activeDrugReferenceNames, true, true);
 	}
 
 	/**
-	 * As above, additionally recording whether the allergy and condition reads SUCCEEDED — see
-	 * {@link #contraindicationRecordsRead}. Package-private and defaulted to {@code true} everywhere
+	 * As above, additionally recording whether the allergy and condition reads SUCCEEDED and whether
+	 * the ACTIVE ORDER read did — see {@link #contraindicationRecordsRead}. Package-private and defaulted to {@code true} everywhere
 	 * else on purpose: only {@link PatientClinicalContextBuilder}, which performs those reads, is in a
 	 * position to say otherwise, and a caller assembling a context by hand knows what it put in it.
 	 */
 	PatientClinicalContext(Integer ageYears, Double weightKg, Set<String> activeDrugNames,
 			Set<String> activeDrugAtcCodes, Set<String> allergyTokens, Set<String> conditionTokens,
 			List<ActiveDrugOrder> activeDrugOrders, Set<String> activeDrugReferenceNames,
-			boolean contraindicationRecordsRead) {
+			boolean contraindicationRecordsRead, boolean activeDrugOrdersRead) {
 		this(ageYears, weightKg, activeDrugNames, activeDrugAtcCodes, allergyTokens, conditionTokens,
-				activeDrugOrders, activeDrugReferenceNames, contraindicationRecordsRead, null, null);
+				activeDrugOrders, activeDrugReferenceNames, contraindicationRecordsRead,
+				activeDrugOrdersRead, null, null);
 	}
 
 	/**
@@ -169,11 +173,12 @@ public class PatientClinicalContext {
 	PatientClinicalContext(Integer ageYears, Double weightKg, Set<String> activeDrugNames,
 			Set<String> activeDrugAtcCodes, Set<String> allergyTokens, Set<String> conditionTokens,
 			List<ActiveDrugOrder> activeDrugOrders, Set<String> activeDrugReferenceNames,
-			boolean contraindicationRecordsRead, Map<String, Set<String>> allergyRecordUuids,
-			Map<String, Set<String>> conditionRecordUuids) {
+			boolean contraindicationRecordsRead, boolean activeDrugOrdersRead,
+			Map<String, Set<String>> allergyRecordUuids, Map<String, Set<String>> conditionRecordUuids) {
 		this.allergyRecordUuids = lowerKeys(allergyRecordUuids);
 		this.conditionRecordUuids = lowerKeys(conditionRecordUuids);
 		this.contraindicationRecordsRead = contraindicationRecordsRead;
+		this.activeDrugOrdersRead = activeDrugOrdersRead;
 		this.ageYears = ageYears;
 		this.weightKg = weightKg;
 		this.activeDrugNames = lower(activeDrugNames);
@@ -198,7 +203,8 @@ public class PatientClinicalContext {
 		// reference names for EVERY request.
 		return new PatientClinicalContext(ageYears, weightKg, activeDrugNames, activeDrugAtcCodes,
 				allergyTokens, conditionTokens, activeDrugOrders, referenceNames,
-				contraindicationRecordsRead, allergyRecordUuids, conditionRecordUuids);
+				contraindicationRecordsRead, activeDrugOrdersRead, allergyRecordUuids,
+				conditionRecordUuids);
 	}
 
 	/** @return whether the allergy and condition lists were read at all — see
@@ -206,6 +212,25 @@ public class PatientClinicalContext {
 	 *          emptiness has to ask; a reader that only acts on what IS in them does not. */
 	boolean contraindicationRecordsRead() {
 		return contraindicationRecordsRead;
+	}
+
+	/**
+	 * @return whether the patient's ACTIVE ORDERS were read at all. The sibling of
+	 *         {@link #contraindicationRecordsRead()} on the other side of the join, and a second
+	 *         flag rather than a widening of that one because the two answer different readers:
+	 *         the injector asks the first before stating what this patient's RECORDS do not
+	 *         contain, and her prescriptions are not those records.
+	 *
+	 *         <p>{@code false} makes an empty order list uninterpretable rather than false, the
+	 *         same distinction its sibling draws: {@code getActiveOrders} is
+	 *         {@code @Authorized(GET_ORDERS)} in core, so a role granted this module's own
+	 *         privilege without that one reads nothing and looks exactly like a patient on no
+	 *         medication. {@code DrugSafetyValidator.standingChartAlerts} is the reader that
+	 *         cannot survive that confusion, an unscreenable chart being its WHOLE payload; the
+	 *         answer path deliberately does not ask, an unread order there only narrowing a chip.
+	 */
+	boolean activeDrugOrdersRead() {
+		return activeDrugOrdersRead;
 	}
 
 	/** Pre-weight constructor, retained for test convenience (production uses the weight-carrying

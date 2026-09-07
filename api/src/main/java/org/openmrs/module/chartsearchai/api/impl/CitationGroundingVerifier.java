@@ -104,12 +104,14 @@ import org.springframework.stereotype.Service;
  * Faithfulness of reference content is
  * checked deterministically instead, by the exact comparisons over what the answer states about
  * the record: {@link ClassCodeFidelityCheck} for an ATC class code the model edited while
- * citing the record that carries it (issue #142), report-only, and {@link ReferenceProseFidelityCheck}
+ * citing the record that carries it (issue #142), report-only; {@link ReferenceProseFidelityCheck}
  * for a recitation the model diverged from inside the sentence it was copying (issue #337), whose
- * answer is also published — as {@code unfaithfullyRenderedCitations}, and deliberately not as a
- * verdict on these citations, which stay withheld. {@link ActiveOrderCitationFidelityCheck} runs
- * after every answer too and is NOT one of these: it reads no reference content, asking instead
- * which CHART record a sentence cited (ADR Decision 76). NOT by the
+ * answer is published as {@code unfaithfullyRenderedCitations}; and
+ * {@link SafetyFindingSeverityFidelityCheck} for a cited safety finding whose RATING the answer
+ * states nowhere (the same issue, round three), published as {@code unstatedFindingSeverities}.
+ * None of those is published as a verdict on these citations, which stay withheld.
+ * {@link ActiveOrderCitationFidelityCheck} runs after every answer too and is NOT one of them: it
+ * reads no reference content, asking instead which CHART record a sentence cited (ADR Decision 76). NOT by the
  * {@code DrugSafetyValidator} chips, which this javadoc named until #337: they carry the
  * deterministic text but are an independent list nothing reconciles against the answer. Accepted
  * cost: under entailment mode these citations now take the lazy Tier-1 path (up to two
@@ -310,8 +312,8 @@ import org.springframework.stereotype.Service;
  * withholding every chart citation in the answer, and any composite sentence whose claim is not an
  * active-order one. The {@code DrugSafetyValidator} chips are still not it — this javadoc named them
  * until #337 and they carry the deterministic text as an independent list nothing reconciles against
- * the answer — and neither are {@link ClassCodeFidelityCheck} and {@link ReferenceProseFidelityCheck},
- * which compare what the answer states about the REFERENCE records it cites. {@code README.md} and
+ * the answer — and neither are the checks that compare what the answer states about the REFERENCE
+ * records it cites, which this class's own javadoc enumerates. {@code README.md} and
  * ADR Decision 41 say the same of it; an earlier draft of an earlier correction pasted the
  * reference-content sentence here and made the three disagree.
  *
@@ -819,10 +821,13 @@ public class CitationGroundingVerifier {
 			} else if (Boolean.TRUE.equals(verdict) && disposition[i] == Disposition.DEMOTE_ONLY) {
 				// Demote-only: a cosine pass on a recited reference record carries no faithfulness
 				// signal, so it renders unverified rather than verified; a fail (an off-topic
-				// citation) still flags. What DOES check reference content is ClassCodeFidelityCheck
-				// and ReferenceProseFidelityCheck, not this pass and not the DrugSafetyValidator
-				// chips — which this comment named until #337, and which are an independent list
-				// nothing reconciles against the answer.
+				// citation) still flags. What DOES check reference content is the family of
+				// deterministic post-answer comparisons this class's javadoc enumerates — not this
+				// pass, and not the DrugSafetyValidator chips, which this comment named until #337
+				// and which are an independent list nothing reconciles against the answer. Named
+				// rather than listed here deliberately: this comment and ADR Decision 25 are the two
+				// homes of that list which defeated the previous two sweeps of it — ADR Decision 61
+				// records what defeated each.
 				verdict = null;
 			}
 			annotated.add(references.get(i).withGrounded(verdict));

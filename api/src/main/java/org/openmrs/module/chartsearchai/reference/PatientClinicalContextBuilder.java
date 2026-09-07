@@ -64,7 +64,13 @@ final class PatientClinicalContextBuilder {
 				new ArrayList<PatientClinicalContext.ActiveDrugOrder>();
 
 		if (patient == null) {
-			return new PatientClinicalContext(null, null, drugNames, atcCodes, allergyTokens, conditionTokens);
+			// Stamped as READ BY NOTHING, both dimensions. The shorter constructors default both to
+			// true, which is right for a caller assembling a context by hand and wrong here: this is
+			// the one path that performs no read at all, so its empty sets mean the least of any
+			// context this builder produces. Left defaulted, DrugSafetyValidator.standingChartAlerts
+			// certified a patient that does not exist as a screened, clear chart.
+			return new PatientClinicalContext(null, null, drugNames, atcCodes, allergyTokens,
+				conditionTokens, activeOrders, null, false, false);
 		}
 
 		try {
@@ -88,6 +94,11 @@ final class PatientClinicalContextBuilder {
 		// (#118) and so the interaction screen can exclude a subject's own order from witnessing it
 		// (#132). ActiveDrugOrder's own javadoc is the authority on what an order carries; this is a
 		// pointer, not a second list.
+		// Whether the order read below actually happened — see
+		// PatientClinicalContext.activeDrugOrdersRead(). The catch degrades this dimension to an
+		// empty list, which is right for a chip and wrong for a surface whose whole payload is the
+		// join between these orders and the records below.
+		boolean activeDrugOrdersRead = true;
 		try {
 			for (Order order : Context.getOrderService().getActiveOrders(patient, null, null, null)) {
 				if (!(order instanceof DrugOrder)) {
@@ -185,6 +196,7 @@ final class PatientClinicalContextBuilder {
 		}
 		catch (RuntimeException e) {
 			log.debug("Could not read active orders for drug-reference context", e);
+			activeDrugOrdersRead = false;
 		}
 
 		// Whether the two contraindication reads below actually happened. Each catch degrades its
@@ -199,7 +211,7 @@ final class PatientClinicalContextBuilder {
 		// clicks through to, and everything downstream sees the flattened token sets alone.
 		//
 		// The uuid is the record's, which makes the join from here to a chart record exact and free of
-		// name matching. That is a measured contract rather than a convention, and ADR Decision 78 is
+		// name matching. That is a measured contract rather than a convention, and ADR Decision 80 is
 		// its one home — including what about it is NOT measured. Do not restate it here.
 		//
 		// Keyed on the RAW string each collector added, and re-keyed by PatientClinicalContext through
@@ -244,7 +256,8 @@ final class PatientClinicalContextBuilder {
 		}
 
 		return new PatientClinicalContext(age, weightKg, drugNames, atcCodes, allergyTokens, conditionTokens,
-				activeOrders, null, contraindicationRecordsRead, allergyRecords, conditionRecords);
+				activeOrders, null, contraindicationRecordsRead, activeDrugOrdersRead, allergyRecords,
+				conditionRecords);
 	}
 
 	/** The most recent positive-numeric, non-stale obs for {@code concept}, or {@code null}. Shared by

@@ -817,13 +817,6 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/**
-	 * As {@link #ctx}, but for a context whose ACTIVE-ORDER read FAILED — the shape
-	 * {@link PatientClinicalContextBuilder} produces when {@code getActiveOrders} throws and it
-	 * degrades that dimension to an empty list. The order sets are empty for exactly that reason,
-	 * which is why they are not arguments; the allergy and condition tokens ARE, because that read
-	 * succeeded and this is the shape where the two flags disagree.
-	 */
-	/**
 	 * As {@link #unreadableOrdersCtx}, but carrying the orders the builder had already collected when
 	 * the read threw — the shape its SINGLE {@code try} around the whole order loop actually produces,
 	 * and the one that reaches {@code PatientClinicalContext.withActiveDrugReferenceNames}.
@@ -839,6 +832,13 @@ public final class DrugReferenceTestSupport {
 				false);
 	}
 
+	/**
+	 * As {@link #ctx}, but for a context whose ACTIVE-ORDER read FAILED — the shape
+	 * {@link PatientClinicalContextBuilder} produces when {@code getActiveOrders} throws and it
+	 * degrades that dimension to an empty list. The order sets are empty for exactly that reason,
+	 * which is why they are not arguments; the allergy and condition tokens ARE, because that read
+	 * succeeded and this is the shape where the two flags disagree.
+	 */
 	static PatientClinicalContext unreadableOrdersCtx(Set<String> allergies, Set<String> conditions) {
 		return new PatientClinicalContext(60, null, Collections.<String> emptySet(),
 				Collections.<String> emptySet(),

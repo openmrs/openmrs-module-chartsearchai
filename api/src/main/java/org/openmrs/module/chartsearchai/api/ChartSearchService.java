@@ -842,8 +842,9 @@ public interface ChartSearchService {
 		 * {@code null} when verification was disabled, could not run for this
 		 * reference (e.g. the record carried no text to compare against), or ran
 		 * and could not certify it. That last set of reasons is enumerated once,
-		 * in ADR Decision 11's {@code grounded} paragraph, and is not restated
-		 * here; what this accessor adds is which of them leave a verdict standing
+		 * in ADR Decision 11's {@code grounded} paragraph, and is restated below
+		 * only to say which of them leave no verdict here; what this accessor
+		 * adds beyond the pointer is which of them leave a verdict standing
 		 * on IT. A {@code reference}-group citation is demote-only, so its Tier-1
 		 * cosine PASS renders {@code null} here while its FAIL is kept and returns
 		 * {@code FALSE} — only the wire withholds that unconditionally, which is

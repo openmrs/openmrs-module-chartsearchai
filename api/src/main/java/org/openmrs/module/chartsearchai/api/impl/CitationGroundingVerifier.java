@@ -416,7 +416,7 @@ public class CitationGroundingVerifier {
 
 		/**
 		 * Nothing is published in either direction, because neither tier is asked a question that is
-		 * this citation's own. Two arrangements reach it, and they arrive from opposite directions.
+		 * this citation's own. The arrangements below reach it from opposite directions.
 		 *
 		 * <p><b>Do not read "nothing is published" as "nothing is spent".</b> Two drafts of a rule
 		 * about which arm pays an embedding have now been refuted by measurement, so none is made
@@ -611,8 +611,8 @@ public class CitationGroundingVerifier {
 		Tier1Result[] tier1Results = new Tier1Result[references.size()];
 		// How much of a verdict each citation may be given: one ordered Disposition, decided ONCE per
 		// reference and read at all three sites below (judge candidacy, the lazy Tier-1 skip, and what
-		// Pass 2 publishes). Three reasons feed it and they do NOT share a treatment, which is why
-		// this is a three-valued choice rather than a boolean. Decided from the
+		// Pass 2 publishes). The reasons feeding it do not all get the same treatment, which is why
+		// this is one ordered choice rather than a boolean. Decided from the
 		// value claim selection returned, never re-read off tier1Results (cosineVerdict REBUILDS those
 		// for every reference reaching the lazy Tier-1 block, and a flag lost in a rebuild would fail
 		// open). Wiring a new reason into only one site is not hypothetical: #110's safety_finding was
@@ -803,9 +803,9 @@ public class CitationGroundingVerifier {
 				withheldNegatives++;
 			}
 			if (disposition[i] == Disposition.UNVERIFIABLE) {
-				// Two arrangements reach here and both publish nothing, one of them a citation the
+				// Every arrangement reaching here publishes nothing, one of them a citation the
 				// module attached (issue #305), in either mode. The enum constant is canonical for the
-				// pair and for why; what follows is #302's own half, which predates it.
+				// set and for why; what follows is #302's own case, which predates it.
 				//
 				// A compound claim unit under entailment publishes nothing (issue #302). Neither tier
 				// asked a question about THIS citation: the judge was handed a conjunction the record

@@ -293,13 +293,18 @@ public class ChartSearchAiConstants {
 	public static final int DEFAULT_PROGRESSIVE_REASONING_TOP_K = 15;
 
 	/**
-	 * When {@code true}, every cited record is checked for grounding after the
-	 * LLM answers: the record's text must be semantically close enough to the
-	 * answer sentence(s) that cite it, otherwise the citation is flagged as
-	 * unverified. Index validation alone (does {@code [N]} map to a real
+	 * When {@code true}, cited records are checked for grounding after the LLM
+	 * answers: the record's text must be semantically close enough to the
+	 * answer sentence(s) that cite it, otherwise that citation is published as
+	 * unsupported. Index validation alone (does {@code [N]} map to a real
 	 * retrieved record?) cannot catch the dangerous case of a real record cited
-	 * for a claim it does not actually support. Default {@code false} so the
-	 * feature is opt-in. See {@code CitationGroundingVerifier}.
+	 * for a claim it does not actually support. Which citations carry a verdict
+	 * is narrower than which are cited, and a {@code null} is not a failed
+	 * check: the reasons are enumerated once, in ADR Decision 11's
+	 * {@code grounded} paragraph, and {@code CitationGroundingVerifier.Disposition}
+	 * is canonical for how much of a verdict each citation may be given.
+	 * Default {@code false} so the feature is opt-in. See
+	 * {@code CitationGroundingVerifier}.
 	 */
 	public static final String GP_GROUNDING_ENABLED = "chartsearchai.grounding.enabled";
 

@@ -1421,14 +1421,16 @@ public class ChartSearchAiRestController {
 	 * check but the async-grounding early {@code done}: that answer is handed off before any of them
 	 * has run, so {@code LlmInferenceService} passes an explicit {@code null} for each. Mutate a guard
 	 * away and read the failures — the {@code chartsearchai.grounding.async=true} wire cases lose
-	 * their {@code done} event. The failed-check case reaches it too and no path is known to deliver
-	 * it: ADR Decision 61 records that no TEST reaches it, a record
-	 * throwing on read being pre-empted by {@code referenceSlice}, and the one line the check's catch
-	 * is documented as covering — a read of {@code patient.getPatientId()} — is re-read by both answer
-	 * methods in their {@code finally} timing log, so a throw there errors the request instead.
-	 * {@code misattributedOrderCitations} has an identically shaped failure branch, which ADR
-	 * Decision 76 records and Decision 61 does not cover. The guard stays because it costs one
-	 * comparison and the alternative is a 500.
+	 * their {@code done} event. The failed-check case reaches it too, and whether any path DELIVERS one
+	 * differs by accessor. For the prose and active-order checks none is known: ADR Decision 61
+	 * records that no test reaches theirs, a record throwing on read being pre-empted by
+	 * {@code referenceSlice}, and the one line their catch is documented as covering — a read of
+	 * {@code patient.getPatientId()} — is re-read by both answer methods in their {@code finally}
+	 * timing log, so a throw there errors the request instead; Decision 76 records the same of
+	 * {@code misattributedOrderCitations}. {@code unstatedFindingSeverities} is the exception and
+	 * Decision 77 records it: {@code getFindingSeverity()} is read by nothing else on the answer
+	 * path, so a record that throws on it reaches that check and no earlier one, and a test does.
+	 * The guard stays because it costs one comparison and the alternative is a 500.
 	 */
 	private void putModuleStatements(Map<String, Object> target, ChartAnswer answer) {
 		putSafetyChips(target, answer);

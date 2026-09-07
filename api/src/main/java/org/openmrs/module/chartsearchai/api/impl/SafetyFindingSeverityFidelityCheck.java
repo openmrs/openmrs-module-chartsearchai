@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -194,12 +195,19 @@ final class SafetyFindingSeverityFidelityCheck {
 			if (ratings.isEmpty()) {
 				return offending;
 			}
-			// Memoised per DISTINCT rating, in a per-call local and never a field (#172 binds this
+			// Memoised per distinct rating, in a per-call local and never a field (#172 binds this
 			// module's memos, and a static utility on a Spring-managed path is no exception). The
-			// vocabulary `DrugSafetyValidator.statableRating` admits has three members, so an answer
-			// citing two hundred findings asks this at most three times rather than two hundred —
-			// which is the unbounded repeat of one identical needle that the same shape forced
-			// ActiveOrderCitationFidelityCheck to bound with a Matcher region.
+			// vocabulary `statableRating` admits has three members, so an answer citing two hundred
+			// findings asks this at most three times rather than two hundred — the unbounded repeat
+			// of one identical needle that the same shape forced ActiveOrderCitationFidelityCheck to
+			// bound with a Matcher region.
+			//
+			// The key is LOWER-CASED, and that is what makes "three" true rather than a hope.
+			// `statableRating` hands on the dataset's own spelling trimmed, not canonicalised —
+			// `severityRank` lower-cases to RECOGNISE a rating and nothing lower-cases what is
+			// returned — so an operator file writing `Major` and `major` yields two keys for one
+			// rating and pays two walks of the answer for the same question. `statesWord` is
+			// case-insensitive, so this was never a wrong answer, only a wrong bound.
 			Map<String, Boolean> stated = new HashMap<String, Boolean>();
 			List<String> reasons = new ArrayList<String>();
 			Set<Integer> seen = new LinkedHashSet<Integer>();
@@ -211,10 +219,11 @@ final class SafetyFindingSeverityFidelityCheck {
 					// check deliberately cannot tell the two apart.
 					continue;
 				}
-				Boolean answerStatesIt = stated.get(rating);
+				String key = rating.toLowerCase(Locale.ROOT);
+				Boolean answerStatesIt = stated.get(key);
 				if (answerStatesIt == null) {
 					answerStatesIt = Boolean.valueOf(ChartSearchAiUtils.statesWord(answer, rating));
-					stated.put(rating, answerStatesIt);
+					stated.put(key, answerStatesIt);
 				}
 				if (answerStatesIt.booleanValue()) {
 					continue;

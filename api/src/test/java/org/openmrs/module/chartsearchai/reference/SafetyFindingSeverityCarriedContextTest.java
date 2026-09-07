@@ -162,6 +162,34 @@ public class SafetyFindingSeverityCarriedContextTest extends BaseModuleContextSe
 	}
 
 	@Test
+	public void aSeverityThisModuleDoesNotRECOGNISEIsCarriedNoMoreThanAnUnratedOneIs() throws Exception {
+		// `statableRating`'s boundary excludes TWO ranks and only one of them was pinned: `unknown`
+		// (rank 0) by the case below, and -1 — an operator dataset's own spelling — by nothing, so
+		// the predicate could be weakened to `!= severityRank("unknown")` with the whole build green.
+		// The claim it defends is stated in two homes: severityRank answers -1 for such a spelling
+		// exactly as it does for an unrated rule, so the module already treats it as unrated
+		// (clearsSeverityFloor exempts it, which is why this arrangement raises a finding at all),
+		// and the rating handed on must agree. The note restates the word, so the record-states-it
+		// condition is live and this case turns on statableRating alone.
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(
+				DrugReferenceTestSupport.serviceWithGroups(DrugReferenceTestSupport.fixtureEntries(
+						"chartsearchai-test/drug-reference-unrecognised-severity.json"))).injectRecords(
+								DrugReferenceTestSupport.oneRecordChart(),
+								DrugReferenceTestSupport.ctx(60, null,
+										DrugReferenceTestSupport.set("Warfarin"), null, null, null),
+								"Is it safe to give her aspirin?");
+		List<RecordMapping> findings = DrugReferenceTestSupport.injectedFindings(chart);
+		assertEquals(1, findings.size(),
+				"the premise: an unrecognised rating is exempt from the floor, so the arrangement "
+						+ "raises a finding. Chart was: " + chart.getText());
+		assertTrue(findings.get(0).getText().contains("Serious"),
+				"and its other half: the record DOES state the word, so nothing but statableRating "
+						+ "can be what withholds it. Record was: " + findings.get(0).getText());
+		assertNull(findings.get(0).getFindingSeverity(),
+				"a spelling severityRank does not recognise is not a rating an answer owes back");
+	}
+
+	@Test
 	public void theShippedFloorLeavesTheUnknownRatedPairWithNoFindingAtAll() {
 		// The precondition for the case below: without it, that one could pass by raising nothing.
 		assertTrue(findingsFor("Lisinopril").isEmpty(),

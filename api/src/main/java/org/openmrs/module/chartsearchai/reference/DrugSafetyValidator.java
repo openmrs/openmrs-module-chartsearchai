@@ -330,15 +330,27 @@ public class DrugSafetyValidator {
 		/** A chart that WAS screened, stating {@code alerts} — which may legitimately be empty, and
 		 *  is then a measurement of none. See {@link #notScreened()} on the visibility. */
 		public static StandingChartAlerts screened(List<SafetyWarning> alerts) {
-			return new StandingChartAlerts(true, alerts);
+			// Copied on the way IN rather than wrapped on the way out: this class is public with public
+			// factories, so the list is a caller's, and the copy is what stops a later mutation of it
+			// changing what this object says. Not an unmodifiable WRAPPER, deliberately — the wire
+			// serializer's own comment records XStreamMarshaller refusing java.util.Collections'
+			// immutable wrappers, the empty case included, and this list travels to it.
+			return new StandingChartAlerts(true, new ArrayList<SafetyWarning>(alerts));
 		}
 
 		/**
 		 * @return whether this patient's chart was actually screened. <b>False is not "no findings"</b>
 		 *         — it says the screen did not run, and {@link #getAlerts()} is then empty for that
-		 *         reason rather than for the chart's. It does not say WHICH of the reasons applies;
-		 *         {@code GET /chartsearchai/drugreferencestatus} publishes the master switch, and the
-		 *         module's log carries a failed chart read.
+		 *         reason rather than for the chart's. <b>Its unit is the whole pass</b>: a chart one of
+		 *         whose two record reads failed reports {@code false} and no findings, even where the
+		 *         other read would have supported one — fail-closed, and a real cost on a safety
+		 *         surface, taken because the alternative is a partial verdict a client would have to
+		 *         be taught to read. It does not say WHICH of the reasons applies, and
+		 *         the channels differ: {@code GET /chartsearchai/drugreferencestatus} publishes the
+		 *         master switch; a chart whose records could not be READ is logged at WARN by the seam
+		 *         that decides this, which is the only signal for that case, since the builder's own
+		 *         catches log at DEBUG and a stock install discards those; and the two
+		 *         {@code drugSafety} toggles are published nowhere.
 		 */
 		public boolean isScreened() {
 			return screened;
@@ -425,7 +437,19 @@ public class DrugSafetyValidator {
 	 * ({@code StandingChartAlertsToggleContextTest}).
 	 */
 	StandingChartAlerts standingChartAlerts(PatientClinicalContext context) {
-		if (context == null || !context.contraindicationRecordsRead()) {
+		if (context == null || !context.contraindicationRecordsRead()
+				|| !context.activeDrugOrdersRead()) {
+			// WARN, and it is the only signal an operator gets for this state. The builder's own two
+			// catches log at DEBUG, which core's shipped log4j2.xml discards by putting org.openmrs at
+			// WARN — right for the answer path, where a missing record only narrows a chip, and wrong
+			// here, where it is the whole payload. The commonest cause is a role holding
+			// AI Query Patient Data without core's Get Allergies or Get Conditions, which is a
+			// configuration fault an operator can fix, and this file's own loudness rule is that a
+			// configuration rule is loud wherever the data came from.
+			log.warn("Standing chart alerts: this patient's allergy, condition or active-order records "
+					+ "could not be read, so the chart is reported as NOT screened rather than as clear. Check "
+					+ "that the querying role holds core's Get Allergies, Get Conditions and Get Orders "
+					+ "privileges.");
 			return StandingChartAlerts.notScreened();
 		}
 		return StandingChartAlerts.screened(
@@ -1590,8 +1614,9 @@ public class DrugSafetyValidator {
 		 * {@link #standingChartAlerts(PatientClinicalContext)} alone asks for.
 		 *
 		 * <p><b>The three short-circuits are mutually REDUNDANT on such a pass, and no test
-		 * discriminates any one of them.</b> Measured: removing any one or any two leaves the suite
-		 * green, and removing all three reddens five cases. The reason is
+		 * discriminates any one of them.</b> Removing any one, or any two, leaves the suite green;
+		 * removing all three reddens the standing cases — mutate them and read the failures rather
+		 * than trusting a tally, which moves with every case added to those classes. The reason is
 		 * {@link #addActiveOrderContraindications}'s two branches, which under this flag do the same
 		 * thing — the second passes {@code askedAbout} on, and every question it is then put to
 		 * answers true — so nothing observes which branch the pass took.
@@ -1606,15 +1631,19 @@ public class DrugSafetyValidator {
 
 		/**
 		 * @return the gate this pass is bounded by. The factory rather than the constructor, so a call
-		 *         site cannot reach the unbounded form without naming the scope it was handed.
+		 *         site cannot reach the unbounded form without naming it. <b>The constructor takes the
+		 *         SCOPE too, never a raw boolean</b>, which is what makes
+		 *         {@code StandingChartAlertsTest.nothingButTheStandingSurfaceDecidesToRunUnbounded}
+		 *         able to count the deciders: it took a boolean until a review agent bypassed this
+		 *         factory with {@code new SubjectMatter(true, …)} on the ANSWER path, which compiled
+		 *         and left that guard green.
 		 */
 		private static SubjectMatter of(SubjectMatterScope scope, String question, String answer,
 				List<String> citedTextsLower) {
-			return new SubjectMatter(scope == SubjectMatterScope.UNBOUNDED, question, answer,
-				citedTextsLower);
+			return new SubjectMatter(scope, question, answer, citedTextsLower);
 		}
 
-		private SubjectMatter(boolean unbounded, String question, String answer,
+		private SubjectMatter(SubjectMatterScope scope, String question, String answer,
 				List<String> citedTextsLower) {
 			List<String> collected = new ArrayList<String>();
 			if (question != null && !question.trim().isEmpty()) {
@@ -1625,7 +1654,7 @@ public class DrugSafetyValidator {
 			}
 			collected.addAll(citedTextsLower);
 			this.texts = collected;
-			this.unbounded = unbounded;
+			this.unbounded = scope == SubjectMatterScope.UNBOUNDED;
 			this.coversActiveOrders = QueryScopeRouter.asksAboutMedications(question);
 			this.coversRecordedAllergies = QueryScopeRouter.asksAboutAllergies(question);
 			this.coversRecordedConditions = QueryScopeRouter.asksAboutConditions(question);

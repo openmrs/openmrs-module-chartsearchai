@@ -12,6 +12,7 @@ package org.openmrs.module.chartsearchai.web.rest;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -24,6 +25,9 @@ import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
+import org.openmrs.api.context.Context;
+import org.openmrs.api.context.UserContext;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
@@ -45,10 +49,12 @@ import org.springframework.http.ResponseEntity;
  * javadoc gives: {@code omod/pom.xml} declares no {@code chartsearchai-api} test-jar, so the fixtures
  * that drive the real {@code DrugSafetyValidator} are not reachable from here.
  *
- * <p>The stub overrides both public methods the handler calls, so a case can arrange the two states
- * that matter independently — a screen that ran and found something, and a screen that did not run.
- * {@link #anUnscreenedInstallSaysSoRatherThanReportingAnEmptyChart} is the one that would be missing
- * if {@code screened} were dropped, and it is the reason the key exists.
+ * <p>The stub overrides the ONE method the handler calls, and returns both states through it — a
+ * screen that ran and found something, and a screen that did not run. That the handler makes one call
+ * is itself the contract: the flag and the list come back together, so neither can answer for a
+ * different pass than the other. {@link #anUnscreenedInstallSaysSoRatherThanReportingAnEmptyChart} is
+ * the case that would be missing if {@code screened} were dropped, and it is the reason the key
+ * exists.
  */
 public class ChartSearchAiChartAlertsTest {
 
@@ -210,6 +216,45 @@ public class ChartSearchAiChartAlertsTest {
 				"and refused before her chart is screened, so nothing about her is computed");
 	}
 
+	/**
+	 * A caller without the clinical privilege is refused before the patient is even resolved.
+	 *
+	 * <p><b>Nothing else pins this, and the shipped access check does not stand in for it.</b>
+	 * {@code PatientAccessCheck}'s default allows every patient to every holder of the privilege — the
+	 * README says so — so on a stock install {@code Context.requirePrivilege} is the whole gate on this
+	 * endpoint, and it is one line. Measured by a review agent: deleting that line left the entire omod
+	 * suite green, on the surface that returns a patient's prescriptions, allergies and conditions.
+	 *
+	 * <p>Shaped after {@code ChartSearchAiDrugReferenceStatusTest}'s own case for
+	 * {@code /drugreferencestatus}, which pins a privilege guarding configuration rather than a chart.
+	 * The user context is installed WITHOUT this fixture's own, which grants everything, and restored
+	 * whatever happens — surefire reuses one JVM for this module, so a leaked context would silently
+	 * alter the classes that run after it.
+	 */
+	@Test
+	public void aCallerWithoutTheClinicalPrivilegeIsRefusedBeforeThePatientIsResolved() {
+		openmrsContext.install();
+		Context.setUserContext(new UserContext(null) {
+
+			@Override
+			public boolean hasPrivilege(String privilege) {
+				return false;
+			}
+		});
+		try {
+			assertThrows(RuntimeException.class,
+					() -> controller.chartAlerts(RestControllerContext.PATIENT_UUID),
+					"a caller without " + ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA
+							+ " must be refused, on the surface that returns a patient's prescriptions "
+							+ "and recorded allergies");
+			assertEquals(0, validator.standingCalls,
+					"and refused before anything about her is computed");
+		}
+		finally {
+			openmrsContext.restore();
+		}
+	}
+
 	@Test
 	public void anUnknownPatientIsNotFoundAndAMissingOneIsABadRequest() {
 		assertEquals(HttpStatus.NOT_FOUND, alertsFor("no-such-patient").getStatusCode(),
@@ -221,11 +266,14 @@ public class ChartSearchAiChartAlertsTest {
 	/**
 	 * The whole payload marshals for an XML client.
 	 *
-	 * <p>Not decoration: {@code serializeSafetyWarnings} copies each chip's {@code chartOrderBridges}
-	 * into an {@code ArrayList} precisely because {@code XStreamMarshaller} refuses
-	 * {@code java.util.Collections}' immutable wrappers — the empty case included — and this surface
-	 * additionally hands the serializer {@code Collections.emptyList()} on the unscreened path, which
-	 * is a second wrapper on the same route.
+	 * <p>Not decoration, and the wrapper it exercises is not the outer list. {@code serializeSafetyWarnings}
+	 * copies each chip's {@code chartOrderBridges} into an {@code ArrayList} precisely because
+	 * {@code XStreamMarshaller} refuses {@code java.util.Collections}' immutable wrappers — the EMPTY
+	 * case included — and every standing alert is a contraindication, whose three-argument constructor
+	 * sets that field to {@code Collections.emptyList()}. So this surface hands the marshaller the
+	 * refused shape on its ordinary path, not an exotic one. The unscreened half is here because that
+	 * payload's {@code alerts} is empty, which is the arrangement an XML client sees on a disabled
+	 * install.
 	 */
 	@Test
 	public void theWholePayloadMarshalsForAnXmlClient() throws Exception {

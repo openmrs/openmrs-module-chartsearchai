@@ -51,6 +51,16 @@ import org.junit.jupiter.api.Test;
  * {@link #theStandingEntryGatesOnThePredicateItPublishes} and by
  * {@code StandingChartAlertsToggleContextTest}, which needs a real {@code Context} and so cannot live
  * here.
+ *
+ * <p><b>What no case here reaches, named rather than left to be discovered.</b> Nothing produces an
+ * ALERT through the public {@code standingChartAlerts(Patient)} path end to end — that would need a
+ * context-sensitive patient carrying both a real drug order and a real allergy the bundled dataset
+ * relates, and the toggle class's public-entry case runs that path on the standard test patient, who
+ * is prescribed nothing this dataset contraindicates, so it asserts the VERDICT and not a finding.
+ * The fail-safe {@code catch} in that method is executed by nothing. And every chart here passes a
+ * flattened name set with no per-order {@code ActiveDrugOrder} list, which production always builds
+ * (issues #118, #290) — so the surface is measured over the shape the arm falls back to rather than
+ * the one it usually gets.
  */
 public class StandingChartAlertsTest {
 
@@ -214,6 +224,31 @@ public class StandingChartAlertsTest {
 	 * builder produces for that failure — its token sets are empty for that reason and cannot be
 	 * supplied, which is what stops this case being an arrangement no production path reaches.
 	 */
+	/**
+	 * The same rule on the OTHER side of the join: a chart whose ACTIVE-ORDER read failed is not a
+	 * screened chart either.
+	 *
+	 * <p>Found one read short of the case above, by review. {@code getActiveOrders} is
+	 * {@code @Authorized(GET_ORDERS)} in core and throws exactly as {@code getAllergies} does, and the
+	 * builder degrades it to an empty LIST — so a role holding {@code AI Query Patient Data} without
+	 * core's {@code Get Orders} looked exactly like a patient on no medication, and this surface, whose
+	 * whole payload is the join between her orders and her records, published it as a clean chart.
+	 *
+	 * <p>The allergy is recorded and readable here, so this case fails if the seam asks only its
+	 * sibling flag — which is what it did.
+	 */
+	@Test
+	public void aChartWhoseActiveOrdersCouldNotBeReadIsNotScreenedEither() {
+		DrugSafetyValidator.StandingChartAlerts standing = curatedValidator().standingChartAlerts(
+				DrugReferenceTestSupport.unreadableOrdersCtx(
+						DrugReferenceTestSupport.set("ibuprofen"), null));
+
+		assertFalse(standing.isScreened(),
+				"a chart whose prescriptions the module could not read must not be published as a "
+						+ "screened one — an empty order list is then uninterpretable, not empty");
+		assertTrue(standing.getAlerts().isEmpty(), "and it states no findings, having screened nothing");
+	}
+
 	@Test
 	public void aChartWhoseRecordsCouldNotBeReadIsNotScreened() {
 		DrugSafetyValidator.StandingChartAlerts standing = curatedValidator()
@@ -264,12 +299,12 @@ public class StandingChartAlertsTest {
 		SourceScan scan = new SourceScan(RELATIVE_SOURCE);
 		SourceScan.Region gate = scan.body(STANDING_ENTRY);
 
-		assertTrue(namedInside(scan, gate, "if (!reportsStandingChartAlerts()) {"),
+		assertTrue(scan.names(gate, "if (!reportsStandingChartAlerts()) {"),
 				"the standing entry must gate on the predicate it publishes as `screened`, so the two "
 						+ "cannot come apart (issue #280)");
 		for (String switchOfItsOwn : new String[] { "ChartSearchAiConstants.GP_DRUG_SAFETY_VALIDATE_ANSWERS",
 				"ChartSearchAiUtils.isDrugReferenceEnabled()" }) {
-			assertFalse(namedInside(scan, gate, switchOfItsOwn),
+			assertFalse(scan.names(gate, switchOfItsOwn),
 					"the standing entry must not re-spell " + switchOfItsOwn + " beside that predicate — "
 							+ "a second spelling is how the gate and the published flag would diverge");
 		}
@@ -285,9 +320,11 @@ public class StandingChartAlertsTest {
 	 * repo pins comparable directives with a count plus a body, and so does this.
 	 *
 	 * <p>Two namings, and they are different acts. {@code standingChartAlerts} DECIDES to run
-	 * unbounded; {@code SubjectMatter.of} merely translates the scope it was handed into the gate's own
-	 * flag, and would be reached by any caller. So the count alone would let a third site decide, and
-	 * the bodies are what say which naming is which.
+	 * unbounded; {@code SubjectMatter}'s constructor merely translates the scope it was handed into the
+	 * gate's own flag, and is reached by every caller. So the count alone would let a third site decide,
+	 * and the bodies are what say which naming is which — this case moved the second needle once
+	 * already, when the translation moved out of the factory and into the constructor to close a
+	 * raw-boolean bypass, and it said so loudly rather than passing.
 	 *
 	 * <p>Over the source with comments and string literals blanked, so a {@code @link} to the constant
 	 * is not a use of it. What it cannot see is a caller that reaches the unbounded gate without naming
@@ -307,7 +344,7 @@ public class StandingChartAlertsTest {
 		SourceScan.Region decider = scan.body(
 				"StandingChartAlerts standingChartAlerts(PatientClinicalContext context) {");
 		SourceScan.Region translator = scan.body(
-				"private static SubjectMatter of(SubjectMatterScope scope, String question, String answer,");
+				"private SubjectMatter(SubjectMatterScope scope, String question, String answer,");
 		assertTrue(decider.contains(namings.get(0)),
 				"the first naming must be the standing surface asking for the unbounded gate, and was at "
 						+ "line " + scan.lineOf(namings.get(0)));
@@ -315,16 +352,5 @@ public class StandingChartAlertsTest {
 				"the second must be SubjectMatter translating the scope it was handed, and was at line "
 						+ scan.lineOf(namings.get(1)) + " — a decider anywhere else is a second unbounded "
 						+ "pass however the count reads");
-	}
-
-	/** @return whether {@code needle} occurs inside {@code region}, in the source with comments and
-	 *          string literals blanked. */
-	private static boolean namedInside(SourceScan scan, SourceScan.Region region, String needle) {
-		for (Integer at : scan.literalOffsets(needle)) {
-			if (region.contains(at)) {
-				return true;
-			}
-		}
-		return false;
 	}
 }

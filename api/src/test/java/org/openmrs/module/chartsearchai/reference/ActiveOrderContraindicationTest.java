@@ -97,8 +97,9 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  */
 public class ActiveOrderContraindicationTest {
 
-	/** The order name as a chart carries it, and what {@code getActiveDrugNames} holds. */
-	private static final String IBUPROFEN_ORDER = "Ibuprofen 400mg";
+	/** The order name as a chart carries it, and what {@code getActiveDrugNames} holds — the shared
+	 *  one, so this class and the standing surface cannot come to measure two charts spelled alike. */
+	private static final String IBUPROFEN_ORDER = DrugReferenceTestSupport.IBUPROFEN_ORDER;
 
 	/** A question that resolves NO reference drug and is not an interaction screen, so neither
 	 *  question-driven arm nor the screen has an anchor — the shape the defect needs. */
@@ -125,8 +126,7 @@ public class ActiveOrderContraindicationTest {
 
 	/** Context: one active ibuprofen order, plus whatever allergy/condition tokens a case needs. */
 	private static PatientClinicalContext ctx(Set<String> allergies, Set<String> conditions) {
-		return DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set(IBUPROFEN_ORDER),
-				null, allergies, conditions);
+		return DrugReferenceTestSupport.prescribedIbuprofenChart(allergies, conditions);
 	}
 
 	/** A chart holding an obs and that drug-order record, as the serializer numbers them. */

@@ -86,6 +86,11 @@ final class PatientClinicalContextBuilder {
 		// (#118) and so the interaction screen can exclude a subject's own order from witnessing it
 		// (#132). ActiveDrugOrder's own javadoc is the authority on what an order carries; this is a
 		// pointer, not a second list.
+		// Whether the order read below actually happened — see
+		// PatientClinicalContext.activeDrugOrdersRead(). The catch degrades this dimension to an
+		// empty list, which is right for a chip and wrong for a surface whose whole payload is the
+		// join between these orders and the records below.
+		boolean activeDrugOrdersRead = true;
 		try {
 			for (Order order : Context.getOrderService().getActiveOrders(patient, null, null, null)) {
 				if (!(order instanceof DrugOrder)) {
@@ -183,6 +188,7 @@ final class PatientClinicalContextBuilder {
 		}
 		catch (RuntimeException e) {
 			log.debug("Could not read active orders for drug-reference context", e);
+			activeDrugOrdersRead = false;
 		}
 
 		// Whether the two contraindication reads below actually happened. Each catch degrades its
@@ -221,7 +227,7 @@ final class PatientClinicalContextBuilder {
 		}
 
 		return new PatientClinicalContext(age, weightKg, drugNames, atcCodes, allergyTokens, conditionTokens,
-				activeOrders, null, contraindicationRecordsRead);
+				activeOrders, null, contraindicationRecordsRead, activeDrugOrdersRead);
 	}
 
 	/** The most recent positive-numeric, non-stale obs for {@code concept}, or {@code null}. Shared by

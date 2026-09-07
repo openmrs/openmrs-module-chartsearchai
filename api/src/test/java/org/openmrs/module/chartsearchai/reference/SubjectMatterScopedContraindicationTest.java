@@ -66,7 +66,9 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  */
 public class SubjectMatterScopedContraindicationTest {
 
-	private static final String IBUPROFEN_ORDER = "Ibuprofen 400mg";
+	/** The order name as a chart carries it — the shared one, so this class and the standing surface
+	 *  cannot come to measure two charts spelled alike. */
+	private static final String IBUPROFEN_ORDER = DrugReferenceTestSupport.IBUPROFEN_ORDER;
 
 	/** The order record the patient's chart carries, and the one an answer about her medications cites. */
 	private static final RecordMapping ORDER_RECORD =
@@ -112,8 +114,7 @@ public class SubjectMatterScopedContraindicationTest {
 
 	private static PatientClinicalContext ctx(java.util.Set<String> allergies,
 			java.util.Set<String> conditions) {
-		return DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set(IBUPROFEN_ORDER),
-				null, allergies, conditions);
+		return DrugReferenceTestSupport.prescribedIbuprofenChart(allergies, conditions);
 	}
 
 	/**

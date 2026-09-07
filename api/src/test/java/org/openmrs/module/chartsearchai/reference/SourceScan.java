@@ -202,6 +202,28 @@ final class SourceScan {
 	}
 
 	/** A brace-delimited span of the source. */
+	/**
+	 * @return whether {@code needle} occurs inside {@code region}, in this file's blanked source — so
+	 *         a comment or a string literal naming it is not an occurrence of it.
+	 *
+	 *         <p>Extracted at the THIRD caller, the threshold this class's own javadoc records for
+	 *         itself: {@code FoldedOperandTest}'s two assertion helpers were the first two and
+	 *         {@code StandingChartAlertsTest} the third. The walk it replaces is three lines and is
+	 *         exactly the shape a hand-rolled copy gets wrong — one written for issue #280 read the
+	 *         file UNBLANKED, and a commented-out gate satisfied the guard that was the only thing
+	 *         watching it. {@code CoMedicationResolutionPerPassTest} and
+	 *         {@code ChipSubjectOneResolutionTest} still inline their own and are outside that change,
+	 *         so the drift they can make is theirs.
+	 */
+	boolean names(Region region, String needle) {
+		for (Integer at : literalOffsets(needle)) {
+			if (region.contains(at)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	static final class Region {
 
 		private final int start;

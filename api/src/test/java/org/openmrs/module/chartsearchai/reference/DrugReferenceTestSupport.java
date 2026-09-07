@@ -798,7 +798,22 @@ public final class DrugReferenceTestSupport {
 	static PatientClinicalContext unreadableRecordsCtx(Integer age, Double weightKg) {
 		return new PatientClinicalContext(age, weightKg, Collections.<String> emptySet(),
 				Collections.<String> emptySet(), Collections.<String> emptySet(),
-				Collections.<String> emptySet(), null, null, false);
+				Collections.<String> emptySet(), null, null, false, true);
+	}
+
+	/**
+	 * As {@link #ctx}, but for a context whose ACTIVE-ORDER read FAILED — the shape
+	 * {@link PatientClinicalContextBuilder} produces when {@code getActiveOrders} throws and it
+	 * degrades that dimension to an empty list. The order sets are empty for exactly that reason,
+	 * which is why they are not arguments; the allergy and condition tokens ARE, because that read
+	 * succeeded and this is the shape where the two flags disagree.
+	 */
+	static PatientClinicalContext unreadableOrdersCtx(Set<String> allergies, Set<String> conditions) {
+		return new PatientClinicalContext(60, null, Collections.<String> emptySet(),
+				Collections.<String> emptySet(),
+				allergies == null ? Collections.<String> emptySet() : allergies,
+				conditions == null ? Collections.<String> emptySet() : conditions, null, null, true,
+				false);
 	}
 
 	/** As {@link #ctx}, additionally carrying the identified active drug orders the
@@ -1182,10 +1197,13 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/**
-	 * The chart issue #280 is specified on, and the one {@code ActiveOrderContraindicationTest}
-	 * measures the ANSWER surface on: one active ibuprofen order, plus whatever the case records
-	 * against it. Shared so the two surfaces are compared over one chart rather than over two that
-	 * happen to be spelled alike.
+	 * The chart issue #280 is specified on, and the one {@code ActiveOrderContraindicationTest} and
+	 * {@code SubjectMatterScopedContraindicationTest} measure the ANSWER surface on: one active
+	 * ibuprofen order, plus whatever the case records against it. All three call this, and their own
+	 * {@code IBUPROFEN_ORDER} constants read {@link #IBUPROFEN_ORDER} rather than respelling it — so
+	 * the surfaces are compared over ONE chart, which is the whole force of
+	 * {@code StandingChartAlertsTest.theAnswerSurfaceStillWithholdsTheSameFindingFromAResponseAboutSomethingElse}.
+	 * Sharpen this fixture and every one of them moves with it.
 	 *
 	 * @param allergies recorded allergy tokens, or null for none
 	 * @param conditions recorded condition tokens, or null for none

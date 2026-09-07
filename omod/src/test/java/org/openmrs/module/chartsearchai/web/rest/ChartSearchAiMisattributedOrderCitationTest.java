@@ -116,7 +116,9 @@ public class ChartSearchAiMisattributedOrderCitationTest {
 
 	/**
 	 * The defect, on the wire: an answer that cited a record which cannot be the order it names now
-	 * says so, where before this key every observable field read exactly as a correct answer's would.
+	 * says so, where before this key nothing on the response distinguished it from a
+	 * correct one. (Not "every observable field read as a correct answer's would": issue #337's third
+	 * round added a key that flags the same reported response, for a different defect.)
 	 */
 	@Test
 	public void theSearchResponseNamesTheCitationThatCannotBeTheOrder() {

@@ -146,6 +146,15 @@ def search(patient, question):
     d = req("/chartsearchai/search", {"patient": patient, "question": question}, "POST")
     verdicts = {}
     for r in (d.get("references") or []):
+        # A third tag, for the same reason `withheld` is one: since issue #305 a chart-group citation
+        # the MODULE attached carries grounded=null because there is no claim of the model's to check,
+        # and printing that as None reads as "unverified" — the distinction that whole issue turns on.
+        # A STRING again, so the True/False classes cannot match it and the #302 null-side classes,
+        # which test `is None`, cannot either; the three counted classes each require a non-null on
+        # one side, so no tally moves. Do not tag it None.
+        if r.get("attachedByTheModule"):
+            verdicts[r.get("index")] = "attached"
+            continue
         withheld = r.get("group") == "reference"
         verdicts[r.get("index")] = "withheld" if withheld else r.get("grounded")
     return (d.get("answer", "") or "").strip(), verdicts

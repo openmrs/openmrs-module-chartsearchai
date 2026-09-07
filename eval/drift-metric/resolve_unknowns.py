@@ -26,7 +26,14 @@ for f in sorted(glob.glob(sys.argv[1]+'/*.json')):
     if not g: continue
     known=set(g['ontopic'])|set(g['focus_uuids'])|set(adj.get(cell,[]))|set(adj_on.get(cell,[]))
     d=json.load(open(f))
+    # The same population metric_score.py scores, and for its reason: since issue #305 the module
+    # publishes the chart record a cited safety_finding was derived from, marked attachedByTheModule.
+    # That record is not a citation the model made, so the scorer excludes it — and offering it here
+    # would spend adjudication on a uuid no cell will ever score, or worse, have it adjudicated
+    # on-topic and silently change nothing. An older capture carries no such key.
     for r in d.get('references',[]):
+        if r.get('attachedByTheModule'):
+            continue
         cu=r.get('resourceUuid')
         if cu and cu not in known:
             n+=1; print('%-22s %-12s idx=%-4s %s :: %s'%(topic+':'+PN.get(uuid,uuid), r.get('resourceType'), r.get('index'), cu, disp(r.get('resourceType'),cu)))

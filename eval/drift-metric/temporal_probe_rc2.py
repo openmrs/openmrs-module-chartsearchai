@@ -126,7 +126,12 @@ def main():
                 with open(cellpath, "w") as f:
                     json.dump(d, f, indent=1)
         ans = d.get("answer") or ""
-        cited = len(d.get("references") or [])
+        # The MODEL's citations. Since issue #305 the array can also carry a chart record the module
+        # attached to a cited safety_finding, which is not something the answer reached for — and
+        # `cited == 0` below is this probe's whole abstain test. No temporal cell raises a
+        # contraindication finding today, so nothing here moves; the filter is so that the test does
+        # not depend on that staying true. An older capture carries no such key.
+        cited = len([r for r in (d.get("references") or []) if not r.get("attachedByTheModule")])
         if truth is None:
             ok = cited == 0 and (ABSTAIN.search(ans) or not re.search(r"\d", ans))
             verdict = "PASS(abstain)" if ok else "REVIEW"

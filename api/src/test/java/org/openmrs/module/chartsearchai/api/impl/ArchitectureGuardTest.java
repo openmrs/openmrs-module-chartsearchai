@@ -72,9 +72,21 @@ public class ArchitectureGuardTest {
 	 * <p>A SOURCE scan because the property is about the write SITE rather than about any one
 	 * arrangement: {@code FindingChartRecordProvenanceContextTest} asserts that today's chart records
 	 * carry no derivation, which a new write site would leave green. It scans the whole of
-	 * {@code api/src/main} rather than one file, so moving the construction does not escape it, and an
-	 * empty discovery FAILS — a scan that found no provenance-carrying construction at all would
-	 * otherwise pass on a change that deleted the feature.
+	 * {@code api/src/main} rather than one file, so moving the construction does not escape it.
+	 *
+	 * <p><b>It walks its own directory, so it owes itself the pair {@link #getSourceCache()} demands
+	 * of such a rule</b> — that the scan found something, and that it read the RIGHT tree, the sibling
+	 * {@code omod} module having the same package path. The {@code carrying > 0} assertion is both at
+	 * once, and deliberately so: what it requires is a 9-argument {@code RecordMapping} construction
+	 * naming {@code RESOURCE_TYPE_SAFETY_FINDING}, which exists in this module's {@code api} main
+	 * tree and nowhere else. Measured — pointed at {@code omod/src} it scans files, finds none and
+	 * fails, rather than passing on the wrong tree, which asserting that the intended root merely
+	 * EXISTS would not achieve, as that javadoc records.
+	 *
+	 * <p>It walks rather than reading that cache because the cache is keyed on file NAME and holds
+	 * LINES: this rule needs whole-file text, since every interesting construction spans several
+	 * lines, and it needs the PATH, to tell main from test. Re-joining the lines and losing the path
+	 * would be the worse duplication in a class that exists to forbid one.
 	 */
 	@Test
 	public void onlyASafetyFindingMappingIsGivenAProvenanceList() throws IOException {

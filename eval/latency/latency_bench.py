@@ -65,7 +65,7 @@ def set_gp(name, value):
 def timed_search(uuid, q):
     t = time.time()
     d = req("/chartsearchai/search", {"patient": uuid, "question": q}, "POST")
-    return time.time() - t, len(d.get("references") or [])
+    return time.time() - t, len(d.get("references") or [])  # the PUBLISHED total; since #305 it can include a citation the module attached, and nothing here gates on it
 
 
 def pct(sorted_vals, p):

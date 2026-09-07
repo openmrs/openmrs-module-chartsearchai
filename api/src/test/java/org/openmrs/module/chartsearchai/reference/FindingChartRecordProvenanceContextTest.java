@@ -152,18 +152,10 @@ public class FindingChartRecordProvenanceContextTest extends BaseModuleContextSe
 		return c.getUuid();
 	}
 
-	/** Saves an active condition recorded as free text, and returns its uuid. */
+	/** Saves an active condition recorded as free text, through the shared fixture — which carries
+	 *  why the ACTIVE status and the flush/clear pair are both required. */
 	private String recordConditionOf(String condition) {
-		Condition c = new Condition();
-		c.setPatient(patient);
-		c.setClinicalStatus(ConditionClinicalStatus.ACTIVE);
-		CodedOrFreeText coded = new CodedOrFreeText();
-		coded.setNonCoded(condition);
-		c.setCondition(coded);
-		Context.getConditionService().saveCondition(c);
-		Context.flushSession();
-		Context.clearSession();
-		return c.getUuid();
+		return DrugReferenceTestSupport.recordFreeTextCondition(patient, condition);
 	}
 
 	/**

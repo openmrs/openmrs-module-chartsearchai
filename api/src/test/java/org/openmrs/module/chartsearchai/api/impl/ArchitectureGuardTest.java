@@ -139,11 +139,21 @@ public class ArchitectureGuardTest {
 	}
 
 	/**
-	 * How many arguments {@code args} carries — commas at nesting depth zero, outside string and
-	 * character literals, so a nested call, a generic witness or a comma inside a string is not
-	 * miscounted. Zero for an empty list.
+	 * How many arguments {@code args} carries — commas at nesting depth zero, outside comments and
+	 * outside string and character literals, so a nested call, a generic witness, a comma inside a
+	 * string and a comma inside an inline comment are none of them miscounted. Zero for an empty
+	 * list.
+	 *
+	 * <p>Comments are stripped rather than tolerated because this codebase writes them INSIDE a
+	 * multi-line construction constantly, and one there would otherwise unbalance the parse. That
+	 * fails closed — the construction goes unmatched, {@code carrying} drops to zero and the canary
+	 * fires — but a puzzling failure is still a failure. {@code SourceScan.blanked} in the
+	 * {@code reference} test package does this more thoroughly and was the alternative; sharing it
+	 * means promoting a package-private helper out of that package, which is a change of its own,
+	 * and what is needed here is the two comment forms rather than that method's full treatment.
 	 */
 	private static int topLevelArgumentCount(String args) {
+		args = withoutComments(args);
 		if (args.trim().isEmpty()) {
 			return 0;
 		}
@@ -169,6 +179,13 @@ public class ArchitectureGuardTest {
 			}
 		}
 		return count;
+	}
+
+	/** {@code text} with {@code //}-to-end-of-line and {@code /* … *}{@code /} runs removed, so a
+	 *  comma or a bracket written inside one cannot reach the counter above. */
+	private static String withoutComments(String text) {
+		String out = text.replaceAll("(?s)/\\*.*?\\*/", "");
+		return out.replaceAll("//[^\n]*", "");
 	}
 
 	/**
@@ -657,17 +674,17 @@ public class ArchitectureGuardTest {
 	private static java.util.Map<String, List<String>> sourceCache;
 
 	/**
-	 * Every rule in this class but one scans this map, so an EMPTY or WRONG map made all of those
+	 * Most rules in this class scan this map, so an EMPTY or WRONG map made all of those
 	 * pass vacuously — a structural guard that reads nothing reports no violations. That was not
 	 * hypothetical: forcing {@link ModuleSourceRoot#apiRoot()} to an unrelated directory USED TO
 	 * leave this class entirely green. It no longer does; the cache asserts its own sanity before
 	 * any rule reads it, and the same mutation now reddens the rules that read it.
 	 *
-	 * <p>The exception is {@code noDuplicatedDatasetArrays}, which walks the TEST tree itself rather
-	 * than this cache, so these assertions cannot reach it — it carries both of them inline, and it
-	 * needs both: existence alone is not enough, because the sibling {@code omod} module has the
-	 * same package path, so a root pointed there exists and scans the wrong tree. A new rule that
-	 * walks its own directory owes itself the same pair.
+	 * <p><b>A rule that walks its own tree rather than this cache owes itself both assertions
+	 * inline</b>, and needs both: existence alone is not enough, because the sibling {@code omod}
+	 * module has the same package path, so a root pointed there exists and scans the wrong tree. No
+	 * count of such rules is published here and none should be — it has already gone from one to two
+	 * — so look for the pair in any rule that walks, rather than for a list of which ones do.
 	 */
 	private static java.util.Map<String, List<String>> getSourceCache()
 			throws IOException {

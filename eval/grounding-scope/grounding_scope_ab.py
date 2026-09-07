@@ -152,6 +152,11 @@ def search(patient, question):
         # A STRING again, so the True/False classes cannot match it and the #302 null-side classes,
         # which test `is None`, cannot either; the three counted classes each require a non-null on
         # one side, so no tally moves. Do not tag it None.
+        #
+        # It deliberately does NOT share drift-metric's `model_cited` predicate, which is the one home
+        # of the rule for the scorers that EXCLUDE such a citation. This harness tags rather than
+        # excludes — the cell still has to appear in the per-cell table a human reads — so a shared
+        # exclusion would obscure exactly what this tag is for. Different directory, no import path.
         if r.get("attachedByTheModule"):
             verdicts[r.get("index")] = "attached"
             continue

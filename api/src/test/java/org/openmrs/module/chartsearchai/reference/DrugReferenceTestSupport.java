@@ -32,7 +32,10 @@ import java.util.stream.Collectors;
 import org.openmrs.Allergen;
 import org.openmrs.AllergenType;
 import org.openmrs.Allergy;
+import org.openmrs.CodedOrFreeText;
 import org.openmrs.Concept;
+import org.openmrs.Condition;
+import org.openmrs.ConditionClinicalStatus;
 import org.openmrs.Patient;
 import org.openmrs.ConceptMap;
 import org.openmrs.ConceptReferenceTerm;
@@ -1340,6 +1343,31 @@ public final class DrugReferenceTestSupport {
 		Context.flushSession();
 		Context.clearSession();
 		return allergy.getUuid();
+	}
+
+	/**
+	 * Saves an ACTIVE condition recorded as free text, and returns the saved {@code Condition}'s uuid
+	 * — which is what a querystore {@code condition} chart record carries as its resource uuid (see
+	 * {@link #conditionRecord}).
+	 *
+	 * <p>Here for the reason {@link #recordFreeTextAllergy} is, and the coupling is the same shape:
+	 * the {@code ACTIVE} clinical status is what makes
+	 * {@code ConditionService.getActiveConditions} return it, and the flush/clear pair is what makes
+	 * it visible to the builder's own read. Two files had written that out.
+	 *
+	 * <p>Context-sensitive by nature: only a {@code BaseModuleContextSensitiveTest} may call it.
+	 */
+	public static String recordFreeTextCondition(Patient patient, String condition) {
+		Condition c = new Condition();
+		c.setPatient(patient);
+		c.setClinicalStatus(ConditionClinicalStatus.ACTIVE);
+		CodedOrFreeText value = new CodedOrFreeText();
+		value.setNonCoded(condition);
+		c.setCondition(value);
+		Context.getConditionService().saveCondition(c);
+		Context.flushSession();
+		Context.clearSession();
+		return c.getUuid();
 	}
 
 	/**

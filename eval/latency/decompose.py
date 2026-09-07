@@ -59,7 +59,7 @@ def decompose(q):
                 mark[cur] = (f, now)
                 if cur == "done":
                     try:
-                        refs = len(json.loads(line[5:].strip()).get("references") or [])
+                        refs = len(json.loads(line[5:].strip()).get("references") or [])  # the PUBLISHED total; since #305 it can include a citation the module attached, and nothing here gates on it
                     except Exception:
                         pass
     return t0, mark, refs, time.time() - t0

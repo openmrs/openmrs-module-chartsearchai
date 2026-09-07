@@ -106,6 +106,26 @@ def load_captures(cap, want=None):
     return rows, skipped
 
 
+def model_cited(references):
+    """The references the MODEL cited, out of a capture's whole `references` array.
+
+    ONE home for this rule, and the reason is the direction its failure takes. Since issue #305 the
+    module publishes the chart record an injected safety_finding was derived from whenever the model
+    cites that finding, marked `attachedByTheModule` — a record the answer never reached for, which
+    no gate over the model's citation behaviour may score. Every reader of it defaults the key to
+    falsy so a pre-#305 capture scores exactly as it always did; that default also means a RENAME of
+    the wire key silently disables the filter and fails OPEN, re-admitting every attached citation
+    with nothing raised. Four copies of that default meant four places a rename had to reach and a
+    grep for the key had four hits; one means the key is spelled once.
+
+    Callers: this module's own scorer, resolve_unknowns.py and temporal_probe_rc2.py.
+    eval/grounding-scope/grounding_scope_ab.py deliberately does NOT share it — it TAGS such a
+    citation rather than excluding it, so that its own True/False and `is None` tally classes cannot
+    match it, and a shared exclusion predicate would obscure that.
+    """
+    return [r for r in (references or []) if not r.get('attachedByTheModule')]
+
+
 def main():
     cap = sys.argv[1]
     adj_path = sys.argv[2] if len(sys.argv) > 2 else os.path.join(HERE, 'offtopic_adj.json')
@@ -119,26 +139,17 @@ def main():
         cell = uuid + '|' + topic
         g = gold[cell]
         refs = d.get('references', []); ans = d.get('answer', '') or ''
-        # The MODEL's own citations, and not every entry of the array. Since issue #305 the module
-        # publishes the chart record an injected safety_finding was derived from whenever the model
-        # cites that finding, marked attachedByTheModule — a deterministic record the answer never
-        # reached for. Counted here it moves this gate's number without the model's behaviour
-        # moving: inside the gold on-topic set it lifts precision and recall, outside it lands in
-        # `unk` and is summed into the published drift total. Drift this scorer must not read is the
-        # lesson Decision 37 records of score_probe_safety.py, one metric over.
+        # The MODEL's own citations, and not every entry of the array — see model_cited, which is the
+        # one home of that rule and of the wire key's spelling.
         #
         # ON THIS GATE'S OWN PROTOCOL the filtered population is EMPTY, and saying so is the point:
         # capture_eval.sh sets querystore.enabled and embedding.preFilter and nothing else, and the
         # arm that raises a contraindication finding needs chartsearchai.drugReference.enabled, whose
-        # default is false. So a capture taken as the README prescribes is unaffected, and the figures
+        # default is false. So a capture taken as the README prescribes is unaffected and the figures
         # it records are over the same population they always were. The filter is for a capture taken
-        # on an install that has the feature ON — where two of the eight gold topics are `allergies`
-        # and `medications`, which is where that arm fires.
-        #
-        # A capture taken before #305 carries no such key, so `.get` defaulting to false keeps every
-        # historical capture scoring exactly as it did.
-        cited = list(dict.fromkeys(r.get('resourceUuid') for r in refs
-                                   if r.get('resourceUuid') and not r.get('attachedByTheModule')))
+        # on an install that has the feature ON.
+        cited = list(dict.fromkeys(r.get('resourceUuid') for r in model_cited(refs)
+                                   if r.get('resourceUuid')))
         s = score_cell(cited, g['present'], set(g['ontopic']), set(g['focus_uuids']),
                        set(adj.get(cell, [])), set(adj_on.get(cell, [])))
         scored.add(cell)

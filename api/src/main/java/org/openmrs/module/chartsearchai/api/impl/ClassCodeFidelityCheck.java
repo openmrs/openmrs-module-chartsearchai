@@ -247,9 +247,9 @@ final class ClassCodeFidelityCheck {
 					// answer whose cited finding derived from it.
 					//
 					// Asked HERE rather than of the list this method is handed, because it is this
-					// walk's premise that narrows: the @param note calls support "pooled across the
-					// cited records", and the answer's reach is what makes pooling sound at all. The
-					// two sibling checks need no such filter and their javadoc says why.
+					// walk's premise that narrows: the @param note calls support pooled across the
+					// records the ANSWER cited, and the answer's reach is what makes pooling sound at
+					// all. The two sibling checks need no such filter and their javadoc says why.
 					if (reference.isAttachedByTheModule()) {
 						continue;
 					}

@@ -455,15 +455,9 @@ public class NonCodedDrugOrderNameTest extends BaseModuleContextSensitiveTest {
 	 */
 	@Test
 	public void aConditionSpacedIrregularlyStillMatchesAMultiWordCuratedToken() {
-		org.openmrs.Condition condition = new org.openmrs.Condition();
-		org.openmrs.CodedOrFreeText value = new org.openmrs.CodedOrFreeText();
-		value.setNonCoded("Peptic  ulcer disease");
-		condition.setCondition(value);
-		condition.setPatient(patient);
-		condition.setClinicalStatus(org.openmrs.ConditionClinicalStatus.ACTIVE);
-		Context.getConditionService().saveCondition(condition);
-		Context.flushSession();
-		Context.clearSession();
+		// The irregular spacing is the case; the ACTIVE status and the flush/clear pair that make the
+		// row visible to the builder live with the shared fixture.
+		DrugReferenceTestSupport.recordFreeTextCondition(patient, "Peptic  ulcer disease");
 		DrugSafetyValidator validator =
 				DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService());
 

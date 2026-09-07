@@ -1121,7 +1121,8 @@ public class ChartSearchAiRestController {
 			// Who put this citation on the answer (issue #305). True for a chart record an injected
 			// safety_finding the model DID cite was derived from. What a client does with it, and why
 			// it is not derivable from the other fields, is on RecordReference.isAttachedByTheModule
-			// and in README's own section; do not restate it here.
+			// — one home, which README's client section restates for a client author and nothing
+			// else should. Do not restate it here.
 			refMap.put("attachedByTheModule", ref.isAttachedByTheModule());
 			refs.add(refMap);
 		}

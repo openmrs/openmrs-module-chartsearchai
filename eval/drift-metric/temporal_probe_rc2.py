@@ -30,6 +30,8 @@ import re
 import subprocess
 import sys
 import urllib.request
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from metric_score import model_cited
 
 M = os.environ["MARIADB_BIN"]
 PORT = os.environ.get("MARIADB_PORT", "3316")
@@ -126,15 +128,13 @@ def main():
                 with open(cellpath, "w") as f:
                     json.dump(d, f, indent=1)
         ans = d.get("answer") or ""
-        # The MODEL's citations. Since issue #305 the array can also carry a chart record the module
-        # attached to a cited safety_finding, which is not something the answer reached for — and
-        # `cited == 0` below is this probe's whole abstain test. Nothing here moves today: the three
-        # questions above are a weight, a systolic reading and a last visit, none of which resolves a
-        # drug or asks about medications, allergies or conditions, so no arm that raises a
-        # contraindication finding is reached. That is a property of THESE cells, not of the probe —
-        # add a fourth question naming a drug and it stops holding, which is what the filter is for.
-        # An older capture carries no such key.
-        cited = len([r for r in (d.get("references") or []) if not r.get("attachedByTheModule")])
+        # The MODEL's citations, through metric_score's own predicate — `cited == 0` below is this
+        # probe's whole abstain test. Nothing here moves today: the three questions above are a
+        # weight, a systolic reading and a last visit, none of which resolves a drug or asks about
+        # medications, allergies or conditions, so no arm that raises a contraindication finding is
+        # reached. That is a property of THESE cells, not of the probe — add a fourth question naming
+        # a drug and it stops holding, which is what the filter is for.
+        cited = len(model_cited(d.get("references")))
         if truth is None:
             ok = cited == 0 and (ABSTAIN.search(ans) or not re.search(r"\d", ans))
             verdict = "PASS(abstain)" if ok else "REVIEW"

@@ -273,7 +273,9 @@ import org.springframework.stereotype.Service;
  * reference side is the same shape reversed. So a chart citation nothing anchors has its statement —
  * and what that statement rests on — read out of the whole answer, and an UNANCHORED reference
  * citation counts toward every claim, because it was offered in support of the answer without saying
- * where. See {@link AnswerCitations}.</li>
+ * where. See {@link AnswerCitations}. One subclass is exempt since issue #305: a citation the MODULE
+ * attached is anchored by nothing and has no statement selected for it AT ALL, claim selection being
+ * skipped for it.</li>
  * </ul>
  *
  * <p>The cost, stated rather than implied: a chart citation the model attached to the WRONG record
@@ -617,9 +619,8 @@ public class CitationGroundingVerifier {
 		//     compound claim unit, the stronger rule below wins and its fail is withheld too; nothing
 		//     downstream can tell, because #201 withholds every reference-group verdict at the wire.
 		//   * the MODULE attached the citation rather than the model emitting it (issue #305), in
-		//     either mode: UNVERIFIABLE. There is no pairing to check — the model made no claim about
-		//     this record — so a claim would have to be selected FOR it out of the whole answer, at
-		//     whatever floor the operator set. Asked before claim selection, so none runs.
+		//     either mode: UNVERIFIABLE. The enum constant is canonical for why; asked before claim
+		//     selection, so none runs.
 		//   * its CLAIM UNIT is compound and entailment is on (issue #302): UNVERIFIABLE, no verdict in
 		//     either direction. Both tiers are asking the wrong-sized question there — the judge is
 		//     asked to entail a conjunction the record answers for only part of, and cosine is measured
@@ -702,7 +703,7 @@ public class CitationGroundingVerifier {
 			// attaches different citations to different pieces of itself, so the record is asked to
 			// entail a conjunction it answers for only part of, and a correct judge replies "no"
 			// whether the citation is right or wrong. Published, that is what marked correct
-			// medication citations as unsupported. Both exclusions sit OUTSIDE the budget branch
+			// medication citations as unsupported. EVERY exclusion sits OUTSIDE the budget branch
 			// below, so the skipped pairs do not spend the per-answer cap single-claim citations rely
 			// on.
 			if (entailmentEnabled && tier1.bestSentence != null
@@ -754,9 +755,10 @@ public class CitationGroundingVerifier {
 		// cosine would have been overridden and its embedding cost (the dominant grounding cost on
 		// CPU) wasted. Tier-2 reaches none where it failed or could not answer (cap overflow, engine
 		// failure, unparseable reply) and where it was never asked — a reference-group citation, which
-		// still needs its cosine because its FAIL is kept, and a compound claim unit, which does not:
-		// that one publishes nothing either way, so computing the cosine would spend the pass this
-		// block exists to avoid on a verdict Pass 2 discards.
+		// still needs its cosine because its FAIL is kept, and anything UNVERIFIABLE, which does not:
+		// that publishes nothing either way, so computing the cosine would spend the pass this block
+		// exists to avoid on a verdict Pass 2 discards. The guard below reads the DISPOSITION rather
+		// than any one of its reasons, so a reason added to it is covered without an edit here.
 		for (int i = 0; i < references.size(); i++) {
 			if (tier2Verdict[i] == null && tier1Results[i].deferred
 					&& disposition[i] != Disposition.UNVERIFIABLE) {

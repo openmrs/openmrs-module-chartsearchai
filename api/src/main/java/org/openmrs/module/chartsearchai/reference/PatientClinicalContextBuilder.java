@@ -11,8 +11,10 @@ package org.openmrs.module.chartsearchai.reference;
 
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -203,12 +205,31 @@ final class PatientClinicalContextBuilder {
 		// rather than only logged.
 		boolean contraindicationRecordsRead = true;
 
+		// Which chart RECORD each of the two lists' tokens came from (issue #305). Collected here and
+		// nowhere else, because this is the only place that holds both the token and the row it was read
+		// off: a finding raised on a recorded allergy has to be able to name the record the clinician
+		// clicks through to, and everything downstream sees the flattened token sets alone.
+		//
+		// The uuid is the record's, which makes the join from here to a chart record exact and free of
+		// name matching. That is a measured contract rather than a convention, and ADR Decision 80 is
+		// its one home — including what about it is NOT measured. Do not restate it here.
+		//
+		// Keyed on the RAW string each collector added, and re-keyed by PatientClinicalContext through
+		// the same rule that normalizes the token sets themselves — see its lowerKeys. Keying them here
+		// would miss on every allergen the chart spelled with a capital letter.
+		Map<String, Set<String>> allergyRecords = new LinkedHashMap<String, Set<String>>();
+		Map<String, Set<String>> conditionRecords = new LinkedHashMap<String, Set<String>>();
+
 		// Active allergies -> allergen tokens (for contraindication checks).
 		try {
 			for (Allergy allergy : Context.getPatientService().getAllergies(patient)) {
 				if (allergy.getAllergen() != null) {
-					addConceptName(allergyTokens, allergy.getAllergen().getCodedAllergen());
-					addRaw(allergyTokens, allergy.getAllergen().getNonCodedAllergen());
+					// One row can contribute BOTH tokens — the coded allergen's name and the clinician's
+					// free text — and each is attributed to the row, so a rule matching either names it.
+					attribute(allergyRecords, allergy.getUuid(),
+							addConceptName(allergyTokens, allergy.getAllergen().getCodedAllergen()));
+					attribute(allergyRecords, allergy.getUuid(),
+							addRaw(allergyTokens, allergy.getAllergen().getNonCodedAllergen()));
 				}
 			}
 		}
@@ -223,8 +244,10 @@ final class PatientClinicalContextBuilder {
 				if (condition.getCondition() == null) {
 					continue;
 				}
-				addConceptName(conditionTokens, condition.getCondition().getCoded());
-				addRaw(conditionTokens, condition.getCondition().getNonCoded());
+				attribute(conditionRecords, condition.getUuid(),
+						addConceptName(conditionTokens, condition.getCondition().getCoded()));
+				attribute(conditionRecords, condition.getUuid(),
+						addRaw(conditionTokens, condition.getCondition().getNonCoded()));
 			}
 		}
 		catch (RuntimeException e) {
@@ -233,7 +256,8 @@ final class PatientClinicalContextBuilder {
 		}
 
 		return new PatientClinicalContext(age, weightKg, drugNames, atcCodes, allergyTokens, conditionTokens,
-				activeOrders, null, contraindicationRecordsRead, activeDrugOrdersRead);
+				activeOrders, null, contraindicationRecordsRead, activeDrugOrdersRead, allergyRecords,
+				conditionRecords);
 	}
 
 	/** The most recent positive-numeric, non-stale obs for {@code concept}, or {@code null}. Shared by
@@ -453,19 +477,20 @@ final class PatientClinicalContextBuilder {
 		}
 	}
 
-	private static void addConceptName(Set<String> tokens, Concept concept) {
+	private static String addConceptName(Set<String> tokens, Concept concept) {
 		if (concept == null) {
-			return;
+			return null;
 		}
 		try {
 			ConceptName name = concept.getName();
 			if (name != null) {
-				addRaw(tokens, name.getName());
+				return addRaw(tokens, name.getName());
 			}
 		}
 		catch (RuntimeException e) {
 			log.debug("Could not read concept name", e);
 		}
+		return null;
 	}
 
 	/**
@@ -656,13 +681,41 @@ final class PatientClinicalContextBuilder {
 	 * form. That symmetry is the fix; without it an order the chart plainly carries is reported
 	 * unrepresented.
 	 */
-	private static void addRaw(Set<String> set, String value) {
+	private static String addRaw(Set<String> set, String value) {
 		if (value == null) {
-			return;
+			return null;
 		}
 		String collapsed = DrugReference.collapseWhitespace(value).trim();
 		if (!collapsed.isEmpty()) {
 			set.add(collapsed);
+			return collapsed;
 		}
+		return null;
+	}
+
+	/**
+	 * Files {@code token} — the string {@link #addRaw} or {@link #addConceptName} actually collected,
+	 * or {@code null} where they collected nothing — against the uuid of the record it was read off
+	 * (issue #305).
+	 *
+	 * <p>It takes the collector's own RETURN value rather than the string that was handed in, which is
+	 * why those two now return one: {@code addRaw} collapses whitespace and trims, and may collect
+	 * nothing at all, so re-deriving the key at this call site would be a second expression of that
+	 * rule and would miss exactly the values it normalizes.
+	 *
+	 * <p>A token maps to a SET because two rows can contribute the same string, and because the two
+	 * collectors are both asked of ONE row here — the coded allergen's name and the clinician's free
+	 * text are both records of that row.
+	 */
+	private static void attribute(Map<String, Set<String>> records, String recordUuid, String token) {
+		if (token == null || recordUuid == null) {
+			return;
+		}
+		Set<String> uuids = records.get(token);
+		if (uuids == null) {
+			uuids = new LinkedHashSet<String>();
+			records.put(token, uuids);
+		}
+		uuids.add(recordUuid);
 	}
 }

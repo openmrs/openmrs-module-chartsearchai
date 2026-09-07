@@ -29,7 +29,14 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.openmrs.Allergen;
+import org.openmrs.AllergenType;
+import org.openmrs.Allergy;
+import org.openmrs.CodedOrFreeText;
 import org.openmrs.Concept;
+import org.openmrs.Condition;
+import org.openmrs.ConditionClinicalStatus;
+import org.openmrs.Patient;
 import org.openmrs.ConceptMap;
 import org.openmrs.ConceptReferenceTerm;
 import org.openmrs.ConceptSource;
@@ -990,7 +997,7 @@ public final class DrugReferenceTestSupport {
 	 * <p>{@link DrugReferenceService#getLoadStatus()} on the returned service describes the format the
 	 * GP selects rather than the injected adapter (the seam says so), so no case here may assert it.
 	 */
-	static DrugReferenceService curatedService() {
+	public static DrugReferenceService curatedService() {
 		DrugReferenceService service = new DrugReferenceService();
 		service.setSource(new JsonDrugReferenceSource());
 		return service;
@@ -1392,6 +1399,65 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/**
+	 * Saves a recorded allergy to {@code allergen} as FREE TEXT, and returns the saved
+	 * {@code Allergy}'s uuid — which is what a querystore {@code allergy} chart record carries as its
+	 * resource uuid (see {@link #allergyRecord}).
+	 *
+	 * <p>The awkward part is not this module's: a free-text allergen still needs a coded allergen
+	 * (the column is not-null, and {@code AllergyValidator} requires it to BE the concept the
+	 * {@code allergy.concept.otherNonCoded} global property names), and the standard test dataset
+	 * nominates none. So one is nominated here. That is the platform's own "Other, non-coded" shape
+	 * rather than a contrivance, and it is a requirement of {@code AllergyValidator} rather than of
+	 * anything here — which is exactly why it belongs in one place: three files in two packages had
+	 * written it out, so a platform change to that rule would redden all three and be fixed in one.
+	 *
+	 * <p>Context-sensitive by nature: it saves through {@code PatientService}, so only a
+	 * {@code BaseModuleContextSensitiveTest} may call it.
+	 *
+	 * @param patient the patient to record it against
+	 * @param placeholderConceptId the concept to nominate as {@code allergy.concept.otherNonCoded}
+	 * @param allergen the clinician's own words
+	 */
+	public static String recordFreeTextAllergy(Patient patient, int placeholderConceptId,
+			String allergen) {
+		Concept otherNonCoded = Context.getConceptService().getConcept(placeholderConceptId);
+		Context.getAdministrationService()
+				.setGlobalProperty("allergy.concept.otherNonCoded", otherNonCoded.getUuid());
+		Allergy allergy = new Allergy(patient,
+				new Allergen(AllergenType.DRUG, otherNonCoded, allergen), null,
+				null, null);
+		Context.getPatientService().saveAllergy(allergy);
+		Context.flushSession();
+		Context.clearSession();
+		return allergy.getUuid();
+	}
+
+	/**
+	 * Saves an ACTIVE condition recorded as free text, and returns the saved {@code Condition}'s uuid
+	 * — which is what a querystore {@code condition} chart record carries as its resource uuid (see
+	 * {@link #conditionRecord}).
+	 *
+	 * <p>Here for the reason {@link #recordFreeTextAllergy} is, and the coupling is the same shape:
+	 * the {@code ACTIVE} clinical status is what makes
+	 * {@code ConditionService.getActiveConditions} return it, and the flush/clear pair is what makes
+	 * it visible to the builder's own read. Two files had written that out.
+	 *
+	 * <p>Context-sensitive by nature: only a {@code BaseModuleContextSensitiveTest} may call it.
+	 */
+	public static String recordFreeTextCondition(Patient patient, String condition) {
+		Condition c = new Condition();
+		c.setPatient(patient);
+		c.setClinicalStatus(ConditionClinicalStatus.ACTIVE);
+		CodedOrFreeText value = new CodedOrFreeText();
+		value.setNonCoded(condition);
+		c.setCondition(value);
+		Context.getConditionService().saveCondition(c);
+		Context.flushSession();
+		Context.clearSession();
+		return c.getUuid();
+	}
+
+	/**
 	 * Renames {@code conceptId}'s FULLY SPECIFIED name, which is what {@code Concept.getName()} yields
 	 * for these fixtures.
 	 *
@@ -1483,8 +1549,13 @@ public final class DrugReferenceTestSupport {
 	 *  the dataset twice, so the injector and the validator would hold different DrugReference objects
 	 *  for the same row and the safety arms' identity comparisons would miss. That is about two services,
 	 *  NOT about a reload — there is none; see DrugReferenceService's class javadoc, which retires the
-	 *  reload reading of this same sentence at nine other sites. */
-	static DrugReferenceInjector injectorWithSafety(DrugReferenceService service) {
+	 *  reload reading of this same sentence at nine other sites.
+	 *
+	 *  <p>Public, with {@link #curatedService}, for the cross-package reason {@link #injectedSafetyFindingChart}
+	 *  is: {@code LlmInferenceServiceFindingProvenanceContextTest} drives the real {@code search} with
+	 *  the real injector AND the real validator over ONE service, and a chart it built itself would
+	 *  bypass exactly the seam it asserts about. */
+	public static DrugReferenceInjector injectorWithSafety(DrugReferenceService service) {
 		DrugReferenceInjector injector = injector(service);
 		injector.setDrugSafetyValidator(validator(service));
 		return injector;
@@ -1564,7 +1635,7 @@ public final class DrugReferenceTestSupport {
 	/** A chart of {@code records}, rendered as the numbered "[N] text" lines
 	 *  {@link org.openmrs.module.chartsearchai.serializer.PatientChartSerializer} produces — so a
 	 *  test can place a real drug-order record in the chart, or leave it out. */
-	static PatientChart chartOf(RecordMapping... records) {
+	public static PatientChart chartOf(RecordMapping... records) {
 		StringBuilder text = new StringBuilder("Patient\n\n");
 		for (RecordMapping record : records) {
 			text.append("[").append(record.getIndex()).append("] ").append(record.getText()).append("\n");
@@ -1580,8 +1651,37 @@ public final class DrugReferenceTestSupport {
 		return new RecordMapping(index, "drug_order", orderUuid, null, "Drug order: " + drugText);
 	}
 
+	/**
+	 * A querystore allergy chart record: its resource type is querystore's {@code allergy} and its
+	 * resourceUuid is the {@code Allergy} uuid.
+	 *
+	 * <p>That contract is querystore's, and ADR Decision 80 is where it is recorded with its
+	 * provenance and its limits. It is stated rather than assumed because issue #305's whole join is
+	 * that uuid: a helper that got it wrong would make every case here pass against a chart production
+	 * never produces.
+	 *
+	 * <p>Public, with {@link #conditionRecord} and {@link #obsRecord}, for the cross-package reason
+	 * {@link #injectorWithSafety} is: the inference tests build the chart the whole issue-#305 wire
+	 * path is asserted over, and a hand-built mapping there is exactly the chart production never
+	 * produces.
+	 */
+	public static RecordMapping allergyRecord(int index, String allergyUuid, String text) {
+		return new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_ALLERGY, allergyUuid, null,
+				text);
+	}
+
+	/**
+	 * A querystore condition chart record: its resource type is querystore's {@code condition} and its
+	 * resourceUuid is the {@code Condition} uuid — {@code ConditionRecordSerializer}'s contract, read
+	 * the same way {@link #allergyRecord} records.
+	 */
+	public static RecordMapping conditionRecord(int index, String conditionUuid, String text) {
+		return new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_CONDITION, conditionUuid,
+				null, text);
+	}
+
 	/** An obs chart record, for filling a chart with records that are not drug orders. */
-	static RecordMapping obsRecord(int index, String text) {
+	public static RecordMapping obsRecord(int index, String text) {
 		return new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_OBS, "obs-uuid-" + index,
 				null, text);
 	}

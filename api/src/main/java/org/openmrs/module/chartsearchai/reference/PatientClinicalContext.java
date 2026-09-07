@@ -12,8 +12,10 @@ package org.openmrs.module.chartsearchai.reference;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -70,6 +72,26 @@ public class PatientClinicalContext {
 
 	private final Set<String> conditionTokens;
 
+	/**
+	 * Each allergy token to the uuids of the chart records it was read OFF — the provenance
+	 * {@link #allergyRecordsNaming} answers, and the counterpart map for {@link #conditionTokens} is
+	 * below (issue #305).
+	 *
+	 * <p>Keyed on the token in the form {@link #allergyTokens} holds it, because that is the form a
+	 * witness comes back in: {@link #recordsMatching} returns elements OF that set, so a key produced
+	 * any other way would miss on every allergen the chart spelled with a capital letter. One rule,
+	 * applied by {@link #lowerKeys} beside the {@link #lower} that produces the haystack itself — the
+	 * two must move together.
+	 *
+	 * <p>A SET of uuids per token, not one: two recorded allergies whose names normalize alike are one
+	 * key here, and either record is a record of the fact a rule matching that token states.
+	 */
+	private final Map<String, Set<String>> allergyRecordUuids;
+
+	/** Each condition token to the uuids of the chart records it was read off — {@link #allergyRecordUuids}'s
+	 *  counterpart, and everything that javadoc says binds it. */
+	private final Map<String, Set<String>> conditionRecordUuids;
+
 	private final List<ActiveDrugOrder> activeDrugOrders;
 
 	private final Set<String> activeDrugReferenceNames;
@@ -123,8 +145,8 @@ public class PatientClinicalContext {
 	}
 
 	/**
-	 * As above, additionally recording whether the allergy and condition reads SUCCEEDED — see
-	 * {@link #contraindicationRecordsRead}. Package-private and defaulted to {@code true} everywhere
+	 * As above, additionally recording whether the allergy and condition reads SUCCEEDED and whether
+	 * the ACTIVE ORDER read did — see {@link #contraindicationRecordsRead}. Package-private and defaulted to {@code true} everywhere
 	 * else on purpose: only {@link PatientClinicalContextBuilder}, which performs those reads, is in a
 	 * position to say otherwise, and a caller assembling a context by hand knows what it put in it.
 	 */
@@ -132,6 +154,29 @@ public class PatientClinicalContext {
 			Set<String> activeDrugAtcCodes, Set<String> allergyTokens, Set<String> conditionTokens,
 			List<ActiveDrugOrder> activeDrugOrders, Set<String> activeDrugReferenceNames,
 			boolean contraindicationRecordsRead, boolean activeDrugOrdersRead) {
+		this(ageYears, weightKg, activeDrugNames, activeDrugAtcCodes, allergyTokens, conditionTokens,
+				activeDrugOrders, activeDrugReferenceNames, contraindicationRecordsRead,
+				activeDrugOrdersRead, null, null);
+	}
+
+	/**
+	 * Widest form of all, additionally carrying which chart RECORD each recorded allergy and condition
+	 * token was read off — see {@link #allergyRecordsNaming} (issue #305).
+	 *
+	 * <p>Package-private and defaulted to nothing everywhere else for the reason
+	 * {@code contraindicationRecordsRead} is: only {@link PatientClinicalContextBuilder} performs those
+	 * reads, so only it holds the answer, and a caller assembling a context by hand states no
+	 * provenance rather than a wrong one. The maps are handed in UN-normalized — keyed on the raw
+	 * strings the builder collected — and re-keyed here through the same rule that produces the token
+	 * sets themselves, so the keys and the haystack cannot come apart.
+	 */
+	PatientClinicalContext(Integer ageYears, Double weightKg, Set<String> activeDrugNames,
+			Set<String> activeDrugAtcCodes, Set<String> allergyTokens, Set<String> conditionTokens,
+			List<ActiveDrugOrder> activeDrugOrders, Set<String> activeDrugReferenceNames,
+			boolean contraindicationRecordsRead, boolean activeDrugOrdersRead,
+			Map<String, Set<String>> allergyRecordUuids, Map<String, Set<String>> conditionRecordUuids) {
+		this.allergyRecordUuids = lowerKeys(allergyRecordUuids);
+		this.conditionRecordUuids = lowerKeys(conditionRecordUuids);
 		this.contraindicationRecordsRead = contraindicationRecordsRead;
 		this.activeDrugOrdersRead = activeDrugOrdersRead;
 		this.ageYears = ageYears;
@@ -151,9 +196,15 @@ public class PatientClinicalContext {
 	 *         for the drugs its active orders name. Everything else is preserved.
 	 */
 	PatientClinicalContext withActiveDrugReferenceNames(Set<String> referenceNames) {
+		// The record-provenance maps travel with everything else. They are already in their normalized
+		// form here, and lowerKeys is idempotent over that form for the reason normalizeName is, so
+		// re-keying a copy is a no-op rather than a second normalization. Dropping them instead would be
+		// silent and fail-open — the finding would simply cite nothing, on the path that resolves the
+		// reference names for EVERY request.
 		return new PatientClinicalContext(ageYears, weightKg, activeDrugNames, activeDrugAtcCodes,
 				allergyTokens, conditionTokens, activeDrugOrders, referenceNames,
-				contraindicationRecordsRead, activeDrugOrdersRead);
+				contraindicationRecordsRead, activeDrugOrdersRead, allergyRecordUuids,
+				conditionRecordUuids);
 	}
 
 	/** @return whether the allergy and condition lists were read at all — see
@@ -206,6 +257,43 @@ public class PatientClinicalContext {
 			}
 		}
 		return Collections.unmodifiableSet(out);
+	}
+
+	/**
+	 * The key half of {@link #lower}, for the record-provenance maps — the SAME
+	 * {@link DrugReference#normalizeName} rule, applied to each key, so a map key is always a member
+	 * of the token set {@code lower} produced from the same raw strings.
+	 *
+	 * <p>Written beside {@code lower} and not folded into it because the two take different shapes,
+	 * and kept beside it because they are one rule: a widening of that normalization has to reach
+	 * both, or a witness stops being a key and every finding silently cites nothing. Values are
+	 * unioned rather than replaced, since two raw spellings can normalize onto one key.
+	 */
+	private static Map<String, Set<String>> lowerKeys(Map<String, Set<String>> in) {
+		if (in == null || in.isEmpty()) {
+			return Collections.emptyMap();
+		}
+		Map<String, Set<String>> out = new LinkedHashMap<String, Set<String>>();
+		for (Map.Entry<String, Set<String>> entry : in.entrySet()) {
+			String normalized = DrugReference.normalizeName(entry.getKey());
+			if (normalized == null || entry.getValue() == null || entry.getValue().isEmpty()) {
+				continue;
+			}
+			Set<String> uuids = out.get(normalized);
+			if (uuids == null) {
+				uuids = new LinkedHashSet<String>();
+				out.put(normalized, uuids);
+			}
+			uuids.addAll(entry.getValue());
+		}
+		// The VALUES are wrapped too, not just the map: recordsOf hands one straight to a caller, and
+		// an unmodifiable map of mutable sets is a value object only on the outside. Sealed in place
+		// rather than into a second map — the accumulation above is complete by now, so there is
+		// nothing left to add to.
+		for (Map.Entry<String, Set<String>> entry : out.entrySet()) {
+			entry.setValue(Collections.unmodifiableSet(entry.getValue()));
+		}
+		return Collections.unmodifiableMap(out);
 	}
 
 	private static Set<String> upper(Set<String> in) {
@@ -421,6 +509,41 @@ public class PatientClinicalContext {
 	 */
 	List<String> conditionsMatching(String token) {
 		return recordsMatching(conditionTokens, token);
+	}
+
+	/**
+	 * @return the uuids of the chart records the recorded allergen {@code allergen} was read off —
+	 *         where {@code allergen} is a WITNESS, one of the values {@link #allergensMatching}
+	 *         returned. Empty where this context states no provenance at all (every caller that
+	 *         assembled it by hand) and where the string is not one of this chart's allergens.
+	 *
+	 *         <p>Issue #305 is why it exists. A finding raised on a recorded allergy asserts a fact
+	 *         about the chart, and the record that fact is IN is what the clinician needs to reach;
+	 *         before this the module knew which record made the chip fire and threw the knowledge
+	 *         away, leaving the click-through to whether the model happened to cite it.
+	 *
+	 *         <p>Keyed on the witness rather than resolved by a second scan, which is what makes the
+	 *         provenance and the witness one fact rather than two answers that agree today — the rule
+	 *         {@link #recordsMatching} states of the witnesses and the boolean. See
+	 *         {@link #allergyRecordUuids} for the normalization that keeps that true.
+	 */
+	Set<String> allergyRecordsNaming(String allergen) {
+		return recordsOf(allergyRecordUuids, allergen);
+	}
+
+	/** @return the uuids of the chart records the recorded condition {@code condition} was read off —
+	 *          {@link #allergyRecordsNaming}'s counterpart for the condition list, and everything that
+	 *          javadoc says binds it. Two named entry points over one rule, exactly as
+	 *          {@link #allergensMatching} and {@link #conditionsMatching} are. */
+	Set<String> conditionRecordsNaming(String condition) {
+		return recordsOf(conditionRecordUuids, condition);
+	}
+
+	/** The one lookup behind {@link #allergyRecordsNaming} and {@link #conditionRecordsNaming},
+	 *  standing to them as {@link #recordsMatching} stands to the two witness accessors. */
+	private static Set<String> recordsOf(Map<String, Set<String>> records, String value) {
+		Set<String> uuids = value == null ? null : records.get(value);
+		return uuids == null ? Collections.<String> emptySet() : uuids;
 	}
 
 	/**

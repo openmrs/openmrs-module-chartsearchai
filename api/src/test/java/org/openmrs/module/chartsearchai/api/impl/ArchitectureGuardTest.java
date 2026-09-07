@@ -9,9 +9,12 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -44,12 +47,112 @@ public class ArchitectureGuardTest {
 	private static final String CHART_ANSWER_TYPE =
 			"org/openmrs/module/chartsearchai/api/ChartSearchService$ChartAnswer";
 
+	/** The descriptor tail that tells RecordMapping's provenance-carrying constructor from every
+	 *  shorter one: it is the only one whose LAST parameter is a list (issue #305). */
+	private static final String DERIVED_FROM_TAIL = "Ljava/util/List;)V";
+
 	/** The descriptor fragment that tells the widest constructor from every shorter one. */
 	private static final String COVERAGE_TYPE =
 			"Lorg/openmrs/module/chartsearchai/reference/DrugReferenceLoad$Coverage;";
 
 
 	// --- Rules ---
+
+	/**
+	 * The constructor that can carry a provenance list is invoked from exactly one class in THIS
+	 * module, which is all this walk can see (issue #305).
+	 *
+	 * <p><b>The api module is the scope, and it is not the whole of production.</b> The walk reads
+	 * {@code api/target/classes}; {@code ModuleSourceRoot} exposes {@code apiRoot()} and no omod root,
+	 * and api's test phase runs before omod is built in any case. So a construction in omod — where
+	 * {@code RecordMapping}'s widest constructor is public and reachable — would leave {@code callers}
+	 * equal to the expected singleton and this case green. The omod builds no mappings today.
+	 *
+	 * <p>Judgements elsewhere rest on this and none of them could see it — how many is not a count
+	 * kept here, since each states its own dependence where it is written. The residue
+	 * disclosure on {@code CitationGroundingVerifier.AnswerCitations.unanchored} and
+	 * {@code ReferenceProseFidelityCheck}'s "needs no filter" note both argue from "an attached index
+	 * is always chart-group", which holds only because the sole writer of {@code derivedFrom} is
+	 * {@code DrugReferenceInjector}'s findings loop — allergy and condition uuids resolve to chart
+	 * records, and the {@code safety_finding} mappings are appended after the uuid index is built, so
+	 * a finding cannot attach a finding. Let another class construct a mapping with a derivation and
+	 * both break silently and in opposite directions: the prose check would examine, and could
+	 * publish an {@code unfaithfullyRenderedCitations} index for, a reference record the answer never
+	 * cited, and {@code restsOnReferenceMaterial} would find a demote-only member in EVERY claim's
+	 * rests-on set, withholding issue #284's negative for every chart citation in the answer.
+	 * {@code SafetyFindingSeverityFidelityCheck}'s note of its own exemption argues from the last
+	 * clause of that property rather than from the group — an attached index is never a
+	 * {@code safety_finding} record, so it carries no rating for that check to require — and a rated
+	 * mapping built with a derivation would have it publish an {@code unstatedFindingSeverities}
+	 * entry against a citation the model never made.
+	 *
+	 * <p><b>Asked of the BYTECODE, and the earlier source-text form is gone rather than patched.</b>
+	 * That form matched the literal {@code "new RecordMapping("} and counted commas, and review
+	 * defeated it twice, measured: a fully-qualified {@code new
+	 * …PatientChartSerializer.RecordMapping(} was invisible to the literal, and the
+	 * comment-stripping added to fix an inline-comment miscount ate the tail of
+	 * any line holding a {@code //} inside a STRING — an argument such as a URL — which dropped the
+	 * counted arity and skipped the construction with no signal at all. That is the fail-open
+	 * direction, and it was claimed to fail closed. What ends that sequence is a different KIND of
+	 * question rather than another spelling on the list: the constant pool records the descriptor a
+	 * call site actually invokes, so qualification, whitespace, comments and string literals are all
+	 * out of the picture.
+	 *
+	 * <p><b>What it cannot answer, and what does — both halves measured.</b> The pool says which
+	 * CLASS invokes the wide constructor, not which of that class's four mapping constructions passes
+	 * a non-empty list. A second caller reddens THIS case; giving the injector's own
+	 * {@code drug_reference} construction a one-element derivation leaves it green and reddens
+	 * {@code FindingChartRecordProvenanceContextTest.aChartRecordNamesNoProvenanceOfItsOwn} instead,
+	 * over a real arrangement that injects such a record. The two halves are different kinds of
+	 * question on purpose; neither alone is the property those three judgements need.
+	 *
+	 * <p>Every canary here fails on an empty discovery, because a guard that finds nothing forbids
+	 * nothing: the classes directory, the mapping's own class file, more than one constructor arity,
+	 * exactly one that takes a list, and at least one caller.
+	 */
+	@Test
+	public void theProvenanceCarryingMappingConstructorHasOneCaller() throws IOException {
+		Path classes = ModuleSourceRoot.apiRoot().resolve("target/classes");
+		assertTrue(Files.isDirectory(classes),
+				"no " + classes + "; a guard that discovers nothing forbids nothing");
+		Path mapping = classes.resolve(
+				"org/openmrs/module/chartsearchai/serializer/PatientChartSerializer$RecordMapping.class");
+		assertTrue(Files.exists(mapping),
+				"no RecordMapping class file at " + mapping + ", so this guard would forbid nothing");
+
+		List<String> constructors = constructorDescriptors(mapping);
+		assertTrue(constructors.size() > 1,
+				"expected RecordMapping to publish several constructor arities and found "
+						+ constructors.size() + "; with one there is no narrower one for a caller with no "
+						+ "provenance to use and this guard is vacuous");
+		List<String> carrying = new ArrayList<>();
+		for (String descriptor : constructors) {
+			if (descriptor.endsWith(DERIVED_FROM_TAIL)) {
+				carrying.add(descriptor);
+			}
+		}
+		assertEquals(1, carrying.size(),
+				"exactly one RecordMapping constructor may take a provenance list — it is the widest, "
+						+ "and every shorter one defaults it to empty. Found " + carrying.size() + ": "
+						+ carrying);
+
+		List<String> callers = new ArrayList<>();
+		try (java.util.stream.Stream<Path> tree = Files.walk(classes)) {
+			for (Path file : tree.filter(f -> f.toString().endsWith(".class"))
+					.filter(f -> !f.equals(mapping)).collect(java.util.stream.Collectors.toList())) {
+				if (constantPoolStrings(file).contains(carrying.get(0))) {
+					callers.add(classes.relativize(file).toString());
+				}
+			}
+		}
+		assertEquals(java.util.Collections.singletonList(
+				"org/openmrs/module/chartsearchai/reference/DrugReferenceInjector.class"), callers,
+				"the constructor that carries a provenance list may be invoked from DrugReferenceInjector "
+						+ "and nowhere else in this module's classes, which is what this walk reads — see "
+						+ "this test's javadoc for the checks that break silently otherwise. Callers "
+						+ "found: " + callers);
+	}
+
 
 	/**
 	 * No file outside ChartSearchAiConstants should call getEmbeddingPrefix().
@@ -509,17 +612,19 @@ public class ArchitectureGuardTest {
 	private static java.util.Map<String, List<String>> sourceCache;
 
 	/**
-	 * Every rule in this class but one scans this map, so an EMPTY or WRONG map made all of those
+	 * Most rules in this class scan this map, so an EMPTY or WRONG map made all of those
 	 * pass vacuously — a structural guard that reads nothing reports no violations. That was not
 	 * hypothetical: forcing {@link ModuleSourceRoot#apiRoot()} to an unrelated directory USED TO
 	 * leave this class entirely green. It no longer does; the cache asserts its own sanity before
 	 * any rule reads it, and the same mutation now reddens the rules that read it.
 	 *
-	 * <p>The exception is {@code noDuplicatedDatasetArrays}, which walks the TEST tree itself rather
-	 * than this cache, so these assertions cannot reach it — it carries both of them inline, and it
-	 * needs both: existence alone is not enough, because the sibling {@code omod} module has the
-	 * same package path, so a root pointed there exists and scans the wrong tree. A new rule that
-	 * walks its own directory owes itself the same pair.
+	 * <p><b>A rule that reads its own tree rather than this cache owes itself both assertions
+	 * inline</b>, and needs both: existence alone is not enough, because the sibling {@code omod}
+	 * module has the same package path, so a root pointed there exists and reads the wrong tree. No
+	 * count of such rules is published here and none should be — look for the pair in any rule that
+	 * reads its own tree, rather than for a list of which ones do. The two that do today read
+	 * {@code target/classes}, and each carries the pair as a canary on what it FOUND rather than on
+	 * the root merely existing, which is the stronger form: a wrong root reads something.
 	 */
 	private static java.util.Map<String, List<String>> getSourceCache()
 			throws IOException {

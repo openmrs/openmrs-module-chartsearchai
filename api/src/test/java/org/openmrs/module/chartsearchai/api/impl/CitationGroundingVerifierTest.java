@@ -153,6 +153,12 @@ public class CitationGroundingVerifierTest {
 		return new RecordReference(index, "obs", "uuid-" + index, new Date());
 	}
 
+	/** As {@link #reference}, but a citation the MODULE attached rather than one the model emitted —
+	 *  issue #305's shape, and the only input that distinguishes the two cases below. */
+	private static RecordReference attachedReference(int index) {
+		return new RecordReference(index, "obs", "uuid-" + index, new Date(), null, null, 0, true);
+	}
+
 	// ---- Tier-1 (cosine) ----
 
 	@Test
@@ -1141,6 +1147,23 @@ public class CitationGroundingVerifierTest {
 	 * tests above; this helper's subject is the type registry.
 	 */
 	private Boolean verdictForAlignedCitation(String resourceType, boolean entailmentEnabled) {
+		return alignedCitation(resourceType, entailmentEnabled, reference(4)).get(0).getGrounded();
+	}
+
+	/**
+	 * ONE arrangement in which a citation of {@code resourceType} would grade {@code TRUE}: a
+	 * programmed judge that says yes, and a record whose text embeds onto the same axis as the answer
+	 * sentence citing it. The reference is a parameter so a case can vary WHO cited it and nothing
+	 * else.
+	 *
+	 * <p>Shared rather than copied because two cases assert that they are the same arrangement —
+	 * {@code aCitationTheModuleAttachedPublishesNoVerdictAndSpendsNothing}'s whole claim is that only
+	 * the attachment differs, and a hand-written twin would let that sentence become false with both
+	 * cases green. Calls {@link #setUp()} itself, so a caller iterating modes gets a fresh capture
+	 * and fresh counters per iteration.
+	 */
+	private List<RecordReference> alignedCitation(String resourceType, boolean entailmentEnabled,
+			RecordReference citation) {
 		setUp();
 		llm.verdict = Boolean.TRUE;
 		String sentence = "The record supports this claim [4].";
@@ -1148,9 +1171,91 @@ public class CitationGroundingVerifierTest {
 		embeddings.register(sentence, AXIS_A);
 		embeddings.register(record, AXIS_A);
 		return verifier.verify(sentence,
-				new ArrayList<RecordReference>(Arrays.asList(reference(4))),
+				new ArrayList<RecordReference>(Arrays.asList(citation)),
 				Arrays.asList(new RecordMapping(4, resourceType, "uuid-4", null, record)),
-				FLOOR, entailmentEnabled).get(0).getGrounded();
+				FLOOR, entailmentEnabled);
+	}
+
+	/**
+	 * A citation the MODULE attached publishes no verdict, in either mode, and spends nothing getting
+	 * there (issue #305).
+	 *
+	 * <p>The arrangement is literally the one {@link #verdictForAlignedCitation} uses for its positive
+	 * control — {@link #alignedCitation}, shared between them: a chart-group record whose text and the
+	 * answer's sentence embed to the same axis, and a judge programmed to say yes, so under either mode
+	 * a MODEL-emitted citation of it grades {@code TRUE}. The only difference here is who attached it,
+	 * and that is enough to withhold the verdict, because grounding asks whether the claim the model
+	 * attached to a citation is supported by the record it pointed at: the module attached no claim,
+	 * so there is no such pairing.
+	 *
+	 * <p>Publishing a Tier-1 {@code FALSE} instead is the failure this refuses. Such a citation is
+	 * anchored by no sentence, so its claim would be GUESSED out of the whole answer at whatever
+	 * {@code chartsearchai.grounding.minCosine} the operator set — and this module's own global-property
+	 * text advises raising that to about 0.82 on an e5 querystore deployment. A red
+	 * <em>Unsupported</em> on the module's own deterministic provenance is issue #201's defect one
+	 * record over.
+	 *
+	 * <p>The two counts are the "no embedding is spent" half of {@code Disposition.UNVERIFIABLE}, which
+	 * the compound-claim case gets for free from claim DEFERRAL and this one cannot: with nothing
+	 * anchoring it, {@code selectClaim}'s candidate set is every sentence, which is the ambiguous
+	 * branch where the cosine argmax runs eagerly.
+	 *
+	 * <p><b>Which mutation reddens which assertion, measured rather than assumed.</b> Removing the
+	 * Pass-1 claim-selection SKIP alone reddens the embedding count here (2 passes spent) and moves no
+	 * verdict. Removing the disposition ARM alone reddens nothing in this class — the skipped result
+	 * then withholds by accident, having no claim sentence to be a judge candidate with. Removing BOTH
+	 * publishes {@code true} and reddens the verdict assertion here and in
+	 * {@link #theModelsOwnChartCitationIsStillGradedBesideAnAttachedOne}. So the arm is a statement of
+	 * intent that no case discriminates; the comment at that site says why it stays.
+	 */
+	@Test
+	public void aCitationTheModuleAttachedPublishesNoVerdictAndSpendsNothing() {
+		for (boolean entailment : new boolean[] { TIER1_ONLY, TIER2_ON }) {
+			String mode = entailment ? "entailment on" : "Tier-1 only";
+
+			// The SAME arrangement verdictForAlignedCitation uses for its positive control, with the
+			// attachment as the only difference — shared rather than copied, so the claim below that
+			// it grades TRUE for a model-emitted citation cannot go stale with both cases green.
+			List<RecordReference> verdicts = alignedCitation("obs", entailment, attachedReference(4));
+
+			assertNull(verdicts.get(0).getGrounded(), mode + ": a citation the module attached carries "
+					+ "no claim of the model's, so nothing may be published about it — and the same "
+					+ "arrangement grades TRUE for a model-emitted citation, which is what makes this a "
+					+ "statement about the attachment and not about the embeddings");
+			assertTrue(verdicts.get(0).isAttachedByTheModule(),
+					mode + ": and the reference keeps saying who attached it");
+			assertEquals(0, llm.calls, mode + ": it must not reach Tier-2, nor consume the per-answer "
+					+ "cap that the model's own chart claims rely on");
+			assertEquals(0, embeddings.embedCalls, mode + ": nor spend an embedding pass on a claim "
+					+ "selection whose answer is discarded");
+		}
+	}
+
+	/**
+	 * Both kinds of citation in ONE answer, so the withholding cannot be read as a mode-wide effect:
+	 * the model's own chart citation is graded in the same call that publishes nothing for the
+	 * attached one.
+	 */
+	@Test
+	public void theModelsOwnChartCitationIsStillGradedBesideAnAttachedOne() {
+		llm.verdict = Boolean.TRUE;
+		String sentence = "The record supports this claim [4].";
+		String cited = "record text the model cited";
+		String attached = "record text the module attached";
+		embeddings.register(sentence, AXIS_A);
+		embeddings.register(cited, AXIS_A);
+		embeddings.register(attached, AXIS_A);
+
+		List<RecordReference> verdicts = verifier.verify(sentence,
+				new ArrayList<RecordReference>(Arrays.asList(reference(4), attachedReference(5))),
+				Arrays.asList(new RecordMapping(4, "obs", "uuid-4", null, cited),
+						new RecordMapping(5, "obs", "uuid-5", null, attached)),
+				FLOOR, TIER1_ONLY);
+
+		assertEquals(Boolean.TRUE, verdicts.get(0).getGrounded(),
+				"the model's own chart citation is graded exactly as it was before issue #305");
+		assertNull(verdicts.get(1).getGrounded(),
+				"and the attached one publishes nothing, in the same call");
 	}
 
 	/**
@@ -1181,6 +1286,15 @@ public class CitationGroundingVerifierTest {
 	 * entry — not the live instability that motivated the issue: those flips are embedding-driven, so
 	 * no unit test reproduces them. The chart-group half of each assertion is the positive control that
 	 * the machinery under it is working.
+	 *
+	 * <p><b>Every citation it sweeps is one the MODEL emitted</b>, which is what "chart evidence is
+	 * graded normally, however it reached the chart" is a claim about. Since issue #305 a chart-group
+	 * citation the MODULE attached publishes nothing, and this sweep cannot see that — it builds its
+	 * references through {@link #reference}, which answers false to
+	 * {@code isAttachedByTheModule()}. {@link #aCitationTheModuleAttachedPublishesNoVerdictAndSpendsNothing}
+	 * is that case, and it is deliberately beside this rather than folded into it: the two axes are
+	 * independent, and one sweep over their product would assert the same thing per resource type for
+	 * a distinction no resource type is part of.
 	 */
 	@Test
 	public void everyDeclaredResourceTypeConstant_isGradedAccordingToItsReferenceGroup() throws Exception {

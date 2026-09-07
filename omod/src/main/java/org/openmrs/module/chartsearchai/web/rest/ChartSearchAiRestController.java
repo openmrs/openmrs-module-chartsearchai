@@ -909,8 +909,9 @@ public class ChartSearchAiRestController {
 			entry.put("question", auditLog.getQuestion());
 			entry.put("answer", auditLog.getAnswer());
 			entry.put("referenceCount", auditLog.getReferenceCount());
-			// The prompt COST beside the answer's USE of it: referenceCount is the citations in the
-			// answer, these two are the reference material put in front of the model, most of which
+			// The prompt COST beside the answer's USE of it: referenceCount is what the answer
+			// PUBLISHED — since issue #305 that can include a citation the module attached, so it is
+			// not a count of what the model cited; these two are the reference material put in front of the model, most of which
 			// is never cited. Published here because the point of issue #229 is that the size was
 			// unreadable without a log level nobody can durably set.
 			entry.put("referenceSliceRecords", auditLog.getReferenceSliceRecords());
@@ -1144,8 +1145,8 @@ public class ChartSearchAiRestController {
 	 * path. One implementation so a field added here cannot reach some clients and not others.
 	 *
 	 * <p>{@code grounded} is null when grounding is disabled, could not run, or ran and could not
-	 * certify the citation (a compound claim unit under entailment, issue #302; or the judge's
-	 * negative on a composite claim, issue #284) — clients must render
+	 * certify the citation — the reasons for that last case are enumerated once, in ADR Decision 11's
+	 * {@code grounded} paragraph, and this method restates none of them. Clients must render
 	 * null as "unverified", never as "verified". It is ALSO null, unconditionally, for a
 	 * {@code reference}-group citation: see {@link #groundedForWire}.
 	 *
@@ -1204,6 +1205,12 @@ public class ChartSearchAiRestController {
 			// `withheldInteractions` 0 for a chart record, which is that record's real shape.
 			refMap.put("source", ref.getSource());
 			refMap.put("withheldInteractions", ref.getWithheldInteractions());
+			// Who put this citation on the answer (issue #305). True for a chart record an injected
+			// safety_finding the model DID cite was derived from. What a client does with it, and why
+			// it is not derivable from the other fields, is on RecordReference.isAttachedByTheModule
+			// — one home, which README's client section restates for a client author and nothing
+			// else should. Do not restate it here.
+			refMap.put("attachedByTheModule", ref.isAttachedByTheModule());
 			refs.add(refMap);
 		}
 		return refs;

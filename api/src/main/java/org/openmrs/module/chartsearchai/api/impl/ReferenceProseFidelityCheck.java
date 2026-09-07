@@ -238,7 +238,9 @@ final class ReferenceProseFidelityCheck {
 	 * @param cited the references the answer cites, as resolved by
 	 *            {@link LlmInferenceService#extractCitedReferences} — taking that accessor's own
 	 *            output rather than re-deriving "which records were cited" from the prose, for the
-	 *            reason {@link ClassCodeFidelityCheck} takes it
+	 *            reason {@link ClassCodeFidelityCheck} takes it. Since issue #305 that list can carry
+	 *            a citation the MODULE attached; this check needs no filter for it, because it scopes
+	 *            itself to the reference GROUP and an attached record is a chart record
 	 * @param mappings the chart's records, the carrier of the cited records' type and text
 	 * @return the DISTINCT citation indexes this call warned about, in the order they were reported;
 	 *         an empty list wherever it ran and warned about none, and {@code null} — the absence of

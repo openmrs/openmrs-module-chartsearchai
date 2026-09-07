@@ -68,10 +68,12 @@ finding is unlikely to be injected at all -- but that has not been re-measured,
 and "unlikely" is not "cannot". Do not quote a tally here over a change to the
 #284 rule.
 
-Only CHART-group citations are measurable here: a reference-group citation
-publishes no verdict at all (issue #201), so its cells read `withheld` and a
-scoping flip on one cannot be seen from the wire. The gate below is therefore a
-statement about chart citations.
+Only the MODEL's own CHART-group citations are measurable here. A reference-group
+citation publishes no verdict at all (issue #201), so its cells read `withheld`;
+and since issue #305 a chart-group citation the MODULE attached carries none
+either, so its cells read `attached` (both tags are set in `search`, which says
+why neither may be printed as None). A scoping flip on either cannot be seen from
+the wire, so the gate below is a statement about the model's own chart citations.
 
 The GP is saved before and restored after. Answers are grounding-independent,
 so a differing answer between modes signals LLM nondeterminism (reported).
@@ -146,6 +148,20 @@ def search(patient, question):
     d = req("/chartsearchai/search", {"patient": patient, "question": question}, "POST")
     verdicts = {}
     for r in (d.get("references") or []):
+        # A third tag, for the same reason `withheld` is one: since issue #305 a chart-group citation
+        # the MODULE attached carries grounded=null because there is no claim of the model's to check,
+        # and printing that as None reads as "unverified" — the distinction that whole issue turns on.
+        # A STRING again, so the True/False classes cannot match it and the #302 null-side classes,
+        # which test `is None`, cannot either; every counted class tests `is True` or `is False` on
+        # at least one side, so no tally moves. Do not tag it None.
+        #
+        # It deliberately does NOT share drift-metric's `model_cited` predicate, which is the one home
+        # of the rule for the scorers that EXCLUDE such a citation. This harness tags rather than
+        # excludes — the cell still has to appear in the per-cell table a human reads — so a shared
+        # exclusion would obscure exactly what this tag is for. Different directory, no import path.
+        if r.get("attachedByTheModule"):
+            verdicts[r.get("index")] = "attached"
+            continue
         withheld = r.get("group") == "reference"
         verdicts[r.get("index")] = "withheld" if withheld else r.get("grounded")
     return (d.get("answer", "") or "").strip(), verdicts

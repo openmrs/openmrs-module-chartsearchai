@@ -368,7 +368,11 @@ public interface ChartSearchService {
 		}
 
 		/**
-		 * The ordered list of record references cited in the answer.
+		 * The ordered list of record references this answer PUBLISHES. Mostly the ones it cites, and
+		 * since issue #305 not only those: a chart record an injected {@code safety_finding} was
+		 * derived from joins the list whenever the model cites that finding, and says so through
+		 * {@link RecordReference#isAttachedByTheModule()}. Read it as what a client renders, not as
+		 * the model's citation set.
 		 */
 		public List<RecordReference> getReferences() {
 			return references;
@@ -756,7 +760,9 @@ public interface ChartSearchService {
 	}
 
 	/**
-	 * Identifies a source record in OpenMRS cited by the LLM answer.
+	 * Identifies a source record in OpenMRS offered as evidence for the LLM answer — cited by the
+	 * model, or, since issue #305, attached by the MODULE because a record the model DID cite was
+	 * derived from it. {@link #isAttachedByTheModule()} is which.
 	 */
 	class RecordReference {
 
@@ -774,6 +780,10 @@ public interface ChartSearchService {
 
 		private final int withheldInteractions;
 
+		/** Whether the MODULE put this citation on the answer rather than the model — see
+		 *  {@link #isAttachedByTheModule()} (issue #305). */
+		private final boolean attachedByTheModule;
+
 		public RecordReference(int index, String resourceType, String resourceUuid, Date date) {
 			this(index, resourceType, resourceUuid, date, null);
 		}
@@ -789,6 +799,16 @@ public interface ChartSearchService {
 		 */
 		public RecordReference(int index, String resourceType, String resourceUuid, Date date, Boolean grounded,
 				String source, int withheldInteractions) {
+			this(index, resourceType, resourceUuid, date, grounded, source, withheldInteractions, false);
+		}
+
+		/**
+		 * Full constructor, additionally saying who put this citation on the answer — see
+		 * {@link #isAttachedByTheModule()}. Every shorter constructor answers {@code false}, which is
+		 * a model-emitted citation's real shape and the only shape that existed before issue #305.
+		 */
+		public RecordReference(int index, String resourceType, String resourceUuid, Date date, Boolean grounded,
+				String source, int withheldInteractions, boolean attachedByTheModule) {
 			this.index = index;
 			this.resourceType = resourceType;
 			this.resourceUuid = resourceUuid;
@@ -796,6 +816,7 @@ public interface ChartSearchService {
 			this.grounded = grounded;
 			this.source = source;
 			this.withheldInteractions = withheldInteractions;
+			this.attachedByTheModule = attachedByTheModule;
 		}
 
 		public int getIndex() {
@@ -820,15 +841,19 @@ public interface ChartSearchService {
 		 * verification ran (see {@code chartsearchai.grounding.enabled});
 		 * {@code null} when verification was disabled, could not run for this
 		 * reference (e.g. the record carried no text to compare against), or ran
-		 * and could not certify it — a citation of a compound claim unit under
-		 * entailment (issue #302), a chart citation whose claim also rests on
-		 * module-supplied reference material and whose judge said no (issue
-		 * #284), or a {@code reference}-group citation whose Tier-1 cosine
-		 * PASSED. A reference-group cosine FAIL is kept and returns
-		 * {@code FALSE} here; only the wire withholds it unconditionally, which
-		 * is the distinction the next paragraph draws — and note the #284 case
-		 * is unlike both, withheld INSIDE the verifier, so no verdict survives
-		 * here to read. Its count is logged once per answer instead. A
+		 * and could not certify it. That last set of reasons is enumerated once,
+		 * in ADR Decision 11's {@code grounded} paragraph, and is restated below
+		 * only to say which of them leave no verdict here; what this accessor
+		 * adds beyond the pointer is which of them leave a verdict standing
+		 * on IT. A {@code reference}-group citation is demote-only, so its Tier-1
+		 * cosine PASS renders {@code null} here while its FAIL is kept and returns
+		 * {@code FALSE} — only the wire withholds that unconditionally, which is
+		 * the distinction the next paragraph draws. A withholding the VERIFIER
+		 * itself applies leaves no verdict here to read at all: a compound claim
+		 * unit under entailment (issue #302); the judge's negative on a composite
+		 * claim (issue #284, whose count is logged once per answer instead); and a
+		 * citation the MODULE attached rather than the model emitting it (issue
+		 * #305), in either mode. A
 		 * {@code null} verdict must be rendered as "unverified", never as
 		 * "verified".
 		 *
@@ -865,11 +890,47 @@ public interface ChartSearchService {
 		}
 
 		/**
+		 * @return whether the MODULE attached this citation rather than the model emitting it — a
+		 *         chart record an injected {@code safety_finding} the model DID cite was derived
+		 *         from, resolved by
+		 *         {@link org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping#getDerivedFrom()}
+		 *         (issue #305). {@code false} for every citation the model emitted, inline or in its
+		 *         structured array, and so for every citation that existed before that issue.
+		 *
+		 *         <p>Two things turn on it, and neither is cosmetic. It is why
+		 *         {@link #getGrounded()} is {@code null} here — such a citation is UNVERIFIABLE inside
+		 *         {@code CitationGroundingVerifier} rather than graded, and that enum constant is
+		 *         canonical for why. And it is published, because the answer prose carries no
+		 *         {@code [N]} marker for such a citation: a client that highlights the marker for a
+		 *         reference chip has nothing to highlight, and one reading the {@code null} verdict
+		 *         needs to know nothing is being withheld from it.
+		 *
+		 *         <p>It says who ATTACHED the citation, never how good the evidence is. A record the
+		 *         module attached is one it resolved deterministically from the finding's own match;
+		 *         a record the model cited is the model's claim. ADR Decision 80 carries why the
+		 *         module may publish one at all.
+		 */
+		public boolean isAttachedByTheModule() {
+			return attachedByTheModule;
+		}
+
+		/**
 		 * @return a copy of this reference carrying the given grounding verdict
+		 *
+		 *         <p>Every other field travels with it, {@link #isAttachedByTheModule()} included.
+		 *         This is a hand-written copy rather than a mutation, so a field added above and
+		 *         forgotten here is dropped SILENTLY and fail-open — the shape that has cost this
+		 *         module twice over the chart-assembly stamps. Every grounded answer passes through
+		 *         here, so dropping that one would relabel the module's own citation as the model's
+		 *         wherever grounding is on:
+		 *         {@code CitationGroundingVerifierTest.aCitationTheModuleAttachedPublishesNoVerdictAndSpendsNothing}
+		 *         asserts the flag on what {@code verify} returns, which is this copy, and is what
+		 *         reddens. The wire keys are pinned separately, in
+		 *         {@code ChartSearchAiFindingProvenanceTest}.
 		 */
 		public RecordReference withGrounded(Boolean verdict) {
 			return new RecordReference(index, resourceType, resourceUuid, date, verdict, source,
-					withheldInteractions);
+					withheldInteractions, attachedByTheModule);
 		}
 	}
 }

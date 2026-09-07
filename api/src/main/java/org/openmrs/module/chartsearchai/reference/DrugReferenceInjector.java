@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
@@ -66,7 +67,10 @@ import org.springframework.stereotype.Service;
  *
  * <p>That one classification also decides whether the citation can be grounding-verified (issue
  * #122): reference material is demote-only, so its verdict is never {@code true}, while chart
- * evidence is graded normally. Both consequences follow from the single provenance judgement and
+ * evidence is graded normally so far as PROVENANCE decides it. Who made the CLAIM is a second axis
+ * this classification does not reach — a citation the MODULE attached is chart evidence and is still
+ * not graded (issue #305) — and ADR Decision 80 draws that axis rather than this javadoc. Both
+ * consequences of the classification follow from the single provenance judgement and
  * both are asserted by that guard — they used to be two separate registrations, and the second was
  * missed when {@code safety_finding} was added. Since issue #201 it decides a third thing: a
  * reference-group citation publishes no verdict at all, serializing {@code grounded: null} however
@@ -580,12 +584,18 @@ public class DrugReferenceInjector {
 		// whether to WARN and inject, which is issue #118's question and is not what is unmeasured
 		// here. Read beside the other once-per-injection global-property reads rather than inside
 		// renderFinding, so one chart cannot number record [7] and not record [8].
-		Map<String, Integer> orderRecordNumbers = findings.isEmpty()
+		//
+		// The INDEX behind both this and issue #305's finding provenance is built once, here, and is
+		// NOT gated: #305's citation reads it on every install, and building it twice would be two
+		// walks of one mapping list for one question (issue #151's shape). Only the order-record
+		// RENDERING below is gated.
+		DrugOrderRecords findingRecords = findings.isEmpty() ? null : new DrugOrderRecords(mappings);
+		Map<String, Integer> orderRecordNumbers = findingRecords == null
 				|| !ChartSearchAiUtils.getBooleanGlobalProperty(
 						ChartSearchAiConstants.GP_DRUG_SAFETY_CITE_ORDER_RECORDS,
 						ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_CITE_ORDER_RECORDS)
 				? Collections.<String, Integer>emptyMap()
-				: orderRecordNumbers(mappings, context);
+				: orderRecordNumbers(findingRecords, context);
 
 		// After the reference records, so a finding's citation number always follows the reference it
 		// was derived from — the clinician reads cause then conclusion in chart order.
@@ -598,7 +608,8 @@ public class DrugReferenceInjector {
 			// of one type about one drug, so five records of this loop can share a single key.
 			mappings.add(new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING,
 					ChartSearchAiUtils.resourceKey(finding.getType(), finding.getDrug()), null, rendered,
-					null, 0, null, ratingThisRecordStates(finding, rendered)));
+					null, 0, null, ratingThisRecordStates(finding, rendered),
+					chartRecordNumbers(finding, findingRecords)));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;
 		}
@@ -804,10 +815,12 @@ public class DrugReferenceInjector {
 	}
 
 	/**
-	 * The chart's own records, indexed so that ONE walk answers "which numbered record IS this active
-	 * order" for both callers that ask it — {@link #unrepresentedActiveOrders}, which needs only
-	 * whether there is one (issue #118), and {@link #orderRecordNumbers}, which needs WHICH (issue
-	 * #379).
+	 * The chart's own records, indexed so that ONE walk answers "which numbered record IS this
+	 * uuid" for every caller that asks it — {@link #unrepresentedActiveOrders}, which needs only
+	 * whether there is one for an order (issue #118); {@link #orderRecordNumbers}, which needs WHICH
+	 * (issue #379); and {@link #chartRecordNumbers}, which asks it of a chart record a finding fired
+	 * on (issue #305). The readings differ and {@link #numberOfRecord}'s javadoc is where that is
+	 * drawn.
 	 *
 	 * <p><b>One resolution read two ways, and not two resolutions that agree.</b> Before issue #379
 	 * this walk lived inside the reconciliation and threw the identity of the matching record away, so
@@ -815,9 +828,11 @@ public class DrugReferenceInjector {
 	 * records substantiate an order, which is the shape issue #151 forbids. Substantiated is now
 	 * defined AS {@link #numbersFor} answering with anything.
 	 *
-	 * <p>One WALK and not one instance: the two callers ask about different mapping lists — the chart
-	 * as it arrived, and the chart with the reconciliation's own records appended — so each builds its
-	 * own. A per-call local either way, which is issue #172's rule met by the shape.
+	 * <p>One WALK and not one instance: the reconciliation asks about the chart as it ARRIVED and
+	 * everything after it about the chart with the reconciliation's own records appended, so there are
+	 * two instances over two mapping lists — and since issue #305 the second is built once at the
+	 * injection site and HANDED to both of its readers, rather than each building one. A per-call
+	 * local either way, which is issue #172's rule met by the shape.
 	 *
 	 * <p><b>It carries no {@code isCompleteFor} gate</b>, deliberately. That gate answers "is an
 	 * ABSENCE meaningful", which is the reconciliation's question and not this one: a query-scoped
@@ -832,6 +847,11 @@ public class DrugReferenceInjector {
 		 *  carried two. Type-agnostic: a resource uuid is globally unique, so a record carrying this
 		 *  order's uuid IS this order however it is typed. */
 		private final Map<String, Integer> byResourceUuid = new LinkedHashMap<String, Integer>();
+
+		/** The resource uuids {@link #byResourceUuid} was handed more than once — what
+		 *  {@link #numberOfRecord} refuses, and the only thing that can tell a uuid ONE record carries
+		 *  apart from one the last-wins map above has quietly collapsed. */
+		private final Set<String> contestedUuids = new HashSet<String>();
 
 		/** Record number to lowercased text, for the records that may substantiate a LIVE order — one
 		 *  ENTRY per admitted record, NOT one concatenated buffer. A record boundary is a real
@@ -853,7 +873,11 @@ public class DrugReferenceInjector {
 					// guard here discriminates no test, measured by mutation. Three successive attempts
 					// to write down which records share this key were each measured false, so none is
 					// written here: instrument the constructor and read the types it admits.
-					byResourceUuid.put(mapping.getResourceUuid(), Integer.valueOf(mapping.getIndex()));
+					Integer already = byResourceUuid.put(mapping.getResourceUuid(),
+							Integer.valueOf(mapping.getIndex()));
+					if (already != null) {
+						contestedUuids.add(mapping.getResourceUuid());
+					}
 				}
 				if (QUERYSTORE_DRUG_ORDER_TYPE.equals(mapping.getResourceType())
 						&& mapping.getText() != null) {
@@ -882,6 +906,36 @@ public class DrugReferenceInjector {
 					}
 				}
 			}
+		}
+
+		/**
+		 * @return the number of the chart record carrying {@code resourceUuid}, or {@code null} where
+		 *         this chart carries none — or carries MORE than one, which it refuses rather than
+		 *         answering with the last (issue #305).
+		 *
+		 *         <p>A second reader of {@link #byResourceUuid}, which that field's javadoc already
+		 *         licenses: a resource uuid is globally unique, so a record carrying one IS that
+		 *         resource however it is typed. Sharing the index rather than walking the mappings
+		 *         again is the one-RULE constraint the record-numbering bullet in this package's
+		 *         {@code CLAUDE.md} states; what is NOT shared is the READING —
+		 *         {@link #numbersFor} is issue #118's fail-open substantiation boolean, so last-wins
+		 *         costs it nothing, and citing is an affirmative claim about WHICH record. <b>ADR
+		 *         Decision 80 is canonical for that argument</b> and carries the residue below; what
+		 *         it does not carry is the mechanical reason {@link #contestedUuids} exists, which is
+		 *         that the map cannot be read for a count it has already collapsed.
+		 *
+		 *         <p><b>A third reader, and it does not follow the split.</b>
+		 *         {@link #citableNumberFor} is issue #379's order-record citation — as affirmative as
+		 *         this one — and its uuid leg goes through {@link #numberByUuid}, which does not
+		 *         consult {@link #contestedUuids}. So on a chart carrying two records under one order
+		 *         uuid, #379 cites the last one indexed and #305 cites neither. Not resolved here:
+		 *         that rendering ships behind {@code chartsearchai.drugSafety.citeOrderRecords} and is
+		 *         OFF, and narrowing its leg is a change to Decision 77's gated decision without its
+		 *         measurement. Stated so whoever flips that flag knows what is owed.
+		 */
+		private Integer numberOfRecord(String resourceUuid) {
+			return resourceUuid == null || contestedUuids.contains(resourceUuid) ? null
+					: byResourceUuid.get(resourceUuid);
 		}
 
 		/**
@@ -1013,6 +1067,51 @@ public class DrugReferenceInjector {
 	}
 
 	/**
+	 * The numbers of the chart records a finding FIRED ON — issue #305's provenance, resolved off the
+	 * same uuid index the order-record numbering reads.
+	 *
+	 * <p>What it answers is not a rendering: nothing about it reaches the prompt, and
+	 * {@code renderFinding} never sees it. It rides on the {@code safety_finding} mapping, which is
+	 * what {@code LlmInferenceService.extractCitedReferences} surfaces as a citation whenever the model
+	 * cites the finding — so the clinician reaches the recorded allergy or condition behind a claim
+	 * whether or not the model thought to cite it. That is why this is ungated where the order-record
+	 * clause is gated: the clause changes what the MODEL reads and its effect on generation is
+	 * unmeasured (ADR Decision 77), while this changes only the published reference list.
+	 *
+	 * <p>ASCENDING by record number, deliberately: two chart rows spelling one allergy are folded into
+	 * one recorded allergen by {@code DrugSafetyValidator.resolvedAlike}, and their uuids then arrive
+	 * in whatever order {@code PatientService} returned the allergies in. Sorting makes THIS list a
+	 * function of the chart rather than of that order. It is not the order a client sees:
+	 * {@code LlmInferenceService.extractCitedReferences} sorts the reference list by DATE, so a dated
+	 * provenance record is reordered against an undated one.
+	 *
+	 * <p>THIS layer refuses two ways: a uuid this chart carries no record for, and a uuid it carries
+	 * more than one record for. It is also empty for anything {@code SafetyWarning.chartRecords()} was
+	 * already empty for — and what THAT covers is not restated here, because the whole list across
+	 * both layers is enumerated in one place, {@code RecordMapping.getDerivedFrom()}. (A draft of this
+	 * paragraph restated it and dropped one of the five, which is exactly what that declaration exists
+	 * to stop.) Additive in every case: the record is injected as it was before issue #305.
+	 *
+	 * <p>The {@code records == null} half of the guard is defensive and unreached: the index is null
+	 * only where {@code findings} is empty, and the one call site is inside the loop over those
+	 * findings. It is not one of the refusals above — no arrangement produces it — and is kept for the
+	 * reason its neighbours in this class are, so a second caller cannot introduce it silently.
+	 */
+	private static List<Integer> chartRecordNumbers(SafetyWarning finding, DrugOrderRecords records) {
+		if (records == null || finding.chartRecords().isEmpty()) {
+			return Collections.emptyList();
+		}
+		Set<Integer> numbers = new TreeSet<Integer>();
+		for (String recordUuid : finding.chartRecords()) {
+			Integer number = records.numberOfRecord(recordUuid);
+			if (number != null) {
+				numbers.add(number);
+			}
+		}
+		return new ArrayList<Integer>(numbers);
+	}
+
+	/**
 	 * The chart record number each active order's DISPLAY may be cited by, keyed on that display —
 	 * issue #379, and what turns a finding's {@code "<Substance> from <order display>"} attribution
 	 * into one the model can cite instead of joining for itself. Resolved once per injection that
@@ -1071,17 +1170,19 @@ public class DrugReferenceInjector {
 	 * would be caught by {@code inject}'s degrade-to-the-unmodified-chart and silently drop the whole
 	 * injection.
 	 *
-	 * @param mappings the chart's records AS THEY STAND at the call — which must be after the
+	 * @param records the index over the chart's records AS THEY STAND — which must be built after the
 	 *        reconciliation has appended its own {@code active_drug_order} records, so an order that
-	 *        had no record resolves to the one just injected for it (each carries that order's uuid)
+	 *        had no record resolves to the one just injected for it (each carries that order's uuid).
+	 *        Taken as a parameter rather than built here since issue #305, because the finding
+	 *        provenance beside it reads the same index and two constructions would be two walks of one
+	 *        mapping list — the two-resolutions-that-agree shape issue #151 forbids.
 	 */
-	private static Map<String, Integer> orderRecordNumbers(List<RecordMapping> mappings,
+	private static Map<String, Integer> orderRecordNumbers(DrugOrderRecords records,
 			PatientClinicalContext context) {
-		if (context == null) {
+		if (context == null || records == null) {
 			return Collections.emptyMap();
 		}
 		List<PatientClinicalContext.ActiveDrugOrder> orders = context.getActiveDrugOrders();
-		DrugOrderRecords records = new DrugOrderRecords(mappings);
 		// The records that are some order's OWN, by uuid. Resolved in a pass of its own before anything
 		// is cited, because the name leg's candidates are judged against it — see citableNumberFor.
 		// Never accumulated as the citing walk goes: an order asked BEFORE the one whose uuid record it

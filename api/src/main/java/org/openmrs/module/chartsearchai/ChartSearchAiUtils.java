@@ -258,7 +258,10 @@ public class ChartSearchAiUtils {
 	 * publishes nothing in either direction and skips Tier-1 as well as Tier-2, under entailment only,
 	 * where this predicate demotes in either mode and — except where the two overlap, and the stronger
 	 * rule wins — keeps its cosine FAIL. So the two are not the same treatment, and a citation can be
-	 * held back without this predicate being true of it.
+	 * held back without this predicate being true of it: by that rule, by a citation the MODULE
+	 * attached rather than the model emitting it (issue #305), and by whatever else
+	 * {@code CitationGroundingVerifier.Disposition} names — that enum is canonical for the set and
+	 * for how much of a verdict each leaves.
 	 *
 	 * <p><strong>Why module-supplied material cannot be verified.</strong> An answer sentence citing
 	 * module-rendered reference prose is typically a recitation of it, and a recitation embeds

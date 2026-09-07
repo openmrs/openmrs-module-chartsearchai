@@ -293,13 +293,18 @@ public class ChartSearchAiConstants {
 	public static final int DEFAULT_PROGRESSIVE_REASONING_TOP_K = 15;
 
 	/**
-	 * When {@code true}, every cited record is checked for grounding after the
-	 * LLM answers: the record's text must be semantically close enough to the
-	 * answer sentence(s) that cite it, otherwise the citation is flagged as
-	 * unverified. Index validation alone (does {@code [N]} map to a real
+	 * When {@code true}, cited records are checked for grounding after the LLM
+	 * answers: the record's text must be semantically close enough to the
+	 * answer sentence(s) that cite it, otherwise that citation is published as
+	 * unsupported. Index validation alone (does {@code [N]} map to a real
 	 * retrieved record?) cannot catch the dangerous case of a real record cited
-	 * for a claim it does not actually support. Default {@code false} so the
-	 * feature is opt-in. See {@code CitationGroundingVerifier}.
+	 * for a claim it does not actually support. Which citations carry a verdict
+	 * is narrower than which are cited, and a {@code null} is not a failed
+	 * check: the reasons are enumerated once, in ADR Decision 11's
+	 * {@code grounded} paragraph, and {@code CitationGroundingVerifier.Disposition}
+	 * is canonical for how much of a verdict each citation may be given.
+	 * Default {@code false} so the feature is opt-in. See
+	 * {@code CitationGroundingVerifier}.
 	 */
 	public static final String GP_GROUNDING_ENABLED = "chartsearchai.grounding.enabled";
 
@@ -343,10 +348,12 @@ public class ChartSearchAiConstants {
 	 * sentence whose claim statements overlap get single-pair calls — a clause-scoped
 	 * compound, or an enumerating sentence in either mode), and the Tier-1 cosine
 	 * verdict is computed lazily only where Tier-2 yields none, so the marginal
-	 * cost is one LLM round-trip per answer. Two kinds of citation are never put to
-	 * the judge at all: module-supplied reference material (issue #106/#122) and a
+	 * cost is one LLM round-trip per answer. Some citations are never put to
+	 * the judge at all: module-supplied reference material (issue #106/#122); a
 	 * COMPOUND claim unit, a statement attaching its citations to different pieces of
-	 * itself (issue #302). Still a separate opt-in from the
+	 * itself (issue #302); and a citation the MODULE attached rather than the model
+	 * emitting it (issue #305). {@code CitationGroundingVerifier.Disposition} is
+	 * canonical for that set and for how much each is held back. Still a separate opt-in from the
 	 * cheap Tier-1 pass. Default {@code false}. See {@code CitationGroundingVerifier}.
 	 */
 	public static final String GP_GROUNDING_ENTAILMENT_ENABLED = "chartsearchai.grounding.entailment.enabled";

@@ -233,8 +233,10 @@ public class ProjectInstructionsGuardTest {
 	 * maintainer a measurement still holds when it does not.
 	 *
 	 * <p>Scoped to counts of TESTS and cases, deliberately. A figure that does not move with
-	 * the code — "33 of 329 Bash calls", "939 level-4 names in the WHO index" — is allowed
-	 * by the file's own rule and must not fire here.
+	 * the code — "939 level-4 names in the WHO index", in the nested instructions — is allowed
+	 * by the file's own rule and must not fire here. The Bash-output run's "33 of 329 Bash
+	 * calls" was the other example and no longer sits in a guarded file: the #305 trim needed
+	 * the room, and docs/adr.md Appendix A carries the figure with its date.
 	 */
 	@Test
 	public void theProjectInstructionsQuoteNoTestSuiteTotal() throws IOException {

@@ -201,17 +201,20 @@ final class ClassCodeFidelityCheck {
 	 * @param answer the answer prose, unchanged by this method
 	 * @param cited the references the answer cites, as resolved by
 	 *            {@link LlmInferenceService#extractCitedReferences} — the union of the inline
-	 *            {@code [N]} markers and the structured citations array, index-validated. Taking
+	 *            {@code [N]} markers and the structured citations array — plus, since issue #305, the
+	 *            chart records the module attached. Taking
 	 *            the accessor's own output rather than re-deriving it from the prose is what keeps
 	 *            "which records were cited" a single answer, and it is also what the clinician can
 	 *            click. An answer that cites nothing cites no code-bearing record either, so it
-	 *            takes the "nothing to copy" exit above like any other.
+	 *            takes the "nothing to copy" exit above like any other. <b>This method skips a
+	 *            citation the MODULE attached</b>, at the walk below and for the reason stated
+	 *            there.
 	 * @param mappings the chart's records, cited or not — the carrier of the cited records' text.
-	 *            Support is pooled across the cited records rather than matched per citation: an
-	 *            answer citing [3] and [7] may state any code either of them carries, because the
-	 *            question here is where a code came from, not which sentence carries which marker
-	 *            (that is grounding's question, and {@code grounding.clauseScoped} is where it is
-	 *            answered).
+	 *            Support is pooled across the records the ANSWER cited rather than matched per
+	 *            citation: an answer citing [3] and [7] may state any code either of them carries,
+	 *            because the question here is where a code came from, not which sentence carries
+	 *            which marker (that is grounding's question, and {@code grounding.clauseScoped} is
+	 *            where it is answered).
 	 */
 	static void reportClassCodeDefects(Patient patient, String question, String answer,
 			List<RecordReference> cited, List<RecordMapping> mappings) {
@@ -234,6 +237,24 @@ final class ClassCodeFidelityCheck {
 			Set<String> recordCodes = new LinkedHashSet<String>();
 			if (cited != null) {
 				for (RecordReference reference : cited) {
+					// A record the MODULE attached is not something the answer reached for, so it is
+					// neither support nor grounds to abstain (issue #305). Both directions were
+					// measured on the real search(): pooled, the attached record's own class code made
+					// a code no cited record states look copied, and a blank-texted one — which
+					// QueryStoreChartBuilder admits, `doc.getText() == null ? "" : doc.getText()` —
+					// took the whole-answer abstain below and silenced issue #142's check for every
+					// answer whose cited finding derived from it.
+					//
+					// Asked HERE rather than of the list this method is handed, because it is this
+					// walk's premise that narrows: the @param note calls support pooled across the
+					// records the ANSWER cited, and the answer's reach is what makes pooling sound at
+					// all. A sibling check handed the same list states in its own `@param cited`
+					// whether it needs a filter of its own — no count of them is kept here, since
+					// LlmInferenceService's uses of extractCitedReferences' output are what enumerate
+					// the consumers of that list.
+					if (reference.isAttachedByTheModule()) {
+						continue;
+					}
 					Integer index = Integer.valueOf(reference.getIndex());
 					// A cited index always has a mapping — the reference list is built from the
 					// mappings — so a null here is only ever a mapping carrying no text.

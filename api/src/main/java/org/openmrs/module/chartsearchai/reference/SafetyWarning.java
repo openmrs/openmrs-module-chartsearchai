@@ -10,8 +10,11 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * A non-blocking advisory raised by {@link DrugSafetyValidator} after the LLM
@@ -92,6 +95,12 @@ public class SafetyWarning {
 	/** @see #isAboutACurrentMedication() */
 	private final boolean aboutACurrentMedication;
 
+	/**
+	 * The chart records this finding fired on — see {@link #chartRecords()} (issue #305), which is
+	 * where what empty covers is said. Never null.
+	 */
+	private final Set<String> chartRecords;
+
 	/** A warning raised from something the reference data assigns no severity to — see
 	 *  {@link #getSeverity()} for which joins those are. */
 	public SafetyWarning(String type, String drug, String detail) {
@@ -153,12 +162,15 @@ public class SafetyWarning {
 	 * @param uncorroboratedChartMatch see {@link #restsOnAnUncorroboratedChartMatch()}
 	 * @param aboutACurrentMedication see {@link #isAboutACurrentMedication()} — true where the arm
 	 *        walking the patient's own active orders raised it (issue #348)
+	 * @param chartRecords see {@link #chartRecords()} — the recorded allergies or conditions this
+	 *        rule's token matched, from the list {@code recordedContraindicationKind}'s own leg names
 	 */
 	static SafetyWarning contraindication(String drug, String detail,
-			boolean uncorroboratedChartMatch, boolean aboutACurrentMedication) {
+			boolean uncorroboratedChartMatch, boolean aboutACurrentMedication,
+			Collection<String> chartRecords) {
 		return new SafetyWarning(TYPE_CONTRAINDICATION, drug, detail, null, false,
 				uncorroboratedChartMatch, null, null, Collections.<ChartOrderBridge> emptyList(),
-				aboutACurrentMedication);
+				aboutACurrentMedication, chartRecords);
 	}
 
 	/**
@@ -180,17 +192,34 @@ public class SafetyWarning {
 	 * {@code addActiveOrderContraindications} (true — the subject is an active order).
 	 *
 	 * @param aboutACurrentMedication see {@link #isAboutACurrentMedication()}
+	 * @param chartRecords see {@link #chartRecords()} — the records the {@code RecordedAllergen} this
+	 *        sentence was built from was read off, unioned across the spellings its merge folded in
 	 */
 	static SafetyWarning recordedAllergenContraindication(String drug, String detail,
-			boolean aboutACurrentMedication) {
+			boolean aboutACurrentMedication, Collection<String> chartRecords) {
 		return new SafetyWarning(TYPE_CONTRAINDICATION, drug, detail, null, false, false, null, null,
-				Collections.<ChartOrderBridge> emptyList(), aboutACurrentMedication);
+				Collections.<ChartOrderBridge> emptyList(), aboutACurrentMedication, chartRecords);
 	}
 
 	private SafetyWarning(String type, String drug, String detail, String severity,
 			boolean unratedRelationship, boolean uncorroboratedChartMatch,
 			DrugReference.Interaction reconciledRule, String reconciledNoteName,
 			List<ChartOrderBridge> chartOrderBridges, boolean aboutACurrentMedication) {
+		this(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch, reconciledRule,
+				reconciledNoteName, chartOrderBridges, aboutACurrentMedication, null);
+	}
+
+	private SafetyWarning(String type, String drug, String detail, String severity,
+			boolean unratedRelationship, boolean uncorroboratedChartMatch,
+			DrugReference.Interaction reconciledRule, String reconciledNoteName,
+			List<ChartOrderBridge> chartOrderBridges, boolean aboutACurrentMedication,
+			Collection<String> chartRecords) {
+		// Copied and wrapped for the reason chartOrderBridges is, one field along. Never null, so no
+		// reader branches on absence — chartRecords()'s javadoc is the one place that says what empty
+		// covers.
+		this.chartRecords = chartRecords == null || chartRecords.isEmpty()
+				? Collections.<String> emptySet()
+				: Collections.unmodifiableSet(new LinkedHashSet<String>(chartRecords));
 		this.type = type;
 		this.drug = drug;
 		this.detail = detail;
@@ -716,6 +745,40 @@ public class SafetyWarning {
 	 */
 	boolean isAboutACurrentMedication() {
 		return aboutACurrentMedication;
+	}
+
+	/**
+	 * @return the uuids of the chart records this finding FIRED ON — the recorded allergy or condition
+	 *         whose match raised it (issue #305). Empty is the honest answer wherever the module
+	 *         attributed nothing, and it is not a denial. THIS layer is empty for three reasons — the
+	 *         finding is not a contraindication (an interaction's evidence is an ORDER, which issue
+	 *         #379 attributes on its own path), the context states no provenance, or the module could
+	 *         read no allergy or condition rows — and the injector's own refusals add more. The whole
+	 *         list is enumerated in one place, {@code RecordMapping.getDerivedFrom()}; a non-empty
+	 *         answer here does NOT mean a non-empty one there.
+	 *
+	 *         <p>Read by {@code DrugReferenceInjector}, which resolves each uuid to the number of the
+	 *         chart record it IS and puts those numbers on the injected {@code safety_finding} mapping,
+	 *         so a client reaches the source record whether or not the model cited it.
+	 *
+	 *         <p><b>Fixed when the warning is built, and deliberately NOT unioned over the collapsed
+	 *         contraindication key.</b> A key can collapse two rules and only the ledger's rank winner's
+	 *         SENTENCE is printed ({@code ContraindicationChips}, issue #146), so the records named here
+	 *         have to be evidence for the sentence this finding actually states rather than for one that
+	 *         was discarded. What IS unioned is the other direction — two chart rows spelling one
+	 *         allergy, which {@code DrugSafetyValidator.resolvedAlike} folds into one recorded
+	 *         allergen — {@code RecordedAllergen.alsoRecordedIn} being what carries the records across
+	 *         that fold, as {@code alsoNames} carries the naming — and either row is a record of the
+	 *         fact the surviving sentence states.
+	 *
+	 *         <p>Package-private, matching the two factories that set it: a caller may set only what it
+	 *         may read back. Not part of the wire-facing chip shape, unlike
+	 *         {@link #chartOrderBridges()} — that one is prose the model reads and so needs a
+	 *         deterministic wire home of its own, while this is a pointer the citation list publishes.
+	 *         ADR Decision 80 carries that argument.
+	 */
+	Set<String> chartRecords() {
+		return chartRecords;
 	}
 
 	/**

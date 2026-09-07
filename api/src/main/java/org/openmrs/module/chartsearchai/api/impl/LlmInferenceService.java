@@ -589,9 +589,11 @@ public class LlmInferenceService implements ChartSearchService {
 
 	/**
 	 * Builds the clickable reference list for an answer, reconciling the two
-	 * sources of citation indices that can disagree: the LLM's structured
-	 * {@code citations} array and the {@code [N]} markers it writes inline in the
-	 * prose. We take the UNION of both (restricted to indices that map to a real
+	 * sources of citation indices the MODEL can disagree with itself about: its
+	 * structured {@code citations} array and the {@code [N]} markers it writes
+	 * inline in the prose. (A third source, which is not the model's at all, is
+	 * the last paragraph below.) We take the UNION of the
+	 * two (restricted to indices that map to a real
 	 * retrieved record), so a record the model cited inline but omitted from the
 	 * array — or one it listed in the array while citing at least one record
 	 * inline — still resolves to a reference. The one exception is the
@@ -613,6 +615,15 @@ public class LlmInferenceService implements ChartSearchService {
 	 * absence of an answer (a distinct degenerate output), not an answer that
 	 * failed to anchor its citations, so the array still resolves there — as does
 	 * the legacy {@code answer == null} entry point.
+	 *
+	 * <p><b>A third source, and the only one that is not the model's</b> (issue #305): a record the
+	 * model DID cite may declare, through {@link RecordMapping#getDerivedFrom()}, the chart records
+	 * it was derived from — an injected {@code safety_finding} names the recorded allergy or
+	 * condition its match fired on. Those records join the reference list and are marked
+	 * {@link RecordReference#isAttachedByTheModule()}. It is a ONE-LEVEL step by construction here:
+	 * the derivation is read off what the model cited and never off what this step added, so a
+	 * record that later carried a derivation of its own would not be followed. Resolved after both
+	 * of the reads above — see the comment at the walk for which one is load-bearing and why.
 	 */
 	static List<RecordReference> extractCitedReferences(String answer, List<Integer> citations,
 			List<RecordMapping> mappings) {
@@ -639,6 +650,64 @@ public class LlmInferenceService implements ChartSearchService {
 			seen.addAll(inline);
 		}
 
+		// The chart records the model's own citations were DERIVED from (issue #305) — a recorded
+		// allergy or condition an injected safety_finding fired on, resolved deterministically by
+		// DrugReferenceInjector and carried on the mapping. Attached here because this method is the
+		// only thing that decides which indices become references, and attaching a citation anywhere
+		// else is how the deterministic layer and the answer come apart.
+		//
+		// AFTER the two reads above, and the reason is the SECOND of them rather than the carve-out.
+		// Measured: moving this block ahead of the carve-out leaves the whole suite green, because
+		// that carve-out returns an unconditional empty list — whatever `seen` held cannot reach a
+		// client, so an abstaining answer acquires nothing either way.
+		//
+		// What the position does decide is narrower than "this block runs late", and the mutation
+		// that shows it is not a move: it is which set `!seen.contains(derived)` below reads. Have it
+		// read the citations array ALONE — the state before `seen.addAll(inline)` — and a record the
+		// model cited INLINE ONLY, its finding in the array, is admitted here and published as
+		// `attachedByTheModule`: the module claiming a citation the model wrote. Iterating a
+		// pre-inline snapshot while leaving that check on `seen` changes nothing, measured. So keep
+		// this after both reads, and read `seen`. →
+		// LlmInferenceServiceTest.extractCitedReferences_shouldNotClaimARecordTheModelCitedInlineOnly
+		//
+		// A SECOND pass over what the model cited, and ONE level: the derivations read here are the
+		// model's own citations', never those of a record this step added, so the walk cannot chain.
+		// That is the rule rather than a property of today's data — no chart record carries a
+		// derivation at all. What keeps the iteration safe is separate and simpler: additions go into
+		// `attached` and reach `seen` only after the loop.
+		//
+		// The loop's SUBJECT carries the gate, and it is a mutation of its own — distinct from the
+		// check inside, which cannot see it. Iterate `indexMap.keySet()` rather than `seen` and every
+		// mapping's derivations are collected whatever the model cited, which is ADR Decision 80's
+		// refused alternative: attach the record unconditionally. Reddens →
+		// LlmInferenceServiceTest.extractCitedReferences_shouldNotSurfaceADerivationOfAFindingTheModelDidNotCite
+		// and, over the real injector, →
+		// LlmInferenceServiceFindingProvenanceContextTest.aFindingTheModelDidNotCiteBringsNoChartRecordIntoTheReferences
+		Set<Integer> attached = new LinkedHashSet<Integer>();
+		for (Integer index : seen) {
+			RecordMapping mapping = indexMap.get(index);
+			if (mapping == null) {
+				continue;
+			}
+			for (Integer derived : mapping.getDerivedFrom()) {
+				// Already cited by the model is a no-op, and it must stay the MODEL's citation: it
+				// carries a claim of the model's, so grounding reads it as the model's like every
+				// other citation the model emitted (issue #305's own first measured form).
+				// The mapping check is for a CALLER mismatch and not for the injector: a derivation is
+				// resolved off the same mapping list that arrives here, so on the production path
+				// every derived index maps. It bites where a caller hands this method a different
+				// list than the one the numbers were resolved against — which the legacy
+				// answer-less entry point makes possible — and it fails closed there, dropping the
+				// attachment rather than publishing a reference to nothing. Unlike the array path
+				// above it does not WARN, because an unmapped derivation is the module's own
+				// bookkeeping and not something the model claimed.
+				if (!seen.contains(derived) && indexMap.containsKey(derived)) {
+					attached.add(derived);
+				}
+			}
+		}
+		seen.addAll(attached);
+
 		List<RecordReference> references = new ArrayList<RecordReference>();
 		for (Integer index : seen) {
 			RecordMapping mapping = indexMap.get(index);
@@ -648,7 +717,7 @@ public class LlmInferenceService implements ChartSearchService {
 				// the citation chip, so the record has nothing about itself for the model to recite.
 				references.add(new RecordReference(index, mapping.getResourceType(),
 						mapping.getResourceUuid(), mapping.getDate(), null, mapping.getSource(),
-						mapping.getWithheldInteractions()));
+						mapping.getWithheldInteractions(), attached.contains(index)));
 			} else {
 				log.warn("LLM cited record [{}] which does not exist in the provided records", index);
 			}

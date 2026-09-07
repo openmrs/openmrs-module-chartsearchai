@@ -953,7 +953,21 @@ public class CitationGroundingVerifier {
 		 *  re-parse of the answer. */
 		final Set<Integer> anchored;
 
-		/** Every cited index no sentence marks up. Belongs to no statement, therefore to all. */
+		/**
+		 * Every cited index no sentence marks up. Belongs to no statement, therefore to all.
+		 *
+		 * <p><b>Since issue #305 that is not true of every member.</b> A citation the MODULE attached
+		 * carries no marker either, so it lands here — and it was offered in support of nothing at
+		 * all, rather than of the answer as a whole. It is unioned into every claim's
+		 * {@link #restsOn} anyway, and that is inert rather than right: the only reader,
+		 * {@link CitationGroundingVerifier#restsOnReferenceMaterial}, tests membership in
+		 * {@code demoteOnlyIndexes}, and an attached index is always chart-group — the derivation
+		 * resolves allergy and condition uuids, and the {@code safety_finding} mappings are appended
+		 * after the injector's uuid index is built, so a finding can never attach a finding. Stated
+		 * because the #284 widening rests on the sentence above, and it is now weaker than it reads:
+		 * excluding an attached index here would be a behaviour change with no case to its name, so
+		 * the residue is disclosed rather than closed.
+		 */
 		final Set<Integer> unanchored;
 
 		AnswerCitations(List<Sentence> sentences, List<RecordReference> references) {

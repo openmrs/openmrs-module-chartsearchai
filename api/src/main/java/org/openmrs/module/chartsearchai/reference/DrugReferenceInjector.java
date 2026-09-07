@@ -1057,15 +1057,22 @@ public class DrugReferenceInjector {
 	 * clause is gated: the clause changes what the MODEL reads and its effect on generation is
 	 * unmeasured (ADR Decision 77), while this changes only the published reference list.
 	 *
-	 * <p>ASCENDING by record number, deliberately: two chart rows spelling one allergy are merged into
-	 * one recorded allergen by {@code RecordedAllergen.alsoNames}, and their uuids then arrive in
-	 * whatever order {@code PatientService} returned the allergies in. Sorting makes the published list
-	 * a function of the chart rather than of that order.
+	 * <p>ASCENDING by record number, deliberately: two chart rows spelling one allergy are folded into
+	 * one recorded allergen by {@code DrugSafetyValidator.resolvedAlike}, and their uuids then arrive
+	 * in whatever order {@code PatientService} returned the allergies in. Sorting makes THIS list a
+	 * function of the chart rather than of that order. It is not the order a client sees:
+	 * {@code LlmInferenceService.extractCitedReferences} sorts the reference list by DATE, so a dated
+	 * provenance record is reordered against an undated one.
 	 *
 	 * <p>Empty for every finding whose {@code chartRecords()} is empty — an interaction, whose evidence
 	 * is an ORDER, and any contraindication whose context stated no provenance — and for a uuid this
 	 * chart carries no record for, or carries two of. Additive in every one of those cases: the record
 	 * is injected exactly as it was before issue #305.
+	 *
+	 * <p>The {@code records == null} half of the guard is defensive and unreached: the index is null
+	 * only where {@code findings} is empty, and the one call site is inside the loop over those
+	 * findings. It is not one of the refusals above — no arrangement produces it — and is kept for the
+	 * reason its neighbours in this class are, so a second caller cannot introduce it silently.
 	 */
 	private static List<Integer> chartRecordNumbers(SafetyWarning finding, DrugOrderRecords records) {
 		if (records == null || finding.chartRecords().isEmpty()) {

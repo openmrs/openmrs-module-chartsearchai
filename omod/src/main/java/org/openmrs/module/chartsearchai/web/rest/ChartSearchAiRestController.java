@@ -822,8 +822,9 @@ public class ChartSearchAiRestController {
 			entry.put("question", auditLog.getQuestion());
 			entry.put("answer", auditLog.getAnswer());
 			entry.put("referenceCount", auditLog.getReferenceCount());
-			// The prompt COST beside the answer's USE of it: referenceCount is the citations in the
-			// answer, these two are the reference material put in front of the model, most of which
+			// The prompt COST beside the answer's USE of it: referenceCount is what the answer
+			// PUBLISHED — since issue #305 that can include a citation the module attached, so it is
+			// not a count of what the model cited; these two are the reference material put in front of the model, most of which
 			// is never cited. Published here because the point of issue #229 is that the size was
 			// unreadable without a log level nobody can durably set.
 			entry.put("referenceSliceRecords", auditLog.getReferenceSliceRecords());

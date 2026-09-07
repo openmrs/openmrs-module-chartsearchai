@@ -265,7 +265,15 @@ public class LlmInferenceServiceTest {
 				new RecordMapping(2, "safety_finding", "contraindication:Ibuprofen", null,
 						"Safety finding", null, 0, null, Arrays.asList(Integer.valueOf(9))));
 
-		try (LogCapture capture = LogCapture.on(LlmInferenceService.class.getName())) {
+		// The PACKAGE and not this class's own logger, and the reason is a leak rather than a
+		// preference: LogCapture restores the EFFECTIVE level it found, so capturing a class logger
+		// leaves that logger with an explicit level of its own — which then overrides a later
+		// PACKAGE-scoped capture and starves it of this pipeline's INFO lines. Measured: capturing
+		// on LlmInferenceService here reddened 30 cases across the three fidelity test classes, all
+		// on their "the capture must receive the pipeline's own INFO lines, or this passes
+		// vacuously" control, and only in a full-suite run. The package is the scope those classes
+		// already use.
+		try (LogCapture capture = LogCapture.on("org.openmrs.module.chartsearchai.api.impl")) {
 			List<RecordReference> result = LlmInferenceService.extractCitedReferences(
 					Arrays.asList(Integer.valueOf(2)), mappings);
 

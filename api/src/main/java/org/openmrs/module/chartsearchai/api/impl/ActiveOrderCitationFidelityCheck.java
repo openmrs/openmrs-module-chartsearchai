@@ -189,7 +189,10 @@ final class ActiveOrderCitationFidelityCheck {
 	 * @param cited the references the answer cites, as resolved by
 	 *            {@link LlmInferenceService#extractCitedReferences} — taking the accessor's own
 	 *            output rather than re-deriving it from the prose is what keeps "which records were
-	 *            cited" a single answer, and it is also what the clinician can click
+	 *            cited" a single answer, and it is also what the clinician can click. Since issue #305
+	 *            that list can carry a citation the MODULE attached; this check needs no filter for
+	 *            it, because it reports only within a MARKER RUN and an attached citation has no
+	 *            marker — had it one, the same pattern would have made it the model's own citation
 	 * @param mappings the chart's records, cited or not — the carrier of each cited record's
 	 *            resource type and of its order-currency mark
 	 * @return the distinct offending citation indexes in the order the answer states them, empty

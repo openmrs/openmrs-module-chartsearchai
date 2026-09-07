@@ -262,12 +262,13 @@ public class PatientClinicalContext {
 			uuids.addAll(entry.getValue());
 		}
 		// The VALUES are wrapped too, not just the map: recordsOf hands one straight to a caller, and
-		// an unmodifiable map of mutable sets is a value object only on the outside.
-		Map<String, Set<String>> sealed = new LinkedHashMap<String, Set<String>>();
+		// an unmodifiable map of mutable sets is a value object only on the outside. Sealed in place
+		// rather than into a second map — the accumulation above is complete by now, so there is
+		// nothing left to add to.
 		for (Map.Entry<String, Set<String>> entry : out.entrySet()) {
-			sealed.put(entry.getKey(), Collections.unmodifiableSet(entry.getValue()));
+			entry.setValue(Collections.unmodifiableSet(entry.getValue()));
 		}
-		return Collections.unmodifiableMap(sealed);
+		return Collections.unmodifiableMap(out);
 	}
 
 	private static Set<String> upper(Set<String> in) {

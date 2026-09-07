@@ -201,7 +201,8 @@ final class ClassCodeFidelityCheck {
 	 * @param answer the answer prose, unchanged by this method
 	 * @param cited the references the answer cites, as resolved by
 	 *            {@link LlmInferenceService#extractCitedReferences} — the union of the inline
-	 *            {@code [N]} markers and the structured citations array, index-validated. Taking
+	 *            {@code [N]} markers and the structured citations array — plus, since issue #305, the
+	 *            chart records the module attached, which the note below is about. Taking
 	 *            the accessor's own output rather than re-deriving it from the prose is what keeps
 	 *            "which records were cited" a single answer, and it is also what the clinician can
 	 *            click. An answer that cites nothing cites no code-bearing record either, so it

@@ -271,6 +271,38 @@ public class FindingChartRecordProvenanceContextTest extends BaseModuleContextSe
 	}
 
 	/**
+	 * The two legs are exclusive BY TYPE, not merely both present: an {@code allergy} rule takes its
+	 * witnesses from the allergy list alone, so a token that also occurs in a recorded CONDITION
+	 * brings back no condition record.
+	 *
+	 * <p>This is the property {@code recordedContraindicationKind}'s javadoc states of the match and
+	 * that {@code matchedContraindicationRecords} has to state of the provenance. Its own text claimed
+	 * "mutate either leg here and this class reddens", which is true of each leg's PRESENCE and says
+	 * nothing about the exclusivity — replacing both {@code if}s with unconditional blocks, so every
+	 * rule reads both lists, left the whole build green until this case. The chart records a condition
+	 * whose wording contains the curated {@code ibuprofen} allergy rule's own token, which is what
+	 * makes the two answers differ.
+	 */
+	@Test
+	public void anAllergyRulesProvenanceComesFromTheAllergyListAlone() {
+		String allergyUuid = recordAllergyTo("Ibuprofen");
+		String conditionUuid = recordConditionOf("Ibuprofen-induced gastritis");
+
+		PatientChart injected = inject(DrugReferenceTestSupport.chartOf(
+				DrugReferenceTestSupport.allergyRecord(1, allergyUuid, "Allergy: Ibuprofen (drug)"),
+				DrugReferenceTestSupport.conditionRecord(2, conditionUuid,
+						"Condition: Ibuprofen-induced gastritis (active)")));
+
+		RecordMapping finding = contraindicationFinding(injected);
+		assertTrue(finding.getText().contains("contraindicated by an active allergy"),
+				"the premise: the ALLERGY rule is the one that won the key. Was: " + finding.getText());
+		assertEquals(Collections.singletonList(Integer.valueOf(1)), finding.getDerivedFrom(),
+				"an allergy rule's evidence is a recorded ALLERGY, so the condition record whose "
+						+ "wording happens to carry the same token is not published. Was: "
+						+ finding.getDerivedFrom());
+	}
+
+	/**
 	 * An INTERACTION finding names nothing, and that is the scope line rather than an omission: its
 	 * provenance is the patient's active ORDERS, which issue #379 already resolves to record numbers
 	 * on a separate, flag-gated path. Two findings of one response, and only the one whose evidence is

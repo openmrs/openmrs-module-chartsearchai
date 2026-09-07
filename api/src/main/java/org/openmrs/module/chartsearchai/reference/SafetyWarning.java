@@ -748,8 +748,10 @@ public class SafetyWarning {
 	 *         SENTENCE is printed ({@code ContraindicationChips}, issue #146), so the records named here
 	 *         have to be evidence for the sentence this finding actually states rather than for one that
 	 *         was discarded. What IS unioned is the other direction — two chart rows spelling one
-	 *         allergy, which {@code RecordedAllergen.alsoNames} merges into one recorded allergen, and
-	 *         either row is a record of the fact the surviving sentence states.
+	 *         allergy, which {@code DrugSafetyValidator.resolvedAlike} folds into one recorded
+	 *         allergen — {@code RecordedAllergen.alsoRecordedIn} being what carries the records across
+	 *         that fold, as {@code alsoNames} carries the naming — and either row is a record of the
+	 *         fact the surviving sentence states.
 	 *
 	 *         <p>Package-private, matching the two factories that set it: a caller may set only what it
 	 *         may read back. Not part of the wire-facing chip shape, unlike

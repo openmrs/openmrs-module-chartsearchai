@@ -2528,8 +2528,11 @@ public class DrugSafetyValidator {
 	 *         a drug the patient is allergic to cannot bring back a condition record. Asked of
 	 *         {@link #isAllergyRule}/{@link #isConditionRule} rather than of the WORD that method
 	 *         returns, because a rule's provenance and a rule's kind must not be two readings that
-	 *         agree today: mutate either leg here and
-	 *         {@code FindingChartRecordProvenanceContextTest} reddens.
+	 *         agree today. Two different mutations, and they are not the same claim: dropping either
+	 *         leg reddens {@code FindingChartRecordProvenanceContextTest}, which says only that each
+	 *         leg is READ; replacing both {@code if}s with unconditional blocks, so every rule reads
+	 *         both lists, is what tests the EXCLUSIVITY and left the whole build green until
+	 *         {@code .anAllergyRulesProvenanceComesFromTheAllergyListAlone}.
 	 *
 	 *         <p>Through the WITNESS accessors ({@link PatientClinicalContext#allergensMatching} /
 	 *         {@link PatientClinicalContext#conditionsMatching}) and never the boolean, for the reason

@@ -574,9 +574,11 @@ public class LlmInferenceService implements ChartSearchService {
 
 	/**
 	 * Builds the clickable reference list for an answer, reconciling the two
-	 * sources of citation indices that can disagree: the LLM's structured
-	 * {@code citations} array and the {@code [N]} markers it writes inline in the
-	 * prose. We take the UNION of both (restricted to indices that map to a real
+	 * sources of citation indices the MODEL can disagree with itself about: its
+	 * structured {@code citations} array and the {@code [N]} markers it writes
+	 * inline in the prose. (A third source, which is not the model's at all, is
+	 * the last paragraph below.) We take the UNION of the
+	 * two (restricted to indices that map to a real
 	 * retrieved record), so a record the model cited inline but omitted from the
 	 * array — or one it listed in the array while citing at least one record
 	 * inline — still resolves to a reference. The one exception is the

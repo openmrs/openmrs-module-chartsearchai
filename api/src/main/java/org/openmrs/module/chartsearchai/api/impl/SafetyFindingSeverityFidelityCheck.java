@@ -27,8 +27,10 @@ import org.slf4j.LoggerFactory;
 /**
  * Reports a safety finding whose RATING the answer states nowhere — issue
  * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/337">#337</a>, round
- * three. A deterministic, exact comparison, like its sibling checks and for the same reason: no
- * model call, no embedding, no cosine floor, no reproduction threshold.
+ * three. A deterministic, exact comparison: no model call, no embedding, no cosine floor and no
+ * reproduction threshold, the last of those being what lets it see the answers Decision 61's check
+ * by construction cannot. Stated of THIS check and not as a likeness to its siblings — two
+ * successive attempts to word that comparison were each false of one of them.
  *
  * <p><b>The failure.</b> Measured live on a RefApp 3.7.1 standalone against the bundled knowledge
  * base, stock global properties, three runs byte-identical. A <em>"Is it safe to start her on

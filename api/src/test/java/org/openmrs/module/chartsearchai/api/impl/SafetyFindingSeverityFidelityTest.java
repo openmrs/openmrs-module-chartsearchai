@@ -245,13 +245,18 @@ public class SafetyFindingSeverityFidelityTest {
 		// `DrugReference.boundedTokenIndex`, whose own javadoc argues the digit rule from measured
 		// data — so weakening it silently ends the equivalence the shared-scan argument rests on.
 		// It fails toward SILENCE, which is the direction hardest to notice in production.
+		// BOTH edges, and that is the point rather than thoroughness: the first version of this case
+		// glued the digit only on the LEFT, so mutating just the trailing `isLetterOrDigit` stayed
+		// green — a fourth instance of the same half-pinned shape, found by a fourth review pass.
+		// `boundedTokenIndex`'s own argument for the digit rule uses a TRAILING example
+		// (`Aspirin81mg`), which is the side that was uncovered.
 		List<Integer> major = indexesRated("Major");
-		service.setLlmProvider(answering("Reviewed against the 2024Major formulary update. "
-				+ enumerationCiting(major)));
+		service.setLlmProvider(answering("Reviewed against the 2024Major formulary update, "
+				+ "revision Major2024. " + enumerationCiting(major)));
 		try (LogCapture capture = LogCapture.on(CHECK)) {
 			ChartAnswer answer = service.search(patient(), QUESTION);
 			assertEquals(major, answer.getUnstatedFindingSeverities(),
-					"a rating with a digit glued to it is not the word. Captured: "
+					"a rating with a digit glued to either end of it is not the word. Captured: "
 							+ capture.describeAll());
 		}
 	}

@@ -46,8 +46,8 @@ import org.slf4j.LoggerFactory;
  * enumerates, dropping the mechanism and the rating together. That carve-out is the right call for
  * that check, and its javadoc already names the residue ("a hazard dropped by stopping early"); this
  * is the half of that residue a rating makes deterministic. {@link ClassCodeFidelityCheck} compares
- * one ATC token shape. {@link ActiveOrderCitationFidelityCheck} asks whether a chart citation can be
- * the order its sentence names, which on this answer it could. And a reference-group citation skips
+ * one ATC token shape. {@link ActiveOrderCitationFidelityCheck} asks a different question again —
+ * whether a chart citation can be the order its sentence names. And a reference-group citation skips
  * Tier-2 entailment entirely (demote-only, #106/#122), so nothing graded these sentences either.
  *
  * <p><b>What it compares.</b> Nothing it derives from prose. The rating travels structurally beside
@@ -207,9 +207,9 @@ final class SafetyFindingSeverityFidelityCheck {
 			// than a hope.
 			// `statableRating` hands on the dataset's own spelling trimmed, not canonicalised —
 			// `severityRank` lower-cases to RECOGNISE a rating and nothing lower-cases what is
-			// returned — so an operator file writing `Major` and `major` yields two keys for one
-			// rating and pays two walks of the answer for the same question. `statesWord` is
-			// case-insensitive, so this was never a wrong answer, only a wrong bound.
+			// returned — so before this key was folded, an operator file writing `Major` and `major`
+			// gave two keys for one rating and paid two walks of the answer for the same question.
+			// `statesWord` is case-insensitive, so that was never a wrong answer, only a wrong bound.
 			Map<String, Boolean> stated = new HashMap<String, Boolean>();
 			List<String> reasons = new ArrayList<String>();
 			Set<Integer> seen = new LinkedHashSet<Integer>();

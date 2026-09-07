@@ -23,10 +23,6 @@ import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.openmrs.Allergen;
-import org.openmrs.AllergenType;
-import org.openmrs.Allergy;
-import org.openmrs.Concept;
 import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
 import org.apache.logging.log4j.Level;
@@ -91,15 +87,8 @@ public class LlmInferenceServiceFindingProvenanceContextTest extends BaseModuleC
 		Context.getAdministrationService()
 				.setGlobalProperty(ChartSearchAiConstants.GP_DRUG_REFERENCE_ENABLED, "true");
 		patient = Context.getPatientService().getPatient(7);
-		Concept otherNonCoded = Context.getConceptService().getConcept(OTHER_NON_CODED_CONCEPT);
-		Context.getAdministrationService()
-				.setGlobalProperty("allergy.concept.otherNonCoded", otherNonCoded.getUuid());
-		Allergy allergy = new Allergy(patient,
-				new Allergen(AllergenType.DRUG, otherNonCoded, "Ibuprofen"), null, null, null);
-		Context.getPatientService().saveAllergy(allergy);
-		Context.flushSession();
-		Context.clearSession();
-		allergyUuid = allergy.getUuid();
+		allergyUuid = DrugReferenceTestSupport.recordFreeTextAllergy(patient, OTHER_NON_CODED_CONCEPT,
+				"Ibuprofen");
 	}
 
 	private TestableService serviceUnderTest(LlmProvider provider) {
@@ -328,11 +317,12 @@ public class LlmInferenceServiceFindingProvenanceContextTest extends BaseModuleC
 
 		@Override
 		PatientChart buildChart(Patient patient, String question) {
+			// Through the shared helpers, not hand-built: allergyRecord's javadoc carries the querystore
+			// resourceType/uuid contract this whole path joins on, read off the built jar with javap.
+			// A local mapping here would be the one chart production never produces.
 			List<RecordMapping> mappings = Arrays.asList(
-					new RecordMapping(OBS_RECORD, ChartSearchAiConstants.RESOURCE_TYPE_OBS, "obs-uuid-1",
-							null, obsText),
-					new RecordMapping(ALLERGY_RECORD, ChartSearchAiConstants.RESOURCE_TYPE_ALLERGY,
-							allergyUuid, null, allergyText));
+					DrugReferenceTestSupport.obsRecord(OBS_RECORD, obsText),
+					DrugReferenceTestSupport.allergyRecord(ALLERGY_RECORD, allergyUuid, allergyText));
 			return new PatientChart("[" + OBS_RECORD + "] " + obsText + "\n[" + ALLERGY_RECORD + "] "
 					+ allergyText + "\n", mappings, Collections.<Integer> emptyList());
 		}

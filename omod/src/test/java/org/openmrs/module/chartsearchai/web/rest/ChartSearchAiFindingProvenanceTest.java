@@ -24,7 +24,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
-import org.openmrs.User;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -89,13 +88,6 @@ public class ChartSearchAiFindingProvenanceTest {
 		openmrsContext.restore();
 	}
 
-	private static Patient patient() {
-		Patient p = new Patient();
-		p.setPatientId(7);
-		p.setUuid("uuid-7");
-		return p;
-	}
-
 	private List<JsonNode> referencesOf(String eventType) throws Exception {
 		SseEvent event = SseEvents.ofType(out, eventType);
 		assertNotNull(event, "no '" + eventType + "' event was emitted");
@@ -125,7 +117,8 @@ public class ChartSearchAiFindingProvenanceTest {
 
 	@Test
 	public void doneEvent_saysWhichCitationTheModuleAttached() throws Exception {
-		controller.streamAnswer(out, patient(), "can I give ibuprofen?", new User(3), false);
+		controller.streamAnswer(out, RestControllerContext.patient(), "can I give ibuprofen?",
+				RestControllerContext.user(), false);
 
 		assertEquals(Arrays.asList(ATTACHED + ":true", CITED_FINDING + ":false"),
 				attributionOf("done"),
@@ -140,7 +133,8 @@ public class ChartSearchAiFindingProvenanceTest {
 		// The other half of what the key is for. The verifier withholds the verdict because there is no
 		// claim of the model's to check; on the wire that is indistinguishable from "could not verify",
 		// and the key is what tells a client which it is reading.
-		controller.streamAnswer(out, patient(), "can I give ibuprofen?", new User(3), false);
+		controller.streamAnswer(out, RestControllerContext.patient(), "can I give ibuprofen?",
+				RestControllerContext.user(), false);
 
 		JsonNode attached = referencesOf("done").get(0);
 		assertEquals(ATTACHED, attached.get("index").asInt(), "precondition: the attached record first");
@@ -152,7 +146,8 @@ public class ChartSearchAiFindingProvenanceTest {
 	public void referencesEvent_saysTheSameThingAsDone() throws Exception {
 		// The early event is what a client renders while Tier-2 verification is still running, so a
 		// chip whose attribution only arrives with the answer would relabel itself mid-render.
-		controller.streamAnswer(out, patient(), "can I give ibuprofen?", new User(3), false);
+		controller.streamAnswer(out, RestControllerContext.patient(), "can I give ibuprofen?",
+				RestControllerContext.user(), false);
 
 		assertEquals(attributionOf("done"), attributionOf("references"),
 				"the early references event must carry the same attribution as done");
@@ -163,7 +158,8 @@ public class ChartSearchAiFindingProvenanceTest {
 		// Its own serializeReferences call site, and the only one a client consuming verdicts has to
 		// read. With literals rather than a comparison against done, because "identical to done" is
 		// also satisfied by both sites dropping the key together.
-		controller.streamAnswer(out, patient(), "can I give ibuprofen?", new User(3), true);
+		controller.streamAnswer(out, RestControllerContext.patient(), "can I give ibuprofen?",
+				RestControllerContext.user(), true);
 
 		assertEquals(Arrays.asList(ATTACHED + ":true", CITED_FINDING + ":false"),
 				attributionOf("grounded"),

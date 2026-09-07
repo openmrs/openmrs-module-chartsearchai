@@ -85,24 +85,15 @@ public class FindingChartRecordProvenanceContextTest extends BaseModuleContextSe
 
 	/**
 	 * Saves a recorded allergy to {@code allergen}, as free text — the shape a clinician types, and
-	 * the one whose token {@code PatientClinicalContextBuilder.addRaw} collects. A free-text allergen
-	 * still needs a coded allergen (the column is not-null and {@code AllergyValidator} requires it to
-	 * BE the {@code allergy.concept.otherNonCoded} concept), so one is nominated here exactly as
-	 * {@code NonCodedDrugOrderNameTest} does.
+	 * the one whose token {@code PatientClinicalContextBuilder.addRaw} collects. Through the shared
+	 * fixture, which carries why a free-text allergen needs a coded one behind it.
 	 *
 	 * @return the saved {@code Allergy}'s uuid, which is what a querystore {@code allergy} chart
 	 *         record carries as its resource uuid
 	 */
 	private String recordAllergyTo(String allergen) {
-		Concept otherNonCoded = Context.getConceptService().getConcept(OTHER_NON_CODED_CONCEPT);
-		Context.getAdministrationService()
-				.setGlobalProperty("allergy.concept.otherNonCoded", otherNonCoded.getUuid());
-		Allergy allergy = new Allergy(patient,
-				new Allergen(AllergenType.DRUG, otherNonCoded, allergen), null, null, null);
-		Context.getPatientService().saveAllergy(allergy);
-		Context.flushSession();
-		Context.clearSession();
-		return allergy.getUuid();
+		return DrugReferenceTestSupport.recordFreeTextAllergy(patient, OTHER_NON_CODED_CONCEPT,
+				allergen);
 	}
 
 	/**

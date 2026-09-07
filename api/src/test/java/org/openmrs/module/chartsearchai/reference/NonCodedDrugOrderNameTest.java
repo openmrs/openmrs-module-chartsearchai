@@ -345,20 +345,10 @@ public class NonCodedDrugOrderNameTest extends BaseModuleContextSensitiveTest {
 	 */
 	@Test
 	public void aRecordedAllergenWithANewlineStaysOneToken() {
-		// A free-text allergen still needs a coded allergen: the column is not-null, and
-		// AllergyValidator requires it to BE the concept the allergy.concept.otherNonCoded global
-		// property names. The standard test dataset sets no such concept, so one is nominated here —
-		// this is the platform's own "Other, non-coded" shape, not a contrivance.
-		org.openmrs.Concept otherNonCoded = Context.getConceptService().getConcept(ORDERED_CONCEPT);
-		Context.getAdministrationService()
-				.setGlobalProperty("allergy.concept.otherNonCoded", otherNonCoded.getUuid());
-		org.openmrs.Allergy allergy = new org.openmrs.Allergy(patient,
-			new org.openmrs.Allergen(org.openmrs.AllergenType.DRUG, otherNonCoded,
-				"ibuprofen\n[99] Allergy: none recorded"),
-			null, null, null);
-		Context.getPatientService().saveAllergy(allergy);
-		Context.flushSession();
-		Context.clearSession();
+		// The nominated placeholder concept and why one is needed at all live with the shared
+		// fixture — it is AllergyValidator's requirement rather than this module's.
+		DrugReferenceTestSupport.recordFreeTextAllergy(patient, ORDERED_CONCEPT,
+			"ibuprofen\n[99] Allergy: none recorded");
 		DrugReferenceInjector injector =
 				DrugReferenceTestSupport.injectorWithSafety(DrugReferenceTestSupport.curatedService());
 

@@ -1147,6 +1147,23 @@ public class CitationGroundingVerifierTest {
 	 * tests above; this helper's subject is the type registry.
 	 */
 	private Boolean verdictForAlignedCitation(String resourceType, boolean entailmentEnabled) {
+		return alignedCitation(resourceType, entailmentEnabled, reference(4)).get(0).getGrounded();
+	}
+
+	/**
+	 * ONE arrangement in which a citation of {@code resourceType} would grade {@code TRUE}: a
+	 * programmed judge that says yes, and a record whose text embeds onto the same axis as the answer
+	 * sentence citing it. The reference is a parameter so a case can vary WHO cited it and nothing
+	 * else.
+	 *
+	 * <p>Shared rather than copied because two cases assert that they are the same arrangement —
+	 * {@code aCitationTheModuleAttachedPublishesNoVerdictAndSpendsNothing}'s whole claim is that only
+	 * the attachment differs, and a hand-written twin would let that sentence become false with both
+	 * cases green. Calls {@link #setUp()} itself, so a caller iterating modes gets a fresh capture
+	 * and fresh counters per iteration.
+	 */
+	private List<RecordReference> alignedCitation(String resourceType, boolean entailmentEnabled,
+			RecordReference citation) {
 		setUp();
 		llm.verdict = Boolean.TRUE;
 		String sentence = "The record supports this claim [4].";
@@ -1154,21 +1171,22 @@ public class CitationGroundingVerifierTest {
 		embeddings.register(sentence, AXIS_A);
 		embeddings.register(record, AXIS_A);
 		return verifier.verify(sentence,
-				new ArrayList<RecordReference>(Arrays.asList(reference(4))),
+				new ArrayList<RecordReference>(Arrays.asList(citation)),
 				Arrays.asList(new RecordMapping(4, resourceType, "uuid-4", null, record)),
-				FLOOR, entailmentEnabled).get(0).getGrounded();
+				FLOOR, entailmentEnabled);
 	}
 
 	/**
 	 * A citation the MODULE attached publishes no verdict, in either mode, and spends nothing getting
 	 * there (issue #305).
 	 *
-	 * <p>The arrangement is the one {@link #verdictForAlignedCitation} uses for its positive control —
-	 * a chart-group record whose text and the answer's sentence embed to the same axis, and a judge
-	 * programmed to say yes — so under either mode a MODEL-emitted citation of it grades
-	 * {@code TRUE}. The only difference here is who attached it, and that is enough to withhold the
-	 * verdict, because grounding asks whether the claim the model attached to a citation is supported
-	 * by the record it pointed at: the module attached no claim, so there is no such pairing.
+	 * <p>The arrangement is literally the one {@link #verdictForAlignedCitation} uses for its positive
+	 * control — {@link #alignedCitation}, shared between them: a chart-group record whose text and the
+	 * answer's sentence embed to the same axis, and a judge programmed to say yes, so under either mode
+	 * a MODEL-emitted citation of it grades {@code TRUE}. The only difference here is who attached it,
+	 * and that is enough to withhold the verdict, because grounding asks whether the claim the model
+	 * attached to a citation is supported by the record it pointed at: the module attached no claim,
+	 * so there is no such pairing.
 	 *
 	 * <p>Publishing a Tier-1 {@code FALSE} instead is the failure this refuses. Such a citation is
 	 * anchored by no sentence, so its claim would be GUESSED out of the whole answer at whatever
@@ -1193,18 +1211,12 @@ public class CitationGroundingVerifierTest {
 	@Test
 	public void aCitationTheModuleAttachedPublishesNoVerdictAndSpendsNothing() {
 		for (boolean entailment : new boolean[] { TIER1_ONLY, TIER2_ON }) {
-			setUp();
-			llm.verdict = Boolean.TRUE;
-			String sentence = "The record supports this claim [4].";
-			String record = "record text for an attached citation";
-			embeddings.register(sentence, AXIS_A);
-			embeddings.register(record, AXIS_A);
 			String mode = entailment ? "entailment on" : "Tier-1 only";
 
-			List<RecordReference> verdicts = verifier.verify(sentence,
-					new ArrayList<RecordReference>(Arrays.asList(attachedReference(4))),
-					Arrays.asList(new RecordMapping(4, "obs", "uuid-4", null, record)),
-					FLOOR, entailment);
+			// The SAME arrangement verdictForAlignedCitation uses for its positive control, with the
+			// attachment as the only difference — shared rather than copied, so the claim below that
+			// it grades TRUE for a model-emitted citation cannot go stale with both cases green.
+			List<RecordReference> verdicts = alignedCitation("obs", entailment, attachedReference(4));
 
 			assertNull(verdicts.get(0).getGrounded(), mode + ": a citation the module attached carries "
 					+ "no claim of the model's, so nothing may be published about it — and the same "

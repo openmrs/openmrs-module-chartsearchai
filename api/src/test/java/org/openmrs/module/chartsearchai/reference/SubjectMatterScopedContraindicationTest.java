@@ -49,8 +49,10 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * <p><b>What this deliberately gives up</b>, recorded so it is not rediscovered as a bug: a
  * prescribing error nobody ever asks a drug-shaped question about is no longer announced. That is
  * not a safety net this module can honestly carry — it has no subscription, no acknowledgement and
- * no delivery path that opens unprompted — and the finding belongs on a surface that has them
- * (order entry, a chart banner, CDS hooks). See the rewritten case in
+ * no delivery path that opens unprompted — and since issue #280 the finding is served by a surface
+ * that does not need them, {@code GET /chartsearchai/chartalerts}, which a client ASKS for rather
+ * than one that opens on its own ({@link StandingChartAlertsTest}). Acknowledgement state is still
+ * elsewhere (order entry, a chart banner, CDS hooks). See the rewritten case in
  * {@link ActiveOrderContraindicationTest}, which is where this reverses a documented decision.
  *
  * <p>Every case drives the real {@code DrugSafetyValidator.validate} with real querystore-shaped chart
@@ -64,7 +66,9 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  */
 public class SubjectMatterScopedContraindicationTest {
 
-	private static final String IBUPROFEN_ORDER = "Ibuprofen 400mg";
+	/** The order name as a chart carries it — the shared one, so this class and the standing surface
+	 *  cannot come to measure two charts spelled alike. */
+	private static final String IBUPROFEN_ORDER = DrugReferenceTestSupport.IBUPROFEN_ORDER;
 
 	/** The order record the patient's chart carries, and the one an answer about her medications cites. */
 	private static final RecordMapping ORDER_RECORD =
@@ -110,8 +114,7 @@ public class SubjectMatterScopedContraindicationTest {
 
 	private static PatientClinicalContext ctx(java.util.Set<String> allergies,
 			java.util.Set<String> conditions) {
-		return DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set(IBUPROFEN_ORDER),
-				null, allergies, conditions);
+		return DrugReferenceTestSupport.prescribedIbuprofenChart(allergies, conditions);
 	}
 
 	/**
@@ -147,13 +150,7 @@ public class SubjectMatterScopedContraindicationTest {
 	}
 
 	private static List<SafetyWarning> contraindications(List<SafetyWarning> warnings) {
-		List<SafetyWarning> out = new ArrayList<SafetyWarning>();
-		for (SafetyWarning warning : warnings) {
-			if (SafetyWarning.TYPE_CONTRAINDICATION.equals(warning.getType())) {
-				out.add(warning);
-			}
-		}
-		return out;
+		return DrugReferenceTestSupport.contraindications(warnings);
 	}
 
 	@Test

@@ -344,11 +344,14 @@ public class SafetyWarning {
 	 * clause left {@code thePairChipsAreOrderedBySeverityAndBounded} green while it asserted nothing at
 	 * all.
 	 *
-	 * <p><b>Published on the wire since issue #340</b>, as the {@code severity} key of every
-	 * {@code safetyWarnings} chip — on the blocking {@code /search} response and on both SSE events
-	 * that carry chips, since all three reach
-	 * {@code ChartSearchAiRestController.serializeSafetyWarnings} through the one
-	 * {@code putSafetyChips} payload writer. Verbatim and UNNORMALIZED, which is
+	 * <p><b>Published on the wire since issue #340</b>, as the {@code severity} key of every chip this
+	 * module serializes — the blocking {@code /search} response and both SSE events that carry
+	 * chips, which reach {@code ChartSearchAiRestController.serializeSafetyWarnings} through the one
+	 * {@code putSafetyChips} payload writer, and since issue #280 the {@code alerts} array of
+	 * {@code GET /chartsearchai/chartalerts}, which reaches that same serializer WITHOUT
+	 * {@code putSafetyChips} because it carries no answer to state an interaction extent about.
+	 * The field is therefore read the same way on every surface — always present, {@code null} on a
+	 * contraindication, which is what every standing alert is. Verbatim and UNNORMALIZED, which is
 	 * deliberate rather than lazy: the field is the dataset's rating, and coercing it would put the
 	 * wire at odds with the very prose a client is being told to stop parsing. What it publishes is the
 	 * SOURCE's rating, not this module's judgment about what may be done — which is the separate thing

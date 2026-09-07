@@ -233,10 +233,14 @@ public class ChartSearchAiInteractionPairExtentTest {
 	@Test
 	public void noEmissionSiteCanPublishChipsWithoutSayingHowBoundedTheyAre() throws Exception {
 		// Structural, and it is what makes the three cases above hold for a site nobody has written
-		// yet: the chips and the statement about them are written by ONE method, so a fourth payload
+		// yet: an ANSWER's chips and the statement about them are written by ONE method, so a payload
 		// added later cannot carry one and forget the other. Two payload sites kept in step by hand
 		// is the condition the search_mode column's own comment records as having held one value for
 		// 6036 rows.
+		// Since issue #280 the file also carries a surface that publishes chips with no answer behind
+		// them — the standing chart alerts — which is why the third naming below is pinned to that
+		// handler's own body rather than merely counted. It raises no interaction chip, so it has no
+		// extent to state; routing it through putSafetyChips would assert a screen that never ran.
 		// Through ChartSearchAiStreamingTest's resolver, not a second one of our own: it is taught
 		// both layouts and asserts the file was found. A guard that silently cannot read its subject
 		// passes, which is the failure that resolver's own javadoc exists to prevent.
@@ -249,10 +253,33 @@ public class ChartSearchAiInteractionPairExtentTest {
 				"the safetyWarnings key must be written in exactly one place, beside the statement of "
 						+ "how bounded those chips are (issue #336). Found " + keys + " writes of it.");
 		int calls = ChartSearchAiStreamingTest.occurrences(source, "serializeSafetyWarnings(");
-		assertEquals(2, calls,
-				"serializeSafetyWarnings must be named exactly twice — its own declaration and the one "
-						+ "call inside putSafetyChips. A third naming is an emission site building the "
-						+ "chip array for itself. Found " + calls + ".");
+		assertEquals(3, calls,
+				"serializeSafetyWarnings must be named exactly three times — its own declaration, the "
+						+ "call inside putSafetyChips, and the one inside chartAlerts. A fourth naming "
+						+ "is an emission site building the chip array for itself. Found " + calls + ".");
+		// The third naming, pinned to the body it belongs in rather than left to the count. Issue #280
+		// added a consumer that is NOT an answer emission site — the standing chart-alert surface,
+		// which raises no interaction chip and so has no extent to state — and a bare 3 would license
+		// any third caller, including an answer site that had dropped the statement. Scoped for the
+		// same reason the putSafetyChips assertion below is: measured on this very guard, a file-wide
+		// read let a chips-writer/extent-writer split pass green.
+		assertTrue(bodyOf(source, "public ResponseEntity<Object> chartAlerts(")
+				.contains("serializeSafetyWarnings("),
+				"the third naming must be the standing chart-alert surface's own; a third caller "
+						+ "elsewhere is an answer payload building the chip array without the statement "
+						+ "of how bounded those chips are (issue #336).");
+		// And the completeness statement itself is written ONCE, which the count above does not say.
+		// Licensing a second chips site licenses nothing about what that site publishes BESIDE the
+		// chips: measured by a review agent, adding an interactionPairs of {found:0, reported:0} to
+		// chartAlerts — a payload asserting a complete screen of zero pairs on a surface that ran no
+		// screen at all, which is exactly what putSafetyChips's javadoc says routing it there would
+		// assert — left this class and the whole omod suite green. A surface with no interaction chips
+		// has no extent to state, and a zeroed one is a measurement it did not make.
+		int extents = ChartSearchAiStreamingTest.occurrences(source, "\"interactionPairs\"");
+		assertEquals(1, extents,
+				"the interactionPairs key must be written in exactly one place — beside the chips it is "
+						+ "about, in putSafetyChips. Found " + extents + " writes of it; a second is a "
+						+ "payload stating how bounded an interaction list it never built (issue #280).");
 		// Scoped to putSafetyChips's OWN BODY, not to the file: asked of the whole source, both
 		// literals keep matching once they live in two different methods, so splitting the helper into
 		// a chips-writer and an extent-writer passed the guard whose message forbids exactly that

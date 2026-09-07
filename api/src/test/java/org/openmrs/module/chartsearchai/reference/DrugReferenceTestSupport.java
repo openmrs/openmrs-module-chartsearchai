@@ -798,7 +798,53 @@ public final class DrugReferenceTestSupport {
 	static PatientClinicalContext unreadableRecordsCtx(Integer age, Double weightKg) {
 		return new PatientClinicalContext(age, weightKg, Collections.<String> emptySet(),
 				Collections.<String> emptySet(), Collections.<String> emptySet(),
-				Collections.<String> emptySet(), null, null, false);
+				Collections.<String> emptySet(), null, null, false, true);
+	}
+
+	/**
+	 * As {@link #unreadableRecordsCtx}, but carrying the patient's active orders — the shape the
+	 * builder produces when {@code getActiveOrders} SUCCEEDS and the allergy or condition read throws.
+	 *
+	 * <p>It exists because it is the only arrangement that reaches
+	 * {@code PatientClinicalContext.withActiveDrugReferenceNames}: {@code withReferenceNames} returns
+	 * the context untouched when no order resolves a reference entry, so a chart with no orders cannot
+	 * exercise the copy at all, whatever its stamps say.
+	 */
+	static PatientClinicalContext unreadableRecordsCtxWithOrders(Set<String> drugs) {
+		return new PatientClinicalContext(60, null, drugs, Collections.<String> emptySet(),
+				Collections.<String> emptySet(), Collections.<String> emptySet(), null, null, false,
+				true);
+	}
+
+	/**
+	 * As {@link #unreadableOrdersCtx}, but carrying the orders the builder had already collected when
+	 * the read threw — the shape its SINGLE {@code try} around the whole order loop actually produces,
+	 * and the one that reaches {@code PatientClinicalContext.withActiveDrugReferenceNames}.
+	 *
+	 * <p>It exists because a review agent ran the real builder against an order list that throws
+	 * partway through iteration and got exactly this: {@code activeDrugOrdersRead=false} WITH a
+	 * populated order list. An earlier javadoc here called that unreachable and told the next
+	 * maintainer not to pin the stamp's carry; it was reachable, and the carry was unpinned.
+	 */
+	static PatientClinicalContext partiallyReadOrdersCtx(Set<String> drugs) {
+		return new PatientClinicalContext(60, null, drugs, Collections.<String> emptySet(),
+				Collections.<String> emptySet(), Collections.<String> emptySet(), null, null, true,
+				false);
+	}
+
+	/**
+	 * As {@link #ctx}, but for a context whose ACTIVE-ORDER read FAILED — the shape
+	 * {@link PatientClinicalContextBuilder} produces when {@code getActiveOrders} throws and it
+	 * degrades that dimension to an empty list. The order sets are empty for exactly that reason,
+	 * which is why they are not arguments; the allergy and condition tokens ARE, because that read
+	 * succeeded and this is the shape where the two flags disagree.
+	 */
+	static PatientClinicalContext unreadableOrdersCtx(Set<String> allergies, Set<String> conditions) {
+		return new PatientClinicalContext(60, null, Collections.<String> emptySet(),
+				Collections.<String> emptySet(),
+				allergies == null ? Collections.<String> emptySet() : allergies,
+				conditions == null ? Collections.<String> emptySet() : conditions, null, null, true,
+				false);
 	}
 
 	/** As {@link #ctx}, additionally carrying the identified active drug orders the
@@ -1158,6 +1204,47 @@ public final class DrugReferenceTestSupport {
 		}
 		return out;
 	}
+
+	/**
+	 * @return the contraindication chips of {@code warnings}, in order — the WARNINGS themselves, where
+	 *         {@link #contraindicationDetails} answers with their sentences. Two questions, two
+	 *         accessors: a case counting chips must not have to go through a list of strings, and a
+	 *         case comparing wording must not have to reach into a warning.
+	 *
+	 *         <p>Here for the reason that method's javadoc gives, and this one had reached THREE copies
+	 *         before it was extracted ({@code ActiveOrderContraindicationTest},
+	 *         {@code SubjectMatterScopedContraindicationTest}, {@code StandingChartAlertsTest}) —
+	 *         which is past the threshold that method deferred, so all three are migrated here rather
+	 *         than a fourth being added beside them.
+	 */
+	static List<SafetyWarning> contraindications(List<SafetyWarning> warnings) {
+		List<SafetyWarning> out = new ArrayList<SafetyWarning>();
+		for (SafetyWarning warning : warnings) {
+			if (SafetyWarning.TYPE_CONTRAINDICATION.equals(warning.getType())) {
+				out.add(warning);
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * The chart issue #280 is specified on, and the one {@code ActiveOrderContraindicationTest} and
+	 * {@code SubjectMatterScopedContraindicationTest} measure the ANSWER surface on: one active
+	 * ibuprofen order, plus whatever the case records against it. All three call this, and their own
+	 * {@code IBUPROFEN_ORDER} constants read {@link #IBUPROFEN_ORDER} rather than respelling it — so
+	 * the surfaces are compared over ONE chart, which is the whole force of
+	 * {@code StandingChartAlertsTest.theAnswerSurfaceStillWithholdsTheSameFindingFromAResponseAboutSomethingElse}.
+	 * Sharpen this fixture and every one of them moves with it.
+	 *
+	 * @param allergies recorded allergy tokens, or null for none
+	 * @param conditions recorded condition tokens, or null for none
+	 */
+	static PatientClinicalContext prescribedIbuprofenChart(Set<String> allergies, Set<String> conditions) {
+		return ctx(60, null, set(IBUPROFEN_ORDER), null, allergies, conditions);
+	}
+
+	/** The order name as a chart carries it, and what {@code getActiveDrugNames} holds. */
+	static final String IBUPROFEN_ORDER = "Ibuprofen 400mg";
 
 	/**
 	 * The {@code Interactions:} section of a rendered record, lowercased — everything from the header

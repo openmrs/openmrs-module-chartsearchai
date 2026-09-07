@@ -490,7 +490,7 @@ Run on **Margaret Holloway** (`dkb00000-0000-0000-0000-000000000001`) unless not
 > chart already contains, and the ANSWER's wording alone should not hide it — a prescribed drug turns
 > up in a cited `drug_order` record, which is exactly what echo scoping was reading as a recitation.
 > What the module deliberately no longer does is announce it on a response about something else; that
-> finding needs a surface with acknowledgement
+> finding needs a surface of its own, which is `GET /chartsearchai/chartalerts`
 > ([#280](https://github.com/openmrs/openmrs-module-chartsearchai/issues/280)).
 
 | Query | Expected `safetyWarnings` / injection |

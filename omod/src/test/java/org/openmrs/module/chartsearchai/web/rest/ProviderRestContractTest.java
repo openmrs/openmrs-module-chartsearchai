@@ -34,6 +34,9 @@ import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
+import org.openmrs.module.chartsearchai.api.ChartSearchService;
+import org.openmrs.module.chartsearchai.reference.DrugReferenceLoad;
+import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.openmrs.module.chartsearchai.api.conversation.ConversationService;
 import org.openmrs.module.chartsearchai.api.conversation.PriorClinicalTurn;
 import org.openmrs.module.chartsearchai.api.provider.AnswerEnvelope;
@@ -93,6 +96,49 @@ public class ProviderRestContractTest {
 		assertEquals("chartsearchai.hub.endpointUrl is not set",
 				providers.get(1).get("unavailableReason"));
 		assertFalse((Boolean) providers.get(1).get("default"));
+	}
+
+	/**
+	 * The legacy {@code /search/stream} publishes the module's answer-limit statements through
+	 * {@code putModuleStatements}; the provider stream must publish the same for the bundled
+	 * provider, on the wire and in the persisted turn, or a client reading only the provider
+	 * stream loses every one of them.
+	 */
+	@Test
+	public void bundledTurnPayloadsCarryTheModulesAnswerLimitStatements() throws Exception {
+		ChartSearchAiRestController controller = new ChartSearchAiRestController();
+		RecordingConversationService conversations = new RecordingConversationService();
+		ScriptedProvider provider = new ScriptedProvider("bundled", true);
+		ChartSearchService.ChartAnswer source = new ChartSearchService.ChartAnswer("Aspirin 81mg.",
+				Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
+				Collections.<SafetyWarning> emptyList(), "queryScoped", null, null, null, null,
+				Arrays.asList(3), Arrays.asList(2), new ChartSearchService.ActiveOrderClaims(2, 1),
+				DrugReferenceLoad.Coverage.PUBLISHED, "checked");
+		AnswerEnvelope envelope = AnswerEnvelope.fromPayload(answerPayload("Aspirin 81mg."), source);
+		provider.events = Arrays.asList(
+				TurnEvent.of(TurnEventType.TURN_STARTED, 0, "bundled"),
+				TurnEvent.withAnswer(TurnEventType.ANSWER_DONE, 1, "bundled", envelope),
+				TurnEvent.withAnswer(TurnEventType.TURN_DONE, 2, "bundled", envelope));
+		provider.result = TurnResult.done("bundled", ProviderMode.QUERY_SCOPED, envelope);
+		controller.setConversationService(conversations);
+		controller.setProviderRegistry(stubRegistry(provider));
+
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		controller.streamProviderTurn(out, patient(), "What meds?", "bundled",
+				ProviderMode.QUERY_SCOPED, null, null);
+
+		for (String type : Arrays.asList("answer_done", "turn_done")) {
+			JsonNode payload = ssePayload(out, type);
+			assertEquals(3, payload.path("misattributedOrderCitations").get(0).asInt(), type);
+			assertEquals(2, payload.path("unstatedFindingSeverities").get(0).asInt(), type);
+			assertEquals(2, payload.path("activeOrderClaims").path("stated").asInt(), type);
+			assertEquals(1, payload.path("activeOrderClaims").path("uncited").asInt(), type);
+			assertEquals("published", payload.path("conditionRuleCoverage").asText(), type);
+			assertTrue(payload.has("interactionPairs"),
+					type + " must state interactionPairs even when none was measured");
+		}
+		assertEquals(Arrays.asList(3), conversations.lastFinishedPayload.get("misattributedOrderCitations"));
+		assertEquals("published", conversations.lastFinishedPayload.get("conditionRuleCoverage"));
 	}
 
 	@Test

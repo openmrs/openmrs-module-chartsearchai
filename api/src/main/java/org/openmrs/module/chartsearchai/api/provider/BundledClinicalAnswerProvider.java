@@ -339,7 +339,7 @@ public class BundledClinicalAnswerProvider implements ClinicalAnswerProvider {
 		payload.put("inputTokens", answer.getInputTokens());
 		payload.put("outputTokens", answer.getOutputTokens());
 		payload.put("cachedTokens", answer.getCachedTokens());
-		return AnswerEnvelope.fromPayload(payload);
+		return AnswerEnvelope.fromPayload(payload, answer);
 	}
 
 	private ProviderMode configuredMode() {

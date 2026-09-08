@@ -13,6 +13,8 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
+
 /**
  * Provider-neutral answer content carried by {@link TurnEvent} and {@link TurnResult}.
  *
@@ -32,9 +34,13 @@ public final class AnswerEnvelope {
 
 	private final Map<String, Object> payload;
 
-	private AnswerEnvelope(String text, Map<String, Object> payload) {
+	/** The bundled pipeline's answer this envelope was built from, or null for a relayed provider. */
+	private final ChartAnswer source;
+
+	private AnswerEnvelope(String text, Map<String, Object> payload, ChartAnswer source) {
 		this.text = text;
 		this.payload = Collections.unmodifiableMap(new LinkedHashMap<>(payload));
+		this.source = source;
 	}
 
 	/**
@@ -46,7 +52,17 @@ public final class AnswerEnvelope {
 		if (payload == null || !(payload.get("answer") instanceof String)) {
 			throw new IllegalArgumentException("Provider answer payload must contain textual 'answer'");
 		}
-		return new AnswerEnvelope((String) payload.get("answer"), payload);
+		return new AnswerEnvelope((String) payload.get("answer"), payload, null);
+	}
+
+	/**
+	 * As {@link #fromPayload(Map)}, keeping the {@link ChartAnswer} the payload was projected from so a
+	 * consumer that owns the module's wire serializers can publish its statements without a second
+	 * derivation. Relayed providers have no such answer and pass none.
+	 */
+	public static AnswerEnvelope fromPayload(Map<String, Object> payload, ChartAnswer source) {
+		AnswerEnvelope envelope = fromPayload(payload);
+		return new AnswerEnvelope(envelope.text, envelope.payload, source);
 	}
 
 	/** Canonical final prose used for display, conversation replay, and audit. */
@@ -59,5 +75,10 @@ public final class AnswerEnvelope {
 	 */
 	public Map<String, Object> getPayload() {
 		return payload;
+	}
+
+	/** @return the bundled answer behind this envelope, or null for a relayed one */
+	public ChartAnswer getSource() {
+		return source;
 	}
 }

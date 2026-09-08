@@ -1272,7 +1272,7 @@ public class ChartSearchAiRestController {
 									return;
 								}
 								try {
-									writeTurnEventOrThrow(out, event, activeConversation, turn);
+									writeTurnEventOrThrow(out, withModuleStatements(event), activeConversation, turn);
 								}
 								catch (RuntimeException e) {
 									activeCancellation.cancel();
@@ -1282,7 +1282,7 @@ public class ChartSearchAiRestController {
 							cancellation)
 					.toCompletableFuture().get();
 			long responseTimeMs = (System.nanoTime() - startNs) / 1_000_000L;
-			conversationService.finishTurn(turn, result, responseTimeMs);
+			conversationService.finishTurn(turn, withModuleStatements(result), responseTimeMs);
 		}
 		catch (Exception e) {
 			if (e.getCause() instanceof IOException) {
@@ -1335,6 +1335,40 @@ public class ChartSearchAiRestController {
 			return requestedMode;
 		}
 		return provider.modes().isEmpty() ? ProviderMode.QUERY_SCOPED : provider.modes().get(0);
+	}
+
+	/**
+	 * A bundled envelope projects only what the api module can serialize. The module's answer-limit
+	 * statements ({@code misattributedOrderCitations}, {@code unstatedFindingSeverities},
+	 * {@code conditionRuleCoverage}, {@code interactionPairs}, {@code activeOrderClaims}) and the wire
+	 * shape of the safety chips live in this controller's serializers, which {@code /search} and
+	 * {@code /search/stream} publish through {@link #putModuleStatements}. Publish them here too, once,
+	 * from the {@link ChartAnswer} the envelope carries, so the provider stream and the persisted turn
+	 * state the same facts as the legacy stream. A relayed provider's envelope carries no source and
+	 * passes through unchanged.
+	 */
+	private AnswerEnvelope withModuleStatements(AnswerEnvelope envelope) {
+		if (envelope == null || envelope.getSource() == null) {
+			return envelope;
+		}
+		Map<String, Object> payload = new LinkedHashMap<String, Object>(envelope.getPayload());
+		putModuleStatements(payload, envelope.getSource());
+		return AnswerEnvelope.fromPayload(payload, envelope.getSource());
+	}
+
+	private TurnEvent withModuleStatements(TurnEvent event) {
+		if (event.getAnswer() == null || event.getAnswer().getSource() == null) {
+			return event;
+		}
+		return TurnEvent.withAnswer(event.getType(), event.getSequence(), event.getProviderId(),
+				withModuleStatements(event.getAnswer()));
+	}
+
+	private TurnResult withModuleStatements(TurnResult result) {
+		if (result.getAnswer() == null || result.getAnswer().getSource() == null) {
+			return result;
+		}
+		return TurnResult.done(result.getProviderId(), result.getMode(), withModuleStatements(result.getAnswer()));
 	}
 
 	private void writeTurnEventOrThrow(OutputStream out, TurnEvent event,

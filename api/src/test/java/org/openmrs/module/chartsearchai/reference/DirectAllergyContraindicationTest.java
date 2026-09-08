@@ -164,7 +164,7 @@ public class DirectAllergyContraindicationTest {
 		// single-allergen absence cases either side of this one catch it: they pass one allergen, so
 		// nothing is ever queued.
 		//
-		// WHAT MOVED (issue #388): this used to record "1 chip on this build, 0 with the guard's
+		// WHAT MOVED (issue #388): this used to record "1 on this build, 0 with the guard's
 		// `continue` changed to `return`". That mutation no longer moves anything — ADR Decision 82
 		// says why — so what this case pins is the behaviour and not the keyword: the allergen listed
 		// after an unrelated one is still compared. Measured pre-#135-fix: 0 chips.

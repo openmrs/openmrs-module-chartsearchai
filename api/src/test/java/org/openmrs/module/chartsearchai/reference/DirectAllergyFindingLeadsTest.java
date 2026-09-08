@@ -26,11 +26,25 @@ import org.junit.jupiter.api.Test;
  * the ordering does and does not reach are ADR Decision 82; nothing of that argument is restated
  * here. What the cases below add to it is the arrangement each one drives.
  *
- * <p><b>The fixture</b> is the verbatim DDInter excerpt {@code ddi-unclassified-allergen.json}, whose
- * {@code Ciprofloxacin} and {@code Levofloxacin} rows are the real dataset's — so the class comparison
- * here is the one the shipped knowledge base makes, and {@code DirectAllergyContraindicationTest}'s
- * javadoc is where that pair's subgroups and the reason {@code (J01MA)} is the one printed are
- * recorded.
+ * <p><b>Both cross-reactivity arms are driven</b>, the ATC-class comparison and the curated-group
+ * one, because {@code README.md} states the lead over each of them alike and the nested
+ * {@code CLAUDE.md} bullet states it as one rule. They need different data, so there are two
+ * fixtures.
+ *
+ * <p><b>The class arm's fixture</b> is the verbatim DDInter excerpt
+ * {@code ddi-unclassified-allergen.json}, whose {@code Ciprofloxacin} and {@code Levofloxacin} rows
+ * are the real dataset's — so the class comparison here is the one the shipped knowledge base makes,
+ * and {@code DirectAllergyContraindicationTest}'s javadoc is where that pair's subgroups and the
+ * reason {@code (J01MA)} is the one printed are recorded.
+ *
+ * <p><b>The curated arm's fixture</b> is the pinned DDInter excerpt, through
+ * {@code DrugReferenceTestSupport.ddinterServiceWithGroups()}. A different slice and not a different
+ * loader — both services carry the real bundled cross-reactivity groups — because what the class
+ * arm's slice has not got is a PAIR a curated group relates. The bundled data has one group,
+ * {@code NSAID}, spanning {@code M01AE} and {@code N02BA}, and this excerpt's {@code Ibuprofen} and
+ * {@code Acetylsalicylic acid} rows share it while sharing no ATC subgroup — which is what makes the
+ * class comparison decline and {@link CrossReactivityGroup#sharedGroup(java.util.List, DrugReference)}
+ * the comparison that answers.
  */
 public class DirectAllergyFindingLeadsTest {
 
@@ -46,6 +60,15 @@ public class DirectAllergyFindingLeadsTest {
 	/** The active order's display, and what {@code getActiveDrugNames} holds for it. */
 	private static final String PRESCRIPTION = "Ciprofloxacin 500mg";
 
+	/** The curated arm's question — the excerpt's {@code Ibuprofen} is what it puts in play. */
+	private static final String GROUP_QUESTION = "Is it safe to give her ibuprofen?";
+
+	private static final String GROUP_IDENTITY = "The patient has a recorded allergy to Ibuprofen.";
+
+	private static final String CROSS_REACTIVITY_GROUP = "Ibuprofen is in the same cross-reactivity"
+			+ " group (NSAID) as the patient's allergy to Acetylsalicylic acid (aspirin) — possible"
+			+ " cross-reactivity";
+
 	@Test
 	public void theDirectAllergyLeadsWhereTheChartRecordedTheClassAllergenFirst() throws IOException {
 		// THE case, and the one that fails before the fix: the class-related allergen is the chart's
@@ -60,6 +83,32 @@ public class DirectAllergyFindingLeadsTest {
 		// before the fix as well as after it, deliberately: it is what says the change made the lead
 		// independent of the chart's record order rather than dependent on it the other way round.
 		assertLeadsWithTheDirectAllergy(DrugReferenceTestSupport.set("Ciprofloxacin", "Levofloxacin"));
+	}
+
+	@Test
+	public void theDirectAllergyLeadsOverACuratedGroupWhereTheChartRecordedTheGroupAllergenFirst() {
+		// THE curated-arm case, and one no ATC-class case in this file can reach — its slice carries no
+		// code under either of the NSAID group's prefixes, so nothing in it relates through a curated
+		// group at all. Here the excerpt's aspirin and ibuprofen rows share the bundled NSAID group and
+		// no ATC subgroup, so the class comparison declines and CrossReactivityGroup.sharedGroup is
+		// what raises the chip. The group-related allergen is the chart's first record, so before the
+		// fix the single-pass walk raised its group chip ahead of the identity question about the
+		// second record — and it is what reddens if the group comparison alone is hoisted into the
+		// identity pass, which is the edit this case exists for: mutate the pass split and read the
+		// failures.
+		assertLeadsWithTheDirectAllergy(groupFixtureValidator(), GROUP_QUESTION,
+				DrugReferenceTestSupport.set("Aspirin", "Ibuprofen"), GROUP_IDENTITY,
+				CROSS_REACTIVITY_GROUP);
+	}
+
+	@Test
+	public void theDirectAllergyLeadsOverACuratedGroupWhereTheChartRecordedItFirst() {
+		// The curated arm's mirror, for the reason theDirectAllergyLeadsWhereTheChartRecordedItFirst
+		// gives: it says the lead is independent of the chart's record order rather than dependent on
+		// it the other way round.
+		assertLeadsWithTheDirectAllergy(groupFixtureValidator(), GROUP_QUESTION,
+				DrugReferenceTestSupport.set("Ibuprofen", "Aspirin"), GROUP_IDENTITY,
+				CROSS_REACTIVITY_GROUP);
 	}
 
 	@Test
@@ -90,19 +139,28 @@ public class DirectAllergyFindingLeadsTest {
 				"the cross-reactivity finding standing behind it, as on the question-driven arm");
 	}
 
-	/** Both findings, in one order, through the real validator over the real fixture. */
+	/** The class arm's two findings, in one order, through the real validator over its own fixture. */
 	private static void assertLeadsWithTheDirectAllergy(Set<String> allergies)
 			throws IOException {
-		List<SafetyWarning> warnings = fixtureValidator().validate("", QUESTION,
+		assertLeadsWithTheDirectAllergy(fixtureValidator(), QUESTION, allergies, IDENTITY,
+				CROSS_REACTIVITY);
+	}
+
+	/** Both findings, in one order, through the real validator over the real fixture — one arm's
+	 *  sentences per call, because the two arms name their cross-reactivity differently and the whole
+	 *  point of the case is which of the two findings the arm emitted first. */
+	private static void assertLeadsWithTheDirectAllergy(DrugSafetyValidator validator, String question,
+			Set<String> allergies, String identity, String crossReactivity) {
+		List<SafetyWarning> warnings = validator.validate("", question,
 				DrugReferenceTestSupport.ctx(60, null, null, null, allergies, null));
 
 		// Kept, not suppressed: two recorded allergens are two findings and stay two chips (issue #145).
 		assertEquals(2, warnings.size(), "two recorded allergens are two findings, was: " + warnings);
-		assertEquals(IDENTITY, warnings.get(0).getDetail(),
+		assertEquals(identity, warnings.get(0).getDetail(),
 				"the chart's own allergy to the drug itself leads, whatever order " + allergies
 						+ " was recorded in");
-		assertEquals(CROSS_REACTIVITY, warnings.get(1).getDetail(),
-				"and the class finding about the OTHER allergen still stands behind it");
+		assertEquals(crossReactivity, warnings.get(1).getDetail(),
+				"and the cross-reactivity finding about the OTHER allergen still stands behind it");
 	}
 
 	/** The shared service builder, validated — as {@code DirectAllergyContraindicationTest} spells it.
@@ -110,5 +168,13 @@ public class DirectAllergyFindingLeadsTest {
 	 *  its own javadoc gives. */
 	private static DrugSafetyValidator fixtureValidator() throws IOException {
 		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.ddiFixtureService(FIXTURE));
+	}
+
+	/** The pinned DDInter excerpt carrying the real curated groups, validated. Through
+	 *  {@code DrugReferenceTestSupport.ddinterServiceWithGroups} because that is the one body the two
+	 *  loading steps live in, and a service missing the second of them raises no group chip while
+	 *  nothing goes red. */
+	private static DrugSafetyValidator groupFixtureValidator() {
+		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.ddinterServiceWithGroups());
 	}
 }

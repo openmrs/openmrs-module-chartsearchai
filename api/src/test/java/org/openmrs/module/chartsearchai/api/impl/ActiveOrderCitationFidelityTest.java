@@ -595,6 +595,28 @@ public class ActiveOrderCitationFidelityTest {
 	}
 
 	@Test
+	public void aClaimWithNoMarkersOfItsOwnDoesNotTakeTheNextClaimsCitation() {
+		// The bound the scan takes from the NEXT occurrence of the phrase, which #377 measured as
+		// byte-identical for the ACCUSATION and which the claim count made load-bearing. This
+		// sentence carries no comma, so clauseBound stops nothing and the first claim's region ends
+		// where the second claim begins: replace that bound with sentence.length() and the first
+		// claim reaches the SECOND's chart citation, reading uncited 0 here. Two claims, one
+		// citation, and it belongs to the claim it follows — mutate the bound and read the failures.
+		List<Integer> orders = indexesOfType(ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER);
+		service.setLlmProvider(answering("Clarithromycin" + PHRASE + "Simvastatin and Clarithromycin"
+				+ PHRASE + "Digoxin [" + orders.get(0) + "]."));
+		ChartAnswer answer = service.search(patient(), QUESTION);
+		assertTrue(answer.getMisattributedOrderCitations().isEmpty(),
+				"the premise: the one citation offered is her own drug order, so nothing here is "
+						+ "accused and this case discriminates the claim count alone");
+		ActiveOrderClaims claims = answer.getActiveOrderClaims();
+		assertEquals(2, claims.getStated(), "two claims in one sentence");
+		assertEquals(1, claims.getUncited(),
+				"and the first offered no chart record of its own — a later claim's citation is not "
+						+ "evidence for the one before it. Answer was: " + answer.getAnswer());
+	}
+
+	@Test
 	public void aClaimCitingAChartRecordIsNotUncitedEvenWhereThatRecordIsMisattributed() {
 		// The two halves count different things — a CLAIM here, a CITATION there — and this is the
 		// case that shows it: the ticket's own five-claim arrangement, three of whose chart citations

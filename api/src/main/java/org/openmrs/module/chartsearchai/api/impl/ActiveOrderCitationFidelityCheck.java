@@ -336,7 +336,10 @@ final class ActiveOrderCitationFidelityCheck {
 			// because firstMarkerRun makes it the region bound that keeps the scan linear. #377
 			// measured passing sentence.length() instead as byte-identical for the ACCUSATION; that
 			// measurement does not carry to the claim count, where the substitution moves an uncited
-			// claim to cited with the whole suite green — so nothing pins this bound for that half.
+			// claim to cited. Since #379's round-one review that half IS pinned:
+			// ActiveOrderCitationFidelityTest.aClaimWithNoMarkersOfItsOwnDoesNotTakeTheNextClaimsCitation
+			// states two claims in one comma-free sentence, where clauseBound stops nothing, so this
+			// bound is what keeps the second claim's citation out of the first claim's run.
 			int limit = next < 0 ? sentence.length() : next;
 			for (Integer index : ChartSearchAiUtils.citedIndexes(
 					firstMarkerRun(sentence, at + phrase.length(), limit))) {

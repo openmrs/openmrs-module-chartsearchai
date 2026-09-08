@@ -44,8 +44,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  *
  * <p>What the two numbers MEAN is canonical at {@code ChartSearchService.ActiveOrderClaims} and
  * pinned one layer down by {@code ActiveOrderCitationFidelityTest}, which drives the real
- * orchestration. Here the subject is the wire: that the key reaches every surface, that a zeroed
- * statement and no statement survive as themselves, and that it marshals for an XML client.
+ * orchestration. Here the subject is the wire: that the key reaches every surface, that each number
+ * lands under its own name rather than the other's, that a zeroed statement and no statement survive
+ * as themselves, and that it marshals for an XML client.
  */
 public class ChartSearchAiActiveOrderClaimsTest {
 
@@ -154,14 +155,29 @@ public class ChartSearchAiActiveOrderClaimsTest {
 				"no measurement is null, and must not be flattened to a zeroed object");
 	}
 
+	/**
+	 * The case whose two numbers DIFFER, which is what tells {@code stated} apart from
+	 * {@code uncited} on the wire. The other cases here state the defect's own shape, where the two
+	 * are equal — an answer whose every active-order claim offered nothing — and a symmetric fixture
+	 * cannot see the serializer's two right-hand sides transposed.
+	 * Transposed, an answer whose claims all cited accepted chart records publishes
+	 * {@code stated: 0}, on which README tells a client every reading of this key needs
+	 * {@code stated > 0} first — so the client stops reading it on exactly the response it exists
+	 * for. Its sibling {@code ChartSearchAiInteractionPairExtentTest} keeps distinct values for the
+	 * same reason. Swap the two {@code map.put} arms in {@code serializeActiveOrderClaims} and read
+	 * the failure.
+	 */
 	@Test
 	public void theDoneEventStatesItToo() throws Exception {
+		stated = new ActiveOrderClaims(4, 3);
 		controller.streamAnswer(out, RestControllerContext.patient(), QUESTION, new User(3), false);
 
 		JsonNode done = eventData("done");
 		assertTrue(done.has("activeOrderClaims"), "the done event carried no activeOrderClaims key");
-		assertEquals(4, done.get("activeOrderClaims").get("stated").asInt());
-		assertEquals(4, done.get("activeOrderClaims").get("uncited").asInt());
+		assertEquals(4, done.get("activeOrderClaims").get("stated").asInt(),
+				"four claims were stated, and the key must not carry the other number here");
+		assertEquals(3, done.get("activeOrderClaims").get("uncited").asInt(),
+				"three of them offered no chart record");
 	}
 
 	/**

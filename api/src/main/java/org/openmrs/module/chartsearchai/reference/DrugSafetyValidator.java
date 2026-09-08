@@ -7663,7 +7663,9 @@ public class DrugSafetyValidator {
 			// load-bearing — issue #135's own shape. It is safe HERE because every identity chip is
 			// already raised, so there is no identity comparison left for it to gate; that also makes
 			// the old mutation unobservable, and ADR Decision 82 records both. Still pinned end to end
-			// by DirectAllergyContraindicationTest.anEarlierUnrelatedAllergenDoesNotHideTheDirectOne.
+			// by DirectAllergyContraindicationTest.anEarlierUnrelatedAllergenDoesNotHideTheDirectOne,
+			// which also reddens if this block is moved back above the identity pass — where it would
+			// be #135 again, and where a "tidy the precondition to the top" edit naturally puts it.
 			return;
 		}
 		// The row this response names that substance by (issue #206) — see addContraindications. The two

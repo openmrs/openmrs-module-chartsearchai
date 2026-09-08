@@ -187,7 +187,13 @@ public class DirectAllergyContraindicationTest {
 		//
 		// What this pins is the REQUIREMENT, not the guard statement: with the guard deleted outright
 		// the assertion still holds, because both comparisons are no-ops on empty sets (measured — the
-		// whole suite stays green). Where that guard sits is no longer pinned by anything, and the case above says why.
+		// whole suite stays green). Where the guard SITS is a different question and is still pinned:
+		// move it above the identity pass — issue #135's own shape, and the natural "tidy the
+		// precondition to the top of the method" edit — and the case above reddens, along with other
+		// cases here and in the neighbouring allergen classes (measured the same way). Each of those
+		// turns on an identity chip for a drug carrying neither an ATC subgroup nor a cross-reactivity
+		// group, which is the only state in which this guard fires at all. What the case above can no
+		// longer catch is the `continue`-vs-`return` keyword, and its own comment says so.
 		List<SafetyWarning> warnings = fixtureValidator().validate(
 				"", "Is it safe to give her ledipasvir?",
 				DrugReferenceTestSupport.ctx(60, null, null, null,

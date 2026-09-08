@@ -4,33 +4,105 @@
   "provider_lifecycle": [
     {
       "id": "provider.lifecycle.required-answer-and-terminal",
-      "capabilities": ["answer"],
-      "events": ["turn_started", "answer_done", "turn_done"],
+      "capabilities": [
+        "answer"
+      ],
+      "events": [
+        "turn_started",
+        "answer_done",
+        "turn_done"
+      ],
       "expected": "accept"
     },
     {
       "id": "provider.lifecycle.review-is-optional",
-      "capabilities": ["answer", "answer_review", "indepth"],
-      "events": ["turn_started", "answer_done", "answer_validation", "indepth_pending", "indepth_done", "turn_done"],
+      "capabilities": [
+        "answer",
+        "answer_review",
+        "indepth"
+      ],
+      "events": [
+        "turn_started",
+        "answer_done",
+        "answer_validation",
+        "indepth_pending",
+        "indepth_done",
+        "turn_done"
+      ],
       "expected": "accept"
     },
     {
       "id": "provider.lifecycle.no-silent-fallback",
-      "capabilities": ["answer"],
-      "events": ["turn_started", "turn_error"],
+      "capabilities": [
+        "answer"
+      ],
+      "events": [
+        "turn_started",
+        "turn_error"
+      ],
       "expected": "accept"
+    },
+    {
+      "id": "provider.lifecycle.preview-precedes-committed-reasoning",
+      "capabilities": [
+        "answer",
+        "token_streaming"
+      ],
+      "events": [
+        "turn_started",
+        "preliminary_delta",
+        "preliminary_delta",
+        "reasoning_delta",
+        "answer_delta",
+        "answer_done",
+        "turn_done"
+      ],
+      "expected": "accept"
+    },
+    {
+      "id": "provider.lifecycle.preview-may-not-resume-after-committed-reasoning",
+      "capabilities": [
+        "answer",
+        "token_streaming"
+      ],
+      "events": [
+        "turn_started",
+        "reasoning_delta",
+        "preliminary_delta",
+        "answer_done",
+        "turn_done"
+      ],
+      "expected": "reject"
+    },
+    {
+      "id": "provider.lifecycle.preview-requires-token-streaming",
+      "capabilities": [
+        "answer"
+      ],
+      "events": [
+        "turn_started",
+        "preliminary_delta",
+        "answer_done",
+        "turn_done"
+      ],
+      "expected": "reject"
     }
   ],
   "provider_capabilities": [
     {
       "id": "provider.capabilities.single-provider-no-picker",
-      "providers": ["bundled"],
+      "providers": [
+        "bundled"
+      ],
       "default_provider": "bundled",
       "expected_picker": false
     },
     {
       "id": "provider.capabilities.configured-hub-visible-when-unready",
-      "providers": ["bundled", "hub"],
+      "providers": [
+        "bundled",
+        "hub"
+      ],
       "default_provider": "bundled",
       "hub_ready": false,
       "expected_picker": true,
@@ -38,7 +110,10 @@
     },
     {
       "id": "provider.capabilities.switch-starts-new-conversation",
-      "providers": ["bundled", "hub"],
+      "providers": [
+        "bundled",
+        "hub"
+      ],
       "switch_from": "bundled",
       "switch_to": "hub",
       "expected": "new_conversation"
@@ -63,12 +138,18 @@
     },
     {
       "id": "querystore.snapshot.all-pages-agree",
-      "snapshot_ids": ["snapshot-a", "snapshot-a"],
+      "snapshot_ids": [
+        "snapshot-a",
+        "snapshot-a"
+      ],
       "expected": "accept"
     },
     {
       "id": "querystore.snapshot.mixed-pages-rejected",
-      "snapshot_ids": ["snapshot-a", "snapshot-b"],
+      "snapshot_ids": [
+        "snapshot-a",
+        "snapshot-b"
+      ],
       "expected": "reject_after_one_retry"
     }
   ],
@@ -77,16 +158,35 @@
       "id": "context.enumerated-medications-are-complete",
       "mode": "query_scoped",
       "question_kind": "medication_enumeration",
-      "mandatory_ids": ["p-1", "allergy-1", "cond-active"],
-      "typed_complete_ids": ["med-1", "med-2", "med-3"],
-      "expected_included": ["p-1", "allergy-1", "cond-active", "med-1", "med-2", "med-3"]
+      "mandatory_ids": [
+        "p-1",
+        "allergy-1",
+        "cond-active"
+      ],
+      "typed_complete_ids": [
+        "med-1",
+        "med-2",
+        "med-3"
+      ],
+      "expected_included": [
+        "p-1",
+        "allergy-1",
+        "cond-active",
+        "med-1",
+        "med-2",
+        "med-3"
+      ]
     },
     {
       "id": "context.temporal-adds-recency-anchor",
       "mode": "query_scoped",
       "question_kind": "temporal",
-      "recency_anchor_ids": ["visit-1"],
-      "expected_included": ["visit-1"]
+      "recency_anchor_ids": [
+        "visit-1"
+      ],
+      "expected_included": [
+        "visit-1"
+      ]
     },
     {
       "id": "context.non-temporal-does-not-fill-budget",
@@ -94,14 +194,22 @@
       "question_kind": "medication_enumeration",
       "budget_tokens": 1000,
       "selected_tokens": 420,
-      "must_exclude_ids": ["recent-1", "visit-1"],
+      "must_exclude_ids": [
+        "recent-1",
+        "visit-1"
+      ],
       "expected": "accept_without_extra_records"
     },
     {
       "id": "context.explicit-signals-are-retained",
       "mode": "query_scoped",
       "question": "Compare \"Sprained ankle\", 2023-01-01, 11111111-1111-4111-8111-111111111111, and CIEL:12345.",
-      "exact_match_ids": ["cond-old", "noise-1", "11111111-1111-4111-8111-111111111111", "coded-1"],
+      "exact_match_ids": [
+        "cond-old",
+        "noise-1",
+        "11111111-1111-4111-8111-111111111111",
+        "coded-1"
+      ],
       "expected_tier": "exact"
     },
     {
@@ -113,20 +221,57 @@
     },
     {
       "id": "context.panel-completion-includes-all-members",
-      "similarity_matched_ids": ["panel-1"],
-      "panel_members": {"panel-1": ["member-1", "member-2"]},
-      "expected_included": ["panel-1", "member-1", "member-2"],
-      "expected_tier": {"panel-1": "panel", "member-1": "panel", "member-2": "panel"}
+      "similarity_matched_ids": [
+        "panel-1"
+      ],
+      "panel_members": {
+        "panel-1": [
+          "member-1",
+          "member-2"
+        ]
+      },
+      "expected_included": [
+        "panel-1",
+        "member-1",
+        "member-2"
+      ],
+      "expected_tier": {
+        "panel-1": "panel",
+        "member-1": "panel",
+        "member-2": "panel"
+      }
     },
     {
       "id": "context.stable-ordering-preserves-chart-order-and-highest-tier-wins",
-      "chart_order_ids": ["p-1", "recent-1", "cond-active", "allergy-1"],
-      "mandatory_ids": ["allergy-1"],
-      "typed_complete_ids": ["allergy-1"],
-      "similarity_matched_ids": ["allergy-1"],
+      "chart_order_ids": [
+        "p-1",
+        "recent-1",
+        "cond-active",
+        "allergy-1"
+      ],
+      "mandatory_ids": [
+        "allergy-1"
+      ],
+      "typed_complete_ids": [
+        "allergy-1"
+      ],
+      "similarity_matched_ids": [
+        "allergy-1"
+      ],
       "expected_no_duplicates": true,
-      "expected_order_precedes": [["p-1", "recent-1"], ["recent-1", "allergy-1"]],
-      "expected_tier": {"allergy-1": "mandatory"}
+      "expected_order_precedes": [
+        [
+          "p-1",
+          "recent-1"
+        ],
+        [
+          "recent-1",
+          "allergy-1"
+        ]
+      ],
+      "expected_tier": {
+        "allergy-1": "mandatory"
+      }
     }
   ],
   "temporal_gate": [
@@ -138,21 +283,33 @@
     {
       "id": "temporal.non-ledger-date-fails",
       "answer": "The last visit was 2026-02-17.",
-      "ledger_dates": ["2026-02-16"],
+      "ledger_dates": [
+        "2026-02-16"
+      ],
       "expected_status": "fail"
     },
     {
       "id": "temporal.date-value-binding-fails",
       "answer": "Weight was 60 kg on 2026-01-01.",
       "concept": "Weight",
-      "numeric_series": [{"date": "2026-01-01", "value": 58}],
+      "numeric_series": [
+        {
+          "date": "2026-01-01",
+          "value": 58
+        }
+      ],
       "expected_status": "fail"
     },
     {
       "id": "temporal.single-point-trend-fails",
       "answer": "Weight is increasing.",
       "concept": "Weight",
-      "numeric_series": [{"date": "2026-01-01", "value": 58}],
+      "numeric_series": [
+        {
+          "date": "2026-01-01",
+          "value": 58
+        }
+      ],
       "expected_status": "fail"
     }
   ],

@@ -106,6 +106,19 @@ public class ProjectInstructionsGuardTest {
 	 * fit was a directive, not evidence. What 75,000 buys is the couple of ordinary rules the
 	 * principle below asks for; it is a ratchet still, and the direction to move it is down.
 	 *
+	 * <p><b>Raised again, from 75,000 to 76,000, on 2026-09-09 — and it is the same state, which is
+	 * the useful part.</b> #388's contraindication-lead sub-bullet and #395's finding-extent bullet
+	 * were each written to fit, on branches that did not see each other; merging them left the file
+	 * 300 bytes over, having added no prose in the merge at all. Trimming came first here too, and
+	 * only on the newer of the two: #395's bullet gave up the gloss on what its two numbers assert
+	 * (its own decision already names {@code ChartSearchService.FindingCitationExtent} as canonical
+	 * for that) and the "three populations" reason for its never-derive rule, which ADR Decision 83
+	 * carries. That recovered 155 bytes and left 145 of residue that is two directives. So the raise
+	 * buys those and one ordinary rule after them, which is what the principle below asks for.
+	 * <b>Twice in three days is the signal, and it is not that the number is too small</b> — it is
+	 * that two branches adding one rule each cannot both land, and the answer stays trimming rather
+	 * than a bigger number, because the direction is still down.
+	 *
 	 * <p>One principle sets both: headroom of roughly a tenth — a couple of ordinary rules, not a
 	 * section. Both were set at the split, a little under a tenth above what each file measured once
 	 * {@link #noBulletCarriesMoreProseThanItsBudget} had been satisfied — room for a few rules, not
@@ -121,7 +134,7 @@ public class ProjectInstructionsGuardTest {
 	private static Map<Path, Integer> budgets() {
 		Map<Path, Integer> m = new LinkedHashMap<>();
 		m.put(ROOT_INSTRUCTIONS, 23_000);
-		m.put(REFERENCE_INSTRUCTIONS, 75_000);
+		m.put(REFERENCE_INSTRUCTIONS, 76_000);
 		return m;
 	}
 

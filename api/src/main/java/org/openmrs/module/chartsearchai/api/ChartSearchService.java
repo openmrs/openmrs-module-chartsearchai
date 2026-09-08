@@ -853,7 +853,7 @@ public interface ChartSearchService {
 		 * <p>{@link FindingCitationExtent} is canonical for what {@code carried}, {@code cited}, a
 		 * zero and this accessor's null each do and do not assert, for why it is a count rather than
 		 * an accusation, and for why neither {@code cited == carried} nor {@code cited < carried} is a
-		 * certificate of anything. ADR Decision 82 carries the decision.
+		 * certificate of anything. ADR Decision 83 carries the decision.
 		 *
 		 * @return the statement, or null where the producer made no measurement
 		 */

@@ -103,7 +103,7 @@ import org.slf4j.LoggerFactory;
  * {@code searchStreaming}, so the endpoint users hit is covered. Not the progressive-reasoning
  * preview, which discards its answer and resolves no citations, and not a cached answer, which was
  * measured when it was produced — the same scoping its siblings state.
- * &rarr; ADR Decision 82.
+ * &rarr; ADR Decision 83.
  */
 final class SafetyFindingCitationExtentCheck {
 

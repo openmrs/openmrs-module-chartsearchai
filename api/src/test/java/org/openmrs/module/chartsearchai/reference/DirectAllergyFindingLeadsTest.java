@@ -27,8 +27,10 @@ import org.junit.jupiter.api.Test;
  * here. What the cases below add to it is the arrangement each one drives.
  *
  * <p><b>The fixture</b> is the verbatim DDInter excerpt {@code ddi-unclassified-allergen.json}, whose
- * {@code Ciprofloxacin} ({@code J01MA02}) and {@code Levofloxacin} ({@code J01MA12}) rows are the real
- * dataset's, so the class comparison here is the one the shipped knowledge base makes.
+ * {@code Ciprofloxacin} and {@code Levofloxacin} rows are the real dataset's — so the class comparison
+ * here is the one the shipped knowledge base makes, and {@code DirectAllergyContraindicationTest}'s
+ * javadoc is where that pair's subgroups and the reason {@code (J01MA)} is the one printed are
+ * recorded.
  */
 public class DirectAllergyFindingLeadsTest {
 
@@ -63,14 +65,16 @@ public class DirectAllergyFindingLeadsTest {
 	@Test
 	public void theDirectAllergyLeadsOnAPrescriptionTheQuestionNeverNames() throws IOException {
 		// The arm the ticket measured: a prescription checked against the chart's allergy records rather
-		// than a drug the question resolved. Nothing here names ciprofloxacin, so the question-driven
-		// arm has no anchor and it is addActiveOrderContraindications that reaches the prescription,
-		// through the allergy widening its subject-matter gate reads off the question (issue #143).
+		// than a drug the question resolved. Neither the question nor the answer names it, so the
+		// question-driven arm has no anchor and addActiveOrderContraindications reaches the prescription.
+		// WHICH widening admits it is not this case's subject and is not pinned here: measured by
+		// neutering each in turn, the question matches the medications cues as well as the allergy ones
+		// and either alone admits it. What this case pins is the ORDER of the two findings that arm
+		// raises about one prescription.
 		// That this arm reaches the identity check at all is
 		// ActiveOrderContraindicationTest.thePrescribedDrugIsCheckedByTheIdentityArmToo; what is new
 		// here is the ORDER the two findings about one prescription are stated in.
-		List<SafetyWarning> warnings = DrugReferenceTestSupport
-				.validator(DrugReferenceTestSupport.ddiFixtureService(FIXTURE)).validate("",
+		List<SafetyWarning> warnings = fixtureValidator().validate("",
 				"Does she have any drug allergies?",
 				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set(PRESCRIPTION), null,
 						DrugReferenceTestSupport.set("Levofloxacin", "Ciprofloxacin"), null,
@@ -89,9 +93,7 @@ public class DirectAllergyFindingLeadsTest {
 	/** Both findings, in one order, through the real validator over the real fixture. */
 	private static void assertLeadsWithTheDirectAllergy(Set<String> allergies)
 			throws IOException {
-		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(DrugReferenceTestSupport.ddiFixtureService(FIXTURE))
-				.validate("",
-				QUESTION,
+		List<SafetyWarning> warnings = fixtureValidator().validate("", QUESTION,
 				DrugReferenceTestSupport.ctx(60, null, null, null, allergies, null));
 
 		// Kept, not suppressed: two recorded allergens are two findings and stay two chips (issue #145).
@@ -101,5 +103,10 @@ public class DirectAllergyFindingLeadsTest {
 						+ " was recorded in");
 		assertEquals(CROSS_REACTIVITY, warnings.get(1).getDetail(),
 				"and the class finding about the OTHER allergen still stands behind it");
+	}
+
+	/** As the two sibling classes over this fixture spell it — the shared service builder, validated. */
+	private static DrugSafetyValidator fixtureValidator() throws IOException {
+		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.ddiFixtureService(FIXTURE));
 	}
 }

@@ -7491,18 +7491,19 @@ public class DrugSafetyValidator {
 	 * decided by the order the chart returned the allergy records, because one loop raised whichever
 	 * relationship each allergen produced as it reached it. It is now decided here: the identity
 	 * comparison is made for every recorded allergen before any class comparison is made for any of
-	 * them. <b>What that reaches, measured on the issue's own reproduction:</b> the order the chips are
-	 * serialized in, and with it the order {@link DrugReferenceInjector} numbers the {@code
-	 * safety_finding} records, which it writes in this list's order. What follows about the ANSWER is
+	 * them. <b>What that reaches</b> is the order the chips are serialized in — measured on the issue's
+	 * own reproduction, ADR Decision 82 — and, following from that, the order
+	 * {@link DrugReferenceInjector} numbers the {@code safety_finding} records, which it writes in this
+	 * list's order. What follows about the ANSWER is
 	 * nothing — the prompt is handed a set whose order is not stated to the model (ADR Decision 37) —
 	 * so do not read this as putting the identity finding in front of it. Ordering rather than
 	 * suppressing is the same choice {@link #FINDING_STRENGTH_DESCENDING} makes for the interaction
-	 * arm; the alternative issue #388 weighed and declined was to drop the class chip, which carries a
-	 * second chart record the identity chip cannot state.
+	 * arm; ADR Decision 82 is canonical for the alternative that was weighed and declined.
 	 *
-	 * <p><b>Scoped to this arm, which is narrower than "this drug's chips".</b> A curated rule
-	 * {@link #addContraindications} raises is appended before either of these at both call sites, and
-	 * nothing here moves it.
+	 * <p><b>Scoped to this arm, which is narrower than "this drug's chips".</b> It orders the two
+	 * claims THIS arm makes about one subject and nothing else. Where a curated rule's chip sits is
+	 * {@link #contraindicationRank} and the ledger's business — a self-named allergy rule shares the
+	 * identity chip's key and can replace it in place (issue #146) — and nothing here moves it.
 	 *
 	 * <p><b>Identity is not classification (issue #135).</b> The three comparisons were all gated on
 	 * one early return taken when {@code ref} had neither an ATC subgroup nor a curated group. That
@@ -7656,15 +7657,11 @@ public class DrugSafetyValidator {
 			// empty sets, so this states the requirement in code rather than leaving it to be re-derived:
 			// "same class as" and "same group as" are questions only a classified drug can be asked.
 			//
-			// It used to sit inside the single loop as a per-allergen `continue`, and that placement was
-			// load-bearing — as a `return` it left a later allergen's IDENTITY match unasked, which is
-			// issue #135 reinstated for the patients most likely to meet it, and
-			// DirectAllergyContraindicationTest.anEarlierUnrelatedAllergenDoesNotHideTheDirectOne is the
-			// case that caught it. The pass split is what makes it safe HERE and what makes that
-			// distinction unobservable: every identity chip is raised before this line is reached, so
-			// there is no longer an identity comparison for a class precondition to gate. #135's own
-			// shape is structural now rather than resting on a keyword; that test still pins the
-			// behaviour end to end, and its comment records what its mutation can no longer show.
+			// It used to be a per-allergen `continue` inside the single loop, where the keyword was
+			// load-bearing — issue #135's own shape. It is safe HERE because every identity chip is
+			// already raised, so there is no identity comparison left for it to gate; that also makes
+			// the old mutation unobservable, and ADR Decision 82 records both. Still pinned end to end
+			// by DirectAllergyContraindicationTest.anEarlierUnrelatedAllergenDoesNotHideTheDirectOne.
 			return;
 		}
 		// The row this response names that substance by (issue #206) — see addContraindications. The two

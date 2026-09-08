@@ -164,14 +164,10 @@ public class DirectAllergyContraindicationTest {
 		// single-allergen absence cases either side of this one catch it: they pass one allergen, so
 		// nothing is ever queued.
 		//
-		// WHAT MOVED (issue #388): this used to record "1 on this build, 0 with the guard's `continue`
-		// changed to `return`". That measurement no longer holds and the reason is the point — the arm
-		// now raises every identity chip in a first pass and consults the class precondition once,
-		// after it, so there is no identity comparison left for the precondition to gate whichever
-		// keyword it uses. What this case pins is unchanged and is the behaviour, not the keyword: the
-		// allergen listed after an unrelated one is still compared. It is structural rather than
-		// mutation-caught now, and DirectAllergyFindingLeadsTest is where the pass order itself is
-		// pinned. Measured pre-#135-fix: 0.
+		// WHAT MOVED (issue #388): this used to record "1 chip on this build, 0 with the guard's
+		// `continue` changed to `return`". That mutation no longer moves anything — ADR Decision 82
+		// says why — so what this case pins is the behaviour and not the keyword: the allergen listed
+		// after an unrelated one is still compared. Measured pre-#135-fix: 0 chips.
 		List<SafetyWarning> warnings = fixtureValidator().validate(
 				"", "Is it safe to give her ledipasvir?",
 				DrugReferenceTestSupport.ctx(60, null, null, null,
@@ -191,7 +187,7 @@ public class DirectAllergyContraindicationTest {
 		//
 		// What this pins is the REQUIREMENT, not the guard statement: with the guard deleted outright
 		// the assertion still holds, because both comparisons are no-ops on empty sets (measured — the
-		// whole suite stays green). The guard's placement is pinned separately, by the case above.
+		// whole suite stays green). Where that guard sits is no longer pinned by anything, and the case above says why.
 		List<SafetyWarning> warnings = fixtureValidator().validate(
 				"", "Is it safe to give her ledipasvir?",
 				DrugReferenceTestSupport.ctx(60, null, null, null,
@@ -254,8 +250,8 @@ public class DirectAllergyContraindicationTest {
 		// One question can put SEVERAL entries in play, because DDInter files one substance as several
 		// route/formulation rows sharing an rxnorm_name — 142 such groups in the full KB, 28 of them
 		// entirely ATC-less. Only one of those rows is the resolved allergen, so the others reach the
-		// per-allergen loop as a DIFFERENT reference: they must fall through the in-loop classification
-		// guard rather than each add a chip. Measured through this same path: 0 chips before the fix
+		// arm as a DIFFERENT reference: they must fall through the classification guard rather than each
+		// add a chip. Measured through this same path: 0 chips before the fix
 		// (the whole arm returned early for both rows), 1 after.
 		//
 		// The shared route-variant slice supplies the shape: its two Iron rows (DDInter975 and
@@ -299,12 +295,11 @@ public class DirectAllergyContraindicationTest {
 				"and the surviving chip is the identity one, about the row the allergy resolved to");
 	}
 
-	/** The real fixture entries behind a service carrying the real curated cross-reactivity groups. */
+	/** The real fixture entries behind a service carrying the real curated cross-reactivity groups —
+	 *  {@code DrugReferenceTestSupport.ddiFixtureService}, whose javadoc says why the two steps may
+	 *  not be taken apart. */
 	private static DrugReferenceService fixtureService() throws IOException {
-		DrugReferenceService service = DrugReferenceTestSupport
-				.serviceWith(DrugReferenceTestSupport.ddiFixtureEntries(FIXTURE));
-		service.setCrossReactivityGroups(DrugReferenceTestSupport.bundledGroups());
-		return service;
+		return DrugReferenceTestSupport.ddiFixtureService(FIXTURE);
 	}
 
 	private static DrugSafetyValidator fixtureValidator() throws IOException {

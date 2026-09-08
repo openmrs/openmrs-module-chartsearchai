@@ -7491,11 +7491,18 @@ public class DrugSafetyValidator {
 	 * decided by the order the chart returned the allergy records, because one loop raised whichever
 	 * relationship each allergen produced as it reached it. It is now decided here: the identity
 	 * comparison is made for every recorded allergen before any class comparison is made for any of
-	 * them. That reaches the order a client renders the chip list in, and which finding survives a
-	 * truncation ({@link #FINDING_STRENGTH_DESCENDING} is this class's other answer to the same
-	 * question); it reaches nothing about how the model reads the prompt, which is handed a SET whose
-	 * order is not stated to it. Suppressing the class chip instead was the alternative issue #388
-	 * weighed and declined — it carries a second chart record the identity chip cannot state.
+	 * them. <b>What that reaches, measured on the issue's own reproduction:</b> the order the chips are
+	 * serialized in, and with it the order {@link DrugReferenceInjector} numbers the {@code
+	 * safety_finding} records, which it writes in this list's order. What follows about the ANSWER is
+	 * nothing — the prompt is handed a set whose order is not stated to the model (ADR Decision 37) —
+	 * so do not read this as putting the identity finding in front of it. Ordering rather than
+	 * suppressing is the same choice {@link #FINDING_STRENGTH_DESCENDING} makes for the interaction
+	 * arm; the alternative issue #388 weighed and declined was to drop the class chip, which carries a
+	 * second chart record the identity chip cannot state.
+	 *
+	 * <p><b>Scoped to this arm, which is narrower than "this drug's chips".</b> A curated rule
+	 * {@link #addContraindications} raises is appended before either of these at both call sites, and
+	 * nothing here moves it.
 	 *
 	 * <p><b>Identity is not classification (issue #135).</b> The three comparisons were all gated on
 	 * one early return taken when {@code ref} had neither an ATC subgroup nor a curated group. That
@@ -7593,43 +7600,9 @@ public class DrugSafetyValidator {
 		// replaced (issue #164) rather than sitting beside it. It is also the key the ledger groups on, so
 		// a substance whose rows arrive from several call sites cannot raise one chip twice.
 		Object refSubstance = ref.substanceGroupKey();
-		// The row this response names that substance by (issue #206) — see addContraindications. The two
-		// CLASS comparisons below assert something about the drug being checked and so must call it what
-		// every other arm calls it; the identity chip does not and is exempt, for the reason recorded at
-		// its own branch.
-		//
-		// So those two sentences now READ their evidence from ref (refClasses, refGroups above) and NAME
-		// a different row of the same substance. "X is in the same ATC class (C) as …" is therefore true
-		// of the row it names only while every row of a substance publishes the same ATC codes — the data
-		// invariant ContraindicationChips' javadoc measures (0 of 129 multi-row families divergent,
-		// 2026-08-08) for the ledger key and the class arm's one-row read. Since issue #206 that
-		// invariant also underwrites the CHIP'S OWN CLAIM, which is a sharper consequence than a dropped
-		// chip: a refresh giving one route variant a subgroup its siblings lack would make this sentence
-		// name a drug that publishes no such code. Re-measure it on a refresh — the instruction lives with
-		// the measurement, and this is one more thing that now depends on it.
-		DrugReference subject = chips.subjectOf(ref);
 		// PASS ONE: the identity comparison, over EVERY recorded allergen, before any class comparison
-		// is made for any of them (issue #388). Two passes and not one loop, because the two questions
-		// are asked of different records and the answer to one outranks the other: the chart's own
-		// allergy to the drug being checked is what leads, and a class relationship a DIFFERENT allergen
-		// has with it stands behind that. Under one loop the lead was decided by the order
-		// PatientService.getAllergies returned the records — recordedAllergens preserves
-		// PatientClinicalContext.getAllergyTokens() — so a cross-reactivity chip raised from an allergen
-		// the chart happened to record first was appended ahead of the direct-allergy chip about the
-		// very same drug. That is the order-dependence issue #268 removed from the fold's CONTENT (see
-		// ContraindicationChips.add), left standing in its ORDER.
-		//
-		// What the ordering reaches is TWO surfaces and deliberately not a third: the order a client
-		// renders the chip list in, and which finding survives a truncation — issue #346's own property,
-		// see FINDING_STRENGTH_DESCENDING, which is this class's other answer to "several findings about
-		// one subject, ordered strongest first rather than suppressed". It buys nothing at the model's
-		// reading of the prompt, which is handed a SET whose order is not stated to it (ADR Decision 37).
-		//
-		// It changes no chip's CONTENT and suppresses nothing: two recorded allergens are two findings
-		// and stay two chips, the ledger's collapse unit being the recorded finding (issue #145). Issue
-		// #388 asked whether the class chip should instead be dropped where the subject already carries
-		// an identity chip, and answered no — the yielding chip carries a second chart record the
-		// surviving one cannot state, which is issue #88's own test for a wrong dedup.
+		// is made for any of them (issue #388). The javadoc above carries why; it is not restated
+		// here. What each pass has to preserve is stated at the pass itself.
 		List<RecordedAllergen> notThisDrug = new ArrayList<RecordedAllergen>(recordedAllergens.size());
 		for (RecordedAllergen recorded : recordedAllergens) {
 			List<DrugReference> allergen = recorded.substances();
@@ -7694,6 +7667,21 @@ public class DrugSafetyValidator {
 			// behaviour end to end, and its comment records what its mutation can no longer show.
 			return;
 		}
+		// The row this response names that substance by (issue #206) — see addContraindications. The two
+		// CLASS comparisons below assert something about the drug being checked and so must call it what
+		// every other arm calls it; the identity chip does not and is exempt, for the reason recorded at
+		// its own branch.
+		//
+		// So those two sentences now READ their evidence from ref (refClasses, refGroups above) and NAME
+		// a different row of the same substance. "X is in the same ATC class (C) as …" is therefore true
+		// of the row it names only while every row of a substance publishes the same ATC codes — the data
+		// invariant ContraindicationChips' javadoc measures (0 of 129 multi-row families divergent,
+		// 2026-08-08) for the ledger key and the class arm's one-row read. Since issue #206 that
+		// invariant also underwrites the CHIP'S OWN CLAIM, which is a sharper consequence than a dropped
+		// chip: a refresh giving one route variant a subgroup its siblings lack would make this sentence
+		// name a drug that publishes no such code. Re-measure it on a refresh — the instruction lives with
+		// the measurement, and this is one more thing that now depends on it.
+		DrugReference subject = chips.subjectOf(ref);
 		// PASS TWO: the two class comparisons, for the allergens pass one did not chip — the same
 		// allergens the single loop reached them with, in the same order, since identity was already
 		// this arm's first question.
@@ -8224,8 +8212,9 @@ public class DrugSafetyValidator {
 	 * provably no-ops — every branch of {@link #addContraindications} requires
 	 * {@link PatientClinicalContext#hasAllergyToken} or
 	 * {@link PatientClinicalContext#hasConditionToken}, and
-	 * {@link #addAllergyContraindications}'s whole body is a loop over the allergens
-	 * {@link #recordedAllergens} resolved from {@link PatientClinicalContext#getAllergyTokens()} — so
+	 * {@link #addAllergyContraindications} returns at once on an empty allergen list — the allergens
+	 * being {@link #recordedAllergens}' resolution of {@link PatientClinicalContext#getAllergyTokens()},
+	 * and that method's own javadoc is where its shape is described rather than here — so
 	 * the check is skipped rather than run to find nothing. What it saves is the two arms' own work over
 	 * every order subject, not the resolution of those subjects: since issue #136 {@code validate}
 	 * resolves them once per pass whatever the question, because

@@ -22,25 +22,9 @@ import org.junit.jupiter.api.Test;
  * A drug the chart records a DIRECT allergy to leads with that finding, whatever order the chart
  * returned the allergy records in (issue #388).
  *
- * <p><b>The shape.</b> One drug can carry two contraindication findings raised by two DIFFERENT
- * recorded allergens: the chart records an allergy to the drug itself, AND a second allergen shares
- * its ATC level-4 subgroup. Both are true and both are kept — the ledger's collapse unit is the
- * recorded FINDING (issue #145), and a class chip about a different allergen reports a second chart
- * record that the identity chip cannot ({@code ContraindicationChips}). Issue #388 asked whether the
- * class one should instead be suppressed on a drug already contraindicated by name, and decided not
- * to: the yielding chip carries content the surviving one cannot, which is issue #88's own test for
- * a wrong dedup, and this module states what it withholds rather than dropping it silently.
- *
- * <p><b>What was wrong.</b> {@code DrugSafetyValidator.addAllergyContraindications} walked the
- * recorded allergens once and raised whichever relationship each one produced, so which of the two
- * findings LED was decided by the order {@code PatientService.getAllergies} returned the records —
- * the same order-dependence issue #268 removed from the fold's CONTENT, still standing in its order.
- *
- * <p><b>What ordering buys, stated narrowly.</b> Two surfaces, neither of them the model's reading of
- * the prompt: the order a client renders the chip list in, and which finding survives a truncation
- * (issue #346's own property, {@code DrugSafetyValidator.FINDING_STRENGTH_DESCENDING}). ADR Decision
- * 37 records why it buys nothing at the third — the prompt is handed a SET and its order is not
- * stated to the model — so no case here asserts anything about what the answer says.
+ * <p>Both are kept and the identity one leads. Why, what the alternative would have cost, and what
+ * the ordering does and does not reach are ADR Decision 82; nothing of that argument is restated
+ * here. What the cases below add to it is the arrangement each one drives.
  *
  * <p><b>The fixture</b> is the verbatim DDInter excerpt {@code ddi-unclassified-allergen.json}, whose
  * {@code Ciprofloxacin} ({@code J01MA02}) and {@code Levofloxacin} ({@code J01MA12}) rows are the real
@@ -78,14 +62,15 @@ public class DirectAllergyFindingLeadsTest {
 
 	@Test
 	public void theDirectAllergyLeadsOnAPrescriptionTheQuestionNeverNames() throws IOException {
-		// The ticket's own arm: its sixteen chips were measured on a question about a THIRD drug, and
-		// ten of them came from the active-order arm — a prescription checked against the chart's
-		// allergy records rather than a drug the question resolved. Both arms call this one method, and
-		// this case is what says so: nothing here names ciprofloxacin, so the question-driven arm has no
-		// anchor and it is addActiveOrderContraindications that reaches the prescription, through the
-		// allergy widening its subject-matter gate reads off the question (issue #143).
-		DrugReferenceService service = fixtureService();
-		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service).validate("",
+		// The arm the ticket measured: a prescription checked against the chart's allergy records rather
+		// than a drug the question resolved. Nothing here names ciprofloxacin, so the question-driven
+		// arm has no anchor and it is addActiveOrderContraindications that reaches the prescription,
+		// through the allergy widening its subject-matter gate reads off the question (issue #143).
+		// That this arm reaches the identity check at all is
+		// ActiveOrderContraindicationTest.thePrescribedDrugIsCheckedByTheIdentityArmToo; what is new
+		// here is the ORDER the two findings about one prescription are stated in.
+		List<SafetyWarning> warnings = DrugReferenceTestSupport
+				.validator(DrugReferenceTestSupport.ddiFixtureService(FIXTURE)).validate("",
 				"Does she have any drug allergies?",
 				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set(PRESCRIPTION), null,
 						DrugReferenceTestSupport.set("Levofloxacin", "Ciprofloxacin"), null,
@@ -104,7 +89,8 @@ public class DirectAllergyFindingLeadsTest {
 	/** Both findings, in one order, through the real validator over the real fixture. */
 	private static void assertLeadsWithTheDirectAllergy(Set<String> allergies)
 			throws IOException {
-		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(fixtureService()).validate("",
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(DrugReferenceTestSupport.ddiFixtureService(FIXTURE))
+				.validate("",
 				QUESTION,
 				DrugReferenceTestSupport.ctx(60, null, null, null, allergies, null));
 
@@ -115,15 +101,5 @@ public class DirectAllergyFindingLeadsTest {
 						+ " was recorded in");
 		assertEquals(CROSS_REACTIVITY, warnings.get(1).getDetail(),
 				"and the class finding about the OTHER allergen still stands behind it");
-	}
-
-	/** The real fixture entries behind a service carrying the real curated cross-reactivity groups —
-	 *  as {@code DirectAllergyContraindicationTest} builds it, so the class comparison here is made
-	 *  against the curated data a deployment really has and not against an empty group list. */
-	private static DrugReferenceService fixtureService() throws IOException {
-		DrugReferenceService service = DrugReferenceTestSupport
-				.serviceWith(DrugReferenceTestSupport.ddiFixtureEntries(FIXTURE));
-		service.setCrossReactivityGroups(DrugReferenceTestSupport.bundledGroups());
-		return service;
 	}
 }

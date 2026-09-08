@@ -21,6 +21,7 @@ import java.util.regex.Matcher;
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
+import org.openmrs.module.chartsearchai.api.ChartSearchService.ActiveOrderClaims;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
@@ -76,8 +77,7 @@ import org.slf4j.LoggerFactory;
  * attribute {@code [9]} to the order claim. Sentences still bound the scan
  * ({@link ChartSearchAiUtils#SENTENCE_BOUNDARY}, the SPLITTING question over the shared terminator
  * set) so a phrase occurrence with no run after it cannot reach into the next sentence for one. The
- * next phrase occurrence bounds the scan as well, though only the scan — {@link #examine} records
- * what removing that bound was measured to change, which is nothing.
+ * next phrase occurrence bounds the scan as well, though only the scan.
  *
  * <p><b>Not a fourth claim-unit rule.</b> {@code CitationGroundingVerifier}'s {@code splitEnumeration}
  * and {@code splitIntoClauseScopedSentences} partition a sentence for GRADING, into cumulative
@@ -100,9 +100,14 @@ import org.slf4j.LoggerFactory;
  *       value the chart has no record for is not a citation here either. That filter and
  *       {@link #refusal}'s null-mapping arm are ONE conservatism and not two — {@code
  *       extractCitedReferences} admits every in-range index, so removing either leaves the other
- *       answering, and removing this one was measured byte-identical. It is the one kept because
- *       CLAUDE.md's inline-citation rule states it: an index is not a citation until the answer's
- *       own resolution admits it;</li>
+ *       answering, and removing this one was measured byte-identical. <b>That measurement is #377's
+ *       and does not carry to #379's half</b>: there the two fail safe in OPPOSITE directions —
+ *       {@link #refusal} declines to accuse a record it cannot read while {@link #offersChartEvidence}
+ *       calls it evidence — so removing the filter reddens {@code
+ *       ActiveOrderCitationFidelityTest.aClaimWhoseOnlyMarkerIsNoCitationOfThisAnswerIsCountedUncited}
+ *       while removing the null arm is green, and it is the filter that keeps that arm unreachable.
+ *       It is the one kept because CLAUDE.md's inline-citation rule states it: an index is not a
+ *       citation until the answer's own resolution admits it;</li>
  *   <li>reference-group citations in the run are untouched. Every one of these runs carries the
  *       module's own {@code safety_finding} beside the chart citation — that is the shape the ticket
  *       measured — and it is cited legitimately;</li>
@@ -134,6 +139,36 @@ import org.slf4j.LoggerFactory;
  * records here are RETRIEVED {@code drug_order}s that no injector resolved. A claim whose markers do
  * not immediately follow it is not attributed either, and neither is a chart citation the answer
  * places before the phrase.
+ *
+ * <p><b>It answers a SECOND question on the same walk</b> — issue
+ * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/379">#379</a>: how many
+ * active-order claims the answer stated, and how many of them offered no chart record at all.
+ * Without it the key below is unreadable in the one direction that matters, and both readings are on
+ * the record: on one patient and one question, {@code misattributedOrderCitations} read {@code []}
+ * once with the answer citing the drug orders themselves and once with no drug order cited at all. ADR Decision 81 carries both runs and carries the fact that they disagree.
+ * {@link ActiveOrderClaims} is canonical for what the two numbers assert — what {@code stated}
+ * counts, what {@code uncited} counts, and why a claim citing a record this check ACCUSES is not
+ * uncited. What belongs HERE, beside the walk, is what the walk itself decides: <b>a chart record
+ * the MODULE attached (issue #305) is not evidence a claim offered anything</b>, and nothing filters
+ * it out — the run is decoded from the answer's own text and an attached citation has no marker in
+ * it, which is the same property this class's {@code cited} parameter already rests on for the other
+ * half.
+ *
+ * <p><b>Its conservatism runs the OTHER WAY, and that is the cost of sharing the unit.</b> The run is
+ * built to fail toward silence for an accusation, so where the module cannot read what a claim
+ * offered — a hard wrap between the claim and its markers, markers after a comma — the accusation
+ * stays silent and this count reports. That is defensible per claim (no chart record was offered in
+ * the claim's own clause) and it is not the same statement as "the answer cites nothing", which is
+ * why the number is published with the count of claims beside it rather than as a per-citation
+ * accusation. Where the module cannot read the cited RECORD, both halves stay silent
+ * ({@link #offersChartEvidence}).
+ *
+ * <p><b>The second answer is PUBLISHED and deliberately not LOGGED.</b> The WARN below stays the
+ * accusation's alone. Adding one for an uncited claim reddens
+ * {@code ActiveOrderCitationFidelityTest.aCitationInTheNEXTCLAUSEOfTheSameSentenceIsNotAttributedToTheClaim},
+ * which specifies silence for an arrangement this count reports — the residue above — so the log
+ * would carry exactly the shape the class refuses to be loud about while the key carries it with the
+ * base that makes it readable.
  *
  * <p><b>It reports and it publishes.</b> The WARN is the maintainer's channel;
  * {@code ChartAnswer.getMisattributedOrderCitations()} is the clinician's, through the
@@ -175,7 +210,9 @@ final class ActiveOrderCitationFidelityCheck {
 	 *  <p>Deliberately narrower than {@code CitationGroundingVerifier}'s {@code LEADING_ITEM_SEPARATOR},
 	 *  the nearest neighbouring alphabet, which also admits {@code ;} and a leading {@code and} or
 	 *  {@code or} because it separates ITEMS of one enumeration. Widening this to match would make a
-	 *  second claim's markers part of the first claim's run; the narrowing fails toward silence. */
+	 *  second claim's markers part of the first claim's run; the narrowing fails toward silence for the
+	 *  accusation, and since issue #379 toward an {@code uncited} count for the claim — the same
+	 *  asymmetry {@link #clauseBound} carries. */
 	private static final String RUN_SEPARATORS = " \t,";
 
 	private ActiveOrderCitationFidelityCheck() {
@@ -183,7 +220,11 @@ final class ActiveOrderCitationFidelityCheck {
 
 	/**
 	 * Reports, at WARN, every chart citation {@code answer} offers as evidence of an active drug
-	 * order that cannot be one, and returns them for publication.
+	 * order that cannot be one, and returns them for publication — together with how many
+	 * active-order claims the answer stated and how many of those offered no chart record at all
+	 * (issue #379). One walk, two answers: a second walk over the same prose would be the
+	 * two-resolutions-that-agree shape #151 forbids, and the two would then be able to disagree
+	 * about how many claims the answer even made.
 	 *
 	 * @param patient whose answer it is — logged so a line is attributable under concurrent requests
 	 * @param answer the answer prose, unchanged by this method
@@ -196,10 +237,10 @@ final class ActiveOrderCitationFidelityCheck {
 	 *            marker — had it one, the same pattern would have made it the model's own citation
 	 * @param mappings the chart's records, cited or not — the carrier of each cited record's
 	 *            resource type and of its order-currency mark
-	 * @return the distinct offending citation indexes in the order the answer states them, empty
-	 *         when the check ran and found none, and null only when the check itself failed
+	 * @return both answers, or null only when the check itself failed — in which case NEITHER is a
+	 *         measurement, because one walk produced them and a walk that threw produced neither
 	 */
-	static List<Integer> reportMisattributedOrderCitations(Patient patient, String answer,
+	static Report examineActiveOrderClaims(Patient patient, String answer,
 			List<RecordReference> cited, List<RecordMapping> mappings) {
 		Integer patientId = null;
 		try {
@@ -213,8 +254,17 @@ final class ActiveOrderCitationFidelityCheck {
 				// same 66,429 arrangements, because examine's own per-sentence indexOf is what
 				// scopes the check to an active-order claim. What it buys is that the overwhelmingly
 				// common answer, which states no such claim, costs one containment scan and neither
-				// map below — ADR Decision 76 carries the figures, and carries them once.
-				return offending;
+				// map below — ADR Decision 76 carries the figures, and carries them once. Its
+				// CONTAINMENT half stays a short-circuit and not a rule for the claim count either:
+				// removing that half leaves this class green, an answer with no phrase occurrence
+				// producing this same zeroed statement through the walk (re-measured for issue
+				// #379's second answer). The null half is not the same kind of claim: no case
+				// constructs a null answer, so it rests on the mechanism rather than on a red test
+				// — without it one reaches the splitter, throws, and the whole report becomes no
+				// measurement rather than a zeroed one.
+				// Zero claims is a MEASUREMENT of none, which a client has to be able to tell
+				// from the failed check's null.
+				return new Report(offending, new ActiveOrderClaims(0, 0));
 			}
 			Map<Integer, RecordMapping> byIndex = new HashMap<Integer, RecordMapping>();
 			if (mappings != null) {
@@ -230,8 +280,9 @@ final class ActiveOrderCitationFidelityCheck {
 			}
 			List<String> reasons = new ArrayList<String>();
 			Set<Integer> seen = new LinkedHashSet<Integer>();
+			Tally tally = new Tally();
 			for (String sentence : ChartSearchAiUtils.SENTENCE_BOUNDARY.split(answer)) {
-				examine(sentence, byIndex, citedIndexes, seen, reasons);
+				examine(sentence, byIndex, citedIndexes, seen, reasons, tally);
 			}
 			offending.addAll(seen);
 			if (!offending.isEmpty()) {
@@ -245,7 +296,7 @@ final class ActiveOrderCitationFidelityCheck {
 						+ "cannot be. The answer prose is left unchanged (issue #377).",
 						patientId, reasons);
 			}
-			return offending;
+			return new Report(offending, new ActiveOrderClaims(tally.stated, tally.uncited));
 		}
 		catch (RuntimeException e) {
 			// A diagnostic must never break a clinical answer — the same promise
@@ -262,24 +313,33 @@ final class ActiveOrderCitationFidelityCheck {
 	 * Examines one sentence, adding every offending citation to {@code seen} and its reason to
 	 * {@code reasons}.
 	 *
-	 * <p>Split out so the run walk reads as the one thing it is. The two collections are carried in
-	 * rather than returned because a citation offending in two runs is one entry — the answer states
-	 * it once as far as a client is concerned — and de-duplicating afterwards would lose the order
-	 * the answer states them in, which is the order the published list promises.
+	 * <p>Split out so the run walk reads as the one thing it is. The three accumulators are carried
+	 * in rather than returned because a citation offending in two runs is one entry — the answer
+	 * states it once as far as a client is concerned — and de-duplicating afterwards would lose the
+	 * order the answer states them in, which is the order the published list promises. The tally is
+	 * carried for the same reason in a different direction: a CLAIM is counted once per phrase
+	 * occurrence however many sentences the answer spreads them over, so the count cannot be
+	 * recovered from either collection afterwards.
 	 */
 	private static void examine(String sentence, Map<Integer, RecordMapping> byIndex,
-			Set<Integer> citedIndexes, Set<Integer> seen, List<String> reasons) {
+			Set<Integer> citedIndexes, Set<Integer> seen, List<String> reasons, Tally tally) {
 		String phrase = DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE;
 		int at = sentence.indexOf(phrase);
 		while (at >= 0) {
+			// One occurrence of the phrase is one CLAIM, counted before anything is read about what
+			// it offered — a claim the module can say nothing else about is still a claim the answer
+			// made, and the count is the base the uncited number is a share of.
+			tally.stated++;
+			boolean offeredChartEvidence = false;
 			int next = sentence.indexOf(phrase, at + phrase.length());
-			// Where the next claim begins. It bounds the SCAN and not the answer: removing it and
-			// passing sentence.length() was measured byte-identical over 66,429 generated
-			// arrangements of the phrase, markers, separators and a terminator — a run that would
-			// reach past the next occurrence is already stopped by onlySeparators, the gap carrying
-			// that occurrence's own letters, and a run beyond it is attributed to that occurrence
-			// instead, in the same order. It stays because firstMarkerRun makes it the region bound
-			// that keeps the scan linear.
+			// Where the next claim begins. It bounds the SCAN and not the answer, and it stays
+			// because firstMarkerRun makes it the region bound that keeps the scan linear. #377
+			// measured passing sentence.length() instead as byte-identical for the ACCUSATION; that
+			// measurement does not carry to the claim count, where the substitution moves an uncited
+			// claim to cited. Since #379's round-one review that half IS pinned:
+			// ActiveOrderCitationFidelityTest.aClaimWithNoMarkersOfItsOwnDoesNotTakeTheNextClaimsCitation
+			// states two claims in one comma-free sentence, where clauseBound stops nothing, so this
+			// bound is what keeps the second claim's citation out of the first claim's run.
 			int limit = next < 0 ? sentence.length() : next;
 			for (Integer index : ChartSearchAiUtils.citedIndexes(
 					firstMarkerRun(sentence, at + phrase.length(), limit))) {
@@ -287,10 +347,19 @@ final class ActiveOrderCitationFidelityCheck {
 					continue;
 				}
 				RecordMapping mapping = byIndex.get(index);
+				if (offersChartEvidence(mapping)) {
+					// Asked of every admitted index in the run and NOT only of the ones the refusal
+					// below clears: a claim citing a record that cannot be its order still OFFERED a
+					// chart record, and counting it here as well would count one failure twice.
+					offeredChartEvidence = true;
+				}
 				String reason = refusal(mapping);
 				if (reason != null && seen.add(index)) {
 					reasons.add("[" + index + "] " + reason);
 				}
+			}
+			if (!offeredChartEvidence) {
+				tally.uncited++;
 			}
 			at = next;
 		}
@@ -354,10 +423,14 @@ final class ActiveOrderCitationFidelityCheck {
 	 *         {@code ActiveOrderCitationFidelityTest.aLoneCitationInAClaimWithNoRunOfItsOwnIsAttributedToIt}
 	 *         is that residue, pinned rather than left to be found.
 	 *
-	 *         <p>It fails toward SILENCE in both directions, which is this check's own direction. A
-	 *         partner name carrying a comma truncates the search and the claim reports nothing; a
-	 *         model that puts its markers after the clause break rather than before it is not
-	 *         attributed. Neither can manufacture a report.
+	 *         <p>It fails toward SILENCE in both directions FOR THE ACCUSATION, which is that half's
+	 *         direction. A partner name carrying a comma truncates the search and the claim reports
+	 *         nothing; a model that puts its markers after the clause break rather than before it is
+	 *         not attributed. Neither can manufacture an accusation. <b>Since issue #379 both shapes
+	 *         DO produce an {@code uncited} count</b> — the claim having offered nothing inside its
+	 *         own clause, which is the residue this class's javadoc records as running the other way,
+	 *         pinned by {@code ActiveOrderCitationFidelityTest
+	 *         .aClaimWhoseOnlyChartCitationSitsInTheNextClauseIsCountedUncited}.
 	 */
 	private static int clauseBound(String sentence, int from, int limit) {
 		for (int at = from; at < limit; at++) {
@@ -381,6 +454,47 @@ final class ActiveOrderCitationFidelityCheck {
 	}
 
 	/**
+	 * @return whether {@code mapping} is a chart record the claim can be said to have OFFERED as
+	 *         evidence — anything that is not this module's own reference material.
+	 *
+	 *         <p>Asked through {@link #isChartEvidence}, the one spelling this class gives that
+	 *         classification.
+	 *
+	 *         <p><b>Its silence runs the opposite way to {@link #refusal}'s and reaches the same
+	 *         records.</b> That method declines to ACCUSE a record whose type the module could not
+	 *         read; this one declines to say the claim offered NOTHING when it cited one — and it
+	 *         needs no guard of its own to do it, because {@code referenceGroup} already fails safe
+	 *         to chart evidence for an unrecognised or null type. A null mapping takes the same
+	 *         answer rather than a stricter one, and that arm is unreachable for the reason
+	 *         {@link #refusal} states: a cited index always has a mapping. What KEEPS it unreachable
+	 *         is the admitted-index filter in {@link #examine} — drop that and this arm answers
+	 *         "evidence" for a bracket the chart has no record for.
+	 */
+	private static boolean offersChartEvidence(RecordMapping mapping) {
+		return mapping == null || isChartEvidence(mapping.getResourceType());
+	}
+
+	/**
+	 * @return whether a record of {@code resourceType} is CHART evidence rather than this module's
+	 *         own reference material.
+	 *
+	 *         <p>One spelling for the two questions this class asks of that classification, and the
+	 *         reason is not tidiness: that {@link ChartSearchAiUtils#referenceGroup}'s two values are
+	 *         exhaustive is a property of THAT method. Written as each other's complement — one site
+	 *         asking {@code != REFERENCE_GROUP_REFERENCE} and the other {@code != CHART} — the day a
+	 *         third group is minted the two answer differently, with this class's suite green and
+	 *         neither site having considered it.
+	 *
+	 *         <p>Asked of {@code referenceGroup} directly, which is the form CLAUDE.md prescribes for
+	 *         a question that is not about grading, and never of a resource-type name nor through
+	 *         {@code isGroundingDemoteOnly}, which names a grounding rule.
+	 */
+	private static boolean isChartEvidence(String resourceType) {
+		return ChartSearchAiConstants.REFERENCE_GROUP_CHART
+				.equals(ChartSearchAiUtils.referenceGroup(resourceType));
+	}
+
+	/**
 	 * @return why {@code mapping} cannot be the active order its claim names, or null when it can be
 	 *         — which is also the answer for a reference-group citation, deliberately: the module's
 	 *         own {@code safety_finding} is what these runs cite beside the chart record, and it is
@@ -400,8 +514,7 @@ final class ActiveOrderCitationFidelityCheck {
 			// record" — an accusation made about metadata nobody read.
 			return null;
 		}
-		if (!ChartSearchAiConstants.REFERENCE_GROUP_CHART
-				.equals(ChartSearchAiUtils.referenceGroup(mapping.getResourceType()))) {
+		if (!isChartEvidence(mapping.getResourceType())) {
 			return null;
 		}
 		if (!ChartSearchAiUtils.mayDescribeAMedicationOrder(mapping.getResourceType())) {
@@ -414,5 +527,47 @@ final class ActiveOrderCitationFidelityCheck {
 			return "an order the chart marks as no longer in force";
 		}
 		return null;
+	}
+
+	/** The claim counts as one walk accumulates them. A mutable holder rather than a return value
+	 *  because {@link #examine} already carries the other accumulators for the reason its javadoc gives,
+	 *  and a third return channel would make the per-sentence loop assemble what the walk knows. */
+	private static final class Tally {
+
+		private int stated;
+
+		private int uncited;
+	}
+
+	/**
+	 * Both answers of one walk: the citations offered for an active-order claim that cannot be the
+	 * order, and the count of claims and of those that offered no chart record.
+	 *
+	 * <p>They travel together because they are produced together and a caller must not be able to
+	 * hold one without the other — that is what makes {@code misattributedOrderCitations: []}
+	 * readable, and it is the defect issue #379's measurement found. A failed check returns no
+	 * {@code Report} at all rather than a Report of nulls, so "no measurement" is one state and not
+	 * two.
+	 */
+	static final class Report {
+
+		private final List<Integer> misattributed;
+
+		private final ActiveOrderClaims claims;
+
+		Report(List<Integer> misattributed, ActiveOrderClaims claims) {
+			this.misattributed = misattributed;
+			this.claims = claims;
+		}
+
+		/** @return the distinct offending citation indexes, in the order the answer states them */
+		List<Integer> getMisattributed() {
+			return misattributed;
+		}
+
+		/** @return how many active-order claims the answer stated and how many offered nothing */
+		ActiveOrderClaims getClaims() {
+			return claims;
+		}
 	}
 }

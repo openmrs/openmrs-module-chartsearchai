@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.LogCapture;
+import org.openmrs.module.chartsearchai.api.ChartSearchService.ActiveOrderClaims;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
@@ -124,14 +125,7 @@ public class ActiveOrderCitationFidelityTest {
 		int visit = indexOfType("visit");
 		int encounter = indexOfType("encounter");
 		List<Integer> orders = indexesOfType(ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER);
-		List<Integer> findings = findingsStatingThePhrase();
-		service.setLlmProvider(answering("No — Clarithromycin should not be started: The patient has "
-				+ "a recorded allergy to Clarithromycin [" + findings.get(0) + "]. Furthermore, "
-				+ sentenceFragment("Simvastatin", condition, findings.get(0)) + ", "
-				+ sentenceFragment("Digoxin", visit, findings.get(1)) + ", "
-				+ sentenceFragment("Amiodarone", encounter, findings.get(2)) + ", "
-				+ sentenceFragment("Warfarin", orders.get(0), findings.get(0)) + ", and "
-				+ sentenceFragment("Metformin", orders.get(1), findings.get(1)) + "."));
+		service.setLlmProvider(answering(ticketsFiveClaimAnswer()));
 		try (LogCapture capture = LogCapture.on(CHECK)) {
 			ChartAnswer answer = service.search(patient(), QUESTION);
 			assertTrue(warnStating(capture, "[" + condition + "]", "[" + visit + "]",
@@ -238,14 +232,8 @@ public class ActiveOrderCitationFidelityTest {
 		// unrecognised one — referenceGroup's fail-safe calls it chart evidence, so without its own
 		// guard this record is reported as "null record", which is an accusation about metadata
 		// nobody read. Silence is the direction this check must fail in.
-		PatientChart untyped = new PatientChart(
-				"Patient" + System.lineSeparator() + System.lineSeparator()
-						+ "[1] Simvastatin 20mg" + System.lineSeparator(),
-				Arrays.<RecordMapping> asList(
-						new RecordMapping(1, null, "record-uuid-untyped", null, "Simvastatin 20mg")),
-				Collections.<Integer> emptyList());
-		TestableService onUntyped = newService(untyped);
-		onUntyped.setLlmProvider(answering(sentenceFragment("Simvastatin", 1, 1) + "."));
+		TestableService onUntyped = newService(untypedRecordChart());
+		onUntyped.setLlmProvider(answering(claimCitingRecordOne()));
 		try (LogCapture capture = LogCapture.on(PACKAGE)) {
 			ChartAnswer answer = onUntyped.search(patient(), QUESTION);
 			assertFalse(capture.describeAll().isEmpty(),
@@ -353,8 +341,7 @@ public class ActiveOrderCitationFidelityTest {
 		// renders, which is #201's harm in a new place. The run may only BEGIN before the claim's own
 		// clause ends.
 		int condition = indexOfType(ChartSearchAiConstants.RESOURCE_TYPE_CONDITION);
-		service.setLlmProvider(answering("Clarithromycin" + PHRASE + "Simvastatin, which she has "
-				+ "been taking since 2024 for her benign thyroid neoplasm [" + condition + "]."));
+		service.setLlmProvider(answering(claimWhoseOnlyCitationIsInTheNextClause(condition)));
 		try (LogCapture capture = LogCapture.on(PACKAGE)) {
 			ChartAnswer answer = service.search(patient(), QUESTION);
 			assertFalse(capture.describeAll().isEmpty(),
@@ -542,13 +529,260 @@ public class ActiveOrderCitationFidelityTest {
 							+ capture.describeAll());
 			assertEquals(null, answer.getMisattributedOrderCitations(),
 					"a failed check states NO measurement, which is not a measurement of none");
+			assertEquals(null, answer.getActiveOrderClaims(),
+					"and neither key is a measurement, because one walk produced both — a zeroed "
+							+ "statement here would say the check ran and the answer stated no "
+							+ "active-order claim (issue #379)");
 		}
+	}
+
+	@Test
+	public void anAnswerWhoseActiveOrderClaimsCiteOnlyTheirOwnFindingCountsEveryOneOfThemUncited() {
+		// Issue #379. The shape the maintainer measured with
+		// chartsearchai.drugSafety.citeOrderRecords ON: a lead sentence citing the allergy, then one
+		// claim per sentence, each offering the module's own safety_finding and no chart record. The
+		// other half of this check reads EMPTY there — there is nothing left to misattribute — and
+		// that empty is what "reads like success" meant on the ticket. Both halves are asserted in
+		// one case precisely because the defect is that one of them was readable without the other.
+		//
+		// FOUR claims and FIVE orders named: the last sentence reads "active order Dexamethasone and
+		// active order Hydrocortisone", and the second name carries no "interacts with" before it. A
+		// case asserting five here would be asserting a number the measured answer does not produce.
+		List<Integer> findings = findingsStatingThePhrase();
+		// The lead sentence carries a chart citation of its own and states no active-order claim, so
+		// it must contribute to neither number — the measured answer opened the same way.
+		int leadRecord = indexOfType(ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER);
+		service.setLlmProvider(answering("No — Clarithromycin should not be started: she is already "
+				+ "prescribed a drug that interacts with it [" + leadRecord + "]. Furthermore, "
+				+ "Clarithromycin" + PHRASE + "Simvastatin because of an interaction ["
+				+ findings.get(0) + "]. Clarithromycin also" + PHRASE + "Digoxin because of an "
+				+ "interaction [" + findings.get(1) + "]. Additionally, Clarithromycin" + PHRASE
+				+ "Amiodarone because of an interaction [" + findings.get(2) + "]. Finally, "
+				+ "Clarithromycin" + PHRASE + "Warfarin and active order Metformin because of an "
+				+ "interaction [" + findings.get(0) + "], [" + findings.get(1) + "]."));
+		ChartAnswer answer = service.search(patient(), QUESTION);
+		assertTrue(answer.getMisattributedOrderCitations().isEmpty(),
+				"the premise: with no chart citation offered for any claim there is nothing to "
+						+ "misattribute, so the older key reads as it does on a clean answer");
+		ActiveOrderClaims claims = answer.getActiveOrderClaims();
+		assertEquals(4, claims.getStated(),
+				"four occurrences of the module's own phrase, not the five orders the answer names "
+						+ "— the compound attribution in the last sentence is ONE claim");
+		assertEquals(4, claims.getUncited(),
+				"and not one of them offered a chart record, which is what the empty list above "
+						+ "could not say. Answer was: " + answer.getAnswer());
+	}
+
+	@Test
+	public void oneSentenceWhoseClaimsAreCitedUnevenlyCountsOnlyTheUncitedOnes() {
+		// The discriminator, and the reason the unit here is the marker RUN and not the sentence.
+		// This answer states two claims in ONE sentence: the first offers a drug order, the second
+		// offers only its finding. A sentence-scoped count reads zero — the sentence does cite a
+		// drug order — and that is the same refutation ADR Decision 76 records for the other half,
+		// on the ticket's own one-sentence reproduction. The maintainer's second comment names this
+		// shape as a requirement rather than an edge: "any fix has to keep working when one sentence
+		// carries several attributions".
+		List<Integer> orders = indexesOfType(ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER);
+		List<Integer> findings = findingsStatingThePhrase();
+		service.setLlmProvider(answering(sentenceFragment("Simvastatin", orders.get(0),
+				findings.get(0)) + ", and Clarithromycin" + PHRASE + "Digoxin ["
+				+ findings.get(1) + "]."));
+		ActiveOrderClaims claims = service.search(patient(), QUESTION).getActiveOrderClaims();
+		assertEquals(2, claims.getStated(), "two claims in one sentence");
+		assertEquals(1, claims.getUncited(),
+				"and exactly the one that offered no chart record. A sentence-scoped count reads 0 "
+						+ "here, which is the unit ADR Decision 76 measured and rejected");
+	}
+
+	@Test
+	public void aClaimWithNoMarkersOfItsOwnDoesNotTakeTheNextClaimsCitation() {
+		// The bound the scan takes from the NEXT occurrence of the phrase, which #377 measured as
+		// byte-identical for the ACCUSATION and which the claim count made load-bearing. This
+		// sentence carries no comma, so clauseBound stops nothing and the first claim's region ends
+		// where the second claim begins: replace that bound with sentence.length() and the first
+		// claim reaches the SECOND's chart citation, reading uncited 0 here. Two claims, one
+		// citation, and it belongs to the claim it follows — mutate the bound and read the failures.
+		List<Integer> orders = indexesOfType(ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER);
+		service.setLlmProvider(answering("Clarithromycin" + PHRASE + "Simvastatin and Clarithromycin"
+				+ PHRASE + "Digoxin [" + orders.get(0) + "]."));
+		ChartAnswer answer = service.search(patient(), QUESTION);
+		assertTrue(answer.getMisattributedOrderCitations().isEmpty(),
+				"the premise: the one citation offered is her own drug order, so nothing here is "
+						+ "accused and this case discriminates the claim count alone");
+		ActiveOrderClaims claims = answer.getActiveOrderClaims();
+		assertEquals(2, claims.getStated(), "two claims in one sentence");
+		assertEquals(1, claims.getUncited(),
+				"and the first offered no chart record of its own — a later claim's citation is not "
+						+ "evidence for the one before it. Answer was: " + answer.getAnswer());
+	}
+
+	@Test
+	public void aClaimCitingAChartRecordIsNotUncitedEvenWhereThatRecordIsMisattributed() {
+		// The two halves count different things — a CLAIM here, a CITATION there — and this is the
+		// case that shows it: the ticket's own five-claim arrangement, three of whose chart citations
+		// cannot be an order. Every claim OFFERED something, so none is uncited; three offered the
+		// wrong thing, which is the other key's answer. Collapsing the two — counting a misattributed
+		// claim as uncited — reddens here.
+		int condition = indexOfType(ChartSearchAiConstants.RESOURCE_TYPE_CONDITION);
+		int visit = indexOfType("visit");
+		int encounter = indexOfType("encounter");
+		service.setLlmProvider(answering(ticketsFiveClaimAnswer()));
+		ChartAnswer answer = service.search(patient(), QUESTION);
+		assertEquals(Arrays.asList(condition, visit, encounter),
+				answer.getMisattributedOrderCitations(),
+				"the premise: three of the five chart citations cannot be an order");
+		ActiveOrderClaims claims = answer.getActiveOrderClaims();
+		assertEquals(5, claims.getStated(), "five claims, in one sentence");
+		assertEquals(0, claims.getUncited(),
+				"and none of them uncited — a claim that cited the WRONG record still offered one, "
+						+ "and saying otherwise would count one failure twice");
+	}
+
+	@Test
+	public void aClaimWhoseOnlyChartCitationSitsInTheNextClauseIsCountedUncited() {
+		// The residue, pinned rather than left to be found. The run may only BEGIN before the claim's
+		// own clause ends, so the citation after the comma is that clause's — which is why the other
+		// half stays silent here (asserted, so this case cannot pass by the check simply not
+		// running). For THIS half the same unit yields a report, and the report is defensible: no
+		// chart record was offered inside the claim's own clause. What must never be read off it is
+		// that the ANSWER cites nothing.
+		int condition = indexOfType(ChartSearchAiConstants.RESOURCE_TYPE_CONDITION);
+		service.setLlmProvider(answering(claimWhoseOnlyCitationIsInTheNextClause(condition)));
+		ChartAnswer answer = service.search(patient(), QUESTION);
+		assertTrue(answer.getMisattributedOrderCitations().isEmpty(),
+				"the premise: the other half attributes nothing to a claim whose clause carries no "
+						+ "markers, which is what keeps it from accusing a correct citation");
+		ActiveOrderClaims claims = answer.getActiveOrderClaims();
+		assertEquals(1, claims.getStated(), "one claim");
+		assertEquals(1, claims.getUncited(),
+				"and it offered no chart record in its own clause. The residues of the two halves "
+						+ "run opposite ways over one unit, which is stated rather than closed");
+	}
+
+	@Test
+	public void aClaimWhoseOnlyMarkerIsNoCitationOfThisAnswerIsCountedUncited() {
+		// The admitted-index gate, which nothing discriminated before this case: the check considers
+		// only indexes the answer's OWN resolution turned into references (CLAUDE.md's inline-citation
+		// rule — an index is not a citation until that resolution admits it). A bracketed number the
+		// chart has no record for is a clinical value, not evidence, so the claim offered nothing.
+		// Disabling the gate makes this read uncited 0, because the missing mapping then reaches
+		// offersChartEvidence's null arm, which answers "evidence" — the two fail safe in opposite
+		// directions and only this case holds them apart.
+		service.setLlmProvider(answering("Clarithromycin" + PHRASE + "Simvastatin [9999]."));
+		ChartAnswer answer = service.search(patient(), QUESTION);
+		assertTrue(answer.getMisattributedOrderCitations().isEmpty(),
+				"the premise: an index the answer resolved no reference for is not accused either");
+		ActiveOrderClaims claims = answer.getActiveOrderClaims();
+		assertEquals(1, claims.getStated(), "one claim");
+		assertEquals(1, claims.getUncited(),
+				"and it offered no chart record — a bracket the chart has no record for is a "
+						+ "clinical value, never a citation");
+	}
+
+	@Test
+	public void anAnswerThatNeverStatesThePhraseStatesNoClaimsRatherThanNoMeasurement() {
+		// The short-circuit must not become a silent absence: zero says the check ran and the answer
+		// stated no active-order claim, which is the overwhelmingly common response and is exactly
+		// what a client needs to tell from the failed check's null.
+		service.setLlmProvider(answering("Her most recent haemoglobin was 11.2 g/dL [1]."));
+		ActiveOrderClaims claims = service.search(patient(), QUESTION).getActiveOrderClaims();
+		assertEquals(0, claims.getStated(), "no claim was stated");
+		assertEquals(0, claims.getUncited(), "so none of them is uncited");
+	}
+
+	@Test
+	public void searchStreaming_statesTheClaimsOnTheAnswerItReturnsAndNotOnTheEarlyOne() {
+		// /search/stream is the path users hit, and the async early `done` is built BEFORE any check
+		// runs — so it has no measurement to state, and null says that where a zeroed statement
+		// would tell a client the claims had been examined and every one found cited.
+		List<Integer> findings = findingsStatingThePhrase();
+		service.setLlmProvider(answering("Clarithromycin" + PHRASE + "Simvastatin ["
+				+ findings.get(0) + "]."));
+		final List<ActiveOrderClaims> early = new ArrayList<ActiveOrderClaims>();
+		ChartAnswer answer = service.searchStreaming(patient(), QUESTION, token -> { },
+				reasoning -> { }, citations -> { },
+				ungrounded -> early.add(ungrounded.getActiveOrderClaims()));
+		assertEquals(1, early.size(), "the early-done consumer must have fired, or the null below is "
+				+ "the absence of a callback rather than the absence of a measurement");
+		assertEquals(null, early.get(0),
+				"the early answer states NO measurement: it is handed off before the check runs");
+		ActiveOrderClaims claims = answer.getActiveOrderClaims();
+		assertEquals(1, claims.getStated(), "and the answer this method RETURNS carries it");
+		assertEquals(1, claims.getUncited(),
+				"the claim offered only its own finding, which is reference material and not a "
+						+ "chart record");
+	}
+
+	@Test
+	public void aCitedRecordWhoseTypeTheModuleCouldNotReadSilencesItsClaim() {
+		// The conservatism of THIS half runs opposite to refusal()'s and must be stated once rather
+		// than inferred: where the module cannot read a cited record's type it must not say the claim
+		// offered nothing. referenceGroup fails safe to chart evidence for an unreadable type, so the
+		// claim is not counted — the same record the other half declines to ACCUSE.
+		TestableService onUntyped = newService(untypedRecordChart());
+		onUntyped.setLlmProvider(answering(claimCitingRecordOne()));
+		ChartAnswer answer = onUntyped.search(patient(), QUESTION);
+		assertTrue(answer.getMisattributedOrderCitations().isEmpty(),
+				"the premise: an unreadable type is not accused");
+		ActiveOrderClaims claims = answer.getActiveOrderClaims();
+		assertEquals(1, claims.getStated(), "one claim");
+		assertEquals(0, claims.getUncited(),
+				"and it is not counted uncited either — a record the module could not read is one "
+						+ "it cannot say anything about, in EITHER direction");
 	}
 
 	/** "Clarithromycin interacts with active order X [chart] [finding]" — production's own phrase,
 	 *  read off the constant the renderer builds the chip detail from. */
 	private static String sentenceFragment(String partner, int chartIndex, int findingIndex) {
 		return "Clarithromycin" + PHRASE + partner + " [" + chartIndex + "] [" + findingIndex + "]";
+	}
+
+	/** The ticket's own reported answer: five active-order claims in ONE sentence, three citing a
+	 *  record that cannot be an order and two citing her own drug orders, behind a lead sentence
+	 *  citing the finding. Two cases drive it — that the three are accused, and that none of the five
+	 *  is counted uncited — and ADR Decision 81's "conjoining the two reddens exactly one case" rests
+	 *  on their being ONE arrangement, so they must not be able to drift apart. */
+	private String ticketsFiveClaimAnswer() {
+		int condition = indexOfType(ChartSearchAiConstants.RESOURCE_TYPE_CONDITION);
+		int visit = indexOfType("visit");
+		int encounter = indexOfType("encounter");
+		List<Integer> orders = indexesOfType(ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER);
+		List<Integer> findings = findingsStatingThePhrase();
+		return "No — Clarithromycin should not be started: The patient has "
+				+ "a recorded allergy to Clarithromycin [" + findings.get(0) + "]. Furthermore, "
+				+ sentenceFragment("Simvastatin", condition, findings.get(0)) + ", "
+				+ sentenceFragment("Digoxin", visit, findings.get(1)) + ", "
+				+ sentenceFragment("Amiodarone", encounter, findings.get(2)) + ", "
+				+ sentenceFragment("Warfarin", orders.get(0), findings.get(0)) + ", and "
+				+ sentenceFragment("Metformin", orders.get(1), findings.get(1)) + ".";
+	}
+
+	/** A claim whose own clause carries no marker, the sentence's only citation sitting in the clause
+	 *  after it. Two cases drive it — that the accusation stays silent and that the claim IS counted
+	 *  uncited — and that pair is what ADR Decision 81's "published and not logged" rests on, so they
+	 *  must stay one arrangement. */
+	private static String claimWhoseOnlyCitationIsInTheNextClause(int condition) {
+		return "Clarithromycin" + PHRASE + "Simvastatin, which she has "
+				+ "been taking since 2024 for her benign thyroid neoplasm [" + condition + "].";
+	}
+
+	/** The claim the two untyped-chart cases state: one active-order claim citing record [1] twice.
+	 *  Extracted for the same reason {@code untypedRecordChart()} was — an arrangement is its answer
+	 *  as well as its records, and those two cases must stay one arrangement. */
+	private static String claimCitingRecordOne() {
+		return sentenceFragment("Simvastatin", 1, 1) + ".";
+	}
+
+	/** A chart of ONE record whose resource type the module could not read. The two cases that use
+	 *  it are the two halves of one arrangement — that such a record is neither ACCUSED nor counted
+	 *  as offering nothing — so they must stay the same arrangement. */
+	private static PatientChart untypedRecordChart() {
+		return new PatientChart(
+				"Patient" + System.lineSeparator() + System.lineSeparator()
+						+ "[1] Simvastatin 20mg" + System.lineSeparator(),
+				Arrays.<RecordMapping> asList(
+						new RecordMapping(1, null, "record-uuid-untyped", null, "Simvastatin 20mg")),
+				Collections.<Integer> emptyList());
 	}
 
 	/** The base chart, rendered by the REAL serializer: three of the patient's own drug orders and

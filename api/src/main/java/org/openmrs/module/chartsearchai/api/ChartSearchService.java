@@ -216,6 +216,77 @@ public interface ChartSearchService {
 	}
 
 	/**
+	 * How many claims about the patient's ACTIVE ORDERS an answer stated, and how many of them
+	 * offered no chart record as evidence — the base a share needs, and issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/379">#379</a>'s half of
+	 * the question {@code ChartAnswer.getMisattributedOrderCitations()} answers the other half of.
+	 * This type is CANONICAL for what its two numbers do and do not assert. The accessor points at it
+	 * rather than restating it; README states the same contract for a client author, which is the
+	 * arrangement {@code conditionRuleCoverage} already uses.
+	 *
+	 * <p><b>Why a client could not read it off the other key.</b> {@code misattributedOrderCitations}
+	 * names the chart citations offered for such a claim that cannot be the order. Its {@code []} is
+	 * therefore two different responses: one whose active-order claims cited chart records that were
+	 * all accepted, and one that cited no chart record for any of them. Both are recorded, on one
+	 * patient and one question with {@code chartsearchai.drugSafety.citeOrderRecords} turned on, and
+	 * {@code misattributedOrderCitations} read {@code []} in each. ADR Decision 81 carries both runs,
+	 * and carries the fact that they disagree with each other.
+	 *
+	 * <p><b>What {@code stated} counts.</b> Occurrences of
+	 * {@code DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE} — CLAIMS, and not orders named. One
+	 * sentence reading <em>"… active order Dexamethasone and active order Hydrocortisone …"</em>
+	 * states one claim about two orders, because the second name carries no <em>interacts with</em>
+	 * before it. That is a residue rather than a rounding: the module's own recogniser is the phrase,
+	 * and a second rule for the conjunction would be a second recogniser.
+	 *
+	 * <p><b>What {@code uncited} counts.</b> Those claims whose own marker RUN — the same unit
+	 * {@code ActiveOrderCitationFidelityCheck} uses for the other half, never the sentence — held no
+	 * chart-group citation the answer's own resolution admitted. A claim citing a chart record that
+	 * is MISATTRIBUTED is not uncited: it offered evidence, and which record it offered is the other
+	 * key's answer. The two answer about different things — a CLAIM here, a CITATION there, and one
+	 * claim can contribute several of the latter — so a client must not add them. Neither is a
+	 * certificate: {@code uncited: 0} says every claim offered something, not that the something was
+	 * right.
+	 *
+	 * <p><b>Zero is a measurement and absence is not.</b> {@code stated: 0} says the answer stated no
+	 * such claim; a null {@code ActiveOrderClaims} says the producer stated no measurement, which the
+	 * async-grounding early {@code done} does because it is handed off before any check runs, and a
+	 * failed check does because a diagnostic that broke must not read as one that found nothing.
+	 *
+	 * <p><b>What it cannot see</b> is what the run unit cannot see, and the residues run OPPOSITE to
+	 * the other half's: there, a run the module cannot read fails toward silence; here, toward
+	 * counting the claim uncited. A model that hard-wraps between a claim and its markers, or that
+	 * puts them after a comma, states a claim this counts as offering nothing. ADR Decision 81
+	 * records them; {@code ActiveOrderCitationFidelityCheck} is canonical for the run itself.
+	 */
+	final class ActiveOrderClaims {
+
+		private final int stated;
+
+		private final int uncited;
+
+		public ActiveOrderClaims(int stated, int uncited) {
+			this.stated = stated;
+			this.uncited = uncited;
+		}
+
+		/** @return how many active-order claims the answer stated */
+		public int getStated() {
+			return stated;
+		}
+
+		/** @return how many of them offered no chart record in their own marker run */
+		public int getUncited() {
+			return uncited;
+		}
+
+		@Override
+		public String toString() {
+			return "ActiveOrderClaims{stated=" + stated + ", uncited=" + uncited + "}";
+		}
+	}
+
+	/**
 	 * An answer to a chart search question with source citations.
 	 */
 	class ChartAnswer {
@@ -247,6 +318,8 @@ public interface ChartSearchService {
 		private final List<Integer> misattributedOrderCitations;
 
 		private final List<Integer> unstatedFindingSeverities;
+
+		private final ActiveOrderClaims activeOrderClaims;
 
 		private final DrugReferenceLoad.Coverage conditionRuleCoverage;
 
@@ -310,7 +383,7 @@ public interface ChartSearchService {
 				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations) {
 			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, searchMode,
 					referenceSlice, pairChipExtent, unresolvedDrugClass, unfaithfullyRenderedCitations,
-					null, null, null);
+					null, null, null, null);
 		}
 
 		/**
@@ -322,7 +395,8 @@ public interface ChartSearchService {
 		 * <p><b>It is also the only form that grows.</b> A statement added to the answer takes a new
 		 * parameter HERE rather than a new overload, because a second constructor carrying the
 		 * coverage would fail that guard outright — which is what fixes the position of
-		 * {@code conditionRuleCoverage} last and puts each new list before it.
+		 * {@code conditionRuleCoverage} last and puts each new statement before it, whether it is a
+		 * list or a value type of its own.
 		 *
 		 * <p>There is deliberately no twelve-argument overload beside it in either direction. Issues
 		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/377">#377</a> and
@@ -339,11 +413,12 @@ public interface ChartSearchService {
 				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations,
 				List<Integer> misattributedOrderCitations,
 				List<Integer> unstatedFindingSeverities,
+				ActiveOrderClaims activeOrderClaims,
 				DrugReferenceLoad.Coverage conditionRuleCoverage) {
 			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings,
 					searchMode, referenceSlice, pairChipExtent, unresolvedDrugClass,
 					unfaithfullyRenderedCitations, misattributedOrderCitations, unstatedFindingSeverities,
-					conditionRuleCoverage, DrugSafetyValidator.STATUS_UNAVAILABLE);
+					activeOrderClaims, conditionRuleCoverage, DrugSafetyValidator.STATUS_UNAVAILABLE);
 		}
 
 		public ChartAnswer(String answer, List<RecordReference> references,
@@ -353,6 +428,7 @@ public interface ChartSearchService {
 				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations,
 				List<Integer> misattributedOrderCitations,
 				List<Integer> unstatedFindingSeverities,
+				ActiveOrderClaims activeOrderClaims,
 				DrugReferenceLoad.Coverage conditionRuleCoverage, String safetyStatus) {
 			this.answer = answer;
 			this.references = java.util.Collections.unmodifiableList(
@@ -383,6 +459,11 @@ public interface ChartSearchService {
 			this.unstatedFindingSeverities = unstatedFindingSeverities == null ? null
 					: java.util.Collections.unmodifiableList(
 							new java.util.ArrayList<Integer>(unstatedFindingSeverities));
+			// A value type rather than a normalised pair of ints, under the same rule as the three
+			// lists above (issue #379): null is the absence of a measurement and a zeroed statement
+			// is a measurement of none, so neither is normalised into the other. It is immutable, so
+			// it is carried rather than copied.
+			this.activeOrderClaims = activeOrderClaims;
 			this.conditionRuleCoverage = conditionRuleCoverage;
 			this.safetyStatus = safetyStatus;
 		}
@@ -685,11 +766,38 @@ public interface ChartSearchService {
 		 * is the async-grounding path's early {@code done}, built before the check runs; on a cache
 		 * hit the ORIGINAL request's list is replayed with the rest of the answer.
 		 *
+		 * <p><b>Read it beside {@link #getActiveOrderClaims()}</b>, which says on the same walk how
+		 * many active-order claims the answer made and how many offered no chart record at all. Empty
+		 * here means one thing where that number is zero and quite another where it equals the claims
+		 * stated, and issue #379 is a pair of live measurements in which it meant each.
+		 *
 		 * @return the distinct citation indexes, in the order the answer states them, or null where
 		 *         none was stated
 		 */
 		public List<Integer> getMisattributedOrderCitations() {
 			return misattributedOrderCitations;
+		}
+
+		/**
+		 * How many claims about this patient's ACTIVE ORDERS the answer stated, and how many of them
+		 * offered no chart record as evidence —
+		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/379">issue #379</a>.
+		 * {@code ActiveOrderCitationFidelityCheck} states it on the same walk that produces
+		 * {@link #getMisattributedOrderCitations()}, because they are two answers to one question and
+		 * a second walk is the two-resolutions-that-agree shape #151 forbids.
+		 *
+		 * <p><b>It is what makes {@link #getMisattributedOrderCitations()} readable</b>, whose empty
+		 * list could not be read alone. It is not a base that one is a share OF — that key counts
+		 * CITATIONS and this counts CLAIMS, and one claim can offer several citations.
+		 * {@link ActiveOrderClaims} is canonical for what {@code stated}, {@code uncited}, a zero and
+		 * this accessor's null each do and do not assert, for the two recorded runs behind that
+		 * reasoning, and for the residues of the run unit both halves share. ADR Decision 81 carries
+		 * the decision.
+		 *
+		 * @return the statement, or null where the producer made no measurement
+		 */
+		public ActiveOrderClaims getActiveOrderClaims() {
+			return activeOrderClaims;
 		}
 
 		/**

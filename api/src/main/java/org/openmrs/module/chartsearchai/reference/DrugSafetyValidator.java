@@ -7494,9 +7494,11 @@ public class DrugSafetyValidator {
 	 * them. <b>What that reaches</b> is the order the chips are serialized in — measured on the issue's
 	 * own reproduction, ADR Decision 82 — and, following from that, the order
 	 * {@link DrugReferenceInjector} numbers the {@code safety_finding} records, which it writes in this
-	 * list's order. What follows about the ANSWER is
-	 * nothing — the prompt is handed a set whose order is not stated to the model (ADR Decision 37) —
-	 * so do not read this as putting the identity finding in front of it. Ordering rather than
+	 * list's order. It licenses NO claim about the ANSWER — the prompt is handed a set whose order is
+	 * not stated to the model (ADR Decision 37) — so do not read it as putting the identity finding in
+	 * front of the answer, and do not read the refusal as a denial: what the emission order of this
+	 * same list does for a truncated answer is issue #346's question, at
+	 * {@link #FINDING_STRENGTH_DESCENDING}. Ordering rather than
 	 * suppressing is the same choice {@link #FINDING_STRENGTH_DESCENDING} makes for the interaction
 	 * arm; ADR Decision 82 is canonical for the alternative that was weighed and declined.
 	 *

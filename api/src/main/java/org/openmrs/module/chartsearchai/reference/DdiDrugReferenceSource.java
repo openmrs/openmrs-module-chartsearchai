@@ -40,7 +40,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * duplicated:
  * <ul>
  *   <li>{@code mechanisms}: {@code {groupId: {text, categories}}}, each description stored once;</li>
- *   <li>{@code drugs}: {@code {id, name, rxcui, rxnorm_name, drugbank_id, atc[], ciel[]}};</li>
+ *   <li>{@code drugs}: {@code {id, name, rxcui, rxnorm_name, drugbank_id, atc[], brand_names[], ciel[]}}
+ *       ({@code brand_names} since knowledge-base schema 1.3; read as aliases, absent on older files);</li>
  *   <li>{@code interactions}: rows {@code [drug_a_id, drug_b_id, severity, group_id]}.</li>
  * </ul>
  * This source expands that into the module's drug-centric {@link DrugReference} model: one
@@ -580,11 +581,22 @@ public class DdiDrugReferenceSource implements DrugReferenceSource {
 			for (JsonNode a : d.path("atc")) {
 				atc.add(a.asText());
 			}
-			// aliases: name + RxNorm name + CIEL concept names, lowercased and de-duplicated
+			// aliases: name + RxNorm name + RxNorm brand names + CIEL concept names, lowercased and de-duplicated
 			List<String> aliases = new ArrayList<String>();
 			addAlias(aliases, name);
 			if (d.path("rxnorm_name").isTextual()) {
 				addAlias(aliases, d.get("rxnorm_name").asText());
+			}
+			// Brand names (knowledge base schema 1.3, openmrs-ddi-knowledge-base issue #5): a clinician's
+			// question is where brand names live, and without them "is it safe to give her panadol?" resolved
+			// to nothing, so the asked-about drug was never injected or checked. A brand of a combination
+			// product is filed under every ingredient it contains (Vytorin under simvastatin AND ezetimibe),
+			// which is the same many-to-one shape the bridged CIEL names below already give the alias list.
+			// Absent on a schema 1.0 file: path() yields a missing node, and the loop runs zero times.
+			for (JsonNode b : d.path("brand_names")) {
+				if (b.isTextual()) {
+					addAlias(aliases, b.asText());
+				}
 			}
 			// One pass over the bridge, feeding both readings of it: the NAME goes on as an alias, as it
 			// always has, and the (uuid, name) pair is kept whole so the order-to-entry join can ask

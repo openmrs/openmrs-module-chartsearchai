@@ -1,0 +1,916 @@
+{
+ "metadata": {
+  "schema_version": "1.3",
+  "title": "OpenMRS DDI knowledge base — verbatim slice for brand-name alias tests",
+  "note": "Three drugs of the shipped knowledge base with their brand_names (RxNorm BN concepts) and the interaction rows among them. Vytorin is a brand of both simvastatin and ezetimibe; Panadol is a brand of acetaminophen (openmrs-ddi-knowledge-base issue #5).",
+  "source": {
+   "name": "DDInter 2.0",
+   "url": "https://ddinter2.scbdd.com/",
+   "tables": "drug-drug interactions; drug-disease interactions",
+   "normalization": "RxNorm (NLM)",
+   "bridge": "CIEL v2026-07-20"
+  }
+ },
+ "mechanisms": {
+  "-1": {
+   "text": null,
+   "categories": []
+  },
+  "16": {
+   "text": "Coadministration with ezetimibe may rarely increase the risk of myopathy and serum transaminase elevations associated with HMG-CoA reductase inhibitors (i.e., statins). The mechanism of interaction is unknown.",
+   "categories": [
+    "others"
+   ]
+  }
+ },
+ "drugs": [
+  {
+   "id": "DDInter14",
+   "name": "Acetaminophen",
+   "rxcui": "161",
+   "rxnorm_name": "acetaminophen",
+   "drugbank_id": "DB00316",
+   "atc": [
+    "N02BE01"
+   ],
+   "brand_names": [
+    "Acephen",
+    "Acetadryl",
+    "Allzital",
+    "Anabar",
+    "Anacin AF",
+    "Anacin Advanced Headache Formula",
+    "Apadaz",
+    "Arthriten Inflammatory Pain",
+    "Backaid",
+    "Backaid IPF",
+    "Backprin",
+    "Bactimicina",
+    "Bupap",
+    "Capacet",
+    "Cetafen",
+    "Combogesic",
+    "Comtrex Sore Throat Relief",
+    "Contragesic",
+    "Dologesic",
+    "Ed Flex",
+    "Endocet",
+    "Esgic",
+    "Exaprin",
+    "Exaprin Plus",
+    "Excedrin",
+    "Excedrin Mild Headache",
+    "Excedrin PM",
+    "Excedrin PM Triple Action",
+    "Excedrin Quick Tab",
+    "Excedrin Tension Headache",
+    "Feverall",
+    "Fioricet",
+    "Fioricet with Codeine",
+    "Frenadol",
+    "Hycet",
+    "Legatrin PM",
+    "Little Fevers",
+    "Mapap",
+    "Nalocet",
+    "Ninjacof A",
+    "Norco",
+    "Nortemp",
+    "Pamprin Cramp Formula",
+    "Pamprin Max Formula",
+    "Pamprin Multi-Symptom",
+    "Panadol",
+    "Panadol Extra",
+    "Panadol PM",
+    "Percocet",
+    "Percogesic Reformulated Jan 2011",
+    "Pharbetol",
+    "Premsyn PMS",
+    "Primlev",
+    "Redutemp",
+    "Relagesic",
+    "Repan",
+    "Ringl",
+    "Saleto",
+    "Sed-Max",
+    "Tactinal",
+    "Tempra Quicklets",
+    "Tencon",
+    "Trezix",
+    "Tycolene",
+    "Tylenol",
+    "Tylenol Gelcap Extra Strength",
+    "Tylenol PM",
+    "Tylenol with Codeine",
+    "Ultracet",
+    "Unisom with Pain Relief",
+    "Vanatol",
+    "Verdrocet",
+    "Vtol",
+    "Zebutal"
+   ],
+   "ciel": [
+    {
+     "code": "103169",
+     "uuid": "103169AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aluminum acetate / chlorpheniramine / phenylpropanolamine"
+    },
+    {
+     "code": "103170",
+     "uuid": "103170AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aluminum hydroxide / aspirin / caffeine / magnesium hydroxide"
+    },
+    {
+     "code": "103171",
+     "uuid": "103171AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aluminum hydroxide / aspirin / salicylamide"
+    },
+    {
+     "code": "103172",
+     "uuid": "103172AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin"
+    },
+    {
+     "code": "103173",
+     "uuid": "103173AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / caffeine"
+    },
+    {
+     "code": "103174",
+     "uuid": "103174AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / caffeine / calcium gluconate"
+    },
+    {
+     "code": "103175",
+     "uuid": "103175AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / caffeine / codeine / salicylamide"
+    },
+    {
+     "code": "103176",
+     "uuid": "103176AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / caffeine / hydrocodone"
+    },
+    {
+     "code": "103177",
+     "uuid": "103177AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / caffeine / salicylamide"
+    },
+    {
+     "code": "103178",
+     "uuid": "103178AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / codeine"
+    },
+    {
+     "code": "103179",
+     "uuid": "103179AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / aspirin / phenylpropanolamine"
+    },
+    {
+     "code": "103180",
+     "uuid": "103180AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / atropine / ethaverine / salicylamide"
+    },
+    {
+     "code": "103181",
+     "uuid": "103181AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / bromelains"
+    },
+    {
+     "code": "103182",
+     "uuid": "103182AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / brompheniramine / dextromethorphan / pseudoephedrine"
+    },
+    {
+     "code": "103183",
+     "uuid": "103183AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / brompheniramine / phenylpropanolamine"
+    },
+    {
+     "code": "103184",
+     "uuid": "103184AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / brompheniramine / pseudoephedrine"
+    },
+    {
+     "code": "103185",
+     "uuid": "103185AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / butabarbital / caffeine"
+    },
+    {
+     "code": "103186",
+     "uuid": "103186AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / butalbital"
+    },
+    {
+     "code": "103187",
+     "uuid": "103187AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / butalbital / caffeine"
+    },
+    {
+     "code": "103188",
+     "uuid": "103188AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / butalbital / caffeine / codeine"
+    },
+    {
+     "code": "103189",
+     "uuid": "103189AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / butalbital / caffeine / hydrocodone"
+    },
+    {
+     "code": "103190",
+     "uuid": "103190AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / butalbital / codeine"
+    },
+    {
+     "code": "103191",
+     "uuid": "103191AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / caffeine"
+    },
+    {
+     "code": "103192",
+     "uuid": "103192AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / caffeine / chlorpheniramine / hydrocodone / phenylephrine"
+    },
+    {
+     "code": "103193",
+     "uuid": "103193AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / caffeine / chlorpheniramine / phenylephrine"
+    },
+    {
+     "code": "103194",
+     "uuid": "103194AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / caffeine / chlorpheniramine / phenylephrine / pyrilamine"
+    },
+    {
+     "code": "103195",
+     "uuid": "103195AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / caffeine / chlorpheniramine / phenylpropanolamine"
+    },
+    {
+     "code": "103196",
+     "uuid": "103196AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / caffeine / chlorpheniramine / pseudoephedrine"
+    },
+    {
+     "code": "103197",
+     "uuid": "103197AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / caffeine / codeine / salicylamide"
+    },
+    {
+     "code": "103198",
+     "uuid": "103198AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / caffeine / dihydrocodeine"
+    },
+    {
+     "code": "103199",
+     "uuid": "103199AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / caffeine / guaifenesin / phenylephrine"
+    },
+    {
+     "code": "103201",
+     "uuid": "103201AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / caffeine / isometheptene"
+    },
+    {
+     "code": "103202",
+     "uuid": "103202AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / caffeine / magnesium salicylate"
+    },
+    {
+     "code": "103203",
+     "uuid": "103203AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / caffeine / pamabrom / vitamin B6"
+    },
+    {
+     "code": "103204",
+     "uuid": "103204AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / caffeine / phenylephrine"
+    },
+    {
+     "code": "103205",
+     "uuid": "103205AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / caffeine / phenylpropanolamine / pyrilamine"
+    },
+    {
+     "code": "103206",
+     "uuid": "103206AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / caffeine / phenylpropanolamine / salicylamide"
+    },
+    {
+     "code": "103208",
+     "uuid": "103208AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / caffeine / phenyltoloxamine"
+    },
+    {
+     "code": "103209",
+     "uuid": "103209AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / caffeine / phenyltoloxamine / salicylamide"
+    },
+    {
+     "code": "103210",
+     "uuid": "103210AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / caffeine / pyrilamine"
+    },
+    {
+     "code": "103211",
+     "uuid": "103211AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / caffeine / salicylamide"
+    },
+    {
+     "code": "103212",
+     "uuid": "103212AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / calcium carbonate"
+    },
+    {
+     "code": "103213",
+     "uuid": "103213AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / calcium carbonate / magnesium carbonate / magnesium oxide"
+    },
+    {
+     "code": "103214",
+     "uuid": "103214AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / chloralantipyrine / isometheptene"
+    },
+    {
+     "code": "103215",
+     "uuid": "103215AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / chlorpheniramine"
+    },
+    {
+     "code": "103216",
+     "uuid": "103216AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / chlorpheniramine / codeine / phenylephrine"
+    },
+    {
+     "code": "103217",
+     "uuid": "103217AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / chlorpheniramine / dextromethorphan"
+    },
+    {
+     "code": "103218",
+     "uuid": "103218AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / chlorpheniramine / dextromethorphan / phenylephrine"
+    },
+    {
+     "code": "103219",
+     "uuid": "103219AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / chlorpheniramine / dextromethorphan / phenylpropanolamine"
+    },
+    {
+     "code": "103220",
+     "uuid": "103220AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / chlorpheniramine / dextromethorphan / pseudoephedrine"
+    },
+    {
+     "code": "103221",
+     "uuid": "103221AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / chlorpheniramine / diphenhydramine / pseudoephedrine"
+    },
+    {
+     "code": "103222",
+     "uuid": "103222AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / chlorpheniramine / guaifenesin / phenylpropanolamine"
+    },
+    {
+     "code": "103223",
+     "uuid": "103223AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / chlorpheniramine / phenylephrine"
+    },
+    {
+     "code": "103224",
+     "uuid": "103224AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / chlorpheniramine / phenylephrine / phenylpropanolamine / pyrilamine"
+    },
+    {
+     "code": "103225",
+     "uuid": "103225AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / chlorpheniramine / phenylephrine / phenyltoloxamine"
+    },
+    {
+     "code": "103226",
+     "uuid": "103226AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / chlorpheniramine / phenylephrine / pyrilamine"
+    },
+    {
+     "code": "103227",
+     "uuid": "103227AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / chlorpheniramine / phenylephrine / salicylamide"
+    },
+    {
+     "code": "103228",
+     "uuid": "103228AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / chlorpheniramine / phenylpropanolamine"
+    },
+    {
+     "code": "103229",
+     "uuid": "103229AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / chlorpheniramine / phenylpropanolamine / phenyltoloxamine"
+    },
+    {
+     "code": "103230",
+     "uuid": "103230AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / chlorpheniramine / phenylpropanolamine / salicylamide"
+    },
+    {
+     "code": "103231",
+     "uuid": "103231AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / chlorpheniramine / pseudoephedrine"
+    },
+    {
+     "code": "103232",
+     "uuid": "103232AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / chlorzoxazone"
+    },
+    {
+     "code": "103233",
+     "uuid": "103233AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / cinnamedrine / pamabrom"
+    },
+    {
+     "code": "103234",
+     "uuid": "103234AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / cinnamedrine / pamabrom / pyrilamine"
+    },
+    {
+     "code": "103235",
+     "uuid": "103235AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / clemastine / phenylpropanolamine"
+    },
+    {
+     "code": "103236",
+     "uuid": "103236AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / clemastine / pseudoephedrine"
+    },
+    {
+     "code": "103237",
+     "uuid": "103237AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / codeine"
+    },
+    {
+     "code": "103238",
+     "uuid": "103238AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / codeine / guaifenesin / phenylpropanolamine"
+    },
+    {
+     "code": "103239",
+     "uuid": "103239AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / dexbrompheniramine / pseudoephedrine"
+    },
+    {
+     "code": "103240",
+     "uuid": "103240AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / dexchlorpheniramine / pseudoephedrine"
+    },
+    {
+     "code": "103241",
+     "uuid": "103241AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / dextromethorphan"
+    },
+    {
+     "code": "103242",
+     "uuid": "103242AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / dextromethorphan / diphenhydramine"
+    },
+    {
+     "code": "103243",
+     "uuid": "103243AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / dextromethorphan / diphenhydramine / pseudoephedrine"
+    },
+    {
+     "code": "103244",
+     "uuid": "103244AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / dextromethorphan / doxylamine"
+    },
+    {
+     "code": "103245",
+     "uuid": "103245AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / dextromethorphan / doxylamine / ephedrine"
+    },
+    {
+     "code": "103246",
+     "uuid": "103246AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / dextromethorphan / doxylamine / phenylephrine"
+    },
+    {
+     "code": "103247",
+     "uuid": "103247AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / dextromethorphan / doxylamine / pseudoephedrine"
+    },
+    {
+     "code": "103248",
+     "uuid": "103248AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / dextromethorphan / guaifenesin"
+    },
+    {
+     "code": "103249",
+     "uuid": "103249AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / dextromethorphan / guaifenesin / phenylephrine"
+    },
+    {
+     "code": "103250",
+     "uuid": "103250AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / dextromethorphan / guaifenesin / phenylpropanolamine"
+    },
+    {
+     "code": "103251",
+     "uuid": "103251AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / dextromethorphan / guaifenesin / pseudoephedrine"
+    },
+    {
+     "code": "103252",
+     "uuid": "103252AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / dextromethorphan / phenylephrine"
+    },
+    {
+     "code": "103253",
+     "uuid": "103253AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / dextromethorphan / phenylephrine / pyrilamine"
+    },
+    {
+     "code": "103254",
+     "uuid": "103254AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / dextromethorphan / phenylpropanolamine"
+    },
+    {
+     "code": "103255",
+     "uuid": "103255AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / dextromethorphan / pseudoephedrine"
+    },
+    {
+     "code": "103256",
+     "uuid": "103256AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / dextromethorphan / pseudoephedrine / pyrilamine"
+    },
+    {
+     "code": "103257",
+     "uuid": "103257AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / dichloralantipyrine / isometheptene"
+    },
+    {
+     "code": "103258",
+     "uuid": "103258AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / dihydrocodeine"
+    },
+    {
+     "code": "103259",
+     "uuid": "103259AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / dihydrocodeine / salicylamide"
+    },
+    {
+     "code": "103260",
+     "uuid": "103260AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / diphenhydramine"
+    },
+    {
+     "code": "103261",
+     "uuid": "103261AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / diphenhydramine / guaifenesin / phenylephrine"
+    },
+    {
+     "code": "103262",
+     "uuid": "103262AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / diphenhydramine / phenylephrine"
+    },
+    {
+     "code": "103263",
+     "uuid": "103263AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / diphenhydramine / pseudoephedrine"
+    },
+    {
+     "code": "103264",
+     "uuid": "103264AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / domperidone"
+    },
+    {
+     "code": "103265",
+     "uuid": "103265AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / doxylamine / phenylephrine"
+    },
+    {
+     "code": "103266",
+     "uuid": "103266AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / doxylamine / pseudoephedrine"
+    },
+    {
+     "code": "103267",
+     "uuid": "103267AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / doxylamine / salicylamide"
+    },
+    {
+     "code": "103268",
+     "uuid": "103268AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / guaifenesin"
+    },
+    {
+     "code": "103269",
+     "uuid": "103269AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / guaifenesin / phenylephrine"
+    },
+    {
+     "code": "103270",
+     "uuid": "103270AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / guaifenesin / pseudoephedrine"
+    },
+    {
+     "code": "103271",
+     "uuid": "103271AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / hydrocodone"
+    },
+    {
+     "code": "103272",
+     "uuid": "103272AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / hydrocodone / potassium guaiacolsulfonate / pseudoephedrine"
+    },
+    {
+     "code": "103273",
+     "uuid": "103273AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / isometheptene"
+    },
+    {
+     "code": "103274",
+     "uuid": "103274AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / magnesium salicylate"
+    },
+    {
+     "code": "103275",
+     "uuid": "103275AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / magnesium salicylate / pamabrom"
+    },
+    {
+     "code": "103276",
+     "uuid": "103276AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / melatonin"
+    },
+    {
+     "code": "103277",
+     "uuid": "103277AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / meperidine"
+    },
+    {
+     "code": "103278",
+     "uuid": "103278AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / methionine"
+    },
+    {
+     "code": "103279",
+     "uuid": "103279AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / metoclopramide"
+    },
+    {
+     "code": "103280",
+     "uuid": "103280AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / orphenadrine"
+    },
+    {
+     "code": "103281",
+     "uuid": "103281AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / oxycodone"
+    },
+    {
+     "code": "103282",
+     "uuid": "103282AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / pamabrom"
+    },
+    {
+     "code": "103284",
+     "uuid": "103284AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / pamabrom / pyrilamine"
+    },
+    {
+     "code": "103285",
+     "uuid": "103285AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / pamabrom / vitamin B6"
+    },
+    {
+     "code": "103286",
+     "uuid": "103286AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / pamabrom / vitamin E"
+    },
+    {
+     "code": "103287",
+     "uuid": "103287AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / pentazocine"
+    },
+    {
+     "code": "103288",
+     "uuid": "103288AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / pheniramine / phenylephrine"
+    },
+    {
+     "code": "103289",
+     "uuid": "103289AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / phenobarbital"
+    },
+    {
+     "code": "103290",
+     "uuid": "103290AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / phenylephrine"
+    },
+    {
+     "code": "103291",
+     "uuid": "103291AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / phenylephrine / phenyltoloxamine"
+    },
+    {
+     "code": "103292",
+     "uuid": "103292AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / phenylpropanolamine"
+    },
+    {
+     "code": "103293",
+     "uuid": "103293AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / phenylpropanolamine / phenyltoloxamine"
+    },
+    {
+     "code": "103294",
+     "uuid": "103294AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / phenyltoloxamine"
+    },
+    {
+     "code": "103295",
+     "uuid": "103295AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / phenyltoloxamine / salicylamide"
+    },
+    {
+     "code": "103296",
+     "uuid": "103296AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / promethazine"
+    },
+    {
+     "code": "103297",
+     "uuid": "103297AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / propoxyphene"
+    },
+    {
+     "code": "103298",
+     "uuid": "103298AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / pseudoephedrine"
+    },
+    {
+     "code": "103299",
+     "uuid": "103299AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / pseudoephedrine / triprolidine"
+    },
+    {
+     "code": "103300",
+     "uuid": "103300AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / pyrilamine"
+    },
+    {
+     "code": "103301",
+     "uuid": "103301AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / salicylamide"
+    },
+    {
+     "code": "103302",
+     "uuid": "103302AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / salicylic acid"
+    },
+    {
+     "code": "103303",
+     "uuid": "103303AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / tramadol"
+    },
+    {
+     "code": "165447",
+     "uuid": "165447AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen / caffeine / chlorpheniramine maleate / phenylephrine hydrochloride"
+    },
+    {
+     "code": "167976",
+     "uuid": "640b58d6-a9b4-4109-a9a4-1fdcd9718ecd",
+     "name": "Hyoscine butylbromide / Paracetamol"
+    },
+    {
+     "code": "168002",
+     "uuid": "3d95e9ad-f172-4e1a-8a0f-586871d714f0",
+     "name": "Acetaminophen / etoricoxib"
+    },
+    {
+     "code": "168033",
+     "uuid": "9cdb86c3-0f97-4114-ae2b-ba996d263cef",
+     "name": "Aceclofenac / chlorzoxazone / paracetamol"
+    },
+    {
+     "code": "168218",
+     "uuid": "e05229cd-1d52-48ff-8e1c-b3780b2e0a34",
+     "name": "Acetaminophen / lornoxicam"
+    },
+    {
+     "code": "169133",
+     "uuid": "58e694d1-87d7-4d5d-a4ae-a0a8b74611bd",
+     "name": "Aceclofenac / paracetamol / serratiopeptidase"
+    },
+    {
+     "code": "170013",
+     "uuid": "58b26824-eb90-4585-abd3-e9ce096e2010",
+     "name": "Acetaminophen / ibuprofen"
+    },
+    {
+     "code": "170036",
+     "uuid": "a9240a1f-1f8c-44be-b292-a2959509c554",
+     "name": "Acetaminophen / diclofenac / methocarbamol"
+    },
+    {
+     "code": "170673",
+     "uuid": "fbbb8749-c143-4e62-92ea-76e77db47f32",
+     "name": "Acetaminophen / caffeine / opium"
+    },
+    {
+     "code": "70116",
+     "uuid": "70116AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Acetaminophen"
+    }
+   ]
+  },
+  {
+   "id": "DDInter1675",
+   "name": "Simvastatin",
+   "rxcui": "36567",
+   "rxnorm_name": "simvastatin",
+   "drugbank_id": "DB00641",
+   "atc": [
+    "C10AA01"
+   ],
+   "brand_names": [
+    "Flolipid",
+    "Vytorin",
+    "Zocor"
+   ],
+   "ciel": [
+    {
+     "code": "104633",
+     "uuid": "104633AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ezetimibe / simvastatin"
+    },
+    {
+     "code": "83936",
+     "uuid": "83936AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Simvastatin"
+    }
+   ]
+  },
+  {
+   "id": "DDInter707",
+   "name": "Ezetimibe",
+   "rxcui": "341248",
+   "rxnorm_name": "ezetimibe",
+   "drugbank_id": "DB00973",
+   "atc": [
+    "C10AX09"
+   ],
+   "brand_names": [
+    "Nexlizet",
+    "Roszet",
+    "Vytorin",
+    "Zetia"
+   ],
+   "ciel": [
+    {
+     "code": "104633",
+     "uuid": "104633AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ezetimibe / simvastatin"
+    },
+    {
+     "code": "167965",
+     "uuid": "caa64c78-2dd6-4985-92e9-4367f09ec4d4",
+     "name": "Ezetimibe / rosuvastatin"
+    },
+    {
+     "code": "170262",
+     "uuid": "8029b79f-35f9-44a5-b079-f48a6853a115",
+     "name": "Ezetimibe / pitavastatin"
+    },
+    {
+     "code": "170525",
+     "uuid": "6143f3b5-e250-4891-83d2-b597a8a22f87",
+     "name": "Ezetimibe / fenofibrate / rosuvastatin"
+    },
+    {
+     "code": "76155",
+     "uuid": "76155AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+     "name": "Ezetimibe"
+    }
+   ]
+  }
+ ],
+ "interactions": [
+  [
+   "DDInter14",
+   "DDInter1675",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter14",
+   "DDInter707",
+   "Unknown",
+   "-1"
+  ],
+  [
+   "DDInter1675",
+   "DDInter707",
+   "Moderate",
+   "16"
+  ]
+ ]
+}

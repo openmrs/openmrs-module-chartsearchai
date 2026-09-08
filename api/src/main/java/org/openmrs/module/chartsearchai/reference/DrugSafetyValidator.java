@@ -7485,6 +7485,18 @@ public class DrugSafetyValidator {
 	 * is how an authoritative classification source carrying no rules ({@link AtcDrugReferenceSource})
 	 * still produces allergy reasoning.
 	 *
+	 * <p><b>The direct allergy leads (issue #388).</b> One drug can carry an identity finding AND a
+	 * class finding raised by a DIFFERENT recorded allergen: they are two findings about two records,
+	 * two keys in {@link ContraindicationChips}, and both are kept. Which of them LEADS used to be
+	 * decided by the order the chart returned the allergy records, because one loop raised whichever
+	 * relationship each allergen produced as it reached it. It is now decided here: the identity
+	 * comparison is made for every recorded allergen before any class comparison is made for any of
+	 * them. That reaches the order a client renders the chip list in, and which finding survives a
+	 * truncation ({@link #FINDING_STRENGTH_DESCENDING} is this class's other answer to the same
+	 * question); it reaches nothing about how the model reads the prompt, which is handed a SET whose
+	 * order is not stated to it. Suppressing the class chip instead was the alternative issue #388
+	 * weighed and declined — it carries a second chart record the identity chip cannot state.
+	 *
 	 * <p><b>Identity is not classification (issue #135).</b> The three comparisons were all gated on
 	 * one early return taken when {@code ref} had neither an ATC subgroup nor a curated group. That
 	 * guard is right for the two class comparisons — without a subgroup or a group there is nothing to
@@ -7596,15 +7608,44 @@ public class DrugSafetyValidator {
 		// name a drug that publishes no such code. Re-measure it on a refresh — the instruction lives with
 		// the measurement, and this is one more thing that now depends on it.
 		DrugReference subject = chips.subjectOf(ref);
+		// PASS ONE: the identity comparison, over EVERY recorded allergen, before any class comparison
+		// is made for any of them (issue #388). Two passes and not one loop, because the two questions
+		// are asked of different records and the answer to one outranks the other: the chart's own
+		// allergy to the drug being checked is what leads, and a class relationship a DIFFERENT allergen
+		// has with it stands behind that. Under one loop the lead was decided by the order
+		// PatientService.getAllergies returned the records — recordedAllergens preserves
+		// PatientClinicalContext.getAllergyTokens() — so a cross-reactivity chip raised from an allergen
+		// the chart happened to record first was appended ahead of the direct-allergy chip about the
+		// very same drug. That is the order-dependence issue #268 removed from the fold's CONTENT (see
+		// ContraindicationChips.add), left standing in its ORDER.
+		//
+		// What the ordering reaches is TWO surfaces and deliberately not a third: the order a client
+		// renders the chip list in, and which finding survives a truncation — issue #346's own property,
+		// see FINDING_STRENGTH_DESCENDING, which is this class's other answer to "several findings about
+		// one subject, ordered strongest first rather than suppressed". It buys nothing at the model's
+		// reading of the prompt, which is handed a SET whose order is not stated to it (ADR Decision 37).
+		//
+		// It changes no chip's CONTENT and suppresses nothing: two recorded allergens are two findings
+		// and stay two chips, the ledger's collapse unit being the recorded finding (issue #145). Issue
+		// #388 asked whether the class chip should instead be dropped where the subject already carries
+		// an identity chip, and answered no — the yielding chip carries a second chart record the
+		// surviving one cannot state, which is issue #88's own test for a wrong dedup.
+		List<RecordedAllergen> notThisDrug = new ArrayList<RecordedAllergen>(recordedAllergens.size());
 		for (RecordedAllergen recorded : recordedAllergens) {
 			List<DrugReference> allergen = recorded.substances();
 			// Identity FIRST, over every substance the recorded name implies, and only then the class
 			// comparisons over the same set: precedence belongs to the recorded allergy as a whole, so a
 			// weaker relationship with one implied substance must not pre-empt a stronger one with
 			// another. Each arm stops at its first match, which is what makes one recorded allergy one
-			// chip however many of the implied substances the subject is related to.
+			// chip however many of the implied substances the subject is related to. Since issue #388
+			// that precedence is unchanged and is spelled by the pass split: an allergen this pass chips
+			// is not carried into the next one, so the class comparisons still see exactly the allergens
+			// they saw before.
 			DrugReference sameSubstance = firstOfSameSubstance(allergen, refSubstance);
-			if (sameSubstance != null) {
+			if (sameSubstance == null) {
+				notThisDrug.add(recorded);
+			}
+			else {
 				// Named after the ALLERGEN ROW the chart resolved, not after the subject the other chips
 				// name (issue #164, and exempt from issue #206 deliberately). This sentence reports the
 				// patient's own allergy RECORD, and naming the row the chart records is what makes a
@@ -7633,15 +7674,31 @@ public class DrugSafetyValidator {
 								recorded.identitySentence(sameSubstance), subjectIsACurrentMedication,
 								recorded.chartRecords()),
 						recorded.names(sameSubstance));
-				continue;
 			}
-			if (refClasses.isEmpty() && refGroups.isEmpty()) {
-				// The class comparisons' own precondition, kept where it belongs — after the identity
-				// check, which needs none of it. Both comparisons below are provably no-ops on empty
-				// sets, so this states the requirement in code rather than leaving it to be re-derived:
-				// "same class as" and "same group as" are questions only a classified drug can be asked.
-				continue;
-			}
+		}
+		if (refClasses.isEmpty() && refGroups.isEmpty()) {
+			// The class comparisons' own precondition, and since issue #388 it is stated once rather than
+			// per allergen: it reads refClasses and refGroups, both of which are functions of ref alone,
+			// so it never differed between iterations. Both comparisons below are provably no-ops on
+			// empty sets, so this states the requirement in code rather than leaving it to be re-derived:
+			// "same class as" and "same group as" are questions only a classified drug can be asked.
+			//
+			// It used to sit inside the single loop as a per-allergen `continue`, and that placement was
+			// load-bearing — as a `return` it left a later allergen's IDENTITY match unasked, which is
+			// issue #135 reinstated for the patients most likely to meet it, and
+			// DirectAllergyContraindicationTest.anEarlierUnrelatedAllergenDoesNotHideTheDirectOne is the
+			// case that caught it. The pass split is what makes it safe HERE and what makes that
+			// distinction unobservable: every identity chip is raised before this line is reached, so
+			// there is no longer an identity comparison for a class precondition to gate. #135's own
+			// shape is structural now rather than resting on a keyword; that test still pins the
+			// behaviour end to end, and its comment records what its mutation can no longer show.
+			return;
+		}
+		// PASS TWO: the two class comparisons, for the allergens pass one did not chip — the same
+		// allergens the single loop reached them with, in the same order, since identity was already
+		// this arm's first question.
+		for (RecordedAllergen recorded : notThisDrug) {
+			List<DrugReference> allergen = recorded.substances();
 			boolean chipped = false;
 			for (DrugReference implied : allergen) {
 				String shared = sharedCrossReactivityClass(refClasses, implied);

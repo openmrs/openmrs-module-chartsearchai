@@ -153,20 +153,25 @@ public class DirectAllergyContraindicationTest {
 
 	@Test
 	public void anEarlierUnrelatedAllergenDoesNotHideTheDirectOne() throws IOException {
-		// The guard is a per-allergen SKIP, not an exit — and that is the whole of its new placement.
-		// The guard tests the DRUG IN PLAY, not the allergen, so with an unclassified drug in play
-		// every iteration meets it; each recorded allergy is one iteration, in the chart's own order.
-		// Here the unrelated allergen is listed FIRST, so it is the one that trips the guard and the
-		// identity match is queued behind it. If the guard left the METHOD instead of the iteration,
-		// that queued match would never be looked at and issue #135 would be reinstated for exactly
-		// the patients most likely to hit it — the ones with more than one recorded drug allergy.
+		// An allergen the arm can say nothing about must not cost a LATER record its identity chip. The
+		// class precondition tests the DRUG IN PLAY and not the allergen, so with an unclassified drug
+		// in play it is met however many allergies the chart holds; here the unrelated allergen is
+		// listed FIRST, so pre-fix it was reached before the identity match behind it. If reaching it
+		// left the METHOD, that match would never be looked at and issue #135 would be reinstated for
+		// exactly the patients most likely to hit it — the ones with more than one recorded drug
+		// allergy. The token order is therefore load-bearing and must not be "tidied": with the identity
+		// allergen first its chip is added before the precondition is ever reached. Nor can the two
+		// single-allergen absence cases either side of this one catch it: they pass one allergen, so
+		// nothing is ever queued.
 		//
-		// The token order is therefore load-bearing and must not be "tidied": with the identity
-		// allergen first its chip is already added before the guard is ever reached, and a method-exit
-		// guard looks correct. Nor can the two single-allergen absence cases either side of this one
-		// catch it: they pass one allergen, so nothing is ever queued. Measured through this path: 1 on
-		// this build, 0 with the guard's `continue` changed to `return` (which still sits after the
-		// identity check, so it reads as correct), and 0 pre-fix.
+		// WHAT MOVED (issue #388): this used to record "1 on this build, 0 with the guard's `continue`
+		// changed to `return`". That measurement no longer holds and the reason is the point — the arm
+		// now raises every identity chip in a first pass and consults the class precondition once,
+		// after it, so there is no identity comparison left for the precondition to gate whichever
+		// keyword it uses. What this case pins is unchanged and is the behaviour, not the keyword: the
+		// allergen listed after an unrelated one is still compared. It is structural rather than
+		// mutation-caught now, and DirectAllergyFindingLeadsTest is where the pass order itself is
+		// pinned. Measured pre-#135-fix: 0.
 		List<SafetyWarning> warnings = fixtureValidator().validate(
 				"", "Is it safe to give her ledipasvir?",
 				DrugReferenceTestSupport.ctx(60, null, null, null,

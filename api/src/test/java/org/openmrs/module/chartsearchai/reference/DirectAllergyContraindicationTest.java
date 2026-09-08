@@ -153,20 +153,21 @@ public class DirectAllergyContraindicationTest {
 
 	@Test
 	public void anEarlierUnrelatedAllergenDoesNotHideTheDirectOne() throws IOException {
-		// The guard is a per-allergen SKIP, not an exit — and that is the whole of its new placement.
-		// The guard tests the DRUG IN PLAY, not the allergen, so with an unclassified drug in play
-		// every iteration meets it; each recorded allergy is one iteration, in the chart's own order.
-		// Here the unrelated allergen is listed FIRST, so it is the one that trips the guard and the
-		// identity match is queued behind it. If the guard left the METHOD instead of the iteration,
-		// that queued match would never be looked at and issue #135 would be reinstated for exactly
-		// the patients most likely to hit it — the ones with more than one recorded drug allergy.
+		// An allergen the arm can say nothing about must not cost a LATER record its identity chip. The
+		// class precondition tests the DRUG IN PLAY and not the allergen, so with an unclassified drug
+		// in play it is met however many allergies the chart holds; here the unrelated allergen is
+		// listed FIRST, so pre-fix it was reached before the identity match behind it. If reaching it
+		// left the METHOD, that match would never be looked at and issue #135 would be reinstated for
+		// exactly the patients most likely to hit it — the ones with more than one recorded drug
+		// allergy. The token order is therefore load-bearing and must not be "tidied": with the identity
+		// allergen first its chip is added before the precondition is ever reached. Nor can the two
+		// single-allergen absence cases either side of this one catch it: they pass one allergen, so
+		// nothing is ever queued.
 		//
-		// The token order is therefore load-bearing and must not be "tidied": with the identity
-		// allergen first its chip is already added before the guard is ever reached, and a method-exit
-		// guard looks correct. Nor can the two single-allergen absence cases either side of this one
-		// catch it: they pass one allergen, so nothing is ever queued. Measured through this path: 1 on
-		// this build, 0 with the guard's `continue` changed to `return` (which still sits after the
-		// identity check, so it reads as correct), and 0 pre-fix.
+		// WHAT MOVED (issue #388): this used to record "1 on this build, 0 with the guard's
+		// `continue` changed to `return`". That mutation no longer moves anything — ADR Decision 82
+		// says why — so what this case pins is the behaviour and not the keyword: the allergen listed
+		// after an unrelated one is still compared. Measured pre-#135-fix: 0 chips.
 		List<SafetyWarning> warnings = fixtureValidator().validate(
 				"", "Is it safe to give her ledipasvir?",
 				DrugReferenceTestSupport.ctx(60, null, null, null,
@@ -186,7 +187,13 @@ public class DirectAllergyContraindicationTest {
 		//
 		// What this pins is the REQUIREMENT, not the guard statement: with the guard deleted outright
 		// the assertion still holds, because both comparisons are no-ops on empty sets (measured — the
-		// whole suite stays green). The guard's placement is pinned separately, by the case above.
+		// whole suite stays green). Where the guard SITS is a different question and is still pinned:
+		// move it above the identity pass — issue #135's own shape, and the natural "tidy the
+		// precondition to the top of the method" edit — and the case above reddens, along with other
+		// cases here and in the neighbouring allergen classes (measured the same way). Each of those
+		// turns on an identity chip for a drug carrying neither an ATC subgroup nor a cross-reactivity
+		// group, which is the only state in which this guard fires at all. What the case above can no
+		// longer catch is the `continue`-vs-`return` keyword, and its own comment says so.
 		List<SafetyWarning> warnings = fixtureValidator().validate(
 				"", "Is it safe to give her ledipasvir?",
 				DrugReferenceTestSupport.ctx(60, null, null, null,
@@ -249,8 +256,8 @@ public class DirectAllergyContraindicationTest {
 		// One question can put SEVERAL entries in play, because DDInter files one substance as several
 		// route/formulation rows sharing an rxnorm_name — 142 such groups in the full KB, 28 of them
 		// entirely ATC-less. Only one of those rows is the resolved allergen, so the others reach the
-		// per-allergen loop as a DIFFERENT reference: they must fall through the in-loop classification
-		// guard rather than each add a chip. Measured through this same path: 0 chips before the fix
+		// arm as a DIFFERENT reference: they must fall through the classification guard rather than each
+		// add a chip. Measured through this same path: 0 chips before the fix
 		// (the whole arm returned early for both rows), 1 after.
 		//
 		// The shared route-variant slice supplies the shape: its two Iron rows (DDInter975 and
@@ -294,12 +301,11 @@ public class DirectAllergyContraindicationTest {
 				"and the surviving chip is the identity one, about the row the allergy resolved to");
 	}
 
-	/** The real fixture entries behind a service carrying the real curated cross-reactivity groups. */
+	/** The real fixture entries behind a service carrying the real curated cross-reactivity groups —
+	 *  {@code DrugReferenceTestSupport.ddiFixtureService}, whose javadoc says why the two steps may
+	 *  not be taken apart. */
 	private static DrugReferenceService fixtureService() throws IOException {
-		DrugReferenceService service = DrugReferenceTestSupport
-				.serviceWith(DrugReferenceTestSupport.ddiFixtureEntries(FIXTURE));
-		service.setCrossReactivityGroups(DrugReferenceTestSupport.bundledGroups());
-		return service;
+		return DrugReferenceTestSupport.ddiFixtureService(FIXTURE);
 	}
 
 	private static DrugSafetyValidator fixtureValidator() throws IOException {

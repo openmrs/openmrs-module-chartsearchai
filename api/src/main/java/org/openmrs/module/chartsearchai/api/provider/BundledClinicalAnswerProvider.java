@@ -246,7 +246,7 @@ public class BundledClinicalAnswerProvider implements ClinicalAnswerProvider {
 						latestAnswer.set(envelope);
 						events.accept(TurnEvent.withAnswer(TurnEventType.ANSWER_DONE,
 								sequence.getAndIncrement(), PROVIDER_ID, envelope));
-					}, preliminary -> events.accept(TurnEvent.delta(TurnEventType.REASONING_DELTA,
+					}, preliminary -> events.accept(TurnEvent.delta(TurnEventType.PRELIMINARY_DELTA,
 							sequence.getAndIncrement(), PROVIDER_ID, preliminary)), cancellation);
 		}
 		catch (InsufficientContextException e) {

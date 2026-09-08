@@ -1391,7 +1391,8 @@ public class ChartSearchAiRestController {
 			conversationService.recordCheckedAnswer(turn, event.getAnswer());
 		}
 		String wire = type.getWireName();
-		if (type == TurnEventType.ANSWER_DELTA || type == TurnEventType.REASONING_DELTA) {
+		if (type == TurnEventType.ANSWER_DELTA || type == TurnEventType.REASONING_DELTA
+				|| type == TurnEventType.PRELIMINARY_DELTA) {
 			writeSseEvent(out, wire, event.getTextDelta() == null ? "" : event.getTextDelta());
 			return;
 		}

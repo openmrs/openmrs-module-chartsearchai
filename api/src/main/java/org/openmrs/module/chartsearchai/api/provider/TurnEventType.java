@@ -13,7 +13,7 @@ package org.openmrs.module.chartsearchai.api.provider;
  * One event in the canonical provider turn lifecycle:
  *
  * <pre>
- * turn_started -&gt; reasoning_delta* -&gt; answer_delta* -&gt; answer_done
+ * turn_started -&gt; preliminary_delta* -&gt; reasoning_delta* -&gt; answer_delta* -&gt; answer_done
  *   -&gt; answer_validation? -&gt; evidence_updated? -&gt; indepth_pending?
  *   -&gt; (indepth_done | indepth_error)? -&gt; (turn_done | turn_error)
  * </pre>
@@ -31,6 +31,19 @@ public enum TurnEventType {
 	/** Transport liveness signal. It carries no clinical content and may repeat between stages. */
 	HEARTBEAT("heartbeat"),
 
+	/**
+	 * Optional progressive preview reasoning, streamed before any committed reasoning exists
+	 * ({@code chartsearchai.progressiveReasoning.enabled}, default off).
+	 *
+	 * <p>Its own channel rather than another {@link #REASONING_DELTA} for two reasons a client
+	 * cannot recover from the text: the preview reasons over an independently-numbered top-K chart,
+	 * so its {@code [N]} markers do NOT index the records the committed answer cites and must be
+	 * stripped rather than rendered; and it is PROVISIONAL, so the first committed reasoning delta
+	 * replaces it rather than continuing it. Repeats; requires {@code token_streaming}; may not
+	 * resume once committed reasoning has begun.</p>
+	 */
+	PRELIMINARY_DELTA("preliminary_delta"),
+	/** Committed full-chart reasoning. Supersedes any {@link #PRELIMINARY_DELTA} text. */
 	REASONING_DELTA("reasoning_delta"),
 
 	ANSWER_DELTA("answer_delta"),

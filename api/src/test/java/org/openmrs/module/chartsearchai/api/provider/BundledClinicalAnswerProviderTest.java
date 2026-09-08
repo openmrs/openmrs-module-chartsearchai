@@ -185,7 +185,7 @@ public class BundledClinicalAnswerProviderTest {
 		TurnResult result = provider.execute(request(), sink, CancellationSignal.NONE)
 				.toCompletableFuture().get();
 
-		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.REASONING_DELTA,
+		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.PRELIMINARY_DELTA,
 				TurnEventType.REASONING_DELTA, TurnEventType.ANSWER_DELTA, TurnEventType.ANSWER_DELTA,
 				TurnEventType.ANSWER_DONE, TurnEventType.EVIDENCE_UPDATED, TurnEventType.TURN_DONE),
 				sink.types());
@@ -215,6 +215,35 @@ public class BundledClinicalAnswerProviderTest {
 		assertEquals("drug_safety.v1", safetyCheck.get("schema_version"));
 		assertEquals("unavailable", safetyCheck.get("status"));
 		assertNull(result.getProblemCode());
+	}
+
+	/**
+	 * The pipeline streams THREE text channels, and the preview is not the third spelling of the
+	 * second. It reasons over an independently-numbered top-K chart
+	 * ({@code chartsearchai.progressiveReasoning.topK}), so its {@code [N]} markers do not index the
+	 * records the committed answer cites, and it is provisional: the committed reasoning REPLACES it
+	 * rather than continuing it. Folding it into {@code reasoning_delta} left a client no way to
+	 * strip those markers or to know when to discard the preview, which is the misreading the legacy
+	 * {@code /search/stream} contract names its own third channel to prevent.
+	 */
+	@Test
+	public void thePreviewReasoningIsItsOwnChannelAndNotAnotherCommittedReasoningDelta()
+			throws Exception {
+		ScriptedChartSearchService service = new ScriptedChartSearchService();
+		service.ungrounded = answer("Aspirin 81mg [1]", Arrays.asList(reference(1, null)));
+		service.groundedResult = answer("Aspirin 81mg [1]", Arrays.asList(reference(1, Boolean.TRUE)));
+		BundledClinicalAnswerProvider provider = provider(service);
+
+		CollectingSink sink = new CollectingSink();
+		provider.execute(request(), sink, CancellationSignal.NONE).toCompletableFuture().get();
+
+		assertEquals("preview ", sink.single(TurnEventType.PRELIMINARY_DELTA).getTextDelta(),
+				"the progressive preview must arrive on its own channel");
+		assertEquals("thinking ", sink.single(TurnEventType.REASONING_DELTA).getTextDelta(),
+				"committed reasoning must not carry the preview's text");
+		assertTrue(TurnLifecycleValidator
+				.violations(provider.descriptor().getCapabilities(), sink.types()).isEmpty(),
+				"the preview channel must satisfy the provider's advertised capabilities");
 	}
 
 	@Test

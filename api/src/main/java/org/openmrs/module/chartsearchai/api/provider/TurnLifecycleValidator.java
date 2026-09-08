@@ -27,8 +27,10 @@ import java.util.Set;
  *       and nothing follows it.</li>
  *   <li>{@code turn_done} requires a preceding {@code answer_done}; {@code turn_error} does not,
  *       because a turn may fail before any answer exists.</li>
- *   <li>Events follow the canonical stage order; only the delta events may repeat, and the
- *       reasoning stream ends once answer deltas begin.</li>
+ *   <li>Events follow the canonical stage order; only the delta events may repeat. The optional
+ *       progressive PREVIEW stream ({@code preliminary_delta}) precedes committed reasoning and
+ *       may not resume once it has begun, because committed reasoning replaces the preview rather
+ *       than continuing it; the reasoning stream in turn ends once answer deltas begin.</li>
  *   <li>Optional events require their advertised capability: deltas require
  *       {@code token_streaming}; {@code answer_validation} requires {@code answer_check} or
  *       {@code answer_review}; {@code evidence_updated} requires {@code grounding};
@@ -44,16 +46,17 @@ public final class TurnLifecycleValidator {
 
 	static {
 		STAGES.put(TurnEventType.TURN_STARTED, 0);
-		STAGES.put(TurnEventType.REASONING_DELTA, 1);
-		STAGES.put(TurnEventType.ANSWER_DELTA, 2);
-		STAGES.put(TurnEventType.ANSWER_DONE, 3);
-		STAGES.put(TurnEventType.ANSWER_VALIDATION, 4);
-		STAGES.put(TurnEventType.EVIDENCE_UPDATED, 5);
-		STAGES.put(TurnEventType.INDEPTH_PENDING, 6);
-		STAGES.put(TurnEventType.INDEPTH_DONE, 7);
-		STAGES.put(TurnEventType.INDEPTH_ERROR, 7);
-		STAGES.put(TurnEventType.TURN_DONE, 8);
-		STAGES.put(TurnEventType.TURN_ERROR, 8);
+		STAGES.put(TurnEventType.PRELIMINARY_DELTA, 1);
+		STAGES.put(TurnEventType.REASONING_DELTA, 2);
+		STAGES.put(TurnEventType.ANSWER_DELTA, 3);
+		STAGES.put(TurnEventType.ANSWER_DONE, 4);
+		STAGES.put(TurnEventType.ANSWER_VALIDATION, 5);
+		STAGES.put(TurnEventType.EVIDENCE_UPDATED, 6);
+		STAGES.put(TurnEventType.INDEPTH_PENDING, 7);
+		STAGES.put(TurnEventType.INDEPTH_DONE, 8);
+		STAGES.put(TurnEventType.INDEPTH_ERROR, 8);
+		STAGES.put(TurnEventType.TURN_DONE, 9);
+		STAGES.put(TurnEventType.TURN_ERROR, 9);
 	}
 
 	private TurnLifecycleValidator() {
@@ -135,7 +138,9 @@ public final class TurnLifecycleValidator {
 				answered || count(counts, TurnEventType.ANSWER_DELTA) > 0,
 				"producing an answer");
 		requireCapability(violations, capabilities, ProviderCapability.TOKEN_STREAMING,
-				count(counts, TurnEventType.REASONING_DELTA) + count(counts, TurnEventType.ANSWER_DELTA) > 0,
+				count(counts, TurnEventType.PRELIMINARY_DELTA)
+						+ count(counts, TurnEventType.REASONING_DELTA)
+						+ count(counts, TurnEventType.ANSWER_DELTA) > 0,
 				"delta events");
 		if (count(counts, TurnEventType.ANSWER_VALIDATION) > 0
 				&& !capabilities.contains(ProviderCapability.ANSWER_CHECK)

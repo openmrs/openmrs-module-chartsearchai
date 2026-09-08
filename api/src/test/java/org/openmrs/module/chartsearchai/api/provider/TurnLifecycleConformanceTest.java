@@ -16,6 +16,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -193,6 +194,32 @@ public class TurnLifecycleConformanceTest {
 		Set<ProviderCapability> none = EnumSet.noneOf(ProviderCapability.class);
 		assertFalse(TurnLifecycleValidator
 				.violations(none, events("turn_started", "answer_done", "turn_done")).isEmpty());
+	}
+
+	@Test
+	public void thePreviewStreamMayNotResumeOnceCommittedReasoningBegins() {
+		// The committed reasoning REPLACES the preview, so a preview delta after it would tell a
+		// client to append provisional text to the reasoning it was meant to supersede.
+		assertFalse(TurnLifecycleValidator.violations(
+				EnumSet.of(ProviderCapability.ANSWER, ProviderCapability.TOKEN_STREAMING),
+				Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.REASONING_DELTA,
+						TurnEventType.PRELIMINARY_DELTA, TurnEventType.ANSWER_DONE,
+						TurnEventType.TURN_DONE))
+				.isEmpty(), "a preview delta after committed reasoning must violate the stage order");
+	}
+
+	@Test
+	public void thePreviewStreamIsValidAheadOfCommittedReasoningAndRequiresTokenStreaming() {
+		List<TurnEventType> events = Arrays.asList(TurnEventType.TURN_STARTED,
+				TurnEventType.PRELIMINARY_DELTA, TurnEventType.PRELIMINARY_DELTA,
+				TurnEventType.REASONING_DELTA, TurnEventType.ANSWER_DELTA, TurnEventType.ANSWER_DONE,
+				TurnEventType.TURN_DONE);
+		assertTrue(TurnLifecycleValidator.violations(
+				EnumSet.of(ProviderCapability.ANSWER, ProviderCapability.TOKEN_STREAMING), events)
+				.isEmpty(), "preview deltas repeat and precede committed reasoning");
+		assertFalse(TurnLifecycleValidator
+				.violations(EnumSet.of(ProviderCapability.ANSWER), events).isEmpty(),
+				"a provider that does not advertise token_streaming may not stream a preview");
 	}
 
 	@Test

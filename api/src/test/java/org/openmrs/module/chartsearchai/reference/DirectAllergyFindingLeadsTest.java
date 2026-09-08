@@ -12,6 +12,7 @@ package org.openmrs.module.chartsearchai.reference;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -56,6 +57,9 @@ public class DirectAllergyFindingLeadsTest {
 	private static final String CROSS_REACTIVITY = "Ciprofloxacin is in the same ATC class (J01MA) as"
 			+ " the patient's allergy to Levofloxacin — possible cross-reactivity";
 
+	/** The active order's display, and what {@code getActiveDrugNames} holds for it. */
+	private static final String PRESCRIPTION = "Ciprofloxacin 500mg";
+
 	@Test
 	public void theDirectAllergyLeadsWhereTheChartRecordedTheClassAllergenFirst() throws IOException {
 		// THE case, and the one that fails before the fix: the class-related allergen is the chart's
@@ -72,14 +76,36 @@ public class DirectAllergyFindingLeadsTest {
 		assertLeadsWithTheDirectAllergy(DrugReferenceTestSupport.set("Ciprofloxacin", "Levofloxacin"));
 	}
 
+	@Test
+	public void theDirectAllergyLeadsOnAPrescriptionTheQuestionNeverNames() throws IOException {
+		// The ticket's own arm: its sixteen chips were measured on a question about a THIRD drug, and
+		// ten of them came from the active-order arm — a prescription checked against the chart's
+		// allergy records rather than a drug the question resolved. Both arms call this one method, and
+		// this case is what says so: nothing here names ciprofloxacin, so the question-driven arm has no
+		// anchor and it is addActiveOrderContraindications that reaches the prescription, through the
+		// allergy widening its subject-matter gate reads off the question (issue #143).
+		DrugReferenceService service = fixtureService();
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service).validate("",
+				"Does she have any drug allergies?",
+				DrugReferenceTestSupport.ctx(60, null, DrugReferenceTestSupport.set(PRESCRIPTION), null,
+						DrugReferenceTestSupport.set("Levofloxacin", "Ciprofloxacin"), null,
+						Collections.singletonList(DrugReferenceTestSupport.activeOrder(
+								"e2f7a1c4-3b6d-4a58-9f21-0c7d8e5b4a63", PRESCRIPTION))));
+
+		List<SafetyWarning> contraindications = DrugReferenceTestSupport.contraindications(warnings);
+		assertEquals(2, contraindications.size(),
+				"the prescription is checked against both recorded allergens, was: " + warnings);
+		assertEquals(IDENTITY, contraindications.get(0).getDetail(),
+				"and leads with the chart's own allergy to the drug it is prescribed");
+		assertEquals(CROSS_REACTIVITY, contraindications.get(1).getDetail(),
+				"the cross-reactivity finding standing behind it, as on the question-driven arm");
+	}
+
 	/** Both findings, in one order, through the real validator over the real fixture. */
 	private static void assertLeadsWithTheDirectAllergy(Set<String> allergies)
 			throws IOException {
-		DrugReferenceService service = DrugReferenceTestSupport
-				.serviceWith(DrugReferenceTestSupport.ddiFixtureEntries(FIXTURE));
-		service.setCrossReactivityGroups(DrugReferenceTestSupport.bundledGroups());
-
-		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(service).validate("", QUESTION,
+		List<SafetyWarning> warnings = DrugReferenceTestSupport.validator(fixtureService()).validate("",
+				QUESTION,
 				DrugReferenceTestSupport.ctx(60, null, null, null, allergies, null));
 
 		// Kept, not suppressed: two recorded allergens are two findings and stay two chips (issue #145).
@@ -89,5 +115,15 @@ public class DirectAllergyFindingLeadsTest {
 						+ " was recorded in");
 		assertEquals(CROSS_REACTIVITY, warnings.get(1).getDetail(),
 				"and the class finding about the OTHER allergen still stands behind it");
+	}
+
+	/** The real fixture entries behind a service carrying the real curated cross-reactivity groups —
+	 *  as {@code DirectAllergyContraindicationTest} builds it, so the class comparison here is made
+	 *  against the curated data a deployment really has and not against an empty group list. */
+	private static DrugReferenceService fixtureService() throws IOException {
+		DrugReferenceService service = DrugReferenceTestSupport
+				.serviceWith(DrugReferenceTestSupport.ddiFixtureEntries(FIXTURE));
+		service.setCrossReactivityGroups(DrugReferenceTestSupport.bundledGroups());
+		return service;
 	}
 }

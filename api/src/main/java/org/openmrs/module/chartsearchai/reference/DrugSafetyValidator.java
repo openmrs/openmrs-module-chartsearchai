@@ -7474,9 +7474,9 @@ public class DrugSafetyValidator {
 	 * (cross-<em>branch</em> cross-reactivity, e.g. aspirin vs an ibuprofen allergy, which ATC's tree
 	 * cannot express). At most one warning per (SUBSTANCE, ALLERGEN'S SUBSTANCE): the most specific match
 	 * wins, several aliases of one allergy warn once ({@link #recordedAllergens} de-duplicates them), a
-	 * recorded name denoting several substances warns once (the loop below stops at its first match), the
-	 * several reference rows one substance is filed as warn once between them, and so do two allergy
-	 * RECORDS for two presentations of one substance
+	 * recorded name denoting several substances warns once (each comparison below stops at its first
+	 * match), the several reference rows one substance is filed as warn once between them, and so do
+	 * two allergy RECORDS for two presentations of one substance
 	 * ({@link ContraindicationChips}, issue #145 — the ledger this arm adds to rather than appending to
 	 * the chip list, and the reason it takes one). That ledger is shared with the curated arm, whose
 	 * allergy rules NAMING their own entry land on this arm's key since issue #146 and report the same

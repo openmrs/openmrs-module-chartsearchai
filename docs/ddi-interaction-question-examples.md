@@ -754,11 +754,12 @@ or what reaches the model.
   allergen kept both — that is the designed fold, and #388 decided to keep it — but which of the two
   came first followed the order `PatientService.getAllergies` returned the records. Measured
   2026-09-08 on this rig with Sarah Taylor, *"Is it safe to start her on clarithromycin?"*: sixteen
-  chips, of which the hydrocortisone pair read class-then-identity. **#388 now raises every
-  direct-allergy chip before any cross-reactivity chip**, so a rerun on a build carrying it returns
-  the same sixteen with that pair the other way round; the transcripts above pre-date it. Nothing
-  else in the payload moves — the dexamethasone pair was already in that order, which is what made
-  the dependence invisible until the second pair was looked at.
+  chips, of which the hydrocortisone pair read class-then-identity. **#388 now raises a drug's
+  direct-allergy finding ahead of the cross-reactivity findings about that same drug** — per drug,
+  not across the response — so a rerun on a build carrying it returns the same sixteen chips with
+  that pair the other way round; the transcripts above pre-date it. Nothing else in the payload
+  moves: the dexamethasone pair was already in that order, which is what made the dependence
+  invisible until the second pair was looked at.
 
 ## How these were verified
 

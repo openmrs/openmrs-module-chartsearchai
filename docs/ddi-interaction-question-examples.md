@@ -747,7 +747,6 @@ or what reaches the model.
   ([#356](https://github.com/openmrs/openmrs-module-chartsearchai/issues/356), counting the rule
   chips it appended), but that count says how many pairs it related, not which of them a truncated
   answer kept. On a patient with many active orders, read the chips.
-
 - **The contraindication chips about one drug were sequenced by the chart's allergy record order**
   ([#388](https://github.com/openmrs/openmrs-module-chartsearchai/issues/388)). A drug that carries
   both a direct-allergy chip and a *possible cross-reactivity* chip from a DIFFERENT recorded

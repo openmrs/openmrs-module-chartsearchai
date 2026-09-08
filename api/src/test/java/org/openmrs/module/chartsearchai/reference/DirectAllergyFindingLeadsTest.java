@@ -105,7 +105,9 @@ public class DirectAllergyFindingLeadsTest {
 				"and the class finding about the OTHER allergen still stands behind it");
 	}
 
-	/** As the two sibling classes over this fixture spell it — the shared service builder, validated. */
+	/** The shared service builder, validated — as {@code DirectAllergyContraindicationTest} spells it.
+	 *  {@code RecordedAllergenMemoScopeTest} uses this fixture and deliberately does not, for a reason
+	 *  its own javadoc gives. */
 	private static DrugSafetyValidator fixtureValidator() throws IOException {
 		return DrugReferenceTestSupport.validator(DrugReferenceTestSupport.ddiFixtureService(FIXTURE));
 	}

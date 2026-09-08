@@ -97,7 +97,8 @@ public class ChartSearchAiMisattributedOrderCitationTest {
 	private ChartSearchService.ChartAnswer answer() {
 		return new ChartSearchService.ChartAnswer(MODEL_ANSWER,
 				Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
-				Collections.<SafetyWarning> emptyList(), null, null, null, null, null, stated, null, null);
+				Collections.<SafetyWarning> emptyList(), null, null, null, null, null, stated, null, null,
+				null);
 	}
 
 	@SuppressWarnings("unchecked")
@@ -259,7 +260,7 @@ public class ChartSearchAiMisattributedOrderCitationTest {
 			// no measurement whatever the final one says.
 			ungroundedAnswerConsumer.accept(new ChartSearchService.ChartAnswer(MODEL_ANSWER,
 					Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
-					Collections.<SafetyWarning> emptyList(), null, null, null, null, null, null, null, null));
+					Collections.<SafetyWarning> emptyList(), null, null, null, null, null));
 			return answer();
 		}
 

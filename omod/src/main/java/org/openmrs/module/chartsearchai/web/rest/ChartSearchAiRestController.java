@@ -44,6 +44,7 @@ import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.util.DateFormatUtil;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.ChartTooLargeException;
+import org.openmrs.module.chartsearchai.api.ChartSearchService.ActiveOrderClaims;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.api.AuditLogService;
@@ -1541,6 +1542,14 @@ public class ChartSearchAiRestController {
 	 * Decision 78 records it: {@code getFindingSeverity()} is read by nothing else on the answer
 	 * path, so a record that throws on it reaches that check and no earlier one, and a test does.
 	 * The guard stays because it costs one comparison and the alternative is a 500.
+	 *
+	 * <p>{@code activeOrderClaims} takes no such guard, and not because it is trusted: it is an
+	 * immutable value type, so it is carried rather than copied and there is no {@code
+	 * new ArrayList<>(null)} to defend against. What it DOES share with
+	 * {@code misattributedOrderCitations} is the null-versus-measurement distinction and one failure
+	 * state — the two are one check's two answers off one report (issue #379), so a failed check
+	 * states null on both or on neither. {@code ChartSearchService.ActiveOrderClaims} is canonical
+	 * for what a zero and a null each assert, and for why the other key could not be read alone.
 	 */
 	private void putModuleStatements(Map<String, Object> target, ChartAnswer answer) {
 		putSafetyChips(target, answer);
@@ -1554,7 +1563,31 @@ public class ChartSearchAiRestController {
 		List<Integer> unstatedSeverities = answer.getUnstatedFindingSeverities();
 		target.put("unstatedFindingSeverities",
 			unstatedSeverities == null ? null : new ArrayList<Integer>(unstatedSeverities));
+		target.put("activeOrderClaims", serializeActiveOrderClaims(answer.getActiveOrderClaims()));
 		putConditionRuleCoverage(target, answer.getConditionRuleCoverage());
+	}
+
+	/**
+	 * The wire shape of {@code activeOrderClaims}: {@code stated} active-order claims the answer
+	 * made, {@code uncited} of them offering no chart record — issue #379, and what
+	 * {@code misattributedOrderCitations} could not be read without. {@code null} for an answer whose
+	 * check stated no measurement, never an empty object and never a zeroed one, because zero is
+	 * itself a measurement here (an answer that stated no such claim). See
+	 * {@code ChartSearchService.ActiveOrderClaims}, which is canonical for what each value does and
+	 * does not assert, and for the residues of the run unit the two halves share.
+	 *
+	 * <p>The same shape as {@link #serializePairChipExtent} and deliberately not folded into it: that
+	 * one counts drug PAIRS a screen found and reported, this one counts CLAIMS an answer made and
+	 * left unevidenced, and a shared serializer would make one rename move both keys.
+	 */
+	private Map<String, Object> serializeActiveOrderClaims(ActiveOrderClaims claims) {
+		if (claims == null) {
+			return null;
+		}
+		Map<String, Object> map = new LinkedHashMap<String, Object>();
+		map.put("stated", claims.getStated());
+		map.put("uncited", claims.getUncited());
+		return map;
 	}
 
 	/**

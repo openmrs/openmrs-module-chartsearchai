@@ -53,6 +53,13 @@ compares cited UUIDs to a human gold set, so it cannot inherit a single model's 
 - `metric_score.py <capture_dir> [offtopic_adj.json] [metric_gold.json]` — UUID set comparison → per-cell
   precision/recall/F1 (present cells) + abstention correctness (absent cells), aggregate.
 
+**What "cited" means here, since [#305](https://github.com/openmrs/openmrs-module-chartsearchai/issues/305):**
+the references the MODEL cited, and not every entry of the array. The module now publishes the chart
+record an injected `safety_finding` was derived from whenever the model cites that finding, marked
+`attachedByTheModule` — a record the answer never reached for. `metric_score.py` and
+`resolve_unknowns.py` both exclude those, so this gate's numbers stay a measurement of the model's
+citation behaviour; a capture taken before that issue carries no such key and scores as it always did.
+
 ## Workflow to score a new model
 
 1. Point the standalone at the model, then `capture_eval.sh /tmp/eval_capture/<MODEL>`.

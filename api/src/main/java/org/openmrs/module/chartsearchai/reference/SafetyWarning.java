@@ -10,8 +10,11 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * A non-blocking advisory raised by {@link DrugSafetyValidator} after the LLM
@@ -92,6 +95,12 @@ public class SafetyWarning {
 	/** @see #isAboutACurrentMedication() */
 	private final boolean aboutACurrentMedication;
 
+	/**
+	 * The chart records this finding fired on — see {@link #chartRecords()} (issue #305), which is
+	 * where what empty covers is said. Never null.
+	 */
+	private final Set<String> chartRecords;
+
 	/** A warning raised from something the reference data assigns no severity to — see
 	 *  {@link #getSeverity()} for which joins those are. */
 	public SafetyWarning(String type, String drug, String detail) {
@@ -153,12 +162,15 @@ public class SafetyWarning {
 	 * @param uncorroboratedChartMatch see {@link #restsOnAnUncorroboratedChartMatch()}
 	 * @param aboutACurrentMedication see {@link #isAboutACurrentMedication()} — true where the arm
 	 *        walking the patient's own active orders raised it (issue #348)
+	 * @param chartRecords see {@link #chartRecords()} — the recorded allergies or conditions this
+	 *        rule's token matched, from the list {@code recordedContraindicationKind}'s own leg names
 	 */
 	static SafetyWarning contraindication(String drug, String detail,
-			boolean uncorroboratedChartMatch, boolean aboutACurrentMedication) {
+			boolean uncorroboratedChartMatch, boolean aboutACurrentMedication,
+			Collection<String> chartRecords) {
 		return new SafetyWarning(TYPE_CONTRAINDICATION, drug, detail, null, false,
 				uncorroboratedChartMatch, null, null, Collections.<ChartOrderBridge> emptyList(),
-				aboutACurrentMedication);
+				aboutACurrentMedication, chartRecords);
 	}
 
 	/**
@@ -180,17 +192,34 @@ public class SafetyWarning {
 	 * {@code addActiveOrderContraindications} (true — the subject is an active order).
 	 *
 	 * @param aboutACurrentMedication see {@link #isAboutACurrentMedication()}
+	 * @param chartRecords see {@link #chartRecords()} — the records the {@code RecordedAllergen} this
+	 *        sentence was built from was read off, unioned across the spellings its merge folded in
 	 */
 	static SafetyWarning recordedAllergenContraindication(String drug, String detail,
-			boolean aboutACurrentMedication) {
+			boolean aboutACurrentMedication, Collection<String> chartRecords) {
 		return new SafetyWarning(TYPE_CONTRAINDICATION, drug, detail, null, false, false, null, null,
-				Collections.<ChartOrderBridge> emptyList(), aboutACurrentMedication);
+				Collections.<ChartOrderBridge> emptyList(), aboutACurrentMedication, chartRecords);
 	}
 
 	private SafetyWarning(String type, String drug, String detail, String severity,
 			boolean unratedRelationship, boolean uncorroboratedChartMatch,
 			DrugReference.Interaction reconciledRule, String reconciledNoteName,
 			List<ChartOrderBridge> chartOrderBridges, boolean aboutACurrentMedication) {
+		this(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch, reconciledRule,
+				reconciledNoteName, chartOrderBridges, aboutACurrentMedication, null);
+	}
+
+	private SafetyWarning(String type, String drug, String detail, String severity,
+			boolean unratedRelationship, boolean uncorroboratedChartMatch,
+			DrugReference.Interaction reconciledRule, String reconciledNoteName,
+			List<ChartOrderBridge> chartOrderBridges, boolean aboutACurrentMedication,
+			Collection<String> chartRecords) {
+		// Copied and wrapped for the reason chartOrderBridges is, one field along. Never null, so no
+		// reader branches on absence — chartRecords()'s javadoc is the one place that says what empty
+		// covers.
+		this.chartRecords = chartRecords == null || chartRecords.isEmpty()
+				? Collections.<String> emptySet()
+				: Collections.unmodifiableSet(new LinkedHashSet<String>(chartRecords));
 		this.type = type;
 		this.drug = drug;
 		this.detail = detail;
@@ -344,11 +373,14 @@ public class SafetyWarning {
 	 * clause left {@code thePairChipsAreOrderedBySeverityAndBounded} green while it asserted nothing at
 	 * all.
 	 *
-	 * <p><b>Published on the wire since issue #340</b>, as the {@code severity} key of every
-	 * {@code safetyWarnings} chip — on the blocking {@code /search} response and on both SSE events
-	 * that carry chips, since all three reach
-	 * {@code ChartSearchAiRestController.serializeSafetyWarnings} through the one
-	 * {@code putSafetyChips} payload writer. Verbatim and UNNORMALIZED, which is
+	 * <p><b>Published on the wire since issue #340</b>, as the {@code severity} key of every chip this
+	 * module serializes — the blocking {@code /search} response and both SSE events that carry
+	 * chips, which reach {@code ChartSearchAiRestController.serializeSafetyWarnings} through the one
+	 * {@code putSafetyChips} payload writer, and since issue #280 the {@code alerts} array of
+	 * {@code GET /chartsearchai/chartalerts}, which reaches that same serializer WITHOUT
+	 * {@code putSafetyChips} because it carries no answer to state an interaction extent about.
+	 * The field is therefore read the same way on every surface — always present, {@code null} on a
+	 * contraindication, which is what every standing alert is. Verbatim and UNNORMALIZED, which is
 	 * deliberate rather than lazy: the field is the dataset's rating, and coercing it would put the
 	 * wire at odds with the very prose a client is being told to stop parsing. What it publishes is the
 	 * SOURCE's rating, not this module's judgment about what may be done — which is the separate thing
@@ -404,6 +436,20 @@ public class SafetyWarning {
 	 * three-argument constructor), because a recorded allergy is not a caution at any rating. The null
 	 * rule above is what carries the most weight where the value IS read: unrated is not low-rated,
 	 * and reading it as a caution would soften a curated rule an implementation authored deliberately.
+	 *
+	 * <p><b>Since issue #337's third round there is a further reader whose answer reaches a
+	 * clinician-facing published key</b> — not the only one, this value having reached the wire as
+	 * each chip's own {@code severity} since issue #340 — #207 exposed the field for the api-side
+	 * ordering and scoped itself to that, as the paragraph above says — raw and untrimmed where that
+	 * reader trims:
+	 * {@code DrugSafetyValidator.statableRating},
+	 * through {@code DrugReferenceInjector.ratingThisRecordStates}, which carries the rating onto the
+	 * injected record's mapping so a check can ask whether the ANSWER stated it
+	 * ({@code unstatedFindingSeverities}). It asks a different question from every reader above —
+	 * whether there is a WORD whose absence means something, rather than how strongly the finding
+	 * licenses a call — so do not fold it into the withholding split. Note what the paragraph above
+	 * refuses to claim about WHERE the rating sits in the rendered detail: that reader is exactly the
+	 * thing that now asks it per record, and it answers by scanning rather than by assuming.
 	 */
 	public String getSeverity() {
 		return severity;
@@ -702,6 +748,40 @@ public class SafetyWarning {
 	}
 
 	/**
+	 * @return the uuids of the chart records this finding FIRED ON — the recorded allergy or condition
+	 *         whose match raised it (issue #305). Empty is the honest answer wherever the module
+	 *         attributed nothing, and it is not a denial. THIS layer is empty for three reasons — the
+	 *         finding is not a contraindication (an interaction's evidence is an ORDER, which issue
+	 *         #379 attributes on its own path), the context states no provenance, or the module could
+	 *         read no allergy or condition rows — and the injector's own refusals add more. The whole
+	 *         list is enumerated in one place, {@code RecordMapping.getDerivedFrom()}; a non-empty
+	 *         answer here does NOT mean a non-empty one there.
+	 *
+	 *         <p>Read by {@code DrugReferenceInjector}, which resolves each uuid to the number of the
+	 *         chart record it IS and puts those numbers on the injected {@code safety_finding} mapping,
+	 *         so a client reaches the source record whether or not the model cited it.
+	 *
+	 *         <p><b>Fixed when the warning is built, and deliberately NOT unioned over the collapsed
+	 *         contraindication key.</b> A key can collapse two rules and only the ledger's rank winner's
+	 *         SENTENCE is printed ({@code ContraindicationChips}, issue #146), so the records named here
+	 *         have to be evidence for the sentence this finding actually states rather than for one that
+	 *         was discarded. What IS unioned is the other direction — two chart rows spelling one
+	 *         allergy, which {@code DrugSafetyValidator.resolvedAlike} folds into one recorded
+	 *         allergen — {@code RecordedAllergen.alsoRecordedIn} being what carries the records across
+	 *         that fold, as {@code alsoNames} carries the naming — and either row is a record of the
+	 *         fact the surviving sentence states.
+	 *
+	 *         <p>Package-private, matching the two factories that set it: a caller may set only what it
+	 *         may read back. Not part of the wire-facing chip shape, unlike
+	 *         {@link #chartOrderBridges()} — that one is prose the model reads and so needs a
+	 *         deterministic wire home of its own, while this is a pointer the citation list publishes.
+	 *         ADR Decision 80 carries that argument.
+	 */
+	Set<String> chartRecords() {
+		return chartRecords;
+	}
+
+	/**
 	 * One substance this chip names, and one active order of this patient's that the module resolved it
 	 * from — the pair {@code DrugReferenceInjector.FINDING_CHART_ORDER_LEAD}'s items are rendered from.
 	 *
@@ -734,7 +814,12 @@ public class SafetyWarning {
 	 *
 	 * <p><b>{@link #toString()} is the only reader that PRINTS them as one string</b>, and the
 	 * PROMPT-side renderer must keep taking that spelling, so that the pair a debug dump prints and
-	 * the pair a model reads cannot differ. The two getters beside it are the WIRE's (issue #347) and
+	 * the pair a model reads cannot differ. <b>Since issue #379 the model can read one thing MORE</b>: on an
+	 * install that sets {@code chartsearchai.drugSafety.citeOrderRecords},
+	 * {@code DrugReferenceInjector.chartOrderClause} appends the number of the chart record the order
+	 * is, to this string rather than into it, which is why that issue changed nothing here. So there the
+	 * two agree about the PAIR and no longer about the whole item — do not close that gap by moving the
+	 * number in, which would put a prompt-side index on the wire keys issue #347 fixed. The two getters beside it are the WIRE's (issue #347) and
 	 * exist so that a client is handed two fields rather than a sentence to parse — the same reason
 	 * issue #340 publishes {@code severity} instead of leaving a client to substring-match
 	 * {@link SafetyWarning#getDetail()}. They are named {@code getSubstance} rather than

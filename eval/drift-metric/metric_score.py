@@ -5,7 +5,9 @@ Usage:
   metric_score.py <capture_dir> [offtopic_adj.json] [metric_gold.json]
   metric_score.py --selftest
 
-  capture_dir: per-cell response JSON {answer, references:[{resourceUuid,index,resourceType}]}
+  capture_dir: per-cell response JSON {answer, references:[{resourceUuid,index,resourceType,
+      attachedByTheModule}]}. A reference the MODULE attached rather than the model citing it is
+      not scored — see the filter in main(); an older capture carrying no such key scores as before.
   offtopic_adj.json (default: alongside this script): out-of-focus cited records adjudicated.
       {"<patientUuid|topic>": ["uuid",...]}  -> OFF-topic
       {"_ontopic": {"<cell>": ["uuid",...]}} -> ON-topic
@@ -74,6 +76,22 @@ def selftest():
     # absent: abstain vs drift
     assert score_cell([], False, O(), O(), O(), O())['abstain_ok'] is True
     assert score_cell(['p'], False, O(), O('p'), O(), O())['abstain_ok'] is False
+    # `model_cited`, and the wire key spelled as a LITERAL: every reader defaults it to falsy, so a
+    # rename of it disables the filter in the fail-OPEN direction — the attached citations re-enter
+    # this gate's precision/recall and temporal_probe_rc2.py's `cited == 0` abstain test, and what a
+    # reader sees is a gate number that moved with no model behaviour behind it.
+    #
+    # The two cases discriminate separately, measured rather than assumed: rename the key in
+    # `model_cited` and the first reddens alone, the second carrying the key nowhere; default the
+    # absent key to attached (`r.get(..., True)`) and the second reddens alone.
+    model = {'resourceUuid': 'a', 'attachedByTheModule': False}
+    assert model_cited([model, {'resourceUuid': 'b', 'attachedByTheModule': True}]) == [model], \
+        'a citation the module attached must not be scored as the model\'s'
+    # A capture taken before issue #305 carries the key on no reference at all, and every one of
+    # them is the model's own — the default this gate's continuity with older captures rests on.
+    older = [{'resourceUuid': 'a'}, {'resourceUuid': 'b'}]
+    assert model_cited(older) == older, 'a pre-#305 capture must score exactly as it did'
+    assert model_cited(None) == [] and model_cited([]) == [], 'no references is no citations'
     print('selftest OK')
 
 
@@ -104,6 +122,28 @@ def load_captures(cap, want=None):
     return rows, skipped
 
 
+def model_cited(references):
+    """The references the MODEL cited, out of a capture's whole `references` array.
+
+    ONE home for this rule, and the reason is the direction its failure takes. Since issue #305 the
+    module publishes the chart record an injected safety_finding was derived from whenever the model
+    cites that finding, marked `attachedByTheModule` — a record the answer never reached for, which
+    no gate over the model's citation behaviour may score. Every reader of it defaults the key to
+    falsy so a pre-#305 capture scores exactly as it always did; that default also means a RENAME of
+    the wire key disables the filter in the fail-OPEN direction, re-admitting every attached
+    citation. `selftest` spells the key as a literal for that reason and CI runs it, so a rename
+    reddens `--selftest` instead of moving a gate number. Four copies of that default meant four
+    places a rename had to reach and a grep for the key had four hits; one means the key is spelled
+    once.
+
+    Callers: this module's own scorer, resolve_unknowns.py and temporal_probe_rc2.py.
+    eval/grounding-scope/grounding_scope_ab.py deliberately does NOT share it — it TAGS such a
+    citation rather than excluding it, so that its own True/False and `is None` tally classes cannot
+    match it, and a shared exclusion predicate would obscure that.
+    """
+    return [r for r in (references or []) if not r.get('attachedByTheModule')]
+
+
 def main():
     cap = sys.argv[1]
     adj_path = sys.argv[2] if len(sys.argv) > 2 else os.path.join(HERE, 'offtopic_adj.json')
@@ -117,7 +157,17 @@ def main():
         cell = uuid + '|' + topic
         g = gold[cell]
         refs = d.get('references', []); ans = d.get('answer', '') or ''
-        cited = list(dict.fromkeys(r.get('resourceUuid') for r in refs if r.get('resourceUuid')))
+        # The MODEL's own citations, and not every entry of the array — see model_cited, which is the
+        # one home of that rule and of the wire key's spelling.
+        #
+        # HOW MANY citations it removes from a given capture is deliberately not claimed here. Two
+        # drafts of that claim were written and both were measured false, in opposite directions:
+        # the README's protocol does not pin chartsearchai.drugReference.enabled either way, so
+        # whether a capture carries an attached citation at all is a property of the standalone it
+        # was taken against and not of this gate. What IS certain is the direction: a capture with
+        # none scores bit-identically, because the key is absent and the filter removes nothing.
+        cited = list(dict.fromkeys(r.get('resourceUuid') for r in model_cited(refs)
+                                   if r.get('resourceUuid')))
         s = score_cell(cited, g['present'], set(g['ontopic']), set(g['focus_uuids']),
                        set(adj.get(cell, [])), set(adj_on.get(cell, [])))
         scored.add(cell)

@@ -74,6 +74,7 @@ import org.openmrs.module.chartsearchai.api.provider.TurnResult;
 import org.openmrs.module.chartsearchai.model.ChartSearchAuditLog;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceLoad;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceService;
+import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.PairChipExtent;
 import org.openmrs.module.chartsearchai.model.ClinicalConversation;
 import org.openmrs.module.chartsearchai.model.ClinicalConversationTurn;
@@ -264,6 +265,8 @@ public class ChartSearchAiRestController {
 		response.put("providers", providers);
 		return response;
 	}
+	@Qualifier("chartSearchAi.drugSafetyValidator")
+	private DrugSafetyValidator drugSafetyValidator;
 
 	@RequestMapping(value = "/search", method = RequestMethod.POST)
 	@ResponseBody
@@ -480,6 +483,84 @@ public class ChartSearchAiRestController {
 		// APPENDED after the entry load's own keys, never inserted among them: the endpoint's field list
 		// is asserted as an ORDERED list, and appending is what keeps that assertion order-sensitive.
 		body.put("crossReactivity", drugReferenceService.getCrossReactivityLoadStatus().toMap());
+		return new ResponseEntity<Object>(body, HttpStatus.OK);
+	}
+
+	/**
+	 * This patient's STANDING chart findings: every active order her own allergy and condition records
+	 * contraindicate, outside the answer thread (issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/280">#280</a>).
+	 *
+	 * <p><b>Why it is an endpoint of its own and not a key on {@code /search}.</b> The active-order
+	 * contraindication arm is bounded to what the response is about, and what that bound gives up is
+	 * announcing a prescribing error nobody asks a drug-shaped question about. This is the surface it
+	 * was given up TO: a client asks for it, so the finding reaches a clinician who ran no search and
+	 * nothing rides an unrelated answer. ADR Decision 79 carries the measurement behind the bound.
+	 *
+	 * <p>Gated on the same clinical privilege as {@code /search} and resolved through the same
+	 * {@link #resolvePatient}, so the per-patient access check is the one the answer path uses.
+	 *
+	 * <p><b>Deliberately not rate-limited, and the numbers are the argument rather than the
+	 * limiter's shape.</b> Measured 2026-09-07 by driving the real
+	 * {@code DrugSafetyValidator.standingChartAlerts} over the shipped 2283-entry knowledge base,
+	 * best of 15 after 5 warm-up rounds: <b>2.2 ms</b> on an 8-order chart with an allergy and two
+	 * conditions, <b>4.9 ms</b> on a 30-order one — CHEAPER than the drug-safety pass
+	 * {@code /search} already runs on the same charts, which measured 8.7 ms and 25.6 ms, and that
+	 * pass is itself a rounding error beside that endpoint's model call. The precedent that settles it is
+	 * {@link #warmup}: same privilege, same {@code resolvePatient}, no limiter, no audit row, and it
+	 * spawns a background thread that builds a whole chart. This surface is strictly cheaper and
+	 * better bounded than one already shipped. What the existing limiter could not do for it either
+	 * way is count it — it counts this user's audit rows — and there is no row here because the row
+	 * is question-shaped and there is no question.
+	 *
+	 * <p><b>{@code screened} is not decoration.</b> An empty {@code alerts} array otherwise carries
+	 * two unrelated meanings — this chart holds no such finding, and nobody looked — which is the
+	 * distinction issue #378 drew for the condition-rule arm and issue #336 for the interaction
+	 * extent, here on the one surface whose WHOLE payload can be empty. The validator decides it and
+	 * hands both back in one object, so the flag cannot answer for a different pass than the list
+	 * beside it; see {@link DrugSafetyValidator.StandingChartAlerts}, which is canonical for what
+	 * {@code false} covers.
+	 *
+	 * <p><b>And {@code screened} answers only for the CHART.</b> What the loaded DATASET had to ask
+	 * with is a second question, and on the shipped default the answer is nothing: DDInter publishes no
+	 * hand-authored condition rule, so a patient prescribed a drug her recorded condition
+	 * contraindicates gets {@code screened: true} beside an empty {@code alerts}, which this endpoint's
+	 * README section defines as a measurement of none. That is issue #378's distinction, and it is
+	 * stated here the way #378 states it on {@code /search} — the {@code conditionRuleCoverage} key,
+	 * through the shared {@link #putConditionRuleCoverage} so the two surfaces cannot spell one verdict
+	 * two ways, and ungated for the reason {@code DrugSafetyValidator.conditionRuleCoverage()} gives:
+	 * the verdict is knowable whether or not a screen ran, and withholding it where the arms are off
+	 * withholds it exactly where it is worth having. Routing a client to
+	 * {@code GET /chartsearchai/drugreferencestatus} instead is what the first draft did, and it does
+	 * not hold: that endpoint gates on core's {@code Get Global Properties}, a different privilege from
+	 * the one this endpoint requires, which happens to sit on {@code Authenticated} on a stock install
+	 * and which a hardened site can take away. It still answers the WIDER question — every arm, and
+	 * {@code arms.handAuthoredRules.coverage} beside the condition leg — and is still where a client
+	 * goes for that.
+	 *
+	 * <p>The chips are the {@code /search} chips, through the one serializer, so a finding cannot be
+	 * shaped two ways on two surfaces. They carry no {@code interactionPairs} statement because this
+	 * pass raises no interaction chip to bound: it has no question, and the screening arm is gated on
+	 * one asking to be screened (issue #113).
+	 */
+	@RequestMapping(value = "/chartalerts", method = RequestMethod.GET)
+	@ResponseBody
+	public ResponseEntity<Object> chartAlerts(@RequestParam(value = "patient", required = false) String patientUuid) {
+		Context.requirePrivilege(ChartSearchAiConstants.PRIV_QUERY_PATIENT_DATA);
+
+		PatientResolution resolved = resolvePatient(patientUuid);
+		if (resolved.hasError()) {
+			return new ResponseEntity<Object>(
+					errorResponse(resolved.errorMessage), resolved.errorStatus);
+		}
+
+		DrugSafetyValidator.StandingChartAlerts standing =
+				drugSafetyValidator.standingChartAlerts(resolved.patient);
+
+		Map<String, Object> body = new LinkedHashMap<String, Object>();
+		body.put("screened", standing.isScreened());
+		putConditionRuleCoverage(body, drugSafetyValidator.conditionRuleCoverage());
+		body.put("alerts", serializeSafetyWarnings(standing.getAlerts()));
 		return new ResponseEntity<Object>(body, HttpStatus.OK);
 	}
 
@@ -1335,6 +1416,10 @@ public class ChartSearchAiRestController {
 		return ProviderMode.fromWireName(mode.trim());
 	}
 
+	void setDrugSafetyValidator(DrugSafetyValidator drugSafetyValidator) {
+		this.drugSafetyValidator = drugSafetyValidator;
+	}
+
 	@RequestMapping(value = "/auditlog", method = RequestMethod.GET)
 	@ResponseBody
 	public ResponseEntity<Object> getAuditLogs(
@@ -1382,8 +1467,9 @@ public class ChartSearchAiRestController {
 			entry.put("question", auditLog.getQuestion());
 			entry.put("answer", auditLog.getAnswer());
 			entry.put("referenceCount", auditLog.getReferenceCount());
-			// The prompt COST beside the answer's USE of it: referenceCount is the citations in the
-			// answer, these two are the reference material put in front of the model, most of which
+			// The prompt COST beside the answer's USE of it: referenceCount is what the answer
+			// PUBLISHED — since issue #305 that can include a citation the module attached, so it is
+			// not a count of what the model cited; these two are the reference material put in front of the model, most of which
 			// is never cited. Published here because the point of issue #229 is that the size was
 			// unreadable without a log level nobody can durably set.
 			entry.put("referenceSliceRecords", auditLog.getReferenceSliceRecords());
@@ -1617,8 +1703,8 @@ public class ChartSearchAiRestController {
 	 * path. One implementation so a field added here cannot reach some clients and not others.
 	 *
 	 * <p>{@code grounded} is null when grounding is disabled, could not run, or ran and could not
-	 * certify the citation (a compound claim unit under entailment, issue #302; or the judge's
-	 * negative on a composite claim, issue #284) — clients must render
+	 * certify the citation — the reasons for that last case are enumerated once, in ADR Decision 11's
+	 * {@code grounded} paragraph, and this method restates none of them. Clients must render
 	 * null as "unverified", never as "verified". It is ALSO null, unconditionally, for a
 	 * {@code reference}-group citation: see {@link #groundedForWire}.
 	 *
@@ -1677,6 +1763,12 @@ public class ChartSearchAiRestController {
 			// `withheldInteractions` 0 for a chart record, which is that record's real shape.
 			refMap.put("source", ref.getSource());
 			refMap.put("withheldInteractions", ref.getWithheldInteractions());
+			// Who put this citation on the answer (issue #305). True for a chart record an injected
+			// safety_finding the model DID cite was derived from. What a client does with it, and why
+			// it is not derivable from the other fields, is on RecordReference.isAttachedByTheModule
+			// — one home, which README's client section restates for a client author and nothing
+			// else should. Do not restate it here.
+			refMap.put("attachedByTheModule", ref.isAttachedByTheModule());
 			refs.add(refMap);
 		}
 		return refs;
@@ -1883,11 +1975,18 @@ public class ChartSearchAiRestController {
 	}
 
 	/**
-	 * Writes an answer's drug-safety chips AND the statement of how bounded the interaction list
-	 * behind them is, into one payload map. Every emission surface goes through here, since
-	 * issue #354 by way of {@link #putModuleStatements} — which composes this with the module's other
-	 * statements, and is this method's only caller. Read that method for what those are; a list here
-	 * is one that falls behind, which it already had once.
+	 * Writes an ANSWER's drug-safety chips AND the statement of how bounded the interaction list
+	 * behind them is, into one payload map. Every surface that emits an answer goes through here,
+	 * since issue #354 by way of {@link #putModuleStatements} — which composes this with the
+	 * module's other statements, and is this method's only caller. Read that method for what those
+	 * are; a list here is one that falls behind, which it already had once.
+	 *
+	 * <p><b>"Every surface that emits an answer" is the whole of the claim, and since issue #280 it
+	 * is narrower than "every surface that emits chips".</b> {@link #chartAlerts} publishes chips
+	 * with no answer behind them: it raises no interaction chip, so there is no extent to state,
+	 * and it says instead whether the screen ran. It shares {@link #serializeSafetyWarnings} so a
+	 * finding is shaped one way on both surfaces, and it must NOT be routed through this method —
+	 * an {@code interactionPairs} key there would assert a screen that never ran.
 	 *
 	 * <p>Named for the CHIPS and not for "findings", deliberately: {@code safety_finding} is a
 	 * reference resource type — the citable record form of a chip — and this method has nothing to
@@ -1899,9 +1998,12 @@ public class ChartSearchAiRestController {
 	 * withheld, 0 signals — so the completeness statement must travel with the chips it is about,
 	 * and a fourth emission site added later must not be able to publish one without the other. Two
 	 * sites kept in step by hand is the structural condition the {@code search_mode} column's own
-	 * comment above records as having held one value for 6036 rows;
-	 * {@code ChartSearchAiInteractionPairExtentTest} fails the build on a call to
-	 * {@link #serializeSafetyWarnings} outside this method.
+	 * comment above records as having held one value for 6036 rows.
+	 * {@code ChartSearchAiInteractionPairExtentTest} counts the callers of
+	 * {@link #serializeSafetyWarnings} and pins each to the body it belongs in — this one, and
+	 * since issue #280 {@link #chartAlerts}, which is not an answer payload. A caller anywhere
+	 * else fails the build; do not read that as "any caller but this one", which is what it
+	 * asserted before that surface existed.
 	 *
 	 * <p>{@code interactionPairs} is always present and is {@code null} where the interaction check
 	 * stated nothing — see {@code PairChipExtent}, which is canonical for what that does and does
@@ -1917,8 +2019,14 @@ public class ChartSearchAiRestController {
 	}
 
 	/**
-	 * Writes every statement this module makes about a response OF ITS OWN — as distinct from the
-	 * answer text, which is the model's. Each emission surface calls this one method.
+	 * Writes every statement this module makes about an ANSWER of its own — as distinct from the
+	 * answer text, which is the model's. Each surface that emits an answer calls this one method.
+	 *
+	 * <p>Scoped to an answer, and since issue #280 that is narrower than "every payload":
+	 * {@link #chartAlerts} carries no answer, so none of these statements is about anything it
+	 * holds. It makes one of its own instead, {@code screened}, which is about the SCREEN and not
+	 * about a response — see {@link #putSafetyChips}, whose claim narrowed the same way and for
+	 * the same reason.
 	 *
 	 * <p><b>One entry point for the same reason {@link #putSafetyChips} is one</b> (issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/336">#336</a>): a
@@ -1957,6 +2065,13 @@ public class ChartSearchAiRestController {
 	 * reaches this method rather than {@code putSafetyChips} for the reason
 	 * {@code unfaithfullyRenderedCitations} does: it is a statement about the ANSWER, not a chip.
 	 *
+	 * <p>{@code unstatedFindingSeverities} is that remedy a third time, back on the issue the first
+	 * one came from (<a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/337">issue
+	 * #337</a>, round three): the citations of safety findings whose RATING the answer states nowhere. It
+	 * reaches this method rather than {@code putSafetyChips} for the reason its two neighbours do —
+	 * it is a statement about the ANSWER, not a chip — and it is emphatically not a restatement of
+	 * the chips' own {@code severity}, which is what the answer was supposed to carry and did not.
+	 *
 	 * <p>{@code conditionRuleCoverage} is the same remedy again, from the issue beside it
 	 * (<a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/378">#378</a>): what
 	 * the loaded dataset publishes for the hand-authored CONDITION-rule arm, so a client can tell a
@@ -1971,19 +2086,21 @@ public class ChartSearchAiRestController {
 	 *
 	 * <p><b>The copy is a correctness requirement</b> and not caution — the measurement is at
 	 * {@link #serializeSafetyWarnings}, which takes it for the same reason. What is new here is the
-	 * guard around it: unlike {@code chartOrderBridges()} these two accessors can return null, and
-	 * {@code new ArrayList<>(null)} throws. Its ROUTINE trigger is not a failed check but the
-	 * async-grounding early {@code done}: that answer is handed off before either check has run, so
-	 * {@code LlmInferenceService} passes an explicit {@code null} in both arguments. Mutate a guard
+	 * guard around it: unlike {@code chartOrderBridges()} every one of the answer-check accessors can
+	 * return null, and {@code new ArrayList<>(null)} throws. Its ROUTINE trigger is not a failed
+	 * check but the async-grounding early {@code done}: that answer is handed off before any of them
+	 * has run, so {@code LlmInferenceService} passes an explicit {@code null} for each. Mutate a guard
 	 * away and read the failures — the {@code chartsearchai.grounding.async=true} wire cases lose
-	 * their {@code done} event. The failed-check case reaches it too and no path is known to deliver
-	 * it: ADR Decision 61 records that no TEST reaches it, a record
-	 * throwing on read being pre-empted by {@code referenceSlice}, and the one line the check's catch
-	 * is documented as covering — a read of {@code patient.getPatientId()} — is re-read by both answer
-	 * methods in their {@code finally} timing log, so a throw there errors the request instead.
-	 * {@code misattributedOrderCitations} has an identically shaped failure branch, which ADR
-	 * Decision 76 records and Decision 61 does not cover. The guard stays because it costs one
-	 * comparison and the alternative is a 500.
+	 * their {@code done} event. The failed-check case reaches it too, and whether any path DELIVERS one
+	 * differs by accessor. For the prose and active-order checks none is known: ADR Decision 61
+	 * records that no test reaches theirs, a record throwing on read being pre-empted by
+	 * {@code referenceSlice}, and the one line their catch is documented as covering — a read of
+	 * {@code patient.getPatientId()} — is re-read by both answer methods in their {@code finally}
+	 * timing log, so a throw there errors the request instead; Decision 76 records the same of
+	 * {@code misattributedOrderCitations}. {@code unstatedFindingSeverities} is the exception and
+	 * Decision 78 records it: {@code getFindingSeverity()} is read by nothing else on the answer
+	 * path, so a record that throws on it reaches that check and no earlier one, and a test does.
+	 * The guard stays because it costs one comparison and the alternative is a 500.
 	 */
 	private void putModuleStatements(Map<String, Object> target, ChartAnswer answer) {
 		target.put("safetyStatus", answer.getSafetyStatus());
@@ -2004,9 +2121,30 @@ public class ChartSearchAiRestController {
 		List<Integer> misattributed = answer.getMisattributedOrderCitations();
 		target.put("misattributedOrderCitations",
 			misattributed == null ? null : new ArrayList<Integer>(misattributed));
-		DrugReferenceLoad.Coverage conditionRules = answer.getConditionRuleCoverage();
-		target.put("conditionRuleCoverage",
-			conditionRules == null ? null : conditionRules.wireToken());
+		List<Integer> unstatedSeverities = answer.getUnstatedFindingSeverities();
+		target.put("unstatedFindingSeverities",
+			unstatedSeverities == null ? null : new ArrayList<Integer>(unstatedSeverities));
+		putConditionRuleCoverage(target, answer.getConditionRuleCoverage());
+	}
+
+	/**
+	 * Writes the {@code conditionRuleCoverage} key, and is the one place that key is SPELLED.
+	 *
+	 * <p>Two surfaces state it and neither derives it from the other: {@link #putModuleStatements}
+	 * takes it off the answer, where {@code LlmInferenceService} resolved it once per method, and
+	 * {@link #chartAlerts} asks {@code DrugSafetyValidator.conditionRuleCoverage()} directly, having no
+	 * answer to read it off. What must not diverge is the KEY and the token, which is why the write
+	 * itself is shared rather than copied — {@code ChartSearchAiConditionRuleCoverageTest.theKeyIsWrittenInExactlyOnePlace}
+	 * counts the literal and fails on a second spelling of it.
+	 *
+	 * <p>{@code null} is present-and-null, never absent: an omitted key is a client's own guess, and
+	 * {@code ChartAnswer.getConditionRuleCoverage()} is canonical for what each value does and does not
+	 * assert — in particular that it is a statement about the DATASET and never that any recorded
+	 * condition was screened.
+	 */
+	private static void putConditionRuleCoverage(Map<String, Object> target,
+			DrugReferenceLoad.Coverage coverage) {
+		target.put("conditionRuleCoverage", coverage == null ? null : coverage.wireToken());
 	}
 
 	/**

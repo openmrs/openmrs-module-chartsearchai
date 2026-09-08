@@ -32,6 +32,16 @@ public class ChartSearchAuditLog implements Serializable {
 
 	private String answer;
 
+	/**
+	 * How many references this answer PUBLISHED — the size of the list a client receives.
+	 *
+	 * <p>That is not the same as how many citations the model made, and it stopped being the same at
+	 * issue #305: a chart record an injected {@code safety_finding} was derived from joins the list
+	 * whenever the model cites that finding, so a row can count a citation the answer's prose carries
+	 * no {@code [N]} marker for. The distinction is on the wire as each reference's
+	 * {@code attachedByTheModule} and is not recoverable from this column, which is a count and not a
+	 * breakdown — read it as the published total rather than as the model's own citation count.
+	 */
 	private Integer referenceCount;
 
 	/**
@@ -39,8 +49,8 @@ public class ChartSearchAuditLog implements Serializable {
 	 * the producer stated none — see {@code ChartSearchService.ChartAnswer.getReferenceSlice()} for
 	 * the null-versus-zero contract (issue #229).
 	 *
-	 * <p>A different population from {@link #referenceCount}, which counts the citations IN the
-	 * answer. Most injected reference material is never cited, so this is the prompt COST and that
+	 * <p>A different population from {@link #referenceCount}, which counts what the answer
+	 * PUBLISHED. Most injected reference material is never cited, so this is the prompt COST and that
 	 * one is the answer's use of it.
 	 */
 	private Integer referenceSliceRecords;

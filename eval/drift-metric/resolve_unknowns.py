@@ -2,6 +2,8 @@
 """List + REST-resolve out-of-focus cited records not yet in gold or adjudications.
 Usage: resolve_unknowns.py <capture_dir>  (reads metric_gold.json + offtopic_adj.json alongside this script)"""
 import json,glob,os,sys,urllib.request,base64
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from metric_score import model_cited
 HERE=os.path.dirname(os.path.abspath(__file__))
 AUTH=base64.b64encode(os.environ.get("OPENMRS_AUTH","admin:Admin123").encode()).decode()
 BASE=os.environ.get("OPENMRS_REST","http://localhost:8080/openmrs/ws/rest/v1")
@@ -26,7 +28,11 @@ for f in sorted(glob.glob(sys.argv[1]+'/*.json')):
     if not g: continue
     known=set(g['ontopic'])|set(g['focus_uuids'])|set(adj.get(cell,[]))|set(adj_on.get(cell,[]))
     d=json.load(open(f))
-    for r in d.get('references',[]):
+    # THE SAME population metric_score.py scores, through its own predicate rather than a second copy
+    # of it: offering an attached record here would spend adjudication on a uuid no cell will score,
+    # or worse have it adjudicated on-topic and silently change nothing. model_cited carries the rule
+    # and the wire key's one spelling.
+    for r in model_cited(d.get('references')):
         cu=r.get('resourceUuid')
         if cu and cu not in known:
             n+=1; print('%-22s %-12s idx=%-4s %s :: %s'%(topic+':'+PN.get(uuid,uuid), r.get('resourceType'), r.get('index'), cu, disp(r.get('resourceType'),cu)))

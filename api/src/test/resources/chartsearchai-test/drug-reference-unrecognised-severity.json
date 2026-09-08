@@ -1,0 +1,30 @@
+{
+ "version": "1.0",
+ "description": "Test fixture for issue #337 round three: an operator-authored dataset whose interaction severity is a spelling this module does not recognise. DrugSafetyValidator.severityRank answers -1 for it, which is the same answer it gives an UNRATED rule, so the whole module already treats such a rating as unrated — clearsSeverityFloor exempts it, licensesWithholding withholds on it. The rating a consumer is handed must agree: there is no word here an answer owes back, whatever the file says. The note restates the word deliberately, so that the record-states-it condition is live and this case turns on statableRating alone.",
+ "entries": [
+  {
+   "id": "aspirin",
+   "name": "Aspirin",
+   "aliases": [
+    "aspirin"
+   ],
+   "interactions": [
+    {
+     "token": "warfarin",
+     "severity": "Serious",
+     "note": "Serious. Coadministration may increase the risk of bleeding."
+    }
+   ],
+   "source": "Test fixture"
+  },
+  {
+   "id": "warfarin",
+   "name": "Warfarin",
+   "aliases": [
+    "warfarin"
+   ],
+   "interactions": [],
+   "source": "Test fixture"
+  }
+ ]
+}

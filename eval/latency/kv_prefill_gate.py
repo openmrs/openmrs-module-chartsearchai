@@ -190,7 +190,7 @@ def stream_prefill(uuid, q):
                 mark[cur] = (f, now)
                 if cur == "done":
                     try:
-                        cites = len(json.loads(line[5:].strip()).get("references") or [])
+                        cites = len(json.loads(line[5:].strip()).get("references") or [])  # the PUBLISHED total; since #305 it can include a citation the module attached, and nothing here gates on it
                     except Exception:
                         pass
     total = time.time() - t0

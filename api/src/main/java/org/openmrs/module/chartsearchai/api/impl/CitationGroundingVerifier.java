@@ -55,9 +55,10 @@ import org.springframework.stereotype.Service;
  * {@code chartsearchai.grounding.entailment.enabled} is set, the cited references are
  * confirmed by a yes/no LLM entailment verdict that is authoritative, except where its answer is
  * decided by the pairing rather than earned by the record. This is what
- * catches the subject/polarity flips cosine cannot — for chart records; three kinds of citation are
- * excepted and all three are below: module-supplied reference material, a COMPOUND claim unit, and
- * — for its NEGATIVE only — a COMPOSITE claim. It runs on Tier-1 passes
+ * catches the subject/polarity flips cosine cannot — for chart records; the citations excepted from
+ * it are module-supplied reference material, a COMPOUND claim unit, a citation the MODULE attached
+ * ({@link Disposition#UNVERIFIABLE}, issue #305) and — for its NEGATIVE only — a COMPOSITE claim,
+ * each below or on the constant named for it. It runs on Tier-1 passes
  * <em>and</em> failures — the dangerous case (a high-overlap but unsupported
  * citation) is a Tier-1 pass, so confirming only failures would miss it. References are verified
  * in a SINGLE batched call ({@link LlmProvider#entailsBatch}) — except for the citations of ONE
@@ -83,7 +84,8 @@ import org.springframework.stereotype.Service;
  * answer where each line cites its own record runs no Tier-1 embeds at all. A consequence pinned in
  * tests: a broken or absent Tier-1 embedding model no longer blocks Tier-2 verdicts for unambiguous
  * claim sentences the judge is ASKED about — previously it silently downgraded every citation to
- * "unverified". Since issue #302 it is not asked about a compound claim unit, which on such a
+ * "unverified". Since issue #302 it is not asked about a compound claim unit, and since #305 not
+ * about a citation the module attached either (see {@link Disposition#UNVERIFIABLE}); the former on such a
  * deployment has no tier left and renders unverified; see the compound-claim paragraph below.
  *
  * <p><strong>Module-supplied reference citations are demote-only.</strong> A record whose
@@ -103,12 +105,14 @@ import org.springframework.stereotype.Service;
  * Faithfulness of reference content is
  * checked deterministically instead, by the exact comparisons over what the answer states about
  * the record: {@link ClassCodeFidelityCheck} for an ATC class code the model edited while
- * citing the record that carries it (issue #142), report-only, and {@link ReferenceProseFidelityCheck}
+ * citing the record that carries it (issue #142), report-only; {@link ReferenceProseFidelityCheck}
  * for a recitation the model diverged from inside the sentence it was copying (issue #337), whose
- * answer is also published — as {@code unfaithfullyRenderedCitations}, and deliberately not as a
- * verdict on these citations, which stay withheld. {@link ActiveOrderCitationFidelityCheck} runs
- * after every answer too and is NOT one of these: it reads no reference content, asking instead
- * which CHART record a sentence cited (ADR Decision 76). NOT by the
+ * answer is published as {@code unfaithfullyRenderedCitations}; and
+ * {@link SafetyFindingSeverityFidelityCheck} for a cited safety finding whose RATING the answer
+ * states nowhere (the same issue, round three), published as {@code unstatedFindingSeverities}.
+ * None of those is published as a verdict on these citations, which stay withheld.
+ * {@link ActiveOrderCitationFidelityCheck} runs after every answer too and is NOT one of them: it
+ * reads no reference content, asking instead which CHART record a sentence cited (ADR Decision 76). NOT by the
  * {@code DrugSafetyValidator} chips, which this javadoc named until #337: they carry the
  * deterministic text but are an independent list nothing reconciles against the answer. Accepted
  * cost: under entailment mode these citations now take the lazy Tier-1 path (up to two
@@ -272,7 +276,9 @@ import org.springframework.stereotype.Service;
  * reference side is the same shape reversed. So a chart citation nothing anchors has its statement —
  * and what that statement rests on — read out of the whole answer, and an UNANCHORED reference
  * citation counts toward every claim, because it was offered in support of the answer without saying
- * where. See {@link AnswerCitations}.</li>
+ * where. See {@link AnswerCitations}. One subclass is exempt since issue #305: a citation the MODULE
+ * attached is anchored by nothing and has no statement selected for it AT ALL, claim selection being
+ * skipped for it.</li>
  * </ul>
  *
  * <p>The cost, stated rather than implied: a chart citation the model attached to the WRONG record
@@ -307,8 +313,8 @@ import org.springframework.stereotype.Service;
  * withholding every chart citation in the answer, and any composite sentence whose claim is not an
  * active-order one. The {@code DrugSafetyValidator} chips are still not it — this javadoc named them
  * until #337 and they carry the deterministic text as an independent list nothing reconciles against
- * the answer — and neither are {@link ClassCodeFidelityCheck} and {@link ReferenceProseFidelityCheck},
- * which compare what the answer states about the REFERENCE records it cites. {@code README.md} and
+ * the answer — and neither are the checks that compare what the answer states about the REFERENCE
+ * records it cites, which this class's own javadoc enumerates. {@code README.md} and
  * ADR Decision 41 say the same of it; an earlier draft of an earlier correction pasted the
  * reference-content sentence here and made the three disagree.
  *
@@ -357,7 +363,8 @@ public class CitationGroundingVerifier {
 	 * as retrieval and no separate chartsearchai embedding model has to be installed. Returns
 	 * {@code null} when querystore's provider can't be resolved — Tier-1 cosine checks are then
 	 * skipped and Tier-2 entailment (the authoritative pass) still applies to every citation it is
-	 * asked about. Since issue #302 it is not asked about a citation of a compound claim unit, which
+	 * asked about. Since issue #302 it is not asked about a citation of a compound claim unit — nor,
+	 * since #305, one the module attached, which selects no claim at all — the former of which
 	 * renders unverified on any deployment, so an absent embedder cannot change its verdict. It can
 	 * still change the LOG: where several sentences cite the record, claim selection embeds to choose
 	 * between them, and that failure is counted in the run's embedding-failure summary. Never throws.
@@ -408,9 +415,26 @@ public class CitationGroundingVerifier {
 		DEMOTE_ONLY,
 
 		/**
-		 * A compound claim unit under entailment (#302): neither tier is asked a question that is this
-		 * citation's own, so nothing is published in either direction and no embedding is spent. Ranks
-		 * above {@link #DEMOTE_ONLY} — a reference-group citation inside a compound unit is
+		 * Nothing is published in either direction, because neither tier is asked a question that is
+		 * this citation's own. The arrangements below reach it from opposite directions.
+		 *
+		 * <p><b>Do not read "nothing is published" as "nothing is spent".</b> Two drafts of a rule
+		 * about which arm pays an embedding have now been refuted by measurement, so none is made
+		 * here: what a given arrangement costs depends on which branch of {@link #selectClaim} it
+		 * took, and the answer is read off that method rather than from a rule in this declaration.
+		 * The attached-citation arm's own site states what it is decided before, and why that
+		 * matters there.
+		 *
+		 * <p>A compound claim unit under entailment (#302): the statement attaches different citations
+		 * to different pieces of itself, so no single record entails it.
+		 *
+		 * <p>A citation the MODULE attached rather than the model (#305): the model made no claim about
+		 * this record at all, so there is no pairing to check. Unlike the first, this one is NOT scoped
+		 * to entailment mode — with Tier-2 off the cosine would stand in for a judge that was never
+		 * asked, and publishing its FALSE would render the module's own deterministic provenance as
+		 * <em>Unsupported</em>, which is issue #201's defect one record over.
+		 *
+		 * <p>Ranks above {@link #DEMOTE_ONLY} — a reference-group citation inside a compound unit is
 		 * unverifiable, not merely demotable. That precedence is why this is one ordered choice rather
 		 * than two independent flags — though the ordering lives in the arms of the Pass-1 ternary, not
 		 * in this declaration order, which nothing reads. It is pinned by
@@ -436,18 +460,22 @@ public class CitationGroundingVerifier {
 
 	/**
 	 * Returns a copy of {@code references} with each entry's grounding verdict
-	 * set. A reference is grounded when its record's text is at least
+	 * set. A citation the MODEL emitted is grounded when its record's text is at least
 	 * {@link ChartSearchAiUtils#getGroundingMinCosine()} cosine-similar to the
 	 * best-matching answer sentence that cites it (or, when no sentence cites it
 	 * inline — e.g. it appeared only in the structured citations array — to the
-	 * best-matching sentence anywhere in the answer). References whose record
+	 * best-matching sentence anywhere in the answer). That whole-answer argmax is NOT applied to a
+	 * citation the MODULE attached: such a citation is anchored by no sentence by construction, and
+	 * grading it against a claim selected for it out of the whole answer is exactly what ADR
+	 * Decision 80 refuses (issue #305) — no statement is selected for it and nothing is published.
+	 * References whose record
 	 * carries no text, or that cannot be embedded, are returned with a
-	 * {@code null} verdict ("could not verify"). Two kinds of citation are held back from a verdict,
-	 * by different amounts and under different conditions: module-supplied reference material is
-	 * demote-only in either mode (a cosine pass renders {@code null}, a cosine fail still flags), and
-	 * a COMPOUND claim unit — a statement attaching its citations to different pieces of itself —
-	 * publishes nothing in either direction, but only when entailment is enabled; with Tier-2 off it
-	 * is graded like any other citation. See the class javadoc for both.
+	 * {@code null} verdict ("could not verify"). Citations are also held back deliberately, by
+	 * different amounts and under different conditions: module-supplied reference material, a
+	 * COMPOUND claim unit under entailment, and a citation the MODULE attached, in either mode.
+	 * {@link Disposition} says how much each is held back and the class javadoc says why; the
+	 * reasons a published {@code grounded} reads {@code null} are enumerated once, in ADR
+	 * Decision 11's {@code grounded} paragraph, and neither set is restated here.
 	 *
 	 * @param answer the full answer prose, with inline {@code [N]} markers
 	 * @param references the index-validated references to annotate
@@ -477,8 +505,9 @@ public class CitationGroundingVerifier {
 	 * tests can exercise the grounding logic without an OpenMRS context.
 	 *
 	 * <p>When {@code entailmentEnabled}, every reference with a resolvable claim sentence and
-	 * record text — except two kinds that never enter Tier-2, citations of module-supplied reference
-	 * material and citations of a COMPOUND claim unit (both in the class javadoc) — is confirmed by a
+	 * record text — except the kinds that never enter Tier-2: citations of module-supplied reference
+	 * material, citations of a COMPOUND claim unit (both in the class javadoc) and, since issue #305,
+	 * a citation the MODULE attached ({@link Disposition#UNVERIFIABLE}) — is confirmed by a
 	 * Tier-2 LLM entailment verdict that is authoritative
 	 * (cosine errs in both directions, and the dangerous error — a high-overlap
 	 * but unsupported citation — is exactly the case Tier-1 cannot self-detect,
@@ -582,8 +611,8 @@ public class CitationGroundingVerifier {
 		Tier1Result[] tier1Results = new Tier1Result[references.size()];
 		// How much of a verdict each citation may be given: one ordered Disposition, decided ONCE per
 		// reference and read at all three sites below (judge candidacy, the lazy Tier-1 skip, and what
-		// Pass 2 publishes). Two reasons feed it and they do NOT share a treatment, which is why this
-		// is a three-valued choice rather than a boolean. Decided from the
+		// Pass 2 publishes). The reasons feeding it do not all get the same treatment, which is why
+		// this is one ordered choice rather than a boolean. Decided from the
 		// value claim selection returned, never re-read off tier1Results (cosineVerdict REBUILDS those
 		// for every reference reaching the lazy Tier-1 block, and a flag lost in a rebuild would fail
 		// open). Wiring a new reason into only one site is not hypothetical: #110's safety_finding was
@@ -596,6 +625,9 @@ public class CitationGroundingVerifier {
 		//     source whether or not it swapped roles. Where a reference-group citation is ALSO inside a
 		//     compound claim unit, the stronger rule below wins and its fail is withheld too; nothing
 		//     downstream can tell, because #201 withholds every reference-group verdict at the wire.
+		//   * the MODULE attached the citation rather than the model emitting it (issue #305), in
+		//     either mode: UNVERIFIABLE. The enum constant is canonical for why; asked before claim
+		//     selection, so none runs.
 		//   * its CLAIM UNIT is compound and entailment is on (issue #302): UNVERIFIABLE, no verdict in
 		//     either direction. Both tiers are asking the wrong-sized question there — the judge is
 		//     asked to entail a conjunction the record answers for only part of, and cosine is measured
@@ -635,13 +667,34 @@ public class CitationGroundingVerifier {
 		List<String> isolateStatements = new ArrayList<String>();
 		for (int i = 0; i < references.size(); i++) {
 			RecordReference reference = references.get(i);
-			Tier1Result tier1 = entailmentEnabled
-					? selectClaim(reference.getIndex(), textByIndex, sentences, citations,
-							floor, recordVectors, sentenceVectors, embedder, stats)
-					: verdictTier1(reference.getIndex(), textByIndex, sentences, citations,
-							floor, recordVectors, sentenceVectors, embedder, stats);
+			// A citation the MODULE attached selects no claim at all (issue #305) — why, is on
+			// Disposition.UNVERIFIABLE, which is canonical for it. Asked BEFORE the selection rather
+			// than only in the disposition below, because that is what makes the "no embedding is
+			// spent" half true HERE: such a citation is anchored by no sentence, so selectClaim's
+			// candidate set is EVERY sentence — the ambiguous branch, where the cosine argmax runs
+			// eagerly and would be paid for a verdict Pass 2 discards.
+			//
+			// ONE local, read at both sites, so the skip and the disposition cannot be edited apart.
+			// They are NOT equally observable: the arm below is a statement of intent that no case
+			// discriminates, because with it gone the empty Tier1Result withholds by accident — no
+			// claim sentence means no Tier-2 candidate and no deferred cosine. Which mutation reddens
+			// what is measured and recorded once, beside the cases, in
+			// CitationGroundingVerifierTest.aCitationTheModuleAttachedPublishesNoVerdictAndSpendsNothing;
+			// a tally here would be a second home for a count that tracks the suite. The arm stays
+			// because candidacy is expressed as `== GRADED` (see Disposition): a later change that
+			// gave the skipped result a claim sentence would make an attached citation a judge
+			// candidate the moment this arm was gone.
+			boolean attachedByTheModule = reference.isAttachedByTheModule();
+			Tier1Result tier1 = attachedByTheModule
+					? new Tier1Result(null, null, null, false)
+					: entailmentEnabled
+							? selectClaim(reference.getIndex(), textByIndex, sentences, citations,
+									floor, recordVectors, sentenceVectors, embedder, stats)
+							: verdictTier1(reference.getIndex(), textByIndex, sentences, citations,
+									floor, recordVectors, sentenceVectors, embedder, stats);
 			tier1Results[i] = tier1;
-			disposition[i] = entailmentEnabled && tier1.compoundClaim ? Disposition.UNVERIFIABLE
+			disposition[i] = attachedByTheModule || (entailmentEnabled && tier1.compoundClaim)
+					? Disposition.UNVERIFIABLE
 					: demoteOnlyIndexes.contains(Integer.valueOf(reference.getIndex()))
 							? Disposition.DEMOTE_ONLY
 							: Disposition.GRADED;
@@ -657,7 +710,7 @@ public class CitationGroundingVerifier {
 			// attaches different citations to different pieces of itself, so the record is asked to
 			// entail a conjunction it answers for only part of, and a correct judge replies "no"
 			// whether the citation is right or wrong. Published, that is what marked correct
-			// medication citations as unsupported. Both exclusions sit OUTSIDE the budget branch
+			// medication citations as unsupported. EVERY exclusion sits OUTSIDE the budget branch
 			// below, so the skipped pairs do not spend the per-answer cap single-claim citations rely
 			// on.
 			if (entailmentEnabled && tier1.bestSentence != null
@@ -709,9 +762,10 @@ public class CitationGroundingVerifier {
 		// cosine would have been overridden and its embedding cost (the dominant grounding cost on
 		// CPU) wasted. Tier-2 reaches none where it failed or could not answer (cap overflow, engine
 		// failure, unparseable reply) and where it was never asked — a reference-group citation, which
-		// still needs its cosine because its FAIL is kept, and a compound claim unit, which does not:
-		// that one publishes nothing either way, so computing the cosine would spend the pass this
-		// block exists to avoid on a verdict Pass 2 discards.
+		// still needs its cosine because its FAIL is kept, and anything UNVERIFIABLE, which does not:
+		// that publishes nothing either way, so computing the cosine would spend the pass this block
+		// exists to avoid on a verdict Pass 2 discards. The guard below reads the DISPOSITION rather
+		// than any one of its reasons, so a reason added to it is covered without an edit here.
 		for (int i = 0; i < references.size(); i++) {
 			if (tier2Verdict[i] == null && tier1Results[i].deferred
 					&& disposition[i] != Disposition.UNVERIFIABLE) {
@@ -749,6 +803,10 @@ public class CitationGroundingVerifier {
 				withheldNegatives++;
 			}
 			if (disposition[i] == Disposition.UNVERIFIABLE) {
+				// Every arrangement reaching here publishes nothing, one of them a citation the
+				// module attached (issue #305), in either mode. The enum constant is canonical for the
+				// set and for why; what follows is #302's own case, which predates it.
+				//
 				// A compound claim unit under entailment publishes nothing (issue #302). Neither tier
 				// asked a question about THIS citation: the judge was handed a conjunction the record
 				// answers for only part of, and the cosine that would stand in for it is measured
@@ -768,10 +826,13 @@ public class CitationGroundingVerifier {
 			} else if (Boolean.TRUE.equals(verdict) && disposition[i] == Disposition.DEMOTE_ONLY) {
 				// Demote-only: a cosine pass on a recited reference record carries no faithfulness
 				// signal, so it renders unverified rather than verified; a fail (an off-topic
-				// citation) still flags. What DOES check reference content is ClassCodeFidelityCheck
-				// and ReferenceProseFidelityCheck, not this pass and not the DrugSafetyValidator
-				// chips — which this comment named until #337, and which are an independent list
-				// nothing reconciles against the answer.
+				// citation) still flags. What DOES check reference content is the family of
+				// deterministic post-answer comparisons this class's javadoc enumerates — not this
+				// pass, and not the DrugSafetyValidator chips, which this comment named until #337
+				// and which are an independent list nothing reconciles against the answer. Named
+				// rather than listed here deliberately: this comment and ADR Decision 25 are the two
+				// homes of that list which defeated the previous two sweeps of it — ADR Decision 61
+				// records what defeated each.
 				verdict = null;
 			}
 			annotated.add(references.get(i).withGrounded(verdict));
@@ -903,7 +964,21 @@ public class CitationGroundingVerifier {
 		 *  re-parse of the answer. */
 		final Set<Integer> anchored;
 
-		/** Every cited index no sentence marks up. Belongs to no statement, therefore to all. */
+		/**
+		 * Every cited index no sentence marks up. Belongs to no statement, therefore to all.
+		 *
+		 * <p><b>Since issue #305 that is not true of every member.</b> A citation the MODULE attached
+		 * carries no marker either, so it lands here — and it was offered in support of nothing at
+		 * all, rather than of the answer as a whole. It is unioned into every claim's
+		 * {@link #restsOn} anyway, and that is inert rather than right: the only reader,
+		 * {@link CitationGroundingVerifier#restsOnReferenceMaterial}, tests membership in
+		 * {@code demoteOnlyIndexes}, and an attached index is always chart-group — the derivation
+		 * resolves allergy and condition uuids, and the {@code safety_finding} mappings are appended
+		 * after the injector's uuid index is built, so a finding can never attach a finding. Stated
+		 * because the #284 widening rests on the sentence above, and it is now weaker than it reads:
+		 * excluding an attached index here would be a behaviour change with no case to its name, so
+		 * the residue is disclosed rather than closed.
+		 */
 		final Set<Integer> unanchored;
 
 		AnswerCitations(List<Sentence> sentences, List<RecordReference> references) {

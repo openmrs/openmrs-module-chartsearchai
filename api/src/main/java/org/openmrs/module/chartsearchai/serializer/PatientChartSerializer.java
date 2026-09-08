@@ -609,12 +609,22 @@ public class PatientChartSerializer {
 	/**
 	 * Maps a sequential index used in the LLM prompt back to the OpenMRS resource.
 	 *
-	 * <p>{@link #getText()} is the record's content — the part the LLM reads and may quote.
-	 * {@link #getSource()} and {@link #getWithheldInteractions()} are <em>about</em> the record
-	 * rather than part of it, and are deliberately kept off the text: anything inside it is
-	 * quotable, and a model told to cite records recited the module's own truncation counter and
-	 * dataset attribution into a clinician-facing answer (issue #117). Metadata a client should
-	 * render beside a citation therefore travels as its own field, never as prose.
+	 * <p>{@link #getText()} is the record's content — the part the LLM reads and may quote. The other
+	 * accessors are <em>about</em> the record rather than part of it, and {@link #getSource()},
+	 * {@link #getWithheldInteractions()} and {@link #getDerivedFrom()} are deliberately kept off the
+	 * text: anything inside it is quotable, and a model told to cite records recited the module's own
+	 * truncation counter and dataset attribution into a clinician-facing answer (issue #117). Anything
+	 * of that kind therefore travels as its own field, never as prose — whether a client renders it
+	 * beside the citation (the first two) or the module reads it back to decide what to publish (the
+	 * third).
+	 *
+	 * <p>{@link #getFindingSeverity()} is carried only where the rendered text states it too, since
+	 * an answer cannot have dropped a word the record never gave it (issue #337). It is beside the
+	 * record so a consumer need not parse for it — which is exactly {@link #getOrderActive()}'s rule
+	 * (issue #317: never re-derive it, and in particular never from the rendered text), and that
+	 * field is in both places as well, {@code orderCurrencyLabel} rendering it into the body. So is
+	 * {@link #getDate()}. "Never as prose" is a rule about metadata the model has no business
+	 * reciting, which none of those three is.
 	 */
 	public static class RecordMapping {
 
@@ -641,6 +651,26 @@ public class PatientChartSerializer {
 		private final Boolean orderActive;
 
 		/**
+		 * The rating an injected {@code safety_finding} states, where an answer stating that finding
+		 * ought to state the rating too — {@code null} on every other record, and on a finding whose
+		 * rating has no word worth requiring (issue #337). Written in exactly ONE place,
+		 * {@code DrugReferenceInjector}'s finding mapping, off {@code SafetyWarning.getSeverity()}
+		 * through {@code DrugSafetyValidator.statableRating}, which is canonical for which ratings
+		 * answer null and why. Never re-derived from {@link #getText()}: a knowledge-base mechanism
+		 * can itself contain a rating word.
+		 */
+		private final String findingSeverity;
+
+		/**
+		 * The numbers of the chart records this record was DERIVED from, empty where it was not
+		 * derived from any — the provenance of a record this module injected, and the form a consumer
+		 * reads rather than parsing it out of {@link #getText()} (issue #305).
+		 *
+		 * <p>See {@link #getDerivedFrom()} for what it is written for and by whom.
+		 */
+		private final List<Integer> derivedFrom;
+
+		/**
 		 * Backward-compatible constructor that carries no source text. Mappings
 		 * built this way cannot be grounding-checked; the grounding verifier
 		 * treats a null/blank text as "cannot verify" and leaves the citation
@@ -659,10 +689,13 @@ public class PatientChartSerializer {
 		 * {@code text} (see the class doc). A chart record has neither, so the shorter constructors
 		 * default them to "no attribution, nothing withheld".
 		 *
-		 * <p>Not the full constructor — it defaults {@link #orderActive} to {@code null}, "the
-		 * module cannot say". The one below is the full one, and the distinction is worth the name
-		 * because a caller reaching for "the full constructor" through this javadoc would silently
-		 * drop a drug-order record's currency answer.
+		 * <p>Not the full constructor — it defaults {@link #orderActive} to {@code null} ("the module
+		 * cannot say") and, since issues #337 and #305, {@link #findingSeverity} and
+		 * {@link #derivedFrom} as well. The full one is the WIDEST, which is three rungs below rather
+		 * than one, and the distinction is worth the name because a caller reaching for "the full
+		 * constructor" through this javadoc would silently drop a drug-order record's currency answer, a
+		 * finding's rating or an injected record's provenance. Do not name the next rung as the full
+		 * one: this sentence did, and the ladder has now grown under it twice.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions) {
@@ -670,12 +703,47 @@ public class PatientChartSerializer {
 		}
 
 		/**
-		 * Full constructor, including the order-currency answer. Every shorter constructor defaults it
-		 * to {@code null} — "the module cannot say" — which is right for an injected record (no
-		 * {@code Order} behind it) and for every caller that has not read the patient's orders.
+		 * The order-currency overload. Every shorter constructor defaults that answer to {@code null}
+		 * — "the module cannot say" — which is right for an injected record (no {@code Order} behind
+		 * it) and for every caller that has not read the patient's orders.
+		 *
+		 * <p>Not the full constructor since issue #337: it defaults {@link #findingSeverity} to
+		 * {@code null}, which is right for every record that is not an injected safety finding, and
+		 * since issue #305 {@link #derivedFrom} to empty with it. The rung below is not the full one
+		 * either — the WIDEST is two below — so reaching through this javadoc for "the full constructor"
+		 * means reading down to the one that takes every field.
 		 */
 		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
 				String source, int withheldInteractions, Boolean orderActive) {
+			this(index, resourceType, resourceUuid, date, text, source, withheldInteractions,
+					orderActive, null);
+		}
+
+		/**
+		 * The finding-rating overload. Every shorter constructor defaults that answer to {@code null} —
+		 * "this record states no rating an answer owes" — which is right for every record but an
+		 * injected {@code safety_finding}, the one thing that has a rating at all.
+		 *
+		 * <p>Not the full constructor since issue #305: it defaults {@link #derivedFrom} to empty, which
+		 * is right for every record that was not derived from a chart record of this patient's. The one
+		 * below is the widest, and naming it that rather than "the full one" is deliberate — the two
+		 * rungs above this said "the full one is below" and were each overtaken by the next issue.
+		 */
+		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
+				String source, int withheldInteractions, Boolean orderActive, String findingSeverity) {
+			this(index, resourceType, resourceUuid, date, text, source, withheldInteractions, orderActive,
+					findingSeverity, null);
+		}
+
+		/**
+		 * The widest constructor, including the provenance of an injected record — see
+		 * {@link #getDerivedFrom()}. Every shorter constructor defaults it to empty, "derived from no
+		 * chart record", which is right for a chart record (it IS the record) and for every injected
+		 * record whose provenance the module could not resolve.
+		 */
+		public RecordMapping(int index, String resourceType, String resourceUuid, Date date, String text,
+				String source, int withheldInteractions, Boolean orderActive, String findingSeverity,
+				List<Integer> derivedFrom) {
 			this.index = index;
 			this.resourceType = resourceType;
 			this.resourceUuid = resourceUuid;
@@ -684,6 +752,13 @@ public class PatientChartSerializer {
 			this.source = source;
 			this.withheldInteractions = withheldInteractions;
 			this.orderActive = orderActive;
+			this.findingSeverity = findingSeverity;
+			// Copied and wrapped rather than stored as handed, for the reason SafetyWarning gives of its
+			// own list: this travels onto a PatientChart a caller keeps reasoning over. Never null, so no
+			// reader branches on absence — empty is the honest answer wherever nothing was resolved.
+			this.derivedFrom = derivedFrom == null || derivedFrom.isEmpty()
+					? Collections.<Integer> emptyList()
+					: Collections.unmodifiableList(new ArrayList<Integer>(derivedFrom));
 		}
 
 		public int getIndex() {
@@ -766,6 +841,59 @@ public class PatientChartSerializer {
 		 */
 		public Boolean getOrderActive() {
 			return orderActive;
+		}
+
+		/**
+		 * @return the numbers of the chart records this record was DERIVED from, most often empty.
+		 *
+		 *         <p>Written in exactly one place — {@code DrugReferenceInjector}, for the
+		 *         {@code safety_finding} records it appends (issue #305) — and read in exactly one
+		 *         place, {@code LlmInferenceService.extractCitedReferences}, which surfaces these
+		 *         records as citations whenever the record carrying them is itself cited. A chart
+		 *         record's own list is always empty: it IS the record, so there is nothing behind it.
+		 *
+		 *         <p><b>Empty is not a denial, and the situations it covers are enumerated HERE and
+		 *         nowhere else</b> — the rule the nested drug-safety instructions state for
+		 *         {@code SerializedRecord.orderActive}, for the reason that one records: the list grew
+		 *         each time a refusal was added, and every other site went on stating the shorter one.
+		 *         So the upstream carriers document their own layer and point here; do not restate this
+		 *         list at any of them. A consumer must not read emptiness as "this claim rests on
+		 *         nothing in the chart".
+		 *
+		 *         <p>Five situations, from the two layers above this one. From
+		 *         {@code SafetyWarning.chartRecords()}: the record is not a contraindication finding at
+		 *         all (an interaction's evidence is an ORDER, attributed on issue #379's own path); the
+		 *         context stated no provenance, which is every context assembled by hand; or the module
+		 *         could read no allergy or condition rows for this patient. From
+		 *         {@code DrugReferenceInjector.chartRecordNumbers}: this chart carries no record for the
+		 *         uuid — a query-scoped slice need not carry the patient's allergies at all — or it
+		 *         carries more than one, which the citing reading refuses rather than guessing between.
+		 *
+		 *         <p>Structural rather than appended to {@link #getText()}, like {@link #getSource()}
+		 *         and {@link #getWithheldInteractions()} and for the same measured reason: anything
+		 *         inside the text is quotable, and the model has recited the module's own bookkeeping
+		 *         into a clinician-facing answer (issue #117).
+		 */
+		public List<Integer> getDerivedFrom() {
+			return derivedFrom;
+		}
+
+		/**
+		 * @return the rating this record states that an answer citing it ought to state too, or
+		 *         {@code null} where there is none — every record that is not an injected
+		 *         {@code safety_finding}, and a finding whose rating carries no word worth requiring.
+		 *         {@code DrugSafetyValidator.statableRating} is canonical for that second case.
+		 *
+		 *         <p>Metadata ABOUT the record and deliberately not part of {@link #getText()}, the
+		 *         discipline this class's own javadoc states — with the qualification that this field
+		 *         is non-null only where the rendered text states the rating as well, which is not
+		 *         every dataset. {@code DrugReferenceInjector.ratingThisRecordStates} is canonical for
+		 *         that condition and for why it is a fact about the data rather than about this
+		 *         module. What the field buys is that "which rating did this finding state" has one
+		 *         answer rather than one per parse.
+		 */
+		public String getFindingSeverity() {
+			return findingSeverity;
 		}
 	}
 }

@@ -179,6 +179,12 @@ public class LlmInferenceService implements ChartSearchService {
 			List<Integer> misattributedOrderCitations =
 					ActiveOrderCitationFidelityCheck.reportMisattributedOrderCitations(patient,
 							response.getAnswer(), cited, chart.getMappings());
+			// And the fourth (issue #337 round three): the cited safety findings whose RATING the
+			// answer states nowhere. Carried rather than re-derived for the reason its neighbours
+			// are — the chart, which is where the rating travels, is gone by REST time.
+			List<Integer> unstatedFindingSeverities =
+					SafetyFindingSeverityFidelityCheck.reportUnstatedFindingSeverities(patient,
+							response.getAnswer(), cited, chart.getMappings());
 			List<RecordReference> references = groundReferences(response.getAnswer(), cited,
 					chart.getMappings());
 			// A per-call sink, never a field: the validator is a Spring singleton, so a field would be
@@ -194,7 +200,8 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyResult.getWarnings(), searchMode, referenceSlice,
 					pairExtent.stated(), unresolvedDrugClass, unfaithfullyRenderedCitations,
-					misattributedOrderCitations, conditionRuleCoverage, safetyResult.getStatus());
+					misattributedOrderCitations, unstatedFindingSeverities, conditionRuleCoverage,
+					safetyResult.getStatus());
 			outcome = "ok";
 			return answer;
 		}
@@ -500,23 +507,26 @@ public class LlmInferenceService implements ChartSearchService {
 			ungroundedAnswerConsumer.accept(new ChartAnswer(response.getAnswer(), cited,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), Collections.<SafetyWarning> emptyList(), searchMode,
-					referenceSlice, null, unresolvedDrugClass, null, null, conditionRuleCoverage,
-					DrugSafetyValidator.STATUS_UNAVAILABLE));
+					referenceSlice, null, unresolvedDrugClass, null, null, null,
+					conditionRuleCoverage, DrugSafetyValidator.STATUS_UNAVAILABLE));
 
 			// After the user-visible handoff, before grounding: the exact comparisons over what the
 			// answer did with the records it cites — the class-code defects a set-membership
 			// comparison can and cannot see (issues #142 and #338), prose reproduced from a cited
 			// reference record and then rewritten inside the sentence it was copying (issue #337),
 			// and, since issue #377, the chart citations offered as evidence of an active drug order
-			// that cannot be one. None blocks: the class-code check reports only to the log, and the
-			// other two carry their answers onto the ChartAnswer this method RETURNS, so no consumer
+			// that cannot be one, and, since #337's third round, a cited finding whose RATING the
+			// answer states nowhere. None blocks: the class-code check reports only to the log and
+			// the rest carry their answers onto the ChartAnswer this method RETURNS, so no consumer
 			// above waits on any of them. Microseconds for the first and the third — measured by
 			// calling their own entry points from a throwaway same-package case, the active-order
 			// check costs 0.93 us on an answer stating no active-order claim, which is the ordinary
-			// one, and 171 us on a five-claim answer over a 400-record chart. The prose check is the
-			// outlier and is why this comment stopped saying microseconds of all of them: it is a
-			// word-level dynamic program, ~0.7 ms on a realistic chart and ~1.2 ms at the largest
-			// injected record set anyone has swept (ADR Decision 61).
+			// one, and 171 us on a five-claim answer over a 400-record chart. The finding-severity
+			// check is in the same band, 6.2 us on a stock install and 87 us on the reported shape
+			// (ADR Decision 78). The prose check is the outlier and is why this comment stopped
+			// saying microseconds of all of them: it is a word-level dynamic program, ~0.7 ms on a
+			// realistic chart and ~1.2 ms at the largest injected record set anyone has swept (ADR
+			// Decision 61).
 			ClassCodeFidelityCheck.reportClassCodeDefects(patient, question, response.getAnswer(),
 					cited, chart.getMappings());
 			// Its answer is carried onto the ChartAnswer this method returns (issue #337 round two).
@@ -530,6 +540,11 @@ public class LlmInferenceService implements ChartSearchService {
 			// reason (issue #377): the check runs here, after the user-visible handoff.
 			List<Integer> misattributedOrderCitations =
 					ActiveOrderCitationFidelityCheck.reportMisattributedOrderCitations(patient,
+							response.getAnswer(), cited, chart.getMappings());
+			// The fourth, carried the same way and stating null on the early `done` for the same
+			// reason (issue #337 round three): the check runs here, after the user-visible handoff.
+			List<Integer> unstatedFindingSeverities =
+					SafetyFindingSeverityFidelityCheck.reportUnstatedFindingSeverities(patient,
 							response.getAnswer(), cited, chart.getMappings());
 
 			long groundStart = System.currentTimeMillis();
@@ -550,7 +565,8 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), safetyResult.getWarnings(), searchMode, referenceSlice,
 					pairExtent.stated(), unresolvedDrugClass, unfaithfullyRenderedCitations,
-					misattributedOrderCitations, conditionRuleCoverage, safetyResult.getStatus());
+					misattributedOrderCitations, unstatedFindingSeverities, conditionRuleCoverage,
+					safetyResult.getStatus());
 			outcome = "ok";
 			return answer;
 		}
@@ -615,9 +631,11 @@ public class LlmInferenceService implements ChartSearchService {
 
 	/**
 	 * Builds the clickable reference list for an answer, reconciling the two
-	 * sources of citation indices that can disagree: the LLM's structured
-	 * {@code citations} array and the {@code [N]} markers it writes inline in the
-	 * prose. We take the UNION of both (restricted to indices that map to a real
+	 * sources of citation indices the MODEL can disagree with itself about: its
+	 * structured {@code citations} array and the {@code [N]} markers it writes
+	 * inline in the prose. (A third source, which is not the model's at all, is
+	 * the last paragraph below.) We take the UNION of the
+	 * two (restricted to indices that map to a real
 	 * retrieved record), so a record the model cited inline but omitted from the
 	 * array — or one it listed in the array while citing at least one record
 	 * inline — still resolves to a reference. The one exception is the
@@ -639,6 +657,15 @@ public class LlmInferenceService implements ChartSearchService {
 	 * absence of an answer (a distinct degenerate output), not an answer that
 	 * failed to anchor its citations, so the array still resolves there — as does
 	 * the legacy {@code answer == null} entry point.
+	 *
+	 * <p><b>A third source, and the only one that is not the model's</b> (issue #305): a record the
+	 * model DID cite may declare, through {@link RecordMapping#getDerivedFrom()}, the chart records
+	 * it was derived from — an injected {@code safety_finding} names the recorded allergy or
+	 * condition its match fired on. Those records join the reference list and are marked
+	 * {@link RecordReference#isAttachedByTheModule()}. It is a ONE-LEVEL step by construction here:
+	 * the derivation is read off what the model cited and never off what this step added, so a
+	 * record that later carried a derivation of its own would not be followed. Resolved after both
+	 * of the reads above — see the comment at the walk for which one is load-bearing and why.
 	 */
 	static List<RecordReference> extractCitedReferences(String answer, List<Integer> citations,
 			List<RecordMapping> mappings) {
@@ -665,6 +692,64 @@ public class LlmInferenceService implements ChartSearchService {
 			seen.addAll(inline);
 		}
 
+		// The chart records the model's own citations were DERIVED from (issue #305) — a recorded
+		// allergy or condition an injected safety_finding fired on, resolved deterministically by
+		// DrugReferenceInjector and carried on the mapping. Attached here because this method is the
+		// only thing that decides which indices become references, and attaching a citation anywhere
+		// else is how the deterministic layer and the answer come apart.
+		//
+		// AFTER the two reads above, and the reason is the SECOND of them rather than the carve-out.
+		// Measured: moving this block ahead of the carve-out leaves the whole suite green, because
+		// that carve-out returns an unconditional empty list — whatever `seen` held cannot reach a
+		// client, so an abstaining answer acquires nothing either way.
+		//
+		// What the position does decide is narrower than "this block runs late", and the mutation
+		// that shows it is not a move: it is which set `!seen.contains(derived)` below reads. Have it
+		// read the citations array ALONE — the state before `seen.addAll(inline)` — and a record the
+		// model cited INLINE ONLY, its finding in the array, is admitted here and published as
+		// `attachedByTheModule`: the module claiming a citation the model wrote. Iterating a
+		// pre-inline snapshot while leaving that check on `seen` changes nothing, measured. So keep
+		// this after both reads, and read `seen`. →
+		// LlmInferenceServiceTest.extractCitedReferences_shouldNotClaimARecordTheModelCitedInlineOnly
+		//
+		// A SECOND pass over what the model cited, and ONE level: the derivations read here are the
+		// model's own citations', never those of a record this step added, so the walk cannot chain.
+		// That is the rule rather than a property of today's data — no chart record carries a
+		// derivation at all. What keeps the iteration safe is separate and simpler: additions go into
+		// `attached` and reach `seen` only after the loop.
+		//
+		// The loop's SUBJECT carries the gate, and it is a mutation of its own — distinct from the
+		// check inside, which cannot see it. Iterate `indexMap.keySet()` rather than `seen` and every
+		// mapping's derivations are collected whatever the model cited, which is ADR Decision 80's
+		// refused alternative: attach the record unconditionally. Reddens →
+		// LlmInferenceServiceTest.extractCitedReferences_shouldNotSurfaceADerivationOfAFindingTheModelDidNotCite
+		// and, over the real injector, →
+		// LlmInferenceServiceFindingProvenanceContextTest.aFindingTheModelDidNotCiteBringsNoChartRecordIntoTheReferences
+		Set<Integer> attached = new LinkedHashSet<Integer>();
+		for (Integer index : seen) {
+			RecordMapping mapping = indexMap.get(index);
+			if (mapping == null) {
+				continue;
+			}
+			for (Integer derived : mapping.getDerivedFrom()) {
+				// Already cited by the model is a no-op, and it must stay the MODEL's citation: it
+				// carries a claim of the model's, so grounding reads it as the model's like every
+				// other citation the model emitted (issue #305's own first measured form).
+				// The mapping check is for a CALLER mismatch and not for the injector: a derivation is
+				// resolved off the same mapping list that arrives here, so on the production path
+				// every derived index maps. It bites where a caller hands this method a different
+				// list than the one the numbers were resolved against — which the legacy
+				// answer-less entry point makes possible — and it fails closed there, dropping the
+				// attachment rather than publishing a reference to nothing. Unlike the array path
+				// above it does not WARN, because an unmapped derivation is the module's own
+				// bookkeeping and not something the model claimed.
+				if (!seen.contains(derived) && indexMap.containsKey(derived)) {
+					attached.add(derived);
+				}
+			}
+		}
+		seen.addAll(attached);
+
 		List<RecordReference> references = new ArrayList<RecordReference>();
 		for (Integer index : seen) {
 			RecordMapping mapping = indexMap.get(index);
@@ -674,7 +759,7 @@ public class LlmInferenceService implements ChartSearchService {
 				// the citation chip, so the record has nothing about itself for the model to recite.
 				references.add(new RecordReference(index, mapping.getResourceType(),
 						mapping.getResourceUuid(), mapping.getDate(), null, mapping.getSource(),
-						mapping.getWithheldInteractions()));
+						mapping.getWithheldInteractions(), attached.contains(index)));
 			} else {
 				log.warn("LLM cited record [{}] which does not exist in the provided records", index);
 			}

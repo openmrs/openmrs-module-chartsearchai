@@ -274,20 +274,20 @@ public class CoMedicationResolutionPerPassTest {
 			"src/main/java/org/openmrs/module/chartsearchai/reference/DrugSafetyValidator.java";
 
 	/** The one arity of {@code validate} that builds the pass's shared state; the others delegate to
-	 *  it. It spans ALL THREE lines of the declaration, and what each line buys was measured: the
-	 *  first line alone matches THREE times (this declaration and the two arities above it that open
-	 *  identically), on which {@link SourceScan#body} hard-fails; the two-line prefix is already
-	 *  unique, by the one character that separates this line's trailing comma from the five-argument
-	 *  seam's {@code )}. So the third line is not what makes it unique — spelling it is what makes a
-	 *  re-wrap of the declaration re-target the needle loudly. The tail alone names no METHOD, so
-	 *  nothing about it would say the body it lands on is {@code validate}'s. What the first line buys
-	 *  is that name — see
+	 *  it. It spans ALL THREE lines of the declaration, and {@link SourceScan#body} hard-fails on a
+	 *  needle matching more than once. The first line alone matches every arity above that opens
+	 *  identically, so what it buys is the NAME — the tail alone names no method, and nothing about it
+	 *  would say the body it lands on is {@code validate}'s. <b>The third line is what makes this
+	 *  unique, and only since issue #280</b>: before it the two-line prefix already was, by the one
+	 *  character separating the declaration's trailing comma from the five-argument seam's {@code )},
+	 *  and the third line bought loudness alone. The six-argument delegate #280 added wraps its first
+	 *  two lines identically, so a needle stopping at line two now matches twice. See
 	 *  {@code ChipSubjectOneResolutionTest}'s copy of this constant for what a tail-only needle does
 	 *  and does not let through, which is not what it first appears. */
 	private static final String VALIDATE =
 			"validate(String answer, String question, PatientClinicalContext rawContext,\n"
 					+ "\t\t\tList<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries,\n"
-					+ "\t\t\tPairChipExtent.Sink pairExtentSink) {";
+					+ "\t\t\tPairChipExtent.Sink pairExtentSink, SubjectMatterScope scope) {";
 
 	private static final String MEMO_DECLARATION = "private final class CoMedications {";
 

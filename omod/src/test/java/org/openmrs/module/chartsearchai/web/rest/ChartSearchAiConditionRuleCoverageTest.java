@@ -202,14 +202,21 @@ public class ChartSearchAiConditionRuleCoverageTest {
 	}
 
 	/**
-	 * Written in exactly one place, beside the chips, the interaction extent and the class statement.
+	 * The key is SPELLED in exactly one place, {@code putConditionRuleCoverage}.
+	 *
+	 * <p>Two surfaces state it and neither derives it from the other — the answer payloads, which read
+	 * it off {@code ChartAnswer}, and {@code GET /chartsearchai/chartalerts} (issue #280), which has no
+	 * answer and asks {@code DrugSafetyValidator.conditionRuleCoverage()} directly. What must not
+	 * diverge is the key and the token, so the WRITE is shared and this counts the literal. A second
+	 * spelling anywhere in the controller reddens it.
 	 *
 	 * <p>Asserted as a count of the KEY rather than of emission sites, for the reason
-	 * {@code ChartSearchAiUnfaithfulRenderingTest} records on the sibling key: a fourth
+	 * {@code ChartSearchAiUnfaithfulRenderingTest} records on the sibling key: a further
 	 * payload-building method that serializes an answer without calling
-	 * {@code putModuleStatements} leaves this guard and all three of its neighbours green. The three
-	 * surfaces that exist today are covered behaviourally by the cases above; a fourth would need its
-	 * own.
+	 * {@code putModuleStatements} leaves this guard and all three of its neighbours green. The answer
+	 * surfaces are covered behaviourally by the cases above and the standing one by
+	 * {@code ChartSearchAiChartAlertsTest.thePayloadStatesWhatTheLoadedDatasetHadToAskWith}; a further
+	 * surface would need its own.
 	 */
 	@Test
 	public void theKeyIsWrittenInExactlyOnePlace() throws Exception {
@@ -217,8 +224,9 @@ public class ChartSearchAiConditionRuleCoverageTest {
 
 		int keys = ChartSearchAiStreamingTest.occurrences(source, "\"conditionRuleCoverage\"");
 		assertEquals(1, keys,
-				"the conditionRuleCoverage key must be written in exactly one place, beside the chips, "
-						+ "the interaction extent and the class statement (issue #378). Found " + keys
+				"the conditionRuleCoverage key must be spelled in exactly one place, the shared "
+						+ "putConditionRuleCoverage writer both the answer payloads and the standing "
+						+ "chart-alert payload go through (issues #378, #280). Found " + keys
 						+ " writes of it.");
 	}
 
@@ -254,7 +262,7 @@ public class ChartSearchAiConditionRuleCoverageTest {
 		private ChartAnswer answer() {
 			return new ChartAnswer(MODEL_ANSWER,
 					Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
-					Collections.<SafetyWarning> emptyList(), null, null, null, null, null, null, stated);
+					Collections.<SafetyWarning> emptyList(), null, null, null, null, null, null, null, stated);
 		}
 
 		@Override

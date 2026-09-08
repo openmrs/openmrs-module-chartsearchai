@@ -29,7 +29,14 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.openmrs.Allergen;
+import org.openmrs.AllergenType;
+import org.openmrs.Allergy;
+import org.openmrs.CodedOrFreeText;
 import org.openmrs.Concept;
+import org.openmrs.Condition;
+import org.openmrs.ConditionClinicalStatus;
+import org.openmrs.Patient;
 import org.openmrs.ConceptMap;
 import org.openmrs.ConceptReferenceTerm;
 import org.openmrs.ConceptSource;
@@ -798,7 +805,53 @@ public final class DrugReferenceTestSupport {
 	static PatientClinicalContext unreadableRecordsCtx(Integer age, Double weightKg) {
 		return new PatientClinicalContext(age, weightKg, Collections.<String> emptySet(),
 				Collections.<String> emptySet(), Collections.<String> emptySet(),
-				Collections.<String> emptySet(), null, null, false);
+				Collections.<String> emptySet(), null, null, false, true);
+	}
+
+	/**
+	 * As {@link #unreadableRecordsCtx}, but carrying the patient's active orders — the shape the
+	 * builder produces when {@code getActiveOrders} SUCCEEDS and the allergy or condition read throws.
+	 *
+	 * <p>It exists because it is the only arrangement that reaches
+	 * {@code PatientClinicalContext.withActiveDrugReferenceNames}: {@code withReferenceNames} returns
+	 * the context untouched when no order resolves a reference entry, so a chart with no orders cannot
+	 * exercise the copy at all, whatever its stamps say.
+	 */
+	static PatientClinicalContext unreadableRecordsCtxWithOrders(Set<String> drugs) {
+		return new PatientClinicalContext(60, null, drugs, Collections.<String> emptySet(),
+				Collections.<String> emptySet(), Collections.<String> emptySet(), null, null, false,
+				true);
+	}
+
+	/**
+	 * As {@link #unreadableOrdersCtx}, but carrying the orders the builder had already collected when
+	 * the read threw — the shape its SINGLE {@code try} around the whole order loop actually produces,
+	 * and the one that reaches {@code PatientClinicalContext.withActiveDrugReferenceNames}.
+	 *
+	 * <p>It exists because a review agent ran the real builder against an order list that throws
+	 * partway through iteration and got exactly this: {@code activeDrugOrdersRead=false} WITH a
+	 * populated order list. An earlier javadoc here called that unreachable and told the next
+	 * maintainer not to pin the stamp's carry; it was reachable, and the carry was unpinned.
+	 */
+	static PatientClinicalContext partiallyReadOrdersCtx(Set<String> drugs) {
+		return new PatientClinicalContext(60, null, drugs, Collections.<String> emptySet(),
+				Collections.<String> emptySet(), Collections.<String> emptySet(), null, null, true,
+				false);
+	}
+
+	/**
+	 * As {@link #ctx}, but for a context whose ACTIVE-ORDER read FAILED — the shape
+	 * {@link PatientClinicalContextBuilder} produces when {@code getActiveOrders} throws and it
+	 * degrades that dimension to an empty list. The order sets are empty for exactly that reason,
+	 * which is why they are not arguments; the allergy and condition tokens ARE, because that read
+	 * succeeded and this is the shape where the two flags disagree.
+	 */
+	static PatientClinicalContext unreadableOrdersCtx(Set<String> allergies, Set<String> conditions) {
+		return new PatientClinicalContext(60, null, Collections.<String> emptySet(),
+				Collections.<String> emptySet(),
+				allergies == null ? Collections.<String> emptySet() : allergies,
+				conditions == null ? Collections.<String> emptySet() : conditions, null, null, true,
+				false);
 	}
 
 	/** As {@link #ctx}, additionally carrying the identified active drug orders the
@@ -944,7 +997,7 @@ public final class DrugReferenceTestSupport {
 	 * <p>{@link DrugReferenceService#getLoadStatus()} on the returned service describes the format the
 	 * GP selects rather than the injected adapter (the seam says so), so no case here may assert it.
 	 */
-	static DrugReferenceService curatedService() {
+	public static DrugReferenceService curatedService() {
 		DrugReferenceService service = new DrugReferenceService();
 		service.setSource(new JsonDrugReferenceSource());
 		return service;
@@ -1160,6 +1213,47 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/**
+	 * @return the contraindication chips of {@code warnings}, in order — the WARNINGS themselves, where
+	 *         {@link #contraindicationDetails} answers with their sentences. Two questions, two
+	 *         accessors: a case counting chips must not have to go through a list of strings, and a
+	 *         case comparing wording must not have to reach into a warning.
+	 *
+	 *         <p>Here for the reason that method's javadoc gives, and this one had reached THREE copies
+	 *         before it was extracted ({@code ActiveOrderContraindicationTest},
+	 *         {@code SubjectMatterScopedContraindicationTest}, {@code StandingChartAlertsTest}) —
+	 *         which is past the threshold that method deferred, so all three are migrated here rather
+	 *         than a fourth being added beside them.
+	 */
+	static List<SafetyWarning> contraindications(List<SafetyWarning> warnings) {
+		List<SafetyWarning> out = new ArrayList<SafetyWarning>();
+		for (SafetyWarning warning : warnings) {
+			if (SafetyWarning.TYPE_CONTRAINDICATION.equals(warning.getType())) {
+				out.add(warning);
+			}
+		}
+		return out;
+	}
+
+	/**
+	 * The chart issue #280 is specified on, and the one {@code ActiveOrderContraindicationTest} and
+	 * {@code SubjectMatterScopedContraindicationTest} measure the ANSWER surface on: one active
+	 * ibuprofen order, plus whatever the case records against it. All three call this, and their own
+	 * {@code IBUPROFEN_ORDER} constants read {@link #IBUPROFEN_ORDER} rather than respelling it — so
+	 * the surfaces are compared over ONE chart, which is the whole force of
+	 * {@code StandingChartAlertsTest.theAnswerSurfaceStillWithholdsTheSameFindingFromAResponseAboutSomethingElse}.
+	 * Sharpen this fixture and every one of them moves with it.
+	 *
+	 * @param allergies recorded allergy tokens, or null for none
+	 * @param conditions recorded condition tokens, or null for none
+	 */
+	static PatientClinicalContext prescribedIbuprofenChart(Set<String> allergies, Set<String> conditions) {
+		return ctx(60, null, set(IBUPROFEN_ORDER), null, allergies, conditions);
+	}
+
+	/** The order name as a chart carries it, and what {@code getActiveDrugNames} holds. */
+	static final String IBUPROFEN_ORDER = "Ibuprofen 400mg";
+
+	/**
 	 * The {@code Interactions:} section of a rendered record, lowercased — everything from the header
 	 * to the end of the text, which is where the section sits.
 	 *
@@ -1305,6 +1399,65 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/**
+	 * Saves a recorded allergy to {@code allergen} as FREE TEXT, and returns the saved
+	 * {@code Allergy}'s uuid — which is what a querystore {@code allergy} chart record carries as its
+	 * resource uuid (see {@link #allergyRecord}).
+	 *
+	 * <p>The awkward part is not this module's: a free-text allergen still needs a coded allergen
+	 * (the column is not-null, and {@code AllergyValidator} requires it to BE the concept the
+	 * {@code allergy.concept.otherNonCoded} global property names), and the standard test dataset
+	 * nominates none. So one is nominated here. That is the platform's own "Other, non-coded" shape
+	 * rather than a contrivance, and it is a requirement of {@code AllergyValidator} rather than of
+	 * anything here — which is exactly why it belongs in one place: three files in two packages had
+	 * written it out, so a platform change to that rule would redden all three and be fixed in one.
+	 *
+	 * <p>Context-sensitive by nature: it saves through {@code PatientService}, so only a
+	 * {@code BaseModuleContextSensitiveTest} may call it.
+	 *
+	 * @param patient the patient to record it against
+	 * @param placeholderConceptId the concept to nominate as {@code allergy.concept.otherNonCoded}
+	 * @param allergen the clinician's own words
+	 */
+	public static String recordFreeTextAllergy(Patient patient, int placeholderConceptId,
+			String allergen) {
+		Concept otherNonCoded = Context.getConceptService().getConcept(placeholderConceptId);
+		Context.getAdministrationService()
+				.setGlobalProperty("allergy.concept.otherNonCoded", otherNonCoded.getUuid());
+		Allergy allergy = new Allergy(patient,
+				new Allergen(AllergenType.DRUG, otherNonCoded, allergen), null,
+				null, null);
+		Context.getPatientService().saveAllergy(allergy);
+		Context.flushSession();
+		Context.clearSession();
+		return allergy.getUuid();
+	}
+
+	/**
+	 * Saves an ACTIVE condition recorded as free text, and returns the saved {@code Condition}'s uuid
+	 * — which is what a querystore {@code condition} chart record carries as its resource uuid (see
+	 * {@link #conditionRecord}).
+	 *
+	 * <p>Here for the reason {@link #recordFreeTextAllergy} is, and the coupling is the same shape:
+	 * the {@code ACTIVE} clinical status is what makes
+	 * {@code ConditionService.getActiveConditions} return it, and the flush/clear pair is what makes
+	 * it visible to the builder's own read. Two files had written that out.
+	 *
+	 * <p>Context-sensitive by nature: only a {@code BaseModuleContextSensitiveTest} may call it.
+	 */
+	public static String recordFreeTextCondition(Patient patient, String condition) {
+		Condition c = new Condition();
+		c.setPatient(patient);
+		c.setClinicalStatus(ConditionClinicalStatus.ACTIVE);
+		CodedOrFreeText value = new CodedOrFreeText();
+		value.setNonCoded(condition);
+		c.setCondition(value);
+		Context.getConditionService().saveCondition(c);
+		Context.flushSession();
+		Context.clearSession();
+		return c.getUuid();
+	}
+
+	/**
 	 * Renames {@code conceptId}'s FULLY SPECIFIED name, which is what {@code Concept.getName()} yields
 	 * for these fixtures.
 	 *
@@ -1396,8 +1549,13 @@ public final class DrugReferenceTestSupport {
 	 *  the dataset twice, so the injector and the validator would hold different DrugReference objects
 	 *  for the same row and the safety arms' identity comparisons would miss. That is about two services,
 	 *  NOT about a reload — there is none; see DrugReferenceService's class javadoc, which retires the
-	 *  reload reading of this same sentence at nine other sites. */
-	static DrugReferenceInjector injectorWithSafety(DrugReferenceService service) {
+	 *  reload reading of this same sentence at nine other sites.
+	 *
+	 *  <p>Public, with {@link #curatedService}, for the cross-package reason {@link #injectedSafetyFindingChart}
+	 *  is: {@code LlmInferenceServiceFindingProvenanceContextTest} drives the real {@code search} with
+	 *  the real injector AND the real validator over ONE service, and a chart it built itself would
+	 *  bypass exactly the seam it asserts about. */
+	public static DrugReferenceInjector injectorWithSafety(DrugReferenceService service) {
 		DrugReferenceInjector injector = injector(service);
 		injector.setDrugSafetyValidator(validator(service));
 		return injector;
@@ -1477,7 +1635,7 @@ public final class DrugReferenceTestSupport {
 	/** A chart of {@code records}, rendered as the numbered "[N] text" lines
 	 *  {@link org.openmrs.module.chartsearchai.serializer.PatientChartSerializer} produces — so a
 	 *  test can place a real drug-order record in the chart, or leave it out. */
-	static PatientChart chartOf(RecordMapping... records) {
+	public static PatientChart chartOf(RecordMapping... records) {
 		StringBuilder text = new StringBuilder("Patient\n\n");
 		for (RecordMapping record : records) {
 			text.append("[").append(record.getIndex()).append("] ").append(record.getText()).append("\n");
@@ -1493,8 +1651,37 @@ public final class DrugReferenceTestSupport {
 		return new RecordMapping(index, "drug_order", orderUuid, null, "Drug order: " + drugText);
 	}
 
+	/**
+	 * A querystore allergy chart record: its resource type is querystore's {@code allergy} and its
+	 * resourceUuid is the {@code Allergy} uuid.
+	 *
+	 * <p>That contract is querystore's, and ADR Decision 80 is where it is recorded with its
+	 * provenance and its limits. It is stated rather than assumed because issue #305's whole join is
+	 * that uuid: a helper that got it wrong would make every case here pass against a chart production
+	 * never produces.
+	 *
+	 * <p>Public, with {@link #conditionRecord} and {@link #obsRecord}, for the cross-package reason
+	 * {@link #injectorWithSafety} is: the inference tests build the chart the whole issue-#305 wire
+	 * path is asserted over, and a hand-built mapping there is exactly the chart production never
+	 * produces.
+	 */
+	public static RecordMapping allergyRecord(int index, String allergyUuid, String text) {
+		return new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_ALLERGY, allergyUuid, null,
+				text);
+	}
+
+	/**
+	 * A querystore condition chart record: its resource type is querystore's {@code condition} and its
+	 * resourceUuid is the {@code Condition} uuid — {@code ConditionRecordSerializer}'s contract, read
+	 * the same way {@link #allergyRecord} records.
+	 */
+	public static RecordMapping conditionRecord(int index, String conditionUuid, String text) {
+		return new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_CONDITION, conditionUuid,
+				null, text);
+	}
+
 	/** An obs chart record, for filling a chart with records that are not drug orders. */
-	static RecordMapping obsRecord(int index, String text) {
+	public static RecordMapping obsRecord(int index, String text) {
 		return new RecordMapping(index, ChartSearchAiConstants.RESOURCE_TYPE_OBS, "obs-uuid-" + index,
 				null, text);
 	}

@@ -293,13 +293,18 @@ public class ChartSearchAiConstants {
 	public static final int DEFAULT_PROGRESSIVE_REASONING_TOP_K = 15;
 
 	/**
-	 * When {@code true}, every cited record is checked for grounding after the
-	 * LLM answers: the record's text must be semantically close enough to the
-	 * answer sentence(s) that cite it, otherwise the citation is flagged as
-	 * unverified. Index validation alone (does {@code [N]} map to a real
+	 * When {@code true}, cited records are checked for grounding after the LLM
+	 * answers: the record's text must be semantically close enough to the
+	 * answer sentence(s) that cite it, otherwise that citation is published as
+	 * unsupported. Index validation alone (does {@code [N]} map to a real
 	 * retrieved record?) cannot catch the dangerous case of a real record cited
-	 * for a claim it does not actually support. Default {@code false} so the
-	 * feature is opt-in. See {@code CitationGroundingVerifier}.
+	 * for a claim it does not actually support. Which citations carry a verdict
+	 * is narrower than which are cited, and a {@code null} is not a failed
+	 * check: the reasons are enumerated once, in ADR Decision 11's
+	 * {@code grounded} paragraph, and {@code CitationGroundingVerifier.Disposition}
+	 * is canonical for how much of a verdict each citation may be given.
+	 * Default {@code false} so the feature is opt-in. See
+	 * {@code CitationGroundingVerifier}.
 	 */
 	public static final String GP_GROUNDING_ENABLED = "chartsearchai.grounding.enabled";
 
@@ -343,10 +348,12 @@ public class ChartSearchAiConstants {
 	 * sentence whose claim statements overlap get single-pair calls — a clause-scoped
 	 * compound, or an enumerating sentence in either mode), and the Tier-1 cosine
 	 * verdict is computed lazily only where Tier-2 yields none, so the marginal
-	 * cost is one LLM round-trip per answer. Two kinds of citation are never put to
-	 * the judge at all: module-supplied reference material (issue #106/#122) and a
+	 * cost is one LLM round-trip per answer. Some citations are never put to
+	 * the judge at all: module-supplied reference material (issue #106/#122); a
 	 * COMPOUND claim unit, a statement attaching its citations to different pieces of
-	 * itself (issue #302). Still a separate opt-in from the
+	 * itself (issue #302); and a citation the MODULE attached rather than the model
+	 * emitting it (issue #305). {@code CitationGroundingVerifier.Disposition} is
+	 * canonical for that set and for how much each is held back. Still a separate opt-in from the
 	 * cheap Tier-1 pass. Default {@code false}. See {@code CitationGroundingVerifier}.
 	 */
 	public static final String GP_GROUNDING_ENTAILMENT_ENABLED = "chartsearchai.grounding.entailment.enabled";
@@ -524,6 +531,21 @@ public class ChartSearchAiConstants {
 			"chartsearchai.drugSafety.warnOnContraindications";
 
 	public static final boolean DEFAULT_DRUG_SAFETY_WARN_ON_CONTRAINDICATIONS = true;
+
+	/** Whether an injected {@code safety_finding}'s chart-order attribution names the NUMBER of the
+	 *  chart record each order IS — {@code "<Substance> from <order display> [14]"} rather than
+	 *  {@code "<Substance> from <order display>"} (issue #379). Off by default: the resolution is
+	 *  deterministic and pinned, but whether putting the number in front of the model makes it cite
+	 *  better is a live-engine measurement the ticket names as a precondition and which has not been
+	 *  run, and ADR Decision 77 records the costs a rendered marker carries in the meantime. Turning it
+	 *  on is how that measurement is run — one flip on one binary rather than two builds. It gates the
+	 *  rendered marker alone; the resolution's other reader (the issue #118 reconciliation) and
+	 *  {@code ReferenceProseFidelityCheck}'s marker stripping are unconditional, so the flag is safe to
+	 *  flip in either direction. */
+	public static final String GP_DRUG_SAFETY_CITE_ORDER_RECORDS =
+			"chartsearchai.drugSafety.citeOrderRecords";
+
+	public static final boolean DEFAULT_DRUG_SAFETY_CITE_ORDER_RECORDS = false;
 
 	/** Minimum source-assigned severity ({@code unknown} &lt; {@code minor} &lt; {@code moderate} &lt;
 	 *  {@code major}) a rule-based interaction must carry to raise a warning chip. Rules without a

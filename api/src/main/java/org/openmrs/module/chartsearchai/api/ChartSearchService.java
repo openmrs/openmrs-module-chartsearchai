@@ -276,6 +276,86 @@ public interface ChartSearchService {
 	}
 
 	/**
+	 * How many injected safety findings the prompt CARRIED, and how many of them the answer CITED —
+	 * issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/395">#395</a>.
+	 * This type is CANONICAL for what its two numbers do and do not assert. The accessor points at
+	 * it rather than restating it; README states the same contract for a client author, the
+	 * arrangement {@code conditionRuleCoverage} and {@code activeOrderClaims} already use.
+	 *
+	 * <p><b>Why a client could not read it off anything already published.</b> The response's
+	 * {@code references} carry only what was cited, so they are the {@code cited} half with no base
+	 * to read it against; {@code reference_slice_records} is the base of a different population
+	 * (every reference-group record, monographs and class notes included) and reaches the audit row
+	 * rather than the response. {@code interactionPairs} counts what the SCREEN found and reported
+	 * and is true of a response whose prose dropped one, which is the reported defect exactly. On the
+	 * measured run nothing published said a finding had gone missing — the three keys that judge a
+	 * cited finding read {@code []}, and the two extents were each true of what they count. Stated
+	 * that way rather than as "every key read as a faithful answer's", which is false of that
+	 * response: {@code activeOrderClaims} read {@code {stated: 6, uncited: 6}} and was flagging
+	 * something real, just not this.
+	 *
+	 * <p><b>What {@code carried} counts.</b> Records of type {@code safety_finding} in the chart the
+	 * prompt was built from — the population {@code DrugReferenceInjector}'s findings loop wrote,
+	 * one record per finding, each independently citable. Never the {@code safetyWarnings} chips:
+	 * those are a different and usually larger population (on the reported run, seventeen chips
+	 * against seven records), and CLAUDE.md's own rule forbids inferring an extent from the chip
+	 * count.
+	 *
+	 * <p><b>What {@code cited} counts.</b> How many of those records the answer's own citation
+	 * resolution admitted — {@code LlmInferenceService.extractCitedReferences}, never a
+	 * re-derivation from the markers, so "which records did this answer cite" keeps one answer. A
+	 * finding cited twice counts once. A citation the MODULE attached (issue #305) is one the answer
+	 * did not make, and is not counted.
+	 *
+	 * <p><b>A COUNT and deliberately not an accusation.</b> Over the unit of one finding the
+	 * residues run in BOTH directions: an answer that states a finding in prose and omits its marker
+	 * would be falsely accused, and one that cites a marker while saying nothing about it would be
+	 * missed. That is the condition ADR Decision 81 gives for publishing the base rather than a
+	 * per-item accusation, and it holds here for the same reason. A maintainer who needs to know
+	 * WHICH finding went uncited reads the check's WARN.
+	 *
+	 * <p><b>Zero is a measurement and absence is not.</b> {@code carried: 0} says the prompt carried
+	 * no finding — the shipped default, where {@code chartsearchai.drugReference.enabled} is false
+	 * and the injector never runs, and equally a question that raised none. A null
+	 * {@code FindingCitationExtent} says the producer stated no measurement, which the
+	 * async-grounding early {@code done} does because it is handed off before any check runs, and a
+	 * failed check does because a diagnostic that broke must not read as one that found nothing.
+	 *
+	 * <p><b>{@code cited == carried} is not a certificate.</b> It says every finding was cited, not
+	 * that any of them was stated correctly: whether a cited finding's rating reached the prose is
+	 * {@code unstatedFindingSeverities}, whether its words were reproduced faithfully is
+	 * {@code unfaithfullyRenderedCitations}, and whether the chart record it offered can be the order
+	 * it names is {@code misattributedOrderCitations}. Nor is {@code cited < carried} proof of a
+	 * dropped hazard — the residues above are why.
+	 */
+	final class FindingCitationExtent {
+
+		private final int carried;
+
+		private final int cited;
+
+		public FindingCitationExtent(int carried, int cited) {
+			this.carried = carried;
+			this.cited = cited;
+		}
+
+		/** @return how many injected safety findings the prompt carried */
+		public int getCarried() {
+			return carried;
+		}
+
+		/** @return how many of them the answer's own citation resolution admitted */
+		public int getCited() {
+			return cited;
+		}
+
+		@Override
+		public String toString() {
+			return "FindingCitationExtent{carried=" + carried + ", cited=" + cited + "}";
+		}
+	}
+
+	/**
 	 * An answer to a chart search question with source citations.
 	 */
 	class ChartAnswer {
@@ -307,6 +387,8 @@ public interface ChartSearchService {
 		private final List<Integer> unstatedFindingSeverities;
 
 		private final ActiveOrderClaims activeOrderClaims;
+
+		private final FindingCitationExtent findingCitationExtent;
 
 		private final DrugReferenceLoad.Coverage conditionRuleCoverage;
 
@@ -370,7 +452,7 @@ public interface ChartSearchService {
 				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations) {
 			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, searchMode,
 					referenceSlice, pairChipExtent, unresolvedDrugClass, unfaithfullyRenderedCitations,
-					null, null, null, null);
+					null, null, null, null, null);
 		}
 
 		/**
@@ -401,6 +483,7 @@ public interface ChartSearchService {
 				List<Integer> misattributedOrderCitations,
 				List<Integer> unstatedFindingSeverities,
 				ActiveOrderClaims activeOrderClaims,
+				FindingCitationExtent findingCitationExtent,
 				DrugReferenceLoad.Coverage conditionRuleCoverage) {
 			this.answer = answer;
 			this.references = java.util.Collections.unmodifiableList(
@@ -436,6 +519,10 @@ public interface ChartSearchService {
 			// is a measurement of none, so neither is normalised into the other. It is immutable, so
 			// it is carried rather than copied.
 			this.activeOrderClaims = activeOrderClaims;
+			// And once more (issue #395), under the rule the four above share rather than one of its
+			// own: null is the absence of a measurement and a zeroed statement is a measurement of
+			// none. Immutable, so it is carried rather than copied.
+			this.findingCitationExtent = findingCitationExtent;
 			this.conditionRuleCoverage = conditionRuleCoverage;
 		}
 
@@ -745,6 +832,33 @@ public interface ChartSearchService {
 		 */
 		public ActiveOrderClaims getActiveOrderClaims() {
 			return activeOrderClaims;
+		}
+
+		/**
+		 * How many injected safety findings the prompt carried, and how many of them this answer
+		 * cited —
+		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/395">issue
+		 * #395</a>. {@code SafetyFindingCitationExtentCheck} states it.
+		 *
+		 * <p>It is the base the family had no member for. Its four neighbours each judge a finding
+		 * the answer DID cite — whether the rating reached the prose
+		 * ({@link #getUnstatedFindingSeverities()}), whether the words were reproduced faithfully
+		 * ({@link #getUnfaithfullyRenderedCitations()}), whether the chart record offered can be the
+		 * order named ({@link #getMisattributedOrderCitations()}), whether a claim offered any record
+		 * at all ({@link #getActiveOrderClaims()}) — so an answer that drops a finding ENTIRELY is
+		 * outside all four, and on the reported run not one of them reported it: the three list keys
+		 * read {@code []} and the fourth was flagging something else. Not "all four read as a
+		 * faithful answer's", which is false of that response.
+		 *
+		 * <p>{@link FindingCitationExtent} is canonical for what {@code carried}, {@code cited}, a
+		 * zero and this accessor's null each do and do not assert, for why it is a count rather than
+		 * an accusation, and for why neither {@code cited == carried} nor {@code cited < carried} is a
+		 * certificate of anything. ADR Decision 82 carries the decision.
+		 *
+		 * @return the statement, or null where the producer made no measurement
+		 */
+		public FindingCitationExtent getFindingCitationExtent() {
+			return findingCitationExtent;
 		}
 
 		/**

@@ -124,4 +124,43 @@ public class LogCaptureExclusionTest {
 							+ "everything. Captured: " + capture.describeAll());
 		}
 	}
+
+	@Test
+	public void severalExcludedClassesAreAllIgnoredAndNothingElseIs() {
+		// The varargs arity, added when a fifth check in one package meant a negative whose subject
+		// is a third had two loggers to name (issue #395). Two exclusions and a third logger that is
+		// NOT excluded, in one capture: with only the first exclusion honoured the middle assertion
+		// fails, and with the list read as "exclude everything" the last one does. One WARN per
+		// logger, so no assertion here can be satisfied by another's event.
+		try (LogCapture capture = LogCapture.on("org.openmrs.module.chartsearchai")) {
+			LoggerFactory.getLogger(LogCaptureExclusionTest.class).warn("from this very class");
+			LoggerFactory.getLogger(LogCapture.class).warn("from the class under test");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN, LogCaptureExclusionTest.class,
+					LogCapture.class),
+					"both named loggers must be ignored together, not just the first. Captured: "
+							+ capture.describeAll());
+
+			LoggerFactory.getLogger(LogCaptureExclusionTest.class.getName() + ".neighbour")
+					.warn("from a logger nobody excluded");
+			assertTrue(capture.hasEventAtOrAbove(Level.WARN, LogCapture.class),
+					"precondition: that third WARN was captured");
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN, LogCaptureExclusionTest.class,
+					LogCapture.class),
+					"and a logger BENEATH an excluded one is excluded under this arity too, the same "
+							+ "relation the single arity uses. Captured: " + capture.describeAll());
+		}
+	}
+
+	@Test
+	public void anEmptyExclusionListExcludesNothing() {
+		// The degenerate call, and it must ask the same question the no-exclusion arity asks — a
+		// caller building the list programmatically must not silence the whole package by handing
+		// over an empty one.
+		try (LogCapture capture = LogCapture.on("org.openmrs.module.chartsearchai")) {
+			LoggerFactory.getLogger(LogCaptureExclusionTest.class).warn("from this very class");
+			assertTrue(capture.hasEventAtOrAbove(Level.WARN, new Class<?>[0]),
+					"an empty exclusion list must leave every WARN counting. Captured: "
+							+ capture.describeAll());
+		}
+	}
 }

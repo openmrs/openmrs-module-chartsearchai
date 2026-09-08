@@ -183,6 +183,14 @@ public class LlmInferenceService implements ChartSearchService {
 			List<Integer> unstatedFindingSeverities =
 					SafetyFindingSeverityFidelityCheck.reportUnstatedFindingSeverities(patient,
 							response.getAnswer(), cited, chart.getMappings());
+			// And the fifth (issue #395): the base the four above had none for. Each of them judges a
+			// finding the answer DID cite, so an answer that drops one entirely is outside all four
+			// — this counts the findings the prompt carried against the ones the answer cited.
+			// Carried rather than re-derived for the reason its neighbours are: the chart, which is
+			// the carrier of the population, is gone by REST time.
+			FindingCitationExtent findingCitationExtent =
+					SafetyFindingCitationExtentCheck.measureFindingCitations(patient,
+							response.getAnswer(), cited, chart.getMappings());
 			List<RecordReference> references = groundReferences(response.getAnswer(), cited,
 					chart.getMappings());
 			// A per-call sink, never a field: the validator is a Spring singleton, so a field would be
@@ -198,7 +206,7 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
 					pairExtent.stated(), unresolvedDrugClass, unfaithfullyRenderedCitations,
 					misattributedOrderCitations, unstatedFindingSeverities, activeOrderClaims,
-					conditionRuleCoverage);
+					findingCitationExtent, conditionRuleCoverage);
 			outcome = "ok";
 			return answer;
 		}
@@ -493,7 +501,7 @@ public class LlmInferenceService implements ChartSearchService {
 			ungroundedAnswerConsumer.accept(new ChartAnswer(response.getAnswer(), cited,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), Collections.<SafetyWarning> emptyList(), searchMode,
-					referenceSlice, null, unresolvedDrugClass, null, null, null, null,
+					referenceSlice, null, unresolvedDrugClass, null, null, null, null, null,
 					conditionRuleCoverage));
 
 			// After the user-visible handoff, before grounding: the exact comparisons over what the
@@ -537,6 +545,16 @@ public class LlmInferenceService implements ChartSearchService {
 			List<Integer> unstatedFindingSeverities =
 					SafetyFindingSeverityFidelityCheck.reportUnstatedFindingSeverities(patient,
 							response.getAnswer(), cited, chart.getMappings());
+			// The fifth, carried the same way and stating null on the early `done` for the same
+			// reason (issue #395): the check runs here, after the user-visible handoff. It is the
+			// cheapest of the five — two walks and a set intersection, and of the answer only whether
+			// there is any prose at all rather than a scan of it — and it
+			// still runs here rather than ahead of the handoff, because a client that got a zeroed
+			// extent on the early event and a real one on the final would read the first as a
+			// measurement.
+			FindingCitationExtent findingCitationExtent =
+					SafetyFindingCitationExtentCheck.measureFindingCitations(patient,
+							response.getAnswer(), cited, chart.getMappings());
 
 			long groundStart = System.currentTimeMillis();
 			List<RecordReference> references = groundReferences(response.getAnswer(), cited,
@@ -556,7 +574,7 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
 					pairExtent.stated(), unresolvedDrugClass, unfaithfullyRenderedCitations,
 					misattributedOrderCitations, unstatedFindingSeverities, activeOrderClaims,
-					conditionRuleCoverage);
+					findingCitationExtent, conditionRuleCoverage);
 			outcome = "ok";
 			return answer;
 		}

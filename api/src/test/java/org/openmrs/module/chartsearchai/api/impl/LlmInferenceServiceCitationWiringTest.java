@@ -102,8 +102,8 @@ public class LlmInferenceServiceCitationWiringTest {
 				org.openmrs.module.chartsearchai.reference.PairChipExtent.Sink pairExtentSink) {
 			this.mappingsSeen = mappings;
 			this.arityUsed = "status-carrying";
-			return new SafetyCheckResult(STATUS_CHECKED,
-					java.util.Collections.emptyList());
+			return new SafetyCheckResult(STATUS_LIMITED,
+					java.util.Collections.emptyList(), java.util.Collections.singletonList("mapping_incomplete"));
 		}
 	}
 
@@ -141,7 +141,9 @@ public class LlmInferenceServiceCitationWiringTest {
 		// Echo scoping (issue #105) is inert without the chart's mappings: a refactor that
 		// reverted to the mappings-less validate() would silently re-enable the recited-mention
 		// chip cascade on the blocking path, and every logic-level test would still pass.
-		service.search(patient(), "any infections?");
+		ChartAnswer answer = service.search(patient(), "any infections?");
+		assertEquals("limited", answer.getSafetyStatus());
+		assertEquals(java.util.Collections.singletonList("mapping_incomplete"), answer.getSafetyCheck().get("issues"));
 		assertMappingsSeenIncludeIndex(8);
 	}
 
@@ -149,7 +151,9 @@ public class LlmInferenceServiceCitationWiringTest {
 	public void searchStreaming_shouldPassChartMappingsToTheSafetyValidator() {
 		// Twin on the PRIMARY production path (see class javadoc) — the streaming call site is
 		// where a silently-dropped mappings argument would actually reach users.
-		service.searchStreaming(patient(), "any infections?", token -> { });
+		ChartAnswer answer = service.searchStreaming(patient(), "any infections?", token -> { });
+		assertEquals("limited", answer.getSafetyStatus());
+		assertEquals(java.util.Collections.singletonList("mapping_incomplete"), answer.getSafetyCheck().get("issues"));
 		assertMappingsSeenIncludeIndex(8);
 	}
 

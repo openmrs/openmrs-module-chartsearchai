@@ -94,6 +94,8 @@ public class PatientClinicalContext {
 
 	private final List<ActiveDrugOrder> activeDrugOrders;
 
+	private final boolean activeDrugIdentitiesComplete;
+
 	private final Set<String> activeDrugReferenceNames;
 
 	/** Whether the two chart lists a contraindication rule is put to — allergies and conditions — were
@@ -175,6 +177,18 @@ public class PatientClinicalContext {
 			List<ActiveDrugOrder> activeDrugOrders, Set<String> activeDrugReferenceNames,
 			boolean contraindicationRecordsRead, boolean activeDrugOrdersRead,
 			Map<String, Set<String>> allergyRecordUuids, Map<String, Set<String>> conditionRecordUuids) {
+		this(ageYears, weightKg, activeDrugNames, activeDrugAtcCodes, allergyTokens, conditionTokens,
+				activeDrugOrders, activeDrugReferenceNames, contraindicationRecordsRead, activeDrugOrdersRead,
+				allergyRecordUuids, conditionRecordUuids, true);
+	}
+
+	PatientClinicalContext(Integer ageYears, Double weightKg, Set<String> activeDrugNames,
+			Set<String> activeDrugAtcCodes, Set<String> allergyTokens, Set<String> conditionTokens,
+			List<ActiveDrugOrder> activeDrugOrders, Set<String> activeDrugReferenceNames,
+			boolean contraindicationRecordsRead, boolean activeDrugOrdersRead,
+			Map<String, Set<String>> allergyRecordUuids, Map<String, Set<String>> conditionRecordUuids,
+			boolean activeDrugIdentitiesComplete) {
+		this.activeDrugIdentitiesComplete = activeDrugIdentitiesComplete;
 		this.allergyRecordUuids = lowerKeys(allergyRecordUuids);
 		this.conditionRecordUuids = lowerKeys(conditionRecordUuids);
 		this.contraindicationRecordsRead = contraindicationRecordsRead;
@@ -204,7 +218,12 @@ public class PatientClinicalContext {
 		return new PatientClinicalContext(ageYears, weightKg, activeDrugNames, activeDrugAtcCodes,
 				allergyTokens, conditionTokens, activeDrugOrders, referenceNames,
 				contraindicationRecordsRead, activeDrugOrdersRead, allergyRecordUuids,
-				conditionRecordUuids);
+				conditionRecordUuids, activeDrugIdentitiesComplete);
+	}
+
+	/** False if an active order was omitted because it had no readable identity. */
+	boolean activeDrugIdentitiesComplete() {
+		return activeDrugIdentitiesComplete;
 	}
 
 	/** @return whether the allergy and condition lists were read at all — see

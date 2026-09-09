@@ -219,11 +219,12 @@ public class BundledClinicalAnswerProvider implements ClinicalAnswerProvider {
 		events.accept(TurnEvent.of(TurnEventType.TURN_STARTED, sequence.getAndIncrement(), PROVIDER_ID));
 
 		if (cancellation.isCancelled()) {
-			return failed(events, sequence, null, PROBLEM_CANCELLED);
+			return failed(events, sequence, request.getMode() == null ? configuredMode() : request.getMode(),
+					PROBLEM_CANCELLED);
 		}
 		ProviderMode configuredMode = configuredMode();
 		if (request.getMode() != null && request.getMode() != configuredMode) {
-			return failed(events, sequence, null, PROBLEM_UNSUPPORTED_MODE);
+			return failed(events, sequence, request.getMode(), PROBLEM_UNSUPPORTED_MODE);
 		}
 
 		boolean[] answerDoneEmitted = { false };

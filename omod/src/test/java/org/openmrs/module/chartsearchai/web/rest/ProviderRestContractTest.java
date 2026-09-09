@@ -225,6 +225,25 @@ public class ProviderRestContractTest {
 	}
 
 	@Test
+	public void failedPersistenceEmitsOnlyOneErrorAndNeverAnUnpersistedCompletion() throws Exception {
+		ChartSearchAiRestController controller = new ChartSearchAiRestController();
+		RecordingConversationService conversations = new RecordingConversationService();
+		conversations.failOnFinish = true;
+		ScriptedProvider provider = new ScriptedProvider("bundled", true);
+		AnswerEnvelope answer = AnswerEnvelope.fromPayload(answerPayload("Answer"));
+		provider.events = Arrays.asList(TurnEvent.of(TurnEventType.TURN_STARTED, 0, "bundled"),
+				TurnEvent.withAnswer(TurnEventType.ANSWER_DONE, 1, "bundled", answer),
+				TurnEvent.withAnswer(TurnEventType.TURN_DONE, 2, "bundled", answer));
+		provider.result = TurnResult.done("bundled", ProviderMode.QUERY_SCOPED, answer);
+		controller.setConversationService(conversations);
+		controller.setProviderRegistry(stubRegistry(provider));
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
+		controller.streamProviderTurn(out, patient(), "Question", "bundled", ProviderMode.QUERY_SCOPED, null, null);
+		assertEquals(Arrays.asList("turn_started", "answer_done", "turn_error"), sseTypes(out));
+		assertEquals("provider_failure", ssePayload(out, "turn_error").path("problemCode").asText());
+	}
+
+	@Test
 	public void aNewTurnOnTheSameConversationCancelsThePriorInFlightTurn() throws Exception {
 		// G18: starting a new turn while a prior one on the same conversation is still running
 		// (e.g. its In-Depth is still generating) must cancel that prior turn instead of letting
@@ -637,6 +656,8 @@ public class ProviderRestContractTest {
 
 		int finished;
 
+		boolean failOnFinish;
+
 		int recordedCheckedAnswers;
 
 		String lastFinishedAnswer;
@@ -699,6 +720,9 @@ public class ProviderRestContractTest {
 		@Override
 		public ClinicalConversationTurn finishTurn(ClinicalConversationTurn turn,
 				TurnResult result, long responseTimeMs) {
+			if (failOnFinish) {
+				throw new IllegalStateException("persistence unavailable");
+			}
 			finished++;
 			lastFinishedAnswer = result.getAnswer() == null ? null : result.getAnswer().getText();
 			lastFinishedPayload = result.getAnswer() == null ? null : result.getAnswer().getPayload();

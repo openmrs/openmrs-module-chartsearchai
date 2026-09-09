@@ -458,6 +458,7 @@ public class BundledClinicalAnswerProviderTest {
 
 		assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
 		assertEquals("unsupported_mode", result.getProblemCode());
+		assertEquals(ProviderMode.FULL_CHART_STABLE, result.getMode());
 	}
 
 	@Test
@@ -473,6 +474,7 @@ public class BundledClinicalAnswerProviderTest {
 
 		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.TURN_ERROR), sink.types());
 		assertEquals("cancelled", result.getProblemCode());
+		assertEquals(ProviderMode.QUERY_SCOPED, result.getMode());
 	}
 
 	@Test

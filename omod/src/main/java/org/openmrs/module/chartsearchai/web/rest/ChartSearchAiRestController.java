@@ -1260,6 +1260,8 @@ public class ChartSearchAiRestController {
 			// hub's own completion after the browser has already moved on.
 			cancellation = preemptionRegistry.begin(activeConversation.getUuid());
 			final TurnCancellation activeCancellation = cancellation;
+			final java.util.concurrent.atomic.AtomicReference<TurnEvent> terminalEvent =
+					new java.util.concurrent.atomic.AtomicReference<>();
 
 			long startNs = System.nanoTime();
 			TurnResult result = provider
@@ -1273,6 +1275,11 @@ public class ChartSearchAiRestController {
 								if (activeCancellation.isCancelled()) {
 									return;
 								}
+								// Completion carries the persisted audit identity used by live feedback.
+								if (event.getType().isTerminal()) {
+									terminalEvent.compareAndSet(null, event);
+									return;
+								}
 								try {
 									writeTurnEventOrThrow(out, withModuleStatements(event), activeConversation, turn);
 								}
@@ -1284,9 +1291,15 @@ public class ChartSearchAiRestController {
 							cancellation)
 					.toCompletableFuture().get();
 			long responseTimeMs = (System.nanoTime() - startNs) / 1_000_000L;
-			conversationService.finishTurn(turn, withModuleStatements(result), responseTimeMs);
+			ClinicalConversationTurn persisted = conversationService.finishTurn(turn, withModuleStatements(result), responseTimeMs);
+			if (!activeCancellation.isCancelled() && terminalEvent.get() != null) {
+				writeTurnEventOrThrow(out, withModuleStatements(terminalEvent.get()), activeConversation, persisted);
+			}
 		}
 		catch (Exception e) {
+			if (cancellation != null && cancellation.isCancelled()) {
+				return;
+			}
 			if (e.getCause() instanceof IOException) {
 				log.debug("Provider chat stream ended due to client disconnect");
 				return;

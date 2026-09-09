@@ -47,7 +47,7 @@ public final class TurnResult {
 		return providerId;
 	}
 
-	/** The context mode the turn actually ran with; {@code null} when the turn failed before one applied. */
+	/** The requested/resolved context mode associated with this turn, including a rejected turn. */
 	public ProviderMode getMode() {
 		return mode;
 	}

@@ -305,6 +305,8 @@ public interface ChartSearchService {
 
 		private final String safetyStatus;
 
+		private final List<String> safetyIssues;
+
 		private final String searchMode;
 
 		private final ChartSearchAiUtils.ReferenceSlice referenceSlice;
@@ -387,24 +389,11 @@ public interface ChartSearchService {
 		}
 
 		/**
-		 * The widest form, and the ONLY one that takes the condition-rule coverage —
-		 * {@code ArchitectureGuardTest.everyAnswerThisModuleBuildsCarriesTheConditionRuleCoverage}
-		 * requires exactly one, so that no production site can build an answer stating null on a key
-		 * README documents as always present.
-		 *
-		 * <p><b>It is also the only form that grows.</b> A statement added to the answer takes a new
-		 * parameter HERE rather than a new overload, because a second constructor carrying the
-		 * coverage would fail that guard outright — which is what fixes the position of
-		 * {@code conditionRuleCoverage} last and puts each new statement before it, whether it is a
-		 * list or a value type of its own.
-		 *
-		 * <p>There is deliberately no twelve-argument overload beside it in either direction. Issues
-		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/377">#377</a> and
-		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/378">#378</a> each
-		 * added a twelfth argument independently and this is where they met: two twelve-argument
-		 * forms distinguishable only by their last parameter's type would make a caller passing a
-		 * bare {@code null} there ambiguous, and a second one taking the coverage would fail that
-		 * guard outright.
+		 * Compatibility form preserving condition-rule coverage and defaulting safety to unavailable.
+		 * Production callers must use a form that also states safety status; completed answers carry
+		 * the safety issues too. {@code ArchitectureGuardTest} forbids production calls to forms that
+		 * cannot carry coverage and status, while response-wiring tests verify that completed answers
+		 * retain the check's issues.
 		 */
 		public ChartAnswer(String answer, List<RecordReference> references,
 				int inputTokens, int outputTokens, int cachedTokens,
@@ -430,6 +419,21 @@ public interface ChartSearchService {
 				List<Integer> unstatedFindingSeverities,
 				ActiveOrderClaims activeOrderClaims,
 				DrugReferenceLoad.Coverage conditionRuleCoverage, String safetyStatus) {
+			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, searchMode,
+					referenceSlice, pairChipExtent, unresolvedDrugClass, unfaithfullyRenderedCitations,
+					misattributedOrderCitations, unstatedFindingSeverities, activeOrderClaims,
+					conditionRuleCoverage, safetyStatus, java.util.Collections.emptyList());
+		}
+
+		public ChartAnswer(String answer, List<RecordReference> references,
+				int inputTokens, int outputTokens, int cachedTokens,
+				List<SafetyWarning> safetyWarnings, String searchMode,
+				ChartSearchAiUtils.ReferenceSlice referenceSlice, PairChipExtent pairChipExtent,
+				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations,
+				List<Integer> misattributedOrderCitations, List<Integer> unstatedFindingSeverities,
+				ActiveOrderClaims activeOrderClaims, DrugReferenceLoad.Coverage conditionRuleCoverage,
+				String safetyStatus, List<String> safetyIssues) {
+			this.safetyIssues = java.util.Collections.unmodifiableList(new java.util.ArrayList<>(safetyIssues));
 			this.answer = answer;
 			this.references = java.util.Collections.unmodifiableList(
 					new java.util.ArrayList<>(references));
@@ -520,8 +524,8 @@ public interface ChartSearchService {
 		}
 
 		/**
-		 * Whether the deterministic safety check completed fully, ran with disabled arms, or could
-		 * not run. An empty warning list does not state this on its own.
+		 * Whether the check completed within its resolved reference scope, ran with incomplete
+		 * mapping, exposure or rules, or could not run. Empty warnings alone establish none of these.
 		 */
 		public String getSafetyStatus() {
 			return safetyStatus;
@@ -537,6 +541,7 @@ public interface ChartSearchService {
 			java.util.Map<String, Object> safetyCheck = new java.util.LinkedHashMap<String, Object>();
 			safetyCheck.put("schema_version", "drug_safety.v1");
 			safetyCheck.put("status", safetyStatus);
+			safetyCheck.put("issues", new java.util.ArrayList<String>(safetyIssues));
 			safetyCheck.put("warnings", new java.util.ArrayList<SafetyWarning>(safetyWarnings));
 			return java.util.Collections.unmodifiableMap(safetyCheck);
 		}

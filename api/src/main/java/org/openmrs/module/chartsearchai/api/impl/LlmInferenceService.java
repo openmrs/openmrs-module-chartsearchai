@@ -210,7 +210,7 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getCachedTokens(), safetyResult.getWarnings(), searchMode, referenceSlice,
 					pairExtent.stated(), unresolvedDrugClass, unfaithfullyRenderedCitations,
 					misattributedOrderCitations, unstatedFindingSeverities, activeOrderClaims,
-					conditionRuleCoverage, safetyResult.getStatus());
+					conditionRuleCoverage, safetyResult.getStatus(), safetyResult.getIssues());
 			outcome = "ok";
 			return answer;
 		}
@@ -580,7 +580,7 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getCachedTokens(), safetyResult.getWarnings(), searchMode, referenceSlice,
 					pairExtent.stated(), unresolvedDrugClass, unfaithfullyRenderedCitations,
 					misattributedOrderCitations, unstatedFindingSeverities, activeOrderClaims,
-					conditionRuleCoverage, safetyResult.getStatus());
+					conditionRuleCoverage, safetyResult.getStatus(), safetyResult.getIssues());
 			outcome = "ok";
 			return answer;
 		}

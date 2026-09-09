@@ -402,23 +402,19 @@ public class ArchitectureGuardTest {
 	 * than the pattern getting another alternative.
 	 *
 	 * <p>So this reads {@code ChartAnswer}'s own constructor descriptors out of its class file, and
-	 * then asserts that no other production class references any of them except the widest — the one
-	 * ending in {@code DrugReferenceLoad$Coverage}. The descriptors come from the type's own METHOD
+	 * then permits only the two explicit coverage-and-status forms, with or without safety issues.
+	 * The descriptors come from the type's own METHOD
 	 * TABLE, so every constructor it declares is in the forbidden set whatever its signature: a
 	 * review agent added an arity opening on different parameter types and got a coverage-less answer
 	 * past an earlier version of this that picked constructors out of the pool by a hardcoded
 	 * descriptor PREFIX. It also closes what the source form conceded, that it could only see answers
 	 * built in one FILE; this sees every class under {@code api/target/classes}.
 	 *
-	 * <p><b>What it actually proves is that every answer is built through the WIDEST constructor</b>,
-	 * which is not the same as carrying a value: passing a literal {@code null} for that last argument
-	 * satisfies this completely. A review round measured it — a fourth answer site calling the widest
-	 * constructor with a {@code null} coverage leaves this green — and named it the likeliest escape
-	 * of all, since {@code ChartAnswer}'s own telescoping constructors do exactly that. Closing it
-	 * means reading the CALLER's bytecode for an {@code aconst_null} in that argument slot, which is a
-	 * real instruction walk rather than a constant-pool read; this stops at the descriptor
-	 * deliberately. So do not read a green run here as "every answer states a verdict" — it says no
-	 * answer was built through a constructor that CANNOT state one.
+	 * <p>This proves that production constructors CAN carry coverage and status, not that their
+	 * arguments contain meaningful values: a literal {@code null} still satisfies the descriptor.
+	 * Checking values requires behavioral tests rather than this constant-pool read.
+	 * {@code LlmInferenceServiceCitationWiringTest} verifies that both completed-answer paths retain
+	 * the check's status and issues; the early ungrounded answer explicitly states unavailable.
 	 *
 	 * <p><b>The rest of the residue, named rather than claimed away.</b> It reads api's output only, because omod
 	 * is not compiled when api's tests run — no {@code omod/src/main} class constructs an answer
@@ -455,13 +451,13 @@ public class ArchitectureGuardTest {
 						+ "to be built through and this guard is vacuous");
 		List<String> widest = new ArrayList<>();
 		for (String descriptor : constructors) {
-			if (descriptor.endsWith(WIDEST_ANSWER_SUFFIX)) {
+			if (descriptor.endsWith(WIDEST_ANSWER_SUFFIX)
+					|| descriptor.endsWith(WIDEST_ANSWER_SUFFIX.replace(")V", "Ljava/util/List;)V"))) {
 				widest.add(descriptor);
 			}
 		}
-		org.junit.jupiter.api.Assertions.assertEquals(1, widest.size(),
-				"exactly one ChartAnswer constructor may take both condition-rule coverage and the "
-						+ "safety status — it is the widest. Found " + widest.size() + ".");
+		org.junit.jupiter.api.Assertions.assertEquals(2, widest.size(),
+				"both status-carrying constructors must retain condition coverage; one additionally carries issues");
 
 		List<String> violations = new ArrayList<>();
 		int callers = 0;
@@ -474,7 +470,7 @@ public class ArchitectureGuardTest {
 				}
 				callers++;
 				for (String entry : pool) {
-					if (constructors.contains(entry) && !entry.endsWith(WIDEST_ANSWER_SUFFIX)) {
+					if (constructors.contains(entry) && !widest.contains(entry)) {
 						violations.add(classes.relativize(file) + " builds " + entry);
 					}
 				}

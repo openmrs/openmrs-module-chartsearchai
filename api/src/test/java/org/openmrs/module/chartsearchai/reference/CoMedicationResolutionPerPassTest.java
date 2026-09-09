@@ -287,7 +287,7 @@ public class CoMedicationResolutionPerPassTest {
 	private static final String VALIDATE =
 			"validate(String answer, String question, PatientClinicalContext rawContext,\n"
 					+ "\t\t\tList<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries,\n"
-					+ "\t\t\tPairChipExtent.Sink pairExtentSink, SubjectMatterScope scope) {";
+					+ "\t\t\tPairChipExtent.Sink pairExtentSink, SubjectMatterScope scope, SafetyCoverage coverage) {";
 
 	private static final String MEMO_DECLARATION = "private final class CoMedications {";
 

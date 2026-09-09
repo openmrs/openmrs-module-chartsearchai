@@ -90,6 +90,171 @@ public class LlmProviderUserMessageTest {
 				"empty-chart prefix must still match between warmup and real query");
 	}
 
+	// ---------- the #397 finding-enumeration clause ----------
+
+	/**
+	 * Issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>: a
+	 * real query carries the one-line-per-finding clause; a warmup does not.
+	 *
+	 * <p><b>Why it is here and not in {@code DEFAULT_SYSTEM_PROMPT}, which is where it was tried
+	 * first.</b> POSITION is the variable, measured on one build with both arms served through
+	 * {@code chartsearchai.llm.systemPrompt} so they differed in exactly this sentence, over 14
+	 * safety cells on one patient with eight active orders. Baseline: 8 of the 12 cells whose prompt
+	 * carried a safety finding stated fewer than it carried. With the sentence in the system prompt,
+	 * ~8.6KB ahead of the records: 9 of 12, and 72% more output. With it here, after the question:
+	 * 6 of 12, {@code unstatedFindingSeverities} to zero, answers 40% shorter, and both ABSTAIN
+	 * cells still abstaining. ADR Decision 84 and {@code eval/drift-metric/README.md} carry the
+	 * ledger; {@code eval/drift-metric/score_probe_safety.py}'s completeness cell is what reads it.
+	 *
+	 * <p><b>What the blank-question guard is for, corrected.</b> An earlier version of this javadoc
+	 * called it the KV-cache prefix contract and named the two warmup cases at the top of this class
+	 * as reddening without it. Both claims are false and the mutation is what showed it: replacing
+	 * the whole condition with {@code if (enumerateFindings)} reddens
+	 * {@code warmupShouldNotCarryTheFindingEnumerationClause} and
+	 * {@code theClauseMustNotBreakTheWarmupPrefixForAQuestionOfAnyLength}, and leaves those two
+	 * green — they compare two clause-free messages through the 3-arg arity, which hardcodes the
+	 * flag false, so no change to this condition can move them. What protects the prefix is the
+	 * APPEND POSITION; the guard prevents nothing production can reach, {@code warmup} and
+	 * {@code cacheSeed} both building through the arity that hardcodes the flag false, and what it
+	 * buys is that a future widening of the seed path cannot carry the clause without reddening the
+	 * two cases the mutation reddened — both of which call the 4-arg arity directly, which no
+	 * production seed path does. {@code LlmProvider.buildUserMessage}'s own comment and ADR
+	 * Decision 84 carry that correction too.
+	 */
+	@Test
+	public void realQueryShouldCarryTheFindingEnumerationClause() {
+		String msg = LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(),
+				"should i give Amlodipine?", true);
+		assertTrue(msg.contains("put every one of them on a line of its own"),
+				"a real query must carry the one-line-per-finding clause: a running paragraph is what "
+				+ "the model writes without it, and 8 of 12 measured cells then stated fewer findings "
+				+ "than the prompt carried. Got: " + msg);
+		assertTrue(msg.contains("each with the severity that finding states"),
+				"and the severity half, without which the measured arms stated every finding and "
+				+ "dropped every rating — issue #337's property traded for this one");
+		assertTrue(msg.indexOf("Clinician's query: ") < msg.indexOf("put every one of them"),
+				"and it must come AFTER the question, which is the position that was measured: ahead "
+				+ "of the records, in the system prompt, the same sentence made completeness worse");
+		// THE SEPARATOR, pinned because it is what the first shipped build got wrong. With a newline
+		// here the clause is a standalone imperative line and reads as the dominant instruction: on
+		// the same 14 cells `verdict-led` fell from 12 of 12 to 11, the Ciprofloxacin answer opening
+		// "Ciprofloxacin interactions with active orders are:" with no call, which
+		// score_directness.classify reads as NONE. Run on from the question it held 12 of 12. Change
+		// the space to a newline and this line reddens.
+		assertTrue(msg.contains("? Where more than one finding names it"),
+				"the clause must run on from the question with a SPACE, not start a line of its own: "
+				+ "a line of its own cost a verdict lead on the measured corpus. Got: " + msg);
+		// THE PROHIBITION, pinned. `reference/CLAUDE.md` states "Never buy completeness with a
+		// wording carrying `nothing else`" and ADR Decision 84 claimed this class enforced it — it
+		// did not: appending ", and nothing else" to the clause left the whole build green. Measured
+		// on the reproducer cell, that wording stated all seven findings WITH their ratings and lost
+		// the verdict lead, the answer opening "1. Solu-Medrol 125mg/5ml — Moderate [349]" with no
+		// call in front of it, which score_directness.classify reads as NONE. Same shape as
+		// LlmProviderTest's `otherwise` assertion over the safety paragraph, and for the same reason.
+		assertFalse(msg.toLowerCase().contains("nothing else"),
+				"the clause must not tell the answer to carry NOTHING ELSE on those lines: measured, "
+				+ "that wording took completeness and ratings and paid for them with the verdict "
+				+ "lead, which is the trade issue #397 forbids. Got: " + msg);
+	}
+
+	/**
+	 * THE EXACT BYTES, which is the only assertion in this class that an ADDED imperative cannot
+	 * pass. The substring cases above hold what the clause must SAY and one thing it must not; they
+	 * are all satisfiable by a longer clause, and a longer clause in this exact position is the
+	 * measured hazard rather than a hypothetical one — ADR Decision 84 records that of seven probed
+	 * wordings the one appending {@code ", and nothing else"} took completeness and the ratings and
+	 * lost the verdict lead, opening {@code 1. Solu-Medrol 125mg/5ml — Moderate [349]} with no call
+	 * in front of it. Measured here too: appending {@code " State your verdict first."} to the
+	 * production literal left every other case in this class green.
+	 *
+	 * <p>Asserted as the DIFFERENCE between the two flag values rather than over the whole message,
+	 * so the case says what it is about and does not have to restate the records header, the focus
+	 * block or the query marker. The flag-false message is a prefix of the flag-true one by
+	 * construction — the clause is the last thing appended — and that is asserted first, because a
+	 * clause moved ahead of the query marker would otherwise reach {@code substring} rather than an
+	 * assertion.
+	 *
+	 * <p>The project's idiom for prompt-facing text whose wording was measured, and this clause is
+	 * now held to it as its three neighbours are:
+	 * {@code DrugClassQuestionNoteTest.theRenderedNoteIsExactlyTheseWords},
+	 * {@code SafetyVerdictSeverityGradationTest.theTwoCurrentMedicationBranchesAreExactlyTheseWords}
+	 * and {@code AbsentDataEvalTest.theEmptyChartPromptAsksTheModelToNameWhatIsMissing}.
+	 */
+	@Test
+	public void theAppendedClauseIsExactlyTheseBytes() {
+		String withClause = LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(),
+				"should i give Amlodipine?", true);
+		String withoutClause = LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(),
+				"should i give Amlodipine?", false);
+		assertTrue(withClause.startsWith(withoutClause),
+				"the clause is APPENDED, so the flag-false message must be a byte-prefix of the "
+				+ "flag-true one. If this fails the clause has moved out of the tail and the "
+				+ "warmup-prefix contract is what to look at next.\n  without: " + withoutClause
+				+ "\n  with:    " + withClause);
+		assertEquals(" Where more than one finding names it, put every one of them on a line of its "
+				+ "own, each with the severity that finding states.",
+				withClause.substring(withoutClause.length()),
+				"these are the measured bytes of the #397 clause, down to the SPACE in front of "
+				+ "them. Every substring case in this class is satisfied by a longer clause, and an "
+				+ "added imperative here is measured to cost the verdict lead on a safety cell — the "
+				+ "trade issue #397 forbids. If you are changing the wording deliberately, the "
+				+ "measured ledger in ADR Decision 84 stops describing the shipped bytes, so measure "
+				+ "the new one and update it.");
+	}
+
+	@Test
+	public void warmupShouldNotCarryTheFindingEnumerationClause() {
+		String warmup = LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(), "", true);
+		assertFalse(warmup.contains("put every one of them on a line of its own"),
+				"a warmup must NOT carry the clause. It is sent with question=\"\" precisely to "
+				+ "produce a byte-prefix of every real query, and a clause appended after an empty "
+				+ "question sits where the question's own bytes go — so the seed stops being a prefix "
+				+ "and every warmed patient reprocesses the whole chart. Got: " + warmup);
+	}
+
+	@Test
+	public void theClauseMustNotBreakTheWarmupPrefixForAQuestionOfAnyLength() {
+		// The two warmup cases above use one question. This asks the property of the SHORTEST
+		// non-blank question there is, which is where an off-by-one in the guard would show: a
+		// guard reading `question.isEmpty()` rather than trimming would let a whitespace-only
+		// question take the clause, and `" "` is a real value — normalizeRecords already treats
+		// blank and whitespace alike one field over.
+		String warmup = LlmProvider.buildUserMessage(CHART, "");
+		for (String question : new String[] { "?", "a", "  ", "\t" }) {
+			String real = LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(),
+					question, true);
+			assertTrue(real.startsWith(warmup),
+					"warmup must stay a byte-prefix for question " + Arrays.toString(question.toCharArray())
+					+ "; got real=" + real);
+		}
+		assertFalse(LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(), "   ", true)
+						.contains("put every one of them"),
+				"a whitespace-only question is blank, so it takes no clause — otherwise the prefix "
+				+ "property above holds only by accident of where the clause lands");
+	}
+
+	@Test
+	public void aChartWithFewerThanTwoFindingsCarriesNoClause() {
+		// The other half of the gate, and the half a caller can get wrong: `enumerateFindings` false
+		// must leave the message byte-identical to what it was before #397, because that is what the
+		// empty-chart and single-finding prompts still send.
+		//
+		// NOT compared against the 3-arg form. An earlier version did, with a comment claiming that
+		// was the stronger check — it is the opposite: the 3-arg body IS
+		// `buildUserMessage(records, focusIndices, question, false)`, so the comparison was
+		// `f(x) == f(x)` and passed under the very mutation it was written for (ungating the clause
+		// takes both sides together, measured). What is not vacuous is where the message ENDS: with
+		// the flag false the question's own bytes are the last thing in it, which is the property
+		// AbsentDataEvalTest pins to exact bytes one arity over.
+		assertTrue(LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(), "Q?", false)
+						.endsWith("Clinician's query: Q?"),
+				"a chart the caller says carries fewer than two findings must send a message that "
+				+ "ends at the question, with nothing appended after it");
+		assertFalse(LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(), "Q?", false)
+						.contains("put every one of them"),
+				"and it must not carry the clause");
+	}
+
 	// ---------- focus-hint variant ----------
 
 	@Test

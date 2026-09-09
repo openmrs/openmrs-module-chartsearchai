@@ -208,14 +208,14 @@ public class LlmInferenceServiceConditionRuleCoverageContextTest extends BaseMod
 
 		@Override
 		public LlmResponse search(String numberedRecords, List<Integer> focusIndices,
-				String question) {
+				String question, boolean enumerateFindings) {
 			return canned();
 		}
 
 		@Override
 		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-				String cacheScope) {
+				String cacheScope, boolean enumerateFindings) {
 			return canned();
 		}
 	}

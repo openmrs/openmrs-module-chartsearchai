@@ -431,11 +431,44 @@ public final class DrugReferenceTestSupport {
 	public static PatientChart injectedFindingsOver(PatientChart base, String question,
 			Set<String> activeDrugs, Set<String> activeAtcCodes,
 			List<PatientClinicalContext.ActiveDrugOrder> orders) {
+		return injectedFindingsOver(base, question, activeDrugs, activeAtcCodes, null, orders);
+	}
+
+	/**
+	 * {@link #injectedFindingsOver(PatientChart, String, Set, Set)} for a patient who ALSO has
+	 * recorded allergies — an arrangement in which the injector raises findings of more than one
+	 * TYPE about a single drug, because the allergy contraindication arm and an order-driven
+	 * interaction arm both fire on the drug the question puts in play.
+	 *
+	 * <p><b>Neither existing entry point can build it, which is why this one exists</b> (issue
+	 * #397's review round 2): {@link #injectedFindingsOver(PatientChart, String, Set, Set)} passes
+	 * no allergies at all, and {@link #injectedAllergyFindingChart} passes no active drugs and
+	 * injects over {@link #oneRecordChart}. So every arrangement those two produce has the finding
+	 * TYPE and the finding's drug in one-to-one correspondence, and a caller comparing whole
+	 * {@code resourceKey} composites reads exactly the same answer as
+	 * {@code ChartSearchAiUtils.findingSubjects}, so the mutation that method's key split exists to
+	 * catch passes over any of them.
+	 *
+	 * @throws IllegalStateException when the arrangement raises no finding at all, as the two
+	 *         overloads above do — the throw lives in the body all three share
+	 */
+	public static PatientChart injectedFindingsOverWithRecordedAllergies(PatientChart base,
+			String question, Set<String> activeDrugs, Set<String> activeAtcCodes,
+			Set<String> allergies) {
+		return injectedFindingsOver(base, question, activeDrugs, activeAtcCodes, allergies, null);
+	}
+
+	/** The one body the three public forms share, so the throw-on-empty contract each of them
+	 *  documents cannot come apart from the injection it is a contract about. */
+	private static PatientChart injectedFindingsOver(PatientChart base, String question,
+			Set<String> activeDrugs, Set<String> activeAtcCodes, Set<String> allergies,
+			List<PatientClinicalContext.ActiveDrugOrder> orders) {
 		PatientChart chart = injectorWithSafety(ddinterServiceWithGroups())
 				.injectRecords(base,
-						ctx(60, null, activeDrugs, activeAtcCodes, null, null, orders), question);
+						ctx(60, null, activeDrugs, activeAtcCodes, allergies, null, orders), question);
 		if (injectedFindings(chart).isEmpty()) {
 			throw new IllegalStateException("no safety finding was injected for drugs " + activeDrugs
+					+ (allergies == null ? "" : " and allergies " + allergies)
 					+ " and question: " + question);
 		}
 		return chart;

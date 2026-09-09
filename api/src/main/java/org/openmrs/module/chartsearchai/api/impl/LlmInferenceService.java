@@ -143,11 +143,19 @@ public class LlmInferenceService implements ChartSearchService {
 			// tell a screen that cannot fire from one that asked and found nothing.
 			DrugReferenceLoad.Coverage conditionRuleCoverage =
 					drugSafetyValidator.conditionRuleCoverage();
+			// And whether this chart's prompt asks the model for one line per safety finding (issue
+			// #397). After inject() deliberately, as searchMode, referenceSlice and
+			// unresolvedDrugClass above are — and this one means NOTHING anywhere else:
+			// DrugReferenceInjector is the sole producer of `safety_finding` mappings, so a read
+			// hoisted above that line is unconditionally false and #397's whole payload is reverted
+			// with the build green. A local for the same reason they are, and so that this comment
+			// has somewhere to live.
+			boolean enumerateFindings = severalFindingsAboutOneDrug(chart);
 			buildMs = System.currentTimeMillis() - buildStart;
 
 			long llmStart = System.currentTimeMillis();
 			LlmResponse response = llmProvider.search(chartTextOrPlaceholder(chart),
-					chart.getFocusIndices(), question);
+					chart.getFocusIndices(), question, enumerateFindings);
 			llmMs = System.currentTimeMillis() - llmStart;
 			inputTokens = response.getInputTokens();
 			cachedTokens = response.getCachedTokens();
@@ -375,8 +383,15 @@ public class LlmInferenceService implements ChartSearchService {
 			}
 			PatientChart focused = chartBuildingStrategy.buildFocusedChart(patient, question);
 			if (focused != null && !focused.getMappings().isEmpty()) {
+				// `false` explicitly, and it is a decision rather than a default: this preview
+				// DISCARDS its answer (DISCARD_TOKENS) and exists only to stream reasoning early, so
+				// there is no enumeration to shape and no reason to spend the clause or to move this
+				// path's cached prefix. Passed at the call site because the flag-less arity was
+				// removed — see the @param on `search`: an overload production calls that a test
+				// double does not override is silently bypassed, which is how issue #397 shipped
+				// once already.
 				llmProvider.searchStreaming(focused.getText(), focused.getFocusIndices(), question,
-						DISCARD_TOKENS, previewReasoningConsumer, null);
+						DISCARD_TOKENS, previewReasoningConsumer, null, false);
 			}
 		}
 		catch (RuntimeException e) {
@@ -463,6 +478,12 @@ public class LlmInferenceService implements ChartSearchService {
 			// before the model is called, so there is no reason for that event to carry less.
 			DrugReferenceLoad.Coverage conditionRuleCoverage =
 					drugSafetyValidator.conditionRuleCoverage();
+			// The finding-enumeration flag too, off the same post-inject chart and for the reason
+			// search() gives at the same position (issue #397): DrugReferenceInjector is the sole
+			// producer of `safety_finding` mappings, so a read hoisted above the inject() line above
+			// is unconditionally false and this issue's whole payload is reverted with the build
+			// green.
+			boolean enumerateFindings = severalFindingsAboutOneDrug(chart);
 			buildMs = System.currentTimeMillis() - buildStart;
 
 			// Progressive reasoning: stream a fast preview reasoning from the focused top-K chart to
@@ -481,7 +502,7 @@ public class LlmInferenceService implements ChartSearchService {
 			String kvCacheScope = chart.isQueryScoped() ? null : kvCacheScopeFor(patient);
 			LlmResponse response = llmProvider.searchStreaming(
 					chartTextOrPlaceholder(chart), chart.getFocusIndices(), question, tokenConsumer,
-					reasoningConsumer, kvCacheScope);
+					reasoningConsumer, kvCacheScope, enumerateFindings);
 			llmMs = System.currentTimeMillis() - llmStart;
 			inputTokens = response.getInputTokens();
 			cachedTokens = response.getCachedTokens();
@@ -593,6 +614,70 @@ public class LlmInferenceService implements ChartSearchService {
 	 */
 	private static String chartTextOrPlaceholder(PatientChart chart) {
 		return chart.getMappings().isEmpty() ? "(No relevant records found)" : chart.getText();
+	}
+
+	/**
+	 * Whether this chart's prompt carries more than one injected safety finding AND every one of
+	 * them names the same drug — the only fact about the chart the #397 clause in
+	 * {@code LlmProvider.buildUserMessage} needs. Issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>.
+	 *
+	 * <p><b>Reads {@code SafetyFindingCitationExtentCheck.carriedFindingIndexes}, which is the ONE
+	 * definition of the carried population.</b> An earlier draft walked the mappings here instead
+	 * and justified it by saying the two questions are asked of charts that do not coexist — which
+	 * is false: {@code chart} is the same live local at this call and at the check's, in both answer
+	 * methods. Two walks would let a filter added to one drift from the other silently, so that the
+	 * prompt asks for an enumeration of a population {@code findingCitations} then counts
+	 * differently. The check runs after the answer and needs the SET; this runs before there is one
+	 * and needs only whether there are two.
+	 *
+	 * <p>The threshold is TWO because one finding is not an enumeration. Nothing published records
+	 * the per-cell carried counts of the measured corpus, so no claim is made about them here.
+	 *
+	 * <p><b>ONE SUBJECT, and that conjunct is the clause's own precondition rather than a
+	 * refinement of it.</b> The sentence reads "Where more than one finding names <em>it</em>", and
+	 * its {@code it} is a drug; a chart whose findings name several drugs offers no single referent
+	 * for it, so the sentence describes an arrangement that chart does not have. Measured over the
+	 * bundled DDInter knowledge base through {@code DrugReferenceTestSupport.injectorWithSafety(
+	 * ddinterServiceWithGroups()).injectRecords}, with the subjects read back by the same
+	 * {@code findingSubjects} this method calls, on a two-order chart with six resolved active
+	 * drugs: {@code "do any of her meds interact?"} —
+	 * an issue #113 interaction SCREEN, which needs no drug in the question at all — injects ten
+	 * findings naming FIVE subjects, and this conjunct is what keeps the clause off it. Without it
+	 * the flag is true there, and no arm of #397's A/B contains such a cell. That population is also
+	 * the one with a recorded measurement of citing NONE of its findings — see
+	 * {@code eval/drift-metric/score_probe_safety.py}'s {@code findings_incompletely_stated}
+	 * docstring, where a wh-question carried ten screening-arm findings and cited none of them.
+	 *
+	 * <p><b>What it does NOT establish is that the QUESTION names that drug.</b> A screen whose
+	 * findings happen to name one of her own drugs still takes the clause (measured: the same
+	 * arrangement with four resolved drugs injects two findings naming one subject), and there the
+	 * antecedent for {@code it} is in the records rather than the question. That is unmeasured and
+	 * is not claimed closed; what the conjunct does guarantee is that whenever the clause is sent,
+	 * exactly one drug in the prompt satisfies its own description. Narrowing on the question's
+	 * phrasing instead — {@code QueryScopeRouter.isInteractionScreening} negated — was measured and
+	 * is worse in both directions. {@code "Does clarithromycin interact with any of her current
+	 * medications?"} carries the screening cue yet its findings name the one drug the question names,
+	 * the screening arm standing down because the question resolved a drug (four resolved active
+	 * drugs: four findings, one subject), so a phrasing gate withholds the clause there for no
+	 * reason. {@code "Do her clarithromycin and amiodarone interact?"} carries no screening cue and
+	 * names two (six resolved active drugs: nine findings, two subjects), so a phrasing gate sends
+	 * it. Both figures are from the arrangement above through the same helper.
+	 *
+	 * <p><b>Gating at all — rather than appending the clause unconditionally — is also about the
+	 * absent-data prompt.</b> The empty-chart message's exact bytes are pinned by
+	 * {@code AbsentDataEvalTest.theEmptyChartPromptAsksTheModelToNameWhatIsMissing} after 19
+	 * measured cases, and that test is how this method came to exist rather than by design. It
+	 * cannot see a widened CALL SITE, though — it builds its bytes through an arity that hardcodes
+	 * the flag false, so a literal {@code true} where this method is called left the whole build
+	 * green until
+	 * {@code FindingEnumerationClauseContextTest.theCallSitesHandTheProviderFalseForThePopulationsTheGateWithholdsFrom}
+	 * existed. Widen either call site and read that case's failure.
+	 */
+	static boolean severalFindingsAboutOneDrug(PatientChart chart) {
+		List<RecordMapping> mappings = chart.getMappings();
+		return SafetyFindingCitationExtentCheck.carriedFindingIndexes(mappings).size() > 1
+				&& ChartSearchAiUtils.findingSubjects(mappings).size() == 1;
 	}
 
 	static boolean isWarmupEnabled() {

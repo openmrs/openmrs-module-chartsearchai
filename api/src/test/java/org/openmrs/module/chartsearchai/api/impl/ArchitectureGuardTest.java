@@ -56,14 +56,32 @@ public class ArchitectureGuardTest {
 	private static final String COVERAGE_TYPE =
 			"Lorg/openmrs/module/chartsearchai/reference/DrugReferenceLoad$Coverage;";
 
-	/** The safety-finding type test as a token sequence: the constant, or the literal value it
-	 *  holds, as the receiver or the argument of {@code equals}. Whitespace-tolerant in both arms
-	 *  because one of the two production spellings wraps across a line, and a line-scoped pattern
-	 *  would be blind to exactly the arrangement a re-inline is most likely to copy. */
-	private static final Pattern FINDING_TYPE_TEST = Pattern.compile(
-			"(?:\"safety_finding\"|RESOURCE_TYPE_SAFETY_FINDING)\\s*\\.\\s*equals\\s*\\("
-			+ "|\\.\\s*equals\\s*\\(\\s*(?:[A-Za-z_][A-Za-z0-9_]*\\s*\\.\\s*)?"
-			+ "(?:\"safety_finding\"|RESOURCE_TYPE_SAFETY_FINDING)\\s*\\)");
+	/** The safety-finding type as a token: the constant's simple name, or the literal value it holds.
+	 *  The constant arm is bounded at BOTH ends, so a longer identifier that merely CONTAINS that
+	 *  name is not read as it, wherever in the identifier the name sits; the literal arm is bounded by
+	 *  its own quotes. One spelling, shared by the receiver arm and by the argument-list read. */
+	private static final Pattern FINDING_TYPE_TOKEN = Pattern.compile(
+			"\"safety_finding\"|\\bRESOURCE_TYPE_SAFETY_FINDING\\b");
+
+	/** The type test with the token as the RECEIVER, which is the shape both production spellings
+	 *  use. Whitespace-tolerant because one of the two wraps across a line, and a line-scoped
+	 *  pattern would be blind to exactly the arrangement a re-inline is most likely to copy. */
+	private static final Pattern FINDING_TYPE_TEST_RECEIVER = Pattern.compile(
+			"(?:\"safety_finding\"|\\bRESOURCE_TYPE_SAFETY_FINDING\\b)"
+			+ "\\s*\\.\\s*equals(?:IgnoreCase)?\\s*\\(");
+
+	/** The opening of an {@code equals}/{@code equalsIgnoreCase} CALL, whose argument list is then
+	 *  read whole rather than matched positionally: {@code Objects.equals(type, CONST)} and
+	 *  {@code Objects.equals(CONST, type)} are the null-safe respellings a third selection site is
+	 *  likeliest to reach for — this module already writes {@code Objects.equals} in
+	 *  {@code api/src/main} — and a positional pattern catches at most one of the two argument
+	 *  orders. What the leading {@code \b} buys is indifference to WHAT qualifies the call — one
+	 *  rule covers {@code Objects.}, {@code StringUtils.} and a fully qualified
+	 *  {@code java.util.Objects.} — while still refusing a longer lowercase name ending in
+	 *  {@code equals}. A statically imported bare {@code equals(…)} would match too and is not a
+	 *  shape to worry about: every class inherits {@code Object.equals}, which shadows the import, so
+	 *  the two-argument call does not compile (measured while probing this rule). */
+	private static final Pattern EQUALS_CALL = Pattern.compile("\\bequals(?:IgnoreCase)?\\s*\\(");
 
 	/** The only two method bodies in {@code api/src/main} that may spell it, each named by its own
 	 *  signature text so the allow-list cannot drift onto a neighbour. */
@@ -253,23 +271,42 @@ public class ArchitectureGuardTest {
 	 * {@code ChartSearchAiReferenceGroupTest} is what binds it. Naming both is what lets this rule
 	 * be spelled as "nowhere else" rather than as a file exclusion.
 	 *
-	 * <p><b>What it catches, measured by writing each shape into a third class and reading this
-	 * case:</b> the constant or its literal value {@code "safety_finding"} as the receiver or the
-	 * argument of {@code equals}, in any whitespace or line arrangement, whether or not the
-	 * comparison reads {@code getResourceType()} directly — so a re-inline through a local holding
-	 * the type is caught too, and so is the arrangement the production spellings themselves use,
-	 * one of which wraps across a line.
+	 * <p><b>What it catches, measured by writing each shape into a third class in
+	 * {@code api/src/main} and reading this case's own failures (2026-09-09, twelve shapes, all
+	 * twelve reported):</b> the constant or its literal value {@code "safety_finding"} as the
+	 * receiver of {@code equals} or {@code equalsIgnoreCase} — including the arrangement the
+	 * production spellings themselves use, one of which wraps across a line — and the same token
+	 * ANYWHERE in such a call's argument list. The rule keys on the METHOD NAME, so whatever
+	 * qualifies it is out of the picture: the shapes measured were {@code java.util.Objects.equals}
+	 * in BOTH argument orders, a {@code StringUtils.equals}-shaped two-argument helper, a fully
+	 * qualified constant as the sole argument, and
+	 * {@code Objects.equals(mapping.getResourceType(), CONST)} — an argument carrying parentheses of
+	 * its own, which is what a positional pattern cannot read past. The
+	 * null-safe respellings are the ones worth reaching, because a maintainer writing a third
+	 * selection site reaches for them rather than for the constant-first receiver trick production
+	 * uses, and this module already writes {@code Objects.equals} in {@code api/src/main}. It does
+	 * not matter whether the comparison reads {@code getResourceType()} directly, so a re-inline
+	 * through a local holding the type is caught too.
 	 *
-	 * <p><b>What it does NOT catch, so nothing here looks better defended than it is.</b>
-	 * {@code equalsIgnoreCase}, {@code contains}, {@code startsWith}, a {@code switch} on the type
-	 * or a reference comparison against the interned constant: each is a different token sequence
-	 * and none is on this list. A re-collection through {@code referenceGroup} against
-	 * {@code REFERENCE_GROUP_REFERENCE} is out of reach by design — that selects THREE types and is
-	 * a wider population, not this one respelled. And the scope is {@code api/src/main/java}: the
-	 * omod is unreached (it builds no mappings today, the same disclosure
-	 * {@link #theProvenanceCarryingMappingConstructorHasOneCaller} carries), and the test tree is
-	 * excluded deliberately, since {@code DrugReferenceTestSupport.injectedFindings} is the one
-	 * matcher the test files are held to instead.
+	 * <p><b>What it does NOT catch. This list is not exhaustive and the shapes on it are UNCAUGHT
+	 * rather than covered elsewhere</b> — measured in the same run: {@code contains},
+	 * {@code startsWith}, a reference comparison ({@code type == CONST}) against the interned
+	 * constant, a {@code switch} whose {@code case} label is the constant, and a comparison moved
+	 * into a helper of another name ({@code sameType(type, CONST)}) all pass this rule silently. A
+	 * re-collection through {@code referenceGroup} against {@code REFERENCE_GROUP_REFERENCE} passes
+	 * too, and that one is out of reach by design — it selects THREE types and is a wider
+	 * population, not this one respelled.
+	 *
+	 * <p><b>And the scope is {@code api/src/main/java}.</b> The omod is unreached (it builds no
+	 * mappings today, the same disclosure
+	 * {@link #theProvenanceCarryingMappingConstructorHasOneCaller} carries). The test tree is out of
+	 * scope because a copy there cannot move the coupling this rule protects — a test file selects
+	 * findings for its own assertion and reaches neither the prompt nor {@code findingCitations}.
+	 * <b>That is not the same as saying the tree is funnelled through one matcher: it is not.</b>
+	 * {@code DrugReferenceTestSupport.injectedFindings} is the matcher the tree is MEANT to use, and
+	 * several test files besides it still spell the type test themselves; its own javadoc names that
+	 * residue and the different hazard it carries, in the shape
+	 * {@code DrugReferenceTestSupport.injectedActiveOrders} uses for its own.
 	 *
 	 * <p><b>It reads COMMENTS as well as code</b>, so a javadoc that quotes the predicate outside
 	 * those two bodies reddens this case. That direction is a false positive rather than a silent
@@ -285,10 +322,11 @@ public class ArchitectureGuardTest {
 	 * precondition, and dropping either name from the allow-list reddens with the named method's own
 	 * spelling reported as the violation.
 	 *
-	 * <p><b>One arm of the pattern carries no canary, and it is named rather than left to be
-	 * assumed covered.</b> Neither production spelling puts the constant on the RIGHT of
-	 * {@code equals}, so deleting that alternation leaves this case green — measured — and silently
-	 * gives up the argument-side shape. The receiver arm is the one the two bodies keep honest.
+	 * <p><b>Only one of the two shapes carries a canary, and that is named rather than left to be
+	 * assumed covered.</b> Neither production spelling puts the constant in an {@code equals}
+	 * ARGUMENT list, so deleting the {@link #EQUALS_CALL} half of {@link #findingTypeTests} leaves
+	 * this case green — measured — and silently gives up every argument-side shape above, the
+	 * {@code Objects.equals} ones included. The receiver shape is the one the two bodies keep honest.
 	 */
 	@Test
 	public void theFindingPopulationIsSelectedInOneMethod() throws IOException {
@@ -321,7 +359,7 @@ public class ArchitectureGuardTest {
 							+ "rule's allow-list is keyed on that signature, so it would report the "
 							+ "method's own spelling as the violation");
 			int[] region = new int[] { start, endOfBody(utils, start + signature.length() - 1) };
-			assertTrue(FINDING_TYPE_TEST.matcher(utils.substring(region[0], region[1])).find(),
+			assertTrue(!findingTypeTests(utils.substring(region[0], region[1])).isEmpty(),
 					"precondition: \"" + signature + "\" no longer spells the type test in a shape this "
 							+ "rule can see, so the rule has been disarmed rather than satisfied");
 			allowed.add(region);
@@ -329,25 +367,87 @@ public class ArchitectureGuardTest {
 		List<String> violations = new ArrayList<>();
 		for (java.util.Map.Entry<String, String> entry : sources.entrySet()) {
 			String source = entry.getValue();
-			Matcher matcher = FINDING_TYPE_TEST.matcher(source);
-			while (matcher.find()) {
+			for (int[] test : findingTypeTests(source)) {
 				boolean home = false;
 				if (FINDING_TYPE_TEST_HOME_FILE.equals(entry.getKey())) {
 					for (int[] region : allowed) {
-						home = home || (matcher.start() >= region[0] && matcher.start() < region[1]);
+						home = home || (test[0] >= region[0] && test[0] < region[1]);
 					}
 				}
 				if (!home) {
+					String quoted = source.substring(test[0], test[1]).replace("\n", " ");
 					violations.add(entry.getKey() + ":"
-							+ lineOf(source, matcher.start())
+							+ lineOf(source, test[0])
 							+ " — the injected-finding population is selected by "
 							+ "ChartSearchAiUtils.safetyFindingMappings and nowhere else (issue #397); "
 							+ "call it instead of respelling the type test\n    "
-							+ matcher.group().replace("\n", " "));
+							+ (quoted.length() > 160 ? quoted.substring(0, 160) + "…" : quoted));
 				}
 			}
 		}
 		assertNoViolations(violations);
+	}
+
+	/**
+	 * Every place {@code source} tests a resource type against the safety-finding type, as
+	 * {@code {start, end}} offsets — the ONE reading of that question in this class, so a canary
+	 * cannot be satisfied by a shape the rule itself does not look for.
+	 *
+	 * <p>Two shapes, and the second is read rather than matched. The token as the RECEIVER of
+	 * {@code equals}/{@code equalsIgnoreCase} is a token sequence and stays a pattern. The token as
+	 * an ARGUMENT is not: it can sit at any position of the list, behind any depth of qualifier, and
+	 * beside arguments carrying parentheses of their own ({@code mapping.getResourceType()}), so the
+	 * list is read to its matching close paren and searched whole. That is what reaches both
+	 * argument orders of {@code Objects.equals} with one rule instead of one alternation per order.
+	 *
+	 * <p><b>The paren count is naive in the same way {@link #endOfBody}'s brace count is</b> — it
+	 * knows nothing of strings, chars or comments — and the two directions of that are not the same:
+	 * a stray {@code )} inside a string literal ends the list early and can hide a token sitting
+	 * after it, which is a silent pass, while a stray {@code (} runs the list past its real end and
+	 * can report a token that is not in it, which is a loud one. Neither is reachable from a
+	 * production spelling today; both are named rather than left to be discovered.
+	 */
+	private static List<int[]> findingTypeTests(String source) {
+		List<int[]> found = new ArrayList<>();
+		Matcher receiver = FINDING_TYPE_TEST_RECEIVER.matcher(source);
+		while (receiver.find()) {
+			found.add(new int[] { receiver.start(), receiver.end() });
+		}
+		Matcher call = EQUALS_CALL.matcher(source);
+		while (call.find()) {
+			int close = endOfArguments(source, call.end() - 1);
+			if (close < 0) {
+				continue;
+			}
+			if (FINDING_TYPE_TOKEN.matcher(source.substring(call.end(), close)).find()) {
+				found.add(new int[] { call.start(), close + 1 });
+			}
+		}
+		java.util.Collections.sort(found, new java.util.Comparator<int[]>() {
+			@Override
+			public int compare(int[] left, int[] right) {
+				return Integer.compare(left[0], right[0]);
+			}
+		});
+		return found;
+	}
+
+	/** The index of the paren closing the argument list that opens at {@code openParen}, or -1 where
+	 *  the source runs out first — the caveats are {@link #findingTypeTests}'. */
+	private static int endOfArguments(String source, int openParen) {
+		int depth = 0;
+		for (int i = openParen; i < source.length(); i++) {
+			char c = source.charAt(i);
+			if (c == '(') {
+				depth++;
+			} else if (c == ')') {
+				depth--;
+				if (depth == 0) {
+					return i;
+				}
+			}
+		}
+		return -1;
 	}
 
 	/**

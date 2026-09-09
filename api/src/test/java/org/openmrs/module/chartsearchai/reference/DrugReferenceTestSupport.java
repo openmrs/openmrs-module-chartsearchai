@@ -487,10 +487,24 @@ public final class DrugReferenceTestSupport {
 
 	/**
 	 * Every injected {@code safety_finding} mapping in {@code chart}, in injection order — the
-	 * finding-shaped counterpart of {@link #injectedReference}, and the one matcher for it, so the
-	 * filter cannot drift between the test files that assert HOW MANY records a chip yields. Returns
-	 * the list rather than the first, because that count is the assertion in every caller but
+	 * finding-shaped counterpart of {@link #injectedReference}, and the matcher this tree is MEANT to
+	 * share, so the filter cannot drift between the test files that CALL it. Returns the list rather
+	 * than the first, because that count is the assertion in every caller but
 	 * {@link #injectedSafetyFinding}, which layers its own throw-on-empty contract on top.
+	 *
+	 * <p><b>NOT yet the only matcher for this resource type, so the drift hazard it names is live
+	 * here as it is for {@code injectedActiveOrders}</b> — {@code DrugReferenceInjectorTest},
+	 * {@code DrugSafetyInteractionScreeningTest}, {@code DrugSafetyQuestionPairInteractionTest},
+	 * {@code ActiveOrderReconciliationTest}, {@code FindingChartRecordProvenanceContextTest} and
+	 * {@code ReferenceProseFidelityTest} each still spell the type test themselves, and pointing them
+	 * at this would close it. <b>Scoping the promise to the callers is the second narrowing this
+	 * sentence has taken, and the first one was still false:</b> it read "the test files that assert
+	 * HOW MANY records a chip yields", and one of the files above counts findings through its own
+	 * copy of the filter, which is that very assertion class. Said here rather than assumed, because
+	 * {@code ArchitectureGuardTest.theFindingPopulationIsSelectedInOneMethod} scopes itself to
+	 * {@code api/src/main} and pointed at this method for the tree instead: what that rule protects
+	 * is the PRODUCTION coupling between the prompt and {@code findingCitations}, which no test-tree
+	 * copy can move, and this hazard is the different one.
 	 *
 	 * <p>Public for the cross-package reason {@link #safetyFindingIn} is: a test in another package
 	 * whose assertion is about WHICH of several findings an answer sentence cited needs them all

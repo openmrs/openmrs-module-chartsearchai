@@ -791,23 +791,45 @@ copy had already started to drift in its second column before it was cut.
 | **after the question, run on** | `buildUserMessage`, space | **6 / 12** | **0** | 12 / 12 | **366** | **564** |
 
 **Both cost columns are over all fourteen cells**, the two ABSTAIN controls included — so read
-every share below as a share of that fourteen and not of the twelve the clause reaches. **And the
-controls are clause-free in the two BUILT arms only, which is what makes two of those shares
-non-comparable.** Those arms gate the clause on `severalFindingsAboutOneDrug`, which is false of a
-chart carrying no finding. The `system prompt` arm is UNGATED: `getSystemPrompt()` returns the
-global property if custom and `DEFAULT_SYSTEM_PROMPT` otherwise, with no gate at all, and both
-`LlmProvider.search` and `LlmProvider.searchStreaming` call it per request — so its two controls
-DID carry the clause. Read the 26% and +72% shares below against a baseline whose controls did not
-— the −23% beside them is like-for-like, its arm being one of the built ones. What the `appended to
-the question` arm did with the two control questions is **not settled by anything in this repo**:
-that arm's own phrasing string is not recorded here, and while the harness's only question-append
-lever (`CAPTURE_PHRASING`) is uniform over cells and would have reached them, nothing records that
-it was the lever used. `mean output tokens` is `outputTokens` off the
+every share below as a share of that fourteen and not of the twelve the clause reaches. **Of the
+four arms that carry a clause at all, the `system prompt` one is the only one whose two controls
+carry it too, which is what makes that arm's two shares non-comparable.** The baseline has no clause
+anywhere, which is what its `nowhere` cell says; the two BUILT arms gate it on
+`severalFindingsAboutOneDrug`, false of a chart carrying no finding; and the `appended to the
+question` arm's controls are settled below. The `system prompt` arm is UNGATED:
+`getSystemPrompt()` returns the global property if custom and `DEFAULT_SYSTEM_PROMPT` otherwise,
+with no gate at all, and both `LlmProvider.search` and `LlmProvider.searchStreaming` call it per
+request — so its two controls DID carry the clause. Read the 26% and +72% shares below against a
+baseline whose controls did not — the −23% beside them is like-for-like, its arm being one of the
+built ones. `mean output tokens` is `outputTokens` off the
 `chartsearchai_audit_log` row, joined to the captures by exact answer text, 14 of 14 cells matched in
 every arm (measured 2026-09-09; the audit REST listing at `GET
 /ws/rest/v1/chartsearchai/auditlog` publishes it beside `inputTokens`). The characters column was
 here first and was being read as the output cost, which it is not: the module records the tokens, so
 that is the figure to quote and the ratio of the two is not constant across arms.
+
+**The `appended to the question` and `after the question, run on` rows agree in all five columns
+because they are two independent captures of ONE prompt** (measured 2026-09-09 over the two stored
+capture directories). Their fourteen ANSWERS are byte-identical — sha256 over each `answer` string,
+zero differing cells — and they are not one capture relabelled: the `questionId` differs per cell,
+Amlodipine being 10752 in the wording arm and 10785 in the shipped one. Byte-identity is the
+expected result rather than a suspicious one. The engine is greedy-decoded with `--cache-reuse 0`,
+so identical prompts give identical answers, and the two arrangements produce the same prompt BY
+CONSTRUCTION: the shipped implementation appends the clause after the question separated by a SPACE,
+which is textually indistinguishable from the clause following the question on the same line. **So
+the identical aggregate is a VALIDATION rather than a duplicate row — the shipped code reproduces
+the arm that chose the wording, byte for byte, over two independent captures — and it is the PROMPT
+that is identical, which is the stronger statement.**
+
+**That also settles what the wording arm did with the two control questions, in the NEGATIVE**,
+which this section used to record as not settled by anything in this repo. The shipped arm
+demonstrably withholds the clause from those two cells (its gate sees `carried` 0), and their
+answers are byte-identical between the arms; had the wording arm carried the clause on those
+prompts they would have differed, and under greedy decode their answers would be expected to differ
+too. They do not — so that arm's controls carried no clause either, and a uniform `CAPTURE_PHRASING`
+append over all fourteen drugs was NOT the lever that produced that arm. **The positive stays
+open:** nothing here records which lever DID, that arm's own phrasing string not being written down,
+and byte-identical answers are strong evidence of identical prompts rather than proof.
 
 **Position, not wording — and then the separator.** The same sentence ahead of the records made
 completeness *worse* by a cell and cost **26% more output tokens** (477 → 602; +72% in answer
@@ -830,9 +852,14 @@ interactions with active orders are:"*), and run on from the question it did not
 rows were captured against the built omod deployed to the standalone, not through the global
 property, so they measure the module rather than a simulation of it.
 
-Read beside the existing gates rather than instead of them, which is the whole point: **verdict-led
-12/12, abstention 2/2, `unlicensed_verdict` 0 and `discordant_severity` 0 in every arm**. Nothing any
-pre-existing column reports moved in any arm.
+Read beside the existing gates rather than instead of them, which is the whole point: **abstention
+2/2, `unlicensed_verdict` 0 and `discordant_severity` 0 in every arm, and verdict-led 12/12 in every
+arm but the line-separated one** — that one cell is the separator finding above, and it is the ONE
+pre-existing column that moved in any arm. An earlier draft of this sentence read *"verdict-led
+12/12 … in every arm"* and *"nothing any pre-existing column reports moved in any arm"*, which the
+table above contradicts in its own `verdict-led` column. That draft was not a figure that went
+stale: it arrived in the same commit as the row it contradicts, so the table is the authority here
+and a summary sentence beside a table is worth re-reading against it.
 
 The `rc2` Tier-B cohort does not exist on this host (404 on its patient uuids), so drift and the 19 absent-data cases are not measurable here — which is
 why the shipped clause is gated rather than added to every prompt. The gate is

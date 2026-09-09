@@ -167,10 +167,15 @@ public class FindingEnumerationClauseContextTest {
 	 * ascending assertion beside it is the premise that those indexes are the injector's own
 	 * sequential numbering, without which a reversal would be unobservable in the values.
 	 *
-	 * <p><b>What it does NOT reach:</b> the COLLECTION type at either end. Substituting a
-	 * {@code HashSet} for {@code carriedFindingIndexes}' {@code LinkedHashSet} iterates ascending
-	 * anyway at this chart's small index values, so that half of the javadoc's claim stays
-	 * unobservable here and is said so rather than left to look guarded.
+	 * <p><b>What it does NOT reach:</b> the COLLECTION type at either end, and the reason is
+	 * structural rather than a property of this chart. The premise asserted above is that the
+	 * injector numbers its findings ASCENDING, so {@code injectionOrder} — the expected value of the
+	 * assertion below — IS a sorted list, and any collection that normalises to that order satisfies
+	 * it on any chart: a {@code TreeSet} or a sort in place of the {@code LinkedHashSet} cannot fail
+	 * this at all, and a {@code HashSet} escapes here too (measured). So that half of
+	 * {@code carriedFindingIndexes}' javadoc claim is unobservable rather than pinned, and is said so
+	 * rather than left to look guarded. Nothing follows about the WARN it protects, whose order is
+	 * the prompt's and therefore the ascending one.
 	 */
 	@Test
 	public void theCarriedIndexesReadInTheOrderTheInjectorWroteTheFindings() {

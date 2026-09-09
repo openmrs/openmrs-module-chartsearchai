@@ -140,11 +140,13 @@ final class SafetyFindingCitationExtentCheck {
 	 * the COLLECTION TYPE's own contribution to it is not, and the two are different claims.</b>
 	 * {@code FindingEnumerationClauseContextTest.theCarriedIndexesReadInTheOrderTheInjectorWroteTheFindings}
 	 * reddens on a reversal of the shared walk, which is what used to be invisible. Substituting a
-	 * {@code HashSet} here leaves it green — measured — because that chart's indexes are small
-	 * enough that a hash set iterates ascending anyway. Keyed on the INDEX, which is the
-	 * injector's own sequential numbering and unique across a chart by construction, so the set
-	 * counts records and is not silently folding any — which is also why the shared walk hands back
-	 * a List and leaves each projection its own collapse.
+	 * {@code HashSet} here leaves it green — measured — and the reason is STRUCTURAL rather than a
+	 * property of that chart: the case's own premise asserts the injector numbers its findings
+	 * ASCENDING, so the list it compares this one against is a sorted list, and any collection that
+	 * normalises to that order escapes on every chart rather than only on one whose indexes are
+	 * small. Keyed on the INDEX, which is the injector's own sequential numbering and unique across a
+	 * chart by construction, so the set counts records and is not silently folding any — which is
+	 * also why the shared walk hands back a List and leaves each projection its own collapse.
 	 */
 	static Set<Integer> carriedFindingIndexes(List<RecordMapping> mappings) {
 		Set<Integer> carried = new LinkedHashSet<Integer>();

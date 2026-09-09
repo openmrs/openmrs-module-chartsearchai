@@ -25,6 +25,7 @@ import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.PairChipExtent;
@@ -36,8 +37,9 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Patien
 import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
 
 /**
- * The #397 clause reaches the prompt of a chart the real injector gave several safety findings, and
- * does not reach one it gave none. Issue
+ * The #397 clause reaches the prompt of a chart the real injector gave several safety findings ABOUT
+ * ONE DRUG, and does not reach one it gave none, one it gave a single finding, or one whose findings
+ * name several drugs. Issue
  * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>.
  *
  * <p><b>Over the real pipeline and its own data</b>, which is what makes it worth having beside
@@ -47,11 +49,14 @@ import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
  * {@code DrugReferenceTestSupport.injectedFindingsOver} — {@code validate} then
  * {@code injectRecords} over the bundled knowledge base — and puts the resulting chart to the
  * predicate the two answer paths call, so the two halves of the gate are checked against each other
- * rather than each against a fixture.
+ * rather than each against a fixture. Every arrangement below asserts its own PREMISE off the
+ * injected chart first, so a case cannot start passing because the shipped data stopped raising the
+ * findings it is about.
  *
- * <p>Neuter {@code LlmInferenceService.severalInjectedFindings} to a constant and read the failures:
- * {@code false} reddens the first case and {@code true} the second, and neither reddens anything in
- * {@code LlmProviderUserMessageTest}.
+ * <p>Neuter {@code LlmInferenceService.severalFindingsAboutOneDrug} to a constant and read the
+ * failures — every case here asserts that predicate directly, so either constant reddens this
+ * class. Neither reddens anything in {@code LlmProviderUserMessageTest}, which passes the flag as a
+ * literal and never asks the predicate at all.
  */
 public class FindingEnumerationClauseContextTest {
 
@@ -88,15 +93,19 @@ public class FindingEnumerationClauseContextTest {
 	public void aChartTheScreenGaveSeveralFindingsAsksForOneLinePerFinding() {
 		PatientChart chart = chartWithSeveralFindings();
 		int findings = DrugReferenceTestSupport.injectedFindings(chart).size();
+		Set<String> subjects = ChartSearchAiUtils.findingSubjects(chart.getMappings());
 		assertTrue(findings > 1,
 				"the premise: the real pipeline must inject more than one finding here, or the "
 						+ "predicate below is satisfied by an arrangement that cannot show the defect. "
 						+ "Injected: " + findings);
-		assertTrue(LlmInferenceService.severalInjectedFindings(chart),
+		assertEquals(1, subjects.size(),
+				"and its other half: those findings must all name ONE drug, which is what makes this "
+						+ "the arrangement the measured corpus is made of. Named: " + subjects);
+		assertTrue(LlmInferenceService.severalFindingsAboutOneDrug(chart),
 				"the predicate the two answer paths hand LlmProvider must be true of a chart the "
 						+ "screen gave " + findings + " findings");
 		String message = LlmProvider.buildUserMessage(chart.getText(), chart.getFocusIndices(),
-			QUESTION, LlmInferenceService.severalInjectedFindings(chart));
+			QUESTION, LlmInferenceService.severalFindingsAboutOneDrug(chart));
 		assertTrue(message.contains("put every one of them on a line of its own"),
 				"so the prompt this chart produces must carry the clause");
 		assertTrue(message.indexOf("Clinician's query: ") < message.indexOf("put every one of them"),
@@ -104,14 +113,25 @@ public class FindingEnumerationClauseContextTest {
 	}
 
 	/**
-	 * The FLAG ITSELF REACHES THE PROVIDER, which is the one link the two cases below cannot see.
+	 * The FLAG ITSELF REACHES THE PROVIDER, AND IT IS READ OFF THE POST-INJECT CHART — the one link
+	 * the cases either side of this one cannot see.
 	 *
 	 * <p>They pin the predicate and they pin the renderer; nothing between them was pinned, and that
-	 * gap is not theoretical — replacing {@code severalInjectedFindings(chart)} with a literal
+	 * gap is not theoretical — replacing {@code severalFindingsAboutOneDrug(chart)} with a literal
 	 * {@code false} at BOTH of {@code LlmInferenceService}'s answer call sites left the entire build
-	 * green, 2188 tests, which is issue #397's whole payload reverted in silence. This case drives
-	 * the real {@code search} over a chart the real injector gave several findings and asserts what
-	 * the provider was handed.
+	 * green, which is issue #397's whole payload reverted in silence. This case drives the real
+	 * {@code search} over a chart the real injector gave several findings and asserts what the
+	 * provider was handed.
+	 *
+	 * <p><b>The harness serves the UN-injected chart and lets its stub injector be the thing that
+	 * adds the findings</b>, which is what makes the WHERE checkable as well as the WHAT. An earlier
+	 * version served the already-injected chart from the strategy and had the injector return it
+	 * unchanged, so pre- and post-{@code inject()} were the same object and the natural maintainer
+	 * mutation — hoisting the flag's local above the {@code inject()} line, beside
+	 * {@code searchMode}, {@code referenceSlice} and {@code unresolvedDrugClass} — was invisible:
+	 * {@code DrugReferenceInjector} is the sole producer of {@code safety_finding} mappings, so that
+	 * hoist makes the flag unconditionally false. Move either assignment above its
+	 * {@code inject()} call and read the failures.
 	 *
 	 * <p>Recorded rather than asserted inside the stub: an assertion thrown from a consumer the
 	 * service calls inside its own try/catch would be swallowed into the fail-safe and read as a
@@ -119,16 +139,21 @@ public class FindingEnumerationClauseContextTest {
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>.
 	 */
 	@Test
-	public void theFlagTheGateComputesIsWhatTheProviderIsHanded() {
-		PatientChart chart = chartWithSeveralFindings();
+	public void theFlagTheGateComputesIsWhatTheProviderIsHandedAndItIsReadAfterInjection() {
+		PatientChart base = baseChart();
+		PatientChart injected = chartWithSeveralFindings();
+		assertFalse(LlmInferenceService.severalFindingsAboutOneDrug(base),
+				"the premise this case rests on: the chart the strategy serves must carry no finding, "
+						+ "so a flag read before inject() is false and the assertions below can tell "
+						+ "the two positions apart");
 		RecordingProvider provider = new RecordingProvider();
-		TestableService service = newService(chart, provider);
+		TestableService service = newService(base, injected, provider);
 
 		service.search(new Patient(), QUESTION);
 		assertEquals(Boolean.TRUE, provider.lastFlag,
-				"search must hand the provider the flag the gate computed for this chart, which the "
-						+ "case above proves is true of it. A literal false here reverts #397 with "
-						+ "every test green");
+				"search must hand the provider the flag the gate computed for the chart the INJECTOR "
+						+ "returned, which the case above proves is true of it. A literal false here, "
+						+ "or a read of the pre-inject chart, reverts #397 with every test green");
 
 		provider.lastFlag = null;
 		service.searchStreaming(new Patient(), QUESTION, token -> { });
@@ -149,7 +174,7 @@ public class FindingEnumerationClauseContextTest {
 		assertTrue(findings == 1,
 				"the premise: this arrangement must raise exactly one finding, or the threshold is "
 						+ "not what is being tested. Injected: " + findings);
-		assertFalse(LlmInferenceService.severalInjectedFindings(chart),
+		assertFalse(LlmInferenceService.severalFindingsAboutOneDrug(chart),
 				"one finding is not several, so the predicate must be false");
 	}
 
@@ -160,27 +185,104 @@ public class FindingEnumerationClauseContextTest {
 		PatientChart chart = baseChart();
 		assertTrue(DrugReferenceTestSupport.injectedFindings(chart).isEmpty(),
 				"the premise: an un-injected chart carries no safety finding");
-		assertFalse(LlmInferenceService.severalInjectedFindings(chart),
+		assertFalse(LlmInferenceService.severalFindingsAboutOneDrug(chart),
 				"and the predicate must be false of it");
 		assertFalse(LlmProvider.buildUserMessage(chart.getText(), Collections.<Integer>emptyList(),
-			QUESTION, LlmInferenceService.severalInjectedFindings(chart))
+			QUESTION, LlmInferenceService.severalFindingsAboutOneDrug(chart))
 				.contains("put every one of them"),
 				"so its prompt carries no clause — which is what keeps the sentence off the "
 						+ "absent-data message AbsentDataEvalTest pins to exact bytes");
 	}
 
+	/**
+	 * A SCREEN ACROSS HER OWN ORDERS ASKS FOR NOTHING, because its findings name several drugs and
+	 * the clause's {@code it} then has no single referent. Issue #113's own population, and issue
+	 * #397's first review round found the clause reaching it:
+	 * {@code QueryScopeRouter.isInteractionScreening} needs an {@code interact*} cue and a
+	 * MEDICATIONS intent and never a named drug, so the question this case asks names no drug at
+	 * all.
+	 *
+	 * <p>The premise is asserted two ways — more than one finding, and more than one SUBJECT —
+	 * because the count alone would let this case pass on an arrangement that says nothing about the
+	 * subject conjunct. Delete {@code ChartSearchAiUtils.findingSubjects(...).size() == 1} from the
+	 * predicate and this case is the one that reddens.
+	 */
+	@Test
+	public void aScreenAcrossHerOwnOrdersAsksForNothing() {
+		String screening = "do any of her meds interact?";
+		assertTrue(QueryScopeRouter.isInteractionScreening(screening),
+				"the premise: this must be the question class issue #113's screening arm runs on, or "
+						+ "the case is not about that population");
+		PatientChart chart = DrugReferenceTestSupport.injectedFindingsOver(baseChart(), screening,
+			setOf("Simvastatin", "Digoxin", "Sertraline", "Omeprazole", "Clarithromycin", "Amiodarone"),
+			setOf("C10AA01", "C01AA05", "N06AB06", "A02BC05", "J01FA09", "C01BD01"));
+		int findings = DrugReferenceTestSupport.injectedFindings(chart).size();
+		Set<String> subjects = ChartSearchAiUtils.findingSubjects(chart.getMappings());
+		assertTrue(findings > 1,
+				"the premise: the screen must raise more than one finding, or the record-count "
+						+ "conjunct is what withholds the clause and this case says nothing. Injected: "
+						+ findings);
+		assertTrue(subjects.size() > 1,
+				"and the premise this case is actually about: those findings must name several drugs. "
+						+ "Named: " + subjects);
+		assertFalse(LlmInferenceService.severalFindingsAboutOneDrug(chart),
+				"so the predicate must be false — the sentence asks for every finding that names ONE "
+						+ "drug, and this chart offers " + subjects.size() + " candidates for it");
+		assertFalse(LlmProvider.buildUserMessage(chart.getText(), chart.getFocusIndices(),
+			screening, LlmInferenceService.severalFindingsAboutOneDrug(chart))
+				.contains("put every one of them"),
+				"and its prompt must carry no clause");
+	}
+
+	/**
+	 * A SCREENING PHRASING THAT NAMES ITS DRUG STILL ASKS FOR ONE LINE PER FINDING — the other side
+	 * of the case above, and what stops the conjunct being replaced by the cheaper-looking
+	 * {@code !QueryScopeRouter.isInteractionScreening(question)}.
+	 *
+	 * <p>Measured over the bundled knowledge base: this question carries the screening cue AND names
+	 * a drug, so the screening arm stands down (its gate needs the question to resolve no drug), the
+	 * drug-in-play arm runs, and every finding names the one drug the question names. A phrasing gate
+	 * withholds the clause here for no reason; the subject gate sends it. The two premises this case
+	 * asserts are what make that entailed rather than argued: the phrasing predicate is true here and
+	 * the subject count is one, so a predicate resting on the phrasing must fail the assertion below.
+	 */
+	@Test
+	public void aScreeningPhrasingThatNamesItsDrugStillAsksForOneLinePerFinding() {
+		String question = "Does clarithromycin interact with any of her current medications?";
+		assertTrue(QueryScopeRouter.isInteractionScreening(question),
+				"the premise: this phrasing must carry the screening cue, or the case cannot show "
+						+ "that the gate is not a phrasing carve-out");
+		PatientChart chart = DrugReferenceTestSupport.injectedFindingsOver(baseChart(), question,
+			setOf("Simvastatin", "Digoxin", "Sertraline", "Omeprazole"),
+			setOf("C10AA01", "C01AA05", "N06AB06", "A02BC05"));
+		Set<String> subjects = ChartSearchAiUtils.findingSubjects(chart.getMappings());
+		assertTrue(DrugReferenceTestSupport.injectedFindings(chart).size() > 1,
+				"the premise: more than one finding");
+		assertEquals(1, subjects.size(),
+				"and the premise this case is about: they must all name one drug. Named: " + subjects);
+		assertTrue(LlmInferenceService.severalFindingsAboutOneDrug(chart),
+				"so the predicate must be TRUE — the drug the clause's `it` refers to is the one the "
+						+ "question names, whatever cue words sit around it");
+		assertTrue(LlmProvider.buildUserMessage(chart.getText(), chart.getFocusIndices(),
+			question, LlmInferenceService.severalFindingsAboutOneDrug(chart))
+				.contains("put every one of them on a line of its own"),
+				"and its prompt must carry the clause");
+	}
+
 	/** A private harness, per the convention this package states — not a shared one. The strategy
-	 *  serves the already-injected chart and the injector is a no-op, so what reaches the provider
-	 *  is the chart this file built. */
-	private TestableService newService(PatientChart served, RecordingProvider provider) {
+	 *  serves {@code built} and the stub injector RETURNS {@code injected} rather than its argument,
+	 *  which is how the two positions of the flag's read are told apart — see
+	 *  {@link #theFlagTheGateComputesIsWhatTheProviderIsHandedAndItIsReadAfterInjection}. */
+	private TestableService newService(PatientChart built, final PatientChart injected,
+			RecordingProvider provider) {
 		TestableService created = new TestableService();
-		created.setChartBuildingStrategy(new StubStrategy(served));
+		created.setChartBuildingStrategy(new StubStrategy(built));
 		created.setLlmProvider(provider);
 		created.setDrugReferenceInjector(new DrugReferenceInjector() {
 
 			@Override
 			public PatientChart inject(PatientChart chart, Patient patient, String question) {
-				return chart;
+				return injected;
 			}
 		});
 		created.setDrugSafetyValidator(new DrugSafetyValidator() {

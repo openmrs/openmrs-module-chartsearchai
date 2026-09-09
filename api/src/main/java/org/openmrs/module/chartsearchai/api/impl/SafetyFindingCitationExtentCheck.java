@@ -113,30 +113,17 @@ final class SafetyFindingCitationExtentCheck {
 	}
 
 	/**
-	 * Counts the injected safety findings the prompt carried and the ones {@code answer} cited,
-	 * reporting at WARN when it cited fewer.
-	 *
-	 * @param patient whose answer it is — logged so a line is attributable under concurrent requests
-	 * @param answer the answer prose, unchanged by this method and read only to tell a degenerate
-	 *            output from a real one, which gates the WARN and never the count
-	 * @param cited the references the answer cites, as resolved by
-	 *            {@link LlmInferenceService#extractCitedReferences}
-	 * @param mappings the chart's records, cited or not — the carrier of the CARRIED population
-	 * @return the extent, or null only when the check itself failed. Never null for a chart carrying
-	 *         no finding: that is a zeroed statement, and {@code FindingCitationExtent} is canonical
-	 *         for the difference
-	 */
-	/**
 	 * The injected {@code safety_finding} records {@code mappings} carries, by citation index — the
 	 * CARRIED population this check counts, and the one thing about an assembled chart that says
 	 * whether the prompt asked the model to enumerate anything.
 	 *
 	 * <p><b>ONE walk, and it is shared rather than spelled twice.</b>
-	 * {@link LlmInferenceService#severalInjectedFindings} asks the same question of the same list in
-	 * the same request — the chart local is live at both points, which an earlier draft of that
-	 * method's javadoc denied — and it needs only {@code size() > 1}. Two spellings would let a
-	 * filter added to one drift from the other silently, so that the prompt asks for an enumeration
-	 * of a population this key then counts differently. Issue
+	 * {@link LlmInferenceService#severalFindingsAboutOneDrug} asks it of the same list in the same
+	 * request — the chart local is live at both points, which an earlier draft of that method's
+	 * javadoc denied — and of this set it needs only {@code size() > 1}; its second conjunct asks a
+	 * different question of the same list and is not this one narrowed. Two spellings of THIS
+	 * population would let a filter added to one drift from the other silently, so that the prompt
+	 * asks for an enumeration of a population this key then counts differently. Issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>.
 	 *
 	 * <p>A LinkedHashSet in INJECTION order, so the uncited indexes the WARN lists read in the order
@@ -163,6 +150,20 @@ final class SafetyFindingCitationExtentCheck {
 		return carried;
 	}
 
+	/**
+	 * Counts the injected safety findings the prompt carried and the ones {@code answer} cited,
+	 * reporting at WARN when it cited fewer.
+	 *
+	 * @param patient whose answer it is — logged so a line is attributable under concurrent requests
+	 * @param answer the answer prose, unchanged by this method and read only to tell a degenerate
+	 *            output from a real one, which gates the WARN and never the count
+	 * @param cited the references the answer cites, as resolved by
+	 *            {@link LlmInferenceService#extractCitedReferences}
+	 * @param mappings the chart's records, cited or not — the carrier of the CARRIED population
+	 * @return the extent, or null only when the check itself failed. Never null for a chart carrying
+	 *         no finding: that is a zeroed statement, and {@code FindingCitationExtent} is canonical
+	 *         for the difference
+	 */
 	static FindingCitationExtent measureFindingCitations(Patient patient, String answer,
 			List<RecordReference> cited, List<RecordMapping> mappings) {
 		Integer patientId = null;

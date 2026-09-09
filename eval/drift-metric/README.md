@@ -770,8 +770,22 @@ yes/no gold cell this cohort carries (`dc8560c9-…|probe-current-meds`, cohort 
 scored `directness=1/1 expected_lead_match=1/1 safety_violations=0` throughout. Nothing any
 pre-existing column reports moved in any arm. The `rc2` Tier-B cohort does not exist on this host
 (404 on its patient uuids), so drift and the 19 absent-data cases are not measurable here — which is
-why the shipped clause is gated to charts carrying more than one finding rather than added to every
-prompt.
+why the shipped clause is gated rather than added to every prompt. The gate is
+`LlmInferenceService.severalFindingsAboutOneDrug`: more than one injected finding, all of them
+naming ONE drug. The second conjunct came out of this change's first review round and is not visible
+in the table — every cell above is phrased *"should i give {drug}?"*, so the corpus contains no
+interaction-SCREENING cell, which is the arrangement whose findings name several drugs and where the
+clause's *"it"* therefore has no single referent. ADR Decision 84 carries what that conjunct is
+measured to withhold and what it does not establish.
+
+**What exit code to expect from a clean run.** The completeness cell is a `problems` entry, so a
+single-arm run over any drug-reference-enabled install where a cell is short **exits 3** — and six
+of the twelve finding-carrying cells are still short on the shipped build, so 3 is the expected code
+here rather than a signal that something regressed. An A/B exits 3 whenever either arm has problems.
+That is deliberate: softening the cell to a census line is the fail-open this change refuses. **Read
+the columns and the FLIP rows**, not the exit code, when comparing two arms on this install class;
+the exit code is what stops a short arm being reported as clean, which is what the baseline above
+was.
 
 **Read every published key, not only the ones a ticket lists.** Over the same 14 cells,
 `misattributedOrderCitations` went from two cells to none and `unfaithfullyRenderedCitations` from

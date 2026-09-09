@@ -106,9 +106,17 @@ public class LlmProviderUserMessageTest {
 	 * cells still abstaining. ADR Decision 84 and {@code eval/drift-metric/README.md} carry the
 	 * ledger; {@code eval/drift-metric/score_probe_safety.py}'s completeness cell is what reads it.
 	 *
-	 * <p>The blank-question guard is the KV-cache prefix contract and not tidiness — see the two
-	 * warmup cases above, which both redden without it, and the third case here, which is the one
-	 * that says WHY rather than only that.
+	 * <p><b>What the blank-question guard is for, corrected.</b> An earlier version of this javadoc
+	 * called it the KV-cache prefix contract and named the two warmup cases at the top of this class
+	 * as reddening without it. Both claims are false and the mutation is what showed it: replacing
+	 * the whole condition with {@code if (enumerateFindings)} reddens
+	 * {@code warmupShouldNotCarryTheFindingEnumerationClause} and
+	 * {@code theClauseMustNotBreakTheWarmupPrefixForAQuestionOfAnyLength}, and leaves those two
+	 * green — they compare two clause-free messages through the 3-arg arity, which hardcodes the
+	 * flag false, so no change to this condition can move them. What protects the prefix is the
+	 * APPEND POSITION; the guard buys the narrower thing that a warmed patient's seed is not
+	 * prefixed with an instruction it will never answer. {@code LlmProvider.buildUserMessage}'s own
+	 * comment and ADR Decision 84 carry that correction too.
 	 */
 	@Test
 	public void realQueryShouldCarryTheFindingEnumerationClause() {
@@ -135,7 +143,7 @@ public class LlmProviderUserMessageTest {
 				+ "a line of its own cost a verdict lead on the measured corpus. Got: " + msg);
 		// THE PROHIBITION, pinned. `reference/CLAUDE.md` states "Never buy completeness with a
 		// wording carrying `nothing else`" and ADR Decision 84 claimed this class enforced it — it
-		// did not: appending ", and nothing else" to the clause left all 2188 tests green. Measured
+		// did not: appending ", and nothing else" to the clause left the whole build green. Measured
 		// on the reproducer cell, that wording stated all seven findings WITH their ratings and lost
 		// the verdict lead, the answer opening "1. Solu-Medrol 125mg/5ml — Moderate [349]" with no
 		// call in front of it, which score_directness.classify reads as NONE. Same shape as
@@ -144,6 +152,51 @@ public class LlmProviderUserMessageTest {
 				"the clause must not tell the answer to carry NOTHING ELSE on those lines: measured, "
 				+ "that wording took completeness and ratings and paid for them with the verdict "
 				+ "lead, which is the trade issue #397 forbids. Got: " + msg);
+	}
+
+	/**
+	 * THE EXACT BYTES, which is the only assertion in this class that an ADDED imperative cannot
+	 * pass. The substring cases above hold what the clause must SAY and one thing it must not; they
+	 * are all satisfiable by a longer clause, and a longer clause in this exact position is the
+	 * measured hazard rather than a hypothetical one — ADR Decision 84 records that of seven probed
+	 * wordings the one appending {@code ", and nothing else"} took completeness and the ratings and
+	 * lost the verdict lead, opening {@code 1. Solu-Medrol 125mg/5ml — Moderate [349]} with no call
+	 * in front of it. Measured here too: appending {@code " State your verdict first."} to the
+	 * production literal left every other case in this class green.
+	 *
+	 * <p>Asserted as the DIFFERENCE between the two flag values rather than over the whole message,
+	 * so the case says what it is about and does not have to restate the records header, the focus
+	 * block or the query marker. The flag-false message is a prefix of the flag-true one by
+	 * construction — the clause is the last thing appended — and that is asserted first, because a
+	 * clause moved ahead of the query marker would otherwise reach {@code substring} rather than an
+	 * assertion.
+	 *
+	 * <p>The project's idiom for prompt-facing text whose wording was measured, and this clause is
+	 * now held to it as its three neighbours are:
+	 * {@code DrugClassQuestionNoteTest.theRenderedNoteIsExactlyTheseWords},
+	 * {@code SafetyVerdictSeverityGradationTest.theTwoCurrentMedicationBranchesAreExactlyTheseWords}
+	 * and {@code AbsentDataEvalTest.theEmptyChartPromptAsksTheModelToNameWhatIsMissing}.
+	 */
+	@Test
+	public void theAppendedClauseIsExactlyTheseBytes() {
+		String withClause = LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(),
+				"should i give Amlodipine?", true);
+		String withoutClause = LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(),
+				"should i give Amlodipine?", false);
+		assertTrue(withClause.startsWith(withoutClause),
+				"the clause is APPENDED, so the flag-false message must be a byte-prefix of the "
+				+ "flag-true one. If this fails the clause has moved out of the tail and the "
+				+ "warmup-prefix contract is what to look at next.\n  without: " + withoutClause
+				+ "\n  with:    " + withClause);
+		assertEquals(" Where more than one finding names it, put every one of them on a line of its "
+				+ "own, each with the severity that finding states.",
+				withClause.substring(withoutClause.length()),
+				"these are the measured bytes of the #397 clause, down to the SPACE in front of "
+				+ "them. Every substring case in this class is satisfied by a longer clause, and an "
+				+ "added imperative here is measured to cost the verdict lead on a safety cell — the "
+				+ "trade issue #397 forbids. If you are changing the wording deliberately, the "
+				+ "measured ledger in ADR Decision 84 stops describing the shipped bytes, so measure "
+				+ "the new one and update it.");
 	}
 
 	@Test

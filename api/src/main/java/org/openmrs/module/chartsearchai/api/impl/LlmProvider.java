@@ -387,14 +387,15 @@ public class LlmProvider {
 	 * @param numberedRecords the numbered patient records text
 	 * @param focusIndices the records ranked most similar to the query, or empty for no hint
 	 * @param question the clinician's natural language question
-	 * @return the LLM's response with answer text and structured citation indices
 	 * @param enumerateFindings whether this chart's prompt carries more than one injected safety
-	 *        finding — see {@link #buildUserMessage(String, List, String, boolean)}. It is a
-	 *        parameter of the ONE entry point rather than of an overload beside a flag-less one,
-	 *        and that is not tidiness: this method is the seam a dozen test doubles override, so an
-	 *        overload production called instead would be silently bypassed by every one of them.
-	 *        Issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">
-	 *        #397</a> shipped that mistake first and eleven test classes errored on it
+	 *        finding, all of them naming one drug — see
+	 *        {@link #buildUserMessage(String, List, String, boolean)}. It is a parameter of the ONE
+	 *        entry point rather than of an overload beside a flag-less one, and that is not
+	 *        tidiness: this method is the seam a dozen test doubles override, so an overload
+	 *        production called instead would be silently bypassed by every one of them. Issue
+	 *        <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>
+	 *        shipped that mistake first and eleven test classes errored on it
+	 * @return the LLM's response with answer text and structured citation indices
 	 */
 	public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question,
 			boolean enumerateFindings) {
@@ -970,13 +971,16 @@ public class LlmProvider {
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>.
 	 *
 	 * @param enumerateFindings whether this chart's prompt carries more than one injected
-	 *        safety finding, which only the caller holding the chart can say. The clause is
-	 *        self-gating on its own antecedent, so passing it unconditionally would still
-	 *        produce correct answers; what the flag buys is not spending the sentence on the
-	 *        prompt this module is most careful about. {@code AbsentDataEvalTest
-	 *        .theEmptyChartPromptAsksTheModelToNameWhatIsMissing} pins the empty-chart
-	 *        message to exact bytes for that reason, and reddens on an ungated clause —
-	 *        which is how this parameter came to exist rather than by design
+	 *        safety finding AND every one of them names the same drug, which only the caller
+	 *        holding the chart can say — {@code LlmInferenceService.severalFindingsAboutOneDrug}
+	 *        is the predicate and is canonical for both conjuncts, for what the second one is
+	 *        measured to keep the clause off, and for what it does not establish. Do not read
+	 *        the flag as "there are findings": passing it unconditionally sends the sentence to
+	 *        charts whose findings name several drugs, which is an arrangement the sentence does
+	 *        not describe, and to the empty-chart message whose exact bytes
+	 *        {@code AbsentDataEvalTest.theEmptyChartPromptAsksTheModelToNameWhatIsMissing} pins
+	 *        — that test reddens on an ungated clause, which is how this parameter came to exist
+	 *        rather than by design
 	 */
 	static String buildUserMessage(String numberedRecords, List<Integer> focusIndices,
 			String question, boolean enumerateFindings) {
@@ -1068,19 +1072,29 @@ public class LlmProvider {
 		// with the flag true and the question empty the clause would be appended to the SEED as
 		// well, which is 126 characters of instruction prefixed to every warmed patient for no
 		// answer. Dropping it reddens .warmupShouldNotCarryTheFindingEnumerationClause and that
-		// same any-length case — measured, at lines 141 and 163.
+		// same any-length case — mutate the guard out and read the failures.
 		//
-		// The clause is also SELF-GATING on its own antecedent, the shape the safety paragraph's own
-		// branches use: on a question that raises no finding "where more than one finding names it"
-		// is simply false, which is why the two absent-data cells were unmoved by it. That is not an
-		// argument against the {@code enumerateFindings} flag beside it — see its @param, and
-		// AbsentDataEvalTest, which is what put it there.
+		// AN EARLIER DRAFT CALLED THE CLAUSE SELF-GATING ON ITS OWN ANTECEDENT and offered the two
+		// unmoved absent-data cells as the evidence. Both halves are wrong and the second is what
+		// showed it: those cells raise no finding, so the flag is FALSE there and they carry no
+		// clause at all — the gate explains them, not self-gating. The case the claim was covering
+		// for is the opposite one, a chart whose findings name SEVERAL drugs, where "more than one
+		// finding names it" is not false but unanswerable — an issue #113 interaction screen being
+		// the measured case. What keeps the sentence off that arrangement is the flag, and only the
+		// flag: LlmInferenceService.severalFindingsAboutOneDrug is canonical for the measurement,
+		// for what the gate does and for what it does not establish, so none of that is repeated
+		// here.
+		//
 		// THESE ARE THE MEASURED BYTES, down to the SPACE in front of them, and that is not
 		// fussiness — it is the one thing this change got wrong first and the gate caught.
+		// LlmProviderUserMessageTest.theAppendedClauseIsExactlyTheseBytes is what holds them, and it
+		// is not decoration either: until it existed the class held this string by substrings alone,
+		// so an ADDED imperative shipped green, which is the one edit measured to cost a lead here.
 		//
 		// "it" is kept rather than expanded to "the drug asked about" because the arm appended this
-		// exact sentence to the question, so its antecedent is the question's own drug, and rewording
-		// it for legibility would ship a string nothing measured.
+		// exact sentence to the question, and every cell in that arm named one drug in the question
+		// — so rewording it would ship a string nothing measured, and the ledger's figures would
+		// stop describing the shipped bytes.
 		//
 		// The separator was a NEWLINE in the first version, which is the only way that build differed
 		// from the arm that chose the wording — and it cost a verdict lead. On the same 14 cells the

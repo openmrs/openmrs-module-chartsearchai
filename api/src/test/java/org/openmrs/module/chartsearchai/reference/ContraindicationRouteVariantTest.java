@@ -407,17 +407,27 @@ public class ContraindicationRouteVariantTest {
 		// finding half of the ledger key and is asserted entirely by the two chips below: ONE subject
 		// substance, TWO recorded findings, TWO chips. Four would still be the answer if the question named
 		// the ester too; what changed is that it does not name it.
+		//
+		// WHAT MOVED (issue #388): the two chips swapped INDEX, and nothing else did. This case's
+		// property is the finding half of the ledger key — ONE subject substance, TWO recorded findings,
+		// TWO chips — and the count plus both details still assert it; keeping both is what #388 decided,
+		// against suppressing the class chip on a drug the chart already contraindicates by name. What
+		// this case never asserted is WHICH of the two leads, and before #388 that was decided by the
+		// order the allergy records arrived in. The direct allergy now leads whatever that order is.
+		// This case is the ticket's own reproduction shape, which is why the change is spelled here; the
+		// rule itself is DirectAllergyFindingLeadsTest.
 		List<SafetyWarning> warnings = fixtureValidator(FIXTURE).validate("",
 				"Is hydrocortisone safe for her?", DrugReferenceTestSupport.ctx(60, null, null, null,
 						DrugReferenceTestSupport.set("Dexamethasone", "Hydrocortisone"), null));
 
 		assertEquals(2, warnings.size(), "one substance x two findings, was: " + warnings);
-		assertEquals("Hydrocortisone is in the same ATC class (H02AB) as the patient's allergy to"
-				+ " Dexamethasone — possible cross-reactivity", warnings.get(0).getDetail());
 		assertEquals("The patient has a recorded allergy to Hydrocortisone.",
-				warnings.get(1).getDetail(),
+				warnings.get(0).getDetail(),
 				"the identity finding about the SAME substance keeps its own chip beside the "
-						+ "cross-reactivity one");
+						+ "cross-reactivity one, and leads it (issue #388)");
+		assertEquals("Hydrocortisone is in the same ATC class (H02AB) as the patient's allergy to"
+				+ " Dexamethasone — possible cross-reactivity", warnings.get(1).getDetail(),
+				"and the cross-reactivity finding about the OTHER recorded allergen is still raised");
 	}
 
 	@Test

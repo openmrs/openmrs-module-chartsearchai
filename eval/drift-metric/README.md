@@ -787,6 +787,44 @@ the columns and the FLIP rows**, not the exit code, when comparing two arms on t
 the exit code is what stops a short arm being reported as clean, which is what the baseline above
 was.
 
+**Runtime verification of the narrowed gate (2026-09-09, review round 1).** The one-subject conjunct
+was added after the table above was captured, so it carried the risk of silently withholding the
+clause from a corpus cell and handing back part of the improvement. Measured on the deployed omod, it
+withholds it from **none of the fourteen** — and does withhold it from the population it exists for:
+
+- **The clause costs 28 input tokens**, read off `input_tokens` on the `chartsearchai_audit_log` row
+  (the audit REST listing publishes it as `inputTokens`). On the interaction-screening question *"Do
+  any of her medications interact?"* the pre-narrowing build spent 13,188 against this build's
+  13,160 over an identical corpus — that deficit IS the withheld clause. **That cell carries twenty
+  findings and cites ten**, its cited findings naming two subjects, which is the population ADR
+  Decision 84 says the sentence cannot describe.
+- **All twelve finding-carrying cells still receive it.** Every one of the fourteen cells' token
+  count moved by the same amount between the two arms, the two zero-finding controls included — and
+  the clause is absent from those in both builds by construction, so that common amount is the
+  corpus offset and nothing else. A cell that had lost the clause would sit 28 tokens under it.
+  Corroborated three ways: `carried` unchanged per cell, the reference slice unchanged per cell, and
+  every finding-carrying cell's cited findings naming exactly one subject.
+
+**Byte-identity is NOT the instrument it looks like, and reaching for it cost this run an arm.**
+Greedy decode with `--cache-reuse 0` does make repeats byte-identical, so an unchanged prompt should
+give an unchanged answer — but rebuilding the querystore index shifted the assembled chart text by a
+uniform twelve tokens, which re-worded eleven of the fourteen answers while changing nothing about
+the code under test, and moved the completeness cell by one in EACH direction (Ciprofloxacin 7/8 to
+8/8, against Amlodipine 7/7 to 7/6 and Aspirin 8/8 to 8/7 — seven of twelve rather than six). So
+**read every cell count in this table as ±1 under chart-text drift**, and compare two arms with the
+token differential above rather than with their prose, using the zero-finding cells as the drift
+control. A systematic withholding could only ever move cells one way, which is how bidirectional
+flips are told from a regression.
+
+**Before capturing any arm on this rig, confirm the citation range.** A standalone restart empties
+the querystore Lucene index, and `querystore.bootstrap.autostart=true` does **not** rebuild it: the
+bootstrap tracking rows survive the wipe reading COMPLETED, so autostart declines and `GET
+/querystore/indexingstatus` reports `complete: true` over an empty index. The chart then assembles
+from ~9 records instead of ~348 while `chartMode` still reads `fullChart`, and nothing in the
+response says so — the first capture attempt of this verification cited `[10]`–`[17]` and was
+discarded. This patient's safety findings cite `[349]`–`[356]`. `POST /querystore/reindex {"patient":
+"<uuid>"}` rebuilds it (347 documents here), and the range is what says it worked.
+
 **Read every published key, not only the ones a ticket lists.** Over the same 14 cells,
 `misattributedOrderCitations` went from two cells to none and `unfaithfullyRenderedCitations` from
 three to two, while `activeOrderClaims.uncited` rose on four cells from `0` to `stated`. Those are

@@ -6157,6 +6157,15 @@ change would have shipped.
 
 **What the gate does NOT establish is that the QUESTION names that drug, and that residue is not claimed closed.** The same screen on a smaller chart — the same two orders, four resolved active drugs — injects two findings naming ONE subject, so the flag is true and the question still names no drug; what the conjunct guarantees is only that exactly one drug in the prompt satisfies the sentence's own description. Closing it properly needs "does this question name that substance", which is `DrugReferenceService.findImpliedByQuery`'s question and would be a second resolution of the one the injector already performed — the shape [#151](https://github.com/openmrs/openmrs-module-chartsearchai/issues/151) forbids. Unmeasured, and left so deliberately.
 
+**Verified on the deployed omod, not only through the injector (2026-09-09).** The conjunct
+withholds the clause from none of the fourteen measured cells, and does withhold it from the
+population it exists for: on *"Do any of her medications interact?"* the pre-narrowing build spent 28
+more input tokens than this one over an identical corpus, which is the clause, and that cell **carries
+twenty findings, cites ten**, its cited findings naming two subjects. Every corpus cell's token count
+moved by one common offset, the two zero-finding controls included, so none of them lost 28.
+`eval/drift-metric/README.md` carries the method — including why byte-identity is not the instrument
+it looks like across a standalone restart, and what the cell counts in its table are stable to.
+
 **Gating at all — rather than appending unconditionally — is also about the absent-data prompt.** The empty-chart message's exact bytes are pinned by `AbsentDataEvalTest.theEmptyChartPromptAsksTheModelToNameWhatIsMissing` after #214's 19 measured cases, and that test is how the parameter came to exist: an ungated clause reddened it.
 
 **An earlier draft of this decision called the clause "self-gating by its own antecedent", so that an ungated one would produce the same answers, and offered the two unmoved absent-data cells as evidence.** Both halves are wrong and the second is what showed it: those cells raise no finding, so the flag is FALSE there and they carry no clause at all — the gate explains them, not self-gating. The claim was covering for exactly the several-drug case above, where the antecedent is not false but unanswerable.

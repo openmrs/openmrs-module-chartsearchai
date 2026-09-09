@@ -132,9 +132,11 @@ final class SafetyFindingCitationExtentCheck {
 	 * injector's own sequential numbering and unique across a chart by construction, so the set
 	 * counts records and is not silently folding any.
 	 *
-	 * <p>Null-tolerant in both arities, as {@code ChartSearchAiUtils.referenceSlice} and
-	 * {@code .unresolvedDrugClass} are of the same list: this now runs on the prompt-assembly path
-	 * as well, which has no catch of its own.
+	 * <p>Null-tolerant in two DIMENSIONS rather than two arities, which an earlier draft of this
+	 * sentence said and this method has never had: a null list answers empty, and a null mapping
+	 * inside a non-null list is skipped. {@code ChartSearchAiUtils.referenceSlice} and
+	 * {@code .unresolvedDrugClass} are of the same list and tolerate it the same way: this now runs
+	 * on the prompt-assembly path as well, which has no catch of its own.
 	 */
 	static Set<Integer> carriedFindingIndexes(List<RecordMapping> mappings) {
 		Set<Integer> carried = new LinkedHashSet<Integer>();

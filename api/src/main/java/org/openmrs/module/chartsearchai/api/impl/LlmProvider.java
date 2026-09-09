@@ -391,8 +391,12 @@ public class LlmProvider {
 	 *        finding, all of them naming one drug — see
 	 *        {@link #buildUserMessage(String, List, String, boolean)}. It is a parameter of the ONE
 	 *        entry point rather than of an overload beside a flag-less one, and that is not
-	 *        tidiness: this method is the seam a dozen test doubles override, so an overload
-	 *        production called instead would be silently bypassed by every one of them. Issue
+	 *        tidiness: this method is the seam the suite's test doubles override, so an overload
+	 *        production called instead would be silently bypassed by every one of them. No count
+	 *        of them is given here on purpose — the one that stood in this sentence was already
+	 *        wrong at the commit that published it, this change having added a double of its own,
+	 *        which is the root {@code CLAUDE.md} rule against a published count landing one file
+	 *        outside what {@code ProjectInstructionsGuardTest} can police. Issue
 	 *        <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>
 	 *        shipped that mistake first and eleven test classes errored on it
 	 * @return the LLM's response with answer text and structured citation indices
@@ -461,8 +465,8 @@ public class LlmProvider {
 	 *        reaches the user message and never the KV seed above, which is what keeps that seed a
 	 *        byte-prefix of this query. It is a parameter of THIS arity rather than of an overload
 	 *        beside a flag-less one for the reason {@code search}'s own @param gives: this is the
-	 *        seam nineteen test doubles override, and an overload production called instead was
-	 *        silently bypassed by every one of them (issue #397 shipped that once)
+	 *        same seam, and an overload production called instead was silently bypassed by every
+	 *        one of the doubles overriding it (issue #397 shipped that once)
 	 */
 	public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 			String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,

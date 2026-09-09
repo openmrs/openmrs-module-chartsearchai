@@ -1057,7 +1057,10 @@ public class LlmProvider {
 		// rewording also stops the ledger describing the shipped clause.
 		//
 		// NO FEW-SHOT DEMONSTRATES THIS CLAUSE, AND THAT IS A DECISION — the one exception to the
-		// mirror invariant FOCUS_HINT_LABEL's javadoc states, which points here for it.
+		// mirror invariant FOCUS_HINT_LABEL's javadoc states, which points here for it. Mirroring it
+		// would mean restructuring a demonstration rather than adding a line: this clause is a THIRD
+		// element of the real message, a sentence between the question and the model's JSON, and every
+		// "Clinician's query: " line in DEFAULT_SYSTEM_PROMPT is followed immediately by that JSON.
 		// DEFAULT_SYSTEM_PROMPT's two demonstrated finding records name a different fruit each — [4]
 		// Durian, [5] Lychee — so the demonstration prompt fails this clause's own gate: it carries
 		// two findings and they name two subjects. And a demonstration is more instruction

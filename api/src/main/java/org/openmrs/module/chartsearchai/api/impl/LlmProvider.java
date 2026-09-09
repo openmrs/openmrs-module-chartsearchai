@@ -1073,11 +1073,15 @@ public class LlmProvider {
 		// clause ahead of the marker is what breaks the contract, and the case that catches that is
 		// LlmProviderUserMessageTest.theClauseMustNotBreakTheWarmupPrefixForAQuestionOfAnyLength.**
 		//
-		// The blank-question guard therefore buys something narrower, and it is worth having for it:
-		// with the flag true and the question empty the clause would be appended to the SEED as
-		// well, which is 126 characters of instruction prefixed to every warmed patient for no
-		// answer. Dropping it reddens .warmupShouldNotCarryTheFindingEnumerationClause and that
-		// same any-length case — mutate the guard out and read the failures.
+		// THE BLANK-QUESTION GUARD PREVENTS NOTHING PRODUCTION CAN REACH, and is still worth having.
+		// {@link #warmup} and searchStreaming's cacheSeed both build through the 2-arg arity, which
+		// is the one that hardcodes the flag false, so no production caller can present this body
+		// with the flag true and the question blank — an earlier draft of this comment said the
+		// clause would otherwise reach the SEED, which no caller can ask for. It is defence against
+		// a FUTURE caller: a widening of the seed path to carry the real flag cannot make a seed
+		// carry the clause without reddening .warmupShouldNotCarryTheFindingEnumerationClause or
+		// that same any-length case, both of which call this arity directly with true and a blank
+		// question. Mutate the guard out and read the failures.
 		//
 		// AN EARLIER DRAFT CALLED THE CLAUSE SELF-GATING ON ITS OWN ANTECEDENT and offered the two
 		// unmoved absent-data cells as the evidence. Both halves are wrong and the second is what

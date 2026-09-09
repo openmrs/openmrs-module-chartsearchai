@@ -114,9 +114,12 @@ public class LlmProviderUserMessageTest {
 	 * {@code theClauseMustNotBreakTheWarmupPrefixForAQuestionOfAnyLength}, and leaves those two
 	 * green — they compare two clause-free messages through the 3-arg arity, which hardcodes the
 	 * flag false, so no change to this condition can move them. What protects the prefix is the
-	 * APPEND POSITION; the guard buys the narrower thing that a warmed patient's seed is not
-	 * prefixed with an instruction it will never answer. {@code LlmProvider.buildUserMessage}'s own
-	 * comment and ADR Decision 84 carry that correction too.
+	 * APPEND POSITION; the guard prevents nothing production can reach, {@code warmup} and
+	 * {@code cacheSeed} both building through the arity that hardcodes the flag false, and what it
+	 * buys is that a future widening of the seed path cannot carry the clause without reddening the
+	 * two cases the mutation reddened — both of which call the 4-arg arity directly, which no
+	 * production seed path does. {@code LlmProvider.buildUserMessage}'s own comment and ADR
+	 * Decision 84 carry that correction too.
 	 */
 	@Test
 	public void realQueryShouldCarryTheFindingEnumerationClause() {

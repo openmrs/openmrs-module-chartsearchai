@@ -1407,8 +1407,9 @@ SELFTEST_CASES = [
      ["the two arms disagree about which cells measured the finding-citation extent",
       "2 cell(s) on one side only"],
      ["cells carrying a finding whose prose stated FEWER: A=1"]),
-    # THE SAME TWO ANSWERS FOR THE RATING KEY, which has its own measurability — a capture taken
-    # between #384 and #395 carries the extent key without it. `findings-unmeasured/` cannot stand
+    # THE SAME TWO ANSWERS FOR THE RATING KEY, which has its own measurability: it and the extent
+    # key were published by different changes, so which of them a capture carries depends on when it
+    # was taken, and neither may be defaulted. `findings-unmeasured/` cannot stand
     # in: it drops the EXTENT key, so on an A/B the extent refusal fires and the rating refusal is
     # never the reason for the exit code. This arm keeps `findingCitations` and drops only
     # `unstatedFindingSeverities`, which is why the case below can assert that the extent refusal
@@ -1677,8 +1678,9 @@ def selftest():
     # that measured the RATING key, and while every fixture carrying the extent key carried the
     # rating key too, replacing `rated_both` with `sorted(both)` left the selftest green.
     # `findings-ratings-unmeasured/` is the
-    # capture that separates them — the shape a build between #384 and #395 produced — and its A/B
-    # case reddens on that substitution as well as on the refusal it was added for.
+    # arm that separates them — constructed, no build having published the extent key before the
+    # rating one — and its A/B case reddens on that substitution as well as on the refusal it was
+    # added for.
     before = len(failures)
     def _cell(fc, us=None):
         c = _blank_cell((), None)

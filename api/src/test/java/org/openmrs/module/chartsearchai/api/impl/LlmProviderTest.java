@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -1054,7 +1055,45 @@ public class LlmProviderTest {
 		}
 	}
 
-	private static LlmProvider providerWith(final CapturingEngine engine) {
+	/**
+	 * Captures the user message of one blocking {@code infer} call, which is the arity
+	 * {@link LlmProvider#search} reaches.
+	 *
+	 * <p>A second double rather than a widening of {@link CapturingEngine}: that one fails the
+	 * build if {@code infer} is reached at all, which is a streaming pin ("streaming test must not
+	 * call infer"), and teaching it to capture instead would spend that pin to serve this case.
+	 * This one is its mirror — the streaming arities throw, and the 6-arg form need not be
+	 * overridden because {@link LlmEngine}'s default delegates to the 4-arg one that does.
+	 */
+	private static final class CapturingBlockingEngine implements LlmEngine {
+
+		String capturedUserMessage;
+
+		@Override
+		public InferenceResult infer(String systemPrompt, String userMessage, int timeoutSeconds) {
+			this.capturedUserMessage = userMessage;
+			return new InferenceResult("{\"reasoning\": \"r\", \"answer\": \"a\", \"citations\": []}", 1, 1, 0);
+		}
+
+		@Override
+		public InferenceResult inferStreaming(String s, String u, int t, Consumer<String> c) {
+			throw new AssertionError("the blocking search path must not stream");
+		}
+
+		@Override
+		public void warmup(String s, String u, int t) {
+		}
+
+		@Override
+		public void close() {
+		}
+
+		@Override
+		public void shutdown() {
+		}
+	}
+
+	private static LlmProvider providerWith(final LlmEngine engine) {
 		return new LlmProvider() {
 
 			@Override
@@ -1112,6 +1151,123 @@ public class LlmProviderTest {
 		assertNull(engine.capturedSeed,
 				"with no scope there is no patient to key on, so the seed must be null and the engine "
 				+ "must skip all disk KV restore/save");
+	}
+
+	// ---------- the #397 flag's LAST hop: the provider's own bodies to the builder ----------
+
+	/**
+	 * THE FLAG THIS METHOD IS HANDED REACHES THE MESSAGE IT SENDS THE ENGINE — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>'s last
+	 * unguarded hop, and the only one of its chain that no case observed.
+	 *
+	 * <p>Every other link was pinned before this one: the gate's read position and both call sites
+	 * by {@code FindingEnumerationClauseContextTest}, and the append condition inside
+	 * {@code buildUserMessage} by {@code AbsentDataEvalTest} and
+	 * {@code LlmProviderUserMessageTest}. This one — {@code search}'s own parameter reaching the
+	 * builder — was covered by nothing in either direction. Measured, review round 3: replacing
+	 * {@code buildUserMessage(numberedRecords, focusIndices, question, enumerateFindings)} with the
+	 * retained flag-less 3-arg arity in BOTH {@code search} and {@code searchStreaming} left the
+	 * whole root build green, totals identical to the baseline's. That is a one-token edit — a
+	 * refactor deduplicating the two identical calls, or a cleanup of what reads as a redundant
+	 * 4-arg overload — and it reverts this issue's entire production payload while the gate still
+	 * computes the flag and both call sites still hand it over.
+	 *
+	 * <p>{@code FindingEnumerationClauseContextTest} cannot see it: its {@code RecordingProvider}
+	 * OVERRIDES {@code search} and {@code searchStreaming}, so these bodies never execute there.
+	 * This class is where they do.
+	 *
+	 * <p>Asserted as equality with the flag-true build and INEQUALITY with the flag-false one. The
+	 * second half is what stops the case going vacuous if the clause is ever ungated or deleted:
+	 * without it both sides move together and the equality passes over two clause-free messages.
+	 * Measured — deleting the append block from {@code buildUserMessage} reddens this case and its
+	 * streaming sibling, on that assertion.
+	 *
+	 * <p>Every direction of both hops was mutated and the failures read.
+	 * At {@code search}: the flag-less arity or a literal {@code false} reddens THIS case, and a
+	 * literal {@code true} reddens {@code search_withTheFlagFalseSendsTheMessageItSentBeforeThisFeatureExisted}.
+	 * At {@code searchStreaming}: the flag-less arity or {@code false} reddens
+	 * {@code searchStreaming_forwardsTheFindingEnumerationFlagToTheMessageAndNeverToTheKvSeed}, and
+	 * {@code true} reddens {@code searchStreaming_scopeAware_forwardsScopeAndQuestionIndependentSeedToEngine},
+	 * which was already the only case in the suite running a real provider body through a capturing
+	 * engine — and it passes {@code false}, which is why it could see only that one direction.
+	 */
+	@Test
+	public void search_forwardsTheFindingEnumerationFlagToTheMessageItSendsTheEngine() {
+		CapturingBlockingEngine engine = new CapturingBlockingEngine();
+		LlmProvider provider = providerWith(engine);
+		String records = "1. [2024-01-01] Safety finding: Warfarin + Ibuprofen (Major)";
+		List<Integer> focus = Arrays.asList(1);
+		String question = "should i give Warfarin?";
+
+		provider.search(records, focus, question, true);
+
+		assertEquals(LlmProvider.buildUserMessage(records, focus, question, true),
+				engine.capturedUserMessage,
+				"the prompt this method sends must be the one built for the flag it was handed. "
+				+ "Calling the flag-less arity here, or hardcoding false, sends the pre-#397 prompt "
+				+ "with the gate and both call sites still intact and every other test green");
+		assertNotEquals(LlmProvider.buildUserMessage(records, focus, question, false),
+				engine.capturedUserMessage,
+				"and the two flag values must actually differ in what the engine receives — without "
+				+ "this the assertion above passes over two clause-free messages if the clause is "
+				+ "ever ungated or removed, which is the state issue #397 exists to leave behind");
+	}
+
+	@Test
+	public void search_withTheFlagFalseSendsTheMessageItSentBeforeThisFeatureExisted() {
+		// The opposite direction of the case above, and the one with the safety consequence: a
+		// literal `true` here sends the 126-character clause to every prompt this method builds,
+		// including the empty-chart message AbsentDataEvalTest pins to exact bytes. That case
+		// cannot see it — it builds through an arity that hardcodes the flag false — and the
+		// streaming sibling below covers only searchStreaming.
+		CapturingBlockingEngine engine = new CapturingBlockingEngine();
+		LlmProvider provider = providerWith(engine);
+		String records = "1. [2024-01-01] BP 120/80";
+		List<Integer> focus = Arrays.<Integer>asList();
+
+		provider.search(records, focus, "Is she hypertensive?", false);
+
+		assertEquals(LlmProvider.buildUserMessage(records, focus, "Is she hypertensive?", false),
+				engine.capturedUserMessage,
+				"a caller that says this chart carries no enumerable finding set must get the prompt "
+				+ "this method built before #397 existed, byte for byte");
+	}
+
+	/**
+	 * THE SAME HOP IN {@code searchStreaming}, WHICH IS THE PATH THE FRONTEND USES BY DEFAULT, plus
+	 * the property that keeps the KV cache working: the flag reaches the user message and NEVER the
+	 * seed. See {@code search_forwardsTheFindingEnumerationFlagToTheMessageItSendsTheEngine} for
+	 * what the mutation measured, which was of both bodies at once.
+	 *
+	 * <p>The seed half is asserted with the flag TRUE, which is the arrangement where it could
+	 * leak: the two cases above this section pass {@code false}, so a seed built from the
+	 * clause-carrying arity would be indistinguishable from a correct one there. A seed carrying
+	 * the clause stops being a byte-prefix of the warmup message and every warmed patient
+	 * re-prefills its whole chart.
+	 */
+	@Test
+	public void searchStreaming_forwardsTheFindingEnumerationFlagToTheMessageAndNeverToTheKvSeed() {
+		CapturingEngine engine = new CapturingEngine();
+		LlmProvider provider = providerWith(engine);
+		String records = "1. [2024-01-01] Safety finding: Warfarin + Ibuprofen (Major)";
+		List<Integer> focus = Arrays.asList(1, 2);
+		String question = "should i give Warfarin?";
+
+		provider.searchStreaming(records, focus, question, tok -> { }, reason -> { },
+				"patient-uuid-42", true);
+
+		assertEquals(LlmProvider.buildUserMessage(records, focus, question, true),
+				engine.capturedUserMessage,
+				"the streaming path must send the prompt built for the flag it was handed — see the "
+				+ "blocking sibling for the mutation that showed this hop uncovered");
+		assertNotEquals(LlmProvider.buildUserMessage(records, focus, question, false),
+				engine.capturedUserMessage,
+				"and the two flag values must differ in what the engine receives, or the assertion "
+				+ "above is satisfied by two clause-free messages");
+		assertEquals(LlmProvider.buildUserMessage(records, ""), engine.capturedSeed,
+				"and the KV seed must stay the question-INDEPENDENT prefix whatever the flag says: "
+				+ "it is what warmup sends, so a seed built through the clause-carrying arity would "
+				+ "hash to a filename no warmup ever wrote");
 	}
 
 }

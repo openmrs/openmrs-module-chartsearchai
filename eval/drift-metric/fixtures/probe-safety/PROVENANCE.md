@@ -487,8 +487,9 @@ it ran on one side only; without that refusal a pre-#395 arm A against a post-#3
 ### `findings-ratings-unmeasured/` — **CONSTRUCTED**, by deleting the OTHER key
 `findings-complete/`'s two cells with `unstatedFindingSeverities` **removed** and everything else —
 the answers, the chips, the references, `findingCitations`, the key order — untouched. Its sibling
-above drops the extent key; this one keeps it and drops the rating key, which is what a capture
-taken between #384 and #395 looks like.
+above drops the extent key; this one keeps it and drops the rating key — a pair no real capture
+has, #384 having added the rating key two days before #395 added the extent one, so the
+captured window is the sibling's shape and this one had to be constructed.
 
 Two arms again, because absence has the same two answers one key over. Alone it is a CENSUS at
 **exit 0**, with `cells whose answer dropped a cited finding's rating: 0 of 0 that measured it`

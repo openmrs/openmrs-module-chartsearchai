@@ -667,7 +667,12 @@ public class LlmInferenceService implements ChartSearchService {
 	 * <p><b>Gating at all — rather than appending the clause unconditionally — is also about the
 	 * absent-data prompt.</b> The empty-chart message's exact bytes are pinned by
 	 * {@code AbsentDataEvalTest.theEmptyChartPromptAsksTheModelToNameWhatIsMissing} after 19
-	 * measured cases, and that test is how this method came to exist rather than by design.
+	 * measured cases, and that test is how this method came to exist rather than by design. It
+	 * cannot see a widened CALL SITE, though — it builds its bytes through an arity that hardcodes
+	 * the flag false, so a literal {@code true} where this method is called left the whole build
+	 * green until
+	 * {@code FindingEnumerationClauseContextTest.theCallSitesHandTheProviderFalseForThePopulationsTheGateWithholdsFrom}
+	 * existed. Widen either call site and read that case's failure.
 	 */
 	static boolean severalFindingsAboutOneDrug(PatientChart chart) {
 		List<RecordMapping> mappings = chart.getMappings();

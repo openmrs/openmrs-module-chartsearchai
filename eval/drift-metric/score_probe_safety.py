@@ -1032,8 +1032,8 @@ def summarise(name, cells, done, expected=None):
     # the denominator it was counted over: a capture that stated no extent at all would otherwise
     # read exactly like an arm whose every answer was complete. The unmeasured count is printed even
     # when it is 0, for the reason `finding_extent` gives — absence has to be visible, and it is not
-    # a `problems` entry because every committed fixture predates the key and would redden for a
-    # reason unrelated to what it pins.
+    # a `problems` entry because every fixture committed before issue #397 predates the key and
+    # would redden for a reason unrelated to what it pins.
     print("findings the answer stated, of the findings the prompt carried:")
     print("  cells whose prose stated every one: %d of %d that carried any"
           % (len(with_findings) - len(short), len(with_findings)))
@@ -1407,6 +1407,32 @@ SELFTEST_CASES = [
      ["the two arms disagree about which cells measured the finding-citation extent",
       "2 cell(s) on one side only"],
      ["cells carrying a finding whose prose stated FEWER: A=1"]),
+    # THE SAME TWO ANSWERS FOR THE RATING KEY, which has its own measurability — a capture taken
+    # between #384 and #395 carries the extent key without it. `findings-unmeasured/` cannot stand
+    # in: it drops the EXTENT key, so on an A/B the extent refusal fires and the rating refusal is
+    # never the reason for the exit code. This arm keeps `findingCitations` and drops only
+    # `unstatedFindingSeverities`, which is why the case below can assert that the extent refusal
+    # stayed SILENT. Alone it is a census at exit 0, as its sibling is.
+    (["findings-ratings-unmeasured"], 0,
+     ["cells whose answer dropped a cited finding's rating: 0 of 0 that measured it",
+      "cells stating no extent at all (not counted above): 0 of 2",
+      "cells that stated fewer (the defect): 0"],
+     ["!!"]),
+    # And the A/B is REFUSED, which is the whole of why the second refusal exists. Without it this
+    # pair prints `cells that dropped a cited finding's rating: A=0 B=0 of 0 that measured it` and
+    # exits 0 — a clean tie in the one column that tells a completeness win from a
+    # completeness-for-ratings trade, over a column that ran on one arm only. Delete the
+    # `a_rated`/`b_rated` block in `main` and this case is the one that reddens; until this arm
+    # existed nothing did, no committed pair disagreeing about the rating key — every fixture
+    # carrying the extent key carried the rating key too, and the arms carrying NEITHER agree at
+    # "no measurement". It also pins the residue `selftest` records as covered further
+    # down: replace `rated_both` with `sorted(both)` and the row reads `of 2 that measured it`.
+    (["findings-complete", "findings-ratings-unmeasured"], 3,
+     ["the two arms disagree about which cells measured a cited finding's RATING",
+      "2 cell(s) on one side only",
+      "cells that dropped a cited finding's rating:       A=0 B=0  of 0 that measured it"],
+     # The EXTENT refusal must stay silent, or the exit code is not this refusal's.
+     ["the two arms disagree about which cells measured the finding-citation extent"]),
     # THE PAIR THAT ISOLATES THE RATINGS HALF OF THE FLIP CONDITION. Completeness is identical on
     # both sides (7 of 7 each), so only the ratings half can print the row — delete it and this arm
     # prints no FLIP line at all while still exiting 3, which is how that half came to be a dead
@@ -1640,16 +1666,19 @@ def selftest():
     # `AttributeError` and the selftest exits 1; dropping the bool exclusion or the list check
     # reddens named cases here.
     #
-    # TWO RESIDUES, named rather than claimed as covered, because neither is reachable from this
-    # block and no committed capture can construct either:
-    #  - `summarise`'s population is scoped by the measurement and not by `label`. The predicate half
-    #    of that IS asserted below, but adding `and label(c) == "ANSWER"` to the `measured`
-    #    comprehension itself leaves the selftest green — every cell carrying the key labels ANSWER,
-    #    and `finding-no-chip/`, which is the ABSTAIN-labelled shape, predates the key.
-    #  - `main`'s rating column is scoped to the cells that measured the RATING key. Replacing
-    #    `rated_both` with `sorted(both)` also leaves it green, because every fixture carrying the
-    #    extent key carries the rating key too. A capture from between #384 and #395 would separate
-    #    them; none is committed.
+    # ONE RESIDUE, named rather than claimed as covered, because it is not reachable from this block
+    # and no committed capture can construct it: `summarise`'s population is scoped by the
+    # measurement and not by `label`. The predicate half of that IS asserted below, but adding
+    # `and label(c) == "ANSWER"` to the `measured` comprehension itself leaves the selftest green —
+    # every cell carrying the key labels ANSWER, and `finding-no-chip/`, which is the
+    # ABSTAIN-labelled shape, predates the key.
+    #
+    # A SECOND RESIDUE STOOD HERE AND IS NOW COVERED: `main`'s rating column is scoped to the cells
+    # that measured the RATING key, and while every fixture carrying the extent key carried the
+    # rating key too, replacing `rated_both` with `sorted(both)` left the selftest green.
+    # `findings-ratings-unmeasured/` is the
+    # capture that separates them — the shape a build between #384 and #395 produced — and its A/B
+    # case reddens on that substitution as well as on the refusal it was added for.
     before = len(failures)
     def _cell(fc, us=None):
         c = _blank_cell((), None)
@@ -1883,12 +1912,13 @@ def main():
     # needs no help from the label (see `findings_incompletely_stated`).
     #
     # And this is where an absent measurement bites, rather than in `summarise`. There it is a
-    # census line, because every committed fixture predates #395 and a `problems` entry would redden
-    # `shipped-clean` for a reason unrelated to what it pins. Here the arms are being compared to
+    # census line, because every fixture committed before issue #397 predates #395 and a `problems`
+    # entry would redden `shipped-clean` for a reason unrelated to what it pins. Here the arms are
+    # being compared to
     # decide whether a change worked, and a pre-#395 arm A against a post-#395 arm B would read as
     # "A stated nothing incomplete, B stated nothing incomplete" — a clean tie over a column that
-    # ran on one side only. That is refused. It fires on no existing fixture pair, both sides of
-    # each being unmeasured and so in agreement.
+    # ran on one side only. That is refused. Of the pairs committed before #397 it fires on none,
+    # both sides of each being unmeasured and so in agreement.
     ab_problems = []
     a_measured = set(k for k in both if measured_finding_extent(a[k]))
     b_measured = set(k for k in both if measured_finding_extent(b[k]))
@@ -1903,7 +1933,9 @@ def main():
     # that tells a completeness win from a completeness/rating trade can run on a single arm and
     # still print a tie. Measured: two arms of `findings-complete` with arm B's
     # `unstatedFindingSeverities` set to `null` printed `A=0 B=0 of 0 that measured it` and exited
-    # 0, which is the fail-open the refusal above exists to prevent, one key over.
+    # 0, which is the fail-open the refusal above exists to prevent, one key over. That arrangement
+    # is now committed as `fixtures/probe-safety/findings-ratings-unmeasured/` — delete this block
+    # and read its A/B case's failure.
     a_rated = set(k for k in both if unstated_ratings(a[k]) is not None)
     b_rated = set(k for k in both if unstated_ratings(b[k]) is not None)
     if a_rated != b_rated:

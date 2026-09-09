@@ -418,19 +418,19 @@ exactly what a capture taken with the drug-reference GPs off looks like, plus th
 cell. Every label collapses to ABSTAIN and the report reads like a pass; this used to exit 0. Pins
 the refusal at **exit 3**.
 
-## The #397 arms — four cells of one patient, and three of them are live
+## The #397 arms — five arms of one patient, and three of them are live
 
-All four directories below are two cells of ONE patient on the 3.7.1 standalone, captured
+All five directories below are two cells of ONE patient on the 3.7.1 standalone, captured
 2026-09-09 against the deployed omod at the head that carries #395: patient
 `dc8560c9-6d2b-45bf-861c-8fcf562ec9b1` on eight active drug orders, `sourceFormat=ddinter`,
 `chartMode=fullChart`, `PROBE_DRUGS='Amlodipine Nifedipine'`,
 `CAPTURE_PHRASING='should i give {drug}?'`. **The Nifedipine cell is byte-identical in the first
 three** — seven findings, seven cited, no rating dropped — so across those it is the control and
-every difference is the Amlodipine cell's. In `findings-unmeasured/` it is NOT: the key was deleted
-from both cells there, which is the whole of that arm, so a difference in that arm is not
-attributable to the Amlodipine cell alone.
+every difference is the Amlodipine cell's. In the two CONSTRUCTED arms it is NOT: a key was deleted
+from both cells there, which is the whole of each of those arms, so a difference in one of them is
+not attributable to the Amlodipine cell alone.
 
-Three of the four are verbatim live captures, which is unusual here and is the point: this defect is
+Three of the five are verbatim live captures, which is unusual here and is the point: this defect is
 one the shipped build emits on the majority of its own cells, so it needed no construction. On the
 14-drug corpus these two cells were cut from, **eight of the twelve cells whose prompt carried a
 finding stated fewer than it carried**, every one of them by exactly one — seven losing the last
@@ -483,3 +483,23 @@ reason unrelated to what it pins — and it pins **exit 0** with
 **refused at exit 3**, because there the column is being read to decide whether a change worked and
 it ran on one side only; without that refusal a pre-#395 arm A against a post-#395 arm B reports
 `A=0 B=0`, a clean tie over nothing.
+
+### `findings-ratings-unmeasured/` — **CONSTRUCTED**, by deleting the OTHER key
+`findings-complete/`'s two cells with `unstatedFindingSeverities` **removed** and everything else —
+the answers, the chips, the references, `findingCitations`, the key order — untouched. Its sibling
+above drops the extent key; this one keeps it and drops the rating key, which is what a capture
+taken between #384 and #395 looks like.
+
+Two arms again, because absence has the same two answers one key over. Alone it is a CENSUS at
+**exit 0**, with `cells whose answer dropped a cited finding's rating: 0 of 0 that measured it`
+beside `cells stating no extent at all (not counted above): 0 of 2` — the extent column ran, the
+rating column did not. Against `findings-complete/` it is **refused at exit 3**, and that refusal
+had no fixture behind it before this arm: every directory carrying the extent key carried the rating
+key too, and the ones carrying neither agree at *no measurement*, so no pair disagreed and the
+refusal could not fire. Without it the pair prints
+`cells that dropped a cited finding's rating: A=0 B=0 of 0 that measured it` and exits 0 — a clean
+tie in the one column that tells a completeness win from a completeness-for-ratings trade.
+
+**Paired with `findings-complete/` and not with `findings-complete-unrated/`, and that is
+load-bearing.** The unrated arm reports problems of its own, so a pair built on it exits 3 whether
+or not the refusal is there — measured — and the case would pin nothing.

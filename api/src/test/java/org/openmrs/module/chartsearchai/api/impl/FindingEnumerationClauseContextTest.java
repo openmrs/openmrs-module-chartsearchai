@@ -56,7 +56,9 @@ import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
  * <p>Neuter {@code LlmInferenceService.severalFindingsAboutOneDrug} to a constant and read the
  * failures — every case here asserts that predicate directly, so either constant reddens this
  * class. Neither reddens anything in {@code LlmProviderUserMessageTest}, which passes the flag as a
- * literal and never asks the predicate at all.
+ * literal and never asks the predicate at all. The two cases that drive the real {@code search}
+ * assert the flag the CALL SITES hand the provider, in both directions, which is a different
+ * mutation: a literal at a call site leaves the predicate itself untouched.
  */
 public class FindingEnumerationClauseContextTest {
 
@@ -89,6 +91,30 @@ public class FindingEnumerationClauseContextTest {
 			setOf("C10AA01", "C01AA05", "N06AB06", "A02BC05"));
 	}
 
+	/** The question issue #113's screening arm runs on: an {@code interact*} cue and a MEDICATIONS
+	 *  intent, naming no drug at all. */
+	private static final String SCREENING_QUESTION = "do any of her meds interact?";
+
+	/** The screen across her own orders, whose findings name several drugs — shared by the case that
+	 *  asserts the predicate is false of it and the case that asserts the CALL SITES withhold the
+	 *  flag for it, so the two cannot come to be about different arrangements. */
+	private static PatientChart chartWithFindingsNamingSeveralDrugs() {
+		return DrugReferenceTestSupport.injectedFindingsOver(baseChart(), SCREENING_QUESTION,
+			setOf("Simvastatin", "Digoxin", "Sertraline", "Omeprazole", "Clarithromycin", "Amiodarone"),
+			setOf("C10AA01", "C01AA05", "N06AB06", "A02BC05", "J01FA09", "C01BD01"));
+	}
+
+	/** The chart the mixed-type case below injects over: one prescription and the recorded allergy its context
+	 *  carries, so the arrangement's two finding arms each have a chart record behind them. */
+	private static PatientChart prescriptionAndAllergyChart() {
+		List<SerializedRecord> records = new ArrayList<SerializedRecord>();
+		records.add(new SerializedRecord(ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER,
+				"order-uuid-1", "Warfarin 5mg tablet, 1 daily", null));
+		records.add(new SerializedRecord(ChartSearchAiConstants.RESOURCE_TYPE_ALLERGY,
+				"allergy-uuid-1", "Allergy to acetylsalicylic acid", null));
+		return new PatientChartSerializer().serialize(null, records, Collections.<String> emptySet());
+	}
+
 	@Test
 	public void aChartTheScreenGaveSeveralFindingsAsksForOneLinePerFinding() {
 		PatientChart chart = chartWithSeveralFindings();
@@ -113,8 +139,10 @@ public class FindingEnumerationClauseContextTest {
 	}
 
 	/**
-	 * The FLAG ITSELF REACHES THE PROVIDER, AND IT IS READ OFF THE POST-INJECT CHART — the one link
-	 * the cases either side of this one cannot see.
+	 * The FLAG ITSELF REACHES THE PROVIDER, AND IT IS READ OFF THE POST-INJECT CHART — the link the
+	 * cases that pin the predicate and the renderer cannot see, in the TRUE direction. The case
+	 * below is the same link in the FALSE direction, and is a separate case because a widened call
+	 * site and a neutered one are two edits with two different consequences.
 	 *
 	 * <p>They pin the predicate and they pin the renderer; nothing between them was pinned, and that
 	 * gap is not theoretical — replacing {@code severalFindingsAboutOneDrug(chart)} with a literal
@@ -159,6 +187,118 @@ public class FindingEnumerationClauseContextTest {
 		service.searchStreaming(new Patient(), QUESTION, token -> { });
 		assertEquals(Boolean.TRUE, provider.lastFlag,
 				"and so must searchStreaming, which is the path the frontend uses by default");
+	}
+
+	/**
+	 * AND THE CALL SITES HAND THE PROVIDER {@code false} FOR THE TWO POPULATIONS THE GATE EXISTS TO
+	 * KEEP THE CLAUSE OFF — the other direction of the case above, and the one with the safety
+	 * consequence.
+	 *
+	 * <p>The case above observes one value, {@code TRUE}, at both legs, and before this case nothing
+	 * in the suite observed a call site handing {@code false} — so the gate could be WIDENED there,
+	 * by a second condition OR-ed into the flag or by a literal {@code true}. Measured:
+	 * {@code = true} at both of {@code LlmInferenceService}'s answer call sites reddened nothing in
+	 * the whole build. The two populations below are the ones such an edit sends the 126-character
+	 * sentence to, and the failure is silent — it surfaces only as changed model prose.
+	 *
+	 * <p><b>The first arm also closes the flag's READ POSITION in the opposite direction to the case
+	 * above.</b> The strategy serves the chart with the findings and the injector hands back the
+	 * finding-free one, so a flag read BEFORE {@code inject()} is TRUE here and FALSE after — the
+	 * mirror of that case's arrangement. Between the two, a hoist of either local above its
+	 * {@code inject()} line is caught whichever way the injection moves the answer.
+	 *
+	 * <p>The second arm is the interaction-screening population, whose findings name several drugs
+	 * so the clause's {@code it} has no referent. A call site re-expressing the record-count half
+	 * alone — {@code carriedFindingIndexes(mappings).size() > 1} without the subject conjunct — is
+	 * false on the first arm's chart and true on this one, which is why both are here. Issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>.
+	 */
+	@Test
+	public void theCallSitesHandTheProviderFalseForThePopulationsTheGateWithholdsFrom() {
+		PatientChart findingFree = baseChart();
+		assertFalse(LlmInferenceService.severalFindingsAboutOneDrug(findingFree),
+				"the premise of the first arm: the chart the injector hands back must carry no "
+						+ "finding, which is the absent-data population's own shape");
+		RecordingProvider provider = new RecordingProvider();
+		TestableService service = newService(chartWithSeveralFindings(), findingFree, provider);
+
+		service.search(new Patient(), QUESTION);
+		assertEquals(Boolean.FALSE, provider.lastFlag,
+				"search must hand the provider false for a chart carrying no finding — a literal "
+						+ "true, or a second condition OR-ed into the flag, sends the clause to the "
+						+ "empty-chart message AbsentDataEvalTest pins to exact bytes");
+		provider.lastFlag = null;
+		service.searchStreaming(new Patient(), QUESTION, token -> { });
+		assertEquals(Boolean.FALSE, provider.lastFlag,
+				"and so must searchStreaming, which is the path the frontend uses by default");
+
+		PatientChart severalDrugs = chartWithFindingsNamingSeveralDrugs();
+		Set<String> screeningSubjects = ChartSearchAiUtils.findingSubjects(severalDrugs.getMappings());
+		assertTrue(DrugReferenceTestSupport.injectedFindings(severalDrugs).size() > 1,
+				"the premise of the second arm: the screen must raise more than one finding, or the "
+						+ "record-count conjunct is what withholds the flag and this arm says nothing");
+		assertTrue(screeningSubjects.size() > 1,
+				"and the half this arm is about: those findings must name several drugs, or it is the "
+						+ "first arm again. Named: " + screeningSubjects);
+		RecordingProvider screening = new RecordingProvider();
+		TestableService screeningService = newService(baseChart(), severalDrugs, screening);
+
+		screeningService.search(new Patient(), SCREENING_QUESTION);
+		assertEquals(Boolean.FALSE, screening.lastFlag,
+				"and search must hand it false for the interaction screen, whose findings name "
+						+ "several drugs — the sentence asks for every finding naming ONE of them");
+		screening.lastFlag = null;
+		screeningService.searchStreaming(new Patient(), SCREENING_QUESTION, token -> { });
+		assertEquals(Boolean.FALSE, screening.lastFlag,
+				"and so must searchStreaming on it");
+	}
+
+	/**
+	 * A CHART WHOSE FINDINGS MIX TYPES ABOUT ONE DRUG STILL ASKS FOR ONE LINE PER FINDING — the
+	 * population that reaches {@code ChartSearchAiUtils.findingSubjects}' key SPLIT, which every
+	 * other arrangement in this class leaves a no-op.
+	 *
+	 * <p>Those all inject interaction findings only, so the finding's TYPE and its drug are in
+	 * one-to-one correspondence and comparing whole {@code resourceKey} composites gives the same
+	 * answer as comparing the drug halves. This arrangement separates them: a recorded allergy and
+	 * an active order that interacts both fire on the one drug the question puts in play, so the
+	 * chart carries {@code contraindication:<drug>} beside {@code interaction:<drug>} — two keys,
+	 * one subject. Simplify the split to {@code subjects.add(key)} and this case is the one that
+	 * reddens; the clause silently stops reaching a population the real injector produces over the
+	 * bundled knowledge base, which is what this case's own premises assert of it.
+	 *
+	 * <p><b>The premise is the KEY COUNT and the assertion is the SUBJECT set</b>, which is what
+	 * makes the case say what it means without splitting anything itself: two distinct composites
+	 * that yield one subject can only be two types about one drug. Issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>.
+	 */
+	@Test
+	public void aChartWhoseFindingsMixTypesAboutOneDrugAsksForOneLinePerFinding() {
+		String question = "Should I give her ibuprofen?";
+		PatientChart chart = DrugReferenceTestSupport.injectedFindingsOverWithRecordedAllergies(
+			prescriptionAndAllergyChart(), question, setOf("Warfarin"), setOf("B01AA03"),
+			setOf("acetylsalicylic acid"));
+		List<RecordMapping> findings = DrugReferenceTestSupport.injectedFindings(chart);
+		Set<String> keys = new LinkedHashSet<String>();
+		for (RecordMapping finding : findings) {
+			keys.add(finding.getResourceUuid());
+		}
+		assertTrue(findings.size() > 1,
+				"the premise: the real pipeline must inject more than one finding here. Injected: "
+						+ findings.size());
+		assertEquals(2, keys.size(),
+				"and the premise this case is about: those findings must carry TWO distinct composite "
+						+ "keys, or the split under test is a no-op here as it is everywhere else in "
+						+ "this class. Keys: " + keys);
+		assertEquals(setOf("Ibuprofen"), ChartSearchAiUtils.findingSubjects(chart.getMappings()),
+				"so the subjects must be the one DRUG those two keys are about — not the composites, "
+						+ "and not the types. Keys: " + keys);
+		assertTrue(LlmInferenceService.severalFindingsAboutOneDrug(chart),
+				"and the predicate must be true, or this population loses the clause");
+		assertTrue(LlmProvider.buildUserMessage(chart.getText(), chart.getFocusIndices(),
+			question, LlmInferenceService.severalFindingsAboutOneDrug(chart))
+				.contains("put every one of them on a line of its own"),
+				"and its prompt must carry the clause");
 	}
 
 	@Test
@@ -209,13 +349,10 @@ public class FindingEnumerationClauseContextTest {
 	 */
 	@Test
 	public void aScreenAcrossHerOwnOrdersAsksForNothing() {
-		String screening = "do any of her meds interact?";
-		assertTrue(QueryScopeRouter.isInteractionScreening(screening),
+		assertTrue(QueryScopeRouter.isInteractionScreening(SCREENING_QUESTION),
 				"the premise: this must be the question class issue #113's screening arm runs on, or "
 						+ "the case is not about that population");
-		PatientChart chart = DrugReferenceTestSupport.injectedFindingsOver(baseChart(), screening,
-			setOf("Simvastatin", "Digoxin", "Sertraline", "Omeprazole", "Clarithromycin", "Amiodarone"),
-			setOf("C10AA01", "C01AA05", "N06AB06", "A02BC05", "J01FA09", "C01BD01"));
+		PatientChart chart = chartWithFindingsNamingSeveralDrugs();
 		int findings = DrugReferenceTestSupport.injectedFindings(chart).size();
 		Set<String> subjects = ChartSearchAiUtils.findingSubjects(chart.getMappings());
 		assertTrue(findings > 1,
@@ -229,7 +366,7 @@ public class FindingEnumerationClauseContextTest {
 				"so the predicate must be false — the sentence asks for every finding that names ONE "
 						+ "drug, and this chart offers " + subjects.size() + " candidates for it");
 		assertFalse(LlmProvider.buildUserMessage(chart.getText(), chart.getFocusIndices(),
-			screening, LlmInferenceService.severalFindingsAboutOneDrug(chart))
+			SCREENING_QUESTION, LlmInferenceService.severalFindingsAboutOneDrug(chart))
 				.contains("put every one of them"),
 				"and its prompt must carry no clause");
 	}

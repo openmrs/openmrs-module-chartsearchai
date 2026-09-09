@@ -531,7 +531,12 @@ public class ChartSearchAiUtils {
 	 * production caller — so the drug is everything after the first {@code :}. Split it here and
 	 * never at a call site: the finding's TYPE varies over one subject (an interaction and an
 	 * allergy contraindication about one drug are two keys), so a caller comparing whole keys would
-	 * read one drug as two, and one comparing type prefixes would read two drugs as one.
+	 * read one drug as two, and one comparing type prefixes would read two drugs as one. That
+	 * arrangement ships — a recorded allergy beside an interacting active order, both about the drug
+	 * the question names — and constructing it needs a context carrying recorded allergies AND
+	 * active drugs, so every arrangement without both leaves this split a no-op:
+	 * {@code FindingEnumerationClauseContextTest.aChartWhoseFindingsMixTypesAboutOneDrugAsksForOneLinePerFinding}
+	 * is the one that reddens on {@code subjects.add(key)}.
 	 *
 	 * <p><b>What the answer is NOT.</b> {@code SafetyWarning.getDrug()}'s own javadoc says it is
 	 * neither a per-finding identity nor a stable substance name to group on, and this does not

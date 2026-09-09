@@ -765,11 +765,10 @@ rows were captured against the built omod deployed to the standalone, not throug
 property, so they measure the module rather than a simulation of it.
 
 Read beside the existing gates rather than instead of them, which is the whole point: **verdict-led
-12/12, abstention 2/2, `unlicensed_verdict` 0 and `discordant_severity` 0 in every arm**, and the one
-yes/no gold cell this cohort carries (`dc8560c9-…|probe-current-meds`, cohort `standalone-3.7.1`)
-scored `directness=1/1 expected_lead_match=1/1 safety_violations=0` throughout. Nothing any
-pre-existing column reports moved in any arm. The `rc2` Tier-B cohort does not exist on this host
-(404 on its patient uuids), so drift and the 19 absent-data cases are not measurable here — which is
+12/12, abstention 2/2, `unlicensed_verdict` 0 and `discordant_severity` 0 in every arm**. Nothing any
+pre-existing column reports moved in any arm.
+
+The `rc2` Tier-B cohort does not exist on this host (404 on its patient uuids), so drift and the 19 absent-data cases are not measurable here — which is
 why the shipped clause is gated rather than added to every prompt. The gate is
 `LlmInferenceService.severalFindingsAboutOneDrug`: more than one injected finding, all of them
 naming ONE drug. The second conjunct came out of this change's first review round and is not visible
@@ -777,6 +776,18 @@ in the table — every cell above is phrased *"should i give {drug}?"*, so the c
 interaction-SCREENING cell, which is the arrangement whose findings name several drugs and where the
 clause's *"it"* therefore has no single referent. ADR Decision 84 carries what that conjunct is
 measured to withhold and what it does not establish.
+
+**`score_directness.py` scores nothing over this capture, and that is a property of the capture
+rather than a result.** It reads the `uuid__topic` and `uuid__probe-*` cells `capture_probe_yesno.sh`
+writes; `capture_probe_safety.sh` writes only `<slug>__safety-<Drug>.json` and
+`<slug>___context.json`, so over any arm of the command above it prints `no scoreable cells found`
+and exits 0 — measured over the committed `fixtures/probe-safety/findings-complete/`, which is two
+cells of this capture. What the locked metric DOES cover here is the `verdict-led` column:
+`score_probe_safety.py` imports `score_directness.classify`, so every lead counted above is
+classified by that gate's own definition. Its yes/no cohort — including the single MEDICATIONS cell,
+`dc8560c9-…|probe-current-meds`, cohort `standalone-3.7.1` — is captured by `capture_probe_yesno.sh`
+with `CAPTURE_TIER_B=1` and scored `--cohort standalone-3.7.1`, and no figure from it is recorded in
+this section.
 
 **What exit code to expect from a clean run.** The completeness cell is a `problems` entry, so a
 single-arm run over any drug-reference-enabled install where a cell is short **exits 3** — and six

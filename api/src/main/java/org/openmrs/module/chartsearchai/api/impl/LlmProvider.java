@@ -978,9 +978,14 @@ public class LlmProvider {
 	 *        the flag as "there are findings": passing it unconditionally sends the sentence to
 	 *        charts whose findings name several drugs, which is an arrangement the sentence does
 	 *        not describe, and to the empty-chart message whose exact bytes
-	 *        {@code AbsentDataEvalTest.theEmptyChartPromptAsksTheModelToNameWhatIsMissing} pins
-	 *        — that test reddens on an ungated clause, which is how this parameter came to exist
-	 *        rather than by design
+	 *        {@code AbsentDataEvalTest.theEmptyChartPromptAsksTheModelToNameWhatIsMissing} pins.
+	 *        <b>Those are two different edits and no one test sees both.</b> That pin reddens when
+	 *        the append condition in the body below drops {@code enumerateFindings} — measured —
+	 *        and it CANNOT move for anything a caller does, because it builds through an arity
+	 *        that hardcodes this flag false. A caller handing the flag
+	 *        unconditionally is caught by
+	 *        {@code FindingEnumerationClauseContextTest.theCallSitesHandTheProviderFalseForThePopulationsTheGateWithholdsFrom}
+	 *        instead, and before that case existed it was caught by nothing at all
 	 */
 	static String buildUserMessage(String numberedRecords, List<Integer> focusIndices,
 			String question, boolean enumerateFindings) {

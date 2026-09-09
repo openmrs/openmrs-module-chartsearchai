@@ -46,6 +46,7 @@ import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.ChartTooLargeException;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ActiveOrderClaims;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
+import org.openmrs.module.chartsearchai.api.ChartSearchService.FindingCitationExtent;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
 import org.openmrs.module.chartsearchai.api.AuditLogService;
 import org.openmrs.module.chartsearchai.api.PatientAccessCheck;
@@ -1564,7 +1565,34 @@ public class ChartSearchAiRestController {
 		target.put("unstatedFindingSeverities",
 			unstatedSeverities == null ? null : new ArrayList<Integer>(unstatedSeverities));
 		target.put("activeOrderClaims", serializeActiveOrderClaims(answer.getActiveOrderClaims()));
+		target.put("findingCitations",
+				serializeFindingCitationExtent(answer.getFindingCitationExtent()));
 		putConditionRuleCoverage(target, answer.getConditionRuleCoverage());
+	}
+
+	/**
+	 * The wire shape of {@code findingCitations}: {@code carried} injected safety findings the prompt
+	 * held, {@code cited} of them the answer cited — issue #395, and the base its four neighbours
+	 * each needed and none of them is. {@code null} for an answer whose check stated no measurement,
+	 * never an empty object and never a zeroed one, because zero is itself a measurement here (a
+	 * prompt that carried no finding, which is the shipped default's ordinary state). See
+	 * {@code ChartSearchService.FindingCitationExtent}, which is canonical for what each value does
+	 * and does not assert — in particular that {@code cited == carried} certifies nothing about how
+	 * those findings were stated.
+	 *
+	 * <p>The same shape as {@link #serializePairChipExtent} and {@link #serializeActiveOrderClaims},
+	 * and deliberately not folded into either: that one counts drug PAIRS a screen found and
+	 * reported, the other CLAIMS an answer made and left unevidenced, this one FINDINGS a prompt
+	 * carried and an answer cited. A shared serializer would make one rename move three keys.
+	 */
+	private Map<String, Object> serializeFindingCitationExtent(FindingCitationExtent extent) {
+		if (extent == null) {
+			return null;
+		}
+		Map<String, Object> map = new LinkedHashMap<String, Object>();
+		map.put("carried", extent.getCarried());
+		map.put("cited", extent.getCited());
+		return map;
 	}
 
 	/**

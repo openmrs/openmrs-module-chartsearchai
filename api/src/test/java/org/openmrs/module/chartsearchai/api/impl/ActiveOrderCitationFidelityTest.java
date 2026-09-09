@@ -96,7 +96,15 @@ public class ActiveOrderCitationFidelityTest {
 	/** The package, for every assertion whose claim is SILENCE. A class-scoped capture of a silent
 	 *  class receives nothing, which is exactly the state that makes "no WARN was logged" pass
 	 *  vacuously ({@link LogCapture}'s javadoc), so those cases capture the package instead, where
-	 *  {@code LlmInferenceService}'s own [timing] INFO line proves the capture is live. */
+	 *  {@code LlmInferenceService}'s own [timing] INFO line proves the capture is live.
+	 *
+	 *  <p>The cost is that a package capture also hears the OTHER checks reporting other properties
+	 *  of one canned answer, which is why the silence assertions below name those checks as
+	 *  exclusions rather than narrowing the capture — {@code LogCapture.hasEventAtOrAbove}'s own
+	 *  javadoc carries that argument. {@code SafetyFindingCitationExtentCheck} joined the list in
+	 *  issue #395: these arrangements inject findings this file's canned answers have no reason to
+	 *  cite, so its count legitimately reports on them, and the reach over every other logger in the
+	 *  package is kept. */
 	private static final String PACKAGE = "org.openmrs.module.chartsearchai.api.impl";
 
 	private PatientChart chart;
@@ -156,7 +164,8 @@ public class ActiveOrderCitationFidelityTest {
 			assertFalse(capture.describeAll().isEmpty(),
 					"the capture must receive the pipeline's own INFO lines, or the assertion below "
 							+ "passes vacuously");
-			assertFalse(capture.hasEventAtOrAbove(Level.WARN, SafetyFindingSeverityFidelityCheck.class),
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN, SafetyFindingSeverityFidelityCheck.class,
+					SafetyFindingCitationExtentCheck.class),
 					"a citation that points at the patient's own drug order is the shape this check "
 							+ "exists to leave alone. Captured: " + capture.describeAll());
 			assertTrue(answer.getMisattributedOrderCitations().isEmpty(),
@@ -260,7 +269,7 @@ public class ActiveOrderCitationFidelityTest {
 			assertFalse(capture.describeAll().isEmpty(),
 					"the capture must receive the pipeline's own INFO lines, or the assertion below "
 							+ "passes vacuously");
-			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN, SafetyFindingCitationExtentCheck.class),
 					"an answer stating no active-order claim offers no chart citation for one. "
 							+ "Captured: " + capture.describeAll());
 			assertTrue(answer.getMisattributedOrderCitations().isEmpty(),
@@ -283,7 +292,8 @@ public class ActiveOrderCitationFidelityTest {
 			assertFalse(capture.describeAll().isEmpty(),
 					"the capture must receive the pipeline's own INFO lines, or the assertion below "
 							+ "passes vacuously");
-			assertFalse(capture.hasEventAtOrAbove(Level.WARN, SafetyFindingSeverityFidelityCheck.class),
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN, SafetyFindingSeverityFidelityCheck.class,
+					SafetyFindingCitationExtentCheck.class),
 					"only the run of markers immediately after the phrase is offered for the claim. "
 							+ "Captured: " + capture.describeAll());
 		}
@@ -305,7 +315,7 @@ public class ActiveOrderCitationFidelityTest {
 			assertFalse(capture.describeAll().isEmpty(),
 					"the capture must receive the pipeline's own INFO lines, or the assertion below "
 							+ "passes vacuously");
-			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN, SafetyFindingCitationExtentCheck.class),
 					"a citation in the following sentence is that sentence's. Captured: "
 							+ capture.describeAll());
 		}
@@ -347,7 +357,7 @@ public class ActiveOrderCitationFidelityTest {
 			assertFalse(capture.describeAll().isEmpty(),
 					"the capture must receive the pipeline's own INFO lines, or the assertion below "
 							+ "passes vacuously");
-			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN, SafetyFindingCitationExtentCheck.class),
 					"a citation in the clause after the claim's own is that clause's. Captured: "
 							+ capture.describeAll());
 			assertTrue(answer.getMisattributedOrderCitations().isEmpty(),
@@ -449,7 +459,8 @@ public class ActiveOrderCitationFidelityTest {
 			assertFalse(capture.describeAll().isEmpty(),
 					"the capture must receive the pipeline's own INFO lines, or the assertion below "
 							+ "passes vacuously");
-			assertFalse(capture.hasEventAtOrAbove(Level.WARN, SafetyFindingSeverityFidelityCheck.class),
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN, SafetyFindingSeverityFidelityCheck.class,
+					SafetyFindingCitationExtentCheck.class),
 					"the module's own record of an active order IS evidence of one. Captured: "
 							+ capture.describeAll());
 			assertTrue(answer.getMisattributedOrderCitations().isEmpty(),
@@ -924,14 +935,15 @@ public class ActiveOrderCitationFidelityTest {
 		}
 
 		@Override
-		public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question) {
+		public LlmResponse search(String numberedRecords, List<Integer> focusIndices,
+				String question, boolean enumerateFindings) {
 			return canned();
 		}
 
 		@Override
 		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-				String cacheScope) {
+				String cacheScope, boolean enumerateFindings) {
 			return canned();
 		}
 	}

@@ -110,7 +110,15 @@ public class ClassCodeFidelityTest {
 	 *  <p><b>WHICH of them redden is deliberately not enumerated, here or there.</b> This note named
 	 *  a count, and so did that javadoc and ADR Decision 61 beside it; the merge that brought issue
 	 *  #338's cases into this file falsified all three in one commit, and a count that replaces a
-	 *  stale count goes stale on the next merge. Mutate the constant and read the failures. */
+	 *  stale count goes stale on the next merge. Mutate the constant and read the failures.
+	 *
+	 *  <p>A silence assertion below that names {@code SafetyFindingCitationExtentCheck} as an
+	 *  exclusion (issue #395) does so because its arrangement injects a finding the canned answer has
+	 *  no reason to cite, so that count legitimately reports on it — no quantity is stated here, for
+	 *  the reason the paragraph above gives of counts in this note. Excluding the one logger keeps
+	 *  this capture's reach over every other in the package;
+	 *  {@code LogCapture.hasEventAtOrAbove}'s javadoc carries the argument for preferring that to a
+	 *  narrower capture. */
 	private static final String PACKAGE = "org.openmrs.module.chartsearchai.api.impl";
 
 	private TestableService service;
@@ -504,7 +512,7 @@ public class ClassCodeFidelityTest {
 			assertFalse(capture.describeAll().isEmpty(),
 					"the capture must receive the pipeline's own INFO lines, or the assertion below "
 							+ "passes vacuously");
-			assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+			assertFalse(capture.hasEventAtOrAbove(Level.WARN, SafetyFindingCitationExtentCheck.class),
 					"two DIFFERENT codes in one parenthetical are a list the records do license — one "
 							+ "record states both — and reporting it would make this rule noise. "
 							+ "Captured: " + capture.describeAll());
@@ -931,14 +939,15 @@ public class ClassCodeFidelityTest {
 		}
 
 		@Override
-		public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question) {
+		public LlmResponse search(String numberedRecords, List<Integer> focusIndices,
+				String question, boolean enumerateFindings) {
 			return canned();
 		}
 
 		@Override
 		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-				String cacheScope) {
+				String cacheScope, boolean enumerateFindings) {
 			return canned();
 		}
 	}

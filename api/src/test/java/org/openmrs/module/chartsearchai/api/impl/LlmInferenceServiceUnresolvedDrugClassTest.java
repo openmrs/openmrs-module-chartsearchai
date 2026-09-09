@@ -214,14 +214,15 @@ public class LlmInferenceServiceUnresolvedDrugClassTest {
 				"The records do not address starting an oral contraceptive for this patient.";
 
 		@Override
-		public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question) {
+		public LlmResponse search(String numberedRecords, List<Integer> focusIndices,
+				String question, boolean enumerateFindings) {
 			return new LlmResponse(ANSWER, Collections.<Integer> emptyList());
 		}
 
 		@Override
 		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-				String cacheScope) {
+				String cacheScope, boolean enumerateFindings) {
 			return new LlmResponse(ANSWER, Collections.<Integer> emptyList());
 		}
 	}

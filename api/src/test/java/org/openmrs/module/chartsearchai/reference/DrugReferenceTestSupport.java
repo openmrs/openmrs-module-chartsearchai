@@ -431,11 +431,44 @@ public final class DrugReferenceTestSupport {
 	public static PatientChart injectedFindingsOver(PatientChart base, String question,
 			Set<String> activeDrugs, Set<String> activeAtcCodes,
 			List<PatientClinicalContext.ActiveDrugOrder> orders) {
+		return injectedFindingsOver(base, question, activeDrugs, activeAtcCodes, null, orders);
+	}
+
+	/**
+	 * {@link #injectedFindingsOver(PatientChart, String, Set, Set)} for a patient who ALSO has
+	 * recorded allergies — an arrangement in which the injector raises findings of more than one
+	 * TYPE about a single drug, because the allergy contraindication arm and an order-driven
+	 * interaction arm both fire on the drug the question puts in play.
+	 *
+	 * <p><b>Neither existing entry point can build it, which is why this one exists</b> (issue
+	 * #397's review round 2): {@link #injectedFindingsOver(PatientChart, String, Set, Set)} passes
+	 * no allergies at all, and {@link #injectedAllergyFindingChart} passes no active drugs and
+	 * injects over {@link #oneRecordChart}. So every arrangement those two produce has the finding
+	 * TYPE and the finding's drug in one-to-one correspondence, and a caller comparing whole
+	 * {@code resourceKey} composites reads exactly the same answer as
+	 * {@code ChartSearchAiUtils.findingSubjects}, so the mutation that method's key split exists to
+	 * catch passes over any of them.
+	 *
+	 * @throws IllegalStateException when the arrangement raises no finding at all, as the two
+	 *         overloads above do — the throw lives in the body all three share
+	 */
+	public static PatientChart injectedFindingsOverWithRecordedAllergies(PatientChart base,
+			String question, Set<String> activeDrugs, Set<String> activeAtcCodes,
+			Set<String> allergies) {
+		return injectedFindingsOver(base, question, activeDrugs, activeAtcCodes, allergies, null);
+	}
+
+	/** The one body the three public forms share, so the throw-on-empty contract each of them
+	 *  documents cannot come apart from the injection it is a contract about. */
+	private static PatientChart injectedFindingsOver(PatientChart base, String question,
+			Set<String> activeDrugs, Set<String> activeAtcCodes, Set<String> allergies,
+			List<PatientClinicalContext.ActiveDrugOrder> orders) {
 		PatientChart chart = injectorWithSafety(ddinterServiceWithGroups())
 				.injectRecords(base,
-						ctx(60, null, activeDrugs, activeAtcCodes, null, null, orders), question);
+						ctx(60, null, activeDrugs, activeAtcCodes, allergies, null, orders), question);
 		if (injectedFindings(chart).isEmpty()) {
 			throw new IllegalStateException("no safety finding was injected for drugs " + activeDrugs
+					+ (allergies == null ? "" : " and allergies " + allergies)
 					+ " and question: " + question);
 		}
 		return chart;
@@ -454,10 +487,24 @@ public final class DrugReferenceTestSupport {
 
 	/**
 	 * Every injected {@code safety_finding} mapping in {@code chart}, in injection order — the
-	 * finding-shaped counterpart of {@link #injectedReference}, and the one matcher for it, so the
-	 * filter cannot drift between the test files that assert HOW MANY records a chip yields. Returns
-	 * the list rather than the first, because that count is the assertion in every caller but
+	 * finding-shaped counterpart of {@link #injectedReference}, and the matcher this tree is MEANT to
+	 * share, so the filter cannot drift between the test files that CALL it. Returns the list rather
+	 * than the first, because that count is the assertion in every caller but
 	 * {@link #injectedSafetyFinding}, which layers its own throw-on-empty contract on top.
+	 *
+	 * <p><b>NOT yet the only matcher for this resource type, so the drift hazard it names is live
+	 * here as it is for {@code injectedActiveOrders}</b> — {@code DrugReferenceInjectorTest},
+	 * {@code DrugSafetyInteractionScreeningTest}, {@code DrugSafetyQuestionPairInteractionTest},
+	 * {@code ActiveOrderReconciliationTest}, {@code FindingChartRecordProvenanceContextTest} and
+	 * {@code ReferenceProseFidelityTest} each still spell the type test themselves, and pointing them
+	 * at this would close it. <b>Scoping the promise to the callers is the second narrowing this
+	 * sentence has taken, and the first one was still false:</b> it read "the test files that assert
+	 * HOW MANY records a chip yields", and one of the files above counts findings through its own
+	 * copy of the filter, which is that very assertion class. Said here rather than assumed, because
+	 * {@code ArchitectureGuardTest.theFindingPopulationIsSelectedInOneMethod} scopes itself to
+	 * {@code api/src/main} and pointed at this method for the tree instead: what that rule protects
+	 * is the PRODUCTION coupling between the prompt and {@code findingCitations}, which no test-tree
+	 * copy can move, and this hazard is the different one.
 	 *
 	 * <p>Public for the cross-package reason {@link #safetyFindingIn} is: a test in another package
 	 * whose assertion is about WHICH of several findings an answer sentence cited needs them all

@@ -22,6 +22,7 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.Test;
@@ -55,6 +56,46 @@ public class ArchitectureGuardTest {
 	private static final String COVERAGE_TYPE =
 			"Lorg/openmrs/module/chartsearchai/reference/DrugReferenceLoad$Coverage;";
 
+	/** The safety-finding type as a token: the constant's simple name, or the literal value it holds.
+	 *  The constant arm is bounded at BOTH ends, so a longer identifier that merely CONTAINS that
+	 *  name is not read as it, wherever in the identifier the name sits; the literal arm is bounded by
+	 *  its own quotes. ONE spelling, and both readings below are BUILT from it — a second copy is the
+	 *  re-inlined-literal hazard this file exists to forbid, and it would let a third spelling added
+	 *  here leave the receiver arm looking for the old two with every canary still passing. */
+	private static final Pattern FINDING_TYPE_TOKEN = Pattern.compile(
+			"\"safety_finding\"|\\bRESOURCE_TYPE_SAFETY_FINDING\\b");
+
+	/** The type test with the token as the RECEIVER, which is the shape both production spellings
+	 *  use. Whitespace-tolerant because one of the two wraps across a line, and a line-scoped
+	 *  pattern would be blind to exactly the arrangement a re-inline is most likely to copy. */
+	private static final Pattern FINDING_TYPE_TEST_RECEIVER = Pattern.compile(
+			"(?:" + FINDING_TYPE_TOKEN.pattern() + ")"
+			+ "\\s*\\.\\s*equals(?:IgnoreCase)?\\s*\\(");
+
+	/** The opening of an {@code equals}/{@code equalsIgnoreCase} CALL, whose argument list is then
+	 *  read whole rather than matched positionally: {@code Objects.equals(type, CONST)} and
+	 *  {@code Objects.equals(CONST, type)} are the null-safe respellings a third selection site is
+	 *  likeliest to reach for — this module already writes {@code Objects.equals} in
+	 *  {@code api/src/main} — and a positional pattern catches at most one of the two argument
+	 *  orders. What the leading {@code \b} buys is indifference to WHAT qualifies the call — one
+	 *  rule covers {@code Objects.}, {@code StringUtils.} and a fully qualified
+	 *  {@code java.util.Objects.} — while still refusing a longer lowercase name ending in
+	 *  {@code equals}. A statically imported bare {@code equals(…)} would match too and is not a
+	 *  shape to worry about: every class inherits {@code Object.equals}, which shadows the import, so
+	 *  the two-argument call does not compile (measured while probing this rule). */
+	private static final Pattern EQUALS_CALL = Pattern.compile("\\bequals(?:IgnoreCase)?\\s*\\(");
+
+	/** The only two method bodies in {@code api/src/main} that may spell it, each named by its own
+	 *  signature text so the allow-list cannot drift onto a neighbour. */
+	private static final List<String> FINDING_TYPE_TEST_HOMES = java.util.Arrays.asList(
+			"public static List<RecordMapping> safetyFindingMappings(List<RecordMapping> mappings) {",
+			"public static String referenceGroup(String resourceType) {");
+
+	/** Where the two homes live, relative to {@code api/src/main/java} — the KEY the walk files
+	 *  that file under, so a class of the same simple name in another package cannot be mistaken
+	 *  for it and cannot silently displace it in the map either. */
+	private static final String FINDING_TYPE_TEST_HOME_FILE =
+			"org/openmrs/module/chartsearchai/ChartSearchAiUtils.java";
 
 	// --- Rules ---
 
@@ -212,6 +253,239 @@ public class ArchitectureGuardTest {
 				"Should use ChartSearchAiUtils.cosineSimilarity() "
 				+ "instead of reimplementing the formula");
 		assertNoViolations(violations);
+	}
+
+	/**
+	 * The injected-finding POPULATION is selected in one method. Issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a> folded
+	 * two character-for-character copies of that selection into
+	 * {@code ChartSearchAiUtils.safetyFindingMappings}, and until this rule existed the coupling was
+	 * held by a javadoc sentence alone: a third site re-inlining the type test breaks nothing the
+	 * day it is written — the spellings are equal — which is the hazard
+	 * {@code ActiveOrderInteractionPhraseTest} records for
+	 * {@code DrugSafetyValidator.ACTIVE_ORDER_INTERACTION_PHRASE}. The divergence arrives later, as
+	 * a prompt asking for an enumeration of one population while {@code findingCitations} counts
+	 * another.
+	 *
+	 * <p><b>Two homes, not one, and the second is a different question.</b>
+	 * {@code safetyFindingMappings} SELECTS the population; {@code referenceGroup} asks which
+	 * of three types is reference material, off a bare type string with no mapping in sight, and
+	 * {@code ChartSearchAiReferenceGroupTest} is what binds it. Naming both is what lets this rule
+	 * be spelled as "nowhere else" rather than as a file exclusion.
+	 *
+	 * <p><b>What it catches, measured by writing each shape into a third class in
+	 * {@code api/src/main} and reading this case's own failures (2026-09-09, twelve shapes, all
+	 * twelve reported):</b> the constant or its literal value {@code "safety_finding"} as the
+	 * receiver of {@code equals} or {@code equalsIgnoreCase} — including the arrangement the
+	 * production spellings themselves use, one of which wraps across a line — and the same token
+	 * ANYWHERE in such a call's argument list. The rule keys on the METHOD NAME, so whatever
+	 * qualifies it is out of the picture: the shapes measured were {@code java.util.Objects.equals}
+	 * in BOTH argument orders, a {@code StringUtils.equals}-shaped two-argument helper, a fully
+	 * qualified constant as the sole argument, and
+	 * {@code Objects.equals(mapping.getResourceType(), CONST)} — an argument carrying parentheses of
+	 * its own, which is what a positional pattern cannot read past. The
+	 * null-safe respellings are the ones worth reaching, because a maintainer writing a third
+	 * selection site reaches for them rather than for the constant-first receiver trick production
+	 * uses, and this module already writes {@code Objects.equals} in {@code api/src/main}. It does
+	 * not matter whether the comparison reads {@code getResourceType()} directly, so a re-inline
+	 * through a local holding the type is caught too.
+	 *
+	 * <p><b>What it does NOT catch. This list is not exhaustive and the shapes on it are UNCAUGHT
+	 * rather than covered elsewhere</b> — measured in the same run: {@code contains},
+	 * {@code startsWith}, a reference comparison ({@code type == CONST}) against the interned
+	 * constant, a {@code switch} whose {@code case} label is the constant, and a comparison moved
+	 * into a helper of another name ({@code sameType(type, CONST)}) all pass this rule silently. A
+	 * re-collection through {@code referenceGroup} against {@code REFERENCE_GROUP_REFERENCE} passes
+	 * too, and that one is out of reach by design — it selects THREE types and is a wider
+	 * population, not this one respelled.
+	 *
+	 * <p><b>And the scope is {@code api/src/main/java}.</b> The omod is unreached (it builds no
+	 * mappings today, the same disclosure
+	 * {@link #theProvenanceCarryingMappingConstructorHasOneCaller} carries). The test tree is out of
+	 * scope because a copy there cannot move the coupling this rule protects — a test file selects
+	 * findings for its own assertion and reaches neither the prompt nor {@code findingCitations}.
+	 * <b>That is not the same as saying the tree is funnelled through one matcher: it is not.</b>
+	 * {@code DrugReferenceTestSupport.injectedFindings} is the matcher the tree is MEANT to use, and
+	 * several test files besides it still spell the type test themselves; its own javadoc names that
+	 * residue and the different hazard it carries, in the shape
+	 * {@code DrugReferenceTestSupport.injectedActiveOrders} uses for its own.
+	 *
+	 * <p><b>It reads COMMENTS as well as code</b>, so a javadoc that quotes the predicate outside
+	 * those two bodies reddens this case. That direction is a false positive rather than a silent
+	 * pass, and it is the deliberate choice: comment-stripping is what defeated the earlier
+	 * source-text form of {@link #theProvenanceCarryingMappingConstructorHasOneCaller}, eating the
+	 * tail of any line holding {@code //} inside a string literal.
+	 *
+	 * <p>Both canaries fail on an empty discovery, because a rule that finds nothing forbids
+	 * nothing: the walk must have read {@code ChartSearchAiUtils.java}, both named signatures must
+	 * still be declared there, and <b>each of the two bodies must itself contain a match</b> — that
+	 * last is what stops a rewrite of a production spelling from disarming the rule instead of
+	 * reddening it. Measured: narrowing the receiver arm off the production spelling reddens on that
+	 * precondition, and dropping either name from the allow-list reddens with the named method's own
+	 * spelling reported as the violation.
+	 *
+	 * <p><b>What the two bodies keep honest is ONE alternative of ONE shape, and that is stated at
+	 * the granularity it was measured at rather than as "the receiver shape".</b> Both spell
+	 * {@code ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(}, so the precondition above
+	 * holds the reading to the QUALIFIED-CONSTANT receiver and to nothing else, and <b>any narrowing
+	 * the two bodies still satisfy passes both preconditions</b>. Measured 2026-09-09, one mutation
+	 * per run, each leaving this case GREEN: deleting the {@code "safety_finding"} literal arm from
+	 * {@link #FINDING_TYPE_TOKEN}, the one home both readings are built from; replacing
+	 * {@code equals(?:IgnoreCase)?} with {@code equals} in the receiver pattern and in
+	 * {@link #EQUALS_CALL}, which are two copies of THAT fragment; and
+	 * narrowing the receiver pattern to require the {@code ChartSearchAiConstants.} qualifier, after
+	 * which the reading sees neither a static-imported
+	 * {@code RESOURCE_TYPE_SAFETY_FINDING.equals(t)} nor {@code "safety_finding".equals(t)}. The
+	 * literal arm is the live one of the three: the root {@code CLAUDE.md} carries a rule against
+	 * testing a {@code resourceType} against a named type at all (issue #122), which exists because
+	 * such tests do get written. Deleting the {@link #EQUALS_CALL} half of
+	 * {@link #findingTypeTests} leaves this green too — neither production spelling puts the constant
+	 * in an {@code equals} ARGUMENT list — and silently gives up every argument-side shape above, the
+	 * {@code Objects.equals} ones included. <b>Trim nothing here on the strength of the build staying
+	 * green after it.</b>
+	 */
+	@Test
+	public void theFindingPopulationIsSelectedInOneMethod() throws IOException {
+		Path main = SRC_ROOT.resolve("src/main/java");
+		assertTrue(Files.exists(main),
+				"precondition: no production sources at " + main + " — this rule would forbid nothing");
+		final Path root = main;
+		final java.util.Map<String, String> sources = new java.util.LinkedHashMap<>();
+		Files.walkFileTree(main, new SimpleFileVisitor<Path>() {
+			@Override
+			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+				if (file.toString().endsWith(".java")) {
+					sources.put(root.relativize(file).toString().replace('\\', '/'),
+							new String(Files.readAllBytes(file), StandardCharsets.UTF_8));
+				}
+				return FileVisitResult.CONTINUE;
+			}
+		});
+		String utils = sources.get(FINDING_TYPE_TEST_HOME_FILE);
+		assertTrue(utils != null,
+				"precondition: the walk of " + main + " did not find " + FINDING_TYPE_TEST_HOME_FILE
+						+ ", so it is reading the wrong tree, or the class moved package and this "
+						+ "rule's allow-list no longer resolves — either way every violation below "
+						+ "would be invisible");
+		List<int[]> allowed = new ArrayList<>();
+		for (String signature : FINDING_TYPE_TEST_HOMES) {
+			int start = utils.indexOf(signature);
+			assertTrue(start >= 0,
+					"precondition: ChartSearchAiUtils no longer declares \"" + signature + "\" — this "
+							+ "rule's allow-list is keyed on that signature, so it would report the "
+							+ "method's own spelling as the violation");
+			int[] region = new int[] { start, endOfBody(utils, start + signature.length() - 1) };
+			assertTrue(!findingTypeTests(utils.substring(region[0], region[1])).isEmpty(),
+					"precondition: \"" + signature + "\" no longer spells the type test in a shape this "
+							+ "rule can see, so the rule has been disarmed rather than satisfied");
+			allowed.add(region);
+		}
+		List<String> violations = new ArrayList<>();
+		for (java.util.Map.Entry<String, String> entry : sources.entrySet()) {
+			String source = entry.getValue();
+			for (int[] test : findingTypeTests(source)) {
+				boolean home = FINDING_TYPE_TEST_HOME_FILE.equals(entry.getKey())
+						&& insideAnyOf(test[0], allowed);
+				if (!home) {
+					String quoted = source.substring(test[0], test[1]).replace("\n", " ");
+					violations.add(entry.getKey() + ":"
+							+ lineOf(source, test[0])
+							+ " — the injected-finding population is selected by "
+							+ "ChartSearchAiUtils.safetyFindingMappings and nowhere else (issue #397); "
+							+ "call it instead of respelling the type test\n    "
+							+ (quoted.length() > 160 ? quoted.substring(0, 160) + "…" : quoted));
+				}
+			}
+		}
+		assertNoViolations(violations);
+	}
+
+	/**
+	 * Every place {@code source} tests a resource type against the safety-finding type, as
+	 * {@code {start, end}} offsets — the ONE reading of that question in this class, so a canary
+	 * cannot be satisfied by a shape the rule itself does not look for.
+	 *
+	 * <p>Two shapes, and the second is read rather than matched. The token as the RECEIVER of
+	 * {@code equals}/{@code equalsIgnoreCase} is a token sequence and stays a pattern. The token as
+	 * an ARGUMENT is not: it can sit at any position of the list, behind any depth of qualifier, and
+	 * beside arguments carrying parentheses of their own ({@code mapping.getResourceType()}), so the
+	 * list is read to its matching close paren and searched whole. That is what reaches both
+	 * argument orders of {@code Objects.equals} with one rule instead of one alternation per order.
+	 *
+	 * <p><b>The paren count is naive in the same way {@link #endOfBody}'s brace count is</b> — it
+	 * knows nothing of strings, chars or comments — and it has THREE outcomes, of which TWO are
+	 * silent. A {@code )} inside a literal ahead of the token ends the list early and truncates the
+	 * span, hiding a token that sits after it. A {@code (} inside a literal runs the list past its
+	 * real end, and in the ordinary case that means past the end of the FILE: {@link #endOfArguments}
+	 * returns -1 and {@link #findingTypeTests} discards the call outright, which is the strongest
+	 * fail-open path here — a real type test carrying one such literal leaves the rule altogether.
+	 * It becomes loud only where a later net-extra {@code )} in the same file brings the depth back
+	 * to zero, reporting a token that is not in the argument list at all.
+	 *
+	 * <p><b>Measured 2026-09-09 by putting each shape to this reading on its own: all four are
+	 * MISSED</b> — {@code Objects.equals(t + ")", CONST)}, {@code Objects.equals(t + "(", CONST)},
+	 * {@code Objects.equals(t.replace(')', ' '), CONST)} and
+	 * {@code Objects.equals(t.substring(t.indexOf('(') + 1), CONST)} — with the loud outcome
+	 * reproduced only by putting a net-extra {@code )} later in the same source, which then reported
+	 * a token sitting outside the real argument list. The last two are ordinary Java and not a stray:
+	 * a genuine type test whose argument carries a paren-bearing sub-expression escapes a rule whose
+	 * whole purpose is to forbid it. <b>What makes that tolerable
+	 * is the tree and not the parser</b> — the same run read 107 {@code equals}-shaped calls across
+	 * the 68 java files of {@code api/src/main}, none of them returning -1, the longest span 93
+	 * characters and none crossing more than two lines.
+	 */
+	private static List<int[]> findingTypeTests(String source) {
+		List<int[]> found = new ArrayList<>();
+		Matcher receiver = FINDING_TYPE_TEST_RECEIVER.matcher(source);
+		while (receiver.find()) {
+			found.add(new int[] { receiver.start(), receiver.end() });
+		}
+		Matcher call = EQUALS_CALL.matcher(source);
+		while (call.find()) {
+			int close = endOfArguments(source, call.end() - 1);
+			if (close < 0) {
+				continue;
+			}
+			if (FINDING_TYPE_TOKEN.matcher(source.substring(call.end(), close)).find()) {
+				found.add(new int[] { call.start(), close + 1 });
+			}
+		}
+		java.util.Collections.sort(found, new java.util.Comparator<int[]>() {
+			@Override
+			public int compare(int[] left, int[] right) {
+				return Integer.compare(left[0], right[0]);
+			}
+		});
+		return found;
+	}
+
+	/** The index of the paren closing the argument list that opens at {@code openParen}, or -1 where
+	 *  the source runs out first — the caveats are {@link #findingTypeTests}'. */
+	private static int endOfArguments(String source, int openParen) {
+		int depth = 0;
+		for (int i = openParen; i < source.length(); i++) {
+			char c = source.charAt(i);
+			if (c == '(') {
+				depth++;
+			} else if (c == ')') {
+				depth--;
+				if (depth == 0) {
+					return i;
+				}
+			}
+		}
+		return -1;
+	}
+
+	/** Whether {@code offset} falls inside any of {@code regions}, each a {@code {start, end}} pair
+	 *  with the end EXCLUSIVE, as {@link #endOfBody} returns it. */
+	private static boolean insideAnyOf(int offset, List<int[]> regions) {
+		for (int[] region : regions) {
+			if (offset >= region[0] && offset < region[1]) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -651,6 +925,39 @@ public class ArchitectureGuardTest {
 						+ "it is reading the wrong tree — a wrong root scans SOMETHING and every rule "
 						+ "then passes on files these rules were never written about");
 		return sourceCache;
+	}
+
+	/**
+	 * The index one past the brace closing the block that opens at {@code openBrace}. Naive by
+	 * design: it counts braces and knows nothing of strings, chars or comments, which is why its
+	 * caller names the two signatures it may be asked about rather than scanning for methods.
+	 */
+	private static int endOfBody(String source, int openBrace) {
+		int depth = 0;
+		for (int i = openBrace; i < source.length(); i++) {
+			char c = source.charAt(i);
+			if (c == '{') {
+				depth++;
+			} else if (c == '}') {
+				depth--;
+				if (depth == 0) {
+					return i + 1;
+				}
+			}
+		}
+		return source.length();
+	}
+
+	/** The 1-based line number of {@code offset} in {@code source}, for a violation a reader has to
+	 *  be able to find. */
+	private static int lineOf(String source, int offset) {
+		int line = 1;
+		for (int i = 0; i < offset; i++) {
+			if (source.charAt(i) == '\n') {
+				line++;
+			}
+		}
+		return line;
 	}
 
 	private static List<String> scanForPattern(Path root, Pattern pattern,

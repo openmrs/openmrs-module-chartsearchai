@@ -19,6 +19,7 @@ import static org.openmrs.module.chartsearchai.ChartSearchAiConstants.RESOURCE_T
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -512,6 +513,119 @@ public class ChartSearchAiUtils {
 	 */
 	public static String resourceKey(String resourceType, String resourceUuid) {
 		return resourceType + ":" + resourceUuid;
+	}
+
+	/**
+	 * The distinct reference drugs one assembled chart's injected {@code safety_finding} records
+	 * name — the subjects of its findings, as {@code SafetyWarning.getDrug()} spelled them. Issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>.
+	 *
+	 * <p><b>Production asks it for the SIZE</b>, because a prompt clause about "the drug" needs the
+	 * chart's findings to name exactly one — see
+	 * {@code LlmInferenceService.severalFindingsAboutOneDrug}.
+	 *
+	 * <p><b>It sits beside {@link #resourceKey} because it is that method's inverse over one half of
+	 * the composite, and the two must not drift.</b> A finding's {@code resourceUuid} is
+	 * {@code resourceKey(type, drug)} — written in exactly one place,
+	 * {@code DrugReferenceInjector.injectRecords}, which is also {@code resourceKey}'s only
+	 * production caller — so the drug is everything after the first {@code :}. Split it here and
+	 * never at a call site: the finding's TYPE varies over one subject (an interaction and an
+	 * allergy contraindication about one drug are two keys), so a caller comparing whole keys would
+	 * read one drug as two, and one comparing type prefixes would read two drugs as one. That
+	 * arrangement ships — a recorded allergy beside an interacting active order, both about the drug
+	 * the question names — and constructing it needs a context carrying recorded allergies AND
+	 * active drugs, so every arrangement without both leaves this split a no-op:
+	 * {@code FindingEnumerationClauseContextTest.aChartWhoseFindingsMixTypesAboutOneDrugAsksForOneLinePerFinding}
+	 * is the one that reddens on {@code subjects.add(key)}.
+	 *
+	 * <p><b>What the answer is NOT.</b> {@code SafetyWarning.getDrug()}'s own javadoc says it is
+	 * neither a per-finding identity nor a stable substance name to group on, and this does not
+	 * pretend otherwise: two spellings of one substance count as two subjects here. The direction
+	 * that costs is therefore the safe one — a chart whose findings really are about one drug under
+	 * two labels reads as several, and the caller withholds a prompt sentence rather than sending an
+	 * unfounded one.
+	 *
+	 * <p><b>It selects the population through {@link #safetyFindingMappings} and never by walking
+	 * the list itself</b>, which is where the null tolerance and the injection-order contract live:
+	 * the other questions asked of that population — its own SIZE, at this method's own call site,
+	 * and {@code SafetyFindingCitationExtentCheck}'s citation indexes — read the same walk, and none
+	 * of them may disagree about which records are findings.
+	 *
+	 * @param mappings the assembled chart's mappings; null answers empty, per the shared walk
+	 * @return the distinct subject labels, in the shared walk's injection order — which that walk's
+	 *         own pin holds; empty where the chart carries no finding. No consumer reads this order,
+	 *         only {@code size()}, so the {@code LinkedHashSet} here contributes nothing any case
+	 *         can observe and is said so rather than left to look defended
+	 */
+	public static Set<String> findingSubjects(List<RecordMapping> mappings) {
+		Set<String> subjects = new LinkedHashSet<String>();
+		for (RecordMapping mapping : safetyFindingMappings(mappings)) {
+			String key = mapping.getResourceUuid();
+			// Both fallbacks are unreachable given resourceKey's contract — it never returns null
+			// and always writes the separator — and are here so that a key some future writer
+			// builds differently reads as its own subject rather than as somebody else's.
+			// Defensive only: do not build a rule on either.
+			int separator = key == null ? -1 : key.indexOf(':');
+			subjects.add(separator < 0 ? key : key.substring(separator + 1));
+		}
+		return subjects;
+	}
+
+	/**
+	 * The injected {@code safety_finding} records one assembled chart carries, in injection order —
+	 * the ONE selection of that population, and the walk both questions asked of it project off.
+	 * Issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>.
+	 *
+	 * <p><b>Both halves of that sentence are observed, and neither was when it was first written.</b>
+	 * The ORDER is pinned by
+	 * {@code FindingEnumerationClauseContextTest.theSharedWalkHandsTheFindingsBackInTheOrderTheInjectorWroteThem},
+	 * over a chart the real injector gave several findings: re-collecting this list in reverse used
+	 * to leave the whole build green while
+	 * {@code SafetyFindingCitationExtentCheck.measureFindingCitations}' WARN promised prompt order.
+	 * The ONE-selection half is pinned by
+	 * {@code ArchitectureGuardTest.theFindingPopulationIsSelectedInOneMethod}, a source scan
+	 * over {@code api/src/main} whose javadoc is canonical for the shapes it catches and the ones it
+	 * does not — do not read it as catching every respelling.
+	 *
+	 * <p><b>Why it is one method.</b> Three questions are asked of this population in one request, at
+	 * two different moments. Before the answer: its SIZE, because the #397 clause needs more than one
+	 * finding, and {@link #findingSubjects}, because that clause is about "the drug" and needs the
+	 * findings to name exactly one — {@code LlmInferenceService.severalFindingsAboutOneDrug} is both.
+	 * After it: the citation INDEXES, to count what the prompt carried against what the answer cited,
+	 * which is {@code SafetyFindingCitationExtentCheck}'s projection and is also published there as
+	 * {@code carriedFindingIndexes}.
+	 * Only the projection differs. Spelled twice, a filter added to one would drift from the other
+	 * silently, so that the prompt asks for an enumeration of a population {@code findingCitations}
+	 * then counts differently — which is the state this method was extracted out of, the two
+	 * spellings having been character-for-character identical in two classes.
+	 *
+	 * <p>A {@code List} rather than a Set, so the projection decides its own collapse: the index set
+	 * is unique by construction (the injector's own sequential numbering) while two findings about
+	 * one drug are two records and one subject, and a Set here would have to pick one of those.
+	 *
+	 * <p>Null-tolerant in two DIMENSIONS: a null list answers empty, and a null mapping inside a
+	 * non-null list is skipped. {@link #referenceSlice} and {@link #unresolvedDrugClass} are of the
+	 * same list and tolerate it the same way — this runs on the prompt-assembly path as well, which
+	 * has no catch of its own. Deliberately UNPINNED, and said so rather than left to look defended:
+	 * no production path produces either shape, {@code PatientChartSerializer} never emitting a null
+	 * mapping, so a case forcing one would be a hand-crafted input rather than an arrangement of the
+	 * pipeline.
+	 *
+	 * @param mappings the assembled chart's mappings, may be null
+	 * @return the finding records, in the order the chart carries them; empty where it carries none
+	 */
+	public static List<RecordMapping> safetyFindingMappings(List<RecordMapping> mappings) {
+		List<RecordMapping> findings = new ArrayList<RecordMapping>();
+		if (mappings == null) {
+			return findings;
+		}
+		for (RecordMapping mapping : mappings) {
+			if (mapping != null && ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING
+					.equals(mapping.getResourceType())) {
+				findings.add(mapping);
+			}
+		}
+		return findings;
 	}
 
 	/**

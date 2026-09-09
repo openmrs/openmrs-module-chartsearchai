@@ -130,10 +130,29 @@ public final class LogCapture implements AutoCloseable {
 	 * @param excludedLogger a logger or package name whose events do not count
 	 */
 	public boolean hasEventAtOrAbove(Level level, String excludedLogger) {
+		return hasEventAtOrAboveExcluding(level, new String[] { excludedLogger });
+	}
+
+	/**
+	 * The shared walk behind both exclusion arities. A logger matching ANY of {@code excluded} does
+	 * not count; a null element excludes nothing, which is what keeps
+	 * {@code LogCaptureExclusionTest.aNullExclusionExcludesNothing} the same assertion under the
+	 * varargs arity as it was under the single one.
+	 */
+	private boolean hasEventAtOrAboveExcluding(Level level, String[] excluded) {
 		synchronized (events) {
 			for (LogEvent event : events) {
-				if (event.getLevel().isMoreSpecificThan(level)
-						&& !isFrom(event.getLoggerName(), excludedLogger)) {
+				if (!event.getLevel().isMoreSpecificThan(level)) {
+					continue;
+				}
+				boolean ignored = false;
+				for (String name : excluded) {
+					if (isFrom(event.getLoggerName(), name)) {
+						ignored = true;
+						break;
+					}
+				}
+				if (!ignored) {
 					return true;
 				}
 			}
@@ -154,12 +173,25 @@ public final class LogCapture implements AutoCloseable {
 	 * class behind them and could not take this arity. An earlier draft of this paragraph said the
 	 * opposite of both.
 	 *
+	 * <p><b>It became varargs when the predicted fifth check arrived</b> (issue #395). The paragraph
+	 * above forecast one more collision and got the arity wrong: two of the five checks now report
+	 * different properties of one canned answer, so a case whose subject is a third has two loggers
+	 * to name and not one. Widening the arity is what keeps each such negative the assertion it was
+	 * — reach over every OTHER logger in the package, given up only for the ones the caller says are
+	 * other cases' subjects — where the alternative was narrowing those captures to the caller's own
+	 * class and giving that reach up wholesale. A sixth check needs no further change here.
+	 *
 	 * @param level as {@link #hasEventAtOrAbove(Level)}
-	 * @param excludedLogger the class whose logger's events do not count
+	 * @param excludedLoggers the classes whose loggers' events do not count. Empty excludes nothing
+	 *            and is the same question {@link #hasEventAtOrAbove(Level)} asks; a null element
+	 *            excludes nothing, as the string arity's null does
 	 */
-	public boolean hasEventAtOrAbove(Level level, Class<?> excludedLogger) {
-		return hasEventAtOrAbove(level,
-				excludedLogger == null ? null : excludedLogger.getName());
+	public boolean hasEventAtOrAbove(Level level, Class<?>... excludedLoggers) {
+		String[] names = new String[excludedLoggers == null ? 0 : excludedLoggers.length];
+		for (int i = 0; i < names.length; i++) {
+			names[i] = excludedLoggers[i] == null ? null : excludedLoggers[i].getName();
+		}
+		return hasEventAtOrAboveExcluding(level, names);
 	}
 
 	/** @return whether {@code loggerName} IS {@code ancestor} or sits beneath it — the same

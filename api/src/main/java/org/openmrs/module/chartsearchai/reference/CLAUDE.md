@@ -4,9 +4,8 @@ These rules bind the drug-reference and drug-safety subsystem. Most of that code
 directory this file sits in, and not all of it: how a finding, a chip, an interaction-pair
 extent or the reference slice reaches the answer and the wire is decided in
 `LlmInferenceService` and `ChartSearchAiRestController`, and rules here bind those too.
-They were split out of the root `CLAUDE.md` on 2026-09-06: that file is read in full at the
-start of every session, and 77% of it was this one subsystem, carried by every session that
-never touches it.
+They were split out of the root `CLAUDE.md` on 2026-09-06; the measurement
+behind that split is in `ProjectInstructionsGuardTest`'s own javadoc.
 
 **Nothing guarantees this file reached you before you edit that code.** Whether a tool picks up a
 nested instruction file on its own varies, and a session that greps and edits through shell
@@ -81,6 +80,9 @@ These methods are the ONLY correct entry points for their respective operations.
   - **Zero is a measurement and absence is not** — `found == 0` says an arm ran and related nothing; `null` says the producer stated nothing. Never read `null` as completeness. 
   - **A pairwise arm a cede leaves with no pair states nothing, never zero** (#336, #370) — one rule on both, read as KEPT NONE having ceded at least one, and recorded AT the cede since not every skip is one. Nothing stands behind the screening arm, so its `null` reaches a client; never widen the #356 fallback to rescue it (Decision 65). 
   - **Published once**, on `validate`'s normal return, from a local the three arms assign — never per arm. The statement is a COUNT and never the withheld list, and must reach every surface carrying chips: `ChartSearchAiRestController.putSafetyChips` writes both keys, and `ChartSearchAiInteractionPairExtentTest` fails the build on a second write of the `safetyWarnings` KEY. A synthetic chip is refused (it would reach the prompt with neither strength clause and break `getType()`'s three-value contract). → ADR Decisions 60, 65, 69, 71; `PairChipExtent`'s class javadoc for what `null` covers; `PairChipExtentContextTest.aDrugInPlayScreenThatRelatesNoActiveOrderStatesZeroRatherThanNothing`, `.aDrugOnlyTheAnswerNamedStatesNothingOnItsOwn`, `.aDrugTheAnswerAddsIsNotCountedIntoTheQuestionsOwnScreen`, `.aClassOnlyRelationshipIsNotCountedAsAPairFound`, `.aScreenThatCededEveryPairItRelatedStatesNothingRatherThanACompleteScreenOfNone`.
+- **Whether a screened finding reached the ANSWER at all**: `ChartAnswer.getFindingCitationExtent()` / `findingCitations`, stated by `SafetyFindingCitationExtentCheck` on both answer paths. **Never the chips, and never derived from `interactionPairs` beside `activeOrderClaims`. Publish the base, never a per-finding accusation.** → ADR Decision 83; `SafetyFindingCitationExtentTest`, `ChartSearchAiFindingCitationsTest`.
+  - **The ANSWER's FORMAT decides it, and WHERE that clause sits decides whether it works** (#397): `LlmProvider.buildUserMessage` puts it AFTER the question, never in `DEFAULT_SYSTEM_PROMPT`, gated on `LlmInferenceService.severalFindingsAboutOneDrug` — more than one finding, all naming ONE drug, and canonical for what that conjunct does NOT establish. **Its words are pinned as a literal and completeness is never bought by rewording it.** Read this key BESIDE `unstatedFindingSeverities`, never instead. → ADR Decision 84; `LlmProviderUserMessageTest`, `FindingEnumerationClauseContextTest`.
+  - **`ChartSearchAiUtils.safetyFindingMappings` is the ONE selection of that population**; `carriedFindingIndexes`/`findingSubjects` project off it — **never respell its type test**. → `ArchitectureGuardTest.theFindingPopulationIsSelectedInOneMethod`, whose javadoc names the hazard and what it misses.
 - **Whether an injected record may state what THIS patient's chart records**: FOUR questions, four predicates; conflating any two produces a confident false statement in citable evidence (#208 item 2).
   - **Does the chart record it?** `DrugSafetyValidator.recordedContraindicationKind()` — the chip arm's own match, shared and never copied.
   - **Could the module even ask?** `DrugSafetyValidator.evaluatesAgainstTheChart()`; its token half is the matcher's own emptiness rule (`PatientClinicalContext.matchableToken`), extracted from `containsToken` so "not matchable" and "did not match" cannot drift.

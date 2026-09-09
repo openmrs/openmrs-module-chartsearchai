@@ -143,11 +143,19 @@ public class LlmInferenceService implements ChartSearchService {
 			// tell a screen that cannot fire from one that asked and found nothing.
 			DrugReferenceLoad.Coverage conditionRuleCoverage =
 					drugSafetyValidator.conditionRuleCoverage();
+			// And whether this chart's prompt asks the model for one line per safety finding (issue
+			// #397). After inject() deliberately, as searchMode, referenceSlice and
+			// unresolvedDrugClass above are — and this one means NOTHING anywhere else:
+			// DrugReferenceInjector is the sole producer of `safety_finding` mappings, so a read
+			// hoisted above that line is unconditionally false and #397's whole payload is reverted
+			// with the build green. A local for the same reason they are, and so that this comment
+			// has somewhere to live.
+			boolean enumerateFindings = severalFindingsAboutOneDrug(chart);
 			buildMs = System.currentTimeMillis() - buildStart;
 
 			long llmStart = System.currentTimeMillis();
 			LlmResponse response = llmProvider.search(chartTextOrPlaceholder(chart),
-					chart.getFocusIndices(), question);
+					chart.getFocusIndices(), question, enumerateFindings);
 			llmMs = System.currentTimeMillis() - llmStart;
 			inputTokens = response.getInputTokens();
 			cachedTokens = response.getCachedTokens();
@@ -183,6 +191,14 @@ public class LlmInferenceService implements ChartSearchService {
 			List<Integer> unstatedFindingSeverities =
 					SafetyFindingSeverityFidelityCheck.reportUnstatedFindingSeverities(patient,
 							response.getAnswer(), cited, chart.getMappings());
+			// And the fifth (issue #395): the base the four above had none for. Each of them judges a
+			// finding the answer DID cite, so an answer that drops one entirely is outside all four
+			// — this counts the findings the prompt carried against the ones the answer cited.
+			// Carried rather than re-derived for the reason its neighbours are: the chart, which is
+			// the carrier of the population, is gone by REST time.
+			FindingCitationExtent findingCitationExtent =
+					SafetyFindingCitationExtentCheck.measureFindingCitations(patient,
+							response.getAnswer(), cited, chart.getMappings());
 			List<RecordReference> references = groundReferences(response.getAnswer(), cited,
 					chart.getMappings());
 			// A per-call sink, never a field: the validator is a Spring singleton, so a field would be
@@ -198,7 +214,7 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
 					pairExtent.stated(), unresolvedDrugClass, unfaithfullyRenderedCitations,
 					misattributedOrderCitations, unstatedFindingSeverities, activeOrderClaims,
-					conditionRuleCoverage);
+					findingCitationExtent, conditionRuleCoverage);
 			outcome = "ok";
 			return answer;
 		}
@@ -367,8 +383,22 @@ public class LlmInferenceService implements ChartSearchService {
 			}
 			PatientChart focused = chartBuildingStrategy.buildFocusedChart(patient, question);
 			if (focused != null && !focused.getMappings().isEmpty()) {
+				// `false` explicitly, and it is a decision rather than a default. THE LOAD-BEARING
+				// REASON IS THAT THIS PROMPT HAS NOTHING TO ENUMERATE: buildFocusedChart goes to
+				// QueryStoreChartBuilder.buildFocused and never through drugReferenceInjector
+				// .inject, the sole producer of `safety_finding` mappings, so a preview chart carries
+				// none — threading searchStreaming's own flag down here (the natural edit, that flag
+				// being a live local at the call above) would send the 126-character sentence to a
+				// prompt with no finding in it, and spend those bytes on the one pass that shares
+				// llama-server's single slot with the committed answer. That the preview also
+				// DISCARDS its answer (DISCARD_TOKENS) is the weaker reason, and was the only one
+				// this comment gave. FindingEnumerationClauseContextTest
+				// .theProgressiveReasoningPreviewIsHandedFalseWhereTheCommittedAnswerIsHandedTrue
+				// reddens on either edit — this literal flipped, or that flag threaded in — because
+				// there the two passes' flags differ. Passed at the call site because the flag-less
+				// arity was removed — the @param on `search` is canonical for why.
 				llmProvider.searchStreaming(focused.getText(), focused.getFocusIndices(), question,
-						DISCARD_TOKENS, previewReasoningConsumer, null);
+						DISCARD_TOKENS, previewReasoningConsumer, null, false);
 			}
 		}
 		catch (RuntimeException e) {
@@ -455,6 +485,12 @@ public class LlmInferenceService implements ChartSearchService {
 			// before the model is called, so there is no reason for that event to carry less.
 			DrugReferenceLoad.Coverage conditionRuleCoverage =
 					drugSafetyValidator.conditionRuleCoverage();
+			// The finding-enumeration flag too, off the same post-inject chart and for the reason
+			// search() gives at the same position (issue #397): DrugReferenceInjector is the sole
+			// producer of `safety_finding` mappings, so a read hoisted above the inject() line above
+			// is unconditionally false and this issue's whole payload is reverted with the build
+			// green.
+			boolean enumerateFindings = severalFindingsAboutOneDrug(chart);
 			buildMs = System.currentTimeMillis() - buildStart;
 
 			// Progressive reasoning: stream a fast preview reasoning from the focused top-K chart to
@@ -473,7 +509,7 @@ public class LlmInferenceService implements ChartSearchService {
 			String kvCacheScope = chart.isQueryScoped() ? null : kvCacheScopeFor(patient);
 			LlmResponse response = llmProvider.searchStreaming(
 					chartTextOrPlaceholder(chart), chart.getFocusIndices(), question, tokenConsumer,
-					reasoningConsumer, kvCacheScope);
+					reasoningConsumer, kvCacheScope, enumerateFindings);
 			llmMs = System.currentTimeMillis() - llmStart;
 			inputTokens = response.getInputTokens();
 			cachedTokens = response.getCachedTokens();
@@ -493,7 +529,7 @@ public class LlmInferenceService implements ChartSearchService {
 			ungroundedAnswerConsumer.accept(new ChartAnswer(response.getAnswer(), cited,
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), Collections.<SafetyWarning> emptyList(), searchMode,
-					referenceSlice, null, unresolvedDrugClass, null, null, null, null,
+					referenceSlice, null, unresolvedDrugClass, null, null, null, null, null,
 					conditionRuleCoverage));
 
 			// After the user-visible handoff, before grounding: the exact comparisons over what the
@@ -537,6 +573,16 @@ public class LlmInferenceService implements ChartSearchService {
 			List<Integer> unstatedFindingSeverities =
 					SafetyFindingSeverityFidelityCheck.reportUnstatedFindingSeverities(patient,
 							response.getAnswer(), cited, chart.getMappings());
+			// The fifth, carried the same way and stating null on the early `done` for the same
+			// reason (issue #395): the check runs here, after the user-visible handoff. It is the
+			// cheapest of the five — two walks and a set intersection, and of the answer only whether
+			// there is any prose at all rather than a scan of it — and it
+			// still runs here rather than ahead of the handoff, because a client that got a zeroed
+			// extent on the early event and a real one on the final would read the first as a
+			// measurement.
+			FindingCitationExtent findingCitationExtent =
+					SafetyFindingCitationExtentCheck.measureFindingCitations(patient,
+							response.getAnswer(), cited, chart.getMappings());
 
 			long groundStart = System.currentTimeMillis();
 			List<RecordReference> references = groundReferences(response.getAnswer(), cited,
@@ -556,7 +602,7 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
 					pairExtent.stated(), unresolvedDrugClass, unfaithfullyRenderedCitations,
 					misattributedOrderCitations, unstatedFindingSeverities, activeOrderClaims,
-					conditionRuleCoverage);
+					findingCitationExtent, conditionRuleCoverage);
 			outcome = "ok";
 			return answer;
 		}
@@ -575,6 +621,74 @@ public class LlmInferenceService implements ChartSearchService {
 	 */
 	private static String chartTextOrPlaceholder(PatientChart chart) {
 		return chart.getMappings().isEmpty() ? "(No relevant records found)" : chart.getText();
+	}
+
+	/**
+	 * Whether this chart's prompt carries more than one injected safety finding AND every one of
+	 * them names the same drug — the only fact about the chart the #397 clause in
+	 * {@code LlmProvider.buildUserMessage} needs. Issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>.
+	 *
+	 * <p><b>Both conjuncts read the SAME selection of the carried population,
+	 * {@code ChartSearchAiUtils.safetyFindingMappings}</b> — the first its SIZE, the second through
+	 * {@code ChartSearchAiUtils.findingSubjects}, a projection of that one walk and not a second
+	 * walk. An earlier draft walked the mappings here instead and justified it by saying the
+	 * two questions are asked of charts that do not coexist — which is false: {@code chart} is the
+	 * same live local at this call and at {@code SafetyFindingCitationExtentCheck}'s, in both answer
+	 * methods. Two selections would
+	 * let a filter added to one drift from the other silently, so that the prompt asks for an
+	 * enumeration of a population {@code findingCitations} then counts differently. That check runs
+	 * after the answer and needs the index SET; this runs before there is one and needs only whether
+	 * there are two records, so it counts the records rather than crossing into the check to count
+	 * the indexes they were numbered with.
+	 *
+	 * <p>The threshold is TWO because one finding is not an enumeration. Nothing published records
+	 * the per-cell carried counts of the measured corpus, so no claim is made about them here.
+	 *
+	 * <p><b>ONE SUBJECT, and that conjunct is the clause's own precondition rather than a
+	 * refinement of it.</b> The sentence reads "Where more than one finding names <em>it</em>", and
+	 * its {@code it} is a drug; a chart whose findings name several drugs offers no single referent
+	 * for it, so the sentence describes an arrangement that chart does not have. Measured over the
+	 * bundled DDInter knowledge base through {@code DrugReferenceTestSupport.injectorWithSafety(
+	 * ddinterServiceWithGroups()).injectRecords}, with the subjects read back by the same
+	 * {@code findingSubjects} this method calls, on a two-order chart with six resolved active
+	 * drugs: {@code "do any of her meds interact?"} —
+	 * an issue #113 interaction SCREEN, which needs no drug in the question at all — injects ten
+	 * findings naming FIVE subjects, and this conjunct is what keeps the clause off it. Without it
+	 * the flag is true there, and no arm of #397's A/B contains such a cell. That population is also
+	 * the one with a recorded measurement of citing NONE of its findings — see
+	 * {@code eval/drift-metric/score_probe_safety.py}'s {@code findings_incompletely_stated}
+	 * docstring, where a wh-question carried ten screening-arm findings and cited none of them.
+	 *
+	 * <p><b>What it does NOT establish is that the QUESTION names that drug.</b> A screen whose
+	 * findings happen to name one of her own drugs still takes the clause (measured: the same
+	 * arrangement with four resolved drugs injects two findings naming one subject), and there the
+	 * antecedent for {@code it} is in the records rather than the question. That is unmeasured and
+	 * is not claimed closed; what the conjunct does guarantee is that whenever the clause is sent,
+	 * exactly one drug in the prompt satisfies its own description. Narrowing on the question's
+	 * phrasing instead — {@code QueryScopeRouter.isInteractionScreening} negated — was measured and
+	 * is worse in both directions. {@code "Does clarithromycin interact with any of her current
+	 * medications?"} carries the screening cue yet its findings name the one drug the question names,
+	 * the screening arm standing down because the question resolved a drug (four resolved active
+	 * drugs: four findings, one subject), so a phrasing gate withholds the clause there for no
+	 * reason. {@code "Do her clarithromycin and amiodarone interact?"} carries no screening cue and
+	 * names two (six resolved active drugs: nine findings, two subjects), so a phrasing gate sends
+	 * it. Both figures are from the arrangement above through the same helper.
+	 *
+	 * <p><b>Gating at all — rather than appending the clause unconditionally — is also about the
+	 * absent-data prompt.</b> The empty-chart message's exact bytes are pinned by
+	 * {@code AbsentDataEvalTest.theEmptyChartPromptAsksTheModelToNameWhatIsMissing} after 19
+	 * measured cases, and that test is how this method came to exist rather than by design. It
+	 * cannot see a widened CALL SITE, though — it builds its bytes through an arity that hardcodes
+	 * the flag false, so a literal {@code true} where this method is called left the whole build
+	 * green until
+	 * {@code FindingEnumerationClauseContextTest.theCallSitesHandTheProviderFalseForThePopulationsTheGateWithholdsFrom}
+	 * existed. Widen either call site and read that case's failure.
+	 */
+	static boolean severalFindingsAboutOneDrug(PatientChart chart) {
+		List<RecordMapping> mappings = chart.getMappings();
+		return ChartSearchAiUtils.safetyFindingMappings(mappings).size() > 1
+				&& ChartSearchAiUtils.findingSubjects(mappings).size() == 1;
 	}
 
 	static boolean isWarmupEnabled() {

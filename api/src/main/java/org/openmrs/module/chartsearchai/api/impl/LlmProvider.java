@@ -45,7 +45,14 @@ public class LlmProvider {
 
 	/** Label that prefixes the focus-hint line in the user message. Shared with the
 	 *  DEFAULT_SYSTEM_PROMPT few-shot so the demonstration always mirrors the real prompt
-	 *  shape — if they drift, the few-shot stops teaching the format the model actually sees. */
+	 *  shape — if they drift, the few-shot stops teaching the format the model actually sees.
+	 *  Of the elements this label and {@code DrugReferenceInjector.FINDING_PREFIX} couple, the
+	 *  #397 clause is the one deliberately left unmirrored; the comment at its append in
+	 *  {@link #buildUserMessage(String, List, String, boolean)} is where that exception is
+	 *  decided. Read that as scoped to the coupled elements and no wider: the records header is
+	 *  not mirrored either — the real message opens "Patient records (most recent first):" and the
+	 *  demonstration "Records:" — and never was, which is a shape nothing here couples rather than
+	 *  a second deliberate exception. */
 	static final String FOCUS_HINT_LABEL = "Records ranked by similarity to the query: ";
 
 	static final String DEFAULT_SYSTEM_PROMPT = "You are a clinical assistant helping a clinician "
@@ -378,26 +385,38 @@ public class LlmProvider {
 	private RemoteLlmEngine remoteEngine;
 
 	/**
-	 * Send numbered patient records and a question to the LLM for synthesis.
+	 * The ONLY synchronous arity. Where {@code focusIndices} is non-empty it renders a short
+	 * "Records ranked by similarity to the query: ..." line between the records section and the
+	 * question. The numberedRecords are still the full patient chart in stable date-desc order, so
+	 * the prompt prefix is byte-identical across queries for the same patient and llama-server's KV
+	 * cache reuses the prefill. The variable bytes are the small focus-hint line plus the question.
+	 *
+	 * <p>The flag-less convenience overload that stood beside it was DELETED rather than kept, for
+	 * the reason {@link #searchStreaming}'s own paragraph on the same deletion gives and the
+	 * {@code enumerateFindings} @param below repeats of this arity: do not reintroduce one.
 	 *
 	 * @param numberedRecords the numbered patient records text
+	 * @param focusIndices the records ranked most similar to the query, or empty for no hint
 	 * @param question the clinician's natural language question
+	 * @param enumerateFindings whether this chart's prompt carries more than one injected safety
+	 *        finding, all of them naming one drug — see
+	 *        {@link #buildUserMessage(String, List, String, boolean)}. It is a parameter of the ONE
+	 *        entry point rather than of an overload beside a flag-less one, and that is not
+	 *        tidiness: this method is the seam the suite's test doubles override, so an overload
+	 *        production called instead would be silently bypassed by every one of them. No count
+	 *        of them is given here on purpose — the one that stood in this sentence was already
+	 *        wrong at the commit that published it, this change having added a double of its own,
+	 *        which is the root {@code CLAUDE.md} rule against a published count landing one file
+	 *        outside what {@code ProjectInstructionsGuardTest} can police. Issue
+	 *        <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>
+	 *        shipped that mistake first and eleven test classes errored on it
 	 * @return the LLM's response with answer text and structured citation indices
 	 */
-	public LlmResponse search(String numberedRecords, String question) {
-		return search(numberedRecords, Collections.<Integer>emptyList(), question);
-	}
-
-	/**
-	 * Focus-hint variant of {@link #search}: renders a short "Records ranked by similarity to the
-	 * query: ..." line between the records section and the question. The numberedRecords
-	 * are still the full patient chart in stable date-desc order, so the prompt prefix is
-	 * byte-identical across queries for the same patient and llama-server's KV cache reuses
-	 * the prefill. The variable bytes are the small focus-hint line plus the question.
-	 */
-	public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question) {
+	public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question,
+			boolean enumerateFindings) {
 		String systemPrompt = getSystemPrompt();
-		String userMessage = buildUserMessage(numberedRecords, focusIndices, question);
+		String userMessage = buildUserMessage(numberedRecords, focusIndices, question,
+				enumerateFindings);
 		int timeoutSeconds = getTimeoutSeconds();
 
 		LlmEngine.InferenceResult result = getActiveEngine().infer(
@@ -408,53 +427,45 @@ public class LlmProvider {
 	}
 
 	/**
-	 * Streaming variant of {@link #search}. Calls the tokenConsumer for each token as it is
-	 * generated, and returns the full response when complete.
+	 * Streaming variant of {@link #search}, KV-scope-aware and reasoning-aware. Calls
+	 * {@code tokenConsumer} for each token of the {@code "answer"} value as it is generated, and
+	 * forwards the model's leading {@code "reasoning"} value to {@code reasoningConsumer} (so a
+	 * caller can surface it as a live "thinking" indicator); two independent field-scanning
+	 * {@link AnswerExtractingConsumer}s split the single engine token stream, reasoning first
+	 * (schema order: reasoning precedes answer). The reasoning channel is purely additive — the
+	 * answer stream is byte-identical without a consumer for it.
 	 *
-	 * @param numberedRecords the numbered patient records text
-	 * @param question the clinician's natural language question
-	 * @param tokenConsumer called with each token fragment as it is generated
-	 * @return the complete LLM response with answer text and structured citation indices
-	 */
-	public LlmResponse searchStreaming(String numberedRecords, String question,
-			Consumer<String> tokenConsumer) {
-		return searchStreaming(numberedRecords, Collections.<Integer>emptyList(), question, tokenConsumer);
-	}
-
-	/** Focus-hint variant of {@link #searchStreaming}. See {@link #search(String, List, String)}. */
-	public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices, String question,
-			Consumer<String> tokenConsumer) {
-		return searchStreaming(numberedRecords, focusIndices, question, tokenConsumer, chunk -> { });
-	}
-
-	/**
-	 * Reasoning-aware streaming variant. Forwards the model's leading {@code "reasoning"} value to
-	 * {@code reasoningConsumer} (so a caller can surface it as a live "thinking" indicator) and the
-	 * {@code "answer"} value to {@code tokenConsumer}, as each is generated. Two independent
-	 * field-scanning {@link AnswerExtractingConsumer}s split the single engine token stream;
-	 * reasoning is emitted first (schema order: reasoning precedes answer). The reasoning channel is
-	 * purely additive — the answer stream is byte-identical to the non-reasoning overload.
-	 */
-	public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices, String question,
-			Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer) {
-		return searchStreaming(numberedRecords, focusIndices, question, tokenConsumer, reasoningConsumer, null);
-	}
-
-	/**
-	 * KV-scope-aware variant of {@link #searchStreaming(String, List, String, Consumer, Consumer)}.
-	 * When {@code cacheScope} is non-null (the pipeline mode produces a question-independent chart
+	 * <p><b>The ONLY streaming arity, and the narrower ones were deleted rather than kept as
+	 * conveniences</b>, when the flag made them dangerous. Three flag-less delegates stood here — 3-,
+	 * 4- and 5-argument — reached by nothing in production or in the suite, the widest hardcoding
+	 * {@code enumerateFindings = false} in its delegate. Before #397 they were behaviourally
+	 * identical to this one, so they carried no risk; after it they differ in a safety-relevant flag,
+	 * which is the hazard {@code search}'s own @param names — a seam every test double overrides,
+	 * silently bypassed by an overload production called instead. Do not reintroduce one: a caller
+	 * wanting the old shapes passes {@code Collections.emptyList()}, {@code chunk -> { }},
+	 * {@code null} and {@code false} explicitly, which is what makes the flag visible at the call.
+	 *
+	 * <p>When {@code cacheScope} is non-null (the pipeline mode produces a question-independent chart
 	 * prefix — see {@code LlmInferenceService.shouldRunWarmup}), the engine may restore this
 	 * patient's prefilled chart KV from disk instead of re-prefilling, and persist a fresh cold
 	 * prefill, so a query arriving cold (server restart, prompt-cache overflow, or warmup never
 	 * fired) does not re-pay the full prefill. The KV filename is keyed on the question-INDEPENDENT
 	 * prefix {@code buildUserMessage(numberedRecords, "")} — the exact bytes {@link #warmup} sends —
 	 * so warmup-saved and query-saved entries share one file per patient+chart. A null scope sends a
-	 * null seed, which makes the engine skip all disk KV work (behavior identical to the 5-arg form).
+	 * null seed, which makes the engine skip all disk KV work.
+	 *
+	 * @param enumerateFindings see {@link #buildUserMessage(String, List, String, boolean)}. It
+	 *        reaches the user message and never the KV seed above, which is what keeps that seed a
+	 *        byte-prefix of this query; why it is a parameter of the one arity is the paragraph
+	 *        above and {@code search}'s own @param
 	 */
-	public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices, String question,
-			Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer, String cacheScope) {
+	public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
+			String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
+			String cacheScope, boolean enumerateFindings) {
+
 		String systemPrompt = getSystemPrompt();
-		String userMessage = buildUserMessage(numberedRecords, focusIndices, question);
+		String userMessage = buildUserMessage(numberedRecords, focusIndices, question,
+				enumerateFindings);
 		// The KV seed must be the question-independent prefix so it matches the warmup key exactly.
 		String cacheSeed = cacheScope == null ? null : buildUserMessage(numberedRecords, "");
 		int timeoutSeconds = getTimeoutSeconds();
@@ -946,6 +957,33 @@ public class LlmProvider {
 	 * the 5-10x LLM-time reduction on local Gemma for same-patient/distinct-query traffic.
 	 */
 	static String buildUserMessage(String numberedRecords, List<Integer> focusIndices, String question) {
+		return buildUserMessage(numberedRecords, focusIndices, question, false);
+	}
+
+	/**
+	 * As {@link #buildUserMessage(String, List, String)}, additionally asking for one line per
+	 * safety finding — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>.
+	 *
+	 * @param enumerateFindings whether this chart's prompt carries more than one injected
+	 *        safety finding AND every one of them names the same drug, which only the caller
+	 *        holding the chart can say — {@code LlmInferenceService.severalFindingsAboutOneDrug}
+	 *        is the predicate and is canonical for both conjuncts, for what the second one is
+	 *        measured to keep the clause off, and for what it does not establish. Do not read
+	 *        the flag as "there are findings": passing it unconditionally sends the sentence to
+	 *        charts whose findings name several drugs, which is an arrangement the sentence does
+	 *        not describe, and to the empty-chart message whose exact bytes
+	 *        {@code AbsentDataEvalTest.theEmptyChartPromptAsksTheModelToNameWhatIsMissing} pins.
+	 *        <b>Those are two different edits and no one test sees both.</b> That pin reddens when
+	 *        the append condition in the body below drops {@code enumerateFindings} — measured —
+	 *        and it CANNOT move for anything a caller does, because it builds through an arity
+	 *        that hardcodes this flag false. A caller handing the flag
+	 *        unconditionally is caught by
+	 *        {@code FindingEnumerationClauseContextTest.theCallSitesHandTheProviderFalseForThePopulationsTheGateWithholdsFrom}
+	 *        instead, and before that case existed it was caught by nothing at all
+	 */
+	static String buildUserMessage(String numberedRecords, List<Integer> focusIndices,
+			String question, boolean enumerateFindings) {
 		StringBuilder sb = new StringBuilder();
 		sb.append("Patient records (most recent first):\n").append(normalizeRecords(numberedRecords));
 		if (focusIndices != null && !focusIndices.isEmpty()) {
@@ -1002,6 +1040,44 @@ public class LlmProvider {
 					+ "the chart.");
 		}
 		sb.append("\n\nClinician's query: ").append(question);
+		// ISSUE #397. A LAYOUT rule, and BOTH the position and the separator are load-bearing: the
+		// clause goes AFTER the question and runs on from it with a SPACE. Ahead of the records, in
+		// DEFAULT_SYSTEM_PROMPT, the same sentence made completeness WORSE and cost more output; on
+		// a line of its own here it read as the dominant instruction and cost a verdict lead. ADR
+		// Decision 84 carries both measurements, the refuted alternatives and the corrections
+		// earlier drafts of this comment needed; eval/drift-metric/README.md carries the five-arm
+		// ledger they are rows of. Neither is reproduced here — a third copy is what the root
+		// instruction file's "Documenting a decision" section forbids, and would be the copy nobody
+		// re-measures. LlmInferenceService.severalFindingsAboutOneDrug is canonical for the gate.
+		//
+		// THESE ARE THE MEASURED BYTES, down to the SPACE in front of them, and
+		// LlmProviderUserMessageTest.theAppendedClauseIsExactlyTheseBytes is what holds them as
+		// bytes: an imperative ADDED in this position is a measured hazard and not a hypothetical
+		// one, and until that case existed the class held this string by substrings alone. A
+		// rewording also stops the ledger describing the shipped clause.
+		//
+		// NO FEW-SHOT DEMONSTRATES THIS CLAUSE, AND THAT IS A DECISION — the one exception to the
+		// mirror invariant FOCUS_HINT_LABEL's javadoc states, which points here for it. Mirroring it
+		// would mean restructuring a demonstration rather than adding a line: this clause is a THIRD
+		// element of the real message, a sentence between the question and the model's JSON, and every
+		// "Clinician's query: " line in DEFAULT_SYSTEM_PROMPT is followed immediately by that JSON.
+		// DEFAULT_SYSTEM_PROMPT's two demonstrated finding records name a different fruit each — [4]
+		// Durian, [5] Lychee — so the demonstration prompt fails this clause's own gate: it carries
+		// two findings and they name two subjects. And a demonstration is more instruction
+		// in exactly the position where more instruction is measured to regress, so it needs its own
+		// A/B and cannot be had for free. Unmeasured, and left so deliberately.
+		//
+		// THE BLANK-QUESTION GUARD PREVENTS NOTHING PRODUCTION CAN REACH, and is still worth having.
+		// What protects the warmup's byte-PREFIX is the APPEND POSITION and neither conjunct — warmup
+		// and searchStreaming's cacheSeed both build through the arity that hardcodes the flag false,
+		// so no production caller can present this body with the flag true and the question blank.
+		// The guard is defence against a FUTURE widening of the seed path, which cannot then carry
+		// the clause without reddening warmupShouldNotCarryTheFindingEnumerationClause or
+		// theClauseMustNotBreakTheWarmupPrefixForAQuestionOfAnyLength. Mutate it and read those two.
+		if (enumerateFindings && question != null && !question.trim().isEmpty()) {
+			sb.append(" Where more than one finding names it, put every one of them on a line of "
+					+ "its own, each with the severity that finding states.");
+		}
 		return sb.toString();
 	}
 

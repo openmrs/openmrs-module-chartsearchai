@@ -1,0 +1,236 @@
+{
+  "questionId": "10714",
+  "references": [
+    {
+      "index": 349,
+      "resourceType": "safety_finding",
+      "resourceUuid": "interaction:Amlodipine",
+      "date": null,
+      "grounded": null,
+      "group": "reference",
+      "source": null,
+      "withheldInteractions": 0,
+      "attachedByTheModule": false
+    },
+    {
+      "index": 350,
+      "resourceType": "safety_finding",
+      "resourceUuid": "interaction:Amlodipine",
+      "date": null,
+      "grounded": null,
+      "group": "reference",
+      "source": null,
+      "withheldInteractions": 0,
+      "attachedByTheModule": false
+    },
+    {
+      "index": 351,
+      "resourceType": "safety_finding",
+      "resourceUuid": "interaction:Amlodipine",
+      "date": null,
+      "grounded": null,
+      "group": "reference",
+      "source": null,
+      "withheldInteractions": 0,
+      "attachedByTheModule": false
+    },
+    {
+      "index": 352,
+      "resourceType": "safety_finding",
+      "resourceUuid": "interaction:Amlodipine",
+      "date": null,
+      "grounded": null,
+      "group": "reference",
+      "source": null,
+      "withheldInteractions": 0,
+      "attachedByTheModule": false
+    },
+    {
+      "index": 353,
+      "resourceType": "safety_finding",
+      "resourceUuid": "interaction:Amlodipine",
+      "date": null,
+      "grounded": null,
+      "group": "reference",
+      "source": null,
+      "withheldInteractions": 0,
+      "attachedByTheModule": false
+    },
+    {
+      "index": 354,
+      "resourceType": "safety_finding",
+      "resourceUuid": "interaction:Amlodipine",
+      "date": null,
+      "grounded": null,
+      "group": "reference",
+      "source": null,
+      "withheldInteractions": 0,
+      "attachedByTheModule": false
+    },
+    {
+      "index": 355,
+      "resourceType": "safety_finding",
+      "resourceUuid": "interaction:Amlodipine",
+      "date": null,
+      "grounded": null,
+      "group": "reference",
+      "source": null,
+      "withheldInteractions": 0,
+      "attachedByTheModule": false
+    }
+  ],
+  "activeOrderClaims": {
+    "stated": 7,
+    "uncited": 7
+  },
+  "unresolvedDrugClass": null,
+  "misattributedOrderCitations": [],
+  "unfaithfullyRenderedCitations": [],
+  "answer": "No \u2014 Amlodipine should not be given: Amlodipine interacts with active order Methylprednisolone [349], Moderate. Amlodipine interacts with active order Prednisone [350], Moderate. Amlodipine interacts with active order Budesonide [351], Moderate. Amlodipine interacts with active order Dexamethasone [352], Moderate. Amlodipine interacts with active order Diclofenac [353], Moderate. Amlodipine interacts with active order Hydrocortisone [354], Moderate. Amlodipine interacts with active order Ibuprofen [355], Moderate.",
+  "findingCitations": {
+    "carried": 7,
+    "cited": 7
+  },
+  "interactionPairs": {
+    "found": 7,
+    "reported": 7
+  },
+  "conditionRuleCoverage": "absent",
+  "safetyWarnings": [
+    {
+      "type": "interaction",
+      "drug": "Amlodipine",
+      "detail": "Amlodipine interacts with active order Methylprednisolone \u2014 Moderate. Corticosteroids may antagonize the effects of antihypertensive medications by inducing sodium and fluid retention. These effects may be more common with the natural corticosteroids (cortisone, hydrocortisone) because they have greater mineralocorticoid activity. Conversely, some calcium channel blockers such as diltiazem and verapamil may increase corticosteroid plasma levels and effects by inhibiting their clearance via CYP450 3A4 metabolism.",
+      "severity": "Moderate",
+      "chartOrderBridges": [
+        {
+          "substance": "Methylprednisolone",
+          "orderDisplay": "Solu-Medrol 125mg/5ml"
+        }
+      ]
+    },
+    {
+      "type": "interaction",
+      "drug": "Amlodipine",
+      "detail": "Amlodipine interacts with active order Prednisone \u2014 Moderate. Corticosteroids may antagonize the effects of antihypertensive medications by inducing sodium and fluid retention. These effects may be more common with the natural corticosteroids (cortisone, hydrocortisone) because they have greater mineralocorticoid activity. Conversely, some calcium channel blockers such as diltiazem and verapamil may increase corticosteroid plasma levels and effects by inhibiting their clearance via CYP450 3A4 metabolism.",
+      "severity": "Moderate",
+      "chartOrderBridges": []
+    },
+    {
+      "type": "interaction",
+      "drug": "Amlodipine",
+      "detail": "Amlodipine interacts with active order Budesonide \u2014 Moderate. Corticosteroids may antagonize the effects of antihypertensive medications by inducing sodium and fluid retention. These effects may be more common with the natural corticosteroids (cortisone, hydrocortisone) because they have greater mineralocorticoid activity. Conversely, some calcium channel blockers such as diltiazem and verapamil may increase corticosteroid plasma levels and effects by inhibiting their clearance via CYP450 3A4 metabolism.",
+      "severity": "Moderate",
+      "chartOrderBridges": [
+        {
+          "substance": "Budesonide",
+          "orderDisplay": "Pulmicort 90mcg"
+        }
+      ]
+    },
+    {
+      "type": "interaction",
+      "drug": "Amlodipine",
+      "detail": "Amlodipine interacts with active order Dexamethasone \u2014 Moderate. Corticosteroids may antagonize the effects of antihypertensive medications by inducing sodium and fluid retention. These effects may be more common with the natural corticosteroids (cortisone, hydrocortisone) because they have greater mineralocorticoid activity. Conversely, some calcium channel blockers such as diltiazem and verapamil may increase corticosteroid plasma levels and effects by inhibiting their clearance via CYP450 3A4 metabolism.",
+      "severity": "Moderate",
+      "chartOrderBridges": []
+    },
+    {
+      "type": "interaction",
+      "drug": "Amlodipine",
+      "detail": "Amlodipine interacts with active order Diclofenac \u2014 Moderate. Limited data indicate that some cyclooxygenase inhibitors may attenuate the antihypertensive effects of some calcium channel blockers. The mechanism appears to be related to an alteration of vascular tone, which is dependent on prostacyclins and other vasodilatory prostanoids. When a nonsteroidal anti-inflammatory drug (NSAID) is added to the regimen of a patient who is already taking a calcium channel blocker, increased blood pressure may result. Also, the clinician should be aware that the risk of hypotension is increased when NSAIDs are withdrawn from the regimen.",
+      "severity": "Moderate",
+      "chartOrderBridges": []
+    },
+    {
+      "type": "interaction",
+      "drug": "Amlodipine",
+      "detail": "Amlodipine interacts with active order Hydrocortisone \u2014 Moderate. Corticosteroids may antagonize the effects of antihypertensive medications by inducing sodium and fluid retention. These effects may be more common with the natural corticosteroids (cortisone, hydrocortisone) because they have greater mineralocorticoid activity. Conversely, some calcium channel blockers such as diltiazem and verapamil may increase corticosteroid plasma levels and effects by inhibiting their clearance via CYP450 3A4 metabolism.",
+      "severity": "Moderate",
+      "chartOrderBridges": []
+    },
+    {
+      "type": "interaction",
+      "drug": "Amlodipine",
+      "detail": "Amlodipine interacts with active order Ibuprofen \u2014 Moderate. Limited data indicate that some cyclooxygenase inhibitors may attenuate the antihypertensive effects of some calcium channel blockers. The mechanism appears to be related to an alteration of vascular tone, which is dependent on prostacyclins and other vasodilatory prostanoids. When a nonsteroidal anti-inflammatory drug (NSAID) is added to the regimen of a patient who is already taking a calcium channel blocker, increased blood pressure may result. Also, the clinician should be aware that the risk of hypotension is increased when NSAIDs are withdrawn from the regimen.",
+      "severity": "Moderate",
+      "chartOrderBridges": [
+        {
+          "substance": "Ibuprofen",
+          "orderDisplay": "Advil 400mg"
+        }
+      ]
+    },
+    {
+      "type": "contraindication",
+      "drug": "Dexamethasone",
+      "detail": "The patient has a recorded allergy to Dexamethasone.",
+      "severity": null,
+      "chartOrderBridges": []
+    },
+    {
+      "type": "contraindication",
+      "drug": "Dexamethasone",
+      "detail": "Dexamethasone is in the same ATC class (H02AB) as the patient's allergy to Hydrocortisone (ophthalmic) \u2014 possible cross-reactivity",
+      "severity": null,
+      "chartOrderBridges": []
+    },
+    {
+      "type": "contraindication",
+      "drug": "Hydrocortisone",
+      "detail": "Hydrocortisone is in the same ATC class (H02AB) as the patient's allergy to Dexamethasone \u2014 possible cross-reactivity",
+      "severity": null,
+      "chartOrderBridges": []
+    },
+    {
+      "type": "contraindication",
+      "drug": "Hydrocortisone (ophthalmic)",
+      "detail": "The patient has a recorded allergy to Hydrocortisone (ophthalmic).",
+      "severity": null,
+      "chartOrderBridges": []
+    },
+    {
+      "type": "contraindication",
+      "drug": "Prednisone",
+      "detail": "Prednisone is in the same ATC class (H02AB) as the patient's allergy to Dexamethasone \u2014 possible cross-reactivity",
+      "severity": null,
+      "chartOrderBridges": []
+    },
+    {
+      "type": "contraindication",
+      "drug": "Prednisone",
+      "detail": "Prednisone is in the same ATC class (H02AB) as the patient's allergy to Hydrocortisone (ophthalmic) \u2014 possible cross-reactivity",
+      "severity": null,
+      "chartOrderBridges": []
+    },
+    {
+      "type": "contraindication",
+      "drug": "Budesonide",
+      "detail": "Budesonide is in the same ATC class (R01AD) as the patient's allergy to Dexamethasone \u2014 possible cross-reactivity",
+      "severity": null,
+      "chartOrderBridges": []
+    },
+    {
+      "type": "contraindication",
+      "drug": "Budesonide",
+      "detail": "Budesonide is in the same ATC class (A07EA) as the patient's allergy to Hydrocortisone (ophthalmic) \u2014 possible cross-reactivity",
+      "severity": null,
+      "chartOrderBridges": []
+    },
+    {
+      "type": "contraindication",
+      "drug": "Methylprednisolone",
+      "detail": "Methylprednisolone is in the same ATC class (H02AB) as the patient's allergy to Dexamethasone \u2014 possible cross-reactivity",
+      "severity": null,
+      "chartOrderBridges": []
+    },
+    {
+      "type": "contraindication",
+      "drug": "Methylprednisolone",
+      "detail": "Methylprednisolone is in the same ATC class (H02AB) as the patient's allergy to Hydrocortisone (ophthalmic) \u2014 possible cross-reactivity",
+      "severity": null,
+      "chartOrderBridges": []
+    }
+  ],
+  "disclaimer": "This response is AI-generated and may not be accurate. It is not a substitute for clinical judgment. Always verify against the patient's medical records."
+}

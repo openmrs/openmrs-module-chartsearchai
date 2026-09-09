@@ -773,6 +773,16 @@ pre-existing column reports moved in any arm. The `rc2` Tier-B cohort does not e
 why the shipped clause is gated to charts carrying more than one finding rather than added to every
 prompt.
 
+**Read every published key, not only the ones a ticket lists.** Over the same 14 cells,
+`misattributedOrderCitations` went from two cells to none and `unfaithfullyRenderedCitations` from
+three to two, while `activeOrderClaims.uncited` rose on four cells from `0` to `stated`. Those are
+one effect: the baseline answers attached CHART record numbers to their active-order claims (the
+Digoxin answer's `[177]`, which is exactly what `misattributedOrderCitations` flagged), and the
+shipped arm cites the findings only, so those claims offer no chart citation and `uncited` counts
+them. With `drugSafety.citeOrderRecords` shipping OFF that is the correct state and the baseline's
+was the defect — so `uncited` is a column that got worse because the thing it proxies for got
+better. ADR Decision 84 carries the argument.
+
 **Wording was chosen by seven question-appended probes, and the four that failed each failed a
 different property** — a bare list instruction dropped every rating; one asking only for numbered
 lines did the same; one asking for lines *and* severity kept the ratings and stayed short; and one

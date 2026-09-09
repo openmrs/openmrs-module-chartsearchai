@@ -375,8 +375,15 @@ public class LlmInferenceService implements ChartSearchService {
 			}
 			PatientChart focused = chartBuildingStrategy.buildFocusedChart(patient, question);
 			if (focused != null && !focused.getMappings().isEmpty()) {
+				// `false` explicitly, and it is a decision rather than a default: this preview
+				// DISCARDS its answer (DISCARD_TOKENS) and exists only to stream reasoning early, so
+				// there is no enumeration to shape and no reason to spend the clause or to move this
+				// path's cached prefix. Passed at the call site because the flag-less arity was
+				// removed — see the @param on `search`: an overload production calls that a test
+				// double does not override is silently bypassed, which is how issue #397 shipped
+				// once already.
 				llmProvider.searchStreaming(focused.getText(), focused.getFocusIndices(), question,
-						DISCARD_TOKENS, previewReasoningConsumer, null);
+						DISCARD_TOKENS, previewReasoningConsumer, null, false);
 			}
 		}
 		catch (RuntimeException e) {
@@ -591,44 +598,34 @@ public class LlmInferenceService implements ChartSearchService {
 	 * produces a query-specific "no records" answer instead of one based
 	 * on demographics alone.
 	 */
+	private static String chartTextOrPlaceholder(PatientChart chart) {
+		return chart.getMappings().isEmpty() ? "(No relevant records found)" : chart.getText();
+	}
+
 	/**
-	 * Whether this chart's prompt carries more than one injected safety finding, which is the
-	 * condition the #397 clause in {@code LlmProvider.buildUserMessage} describes and the only fact
-	 * about the chart that clause needs. Issue
+	 * Whether this chart's prompt carries more than one injected safety finding — the only fact
+	 * about the chart the #397 clause in {@code LlmProvider.buildUserMessage} needs. Issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>.
 	 *
-	 * <p><b>Not the same walk as {@code SafetyFindingCitationExtentCheck}'s, and not a duplicate of
-	 * it.</b> That one runs AFTER the answer and produces the SET of carried indexes to intersect
-	 * with the citations; this runs before there is an answer and produces a boolean, short-circuits
-	 * at two, and reads no citation. Issue #151's rule is about two resolutions of one question that
-	 * must agree — these answer different questions at different times, and neither can be derived
-	 * from the other because the chart the first reads no longer exists when the second runs.
-	 *
-	 * <p><b>Deliberately not a {@code PatientChart} stamp.</b> Stamps must be carried across
-	 * {@code DrugReferenceInjector.injectRecords}, which rebuilds the chart from scratch, and the
-	 * reference instruction file records that a dropped stamp is silent and fail-open and has
-	 * happened twice. A walk of the mappings cannot be dropped: the records ARE the evidence.
+	 * <p><b>Reads {@code SafetyFindingCitationExtentCheck.carriedFindingIndexes}, which is the ONE
+	 * definition of that population.</b> An earlier draft walked the mappings here instead and
+	 * justified it by saying the two questions are asked of charts that do not coexist — which is
+	 * false: {@code chart} is the same live local at this call and at the check's, in both answer
+	 * methods. Two walks would let a filter added to one drift from the other silently, so that the
+	 * prompt asks for an enumeration of a population {@code findingCitations} then counts
+	 * differently. The check runs after the answer and needs the SET; this runs before there is one
+	 * and needs only whether there are two.
 	 *
 	 * <p><b>Gating at all is about the absent-data prompt, not about correctness.</b> The clause is
 	 * self-gated by its own antecedent, so an ungated one produces the same answers; what this buys
 	 * is not spending the sentence on the empty-chart message, whose exact bytes
 	 * {@code AbsentDataEvalTest.theEmptyChartPromptAsksTheModelToNameWhatIsMissing} pins after 19
-	 * measured cases. The threshold is TWO because one finding is not an enumeration — and because
-	 * every cell the measured improvement came from carried at least five.
+	 * measured cases — and that test is how this method came to exist rather than by design. The
+	 * threshold is TWO because one finding is not an enumeration, and because every cell the
+	 * measured improvement came from carried at least five.
 	 */
 	static boolean severalInjectedFindings(PatientChart chart) {
-		int found = 0;
-		for (RecordMapping mapping : chart.getMappings()) {
-			if (ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(mapping.getResourceType())
-					&& ++found > 1) {
-				return true;
-			}
-		}
-		return false;
-	}
-
-	private static String chartTextOrPlaceholder(PatientChart chart) {
-		return chart.getMappings().isEmpty() ? "(No relevant records found)" : chart.getText();
+		return SafetyFindingCitationExtentCheck.carriedFindingIndexes(chart.getMappings()).size() > 1;
 	}
 
 	static boolean isWarmupEnabled() {

@@ -9,18 +9,27 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
+import java.util.function.Consumer;
+
 import org.junit.jupiter.api.Test;
+import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
+import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
+import org.openmrs.module.chartsearchai.reference.PairChipExtent;
+import org.openmrs.module.chartsearchai.reference.SafetyWarning;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
@@ -52,7 +61,10 @@ public class FindingEnumerationClauseContextTest {
 	private static final String QUESTION = "Is it safe to start her on clarithromycin?";
 
 	private static Set<String> setOf(String... values) {
-		return new HashSet<String>(Arrays.asList(values));
+		// LinkedHashSet, matching the sibling this file says it copies: the premise assertions
+		// below count the findings one partner list raises, and a hash order would let the two
+		// files raise them differently while both claiming to build the same chart.
+		return new LinkedHashSet<String>(Arrays.asList(values));
 	}
 
 	/** The same two-order chart {@code SafetyFindingCitationExtentTest} builds, through the real
@@ -91,6 +103,39 @@ public class FindingEnumerationClauseContextTest {
 				"after the question, which is the position that was measured");
 	}
 
+	/**
+	 * The FLAG ITSELF REACHES THE PROVIDER, which is the one link the two cases below cannot see.
+	 *
+	 * <p>They pin the predicate and they pin the renderer; nothing between them was pinned, and that
+	 * gap is not theoretical — replacing {@code severalInjectedFindings(chart)} with a literal
+	 * {@code false} at BOTH of {@code LlmInferenceService}'s answer call sites left the entire build
+	 * green, 2188 tests, which is issue #397's whole payload reverted in silence. This case drives
+	 * the real {@code search} over a chart the real injector gave several findings and asserts what
+	 * the provider was handed.
+	 *
+	 * <p>Recorded rather than asserted inside the stub: an assertion thrown from a consumer the
+	 * service calls inside its own try/catch would be swallowed into the fail-safe and read as a
+	 * pass. Issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>.
+	 */
+	@Test
+	public void theFlagTheGateComputesIsWhatTheProviderIsHanded() {
+		PatientChart chart = chartWithSeveralFindings();
+		RecordingProvider provider = new RecordingProvider();
+		TestableService service = newService(chart, provider);
+
+		service.search(new Patient(), QUESTION);
+		assertEquals(Boolean.TRUE, provider.lastFlag,
+				"search must hand the provider the flag the gate computed for this chart, which the "
+						+ "case above proves is true of it. A literal false here reverts #397 with "
+						+ "every test green");
+
+		provider.lastFlag = null;
+		service.searchStreaming(new Patient(), QUESTION, token -> { });
+		assertEquals(Boolean.TRUE, provider.lastFlag,
+				"and so must searchStreaming, which is the path the frontend uses by default");
+	}
+
 	@Test
 	public void aChartTheScreenGaveExactlyOneFindingAsksForNothingEither() {
 		// The THRESHOLD, and it is pinned because nothing else reaches it: mutating `> 1` to `> 0`
@@ -122,5 +167,84 @@ public class FindingEnumerationClauseContextTest {
 				.contains("put every one of them"),
 				"so its prompt carries no clause — which is what keeps the sentence off the "
 						+ "absent-data message AbsentDataEvalTest pins to exact bytes");
+	}
+
+	/** A private harness, per the convention this package states — not a shared one. The strategy
+	 *  serves the already-injected chart and the injector is a no-op, so what reaches the provider
+	 *  is the chart this file built. */
+	private TestableService newService(PatientChart served, RecordingProvider provider) {
+		TestableService created = new TestableService();
+		created.setChartBuildingStrategy(new StubStrategy(served));
+		created.setLlmProvider(provider);
+		created.setDrugReferenceInjector(new DrugReferenceInjector() {
+
+			@Override
+			public PatientChart inject(PatientChart chart, Patient patient, String question) {
+				return chart;
+			}
+		});
+		created.setDrugSafetyValidator(new DrugSafetyValidator() {
+
+			@Override
+			public List<SafetyWarning> validate(String answer, String question, Patient patient,
+					List<RecordMapping> mappings, PairChipExtent.Sink pairExtentSink) {
+				return Collections.emptyList();
+			}
+		});
+		return created;
+	}
+
+	/** No-ops the Context-backed resolvers so no OpenMRS runtime is needed. */
+	private static final class TestableService extends LlmInferenceService {
+
+		@Override
+		protected boolean resolveWarmupEnabled() {
+			return false;
+		}
+
+		@Override
+		protected boolean resolveGroundingEnabled() {
+			return false;
+		}
+	}
+
+	private static final class StubStrategy extends ChartBuildingStrategy {
+
+		private final PatientChart chart;
+
+		private StubStrategy(PatientChart chart) {
+			this.chart = chart;
+		}
+
+		@Override
+		PatientChart buildChart(Patient patient, String question) {
+			return chart;
+		}
+
+		@Override
+		boolean usePreFilter() {
+			return false;
+		}
+	}
+
+	/** Records the flag rather than asserting on it — see the case's javadoc for why. */
+	private static final class RecordingProvider extends LlmProvider {
+
+		private Boolean lastFlag;
+
+		@Override
+		public LlmResponse search(String numberedRecords, List<Integer> focusIndices,
+				String question, boolean enumerateFindings) {
+			lastFlag = Boolean.valueOf(enumerateFindings);
+			return new LlmResponse("No.", Collections.<Integer> emptyList());
+		}
+
+		@Override
+		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
+				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
+				String cacheScope, boolean enumerateFindings) {
+			lastFlag = Boolean.valueOf(enumerateFindings);
+			return new LlmResponse("No.", Collections.<Integer> emptyList());
+		}
 	}
 }

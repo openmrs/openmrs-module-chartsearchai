@@ -424,9 +424,11 @@ All four directories below are two cells of ONE patient on the 3.7.1 standalone,
 2026-09-09 against the deployed omod at the head that carries #395: patient
 `dc8560c9-6d2b-45bf-861c-8fcf562ec9b1` on eight active drug orders, `sourceFormat=ddinter`,
 `chartMode=fullChart`, `PROBE_DRUGS='Amlodipine Nifedipine'`,
-`CAPTURE_PHRASING='should i give {drug}?'`. **The Nifedipine cell is the same file in all four** —
-seven findings, seven cited, no rating dropped — so it is the control, and every difference between
-the arms is the Amlodipine cell's.
+`CAPTURE_PHRASING='should i give {drug}?'`. **The Nifedipine cell is byte-identical in the first
+three** — seven findings, seven cited, no rating dropped — so across those it is the control and
+every difference is the Amlodipine cell's. In `findings-unmeasured/` it is NOT: the key was deleted
+from both cells there, which is the whole of that arm, so a difference in that arm is not
+attributable to the Amlodipine cell alone.
 
 Three of the four are verbatim live captures, which is unusual here and is the point: this defect is
 one the shipped build emits on the majority of its own cells, so it needed no construction. On the
@@ -446,11 +448,19 @@ finding it was given. That is the whole reason the cell exists. Pins **exit 3** 
 `6/7`.
 
 ### `findings-complete/` — the same cell, complete, live
-The same question with the format clause's own wording appended to it as a probe, so the answer puts
-each finding on a line of its own carrying its severity: `{"carried": 7, "cited": 7}`,
+The same question with the format clause's own wording appended to it as a probe:
+`{"carried": 7, "cited": 7}`,
 `unstatedFindingSeverities` `[]`, and the lead still *"No — Amlodipine should not be given"*. The
 boundary arm — nothing here may be flagged, or the guard is crying wolf on the answer it exists to
 pass. Pins **exit 0**.
+
+**None of these captures is newline-delimited, and that is worth stating because the clause asks for
+lines.** All six live answers here contain zero `\n`: what the clause changed is the SENTENCE
+structure — seven `Amlodipine interacts with active order X [n], Moderate.` sentences where the
+baseline ran six together with discourse connectives — not the line structure. The arm that did
+produce newlined answers is the system-prompt one, which ADR Decision 84 records as making
+completeness worse. So do not read `findings-complete/` as an example of a line-delimited answer, and
+do not treat a future genuinely line-delimited arm as the same shape as this one.
 
 ### `findings-complete-unrated/` — the trade, live, and the reason there are two keys
 The same cell asked for a bare numbered list. `{"carried": 7, "cited": 7}` — so the completeness

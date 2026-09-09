@@ -1082,7 +1082,7 @@ public class LlmProviderTest {
 		List<Integer> focus = Arrays.asList(1, 2);
 
 		provider.searchStreaming(records, focus, "Is the patient diabetic?",
-				tok -> { }, reason -> { }, "patient-uuid-42");
+				tok -> { }, reason -> { }, "patient-uuid-42", false);
 
 		assertEquals("patient-uuid-42", engine.capturedScope,
 				"the patient UUID must reach the engine as the KV cache scope so the query path can "
@@ -1106,7 +1106,7 @@ public class LlmProviderTest {
 		LlmProvider provider = providerWith(engine);
 
 		provider.searchStreaming("1. x", Arrays.<Integer>asList(), "q",
-				tok -> { }, reason -> { }, null);
+				tok -> { }, reason -> { }, null, false);
 
 		assertNull(engine.capturedScope, "a null scope must pass through unchanged");
 		assertNull(engine.capturedSeed,

@@ -383,8 +383,11 @@ public class LlmProvider {
 	 * are still the full patient chart in stable date-desc order, so the prompt prefix is
 	 * byte-identical across queries for the same patient and llama-server's KV cache reuses
 	 * the prefill. The variable bytes are the small focus-hint line plus the question.
-	 */
-	/**
+	 *
+	 * @param numberedRecords the numbered patient records text
+	 * @param focusIndices the records ranked most similar to the query, or empty for no hint
+	 * @param question the clinician's natural language question
+	 * @return the LLM's response with answer text and structured citation indices
 	 * @param enumerateFindings whether this chart's prompt carries more than one injected safety
 	 *        finding — see {@link #buildUserMessage(String, List, String, boolean)}. It is a
 	 *        parameter of the ONE entry point rather than of an overload beside a flag-less one,
@@ -438,7 +441,8 @@ public class LlmProvider {
 	 */
 	public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices, String question,
 			Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer) {
-		return searchStreaming(numberedRecords, focusIndices, question, tokenConsumer, reasoningConsumer, null);
+		return searchStreaming(numberedRecords, focusIndices, question, tokenConsumer,
+			reasoningConsumer, null, false);
 	}
 
 	/**
@@ -451,25 +455,18 @@ public class LlmProvider {
 	 * prefix {@code buildUserMessage(numberedRecords, "")} — the exact bytes {@link #warmup} sends —
 	 * so warmup-saved and query-saved entries share one file per patient+chart. A null scope sends a
 	 * null seed, which makes the engine skip all disk KV work (behavior identical to the 5-arg form).
-	 */
-	public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices, String question,
-			Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer, String cacheScope) {
-		return searchStreaming(numberedRecords, focusIndices, question, tokenConsumer,
-			reasoningConsumer, cacheScope, false);
-	}
-
-	/**
-	 * As {@link #searchStreaming(String, List, String, Consumer, Consumer, String)}, additionally
-	 * asking the answer to put each of several safety findings on a line of its own — issue
-	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>.
 	 *
 	 * @param enumerateFindings see {@link #buildUserMessage(String, List, String, boolean)}. It
-	 *        reaches the user message and never the KV seed below, which is what keeps that seed a
-	 *        byte-prefix of this query
+	 *        reaches the user message and never the KV seed above, which is what keeps that seed a
+	 *        byte-prefix of this query. It is a parameter of THIS arity rather than of an overload
+	 *        beside a flag-less one for the reason {@code search}'s own @param gives: this is the
+	 *        seam nineteen test doubles override, and an overload production called instead was
+	 *        silently bypassed by every one of them (issue #397 shipped that once)
 	 */
 	public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 			String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
 			String cacheScope, boolean enumerateFindings) {
+
 		String systemPrompt = getSystemPrompt();
 		String userMessage = buildUserMessage(numberedRecords, focusIndices, question,
 				enumerateFindings);
@@ -1042,39 +1039,42 @@ public class LlmProvider {
 		// ISSUE #397. A LAYOUT rule, and it is here rather than in DEFAULT_SYSTEM_PROMPT because
 		// POSITION is the variable — measured, on one build, both arms served through
 		// `chartsearchai.llm.systemPrompt` so they differed in exactly these bytes, over 14 safety
-		// cells on one patient with eight active orders (2026-09-09, eval/drift-metric/README.md and
-		// ADR Decision 84 carry the ledger):
+		// cells on one patient with eight active orders (2026-09-09). ADR Decision 84 and
+		// eval/drift-metric/README.md carry the ledger, and it is deliberately NOT reproduced here:
+		// a third copy is what the root instruction file's "Documenting a decision" section forbids,
+		// and it would be the copy nobody updates.
 		//
-		//   arm        where the clause sits          short   ratings   verdict-led   mean chars
-		//   baseline   nowhere                       8 / 12     2         12 / 12        943
-		//   system     DEFAULT_SYSTEM_PROMPT,
-		//              ~8.6KB before the records     9 / 12     0         12 / 12      1,622
-		//   own line   here, after a \n              7 / 12     0         11 / 12        643
-		//   HERE       after the question, run on    6 / 12     0         12 / 12        564
+		// What a maintainer at this line needs is the SHAPE of that result, which is the whole of
+		// why the clause sits here and not there: the same sentence AHEAD of the records made
+		// completeness WORSE and cost more output; here, after the question, it improved
+		// completeness and made answers shorter. Six of twelve cells are still short, so this is an
+		// improvement and not a fix. And the two after-the-question arms differ only in the
+		// SEPARATOR — see the comment at the append below, which is where that cost a verdict lead.
 		//
-		// "short" is cells whose prompt carried a safety finding the answer's prose never stated,
-		// off `findingCitations`. The system-prompt arm made completeness WORSE by a cell and cost
-		// 72% more output. This position fixed three cells — the issue's own reproducer among them,
-		// 6 of 7 to 7 of 7, plus Metformin and Atenolol — regressed one, took
-		// `unstatedFindingSeverities` to zero, left `verdict-led` at 12 of 12, and made answers 40%
-		// SHORTER. Both ABSTAIN cells held. Six of twelve are still short, so this is an improvement
-		// and not a fix, and the corpus is the gate rather than the cell. The last two rows are the
-		// same 126 characters and differ only in the separator; see the comment at the append below,
-		// which is where that cost a verdict lead.
+		// WHAT PROTECTS THE KV-CACHE PREFIX IS THE APPEND POSITION, NOT EITHER GUARD, and an earlier
+		// draft of this comment said the opposite and claimed to have verified it. {@link #warmup}
+		// and searchStreaming's cacheSeed both call this with {@code question = ""} and rely on the
+		// result being a byte-PREFIX of every real query. That holds because the clause goes after
+		// the "Clinician's query: " marker and the question's own bytes: whatever follows them
+		// cannot disturb a prefix that ends at the marker. Measured, by replacing the whole
+		// condition with {@code if (enumerateFindings)} and running the class:
+		// warmupUserMessageShouldBePrefixOfRealQuery and .warmupUserMessageShouldEndWithEmptyQueryMarker
+		// both stay GREEN — they compare two clause-free messages through the 2-arg arity, which
+		// hardcodes the flag false, so no change to these conditions can move them. **Moving the
+		// clause ahead of the marker is what breaks the contract, and the case that catches that is
+		// LlmProviderUserMessageTest.theClauseMustNotBreakTheWarmupPrefixForAQuestionOfAnyLength.**
 		//
-		// GATED ON A NON-BLANK QUESTION, and that is the KV-cache prefix contract rather than
-		// tidiness: {@link #warmup} and searchStreaming's cacheSeed both call this with
-		// {@code question = ""} and rely on the result being a byte-PREFIX of every real query. A
-		// clause appended after an empty question would sit where the question's own bytes go, so
-		// the seed would stop being a prefix and every warmed patient would reprocess the whole
-		// chart. LlmProviderUserMessageTest.warmupUserMessageShouldBePrefixOfRealQuery and
-		// .warmupUserMessageShouldEndWithEmptyQueryMarker both redden if this guard is dropped —
-		// verified by removing it.
+		// The blank-question guard therefore buys something narrower, and it is worth having for it:
+		// with the flag true and the question empty the clause would be appended to the SEED as
+		// well, which is 126 characters of instruction prefixed to every warmed patient for no
+		// answer. Dropping it reddens .warmupShouldNotCarryTheFindingEnumerationClause and that
+		// same any-length case — measured, at lines 141 and 163.
 		//
-		// The clause is SELF-GATING on its own antecedent, the shape the safety paragraph's own
+		// The clause is also SELF-GATING on its own antecedent, the shape the safety paragraph's own
 		// branches use: on a question that raises no finding "where more than one finding names it"
-		// is simply false. That is why it needs no chart-derived flag threaded through four
-		// overloads, and why the two absent-data cells above were unmoved by it.
+		// is simply false, which is why the two absent-data cells were unmoved by it. That is not an
+		// argument against the {@code enumerateFindings} flag beside it — see its @param, and
+		// AbsentDataEvalTest, which is what put it there.
 		// THESE ARE THE MEASURED BYTES, down to the SPACE in front of them, and that is not
 		// fussiness — it is the one thing this change got wrong first and the gate caught.
 		//

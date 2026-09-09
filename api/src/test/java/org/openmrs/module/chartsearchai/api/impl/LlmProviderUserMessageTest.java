@@ -133,6 +133,17 @@ public class LlmProviderUserMessageTest {
 		assertTrue(msg.contains("? Where more than one finding names it"),
 				"the clause must run on from the question with a SPACE, not start a line of its own: "
 				+ "a line of its own cost a verdict lead on the measured corpus. Got: " + msg);
+		// THE PROHIBITION, pinned. `reference/CLAUDE.md` states "Never buy completeness with a
+		// wording carrying `nothing else`" and ADR Decision 84 claimed this class enforced it — it
+		// did not: appending ", and nothing else" to the clause left all 2188 tests green. Measured
+		// on the reproducer cell, that wording stated all seven findings WITH their ratings and lost
+		// the verdict lead, the answer opening "1. Solu-Medrol 125mg/5ml — Moderate [349]" with no
+		// call in front of it, which score_directness.classify reads as NONE. Same shape as
+		// LlmProviderTest's `otherwise` assertion over the safety paragraph, and for the same reason.
+		assertFalse(msg.toLowerCase().contains("nothing else"),
+				"the clause must not tell the answer to carry NOTHING ELSE on those lines: measured, "
+				+ "that wording took completeness and ratings and paid for them with the verdict "
+				+ "lead, which is the trade issue #397 forbids. Got: " + msg);
 	}
 
 	@Test
@@ -170,13 +181,19 @@ public class LlmProviderUserMessageTest {
 	public void aChartWithFewerThanTwoFindingsCarriesNoClause() {
 		// The other half of the gate, and the half a caller can get wrong: `enumerateFindings` false
 		// must leave the message byte-identical to what it was before #397, because that is what the
-		// empty-chart and single-finding prompts still send. Compared against the 3-arg form rather
-		// than a literal, so this cannot pass by both sides drifting together.
-		assertEquals(LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(), "Q?"),
-				LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(), "Q?", false),
-				"a chart the caller says carries fewer than two findings must send the message "
-				+ "unchanged — the 3-arg form is that message, and it is what AbsentDataEvalTest "
-				+ "pins to exact bytes");
+		// empty-chart and single-finding prompts still send.
+		//
+		// NOT compared against the 3-arg form. An earlier version did, with a comment claiming that
+		// was the stronger check — it is the opposite: the 3-arg body IS
+		// `buildUserMessage(records, focusIndices, question, false)`, so the comparison was
+		// `f(x) == f(x)` and passed under the very mutation it was written for (ungating the clause
+		// takes both sides together, measured). What is not vacuous is where the message ENDS: with
+		// the flag false the question's own bytes are the last thing in it, which is the property
+		// AbsentDataEvalTest pins to exact bytes one arity over.
+		assertTrue(LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(), "Q?", false)
+						.endsWith("Clinician's query: Q?"),
+				"a chart the caller says carries fewer than two findings must send a message that "
+				+ "ends at the question, with nothing appended after it");
 		assertFalse(LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(), "Q?", false)
 						.contains("put every one of them"),
 				"and it must not carry the clause");

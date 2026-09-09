@@ -126,6 +126,43 @@ final class SafetyFindingCitationExtentCheck {
 	 *         no finding: that is a zeroed statement, and {@code FindingCitationExtent} is canonical
 	 *         for the difference
 	 */
+	/**
+	 * The injected {@code safety_finding} records {@code mappings} carries, by citation index — the
+	 * CARRIED population this check counts, and the one thing about an assembled chart that says
+	 * whether the prompt asked the model to enumerate anything.
+	 *
+	 * <p><b>ONE walk, and it is shared rather than spelled twice.</b>
+	 * {@link LlmInferenceService#severalInjectedFindings} asks the same question of the same list in
+	 * the same request — the chart local is live at both points, which an earlier draft of that
+	 * method's javadoc denied — and it needs only {@code size() > 1}. Two spellings would let a
+	 * filter added to one drift from the other silently, so that the prompt asks for an enumeration
+	 * of a population this key then counts differently. Issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>.
+	 *
+	 * <p>A LinkedHashSet in INJECTION order, so the uncited indexes the WARN lists read in the order
+	 * the prompt carried them rather than in whatever order a hash gives — a maintainer comparing
+	 * the line against the prompt is reading down one list. Keyed on the INDEX, which is the
+	 * injector's own sequential numbering and unique across a chart by construction, so the set
+	 * counts records and is not silently folding any.
+	 *
+	 * <p>Null-tolerant in both arities, as {@code ChartSearchAiUtils.referenceSlice} and
+	 * {@code .unresolvedDrugClass} are of the same list: this now runs on the prompt-assembly path
+	 * as well, which has no catch of its own.
+	 */
+	static Set<Integer> carriedFindingIndexes(List<RecordMapping> mappings) {
+		Set<Integer> carried = new LinkedHashSet<Integer>();
+		if (mappings == null) {
+			return carried;
+		}
+		for (RecordMapping mapping : mappings) {
+			if (mapping != null && ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING
+					.equals(mapping.getResourceType())) {
+				carried.add(Integer.valueOf(mapping.getIndex()));
+			}
+		}
+		return carried;
+	}
+
 	static FindingCitationExtent measureFindingCitations(Patient patient, String answer,
 			List<RecordReference> cited, List<RecordMapping> mappings) {
 		Integer patientId = null;
@@ -133,20 +170,7 @@ final class SafetyFindingCitationExtentCheck {
 			// Inside the guard, not above it: reading a detached patient proxy is the one line here
 			// that could throw, and the promise this catch makes is structural or it is nothing.
 			patientId = patient == null ? null : patient.getPatientId();
-			// A LinkedHashSet in INJECTION order, so the uncited indexes the WARN lists read in the
-			// order the prompt carried them rather than in whatever order a hash gives — a
-			// maintainer comparing the line against the prompt is reading down one list. Keyed on
-			// the INDEX, which is the injector's own sequential numbering and unique across a chart
-			// by construction, so the set counts records here and is not silently folding any.
-			Set<Integer> carried = new LinkedHashSet<Integer>();
-			if (mappings != null) {
-				for (RecordMapping mapping : mappings) {
-					if (ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING
-							.equals(mapping.getResourceType())) {
-						carried.add(Integer.valueOf(mapping.getIndex()));
-					}
-				}
-			}
+			Set<Integer> carried = carriedFindingIndexes(mappings);
 			if (carried.isEmpty()) {
 				// The cheapest gate first, as every sibling resolves its own: on the shipped default
 				// the injector never runs, so this is the ordinary path and it must not walk the

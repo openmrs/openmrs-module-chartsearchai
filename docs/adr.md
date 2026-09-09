@@ -6105,6 +6105,26 @@ the only variable between them.
 
 The system-prompt arm made completeness *worse* by a cell (Nifedipine 7/7 → 6/7) and cost 72% more output. The same sentence after the question fixed three cells — the issue's own reproducer among them, 6 of 7 to 7 of 7 — regressed the same one, took `unstatedFindingSeverities` to zero, and made answers **40% shorter**. Both ABSTAIN cells held their abstention in both arms, and the one yes/no directness cell this cohort carries (`dc8560c9-…|probe-current-meds`) scored 1/1 direct with 0 safety violations in both.
 
+**A FIFTH key moves, and it moves in a direction that reads backwards.** Reading the completeness
+cell beside the existing gates is what this issue asks for, and doing it over every published key —
+not only the ones the issue lists — turns up an interaction nothing predicted.
+`misattributedOrderCitations` goes from two cells to none and `unfaithfullyRenderedCitations` from
+three to two, while `activeOrderClaims.uncited` RISES on four cells (Amiodarone, Digoxin, Metformin,
+Warfarin, each from `0` to `stated`). Those are the same effect. The baseline answers were attaching
+CHART record numbers to their active-order claims — the Digoxin answer opened *"Digoxin interacts
+with active order Methylprednisolone [177]"*, and `[177]` is a record
+[Decision 76](#decision-76-a-chart-citation-that-cannot-be-the-active-order-a-sentence-names-is-stated-on-the-response)'s
+check reports as one that cannot be the order the sentence names. The shipped arm cites the findings
+and nothing else, so those claims offer no chart citation at all and `uncited` counts them.
+
+**Which is the better state, on this install.** `chartsearchai.drugSafety.citeOrderRecords` ships
+OFF ([Decision 77](#decision-77-a-findings-chart-order-attribution-names-the-record-number-its-order-is)),
+so a claim that offers no chart citation is what the configuration means, while one that offers the
+wrong record is the defect Decision 76 exists to report. `activeOrderClaims`' own contract already
+says `stated` and `uncited` count different things and that neither is a certificate; this is that
+warning earning its keep. A reader comparing the two arms on `uncited` alone would call the change a
+regression, and would be reading a column that got worse because the thing it proxies for got better.
+
 **The clause asks for lines and the mechanism is not the lines.** Six of the twelve
 finding-carrying answers in the shipped arm contain no newline at all, and completeness improves
 across the corpus regardless — so whatever the sentence does to the enumeration, it is not that the
@@ -6129,7 +6149,7 @@ change would have shipped.
 
 **Gated on the chart carrying more than one finding, and the gate is about the absent-data prompt rather than correctness.** The clause is self-gating by its own antecedent, so an ungated one produces the same answers. What the gate buys is not spending the sentence on the empty-chart message, whose exact bytes `AbsentDataEvalTest.theEmptyChartPromptAsksTheModelToNameWhatIsMissing` pins after #214's 19 measured cases — and that test is how the parameter came to exist: an ungated clause reddened it. `LlmInferenceService.severalInjectedFindings` is the predicate, walking the mappings at both answer paths.
 
-**It reaches the user message and never the KV seed.** `warmup` and `searchStreaming`'s `cacheSeed` both call `buildUserMessage` with `question = ""` and rely on the result being a byte-prefix of every real query. A clause appended after an empty question would sit where the question's own bytes go, so the seed would stop being a prefix and every warmed patient would reprocess the whole chart. That is why the clause goes after the question and not before it, which is also the only position a module-supplied line can take without breaking that contract — `LlmProviderUserMessageTest.warmupUserMessageShouldBePrefixOfRealQuery` and `.warmupUserMessageShouldEndWithEmptyQueryMarker` both redden without the guard.
+**It reaches the user message and never the KV seed — and what protects that is the APPEND POSITION, not the blank-question guard.** `warmup` and `searchStreaming`'s `cacheSeed` both call `buildUserMessage` with `question = ""` and rely on the result being a byte-prefix of every real query. The clause goes after the `Clinician's query: ` marker and the question's own bytes, so whatever follows them cannot disturb a prefix that ends at the marker; the seed additionally cannot carry the clause at all, its arity hardcoding the flag false. **An earlier draft of this paragraph said the guard was that contract and named two tests as reddening without it. Both claims are false, and removing the guard is what showed it**: `warmupUserMessageShouldBePrefixOfRealQuery` and `.warmupUserMessageShouldEndWithEmptyQueryMarker` compare two clause-free messages through that same arity and cannot move. What the guard buys is narrower and still worth having — with the flag true and the question empty the clause would be prefixed to every warmed patient for no answer — and what catches a move of the clause ahead of the marker is `LlmProviderUserMessageTest.theClauseMustNotBreakTheWarmupPrefixForAQuestionOfAnyLength`.
 
 **2. The gate reads two keys, because they trade.** `eval/drift-metric/score_probe_safety.py` gains a completeness cell over `findingCitations` and a rating cell over `unstatedFindingSeverities`, read beside it and never instead of it. The second is not scope for its own sake: on the reproducer a bare list instruction stated all seven findings and dropped all seven ratings, and the completeness cell alone scores that a clean win. The `findings-complete-unrated/` fixture is that capture, and its A/B against `findings-incomplete/` prints the trade on one row — `findings stated: A 6 of 7; B 7 of 7   ratings dropped: A 0; B 7`.
 

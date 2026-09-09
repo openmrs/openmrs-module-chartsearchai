@@ -792,6 +792,17 @@ def finding_extent(cell):
     return (carried, cited)
 
 
+def measured_finding_extent(cell):
+    """Whether this capture STATED a finding-citation extent at all — the census denominator.
+
+    A named predicate rather than `finding_extent(...) is not None` repeated at each site, on the
+    same reasoning `has_readable_chip_rating` is one: `summarise`'s denominator and `main`'s
+    comparability guard must answer this the same way, and four copies of the expression is four
+    places a change to what counts as "no measurement" has to reach.
+    """
+    return finding_extent(cell) is not None
+
+
 def findings_incompletely_stated(cell):
     """The #397 defect: the answer cited fewer injected safety findings than the prompt carried.
 
@@ -979,7 +990,7 @@ def summarise(name, cells, done, expected=None):
                         "from verdict-led: %s" % (len(discordant), discordant[:4]))
     # ISSUE #397. Over every cell that STATED a measurement, not over `ans`: `carried > 0` is the
     # population and it does not need the label's help — see `findings_incompletely_stated`.
-    measured = sorted(k for k, c in cells.items() if finding_extent(c) is not None)
+    measured = sorted(k for k, c in cells.items() if measured_finding_extent(c))
     unmeasured = sorted(set(cells) - set(measured))
     with_findings = [k for k in measured if finding_extent(cells[k])[0] > 0]
     short = [k for k in with_findings if findings_incompletely_stated(cells[k])]
@@ -1396,6 +1407,16 @@ SELFTEST_CASES = [
      ["the two arms disagree about which cells measured the finding-citation extent",
       "2 cell(s) on one side only"],
      ["cells carrying a finding whose prose stated FEWER: A=1"]),
+    # THE PAIR THAT ISOLATES THE RATINGS HALF OF THE FLIP CONDITION. Completeness is identical on
+    # both sides (7 of 7 each), so only the ratings half can print the row — delete it and this arm
+    # prints no FLIP line at all while still exiting 3, which is how that half came to be a dead
+    # guard the whole selftest passed over.
+    (["findings-complete", "findings-complete-unrated"], 3,
+     ["FLIP sarah__safety-Amlodipine",
+      "findings stated: A 7 of 7; B 7 of 7   ratings dropped: A 0; B 7",
+      "cells carrying a finding whose prose stated FEWER: A=0 B=0  of 2 that carried any",
+      "cells that dropped a cited finding's rating:       A=0 B=1  of 2 that measured it"],
+     ["the two arms disagree"]),
     # THE PAIR THIS WHOLE CELL EXISTS FOR, and the one row it prints is the argument: an arm that
     # is a completeness win on the aggregate column (A=1 B=0) is shown on the SAME row to have paid
     # for it with every rating (A=0 B=1, and `ratings dropped: A 0; B 7` on the FLIP line). Read the
@@ -1609,6 +1630,69 @@ def selftest():
         if key not in raw_cell:
             failures.append("%s carries no `%s` — the wire key this cell reads, spelled as a "
                             "literal so a rename cannot pass silently" % (probe, key))
+    # The three TYPE guards the readers' docstrings state, each of which was removable with the whole
+    # selftest green until this block existed. Driven through the real readers over hand-built cells
+    # rather than through fixtures, because the malformed wire bodies these exist for cannot be
+    # captured — no build emits them — and a fixture per shape would be eight more directories for
+    # eight one-line properties. The fixture arms below still carry every REAL shape.
+    #
+    # Mutate each and read the failures: dropping the dict check makes `finding_extent([])` raise
+    # `AttributeError` and the selftest exits 1; dropping the bool exclusion or the list check
+    # reddens named cases here.
+    #
+    # TWO RESIDUES, named rather than claimed as covered, because neither is reachable from this
+    # block and no committed capture can construct either:
+    #  - `summarise`'s population is scoped by the measurement and not by `label`. The predicate half
+    #    of that IS asserted below, but adding `and label(c) == "ANSWER"` to the `measured`
+    #    comprehension itself leaves the selftest green — every cell carrying the key labels ANSWER,
+    #    and `finding-no-chip/`, which is the ABSTAIN-labelled shape, predates the key.
+    #  - `main`'s rating column is scoped to the cells that measured the RATING key. Replacing
+    #    `rated_both` with `sorted(both)` also leaves it green, because every fixture carrying the
+    #    extent key carries the rating key too. A capture from between #384 and #395 would separate
+    #    them; none is committed.
+    before = len(failures)
+    def _cell(fc, us=None):
+        c = _blank_cell((), None)
+        c["finding_citations"] = fc
+        c["unstated_finding_severities"] = us
+        return c
+    for body, why in (
+            ([], "a JSON array where an object is expected must read as no measurement, not crash"),
+            ("7", "a string body must read as no measurement"),
+            (None, "an explicit null is the wire's own no-measurement and must read as one"),
+            ({"cited": 6}, "a body with no `carried` must read as no measurement"),
+            ({"carried": None, "cited": 6}, "a null `carried` must read as no measurement"),
+            ({"carried": "7", "cited": 6}, "a string `carried` must read as no measurement"),
+            ({"carried": 7.0, "cited": 6}, "a float `carried` must read as no measurement"),
+            ({"carried": True, "cited": True},
+             "bools must be REFUSED: isinstance(True, int) is True in Python, so without the "
+             "explicit exclusion this scores as a complete cell that carried one finding")):
+        if finding_extent(_cell(body)) is not None:
+            failures.append("finding_extent(%r) is not None — %s" % (body, why))
+    if finding_extent(_cell({"carried": 7, "cited": 6})) != (7, 6):
+        failures.append("finding_extent must read a well-formed body")
+    for us, why in (({}, "a JSON object must read as no rating measurement"),
+                    ("x", "a string must read as no rating measurement"),
+                    (None, "an explicit null must read as no rating measurement")):
+        if unstated_ratings(_cell({"carried": 7, "cited": 7}, us)) is not None:
+            failures.append("unstated_ratings(%r) is not None — %s" % (us, why))
+    if ratings_dropped(_cell({"carried": 7, "cited": 7}, {"1": "Major"})):
+        failures.append("a non-list rating body must not be counted as a dropped rating")
+    if unstated_ratings(_cell({"carried": 7, "cited": 7}, [349])) != [349]:
+        failures.append("unstated_ratings must read a well-formed list")
+    # The population is scoped by the MEASUREMENT and never by `label` — an ABSTAIN-labelled cell
+    # that dropped a hazard is still a dropped hazard (fixtures/probe-safety/finding-no-chip/ is
+    # that label). No committed capture can show it, since every cell carrying the key labels
+    # ANSWER, so it is asserted directly on the predicate.
+    abstaining = _cell({"carried": 7, "cited": 6})
+    if label(abstaining) != "ABSTAIN":
+        failures.append("precondition: a cell with no chips and not its own drug labels ABSTAIN")
+    if not findings_incompletely_stated(abstaining):
+        failures.append("findings_incompletely_stated must not be scoped by `label`: an "
+                        "ABSTAIN-labelled cell that stated fewer findings than it carried is still "
+                        "the defect")
+    print("  ok  %-32s %d shape(s)" % ("reader type and scope guards", 16)
+          if len(failures) == before else "  FAIL reader type and scope guards")
     loaded, _ = load(os.path.join(fixtures, "findings-incomplete"))
     got = finding_extent(loaded["sarah__safety-Amlodipine"])
     if got != (7, 6):
@@ -1754,9 +1838,12 @@ def main():
             if (findings_incompletely_stated(a[k]) != findings_incompletely_stated(b[k])
                     or ratings_dropped(a[k]) != ratings_dropped(b[k])):
                 fmt = lambda e: "no measurement" if e is None else "%d of %d" % (e[1], e[0])
-                print("       findings stated: A %s; B %s   ratings dropped: A %d; B %d"
+                # `or []` on the ratings half printed an unmeasured arm as `0`, which is the very
+                # thing the comment above forbids of the extent half — one statement, two rules.
+                rated = lambda us: "no measurement" if us is None else str(len(us))
+                print("       findings stated: A %s; B %s   ratings dropped: A %s; B %s"
                       % (fmt(finding_extent(a[k])), fmt(finding_extent(b[k])),
-                         len(unstated_ratings(a[k]) or []), len(unstated_ratings(b[k]) or [])))
+                         rated(unstated_ratings(a[k])), rated(unstated_ratings(b[k]))))
             if severity_moved:
                 print("       severity: A chips %s states %s; B chips %s states %s"
                       % (a[k]["chip_ratings"], sorted(answer_ratings(a[k])),
@@ -1803,14 +1890,30 @@ def main():
     # ran on one side only. That is refused. It fires on no existing fixture pair, both sides of
     # each being unmeasured and so in agreement.
     ab_problems = []
-    a_measured = set(k for k in both if finding_extent(a[k]) is not None)
-    b_measured = set(k for k in both if finding_extent(b[k]) is not None)
+    a_measured = set(k for k in both if measured_finding_extent(a[k]))
+    b_measured = set(k for k in both if measured_finding_extent(b[k]))
     if a_measured != b_measured:
         ab_problems.append("the two arms disagree about which cells measured the finding-citation "
                            "extent (%d cell(s) on one side only), so the completeness column above "
                            "ran on one arm and not the other and its tie means nothing. Re-capture "
                            "the older arm against a build that publishes `findingCitations` "
                            "(issue #397)." % len(a_measured ^ b_measured))
+    # The SAME refusal for the rating key, because it has its own measurability — a capture taken
+    # between #384 and #395 carries one without the other — and because without it the one column
+    # that tells a completeness win from a completeness/rating trade can run on a single arm and
+    # still print a tie. Measured: two arms of `findings-complete` with arm B's
+    # `unstatedFindingSeverities` set to `null` printed `A=0 B=0 of 0 that measured it` and exited
+    # 0, which is the fail-open the refusal above exists to prevent, one key over.
+    a_rated = set(k for k in both if unstated_ratings(a[k]) is not None)
+    b_rated = set(k for k in both if unstated_ratings(b[k]) is not None)
+    if a_rated != b_rated:
+        ab_problems.append("the two arms disagree about which cells measured a cited finding's "
+                           "RATING (%d cell(s) on one side only), so the rating column above ran on "
+                           "one arm and not the other. That column is what tells a completeness win "
+                           "from a completeness-for-ratings trade, so a tie in it means nothing "
+                           "here. Re-capture the older arm against a build that publishes "
+                           "`unstatedFindingSeverities` (issue #397)."
+                           % len(a_rated ^ b_rated))
     shared = sorted(a_measured & b_measured)
     carried_any = [k for k in shared if finding_extent(a[k])[0] > 0 or finding_extent(b[k])[0] > 0]
     print("findings the answer stated (issue #397), over the %d shared cell(s) that measured it:"

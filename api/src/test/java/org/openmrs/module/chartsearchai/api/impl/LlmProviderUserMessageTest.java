@@ -99,12 +99,13 @@ public class LlmProviderUserMessageTest {
 	 * <p><b>Why it is here and not in {@code DEFAULT_SYSTEM_PROMPT}, which is where it was tried
 	 * first.</b> POSITION is the variable, measured on one build with both arms served through
 	 * {@code chartsearchai.llm.systemPrompt} so they differed in exactly this sentence, over 14
-	 * safety cells on one patient with eight active orders. Baseline: 8 of the 12 cells whose prompt
-	 * carried a safety finding stated fewer than it carried. With the sentence in the system prompt,
-	 * ~8.6KB ahead of the records: 9 of 12, and 72% more output. With it here, after the question:
-	 * 6 of 12, {@code unstatedFindingSeverities} to zero, answers 40% shorter, and both ABSTAIN
-	 * cells still abstaining. ADR Decision 84 and {@code eval/drift-metric/README.md} carry the
-	 * ledger; {@code eval/drift-metric/score_probe_safety.py}'s completeness cell is what reads it.
+	 * safety cells on one patient with eight active orders: ahead of the records the same sentence
+	 * made completeness WORSE and cost more output, and here, after the question, it improved
+	 * completeness and made answers shorter. The five-arm ledger is
+	 * {@code eval/drift-metric/README.md}'s and its figures are deliberately not restated here —
+	 * they were, and a third copy of a measured table is the copy nobody re-measures. ADR
+	 * Decision 84 carries the decision; {@code eval/drift-metric/score_probe_safety.py}'s
+	 * completeness cell is what reads it.
 	 *
 	 * <p><b>What the blank-question guard is for, corrected.</b> An earlier version of this javadoc
 	 * called it the KV-cache prefix contract and named the two warmup cases at the top of this class

@@ -729,6 +729,18 @@ Digoxin Atenolol Methotrexate Amiodarone Enalapril Paracetamol Lithium" \
   CAPTURE_PHRASING='should i give {drug}?' eval/drift-metric/capture_probe_safety.sh out-A
 ```
 
+**`fullChart` is an operator flip off the shipped default, so the whole ledger below is of a
+mode this module does not ship.** `omod/src/main/resources/config.xml` sets
+`chartsearchai.chartMode=queryScoped` and `PipelineSettings.queryScopedMode()` resolves unset or
+unreadable to it. That matters here rather than being a footnote, because the finding this
+section records is that POSITION relative to the records decides the clause's SIGN: the same 126
+characters ~8.6KB ahead of the records made completeness worse, and a queryScoped slice is a few
+hundred tokens, so the distances that produced these rows do not exist in the shipped mode. The
+GATE is mode-independent — `severalFindingsAboutOneDrug` reads the injected findings, which come
+from the active orders and the question and not from the chart records the slice narrows — so the
+clause IS sent under the default. Its effect there is unmeasured, and the fail direction is
+therefore unknown rather than fail-closed.
+
 Twelve of the fourteen carry a finding; Paracetamol and Lithium are the ABSTAIN controls. **Baseline:
 eight of the twelve stated fewer findings than the prompt carried**, each short by exactly one —
 seven losing the last finding injected, one losing a middle one. None of the fourteen answers
@@ -743,19 +755,40 @@ the deployed omod and differed in exactly the 126-character clause (verified by 
 constant out of each class file: one insert opcode, and arm B minus the clause is arm A byte for
 byte).
 
-| arm | where the clause sits | cells short | ratings dropped | verdict-led | mean answer chars |
-|---|---|---|---|---|---|
-| baseline | nowhere | 8 / 12 | 2 | 12 / 12 | 943 |
-| system prompt | `DEFAULT_SYSTEM_PROMPT`, ~8.6KB ahead of the records | **9 / 12** | 0 | 12 / 12 | 1,622 |
-| appended to the question | the wording-selection arm, no build | 6 / 12 | 0 | 12 / 12 | 564 |
-| after the question, on a line of its own | `buildUserMessage`, `\n` | 7 / 12 | 0 | **11 / 12** | 643 |
-| **after the question, run on** | `buildUserMessage`, space | **6 / 12** | **0** | 12 / 12 | **564** |
+This is the ledger's ONE home. ADR Decision 84 keeps the decision, the separator argument and the
+rejected alternatives, and cites this section rather than reproducing the rows — the second verbatim
+copy had already started to drift in its second column before it was cut.
+
+| arm | where the clause sits | cells short | ratings dropped | verdict-led | mean output tokens | mean answer chars |
+|---|---|---|---|---|---|---|
+| baseline | nowhere | 8 / 12 | 2 | 12 / 12 | 477 | 943 |
+| system prompt | `DEFAULT_SYSTEM_PROMPT`, ~8.6KB ahead of the records | **9 / 12** | 0 | 12 / 12 | 602 | 1,622 |
+| appended to the question | the wording-selection arm, no build | 6 / 12 | 0 | 12 / 12 | 366 | 564 |
+| after the question, on a line of its own | `buildUserMessage`, `\n` | 7 / 12 | 0 | **11 / 12** | 375 | 643 |
+| **after the question, run on** | `buildUserMessage`, space | **6 / 12** | **0** | 12 / 12 | **366** | **564** |
+
+**Both cost columns are over all fourteen cells**, the two ABSTAIN controls included even though
+they receive no clause in either arm — so read every share below as a share of that fourteen and not
+of the twelve the clause reaches. `mean output tokens` is `outputTokens` off the
+`chartsearchai_audit_log` row, joined to the captures by exact answer text, 14 of 14 cells matched in
+every arm (measured 2026-09-09; the audit REST listing at `GET
+/ws/rest/v1/chartsearchai/auditlog` publishes it beside `inputTokens`). The characters column was
+here first and was being read as the output cost, which it is not: the module records the tokens, so
+that is the figure to quote and the ratio of the two is not constant across arms.
 
 **Position, not wording — and then the separator.** The same sentence ahead of the records made
-completeness *worse* by a cell and cost 72% more output. After the question it fixed three cells
-(Amlodipine — the issue's own reproducer, 6 of 7 to 7 of 7 — plus Metformin and Atenolol), regressed
-one (Nifedipine, the same cell the system-prompt arm lost), took the rating cell to zero and made
-answers 40% **shorter**. Six of twelve are still short: an improvement, not a fix.
+completeness *worse* by a cell and cost **26% more output tokens** (477 → 602; +72% in answer
+characters, which is the same arm measured on the wrong instrument). After the question it fixed
+three cells (Amlodipine — the issue's own reproducer, 6 of 7 to 7 of 7 — plus Metformin and
+Atenolol), regressed one (Nifedipine, the same cell the system-prompt arm lost), took the rating cell
+to zero and cut output by **23%** (477 → 366; −40% in characters). Six of twelve are still short: an
+improvement, not a fix.
+
+**What one gated cell trades, on the recorded figures.** Over the twelve finding-carrying cells the
+clause arms mean 408 output tokens against the baseline's 539, and their input means 12,733–12,735
+against 12,705 — so +28 to +30 input tokens buys −131 output tokens. That input delta independently
+reproduces the 28-token measurement of the clause recorded further down, which was taken on a
+different cell by a different method.
 
 **The last two rows are the same 126 characters differing only in what precedes them**, and that is
 worth its own line because it decided a safety property: on a line of its own the clause displaced
@@ -825,7 +858,9 @@ the code under test, and moved the completeness cell by one in EACH direction (C
 **read every cell count in this table as ±1 under chart-text drift**, and compare two arms with the
 token differential above rather than with their prose, using the zero-finding cells as the drift
 control. A systematic withholding could only ever move cells one way, which is how bidirectional
-flips are told from a regression.
+flips are told from a regression. **The output-token column drifts with them**: that same
+re-capture of the shipped arm means 396 output tokens over the fourteen against the table's 366,
+so read it as a per-arm figure taken with its cell counts and not as a stable property of the clause.
 
 **Before capturing any arm on this rig, confirm the citation range.** A standalone restart empties
 the querystore Lucene index, and `querystore.bootstrap.autostart=true` does **not** rebuild it: the

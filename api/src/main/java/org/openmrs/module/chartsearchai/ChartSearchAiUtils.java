@@ -545,30 +545,71 @@ public class ChartSearchAiUtils {
 	 * two labels reads as several, and the caller withholds a prompt sentence rather than sending an
 	 * unfounded one.
 	 *
-	 * @param mappings the assembled chart's mappings; null answers empty, as
-	 *        {@link #referenceSlice} and {@link #unresolvedDrugClass} are of the same list — this
-	 *        runs on the prompt-assembly path, which has no catch of its own
+	 * <p><b>It selects the population through {@link #safetyFindingMappings} and never by walking
+	 * the list itself</b>, which is where the null tolerance and the injection-order contract live:
+	 * the other question asked of that population, {@code carriedFindingIndexes}, projects off the
+	 * same walk, and the two must not be able to disagree about which records are findings.
+	 *
+	 * @param mappings the assembled chart's mappings; null answers empty, per the shared walk
 	 * @return the distinct subject labels, in injection order; empty where the chart carries no
 	 *         finding
 	 */
 	public static Set<String> findingSubjects(List<RecordMapping> mappings) {
 		Set<String> subjects = new LinkedHashSet<String>();
+		for (RecordMapping mapping : safetyFindingMappings(mappings)) {
+			String key = mapping.getResourceUuid();
+			// Both fallbacks are unreachable given resourceKey's contract — it never returns null
+			// and always writes the separator — and are here so that a key some future writer
+			// builds differently reads as its own subject rather than as somebody else's.
+			// Defensive only: do not build a rule on either.
+			int separator = key == null ? -1 : key.indexOf(':');
+			subjects.add(separator < 0 ? key : key.substring(separator + 1));
+		}
+		return subjects;
+	}
+
+	/**
+	 * The injected {@code safety_finding} records one assembled chart carries, in injection order —
+	 * the ONE selection of that population, and the walk both questions asked of it project off.
+	 * Issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>.
+	 *
+	 * <p><b>Why it is one method.</b> Two questions are asked of this population in one request, at
+	 * two different moments: {@code SafetyFindingCitationExtentCheck.carriedFindingIndexes} takes it
+	 * to citation INDEXES, after the answer, to count what the prompt carried against what the
+	 * answer cited; {@link #findingSubjects} takes it to the SUBJECT labels, before the answer,
+	 * because the #397 clause is about "the drug" and needs the findings to name exactly one.
+	 * Only the projection differs. Spelled twice, a filter added to one would drift from the other
+	 * silently, so that the prompt asks for an enumeration of a population {@code findingCitations}
+	 * then counts differently — which is the state this method was extracted out of, the two
+	 * spellings having been character-for-character identical in two classes.
+	 *
+	 * <p>A {@code List} rather than a Set, so the projection decides its own collapse: the index set
+	 * is unique by construction (the injector's own sequential numbering) while two findings about
+	 * one drug are two records and one subject, and a Set here would have to pick one of those.
+	 *
+	 * <p>Null-tolerant in two DIMENSIONS: a null list answers empty, and a null mapping inside a
+	 * non-null list is skipped. {@link #referenceSlice} and {@link #unresolvedDrugClass} are of the
+	 * same list and tolerate it the same way — this runs on the prompt-assembly path as well, which
+	 * has no catch of its own. Deliberately UNPINNED, and said so rather than left to look defended:
+	 * no production path produces either shape, {@code PatientChartSerializer} never emitting a null
+	 * mapping, so a case forcing one would be a hand-crafted input rather than an arrangement of the
+	 * pipeline.
+	 *
+	 * @param mappings the assembled chart's mappings, may be null
+	 * @return the finding records, in the order the chart carries them; empty where it carries none
+	 */
+	public static List<RecordMapping> safetyFindingMappings(List<RecordMapping> mappings) {
+		List<RecordMapping> findings = new ArrayList<RecordMapping>();
 		if (mappings == null) {
-			return subjects;
+			return findings;
 		}
 		for (RecordMapping mapping : mappings) {
 			if (mapping != null && ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING
 					.equals(mapping.getResourceType())) {
-				String key = mapping.getResourceUuid();
-				// Both fallbacks are unreachable given resourceKey's contract — it never returns
-				// null and always writes the separator — and are here so that a key some future
-				// writer builds differently reads as its own subject rather than as somebody
-				// else's. Defensive only: do not build a rule on either.
-				int separator = key == null ? -1 : key.indexOf(':');
-				subjects.add(separator < 0 ? key : key.substring(separator + 1));
+				findings.add(mapping);
 			}
 		}
-		return subjects;
+		return findings;
 	}
 
 	/**

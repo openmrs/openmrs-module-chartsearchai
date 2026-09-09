@@ -819,6 +819,15 @@ def findings_incompletely_stated(cell):
     ten findings from the screening arm and cited none of them while naming all eight of her active
     orders correctly. `capture_probe_safety.sh` cannot produce that cell, and a future harness that
     can needs its own answer to this rather than a looser predicate here.
+
+    **AND IT CANNOT TELL A CELL THE #397 REQUEST WAS SENT TO FROM ONE IT WAS WITHHELD FROM** — the
+    residue #397 itself created, and the one a successor hits first. Nothing on the wire or in the
+    audit row says whether the prompt carried the request: `LlmInferenceService
+    .severalFindingsAboutOneDrug` withholds it wherever the findings name several drugs, and that
+    population is measured to cite far fewer — twenty findings carried, ten cited, on the
+    interaction-screening question this rig verified the gate against. A cell like that exits 3
+    here, reported as the #397 defect on a prompt #397 asked nothing of. Publishing a key for it is
+    a wire change constrained by ADR Decisions 83 and 84, not a predicate this scorer can tighten.
     """
     extent = finding_extent(cell)
     return extent is not None and extent[0] > 0 and extent[1] < extent[0]
@@ -835,6 +844,19 @@ def unstated_ratings(cell):
     """
     us = cell["unstated_finding_severities"]
     return us if isinstance(us, list) else None
+
+
+def measured_unstated_ratings(cell):
+    """Whether this capture STATED a cited finding's unstated-rating list at all.
+
+    The rating key's own `measured_finding_extent`, and a named predicate for the same reason that
+    one is: `summarise`'s denominator and `main`'s comparability guard must answer this the same
+    way, and four copies of `unstated_ratings(...) is not None` is four places a change to what
+    counts as "no measurement" has to reach. The two keys have INDEPENDENT measurability — a capture
+    taken between #384 and #395 carries this one without the extent — so this is a second predicate
+    and never a view of the first.
+    """
+    return unstated_ratings(cell) is not None
 
 
 def ratings_dropped(cell):
@@ -1043,7 +1065,7 @@ def summarise(name, cells, done, expected=None):
     # With its OWN denominator, for the reason the line above has one: `ratings_dropped` is False
     # where the capture measured nothing, so a bare `0` over a pre-#337 capture reads exactly like
     # an arm that dropped no rating — the same fail-open one key over.
-    rated = [k for k, c in cells.items() if unstated_ratings(c) is not None]
+    rated = [k for k, c in cells.items() if measured_unstated_ratings(c)]
     print("  cells whose answer dropped a cited finding's rating: %d of %d that measured it"
           % (len(dropped_ratings), len(rated)))
     print("ABSTAIN cells (unconnected): %d" % len(abst))
@@ -1938,8 +1960,8 @@ def main():
     # 0, which is the fail-open the refusal above exists to prevent, one key over. That arrangement
     # is now committed as `fixtures/probe-safety/findings-ratings-unmeasured/` — delete this block
     # and read its A/B case's failure.
-    a_rated = set(k for k in both if unstated_ratings(a[k]) is not None)
-    b_rated = set(k for k in both if unstated_ratings(b[k]) is not None)
+    a_rated = set(k for k in both if measured_unstated_ratings(a[k]))
+    b_rated = set(k for k in both if measured_unstated_ratings(b[k]))
     if a_rated != b_rated:
         ab_problems.append("the two arms disagree about which cells measured a cited finding's "
                            "RATING (%d cell(s) on one side only), so the rating column above ran on "
@@ -1960,7 +1982,7 @@ def main():
     # other. They coincide on anything captured today; scoping each column to its own denominator is
     # what stops that from being an assumption.
     rated_both = sorted(k for k in both
-                        if unstated_ratings(a[k]) is not None and unstated_ratings(b[k]) is not None)
+                        if measured_unstated_ratings(a[k]) and measured_unstated_ratings(b[k]))
     print("  cells that dropped a cited finding's rating:       A=%d B=%d  of %d that measured it"
           % (n(rated_both, a, ratings_dropped), n(rated_both, b, ratings_dropped), len(rated_both)))
     for p_ in ab_problems:

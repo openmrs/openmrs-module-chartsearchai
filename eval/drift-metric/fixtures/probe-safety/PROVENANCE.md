@@ -431,10 +431,10 @@ from both cells there, which is the whole of each of those arms, so a difference
 not attributable to the Amlodipine cell alone.
 
 Three of the five are verbatim live captures, which is unusual here and is the point: this defect is
-one the shipped build emits on the majority of its own cells, so it needed no construction. On the
-14-drug corpus these two cells were cut from, **eight of the twelve cells whose prompt carried a
-finding stated fewer than it carried**, every one of them by exactly one — seven losing the last
-finding injected, the eighth a middle one.
+one the shipped build emits on the majority of its own cells, so it needed no construction. The
+14-drug corpus these two cells were cut from, and what each arm of it measured, is
+`eval/drift-metric/README.md`'s section on the finding-enumeration corpus — the one home of that
+ledger. What is recorded here is only what is true of THESE two cells.
 
 ### `findings-incomplete/` — the defect, live
 The Amlodipine cell exactly as `POST /chartsearchai/search` returned it: `findingCitations`

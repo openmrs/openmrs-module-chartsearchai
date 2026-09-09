@@ -62,20 +62,23 @@ import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
  */
 public class FindingEnumerationClauseContextTest {
 
-	/** The arrangement {@code SafetyFindingCitationExtentTest} uses, for the reason it uses it: one
-	 *  question that puts one drug in play against four of the patient's active orders, so the real
-	 *  screen raises several findings about one subject. */
+	/** One question that puts one drug in play against four of the patient's active orders, so the
+	 *  real screen raises several findings about one subject — the arrangement every case here needs
+	 *  and the one each asserts as its own premise off the injected chart. */
 	private static final String QUESTION = "Is it safe to start her on clarithromycin?";
 
 	private static Set<String> setOf(String... values) {
-		// LinkedHashSet, matching the sibling this file says it copies: the premise assertions
-		// below count the findings one partner list raises, and a hash order would let the two
-		// files raise them differently while both claiming to build the same chart.
+		// LinkedHashSet and not a HashSet: the premise assertions below count the findings one
+		// partner list raises, and the partner list's ORDER decides which rules the screen reaches
+		// first, so a hash order would let two runs of this class count differently.
 		return new LinkedHashSet<String>(Arrays.asList(values));
 	}
 
-	/** The same two-order chart {@code SafetyFindingCitationExtentTest} builds, through the real
-	 *  serializer — a private harness rather than a shared one, for the reason that file gives. */
+	/** The two-order chart every case here injects over, through the real serializer. Private to
+	 *  this file, per the convention this package states of its harnesses: nothing may rest on
+	 *  another file building the same records, since a third order added to one copy would falsify
+	 *  that silently, and every case below asserts what the screen raised off the chart in hand
+	 *  rather than off an agreement between files. */
 	private static PatientChart baseChart() {
 		List<SerializedRecord> records = new ArrayList<SerializedRecord>();
 		records.add(new SerializedRecord(ChartSearchAiConstants.RESOURCE_TYPE_DRUG_ORDER,
@@ -406,6 +409,66 @@ public class FindingEnumerationClauseContextTest {
 				"and its prompt must carry the clause");
 	}
 
+	/**
+	 * AND THE PROGRESSIVE-REASONING PREVIEW IS HANDED {@code false} EVEN WHERE THE COMMITTED ANSWER
+	 * IS HANDED {@code true} — the third call site, and the one nothing in the suite observed in
+	 * either direction.
+	 *
+	 * <p>The two cases above assert the flag the two ANSWER call sites hand the provider. The
+	 * preview pass in {@code LlmInferenceService.maybeEmitPreliminaryReasoning} hands a literal
+	 * {@code false}, and the edit that matters there is not flipping that literal: it is threading
+	 * {@code searchStreaming}'s own {@code enumerateFindings} down into the method, which is the
+	 * natural edit because that flag is a live local at the call three lines above. Neither edit can
+	 * be seen by a case whose chart carries no finding — both values are {@code false} there — so
+	 * this case is the one arrangement that tells them apart: the committed answer's chart is the
+	 * real injector's several-findings-one-drug chart, so its flag is {@code true}, while the
+	 * focused slice the preview reads carries no finding at all.
+	 *
+	 * <p><b>The focused slice cannot carry one, and that is the load-bearing reason for the
+	 * literal.</b> {@code ChartBuildingStrategy.buildFocusedChart} goes to
+	 * {@code QueryStoreChartBuilder.buildFocused}, which never calls the injector — the sole
+	 * producer of {@code safety_finding} mappings — so the preview prompt has nothing to enumerate
+	 * and the sentence would be spent on the one pass that shares llama-server's single slot with
+	 * the committed answer. The harness serves the un-injected base chart there for exactly that
+	 * shape.
+	 *
+	 * <p>Both premises are asserted: two streaming passes reached the provider (the preview is
+	 * inside its own try/catch, so a skipped one would otherwise leave this case passing on a
+	 * single call), and the null KV scope identifies which of them is the preview. Issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>.
+	 */
+	@Test
+	public void theProgressiveReasoningPreviewIsHandedFalseWhereTheCommittedAnswerIsHandedTrue() {
+		PatientChart injected = chartWithSeveralFindings();
+		assertTrue(LlmInferenceService.severalFindingsAboutOneDrug(injected),
+				"the premise: the committed answer's chart must ask for the clause, or the two passes "
+						+ "are handed the same flag and this case cannot tell the literal from a "
+						+ "forwarded one");
+		assertFalse(LlmInferenceService.severalFindingsAboutOneDrug(baseChart()),
+				"and its other half: the focused slice the preview reads must carry no finding, which "
+						+ "is what buildFocused produces by construction");
+		RecordingProvider provider = new RecordingProvider();
+		TestableService service = newService(baseChart(), injected, provider);
+		service.progressiveEnabled = true;
+		Patient patient = new Patient();
+		patient.setUuid("uuid-1");
+
+		service.searchStreaming(patient, QUESTION, token -> { });
+
+		assertEquals(2, provider.streamingFlags.size(),
+				"the premise: both the preview pass and the committed pass must have reached the "
+						+ "provider, or this case says nothing about the preview. Scopes: "
+						+ provider.streamingScopes);
+		assertEquals(Arrays.asList(null, "uuid-1"), provider.streamingScopes,
+				"and the preview is the null-scoped pass, which is what identifies it — it must never "
+						+ "read or overwrite the patient's full-chart KV entry");
+		assertEquals(Arrays.asList(Boolean.FALSE, Boolean.TRUE), provider.streamingFlags,
+				"so the preview must be handed false and the committed answer true. A literal true at "
+						+ "the preview call, or searchStreaming's own flag threaded into "
+						+ "maybeEmitPreliminaryReasoning, makes both true and sends the clause to a "
+						+ "prompt carrying no finding to enumerate");
+	}
+
 	/** A private harness, per the convention this package states — not a shared one. The strategy
 	 *  serves {@code built} and the stub injector RETURNS {@code injected} rather than its argument,
 	 *  which is how the two positions of the flag's read are told apart — see
@@ -436,6 +499,9 @@ public class FindingEnumerationClauseContextTest {
 	/** No-ops the Context-backed resolvers so no OpenMRS runtime is needed. */
 	private static final class TestableService extends LlmInferenceService {
 
+		/** Off for every case but the preview one, which is the only path with a second LLM pass. */
+		private boolean progressiveEnabled;
+
 		@Override
 		protected boolean resolveWarmupEnabled() {
 			return false;
@@ -443,6 +509,19 @@ public class FindingEnumerationClauseContextTest {
 
 		@Override
 		protected boolean resolveGroundingEnabled() {
+			return false;
+		}
+
+		@Override
+		protected boolean resolveProgressiveReasoningEnabled() {
+			return progressiveEnabled;
+		}
+
+		// The preview is a fullChart-mode feature and disengages in queryScoped, which is the
+		// shipped default and what the unstubbed resolver would return with no Context — so without
+		// this the preview case would skip the pass it is about and pass on one recorded call.
+		@Override
+		protected boolean resolveQueryScopedMode() {
 			return false;
 		}
 	}
@@ -460,16 +539,37 @@ public class FindingEnumerationClauseContextTest {
 			return chart;
 		}
 
+		/** The focused slice the preview pass reads. It is NOT the injected chart and cannot be:
+		 *  {@code QueryStoreChartBuilder.buildFocused} never runs the injector, so no focused slice
+		 *  that production builds carries a {@code safety_finding} record. Serving the un-injected base
+		 *  chart is that shape, and it is what makes the preview's flag false on its own merits. */
+		@Override
+		PatientChart buildFocusedChart(Patient patient, String question) {
+			return baseChart();
+		}
+
 		@Override
 		boolean usePreFilter() {
 			return false;
 		}
 	}
 
-	/** Records the flag rather than asserting on it — see the case's javadoc for why. */
+	/** Records the flag rather than asserting on it — see the case's javadoc for why.
+	 *
+	 *  <p>Every streaming pass in arrival order as well as the last one, because with progressive
+	 *  reasoning on there are TWO and they are handed different flags: {@code lastFlag} alone cannot
+	 *  say what the preview was given. The scope is recorded beside it for the same reason
+	 *  {@code LlmInferenceServiceProgressiveReasoningTest} records it — a null KV scope is what
+	 *  identifies the preview pass. */
 	private static final class RecordingProvider extends LlmProvider {
 
 		private Boolean lastFlag;
+
+		/** The flag each streaming pass was handed, in order. */
+		private final List<Boolean> streamingFlags = new ArrayList<Boolean>();
+
+		/** The KV-cache scope each streaming pass was handed, in order — null is the preview. */
+		private final List<String> streamingScopes = new ArrayList<String>();
 
 		@Override
 		public LlmResponse search(String numberedRecords, List<Integer> focusIndices,
@@ -483,6 +583,8 @@ public class FindingEnumerationClauseContextTest {
 				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
 				String cacheScope, boolean enumerateFindings) {
 			lastFlag = Boolean.valueOf(enumerateFindings);
+			streamingFlags.add(Boolean.valueOf(enumerateFindings));
+			streamingScopes.add(cacheScope);
 			return new LlmResponse("No.", Collections.<Integer> emptyList());
 		}
 	}

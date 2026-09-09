@@ -15,7 +15,6 @@ import java.util.List;
 import java.util.Set;
 
 import org.openmrs.Patient;
-import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.FindingCitationExtent;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
@@ -99,10 +98,14 @@ import org.slf4j.LoggerFactory;
  *       not every one of them bears on the question the way the reported seventh did.</li>
  * </ul>
  *
- * <p><b>Where it runs.</b> Both answer paths, {@link LlmInferenceService#search} and
- * {@code searchStreaming}, so the endpoint users hit is covered. Not the progressive-reasoning
- * preview, which discards its answer and resolves no citations, and not a cached answer, which was
- * measured when it was produced — the same scoping its siblings state.
+ * <p><b>Where it runs.</b> Of {@link #measureFindingCitations}, which is this class's published
+ * measurement: both answer paths, {@link LlmInferenceService#search} and {@code searchStreaming}, so
+ * the endpoint users hit is covered. Not the progressive-reasoning preview, which discards its
+ * answer and resolves no citations, and not a cached answer, which was measured when it was produced
+ * — the same scoping its siblings state. {@link #carriedFindingIndexes} has a third site and runs
+ * EARLIER than any of these: issue #397 extracted it out of {@code measureFindingCitations} so the
+ * prompt-assembly path could ask this population the question it needs, and there it runs before
+ * any answer exists. Its own javadoc is canonical for that.
  * &rarr; ADR Decision 83.
  */
 final class SafetyFindingCitationExtentCheck {
@@ -117,37 +120,31 @@ final class SafetyFindingCitationExtentCheck {
 	 * CARRIED population this check counts, and the one thing about an assembled chart that says
 	 * whether the prompt asked the model to enumerate anything.
 	 *
-	 * <p><b>ONE walk, and it is shared rather than spelled twice.</b>
-	 * {@link LlmInferenceService#severalFindingsAboutOneDrug} asks it of the same list in the same
-	 * request — the chart local is live at both points, which an earlier draft of that method's
-	 * javadoc denied — and of this set it needs only {@code size() > 1}; its second conjunct asks a
-	 * different question of the same list and is not this one narrowed. Two spellings of THIS
-	 * population would let a filter added to one drift from the other silently, so that the prompt
-	 * asks for an enumeration of a population this key then counts differently. Issue
+	 * <p><b>ONE walk, and it is shared rather than spelled twice —
+	 * {@code ChartSearchAiUtils.safetyFindingMappings}, which is where the population is SELECTED
+	 * and where its null tolerance and injection-order contract live.</b> This method is one
+	 * PROJECTION of that walk and {@code ChartSearchAiUtils.findingSubjects} is the other;
+	 * {@link LlmInferenceService#severalFindingsAboutOneDrug} composes the two in the same request —
+	 * the chart local is live at both points, which an earlier draft of that method's javadoc denied
+	 * — needing only {@code size() > 1} of this one, while its second conjunct asks a different
+	 * question of the same records and is not this one narrowed. Both projections once opened with
+	 * their own copy of the type test, character for character, and were folded into the shared walk
+	 * for what this sentence says: two spellings would let a filter added to one drift from the other
+	 * silently, so that the prompt asks for an enumeration of a population this key then counts
+	 * differently. Issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>.
 	 *
-	 * <p>A LinkedHashSet in INJECTION order, so the uncited indexes the WARN lists read in the order
+	 * <p>A LinkedHashSet over that order, so the uncited indexes the WARN lists read in the order
 	 * the prompt carried them rather than in whatever order a hash gives — a maintainer comparing
 	 * the line against the prompt is reading down one list. Keyed on the INDEX, which is the
 	 * injector's own sequential numbering and unique across a chart by construction, so the set
-	 * counts records and is not silently folding any.
-	 *
-	 * <p>Null-tolerant in two DIMENSIONS rather than two arities, which an earlier draft of this
-	 * sentence said and this method has never had: a null list answers empty, and a null mapping
-	 * inside a non-null list is skipped. {@code ChartSearchAiUtils.referenceSlice} and
-	 * {@code .unresolvedDrugClass} are of the same list and tolerate it the same way: this now runs
-	 * on the prompt-assembly path as well, which has no catch of its own.
+	 * counts records and is not silently folding any — which is also why the shared walk hands back
+	 * a List and leaves each projection its own collapse.
 	 */
 	static Set<Integer> carriedFindingIndexes(List<RecordMapping> mappings) {
 		Set<Integer> carried = new LinkedHashSet<Integer>();
-		if (mappings == null) {
-			return carried;
-		}
-		for (RecordMapping mapping : mappings) {
-			if (mapping != null && ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING
-					.equals(mapping.getResourceType())) {
-				carried.add(Integer.valueOf(mapping.getIndex()));
-			}
+		for (RecordMapping mapping : ChartSearchAiUtils.safetyFindingMappings(mappings)) {
+			carried.add(Integer.valueOf(mapping.getIndex()));
 		}
 		return carried;
 	}

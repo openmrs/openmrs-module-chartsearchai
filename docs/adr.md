@@ -6066,7 +6066,7 @@ The two runs disagree with each other about the answer, and this decision does n
 
 ### What the defect is, measured over a corpus rather than a cell
 
-RefApp 3.7.1 standalone on `:8081`, drug-reference layer enabled, `sourceFormat=ddinter` (2283 entries), `chartMode=fullChart`, `reasoningMaxChars=0`, `maxPairChips=10`. Patient `dc8560c9-…` on eight active drug orders. `eval/drift-metric/capture_probe_safety.sh` with `CAPTURE_PHRASING='should i give {drug}?'` over 14 drugs, through the `PROBE_PATIENTS`/`PROBE_DRUGS` overrides #299 added.
+RefApp 3.7.1 standalone on `:8081`, drug-reference layer enabled, `sourceFormat=ddinter` (2283 entries), `chartMode=fullChart`, `reasoningMaxChars=0`, `maxPairChips=10`. Patient `dc8560c9-…` on eight active drug orders. `eval/drift-metric/capture_probe_safety.sh` with `CAPTURE_PHRASING='should i give {drug}?'` over 14 drugs, through the `PROBE_PATIENTS`/`PROBE_DRUGS` overrides #299 added. **`fullChart` is an operator flip off the shipped default and every arm below is of it**: `omod/src/main/resources/config.xml` ships `chartsearchai.chartMode=queryScoped` and `PipelineSettings.queryScopedMode()` resolves unset or unreadable to that. Since this decision's own claim is that POSITION relative to the records decides the clause's sign, and a queryScoped slice is a few hundred tokens rather than the ~8.6KB the losing arm sat ahead of, the distances that produced this ledger do not exist in the shipped mode and the ledger is not evidence for it. The GATE is mode-independent — the findings come from `preAnswerFindings` over the active orders and the question, not from the chart records the slice narrows — so the clause IS sent there; what is unmeasured is its effect, which makes the fail direction unknown rather than fail-closed.
 
 **Eight of the twelve cells whose prompt carried a safety finding stated fewer than it carried.** The issue's own reproducer is not an outlier; it is the majority behaviour of this arrangement. Every one of the eight is short by exactly one. Seven lost the LAST finding injected; the eighth lost a middle one, record `[355]` with `[356]` cited — so the tail is where it overwhelmingly happens and not the only place it can, and an earlier draft of this decision said "always the last" and was refuted by its own capture set.
 
@@ -6087,24 +6087,24 @@ The four hypotheses the issue asked to be discriminated first, in turn:
 
 **Two things, and the first is the one that generalises.**
 
-**1. POSITION is the variable, not wording.** `LlmProvider.buildUserMessage` appends, after the question, *"Where more than one finding names it, put every one of them on a line of its own, each with the severity that finding states."* Five arms, both prompt arms served through `chartsearchai.llm.systemPrompt` so they differed in exactly those 126 characters, over the same 14 cells:
+**1. POSITION is the variable, not wording.** `LlmProvider.buildUserMessage` appends, after the question, *"Where more than one finding names it, put every one of them on a line of its own, each with the severity that finding states."* Five arms, both prompt arms served through `chartsearchai.llm.systemPrompt` so they differed in exactly those 126 characters, over the same 14 cells.
 
-| arm | where the clause sits | cells short | ratings dropped | verdict-led | mean answer chars |
-|---|---|---|---|---|---|
-| baseline | nowhere | 8 / 12 | 2 | 12 / 12 | 943 |
-| system prompt | `DEFAULT_SYSTEM_PROMPT`, ~8.6KB ahead of the records | **9 / 12** | 0 | 12 / 12 | 1,622 |
-| appended to the question | the wording-selection arm, no build | 6 / 12 | 0 | 12 / 12 | 564 |
-| after the question, on a line of its own | `buildUserMessage`, `\n` separator | 7 / 12 | 0 | **11 / 12** | 643 |
-| **after the question, run on** | `buildUserMessage`, space separator | **6 / 12** | **0** | 12 / 12 | **564** |
+**The five-arm ledger has ONE home and it is not here:** `eval/drift-metric/README.md`, section
+*"The finding-enumeration corpus, and position beating wording"*, which carries the rows, the
+capture command, the corpus and both cost columns. It stood here too, verbatim, until it was cut —
+six columns and five rows in two files, already drifting in the second column, with
+re-measurement landing in one and not the other. This decision keeps the argument and cites the
+table; every figure it needs it states as prose, so the two cannot come apart over a row.
 
-The first three rows were captured with the prompt swapped through
+The first three arms were captured with the prompt swapped through
 `chartsearchai.llm.systemPrompt` or the wording appended to the question; the last two are the
-built omod deployed to that standalone and its module restarted, so what the shipped row measures is
-the module doing it. The run-on row reproduces the wording-selection arm's aggregate exactly — 6 of
-12, no rating dropped, 12 of 12 verdict-led, 564 mean characters — which is what makes the separator
-the only variable between them.
+built omod deployed to that standalone and its module restarted, so what the shipped arm measures is
+the module doing it. **The run-on arm reproduces the wording-selection arm's aggregate exactly** — 6
+of 12 short, no rating dropped, 12 of 12 verdict-led, 564 mean answer characters and 366 mean output
+tokens, against the line-separated arm's 7 of 12, 11 of 12 and 375 — which is what makes the
+separator the only variable between them.
 
-The system-prompt arm made completeness *worse* by a cell (Nifedipine 7/7 → 6/7) and cost 72% more output. The same sentence after the question fixed three cells — the issue's own reproducer among them, 6 of 7 to 7 of 7 — regressed the same one, took `unstatedFindingSeverities` to zero, and made answers **40% shorter**. Both ABSTAIN cells held their abstention in both arms, and the one yes/no directness cell this cohort carries (`dc8560c9-…|probe-current-meds`) scored 1/1 direct with 0 safety violations in both.
+The system-prompt arm made completeness *worse* by a cell (Nifedipine 7/7 → 6/7) and cost **26% more output tokens** (477 → 602 over the 14 cells). The same sentence after the question fixed three cells — the issue's own reproducer among them, 6 of 7 to 7 of 7 — regressed the same one, took `unstatedFindingSeverities` to zero, and cut output by **23%** (477 → 366). **Both of those were published as CHARACTER shares — 72% more and 40% shorter — until they were re-read off the audit row**, and characters are not the cost: `output_tokens` is a column on the same `chartsearchai_audit_log` row this decision already reads `input_tokens` from, so the recorded figure existed and a derived proxy was quoted beside it, which is the root instruction file's own rule. The character shares are real and are the answer's LENGTH; on the twelve cells the clause reaches, +28 to +30 input tokens buys −131 output tokens (539 → 408). Both ABSTAIN cells held their abstention in both arms, and the one yes/no directness cell this cohort carries (`dc8560c9-…|probe-current-meds`) scored 1/1 direct with 0 safety violations in both.
 
 **A FIFTH key moves, and it moves in a direction that reads backwards.** Reading the completeness
 cell beside the existing gates is what this issue asks for, and doing it over every published key —
@@ -6185,7 +6185,7 @@ it looks like across a standalone restart, and what the cell counts in its table
 
 ### Rejected alternatives
 
-- **The clause in `DEFAULT_SYSTEM_PROMPT`.** Tried first, as the lower-risk position — it adds no lead instruction, touches none of the graded-lead branches and leaves #112's refused shape alone. Refuted by the table above: completeness worse by a cell, 72% more output. Reverted rather than kept for its rating win, which is real (2 → 0) and is not this issue's property, and which the shipped position also gets.
+- **The clause in `DEFAULT_SYSTEM_PROMPT`.** Tried first, as the lower-risk position — it adds no lead instruction, touches none of the graded-lead branches and leaves #112's refused shape alone. Refuted by the ledger: completeness worse by a cell, 26% more output tokens. Reverted rather than kept for its rating win, which is real (2 → 0) and is not this issue's property, and which the shipped position also gets.
 - **An ordinal in the injected record** (`Safety finding 3 of 7 — `), which is where the plan for this issue started and which the issue itself ranks as the lower-risk lever. Dropped before it was built, on four grounds and none of them measured behaviour: it reddens two assertions of `UncorroboratedFindingProvenanceTest.twoRulesOfOneEntryAreEachAnsweredOnTheirOwnMatch`, which raises two findings about one subject and asserts both record texts, and relaxing them is changing a spec; a second spelling of the finding lead beside `DrugReferenceInjector.FINDING_PREFIX` is the `ACTIVE_ORDER_INTERACTION_PHRASE` hazard verbatim, and `ReferenceRecordPromptLeadTest` pins only the constant so the new form would be coupled to nothing; a record whose text states a count is prose this model recites ([Decision 66](#decision-66-a-partner-the-chart-names-leads-the-injected-records-dataset-tail-whatever-the-source-rates-it)'s own measurement of the tail rendering), so an answer reciting *"of 7"* and then naming six converts a silent omission into a stated false completeness claim; and it rests on every finding of a cell carrying one subject label, which `RecordedAllergenChipNameTest` is the counter-shape to. The middle drop measured above is a further reason: knowing the total does not tell a model which item it skipped.
 - **Compacting the findings slice** ([Decision 66](#decision-66-a-partner-the-chart-names-leads-the-injected-records-dataset-tail-whatever-the-source-rates-it)'s `name (Severity)` shape). The closest fit to the repeated-mechanism observation — five of the reproducer's seven findings carry the same ~400-character mechanism paragraph verbatim, and the Atenolol cell's answer degrades inside it, writing *"the effects của antihypertensive"*, *"the effets of"* and *"the efectos of"*. Refused because `DrugReferenceInjector.renderFinding` reuses `SafetyWarning.getDetail()` verbatim so that the record and the chip cannot describe one finding differently; compacting the record alone breaks that, and compacting the chip too is a wire change `DrugSafetyChipLabelTest` and #108 constrain.
 - **Reordering the slice so a `drug_reference` monograph is last instead of a finding.** It relocates the loss rather than removing it, and `findingCitations` would then read clean while a record still went missing — improving the number this issue is gated on by moving the loss where the number cannot see it.

@@ -383,12 +383,21 @@ public class LlmInferenceService implements ChartSearchService {
 			}
 			PatientChart focused = chartBuildingStrategy.buildFocusedChart(patient, question);
 			if (focused != null && !focused.getMappings().isEmpty()) {
-				// `false` explicitly, and it is a decision rather than a default: this preview
-				// DISCARDS its answer (DISCARD_TOKENS) and exists only to stream reasoning early, so
-				// there is no enumeration to shape and no reason to spend the clause or to move this
-				// path's cached prefix. Passed at the call site because the flag-less arity was
-				// removed — see the @param on `search`: an overload production calls that a test
-				// double does not override is silently bypassed, which is how issue #397 shipped
+				// `false` explicitly, and it is a decision rather than a default. THE LOAD-BEARING
+				// REASON IS THAT THIS PROMPT HAS NOTHING TO ENUMERATE: buildFocusedChart goes to
+				// QueryStoreChartBuilder.buildFocused and never through drugReferenceInjector
+				// .inject, the sole producer of `safety_finding` mappings, so a preview chart carries
+				// none — threading searchStreaming's own flag down here (the natural edit, that flag
+				// being a live local at the call above) would send the 126-character sentence to a
+				// prompt with no finding in it, and spend those bytes on the one pass that shares
+				// llama-server's single slot with the committed answer. That the preview also
+				// DISCARDS its answer (DISCARD_TOKENS) is the weaker reason, and was the only one
+				// this comment gave. FindingEnumerationClauseContextTest
+				// .theProgressiveReasoningPreviewIsHandedFalseWhereTheCommittedAnswerIsHandedTrue
+				// reddens on either edit — this literal flipped, or that flag threaded in — because
+				// there the two passes' flags differ. Passed at the call site because the flag-less
+				// arity was removed — see the @param on `search`: an overload production calls that a
+				// test double does not override is silently bypassed, which is how issue #397 shipped
 				// once already.
 				llmProvider.searchStreaming(focused.getText(), focused.getFocusIndices(), question,
 						DISCARD_TOKENS, previewReasoningConsumer, null, false);
@@ -622,14 +631,17 @@ public class LlmInferenceService implements ChartSearchService {
 	 * {@code LlmProvider.buildUserMessage} needs. Issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>.
 	 *
-	 * <p><b>Reads {@code SafetyFindingCitationExtentCheck.carriedFindingIndexes}, which is the ONE
-	 * definition of the carried population.</b> An earlier draft walked the mappings here instead
-	 * and justified it by saying the two questions are asked of charts that do not coexist — which
-	 * is false: {@code chart} is the same live local at this call and at the check's, in both answer
-	 * methods. Two walks would let a filter added to one drift from the other silently, so that the
-	 * prompt asks for an enumeration of a population {@code findingCitations} then counts
-	 * differently. The check runs after the answer and needs the SET; this runs before there is one
-	 * and needs only whether there are two.
+	 * <p><b>Both conjuncts read the SAME selection of the carried population,
+	 * {@code ChartSearchAiUtils.safetyFindingMappings}</b> — the first through
+	 * {@code SafetyFindingCitationExtentCheck.carriedFindingIndexes}, the second through
+	 * {@code ChartSearchAiUtils.findingSubjects}, which are two projections of that one walk and not
+	 * two walks. An earlier draft walked the mappings here instead and justified it by saying the
+	 * two questions are asked of charts that do not coexist — which is false: {@code chart} is the
+	 * same live local at this call and at the check's, in both answer methods. Two selections would
+	 * let a filter added to one drift from the other silently, so that the prompt asks for an
+	 * enumeration of a population {@code findingCitations} then counts differently. The check runs
+	 * after the answer and needs the SET; this runs before there is one and needs only whether there
+	 * are two.
 	 *
 	 * <p>The threshold is TWO because one finding is not an enumeration. Nothing published records
 	 * the per-cell carried counts of the measured corpus, so no claim is made about them here.

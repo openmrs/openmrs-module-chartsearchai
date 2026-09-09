@@ -396,9 +396,7 @@ public class LlmInferenceService implements ChartSearchService {
 				// .theProgressiveReasoningPreviewIsHandedFalseWhereTheCommittedAnswerIsHandedTrue
 				// reddens on either edit — this literal flipped, or that flag threaded in — because
 				// there the two passes' flags differ. Passed at the call site because the flag-less
-				// arity was removed — see the @param on `search`: an overload production calls that a
-				// test double does not override is silently bypassed, which is how issue #397 shipped
-				// once already.
+				// arity was removed — the @param on `search` is canonical for why.
 				llmProvider.searchStreaming(focused.getText(), focused.getFocusIndices(), question,
 						DISCARD_TOKENS, previewReasoningConsumer, null, false);
 			}
@@ -632,16 +630,17 @@ public class LlmInferenceService implements ChartSearchService {
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>.
 	 *
 	 * <p><b>Both conjuncts read the SAME selection of the carried population,
-	 * {@code ChartSearchAiUtils.safetyFindingMappings}</b> — the first through
-	 * {@code SafetyFindingCitationExtentCheck.carriedFindingIndexes}, the second through
-	 * {@code ChartSearchAiUtils.findingSubjects}, which are two projections of that one walk and not
-	 * two walks. An earlier draft walked the mappings here instead and justified it by saying the
+	 * {@code ChartSearchAiUtils.safetyFindingMappings}</b> — the first its SIZE, the second through
+	 * {@code ChartSearchAiUtils.findingSubjects}, a projection of that one walk and not a second
+	 * walk. An earlier draft walked the mappings here instead and justified it by saying the
 	 * two questions are asked of charts that do not coexist — which is false: {@code chart} is the
-	 * same live local at this call and at the check's, in both answer methods. Two selections would
+	 * same live local at this call and at {@code SafetyFindingCitationExtentCheck}'s, in both answer
+	 * methods. Two selections would
 	 * let a filter added to one drift from the other silently, so that the prompt asks for an
-	 * enumeration of a population {@code findingCitations} then counts differently. The check runs
-	 * after the answer and needs the SET; this runs before there is one and needs only whether there
-	 * are two.
+	 * enumeration of a population {@code findingCitations} then counts differently. That check runs
+	 * after the answer and needs the index SET; this runs before there is one and needs only whether
+	 * there are two records, so it counts the records rather than crossing into the check to count
+	 * the indexes they were numbered with.
 	 *
 	 * <p>The threshold is TWO because one finding is not an enumeration. Nothing published records
 	 * the per-cell carried counts of the measured corpus, so no claim is made about them here.
@@ -688,7 +687,7 @@ public class LlmInferenceService implements ChartSearchService {
 	 */
 	static boolean severalFindingsAboutOneDrug(PatientChart chart) {
 		List<RecordMapping> mappings = chart.getMappings();
-		return SafetyFindingCitationExtentCheck.carriedFindingIndexes(mappings).size() > 1
+		return ChartSearchAiUtils.safetyFindingMappings(mappings).size() > 1
 				&& ChartSearchAiUtils.findingSubjects(mappings).size() == 1;
 	}
 

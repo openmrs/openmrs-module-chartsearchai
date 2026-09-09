@@ -59,7 +59,9 @@ public class ArchitectureGuardTest {
 	/** The safety-finding type as a token: the constant's simple name, or the literal value it holds.
 	 *  The constant arm is bounded at BOTH ends, so a longer identifier that merely CONTAINS that
 	 *  name is not read as it, wherever in the identifier the name sits; the literal arm is bounded by
-	 *  its own quotes. One spelling, shared by the receiver arm and by the argument-list read. */
+	 *  its own quotes. ONE spelling, and both readings below are BUILT from it — a second copy is the
+	 *  re-inlined-literal hazard this file exists to forbid, and it would let a third spelling added
+	 *  here leave the receiver arm looking for the old two with every canary still passing. */
 	private static final Pattern FINDING_TYPE_TOKEN = Pattern.compile(
 			"\"safety_finding\"|\\bRESOURCE_TYPE_SAFETY_FINDING\\b");
 
@@ -67,7 +69,7 @@ public class ArchitectureGuardTest {
 	 *  use. Whitespace-tolerant because one of the two wraps across a line, and a line-scoped
 	 *  pattern would be blind to exactly the arrangement a re-inline is most likely to copy. */
 	private static final Pattern FINDING_TYPE_TEST_RECEIVER = Pattern.compile(
-			"(?:\"safety_finding\"|\\bRESOURCE_TYPE_SAFETY_FINDING\\b)"
+			"(?:" + FINDING_TYPE_TOKEN.pattern() + ")"
 			+ "\\s*\\.\\s*equals(?:IgnoreCase)?\\s*\\(");
 
 	/** The opening of an {@code equals}/{@code equalsIgnoreCase} CALL, whose argument list is then
@@ -328,7 +330,9 @@ public class ArchitectureGuardTest {
 	 * holds the reading to the QUALIFIED-CONSTANT receiver and to nothing else, and <b>any narrowing
 	 * the two bodies still satisfy passes both preconditions</b>. Measured 2026-09-09, one mutation
 	 * per run, each leaving this case GREEN: deleting the {@code "safety_finding"} literal arm from
-	 * both patterns; replacing {@code equals(?:IgnoreCase)?} with {@code equals} in both; and
+	 * {@link #FINDING_TYPE_TOKEN}, the one home both readings are built from; replacing
+	 * {@code equals(?:IgnoreCase)?} with {@code equals} in the receiver pattern and in
+	 * {@link #EQUALS_CALL}, which are two copies of THAT fragment; and
 	 * narrowing the receiver pattern to require the {@code ChartSearchAiConstants.} qualifier, after
 	 * which the reading sees neither a static-imported
 	 * {@code RESOURCE_TYPE_SAFETY_FINDING.equals(t)} nor {@code "safety_finding".equals(t)}. The
@@ -380,12 +384,8 @@ public class ArchitectureGuardTest {
 		for (java.util.Map.Entry<String, String> entry : sources.entrySet()) {
 			String source = entry.getValue();
 			for (int[] test : findingTypeTests(source)) {
-				boolean home = false;
-				if (FINDING_TYPE_TEST_HOME_FILE.equals(entry.getKey())) {
-					for (int[] region : allowed) {
-						home = home || (test[0] >= region[0] && test[0] < region[1]);
-					}
-				}
+				boolean home = FINDING_TYPE_TEST_HOME_FILE.equals(entry.getKey())
+						&& insideAnyOf(test[0], allowed);
 				if (!home) {
 					String quoted = source.substring(test[0], test[1]).replace("\n", " ");
 					violations.add(entry.getKey() + ":"
@@ -475,6 +475,17 @@ public class ArchitectureGuardTest {
 			}
 		}
 		return -1;
+	}
+
+	/** Whether {@code offset} falls inside any of {@code regions}, each a {@code {start, end}} pair
+	 *  with the end EXCLUSIVE, as {@link #endOfBody} returns it. */
+	private static boolean insideAnyOf(int offset, List<int[]> regions) {
+		for (int[] region : regions) {
+			if (offset >= region[0] && offset < region[1]) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

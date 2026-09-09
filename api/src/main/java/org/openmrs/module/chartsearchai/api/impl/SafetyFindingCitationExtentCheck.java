@@ -102,12 +102,10 @@ import org.slf4j.LoggerFactory;
  * measurement: both answer paths, {@link LlmInferenceService#search} and {@code searchStreaming}, so
  * the endpoint users hit is covered. Not the progressive-reasoning preview, which discards its
  * answer and resolves no citations, and not a cached answer, which was measured when it was produced
- * — the same scoping its siblings state. {@link #carriedFindingIndexes} runs on the
- * prompt-assembly path instead, in BOTH answer methods, and there it runs before any answer exists:
- * issue #397 extracted it out of {@code measureFindingCitations} so that path could ask this
- * population the question it needs. {@code measureFindingCitations} shares that method's
- * PROJECTION rather than calling it, needing the walk the projection was taken from as well. Its
- * own javadoc is canonical for both.
+ * — the same scoping its siblings state. {@link #carriedFindingIndexes} is this class's other
+ * published projection of that population and has no production caller of its own; its javadoc is
+ * canonical for what it is for, and for what {@code measureFindingCitations} shares with it rather
+ * than calling it.
  * &rarr; ADR Decision 83.
  */
 final class SafetyFindingCitationExtentCheck {
@@ -119,60 +117,34 @@ final class SafetyFindingCitationExtentCheck {
 
 	/**
 	 * The injected {@code safety_finding} records {@code mappings} carries, by citation index — the
-	 * CARRIED population this check counts, and the one thing about an assembled chart that says
-	 * whether the prompt asked the model to enumerate anything.
-	 *
-	 * <p><b>ONE walk, and it is shared rather than spelled twice —
-	 * {@code ChartSearchAiUtils.safetyFindingMappings}, which is where the population is SELECTED
-	 * and where its null tolerance and injection-order contract live.</b> This method is one
-	 * PROJECTION of that walk and {@code ChartSearchAiUtils.findingSubjects} is the other;
-	 * {@link LlmInferenceService#severalFindingsAboutOneDrug} composes the two in the same request —
-	 * the chart local is live at both points, which an earlier draft of that method's javadoc denied
-	 * — needing only {@code size() > 1} of this one, while its second conjunct asks a different
-	 * question of the same records and is not this one narrowed. Both projections once opened with
-	 * their own copy of the type test, character for character, and were folded into the shared walk
-	 * for what this sentence says: two spellings would let a filter added to one drift from the other
-	 * silently, so that the prompt asks for an enumeration of a population this key then counts
-	 * differently. Issue
+	 * CARRIED population {@link #measureFindingCitations} counts. Issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>.
 	 *
-	 * <p><b>Nothing reads this set's ITERATION ORDER, and that is a change rather than an
-	 * observation.</b> {@link LlmInferenceService#severalFindingsAboutOneDrug}, the only production
-	 * caller of this method, reads only {@code size()}; {@link #measureFindingCitations}, which
-	 * shares the projection below rather than calling this method, reads {@code isEmpty()},
-	 * {@code contains} and {@code size()} of it and takes the uncited indexes it names at WARN from
-	 * the shared walk's own List instead — so the promise that the WARN reads in the order the
-	 * prompt carried them rests on the walk's order contract, which
-	 * {@code FindingEnumerationClauseContextTest.theCarriedIndexesReadInTheOrderTheInjectorWroteTheFindings}
-	 * pins by comparing that List against the injector's own numbering. That promise rested on this
-	 * {@code LinkedHashSet} until the assertion was made direct, and it was a fail-open: substituting
-	 * a {@code HashSet} left the order case green — measured — and, worse, left the REVERSAL of the
-	 * shared walk green too, so a one-token collection swap disarmed the only pin the order contract
-	 * had. The reason was a property of that chart and not a structural one: its finding indexes are
-	 * 4-7, which a {@code HashSet} iterates ascending whatever order they went in, while the same
-	 * substitution over the SEVEN indexes 349-355 that the eval rig's own findings occupy — read off
-	 * {@code eval/drift-metric/fixtures/probe-safety/findings-complete/sarah__safety-Amlodipine.json},
-	 * the largest such population any committed capture carries, none of them reaching an index
-	 * above 355 — iterates {@code [352, 353, 354, 355, 349, 350, 351]}, equally not ascending. A
-	 * {@code TreeSet} or a sort IS the structural case — that substitution is green here too,
-	 * measured, and unlike the hash one it would have been green on any chart, normalising to the
-	 * order that case then expected whatever the values — and the case's javadoc separates the two.
+	 * <p><b>The population is SELECTED by {@code ChartSearchAiUtils.safetyFindingMappings} and never
+	 * by a walk spelled here</b> — that method is canonical for its null tolerance, its
+	 * injection-order contract and why there is one selection at all; {@code findingSubjects} is the
+	 * other projection off it.
 	 *
-	 * <p><b>The order pin is now a List-to-List comparison over the walk itself, which no collection
-	 * substituted here can get in the way of, and the one case that still read this set's own order
-	 * was changed to compare its CONTENT with both sides sorted — so a {@code HashSet} here is INERT
-	 * rather than merely green.</b> Measured, one mutation per run: the api suite is green under the
-	 * substitution, and green under a REVERSAL of this projection alone with the shared walk left
-	 * untouched, which is the mutation that separates "nothing reads the order" from "the one reader
-	 * is satisfied by the way these values happen to hash". Before that case was changed the same
-	 * reversal reddened it, reporting an order-only change as a dropped or added index. The
-	 * {@code LinkedHashSet} stays because a caller reading the returned set then gets the prompt's
-	 * own order for free, not because anything today depends on it — and nothing pins that, so a
-	 * caller that comes to depend on it brings its own pin.
+	 * <p><b>Nothing in PRODUCTION calls this method, and that is stated rather than left to be
+	 * found.</b> {@link LlmInferenceService#severalFindingsAboutOneDrug} counts the shared walk's own
+	 * records, which is what its conjunct means; {@link #measureFindingCitations} shares
+	 * {@link #indexesOf} instead, needing the walk the projection was taken from as well and not
+	 * walking twice to get both. What this is, is the COMPOSED projection — the entry point the
+	 * projection's own contract can be put to without a caller chaining the two production steps
+	 * itself, and its reader is
+	 * {@code FindingEnumerationClauseContextTest.theSharedWalkHandsTheFindingsBackInTheOrderTheInjectorWroteThem}'s
+	 * content leg. Keep it composed if a production caller returns.
 	 *
-	 * <p>Keyed on the INDEX, which is the injector's own sequential numbering and unique across a
-	 * chart by construction, so the set counts records and is not silently folding any — which is
-	 * also why the shared walk hands back a List and leaves each projection its own collapse.
+	 * <p>Keyed on the INDEX, the injector's own sequential numbering — one increment per finding
+	 * record, in the sole producer of these mappings — so it is unique across a chart by
+	 * construction and this set counts records rather than folding any. That is what the leg above
+	 * observes, one entry per finding against this set.
+	 *
+	 * <p><b>Nothing reads this set's ITERATION ORDER either</b>, so the {@code LinkedHashSet} is a
+	 * convenience and not a contract: a {@code HashSet} or a {@code TreeSet} here is INERT, measured,
+	 * and a caller that comes to depend on the prompt's order brings its own pin. The order contract
+	 * is the shared WALK's, pinned directly List against List by the case above, whose javadoc
+	 * carries what that pin catches and what a collection substituted here cannot reach.
 	 */
 	static Set<Integer> carriedFindingIndexes(List<RecordMapping> mappings) {
 		return indexesOf(ChartSearchAiUtils.safetyFindingMappings(mappings));

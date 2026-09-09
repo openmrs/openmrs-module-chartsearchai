@@ -792,13 +792,18 @@ def finding_extent(cell):
     return (carried, cited)
 
 
-def measured_finding_extent(cell):
+def has_extent_measurement(cell):
     """Whether this capture STATED a finding-citation extent at all — the census denominator.
 
     A named predicate rather than `finding_extent(...) is not None` repeated at each site, on the
     same reasoning `has_readable_chip_rating` is one: `summarise`'s denominator and `main`'s
-    comparability guard must answer this the same way, and four copies of the expression is four
-    places a change to what counts as "no measurement" has to reach.
+    comparability guard must answer this the same way, and a copy of the expression at each site is
+    as many places a change to what counts as "no measurement" has to reach.
+
+    **`has_`, and the naming rule is ONE rule over both pairs** — `has_rating_measurement` carries
+    why, the trap being that the accessor and the predicate diverge in truthiness one key over.
+    `finding_extent` happens to be safe, returning a truthy tuple even at `(0, 0)`; the rule is not
+    resting on that.
     """
     return finding_extent(cell) is not None
 
@@ -846,13 +851,15 @@ def unstated_ratings(cell):
     return us if isinstance(us, list) else None
 
 
-def measured_unstated_ratings(cell):
+def has_rating_measurement(cell):
     """Whether this capture STATED a cited finding's unstated-rating list at all.
 
-    The rating key's own `measured_finding_extent`, and a named predicate for the same reason that
+    The rating key's own `has_extent_measurement`, and a named predicate for the same reason that
     one is: `summarise`'s denominator and `main`'s comparability guard must answer this the same
-    way, and four copies of `unstated_ratings(...) is not None` is four places a change to what
-    counts as "no measurement" has to reach. The two keys have INDEPENDENT measurability — a capture
+    way, and a copy of `unstated_ratings(...) is not None` at each site is as many places a change
+    to what counts as "no measurement" has to reach. **It is NOT `unstated_ratings` under another
+    name and must not be substituted for it**: that accessor returns a falsy `[]` for the ordinary
+    clean cell, where this returns True. The two keys have INDEPENDENT measurability — a capture
     taken between #384 and #395 carries this one without the extent — so this is a second predicate
     and never a view of the first.
     """
@@ -1012,8 +1019,8 @@ def summarise(name, cells, done, expected=None):
                         "from verdict-led: %s" % (len(discordant), discordant[:4]))
     # ISSUE #397. Over every cell that STATED a measurement, not over `ans`: `carried > 0` is the
     # population and it does not need the label's help — see `findings_incompletely_stated`.
-    measured = sorted(k for k, c in cells.items() if measured_finding_extent(c))
-    unmeasured = sorted(set(cells) - set(measured))
+    measured = sorted(k for k, c in cells.items() if has_extent_measurement(c))
+    unmeasured = len(cells) - len(measured)
     with_findings = [k for k in measured if finding_extent(cells[k])[0] > 0]
     short = [k for k in with_findings if findings_incompletely_stated(cells[k])]
     dropped_ratings = sorted(k for k in cells if ratings_dropped(cells[k]))
@@ -1061,11 +1068,11 @@ def summarise(name, cells, done, expected=None):
           % (len(with_findings) - len(short), len(with_findings)))
     print("  cells that stated fewer (the defect): %d" % len(short))
     print("  cells stating no extent at all (not counted above): %d of %d"
-          % (len(unmeasured), len(cells)))
+          % (unmeasured, len(cells)))
     # With its OWN denominator, for the reason the line above has one: `ratings_dropped` is False
     # where the capture measured nothing, so a bare `0` over a pre-#337 capture reads exactly like
     # an arm that dropped no rating — the same fail-open one key over.
-    rated = [k for k, c in cells.items() if measured_unstated_ratings(c)]
+    rated = [k for k, c in cells.items() if has_rating_measurement(c)]
     print("  cells whose answer dropped a cited finding's rating: %d of %d that measured it"
           % (len(dropped_ratings), len(rated)))
     print("ABSTAIN cells (unconnected): %d" % len(abst))
@@ -1972,8 +1979,8 @@ def main():
     # ran on one side only. That is refused. Of the pairs committed before #397 it fires on none,
     # both sides of each being unmeasured and so in agreement.
     ab_problems = []
-    a_measured = set(k for k in both if measured_finding_extent(a[k]))
-    b_measured = set(k for k in both if measured_finding_extent(b[k]))
+    a_measured = set(k for k in both if has_extent_measurement(a[k]))
+    b_measured = set(k for k in both if has_extent_measurement(b[k]))
     if a_measured != b_measured:
         ab_problems.append("the two arms disagree about which cells measured the finding-citation "
                            "extent (%d cell(s) on one side only), so the completeness column above "
@@ -1988,8 +1995,8 @@ def main():
     # 0, which is the fail-open the refusal above exists to prevent, one key over. That arrangement
     # is now committed as `fixtures/probe-safety/findings-ratings-unmeasured/` — delete this block
     # and read its A/B case's failure.
-    a_rated = set(k for k in both if measured_unstated_ratings(a[k]))
-    b_rated = set(k for k in both if measured_unstated_ratings(b[k]))
+    a_rated = set(k for k in both if has_rating_measurement(a[k]))
+    b_rated = set(k for k in both if has_rating_measurement(b[k]))
     if a_rated != b_rated:
         ab_problems.append("the two arms disagree about which cells measured a cited finding's "
                            "RATING (%d cell(s) on one side only), so the rating column above ran on "
@@ -1998,23 +2005,26 @@ def main():
                            "here. Re-capture the older arm against a build that publishes "
                            "`unstatedFindingSeverities` (issue #397)."
                            % len(a_rated ^ b_rated))
-    shared = sorted(a_measured & b_measured)
-    carried_any = [k for k in shared if finding_extent(a[k])[0] > 0 or finding_extent(b[k])[0] > 0]
-    print("findings the answer stated (issue #397), over the %d shared cell(s) that measured it:"
-          % len(shared))
+    extent_both = sorted(a_measured & b_measured)
+    carried_any = [k for k in extent_both
+                   if finding_extent(a[k])[0] > 0 or finding_extent(b[k])[0] > 0]
+    print("findings the answer stated (issue #397), over the %d shared cell(s) where BOTH arms "
+          "measured the extent:" % len(extent_both))
     print("  cells carrying a finding whose prose stated FEWER: A=%d B=%d  of %d that carried any"
           % (n(carried_any, a, findings_incompletely_stated),
              n(carried_any, b, findings_incompletely_stated), len(carried_any)))
-    # Over the cells that measured the RATING key, which is not the same set as `shared`: the two
-    # keys have their own measurability and a capture between #384 and #395 carries one without the
-    # other. They coincide on anything captured today; scoping each column to its own denominator is
-    # what stops that from being an assumption.
-    rated_both = sorted(k for k in both
-                        if measured_unstated_ratings(a[k]) and measured_unstated_ratings(b[k]))
+    # Over the cells that measured the RATING key, which is not the same set as `extent_both`: the
+    # two keys have their own measurability and a capture between #384 and #395 carries one without
+    # the other. They coincide on anything captured today; scoping each column to its own
+    # denominator is what stops that from being an assumption. Intersected off the two sets the
+    # refusal above already holds, rather than re-derived, so the denominator and the refusal cannot
+    # come to disagree about which cells measured the rating; the `findings-ratings-unmeasured` arm
+    # in `selftest` records what widening it costs.
+    rated_both = sorted(a_rated & b_rated)
     print("  cells that dropped a cited finding's rating:       A=%d B=%d  of %d that measured it"
           % (n(rated_both, a, ratings_dropped), n(rated_both, b, ratings_dropped), len(rated_both)))
-    for p_ in ab_problems:
-        print("  !! %s" % p_)
+    for p in ab_problems:
+        print("  !! %s" % p)
     if sa["problems"] or sb["problems"] or ab_problems:
         print("\n!! one or both arms reported integrity problems above, or the two cannot be "
               "compared — read them before treating this as a gate result. Exiting 3 so "

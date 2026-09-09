@@ -385,11 +385,15 @@ public class LlmProvider {
 	private RemoteLlmEngine remoteEngine;
 
 	/**
-	 * Focus-hint variant of {@link #search}: renders a short "Records ranked by similarity to the
-	 * query: ..." line between the records section and the question. The numberedRecords
-	 * are still the full patient chart in stable date-desc order, so the prompt prefix is
-	 * byte-identical across queries for the same patient and llama-server's KV cache reuses
-	 * the prefill. The variable bytes are the small focus-hint line plus the question.
+	 * The ONLY synchronous arity. Where {@code focusIndices} is non-empty it renders a short
+	 * "Records ranked by similarity to the query: ..." line between the records section and the
+	 * question. The numberedRecords are still the full patient chart in stable date-desc order, so
+	 * the prompt prefix is byte-identical across queries for the same patient and llama-server's KV
+	 * cache reuses the prefill. The variable bytes are the small focus-hint line plus the question.
+	 *
+	 * <p>The flag-less convenience overload that stood beside it was DELETED rather than kept, for
+	 * the reason {@link #searchStreaming}'s own paragraph on the same deletion gives and the
+	 * {@code enumerateFindings} @param below repeats of this arity: do not reintroduce one.
 	 *
 	 * @param numberedRecords the numbered patient records text
 	 * @param focusIndices the records ranked most similar to the query, or empty for no hint
@@ -1036,88 +1040,37 @@ public class LlmProvider {
 					+ "the chart.");
 		}
 		sb.append("\n\nClinician's query: ").append(question);
-		// ISSUE #397. A LAYOUT rule, and it is here rather than in DEFAULT_SYSTEM_PROMPT because
-		// POSITION is the variable — measured, on one build, both arms served through
-		// `chartsearchai.llm.systemPrompt` so they differed in exactly these bytes, over 14 safety
-		// cells on one patient with eight active orders (2026-09-09). ADR Decision 84 and
-		// eval/drift-metric/README.md carry the ledger, and it is deliberately NOT reproduced here:
-		// a third copy is what the root instruction file's "Documenting a decision" section forbids,
-		// and it would be the copy nobody updates.
+		// ISSUE #397. A LAYOUT rule, and BOTH the position and the separator are load-bearing: the
+		// clause goes AFTER the question and runs on from it with a SPACE. Ahead of the records, in
+		// DEFAULT_SYSTEM_PROMPT, the same sentence made completeness WORSE and cost more output; on
+		// a line of its own here it read as the dominant instruction and cost a verdict lead. ADR
+		// Decision 84 carries both measurements, the refuted alternatives and the corrections
+		// earlier drafts of this comment needed; eval/drift-metric/README.md carries the five-arm
+		// ledger they are rows of. Neither is reproduced here — a third copy is what the root
+		// instruction file's "Documenting a decision" section forbids, and would be the copy nobody
+		// re-measures. LlmInferenceService.severalFindingsAboutOneDrug is canonical for the gate.
 		//
-		// What a maintainer at this line needs is the SHAPE of that result, which is the whole of
-		// why the clause sits here and not there: the same sentence AHEAD of the records made
-		// completeness WORSE and cost more output; here, after the question, it improved
-		// completeness and made answers shorter. Six of twelve cells are still short, so this is an
-		// improvement and not a fix. And the two after-the-question arms differ only in the
-		// SEPARATOR — see the comment at the append below, which is where that cost a verdict lead.
+		// THESE ARE THE MEASURED BYTES, down to the SPACE in front of them, and
+		// LlmProviderUserMessageTest.theAppendedClauseIsExactlyTheseBytes is what holds them as
+		// bytes: an imperative ADDED in this position is a measured hazard and not a hypothetical
+		// one, and until that case existed the class held this string by substrings alone. A
+		// rewording also stops the ledger describing the shipped clause.
 		//
-		// NO FEW-SHOT DEMONSTRATES THIS CLAUSE, AND THAT IS A DECISION RATHER THAN AN OVERSIGHT. It is
-		// a THIRD element of the real user-message shape — a sentence between the question and the
-		// model's JSON — while every "Clinician's query: " line in DEFAULT_SYSTEM_PROMPT is followed
-		// immediately by that JSON, and no safety demonstration in it carries two findings about one
-		// drug — its two finding records name two different drugs, so the demonstration prompt fails
-		// this clause's own gate. So the demonstration does not mirror the shape the model sees here,
-		// and that mirror is an invariant this class otherwise states twice and enforces with shared
-		// constants (FOCUS_HINT_LABEL, DrugReferenceInjector.FINDING_PREFIX). The reason for the exception is the ledger: the arm
-		// that moved this sentence into DEFAULT_SYSTEM_PROMPT is the one that made completeness WORSE,
-		// and an imperative ADDED in this position is the measured hazard — the ", and nothing else"
-		// wording took the verdict lead. A demonstration is more instruction in the area where more
-		// instruction is measured to regress, so it is a change that needs its own A/B and cannot be
-		// had for free. Unmeasured, and left so deliberately.
-		//
-		// WHAT PROTECTS THE KV-CACHE PREFIX IS THE APPEND POSITION, NOT EITHER GUARD, and an earlier
-		// draft of this comment said the opposite and claimed to have verified it. {@link #warmup}
-		// and searchStreaming's cacheSeed both call this with {@code question = ""} and rely on the
-		// result being a byte-PREFIX of every real query. That holds because the clause goes after
-		// the "Clinician's query: " marker and the question's own bytes: whatever follows them
-		// cannot disturb a prefix that ends at the marker. Measured, by replacing the whole
-		// condition with {@code if (enumerateFindings)} and running the class:
-		// warmupUserMessageShouldBePrefixOfRealQuery and .warmupUserMessageShouldEndWithEmptyQueryMarker
-		// both stay GREEN — they compare two clause-free messages through the 2-arg arity, which
-		// hardcodes the flag false, so no change to these conditions can move them. **Moving the
-		// clause ahead of the marker is what breaks the contract, and the case that catches that is
-		// LlmProviderUserMessageTest.theClauseMustNotBreakTheWarmupPrefixForAQuestionOfAnyLength.**
+		// NO FEW-SHOT DEMONSTRATES THIS CLAUSE, AND THAT IS A DECISION — the one exception to the
+		// mirror invariant FOCUS_HINT_LABEL's javadoc states, which points here for it.
+		// DEFAULT_SYSTEM_PROMPT's two demonstrated finding records name a different fruit each — [4]
+		// Durian, [5] Lychee — so the demonstration prompt fails this clause's own gate: it carries
+		// two findings and they name two subjects. And a demonstration is more instruction
+		// in exactly the position where more instruction is measured to regress, so it needs its own
+		// A/B and cannot be had for free. Unmeasured, and left so deliberately.
 		//
 		// THE BLANK-QUESTION GUARD PREVENTS NOTHING PRODUCTION CAN REACH, and is still worth having.
-		// {@link #warmup} and searchStreaming's cacheSeed both build through the 2-arg arity, which
-		// is the one that hardcodes the flag false, so no production caller can present this body
-		// with the flag true and the question blank — an earlier draft of this comment said the
-		// clause would otherwise reach the SEED, which no caller can ask for. It is defence against
-		// a FUTURE caller: a widening of the seed path to carry the real flag cannot make a seed
-		// carry the clause without reddening .warmupShouldNotCarryTheFindingEnumerationClause or
-		// that same any-length case, both of which call this arity directly with true and a blank
-		// question. Mutate the guard out and read the failures.
-		//
-		// AN EARLIER DRAFT CALLED THE CLAUSE SELF-GATING ON ITS OWN ANTECEDENT and offered the two
-		// unmoved absent-data cells as the evidence. Both halves are wrong and the second is what
-		// showed it: those cells raise no finding, so the flag is FALSE there and they carry no
-		// clause at all — the gate explains them, not self-gating. The case the claim was covering
-		// for is the opposite one, a chart whose findings name SEVERAL drugs, where "more than one
-		// finding names it" is not false but unanswerable — an issue #113 interaction screen being
-		// the measured case. What keeps the sentence off that arrangement is the flag, and only the
-		// flag: LlmInferenceService.severalFindingsAboutOneDrug is canonical for the measurement,
-		// for what the gate does and for what it does not establish, so none of that is repeated
-		// here.
-		//
-		// THESE ARE THE MEASURED BYTES, down to the SPACE in front of them, and that is not
-		// fussiness — it is the one thing this change got wrong first and the gate caught.
-		// LlmProviderUserMessageTest.theAppendedClauseIsExactlyTheseBytes is what holds them, and it
-		// is not decoration either: until it existed the class held this string by substrings alone,
-		// so an ADDED imperative shipped green, which is the one edit measured to cost a lead here.
-		//
-		// "it" is kept rather than expanded to "the drug asked about" because the arm appended this
-		// exact sentence to the question, and every cell in that arm named one drug in the question
-		// — so rewording it would ship a string nothing measured, and the ledger's figures would
-		// stop describing the shipped bytes.
-		//
-		// The separator was a NEWLINE in the first version, which is the only way that build differed
-		// from the arm that chose the wording — and it cost a verdict lead. On the same 14 cells the
-		// space-separated arm held `verdict-led` at 12 of 12 while the newline arm scored 11: the
-		// Ciprofloxacin answer opened "Ciprofloxacin interactions with active orders are:" with no
-		// call in front of it, which `score_directness.classify` reads as NONE. A clause on a line of
-		// its own reads as the dominant instruction and displaces the lead; run on from the question
-		// it does not. That is the directness regression issue #397 forbids trading for completeness,
-		// so the separator is load-bearing and LlmProviderUserMessageTest pins it.
+		// What protects the warmup's byte-PREFIX is the APPEND POSITION and neither conjunct — warmup
+		// and searchStreaming's cacheSeed both build through the arity that hardcodes the flag false,
+		// so no production caller can present this body with the flag true and the question blank.
+		// The guard is defence against a FUTURE widening of the seed path, which cannot then carry
+		// the clause without reddening warmupShouldNotCarryTheFindingEnumerationClause or
+		// theClauseMustNotBreakTheWarmupPrefixForAQuestionOfAnyLength. Mutate it and read those two.
 		if (enumerateFindings && question != null && !question.trim().isEmpty()) {
 			sb.append(" Where more than one finding names it, put every one of them on a line of "
 					+ "its own, each with the severity that finding states.");

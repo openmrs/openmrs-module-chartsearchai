@@ -19,7 +19,6 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-
 import java.util.function.Consumer;
 
 import org.junit.jupiter.api.Test;
@@ -27,13 +26,13 @@ import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
+import org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.PairChipExtent;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
-import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
-import org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
 
 /**
@@ -54,8 +53,8 @@ import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
  * findings it is about.
  *
  * <p><b>One case here is not about the clause at all</b>, and its own javadoc says so:
- * {@link #theCarriedIndexesReadInTheOrderTheInjectorWroteTheFindings} pins the ORDER contract of the
- * shared walk both halves of the gate project off, which is the property of it a real injected chart
+ * {@link #theSharedWalkHandsTheFindingsBackInTheOrderTheInjectorWroteThem} pins the ORDER contract
+ * of the shared walk both halves of the gate read, which is the property of it a real injected chart
  * can show and a hand-crafted mapping list cannot.
  *
  * <p>Neuter {@code LlmInferenceService.severalFindingsAboutOneDrug} to a constant and read the
@@ -75,7 +74,12 @@ public class FindingEnumerationClauseContextTest {
 	private static Set<String> setOf(String... values) {
 		// LinkedHashSet and not a HashSet: the premise assertions below count the findings one
 		// partner list raises, and the partner list's ORDER decides which rules the screen reaches
-		// first, so a hash order would let two runs of this class count differently.
+		// first, so the order those premises rest on must be the one this file DECLARES. NOT because
+		// a hash order would vary between runs — it would not: String.hashCode is specified, and
+		// HashSet iteration is a function of those codes, the table capacity and the insertion
+		// sequence, all fixed for a given JDK (measured on 21.0.6 — three runs, one order, and not
+		// the insertion order). It would be an order nobody here chose, free to move under a JDK
+		// change and to take a premise's count with it.
 		return new LinkedHashSet<String>(Arrays.asList(values));
 	}
 
@@ -179,35 +183,35 @@ public class FindingEnumerationClauseContextTest {
 	 * substitution over the SEVEN indexes 349-355 that the eval rig's own safety findings occupy —
 	 * read off
 	 * {@code eval/drift-metric/fixtures/probe-safety/findings-complete/sarah__safety-Amlodipine.json},
-	 * the largest such population any committed capture carries — iterates
+	 * the largest such population any committed capture carries and none of them reaching an index
+	 * above 355 — iterates
 	 * {@code [352, 353, 354, 355, 349, 350, 351]}, equally not ascending. Both legs are kept and
 	 * they ask different questions: the direct one is the ORDER pin, and the
 	 * {@code carriedFindingIndexes} one is CONTENT only, asserting that the projection neither drops
 	 * an index nor adds one.
 	 *
-	 * <p><b>The projection leg is order-BLIND on purpose, which is what makes the message it prints
-	 * believable.</b> It compared the projection's iteration ORDER until #397's hardening changed
-	 * it, and a mutation changing only that order — collecting the projection from a reversed copy
-	 * with the shared walk untouched, so no index is dropped and none added — reddened it saying the
-	 * projection had dropped or added one: {@code expected: <[4, 5, 6, 7]> but was: <[7, 6, 5, 4]>},
-	 * measured, and the one failure in the whole api suite. The order it was reading is a property
-	 * nothing else reads — production asks this projection for {@code size()} alone, and the check
-	 * that shares it reads only {@code isEmpty()}, {@code contains} and {@code size()} — and it was
-	 * green there only because these values hash ascending, which is the accident the paragraph above
-	 * documents as what made the old pin disarmable. Sorted at both ends, that same mutation leaves
-	 * the whole api suite green while a DROP and an ADD each still redden this leg (one mutation per
-	 * run, measured).
+	 * <p><b>Both sides of that leg are SORTED, and that is deliberate rather than convenient.</b> It
+	 * compared the projection's iteration ORDER until #397's hardening changed it, and a mutation
+	 * changing only that order — collecting the projection from a reversed copy with the shared walk
+	 * untouched, so no index is dropped and none added — reddened it saying the projection had
+	 * dropped or added one: {@code expected: <[4, 5, 6, 7]> but was: <[7, 6, 5, 4]>}, measured, and
+	 * the one failure in the whole api suite. Nothing reads that order: production asks the
+	 * projection for nothing at all, the gate counting the shared walk's own records, and the check
+	 * that shares its private step reads only {@code isEmpty()}, {@code contains} and
+	 * {@code size()}. Sorted at both ends, that same mutation leaves the whole api suite green while
+	 * a DROP and an ADD each still redden this leg (one mutation per run, measured). So a
+	 * {@code HashSet} or a {@code TreeSet} inside {@code carriedFindingIndexes} is unreachable from
+	 * this case, by design rather than as a gap — and nothing here holds the returned SET to the
+	 * prompt's order, so a caller that comes to depend on it brings its own pin.
 	 *
-	 * <p><b>So no collection substituted inside {@code carriedFindingIndexes} is reachable from this
-	 * case at all, and that is the design rather than a gap</b>: the order contract is pinned on the
-	 * WALK, which no downstream collection stands in front of, and the projection's own order is
-	 * read by nothing — a {@code HashSet} and a {@code TreeSet} are both green here and neither
-	 * changes anything any case observes. What that gives up is said rather than left to be found:
-	 * nothing here holds the returned SET to the prompt's order, so a caller that comes to depend on
-	 * it brings its own pin.
+	 * <p>The two substitutions were never equivalent, which is why the escape above is worth
+	 * spelling out. A {@code TreeSet} or a sort is the STRUCTURAL case: it would have been green
+	 * under the old order-reading leg on any chart, normalising to the ascending order that leg
+	 * expected whatever the values. The {@code HashSet} was green only because these values happen
+	 * to hash ascending — hence the 349-355 counterexample.
 	 */
 	@Test
-	public void theCarriedIndexesReadInTheOrderTheInjectorWroteTheFindings() {
+	public void theSharedWalkHandsTheFindingsBackInTheOrderTheInjectorWroteThem() {
 		PatientChart chart = chartWithSeveralFindings();
 		List<RecordMapping> findings = DrugReferenceTestSupport.injectedFindings(chart);
 		assertTrue(findings.size() > 1,
@@ -314,7 +318,7 @@ public class FindingEnumerationClauseContextTest {
 	 *
 	 * <p>The second arm is the interaction-screening population, whose findings name several drugs
 	 * so the clause's {@code it} has no referent. A call site re-expressing the record-count half
-	 * alone — {@code carriedFindingIndexes(mappings).size() > 1} without the subject conjunct — is
+	 * alone — {@code safetyFindingMappings(mappings).size() > 1} without the subject conjunct — is
 	 * false on the first arm's chart and true on this one, which is why both are here. Issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>.
 	 */

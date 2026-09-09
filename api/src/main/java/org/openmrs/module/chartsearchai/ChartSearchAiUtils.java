@@ -547,8 +547,9 @@ public class ChartSearchAiUtils {
 	 *
 	 * <p><b>It selects the population through {@link #safetyFindingMappings} and never by walking
 	 * the list itself</b>, which is where the null tolerance and the injection-order contract live:
-	 * the other question asked of that population, {@code carriedFindingIndexes}, projects off the
-	 * same walk, and the two must not be able to disagree about which records are findings.
+	 * the other questions asked of that population — its own SIZE, at this method's own call site,
+	 * and {@code SafetyFindingCitationExtentCheck}'s citation indexes — read the same walk, and none
+	 * of them may disagree about which records are findings.
 	 *
 	 * @param mappings the assembled chart's mappings; null answers empty, per the shared walk
 	 * @return the distinct subject labels, in the shared walk's injection order — which that walk's
@@ -577,7 +578,7 @@ public class ChartSearchAiUtils {
 	 *
 	 * <p><b>Both halves of that sentence are observed, and neither was when it was first written.</b>
 	 * The ORDER is pinned by
-	 * {@code FindingEnumerationClauseContextTest.theCarriedIndexesReadInTheOrderTheInjectorWroteTheFindings},
+	 * {@code FindingEnumerationClauseContextTest.theSharedWalkHandsTheFindingsBackInTheOrderTheInjectorWroteThem},
 	 * over a chart the real injector gave several findings: re-collecting this list in reverse used
 	 * to leave the whole build green while
 	 * {@code SafetyFindingCitationExtentCheck.measureFindingCitations}' WARN promised prompt order.
@@ -586,11 +587,13 @@ public class ChartSearchAiUtils {
 	 * over {@code api/src/main} whose javadoc is canonical for the shapes it catches and the ones it
 	 * does not — do not read it as catching every respelling.
 	 *
-	 * <p><b>Why it is one method.</b> Two questions are asked of this population in one request, at
-	 * two different moments: {@code SafetyFindingCitationExtentCheck.carriedFindingIndexes} takes it
-	 * to citation INDEXES, after the answer, to count what the prompt carried against what the
-	 * answer cited; {@link #findingSubjects} takes it to the SUBJECT labels, before the answer,
-	 * because the #397 clause is about "the drug" and needs the findings to name exactly one.
+	 * <p><b>Why it is one method.</b> Three questions are asked of this population in one request, at
+	 * two different moments. Before the answer: its SIZE, because the #397 clause needs more than one
+	 * finding, and {@link #findingSubjects}, because that clause is about "the drug" and needs the
+	 * findings to name exactly one — {@code LlmInferenceService.severalFindingsAboutOneDrug} is both.
+	 * After it: the citation INDEXES, to count what the prompt carried against what the answer cited,
+	 * which is {@code SafetyFindingCitationExtentCheck}'s projection and is also published there as
+	 * {@code carriedFindingIndexes}.
 	 * Only the projection differs. Spelled twice, a filter added to one would drift from the other
 	 * silently, so that the prompt asks for an enumeration of a population {@code findingCitations}
 	 * then counts differently — which is the state this method was extracted out of, the two

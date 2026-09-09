@@ -20,10 +20,19 @@ import java.util.Collections;
 import org.junit.jupiter.api.Test;
 
 /**
- * Verifies the warmup contract: the user-message prefix sent during {@code warmup}
+ * TWO INDEPENDENT PROPERTIES of the user message, and the nested instruction file points here for
+ * the second one.
+ *
+ * <p>The warmup contract: the user-message prefix sent during {@code warmup}
  * MUST be a byte-prefix of the user-message sent during a real query on the same
  * chart, otherwise llama-server's KV-cache prefix match breaks and the warmup
  * is wasted work.
+ *
+ * <p>And the #397 one-line-per-finding clause — its exact bytes, the position after the question
+ * and the SPACE that separates it from one, each measured and none of them derivable from the
+ * other property. {@code api/src/main/java/org/openmrs/module/chartsearchai/reference/CLAUDE.md}'s
+ * arrow lands here for <em>"its words are pinned as a literal"</em>, so this class is where that
+ * pin has to be findable.
  *
  * <p>Both production paths (search, searchStreaming, warmup) call
  * {@link LlmProvider#buildUserMessage} — testing through that helper exercises
@@ -137,25 +146,22 @@ public class LlmProviderUserMessageTest {
 				"and it must come AFTER the question, which is the position that was measured: ahead "
 				+ "of the records, in the system prompt, the same sentence made completeness worse");
 		// THE SEPARATOR, pinned because it is what the first shipped build got wrong. With a newline
-		// here the clause is a standalone imperative line and reads as the dominant instruction: on
-		// the same 14 cells `verdict-led` fell from 12 of 12 to 11, the Ciprofloxacin answer opening
-		// "Ciprofloxacin interactions with active orders are:" with no call, which
-		// score_directness.classify reads as NONE. Run on from the question it held 12 of 12. Change
-		// the space to a newline and this line reddens.
+		// the clause is a standalone imperative line, reads as the dominant instruction and cost a
+		// verdict lead on the measured corpus; run on from the question it did not. The rows are ADR
+		// Decision 84's and eval/drift-metric/README.md's, not restated here. Change the space to a
+		// newline and this line reddens.
 		assertTrue(msg.contains("? Where more than one finding names it"),
 				"the clause must run on from the question with a SPACE, not start a line of its own: "
 				+ "a line of its own cost a verdict lead on the measured corpus. Got: " + msg);
-		// THE PROHIBITION, pinned. `reference/CLAUDE.md` states "Never buy completeness with a
-		// wording carrying `nothing else`" and ADR Decision 84 claimed this class enforced it — it
-		// did not: appending ", and nothing else" to the clause left the whole build green. Measured
-		// on the reproducer cell, that wording stated all seven findings WITH their ratings and lost
-		// the verdict lead, the answer opening "1. Solu-Medrol 125mg/5ml — Moderate [349]" with no
-		// call in front of it, which score_directness.classify reads as NONE. Same shape as
-		// LlmProviderTest's `otherwise` assertion over the safety paragraph, and for the same reason.
+		// THE PROHIBITION, pinned because `reference/CLAUDE.md` says "completeness is never bought by
+		// rewording it" and ADR Decision 84 claimed this class was where `nothing else` failed — it
+		// was not: appending ", and nothing else" left the whole build green. What that wording was
+		// measured to cost is the next member's javadoc; same shape as LlmProviderTest's `otherwise`
+		// assertion over the safety paragraph, and for the same reason.
 		assertFalse(msg.toLowerCase().contains("nothing else"),
 				"the clause must not tell the answer to carry NOTHING ELSE on those lines: measured, "
-				+ "that wording took completeness and ratings and paid for them with the verdict "
-				+ "lead, which is the trade issue #397 forbids. Got: " + msg);
+				+ "that wording paid for completeness and ratings with the verdict lead, which is the "
+				+ "trade issue #397 forbids. Got: " + msg);
 	}
 
 	/**

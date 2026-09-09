@@ -17,8 +17,10 @@ import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceLoad;
+import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.PairChipExtent;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
+import org.openmrs.module.chartsearchai.api.provider.CancellationSignal;
 
 /**
  * Answers natural language questions about a patient's chart using an LLM.
@@ -154,6 +156,15 @@ public interface ChartSearchService {
 			Consumer<ChartAnswer> ungroundedAnswerConsumer, Consumer<String> preliminaryReasoningConsumer) {
 		return searchStreaming(patient, question, tokenConsumer, reasoningConsumer, citationsConsumer,
 				ungroundedAnswerConsumer);
+	}
+
+	/** Cancellation-aware form used by the provider-neutral turn lifecycle. */
+	default ChartAnswer searchStreaming(Patient patient, String question, Consumer<String> tokenConsumer,
+			Consumer<String> reasoningConsumer, Consumer<List<RecordReference>> citationsConsumer,
+			Consumer<ChartAnswer> ungroundedAnswerConsumer, Consumer<String> preliminaryReasoningConsumer,
+			CancellationSignal cancellation) {
+		return searchStreaming(patient, question, tokenConsumer, reasoningConsumer, citationsConsumer,
+				ungroundedAnswerConsumer, preliminaryReasoningConsumer);
 	}
 
 	/**
@@ -292,6 +303,10 @@ public interface ChartSearchService {
 
 		private final List<SafetyWarning> safetyWarnings;
 
+		private final String safetyStatus;
+
+		private final List<String> safetyIssues;
+
 		private final String searchMode;
 
 		private final ChartSearchAiUtils.ReferenceSlice referenceSlice;
@@ -374,24 +389,11 @@ public interface ChartSearchService {
 		}
 
 		/**
-		 * The widest form, and the ONLY one that takes the condition-rule coverage —
-		 * {@code ArchitectureGuardTest.everyAnswerThisModuleBuildsCarriesTheConditionRuleCoverage}
-		 * requires exactly one, so that no production site can build an answer stating null on a key
-		 * README documents as always present.
-		 *
-		 * <p><b>It is also the only form that grows.</b> A statement added to the answer takes a new
-		 * parameter HERE rather than a new overload, because a second constructor carrying the
-		 * coverage would fail that guard outright — which is what fixes the position of
-		 * {@code conditionRuleCoverage} last and puts each new statement before it, whether it is a
-		 * list or a value type of its own.
-		 *
-		 * <p>There is deliberately no twelve-argument overload beside it in either direction. Issues
-		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/377">#377</a> and
-		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/378">#378</a> each
-		 * added a twelfth argument independently and this is where they met: two twelve-argument
-		 * forms distinguishable only by their last parameter's type would make a caller passing a
-		 * bare {@code null} there ambiguous, and a second one taking the coverage would fail that
-		 * guard outright.
+		 * Compatibility form preserving condition-rule coverage and defaulting safety to unavailable.
+		 * Production callers must use a form that also states safety status; completed answers carry
+		 * the safety issues too. {@code ArchitectureGuardTest} forbids production calls to forms that
+		 * cannot carry coverage and status, while response-wiring tests verify that completed answers
+		 * retain the check's issues.
 		 */
 		public ChartAnswer(String answer, List<RecordReference> references,
 				int inputTokens, int outputTokens, int cachedTokens,
@@ -402,6 +404,36 @@ public interface ChartSearchService {
 				List<Integer> unstatedFindingSeverities,
 				ActiveOrderClaims activeOrderClaims,
 				DrugReferenceLoad.Coverage conditionRuleCoverage) {
+			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings,
+					searchMode, referenceSlice, pairChipExtent, unresolvedDrugClass,
+					unfaithfullyRenderedCitations, misattributedOrderCitations, unstatedFindingSeverities,
+					activeOrderClaims, conditionRuleCoverage, DrugSafetyValidator.STATUS_UNAVAILABLE);
+		}
+
+		public ChartAnswer(String answer, List<RecordReference> references,
+				int inputTokens, int outputTokens, int cachedTokens,
+				List<SafetyWarning> safetyWarnings, String searchMode,
+				ChartSearchAiUtils.ReferenceSlice referenceSlice, PairChipExtent pairChipExtent,
+				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations,
+				List<Integer> misattributedOrderCitations,
+				List<Integer> unstatedFindingSeverities,
+				ActiveOrderClaims activeOrderClaims,
+				DrugReferenceLoad.Coverage conditionRuleCoverage, String safetyStatus) {
+			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, searchMode,
+					referenceSlice, pairChipExtent, unresolvedDrugClass, unfaithfullyRenderedCitations,
+					misattributedOrderCitations, unstatedFindingSeverities, activeOrderClaims,
+					conditionRuleCoverage, safetyStatus, java.util.Collections.emptyList());
+		}
+
+		public ChartAnswer(String answer, List<RecordReference> references,
+				int inputTokens, int outputTokens, int cachedTokens,
+				List<SafetyWarning> safetyWarnings, String searchMode,
+				ChartSearchAiUtils.ReferenceSlice referenceSlice, PairChipExtent pairChipExtent,
+				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations,
+				List<Integer> misattributedOrderCitations, List<Integer> unstatedFindingSeverities,
+				ActiveOrderClaims activeOrderClaims, DrugReferenceLoad.Coverage conditionRuleCoverage,
+				String safetyStatus, List<String> safetyIssues) {
+			this.safetyIssues = java.util.Collections.unmodifiableList(new java.util.ArrayList<>(safetyIssues));
 			this.answer = answer;
 			this.references = java.util.Collections.unmodifiableList(
 					new java.util.ArrayList<>(references));
@@ -437,6 +469,7 @@ public interface ChartSearchService {
 			// it is carried rather than copied.
 			this.activeOrderClaims = activeOrderClaims;
 			this.conditionRuleCoverage = conditionRuleCoverage;
+			this.safetyStatus = safetyStatus;
 		}
 
 		/**
@@ -489,6 +522,31 @@ public interface ChartSearchService {
 		public List<SafetyWarning> getSafetyWarnings() {
 			return safetyWarnings;
 		}
+
+		/**
+		 * Whether the check completed within its resolved reference scope, ran with incomplete
+		 * mapping, exposure or rules, or could not run. Empty warnings alone establish none of these.
+		 */
+		public String getSafetyStatus() {
+			return safetyStatus;
+		}
+
+		/**
+		 * Provider-neutral safety envelope retained for clients that consume the dual-provider
+		 * contract. The current validator can state execution status and findings, so this projection
+		 * publishes exactly those facts and leaves package provenance or coverage fields absent when
+		 * this implementation cannot establish them.
+		 */
+		public java.util.Map<String, Object> getSafetyCheck() {
+			java.util.Map<String, Object> safetyCheck = new java.util.LinkedHashMap<String, Object>();
+			safetyCheck.put("schema_version", "drug_safety.v1");
+			safetyCheck.put("status", safetyStatus);
+			safetyCheck.put("issues", new java.util.ArrayList<String>(safetyIssues));
+			safetyCheck.put("warnings", new java.util.ArrayList<SafetyWarning>(safetyWarnings));
+			return java.util.Collections.unmodifiableMap(safetyCheck);
+		}
+
+
 
 		/**
 		 * How the prompt's chart context was assembled for this answer — one of the
@@ -887,6 +945,7 @@ public interface ChartSearchService {
 
 		private final int withheldInteractions;
 
+		private final String group;
 		/** Whether the MODULE put this citation on the answer rather than the model — see
 		 *  {@link #isAttachedByTheModule()} (issue #305). */
 		private final boolean attachedByTheModule;
@@ -923,6 +982,7 @@ public interface ChartSearchService {
 			this.grounded = grounded;
 			this.source = source;
 			this.withheldInteractions = withheldInteractions;
+			this.group = ChartSearchAiUtils.referenceGroup(resourceType);
 			this.attachedByTheModule = attachedByTheModule;
 		}
 
@@ -994,6 +1054,11 @@ public interface ChartSearchService {
 		 */
 		public int getWithheldInteractions() {
 			return withheldInteractions;
+		}
+
+		/** Server-authoritative provenance group: patient chart or module reference material. */
+		public String getGroup() {
+			return group;
 		}
 
 		/**

@@ -1,5 +1,10 @@
 # Semantic Similarity Search — Improvement Plan
 
+> **Status: historical and superseded.** This plan describes ChartSearchAI's former local
+> embedding pre-filter. QueryStore now owns the shared clinical-record projection and context-slice
+> selection contract; current dual-provider work is recorded in the validation harness roadmap.
+> The analysis is retained for retrieval-research background only and is not an implementation plan.
+
 The embedding pre-filter in `LlmInferenceService.findSimilar()` returns inconsistent results: sometimes too many irrelevant records, sometimes missing relevant ones. This document analyzes the root causes and proposes improvements.
 
 ## Root Cause Analysis

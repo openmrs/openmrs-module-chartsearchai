@@ -158,6 +158,65 @@ import org.springframework.stereotype.Service;
 @Service("chartSearchAi.drugSafetyValidator")
 public class DrugSafetyValidator {
 
+	public static final String STATUS_CHECKED = "checked";
+
+	public static final String STATUS_LIMITED = "limited";
+
+	public static final String STATUS_UNAVAILABLE = "unavailable";
+
+	public static final class SafetyCheckResult {
+
+		private final String status;
+
+		private final List<SafetyWarning> warnings;
+
+		private final List<String> issues;
+
+		public SafetyCheckResult(String status, List<SafetyWarning> warnings) {
+			this(status, warnings, java.util.Collections.emptyList());
+		}
+
+		public SafetyCheckResult(String status, List<SafetyWarning> warnings, List<String> issues) {
+			this.status = status;
+			this.issues = java.util.Collections.unmodifiableList(new ArrayList<String>(issues));
+			this.warnings = java.util.Collections.unmodifiableList(
+					new ArrayList<SafetyWarning>(warnings));
+		}
+
+		public String getStatus() {
+			return status;
+		}
+
+		public List<SafetyWarning> getWarnings() {
+			return warnings;
+		}
+
+		public List<String> getIssues() {
+			return issues;
+		}
+	}
+
+	/** Completeness measured by the same invocation that produces the warnings, never shared state. */
+	private static final class SafetyCoverage {
+		private final Set<String> issues = new LinkedHashSet<String>();
+		private boolean unavailable;
+
+		void limited(String issue) {
+			issues.add(issue);
+		}
+
+		void unavailable(String issue) {
+			unavailable = true;
+			limited(issue);
+		}
+
+		SafetyCheckResult result(List<SafetyWarning> warnings) {
+			return new SafetyCheckResult(unavailable ? STATUS_UNAVAILABLE
+					: issues.isEmpty() ? STATUS_CHECKED : STATUS_LIMITED,
+					warnings, new ArrayList<String>(issues));
+		}
+	}
+
 	private static final Logger log = LoggerFactory.getLogger(DrugSafetyValidator.class);
 
 	/**
@@ -273,19 +332,56 @@ public class DrugSafetyValidator {
 	 */
 	public List<SafetyWarning> validate(String answer, String question, Patient patient,
 			List<RecordMapping> mappings, PairChipExtent.Sink pairExtentSink) {
+		return validateWithStatus(answer, question, patient, mappings, pairExtentSink).getWarnings();
+	}
+
+	/** Status-carrying production entry point; preserves the same mapping and pair-extent pass. */
+	public SafetyCheckResult validateWithStatus(String answer, String question, Patient patient,
+			List<RecordMapping> mappings, PairChipExtent.Sink pairExtentSink) {
 		try {
 			if (!ChartSearchAiUtils.isDrugReferenceEnabled()
 					|| !ChartSearchAiUtils.getBooleanGlobalProperty(
 							ChartSearchAiConstants.GP_DRUG_SAFETY_VALIDATE_ANSWERS,
 							ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_VALIDATE_ANSWERS)) {
-				return new ArrayList<SafetyWarning>();
+				return new SafetyCheckResult(STATUS_UNAVAILABLE, new ArrayList<SafetyWarning>(),
+						java.util.Collections.singletonList("check_disabled"));
+			}
+			if (patient == null) {
+				return new SafetyCheckResult(STATUS_UNAVAILABLE, new ArrayList<SafetyWarning>(),
+						java.util.Collections.singletonList("patient_context_unavailable"));
+			}
+			SafetyCoverage coverage = new SafetyCoverage();
+			DrugReferenceLoad load = drugReferenceService.getLoadStatus();
+			if (!load.isLoaded() || load.isInert()) {
+				coverage.unavailable("source_unavailable");
+			}
+			for (DrugReferenceValidity.Finding finding : load.getFindings()) {
+				if (finding.getRemedy() != DrugReferenceValidity.Remedy.REPAIRED) {
+					coverage.limited("check_scope_limited");
+				}
 			}
 			PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
-			return validate(answer, question, context, mappings, null, pairExtentSink);
+			if (!context.activeDrugOrdersRead() || !context.contraindicationRecordsRead()) {
+				coverage.unavailable("patient_context_unavailable");
+			}
+			if (!context.activeDrugIdentitiesComplete()) {
+				coverage.limited("mapping_incomplete");
+			}
+			if (!context.getAllergyTokens().isEmpty()) {
+				for (DrugReferenceValidity.Finding finding : drugReferenceService.getCrossReactivityLoadStatus().getFindings()) {
+					if (finding.getRemedy() != DrugReferenceValidity.Remedy.REPAIRED) {
+						coverage.limited("check_scope_limited");
+					}
+				}
+			}
+			List<SafetyWarning> warnings = validate(answer, question, context, mappings, null,
+					pairExtentSink, SubjectMatterScope.OF_THE_RESPONSE, coverage);
+			return coverage.result(warnings);
 		}
 		catch (RuntimeException e) {
-			log.warn("Drug-safety validation failed; returning no warnings — the answer path is never broken", e);
-			return new ArrayList<SafetyWarning>();
+			log.warn("Drug-safety validation failed; returning unavailable status — the answer path is never broken", e);
+			return new SafetyCheckResult(STATUS_UNAVAILABLE, new ArrayList<SafetyWarning>(),
+					java.util.Collections.singletonList("execution_failed"));
 		}
 	}
 
@@ -672,6 +768,12 @@ public class DrugSafetyValidator {
 	List<SafetyWarning> validate(String answer, String question, PatientClinicalContext rawContext,
 			List<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries,
 			PairChipExtent.Sink pairExtentSink, SubjectMatterScope scope) {
+		return validate(answer, question, rawContext, mappings, resolvedOrderEntries, pairExtentSink, scope, null);
+	}
+
+	private List<SafetyWarning> validate(String answer, String question, PatientClinicalContext rawContext,
+			List<RecordMapping> mappings, List<DrugReference> resolvedOrderEntries,
+			PairChipExtent.Sink pairExtentSink, SubjectMatterScope scope, SafetyCoverage coverage) {
 		List<SafetyWarning> warnings = new ArrayList<SafetyWarning>();
 		// The patient's active orders resolved to their reference entries — at most ONE dataset sweep
 		// per validate, and none at all where the caller has already made it (issue #255) — feeding
@@ -784,6 +886,28 @@ public class DrugSafetyValidator {
 		// exist. This bean is a Spring singleton, so a field memo is one unsynchronized structure shared
 		// by every concurrent request.
 		Map<Object, List<DrugReference>> resolvedRows = resolvedSubstanceRows(inPlay, orderEntries);
+		if (coverage != null) {
+			boolean screeningOrders = warnInteractions && QueryScopeRouter.isInteractionScreening(question)
+					&& context.getActiveDrugOrders().size() > 1;
+			if (!warnDose || !warnInteractions || !warnContra || resolvedRows.isEmpty()
+					|| (inPlay.isEmpty() && !screeningOrders)) {
+				coverage.limited("check_scope_limited");
+			}
+			for (PatientClinicalContext.ActiveDrugOrder order : context.getActiveDrugOrders()) {
+				if (orderEntries.stream().noneMatch(ref -> resolvesFrom(ref, order, bridgedOrders))) {
+					coverage.limited("mapping_incomplete");
+				}
+			}
+			for (List<DrugReference> rows : resolvedRows.values()) {
+				if (warnContra && rows.stream().noneMatch(DrugReferenceLoad.Arm.CONDITION_RULES::publishedBy)) {
+					coverage.limited("check_scope_limited");
+				}
+				if (warnInteractions && rows.stream().noneMatch(DrugReferenceLoad.Arm.INTERACTIONS::publishedBy)
+						&& rows.stream().noneMatch(DrugReferenceLoad.Arm.ATC_CODES::publishedBy)) {
+					coverage.limited("check_scope_limited");
+				}
+			}
+		}
 		// The rows a substance is NAMED by, which is a strictly smaller question than the rows it is RULED
 		// over, and since issue #238 a different set: the question's and the patient's own, never the
 		// ANSWER's. Of every input the naming decision reads this is the one that varied between the two
@@ -933,7 +1057,7 @@ public class DrugSafetyValidator {
 				}
 			}
 			if (dosePending.remove(substance)) {
-				addOverdose(warnings, rows, subjects, context, lower, all);
+				addOverdose(warnings, rows, subjects, context, lower, all, coverage);
 			}
 		}
 		// The patient's own prescriptions against their own allergy and condition records — the one
@@ -10429,7 +10553,7 @@ public class DrugSafetyValidator {
 	 */
 	private void addOverdose(List<SafetyWarning> warnings, List<DrugReference> rows,
 			SubstanceSubjects subjects, PatientClinicalContext context, String lowerAnswer,
-			List<DrugReference> allEntries) {
+			List<DrugReference> allEntries, SafetyCoverage coverage) {
 		// The same choice of representative row the other arms make, recorded names and all (issues #194,
 		// #206): a dose warning, an interaction chip and a contraindication chip about ONE substance in
 		// ONE response must not call it three things, which is exactly the divergence anchoring only some
@@ -10449,12 +10573,30 @@ public class DrugSafetyValidator {
 		// hoisting the guard with it would make those installs pay, on every request, for a check their
 		// data can never answer.
 		if (!anyActionableBand(rows, context)) {
+			if (coverage != null) {
+				coverage.limited("check_scope_limited");
+			}
 			return;
 		}
 		// ONE reading of the answer for the whole substance (issue #245), before any row is consulted —
 		// the dose a clinician stated is a fact about the drug, not about the row that happens to publish
 		// the band it is about to be compared against.
 		List<AttributedDose> doses = attributedDoses(lowerAnswer, rows, allEntries);
+		if (coverage != null) {
+			for (DrugReference row : rows) {
+				DrugReference.AgeBand band = row.bandForAge(context.getAgeYears());
+				if (band == null) {
+					continue;
+				}
+				if (band.getMaxDailyDoseMg() > 0 && parseDailyDoseMg(doses) == null) {
+					coverage.limited("exposure_incomplete");
+				}
+				if (band.getMgPerKgMax() > 0 && (context.getWeightKg() == null
+						|| context.getWeightKg() <= 0 || parseMaxPerDoseMg(doses) == null)) {
+					coverage.limited("exposure_incomplete");
+				}
+			}
+		}
 		if (addOverdose(warnings, subject, subject, doses, context)) {
 			return;
 		}

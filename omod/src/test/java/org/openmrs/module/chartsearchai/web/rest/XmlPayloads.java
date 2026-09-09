@@ -45,12 +45,15 @@ final class XmlPayloads {
 	 * @param payload the response body a handler produced, unchanged
 	 * @param what names the arrangement, so a failure says which shape of a key broke it rather than
 	 *            only that some request would 500
+	 * @return the serialized payload for content assertions
 	 */
-	static void assertMarshals(Map<String, Object> payload, String what) throws Exception {
+	static String assertMarshals(Map<String, Object> payload, String what) throws Exception {
 		XStreamMarshaller marshaller = new XStreamMarshaller();
 		marshaller.afterPropertiesSet();
 		try {
-			marshaller.marshal(payload, new StreamResult(new StringWriter()));
+			StringWriter output = new StringWriter();
+			marshaller.marshal(payload, new StreamResult(output));
+			return output.toString();
 		}
 		catch (Exception e) {
 			throw new AssertionError("the /search payload must marshal to XML for " + what

@@ -11,6 +11,8 @@ package org.openmrs.module.chartsearchai.api.impl;
 
 import java.util.function.Consumer;
 
+import org.openmrs.module.chartsearchai.api.provider.CancellationSignal;
+
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
@@ -105,6 +107,14 @@ public interface LlmEngine {
 	default InferenceResult inferStreaming(String systemPrompt, String userMessage, int timeoutSeconds,
 			Consumer<String> tokenConsumer, String cacheScope, String cacheSeed) {
 		return inferStreaming(systemPrompt, userMessage, timeoutSeconds, tokenConsumer);
+	}
+
+	/** Cancellation-aware streaming form; engines with a closeable transport should override it. */
+	default InferenceResult inferStreaming(String systemPrompt, String userMessage, int timeoutSeconds,
+			Consumer<String> tokenConsumer, String cacheScope, String cacheSeed,
+			CancellationSignal cancellation) {
+		return inferStreaming(systemPrompt, userMessage, timeoutSeconds, tokenConsumer,
+				cacheScope, cacheSeed);
 	}
 
 	/**

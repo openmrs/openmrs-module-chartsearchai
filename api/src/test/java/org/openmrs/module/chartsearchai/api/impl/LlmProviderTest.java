@@ -429,8 +429,9 @@ public class LlmProviderTest {
 
 	@Test
 	public void streamingConsumer_shouldNotLeakLeadingReasoningField() {
-		// The schema emits "reasoning" FIRST, before "answer". The streaming path (/search/stream)
-		// must forward only the answer value to the clinician — never the model's reasoning
+		// The schema emits "reasoning" FIRST, before "answer". The bundled compatibility
+		// endpoint (/search/stream) must forward only the answer value to the clinician,
+		// never the model's reasoning
 		// scratchpad. Exercised both as one chunk and char-by-char (real token streams arrive in
 		// arbitrary fragments, so the state machine must skip reasoning across chunk boundaries).
 		String json = "{\"reasoning\": \"Hearing Loss is an ear-related condition, so record [89] "

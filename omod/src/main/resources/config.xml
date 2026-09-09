@@ -23,6 +23,8 @@
 	<!-- Hibernate Mappings -->
 	<mappingFiles>
 		ChartSearchAuditLog.hbm.xml
+		ClinicalConversation.hbm.xml
+		ClinicalConversationTurn.hbm.xml
 	</mappingFiles>
 
 	<!-- Privileges -->

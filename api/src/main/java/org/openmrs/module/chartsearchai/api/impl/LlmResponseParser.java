@@ -55,6 +55,29 @@ final class LlmResponseParser {
 		return responseBody != null && responseBody.contains("exceed_context_size_error");
 	}
 
+	/**
+	 * Parses llama-server's {@code /tokenize} response ({@code {"tokens": [...]}} by default, or
+	 * {@code {"tokens": N}} / {@code {"n_tokens": N}} when a caller requests the summary form)
+	 * into a token count.
+	 *
+	 * @throws IOException when the body is not valid JSON or carries neither shape
+	 */
+	static int parseTokenizeResponse(String responseBody) throws IOException {
+		JsonNode root = MAPPER.readTree(responseBody);
+		JsonNode tokens = root.get("tokens");
+		if (tokens != null && tokens.isArray()) {
+			return tokens.size();
+		}
+		if (tokens != null && tokens.isInt()) {
+			return tokens.asInt();
+		}
+		JsonNode nTokens = root.get("n_tokens");
+		if (nTokens != null && nTokens.isInt()) {
+			return nTokens.asInt();
+		}
+		throw new IOException("Tokenize response had no 'tokens' array or count: " + responseBody);
+	}
+
 	static InferenceResult parseResponse(String responseBody, Logger callerLog) throws IOException {
 		JsonNode root = MAPPER.readTree(responseBody);
 

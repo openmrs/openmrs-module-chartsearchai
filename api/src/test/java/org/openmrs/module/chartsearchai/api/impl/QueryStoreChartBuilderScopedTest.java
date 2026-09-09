@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDate;
@@ -24,6 +25,7 @@ import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
+import org.openmrs.module.chartsearchai.api.ChartTooLargeException;
 import org.openmrs.module.chartsearchai.api.scope.QueryScopeContributor;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
@@ -38,7 +40,9 @@ import org.openmrs.module.querystore.model.QueryDocument;
  * <p>Contract under test:
  * <ul>
  *   <li>The slice = ALL records of the intent's typed scope (complete by construction)
- *       ∪ the similarity top-K ∪ the patient demographics record.</li>
+ *       ∪ the similarity top-K ∪ the mandatory clinical core (allergies + active conditions,
+ *       fixture {@code context.enumerated-medications-are-complete}) ∪ the patient
+ *       demographics record.</li>
  *   <li>Slice records keep the CHART's date-desc order (the "most recent first" contract the
  *       system prompt asserts), never the similarity ranking's order.</li>
  *   <li>A similarity failure degrades to the typed slice alone (never blocks the answer).</li>
@@ -63,6 +67,15 @@ public class QueryStoreChartBuilderScopedTest {
 		return d;
 	}
 
+	/** Condition documents carry their status as {@code clinical_status} METADATA — the real
+	 *  contract querystore's ConditionRecordSerializer emits and the shared slice's mandatory
+	 *  tier reads (no text sniffing). */
+	private static QueryDocument condition(String uuid, String text, LocalDate date, String status) {
+		QueryDocument d = doc("condition", uuid, text, date);
+		d.putMetadata(org.openmrs.module.querystore.QueryStoreConstants.FIELD_CLINICAL_STATUS, status);
+		return d;
+	}
+
 	private CountingQueryStoreStub queryStore;
 	private TestableScopedBuilder builder;
 
@@ -77,7 +90,7 @@ public class QueryStoreChartBuilderScopedTest {
 				doc("obs", "o-1", "Systolic blood pressure: 142 mmHg", LocalDate.of(2026, 6, 30)),
 				doc("drug_order", "d-1", "Drug order: Lisinopril 10 mg daily", LocalDate.of(2026, 6, 29)),
 				doc("obs", "o-2", "Serum creatinine: 90 umol/L", LocalDate.of(2026, 6, 28)),
-				doc("condition", "c-1", "Condition: Essential hypertension. Status: ACTIVE", LocalDate.of(2026, 6, 27)),
+				condition("c-1", "Condition: Essential hypertension. Status: ACTIVE", LocalDate.of(2026, 6, 27), "ACTIVE"),
 				doc("drug_order", "d-2", "Drug order: Amoxicillin 500 mg twice daily", LocalDate.of(2026, 5, 1)),
 				doc("allergy", "a-1", "Allergy: Penicillin. Reaction: rash", LocalDate.of(2026, 4, 2)),
 				doc("obs", "o-3", "Weight: 70 kg", LocalDate.of(2026, 3, 3))));
@@ -103,9 +116,11 @@ public class QueryStoreChartBuilderScopedTest {
 		List<String> uuids = mappedUuids(chart);
 		assertTrue(uuids.containsAll(Arrays.asList("p-1", "o-1", "d-1", "d-2")),
 				"slice must carry the patient record, the similarity hit, and EVERY drug_order; got " + uuids);
-		assertFalse(uuids.contains("c-1"), "conditions are outside the medications scope");
+		assertTrue(uuids.containsAll(Arrays.asList("a-1", "c-1")),
+				"the mandatory clinical core (allergy + active condition) rides every slice; got " + uuids);
 		assertFalse(uuids.contains("o-3"), "records outside typed scope and similarity hits are excluded");
-		assertEquals(1, queryStore.getPatientChartCalls, "slice is filtered from the one chart fetch");
+		assertEquals(1, queryStore.getContextSliceCalls,
+				"one slice RPC; selection (and its single chart fetch) is querystore's job");
 	}
 
 	@Test
@@ -126,7 +141,7 @@ public class QueryStoreChartBuilderScopedTest {
 						+ "a medications cue matched too; got " + uuids);
 		assertTrue(uuids.containsAll(Arrays.asList("d-1", "d-2")),
 				"the medications side of the union stays complete as well; got " + uuids);
-		assertFalse(uuids.contains("c-1"), "unmatched types stay outside the union; got " + uuids);
+		assertFalse(uuids.contains("o-2"), "unmatched plain obs stay outside the union; got " + uuids);
 	}
 
 	@Test
@@ -181,9 +196,10 @@ public class QueryStoreChartBuilderScopedTest {
 
 		PatientChart chart = builder.buildScoped(patient(1), "What is the patient's most recent weight?");
 
-		assertEquals(Arrays.asList("p-1", "o-1", "d-1"), mappedUuids(chart),
+		assertEquals(Arrays.asList("p-1", "o-1", "d-1", "c-1", "a-1"), mappedUuids(chart),
 				"temporal slice must carry the 3 most recent chart records (the demographics "
-						+ "record is itself the newest, so it sits inside the anchor)");
+						+ "record is itself the newest, so it sits inside the anchor) plus the "
+						+ "mandatory clinical core, in chart date order");
 	}
 
 	@Test
@@ -196,8 +212,57 @@ public class QueryStoreChartBuilderScopedTest {
 
 		PatientChart chart = builder.buildScoped(patient(1), "Does the patient have any eye problems?");
 
-		assertEquals(Arrays.asList("p-1"), mappedUuids(chart),
-				"non-temporal topical question with no similarity hits reduces to demographics");
+		assertEquals(Arrays.asList("p-1", "c-1", "a-1"), mappedUuids(chart),
+				"non-temporal topical question carries no anchored vitals — only demographics "
+						+ "plus the mandatory clinical core");
+	}
+
+	@Test
+	public void buildScoped_delegatesSelectionAndInterpretationToTheSharedQuerystoreSlice() {
+		// The shared context contract (querystore ADR Decisions 17+18): selection AND question
+		// interpretation run ONCE in querystore — the RAW question goes over with
+		// interpretQuestion set, so cue routing and retrieval preprocessing cannot drift between
+		// consumers. This builder's own contributions: contributed scopes + the anchor knob.
+		queryStore.stubHits = new ArrayList<QueryDocument>();
+		builder.recencyAnchor = 3;
+
+		builder.buildScoped(patient(1), "What is the patient's most recent medication?");
+
+		assertEquals(1, queryStore.getContextSliceCalls,
+				"selection must go through the shared querystore slice contract");
+		assertTrue(queryStore.lastSliceRequest.isInterpretQuestion(),
+				"interpretation is querystore's — the request opts into server-side cues");
+		assertEquals("What is the patient's most recent medication?", queryStore.lastSliceQuestion,
+				"the RAW question goes over; preprocessing is querystore's now");
+		assertTrue(queryStore.lastSliceRequest.getTypes().isEmpty(),
+				"no locally-derived types — only contributed scopes would ride here; got "
+						+ queryStore.lastSliceRequest.getTypes());
+		assertEquals(3, queryStore.lastSliceRequest.getRecencyAnchorSize());
+	}
+
+	@Test
+	public void buildScoped_shouldAlwaysCarryTheMandatoryClinicalCore() {
+		// Fixture context.enumerated-medications-are-complete (dual-provider-conformance.v1)
+		// pins mandatory_ids: patient + allergy for a MEDICATION question — the mandatory
+		// clinical core (allergies + ACTIVE conditions) is safety context every scoped slice
+		// carries regardless of matched intent. Measured 2026-07-22: a medication slice
+		// without the penicillin allergy record. Similarity returns NOTHING, so the core can
+		// only arrive via its mandatory status.
+		queryStore.stubChart.add(
+				condition("c-2", "Condition: Asthma. Status: INACTIVE", LocalDate.of(2026, 2, 1), "INACTIVE"));
+		queryStore.stubHits = new ArrayList<QueryDocument>();
+
+		PatientChart chart = builder.buildScoped(patient(1), "What medications is the patient taking?");
+
+		List<String> uuids = mappedUuids(chart);
+		assertTrue(uuids.contains("a-1"),
+				"the allergy record is mandatory clinical core in every slice; got " + uuids);
+		assertTrue(uuids.contains("c-1"),
+				"an ACTIVE condition is mandatory clinical core in every slice; got " + uuids);
+		assertFalse(uuids.contains("c-2"),
+				"an INACTIVE condition is not mandatory — only active problems ride every slice; got " + uuids);
+		assertFalse(uuids.contains("o-3"),
+				"plain obs outside typed scope and similarity stay excluded; got " + uuids);
 	}
 
 	@Test
@@ -241,6 +306,23 @@ public class QueryStoreChartBuilderScopedTest {
 				"a normal scoped slice must be stamped");
 		assertTrue(builder.buildScoped(null, "any allergies?").isQueryScoped(),
 				"the null-patient degraded empty must be stamped");
+	}
+
+	@Test
+	public void buildScoped_withholdsASliceBuiltFromAnIncompleteChart() {
+		queryStore.chartTruncated = true;
+
+		assertThrows(ChartTooLargeException.class,
+				() -> builder.buildScoped(patient(1), "What medications is the patient taking?"));
+	}
+
+	@Test
+	public void buildScoped_failsExplicitlyWhenQueryStoreIsUnavailable() {
+		TestableScopedBuilder unavailable = new TestableScopedBuilder(null);
+		unavailable.setChartSerializer(new PatientChartSerializer());
+
+		assertThrows(IllegalStateException.class,
+				() -> unavailable.buildScoped(patient(1), "any allergies?"));
 	}
 
 	@Test
@@ -291,43 +373,6 @@ public class QueryStoreChartBuilderScopedTest {
 		assertFalse(builder.buildScoped(null, "What medications is the patient taking?")
 				.isCompleteFor("drug_order"),
 				"the degraded empty slice applied no filter, so it must declare nothing complete");
-	}
-
-	@Test
-	public void buildScoped_shouldStillDeclareCompleteness_atTheQuerystoreChartCap() {
-		// The cap is the one case where a scoped slice can be missing a doc of a type it scoped:
-		// getPatientChart returns only querystore's most recent N, so a pre-cutoff drug order never
-		// reaches the filter. The class javadoc says so, which makes "then don't declare it
-		// complete" the obvious-looking fix — and it is the WRONG one, so it is pinned here rather
-		// than left to a comment.
-		//
-		// What a consumer reads from absence is whether the chart THE ANSWER IS GROUNDED IN lacks
-		// the record, and at the cap it genuinely does. Suppressing the stamp would silence the
-		// active-order reconciliation (#118) exactly there, handing back the chip-versus-answer
-		// contradiction on the biggest charts — the patients least likely to be checked by hand.
-		// Only the WARN's attribution is affected (a retrieval cap, not an indexing gap), which the
-		// reconciliation already hedges and the cap's own WARN already reports.
-		List<QueryDocument> atCap = new ArrayList<QueryDocument>();
-		atCap.add(doc("drug_order", "d-1", "Drug order: Lisinopril 10 mg daily", LocalDate.of(2026, 6, 29)));
-		// Reads the production constant, not a literal: a test hardcoding 10 000 would silently stop
-		// exercising the cap if the threshold changed, and would still pass.
-		while (atCap.size() < QueryStoreChartBuilder.QUERYSTORE_ES_CHART_CAP) {
-			int i = atCap.size();
-			atCap.add(doc("obs", "o-" + i, "Systolic blood pressure: 142 mmHg", LocalDate.of(2026, 6, 30)));
-		}
-		queryStore.stubChart = atCap;
-		queryStore.stubHits = new ArrayList<QueryDocument>();
-
-		PatientChart chart = builder.buildScoped(patient(1), "What medications is the patient taking?");
-
-		assertEquals(QueryStoreChartBuilder.QUERYSTORE_ES_CHART_CAP, atCap.size(),
-				"precondition: the fetch must land exactly ON the cap, or this asserts the ordinary path");
-		assertTrue(mappedUuids(chart).contains("d-1"),
-				"precondition: the scoped drug order must be in the slice");
-		assertTrue(chart.isCompleteFor("drug_order"),
-				"a slice built at the chart cap must STILL declare its typed scope complete — "
-						+ "absence from the retrieved chart is what the reconciliation repairs, and the "
-						+ "cap is precisely when the retrieved chart is missing something");
 	}
 
 	@Test
@@ -442,8 +487,8 @@ public class QueryStoreChartBuilderScopedTest {
 
 		assertEquals(0, queryStore.searchByPatientCalls,
 				"blank question has no ranking signal — no similarity RPC");
-		assertEquals(Arrays.asList("p-1"), mappedUuids(chart),
-				"blank topical question reduces to the demographics record");
+		assertEquals(Arrays.asList("p-1", "c-1", "a-1"), mappedUuids(chart),
+				"blank topical question reduces to demographics plus the mandatory clinical core");
 	}
 
 	/** A test contributor claiming a fixed type set when the question contains a cue word. */

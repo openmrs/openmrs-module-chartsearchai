@@ -99,6 +99,7 @@ final class PatientClinicalContextBuilder {
 		// empty list, which is right for a chip and wrong for a surface whose whole payload is the
 		// join between these orders and the records below.
 		boolean activeDrugOrdersRead = true;
+		boolean activeDrugIdentitiesComplete = true;
 		try {
 			for (Order order : Context.getOrderService().getActiveOrders(patient, null, null, null)) {
 				if (!(order instanceof DrugOrder)) {
@@ -191,6 +192,8 @@ final class PatientClinicalContextBuilder {
 					activeOrders.add(PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly(
 							drugOrder.getUuid(), codeOnlyDisplay, orderAtcCodes, orderAdministration,
 							orderConceptUuid));
+				} else {
+					activeDrugIdentitiesComplete = false;
 				}
 			}
 		}
@@ -257,7 +260,7 @@ final class PatientClinicalContextBuilder {
 
 		return new PatientClinicalContext(age, weightKg, drugNames, atcCodes, allergyTokens, conditionTokens,
 				activeOrders, null, contraindicationRecordsRead, activeDrugOrdersRead, allergyRecords,
-				conditionRecords);
+				conditionRecords, activeDrugIdentitiesComplete);
 	}
 
 	/** The most recent positive-numeric, non-stale obs for {@code concept}, or {@code null}. Shared by

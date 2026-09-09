@@ -6,6 +6,26 @@ An OpenMRS module that lets clinicians ask natural language questions about a pa
 
 For project background, community discussion, and roadmap, see the [wiki project page](https://openmrs.atlassian.net/wiki/spaces/projects/pages/373325839/Chart+Search+aka+ChartSearchAI).
 
+## Provider architecture (current development)
+
+ChartSearchAI authorizes the patient request and supports two explicit providers behind one OpenMRS
+conversation, audit, evidence, and cancellation contract:
+
+- The **bundled provider** preserves the module's local and configured remote inference engines,
+  streaming, QueryStore-backed context, safety, grounding, and cache behavior.
+- The **med-agent-hub provider** relays one staged hub profile request and persists its returned
+  answer-validation, temporal-gate, grounding, safety, and In-Depth states without reinterpreting
+  them in Java.
+
+Deployments may enable one or both providers. When both are available, the user chooses a provider
+before starting a conversation; switching provider starts a new conversation. **No automatic fallback**
+occurs between providers. QueryStore remains the OpenMRS clinical-context surface; it is
+required for the bundled path and an optional source for a separately configured hub deployment.
+
+The standalone instructions below describe the supported bundled-provider installation. Hub
+integration configuration and the dual-provider acceptance record live in the validation harness's
+`openmrs-dual-provider-parity-roadmap.md`.
+
 The standalone download above includes the backend module, frontend ESM, and the following AI models — ready to run:
 
 - **LLM**: [Gemma 4 E4B Instruct (Q4_K_M)](https://huggingface.co/unsloth/gemma-4-E4B-it-GGUF) — ~5 GB, the module's default model, for answering clinical questions. (A larger Gemma 4 26B MoE bundle can be built via the workflow's `gguf_model_url` input.)

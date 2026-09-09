@@ -4872,11 +4872,38 @@ name CIEL publishes for a bridged code"), whether done upstream in the data or a
 dictionary. **Measured unsafe in this module**, and the two measurements are kept apart because only one of them
 can be produced without re-expressing a production predicate.
 
-Of the shipped knowledge base's alias vocabulary: every alias of five characters or fewer is itself a
-substance name — `clove`, `hemin`, `iron`, `kava`, `opium`, `urea`, `yeast`, and nothing else. That is
-produced by `DrugReference.getAliases()` over the real `DdiDrugReferenceSource.load()` and is asserted,
-as the list rather than as a count, by
-`ShippedAliasVocabularyTest.everyShortAliasTheShippedVocabularyCarriesIsItselfASubstance`.
+Of the shipped knowledge base's alias vocabulary, as it stood when this decision was written (schema 1.0,
+2026-09-02): every alias of five characters or fewer is itself a substance name — `clove`, `hemin`,
+`iron`, `kava`, `opium`, `urea`, `yeast`, and nothing else. That is produced by
+`DrugReference.getAliases()` over the real `DdiDrugReferenceSource.load()`.
+
+**Restated with the schema 1.3 refresh (2026-09-09), which added RxNorm brand names as aliases**
+(openmrs-ddi-knowledge-base issue #5: `panadol` resolved to nothing, so the asked-about drug was never
+evaluated). Brand names are short in bulk — `advil`, `aleve`, `cipro`, `coreg`, `lasix`, `xanax`,
+`zocor` — so the five-or-fewer set is now 200 aliases: the seven substance names and 193 brands. The
+property the argument rests on is therefore narrower than "every short alias is a substance name" and
+is stated as two halves. Every short alias that is NOT a brand the shipped file itself declares is one
+of the seven substance names, so the CIEL-synonym harvest this decision refuses still has no member in
+the vocabulary. And every brand alias is a name someone asks a drug BY rather than a word ordinary
+clinical prose carries in another sense — which is a property of the knowledge base's own exclusion
+rule, not of this module: `fetch_brand_names.py` drops a brand of three characters or fewer, one whose
+every word is a lower-case dictionary word (`Align`, `Today`, `Sleep Aid`) and one that is a first
+name, and commits the dropped list with reasons. That rule is a dictionary and dictionaries have
+lacunae: `Stye` (a mineral-oil eye ointment) and `Propel` (mometasone) survived it because
+`/usr/share/dict/words` carries `sty` and `propeller` but neither word, and measured through the real
+`findImpliedByQuery` over the refreshed file, "The patient has a stye on the right upper eyelid"
+resolved Mineral oil, and through the real `injectRecords` raised a laxative interaction finding with
+a withholding clause against a levofloxacin order — the alert failure this decision declines to
+accept, on the default dataset, with nothing thrown. Both are now excluded by name upstream
+(`src/curation.json` `brand_exclusions`), and the residue was enumerated rather than left: of the
+3,028 single-word brands kept, 16 are words a 370k-entry English list knows and the system dictionary
+does not, and read one by one the ordinary words among them are those two (the rest are trademarks
+that larger list lowercases — Actos, Valium, Prolia — which is why it cannot replace the rule). So the
+next lacuna is found the way this one was, by reading, and
+`ShippedAliasVocabularyTest.everyShortAliasTheShippedVocabularyCarriesIsItselfASubstance` now asserts
+three things so that reading has a diff to happen in: the non-brand short aliases as the list of
+seven; the 193 short brand aliases as a sorted list, so a refresh reports WHICH brand joined; and
+that no brand alias is three characters or fewer.
 
 Of the dictionary those names would be harvested from (the 3.7.1 reference-application demo dictionary,
 2026-09-02, raw `SELECT`s over `concept` and `concept_name`): the 171 bridged CIEL concepts it carries

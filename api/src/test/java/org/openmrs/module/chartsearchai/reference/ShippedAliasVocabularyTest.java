@@ -107,11 +107,18 @@ public class ShippedAliasVocabularyTest {
 	 * are produced: the knowledge base's {@code fetch_brand_names.py} excludes a brand of three
 	 * characters or fewer, one whose every word is an ordinary dictionary word ({@code Align},
 	 * {@code Today}, {@code Sleep Aid}) and one that is a first name, and commits the excluded list
-	 * beside the kept one. What this case still holds is the residue: every short alias that is not a
-	 * declared brand is one of the seven substance names, and no brand alias is three characters or
-	 * fewer.
+	 * beside the kept one. That rule is a dictionary, and dictionaries have lacunae: {@code stye} (a
+	 * mineral-oil eye ointment) survived it, because the dictionary carries {@code sty} and not
+	 * {@code stye}, and measured through the real {@code findImpliedByQuery} "The patient has a stye on
+	 * the right upper eyelid" resolved Mineral oil (found in review of the refresh that introduced it,
+	 * #392). So the short BRAND aliases are asserted as a sorted list too, which is how {@code Align},
+	 * {@code Today} and {@code Ella} were caught before it and how the next {@code stye} is caught: a
+	 * refresh puts the brand that joined into this diff, where it can be read. What this case holds is
+	 * therefore three things: every short alias that is not a declared brand is one of the seven
+	 * substance names; the short brand aliases are exactly this list; and no brand alias is three
+	 * characters or fewer.
 	 *
-	 * <p>Asserted as the list, in sorted order, so a knowledge-base refresh reports WHICH word joined
+	 * <p>Asserted as the lists, in sorted order, so a knowledge-base refresh reports WHICH word joined
 	 * rather than that a number moved.
 	 */
 	@Test
@@ -120,24 +127,55 @@ public class ShippedAliasVocabularyTest {
 		assertTrue(brands.size() > 1000,
 			"precondition: the shipped file declares brand names (knowledge-base schema 1.3)");
 		List<String> shortNonBrandAliases = new ArrayList<String>();
+		List<String> shortBrandAliases = new ArrayList<String>();
 		List<String> tooShortBrands = new ArrayList<String>();
 		for (String alias : distinctAliases()) {
-			if (alias.length() <= SHORT && !brands.contains(alias)) {
-				shortNonBrandAliases.add(alias);
+			if (alias.length() <= SHORT) {
+				(brands.contains(alias) ? shortBrandAliases : shortNonBrandAliases).add(alias);
 			}
 			if (alias.length() <= 3 && brands.contains(alias)) {
 				tooShortBrands.add(alias);
 			}
 		}
 		Collections.sort(shortNonBrandAliases);
+		Collections.sort(shortBrandAliases);
 
 		assertEquals(java.util.Arrays.asList("clove", "hemin", "iron", "kava", "opium", "urea", "yeast"),
 			shortNonBrandAliases,
 			"every alias of " + SHORT + " characters or fewer that is not a declared brand name must be a"
 					+ " substance name — the property ADR Decision 68 declines to give up, and a new member"
 					+ " here is a change to that argument rather than a number to update");
+		assertEquals(SHORT_BRAND_ALIASES, shortBrandAliases,
+			"the brand aliases of " + SHORT + " characters or fewer, as the shipped file carried them on"
+					+ " 2026-09-09 — a refresh that adds one must be read for whether the newcomer is a name"
+					+ " someone asks a drug by or a word ordinary clinical prose carries (stye, propel),"
+					+ " and the knowledge base's exclusion list updated before this list is");
 		assertEquals(Collections.emptyList(), tooShortBrands,
 			"a brand alias of three characters or fewer is an acronym the knowledge base excludes at"
 					+ " source; one reaching here means that exclusion was lost on a refresh");
 	}
+
+	/** The 193 brand aliases of {@link #SHORT} characters or fewer in the shipped file, produced by
+	 *  {@link DrugReference#getAliases()} over the real load and intersected with the raw
+	 *  {@code brand_names}; sorted. Every member was read when the list was pinned. */
+	private static final List<String> SHORT_BRAND_ALIASES = java.util.Arrays.asList(
+			"aceon", "actiq", "actos", "adbry", "addyi", "adoxa", "advil", "afrin", "ajovy", "akten",
+			"aleve", "alli", "alora", "alrex", "alyq", "amrix", "anoro", "arava", "arbli", "ascor", "atgam",
+			"atryn", "avar", "aveed", "avita", "avoca", "axtle", "azopt", "azor", "baza", "beser", "bicnu",
+			"bidil", "bkemv", "botox", "breo", "bumex", "bupap", "calan", "capex", "carac", "cequa",
+			"chooz", "cipro", "coreg", "creon", "curae", "cutar", "ddavp", "depen", "dex4", "dhivy",
+			"digex", "digox", "dilt", "disal", "doans", "dodex", "doral", "doryx", "doxil", "duopa",
+			"ecoza", "edex", "emcyt", "emgel", "emsam", "enoby", "esgic", "evdi", "evivo", "eylea", "feiba",
+			"fiasp", "flac", "frova", "glydo", "glyrx", "gvoke", "halog", "hemax", "hulio", "hycet", "ifex",
+			"infed", "inova", "inzo", "iodip", "iosat", "ipol", "ivra", "jalyn", "koate", "kofal", "kuric",
+			"kuvan", "lasix", "lidum", "lopid", "luxiq", "mapap", "mobic", "mvasi", "nasop", "nemex",
+			"neuac", "nexha", "nityr", "nocto", "norco", "nuox", "nuwiq", "nytol", "ofev", "okebo", "olux",
+			"onfi", "onyda", "opvee", "oseni", "ovace", "paxil", "phexx", "pretz", "proin", "qdolo",
+			"qlosi", "qmiiz", "qnasl", "qtern", "qvar", "rayos", "rebif", "repan", "revia", "ringl",
+			"sebex", "selrx", "sileo", "siliq", "skyla", "sprix", "sular", "sutab", "symfi", "taltz",
+			"tdvax", "tigan", "tobi", "tolak", "tovet", "tpoxx", "triaz", "tums", "urex", "urso", "utira",
+			"uzedy", "vanos", "vevye", "vfend", "vonjo", "vtol", "vuity", "vykat", "wakix", "wyost",
+			"xalix", "xanax", "xbryk", "xgeva", "xiclo", "xoten", "xromi", "xyrem", "xywav", "xyzal",
+			"yonsa", "yutiq", "zensa", "zetia", "ziac", "ziana", "zilxi", "zimhi", "zingo", "zocor",
+			"zomig", "zosyn", "zybic", "zyflo", "zylet", "zyvox");
 }

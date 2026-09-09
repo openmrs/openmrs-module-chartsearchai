@@ -66,7 +66,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * openmrs-ddi-knowledge-base release it came from, so a refresh is a file copy and its provenance is
  * checkable by hash. It used to be a 16-drug excerpt with the full file left to the operator to download,
  * which meant an install that enabled the feature and configured nothing got four curated drugs. Measured
- * through this parser on the shipped file: 0.6 s to parse cold, ~30 MB retained, 2.1 MB of packed jar.
+ * through this parser on the shipped file: 0.6 s to parse cold, ~30 MB retained, 2.1 MB of packed jar for
+ * the schema 1.0 file. The schema 1.3 refresh packs to 4,031,048 bytes (read off the built api jar's entry
+ * for it with {@code unzip -v}); all but about 40 KB of the increase is the three tables nothing reads yet,
+ * {@code disease_notes}, {@code disease_interactions} and {@code derived_interactions} (issue #391), so
+ * retained memory does not move with it.
  * The excerpt survives as a test fixture ({@code DrugReferenceTestSupport.DDI_EXCERPT}) because a case
  * asserting "this record renders exactly these partners" needs a dataset whose partner lists it can
  * state — lisinopril alone has 730 here.

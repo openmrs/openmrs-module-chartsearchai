@@ -11,10 +11,12 @@ package org.openmrs.module.chartsearchai.web.rest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -55,6 +57,9 @@ import org.openmrs.module.chartsearchai.api.provider.TurnRequest;
 import org.openmrs.module.chartsearchai.api.provider.TurnResult;
 import org.openmrs.module.chartsearchai.model.ClinicalConversation;
 import org.openmrs.module.chartsearchai.model.ClinicalConversationTurn;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -67,6 +72,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class ProviderRestContractTest {
 
 	private static final ObjectMapper MAPPER = new ObjectMapper();
+
+	@Test
+	public void drugSafetyValidatorRemainsAutowiredAfterProviderFieldsAreAdded() throws Exception {
+		Field field = ChartSearchAiRestController.class.getDeclaredField("drugSafetyValidator");
+		assertTrue(field.isAnnotationPresent(Autowired.class),
+				"the production controller must inject the validator; setter-based tests do not prove wiring");
+	}
 
 	@Test
 	@SuppressWarnings("unchecked")
@@ -426,6 +438,23 @@ public class ProviderRestContractTest {
 		body.put("mode", "full_chart_stable");
 
 		assertEquals(ProviderMode.FULL_CHART_STABLE, controller.resolveMode(body));
+	}
+
+	@Test
+	@SuppressWarnings("unchecked")
+	public void anUnknownProviderModeIsAClientErrorRatherThanAnInternalFailure() {
+		ChartSearchAiRestController controller = new ChartSearchAiRestController();
+		Map<String, String> body = new HashMap<String, String>();
+		body.put("mode", "invented_mode");
+
+		ChartSearchAiRestController.InvalidProviderModeException error = assertThrows(
+				ChartSearchAiRestController.InvalidProviderModeException.class,
+				() -> controller.resolveMode(body));
+		ResponseEntity<Object> response = controller.handleInvalidProviderMode(error);
+
+		assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+		assertEquals("Unknown provider mode: invented_mode",
+				((Map<String, Object>) response.getBody()).get("error"));
 	}
 
 	@Test

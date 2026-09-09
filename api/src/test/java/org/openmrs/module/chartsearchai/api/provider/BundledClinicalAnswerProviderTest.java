@@ -424,6 +424,25 @@ public class BundledClinicalAnswerProviderTest {
 	}
 
 	@Test
+	public void anUnrecognizedChartModeAdvertisesTheSameFailSafeFullChartPathThePipelineUses() {
+		BundledClinicalAnswerProvider provider = new BundledClinicalAnswerProvider(
+				new ScriptedChartSearchService()) {
+
+			@Override
+			protected String gp(String property, String defaultValue) {
+				if (ChartSearchAiConstants.GP_CHART_MODE.equals(property)) {
+					return "queryScopeTypo";
+				}
+				return defaultValue;
+			}
+		};
+
+		assertEquals(Collections.singletonList(ProviderMode.FULL_CHART_STABLE),
+				provider.descriptor().getModes(),
+				"an unrecognized value fails toward full-chart in the underlying pipeline");
+	}
+
+	@Test
 	public void aRequestForAModeTheProviderDoesNotOfferFailsExplicitlyInsteadOfSilentlySwitching()
 			throws Exception {
 		ScriptedChartSearchService service = new ScriptedChartSearchService();
@@ -539,6 +558,40 @@ public class BundledClinicalAnswerProviderTest {
 		assertFalse(descriptor.isReady());
 		assertTrue(descriptor.getUnavailableReason()
 				.contains(ChartSearchAiConstants.GP_LLM_REMOTE_ENDPOINT_URL));
+	}
+
+	@Test
+	public void readinessParsesTheRemoteEngineNameExactlyLikeTheInferenceRouter() {
+		BundledClinicalAnswerProvider provider = new BundledClinicalAnswerProvider(
+				new ScriptedChartSearchService()) {
+
+			@Override
+			protected String gp(String property, String defaultValue) {
+				if (ChartSearchAiConstants.GP_LLM_ENGINE.equals(property)) {
+					return "  ReMoTe  ";
+				}
+				if (ChartSearchAiConstants.GP_LLM_REMOTE_ENDPOINT_URL.equals(property)) {
+					return "http://engine.example/v1/chat/completions";
+				}
+				if (ChartSearchAiConstants.GP_LLM_REMOTE_MODEL_NAME.equals(property)) {
+					return "gemma-e4b";
+				}
+				return defaultValue;
+			}
+
+			@Override
+			protected boolean engineReachable(String endpointUrl) {
+				return true;
+			}
+
+			@Override
+			protected String requireLocalModel(String configuredPath) {
+				throw new AssertionError("the inference router selects remote for this value");
+			}
+		};
+
+		assertTrue(provider.descriptor().isReady(),
+				"readiness and inference must select the same configured engine");
 	}
 
 	@Test

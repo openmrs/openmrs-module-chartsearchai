@@ -46,7 +46,8 @@ import org.springframework.stereotype.Service;
  * canonical turn lifecycle:
  *
  * <ul>
- *   <li>preliminary and committed reasoning fragments become {@code reasoning_delta};</li>
+ *   <li>preliminary reasoning fragments become {@code preliminary_delta};</li>
+ *   <li>committed reasoning fragments become {@code reasoning_delta};</li>
  *   <li>answer tokens become {@code answer_delta};</li>
  *   <li>the ungrounded-answer seam becomes {@code answer_done} (verdicts still {@code null});</li>
  *   <li>the grounded return value becomes {@code evidence_updated} when grounding is enabled;</li>
@@ -122,7 +123,7 @@ public class BundledClinicalAnswerProvider implements ClinicalAnswerProvider {
 	private String engineUnavailableReason() {
 		String engine = gp(ChartSearchAiConstants.GP_LLM_ENGINE,
 				ChartSearchAiConstants.LLM_ENGINE_LOCAL);
-		if (ChartSearchAiConstants.LLM_ENGINE_REMOTE.equals(engine)) {
+		if (engine != null && ChartSearchAiConstants.LLM_ENGINE_REMOTE.equalsIgnoreCase(engine.trim())) {
 			String endpoint = trimToNull(gp(ChartSearchAiConstants.GP_LLM_REMOTE_ENDPOINT_URL, null));
 			if (endpoint == null) {
 				return ChartSearchAiConstants.GP_LLM_REMOTE_ENDPOINT_URL + " is not set";
@@ -344,7 +345,7 @@ public class BundledClinicalAnswerProvider implements ClinicalAnswerProvider {
 
 	private ProviderMode configuredMode() {
 		String chartMode = gp(ChartSearchAiConstants.GP_CHART_MODE, ChartSearchAiConstants.CHART_MODE_DEFAULT);
-		return ChartSearchAiConstants.CHART_MODE_FULL_CHART.equals(chartMode)
-				? ProviderMode.FULL_CHART_STABLE : ProviderMode.QUERY_SCOPED;
+		return ChartSearchAiConstants.CHART_MODE_QUERY_SCOPED.equalsIgnoreCase(chartMode)
+				? ProviderMode.QUERY_SCOPED : ProviderMode.FULL_CHART_STABLE;
 	}
 }

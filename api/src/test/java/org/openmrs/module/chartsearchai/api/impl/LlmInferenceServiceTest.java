@@ -58,7 +58,14 @@ public class LlmInferenceServiceTest {
 
 			@Override
 			public int countPrompt(String numberedRecords, String question) {
+				return 0;
+			}
+
+			@Override
+			public int countPrompt(String numberedRecords, List<Integer> focusIndices,
+					String question) {
 				measured.add(numberedRecords);
+				measured.add(focusIndices.toString());
 				measured.add(question);
 				return 101;
 			}
@@ -69,12 +76,14 @@ public class LlmInferenceServiceTest {
 			}
 		});
 		PatientChart chart = new PatientChart("[1] Drug reference: WHO-ATC",
-				Collections.singletonList(new RecordMapping(1, "drug-reference", uuid(1), null)));
+				Collections.singletonList(new RecordMapping(1, "drug-reference", uuid(1), null)),
+				Arrays.asList(1, 3));
 
 		assertThrows(ChartTooLargeException.class,
 				() -> service.ensurePromptFits(chart, "Can these medicines interact?"));
 		assertEquals("[1] Drug reference: WHO-ATC", measured.get(0));
-		assertEquals("Can these medicines interact?", measured.get(1));
+		assertEquals("[1, 3]", measured.get(1));
+		assertEquals("Can these medicines interact?", measured.get(2));
 	}
 
 	@Test

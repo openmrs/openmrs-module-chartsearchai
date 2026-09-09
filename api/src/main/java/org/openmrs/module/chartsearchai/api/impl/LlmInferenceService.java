@@ -601,7 +601,8 @@ public class LlmInferenceService implements ChartSearchService {
 		if (tokenCounter == null || !tokenCounter.isAvailable()) {
 			return;
 		}
-		int inputTokens = tokenCounter.countPrompt(chartTextOrPlaceholder(chart), question);
+		int inputTokens = tokenCounter.countPrompt(chartTextOrPlaceholder(chart),
+				chart.getFocusIndices(), question);
 		if (inputTokens > tokenCounter.inputBudget()) {
 			throw new ChartTooLargeException("The complete chart, reference material, and question "
 					+ "exceed the configured model input budget.");

@@ -49,6 +49,8 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 
 	public static final String PROBLEM_HUB_STREAM_INCOMPLETE = "hub_stream_incomplete";
 
+	public static final String PROBLEM_UNSUPPORTED_MODE = "unsupported_mode";
+
 	public static final String PROBLEM_CANCELLED = "cancelled";
 
 	public static final String PROBLEM_PROVIDER_FAILURE = "provider_failure";
@@ -95,6 +97,9 @@ public class HubClinicalAnswerProvider implements ClinicalAnswerProvider {
 
 		if (cancellation.isCancelled()) {
 			return failed(events, sequence, request.getMode(), PROBLEM_CANCELLED);
+		}
+		if (request.getMode() != null && request.getMode() != ProviderMode.QUERY_SCOPED) {
+			return failed(events, sequence, request.getMode(), PROBLEM_UNSUPPORTED_MODE);
 		}
 		String endpoint = configuredEndpoint();
 		if (endpoint == null) {

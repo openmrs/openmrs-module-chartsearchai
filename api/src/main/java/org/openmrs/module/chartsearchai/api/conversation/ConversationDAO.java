@@ -24,6 +24,12 @@ public interface ConversationDAO {
 
 	ClinicalConversation getConversation(Integer conversationId);
 
+	/**
+	 * Loads and locks a conversation for a short write transaction. Turn allocation uses this
+	 * before reading the last ordinal so two concurrent requests cannot choose the same number.
+	 */
+	ClinicalConversation getConversationForUpdate(Integer conversationId);
+
 	ClinicalConversation getConversationByUuid(String uuid);
 
 	ClinicalConversation getLatestActiveConversation(Patient patient, User user);

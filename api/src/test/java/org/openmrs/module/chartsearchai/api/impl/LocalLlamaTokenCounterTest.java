@@ -61,8 +61,10 @@ public class LocalLlamaTokenCounterTest {
 
 		assertEquals(5, counter.count("chart"));
 		assertEquals(37, counter.countPrompt("[1] Medication: Aspirin",
-				"What medications is the patient taking?"));
+				java.util.Arrays.asList(1, 3), "What medications is the patient taking?"));
 		assertTrue(measuredUserMessage.get().contains("[1] Medication: Aspirin"));
+		assertTrue(measuredUserMessage.get().contains(
+				"Records ranked by similarity to the query: 1, 3"));
 		assertTrue(measuredUserMessage.get().endsWith(
 				"Clinician's query: What medications is the patient taking?"));
 		assertEquals(8192 - ChartSearchAiConstants.DEFAULT_LLM_MAX_OUTPUT_TOKENS,

@@ -266,6 +266,8 @@ public class ChartSearchAiRestController {
 		response.put("providers", providers);
 		return response;
 	}
+
+	@Autowired
 	@Qualifier("chartSearchAi.drugSafetyValidator")
 	private DrugSafetyValidator drugSafetyValidator;
 
@@ -1449,7 +1451,21 @@ public class ChartSearchAiRestController {
 		if (mode == null || mode.trim().isEmpty()) {
 			return null;
 		}
-		return ProviderMode.fromWireName(mode.trim());
+		try {
+			return ProviderMode.fromWireName(mode.trim());
+		}
+		catch (IllegalArgumentException e) {
+			throw new InvalidProviderModeException(e.getMessage());
+		}
+	}
+
+	static final class InvalidProviderModeException extends IllegalArgumentException {
+
+		private static final long serialVersionUID = 1L;
+
+		InvalidProviderModeException(String message) {
+			super(message);
+		}
 	}
 
 	void setDrugSafetyValidator(DrugSafetyValidator drugSafetyValidator) {
@@ -1566,6 +1582,12 @@ public class ChartSearchAiRestController {
 		return new ResponseEntity<Object>(
 				errorResponse("Invalid request body. Expected JSON with 'patient' and 'question' fields."),
 				HttpStatus.BAD_REQUEST);
+	}
+
+	@ExceptionHandler(InvalidProviderModeException.class)
+	@ResponseBody
+	public ResponseEntity<Object> handleInvalidProviderMode(InvalidProviderModeException ex) {
+		return new ResponseEntity<Object>(errorResponse(ex.getMessage()), HttpStatus.BAD_REQUEST);
 	}
 
 	/**

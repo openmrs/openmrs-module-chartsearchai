@@ -9,6 +9,8 @@
  */
 package org.openmrs.module.chartsearchai.api.impl;
 
+import java.util.List;
+
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -54,6 +56,12 @@ public class LocalLlamaTokenCounter implements TokenCounter {
 	public int countPrompt(String numberedRecords, String question) {
 		return localLlmEngine.countChatInputTokens(systemPrompt(),
 				LlmProvider.buildUserMessage(numberedRecords, question));
+	}
+
+	@Override
+	public int countPrompt(String numberedRecords, List<Integer> focusIndices, String question) {
+		return localLlmEngine.countChatInputTokens(systemPrompt(),
+				LlmProvider.buildUserMessage(numberedRecords, focusIndices, question));
 	}
 
 	/** Package-visible configuration seam for a context-free contract test. */

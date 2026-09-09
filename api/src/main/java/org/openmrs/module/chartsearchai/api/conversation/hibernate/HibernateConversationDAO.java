@@ -13,6 +13,7 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 
+import org.hibernate.LockOptions;
 import org.hibernate.SessionFactory;
 import org.openmrs.Patient;
 import org.openmrs.User;
@@ -39,6 +40,12 @@ public class HibernateConversationDAO implements ConversationDAO {
 	public ClinicalConversation getConversation(Integer conversationId) {
 		return (ClinicalConversation) sessionFactory.getCurrentSession()
 				.get(ClinicalConversation.class, conversationId);
+	}
+
+	@Override
+	public ClinicalConversation getConversationForUpdate(Integer conversationId) {
+		return (ClinicalConversation) sessionFactory.getCurrentSession()
+				.get(ClinicalConversation.class, conversationId, LockOptions.UPGRADE);
 	}
 
 	@Override

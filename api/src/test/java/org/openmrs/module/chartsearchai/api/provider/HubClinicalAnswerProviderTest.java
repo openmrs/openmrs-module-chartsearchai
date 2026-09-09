@@ -210,6 +210,27 @@ public class HubClinicalAnswerProviderTest {
 	}
 
 	@Test
+	public void anUnsupportedFullChartRequestFailsBeforeCallingTheHub() throws Exception {
+		ScriptedHubTransport transport = new ScriptedHubTransport();
+		HubClinicalAnswerProvider provider = provider(transport,
+				"http://hub.example/v1/chat/completions");
+		CollectingSink sink = new CollectingSink();
+		TurnRequest fullChartRequest = new TurnRequest(patient(),
+				"What medications is this patient on?", "conversation-1", "request-1",
+				ProviderMode.FULL_CHART_STABLE, "product-profile-a", Collections.emptyList());
+
+		TurnResult result = provider.execute(fullChartRequest, sink,
+				CancellationSignal.NONE).toCompletableFuture().get();
+
+		assertEquals(TurnEventType.TURN_ERROR, result.getTerminalState());
+		assertEquals(HubClinicalAnswerProvider.PROBLEM_UNSUPPORTED_MODE,
+				result.getProblemCode());
+		assertEquals(Arrays.asList(TurnEventType.TURN_STARTED, TurnEventType.TURN_ERROR),
+				sink.types());
+		assertEquals(0, transport.calls.get());
+	}
+
+	@Test
 	public void aStagedHubStreamMapsOntoTheCanonicalLifecycleInOneCall() throws Exception {
 		ScriptedHubTransport transport = new ScriptedHubTransport();
 		Map<String, Object> answer = answerPayload("Aspirin 81mg.");

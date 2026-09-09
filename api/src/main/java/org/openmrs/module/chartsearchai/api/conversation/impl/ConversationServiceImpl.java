@@ -130,20 +130,27 @@ public class ConversationServiceImpl implements ConversationService {
 	public ClinicalConversationTurn startTurn(ClinicalConversation conversation, String requestId,
 			String question) {
 		require(conversation != null, "conversation is required");
-		require(ClinicalConversation.STATUS_ACTIVE.equals(conversation.getStatus()),
-				"conversation is not active");
 		require(requestId != null && !requestId.trim().isEmpty(), "requestId is required");
 		require(question != null && !question.trim().isEmpty(), "question is required");
 
+		// Lock the parent row before reading max(ordinal). The unique database constraint catches
+		// duplicate ordinals, but without this lock two concurrent requests can both read the same
+		// maximum and one valid turn is rejected instead of cleanly preempting the other.
+		ClinicalConversation locked = conversationDAO
+				.getConversationForUpdate(conversation.getConversationId());
+		require(locked != null, "conversation does not exist");
+		require(ClinicalConversation.STATUS_ACTIVE.equals(locked.getStatus()),
+				"conversation is not active");
+
 		Date now = new Date();
 		ClinicalConversationTurn turn = new ClinicalConversationTurn();
-		turn.setConversation(conversation);
-		turn.setOrdinal(conversationDAO.getLastOrdinal(conversation) + 1);
+		turn.setConversation(locked);
+		turn.setOrdinal(conversationDAO.getLastOrdinal(locked) + 1);
 		turn.setRequestId(requestId);
 		turn.setQuestion(question);
 		turn.setStartedAt(now);
-		conversation.setLastActivityAt(now);
-		conversationDAO.saveConversation(conversation);
+		locked.setLastActivityAt(now);
+		conversationDAO.saveConversation(locked);
 		return conversationDAO.saveTurn(turn);
 	}
 

@@ -579,8 +579,9 @@ public class ChartSearchAiUtils {
 	 * The ORDER is pinned by
 	 * {@code FindingEnumerationClauseContextTest.theCarriedIndexesReadInTheOrderTheInjectorWroteTheFindings},
 	 * over a chart the real injector gave several findings: re-collecting this list in reverse used
-	 * to leave the whole build green while {@code carriedFindingIndexes}' WARN promised prompt
-	 * order. The ONE-selection half is pinned by
+	 * to leave the whole build green while
+	 * {@code SafetyFindingCitationExtentCheck.measureFindingCitations}' WARN promised prompt order.
+	 * The ONE-selection half is pinned by
 	 * {@code ArchitectureGuardTest.theFindingPopulationIsSelectedInOneMethod}, a source scan
 	 * over {@code api/src/main} whose javadoc is canonical for the shapes it catches and the ones it
 	 * does not — do not read it as catching every respelling.

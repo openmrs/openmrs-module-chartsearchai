@@ -137,10 +137,12 @@ final class SafetyFindingCitationExtentCheck {
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>.
 	 *
 	 * <p><b>Nothing reads this set's ITERATION ORDER, and that is a change rather than an
-	 * observation.</b> {@link LlmInferenceService#severalFindingsAboutOneDrug} reads only
-	 * {@code size()}, and {@link #measureFindingCitations} takes the uncited indexes it names at WARN
-	 * from the shared walk's own List rather than from this set — so the promise that the WARN reads
-	 * in the order the prompt carried them rests on the walk's order contract, which
+	 * observation.</b> {@link LlmInferenceService#severalFindingsAboutOneDrug}, the only production
+	 * caller of this method, reads only {@code size()}; {@link #measureFindingCitations}, which
+	 * shares the projection below rather than calling this method, reads {@code isEmpty()},
+	 * {@code contains} and {@code size()} of it and takes the uncited indexes it names at WARN from
+	 * the shared walk's own List instead — so the promise that the WARN reads in the order the
+	 * prompt carried them rests on the walk's order contract, which
 	 * {@code FindingEnumerationClauseContextTest.theCarriedIndexesReadInTheOrderTheInjectorWroteTheFindings}
 	 * pins by comparing that List against the injector's own numbering. That promise rested on this
 	 * {@code LinkedHashSet} until the assertion was made direct, and it was a fail-open: substituting
@@ -148,17 +150,25 @@ final class SafetyFindingCitationExtentCheck {
 	 * shared walk green too, so a one-token collection swap disarmed the only pin the order contract
 	 * had. The reason was a property of that chart and not a structural one: its finding indexes are
 	 * 4-7, which a {@code HashSet} iterates ascending whatever order they went in, while the same
-	 * eight-element substitution over the 349-356 the eval rig's own findings occupy iterates
-	 * {@code [352, 353, 354, 355, 356, 349, 350, 351]}. A {@code TreeSet} or a sort IS the
-	 * structural case — that substitution is green here too, measured, and unlike the hash one it
-	 * would be green on any chart, normalising to the expected ascending order whatever the values —
-	 * and the case's javadoc separates the two. The pin is now a List-to-List comparison over the
-	 * walk itself, which no collection substituted here can get in the way of, and a {@code HashSet}
-	 * here is INERT rather
-	 * than merely green: nothing reads the order, so there is nothing left for it to change (the api
-	 * suite is green under the substitution, measured). The {@code LinkedHashSet} stays because a
-	 * caller reading the returned set then gets the prompt's own order for free, not because
-	 * anything today depends on it.
+	 * substitution over the SEVEN indexes 349-355 that the eval rig's own findings occupy — read off
+	 * {@code eval/drift-metric/fixtures/probe-safety/findings-complete/sarah__safety-Amlodipine.json},
+	 * the largest such population any committed capture carries, none of them reaching an index
+	 * above 355 — iterates {@code [352, 353, 354, 355, 349, 350, 351]}, equally not ascending. A
+	 * {@code TreeSet} or a sort IS the structural case — that substitution is green here too,
+	 * measured, and unlike the hash one it would have been green on any chart, normalising to the
+	 * order that case then expected whatever the values — and the case's javadoc separates the two.
+	 *
+	 * <p><b>The order pin is now a List-to-List comparison over the walk itself, which no collection
+	 * substituted here can get in the way of, and the one case that still read this set's own order
+	 * was changed to compare its CONTENT with both sides sorted — so a {@code HashSet} here is INERT
+	 * rather than merely green.</b> Measured, one mutation per run: the api suite is green under the
+	 * substitution, and green under a REVERSAL of this projection alone with the shared walk left
+	 * untouched, which is the mutation that separates "nothing reads the order" from "the one reader
+	 * is satisfied by the way these values happen to hash". Before that case was changed the same
+	 * reversal reddened it, reporting an order-only change as a dropped or added index. The
+	 * {@code LinkedHashSet} stays because a caller reading the returned set then gets the prompt's
+	 * own order for free, not because anything today depends on it — and nothing pins that, so a
+	 * caller that comes to depend on it brings its own pin.
 	 *
 	 * <p>Keyed on the INDEX, which is the injector's own sequential numbering and unique across a
 	 * chart by construction, so the set counts records and is not silently folding any — which is

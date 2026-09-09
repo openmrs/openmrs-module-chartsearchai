@@ -176,19 +176,35 @@ public class FindingEnumerationClauseContextTest {
 	 * order pin off. The escape
 	 * was a property of these index VALUES and not structural: this chart's findings are numbered
 	 * 4-7, which a {@code HashSet} iterates ascending whichever order they went in, while the same
-	 * eight-element substitution over the 349-356 the eval rig's own safety findings occupy iterates
-	 * {@code [352, 353, 354, 355, 356, 349, 350, 351]}. Both legs are kept: the direct one is the
-	 * pin, the {@code carriedFindingIndexes} one asserts that the projection neither drops an index
-	 * nor adds one.
+	 * substitution over the SEVEN indexes 349-355 that the eval rig's own safety findings occupy —
+	 * read off
+	 * {@code eval/drift-metric/fixtures/probe-safety/findings-complete/sarah__safety-Amlodipine.json},
+	 * the largest such population any committed capture carries — iterates
+	 * {@code [352, 353, 354, 355, 349, 350, 351]}, equally not ascending. Both legs are kept and
+	 * they ask different questions: the direct one is the ORDER pin, and the
+	 * {@code carriedFindingIndexes} one is CONTENT only, asserting that the projection neither drops
+	 * an index nor adds one.
 	 *
-	 * <p><b>What no arrangement here can reach is a substitution that NORMALISES to ascending</b> —
-	 * a {@code TreeSet} or a sort, at either end, and a {@code HashSet} over index values that
-	 * happen to hash that way. The {@code TreeSet} one is measured green here; the others follow.
-	 * That is structural and it is not a gap in this case: the premise
-	 * above is that the injector numbers its findings ascending, so on every chart it builds
-	 * ascending IS the prompt order, and a normalising substitution hands the WARN the order it
-	 * promises. Such a substitution becomes wrong only alongside a change to the injector's own
-	 * numbering, which the premise assertion would then be the thing to redden.
+	 * <p><b>The projection leg is order-BLIND on purpose, which is what makes the message it prints
+	 * believable.</b> It compared the projection's iteration ORDER until #397's hardening changed
+	 * it, and a mutation changing only that order — collecting the projection from a reversed copy
+	 * with the shared walk untouched, so no index is dropped and none added — reddened it saying the
+	 * projection had dropped or added one: {@code expected: <[4, 5, 6, 7]> but was: <[7, 6, 5, 4]>},
+	 * measured, and the one failure in the whole api suite. The order it was reading is a property
+	 * nothing else reads — production asks this projection for {@code size()} alone, and the check
+	 * that shares it reads only {@code isEmpty()}, {@code contains} and {@code size()} — and it was
+	 * green there only because these values hash ascending, which is the accident the paragraph above
+	 * documents as what made the old pin disarmable. Sorted at both ends, that same mutation leaves
+	 * the whole api suite green while a DROP and an ADD each still redden this leg (one mutation per
+	 * run, measured).
+	 *
+	 * <p><b>So no collection substituted inside {@code carriedFindingIndexes} is reachable from this
+	 * case at all, and that is the design rather than a gap</b>: the order contract is pinned on the
+	 * WALK, which no downstream collection stands in front of, and the projection's own order is
+	 * read by nothing — a {@code HashSet} and a {@code TreeSet} are both green here and neither
+	 * changes anything any case observes. What that gives up is said rather than left to be found:
+	 * nothing here holds the returned SET to the prompt's order, so a caller that comes to depend on
+	 * it brings its own pin.
 	 */
 	@Test
 	public void theCarriedIndexesReadInTheOrderTheInjectorWroteTheFindings() {
@@ -216,10 +232,15 @@ public class FindingEnumerationClauseContextTest {
 						+ "List against List, so no collection a projection substitutes downstream can "
 						+ "hide a reversal from it, which a HashSet in carriedFindingIndexes was "
 						+ "measured to do");
-		assertEquals(injectionOrder, new ArrayList<Integer>(
-			SafetyFindingCitationExtentCheck.carriedFindingIndexes(chart.getMappings())),
+		List<Integer> projected = new ArrayList<Integer>(
+			SafetyFindingCitationExtentCheck.carriedFindingIndexes(chart.getMappings()));
+		Collections.sort(projected);
+		assertEquals(ascending, projected,
 				"and the projection off it must neither drop an index nor add one, which is what "
-						+ "ChartSearchAiUtils.safetyFindingMappings states of every projection off it");
+						+ "ChartSearchAiUtils.safetyFindingMappings states of every projection off it "
+						+ "— CONTENT, both sides sorted, because a reordering of the projection is "
+						+ "read by nothing and must not be reported here as a dropped or added index; "
+						+ "the ORDER contract is the walk's leg above. Projected: " + projected);
 	}
 
 	/**

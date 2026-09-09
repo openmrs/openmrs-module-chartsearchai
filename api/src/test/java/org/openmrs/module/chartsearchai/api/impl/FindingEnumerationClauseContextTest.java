@@ -153,9 +153,9 @@ public class FindingEnumerationClauseContextTest {
 	 * Issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>.
 	 *
 	 * <p><b>What rests on it.</b> The uncited indexes {@code measureFindingCitations} names at WARN
-	 * are the one thing a maintainer has for WHICH finding an answer dropped, and
-	 * {@code carriedFindingIndexes}' javadoc promises they read in the order the prompt carried
-	 * them. Reversed, that line reads backwards against the prompt with every column of
+	 * are the one thing a maintainer has for WHICH finding an answer dropped, and that method builds
+	 * them off this walk precisely so the order it promises is the one pinned here. Reversed, that
+	 * line reads backwards against the prompt with every column of
 	 * {@code findingCitations} unchanged — the gate reads {@code size()} and the subject cases
 	 * compare against a Set, both of which ignore order. And the extraction's own argument is that
 	 * further projections will be added off this one walk, so without this each would inherit an
@@ -167,15 +167,28 @@ public class FindingEnumerationClauseContextTest {
 	 * ascending assertion beside it is the premise that those indexes are the injector's own
 	 * sequential numbering, without which a reversal would be unobservable in the values.
 	 *
-	 * <p><b>What it does NOT reach:</b> the COLLECTION type at either end, and the reason is
-	 * structural rather than a property of this chart. The premise asserted above is that the
-	 * injector numbers its findings ASCENDING, so {@code injectionOrder} — the expected value of the
-	 * assertion below — IS a sorted list, and any collection that normalises to that order satisfies
-	 * it on any chart: a {@code TreeSet} or a sort in place of the {@code LinkedHashSet} cannot fail
-	 * this at all, and a {@code HashSet} escapes here too (measured). So that half of
-	 * {@code carriedFindingIndexes}' javadoc claim is unobservable rather than pinned, and is said so
-	 * rather than left to look guarded. Nothing follows about the WARN it protects, whose order is
-	 * the prompt's and therefore the ascending one.
+	 * <p><b>The walk is asserted DIRECTLY, List against List, and that is what a downstream
+	 * collection cannot get in the way of.</b> Before it existed, the only assertion here went
+	 * through {@code SafetyFindingCitationExtentCheck.carriedFindingIndexes} and its
+	 * {@code LinkedHashSet}, and that made the pin disarmable in one token: with a {@code HashSet} in
+	 * its place the REVERSAL of the shared walk was GREEN — measured, the two edits applied together
+	 * in one run — so the swap did not merely leave a collection-type claim unpinned, it took the
+	 * order pin off. The escape
+	 * was a property of these index VALUES and not structural: this chart's findings are numbered
+	 * 4-7, which a {@code HashSet} iterates ascending whichever order they went in, while the same
+	 * eight-element substitution over the 349-356 the eval rig's own safety findings occupy iterates
+	 * {@code [352, 353, 354, 355, 356, 349, 350, 351]}. Both legs are kept: the direct one is the
+	 * pin, the {@code carriedFindingIndexes} one asserts that the projection neither drops an index
+	 * nor adds one.
+	 *
+	 * <p><b>What no arrangement here can reach is a substitution that NORMALISES to ascending</b> —
+	 * a {@code TreeSet} or a sort, at either end, and a {@code HashSet} over index values that
+	 * happen to hash that way. The {@code TreeSet} one is measured green here; the others follow.
+	 * That is structural and it is not a gap in this case: the premise
+	 * above is that the injector numbers its findings ascending, so on every chart it builds
+	 * ascending IS the prompt order, and a normalising substitution hands the WARN the order it
+	 * promises. Such a substitution becomes wrong only alongside a change to the injector's own
+	 * numbering, which the premise assertion would then be the thing to redden.
 	 */
 	@Test
 	public void theCarriedIndexesReadInTheOrderTheInjectorWroteTheFindings() {
@@ -194,10 +207,18 @@ public class FindingEnumerationClauseContextTest {
 				"and its other half: the injector must number the findings it appends ASCENDING, or "
 						+ "a reversal of the shared walk would not show in these values. Written: "
 						+ injectionOrder);
+		List<Integer> walkOrder = new ArrayList<Integer>();
+		for (RecordMapping finding : ChartSearchAiUtils.safetyFindingMappings(chart.getMappings())) {
+			walkOrder.add(Integer.valueOf(finding.getIndex()));
+		}
+		assertEquals(injectionOrder, walkOrder,
+				"the shared walk itself must hand the findings back in injection order — asserted "
+						+ "List against List, so no collection a projection substitutes downstream can "
+						+ "hide a reversal from it, which a HashSet in carriedFindingIndexes was "
+						+ "measured to do");
 		assertEquals(injectionOrder, new ArrayList<Integer>(
 			SafetyFindingCitationExtentCheck.carriedFindingIndexes(chart.getMappings())),
-				"the shared walk must hand the findings back in injection order, which is what "
-						+ "carriedFindingIndexes' javadoc promises of the uncited-index WARN and what "
+				"and the projection off it must neither drop an index nor add one, which is what "
 						+ "ChartSearchAiUtils.safetyFindingMappings states of every projection off it");
 	}
 

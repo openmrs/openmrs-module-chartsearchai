@@ -6106,24 +6106,40 @@ separator the only variable between them.
 
 **That identical aggregate is a VALIDATION of the shipped code and not a duplicate row, and saying
 why is stronger than saying the columns agree** (measured 2026-09-09 over the two stored capture
-directories; `eval/drift-metric/README.md` carries the method). The two are independent captures —
-the `questionId` differs per cell — and their fourteen ANSWERS are byte-identical, because the
-PROMPTS are: greedy decode with `--cache-reuse 0` makes an unchanged prompt give an unchanged
-answer, and appending the clause after the question separated by a SPACE is textually
-indistinguishable from the clause following the question on the same line. So the shipped code
-reproduces the arm that chose the wording byte for byte, over two captures rather than one.
+directories; `eval/drift-metric/README.md` carries the method and the per-cell figures). The two are
+independent captures — the `questionId` differs per cell — and their fourteen ANSWERS are
+byte-identical. **On the twelve finding-carrying cells that is because the PROMPTS are:** greedy
+decode with `--cache-reuse 0` makes an unchanged prompt give an unchanged answer, appending the
+clause after the question separated by a SPACE is textually indistinguishable from the clause
+following the question on the same line, and `input_tokens` on a finding-carrying cell is identical
+to the token in both arms. Over those twelve the shipped code reproduces the arm that chose the
+wording prompt for prompt, over two captures rather than one. **On the two ABSTAIN controls the
+prompts are NOT the same, and the byte-identical answers there are two different prompts agreeing** —
+the paragraph below.
 
-**And it settles a residue this decision's ledger declared unsettled, in the negative.** What the
-wording-selection arm did with the two ABSTAIN controls was recorded as not settled by anything in
-this repo. It is now settled that it carried no clause on them: the shipped arm withholds it there
-(its gate sees `carried` 0), the two control cells' answers are byte-identical between the arms, and
-under greedy decode a clause on one side and not the other would be expected to move them. So a
-uniform `CAPTURE_PHRASING` append over all fourteen drugs was NOT the lever that produced that arm.
-**The positive is still open and is not to be filled in by elimination:** nothing records that arm's
-own phrasing string, and byte-identical answers are strong evidence of identical prompts rather than
-proof.
+**And it REVERSES a residue this decision recorded as settled, which had been settled the wrong
+way.** What the wording-selection arm did with the two ABSTAIN controls was first recorded as
+unsettled, then as settled in the NEGATIVE — no clause on those cells — on the strength of the two
+arms' control answers being byte-identical. Measured instead with the instrument this decision
+already reads elsewhere, per-cell `input_tokens` joined by `questionId` = `auditLogId`: **that arm
+carried the clause on both controls**, its prompt 28 input tokens larger on each, which is the
+clause's own measured cost. **So a uniform `CAPTURE_PHRASING` append over all fourteen drugs WAS the
+lever that produced that arm** — `capture_probe_safety.sh` renders one question template per run and
+has no per-cell branch that could have withheld it. Its exact phrasing STRING is still not recorded,
+and that is now the whole of what is open about that arm.
 
-The system-prompt arm made completeness *worse* by a cell (Nifedipine 7/7 → 6/7) and cost **26% more output tokens** (477 → 602 over the 14 cells — and that arm alone is UNGATED, `getSystemPrompt()` being read on every request, so its two ABSTAIN controls carried the clause where the baseline's did not; `eval/drift-metric/README.md` states the asymmetry beside the table). The same sentence after the question fixed three cells — the issue's own reproducer among them, 6 of 7 to 7 of 7 — regressed the same one, took `unstatedFindingSeverities` to zero, and cut output by **23%** (477 → 366). **Both of those were published as CHARACTER shares — 72% more and 40% shorter — until they were re-read off the audit row**, and characters are not the cost: `output_tokens` is a column on the same `chartsearchai_audit_log` row this decision already reads `input_tokens` from, so the recorded figure existed and a derived proxy was quoted beside it, which is the root instruction file's own rule. The character shares are real and are the answer's LENGTH; on the twelve cells the clause reaches, +28 to +30 input tokens buys −131 output tokens (539 → 408). Both ABSTAIN cells held their abstention in both arms, and the one yes/no directness cell this cohort carries (`dc8560c9-…|probe-current-meds`) scored 1/1 direct with 0 safety violations in both.
+**Why the negative was reachable, because it is this repo's own standing warning turned on itself.**
+Those two cells are the drift CONTROL precisely because the gating arms keep the clause off them, so
+their non-movement measures the corpus and can say nothing about a clause; the inference needed the
+converse of determinism — that a CHANGED prompt moves the answer — which greedy decode does not
+supply, and which the same ledger refutes, a twelve-token chart shift there having re-worded eleven
+of fourteen answers and left the other three untouched. Sharper: the two arms' `output_tokens` on
+those two cells DIFFER (99 against 118; 162 against 115) while the published `answer` does not, so
+even the completion differed and only the extracted answer coincided. **Byte-identity of a published
+field is weaker evidence than byte-identity of a completion, and `eval/drift-metric/README.md` is the
+one home for that warning as it is for these rows.**
+
+The system-prompt arm made completeness *worse* by a cell (Nifedipine 7/7 → 6/7) and cost **26% more output tokens** (477 → 602 over the 14 cells — and that arm is UNGATED, `getSystemPrompt()` being read on every request, so its two ABSTAIN controls carried the clause where the baseline's did not; the wording-selection arm's controls carried it too, for the different reason above, so the fourteen-cell shares of BOTH prompt-lever arms are non-comparable with the baseline's; `eval/drift-metric/README.md` states the asymmetry beside the table). The same sentence after the question fixed three cells — the issue's own reproducer among them, 6 of 7 to 7 of 7 — regressed the same one, took `unstatedFindingSeverities` to zero, and cut output by **23%** (477 → 366 — a fourteen-cell mean the README records as joined to the audit rows by answer TEXT, which cannot tell the last two arms apart from each other). **Both of those were published as CHARACTER shares — 72% more and 40% shorter — until they were re-read off the audit row**, and characters are not the cost: `output_tokens` is a column on the same `chartsearchai_audit_log` row this decision already reads `input_tokens` from, so the recorded figure existed and a derived proxy was quoted beside it, which is the root instruction file's own rule. The character shares are real and are the answer's LENGTH; on the twelve cells the clause reaches, +28 to +30 input tokens buys −131 output tokens (539 → 408). Both ABSTAIN cells held their abstention in both arms, and the one yes/no directness cell this cohort carries (`dc8560c9-…|probe-current-meds`) scored 1/1 direct with 0 safety violations in both.
 
 **A FIFTH key moves, and it moves in a direction that reads backwards.** Reading the completeness
 cell beside the existing gates is what this issue asks for, and doing it over every published key —

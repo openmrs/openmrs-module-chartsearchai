@@ -322,11 +322,23 @@ public class ArchitectureGuardTest {
 	 * precondition, and dropping either name from the allow-list reddens with the named method's own
 	 * spelling reported as the violation.
 	 *
-	 * <p><b>Only one of the two shapes carries a canary, and that is named rather than left to be
-	 * assumed covered.</b> Neither production spelling puts the constant in an {@code equals}
-	 * ARGUMENT list, so deleting the {@link #EQUALS_CALL} half of {@link #findingTypeTests} leaves
-	 * this case green — measured — and silently gives up every argument-side shape above, the
-	 * {@code Objects.equals} ones included. The receiver shape is the one the two bodies keep honest.
+	 * <p><b>What the two bodies keep honest is ONE alternative of ONE shape, and that is stated at
+	 * the granularity it was measured at rather than as "the receiver shape".</b> Both spell
+	 * {@code ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(}, so the precondition above
+	 * holds the reading to the QUALIFIED-CONSTANT receiver and to nothing else, and <b>any narrowing
+	 * the two bodies still satisfy passes both preconditions</b>. Measured 2026-09-09, one mutation
+	 * per run, each leaving this case GREEN: deleting the {@code "safety_finding"} literal arm from
+	 * both patterns; replacing {@code equals(?:IgnoreCase)?} with {@code equals} in both; and
+	 * narrowing the receiver pattern to require the {@code ChartSearchAiConstants.} qualifier, after
+	 * which the reading sees neither a static-imported
+	 * {@code RESOURCE_TYPE_SAFETY_FINDING.equals(t)} nor {@code "safety_finding".equals(t)}. The
+	 * literal arm is the live one of the three: the root {@code CLAUDE.md} carries a rule against
+	 * testing a {@code resourceType} against a named type at all (issue #122), which exists because
+	 * such tests do get written. Deleting the {@link #EQUALS_CALL} half of
+	 * {@link #findingTypeTests} leaves this green too — neither production spelling puts the constant
+	 * in an {@code equals} ARGUMENT list — and silently gives up every argument-side shape above, the
+	 * {@code Objects.equals} ones included. <b>Trim nothing here on the strength of the build staying
+	 * green after it.</b>
 	 */
 	@Test
 	public void theFindingPopulationIsSelectedInOneMethod() throws IOException {
@@ -401,11 +413,26 @@ public class ArchitectureGuardTest {
 	 * argument orders of {@code Objects.equals} with one rule instead of one alternation per order.
 	 *
 	 * <p><b>The paren count is naive in the same way {@link #endOfBody}'s brace count is</b> — it
-	 * knows nothing of strings, chars or comments — and the two directions of that are not the same:
-	 * a stray {@code )} inside a string literal ends the list early and can hide a token sitting
-	 * after it, which is a silent pass, while a stray {@code (} runs the list past its real end and
-	 * can report a token that is not in it, which is a loud one. Neither is reachable from a
-	 * production spelling today; both are named rather than left to be discovered.
+	 * knows nothing of strings, chars or comments — and it has THREE outcomes, of which TWO are
+	 * silent. A {@code )} inside a literal ahead of the token ends the list early and truncates the
+	 * span, hiding a token that sits after it. A {@code (} inside a literal runs the list past its
+	 * real end, and in the ordinary case that means past the end of the FILE: {@link #endOfArguments}
+	 * returns -1 and {@link #findingTypeTests} discards the call outright, which is the strongest
+	 * fail-open path here — a real type test carrying one such literal leaves the rule altogether.
+	 * It becomes loud only where a later net-extra {@code )} in the same file brings the depth back
+	 * to zero, reporting a token that is not in the argument list at all.
+	 *
+	 * <p><b>Measured 2026-09-09 by putting each shape to this reading on its own: all four are
+	 * MISSED</b> — {@code Objects.equals(t + ")", CONST)}, {@code Objects.equals(t + "(", CONST)},
+	 * {@code Objects.equals(t.replace(')', ' '), CONST)} and
+	 * {@code Objects.equals(t.substring(t.indexOf('(') + 1), CONST)} — with the loud outcome
+	 * reproduced only by putting a net-extra {@code )} later in the same source, which then reported
+	 * a token sitting outside the real argument list. The last two are ordinary Java and not a stray:
+	 * a genuine type test whose argument carries a paren-bearing sub-expression escapes a rule whose
+	 * whole purpose is to forbid it. <b>What makes that tolerable
+	 * is the tree and not the parser</b> — the same run read 107 {@code equals}-shaped calls across
+	 * the 68 java files of {@code api/src/main}, none of them returning -1, the longest span 93
+	 * characters and none crossing more than two lines.
 	 */
 	private static List<int[]> findingTypeTests(String source) {
 		List<int[]> found = new ArrayList<>();

@@ -102,10 +102,12 @@ import org.slf4j.LoggerFactory;
  * measurement: both answer paths, {@link LlmInferenceService#search} and {@code searchStreaming}, so
  * the endpoint users hit is covered. Not the progressive-reasoning preview, which discards its
  * answer and resolves no citations, and not a cached answer, which was measured when it was produced
- * — the same scoping its siblings state. {@link #carriedFindingIndexes} also runs on the
- * prompt-assembly path, in BOTH answer methods, and there it runs before any answer exists: issue
- * #397 extracted it out of {@code measureFindingCitations} so that path could ask this population
- * the question it needs. Its own javadoc is canonical for that.
+ * — the same scoping its siblings state. {@link #carriedFindingIndexes} runs on the
+ * prompt-assembly path instead, in BOTH answer methods, and there it runs before any answer exists:
+ * issue #397 extracted it out of {@code measureFindingCitations} so that path could ask this
+ * population the question it needs. {@code measureFindingCitations} shares that method's
+ * PROJECTION rather than calling it, needing the walk the projection was taken from as well. Its
+ * own javadoc is canonical for both.
  * &rarr; ADR Decision 83.
  */
 final class SafetyFindingCitationExtentCheck {
@@ -134,23 +136,44 @@ final class SafetyFindingCitationExtentCheck {
 	 * differently. Issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>.
 	 *
-	 * <p>A LinkedHashSet over that order, so the uncited indexes the WARN lists read in the order
-	 * the prompt carried them rather than in whatever order a hash gives — a maintainer comparing
-	 * the line against the prompt is reading down one list. <b>The ORDER half of that is pinned;
-	 * the COLLECTION TYPE's own contribution to it is not, and the two are different claims.</b>
+	 * <p><b>Nothing reads this set's ITERATION ORDER, and that is a change rather than an
+	 * observation.</b> {@link LlmInferenceService#severalFindingsAboutOneDrug} reads only
+	 * {@code size()}, and {@link #measureFindingCitations} takes the uncited indexes it names at WARN
+	 * from the shared walk's own List rather than from this set — so the promise that the WARN reads
+	 * in the order the prompt carried them rests on the walk's order contract, which
 	 * {@code FindingEnumerationClauseContextTest.theCarriedIndexesReadInTheOrderTheInjectorWroteTheFindings}
-	 * reddens on a reversal of the shared walk, which is what used to be invisible. Substituting a
-	 * {@code HashSet} here leaves it green — measured — and the reason is STRUCTURAL rather than a
-	 * property of that chart: the case's own premise asserts the injector numbers its findings
-	 * ASCENDING, so the list it compares this one against is a sorted list, and any collection that
-	 * normalises to that order escapes on every chart rather than only on one whose indexes are
-	 * small. Keyed on the INDEX, which is the injector's own sequential numbering and unique across a
+	 * pins by comparing that List against the injector's own numbering. That promise rested on this
+	 * {@code LinkedHashSet} until the assertion was made direct, and it was a fail-open: substituting
+	 * a {@code HashSet} left the order case green — measured — and, worse, left the REVERSAL of the
+	 * shared walk green too, so a one-token collection swap disarmed the only pin the order contract
+	 * had. The reason was a property of that chart and not a structural one: its finding indexes are
+	 * 4-7, which a {@code HashSet} iterates ascending whatever order they went in, while the same
+	 * eight-element substitution over the 349-356 the eval rig's own findings occupy iterates
+	 * {@code [352, 353, 354, 355, 356, 349, 350, 351]}. A {@code TreeSet} or a sort IS the
+	 * structural case — that substitution is green here too, measured, and unlike the hash one it
+	 * would be green on any chart, normalising to the expected ascending order whatever the values —
+	 * and the case's javadoc separates the two. The pin is now a List-to-List comparison over the
+	 * walk itself, which no collection substituted here can get in the way of, and a {@code HashSet}
+	 * here is INERT rather
+	 * than merely green: nothing reads the order, so there is nothing left for it to change (the api
+	 * suite is green under the substitution, measured). The {@code LinkedHashSet} stays because a
+	 * caller reading the returned set then gets the prompt's own order for free, not because
+	 * anything today depends on it.
+	 *
+	 * <p>Keyed on the INDEX, which is the injector's own sequential numbering and unique across a
 	 * chart by construction, so the set counts records and is not silently folding any — which is
 	 * also why the shared walk hands back a List and leaves each projection its own collapse.
 	 */
 	static Set<Integer> carriedFindingIndexes(List<RecordMapping> mappings) {
+		return indexesOf(ChartSearchAiUtils.safetyFindingMappings(mappings));
+	}
+
+	/** The citation indexes of {@code findings}, in the order given — the projection itself, shared
+	 *  by the published accessor above and by {@link #measureFindingCitations}, which needs the walk
+	 *  it was taken from as well and must not walk twice to get both. */
+	private static Set<Integer> indexesOf(List<RecordMapping> findings) {
 		Set<Integer> carried = new LinkedHashSet<Integer>();
-		for (RecordMapping mapping : ChartSearchAiUtils.safetyFindingMappings(mappings)) {
+		for (RecordMapping mapping : findings) {
 			carried.add(Integer.valueOf(mapping.getIndex()));
 		}
 		return carried;
@@ -177,7 +200,8 @@ final class SafetyFindingCitationExtentCheck {
 			// Inside the guard, not above it: reading a detached patient proxy is the one line here
 			// that could throw, and the promise this catch makes is structural or it is nothing.
 			patientId = patient == null ? null : patient.getPatientId();
-			Set<Integer> carried = carriedFindingIndexes(mappings);
+			List<RecordMapping> findings = ChartSearchAiUtils.safetyFindingMappings(mappings);
+			Set<Integer> carried = indexesOf(findings);
 			if (carried.isEmpty()) {
 				// The cheapest gate first, as every sibling resolves its own: on the shipped default
 				// the injector never runs, so this is the ordinary path and it must not walk the
@@ -198,9 +222,14 @@ final class SafetyFindingCitationExtentCheck {
 				}
 			}
 			if (citedFindings.size() < carried.size() && !ChartSearchAiUtils.isBlank(answer)) {
+				// Off the shared WALK and not off `carried`, so the order this line prints is the
+				// walk's pinned injection order rather than whatever iteration order the set above
+				// happens to give. The `uncited` guard keeps the list in step with the count, which
+				// is a set — defensive only, the injector's numbering being unique per chart.
 				List<Integer> uncited = new ArrayList<Integer>();
-				for (Integer index : carried) {
-					if (!citedFindings.contains(index)) {
+				for (RecordMapping finding : findings) {
+					Integer index = Integer.valueOf(finding.getIndex());
+					if (!citedFindings.contains(index) && !uncited.contains(index)) {
 						uncited.add(index);
 					}
 				}

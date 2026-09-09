@@ -791,45 +791,77 @@ copy had already started to drift in its second column before it was cut.
 | **after the question, run on** | `buildUserMessage`, space | **6 / 12** | **0** | 12 / 12 | **366** | **564** |
 
 **Both cost columns are over all fourteen cells**, the two ABSTAIN controls included — so read
-every share below as a share of that fourteen and not of the twelve the clause reaches. **Of the
-four arms that carry a clause at all, the `system prompt` one is the only one whose two controls
-carry it too, which is what makes that arm's two shares non-comparable.** The baseline has no clause
-anywhere, which is what its `nowhere` cell says; the two BUILT arms gate it on
-`severalFindingsAboutOneDrug`, false of a chart carrying no finding; and the `appended to the
-question` arm's controls are settled below. The `system prompt` arm is UNGATED:
-`getSystemPrompt()` returns the global property if custom and `DEFAULT_SYSTEM_PROMPT` otherwise,
-with no gate at all, and both `LlmProvider.search` and `LlmProvider.searchStreaming` call it per
-request — so its two controls DID carry the clause. Read the 26% and +72% shares below against a
-baseline whose controls did not — the −23% beside them is like-for-like, its arm being one of the
-built ones. `mean output tokens` is `outputTokens` off the
+every share below as a share of that fourteen and not of the twelve the clause reaches. **The arms
+whose two controls are clause-free are the baseline and the two BUILT ones. BOTH prompt-lever arms
+carried the clause on both controls, which is what makes each of their fourteen-cell shares
+non-comparable with the baseline's.** The baseline has no clause anywhere, which is what its
+`nowhere` cell says, and the two BUILT arms gate it on `severalFindingsAboutOneDrug`, false of a
+chart carrying no finding. The `system prompt` arm is UNGATED: `getSystemPrompt()` returns the
+global property if custom and `DEFAULT_SYSTEM_PROMPT` otherwise, with no gate at all, and both
+`LlmProvider.search` and `LlmProvider.searchStreaming` call it per request. The `appended to the
+question` arm had no gate to apply either — `capture_probe_safety.sh` renders one template per run,
+so a wording appended there reaches all fourteen cells — and that is MEASURED below as well as
+entailed by that design. Read the 26% and +72% shares below against a baseline whose controls did
+not carry it; the −23% beside them names one of the BUILT arms, so its comparison is like-for-like,
+while its figure carries the join caveat next.
+`mean output tokens` is `outputTokens` off the
 `chartsearchai_audit_log` row, joined to the captures by exact answer text, 14 of 14 cells matched in
 every arm (measured 2026-09-09; the audit REST listing at `GET
-/ws/rest/v1/chartsearchai/auditlog` publishes it beside `inputTokens`). The characters column was
-here first and was being read as the output cost, which it is not: the module records the tokens, so
-that is the figure to quote and the ratio of the two is not constant across arms.
+/ws/rest/v1/chartsearchai/auditlog` publishes it beside `inputTokens`). **That join cannot separate
+the last two clause arms from each other**, their fourteen answers being byte-identical, so read
+their identical `366` as one arm's figure and not as two agreeing measurements: joined per REQUEST
+instead — the capture cell's `questionId` IS the audit row's `auditLogId` — the two differ on both
+controls, 99 output tokens against 118 on Paracetamol and 162 against 115 on Lithium. Every other
+arm's `mean answer chars` differs from every other's, so no other pair can be byte-identical and the
+join separates those rows. The characters column was here first and was being read as the output
+cost, which it is not: the module records the tokens, so that is the figure to quote and the ratio
+of the two is not constant across arms.
 
-**The `appended to the question` and `after the question, run on` rows agree in all five columns
-because they are two independent captures of ONE prompt** (measured 2026-09-09 over the two stored
-capture directories). Their fourteen ANSWERS are byte-identical — sha256 over each `answer` string,
-zero differing cells — and they are not one capture relabelled: the `questionId` differs per cell,
-Amlodipine being 10752 in the wording arm and 10785 in the shipped one. Byte-identity is the
-expected result rather than a suspicious one. The engine is greedy-decoded with `--cache-reuse 0`,
-so identical prompts give identical answers, and the two arrangements produce the same prompt BY
-CONSTRUCTION: the shipped implementation appends the clause after the question separated by a SPACE,
-which is textually indistinguishable from the clause following the question on the same line. **So
-the identical aggregate is a VALIDATION rather than a duplicate row — the shipped code reproduces
-the arm that chose the wording, byte for byte, over two independent captures — and it is the PROMPT
-that is identical, which is the stronger statement.**
+**The `appended to the question` and `after the question, run on` rows agree in all five columns,
+and they are ONE prompt on the twelve finding-carrying cells and TWO prompts on the two controls**
+(measured 2026-09-09 over the two stored capture directories, and joined to the audit rows per
+request). Their fourteen ANSWERS are byte-identical — sha256 over each `answer` string, zero
+differing cells — and they are not one capture relabelled: the `questionId` differs per cell,
+Amlodipine being 10752 in the wording arm and 10785 in the shipped one. **On the twelve the
+by-construction argument holds and is now measured.** The engine is greedy-decoded with
+`--cache-reuse 0`, so identical prompts give identical answers; the shipped implementation appends
+the clause after the question separated by a SPACE, which is textually indistinguishable from the
+clause following the question on the same line; and `input_tokens` on a finding-carrying cell is
+identical to the token (Warfarin 12,467 in both arms). **On the two controls it does not hold** —
+the shipped arm's gate withholds the clause there and the capture template could not, so those two
+prompts differ by the clause's own 28 input tokens (11,381 against 11,353 on Paracetamol; 11,380
+against 11,352 on Lithium). **So the identical aggregate is a VALIDATION of the shipped code over
+the twelve cells the clause reaches — the shipped code reproduces the arm that chose the wording,
+prompt for prompt — while the two controls are two DIFFERENT prompts that happened to agree, which
+is the next paragraph's subject.**
 
-**That also settles what the wording arm did with the two control questions, in the NEGATIVE**,
-which this section used to record as not settled by anything in this repo. The shipped arm
-demonstrably withholds the clause from those two cells (its gate sees `carried` 0), and their
-answers are byte-identical between the arms; had the wording arm carried the clause on those
-prompts they would have differed, and under greedy decode their answers would be expected to differ
-too. They do not — so that arm's controls carried no clause either, and a uniform `CAPTURE_PHRASING`
-append over all fourteen drugs was NOT the lever that produced that arm. **The positive stays
-open:** nothing here records which lever DID, that arm's own phrasing string not being written down,
-and byte-identical answers are strong evidence of identical prompts rather than proof.
+**What the wording arm did with the two control questions is now settled, and it is the OPPOSITE
+of what this section recorded.** This section used to record it as settled in the negative — that
+the arm carried no clause on those two cells — on the strength of their answers being byte-identical
+to the shipped arm's. Measured with the instrument this file already names for the clause's cost —
+per-cell `input_tokens` off the audit row — joined per REQUEST rather than by answer text: **it
+carried the clause on both**, its prompt 11,381 tokens against the shipped arm's 11,353 on
+Paracetamol and 11,380 against
+11,352 on Lithium — exactly the clause's own 28 tokens, and identical to the token on a
+finding-carrying cell. **So a uniform `CAPTURE_PHRASING` append over all fourteen drugs WAS the
+lever that produced that arm**, which is what `capture_probe_safety.sh` does by construction: one
+template per run, `{drug}` substituted per cell inside its one drug loop, and no per-cell branch
+that could have withheld it. What is still not recorded is that arm's exact phrasing STRING: the
+lever is settled, the bytes are not.
+
+**The inference failed on its instrument, and the warning against that instrument is in this file,
+below.** The two control answers really are byte-identical across the two arms — sha256 over
+`answer` — *despite* the 28-token prompt difference. Those two cells are the ones this section makes
+the drift control BECAUSE the built arms' gate keeps the clause off them, so what they can testify
+to is corpus movement and never the clause; reading their non-movement as evidence about the clause
+inverted that. The inference needed the converse of determinism — that a CHANGED prompt moves the
+answer — which greedy decode does not supply, and which the drift measurement below refutes
+outright: a uniform twelve-token chart shift re-worded eleven of the fourteen answers, leaving the
+other three byte-identical under a prompt that had certainly changed. Sharper still: the two arms'
+`output_tokens` on these two cells DIFFER (99 against 118; 162 against 115) while the published
+`answer` is byte-identical, so even the model's completion differed and only the extracted answer
+coincided. Byte-identity of a published field is weaker evidence than byte-identity of a completion,
+and this pair is the gap.
 
 **Position, not wording — and then the separator.** The same sentence ahead of the records made
 completeness *worse* by a cell and cost **26% more output tokens** (477 → 602; +72% in answer

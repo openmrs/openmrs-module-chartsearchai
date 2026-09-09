@@ -53,9 +53,14 @@ import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
  * injected chart first, so a case cannot start passing because the shipped data stopped raising the
  * findings it is about.
  *
+ * <p><b>One case here is not about the clause at all</b>, and its own javadoc says so:
+ * {@link #theCarriedIndexesReadInTheOrderTheInjectorWroteTheFindings} pins the ORDER contract of the
+ * shared walk both halves of the gate project off, which is the property of it a real injected chart
+ * can show and a hand-crafted mapping list cannot.
+ *
  * <p>Neuter {@code LlmInferenceService.severalFindingsAboutOneDrug} to a constant and read the
- * failures — every case here asserts that predicate directly, so either constant reddens this
- * class. Neither reddens anything in {@code LlmProviderUserMessageTest}, which passes the flag as a
+ * failures — every clause case here asserts that predicate directly, so either constant reddens
+ * this class. Neither reddens anything in {@code LlmProviderUserMessageTest}, which passes the flag as a
  * literal and never asks the predicate at all. The two cases that drive the real {@code search}
  * assert the flag the CALL SITES hand the provider, in both directions, which is a different
  * mutation: a literal at a call site leaves the predicate itself untouched.
@@ -139,6 +144,56 @@ public class FindingEnumerationClauseContextTest {
 				"so the prompt this chart produces must carry the clause");
 		assertTrue(message.indexOf("Clinician's query: ") < message.indexOf("put every one of them"),
 				"after the question, which is the position that was measured");
+	}
+
+	/**
+	 * THE SHARED WALK HANDS THE FINDINGS BACK IN THE ORDER THE INJECTOR WROTE THEM, which is a
+	 * contract {@code ChartSearchAiUtils.safetyFindingMappings} STATES and nothing observed:
+	 * re-collecting it in reverse — {@code findings.add(0, mapping)} — left the whole build green.
+	 * Issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>.
+	 *
+	 * <p><b>What rests on it.</b> The uncited indexes {@code measureFindingCitations} names at WARN
+	 * are the one thing a maintainer has for WHICH finding an answer dropped, and
+	 * {@code carriedFindingIndexes}' javadoc promises they read in the order the prompt carried
+	 * them. Reversed, that line reads backwards against the prompt with every column of
+	 * {@code findingCitations} unchanged — the gate reads {@code size()} and the subject cases
+	 * compare against a Set, both of which ignore order. And the extraction's own argument is that
+	 * further projections will be added off this one walk, so without this each would inherit an
+	 * order premise nothing could see.
+	 *
+	 * <p><b>Two independent witnesses, which is what makes this a pin rather than a tautology.</b>
+	 * {@code DrugReferenceTestSupport.injectedFindings} filters {@code chart.getMappings()} itself
+	 * and never through the shared walk, so it reports the order the real injector wrote; the
+	 * ascending assertion beside it is the premise that those indexes are the injector's own
+	 * sequential numbering, without which a reversal would be unobservable in the values.
+	 *
+	 * <p><b>What it does NOT reach:</b> the COLLECTION type at either end. Substituting a
+	 * {@code HashSet} for {@code carriedFindingIndexes}' {@code LinkedHashSet} iterates ascending
+	 * anyway at this chart's small index values, so that half of the javadoc's claim stays
+	 * unobservable here and is said so rather than left to look guarded.
+	 */
+	@Test
+	public void theCarriedIndexesReadInTheOrderTheInjectorWroteTheFindings() {
+		PatientChart chart = chartWithSeveralFindings();
+		List<RecordMapping> findings = DrugReferenceTestSupport.injectedFindings(chart);
+		assertTrue(findings.size() > 1,
+				"the premise: the real pipeline must inject more than one finding here, or no order "
+						+ "is observable at all. Injected: " + findings.size());
+		List<Integer> injectionOrder = new ArrayList<Integer>();
+		for (RecordMapping finding : findings) {
+			injectionOrder.add(Integer.valueOf(finding.getIndex()));
+		}
+		List<Integer> ascending = new ArrayList<Integer>(injectionOrder);
+		Collections.sort(ascending);
+		assertEquals(ascending, injectionOrder,
+				"and its other half: the injector must number the findings it appends ASCENDING, or "
+						+ "a reversal of the shared walk would not show in these values. Written: "
+						+ injectionOrder);
+		assertEquals(injectionOrder, new ArrayList<Integer>(
+			SafetyFindingCitationExtentCheck.carriedFindingIndexes(chart.getMappings())),
+				"the shared walk must hand the findings back in injection order, which is what "
+						+ "carriedFindingIndexes' javadoc promises of the uncited-index WARN and what "
+						+ "ChartSearchAiUtils.safetyFindingMappings states of every projection off it");
 	}
 
 	/**

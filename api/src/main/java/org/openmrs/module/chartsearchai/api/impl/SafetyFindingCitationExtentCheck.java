@@ -102,10 +102,10 @@ import org.slf4j.LoggerFactory;
  * measurement: both answer paths, {@link LlmInferenceService#search} and {@code searchStreaming}, so
  * the endpoint users hit is covered. Not the progressive-reasoning preview, which discards its
  * answer and resolves no citations, and not a cached answer, which was measured when it was produced
- * — the same scoping its siblings state. {@link #carriedFindingIndexes} has a third site and runs
- * EARLIER than any of these: issue #397 extracted it out of {@code measureFindingCitations} so the
- * prompt-assembly path could ask this population the question it needs, and there it runs before
- * any answer exists. Its own javadoc is canonical for that.
+ * — the same scoping its siblings state. {@link #carriedFindingIndexes} also runs on the
+ * prompt-assembly path, in BOTH answer methods, and there it runs before any answer exists: issue
+ * #397 extracted it out of {@code measureFindingCitations} so that path could ask this population
+ * the question it needs. Its own javadoc is canonical for that.
  * &rarr; ADR Decision 83.
  */
 final class SafetyFindingCitationExtentCheck {
@@ -136,7 +136,12 @@ final class SafetyFindingCitationExtentCheck {
 	 *
 	 * <p>A LinkedHashSet over that order, so the uncited indexes the WARN lists read in the order
 	 * the prompt carried them rather than in whatever order a hash gives — a maintainer comparing
-	 * the line against the prompt is reading down one list. Keyed on the INDEX, which is the
+	 * the line against the prompt is reading down one list. <b>The ORDER half of that is pinned;
+	 * the COLLECTION TYPE's own contribution to it is not, and the two are different claims.</b>
+	 * {@code FindingEnumerationClauseContextTest.theCarriedIndexesReadInTheOrderTheInjectorWroteTheFindings}
+	 * reddens on a reversal of the shared walk, which is what used to be invisible. Substituting a
+	 * {@code HashSet} here leaves it green — measured — because that chart's indexes are small
+	 * enough that a hash set iterates ascending anyway. Keyed on the INDEX, which is the
 	 * injector's own sequential numbering and unique across a chart by construction, so the set
 	 * counts records and is not silently folding any — which is also why the shared walk hands back
 	 * a List and leaves each projection its own collapse.

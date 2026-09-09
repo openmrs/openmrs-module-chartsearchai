@@ -46,9 +46,13 @@ public class LlmProvider {
 	/** Label that prefixes the focus-hint line in the user message. Shared with the
 	 *  DEFAULT_SYSTEM_PROMPT few-shot so the demonstration always mirrors the real prompt
 	 *  shape — if they drift, the few-shot stops teaching the format the model actually sees.
-	 *  The one element of that shape no few-shot mirrors is the #397 clause, deliberately; the
-	 *  comment at its append in {@link #buildUserMessage(String, List, String, boolean)} is
-	 *  where that exception is decided. */
+	 *  Of the elements this label and {@code DrugReferenceInjector.FINDING_PREFIX} couple, the
+	 *  #397 clause is the one deliberately left unmirrored; the comment at its append in
+	 *  {@link #buildUserMessage(String, List, String, boolean)} is where that exception is
+	 *  decided. Read that as scoped to the coupled elements and no wider: the records header is
+	 *  not mirrored either — the real message opens "Patient records (most recent first):" and the
+	 *  demonstration "Records:" — and never was, which is a shape nothing here couples rather than
+	 *  a second deliberate exception. */
 	static final String FOCUS_HINT_LABEL = "Records ranked by similarity to the query: ";
 
 	static final String DEFAULT_SYSTEM_PROMPT = "You are a clinical assistant helping a clinician "
@@ -1050,11 +1054,11 @@ public class LlmProvider {
 		// NO FEW-SHOT DEMONSTRATES THIS CLAUSE, AND THAT IS A DECISION RATHER THAN AN OVERSIGHT. It is
 		// a THIRD element of the real user-message shape — a sentence between the question and the
 		// model's JSON — while every "Clinician's query: " line in DEFAULT_SYSTEM_PROMPT is followed
-		// immediately by that JSON, and both of its safety demonstrations carry exactly ONE finding,
-		// which is one fewer than the population this clause is gated on. So the demonstration does not
-		// mirror the shape the model sees here, and that mirror is an invariant this class otherwise
-		// states twice and enforces with shared constants (FOCUS_HINT_LABEL,
-		// DrugReferenceInjector.FINDING_PREFIX). The reason for the exception is the ledger: the arm
+		// immediately by that JSON, and no safety demonstration in it carries two findings about one
+		// drug — its two finding records name two different drugs, so the demonstration prompt fails
+		// this clause's own gate. So the demonstration does not mirror the shape the model sees here,
+		// and that mirror is an invariant this class otherwise states twice and enforces with shared
+		// constants (FOCUS_HINT_LABEL, DrugReferenceInjector.FINDING_PREFIX). The reason for the exception is the ledger: the arm
 		// that moved this sentence into DEFAULT_SYSTEM_PROMPT is the one that made completeness WORSE,
 		// and an imperative ADDED in this position is the measured hazard — the ", and nothing else"
 		// wording took the verdict lead. A demonstration is more instruction in the area where more

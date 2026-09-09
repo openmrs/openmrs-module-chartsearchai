@@ -733,13 +733,36 @@ Digoxin Atenolol Methotrexate Amiodarone Enalapril Paracetamol Lithium" \
 mode this module does not ship.** `omod/src/main/resources/config.xml` sets
 `chartsearchai.chartMode=queryScoped` and `PipelineSettings.queryScopedMode()` resolves unset or
 unreadable to it. That matters here rather than being a footnote, because the finding this
-section records is that POSITION relative to the records decides the clause's SIGN: the same 126
-characters ~8.6KB ahead of the records made completeness worse, and a queryScoped slice is a few
-hundred tokens, so the distances that produced these rows do not exist in the shipped mode. The
-GATE is mode-independent — `severalFindingsAboutOneDrug` reads the injected findings, which come
-from the active orders and the question and not from the chart records the slice narrows — so the
-clause IS sent under the default. Its effect there is unmeasured, and the fail direction is
-therefore unknown rather than fail-closed.
+section records is that POSITION relative to the records decides the clause's SIGN. The clause IS
+sent under the default, and that is now a MEASURED fact rather than an argument from the gate's
+inputs: `findingCitations.carried` for *"should i give Warfarin?"* is 8 in both modes and
+`referenceSliceChars` 5617 in both, so the injected population is identical and only the chart
+records narrow. The mechanism for that is the INJECTOR and not the gate: `DrugReferenceInjector`
+writes its findings into whatever chart it is handed. An earlier draft argued it from the gate's
+own inputs instead, which reads as though the gate did not touch the narrowed records — it does,
+`severalFindingsAboutOneDrug` reading the whole of `chart.getMappings()`, and what makes the answer
+invariant is which records the injector put there rather than which the gate looks at. *The
+queryScoped arm is below.*
+
+**The ~8.6KB this section blames is NOT a property of `fullChart`, and an earlier draft of this
+paragraph said it was.** It read *"the distances that produced these rows do not exist in the
+shipped mode"*, which is half wrong: the distance the losing arm sat ahead of the records **is the
+system prompt's own length** — `DEFAULT_SYSTEM_PROMPT` at 8600 characters, the figure ADR Decision
+72 already records from a throwaway JUnit case over the constant, re-read off the deployed jar's
+constant pool on 2026-09-09 — and that is a compile-time constant `chartMode` does not shrink. **So
+the causal mechanism this section states transfers to the shipped default unchanged.** What
+queryScoped shrinks is the USER message: measured back to back on the same index for the identical
+cell, *"should i give Warfarin?"* costs **12,479 input tokens in `fullChart` against 3,940 in
+`queryScoped`**. Netting the system prompt (~2,150 tokens at the conventional 4 chars per token,
+bounded above by 2,599 — the queryScoped arm's smallest prompt, its abstention cell at
+`referenceSliceChars` 0), the user message falls from ~10,329 to ~1,790 tokens — which still
+carries this cell's 5617-character reference slice, so the narrowed CHART records are the smaller
+part of what is left. So the two candidate positions still differ by the whole user message: the
+separation shrank about sixfold and did not collapse. And because the system prompt is fixed, its
+SHARE of the prompt inverts — roughly 17% of the `fullChart` Warfarin prompt against roughly 55% of
+the `queryScoped` one, both derived from those two measured input-token totals and that ~2,150
+estimate — which if anything makes a system-prompt-placed clause MORE prominent under the default,
+not less.
 
 Twelve of the fourteen carry a finding; Paracetamol and Lithium are the ABSTAIN controls. **Baseline:
 eight of the twelve stated fewer findings than the prompt carried**, each short by exactly one —
@@ -767,9 +790,19 @@ copy had already started to drift in its second column before it was cut.
 | after the question, on a line of its own | `buildUserMessage`, `\n` | 7 / 12 | 0 | **11 / 12** | 375 | 643 |
 | **after the question, run on** | `buildUserMessage`, space | **6 / 12** | **0** | 12 / 12 | **366** | **564** |
 
-**Both cost columns are over all fourteen cells**, the two ABSTAIN controls included even though
-they receive no clause in either arm — so read every share below as a share of that fourteen and not
-of the twelve the clause reaches. `mean output tokens` is `outputTokens` off the
+**Both cost columns are over all fourteen cells**, the two ABSTAIN controls included — so read
+every share below as a share of that fourteen and not of the twelve the clause reaches. **And the
+controls are clause-free in the two BUILT arms only, which is what makes two of those shares
+non-comparable.** Those arms gate the clause on `severalFindingsAboutOneDrug`, which is false of a
+chart carrying no finding. The `system prompt` arm is UNGATED: `getSystemPrompt()` returns the
+global property if custom and `DEFAULT_SYSTEM_PROMPT` otherwise, with no gate at all, and both
+`LlmProvider.search` and `LlmProvider.searchStreaming` call it per request — so its two controls
+DID carry the clause. Read the 26% and +72% shares below against a baseline whose controls did not
+— the −23% beside them is like-for-like, its arm being one of the built ones. What the `appended to
+the question` arm did with the two control questions is **not settled by anything in this repo**:
+that arm's own phrasing string is not recorded here, and while the harness's only question-append
+lever (`CAPTURE_PHRASING`) is uniform over cells and would have reached them, nothing records that
+it was the lever used. `mean output tokens` is `outputTokens` off the
 `chartsearchai_audit_log` row, joined to the captures by exact answer text, 14 of 14 cells matched in
 every arm (measured 2026-09-09; the audit REST listing at `GET
 /ws/rest/v1/chartsearchai/auditlog` publishes it beside `inputTokens`). The characters column was
@@ -888,3 +921,70 @@ adding *"and nothing else"* took all three and lost the verdict lead. A probe th
 several findings name the drug"* moved `carried` from 7 to 17 — it changed the SCREEN, not the format,
 which is a thing a question suffix can do and a prompt clause cannot, and it is excluded from that
 count.
+
+### The queryScoped arm — the shipped default, one arm only (2026-09-09)
+
+The arm the caveat above points forward to. Same rig, patient, phrasing and fourteen drugs, with
+`chartsearchai.chartMode` set to `queryScoped` for the capture and restored to `fullChart`
+afterwards (readback confirmed; the mode is read PER REQUEST, so no restart was involved).
+`chartsearchai.llm.systemPrompt` unset as found and left so; drug-reference layer enabled,
+`sourceFormat=ddinter`, 2283 entries.
+
+**The build is pinned three ways, and one obvious check is wrong.** The deployed build is #397's own
+feature commit: the running JVM's lib-cache api jar's `LlmProvider.class` md5 is byte-identical to
+that commit's build and differs from this branch's; `javap` over that class shows the 126-character
+clause in the constant pool beside the 4-argument `buildUserMessage`; and all fourteen responses
+carry `findingCitations`, which is #395/#397's own publication. **`strings` over that class file
+returns ZERO hits for the clause text** — a `strings`-only check reports the clause absent, so use
+`javap`.
+
+| column | queryScoped (clause sent) |
+|---|---|
+| cells short | **2 / 12** (Enalapril 7/8, Furosemide 4/7) |
+| ratings dropped | 0 of 14 that measured it |
+| verdict-led | 12 / 12 |
+| abstention | 2 / 2 |
+| mean input tokens | 3,814.3 over 14 cells (4,004.4 over the 12 finding-carrying) |
+| mean output tokens | 441.6 over 14 cells |
+
+The gate fired on all twelve finding-carrying cells (carried 5, 6, 7, 7, 7, 7, 7, 8, 8, 8, 8, 8) and
+on neither abstention cell (carried 0). Both short cells are genuine incompleteness rather than
+truncation: each ends on a clean sentence with a period, Furosemide's answer is 310 characters
+against an 855-output-token cell elsewhere in the same arm, and `unstatedFindingSeverities` is `[]`
+on both — every finding they did state carried its rating. All fourteen cells joined 1:1 to audit
+rows by exact answer text, every row logging searchMode `queryScoped`, the join restricted to the
+capture's own time window. The queryScoped cells cite `[15]`–`[26]`, which resembles the
+empty-index tell the paragraph above warns about but is not it: that mode narrows the chart
+deliberately, and a `fullChart` Warfarin probe before AND after the capture returned byte-identical
+results ([349]–[355], carried 8 / cited 7, 12,479 in / 402 out).
+
+**What this arm closes, as ABSOLUTE readings that need no second arm: none of the three harms #397
+names has occurred under the shipped default.** The verdict lead is at its CEILING (12 of 12, so it
+cannot have been lost), ratings dropped at its FLOOR (0), abstention held (2 of 2); 0 cells named a
+severity no chip carries and 0 stated no extent at all.
+
+**What it does NOT establish is the clause's SIGN under the default, and that stays unattributed.**
+2 of 12 is the best completeness figure on record, but with no no-clause arm at this mode the gap
+from `fullChart`'s 6 of 12 is equally consistent with the mode change doing all of it — a four-cell
+mode gap measured once, n=14, one patient, one phrasing, is not a mode effect. A harm visible only
+as a DIFFERENCE from a no-clause arm is invisible here. The 441.6 mean output tokens cannot be read
+against the 366/477 in the table above: that comparison crosses modes, and output length is
+confounded with how many findings each answer enumerated. And nothing here speaks to whether the
+system-prompt POSITION would still hurt under queryScoped, which needs a third arm.
+
+**The second arm is UNOBTAINABLE, nothing was substituted for it, and the reason is worth recording
+so nobody spends the effort again: this scorer's own refusal is what forecloses it.** Every build on
+disk was swept. The artifact kept for the purpose carries the clause (its `PRE` names
+pre-review-round-1, not pre-#397); every post-2026-09-08 artifact carries it; no worktree HEAD is an
+ancestor of the feature commit; and **every genuinely pre-clause build is also pre-#395**, so it
+publishes no `findingCitations` at all. `score_probe_safety.py` REFUSES that A/B by design — it
+compares which cells measured the finding-citation extent on each side and, where they differ,
+prints *"the completeness column above ran on one arm and not the other and its tie means
+nothing"* — so a pre-#395 arm cannot produce the one column the A/B turns on. There is no
+configuration lever either: `severalFindingsAboutOneDrug` is code over `chart.getMappings()` with no
+global-property read, so the clause cannot be switched off from configuration. **Obtaining the arm
+needs a purpose-built no-clause omod**, and that is the whole of what it needs.
+
+**One residue of this capture, said rather than left to be assumed.** The clause's presence in the
+ASSEMBLED prompt was not verified byte for byte — no endpoint echoes the user message — so delivery
+rests on the deployed-bytecode pin plus the gate's inputs, not on a prompt readback.

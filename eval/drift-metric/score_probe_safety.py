@@ -1384,10 +1384,14 @@ SELFTEST_CASES = [
      ["not a probe cell",
       "ANSWER cells (chip for this drug, or their own drug): 1"],
      []),
-    # ISSUE #397. Four arms, and the third is the one with the argument in it. Every capture here
-    # is LIVE — one patient on the 3.7.1 rig, one build, the same question, 2026-09-09 — which is
-    # why none of them is marked CONSTRUCTED in PROVENANCE.md except the fourth, and the fourth is
-    # constructed by DELETING a key rather than by writing an answer.
+    # ISSUE #397. FIVE arms of one patient, named rather than numbered — a count here went stale
+    # against PROVENANCE.md within the change that wrote it, and numbering them is what makes the
+    # next arm restale it. Three are verbatim LIVE captures — `findings-incomplete`,
+    # `findings-complete`, `findings-complete-unrated`, the third being the one with the argument in
+    # it — one patient on the 3.7.1 rig, one build, the same question, 2026-09-09. The two
+    # `*-unmeasured` arms are marked CONSTRUCTED in PROVENANCE.md and are each one KEY DELETED
+    # rather than an answer written, which is their whole value: do not re-capture or edit either as
+    # if a real answer stood behind it.
     #
     # The defect itself: the prompt carried seven interaction findings about Amlodipine and the
     # answer's prose named six, closing on "Finally" at item six. Before this change the scorer
@@ -1670,15 +1674,24 @@ def selftest():
     # measurement", so a RENAME on either side is silent and fail-OPEN — every capture reads
     # unmeasured, the completeness column drops to `0 of 0`, and the gate stops seeing the defect it
     # was written for. The fixture arms below would each still pass a rename with the wrong reading,
-    # since an unmeasured arm is a census rather than a failure; these two lines are what make a
+    # since an unmeasured arm is a census rather than a failure; these two literals are what make a
     # rename redden `--selftest` instead of moving a number.
+    #
+    # IT HAS ITS OWN RESULT LINE, and that — not tidiness — is why this block keeps a `before` of
+    # its own and closes with a print. That `before` used to be reassigned by the type-guard block
+    # below before any print read it, so a renamed key produced no labelled FAIL line at all while
+    # the block beneath it printed `ok` over the failure. That is the misattribution this
+    # function's header comment records having already cost this file once.
     before = len(failures)
+    wire_keys = ("findingCitations", "unstatedFindingSeverities")
     probe = os.path.join(fixtures, "findings-incomplete", "sarah__safety-Amlodipine.json")
     raw_cell = json.load(open(probe))
-    for key in ("findingCitations", "unstatedFindingSeverities"):
+    for key in wire_keys:
         if key not in raw_cell:
             failures.append("%s carries no `%s` — the wire key this cell reads, spelled as a "
                             "literal so a rename cannot pass silently" % (probe, key))
+    print("  ok  %-32s %d key(s)" % ("wire key literals", len(wire_keys))
+          if len(failures) == before else "  FAIL wire key literals")
     # The three TYPE guards the readers' docstrings state, each of which was removable with the whole
     # selftest green until this block existed. Driven through the real readers over hand-built cells
     # rather than through fixtures, because the malformed wire bodies these exist for cannot be
@@ -1703,12 +1716,17 @@ def selftest():
     # arm that separates them — constructed, no build having published the extent key before the
     # rating one — and its A/B case reddens on that substitution as well as on the refusal it was
     # added for.
+    #
+    # THE COUNT ON THE RESULT LINE IS DERIVED FROM THE ASSERTIONS, not written beside them: it was a
+    # literal `16`, correct on the day and due to drift silently the next time a shape was added.
+    # Collecting each into `shapes` and printing `len(shapes)` is what keeps the two together.
     before = len(failures)
     def _cell(fc, us=None):
         c = _blank_cell((), None)
         c["finding_citations"] = fc
         c["unstated_finding_severities"] = us
         return c
+    shapes = []
     for body, why in (
             ([], "a JSON array where an object is expected must read as no measurement, not crash"),
             ("7", "a string body must read as no measurement"),
@@ -1720,41 +1738,51 @@ def selftest():
             ({"carried": True, "cited": True},
              "bools must be REFUSED: isinstance(True, int) is True in Python, so without the "
              "explicit exclusion this scores as a complete cell that carried one finding")):
-        if finding_extent(_cell(body)) is not None:
-            failures.append("finding_extent(%r) is not None — %s" % (body, why))
-    if finding_extent(_cell({"carried": 7, "cited": 6})) != (7, 6):
-        failures.append("finding_extent must read a well-formed body")
+        shapes.append((finding_extent(_cell(body)) is None,
+                       "finding_extent(%r) is not None — %s" % (body, why)))
+    shapes.append((finding_extent(_cell({"carried": 7, "cited": 6})) == (7, 6),
+                   "finding_extent must read a well-formed body"))
     for us, why in (({}, "a JSON object must read as no rating measurement"),
                     ("x", "a string must read as no rating measurement"),
                     (None, "an explicit null must read as no rating measurement")):
-        if unstated_ratings(_cell({"carried": 7, "cited": 7}, us)) is not None:
-            failures.append("unstated_ratings(%r) is not None — %s" % (us, why))
-    if ratings_dropped(_cell({"carried": 7, "cited": 7}, {"1": "Major"})):
-        failures.append("a non-list rating body must not be counted as a dropped rating")
-    if unstated_ratings(_cell({"carried": 7, "cited": 7}, [349])) != [349]:
-        failures.append("unstated_ratings must read a well-formed list")
+        shapes.append((unstated_ratings(_cell({"carried": 7, "cited": 7}, us)) is None,
+                       "unstated_ratings(%r) is not None — %s" % (us, why)))
+    shapes.append((not ratings_dropped(_cell({"carried": 7, "cited": 7}, {"1": "Major"})),
+                   "a non-list rating body must not be counted as a dropped rating"))
+    shapes.append((unstated_ratings(_cell({"carried": 7, "cited": 7}, [349])) == [349],
+                   "unstated_ratings must read a well-formed list"))
     # The population is scoped by the MEASUREMENT and never by `label` — an ABSTAIN-labelled cell
     # that dropped a hazard is still a dropped hazard (fixtures/probe-safety/finding-no-chip/ is
     # that label). No committed capture can show it, since every cell carrying the key labels
     # ANSWER, so it is asserted directly on the predicate.
     abstaining = _cell({"carried": 7, "cited": 6})
-    if label(abstaining) != "ABSTAIN":
-        failures.append("precondition: a cell with no chips and not its own drug labels ABSTAIN")
-    if not findings_incompletely_stated(abstaining):
-        failures.append("findings_incompletely_stated must not be scoped by `label`: an "
-                        "ABSTAIN-labelled cell that stated fewer findings than it carried is still "
-                        "the defect")
-    print("  ok  %-32s %d shape(s)" % ("reader type and scope guards", 16)
+    shapes.append((label(abstaining) == "ABSTAIN",
+                   "precondition: a cell with no chips and not its own drug labels ABSTAIN"))
+    shapes.append((findings_incompletely_stated(abstaining),
+                   "findings_incompletely_stated must not be scoped by `label`: an "
+                   "ABSTAIN-labelled cell that stated fewer findings than it carried is still "
+                   "the defect"))
+    for ok, why in shapes:
+        if not ok:
+            failures.append(why)
+    print("  ok  %-32s %d shape(s)" % ("reader type and scope guards", len(shapes))
           if len(failures) == before else "  FAIL reader type and scope guards")
+    # A `before` of its OWN, so this line reports only the two assertions it is named for: sharing
+    # the block above's made a single type-guard failure print FAIL against both.
+    before = len(failures)
     loaded, _ = load(os.path.join(fixtures, "findings-incomplete"))
+    mapped = []
     got = finding_extent(loaded["sarah__safety-Amlodipine"])
-    if got != (7, 6):
-        failures.append("finding_extent over the live capture = %s, want (7, 6) — `load` no longer "
-                        "maps `findingCitations` onto the cell" % (got,))
-    if unstated_ratings(loaded["sarah__safety-Amlodipine"]) != []:
-        failures.append("unstated_ratings over the live capture is not the empty measurement — "
-                        "`load` no longer maps `unstatedFindingSeverities` onto the cell")
-    print("  ok  %-32s 2 wire key(s)" % "finding-extent wire keys"
+    mapped.append((got == (7, 6),
+                   "finding_extent over the live capture = %s, want (7, 6) — `load` no longer "
+                   "maps `findingCitations` onto the cell" % (got,)))
+    mapped.append((unstated_ratings(loaded["sarah__safety-Amlodipine"]) == [],
+                   "unstated_ratings over the live capture is not the empty measurement — "
+                   "`load` no longer maps `unstatedFindingSeverities` onto the cell"))
+    for ok, why in mapped:
+        if not ok:
+            failures.append(why)
+    print("  ok  %-32s %d wire key(s)" % ("finding-extent wire keys", len(mapped))
           if len(failures) == before else "  FAIL finding-extent wire keys")
     # A selftest that checks nothing is the fault this selftest exists for. Every fixture directory
     # on disk must be asserted by at least one case, and there must be cases.

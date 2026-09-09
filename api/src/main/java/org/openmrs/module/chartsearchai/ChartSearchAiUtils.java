@@ -551,8 +551,10 @@ public class ChartSearchAiUtils {
 	 * same walk, and the two must not be able to disagree about which records are findings.
 	 *
 	 * @param mappings the assembled chart's mappings; null answers empty, per the shared walk
-	 * @return the distinct subject labels, in injection order; empty where the chart carries no
-	 *         finding
+	 * @return the distinct subject labels, in the shared walk's injection order — which that walk's
+	 *         own pin holds; empty where the chart carries no finding. No consumer reads this order,
+	 *         only {@code size()}, so the {@code LinkedHashSet} here contributes nothing any case
+	 *         can observe and is said so rather than left to look defended
 	 */
 	public static Set<String> findingSubjects(List<RecordMapping> mappings) {
 		Set<String> subjects = new LinkedHashSet<String>();
@@ -572,6 +574,16 @@ public class ChartSearchAiUtils {
 	 * The injected {@code safety_finding} records one assembled chart carries, in injection order —
 	 * the ONE selection of that population, and the walk both questions asked of it project off.
 	 * Issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>.
+	 *
+	 * <p><b>Both halves of that sentence are observed, and neither was when it was first written.</b>
+	 * The ORDER is pinned by
+	 * {@code FindingEnumerationClauseContextTest.theCarriedIndexesReadInTheOrderTheInjectorWroteTheFindings},
+	 * over a chart the real injector gave several findings: re-collecting this list in reverse used
+	 * to leave the whole build green while {@code carriedFindingIndexes}' WARN promised prompt
+	 * order. The ONE-selection half is pinned by
+	 * {@code ArchitectureGuardTest.theFindingPopulationIsSelectedInOneMethod}, a source scan
+	 * over {@code api/src/main} whose javadoc is canonical for the shapes it catches and the ones it
+	 * does not — do not read it as catching every respelling.
 	 *
 	 * <p><b>Why it is one method.</b> Two questions are asked of this population in one request, at
 	 * two different moments: {@code SafetyFindingCitationExtentCheck.carriedFindingIndexes} takes it

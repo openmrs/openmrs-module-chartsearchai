@@ -400,7 +400,7 @@ public class LlmInferenceServiceQueryScopedTest {
 		@Override
 		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-				String cacheScope) {
+				String cacheScope, boolean enumerateFindings) {
 			searchStreamingCalls++;
 			// The preview pass discards its answer; only non-preview calls record the scope so the
 			// scoped-mode assertion sees exactly the committed pass's KV contract.
@@ -432,7 +432,7 @@ public class LlmInferenceServiceQueryScopedTest {
 
 		@Override
 		public LlmResponse search(String numberedRecords, List<Integer> focusIndices,
-				String question) {
+				String question, boolean enumerateFindings) {
 			return new LlmResponse(STUB_ANSWER, Arrays.asList(8));
 		}
 

@@ -90,6 +90,98 @@ public class LlmProviderUserMessageTest {
 				"empty-chart prefix must still match between warmup and real query");
 	}
 
+	// ---------- the #397 finding-enumeration clause ----------
+
+	/**
+	 * Issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>: a
+	 * real query carries the one-line-per-finding clause; a warmup does not.
+	 *
+	 * <p><b>Why it is here and not in {@code DEFAULT_SYSTEM_PROMPT}, which is where it was tried
+	 * first.</b> POSITION is the variable, measured on one build with both arms served through
+	 * {@code chartsearchai.llm.systemPrompt} so they differed in exactly this sentence, over 14
+	 * safety cells on one patient with eight active orders. Baseline: 8 of the 12 cells whose prompt
+	 * carried a safety finding stated fewer than it carried. With the sentence in the system prompt,
+	 * ~8.6KB ahead of the records: 9 of 12, and 72% more output. With it here, after the question:
+	 * 6 of 12, {@code unstatedFindingSeverities} to zero, answers 40% shorter, and both ABSTAIN
+	 * cells still abstaining. ADR Decision 84 and {@code eval/drift-metric/README.md} carry the
+	 * ledger; {@code eval/drift-metric/score_probe_safety.py}'s completeness cell is what reads it.
+	 *
+	 * <p>The blank-question guard is the KV-cache prefix contract and not tidiness — see the two
+	 * warmup cases above, which both redden without it, and the third case here, which is the one
+	 * that says WHY rather than only that.
+	 */
+	@Test
+	public void realQueryShouldCarryTheFindingEnumerationClause() {
+		String msg = LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(),
+				"should i give Amlodipine?", true);
+		assertTrue(msg.contains("put every one of them on a line of its own"),
+				"a real query must carry the one-line-per-finding clause: a running paragraph is what "
+				+ "the model writes without it, and 8 of 12 measured cells then stated fewer findings "
+				+ "than the prompt carried. Got: " + msg);
+		assertTrue(msg.contains("each with the severity that finding states"),
+				"and the severity half, without which the measured arms stated every finding and "
+				+ "dropped every rating — issue #337's property traded for this one");
+		assertTrue(msg.indexOf("Clinician's query: ") < msg.indexOf("put every one of them"),
+				"and it must come AFTER the question, which is the position that was measured: ahead "
+				+ "of the records, in the system prompt, the same sentence made completeness worse");
+		// THE SEPARATOR, pinned because it is what the first shipped build got wrong. With a newline
+		// here the clause is a standalone imperative line and reads as the dominant instruction: on
+		// the same 14 cells `verdict-led` fell from 12 of 12 to 11, the Ciprofloxacin answer opening
+		// "Ciprofloxacin interactions with active orders are:" with no call, which
+		// score_directness.classify reads as NONE. Run on from the question it held 12 of 12. Change
+		// the space to a newline and this line reddens.
+		assertTrue(msg.contains("? Where more than one finding names it"),
+				"the clause must run on from the question with a SPACE, not start a line of its own: "
+				+ "a line of its own cost a verdict lead on the measured corpus. Got: " + msg);
+	}
+
+	@Test
+	public void warmupShouldNotCarryTheFindingEnumerationClause() {
+		String warmup = LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(), "", true);
+		assertFalse(warmup.contains("put every one of them on a line of its own"),
+				"a warmup must NOT carry the clause. It is sent with question=\"\" precisely to "
+				+ "produce a byte-prefix of every real query, and a clause appended after an empty "
+				+ "question sits where the question's own bytes go — so the seed stops being a prefix "
+				+ "and every warmed patient reprocesses the whole chart. Got: " + warmup);
+	}
+
+	@Test
+	public void theClauseMustNotBreakTheWarmupPrefixForAQuestionOfAnyLength() {
+		// The two warmup cases above use one question. This asks the property of the SHORTEST
+		// non-blank question there is, which is where an off-by-one in the guard would show: a
+		// guard reading `question.isEmpty()` rather than trimming would let a whitespace-only
+		// question take the clause, and `" "` is a real value — normalizeRecords already treats
+		// blank and whitespace alike one field over.
+		String warmup = LlmProvider.buildUserMessage(CHART, "");
+		for (String question : new String[] { "?", "a", "  ", "\t" }) {
+			String real = LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(),
+					question, true);
+			assertTrue(real.startsWith(warmup),
+					"warmup must stay a byte-prefix for question " + Arrays.toString(question.toCharArray())
+					+ "; got real=" + real);
+		}
+		assertFalse(LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(), "   ", true)
+						.contains("put every one of them"),
+				"a whitespace-only question is blank, so it takes no clause — otherwise the prefix "
+				+ "property above holds only by accident of where the clause lands");
+	}
+
+	@Test
+	public void aChartWithFewerThanTwoFindingsCarriesNoClause() {
+		// The other half of the gate, and the half a caller can get wrong: `enumerateFindings` false
+		// must leave the message byte-identical to what it was before #397, because that is what the
+		// empty-chart and single-finding prompts still send. Compared against the 3-arg form rather
+		// than a literal, so this cannot pass by both sides drifting together.
+		assertEquals(LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(), "Q?"),
+				LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(), "Q?", false),
+				"a chart the caller says carries fewer than two findings must send the message "
+				+ "unchanged — the 3-arg form is that message, and it is what AbsentDataEvalTest "
+				+ "pins to exact bytes");
+		assertFalse(LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(), "Q?", false)
+						.contains("put every one of them"),
+				"and it must not carry the clause");
+	}
+
 	// ---------- focus-hint variant ----------
 
 	@Test

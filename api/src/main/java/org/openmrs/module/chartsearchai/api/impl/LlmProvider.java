@@ -378,26 +378,26 @@ public class LlmProvider {
 	private RemoteLlmEngine remoteEngine;
 
 	/**
-	 * Send numbered patient records and a question to the LLM for synthesis.
-	 *
-	 * @param numberedRecords the numbered patient records text
-	 * @param question the clinician's natural language question
-	 * @return the LLM's response with answer text and structured citation indices
-	 */
-	public LlmResponse search(String numberedRecords, String question) {
-		return search(numberedRecords, Collections.<Integer>emptyList(), question);
-	}
-
-	/**
 	 * Focus-hint variant of {@link #search}: renders a short "Records ranked by similarity to the
 	 * query: ..." line between the records section and the question. The numberedRecords
 	 * are still the full patient chart in stable date-desc order, so the prompt prefix is
 	 * byte-identical across queries for the same patient and llama-server's KV cache reuses
 	 * the prefill. The variable bytes are the small focus-hint line plus the question.
 	 */
-	public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question) {
+	/**
+	 * @param enumerateFindings whether this chart's prompt carries more than one injected safety
+	 *        finding — see {@link #buildUserMessage(String, List, String, boolean)}. It is a
+	 *        parameter of the ONE entry point rather than of an overload beside a flag-less one,
+	 *        and that is not tidiness: this method is the seam a dozen test doubles override, so an
+	 *        overload production called instead would be silently bypassed by every one of them.
+	 *        Issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">
+	 *        #397</a> shipped that mistake first and eleven test classes errored on it
+	 */
+	public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question,
+			boolean enumerateFindings) {
 		String systemPrompt = getSystemPrompt();
-		String userMessage = buildUserMessage(numberedRecords, focusIndices, question);
+		String userMessage = buildUserMessage(numberedRecords, focusIndices, question,
+				enumerateFindings);
 		int timeoutSeconds = getTimeoutSeconds();
 
 		LlmEngine.InferenceResult result = getActiveEngine().infer(
@@ -421,7 +421,8 @@ public class LlmProvider {
 		return searchStreaming(numberedRecords, Collections.<Integer>emptyList(), question, tokenConsumer);
 	}
 
-	/** Focus-hint variant of {@link #searchStreaming}. See {@link #search(String, List, String)}. */
+	/** Focus-hint variant of {@link #searchStreaming}. See
+	 *  {@link #search(String, List, String, boolean)}. */
 	public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices, String question,
 			Consumer<String> tokenConsumer) {
 		return searchStreaming(numberedRecords, focusIndices, question, tokenConsumer, chunk -> { });
@@ -453,8 +454,25 @@ public class LlmProvider {
 	 */
 	public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices, String question,
 			Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer, String cacheScope) {
+		return searchStreaming(numberedRecords, focusIndices, question, tokenConsumer,
+			reasoningConsumer, cacheScope, false);
+	}
+
+	/**
+	 * As {@link #searchStreaming(String, List, String, Consumer, Consumer, String)}, additionally
+	 * asking the answer to put each of several safety findings on a line of its own — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>.
+	 *
+	 * @param enumerateFindings see {@link #buildUserMessage(String, List, String, boolean)}. It
+	 *        reaches the user message and never the KV seed below, which is what keeps that seed a
+	 *        byte-prefix of this query
+	 */
+	public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
+			String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
+			String cacheScope, boolean enumerateFindings) {
 		String systemPrompt = getSystemPrompt();
-		String userMessage = buildUserMessage(numberedRecords, focusIndices, question);
+		String userMessage = buildUserMessage(numberedRecords, focusIndices, question,
+				enumerateFindings);
 		// The KV seed must be the question-independent prefix so it matches the warmup key exactly.
 		String cacheSeed = cacheScope == null ? null : buildUserMessage(numberedRecords, "");
 		int timeoutSeconds = getTimeoutSeconds();
@@ -946,6 +964,25 @@ public class LlmProvider {
 	 * the 5-10x LLM-time reduction on local Gemma for same-patient/distinct-query traffic.
 	 */
 	static String buildUserMessage(String numberedRecords, List<Integer> focusIndices, String question) {
+		return buildUserMessage(numberedRecords, focusIndices, question, false);
+	}
+
+	/**
+	 * As {@link #buildUserMessage(String, List, String)}, additionally asking for one line per
+	 * safety finding — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>.
+	 *
+	 * @param enumerateFindings whether this chart's prompt carries more than one injected
+	 *        safety finding, which only the caller holding the chart can say. The clause is
+	 *        self-gating on its own antecedent, so passing it unconditionally would still
+	 *        produce correct answers; what the flag buys is not spending the sentence on the
+	 *        prompt this module is most careful about. {@code AbsentDataEvalTest
+	 *        .theEmptyChartPromptAsksTheModelToNameWhatIsMissing} pins the empty-chart
+	 *        message to exact bytes for that reason, and reddens on an ungated clause —
+	 *        which is how this parameter came to exist rather than by design
+	 */
+	static String buildUserMessage(String numberedRecords, List<Integer> focusIndices,
+			String question, boolean enumerateFindings) {
 		StringBuilder sb = new StringBuilder();
 		sb.append("Patient records (most recent first):\n").append(normalizeRecords(numberedRecords));
 		if (focusIndices != null && !focusIndices.isEmpty()) {
@@ -1002,6 +1039,61 @@ public class LlmProvider {
 					+ "the chart.");
 		}
 		sb.append("\n\nClinician's query: ").append(question);
+		// ISSUE #397. A LAYOUT rule, and it is here rather than in DEFAULT_SYSTEM_PROMPT because
+		// POSITION is the variable — measured, on one build, both arms served through
+		// `chartsearchai.llm.systemPrompt` so they differed in exactly these bytes, over 14 safety
+		// cells on one patient with eight active orders (2026-09-09, eval/drift-metric/README.md and
+		// ADR Decision 84 carry the ledger):
+		//
+		//   arm        where the clause sits          short   ratings   verdict-led   mean chars
+		//   baseline   nowhere                       8 / 12     2         12 / 12        943
+		//   system     DEFAULT_SYSTEM_PROMPT,
+		//              ~8.6KB before the records     9 / 12     0         12 / 12      1,622
+		//   own line   here, after a \n              7 / 12     0         11 / 12        643
+		//   HERE       after the question, run on    6 / 12     0         12 / 12        564
+		//
+		// "short" is cells whose prompt carried a safety finding the answer's prose never stated,
+		// off `findingCitations`. The system-prompt arm made completeness WORSE by a cell and cost
+		// 72% more output. This position fixed three cells — the issue's own reproducer among them,
+		// 6 of 7 to 7 of 7, plus Metformin and Atenolol — regressed one, took
+		// `unstatedFindingSeverities` to zero, left `verdict-led` at 12 of 12, and made answers 40%
+		// SHORTER. Both ABSTAIN cells held. Six of twelve are still short, so this is an improvement
+		// and not a fix, and the corpus is the gate rather than the cell. The last two rows are the
+		// same 126 characters and differ only in the separator; see the comment at the append below,
+		// which is where that cost a verdict lead.
+		//
+		// GATED ON A NON-BLANK QUESTION, and that is the KV-cache prefix contract rather than
+		// tidiness: {@link #warmup} and searchStreaming's cacheSeed both call this with
+		// {@code question = ""} and rely on the result being a byte-PREFIX of every real query. A
+		// clause appended after an empty question would sit where the question's own bytes go, so
+		// the seed would stop being a prefix and every warmed patient would reprocess the whole
+		// chart. LlmProviderUserMessageTest.warmupUserMessageShouldBePrefixOfRealQuery and
+		// .warmupUserMessageShouldEndWithEmptyQueryMarker both redden if this guard is dropped —
+		// verified by removing it.
+		//
+		// The clause is SELF-GATING on its own antecedent, the shape the safety paragraph's own
+		// branches use: on a question that raises no finding "where more than one finding names it"
+		// is simply false. That is why it needs no chart-derived flag threaded through four
+		// overloads, and why the two absent-data cells above were unmoved by it.
+		// THESE ARE THE MEASURED BYTES, down to the SPACE in front of them, and that is not
+		// fussiness — it is the one thing this change got wrong first and the gate caught.
+		//
+		// "it" is kept rather than expanded to "the drug asked about" because the arm appended this
+		// exact sentence to the question, so its antecedent is the question's own drug, and rewording
+		// it for legibility would ship a string nothing measured.
+		//
+		// The separator was a NEWLINE in the first version, which is the only way that build differed
+		// from the arm that chose the wording — and it cost a verdict lead. On the same 14 cells the
+		// space-separated arm held `verdict-led` at 12 of 12 while the newline arm scored 11: the
+		// Ciprofloxacin answer opened "Ciprofloxacin interactions with active orders are:" with no
+		// call in front of it, which `score_directness.classify` reads as NONE. A clause on a line of
+		// its own reads as the dominant instruction and displaces the lead; run on from the question
+		// it does not. That is the directness regression issue #397 forbids trading for completeness,
+		// so the separator is load-bearing and LlmProviderUserMessageTest pins it.
+		if (enumerateFindings && question != null && !question.trim().isEmpty()) {
+			sb.append(" Where more than one finding names it, put every one of them on a line of "
+					+ "its own, each with the severity that finding states.");
+		}
 		return sb.toString();
 	}
 

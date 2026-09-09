@@ -935,14 +935,15 @@ public class ActiveOrderCitationFidelityTest {
 		}
 
 		@Override
-		public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question) {
+		public LlmResponse search(String numberedRecords, List<Integer> focusIndices,
+				String question, boolean enumerateFindings) {
 			return canned();
 		}
 
 		@Override
 		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-				String cacheScope) {
+				String cacheScope, boolean enumerateFindings) {
 			return canned();
 		}
 	}

@@ -417,3 +417,59 @@ no flip and A=B on every column.
 exactly what a capture taken with the drug-reference GPs off looks like, plus the real paracetamol
 cell. Every label collapses to ABSTAIN and the report reads like a pass; this used to exit 0. Pins
 the refusal at **exit 3**.
+
+## The #397 arms — four cells of one patient, and three of them are live
+
+All four directories below are two cells of ONE patient on the 3.7.1 standalone, captured
+2026-09-09 against the deployed omod at the head that carries #395: patient
+`dc8560c9-6d2b-45bf-861c-8fcf562ec9b1` on eight active drug orders, `sourceFormat=ddinter`,
+`chartMode=fullChart`, `PROBE_DRUGS='Amlodipine Nifedipine'`,
+`CAPTURE_PHRASING='should i give {drug}?'`. **The Nifedipine cell is the same file in all four** —
+seven findings, seven cited, no rating dropped — so it is the control, and every difference between
+the arms is the Amlodipine cell's.
+
+Three of the four are verbatim live captures, which is unusual here and is the point: this defect is
+one the shipped build emits on the majority of its own cells, so it needed no construction. On the
+14-drug corpus these two cells were cut from, **eight of the twelve cells whose prompt carried a
+finding stated fewer than it carried**, every one of them by exactly one — seven losing the last
+finding injected, the eighth a middle one.
+
+### `findings-incomplete/` — the defect, live
+The Amlodipine cell exactly as `POST /chartsearchai/search` returned it: `findingCitations`
+`{"carried": 7, "cited": 6}`, the answer naming six of her active orders and closing on *"Finally,
+it interacts with active order Hydrocortisone, a Moderate problem [354]"*. The seventh finding —
+Amlodipine against her `Advil 400mg`, Moderate — appears in no sentence.
+
+**Before this change the scorer reported this arm as CLEAN, exit 0**: every column it prints is
+identical to `findings-complete/`'s, because none of them reads whether the prose stated every
+finding it was given. That is the whole reason the cell exists. Pins **exit 3** and the per-cell
+`6/7`.
+
+### `findings-complete/` — the same cell, complete, live
+The same question with the format clause's own wording appended to it as a probe, so the answer puts
+each finding on a line of its own carrying its severity: `{"carried": 7, "cited": 7}`,
+`unstatedFindingSeverities` `[]`, and the lead still *"No — Amlodipine should not be given"*. The
+boundary arm — nothing here may be flagged, or the guard is crying wolf on the answer it exists to
+pass. Pins **exit 0**.
+
+### `findings-complete-unrated/` — the trade, live, and the reason there are two keys
+The same cell asked for a bare numbered list. `{"carried": 7, "cited": 7}` — so the completeness
+column reads exactly as clean as `findings-complete/`'s — and `unstatedFindingSeverities` naming
+**all seven** citations: every finding stated, every rating gone. A completeness cell read ALONE
+scores this a win, which is what issue #397 means by trading one safety property for another, and
+`score_probe_safety.py` refuses it instead. Pins **exit 3** with
+`cells that stated fewer (the defect): 0` beside the refusal.
+
+### `findings-unmeasured/` — **CONSTRUCTED**, by deleting one key
+`findings-incomplete/`'s two cells with `findingCitations` **removed** and everything else — the
+answers, the chips, the references, `unstatedFindingSeverities`, the key order — untouched. That is
+not a hypothetical shape: it is what a capture taken between #384 and #395 looks like, and what all
+17 directories above this block are.
+
+Two arms, because absence has two different answers. Alone it is a CENSUS and not a failure — every
+fixture above predates the key, so a `problems` entry here would redden `shipped-clean/` for a
+reason unrelated to what it pins — and it pins **exit 0** with
+`cells stating no extent at all (not counted above): 2 of 2`. Against `findings-complete/` it is
+**refused at exit 3**, because there the column is being read to decide whether a change worked and
+it ran on one side only; without that refusal a pre-#395 arm A against a post-#395 arm B reports
+`A=0 B=0`, a clean tie over nothing.

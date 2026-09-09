@@ -393,14 +393,15 @@ public class LlmInferenceServiceFindingProvenanceContextTest extends BaseModuleC
 		}
 
 		@Override
-		public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question) {
+		public LlmResponse search(String numberedRecords, List<Integer> focusIndices,
+				String question, boolean enumerateFindings) {
 			return answer(numberedRecords);
 		}
 
 		@Override
 		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-				String cacheScope) {
+				String cacheScope, boolean enumerateFindings) {
 			return answer(numberedRecords);
 		}
 	}

@@ -113,8 +113,10 @@ public class ProjectInstructionsGuardTest {
 	 * only on the newer of the two: #395's bullet gave up the gloss on what its two numbers assert
 	 * (its own decision already names {@code ChartSearchService.FindingCitationExtent} as canonical
 	 * for that) and the "three populations" reason for its never-derive rule, which ADR Decision 83
-	 * carries. That recovered 155 bytes and left 145 of residue that is two directives. So the raise
-	 * buys those and one ordinary rule after them, which is what the principle below asks for.
+	 * carries. That recovered 155 bytes and left 145 of residue that is two directives, which is
+	 * what the raise buys. It does not buy the couple of ordinary rules the principle below asks
+	 * for — #397's own directive went in behind it and the file sits close to the cap again — and
+	 * that is stated rather than left to be discovered by the next ticket to trip this.
 	 * <b>Twice in three days is the signal, and it is not that the number is too small</b> — it is
 	 * that two branches adding one rule each cannot both land, and the answer stays trimming rather
 	 * than a bigger number, because the direction is still down.

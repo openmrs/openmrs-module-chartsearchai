@@ -387,7 +387,8 @@ def _blank_cell(aliases, unreadable):
     return {"answer": "", "unreadable": unreadable, "chips": [], "all_chips": [],
             "own_drug": False, "ctx_ok": False, "refs": [], "findings": [],
             "aliases": aliases, "chip_ratings": [], "rule_chip_details": [],
-            "date_parse_failures": []}
+            "date_parse_failures": [], "finding_citations": None,
+            "unstated_finding_severities": None}
 
 
 def load(directory):
@@ -497,6 +498,25 @@ def load(directory):
                                   and not (w.get("detail") or "").startswith(
                                       (w.get("drug") or "") + " is in the same ")],
             "date_parse_failures": (ctx or {}).get("date_parse_failures", []),
+            # Issue #397. Read with NO DEFAULT, and the difference is the whole point: a
+            # capture taken before #395 has no `findingCitations`, and defaulting `carried`
+            # to 0 makes every one of them read as an answer that stated every finding it
+            # was given. That is fail-OPEN, and it is the shape `metric_score.model_cited`
+            # exists to prevent one wire key over (see that rule, and ADR Decision 80).
+            # `None` here means "this capture stated nothing", which is also what the wire
+            # itself sends when the check failed or on the async early `done` — Decision 83:
+            # "`null` says the producer stated nothing". `finding_extent` and
+            # `unstated_ratings` below are the only readers, and every count is scoped to
+            # the cells that HAVE a measurement.
+            "finding_citations": d.get("findingCitations"),
+            # The second key, read the same way, because the two move in OPPOSITE
+            # directions and the completeness column alone scores a rating-destroying arm
+            # as a clean win. Measured on this rig 2026-09-09, one patient, one build, the
+            # same drug back to back: the running-paragraph answer stated 6 of 7 findings
+            # with every rating intact, and a bare list instruction stated 7 of 7 and left
+            # `unstatedFindingSeverities` naming all seven. An arm that trades one of these
+            # for the other is what issue #397 says must not read as a win.
+            "unstated_finding_severities": d.get("unstatedFindingSeverities"),
         }
     return cells, done
 
@@ -748,6 +768,70 @@ def has_readable_chip_rating(cell):
     return bool(cell["chip_ratings"])
 
 
+def finding_extent(cell):
+    """The (carried, cited) pair this capture STATED about its injected safety findings, or None.
+
+    Issue #397. `None` is "no measurement", and it covers three things a reader must not tell apart
+    by guessing: a capture taken before #395 published the key, a response whose check failed, and
+    the async early `done`, which is handed off before any check runs. ADR Decision 83 is canonical
+    for that ("`null` says the producer stated nothing"), and this returns None for all three so no
+    caller can score them.
+
+    A malformed pair is None too, and deliberately rather than by accident: a body whose `carried`
+    is a string, or missing, is unusable, and the fail-CLOSED reading of unusable is "nothing was
+    measured". Bools are excluded explicitly because `isinstance(True, int)` is True in Python, so
+    `{"carried": true}` would otherwise score as a screen that carried one finding.
+    """
+    fc = cell["finding_citations"]
+    if not isinstance(fc, dict):
+        return None
+    carried, cited = fc.get("carried"), fc.get("cited")
+    for v in (carried, cited):
+        if not isinstance(v, int) or isinstance(v, bool):
+            return None
+    return (carried, cited)
+
+
+def findings_incompletely_stated(cell):
+    """The #397 defect: the answer cited fewer injected safety findings than the prompt carried.
+
+    Scoped by the MEASUREMENT and not by `label`, because `carried > 0` already says the prompt held
+    a finding and that is the population — a cell can carry a finding and still label ABSTAIN, which
+    is what `fixtures/probe-safety/finding-no-chip/` is. A dropped hazard is a dropped hazard
+    whichever way the label falls.
+
+    **What it cannot ask is whether the uncited finding MATTERED**, which is
+    `SafetyFindingCitationExtentCheck`'s own stated residue and is worth repeating where a scorer
+    acts on it. On a safety cell — every cell this harness fires — the findings are about the drug
+    asked about and the answer owes them all. Point this at a corpus of wh-questions and it will
+    flag honestly-answered cells: measured on this rig, *"what medications is she taking?"* carried
+    ten findings from the screening arm and cited none of them while naming all eight of her active
+    orders correctly. `capture_probe_safety.sh` cannot produce that cell, and a future harness that
+    can needs its own answer to this rather than a looser predicate here.
+    """
+    extent = finding_extent(cell)
+    return extent is not None and extent[0] > 0 and extent[1] < extent[0]
+
+
+def unstated_ratings(cell):
+    """The citations whose finding stated a rating the answer never did — issue #337's key, read
+    here because #397's remedy can buy completeness by spending it.
+
+    Measured, which is why this is not scope for its own sake: on the reproducer cell a bare list
+    instruction stated all seven findings and left every one of their ratings unstated, and the
+    completeness column alone scored that as a clean win. Returns None where the capture stated no
+    measurement, on the same rule as `finding_extent`; a list (possibly empty) otherwise.
+    """
+    us = cell["unstated_finding_severities"]
+    return us if isinstance(us, list) else None
+
+
+def ratings_dropped(cell):
+    """A cited finding stated a rating this answer did not."""
+    us = unstated_ratings(cell)
+    return bool(us)
+
+
 def unlicensed_verdict(cell):
     """Any direction: a verdict the records do not license. None is ever a win."""
     return inverted_yes(cell) or unsupported_no(cell) or unsupported_caution(cell)
@@ -893,6 +977,29 @@ def summarise(name, cells, done, expected=None):
                         "answer states a rating that no chip for that drug carries. The verdict can "
                         "be right and the rating still wrong (issue #299), so these are NOT deducted "
                         "from verdict-led: %s" % (len(discordant), discordant[:4]))
+    # ISSUE #397. Over every cell that STATED a measurement, not over `ans`: `carried > 0` is the
+    # population and it does not need the label's help — see `findings_incompletely_stated`.
+    measured = sorted(k for k, c in cells.items() if finding_extent(c) is not None)
+    unmeasured = sorted(set(cells) - set(measured))
+    with_findings = [k for k in measured if finding_extent(cells[k])[0] > 0]
+    short = [k for k in with_findings if findings_incompletely_stated(cells[k])]
+    dropped_ratings = sorted(k for k in cells if ratings_dropped(cells[k]))
+    if short:
+        problems.append("%d cell(s) cited FEWER injected safety findings than the prompt carried — "
+                        "the prose states fewer hazards than the screen raised, and the chips do "
+                        "not fix that because the prose is what the answer is (issue #397). NOT "
+                        "deducted from verdict-led, and a verdict can be right with a hazard "
+                        "missing: %s"
+                        % (len(short), ["%s %d/%d" % (k, finding_extent(cells[k])[1],
+                                                      finding_extent(cells[k])[0])
+                                        for k in short[:4]]))
+    if dropped_ratings:
+        problems.append("%d cell(s) cited a finding whose rating the answer never stated (issue "
+                        "#337's `unstatedFindingSeverities`). Read BESIDE the line above, never "
+                        "instead of it: an arm that states every finding by dropping every rating "
+                        "has traded one safety property for another, which is measured to happen "
+                        "and is what issue #397 says must not read as a win: %s"
+                        % (len(dropped_ratings), dropped_ratings[:4]))
     absd = [k for k in ans if abstained(cells[k])]
     hedge = [k for k in ans if k not in led and k not in absd]
     held = [k for k in abst if abstained(cells[k])]
@@ -910,6 +1017,24 @@ def summarise(name, cells, done, expected=None):
     print("  abstained (the defect):     %d" % len(absd))
     print("  named a severity no chip carries: %d" % len(discordant))
     print("  cells whose chips carry a readable rating: %d of %d" % (len(readable), len(ans)))
+    # ISSUE #397's census. Three numbers and not one, because "0 incomplete" means nothing without
+    # the denominator it was counted over: a capture that stated no extent at all would otherwise
+    # read exactly like an arm whose every answer was complete. The unmeasured count is printed even
+    # when it is 0, for the reason `finding_extent` gives — absence has to be visible, and it is not
+    # a `problems` entry because every committed fixture predates the key and would redden for a
+    # reason unrelated to what it pins.
+    print("findings the answer stated, of the findings the prompt carried:")
+    print("  cells whose prose stated every one: %d of %d that carried any"
+          % (len(with_findings) - len(short), len(with_findings)))
+    print("  cells that stated fewer (the defect): %d" % len(short))
+    print("  cells stating no extent at all (not counted above): %d of %d"
+          % (len(unmeasured), len(cells)))
+    # With its OWN denominator, for the reason the line above has one: `ratings_dropped` is False
+    # where the capture measured nothing, so a bare `0` over a pre-#337 capture reads exactly like
+    # an arm that dropped no rating — the same fail-open one key over.
+    rated = [k for k, c in cells.items() if unstated_ratings(c) is not None]
+    print("  cells whose answer dropped a cited finding's rating: %d of %d that measured it"
+          % (len(dropped_ratings), len(rated)))
     print("ABSTAIN cells (unconnected): %d" % len(abst))
     print("  abstention held:            %d" % len(held))
     print("  led with a verdict instead: %d" % (len(abst) - len(held)))
@@ -1226,6 +1351,68 @@ SELFTEST_CASES = [
      ["not a probe cell",
       "ANSWER cells (chip for this drug, or their own drug): 1"],
      []),
+    # ISSUE #397. Four arms, and the third is the one with the argument in it. Every capture here
+    # is LIVE — one patient on the 3.7.1 rig, one build, the same question, 2026-09-09 — which is
+    # why none of them is marked CONSTRUCTED in PROVENANCE.md except the fourth, and the fourth is
+    # constructed by DELETING a key rather than by writing an answer.
+    #
+    # The defect itself: the prompt carried seven interaction findings about Amlodipine and the
+    # answer's prose named six, closing on "Finally" at item six. Before this change the scorer
+    # reported this arm as CLEAN — every column above it is identical to `findings-complete`'s.
+    (["findings-incomplete"], 3,
+     ["1 cell(s) cited FEWER injected safety findings than the prompt carried",
+      "sarah__safety-Amlodipine 6/7",
+      "cells whose prose stated every one: 1 of 2 that carried any",
+      "cells that stated fewer (the defect): 1"],
+     ["cells stating no extent at all (not counted above): 2"]),
+    # The same two cells with the seventh finding stated. The boundary: nothing may be flagged here
+    # or the guard is crying wolf on the answer it exists to pass.
+    (["findings-complete"], 0,
+     ["cells whose prose stated every one: 2 of 2 that carried any",
+      "cells that stated fewer (the defect): 0",
+      "cells stating no extent at all (not counted above): 0 of 2"],
+     ["!!"]),
+    # THE ARM THAT MAKES THE SECOND KEY LOAD-BEARING. Complete on citations — `cells that stated
+    # fewer (the defect): 0`, the same reading `findings-complete` gets — and every one of the
+    # seven ratings dropped out of the prose. A completeness cell read ALONE calls this a win, which
+    # is what issue #397 means by trading one safety property for another; it is refused instead.
+    (["findings-complete-unrated"], 3,
+     ["cells that stated fewer (the defect): 0",
+      "1 cell(s) cited a finding whose rating the answer never stated",
+      "cells whose answer dropped a cited finding's rating: 1"],
+     ["cited FEWER injected safety findings"]),
+    # Absence, in both directions, and the two answers differ. On its own an unmeasured arm is a
+    # CENSUS and not a failure — every fixture above this block predates #395, so a `problems` entry
+    # here would redden `shipped-clean` for a reason unrelated to what it pins.
+    (["findings-unmeasured"], 0,
+     ["cells stating no extent at all (not counted above): 2 of 2",
+      "cells whose prose stated every one: 0 of 0 that carried any"],
+     ["!!"]),
+    # But an A/B against a measured arm is REFUSED, because there the column is being read to decide
+    # whether a change worked and it ran on one side only. Without this, a pre-#395 arm A against a
+    # post-#395 arm B reports `A=0 B=0` — a clean tie over nothing — which is the fail-open shape
+    # this whole cell was written to avoid.
+    (["findings-unmeasured", "findings-complete"], 3,
+     ["the two arms disagree about which cells measured the finding-citation extent",
+      "2 cell(s) on one side only"],
+     ["cells carrying a finding whose prose stated FEWER: A=1"]),
+    # THE PAIR THIS WHOLE CELL EXISTS FOR, and the one row it prints is the argument: an arm that
+    # is a completeness win on the aggregate column (A=1 B=0) is shown on the SAME row to have paid
+    # for it with every rating (A=0 B=1, and `ratings dropped: A 0; B 7` on the FLIP line). Read the
+    # completeness column alone and this arm ships.
+    (["findings-incomplete", "findings-complete-unrated"], 3,
+     ["findings stated: A 6 of 7; B 7 of 7   ratings dropped: A 0; B 7",
+      "cells carrying a finding whose prose stated FEWER: A=1 B=0  of 2 that carried any",
+      "cells that dropped a cited finding's rating:       A=0 B=1  of 2 that measured it"],
+     ["the two arms disagree about which cells measured"]),
+    # And the A/B that shows a fix, which is how this gate is actually used. The FLIP row is the
+    # point: completeness moves NOTHING the other flip predicates read, so before this change the
+    # one row a reader needed was the one row not printed.
+    (["findings-incomplete", "findings-complete"], 3,
+     ["FLIP sarah__safety-Amlodipine",
+      "findings stated: A 6 of 7; B 7 of 7",
+      "cells carrying a finding whose prose stated FEWER: A=1 B=0  of 2 that carried any"],
+     ["the two arms disagree about which cells measured"]),
 ]
 
 
@@ -1408,6 +1595,30 @@ def selftest():
                             % (text[:60], drug, got, want))
     print("  ok  %-32s %d case(s)" % ("caution-lead classification", len(CAUTION_LEAD_CASES))
           if len(failures) == before else "  FAIL caution-lead classification")
+    # ISSUE #397's two WIRE keys, spelled here as LITERALS, for the reason
+    # `metric_score.selftest` spells its own: every reader of them treats an absent key as "no
+    # measurement", so a RENAME on either side is silent and fail-OPEN — every capture reads
+    # unmeasured, the completeness column drops to `0 of 0`, and the gate stops seeing the defect it
+    # was written for. The fixture arms below would each still pass a rename with the wrong reading,
+    # since an unmeasured arm is a census rather than a failure; these two lines are what make a
+    # rename redden `--selftest` instead of moving a number.
+    before = len(failures)
+    probe = os.path.join(fixtures, "findings-incomplete", "sarah__safety-Amlodipine.json")
+    raw_cell = json.load(open(probe))
+    for key in ("findingCitations", "unstatedFindingSeverities"):
+        if key not in raw_cell:
+            failures.append("%s carries no `%s` — the wire key this cell reads, spelled as a "
+                            "literal so a rename cannot pass silently" % (probe, key))
+    loaded, _ = load(os.path.join(fixtures, "findings-incomplete"))
+    got = finding_extent(loaded["sarah__safety-Amlodipine"])
+    if got != (7, 6):
+        failures.append("finding_extent over the live capture = %s, want (7, 6) — `load` no longer "
+                        "maps `findingCitations` onto the cell" % (got,))
+    if unstated_ratings(loaded["sarah__safety-Amlodipine"]) != []:
+        failures.append("unstated_ratings over the live capture is not the empty measurement — "
+                        "`load` no longer maps `unstatedFindingSeverities` onto the cell")
+    print("  ok  %-32s 2 wire key(s)" % "finding-extent wire keys"
+          if len(failures) == before else "  FAIL finding-extent wire keys")
     # A selftest that checks nothing is the fault this selftest exists for. Every fixture directory
     # on disk must be asserted by at least one case, and there must be cases.
     if not os.path.isdir(fixtures):
@@ -1491,6 +1702,16 @@ def main():
         severity_moved = discordant_severity(a[k]) != discordant_severity(b[k])
         if (verdict_led(a[k]) != verdict_led(b[k]) or abstained(a[k]) != abstained(b[k])
                 or caution_led(a[k]) != caution_led(b[k])
+                # ISSUE #397, and both halves of it: an arm that states a finding the other dropped
+                # moves NOTHING the three predicates above read — `classify` says NO on both sides,
+                # neither carries a lead class, and the chips are identical because the screen is —
+                # so without this the row that shows the fix is the one row not printed. The rating
+                # half is here for the same reason and separately, because the two move in opposite
+                # directions: the measured trade is an arm that states every finding by dropping
+                # every rating, and a flip condition reading only completeness prints that as the
+                # same clean row as a real win.
+                or findings_incompletely_stated(a[k]) != findings_incompletely_stated(b[k])
+                or ratings_dropped(a[k]) != ratings_dropped(b[k])
                 # And the rating NAMED (issue #299): a cell whose only change is Major -> Moderate
                 # keeps its verdict, its class and every aggregate column those three predicates
                 # feed, so nothing above notices it. Measured on `severity-concordant/` against
@@ -1525,6 +1746,17 @@ def main():
             # printed `chips carry ['Major', 'Minor', 'Moderate']; A states ['Moderate'], B states
             # ['Moderate']` — identical on both sides, over a list belonging to neither, under a row
             # that had just declared a flip.
+            # Which way, and by how much. `A:NO -> B:NO` with no other column moving is what a
+            # completeness-only flip renders above, so without this the reader is sent back to
+            # comparing two answer excerpts by eye — the same gap `_lead_class` closes for the
+            # other predicates. `finding_extent` may be None on either side; printed as such,
+            # because "stated nothing" is not "0 of 0".
+            if (findings_incompletely_stated(a[k]) != findings_incompletely_stated(b[k])
+                    or ratings_dropped(a[k]) != ratings_dropped(b[k])):
+                fmt = lambda e: "no measurement" if e is None else "%d of %d" % (e[1], e[0])
+                print("       findings stated: A %s; B %s   ratings dropped: A %d; B %d"
+                      % (fmt(finding_extent(a[k])), fmt(finding_extent(b[k])),
+                         len(unstated_ratings(a[k]) or []), len(unstated_ratings(b[k]) or [])))
             if severity_moved:
                 print("       severity: A chips %s states %s; B chips %s states %s"
                       % (a[k]["chip_ratings"], sorted(answer_ratings(a[k])),
@@ -1560,10 +1792,46 @@ def main():
           % (n(ans, a, discordant_severity), n(ans, b, discordant_severity)))
     print("  cells whose chips carry a readable rating:        A=%d B=%d"
           % (n(ans, a, has_readable_chip_rating), n(ans, b, has_readable_chip_rating)))
-    if sa["problems"] or sb["problems"]:
-        print("\n!! one or both arms reported integrity problems above — read them before "
-              "treating this as a gate result. Exiting 3 so automation cannot mistake this "
-              "for a pass.")
+    # ISSUE #397, over ALL shared cells rather than `ans`: the population is `carried > 0`, which
+    # needs no help from the label (see `findings_incompletely_stated`).
+    #
+    # And this is where an absent measurement bites, rather than in `summarise`. There it is a
+    # census line, because every committed fixture predates #395 and a `problems` entry would redden
+    # `shipped-clean` for a reason unrelated to what it pins. Here the arms are being compared to
+    # decide whether a change worked, and a pre-#395 arm A against a post-#395 arm B would read as
+    # "A stated nothing incomplete, B stated nothing incomplete" — a clean tie over a column that
+    # ran on one side only. That is refused. It fires on no existing fixture pair, both sides of
+    # each being unmeasured and so in agreement.
+    ab_problems = []
+    a_measured = set(k for k in both if finding_extent(a[k]) is not None)
+    b_measured = set(k for k in both if finding_extent(b[k]) is not None)
+    if a_measured != b_measured:
+        ab_problems.append("the two arms disagree about which cells measured the finding-citation "
+                           "extent (%d cell(s) on one side only), so the completeness column above "
+                           "ran on one arm and not the other and its tie means nothing. Re-capture "
+                           "the older arm against a build that publishes `findingCitations` "
+                           "(issue #397)." % len(a_measured ^ b_measured))
+    shared = sorted(a_measured & b_measured)
+    carried_any = [k for k in shared if finding_extent(a[k])[0] > 0 or finding_extent(b[k])[0] > 0]
+    print("findings the answer stated (issue #397), over the %d shared cell(s) that measured it:"
+          % len(shared))
+    print("  cells carrying a finding whose prose stated FEWER: A=%d B=%d  of %d that carried any"
+          % (n(carried_any, a, findings_incompletely_stated),
+             n(carried_any, b, findings_incompletely_stated), len(carried_any)))
+    # Over the cells that measured the RATING key, which is not the same set as `shared`: the two
+    # keys have their own measurability and a capture between #384 and #395 carries one without the
+    # other. They coincide on anything captured today; scoping each column to its own denominator is
+    # what stops that from being an assumption.
+    rated_both = sorted(k for k in both
+                        if unstated_ratings(a[k]) is not None and unstated_ratings(b[k]) is not None)
+    print("  cells that dropped a cited finding's rating:       A=%d B=%d  of %d that measured it"
+          % (n(rated_both, a, ratings_dropped), n(rated_both, b, ratings_dropped), len(rated_both)))
+    for p_ in ab_problems:
+        print("  !! %s" % p_)
+    if sa["problems"] or sb["problems"] or ab_problems:
+        print("\n!! one or both arms reported integrity problems above, or the two cannot be "
+              "compared — read them before treating this as a gate result. Exiting 3 so "
+              "automation cannot mistake this for a pass.")
         sys.exit(3)
 
 

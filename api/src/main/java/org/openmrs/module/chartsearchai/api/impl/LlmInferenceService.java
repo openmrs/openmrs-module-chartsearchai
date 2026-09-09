@@ -147,7 +147,7 @@ public class LlmInferenceService implements ChartSearchService {
 
 			long llmStart = System.currentTimeMillis();
 			LlmResponse response = llmProvider.search(chartTextOrPlaceholder(chart),
-					chart.getFocusIndices(), question);
+					chart.getFocusIndices(), question, severalInjectedFindings(chart));
 			llmMs = System.currentTimeMillis() - llmStart;
 			inputTokens = response.getInputTokens();
 			cachedTokens = response.getCachedTokens();
@@ -481,7 +481,7 @@ public class LlmInferenceService implements ChartSearchService {
 			String kvCacheScope = chart.isQueryScoped() ? null : kvCacheScopeFor(patient);
 			LlmResponse response = llmProvider.searchStreaming(
 					chartTextOrPlaceholder(chart), chart.getFocusIndices(), question, tokenConsumer,
-					reasoningConsumer, kvCacheScope);
+					reasoningConsumer, kvCacheScope, severalInjectedFindings(chart));
 			llmMs = System.currentTimeMillis() - llmStart;
 			inputTokens = response.getInputTokens();
 			cachedTokens = response.getCachedTokens();
@@ -591,6 +591,42 @@ public class LlmInferenceService implements ChartSearchService {
 	 * produces a query-specific "no records" answer instead of one based
 	 * on demographics alone.
 	 */
+	/**
+	 * Whether this chart's prompt carries more than one injected safety finding, which is the
+	 * condition the #397 clause in {@code LlmProvider.buildUserMessage} describes and the only fact
+	 * about the chart that clause needs. Issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>.
+	 *
+	 * <p><b>Not the same walk as {@code SafetyFindingCitationExtentCheck}'s, and not a duplicate of
+	 * it.</b> That one runs AFTER the answer and produces the SET of carried indexes to intersect
+	 * with the citations; this runs before there is an answer and produces a boolean, short-circuits
+	 * at two, and reads no citation. Issue #151's rule is about two resolutions of one question that
+	 * must agree — these answer different questions at different times, and neither can be derived
+	 * from the other because the chart the first reads no longer exists when the second runs.
+	 *
+	 * <p><b>Deliberately not a {@code PatientChart} stamp.</b> Stamps must be carried across
+	 * {@code DrugReferenceInjector.injectRecords}, which rebuilds the chart from scratch, and the
+	 * reference instruction file records that a dropped stamp is silent and fail-open and has
+	 * happened twice. A walk of the mappings cannot be dropped: the records ARE the evidence.
+	 *
+	 * <p><b>Gating at all is about the absent-data prompt, not about correctness.</b> The clause is
+	 * self-gated by its own antecedent, so an ungated one produces the same answers; what this buys
+	 * is not spending the sentence on the empty-chart message, whose exact bytes
+	 * {@code AbsentDataEvalTest.theEmptyChartPromptAsksTheModelToNameWhatIsMissing} pins after 19
+	 * measured cases. The threshold is TWO because one finding is not an enumeration — and because
+	 * every cell the measured improvement came from carried at least five.
+	 */
+	static boolean severalInjectedFindings(PatientChart chart) {
+		int found = 0;
+		for (RecordMapping mapping : chart.getMappings()) {
+			if (ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(mapping.getResourceType())
+					&& ++found > 1) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	private static String chartTextOrPlaceholder(PatientChart chart) {
 		return chart.getMappings().isEmpty() ? "(No relevant records found)" : chart.getText();
 	}

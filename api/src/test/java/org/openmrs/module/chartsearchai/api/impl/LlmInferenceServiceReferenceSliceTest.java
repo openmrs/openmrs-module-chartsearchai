@@ -205,14 +205,15 @@ public class LlmInferenceServiceReferenceSliceTest {
 	private static final class StubProvider extends LlmProvider {
 
 		@Override
-		public LlmResponse search(String numberedRecords, List<Integer> focusIndices, String question) {
+		public LlmResponse search(String numberedRecords, List<Integer> focusIndices,
+				String question, boolean enumerateFindings) {
 			return new LlmResponse("No interaction is expected.", Collections.<Integer> emptyList());
 		}
 
 		@Override
 		public LlmResponse searchStreaming(String numberedRecords, List<Integer> focusIndices,
 				String question, Consumer<String> tokenConsumer, Consumer<String> reasoningConsumer,
-				String cacheScope) {
+				String cacheScope, boolean enumerateFindings) {
 			return new LlmResponse("No interaction is expected.", Collections.<Integer> emptyList());
 		}
 	}

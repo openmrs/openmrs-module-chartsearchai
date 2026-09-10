@@ -6507,3 +6507,59 @@ neighbouring half of it.
 - **Letting the prompt handle it instead** — a system-prompt clause about empty reference slices.
   Decision 84's ledger closed the prompt-wording lever for this area, and an instruction added ahead of
   the records is the arm it measured regressing.
+
+
+## Decision 88: A proposal-vocabulary answer about a drug the patient already takes is a real defect, and a one-arm fix for it is refused
+
+**Status: REJECTED** (September 2026) — the defect is real and recorded here; the change attempted for
+it was reverted unshipped.
+
+### The observation
+
+RefApp 3.7.1 standalone on `:8081`, `chartMode=fullChart`, local Gemma E4B. Patient `dc8560c9-…` on
+eight active drug orders, one of which is *Prednisone Co 5mg*. Asked *"Is it safe to add prednisone
+for her?"*:
+
+> No — Prednisone should not be added: … This finding is a reason to withhold [353].
+
+All nine findings carried the PROPOSAL vocabulary about a drug on her own medication list. *"Should
+not be added"* reads as though the drug is not being taken, which her chart contradicts. That is a
+genuine defect and this entry exists so it is not mistaken for intended behaviour.
+
+### Why the obvious fix was reverted
+
+The attempt made the drug-in-play arm's three interaction sites ask whether their SUBJECT is one of
+the patient's own active-order entries, instead of answering false unconditionally. It worked — the
+interaction findings began stating *"a reason to change a medication this patient is already
+taking"*, verified live, with a proposed drug (warfarin, which she is not on) unchanged. It was still
+reverted, for three reasons that compound:
+
+- **It made one of three sites disagree with the other two.** The drug-in-play arm's own
+  CONTRAINDICATION sites hardcode the referent false a few lines away, and the order-driven arm sets
+  `currentMedication = !inPlaySubstances.contains(ref.substanceGroupKey())` — deliberately false for
+  a drug in play. So the same response would state one referent for prednisone's interaction findings
+  and the other for its contraindication findings. The instruction file's rule for this axis is
+  "**Both arms or neither, both classes or neither**".
+- **It re-proposed a position the code already rejected in writing.** The comment at those
+  contraindication sites is explicit: *"FALSE at both, and not because the drug cannot also be a
+  current medication — it often is. The question or the answer PROPOSED it, so what this finding
+  licenses is a decision about that proposal (issue #348)."* That is
+  [Decision 72](#decision-72-a-screening-answer-states-a-call-about-the-medications-she-is-on-instead-of-refusing-one-of-them)'s
+  reading, and a live answer is new evidence about the SYMPTOM without being new evidence about that
+  reading.
+- **The lead did not move anyway.** The response's opening call is decided by its strongest finding,
+  which here is a withholding CONTRAINDICATION still carrying the proposal vocabulary — so the
+  misleading sentence a clinician actually reads, *"No — Prednisone should not be added"*, survived
+  the change that was supposed to fix it.
+
+### What a real fix has to be
+
+Not a call site. It is a reversal of the proposal rule at every site that reads it — both drug-in-play
+arms and the order-driven arm's in-play carve-out — which changes the vocabulary of every safety
+answer about a drug the patient is already on. Decision 72's own A/B ran three arms and refuted one,
+so this owes the same: the fourteen-cell corpus of
+[Decision 84](#decision-84-where-the-one-line-per-finding-clause-sits-is-what-decides-whether-a-safety-answer-states-every-finding-it-was-given),
+read on the verdict lead and on the caution/withhold classes together, with the prednisone cell above
+as the reproduction. Whoever takes it should also decide what the honest answer to *"can I add X"*
+about a charted X is — the finding a clinician needs there is arguably duplicate therapy rather than
+either vocabulary, and neither existing clause says it.

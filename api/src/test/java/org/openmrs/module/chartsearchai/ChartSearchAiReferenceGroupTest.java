@@ -283,6 +283,14 @@ public class ChartSearchAiReferenceGroupTest {
 		// ENTRIES are not indexed by — so it points at no record of this patient and is reference material
 		// for the same reason a knowledge-base entry is.
 		expected.put("RESOURCE_TYPE_DRUG_CLASS_NOTE", ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE);
+		// Issue #401. Module-supplied prose about what this module's own SCREEN did — it names no drug
+		// and points at no record of this patient, so it is reference material on the same provenance
+		// judgement as the class note beside it. Its content is a negative about the module's check and
+		// never about the chart, which is exactly why it must not group as chart evidence: read as the
+		// patient's own record, "the reference data relates none of them" becomes a statement the CHART
+		// makes about her medications.
+		expected.put("RESOURCE_TYPE_INTERACTION_SCREEN_NOTE",
+				ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE);
 		// Module-INJECTED but NOT module-supplied, the one combination this classification has to get
 		// right in both directions: an active_drug_order record is the patient's own active order,
 		// read from OrderService when the retrieved chart carries no drug-order record for it

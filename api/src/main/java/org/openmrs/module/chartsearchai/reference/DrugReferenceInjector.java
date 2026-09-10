@@ -25,6 +25,7 @@ import java.util.TreeSet;
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
+import org.openmrs.module.chartsearchai.api.impl.QueryScopeRouter;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.slf4j.Logger;
@@ -533,7 +534,48 @@ public class DrugReferenceInjector {
 		// resolve the same orders again, and this method already holds that answer.
 		List<SafetyWarning> findings = preAnswerFindings(context, question, orderEntries);
 		List<PatientClinicalContext.ActiveDrugOrder> unrepresented = unrepresentedActiveOrders(chart, context);
-		if (matched.isEmpty() && findings.isEmpty() && unrepresented.isEmpty() && namedClass == null) {
+		// Whether the interaction SCREEN ran over a pair of this patient's own medications and related
+		// none of them — issue #401, and the one thing this injection has to say when it has nothing
+		// else. Four conjuncts and none is decoration:
+		//
+		//   - the question ASKS to be screened and resolved no drug of its own, which is the composite
+		//     gate DrugSafetyValidator's screening arm stands on. `questionDrugs` is the resolution this
+		//     method already holds (issue #151), so the emptiness half is read and not re-derived; the
+		//     cue half is QueryScopeRouter's, the one place question intent is classified.
+		//   - the reference data resolved at least two distinct SUBSTANCES among her active orders, so
+		//     there was a PAIR to screen. Off `orderEntries`, the same list validate was handed, but
+		//     counted through DrugReference.substanceGroupKey and never as ROWS: this KB files one
+		//     substance as several presentation rows, so a row count is "N of something" — the defect
+		//     #145/#162/#174/#186 are seven instances of. Measured on
+		//     InteractionScreenSilenceNoteTest's own fixture, where Methylprednisolone is two rows of
+		//     one drugbank_id: a row count says a two-medication chart had THREE checked, and one
+		//     prescription of a two-row substance would look like a pair with nothing to compare.
+		//     One order is not a pair, and a note claiming a screen ran over it would state something
+		//     the module did not do — the distinction PairChipExtent draws between a completed
+		//     negative screen and a question nobody screened.
+		//   - the orders were READ. A chart the module could not read is not a chart that relates
+		//     nothing, and this is the same stamp the injector's other negative claims stand on.
+		//   - and the injection has nothing else to put in the prompt. That bound is deliberate and
+		//     narrower than the note's own claim, which is true of any screen that related nothing:
+		//     with a finding, a monograph or a class note in the slice the model has material to
+		//     describe, and the failure this note exists to stop is the model describing an EMPTY slice
+		//     as the records not addressing interactions. A screen that related nothing beside a
+		//     contraindication finding therefore states no note — a stated residue, not an oversight.
+		//
+		// → ADR Decision 87; InteractionScreenSilenceNoteTest.
+		Set<Object> screenedSubstances = new LinkedHashSet<Object>();
+		if (orderEntries != null) {
+			for (DrugReference entry : orderEntries) {
+				screenedSubstances.add(entry.substanceGroupKey());
+			}
+		}
+		// Resolved once and read by both the note's gate and the early return below, so the two cannot
+		// come to disagree about whether this injection had anything to say.
+		boolean nothingResolved = matched.isEmpty() && findings.isEmpty() && namedClass == null;
+		boolean screenRelatedNothing = nothingResolved && questionDrugs.isEmpty()
+				&& QueryScopeRouter.isInteractionScreening(question)
+				&& screenedSubstances.size() >= 2 && context.activeDrugOrdersRead();
+		if (nothingResolved && unrepresented.isEmpty() && !screenRelatedNothing) {
 			return chart;
 		}
 
@@ -632,6 +674,23 @@ public class DrugReferenceInjector {
 					// of the class, so this string reaches a client whether or not the model cites the
 					// record: keep it the bare class name.
 					namedClass, null, rendered));
+			text.append("[").append(index).append("] ").append(rendered).append("\n");
+			index++;
+		}
+
+		// LAST for the reason the class note is: it is about what this response's SCREEN did rather
+		// than about any entry, so it reads after everything the response resolved — which, when it
+		// fires, is nothing. Its gate is resolved above, once, beside the resolutions it reads.
+		if (screenRelatedNothing) {
+			String rendered = renderInteractionScreenNote(screenedSubstances.size());
+			mappings.add(new RecordMapping(index,
+					ChartSearchAiConstants.RESOURCE_TYPE_INTERACTION_SCREEN_NOTE,
+					// No resourceKey: the note stands for no entry and names no drug, so there is
+					// nothing for a client to navigate to — the same reason the class note carries the
+					// bare class and not a composite. Unlike that one it has no wire key of its own
+					// either: PairChipExtent already states this arm's own count on the response, and a
+					// second statement of one fact is what this subsystem keeps having to un-say.
+					null, null, rendered));
 			text.append("[").append(index).append("] ").append(rendered).append("\n");
 			index++;
 		}
@@ -2161,6 +2220,75 @@ public class DrugReferenceInjector {
 		return REFERENCE_PREFIX + "drug class \"" + drugClass + "\". Reference entries are indexed by "
 				+ "individual substance name, so the class was not resolved to any substance. "
 				+ "Ask about a specific drug by name.";
+	}
+
+	/**
+	 * The interaction-screen note's own first proposition, and the POLARITY the answer copies —
+	 * issue #401.
+	 *
+	 * <p><b>Measured, and the reason it is a constant.</b> The note's first build stated the count
+	 * first: <i>"2 of this patient's active medications were checked against each other, and the
+	 * reference data relates none of them…"</i>. On the standalone, asked <i>"Are any of this
+	 * patient's current medications interacting with each other?"</i>, the model cited the note and
+	 * answered <b>"Yes — the reference data relates none of the patient's active medications at or
+	 * above the configured severity level [7]"</b>: a yes/no question, a verdict lead the prompt asks
+	 * for, and the first thing the record offered was a NUMBER rather than a polarity. The lead was
+	 * inverted against the clause it introduced, which is worse for a clinician than the empty-slice
+	 * denial this note replaced — "Yes" is the dangerous word on that question.
+	 *
+	 * <p>So the finding comes first and the count second. It remains a claim about the SCREEN — what
+	 * it found — and not about the patient, which is the bound every clause of this note is held to;
+	 * "no interaction was found" and "this patient has no interactions" are the two sides of that
+	 * bound, and the closing caveat is what keeps the note from being read as the second.
+	 *
+	 * <p>Pinned as a literal by {@code InteractionScreenSilenceNoteTest}, because completeness of the
+	 * wording is not the property that matters here — the ORDER of its two propositions is, and a
+	 * reword that put the count back in front would leave every other assertion green.
+	 */
+	private static final String SCREEN_NOTE_FINDING_LEAD =
+			"No interactions were found among this patient's active medications. ";
+
+	/**
+	 * The interaction-screen note's words — issue #401. Every clause is a claim about what this
+	 * module's SCREEN did, and none is a claim about what the patient has: that is the same bound
+	 * {@link #renderDrugClassNote}'s wording is held to, and for the same reason — the note is
+	 * injected as citable evidence, so a sentence wider than the module can support becomes a
+	 * confident falsehood the model may quote.
+	 *
+	 * <p><b>The classification clause is load-bearing and not a hedge.</b> Neither pairwise arm has a
+	 * class leg, so a screen relating "nothing" has not looked at shared-classification relationships
+	 * at all — and on issue #401's own reproduction a question naming two of that patient's three
+	 * antiretrovirals went on to relate them by exactly that route. Without the clause the note licenses
+	 * "no interactions", which the module's own other arm contradicts on the same chart.
+	 *
+	 * <p><b>It names no drug</b>, for the reason the class note names no substance: there is nothing
+	 * here to navigate to, and a named drug in a record stating a negative is how a reader comes to
+	 * read the negative as being ABOUT that drug.
+	 *
+	 * <p>The floor is named as configured rather than quoted, because
+	 * {@code chartsearchai.drugSafety.minInteractionSeverity} is an operator's to set and a quoted
+	 * value would be a second spelling of it in prose the model reads.
+	 *
+	 * <p><b>It carries {@link #FINDING_PREFIX} and not {@link #REFERENCE_PREFIX}, which is measured
+	 * rather than chosen.</b> This note's subject is the patient's own medications, and the prompt's
+	 * record-type rule says a record beginning {@code "Drug reference"} is reference data rather than
+	 * this patient's — so under that lead the model read a statement about her medications as one about
+	 * the knowledge base and prefixed a verdict inverted against it. ADR Decision 87 carries the two
+	 * arms; {@code InteractionScreenSilenceNoteTest} pins the lead. It is a PROMPT-facing choice only:
+	 * the record's TYPE is what every consumer keys on, so it joins no finding population.
+	 *
+	 * @param screened how many DISTINCT SUBSTANCES among the patient's active orders the reference
+	 *        data resolved, which is the population the screen compared against each other — counted
+	 *        through {@link DrugReference#substanceGroupKey()} by the caller, never as rows
+	 * @return the rendered note
+	 */
+	private static String renderInteractionScreenNote(int screened) {
+		return FINDING_PREFIX + "interaction screen. " + SCREEN_NOTE_FINDING_LEAD + screened
+				+ " of them were checked against each other and the "
+				+ "reference data relates none of them at or above the configured severity level. This "
+				+ "check compares individual substances: relationships resting only on two drugs "
+				+ "sharing a drug class are not part of it, so it is not a statement that no "
+				+ "relationship exists.";
 	}
 
 	/**

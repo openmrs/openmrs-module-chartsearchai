@@ -718,6 +718,31 @@ public class ChartSearchAiConstants {
 	public static final String RESOURCE_TYPE_DRUG_CLASS_NOTE = "drug_class_note";
 
 	/**
+	 * A record stating that the interaction SCREEN ran over the patient's own active medications and
+	 * related none of them (issue #401).
+	 *
+	 * <p>Module-supplied prose, GROUPED like {@link #RESOURCE_TYPE_DRUG_CLASS_NOTE} — it names no drug
+	 * and points at no record of this patient — and standing for no reference ENTRY, so counting it into
+	 * {@code DrugReferenceInjector.referenceCharacters} would inflate issue #163's per-entry figure.
+	 *
+	 * <p><b>But it wears the SAFETY-FINDING lead rather than that note's, and the difference is
+	 * measured.</b> Its subject is this patient's own medications, while the prompt's record-type rule
+	 * tells the model that a record beginning {@code "Drug reference"} is reference data and NOT this
+	 * patient's. Under that lead the answer prefixed an inverted verdict; under
+	 * {@code DrugReferenceInjector.FINDING_PREFIX}, whose rule says such records ARE about this patient,
+	 * the same note produced the right one. ADR Decision 87 carries both arms. The lead is a
+	 * PROMPT-facing choice and this type is what every other consumer keys on, so nothing downstream
+	 * reads it as a finding: {@code ChartSearchAiUtils.safetyFindingMappings} selects the finding
+	 * population by TYPE.
+	 *
+	 * <p>Its own type rather than {@code drug_class_note} because that type is what
+	 * {@code ChartSearchAiUtils.unresolvedDrugClass} reads to publish the response's
+	 * {@code unresolvedDrugClass} key: a second meaning on it would make that key state a drug class
+	 * for a question that named none.
+	 */
+	public static final String RESOURCE_TYPE_INTERACTION_SCREEN_NOTE = "interaction_screen_note";
+
+	/**
 	 * Wire value of a serialized reference's {@code group}: a record retrieved from THIS
 	 * patient's chart. Evidence about the patient, citable as such.
 	 */

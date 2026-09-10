@@ -6380,3 +6380,130 @@ not move, and `.aRatedRuleInTheSameArrangementStillLicensesWithholding` that the
   existence. Suppressing it would also silently change `interactionPairs`.
 - **Rating the joins in the data.** DDInter rates rows, not classifications, and inventing a rating
   for a relationship the source does not rate is the module asserting something no dataset says.
+
+
+## Decision 87: A screen that related nothing says so in the prompt, instead of reaching the model as an empty slice
+
+**Status: Accepted** (September 2026) — implemented, issue [#401](https://github.com/openmrs/openmrs-module-chartsearchai/issues/401).
+
+### What was measured
+
+RefApp 3.7.1 standalone on `:8081`, `sourceFormat=ddinter`, `chartMode=fullChart`, local Gemma E4B.
+Patient `1530b813-…` on three antiretrovirals — Lamivudine 150mg, Nevirapine 200mg, Stavudine 30mg.
+Asked *"Are any of this patient's current medications interacting with each other?"*:
+
+> The records do not address drug interactions.
+
+Zero chips, `interactionPairs` `{"found": 0, "reported": 0}`, `findingCitations` `{"carried": 0,
+"cited": 0}`, and the audit row's `reference_slice_chars` **0**, in 4 seconds. The screening arm ran,
+related no pair above the severity floor, and — having no class leg — left the injector with nothing
+to write, so the model was handed an empty reference slice and described it. It described it as a
+fact about the CHART.
+
+That description is false on this very chart: asked *"Can stavudine and lamivudine be given
+together?"*, the same patient's response relates them — *"same ATC class (J05AF) — possible
+duplicate therapy"* — through the drug-in-play arm's class leg, which the screening question stands
+down. So one arm's silence was rendered as a denial that the module's own other arm contradicts.
+
+### The decision
+
+When the interaction screen ran over a pair of this patient's own medications and related none of
+them, `DrugReferenceInjector` injects a citable `interaction_screen_note` record stating what the
+screen did. **Never render silence as denial** is this subsystem's standing rule; this is that rule
+at the level of an ARM rather than of a record.
+
+### The lead was the deciding variable, and the note's first proposition after it
+
+Two things about the note's SHAPE were measured on the rig, one variable at a time, three runs each,
+over the reproduction question above.
+
+**1. The count must not come first.** The first build stated it first — *"2 of this patient's active
+medications were checked against each other, and the reference data relates none of them…"* — and the
+answer came back **"Yes — the reference data relates none of the patient's active medications at or
+above the configured severity level [7]"**. The prompt asks for an explicit verdict on a yes/no
+question, and the first thing the record offered was a NUMBER rather than a polarity. So the note now
+opens with its finding as a complete sentence and the count follows. `SCREEN_NOTE_FINDING_LEAD` is a
+constant pinned as a literal, because the ORDER of the two propositions is the property and a reword
+putting the count back in front would leave every other assertion green.
+
+**2. The PREFIX decided the verdict, and this is the one that mattered.** With the finding stated
+first the answer was still **"Yes — no interactions were found among this patient's active
+medications [7]"**, 3 of 3. The note wore `REFERENCE_PREFIX`, and the system prompt's record-type
+rule says a record beginning *"Drug reference"* is clinical reference data and **not this patient's**
+— while this note's subject is her own medications. Switching the lead to `FINDING_PREFIX`, whose
+rule says such records ARE about this patient, gave **"No — no interactions were found among this
+patient's active medications [7]"**, 3 of 3. Same note, same question, same build; the lead alone
+decided whether the verdict contradicted the clause behind it.
+
+That is a PROMPT-facing choice and nothing more: the record's TYPE is what every consumer keys on,
+`ChartSearchAiUtils.safetyFindingMappings` selects the finding population by type, and this note joins
+none of it — `findingCitations` read `{"carried": 0, "cited": 0}` on the verified run. The lead is
+pinned by `InteractionScreenSilenceNoteTest.theNoteWearsTheFindingLeadBecauseItsSubjectIsThisPatient`.
+
+**A general lesson, and the reason both arms are recorded rather than only the winner:** the two
+record leads are not decoration, they are the two halves of a rule the system prompt states about
+provenance, and a module-authored record that speaks about the patient while wearing the lead for
+material that is not about the patient asks the model to hold both at once. It resolved that by
+hedging the verdict.
+
+**Its wording is bounded the way `renderDrugClassNote`'s is.** Every clause is a claim about the
+SCREEN and none about the patient: how many of her active medications were checked against each
+other, that the reference data relates none of them at or above the configured severity level, and
+that relationships resting only on shared drug class are not part of the check. The note names no
+drug — it is citable evidence with nothing to navigate to, and a drug name in a record stating a
+negative is how a reader comes to read the negative as being about that drug.
+
+**The classification caveat is load-bearing, not a hedge.** Neither pairwise arm has a class leg, so
+a screen relating "nothing" has not examined shared-classification relationships at all — and the
+reproduction above is exactly a case where that route does relate the pair. Without the caveat the
+note licenses "no interactions", which this module contradicts on the same chart.
+
+**The count goes through `DrugReference.substanceGroupKey`, never over rows.** This was caught by the
+test rather than reasoned about: the knowledge base files one substance as several presentation rows,
+so a row count reported **3** medications checked on a two-medication chart, and one prescription of a
+two-row substance would have looked like a pair with nothing to compare. That is the "N of something"
+defect Decisions 43 and 56 exist for, reached here through a COUNT a clinician reads inside citable
+evidence.
+
+**Its own resource type**, not `drug_class_note`: that type is what `ChartSearchAiUtils.unresolvedDrugClass`
+reads to publish the `unresolvedDrugClass` response key, and a second meaning on it would make that key
+state a drug class for a question that named none. Reference-group and medication-order admissions are
+recorded in `ChartSearchAiReferenceGroupTest` and `MedicationOrderRecordTypeTest`, whose sweeps fail the
+build on a resource type nobody decided.
+
+**No new wire key.** `PairChipExtent` already states this arm's own count on the response, and
+`{"found": 0, "reported": 0}` already means an arm ran and related nothing. What was missing was the
+PROMPT half, and only that.
+
+### The gate, and the residue it leaves
+
+Four conjuncts: the question asks to be screened and resolved no drug of its own (the composite the
+screening arm itself stands on — the emptiness read off the resolution the injector already holds, the
+cue from `QueryScopeRouter`, the one place question intent is classified); the reference data resolved
+at least two distinct substances among her active orders, so there was a pair to screen; the orders
+were READ, because a chart the module could not read is not a chart that relates nothing; and the
+injection has nothing else to put in the prompt.
+
+**That last conjunct is narrower than the note's own claim, deliberately.** The note is true of any
+screen that related nothing, but with a finding, a monograph or a class note in the slice the model has
+material to describe and cannot fall into describing an empty one. So a screen that related nothing
+beside, say, a contraindication finding states no note. That is a stated residue rather than an
+oversight, and `InteractionScreenSilenceNoteTest.aScreenThatRelatedAPairStatesNoNote` pins the
+neighbouring half of it.
+
+### Rejected alternatives
+
+- **Giving the screening arm a class leg.** It would answer the reproduction better — the pair really
+  is duplicate-class therapy — but it moves what `PairChipExtent` counts, which
+  [Decisions 60](#decision-60-how-bounded-a-reported-interaction-list-is-is-stated-on-the-response), 65,
+  69 and 71 all rest on ("neither pairwise arm has a class leg"), and it would raise a class chip for
+  every same-class pair on a polypharmacy chart — an unmeasured chip-volume change on the arm whose cap
+  exists because it is quadratic. It is the larger option and it is not refused, only unbuilt: whoever
+  takes it owns the extent semantics and a chip-count measurement.
+- **A wire key of its own.** `interactionPairs` already carries this arm's count, and a second
+  statement of one fact is what this subsystem keeps having to un-say.
+- **Wording the note as "no interactions were found".** It is the claim the module cannot support, for
+  the reason the caveat exists.
+- **Letting the prompt handle it instead** — a system-prompt clause about empty reference slices.
+  Decision 84's ledger closed the prompt-wording lever for this area, and an instruction added ahead of
+  the records is the arm it measured regressing.

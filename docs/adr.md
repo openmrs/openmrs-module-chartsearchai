@@ -5690,6 +5690,78 @@ Two things about that rule are decisions rather than details, and each has a cas
 
 **A FIRST RESULT, from a single-cell manual A/B rather than the drift-metric probe, and it is against the rendering** ([Decision 81](#decision-81-an-answer-that-names-the-patients-active-orders-and-cites-none-of-them-says-so)). The probe this section asks for is still owed: what was run is one patient and one question with the flag flipped, and neither of its reports carries a cell, a directness figure, a meanF1 or a drift count. The section below stands as written — it is what was true when this decision landed, and the terms it sets are the terms the probe was judged by. It is no longer the state of the question: the issue's maintainer ran it on `main` at `4dd1fea4` and reports that with the flag on the answer stops citing drug orders altogether, reintroduces [#347](https://github.com/openmrs/openmrs-module-chartsearchai/issues/347)'s naming defect in the prose, and paraphrases the mechanism text into a `CYP450` identifier no cited record states. **The default therefore stays `false` on evidence rather than on its absence**, which is the outcome the last paragraph of this section prescribes; Decision 81 carries the run, the costs it names, and the reason it cannot be reconciled with [Decision 78](#decision-78-a-safety-findings-rating-has-to-survive-into-the-answer-that-states-it)'s reading of the same flip.
 
+### THE OWED PROBE, RUN (2026-09-10). The default still stays `false`, now on a corpus
+
+Ran on [Decision 84](#decision-84-where-the-one-line-per-finding-clause-sits-is-what-decides-whether-a-safety-answer-states-every-finding-it-was-given)'s
+own fourteen cells so the result is comparable with that ledger and Decision 85's:
+`capture_probe_safety.sh` with `PROBE_PATIENTS=sarah:dc8560c9-…`, Decision 84's fourteen drugs and
+`CAPTURE_PHRASING='should i give {drug}?'`, on the 3.7.1 standalone, `sourceFormat=ddinter` (2283
+entries), `chartMode=fullChart`, local Gemma E4B. Both arms held every other property at its shipped
+default, including `chartsearchai.drugSafety.repairFindingEnumeration=false`, whose continuation
+cites findings and would otherwise confound the citation columns. The gate and its threshold were
+fixed before the treatment arm ran.
+
+**The positive control, because a null result needs one.** `input_tokens` off the audit row grew on
+**12 of 14** cells (+6 to +12) and by **0** on both ABSTAIN cells, which carry no finding to attribute
+— so the numbers reached exactly the twelve prompts that could carry them. Mean input tokens
+12,548 → 12,556 and mean output 371 → 397. The baseline's 12,548 reproduces this decision's
+neighbouring ledger figure exactly.
+
+**What moved, all of it read off published keys rather than derived.** `activeOrderClaims`:
+`stated` 75 → 79, `uncited` **75 → 67**. Chart-group citations in `references`: **0 → 12**.
+`misattributedOrderCitations`: **0 → 0**. So the mechanism works and what it produced was legitimate:
+every chart citation the flag bought passes Decision 76's "can this be the order the sentence names"
+test.
+
+**Where it worked it worked completely, and it worked on two cells of twelve.** Digoxin and
+Furosemide each went from 6 claims all uncited to 6 claims all cited. The Digoxin cell, verbatim:
+
+> **off:** No — Digoxin should not be given: Digoxin interacts with active order Methylprednisolone
+> **[349]**, a Moderate problem. …
+>
+> **on:** No — Digoxin should not be given: Digoxin interacts with active order Methylprednisolone
+> **[17]**, Moderate **[349]**. …
+
+`[17]` is her Methylprednisolone `drug_order` record and `[349]` the finding — the join stated rather
+than re-derived, which is exactly what this decision proposed. The other ten cells' answers ignored
+the numbers, and the token delta above proves the numbers were in all twelve prompts. **So the open
+question is UPTAKE and not correctness**, which is a different question from the one this decision
+set out to answer and points at the wording/position family Decision 84 explored rather than at the
+data.
+
+**Why the default does not move.** The gate was: `uncited` falls by ≥25% relative, no rise in
+`misattributedOrderCitations`, `findingCitations.cited` falls on no cell, verdict-led holds,
+abstention holds, scorer exit no worse. It failed two of the six.
+
+| gate item | off | on | |
+| --- | --- | --- | --- |
+| `activeOrderClaims.uncited` | 75 | 67 (−10.7%) | **fails ≥25%** |
+| `findingCitations.cited`, per cell | — | fell on 5 cells | **fails** |
+| cells whose prose stated every finding | 6 of 12 | 5 of 12 | worse |
+| cells that stated fewer | 6 | 7 | worse |
+| `misattributedOrderCitations` | 0 | 0 | holds |
+| verdict-led | 12 | 12 | holds |
+| abstention held | 2 of 2 | 2 of 2 | holds |
+| named a severity no chip carries | 0 | 0 | holds |
+| `score_probe_safety.py` exit | 3 | 3 | no worse |
+
+Completeness moved in both directions and net down — down on Amiodarone (5→4), Atenolol (7→6),
+Ciprofloxacin (8→7), Furosemide (7→6) and Metformin (7→6), up on Amlodipine (6→7), Aspirin (7→8),
+Digoxin (5→6) and Nifedipine (6→7). That is the cost the prediction in this section's last paragraph
+named for this render layer: *"the last data-adding change in this same render layer worked, did not
+help, and was reverted on that standard"*. This one worked, helped on two cells of twelve, and cost a
+cell of completeness.
+
+**One recorded observation is corrected by this run.** Decision 81's single-cell report — that with
+the flag on "the answer stops citing drug orders altogether" — does not hold on this corpus at
+`ed36f487`: there were no drug-order citations to stop, the baseline having **zero** across all
+fourteen cells, and the flag created twelve. That run was a different build and a different question
+and is left as recorded; what is no longer open is whether the flag suppresses chart citations
+corpus-wide. It does not.
+
+**What a future attempt owes.** Not another flip of this flag — this is its measurement. Uptake is
+the variable, and the two cells that took the numbers up are the reproduction to work from.
+
 **Whether the number makes the answer cite better is not measured here, and this decision does not claim it.** The ticket states the precondition — *"this needs a measurement before implementing"*, on the beat-or-match standard `eval/drift-metric/README.md` enforces — and it was not run: the probe needs a live inference engine, and none was available in the environment this change was made in. What IS measured is deterministic and is what the tests pin: the number printed is the number of the chart record that order is, across the substantiated, injected, drifted-uuid and ambiguous arrangements.
 
 **That gap is what `chartsearchai.drugSafety.citeOrderRecords` is for**, and it is why nothing above ships to an install that has not asked for it. A review round put the alternative plainly: the change asks a maintainer to merge measured costs against an unmeasured benefit. The flag turns that into a flip — run the probe with it on and off against the same binary, and if the answer does not beat-or-match, set the default and leave the deterministic resolution, the fidelity fix and the cases that pin them in place. Every cost in the section above is stated of the rendering, so every one of them is dormant while the flag is off; what remains on a stock install is the marker STRIPPING in `ReferenceProseFidelityCheck`, which is correct on a chart whose order displays carry brackets of their own and was already reachable before this decision.

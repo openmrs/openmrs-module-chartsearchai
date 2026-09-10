@@ -1113,8 +1113,8 @@ public class LlmProvider {
 				sb.append(" Where more than one finding names it, put every one of them on a line of "
 						+ "its own, each with the severity that finding states.");
 			} else if (findingProse == FindingProse.SUMMARISED) {
-				sb.append(" The clinician is shown every finding in full beside your answer, so state "
-						+ "your overall judgement and its main reason rather than listing the findings.");
+				sb.append(" The clinician is shown every finding in full beside your answer, so summarise "
+						+ "rather than list them, citing each finding you rely on and stating its severity.");
 			}
 		}
 		return sb.toString();

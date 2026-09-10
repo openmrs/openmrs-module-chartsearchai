@@ -229,8 +229,8 @@ public class LlmProviderUserMessageTest {
 		assertTrue(withClause.startsWith(withoutClause),
 				"this clause is APPENDED too, so the no-clause message must be a byte-prefix of it.\n"
 				+ "  without: " + withoutClause + "\n  with:    " + withClause);
-		assertEquals(" The clinician is shown every finding in full beside your answer, so state "
-				+ "your overall judgement and its main reason rather than listing the findings.",
+		assertEquals(" The clinician is shown every finding in full beside your answer, so summarise "
+				+ "rather than list them, citing each finding you rely on and stating its severity.",
 				withClause.substring(withoutClause.length()),
 				"these are the measured bytes of the #403 clause, down to the SPACE in front of "
 				+ "them. If you are changing the wording, the arm measured on the rig stops "
@@ -248,7 +248,7 @@ public class LlmProviderUserMessageTest {
 
 		assertFalse(summarised.contains("put every one of them on a line of its own"),
 				"the summarise mode must not also ask for one line per finding, was: " + summarised);
-		assertTrue(summarised.contains("rather than listing the findings"),
+		assertTrue(summarised.contains("summarise rather than list them"),
 				"and it must carry its own ask, was: " + summarised);
 	}
 

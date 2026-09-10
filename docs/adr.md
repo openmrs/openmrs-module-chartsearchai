@@ -6290,3 +6290,93 @@ The off arm reproduces Decision 84's shipped-arm figure exactly, which is what s
 - **Re-asking with the whole question and replacing the answer.** Available on `search` only, for the streaming reason above, and it puts the verdict lead back in play on every repair.
 - **Narrowing the repair prompt to the omitted records alone**, rather than re-sending the chart. It is the obvious cost fix and it is NOT refused — it is unbuilt and unmeasured. It needs an `LlmProvider` entry point that composes a user message from a record subset, and the risk it carries is that a model answering without the chart cites indexes it can no longer see. Whoever takes it has this decision's cost row as the baseline to beat.
 - **Repairing more than once.** One follow-up per answer. A loop trades an unbounded number of inferences for a defect that is short by exactly one in every measured cell.
+
+
+## Decision 86: A relationship resting on shared classification alone is a caution, not a reason to withhold
+
+**Status: Accepted** (September 2026) — implemented, issue [#400](https://github.com/openmrs/openmrs-module-chartsearchai/issues/400).
+
+### Context
+
+`DrugSafetyValidator.ratingLicensesWithholding` splits a finding's strength on its rating, and treats
+an UNRATED finding as withholding. Its javadoc has always said that unrated covers two different
+things which "withhold for two different reasons": a CURATED rule is unrated because an implementation
+authored it deliberately — `severityPriority` sorts it above `major` for exactly that reason — while
+an ATC-subgroup or cross-reactivity JOIN is unrated because the reference data states the
+relationship without rating it and nobody authored it at all. Of the second it said: *"it withholds
+here because that is the behaviour it already had, and softening a relationship no dataset rates
+would be a change nothing has measured … the second is the weaker claim, and a later decision to
+grade those joins should be made on its own evidence."*
+
+This is that evidence.
+
+### What was measured
+
+RefApp 3.7.1 standalone on `:8081`, `sourceFormat=ddinter` (2283 entries), `chartMode=fullChart`,
+`chartsearchai.drugSafety.validateAnswers=true`, local Gemma E4B. Patient `1530b813-…` on three
+active orders — Lamivudine 150mg, Nevirapine 200mg, Stavudine 30mg. Asked *"Can stavudine and
+lamivudine be given together?"*, `POST /chartsearchai/search` answered:
+
+> No — Stavudine and Lamivudine should not be given together: they are in the same ATC class (J05AF)
+> — possible duplicate therapy [9] and [10].
+
+Both chips carried `severity: null`, `interactionPairs` reported `{"found": 0, "reported": 0}` and
+`findingCitations` `{"carried": 2, "cited": 2}`. So nothing rated the relationship and no rule
+related the pair: the refusal rests on ATC co-membership alone, and the answer faithfully relayed
+the `STRENGTH_WITHHOLD` clause the injected finding carried.
+
+J05AF is ATC's nucleoside/nucleotide reverse-transcriptase inhibitor subgroup. Two NRTIs are the
+backbone of antiretroviral therapy — same-subgroup co-prescription is the design of the regimen
+rather than an error in it. The same mechanism reaches every therapeutic area whose standard of care
+is combination therapy from one class.
+
+### The decision
+
+`DrugSafetyValidator.licensesWithholding` answers **false** for a finding whose only evidence is
+shared classification, ahead of both of its existing legs, so such a finding renders
+`STRENGTH_CAUTION` and the prompt's caution branch opens by stating that the drug can be given and
+names the caution.
+
+**The flag is set by the arm, never read off the detail.** `SafetyWarning.classOnlyInteraction` is
+the one construction site — `addInteractionWarnings`' `classOnly` loop — and
+`SafetyWarning.restsOnSharedClassificationAlone()` the one reader. A detail scan would be wrong in a
+reachable way: the FOLDED chip prints the identical *"same ATC class (…)"* sentence beside a rated
+rule, and it must go on stating the stronger of its two claims (`FoldedFindingStrengthTest`).
+A FACTORY rather than a flag on the public constructor, following `recordedAllergenContraindication`:
+every other field of this shape is false or empty by construction, and a caller must not be able to
+set the flag on a chip that carries a rule.
+
+**What it grades is the module's own evidence, and never the drugs.** This module encodes no clinical
+domain knowledge, so it cannot know which classes are co-prescribed on purpose; an exempt-class list
+would be exactly that knowledge, would be wrong at the edges of whatever list was written, and is not
+what changed here. What changed is that a relationship nobody authored, inferred from co-membership,
+now makes the weakest claim this layer makes.
+
+**It moves STRENGTH and nothing else.** The chip's sentence, its `null` severity, its exemption from
+the severity floor, its position after the rule chips, and `PairChipExtent`'s count of it are all
+unchanged. Neither pairwise arm has a class leg, so neither is reached.
+
+### Scope
+
+Interaction findings only. A CONTRAINDICATION states a withholding-class clause whatever rates it —
+#283 scoped the clause to interaction findings once and that was measured wrong — and a recorded
+allergy plus shared classification is a different claim from duplicate therapy: it rests on a record
+of this patient as well as on the classification.
+`ClassOnlyFindingStrengthTest.aClassDerivedContraindicationStillLicensesWithholding` pins that it did
+not move, and `.aRatedRuleInTheSameArrangementStillLicensesWithholding` that the rated rules did not.
+
+### Rejected alternatives
+
+- **A list of classes whose members are co-prescribed on purpose** (J05A, J04A, L01 …). This is
+  clinical domain knowledge, which this module does not encode and has no way to keep current; it
+  would be wrong at the edge of whatever list was written, and it answers a question about the drugs
+  where the defect is a question about the evidence.
+- **Softening `ratingLicensesWithholding`'s unrated leg instead.** It would take the curated arm with
+  it — a rule a deployment authored deliberately would become a caution, silencing the one arm it
+  added on purpose. `SafetyFindingSeverityStrengthTest.anUnratedCuratedRuleIsNotSoftenedToACaution`
+  reddens on it.
+- **Suppressing the class-only chip entirely.** It states a real relationship the reference data
+  carries, and a clinician reviewing a regimen may want it; the defect was its STRENGTH, not its
+  existence. Suppressing it would also silently change `interactionPairs`.
+- **Rating the joins in the data.** DDInter rates rows, not classifications, and inventing a rating
+  for a relationship the source does not rate is the module asserting something no dataset says.

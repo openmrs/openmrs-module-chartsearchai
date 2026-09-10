@@ -565,8 +565,13 @@ public class ChartSearchAiConstants {
 	 * Whether the answer's prose is asked to SUMMARISE the safety findings rather than enumerate
 	 * them, on the grounds that the client already renders every finding in full — issue #403.
 	 *
-	 * <p>Ships OFF, and the reason is that this is a prompt change in the one position ADR
-	 * Decision 84 measured instruction to regress in, so an install may not have it unmeasured.
+	 * <p>Ships ON since the fourteen-cell measurement: over ADR Decision 84's own corpus this arm
+	 * stated every carried finding on 8 of 12 cells against the previous default's 5, dropped a
+	 * cited finding's rating on none, and left verdict-led, the abstention controls and licensing
+	 * untouched — a strict improvement at one inference instead of two. It does NOT reach the
+	 * scorer's exit 0, which wants no cell short at all; the arm that does is
+	 * {@link #GP_DRUG_SAFETY_REPAIR_FINDING_ENUMERATION}, and turning that on now requires turning
+	 * THIS off.
 	 * {@code ChartAnswer.getFindingCitationExtent()} stops being the gate when it is on: prose that
 	 * is not asked to enumerate is short of the findings BY DESIGN, so
 	 * {@link #GP_DRUG_SAFETY_REPAIR_FINDING_ENUMERATION} is suppressed rather than left to fight it.
@@ -576,7 +581,7 @@ public class ChartSearchAiConstants {
 	public static final String GP_DRUG_SAFETY_FINDINGS_RENDERED_BY_CLIENT =
 			"chartsearchai.drugSafety.findingsRenderedByClient";
 
-	public static final boolean DEFAULT_DRUG_SAFETY_FINDINGS_RENDERED_BY_CLIENT = false;
+	public static final boolean DEFAULT_DRUG_SAFETY_FINDINGS_RENDERED_BY_CLIENT = true;
 
 	/** Minimum source-assigned severity ({@code unknown} &lt; {@code minor} &lt; {@code moderate} &lt;
 	 *  {@code major}) a rule-based interaction must carry to raise a warning chip. Rules without a

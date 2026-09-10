@@ -253,17 +253,19 @@ public class LlmProviderUserMessageTest {
 	}
 
 	@Test
-	public void aStockInstallAsksForTheEnumerationExactlyAsItDidBeforeTheSummariseModeExisted() {
-		// The regression guard that matters most: #403 ships OFF, so on a stock install the resolver
-		// must select the two states that existed before it and the bytes must not move at all. A
-		// real LlmProvider is used deliberately — getBooleanGlobalProperty fails safe to the default
-		// with no OpenMRS context, which is exactly a stock install's answer.
+	public void aStockInstallSUMMARISESWhereTheGateFiresAndStaysSilentWhereItDoesNot() {
+		// #403 ships ON since the fourteen-cell measurement, so a stock install must SUMMARISE where
+		// the #397 gate fires — this is the assertion that fails if the default is flipped back
+		// without the ledger in the README and ADR moving with it. A real LlmProvider is used
+		// deliberately: getBooleanGlobalProperty fails safe to the constant with no OpenMRS context,
+		// which is exactly a stock install's answer.
 		LlmProvider stock = new LlmProvider();
 
-		assertEquals(LlmProvider.FindingProse.ENUMERATED, stock.findingProse(true),
-				"a stock install must still ENUMERATE when the #397 gate fires");
+		assertEquals(LlmProvider.FindingProse.SUMMARISED, stock.findingProse(true),
+				"a stock install must SUMMARISE when the #397 gate fires");
 		assertEquals(LlmProvider.FindingProse.UNPROMPTED, stock.findingProse(false),
-				"and must still append nothing when it does not");
+				"and must still append nothing when the gate does not fire — the enumeration gate is "
+				+ "untouched by #403, which decides only WHICH clause, never WHETHER one is sent");
 	}
 
 	@Test

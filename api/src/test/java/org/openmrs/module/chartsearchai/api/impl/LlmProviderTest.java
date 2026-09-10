@@ -1201,12 +1201,12 @@ public class LlmProviderTest {
 
 		provider.search(records, focus, question, true);
 
-		assertEquals(LlmProvider.buildUserMessage(records, focus, question, true),
+		assertEquals(LlmProvider.buildUserMessage(records, focus, question, provider.findingProse(true)),
 				engine.capturedUserMessage,
 				"the prompt this method sends must be the one built for the flag it was handed. "
 				+ "Calling the flag-less arity here, or hardcoding false, sends the pre-#397 prompt "
 				+ "with the gate and both call sites still intact and every other test green");
-		assertNotEquals(LlmProvider.buildUserMessage(records, focus, question, false),
+		assertNotEquals(LlmProvider.buildUserMessage(records, focus, question, provider.findingProse(false)),
 				engine.capturedUserMessage,
 				"and the two flag values must actually differ in what the engine receives — without "
 				+ "this the assertion above passes over two clause-free messages if the clause is "
@@ -1256,11 +1256,11 @@ public class LlmProviderTest {
 		provider.searchStreaming(records, focus, question, tok -> { }, reason -> { },
 				"patient-uuid-42", true);
 
-		assertEquals(LlmProvider.buildUserMessage(records, focus, question, true),
+		assertEquals(LlmProvider.buildUserMessage(records, focus, question, provider.findingProse(true)),
 				engine.capturedUserMessage,
 				"the streaming path must send the prompt built for the flag it was handed — see the "
 				+ "blocking sibling for the mutation that showed this hop uncovered");
-		assertNotEquals(LlmProvider.buildUserMessage(records, focus, question, false),
+		assertNotEquals(LlmProvider.buildUserMessage(records, focus, question, provider.findingProse(false)),
 				engine.capturedUserMessage,
 				"and the two flag values must differ in what the engine receives, or the assertion "
 				+ "above is satisfied by two clause-free messages");

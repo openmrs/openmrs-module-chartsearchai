@@ -312,6 +312,18 @@ public class LlmInferenceService implements ChartSearchService {
 		if (ChartSearchAiUtils.getBooleanGlobalProperty(
 				ChartSearchAiConstants.GP_DRUG_SAFETY_FINDINGS_RENDERED_BY_CLIENT,
 				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_FINDINGS_RENDERED_BY_CLIENT)) {
+			// SAID rather than done silently, because since the summarise mode became the DEFAULT this
+			// branch overrides a setting the operator had to go out of their way to turn on. An
+			// operator who wants the repair has to turn the summarise mode off, and a log line is how
+			// they find that out without reading this method.
+			if (ChartSearchAiUtils.getBooleanGlobalProperty(
+					ChartSearchAiConstants.GP_DRUG_SAFETY_REPAIR_FINDING_ENUMERATION,
+					ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_REPAIR_FINDING_ENUMERATION)) {
+				log.warn("{} is on, so {} is not applied — prose asked to summarise is short of the "
+						+ "findings by design. Turn the first off to use the repair.",
+						ChartSearchAiConstants.GP_DRUG_SAFETY_FINDINGS_RENDERED_BY_CLIENT,
+						ChartSearchAiConstants.GP_DRUG_SAFETY_REPAIR_FINDING_ENUMERATION);
+			}
 			return false;
 		}
 		return ChartSearchAiUtils.getBooleanGlobalProperty(

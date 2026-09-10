@@ -210,6 +210,63 @@ public class LlmProviderUserMessageTest {
 	}
 
 	@Test
+	public void theSummariseClauseIsExactlyTheseBytes() {
+		// ISSUE #403. The counterpart of theAppendedClauseIsExactlyTheseBytes, and held as bytes for
+		// the same reason: this clause sits in the position ADR Decision 84 measured instruction to
+		// regress in, so a rewording is a new arm and not a tidy-up. Reached through the resolver so
+		// the enum value production selects is the one measured, rather than one a test names.
+		LlmProvider summarising = new LlmProvider() {
+			@Override
+			protected FindingProse findingProse(boolean enumerateFindings) {
+				return enumerateFindings ? FindingProse.SUMMARISED : FindingProse.UNPROMPTED;
+			}
+		};
+		String withClause = LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(),
+				"should i give Amlodipine?", summarising.findingProse(true));
+		String withoutClause = LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(),
+				"should i give Amlodipine?", summarising.findingProse(false));
+
+		assertTrue(withClause.startsWith(withoutClause),
+				"this clause is APPENDED too, so the no-clause message must be a byte-prefix of it.\n"
+				+ "  without: " + withoutClause + "\n  with:    " + withClause);
+		assertEquals(" The clinician is shown every finding in full beside your answer, so state "
+				+ "your overall judgement and its main reason rather than listing the findings.",
+				withClause.substring(withoutClause.length()),
+				"these are the measured bytes of the #403 clause, down to the SPACE in front of "
+				+ "them. If you are changing the wording, the arm measured on the rig stops "
+				+ "describing the shipped bytes — measure the new one.");
+	}
+
+	@Test
+	public void theSummariseClauseNeverAsksForTheEnumerationItReplaces() {
+		// The two asks are opposites, so a message carrying both would be the contradiction
+		// FindingProse exists to make unrepresentable. Asserted over the SHIPPED substring of the
+		// #397 clause rather than over the enum, so a future third state that reintroduces the
+		// enumeration ask alongside this one is caught here and not only by a type.
+		String summarised = LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(),
+				"should i give Amlodipine?", LlmProvider.FindingProse.SUMMARISED);
+
+		assertFalse(summarised.contains("put every one of them on a line of its own"),
+				"the summarise mode must not also ask for one line per finding, was: " + summarised);
+		assertTrue(summarised.contains("rather than listing the findings"),
+				"and it must carry its own ask, was: " + summarised);
+	}
+
+	@Test
+	public void aStockInstallAsksForTheEnumerationExactlyAsItDidBeforeTheSummariseModeExisted() {
+		// The regression guard that matters most: #403 ships OFF, so on a stock install the resolver
+		// must select the two states that existed before it and the bytes must not move at all. A
+		// real LlmProvider is used deliberately — getBooleanGlobalProperty fails safe to the default
+		// with no OpenMRS context, which is exactly a stock install's answer.
+		LlmProvider stock = new LlmProvider();
+
+		assertEquals(LlmProvider.FindingProse.ENUMERATED, stock.findingProse(true),
+				"a stock install must still ENUMERATE when the #397 gate fires");
+		assertEquals(LlmProvider.FindingProse.UNPROMPTED, stock.findingProse(false),
+				"and must still append nothing when it does not");
+	}
+
+	@Test
 	public void warmupShouldNotCarryTheFindingEnumerationClause() {
 		String warmup = LlmProvider.buildUserMessage(CHART, Collections.<Integer>emptyList(), "", true);
 		assertFalse(warmup.contains("put every one of them on a line of its own"),

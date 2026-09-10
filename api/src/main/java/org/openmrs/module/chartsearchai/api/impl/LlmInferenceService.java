@@ -303,6 +303,17 @@ public class LlmInferenceService implements ChartSearchService {
 	 * silently untested on the arrangement it exists for.
 	 */
 	protected boolean resolveFindingEnumerationRepair() {
+		// AND-ed with issue #403's mode, and the direction is the point: where the prompt asked the
+		// model to SUMMARISE the findings rather than list them, an answer citing fewer than the
+		// prompt carried is the ASKED-FOR shape, so a repair would re-add exactly the enumeration
+		// that mode removes — one inference per answer to undo the change the operator turned on.
+		// Suppressed here rather than at the repair's own call site so the two toggles cannot be read
+		// in different orders on the two answer paths.
+		if (ChartSearchAiUtils.getBooleanGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_FINDINGS_RENDERED_BY_CLIENT,
+				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_FINDINGS_RENDERED_BY_CLIENT)) {
+			return false;
+		}
 		return ChartSearchAiUtils.getBooleanGlobalProperty(
 				ChartSearchAiConstants.GP_DRUG_SAFETY_REPAIR_FINDING_ENUMERATION,
 				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_REPAIR_FINDING_ENUMERATION);

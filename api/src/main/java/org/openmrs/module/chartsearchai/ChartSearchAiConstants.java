@@ -561,6 +561,23 @@ public class ChartSearchAiConstants {
 
 	public static final boolean DEFAULT_DRUG_SAFETY_REPAIR_FINDING_ENUMERATION = false;
 
+	/**
+	 * Whether the answer's prose is asked to SUMMARISE the safety findings rather than enumerate
+	 * them, on the grounds that the client already renders every finding in full — issue #403.
+	 *
+	 * <p>Ships OFF, and the reason is that this is a prompt change in the one position ADR
+	 * Decision 84 measured instruction to regress in, so an install may not have it unmeasured.
+	 * {@code ChartAnswer.getFindingCitationExtent()} stops being the gate when it is on: prose that
+	 * is not asked to enumerate is short of the findings BY DESIGN, so
+	 * {@link #GP_DRUG_SAFETY_REPAIR_FINDING_ENUMERATION} is suppressed rather than left to fight it.
+	 * What to measure instead is whether the verdict still leads and whether the chips still carry
+	 * every finding — the second being deterministic and therefore not at risk.
+	 */
+	public static final String GP_DRUG_SAFETY_FINDINGS_RENDERED_BY_CLIENT =
+			"chartsearchai.drugSafety.findingsRenderedByClient";
+
+	public static final boolean DEFAULT_DRUG_SAFETY_FINDINGS_RENDERED_BY_CLIENT = false;
+
 	/** Minimum source-assigned severity ({@code unknown} &lt; {@code minor} &lt; {@code moderate} &lt;
 	 *  {@code major}) a rule-based interaction must carry to raise a warning chip. Rules without a
 	 *  severity (e.g. the curated seed's hand-authored rules) are always shown, as are class-based and

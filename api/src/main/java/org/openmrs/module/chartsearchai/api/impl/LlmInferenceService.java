@@ -162,6 +162,25 @@ public class LlmInferenceService implements ChartSearchService {
 
 			List<RecordReference> cited = extractCitedReferences(response.getAnswer(),
 					response.getCitations(), chart.getMappings());
+			// Issue #398, before every check below and before grounding: each of them judges the
+			// answer this method is about to publish, so a repair running after any of them would
+			// leave that key describing prose the caller never receives.
+			List<Integer> owedRepair = findingsOwedARepair(cited, chart.getMappings());
+			if (!owedRepair.isEmpty()) {
+				// Into llmMs and not beside it: the repair IS a second inference, and a timing line
+				// that left it out would under-report precisely the cost this feature adds, on the
+				// field an operator reads to decide whether to keep paying it.
+				long repairStart = System.currentTimeMillis();
+				response = withRepairedFindingEnumeration(response,
+						llmProvider.search(chartTextOrPlaceholder(chart), chart.getFocusIndices(),
+								findingEnumerationRepairQuestion(owedRepair), false),
+						owedRepair, chart.getMappings());
+				llmMs += System.currentTimeMillis() - repairStart;
+				cited = extractCitedReferences(response.getAnswer(), response.getCitations(),
+						chart.getMappings());
+				inputTokens = response.getInputTokens();
+				cachedTokens = response.getCachedTokens();
+			}
 			ClassCodeFidelityCheck.reportClassCodeDefects(patient, question, response.getAnswer(),
 					cited, chart.getMappings());
 			// The prose check's own answer, carried rather than re-derived (issue #337 round two): a
@@ -274,6 +293,19 @@ public class LlmInferenceService implements ChartSearchService {
 	 *  delegates, tests override to exercise the grounding path without an OpenMRS context. */
 	protected boolean resolveGroundingEnabled() {
 		return ChartSearchAiUtils.isGroundingEnabled();
+	}
+
+	/**
+	 * Whether an answer short of the findings its prompt carried is repaired by asking again —
+	 * issue #398, {@code chartsearchai.drugSafety.repairFindingEnumeration}, shipping OFF.
+	 * {@code protected} for the reason its siblings are: a test drives the two answer paths with no
+	 * OpenMRS runtime behind them, and a repair gated on an unreadable global property would be
+	 * silently untested on the arrangement it exists for.
+	 */
+	protected boolean resolveFindingEnumerationRepair() {
+		return ChartSearchAiUtils.getBooleanGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_REPAIR_FINDING_ENUMERATION,
+				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_REPAIR_FINDING_ENUMERATION);
 	}
 
 	/**
@@ -520,6 +552,27 @@ public class LlmInferenceService implements ChartSearchService {
 			// carries the grounded references once verification completes.
 			List<RecordReference> cited = extractCitedReferences(response.getAnswer(),
 					response.getCitations(), chart.getMappings());
+			// Issue #398, before the citations reach the caller and before the ungrounded handoff
+			// below: the repair's own prose streams through the SAME token consumer, so a user
+			// watching the answer being written sees the continuation arrive rather than finding it
+			// only in the final object. That ordering is the whole reason the repair appends
+			// instead of replacing — by here the short answer has already been streamed.
+			List<Integer> owedRepair = findingsOwedARepair(cited, chart.getMappings());
+			if (!owedRepair.isEmpty()) {
+				// Into llmMs, for the reason the sibling path states.
+				long repairStart = System.currentTimeMillis();
+				response = withRepairedFindingEnumeration(response,
+						llmProvider.searchStreaming(chartTextOrPlaceholder(chart),
+								chart.getFocusIndices(),
+								findingEnumerationRepairQuestion(owedRepair), tokenConsumer,
+								reasoningConsumer, kvCacheScope, false),
+						owedRepair, chart.getMappings());
+				llmMs += System.currentTimeMillis() - repairStart;
+				cited = extractCitedReferences(response.getAnswer(), response.getCitations(),
+						chart.getMappings());
+				inputTokens = response.getInputTokens();
+				cachedTokens = response.getCachedTokens();
+			}
 			citationsConsumer.accept(cited);
 
 			// The answer is complete: hand the whole (not yet grounding-verified) result to the
@@ -621,6 +674,98 @@ public class LlmInferenceService implements ChartSearchService {
 	 */
 	private static String chartTextOrPlaceholder(PatientChart chart) {
 		return chart.getMappings().isEmpty() ? "(No relevant records found)" : chart.getText();
+	}
+
+	/**
+	 * The words the repair pass asks its second question in — issue #398. A CONSTANT because it is
+	 * a prompt, and this module's one measured lesson about prompts
+	 * (<a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/397">#397</a>, ADR
+	 * Decision 84) is that their bytes must be pinnable; {@code FindingEnumerationRepairTest} reads
+	 * the composed question off the provider it hands the service.
+	 *
+	 * <p><b>It names records and asks for nothing else.</b> It carries no verdict instruction: the
+	 * lead is the original answer's and the continuation is appended after it, so a repair that
+	 * asked for a call would put a second one in the same answer — the failure ADR Decision 84
+	 * measured the {@code ", and nothing else"} wording causing, one surface over.
+	 */
+	static final String FINDING_ENUMERATION_REPAIR_INSTRUCTION =
+			"For these records only, state each one on a line of its own, naming the active order "
+					+ "it is about and the severity that finding states, and citing its record "
+					+ "number: ";
+
+	/**
+	 * The findings this answer owes a repair for — issue #398. The gate and the population in one
+	 * place, so the two answer paths cannot come to disagree about either; an empty list is both
+	 * "the repair is off" and "the answer cited them all", which are the same instruction to a caller.
+	 */
+	private List<Integer> findingsOwedARepair(List<RecordReference> cited,
+			List<RecordMapping> mappings) {
+		if (!resolveFindingEnumerationRepair()) {
+			return Collections.emptyList();
+		}
+		return SafetyFindingCitationExtentCheck.uncitedFindingIndexes(cited, mappings);
+	}
+
+	/**
+	 * The second question, composed from the records the answer left uncited. Package-private so a
+	 * case can read what the model was asked without reaching into the provider.
+	 *
+	 * @param uncited the uncited carried findings, in the injector's order, as
+	 *            {@code SafetyFindingCitationExtentCheck.uncitedFindingIndexes} answers
+	 * @return the question, naming every uncited record and no cited one
+	 */
+	static String findingEnumerationRepairQuestion(List<Integer> uncited) {
+		StringBuilder question = new StringBuilder(FINDING_ENUMERATION_REPAIR_INSTRUCTION);
+		String separator = "";
+		for (Integer index : uncited) {
+			question.append(separator).append('[').append(index).append(']');
+			separator = ", ";
+		}
+		return question.append('.').toString();
+	}
+
+	/**
+	 * The repaired answer, or {@code original} where the repair bought nothing — issue #398.
+	 *
+	 * <p><b>It may only ADD.</b> The continuation is kept only where the answer's own citation
+	 * resolution admits at least one finding that was uncited before it, so a model answering the
+	 * follow-up with prose carrying no marker leaves the response byte for byte as it was. That is
+	 * the direction this pass is allowed to move the two published keys it touches: an appended
+	 * continuation can raise {@code findingCitations.cited} and cannot lower it.
+	 *
+	 * <p><b>The lead is not re-decided.</b> The continuation goes AFTER the original answer, whose
+	 * opening is what {@code score_directness.classify} reads — the property ADR Decision 84
+	 * measured an arm losing while it gained completeness, and the one this pass must not trade.
+	 */
+	private LlmResponse withRepairedFindingEnumeration(LlmResponse original,
+			LlmResponse continuation, List<Integer> uncited, List<RecordMapping> mappings) {
+		if (continuation == null || ChartSearchAiUtils.isBlank(continuation.getAnswer())) {
+			return original;
+		}
+		Set<Integer> nowCited = new LinkedHashSet<Integer>();
+		for (RecordReference reference : extractCitedReferences(continuation.getAnswer(),
+				continuation.getCitations(), mappings)) {
+			nowCited.add(Integer.valueOf(reference.getIndex()));
+		}
+		if (Collections.disjoint(nowCited, uncited)) {
+			log.debug("Finding-enumeration repair discarded: the continuation cites none of {}",
+					uncited);
+			return original;
+		}
+		List<Integer> citations = new ArrayList<Integer>();
+		if (original.getCitations() != null) {
+			citations.addAll(original.getCitations());
+		}
+		if (continuation.getCitations() != null) {
+			for (Integer index : continuation.getCitations()) {
+				if (!citations.contains(index)) {
+					citations.add(index);
+				}
+			}
+		}
+		// Built by LlmResponse and never here: that type's own javadoc carries why, and the reason
+		// is a guard this class would otherwise trip on a descriptor it shares with ChartAnswer.
+		return original.continuedWith(continuation, citations);
 	}
 
 	/**

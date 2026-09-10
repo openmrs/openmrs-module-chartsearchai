@@ -549,6 +549,18 @@ public class ChartSearchAiConstants {
 
 	public static final boolean DEFAULT_DRUG_SAFETY_CITE_ORDER_RECORDS = false;
 
+	/**
+	 * Whether an answer that cited fewer safety findings than the prompt carried is repaired by
+	 * asking the model again for the ones it left out — issue #398. Ships OFF: ADR Decision 84
+	 * measured this area regressing under added instruction, and a second inference is a cost no
+	 * install should pay unmeasured. {@code ChartAnswer.getFindingCitationExtent()} is the gate to
+	 * measure it against.
+	 */
+	public static final String GP_DRUG_SAFETY_REPAIR_FINDING_ENUMERATION =
+			"chartsearchai.drugSafety.repairFindingEnumeration";
+
+	public static final boolean DEFAULT_DRUG_SAFETY_REPAIR_FINDING_ENUMERATION = false;
+
 	/** Minimum source-assigned severity ({@code unknown} &lt; {@code minor} &lt; {@code moderate} &lt;
 	 *  {@code major}) a rule-based interaction must carry to raise a warning chip. Rules without a
 	 *  severity (e.g. the curated seed's hand-authored rules) are always shown, as are class-based and

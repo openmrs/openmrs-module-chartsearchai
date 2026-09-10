@@ -90,6 +90,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 82: A drug the chart contraindicates by name leads with that finding, and keeps the class one behind it](#decision-82-a-drug-the-chart-contraindicates-by-name-leads-with-that-finding-and-keeps-the-class-one-behind-it)
 - [Decision 83: How many screened findings the prompt carried, and how many the answer cited, is stated on the response](#decision-83-how-many-screened-findings-the-prompt-carried-and-how-many-the-answer-cited-is-stated-on-the-response)
 - [Decision 84: Where the one-line-per-finding clause sits is what decides whether a safety answer states every finding it was given](#decision-84-where-the-one-line-per-finding-clause-sits-is-what-decides-whether-a-safety-answer-states-every-finding-it-was-given)
+- [Decision 85: An answer short of the findings its prompt carried is repaired by asking again, not by another wording](#decision-85-an-answer-short-of-the-findings-its-prompt-carried-is-repaired-by-asking-again-not-by-another-wording)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -6237,3 +6238,55 @@ it looks like across a standalone restart, and what the cell counts in its table
 - **Ordering the findings so the weakest is last.** `DrugSafetyValidator.FINDING_STRENGTH_DESCENDING` already does that, and the reproducer's seven findings are all Moderate.
 - **A general format rule outside the safety paragraph**, extending the prompt's existing *"Use numbered lines or simple newlines to structure lists."* Lower risk to the safety paragraph and higher blast radius: it would reshape every multi-record answer, including #214's 19 absent-data cases and every drift cell, none of which is measurable on this host — the `rc2` cohort `score_directness.py`'s Tier-B gold names does not exist on this standalone (verified: 404 on its patient uuids).
 - **A per-index list of the findings an answer never stated**, on the wire. Decision 83 refused it and its reasons stand; nothing here needs it, the scorer's WARN naming the uncited indexes being what a maintainer reads.
+
+
+## Decision 85: An answer short of the findings its prompt carried is repaired by asking again, not by another wording
+
+**Status: Accepted** (September 2026) — implemented, issue [#398](https://github.com/openmrs/openmrs-module-chartsearchai/issues/398).
+
+### Context
+
+[Decision 83](#decision-83-how-many-screened-findings-the-prompt-carried-and-how-many-the-answer-cited-is-stated-on-the-response) made the shortfall measurable as `findingCitations` and refused to close it, on the grounds that the only lever was prompt wording and that this area has a measured history of regressing under added instruction. Its rejected-alternatives section said what would make a remedy attemptable: *"whoever takes it later has a gate to take it against, which is what this key is."* [Decision 84](#decision-84-where-the-one-line-per-finding-clause-sits-is-what-decides-whether-a-safety-answer-states-every-finding-it-was-given) then took the one prompt lever that worked — position, not wording — and recorded its own result as **"an improvement and not a fix"**: six of twelve corpus cells still stated one finding fewer than the prompt carried.
+
+That residue is not cosmetic. The prose is what the answer IS; a clinician reading six enumerated hazards where the screen raised seven reads a complete list. The chips do not fix it — `safetyWarnings` is an independent list nothing reconciles against the answer, which is exactly what [Decision 61](#decision-61-prose-the-answer-reproduces-from-a-cited-reference-record-must-be-reproduced-faithfully)'s family and this one keep having to say.
+
+**Wording is closed and deliberately so.** Decision 84's ledger is five arms over one corpus; `LlmProviderUserMessageTest.theAppendedClauseIsExactlyTheseBytes` pins the winning clause as a literal precisely so completeness cannot be bought by rewording it, and every prompt-shaped alternative left — an ordinal in the record, compacting the slice, reordering it, a general format rule — is refused there with a reason of its own. What none of them refuses is asking a second time.
+
+### The decision
+
+**An answer whose citation resolution admitted fewer findings than the prompt carried is asked a second question naming only the records it left out, and that continuation is appended.** `chartsearchai.drugSafety.repairFindingEnumeration`, shipping OFF.
+
+**It APPENDS and never replaces, and the reason is `searchStreaming`.** That path hands the answer to the caller token by token, so by the time the shortfall is knowable the user has already watched the short answer being written. Replacing it is available on `search` and on that path alone, and two answer paths that differ in what they do with a repair is the divergence this package's rules warn about throughout. A continuation is the one shape both can carry — and on the streaming path it goes through the SAME `tokenConsumer`, so a user watching the answer sees the continuation arrive rather than finding it only in the returned object.
+
+**It may only ADD.** The continuation is kept only where the answer's own resolution admits at least one finding uncited before it (`Collections.disjoint` against the owed list), so a follow-up carrying no marker leaves the response byte for byte as it was. That bounds the direction: an appended continuation can raise `findingCitations.cited` and cannot lower it.
+
+**The lead is never re-decided.** The continuation goes after the original answer, whose opening is what `score_directness.classify` reads — the property Decision 84 measured an arm LOSING while it gained completeness, and the one this pass must not trade.
+
+**It runs before every check and before grounding**, on both paths. Each of the five checks judges the answer the method is about to publish, so a repair after any of them would leave that key describing prose the caller never receives; `findingCitations` in particular is then measured over the repaired answer, which is what makes the gate honest.
+
+**One walk, shared.** `SafetyFindingCitationExtentCheck.uncitedFindingIndexes` is the walk `measureFindingCitations`' WARN already did, extracted and named so the log line and the second prompt cannot come to be about different populations — the two-resolutions-that-agree shape [#151](https://github.com/openmrs/openmrs-module-chartsearchai/issues/151) forbids. `citedFindingIndexes` is likewise shared, so the count and its complement cannot disagree about what "cited" means.
+
+### Measured, on Decision 84's own corpus
+
+RefApp 3.7.1 standalone on `:8081`, `chartMode=fullChart`, `sourceFormat=ddinter` (2283 entries), the same patient `dc8560c9-…` and the same fourteen drugs through `capture_probe_safety.sh`'s #299 overrides, both arms on ONE build with only the global property between them, scored by `eval/drift-metric/score_probe_safety.py`:
+
+| cell | repair off | repair on |
+|---|---|---|
+| prose stated every finding | 6 of 12 | **12 of 12** |
+| stated fewer (the defect) | 6 | **0** |
+| verdict-led | 12 of 12 | 12 of 12 |
+| cited finding's rating dropped | 0 | 0 |
+| abstention held (2 controls) | 2 | 2 |
+| scorer exit | 3 | **0** |
+
+The off arm reproduces Decision 84's shipped-arm figure exactly, which is what says the two arms are of the arrangement that decision measured. **Neither column Decision 84 records a regression in moved.**
+
+**What it costs, on the same fourteen cells and joined to the audit rows by `questionId` = `auditLogId`:** mean response time **15.1s → 24.9s** and mean input tokens **12,548 → 19,785**. The repair re-sends the whole chart, so a firing cell roughly doubles its prompt; six of fourteen fired. On a CPU-bound local engine that is the whole of the trade, and it is why the property ships off and an install decides. `llmMs` carries the second inference on both paths, so the timing line does not under-report the one thing this feature adds.
+
+### Rejected alternatives
+
+- **Another prompt wording.** Closed by Decision 84 with a five-arm ledger and a literal-pinned clause; re-proposing it needs new evidence, which this change is not.
+- **Writing the omitted findings into the answer deterministically.** The module holds their exact text, so this costs no inference at all — and it is refused: this module never writes clinical prose into an answer. `safetyWarnings` is the surface that carries deterministic text, and README's own description of the safety layer is that *"it never rewrites or blocks the answer; the clinician decides."* An appended module sentence would also be compared against its own source record by `ReferenceProseFidelityCheck` and counted by `ActiveOrderCitationFidelityCheck`, making two checks report on prose the model never wrote.
+- **Re-asking with the whole question and replacing the answer.** Available on `search` only, for the streaming reason above, and it puts the verdict lead back in play on every repair.
+- **Narrowing the repair prompt to the omitted records alone**, rather than re-sending the chart. It is the obvious cost fix and it is NOT refused — it is unbuilt and unmeasured. It needs an `LlmProvider` entry point that composes a user message from a record subset, and the risk it carries is that a model answering without the chart cites indexes it can no longer see. Whoever takes it has this decision's cost row as the baseline to beat.
+- **Repairing more than once.** One follow-up per answer. A loop trades an unbounded number of inferences for a defect that is short by exactly one in every measured cell.

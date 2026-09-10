@@ -162,6 +162,70 @@ final class SafetyFindingCitationExtentCheck {
 	}
 
 	/**
+	 * The carried findings the answer's own citation resolution did not admit, in the order the
+	 * injector wrote them — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/398">#398</a>.
+	 *
+	 * <p><b>It is the walk {@link #measureFindingCitations}'s WARN already did, named so a second
+	 * caller cannot spell it differently.</b> That line and {@code LlmInferenceService}'s repair pass
+	 * must be about the same findings or the log describes one population and the second prompt asks
+	 * about another — the two-resolutions-that-agree shape
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/151">#151</a> forbids.
+	 * The projection is off the shared WALK and never off the carried SET, so the order is the
+	 * injector's pinned one rather than whatever iteration order a set happens to give; that order is
+	 * what the repair's own question is composed in, and a maintainer reading the WARN beside it sees
+	 * one list.
+	 *
+	 * <p><b>It answers about CITATION and not about prose.</b> A finding whose substance the answer
+	 * names in words while citing no marker for it is uncited here, because {@code cited} is
+	 * {@code LlmInferenceService.extractCitedReferences}' own output and that is the only reading of
+	 * "the answer cited it" this module has. So a repair driven by this can ask again for a finding
+	 * the answer did mention — fail-open toward asking, which costs a call and cannot lose content.
+	 *
+	 * @param cited the references the answer cites, as resolved by
+	 *            {@code LlmInferenceService.extractCitedReferences}
+	 * @param mappings the chart's records, the carrier of the carried population
+	 * @return the uncited carried finding indexes, empty where the answer cited every one of them
+	 *         and where the chart carried none
+	 */
+	static List<Integer> uncitedFindingIndexes(List<RecordReference> cited,
+			List<RecordMapping> mappings) {
+		List<RecordMapping> findings = ChartSearchAiUtils.safetyFindingMappings(mappings);
+		return uncitedOf(findings, citedFindingIndexes(cited, indexesOf(findings)));
+	}
+
+	/** The projection both readers share: the walk's own findings, less the ones cited. The
+	 *  {@code contains} guard keeps the list in step with the count, which is a set — defensive only,
+	 *  the injector's numbering being unique per chart. */
+	private static List<Integer> uncitedOf(List<RecordMapping> findings, Set<Integer> citedFindings) {
+		List<Integer> uncited = new ArrayList<Integer>();
+		for (RecordMapping finding : findings) {
+			Integer index = Integer.valueOf(finding.getIndex());
+			if (!citedFindings.contains(index) && !uncited.contains(index)) {
+				uncited.add(index);
+			}
+		}
+		return uncited;
+	}
+
+	/** Which of {@code carried} the answer's own resolution admitted. A citation the module attached
+	 *  is not one the answer made (issue #305); the set de-duplicates, so one finding cited in two
+	 *  sentences is one cited finding. Shared by the extent and by {@link #uncitedFindingIndexes} so
+	 *  the count and the complement cannot disagree about what "cited" means. */
+	private static Set<Integer> citedFindingIndexes(List<RecordReference> cited, Set<Integer> carried) {
+		Set<Integer> citedFindings = new LinkedHashSet<Integer>();
+		if (cited != null) {
+			for (RecordReference citation : cited) {
+				Integer index = Integer.valueOf(citation.getIndex());
+				if (!citation.isAttachedByTheModule() && carried.contains(index)) {
+					citedFindings.add(index);
+				}
+			}
+		}
+		return citedFindings;
+	}
+
+	/**
 	 * Counts the injected safety findings the prompt carried and the ones {@code answer} cited,
 	 * reporting at WARN when it cited fewer.
 	 *
@@ -190,31 +254,11 @@ final class SafetyFindingCitationExtentCheck {
 				// citations to learn it had nothing to count.
 				return new FindingCitationExtent(0, 0);
 			}
-			Set<Integer> citedFindings = new LinkedHashSet<Integer>();
-			if (cited != null) {
-				for (RecordReference citation : cited) {
-					// A citation the module attached is not one the answer made (issue #305). The set
-					// de-duplicates, so one finding cited in two sentences is one cited finding —
-					// belt and braces, since extractCitedReferences already emits one reference per
-					// index, and said so the guard does not look better defended than it is.
-					Integer index = Integer.valueOf(citation.getIndex());
-					if (!citation.isAttachedByTheModule() && carried.contains(index)) {
-						citedFindings.add(index);
-					}
-				}
-			}
+			// Shared with uncitedFindingIndexes, so the count and its complement cannot come to
+			// disagree about what "cited" means (issue #398).
+			Set<Integer> citedFindings = citedFindingIndexes(cited, carried);
 			if (citedFindings.size() < carried.size() && !ChartSearchAiUtils.isBlank(answer)) {
-				// Off the shared WALK and not off `carried`, so the order this line prints is the
-				// walk's pinned injection order rather than whatever iteration order the set above
-				// happens to give. The `uncited` guard keeps the list in step with the count, which
-				// is a set — defensive only, the injector's numbering being unique per chart.
-				List<Integer> uncited = new ArrayList<Integer>();
-				for (RecordMapping finding : findings) {
-					Integer index = Integer.valueOf(finding.getIndex());
-					if (!citedFindings.contains(index) && !uncited.contains(index)) {
-						uncited.add(index);
-					}
-				}
+				List<Integer> uncited = uncitedOf(findings, citedFindings);
 				// Neither the answer nor any record text is logged — they carry patient data, and the
 				// citation with the patient identifies the claim. The indexes are this module's own
 				// numbering of its own injected records and say nothing about the patient.

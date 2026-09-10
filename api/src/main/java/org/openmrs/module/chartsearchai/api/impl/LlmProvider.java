@@ -1137,6 +1137,32 @@ public class LlmProvider {
 			this.cachedTokens = cachedTokens;
 		}
 
+		/**
+		 * This response continued by {@code continuation} — issue #398's repair pass, whose second
+		 * completion is appended to the first rather than replacing it.
+		 *
+		 * <p><b>It lives here because construction of an {@code LlmResponse} does.</b> Building one
+		 * in {@code LlmInferenceService} instead also put the descriptor
+		 * {@code (Ljava/lang/String;Ljava/util/List;III)V} into that class's constant pool, which is
+		 * a {@code ChartAnswer} constructor's descriptor too — and
+		 * {@code ArchitectureGuardTest.everyAnswerThisModuleBuildsCarriesTheConditionRuleCoverage}
+		 * matches those by STRING, deliberately owning no bytecode parser, so it read the call as a
+		 * coverage-less answer. The guard is right to stay strict; this is the call site moving to
+		 * where it belonged anyway.
+		 *
+		 * <p>Token counts are SUMMED and not replaced: two completions were bought, and the audit
+		 * row is where an operator reads what this pass costs.
+		 *
+		 * @param continuation the second completion, whose answer is appended after this one's
+		 * @param citations the merged citation array, composed by the caller that knows both
+		 * @return the continued response
+		 */
+		LlmResponse continuedWith(LlmResponse continuation, List<Integer> citations) {
+			return new LlmResponse(answer + " " + continuation.getAnswer().trim(), citations,
+					inputTokens + continuation.inputTokens, outputTokens + continuation.outputTokens,
+					cachedTokens + continuation.cachedTokens);
+		}
+
 		String getAnswer() {
 			return answer;
 		}

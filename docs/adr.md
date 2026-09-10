@@ -6635,3 +6635,207 @@ read on the verdict lead and on the caution/withhold classes together, with the 
 as the reproduction. Whoever takes it should also decide what the honest answer to *"can I add X"*
 about a charted X is — the finding a clinician needs there is arguably duplicate therapy rather than
 either vocabulary, and neither existing clause says it.
+
+
+## Decision 89: A question asking to STOP or to WORRY about a medication is an interaction screen, and the trigger no longer requires the word "interact"
+
+**Status: Accepted** (September 2026) — implemented, issue #402 + 1 (unfiled at the time of writing;
+see the note on numbering at the end of this decision).
+
+### The observation
+
+Sixteen DDI questions over eight verified patients on the `:8081` 3.7.1 standalone, 2026-09-10, the
+shipped DDInter knowledge base. **In no case did a chip contradict the chart** — `interactionPairs`,
+`findingCitations` and the chips were right every time — and six of the sixteen answers were still
+ones a clinician should not read. Two of those six were not the model's doing at all: the
+deterministic screen never ran.
+
+| patient | question | result |
+|---|---|---|
+| Michael Turner (Zolvimix + Klarizom) | *"Are any of his current medications interacting with each other?"* | **Major** Simvastatin/Clarithromycin reported |
+| Michael Turner | *"Should I stop any of the medications he is on?"* | nothing, 0 chips |
+| Kenneth Hernandez (Salicylic acid + Enalapril) | *"Are any of his current medications interacting with each other?"* | Moderate NSAID/ACE reported |
+| Kenneth Hernandez | *"Anything I should worry about in his current medications?"* | nothing, 0 chips |
+
+Same patient, same chart, same request path. A Major interaction was invisible to the most natural
+way a clinician asks to have therapy reviewed, because `QueryScopeRouter.isInteractionScreening`
+required an `interact*` word to be present. Its javadoc admitted only the smaller cost — *"a bare
+'any interactions?' does not trigger"* — and not this one.
+
+### The decision
+
+**The trigger's first conjunct becomes a disjunction.** `QueryScopeRouter.isInteractionScreening`
+still requires the router's own `Intent.MEDICATIONS` classification; what it asks alongside is now
+`asksForADrugSafetyReading` — an `interact*` word (`INTERACTION_CUES`) **or** a safety-or-change cue
+(`MEDICATION_SAFETY_CUES`: safe, unsafe, safety, danger(ous), harmful, risk(s|y), worry, worried,
+worrying, concern(s|ed|ing), problem(s|atic), wrong, stop(ped|ping), discontinue(d), deprescribe(d),
+change(d|s), adjust(ed|ment|ments)).
+
+**This is NOT "screen every medication-domain question", and the distinction is the whole decision.**
+That widening is [Decision 79](#decision-79-the-standing-chart-finding-is-served-by-a-surface-a-client-asks-for-not-by-every-answer)'s
+refusal and `DrugSafetyValidator.SubjectMatter`'s rules forbid re-opening it: this module answers
+questions and has no subscription or acknowledgement path, so an unconditional finding is an alert
+with none of an alerting system's machinery. What separates the two is that an ENUMERATION request
+carries none of these cues. `DrugSafetyInteractionScreeningTest`'s two eager-firing guards —
+*"What medications is the patient taking?"* and *"Show me an interactive list of her medications."* —
+stay green as written, and **no existing test changed**: the fix adds cases rather than editing any.
+
+**Why a second cue family rather than dropping the cue requirement.** Dropping it passes both
+measured cells and reddens both guards, which is the trade this area is least allowed to make. A
+question asking what to worry about in the current medications, or whether to stop one, IS a question
+about their safety — so a chip it raises is still tied to what was asked, which is the property the
+guards protect.
+
+### Measured
+
+Both cells reproduced as failing tests through the real validator over the real shipped data before
+the change (`DrugSafetyInteractionScreeningTest.aQuestionAskingWhatToWORRYAboutTheCurrentMedicationsIsScreened`,
+`.aQuestionAskingWhetherToSTOPAMedicationIsScreened`, both `[]`). After it, on the rig with the module
+rebuilt and restarted:
+
+| question | before | after |
+|---|---|---|
+| *"Should I stop any of the medications he is on?"* | 0 chips | **Major reported** |
+| *"Anything I should worry about in his current medications?"* | 0 chips | **Moderate reported** |
+| *"What medications is the patient taking?"* | 0 chips | 0 chips |
+| *"Show me an interactive list of her medications."* | 0 chips | 0 chips |
+| *"What are her vitals?"* | 0 chips | 0 chips |
+| *"Are any of his current medications interacting?"* | Major | Major |
+
+### What this does not close, and what now tracks it
+
+A vocabulary is never finished, and one measured phrasing at a time is how the defect above reached a
+clinician. `DrugSafetyScreeningPhrasingCorpusTest` is the standing gate: 28 questions to the real
+validator against one fixed chart holding a real Major pair — 16 that must be screened, 6 that must
+screen nothing, and **6 recorded GAPS**, each a clinician phrasing that names the drugs by something
+other than the six literal words `MEDICATIONS_CUES` matches and therefore screens nothing today:
+
+> *"Is his current regimen safe?"* · *"Anything risky about her treatment?"* ·
+> *"Is she on anything that should not be combined?"* · *"Any red flags in what he is taking?"* ·
+> *"Is this combination safe for her?"* · *"What is she taking that could harm her?"*
+
+They are held as an INVERTED assertion, not deleted and not disabled, so they cost nothing while the
+defect stands and go red the moment the vocabulary is widened.
+
+**Closing them is deliberately not taken here.** The fix is to widen `MEDICATIONS_CUES`, and that
+vocabulary is SHARED — `QueryScopeRouter.asksAboutMedications` reads the same classification as one of
+`DrugSafetyValidator.SubjectMatter`'s three widenings, so a word added for this gate also widens which
+contraindication chips a question raises, which is the direction Decision 79's over-reach came from.
+It wants its own measurement over BOTH surfaces.
+
+### Rejected alternatives
+
+- **Drop the `interact*` requirement entirely.** Passes both measured cells and reddens both
+  eager-firing guards; screens *"What medications is the patient taking?"*. Refused above.
+- **A second drug vocabulary for this gate alone.** The reason `isInteractionScreening` reuses
+  `Intent.MEDICATIONS` is that "medication-domain question" keeps one definition; a second list is
+  two definitions that drift. The safety cues added here are a different axis — what is being ASKED
+  about the drugs — not a second way of recognising that drugs are the subject.
+- **Widening `MEDICATIONS_CUES` in this change.** Unmeasured on the contraindication surface it also
+  feeds. Recorded as the gaps above instead.
+
+### A note on the issue numbers in this branch
+
+At the time of writing the repository's highest issue or pull-request number is **#399**, while
+commits already on this branch cite **#400**, **#401** and **#402** across `docs/adr.md`,
+`api/src/main/java/org/openmrs/module/chartsearchai/reference/CLAUDE.md` and eight other files. Those
+issues are not filed. Whoever opens the pull request for this branch has to file them and correct
+every reference GitHub does not happen to number as the branch guessed — this decision included.
+
+
+## Decision 90: The safety prose summarises the findings the client already renders, and states each one's severity while doing it
+
+**Status: Accepted** (September 2026) — implemented, `chartsearchai.drugSafety.findingsRenderedByClient`,
+shipping **ON**.
+
+### Context
+
+[Decision 84](#decision-84-where-the-one-line-per-finding-clause-sits-is-what-decides-whether-a-safety-answer-states-every-finding-it-was-given)
+asks the model to put every safety finding on a line of its own, and
+[Decision 85](#decision-85-an-answer-short-of-the-findings-its-prompt-carried-is-repaired-by-asking-again-not-by-another-wording)
+adds a second inference when it does not. Both treat the answer's prose as the carrier of the finding
+list. It is not the only carrier: every finding is published in `safetyWarnings` with its severity and
+its `chartOrderBridges`, and the reference client renders **all of them in full**, in a *Safety
+checks* section beside the answer (`ai-response-panel.component.tsx` in
+`openmrs-esm-chartsearchai`). So the enumeration asks a 4B-class local model to restate a list the
+clinician is already being shown correctly.
+
+### The decision
+
+**The clause asks for a summary that still carries both of the prose's own duties.** The exact bytes:
+
+> ` The clinician is shown every finding in full beside your answer, so summarise rather than list them, citing each finding you rely on and stating its severity.`
+
+`LlmProvider.FindingProse` is an enum and not a second boolean, because "enumerate them" and "do not
+enumerate them" are opposite asks in the same measured position and one message must not carry both.
+The mode is resolved inside `LlmProvider.findingProse` rather than threaded through `search` /
+`searchStreaming`, which are the seam the suite's test doubles override — a parameter there would be
+supplied by production and dropped by every double. Decision 84's gate is untouched:
+`LlmInferenceService.severalFindingsAboutOneDrug` still decides WHETHER a clause is appended, this
+decides only WHICH.
+
+**It suppresses `chartsearchai.drugSafety.repairFindingEnumeration`, and says so.** Prose not asked to
+enumerate is short of the findings by design, so the repair would spend a second inference re-adding
+what this removes. Since this ships ON, that override reaches a property an operator had to go out of
+their way to enable, so `LlmInferenceService.resolveFindingEnumerationRepair` logs a WARN naming both
+properties rather than declining silently.
+
+### Measured, on Decision 84's own fourteen-cell corpus
+
+Patient `dc8560c9-…`, `chartMode=fullChart`, `sourceFormat=ddinter`, `maxPairChips=10`, the repair
+false in every arm so the clause is the only variable, scored by
+`eval/drift-metric/score_probe_safety.py`. The engine is deterministic on this rig — a repeated cell
+returned byte-identical — so these deltas are signal and not run variance.
+
+| cell | previous default | first wording | **shipped** |
+|---|---|---|---|
+| verdict-led (of 12 ANSWER cells) | 12 | 12 | **12** |
+| abstention held (of 2 controls) | 2 | 2 | **2** |
+| verdicts the records do not license | 0 | 0 | **0** |
+| named a severity no chip carries | 0 | 0 | **0** |
+| prose stated EVERY finding carried | 5 | 7 | **8** of 12 |
+| prose stated fewer (the defect) | 7 | 5 | **4** of 12 |
+| dropped a CITED finding's rating | 0 | **7** | **0** of 14 |
+| Amiodarone cell, findings cited | 4/5 | **0/5** | **5/5** |
+
+**The first wording is why the shipped clause names both duties.** It asked only for an overall
+judgement and its main reason. It improved completeness and paid for it in the currency
+`score_probe_safety.py` exists to protect — seven of fourteen cells citing a finding whose rating the
+answer never stated — and left the Amiodarone answer citing none of its five findings at all: clean
+prose, four drug names, nothing to click and nothing for grounding to verify. Asking for the citation
+and the severity removed both losses without giving back the completeness.
+
+**Confirmed through the shipped path**, which is what licenses the default rather than the property:
+the global-property row was purged and recreated from `config.xml`'s new default, and all fourteen
+cells came back **byte-identical** to the arm measured through the property.
+
+### What it does not reach
+
+The scorer still exits **3**: four cells remain short of the findings their prompt carried and the
+gate wants none. That is also true of the arm this replaces, at seven. The only arm measured to reach
+exit 0 is Decision 85's repair, which buys it with a second inference and with the continuation this
+session traced the *"Record [353]: … this patent is already taking"* dump to.
+
+### One correction this decision exists to carry
+
+An earlier reading of the same session credited THIS clause with removing that dump. It did not, and
+could not: the screening cell it was measured on fails `severalFindingsAboutOneDrug` (its findings
+name Ibuprofen **and** Celecoxib, two subjects), so no clause is appended there in either arm and both
+arms sent byte-identical prompts. Held with the prompt constant, the dump is Decision 85's repair
+alone — repair off, 669 characters and clean, `cited` 10 of 20; repair on, 3291 characters and the
+dump, `cited` 20 of 20. A stock install does not produce it. The first reading took a two-variable arm
+for a one-variable one, which is the error this table's "repair false in every arm" row exists to
+prevent repeating.
+
+### Rejected alternatives
+
+- **Deterministic finding text written into the answer.** Still refused, and Decision 85's reason
+  stands: this module does not write clinical prose into an answer. The argument that the module's
+  prose "already reaches the clinician corrupted" is weak and rests on a non-default install — without
+  the repair it does not reach the answer at all.
+- **Leaving it an operator flip.** It is a strict improvement over the shipped arm on every scored
+  dimension, at one inference rather than two; an install that has to discover that is an install that
+  does not get it.
+- **Retiring `SafetyFindingCitationExtentCheck`, the repair and `SafetyFindingSeverityFidelityCheck`
+  now that prose no longer enumerates.** Not available on this evidence: the corpus still shows four
+  cells short, so the completeness key is still measuring a live duty rather than a retired one.

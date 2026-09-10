@@ -577,6 +577,48 @@ public class DrugSafetyInteractionScreeningTest {
 	}
 
 	@Test
+	public void aQuestionAskingWhatToWORRYAboutTheCurrentMedicationsIsScreened() {
+		// Measured live on the :8081 3.7.1 rig on 2026-09-10 over the shipped DDInter KB. Patient
+		// Kenneth Hernandez, on Salicylic acid + Enalapril Co 10mg — a real Moderate NSAID/ACE pair:
+		// "Are any of his current medications interacting with each other?" reported it, and this
+		// question, on the same patient and the same chart through the same request path, reported
+		// NOTHING, because the trigger required an interact* word to be present.
+		//
+		// Why this is not the over-reach the two guards above forbid: a question asking what to worry
+		// about in the current medications IS a question about their safety, so a chip it raises stays
+		// tied to what was asked. That is exactly what separates it from "What medications is the
+		// patient taking?" and "Show me an interactive list of her medications.", which ask to be
+		// ENUMERATED and must still screen nothing.
+		List<SafetyWarning> warnings = screen(ddinterValidator(),
+				"Anything I should worry about in his current medications?", interactingPairContext());
+
+		assertTrue(DrugReferenceTestSupport.detailContains(warnings, SafetyWarning.TYPE_INTERACTION,
+				"Simvastatin", "clarithromycin", "Major"),
+				"a question asking what to worry about in the current medications must raise the real "
+						+ "pair among the patient's own active orders, was: " + warnings);
+	}
+
+	@Test
+	public void aQuestionAskingWhetherToSTOPAMedicationIsScreened() {
+		// The same measurement's second cell, and the more serious of the two. Patient Michael Turner,
+		// on Zolvimix + Klarizom — two brand names carrying a real MAJOR Simvastatin/Clarithromycin
+		// pair. "Are any of his current medications interacting with each other?" reported the Major;
+		// "Should I stop any of the medications he is on?" reported nothing at all. A Major
+		// interaction was invisible to the most natural way a clinician asks to have therapy reviewed.
+		//
+		// Asking whether to stop a medication is a question about CHANGING therapy, which is the
+		// decision an interaction screen exists to inform — so, like the worry phrasing above, the
+		// chips stay tied to the question.
+		List<SafetyWarning> warnings = screen(ddinterValidator(),
+				"Should I stop any of the medications he is on?", interactingPairContext());
+
+		assertTrue(DrugReferenceTestSupport.detailContains(warnings, SafetyWarning.TYPE_INTERACTION,
+				"Simvastatin", "clarithromycin", "Major"),
+				"a question asking whether to stop a medication must raise the real pair among the "
+						+ "patient's own active orders, was: " + warnings);
+	}
+
+	@Test
 	public void aScreeningQuestionThatNAMESADrugKeepsTheExistingSingleChip() {
 		// The boundary with the question-driven arm: once the question names a drug, that arm has an
 		// anchor and already answers the question, so the screening arm stands down. Asserting the

@@ -1365,8 +1365,10 @@ public class ChartSearchAiRestController {
 	 * pins the JSON field set. And this is the only value on the payload that is not a JDK type, so
 	 * XStream names its element after the CLASS
 	 * ({@code org.openmrs.module.chartsearchai.reference.SafetyWarning_-ChartOrderBridge}) where every
-	 * other element is a {@code map}/{@code list}/{@code string}; README scopes the documented field
-	 * names to JSON for that reason. XStream marshals FIELDS, so a PRIVATE field added to that class
+	 * other element takes one of XStream's own built-in names; README scopes the documented field
+	 * names to JSON for that reason. A closed list of those names stood here and is not kept — it read
+	 * {@code map}/{@code list}/{@code string} while the payload already carried {@code null} and
+	 * {@code linked-hash-map}, and issue #374 added {@code boolean}. XStream marshals FIELDS, so a PRIVATE field added to that class
 	 * also reaches an XML client, and neither of {@code ChartSearchAiChartOrderBridgeTest}'s other two
 	 * cases sees it —
 	 * {@code theTwoHalvesAreSeparateFieldsAndNotASentenceToParse} reads GETTERS, and

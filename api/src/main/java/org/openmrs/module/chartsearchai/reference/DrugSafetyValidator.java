@@ -4103,7 +4103,7 @@ public class DrugSafetyValidator {
 	 * says why it must not key on rendered text: two arms word one finding differently, so text
 	 * equality UNDER-recognises a repeat. This one is the other direction and needs no identity at all
 	 * — two chips whose every KEYED field is equal state the same relationship in the same words.
-	 * Keyed and not published, since issue #347: {@code chartOrderBridges} reaches the wire and is
+	 * Keyed and published are different sets, since issue #347: {@code chartOrderBridges} reaches the wire and is
 	 * deliberately NOT in this key (see {@code CLAUDE.md}), so a collapsed twin can carry different
 	 * bridges. What the collapse claims is that the SENTENCE repeats, which is what a reader reads.
 	 * Both ledgers run: this one cannot recognise a repeat the arms word differently, and that one

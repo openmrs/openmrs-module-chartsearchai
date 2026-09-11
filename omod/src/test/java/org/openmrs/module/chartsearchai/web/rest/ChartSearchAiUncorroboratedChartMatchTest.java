@@ -58,8 +58,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * set off a live {@code /search} chip rather than listing it — a hand-written list here is the thing
  * that case's javadoc forbids. And that the payload still marshals for an XML client is
  * {@code ChartSearchAiChartOrderBridgeTest.theWholePayloadStillMarshalsForAnXmlClient} through the
- * shared {@code XmlPayloads.assertMarshals}; this key adds no new hazard there, a primitive
- * {@code boolean} being the JDK type the bridges are not.
+ * shared {@code XmlPayloads.assertMarshals}; this key adds no new hazard there, an autoboxed
+ * {@code Boolean} not being one of {@code java.util.Collections}' immutable collection WRAPPERS, which
+ * is what {@code XStreamMarshaller} refuses. "It is a JDK type" is NOT that criterion — both wrappers
+ * issue #347 broke on are JDK types — and {@code ChartSearchAiRestController.serializeSafetyWarnings}
+ * is canonical for it.
  */
 public class ChartSearchAiUncorroboratedChartMatchTest {
 

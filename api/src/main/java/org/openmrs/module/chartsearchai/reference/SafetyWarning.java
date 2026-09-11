@@ -110,6 +110,17 @@ public class SafetyWarning {
 		this(type, drug, detail, null);
 	}
 
+	/**
+	 * As the constructor above, with the dataset's rating.
+	 *
+	 * <p>{@link #restsOnAnUncorroboratedChartMatch()} is false here BY CONSTRUCTION rather than as a
+	 * default, and since issue #374 that false is a published value: a chip assembled through a public
+	 * constructor has no curated rule to have matched against the chart, so it is one of the
+	 * populations that accessor and {@code README.md} enumerate as answering false without having been
+	 * asked. Only {@link #contraindication} may set it, and it is the arm that raised the finding which
+	 * decides it — never whoever assembles a chip. The same argument the 5-argument constructor below
+	 * makes of {@link #isAboutACurrentMedication()}.
+	 */
 	public SafetyWarning(String type, String drug, String detail, String severity) {
 		this(type, drug, detail, severity, false, false, null, null,
 				Collections.<ChartOrderBridge> emptyList(), false);
@@ -827,7 +838,9 @@ public class SafetyWarning {
 	 * chips exist, whether or not a client can read it. The published-versus-prompt-facing reading of
 	 * it was falsified by issue #347 and again by #374, and the key's own membership contradicts it in
 	 * both directions — {@code carriesUnratedRelationship()} is in the key and unpublished, while
-	 * {@link #restsOnAnUncorroboratedChartMatch()} is in it and published. Leaving it out costs nothing
+	 * {@link #restsOnAnUncorroboratedChartMatch()} is in it and published. That membership says what the
+	 * key is NOT sorted by and nothing about this ledger's behaviour: every chip it sees comes from
+	 * {@link #interaction}, which hardcodes that flag false, so the term is constant there. Leaving it out costs nothing
 	 * observable, and that is worth saying rather than leaving to be re-derived: the flag is constant
 	 * within an arm, and where the two interaction arms can both run in one pass — the POST-answer
 	 * pass, where a drug the ANSWER named is in play beside a screening question —

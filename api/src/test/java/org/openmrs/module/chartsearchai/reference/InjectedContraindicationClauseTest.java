@@ -45,15 +45,16 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  *
  * <p><b>Joining rather than dropping.</b> Issue #174 site 2 could drop a repeated row because the
  * repeats were near-identical; here the sibling notes differ in text, and they are operator-authored
- * clinical prose that this record is the only place the model ever sees. So the clause count follows
- * the chip while both notes survive inside the one clause.
+ * clinical prose that this record is the only place the model ever sees. For THAT shape — two rules on
+ * ONE key — the clause count follows the chip while both notes survive inside the one clause.
  *
  * <p><b>Issue #310 — and the other collapse unit, one along again.</b> The cases at the end of
  * this file are about two rules on DIFFERENT keys rendering one string, which the per-key map listed
  * twice. They are not a second reading of the paragraph above: #190 item 1 is one RULE counted twice
  * and is fixed by the KEY, while this is one STRING listed twice and is fixed by the string. Their
  * direction on the count is the opposite one too — after #310 this record can list FEWER clauses than
- * the entry raises chips, which the paragraph above is what to read before calling that a regression.
+ * the entry raises chips. The paragraph on the two POPULATIONS above is what licenses that; the one on
+ * the JOIN describes a different shape, in which the clause count does follow the chip.
  *
  * <p>Runs the REAL production path: the real {@link JsonDrugReferenceSource} parser over a fixture,
  * the real {@code injectRecords} and the real {@code validate}, GP reads on their no-context defaults.
@@ -374,6 +375,35 @@ public class InjectedContraindicationClauseTest {
 		assertEquals(Arrays.asList("monitor for respiratory depression", "avoid in hepatic impairment",
 				"dose reduction required", "documented tapentadol reaction"), clausesIn(record),
 				"was: " + record);
+	}
+
+	@Test
+	public void clausesDifferingOnlyInCaseOrSpacingAreEachTheirOwnClause() throws Exception {
+		// The de-duplication identity is exact equality of the rendered clause, and this is what holds
+		// the EXACTNESS. Containment is held by the case above; case-folding and whitespace-normalising
+		// are a different loosening with the same harm, and until this case nothing in the suite could
+		// see them — a first-spelling-wins fold over toLowerCase() left the whole api suite green.
+		//
+		// Nalbuphine renders "Avoid in pregnancy" (denied), "avoid in pregnancy" (a self-named allergy
+		// rule her recorded Nalbuphine allergy both matches and NAMES, so recorded) and
+		// "Avoid  in  pregnancy" (denied). Fold case and the recorded clause leaves the list, so
+		// inClauseOrder drops it from its section too and the record silently retracts a reading it had
+		// established. Normalise interior whitespace and the third clause leaves the list.
+		//
+		// The premise first, for the reason aClauseAnotherKeyMerelyCONTAINSIsStillItsOwnClause states.
+		String record = recordFor(fixtureService(CROSS_KEY_CLAUSE_ORDER),
+				"Is it safe to give her nalbuphine?",
+				DrugReferenceTestSupport.ctx(60, null, null, null,
+						DrugReferenceTestSupport.set("Nalbuphine"), null),
+				"Nalbuphine");
+
+		assertEquals("avoid in pregnancy",
+				DrugReferenceTestSupport.sectionAfter(record, DrugReferenceInjector.RECORDED_READING_LEAD),
+				"the lower-cased clause is the RECORDED one; folding case retracts that reading, was: "
+						+ record);
+		assertEquals(Arrays.asList("Avoid in pregnancy", "avoid in pregnancy", "Avoid  in  pregnancy"),
+				clausesIn(record),
+				"three clauses differing only in case or spacing are three clauses, was: " + record);
 	}
 
 	/** As {@link #pethidineRecord}, for the entry carrying the other two sections' anomaly. */

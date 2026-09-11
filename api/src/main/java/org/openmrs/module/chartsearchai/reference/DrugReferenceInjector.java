@@ -4105,9 +4105,12 @@ public class DrugReferenceInjector {
 	 *         prompt carries. And where those two strings are in DIFFERENT sections, the shorter one is
 	 *         not merely dropped from the LIST: {@link #inClauseOrder} then filters it out of its
 	 *         SECTION as well, so a chart reading the module had established stops being stated at all,
-	 *         silently. Measured: with a containment rule over {@code clauses}, an entry whose
-	 *         {@code bleeding} clause is RECORDED and whose {@code active gastrointestinal bleeding}
-	 *         clause is not loses its whole recorded section. The {@code contains} check
+	 *         silently. The witness is Levoketoconazole in {@code
+	 *         drug-reference-collapsed-key-joined-clause.json}, whose {@code opioid reaction} clause is
+	 *         RECORDED while the joined clause containing it is the hedge: put a containment rule over
+	 *         {@code clauses} and its recorded section is gone. {@code
+	 *         InjectedContraindicationClauseTest.aClauseAnotherKeyMerelyCONTAINSIsStillItsOwnClause}
+	 *         asserts that section FIRST for this reason. The {@code contains} check
 	 *         {@link DrugSafetyValidator#contraindicationClauses} makes is safe for the opposite reason:
 	 *         it is WITHIN one key, where the two rows report one rule.
 	 *
@@ -4298,9 +4301,9 @@ public class DrugReferenceInjector {
 			// over every key, so a string sits at the position of its first key ANYWHERE. Those differ
 			// exactly when a string two keys render is claimed by the LATER of them — the precedence
 			// above — with another string between. While the list still carried the repeat that was
-			// invisible, the section being a subsequence of it either way; de-duplicating the list alone
-			// would have left a section a reader cannot line up against it, which is the very thing the
-			// clause-order comment above exists to prevent.
+			// invisible: the section was a subsequence of the repeated list either way. De-duplicating
+			// the list alone would have left a section a reader cannot line up against it, which is the
+			// very thing the clause-order comment above exists to prevent.
 			recorded = inClauseOrder(clauses, recorded);
 			notRecorded = inClauseOrder(clauses, notRecorded);
 			uncorroborated = inClauseOrder(clauses, uncorroborated);

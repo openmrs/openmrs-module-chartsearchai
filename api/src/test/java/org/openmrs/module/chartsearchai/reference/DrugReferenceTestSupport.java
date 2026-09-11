@@ -1679,14 +1679,13 @@ public final class DrugReferenceTestSupport {
 	 *  must fail loudly on a record that carries no such section, rather than silently comparing
 	 *  against nothing.
 	 *
-	 *  <p>It does NOT own every split on that separator in this package, and the survivors are not
-	 *  oversights: {@code ConditionRuleBoundaryCorroborationTest.clauseSection} needs {@code
+	 *  <p>It is not the only reader of a rendered section here, and the others are not oversights: {@code ConditionRuleBoundaryCorroborationTest.clauseSection} needs {@code
 	 *  sectionAfter}'s null, which is its answer for a clause carried only by the trailing rule list;
 	 *  {@code InjectedContraindicationPatientReadingTest} splits a string its own {@code
 	 *  recordedReading} has already asserted an ORDERING of, which this carries no half of; and {@code
 	 *  InjectedContraindicationClauseTest.clausesIn} is a different LOCATOR, bounding on {@code
-	 *  " Interactions:"} rather than on the first full stop. Routing any of them through this would
-	 *  drop a precondition, not share one. */
+	 *  " Interactions:"} rather than on the first full stop. Each would LOSE something routed through
+	 *  this — an answer, an assertion, or a boundary. */
 	static List<String> sectionItems(String record, String lead) {
 		String section = sectionAfter(record, lead);
 		assertNotNull(section,

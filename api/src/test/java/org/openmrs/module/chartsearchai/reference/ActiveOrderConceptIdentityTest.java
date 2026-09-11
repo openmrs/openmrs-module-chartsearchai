@@ -91,7 +91,7 @@ public class ActiveOrderConceptIdentityTest extends BaseModuleContextSensitiveTe
 	public void anOrderWithNoCodedDrugRecordsItsOwnConcept() {
 		Context.getAdministrationService().executeSQL(
 			"update drug_order set drug_inventory_id = null, drug_non_coded = 'Cotrimoxazole 960mg'"
-					+ " where order_id = 111",
+					+ " where order_id = " + ORDER,
 			false);
 		Context.flushSession();
 		Context.clearSession();
@@ -150,7 +150,8 @@ public class ActiveOrderConceptIdentityTest extends BaseModuleContextSensitiveTe
 		Context.getAdministrationService().setGlobalProperty(
 			OpenmrsConstants.GLOBAL_PROPERTY_LOCALE_ALLOWED_LIST, allowed + ", fr");
 		Context.getAdministrationService().executeSQL(
-			"update drug_order set drug_inventory_id = null, drug_non_coded = null where order_id = 111",
+			"update drug_order set drug_inventory_id = null, drug_non_coded = null where order_id = "
+					+ ORDER,
 			false);
 		Concept ordered = Context.getConceptService().getConcept(ORDERED_CONCEPT);
 		ordered.setFullySpecifiedName(new ConceptName(FRENCH_SPELLING, Locale.FRENCH));
@@ -216,7 +217,8 @@ public class ActiveOrderConceptIdentityTest extends BaseModuleContextSensitiveTe
 	private void pointTheDrugAt(int conceptId) {
 		Context.getAdministrationService().executeSQL(
 			"update drug set concept_id = " + conceptId
-					+ " where drug_id = (select drug_inventory_id from drug_order where order_id = 111)",
+					+ " where drug_id = (select drug_inventory_id from drug_order"
+					+ " where order_id = " + ORDER + ")",
 			false);
 		Context.flushSession();
 		Context.clearSession();

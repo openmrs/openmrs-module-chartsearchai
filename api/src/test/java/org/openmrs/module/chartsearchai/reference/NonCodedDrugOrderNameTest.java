@@ -408,7 +408,7 @@ public class NonCodedDrugOrderNameTest extends BaseModuleContextSensitiveTest {
 	 * an order OFF the code-only rung.
 	 *
 	 * <p>That rung takes an order the module can read no name for. With the coded drug cleared and every
-	 * name of its concept voided — {@code NamelessActiveOrderPartnerTest.makeTheOrderNameless}'s
+	 * name of its concept voided — {@link DrugReferenceTestSupport#makeOrderNameless}'s
 	 * arrangement exactly — the order used to be labelled by its ATC codes ({@code [ATC M01AE02]}), with
 	 * a WARN, and could not be matched against chart text at all. The clinician's text is now enough to
 	 * keep it named, so {@code hasKnownName()} is true and the chip carries a drug name.

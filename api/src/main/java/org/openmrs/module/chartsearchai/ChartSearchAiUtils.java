@@ -290,7 +290,10 @@ public class ChartSearchAiUtils {
 	 * module can read no name for renders as its ATC codes alone, so that record asserts no drug and
 	 * the clause above does not hold of it. It stays graded regardless — issue #294 asked what that
 	 * costs before anything is changed, and ADR Decision 38's owed-measurement section is the answer,
-	 * including what the first candidate remedy was measured to cost. Conversely a {@link ChartSearchAiConstants#RESOURCE_TYPE_SAFETY_FINDING} is
+	 * including what a type-keyed carve-out here was measured to cost — which is NOT the
+	 * display-keyed, wire-sited remedy that issue proposes.
+	 *
+	 * <p>Conversely a {@link ChartSearchAiConstants#RESOURCE_TYPE_SAFETY_FINDING} is
 	 * patient-specific but module-derived, and its rendering ("&lt;Drug&gt; interacts with active order
 	 * &lt;Partner&gt; — Major. &lt;mechanism&gt;") is precisely the role-swappable prose above, which is why
 	 * grading it produced verdicts that tracked embedding noise rather than the finding (issue #122).

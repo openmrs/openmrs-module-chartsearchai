@@ -67,7 +67,10 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  *
  * <p><b>It does not measure a cosine, and cannot.</b> Tier-1 compares embeddings, and no embedding
  * model runs here — {@code resolveEmbedder()} returns {@code null}, which models a deployment with
- * none and is why the judge is asked at all. Whether a codes-only record's REAL e5 embedding falls
+ * none. That is not what makes the judge be asked — Tier-2 candidacy is the entailment flag and
+ * the disposition, never the embedder — it is what leaves the judge's answer the only thing that
+ * can decide, so the verdict these cases read is unambiguously the one under test. Whether a
+ * codes-only record's REAL e5 embedding falls
  * under a given {@code chartsearchai.grounding.minCosine} is a question only the live measurement on
  * #294 can answer, and the floor is an operator setting the module's own global-property text says
  * to raise. So the assertion below is conditional by construction: given a judge that refuses, the
@@ -105,10 +108,10 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 	 *  question-driven injection arm. */
 	private static final String QUESTION = "What medications is this patient currently taking?";
 
-	/** The one obs the stubbed chart carries. Deliberately NOT a drug-order record: the injection
-	 *  under measurement happens only for an order the retrieved chart substantiates none of, which
-	 *  is what {@code unrepresentedActiveOrders} looks for. */
-	private static final int OBS_RECORD = 1;
+	/** The medication claim the stub model makes about the record, without its citation marker. The
+	 *  judge's inputs are asserted against this and against {@link #CODES_ONLY_RECORD}, so a
+	 *  regression that handed Tier-2 the wrong premise or picked the wrong claim unit cannot pass. */
+	private static final String CLAIM = "The patient is taking naproxen 500mg twice daily";
 
 	/** Reads the injected record's own number out of the numbered chart the provider is handed, so a
 	 *  change to how many records the injector appends cannot quietly turn this into an arrangement
@@ -134,7 +137,7 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 		DrugReferenceTestSupport.makeOrderNameless(ORDER, ORDERED_CONCEPT);
 	}
 
-	private TestableService serviceUnderTest(LlmProvider provider, Boolean judgeVerdict) {
+	private TestableService serviceUnderTest(LlmProvider provider, FixedJudge judge) {
 		DrugReferenceService reference = DrugReferenceTestSupport.curatedService();
 		TestableService service = new TestableService();
 		service.setChartBuildingStrategy(new StubStrategy());
@@ -142,7 +145,7 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 		service.setDrugReferenceInjector(DrugReferenceTestSupport.injectorWithSafety(reference));
 		service.setDrugSafetyValidator(DrugReferenceTestSupport.validator(reference));
 		TestableVerifier verifier = new TestableVerifier();
-		verifier.setLlmProvider(new FixedJudge(judgeVerdict));
+		verifier.setLlmProvider(judge);
 		service.setCitationGroundingVerifier(verifier);
 		return service;
 	}
@@ -168,16 +171,17 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 	 * interposing on it — and the type is not grounding-demote-only, so the wire publishes what it
 	 * finds there.
 	 *
-	 * <p>The claim unit is the record's own sentence and cites nothing else, which is what keeps
-	 * issue #284's withholding out of it: {@code claimRestsOn} is built from CITED indexes, so the
-	 * injected reference material that shares this chart is not in the intersection. Cite a finding
-	 * in the same sentence and the verdict is withheld instead — already pinned, see the class
-	 * javadoc.
+	 * <p>Issue #284's withholding cannot reach this arrangement, and the reason is simpler than
+	 * the intersection rule: this chart carries NO reference material at all — one obs and the
+	 * injected order record — so {@code demoteOnlyIndexes} is empty and the branch has nothing to
+	 * find, whatever the sentence cites. The arrangement that DOES exercise the withholding needs a
+	 * finding in the chart, and is already pinned; see the class javadoc.
 	 */
 	@Test
 	public void aCodesOnlyActiveOrderCitationCarriesTheJudgesRefusalThroughTheComposedPath() {
 		CitesTheActiveOrderAlone provider = new CitesTheActiveOrderAlone();
-		TestableService service = serviceUnderTest(provider, Boolean.FALSE);
+		FixedJudge judge = new FixedJudge(Boolean.FALSE);
+		TestableService service = serviceUnderTest(provider, judge);
 
 		ChartAnswer answer = service.search(patient, QUESTION);
 
@@ -196,15 +200,17 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 		assertEquals(Boolean.FALSE, order.getGrounded(),
 				"a refused claim about a record naming no drug arrives as false — the value "
 						+ "groundedForWire publishes for a chart-group citation, and the one a client "
-						+ "renders as Unsupported");
+						+ "that keys its badge on resourceType rather than on group renders as "
+						+ "Unsupported (#201's defect, which README tells a conforming client to "
+						+ "avoid by rendering false and null alike as unverified)");
+		assertTheJudgeWasAskedAboutTheRecord(judge);
 	}
 
 	/**
 	 * The other direction: the same arrangement with the judge accepting publishes {@code true}, so
 	 * the composed path is not hardwired to either verdict and the exposure above is a property of
-	 * what the pass CONCLUDES rather than of the record's type. This is also the only verdict the live
-	 * measurement observed for such a record — ADR Decision 38's owed-measurement section carries
-	 * which arrangement produced it, and that the record went uncited altogether in the other.
+	 * what the pass CONCLUDES rather than of the record's type. It is also the only verdict the live
+	 * measurement observed for such a record; ADR Decision 38's owed-measurement section has the runs.
 	 *
 	 * <p>Worth pinning beside its sibling because the deliberate non-extension of the demote-only
 	 * carve-out to this type means a pass VERIFIES here rather than rendering unverified — ADR
@@ -215,7 +221,8 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 	@Test
 	public void theSameCitationCarriesAnAcceptanceThroughToo() {
 		CitesTheActiveOrderAlone provider = new CitesTheActiveOrderAlone();
-		TestableService service = serviceUnderTest(provider, Boolean.TRUE);
+		FixedJudge judge = new FixedJudge(Boolean.TRUE);
+		TestableService service = serviceUnderTest(provider, judge);
 
 		ChartAnswer answer = service.search(patient, QUESTION);
 
@@ -227,6 +234,7 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 		assertEquals(Boolean.TRUE, order.getGrounded(),
 				"an accepted claim publishes true for this type — demote-only is scoped to "
 						+ "drug-reference prose, not to everything the module injects");
+		assertTheJudgeWasAskedAboutTheRecord(judge);
 	}
 
 	/** Exposes the seams, and keeps warmup out of a test about a reference list. */
@@ -239,17 +247,19 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 	}
 
 	/**
-	 * A one-record chart carrying no drug-order record at all, so patient 7's order 111 is
-	 * unrepresented and the reconciliation injects it. Built through {@code chartOf}, which is the
-	 * one home of the {@code "[N] text"} numbered rendering the serializer produces — the rendering
-	 * the answer's own citation number is parsed back out of below.
+	 * The shared one-record chart: an obs and no drug-order record at all, so patient 7's order 111 is
+	 * unrepresented and the reconciliation injects it. Deliberately NOT a drug-order record — the
+	 * injection under measurement happens only for an order the retrieved chart substantiates none of,
+	 * which is what {@code unrepresentedActiveOrders} looks for. Taken from
+	 * {@link DrugReferenceTestSupport#oneRecordChart} rather than assembled here, so the numbered
+	 * {@code "[N] text"} rendering the answer's citation number is parsed back out of is the one the
+	 * serializer produces.
 	 */
 	private static final class StubStrategy extends ChartBuildingStrategy {
 
 		@Override
 		PatientChart buildChart(Patient patient, String question) {
-			return DrugReferenceTestSupport.chartOf(
-					DrugReferenceTestSupport.obsRecord(OBS_RECORD, "BP 120/80"));
+			return DrugReferenceTestSupport.oneRecordChart();
 		}
 
 		@Override
@@ -259,11 +269,10 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 	}
 
 	/**
-	 * A verifier with no Tier-1 embedding model, which is a real deployment shape and not a
-	 * convenience: {@code resolveEmbedder()} returns null in production wherever querystore's
-	 * provider cannot be resolved, Tier-1 cosine is then skipped, and the authoritative Tier-2 pass
-	 * still applies. It is also the only honest choice here — see the class javadoc on why no cosine
-	 * is measured.
+	 * A verifier with no Tier-1 embedding model — a real deployment shape rather than a convenience,
+	 * for the reasons {@code CitationGroundingVerifierTest.TestableVerifier}'s javadoc gives. Fixed at
+	 * null here rather than settable, because a cosine this class could set would be a number it
+	 * invented; see the class javadoc.
 	 */
 	private static final class TestableVerifier extends CitationGroundingVerifier {
 
@@ -273,10 +282,21 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 		}
 	}
 
-	/** A judge that answers the same way for every pair it is handed. */
+	/**
+	 * A judge that answers the same way for every pair it is handed, and RECORDS the pairs. Recording
+	 * is not decoration: a constant-returning stub that discarded its inputs would leave both cases
+	 * green if the composed path handed Tier-2 a truncated premise or selected the wrong claim unit,
+	 * so the phrase "a judge that refuses a medication claim ABOUT THIS RECORD" would be untested.
+	 * {@code CitationGroundingVerifierTest.ConjunctionAwareJudge} records for the same reason.
+	 */
 	private static final class FixedJudge extends LlmProvider {
 
 		private final Boolean verdict;
+
+		/** The (premise, statement) pairs Tier-2 was asked about, in call order. */
+		private final List<String> sourcesSeen = new ArrayList<String>();
+
+		private final List<String> statementsSeen = new ArrayList<String>();
 
 		private FixedJudge(Boolean verdict) {
 			this.verdict = verdict;
@@ -284,6 +304,8 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 
 		@Override
 		public List<Boolean> entailsBatch(List<String> sources, List<String> statements) {
+			sourcesSeen.addAll(sources);
+			statementsSeen.addAll(statements);
 			List<Boolean> out = new ArrayList<Boolean>();
 			for (int i = 0; i < sources.size(); i++) {
 				out.add(verdict);
@@ -293,16 +315,29 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 	}
 
 	/**
+	 * What Tier-2 was actually asked: one pair, whose premise is the codes-only record and whose
+	 * statement is the model's own medication claim. Asserted in both cases, because it is the
+	 * difference between "the judge refused a claim about this record" and "the judge refused
+	 * something".
+	 */
+	private static void assertTheJudgeWasAskedAboutTheRecord(FixedJudge judge) {
+		assertEquals(Collections.singletonList(CODES_ONLY_RECORD), judge.sourcesSeen,
+				"Tier-2's premise must be the codes-only record text, whole");
+		assertEquals(1, judge.statementsSeen.size(),
+				"one citation, one claim unit, was: " + judge.statementsSeen);
+		assertTrue(judge.statementsSeen.get(0).contains(CLAIM),
+				"and the statement must be the model's own medication claim, was: "
+						+ judge.statementsSeen.get(0));
+	}
+
+	/**
 	 * Cites the injected active-order record ALONE, in a sentence of its own that makes a medication
 	 * claim about the patient — the shape #294's text describes, and the shape issue #284's
 	 * withholding does not reach since the sentence cites no reference material.
 	 *
-	 * <p><b>This shape is hypothetical, and the live measurement is why that is worth saying.</b> Over
-	 * the eighteen cells ADR Decision 38's owed-measurement section records, the model made no such
-	 * claim about a record naming no drug: with a named twin record for the same prescription it wrote
-	 * a sentence that names no drug either, and with no twin it did not cite the record at all. So what
-	 * the cases here measure is the module's HANDLING of this shape, and the ADR section is what says
-	 * whether a real model produces it. Do not read a green run here as evidence that it does.
+	 * <p><b>This shape is hypothetical: no live run has observed a model produce it.</b> So these cases
+	 * measure the module's HANDLING of it, and ADR Decision 38's owed-measurement section — not a green
+	 * run here — is what says whether a real model writes such a sentence.
 	 */
 	private static final class CitesTheActiveOrderAlone extends LlmProvider {
 
@@ -322,7 +357,7 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 			int lineEnd = numberedRecords.indexOf('\n', matcher.start());
 			citedRecord = (lineEnd < 0 ? numberedRecords.substring(matcher.start())
 					: numberedRecords.substring(matcher.start(), lineEnd)).trim();
-			return new LlmResponse("The patient is taking naproxen 500mg twice daily [" + order + "].",
+			return new LlmResponse(CLAIM + " [" + order + "].",
 					Collections.singletonList(Integer.valueOf(order)));
 		}
 	}

@@ -328,8 +328,8 @@ public class NamelessActiveOrderPartnerTest extends BaseModuleContextSensitiveTe
 	 * cannot entail a medication claim, so a citation of this record can be graded and published
 	 * {@code grounded=false} — reaching a client as "Unsupported". That is a new exposure, and it is
 	 * accepted here only because the alternative is the order being invisible: the module denying a
-	 * prescription the chart records is worse than substantiating it with a code. Issue #290 carries it
-	 * forward as #294.
+	 * prescription the chart records is worse than substantiating it with a code. Issue #294 carries it
+	 * forward from #290.
 	 *
 	 * <p><b>#294's measurement has since been run, and it qualifies the sentence above.</b> The
 	 * mechanism holds — the composed path does publish such a refusal — but no {@code false} was observed

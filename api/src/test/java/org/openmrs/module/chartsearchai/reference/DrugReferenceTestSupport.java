@@ -1786,7 +1786,7 @@ public final class DrugReferenceTestSupport {
 	}
 
 	/** A one-record chart to inject into; the injected reference must append as record [2]. */
-	static PatientChart oneRecordChart() {
+	public static PatientChart oneRecordChart() {
 		return chartOf(new RecordMapping(1, ChartSearchAiConstants.RESOURCE_TYPE_OBS,
 				"obs-uuid-1", null, "BP 120/80"));
 	}

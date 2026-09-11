@@ -1238,8 +1238,9 @@ public class DrugReferenceInjector {
 	 * what {@code LlmInferenceService.extractCitedReferences} surfaces as a citation whenever the model
 	 * cites the finding — so the clinician reaches the recorded allergy or condition behind a claim
 	 * whether or not the model thought to cite it. That is why this is ungated where the order-record
-	 * clause is gated: the clause changes what the MODEL reads and its effect on generation is
-	 * unmeasured (ADR Decision 77), while this changes only the published reference list.
+	 * clause is gated: the clause changes what the MODEL reads, so its effect on generation is a
+	 * question an A/B has to settle (ADR Decision 77 carries the arms), while this changes only the
+	 * published reference list and has no generation behaviour to settle.
 	 *
 	 * <p>ASCENDING by record number, deliberately: two chart rows spelling one allergy are folded into
 	 * one recorded allergen by {@code DrugSafetyValidator.resolvedAlike}, and their uuids then arrive

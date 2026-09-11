@@ -97,6 +97,10 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 
 	private static final ObjectMapper MAPPER = new ObjectMapper();
 
+	/** Chips 8 and 9 share this sentence and differ only in their provenance answer. */
+	private static final String UNCORROBORATED_CONTRAINDICATION =
+			"Naltrexone is contraindicated by an active condition: acute hepatitis or liver failure";
+
 	/**
 	 * The fixture chips. <b>The cases below index this list positionally, so the indices are the
 	 * contract</b> — inserting or reordering a chip retargets them silently, and only some of the
@@ -128,7 +132,7 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 	 *   <li>8 and 9 — a PAIR carrying one sentence and differing only in
 	 *       {@code SafetyWarning.restsOnAnUncorroboratedChartMatch()}, appended for
 	 *       {@link #everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire} on issue #374. Chip 8
-	 *       is the reason chip 7 was appended for #347's key — with every chip answering false, a
+	 *       is here for the reason chip 7 was appended for #347's key — with every chip answering false, a
 	 *       hardcoded false agrees with all of them and that guard cannot see it. Chip 9 is the reason
 	 *       that is not enough: a value re-derived from another published field also agrees with every
 	 *       chip, until two chips share every other field. Built by the curated-rule arm's own
@@ -136,10 +140,6 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 	 *       constructor, respectively.</li>
 	 * </ul>
 	 */
-	/** Chips 8 and 9 share this sentence and differ only in their provenance answer. */
-	private static final String UNCORROBORATED_CONTRAINDICATION =
-			"Naltrexone is contraindicated by an active condition: acute hepatitis or liver failure";
-
 	private static List<SafetyWarning> fixtureWarnings() {
 		return Arrays.asList(
 				new SafetyWarning(SafetyWarning.TYPE_INTERACTION, "Lidocaine",

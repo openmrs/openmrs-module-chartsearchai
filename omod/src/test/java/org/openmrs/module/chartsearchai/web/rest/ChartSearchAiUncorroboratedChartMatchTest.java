@@ -44,12 +44,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * disagreed about one chart — the records hedging and the chip asserting.
  *
  * <p><b>Three guards over one key, and none of them subsumes another.</b> The case here reads the
- * published value off the SSE bytes for two chips whose sentences are equally categorical, which is
+ * published value off the SSE bytes for three chips, two of which carry ONE sentence, which is
  * the defect stated as behaviour. The source pin below asserts the value is READ off the accessor
  * rather than recomputed beside it, which no value comparison can see. And
  * {@code ChartSearchAiSafetyWarningSeverityWireTest}'s reflective guard compares every public
  * accessor's own reading against the key it names, over a fixture that since #374 carries a chip
- * answering true — which is what generalises the comparison past this class's own two chips. Mutate
+ * answering true — which is what generalises the comparison past this class's own chips. Mutate
  * the serializer's put and read all three.
  *
  * <p>Two things are deliberately NOT asserted here, each because something else already holds them.
@@ -86,7 +86,7 @@ public class ChartSearchAiUncorroboratedChartMatchTest {
 	public void setUp() {
 		controller = new ChartSearchAiRestController();
 		controller.setAuditLogService(new StubAuditLogService());
-		controller.setChartSearchService(new TwoContraindicationStubService());
+		controller.setChartSearchService(new ThreeContraindicationStubService());
 		controller.setPatientAccessCheck((user, patient) -> true);
 		out = new ByteArrayOutputStream();
 		openmrsContext.install();
@@ -145,10 +145,11 @@ public class ChartSearchAiUncorroboratedChartMatchTest {
 	 *
 	 * <p><b>This is the defect itself.</b> On issue #309's reproduction the injected
 	 * {@code drug_reference} record and the {@code safety_finding} beside it both hedged while the chip
-	 * asserted the contraindication, and the module held the answer with no path to a client. The two
-	 * chips here carry equally categorical sentences, so nothing but this key tells them apart —
-	 * which is also why the assertion is made of BOTH: a key that read true for every contraindication
-	 * chip would satisfy a one-sided reading of this case while saying nothing.
+	 * asserted the contraindication, and the module held the answer with no path to a client. All three
+	 * chips here carry equally categorical sentences and the answer is asserted of each, because a key
+	 * reading true for every contraindication chip would satisfy a one-sided reading of this case while
+	 * saying nothing. <b>Nothing but this key tells chips 0 and 2 apart</b> — that pair, and not chips 0
+	 * and 1, is what {@link #chips()} added chip 2 for.
 	 *
 	 * <p>It does not assert that {@code detail} changed, because it did not — ADR Decision 92 for why
 	 * the sentence was not hedged instead.
@@ -240,8 +241,10 @@ public class ChartSearchAiUncorroboratedChartMatchTest {
 	 *         <p>Two residues, named rather than claimed away. A BLOCK comment is not stripped, and a
 	 *         {@code //} inside a STRING LITERAL truncates its line — so a literal carrying one could
 	 *         hide a later statement on the same line from the counts above. Neither arises in the body
-	 *         this reads today (checked: 9 literals, none containing {@code //}), and handling either
-	 *         properly means tracking literals, which is a parser. Both can only REMOVE text, so a
+	 *         this reads today, and handling either properly means tracking literals, which is a
+	 *         parser. No count of that body's literals is published here: one was, and it disagreed with
+	 *         its own companion claim, because quote pairs over RAW source include text inside the
+	 *         comment lines this method strips. Both can only REMOVE text, so a
 	 *         statement they hide reads as absent — which reddens where there was one and passes where
 	 *         a second put was the one hidden. So the counts bound this method's spellings, not every
 	 *         way text can be hidden from them; what stops a re-derivation is the chip pair in
@@ -256,8 +259,8 @@ public class ChartSearchAiUncorroboratedChartMatchTest {
 		return out.toString();
 	}
 
-	/** Returns the two fixture chips on every path the controller can take. */
-	private static class TwoContraindicationStubService implements ChartSearchService {
+	/** Returns the three fixture chips on every path the controller can take. */
+	private static class ThreeContraindicationStubService implements ChartSearchService {
 
 		private ChartAnswer answer() {
 			return new ChartAnswer("Naltrexone is contraindicated [1].",

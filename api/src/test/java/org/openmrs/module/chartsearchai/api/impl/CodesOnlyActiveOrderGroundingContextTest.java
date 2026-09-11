@@ -67,9 +67,12 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  *
  * <p><b>It does not measure a cosine, and cannot.</b> Tier-1 compares embeddings, and no embedding
  * model runs here — {@code resolveEmbedder()} returns {@code null}, which models a deployment with
- * none. That is not what makes the judge be asked — Tier-2 candidacy is the entailment flag and
- * the disposition, never the embedder — it is what leaves the judge's answer the only thing that
- * can decide, so the verdict these cases read is unambiguously the one under test. Whether a
+ * none. What that buys here is that the judge's answer is the only thing that can decide, so the
+ * verdict these cases read is unambiguously the one under test. It is NOT that a null embedder is
+ * irrelevant to whether the judge is asked: candidacy needs a claim SENTENCE, and selecting one
+ * embeds wherever more than one sentence cites the record — give this stub a second citing sentence
+ * and both cases publish {@code null} instead. The single-sentence answer below is what keeps that
+ * path out, and nothing more general about it is claimed here. Whether a
  * codes-only record's REAL e5 embedding falls
  * under a given {@code chartsearchai.grounding.minCosine} is a question only the live measurement on
  * #294 can answer, and the floor is an operator setting the module's own global-property text says
@@ -209,8 +212,9 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 	/**
 	 * The other direction: the same arrangement with the judge accepting publishes {@code true}, so
 	 * the composed path is not hardwired to either verdict and the exposure above is a property of
-	 * what the pass CONCLUDES rather than of the record's type. It is also the only verdict the live
-	 * measurement observed for such a record; ADR Decision 38's owed-measurement section has the runs.
+	 * what the pass CONCLUDES rather than of the record's type. Live, both verdicts occur for such a
+	 * record and the regime decides which: the judge refuses it where the cosine accepts it, at both
+	 * the shipped and the advised floor. ADR Decision 38's owed-measurement section has the split.
 	 *
 	 * <p>Worth pinning beside its sibling because the deliberate non-extension of the demote-only
 	 * carve-out to this type means a pass VERIFIES here rather than rendering unverified — ADR
@@ -285,8 +289,9 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 	/**
 	 * A judge that answers the same way for every pair it is handed, and RECORDS the pairs. Recording
 	 * is not decoration: a constant-returning stub that discarded its inputs would leave both cases
-	 * green if the composed path handed Tier-2 a truncated premise or selected the wrong claim unit,
-	 * so the phrase "a judge that refuses a medication claim ABOUT THIS RECORD" would be untested.
+	 * green if the composed path handed Tier-2 a truncated premise, so the phrase "a judge that
+	 * refuses a medication claim ABOUT THIS RECORD" would be untested. What it does NOT test is claim
+	 * SELECTION — this answer offers one sentence, so there is one unit to pick.
 	 * {@code CitationGroundingVerifierTest.ConjunctionAwareJudge} records for the same reason.
 	 */
 	private static final class FixedJudge extends LlmProvider {
@@ -315,10 +320,11 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 	}
 
 	/**
-	 * What Tier-2 was actually asked: one pair, whose premise is the codes-only record and whose
-	 * statement is the model's own medication claim. Asserted in both cases, because it is the
+	 * What Tier-2 was actually asked: one pair, whose premise is the codes-only record WHOLE and whose
+	 * statement carries the model's own medication claim. Asserted in both cases, because it is the
 	 * difference between "the judge refused a claim about this record" and "the judge refused
-	 * something".
+	 * something". The premise side is an equality and is the load-bearing half; the statement side is
+	 * a containment, so a marker or prefix left on it still passes.
 	 */
 	private static void assertTheJudgeWasAskedAboutTheRecord(FixedJudge judge) {
 		assertEquals(Collections.singletonList(CODES_ONLY_RECORD), judge.sourcesSeen,
@@ -335,9 +341,13 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 	 * claim about the patient — the shape #294's text describes, and the shape issue #284's
 	 * withholding does not reach since the sentence cites no reference material.
 	 *
-	 * <p><b>This shape is hypothetical: no live run has observed a model produce it.</b> So these cases
-	 * measure the module's HANDLING of it, and ADR Decision 38's owed-measurement section — not a green
-	 * run here — is what says whether a real model writes such a sentence.
+	 * <p><b>This shape is no longer hypothetical.</b> A real query has produced it — asked whether the
+	 * patient has an active order whose drug the chart does not name, the model says so, cites the
+	 * record, and the judge refuses; the published verdict was {@code false} on a sentence the record
+	 * supports. ADR Decision 38's owed-measurement section carries the arrangement, the wording and the
+	 * regime split. The claim text below is not that sentence — it is a plain medication claim, which
+	 * is the shape #294's own text describes — so these cases still measure the module's HANDLING
+	 * rather than the model's behaviour.
 	 */
 	private static final class CitesTheActiveOrderAlone extends LlmProvider {
 

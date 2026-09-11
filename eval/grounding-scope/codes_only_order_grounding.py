@@ -9,10 +9,15 @@ record's real embedding clears `chartsearchai.grounding.minCosine`, and whether 
 model makes a medication claim about a record that names no drug, are both properties of
 systems this repo does not implement.
 
-It reuses `grounding_scope_ab.py`'s `search`/`get_gp`/`set_gp` rather than re-reading the
-wire here. That reader tags `attached` for `attachedByTheModule` and `withheld` for
-`group == "reference"` instead of printing either as None, which is the misreading the
-root CLAUDE.md's capture-scorer rule exists for (#305) — do not hand-roll a second reader.
+It reuses `grounding_scope_ab.py`'s `get_gp`/`set_gp`/`req`. It does NOT use that module's
+`search`, and the reason is worth stating because the obvious reading is that it should:
+`search` returns verdicts keyed by citation INDEX, and this measurement has to find one
+record by `resourceUuid` — the index is whatever the injector happened to number it. So the
+body is read here, and `verdict_of` below applies that reader's tagging rules verbatim:
+`attached` for `attachedByTheModule`, `withheld` for `group == "reference"`, never None for
+either, which is the misreading the root CLAUDE.md's capture-scorer rule exists for (#305).
+If you change the tagging there, change it here; a second SPELLING of those rules is the
+cost of needing the uuid, and it is the only thing duplicated.
 
 ## The arrangement has to be built, and the natural count is zero
 
@@ -73,14 +78,25 @@ REGIMES = [("entailment-on  floor-0.40", True, "0.40"),
            ("tier1-only     floor-0.40", False, "0.40"),
            ("tier1-only     floor-0.82", False, "0.82")]
 
-# Written to make the model attribute a DRUG NAME to the codes-only record, which is the
-# antecedent #294's exposure needs. The last is the safety shape, where issue #284 withholds
-# a co-cited chart citation's negative anyway.
+# Questions that get the model to SAY something about the codes-only record, which is the
+# antecedent #294's exposure needs. Kept SUBSTANCE-NEUTRAL on purpose: an earlier run carried
+# over two probes naming the drug of a previous arrangement's order ("which antiretrovirals…",
+# "is the patient taking lamivudine?") after the arrangement moved to a different concept, so
+# those cells could not have elicited the antecedent and the run's "cited in none" was weaker
+# than it read. If you add a drug-specific probe, name the substance THIS arrangement's order
+# actually carries.
+#
+# `unnamed-order` is the one that matters and the one to keep first: it is the probe that made
+# the model describe the record AS an order whose drug is unnamed, and it is the cell on which a
+# published `grounded=false` was first observed. The exhaustive-list probes are the control —
+# they measure whether the injected record closes issue #118's divergence, and on the run
+# recorded in ADR Decision 38 they show it does not.
 PROBES = [
+    ("unnamed-order",
+     "Does the patient have any active drug order whose drug the chart does not name?"),
     ("name-each-order", "List each active drug order and name its drug."),
-    ("which-arvs", "Which antiretroviral drugs is this patient taking?"),
-    ("on-lamivudine", "Is the patient taking lamivudine?"),
     ("full-med-list", "Give the patient's complete medication list, naming every drug."),
+    ("how-many", "How many active drug orders does this patient have?"),
     ("safety", "Is it safe to start her on clarithromycin?"),
 ]
 
@@ -105,6 +121,21 @@ def set_regime(entailment, floor):
             raise AssertionError("regime did not take: %s is %r, wanted %r" % (name, got, value))
 
 
+def verdict_of(reference):
+    """What the wire published for one citation, tagged the way `grounding_scope_ab.search` tags it.
+
+    A STRING for the two cases that are not verdicts, never None: a module-attached citation
+    (#305) and a reference-group one (#201) both carry `grounded: null` for reasons that are
+    not "unverified", and printing None for them is what lets a tally be quoted over citations
+    it is structurally blind to.
+    """
+    if reference.get("attachedByTheModule"):
+        return "attached"
+    if reference.get("group") == "reference":
+        return "withheld"
+    return reference.get("grounded")
+
+
 def cell(label, question, entailment, floor):
     set_regime(entailment, floor)
     started = time.time()
@@ -119,16 +150,16 @@ def cell(label, question, entailment, floor):
         "secs": round(time.time() - started, 1),
         "question": question,
         "answer": (body.get("answer") or "").strip(),
-        "verdicts": gsab.search.__doc__ and None,  # see note below
+        "verdicts": {str(r.get("index")): verdict_of(r) for r in references},
+        # "NOT CITED" is a RESULT and not a gap: an uncited record got no verdict, which is a
+        # different measurement from a verdict that came back true. Keep them distinguishable.
         "codes_only_record": ([
             {"index": r.get("index"), "resourceType": r.get("resourceType"),
              "group": r.get("group"), "grounded": r.get("grounded"),
-             "attachedByTheModule": r.get("attachedByTheModule")} for r in ours]
+             "attachedByTheModule": r.get("attachedByTheModule"),
+             "verdict": verdict_of(r)} for r in ours]
             or "NOT CITED"),
     }
-    # Per-index verdicts through the shared reader, so `withheld` and `attached` are tagged
-    # rather than printed as None. Re-POSTs by design: the reader owns the request.
-    del out["verdicts"]
     print(json.dumps(out, indent=2), flush=True)
     return out
 
@@ -139,12 +170,25 @@ def main():
     which = sys.argv[1] if len(sys.argv) > 1 else "all"
     print("# BASE=%s patient=%s order=%s" % (gsab.BASE, PATIENT, ORDER_UUID), flush=True)
     print("# confirm injection in the server log: 'Active-order reconciliation'", flush=True)
-    if which in ("regimes", "all"):
-        for label, entailment, floor in REGIMES:
-            cell("regime " + label, QUESTION, entailment, floor)
-    if which in ("probes", "all"):
-        for tag, question in PROBES:
-            cell("probe " + tag, question, True, "0.40")
+
+    # Save and restore, in a finally, like the sibling harness. These are SHARED standalones and
+    # the shipped defaults are false/false/0.40, so a run that returned leaving grounding and
+    # entailment ON would silently put every later probe on that box into a non-stock regime —
+    # and a run that CRASHED mid-grid would do it without even a line saying so.
+    baseline = [(name, gsab.get_gp(name)[1])
+                for name in (gsab.GROUNDING_GP, gsab.ENTAILMENT_GP, FLOOR_GP)]
+    print("# baseline: %s" % baseline, flush=True)
+    try:
+        if which in ("regimes", "all"):
+            for label, entailment, floor in REGIMES:
+                cell("regime " + label, QUESTION, entailment, floor)
+        if which in ("probes", "all"):
+            for tag, question in PROBES:
+                cell("probe " + tag, question, True, "0.40")
+    finally:
+        for name, value in baseline:
+            gsab.set_gp(name, value)
+        print("# restored: %s" % baseline, flush=True)
 
 
 if __name__ == "__main__":

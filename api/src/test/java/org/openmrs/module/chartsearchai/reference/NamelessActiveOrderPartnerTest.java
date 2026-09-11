@@ -331,11 +331,13 @@ public class NamelessActiveOrderPartnerTest extends BaseModuleContextSensitiveTe
 	 * prescription the chart records is worse than substantiating it with a code. Issue #294 carries it
 	 * forward from #290.
 	 *
-	 * <p><b>#294's measurement has since been run, and it qualifies the sentence above.</b> The
-	 * mechanism holds — the composed path does publish such a refusal — but no {@code false} was observed
-	 * live, because in neither arrangement measured did the model make a medication claim about a
-	 * record naming no drug. ADR Decision 38's owed-measurement section carries both runs and what
-	 * separates them; {@code CodesOnlyActiveOrderGroundingContextTest} is the composed-path half.
+	 * <p><b>#294's measurement has since been run, and the sentence above is confirmed rather than
+	 * qualified.</b> A codes-only record's citation published {@code grounded=false} on a real query —
+	 * asked whether the patient has an active order whose drug the chart does not name, the model says
+	 * so, cites the record, and the judge refuses it. Gated on entailment: Tier-1 cosine accepts the
+	 * same citation at both the shipped and the advised floor. ADR Decision 38's owed-measurement
+	 * section carries the arrangement and the regime split;
+	 * {@code CodesOnlyActiveOrderGroundingContextTest} is the composed-path half.
 	 */
 	@Test
 	public void theCodeOnlyDisplayIsWhatReachesTheChartAsACitableRecord() {

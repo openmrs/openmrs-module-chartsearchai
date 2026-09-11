@@ -478,8 +478,10 @@ public class DrugReferenceInjector {
 	 * stubs nothing.
 	 *
 	 * @param readStatus a caller-supplied one-slot accumulator the pass states its chart-read
-	 *        verdict into, or {@code null} from a caller that does not publish it. See
-	 *        {@link ChartReadStatus}, which is canonical for what each of its three answers means.
+	 *        verdict into, or {@code null} from a caller that does not publish it.
+	 *        {@link ChartReadStatus} is the mechanism;
+	 *        {@code ChartSearchService.ChartAnswer.getChartReadForSafety()} is canonical for what
+	 *        each of its three answers means.
 	 *        It is the caller's per-call object and never a field: this bean is a Spring singleton
 	 *        (issue #172). Recorded as soon as the context exists and BEFORE the injection runs, so
 	 *        a pass that throws while rendering still reports the read that did happen; a pass that

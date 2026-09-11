@@ -937,7 +937,8 @@ public interface ChartSearchService {
 		 * ADR Decision 91 records the scoping.
 		 *
 		 * <p><b>The problem it exists to remove.</b> {@code PatientClinicalContextBuilder} degrades a
-		 * failed allergy, condition or active-order read to an EMPTY set, which is the right fail-safe
+		 * failed allergy, condition or active-order read to an empty — or, where the read threw
+		 * part-way through, a PARTIAL — set, which is the right fail-safe
 		 * for an additive net and leaves the clinician-facing response identical to a healthy
 		 * patient's: no chips, no findings, and — before this key — nothing anywhere on the wire to
 		 * tell the two apart. The failure needs no bad data and no operator mistake: these reads go
@@ -954,12 +955,15 @@ public interface ChartSearchService {
 		 * or that anything was found. An empty {@code safetyWarnings} beside {@code TRUE} is a
 		 * measurement of none <b>on a payload whose warnings are final</b> — not on the early
 		 * {@code done} of an async-grounding stream, which carries an empty list by construction
-		 * because {@code validate} has not run. This key is non-null there, unlike its neighbours,
-		 * because it is genuinely known that early.</li>
+		 * because {@code validate} has not run. This key IS non-null on that event — like
+		 * {@code unresolvedDrugClass} and {@code conditionRuleCoverage}, and unlike the answer checks
+		 * beside it — because it is genuinely known that early.</li>
 		 * <li>{@code FALSE} — at least one of the three did not complete. An empty
-		 * {@code safetyWarnings} beside it is NOT a measurement of none, and must not be rendered
-		 * as a clear chart. "Did not complete" rather than "failed" because a null patient stamps
-		 * both flags false having attempted nothing.</li>
+		 * {@code safetyWarnings} beside it is NOT a measurement of none and must not be rendered as
+		 * a clear chart — and a NON-empty one beside it is not complete either, because a read that
+		 * threw part-way leaves what it had already collected in place. "Did not complete" rather
+		 * than "failed" because a null patient stamps both flags false having attempted
+		 * nothing.</li>
 		 * <li>{@code null} — no measurement. The drug-reference feature is off, or the pass threw
 		 * before it had a context. Never read {@code null} as either verdict.</li>
 		 * </ul>
@@ -971,8 +975,9 @@ public interface ChartSearchService {
 		 * was the first shape and it reads {@code TRUE} on a request whose active-order read failed,
 		 * which is the defect ADR Decision 79 records one surface over.
 		 *
-		 * <p><b>Which pass it is of.</b> The INJECTOR's, which is the request's first chart read and
-		 * happens before the model is called. {@code DrugSafetyValidator.validate} builds a second
+		 * <p><b>Which pass it is of.</b> The INJECTOR's, which is the drug-safety layer's first chart
+		 * read and happens before the model is called. (Chart assembly queries this patient's orders
+		 * earlier still; that read is not this layer's and is not stamped.) {@code DrugSafetyValidator.validate} builds a second
 		 * context of its own, so on a transient failure this verdict and the chips beside it can in
 		 * principle answer for different reads; in the case the key exists for — a role missing a
 		 * privilege — both builds fail alike. The injector's is used because it is the one that

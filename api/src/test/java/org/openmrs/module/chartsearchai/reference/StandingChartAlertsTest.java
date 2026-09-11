@@ -253,8 +253,8 @@ public class StandingChartAlertsTest {
 	 * until issue #247 raised those catches to WARN, logged it at DEBUG — which core's shipped
 	 * {@code log4j2.xml} discards, putting {@code org.openmrs} at WARN — so before this the endpoint
 	 * answered {@code screened: true} with an empty array for a patient nobody had looked at. A role
-	 * holding {@code AI Query Patient Data} without core's
-	 * {@code Get Allergies} is exactly that role.
+	 * holding {@code AI Query Patient Data} without core's {@code Get Allergies} is exactly that
+	 * role.
 	 *
 	 * <p>It is {@code reference/CLAUDE.md}'s "a chart the module could not read is not a chart that
 	 * records nothing", met on the surface whose WHOLE payload can be empty. The fixture is
@@ -348,8 +348,7 @@ public class StandingChartAlertsTest {
 	 * surfaces now share, and published its answer on the ANSWER; this javadoc previously said
 	 * {@code activeDrugOrdersRead} had no enriched-context reader, and pinning the copy before one
 	 * arrived is what makes that arrival cheap. This module's own instructions record the identical
-	 * copy shape costing
-	 * two regressions on a different stamp.
+	 * copy shape costing two regressions on a different stamp.
 	 *
 	 * <p><b>The fixture is what makes it discriminating, and the obvious one is not.</b>
 	 * {@code withReferenceNames} returns the context UNTOUCHED where no order resolves a reference

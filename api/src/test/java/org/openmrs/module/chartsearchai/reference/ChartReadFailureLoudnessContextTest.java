@@ -214,8 +214,7 @@ public class ChartReadFailureLoudnessContextTest extends BaseModuleContextSensit
 		// catch from inside the same real service call. A user context whose privilege check itself
 		// throws does that: the exception travels out of getAllergies exactly as a fault in the store
 		// underneath it would, and is not an APIAuthenticationException.
-		UserContext prior = Context.getUserContext();
-		Context.setUserContext(new UserContext(null) {
+		DrugReferenceTestSupport.withUserContext(new UserContext(null) {
 
 			@Override
 			public boolean hasPrivilege(String held) {
@@ -224,18 +223,17 @@ public class ChartReadFailureLoudnessContextTest extends BaseModuleContextSensit
 				}
 				return true;
 			}
+		}, () -> {
+			try (LogCapture capture = LogCapture.on(BUILDER_LOGGER)) {
+				validator.validate(ANSWER, QUESTION, patient, null, null);
+				assertTrue(capture.hasThrowableAt(Level.WARN),
+						"a cause that is NOT a missing privilege keeps its stack trace — there the "
+								+ "trace is the whole diagnosis, and dropping it would make this "
+								+ "failure as silent as the DEBUG line issue #247 replaced. Captured: "
+								+ capture.describeAll());
+			}
+			return null;
 		});
-		try (LogCapture capture = LogCapture.on(BUILDER_LOGGER)) {
-			validator.validate(ANSWER, QUESTION, patient, null, null);
-			assertTrue(capture.hasThrowableAt(Level.WARN),
-					"a cause that is NOT a missing privilege keeps its stack trace — there the trace "
-							+ "is the whole diagnosis, and dropping it would make this failure as "
-							+ "silent as the DEBUG line issue #247 replaced. Captured: "
-							+ capture.describeAll());
-		}
-		finally {
-			Context.setUserContext(prior);
-		}
 	}
 
 	/**

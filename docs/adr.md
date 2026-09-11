@@ -5535,7 +5535,7 @@ The MACHINERY already existed, and the verdict did not. [Decision 36](#decision-
 
 **No encounter diagnosis reaches the contraindication screen, on any install.** `PatientClinicalContextBuilder` builds the condition token set from `Context.getConditionService().getActiveConditions(patient)` alone, and that set is the only thing a condition rule is ever put to. The module does read `Diagnosis` elsewhere — `ChartSearchEventListener` maps a saved one to its patient to invalidate a cached answer — so the claim is about what the SCREEN can see, not about the module's reach; an earlier draft of this paragraph said "nothing reads a `Diagnosis`" and was false. The witness in #378's own report — a recorded encounter diagnosis of Ventricular tachycardia — therefore reaches no contraindication rule whatever this key says, including on a dataset reading `published`. That is a second, independent defect, it is open, and the README states it beside the key because a client rendering `published` as "conditions checked" would be wrong for that record class.
 
-**A condition list the module could not READ degrades to an empty set**, which `PatientClinicalContext.contraindicationRecordsRead()` records for the injected record's benefit ([Decision 42](#decision-42-a-recorded-clause-needs-corroboration-not-just-a-match)) and this key does not carry. A `published` dataset over an unreadable chart reproduces the issue's own sentence. Closing it means a per-patient signal on the response, which is a different change: this one states what the module had to ask WITH.
+**A condition list the module could not READ degrades to an empty set**, which `PatientClinicalContext.contraindicationRecordsRead()` records for the injected record's benefit ([Decision 42](#decision-42-a-recorded-clause-needs-corroboration-not-just-a-match)) and this key does not carry. A `published` dataset over an unreadable chart reproduces the issue's own sentence. Closing it means a per-patient signal on the response, which is a different change: this one states what the module had to ask WITH. [Decision 91](#decision-91-a-chart-the-module-could-not-read-says-so-in-the-log-and-on-the-answer) made that signal, as `chartReadForSafety`; the two keys are read together.
 
 **This is not [Decision 67](#decision-67-a-question-naming-a-drug-class-is-told-so-rather-than-resolved-to-members-the-classification-cannot-honestly-supply)'s refusal.** That decision declined to gate a citable `drug_class_note` on load status, because reporting the loader's own channel a second time *in citable reference prose* would be this module telling a model about its own configuration. Nothing here is prompt-facing and nothing here gates anything: this is a deterministic key a client reads, which is the remedy Decision 67 itself, Decision 60 and [Decision 74](#decision-74-a-divergence-the-prose-check-finds-is-stated-on-the-response-not-only-in-the-log) each reached for the same failure — the module states what it did, on a key, rather than depending on the wording of a generated answer.
 
@@ -6848,8 +6848,9 @@ prevent repeating.
 
 `PatientClinicalContextBuilder` reads three things off a patient for the drug-safety layer: her
 allergies, her conditions and her active drug orders. Each read sits in its own `try` and each
-degrades to an EMPTY set on failure. That fail-safe is right — the layer is additive and must never
-break the answer path — and it is not what this decision is about.
+degrades to an empty set on failure — or, where the read threw part-way through, to a PARTIAL one,
+since each accumulates inside its own `try`. That fail-safe is right — the layer is additive and must
+never break the answer path — and it is not what this decision is about.
 
 What it is about is that the failure was **indistinguishable from a healthy chart**. The two
 observable consequences of a failed read are that the derived token set is empty and that a stamp
@@ -6882,14 +6883,15 @@ never a muted one.*
 1. **All three catches log at WARN**, naming the core privilege to check. Not two: the published
    verdict below is the whole pass, so leaving the order catch silent would make the answer path's
    log channel narrower than the standing surface's for the identical failure. Age and weight stay
-   at DEBUG — they feed the dose arm, which
+   at DEBUG, for reasons that are NOT the same. Weight feeds only the dose arm, which
    `SafetyFindingSeverityStrengthTest.theTypeThatStatesNeitherClauseCannotReachTheRendererBeforeThereIsAnAnswer`
-   pins as unreachable from the injector.
+   pins as unreachable from the injector. Age has a second consumer and a real residue —
+   `ChartAnswer.getChartReadForSafety()` records it — and is outside the verdict because it carries
+   no stamp, not because nothing reads it.
 
 2. **The answer carries `chartReadForSafety`**, a three-valued `Boolean`:
    `TRUE` all three of those reads completed, `FALSE` at least one did not, `null` no measurement.
-   Three reads, two stamps — the records stamp covers allergies and conditions together. What the
-   verdict does not cover is enumerated in `ChartAnswer.getChartReadForSafety()`.
+   Three reads, two stamps — the records stamp covers allergies and conditions together.
    `ChartAnswer.getChartReadForSafety()` is canonical for what each asserts and is the only place
    that enumeration lives.
 

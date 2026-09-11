@@ -464,11 +464,12 @@ public class DrugSafetyValidator {
 		if (!context.chartReadForSafety()) {
 			// WARN, and it says what this SURFACE does about the state rather than that the state
 			// happened: since issue #247 the builder's own catches are loud too, so an operator sees
-			// the failing read named where it is read and its consequence named here. The two are not
-			// redundant and neither subsumes the other — the builder's line carries the exception and
-			// fires wherever a context is built, this one says the payload beside it is not a clean
-			// chart. A configuration fault an operator can fix, which this package's loudness rule
-			// says is loud wherever the data came from.
+			// the failing read named where it is read and its consequence named here. Neither line
+			// subsumes the other — the builder's names WHICH read failed and fires wherever a context
+			// is built (with a stack trace for any cause but a missing privilege, where the message
+			// already names the privilege); this one says what THIS surface does about it, which the
+			// builder cannot know. A configuration fault an operator can fix, which this package's
+			// loudness rule says is loud wherever the data came from.
 			//
 			// It names EVERY side that failed, not the first: a two-branch form said only "allergy or
 			// condition records" where BOTH reads had failed, so an operator granted those two would

@@ -119,10 +119,9 @@ public class LlmInferenceService implements ChartSearchService {
 		String outcome = "error";
 		try {
 			PatientChart chart = chartBuildingStrategy.buildChart(patient, question);
-			// And whether the drug-safety layer's two stamped chart reads happened (issue #247).
-			// ChartAnswer.getChartReadForSafety() is canonical for what the three answers mean and
-			// for why it is the INJECTOR's pass that states it; a second copy of that argument here
-			// is how the two come apart.
+			// Whether this layer's two stamped chart reads happened (issue #247). Declared here
+			// because the injector's pass is what states it; ChartAnswer.getChartReadForSafety() is
+			// canonical for the three answers and for why that pass rather than validate's.
 			ChartReadStatus chartRead = new ChartReadStatus();
 			chart = drugReferenceInjector.inject(chart, patient, question, chartRead);
 			// Resolved once, off the chart that was actually assembled, and carried on the answer —
@@ -524,10 +523,9 @@ public class LlmInferenceService implements ChartSearchService {
 		String outcome = "error";
 		try {
 			PatientChart chart = chartBuildingStrategy.buildChart(patient, question);
-			// And whether the drug-safety layer's two stamped chart reads happened (issue #247).
-			// ChartAnswer.getChartReadForSafety() is canonical for what the three answers mean and
-			// for why it is the INJECTOR's pass that states it; a second copy of that argument here
-			// is how the two come apart.
+			// Whether this layer's two stamped chart reads happened (issue #247). Declared here
+			// because the injector's pass is what states it; ChartAnswer.getChartReadForSafety() is
+			// canonical for the three answers and for why that pass rather than validate's.
 			ChartReadStatus chartRead = new ChartReadStatus();
 			chart = drugReferenceInjector.inject(chart, patient, question, chartRead);
 			// One resolution for BOTH answers this method produces (issue #178). The early-done path

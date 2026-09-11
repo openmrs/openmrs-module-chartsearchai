@@ -1589,16 +1589,32 @@ public final class DrugReferenceTestSupport {
 	 * @param body what to run; its value is returned
 	 */
 	public static <T> T refusingPrivilege(String privilege, java.util.function.Supplier<T> body) {
-		UserContext prior = Context.getUserContext();
-		if (privilege != null) {
-			Context.setUserContext(new UserContext(null) {
-
-				@Override
-				public boolean hasPrivilege(String held) {
-					return !privilege.equals(held);
-				}
-			});
+		if (privilege == null) {
+			return body.get();
 		}
+		return withUserContext(new UserContext(null) {
+
+			@Override
+			public boolean hasPrivilege(String held) {
+				return !privilege.equals(held);
+			}
+		}, body);
+	}
+
+	/**
+	 * Runs {@code body} under {@code swapped}, restoring the prior {@code UserContext} whatever
+	 * happens.
+	 *
+	 * <p>The swap core {@link #refusingPrivilege} is built on, exposed because refusing a privilege
+	 * is not the only way to fail a chart read the way production fails it: a context whose
+	 * privilege check THROWS sends a non-authorization exception out of the same real service call,
+	 * which is how issue #247's stack-trace rule gets its second branch. Sharing the restore is the
+	 * whole point — a copy that loses the {@code finally} leaks a crippled context into every later
+	 * test in the same JVM, and the symptom surfaces somewhere else entirely.
+	 */
+	public static <T> T withUserContext(UserContext swapped, java.util.function.Supplier<T> body) {
+		UserContext prior = Context.getUserContext();
+		Context.setUserContext(swapped);
 		try {
 			return body.get();
 		}

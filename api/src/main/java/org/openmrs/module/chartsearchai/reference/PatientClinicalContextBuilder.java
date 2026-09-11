@@ -301,9 +301,12 @@ final class PatientClinicalContextBuilder {
 	 */
 	private static void warnUnreadable(String records, String consequence, String privilege,
 			RuntimeException e) {
+		// What the CALLER does about it is deliberately not stated here: the published verdict comes
+		// from the injector's context, validate builds a second one that reaches no wire key, and a
+		// caller may pass no sink at all. The read and its consequence for the screen are what this
+		// line can honestly assert.
 		String message = "Could not read this patient's " + records + "; " + consequence
-				+ ". This chart is reported as NOT read rather than as clear. Check that the querying "
-				+ "role holds core's " + privilege + " privilege.";
+				+ ". Check that the querying role holds core's " + privilege + " privilege.";
 		if (e instanceof APIAuthenticationException) {
 			log.warn(message);
 		} else {
@@ -493,7 +496,9 @@ final class PatientClinicalContextBuilder {
 	 *         order whose concept cannot be loaded throws HERE. The loop's own {@code catch} is outside
 	 *         the {@code for}, so an unguarded read would abandon the whole active-order list at the
 	 *         first such order — every later order dropped, the flattened name and code sets left
-	 *         half-built, and nothing but a {@code log.debug} to say so. That is worse than the state
+	 *         half-built. Since issue #247 the loop's own catch is not silent about that — it WARNs
+	 *         naming Get Orders and stamps the whole pass unread — but losing every later order is
+	 *         still worse than the state
 	 *         before this leg existed, where the same failure cost that one order its ATC codes and
 	 *         left the order itself on the list. A missing uuid costs exactly the bridged-concept leg
 	 *         for one order, which is the degradation the rest of this loop is built for.

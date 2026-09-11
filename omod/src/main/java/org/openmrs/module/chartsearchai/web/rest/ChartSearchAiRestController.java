@@ -1593,8 +1593,11 @@ public class ChartSearchAiRestController {
 	 * two-field type: that one is serialized by the mapper off its getter names, which is why its
 	 * javadoc fixes those names as issue #347's contract. Here the KEYS are the contract README states,
 	 * so they are written as literals and pinned as literals by
-	 * {@code ChartSearchAiUnstatedFindingSeverityTest}, and renaming an accessor cannot move a
-	 * documented key. An {@code ArrayList} of {@code LinkedHashMap} is also the shape
+	 * {@code ChartSearchAiUnstatedFindingSeverityTest.theSearchResponseNamesTheFindingsWhoseRatingTheAnswerDropped},
+	 * which compares the raw map — and by THAT case alone, measured: handing the value objects to the
+	 * mapper instead reddens it and nothing else, the SSE cases passing because Jackson renders the
+	 * getters to byte-identical JSON. So renaming an accessor cannot silently move a documented key,
+	 * but only while that one assertion stands. An {@code ArrayList} of {@code LinkedHashMap} is also the shape
 	 * {@link #serializeSafetyWarnings} publishes, which keeps #347's other half satisfied: the
 	 * marshaller refuses {@code Collections}' immutable wrappers, and the accessor hands one out.
 	 */

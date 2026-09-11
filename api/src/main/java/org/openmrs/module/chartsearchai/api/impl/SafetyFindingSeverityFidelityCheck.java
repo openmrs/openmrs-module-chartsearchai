@@ -176,9 +176,9 @@ final class SafetyFindingSeverityFidelityCheck {
 	 *         <p><b>The pairing is made here and nowhere else.</b> The rating is the one
 	 *         {@code ratings} already holds — the record's own {@code findingSeverity} — so a
 	 *         consumer never re-derives it, and the published statement and the {@code WARN} below
-	 *         cannot come apart. Before #387 this returned the map's KEY SET and the values were
-	 *         dropped, leaving a client that could not rebuild the pairing from anything else on the
-	 *         response; {@code ChartSearchService.UnstatedFindingSeverity} carries why.
+	 *         cannot come apart. Before #387 this returned the offending INDEXES alone, the rating
+	 *         reaching only the log, which left a client unable to rebuild the pairing from anything
+	 *         else on the response; {@code ChartSearchService.UnstatedFindingSeverity} carries why.
 	 *
 	 *         <p>The set the walk de-duplicates on is belt and braces rather than load-bearing:
 	 *         {@code LlmInferenceService.extractCitedReferences} already collects indexes into a
@@ -233,7 +233,6 @@ final class SafetyFindingSeverityFidelityCheck {
 			// gave two keys for one rating and paid two walks of the answer for the same question.
 			// `statesWord` is case-insensitive, so that was never a wrong answer, only a wrong bound.
 			Map<String, Boolean> stated = new HashMap<String, Boolean>();
-			List<String> reasons = new ArrayList<String>();
 			Set<Integer> seen = new LinkedHashSet<Integer>();
 			for (RecordReference citation : cited) {
 				String rating = ratings.get(Integer.valueOf(citation.getIndex()));
@@ -257,29 +256,24 @@ final class SafetyFindingSeverityFidelityCheck {
 					// consumer — issue #387. The rating handed on is the one `ratings` carries, which
 					// is the record's own `findingSeverity`; nothing re-derives it and nothing reads
 					// a chip.
-					//
-					// The WARN takes the entry's own `toString` rather than re-spelling the pair, so
-					// the log and the wire cannot differ in FORMAT either — the arrangement
-					// `DrugReferenceInjector.chartOrderClause` already uses for
-					// `SafetyWarning.ChartOrderBridge`, and for the reason that type's javadoc gives.
-					// Building the string here as well was two spellings of one format, which is what
-					// #337's log and this key had until #387.
-					UnstatedFindingSeverity entry =
-							new UnstatedFindingSeverity(citation.getIndex(), rating);
-					offending.add(entry);
-					reasons.add(entry.toString());
+					offending.add(new UnstatedFindingSeverity(citation.getIndex(), rating));
 				}
 			}
 			if (!offending.isEmpty()) {
 				// Each citation reads beside the word that went missing: a maintainer triaging this
-				// needs to know whether a Major rating was dropped or a Minor one. The published
-				// statement carries the same pair since #387, spelled by the entry itself, so the log
-				// and the wire cannot disagree in content or in format. Neither the answer
+				// needs to know whether a Major rating was dropped or a Minor one. The WARN is the
+				// PUBLISHED list itself, rendered through each entry's `toString` — so the log and
+				// the wire cannot disagree in content or in format, structurally rather than by two
+				// collections being appended in step. Building a parallel list of strings here is
+				// what this looked like until #387, and it is the same shape as the defect that
+				// issue fixed one layer up: a spelling of one statement kept in two places.
+				// `DrugReferenceInjector.chartOrderClause` takes `ChartOrderBridge.toString()` the
+				// same way. Neither the answer
 				// nor any record text is logged — they carry patient data, and the citation with the
 				// patient identifies the claim. The rating is the module's own closed vocabulary and
 				// says nothing about this patient.
 				log.warn("Answer for patient={} states no rating for cited finding(s) {}. The answer "
-						+ "prose is left unchanged (issue #337).", patientId, reasons);
+						+ "prose is left unchanged (issue #337).", patientId, offending);
 			}
 			return offending;
 		}

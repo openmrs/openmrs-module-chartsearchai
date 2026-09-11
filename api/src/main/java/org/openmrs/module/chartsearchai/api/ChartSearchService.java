@@ -414,9 +414,11 @@ public interface ChartSearchService {
 		private final String severity;
 
 		/**
-		 * {@code severity} is required: {@link #equals}, {@link #hashCode} and {@link #toString}
-		 * dereference it, as {@code SafetyWarning.ChartOrderBridge} says of its own two, and a
-		 * caller building one by hand owes the same. The production path cannot pass null —
+		 * {@code severity} is required: {@link #equals} and {@link #hashCode} dereference it, as
+		 * {@code SafetyWarning.ChartOrderBridge} says of its own two, and a caller building one by
+		 * hand owes the same. {@link #toString} does NOT — it concatenates, so a null would print as
+		 * {@code [350] null} rather than throwing, and since the producing check logs these that is
+		 * the one place a hand-built null would surface quietly. The production path cannot pass one:
 		 * {@code SafetyFindingSeverityFidelityCheck} skips a citation whose record carries no rating
 		 * before it reaches here.
 		 */

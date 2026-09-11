@@ -66,9 +66,11 @@ import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
  * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/387">#387</a>.</b> The key
  * published a bare index list until then, and the mixed arrangement above is what makes the pairing
  * checkable at all: {@link #statementsFor} builds the expectation from the ratings the real injector
- * wrote, so a carrier that published one constant rating, a pairing shifted by one, or a severity
- * read off a chip rather than off the record each redden. On a single-rating arrangement all three
- * of those mutants stay green, which is the second thing the spread buys.
+ * wrote, not from a word this file chose. Mutate the pairing and read the failures — a constant
+ * rating and a pairing shifted by one each redden cases here, and on a single-rating arrangement
+ * neither could. What this file does NOT hold is which SOURCE the carrier read the rating from: the
+ * chip's value and the record's agree except on an operator dataset's padding, so that substitution
+ * is caught by {@code SafetyFindingSeverityCarriedContextTest} and not by the spread here.
  *
  * <p>Everything here runs the real {@link LlmInferenceService#search}/{@code searchStreaming}
  * orchestration over a chart the real {@link PatientChartSerializer} rendered and the real
@@ -453,9 +455,9 @@ public class SafetyFindingSeverityFidelityTest {
 		//
 		// This case rests on the MIXED arrangement setUp() asserts, and that is what makes it a
 		// discriminator rather than a shape check: the ratings really do differ between findings, so
-		// a carrier writing one constant rating, a pairing shifted by one, or a severity read off a
-		// chip instead of the record all redden. On a single-rating arrangement every one of those
-		// mutants stays green.
+		// a carrier writing one constant rating and a pairing shifted by one both redden, and on a
+		// single-rating arrangement neither could. The class javadoc names what the spread does not
+		// reach.
 		service.setLlmProvider(answering(enumerationCiting(ratedFindings.keySet())));
 		try (LogCapture capture = LogCapture.on(CHECK)) {
 			ChartAnswer answer = service.search(patient(), QUESTION);

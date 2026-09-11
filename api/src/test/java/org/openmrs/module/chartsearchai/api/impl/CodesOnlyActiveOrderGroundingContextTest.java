@@ -80,11 +80,26 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 
 	private static final int ORDER = 111;
 
-	/** Two codes in one ATC subgroup, neither carried by the curated seed, so the display the order
-	 *  falls back to is codes and nothing else. */
-	private static final String NAPROXEN_ATC = "M01AE02";
+	/**
+	 * Two codes in one ATC subgroup that the curated seed carries neither of. That — unnameable by the
+	 * loaded reference data, so nothing can supply a name the display would fall back to — is the
+	 * property this arrangement needs, and it is the only thing claimed about them. They are named for
+	 * the property rather than for a substance on purpose: which drug each code denotes is irrelevant
+	 * here and asserting it would be an unverified claim.
+	 */
+	private static final String UNNAMEABLE_ATC = "M01AE02";
 
-	private static final String KETOPROFEN_ATC = "M01AE04";
+	private static final String UNNAMEABLE_ATC_SIBLING = "M01AE04";
+
+	/**
+	 * The exact record the arrangement must produce — the precondition the whole issue rests on, so it
+	 * is asserted rather than assumed. Without this a concept that regained a name would leave these
+	 * cases measuring a NAMED active order, which is a different record and is covered elsewhere.
+	 * Byte-identical to the string {@code NamelessActiveOrderPartnerTest} pins for the same
+	 * arrangement, and it names no drug: that is what a medication claim about it cannot be entailed
+	 * by.
+	 */
+	private static final String CODES_ONLY_RECORD = "Active drug order: [ATC M01AE02, M01AE04].";
 
 	/** A plain medication question: it resolves no drug of its own, so nothing here depends on the
 	 *  question-driven injection arm. */
@@ -114,7 +129,8 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 		// Order matters and is not incidental: the ATC map goes on through the real ConceptService
 		// while the concept still validates, and only then are its names voided. makeOrderNameless
 		// carries why.
-		DrugReferenceTestSupport.mapConceptToAtc(ORDERED_CONCEPT, NAPROXEN_ATC, KETOPROFEN_ATC);
+		DrugReferenceTestSupport.mapConceptToAtc(ORDERED_CONCEPT, UNNAMEABLE_ATC,
+			UNNAMEABLE_ATC_SIBLING);
 		DrugReferenceTestSupport.makeOrderNameless(ORDER, ORDERED_CONCEPT);
 	}
 
@@ -160,13 +176,17 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 	 */
 	@Test
 	public void aCodesOnlyActiveOrderCitationCarriesTheJudgesRefusalThroughTheComposedPath() {
-		TestableService service = serviceUnderTest(new CitesTheActiveOrderAlone(), Boolean.FALSE);
+		CitesTheActiveOrderAlone provider = new CitesTheActiveOrderAlone();
+		TestableService service = serviceUnderTest(provider, Boolean.FALSE);
 
 		ChartAnswer answer = service.search(patient, QUESTION);
 
 		RecordReference order = activeOrderReference(answer);
 		assertNotNull(order, "the unrepresented order must reach the answer as a cited record, was: "
 				+ answer.getReferences());
+		assertEquals("[" + order.getIndex() + "] " + CODES_ONLY_RECORD, provider.citedRecord,
+				"precondition: the cited record's display must name no drug, or these cases measure a "
+						+ "different record than #294 is about");
 		assertFalse(ChartSearchAiUtils.isGroundingDemoteOnly(order.getResourceType()),
 				"precondition: this type is chart evidence, so its verdict is NOT withheld at the "
 						+ "wire — that is the exposure #294 is about");
@@ -180,10 +200,11 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 	}
 
 	/**
-	 * The other direction, and it is the one the live measurement on #294 actually observed: the
-	 * same arrangement with the judge accepting publishes {@code true}, so the composed path is not
-	 * hardwired to either verdict and the exposure above is a property of the JUDGE's answer rather
-	 * than of the record's type.
+	 * The other direction: the same arrangement with the judge accepting publishes {@code true}, so
+	 * the composed path is not hardwired to either verdict and the exposure above is a property of
+	 * what the pass CONCLUDES rather than of the record's type. This is also the only verdict the live
+	 * measurement observed for such a record — ADR Decision 38's owed-measurement section carries
+	 * which arrangement produced it, and that the record went uncited altogether in the other.
 	 *
 	 * <p>Worth pinning beside its sibling because the deliberate non-extension of the demote-only
 	 * carve-out to this type means a pass VERIFIES here rather than rendering unverified — ADR
@@ -193,13 +214,16 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 	 */
 	@Test
 	public void theSameCitationCarriesAnAcceptanceThroughToo() {
-		TestableService service = serviceUnderTest(new CitesTheActiveOrderAlone(), Boolean.TRUE);
+		CitesTheActiveOrderAlone provider = new CitesTheActiveOrderAlone();
+		TestableService service = serviceUnderTest(provider, Boolean.TRUE);
 
 		ChartAnswer answer = service.search(patient, QUESTION);
 
 		RecordReference order = activeOrderReference(answer);
 		assertNotNull(order, "the unrepresented order must reach the answer as a cited record, was: "
 				+ answer.getReferences());
+		assertEquals("[" + order.getIndex() + "] " + CODES_ONLY_RECORD, provider.citedRecord,
+				"precondition: the cited record's display must name no drug");
 		assertEquals(Boolean.TRUE, order.getGrounded(),
 				"an accepted claim publishes true for this type — demote-only is scoped to "
 						+ "drug-reference prose, not to everything the module injects");
@@ -274,13 +298,16 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 	 * withholding does not reach since the sentence cites no reference material.
 	 *
 	 * <p><b>This shape is hypothetical, and the live measurement is why that is worth saying.</b> Over
-	 * the nine cells ADR Decision 38's owed-measurement section records, the model wrote no such
-	 * sentence about a record naming no drug: where it cited the record at all it wrote one that names
-	 * no drug either, which the record entails. So what the cases here measure is the module's HANDLING
-	 * of this shape, and the ADR section is what says whether a real model produces it. Do not read a
-	 * green run here as evidence that it does.
+	 * the eighteen cells ADR Decision 38's owed-measurement section records, the model made no such
+	 * claim about a record naming no drug: with a named twin record for the same prescription it wrote
+	 * a sentence that names no drug either, and with no twin it did not cite the record at all. So what
+	 * the cases here measure is the module's HANDLING of this shape, and the ADR section is what says
+	 * whether a real model produces it. Do not read a green run here as evidence that it does.
 	 */
 	private static final class CitesTheActiveOrderAlone extends LlmProvider {
+
+		/** The record line this provider cited, for the caller to assert the display on. */
+		private String citedRecord;
 
 		@Override
 		public LlmResponse search(String numberedRecords, List<Integer> focusIndices,
@@ -292,6 +319,9 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 								+ numberedRecords);
 			}
 			int order = Integer.parseInt(matcher.group(1));
+			int lineEnd = numberedRecords.indexOf('\n', matcher.start());
+			citedRecord = (lineEnd < 0 ? numberedRecords.substring(matcher.start())
+					: numberedRecords.substring(matcher.start(), lineEnd)).trim();
 			return new LlmResponse("The patient is taking naproxen 500mg twice daily [" + order + "].",
 					Collections.singletonList(Integer.valueOf(order)));
 		}

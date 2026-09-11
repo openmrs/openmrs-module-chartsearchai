@@ -43,17 +43,14 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * change. Patient 7's single active drug order (order 111, drug "ASPIRIN", concept 88) is the
  * arrangement, made nameless the only way the platform allows.
  *
- * <p><b>Why the names are voided by SQL and the ATC map is not.</b> {@code Concept.getName()} returns
- * null only for a concept none of whose non-voided names is a preferred name, a fully specified name or
- * a synonym. No count is given: the builder's own comment declines to enumerate the shapes, and a
- * SHORT-typed name is one this file's earlier "two shapes" wording missed. No such concept can be
- * SAVED: {@code ConceptValidator} rejects a concept with no fully specified name, and
- * {@code Concept.addName} coerces the first name added to {@code FULLY_SPECIFIED}, so the index-term
- * route cannot even be built. The order is therefore made nameless after the fact. The ATC mapping is
- * applied FIRST, through the real {@code ConceptService}, while the concept still has its name and
- * validation passes; only then are the names voided. Concept 88 carries TWO names — the FSN "ASPIRIN"
- * and the synonym "ASA" — and both must go, because {@code getName()} falls back to any synonym in any
- * locale before it returns null.
+ * <p><b>Why the names are voided by SQL and the ATC map is not</b> is
+ * {@link DrugReferenceTestSupport#makeOrderNameless}'s own javadoc, which owns that argument now that
+ * two packages build this arrangement. What belongs to this file rather than to the helper:
+ * {@code Concept.getName()} returns null only for a concept none of whose non-voided names is a
+ * preferred name, a fully specified name or a synonym — no count is given, because the builder's own
+ * comment declines to enumerate the shapes and a SHORT-typed name is one this file's earlier "two
+ * shapes" wording missed — and concept 88 carries TWO names, the FSN "ASPIRIN" and the synonym "ASA",
+ * both of which the helper's void must therefore reach.
  */
 public class NamelessActiveOrderPartnerTest extends BaseModuleContextSensitiveTest {
 
@@ -332,7 +329,13 @@ public class NamelessActiveOrderPartnerTest extends BaseModuleContextSensitiveTe
 	 * {@code grounded=false} — reaching a client as "Unsupported". That is a new exposure, and it is
 	 * accepted here only because the alternative is the order being invisible: the module denying a
 	 * prescription the chart records is worse than substantiating it with a code. Issue #290 carries it
-	 * forward.
+	 * forward as #294.
+	 *
+	 * <p><b>#294's measurement has since been run, and it qualifies the sentence above.</b> The
+	 * mechanism holds — the composed path does publish such a refusal — but no {@code false} was observed
+	 * live, because in neither arrangement measured did the model make a medication claim about a
+	 * record naming no drug. ADR Decision 38's owed-measurement section carries both runs and what
+	 * separates them; {@code CodesOnlyActiveOrderGroundingContextTest} is the composed-path half.
 	 */
 	@Test
 	public void theCodeOnlyDisplayIsWhatReachesTheChartAsACitableRecord() {

@@ -286,7 +286,11 @@ public class ChartSearchAiUtils {
 	 * chart evidence — one drug name asserted of this patient, carrying the real {@code Order} uuid,
 	 * with no subject roles to swap — so it is graded normally; demoting it would strip the
 	 * faithfulness check from the very record injected to stop the answer contradicting the safety
-	 * chips (#118). Conversely a {@link ChartSearchAiConstants#RESOURCE_TYPE_SAFETY_FINDING} is
+	 * chips (#118). <b>"One drug name" is the ordinary shape and not every shape</b>: an order the
+	 * module can read no name for renders as its ATC codes alone, so that record asserts no drug and
+	 * the clause above does not hold of it. It stays graded regardless — issue #294 asked what that
+	 * costs before anything is changed, and ADR Decision 38's owed-measurement section is the answer,
+	 * including what the first candidate remedy was measured to cost. Conversely a {@link ChartSearchAiConstants#RESOURCE_TYPE_SAFETY_FINDING} is
 	 * patient-specific but module-derived, and its rendering ("&lt;Drug&gt; interacts with active order
 	 * &lt;Partner&gt; — Major. &lt;mechanism&gt;") is precisely the role-swappable prose above, which is why
 	 * grading it produced verdicts that tracked embedding noise rather than the finding (issue #122).

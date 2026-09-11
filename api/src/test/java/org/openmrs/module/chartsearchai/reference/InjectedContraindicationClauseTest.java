@@ -381,8 +381,8 @@ public class InjectedContraindicationClauseTest {
 	public void clausesDifferingOnlyInCaseOrSpacingAreEachTheirOwnClause() throws Exception {
 		// The de-duplication identity is exact equality of the rendered clause, and this is what holds
 		// the EXACTNESS. Containment is held by the case above; case-folding and whitespace-normalising
-		// are a different loosening with the same harm, and until this case nothing in the suite could
-		// see them — a first-spelling-wins fold over toLowerCase() left the whole api suite green.
+		// are a different loosening with the same harm. Fold the identity either way and read the
+		// failures.
 		//
 		// Nalbuphine renders "Avoid in pregnancy" (denied), "avoid in pregnancy" (a self-named allergy
 		// rule her recorded Nalbuphine allergy both matches and NAMES, so recorded) and

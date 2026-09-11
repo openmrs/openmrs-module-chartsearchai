@@ -4124,8 +4124,10 @@ public class DrugReferenceInjector {
 	 *         {@code twoRulesOfOneEntrySharingANoteRenderThatClauseOnce} and
 	 *         {@code aClauseTwoKeysRenderIsListedOnceWithAnotherClauseBetweenThem} for the list,
 	 *         {@code aReadingSectionIsListedInTheDeduplicatedClausesOwnOrder} for the RECORDED section's
-	 *         order and {@code theDenialAndTheHedgeAreListedInTheClausesOwnOrderToo} for the other two,
-	 *         which no other case reaches. Mutate each and read the failures.
+	 *         order and {@code theDenialAndTheHedgeAreListedInTheClausesOwnOrderToo} for the other two.
+	 *         {@code clausesDifferingOnlyInCaseOrSpacingAreEachTheirOwnClause} and {@code
+	 *         aClauseAnotherKeyMerelyCONTAINSIsStillItsOwnClause} hold the IDENTITY that de-duplication
+	 *         uses. Mutate each and read the failures.
 	 *
 	 *         <p><b>Curated-source-only</b>, by construction rather than by measurement: neither
 	 *         {@code ddinter} nor {@code atc} publishes contraindications at all, so only an

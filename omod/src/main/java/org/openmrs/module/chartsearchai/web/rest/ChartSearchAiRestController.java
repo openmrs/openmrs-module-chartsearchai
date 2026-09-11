@@ -1318,6 +1318,18 @@ public class ChartSearchAiRestController {
 	 * gives about its own field: the key's unconditional presence is what lets a client read it
 	 * without first asking whether it is there.
 	 *
+	 * <p><b>{@code restsOnAnUncorroboratedChartMatch} is the chip's own provenance answer</b> (issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/374">#374</a>), read off
+	 * {@link SafetyWarning#restsOnAnUncorroboratedChartMatch()} and never re-derived here. It exists for
+	 * the reason {@code severity} above does: the module had made the judgement, the two injected
+	 * records stated it, and the only clinician-facing surface said nothing — so a chip asserted a
+	 * contraindication of the chart while the {@code safety_finding} beside it hedged. That accessor is
+	 * canonical for what the value means, including the two folds that make {@code false} weaker than
+	 * it reads, and {@code README.md} carries the client contract. Two things NOT to conclude from this
+	 * paragraph's placement beside {@code severity}: the flag is not a strength and must not be read as
+	 * one (ADR Decision 44), and {@code detail} is unchanged by it, so the qualification is the
+	 * client's to render. ADR Decision 92.
+	 *
 	 * <p><b>{@code chartOrderBridges} names which of the patient's own active orders each substance
 	 * the chip NAMES was resolved from</b>, where the order's own displayed name does not reach that
 	 * substance (issue

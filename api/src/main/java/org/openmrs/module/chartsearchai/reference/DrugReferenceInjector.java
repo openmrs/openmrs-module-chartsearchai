@@ -464,13 +464,39 @@ public class DrugReferenceInjector {
 	 * chart unchanged when the feature is off or nothing matches. Fails safe: the
 	 * injection is an additive enrichment, so any unexpected error degrades to the
 	 * unmodified chart rather than failing the query.
+	 *
+	 * <p><b>There is deliberately no three-argument overload beside this one</b> (issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/247">#247</a>). The
+	 * sink was added by widening this signature in place rather than by adding an arity, because
+	 * this repo has already measured what the alternative does: {@code DrugSafetyValidator.validate}
+	 * kept its narrower arity when the pair-extent sink arrived, and the test doubles overriding it
+	 * went silently inert on the production path — "the rest passed while stubbing nothing, and two
+	 * of them were still doing so after a review of the commit that added the overload". Seventeen
+	 * doubles override this method. Widening in place turned every stale one into a compile error
+	 * instead of a green test that stubs nothing.
+	 *
+	 * @param readStatus a caller-supplied one-slot accumulator the pass states its chart-read
+	 *        verdict into, or {@code null} from a caller that does not publish it. See
+	 *        {@link ChartReadStatus}, which is canonical for what each of its three answers means.
+	 *        It is the caller's per-call object and never a field: this bean is a Spring singleton
+	 *        (issue #172). Recorded as soon as the context exists and BEFORE the injection runs, so
+	 *        a pass that throws while rendering still reports the read that did happen; a pass that
+	 *        returns before building a context, or throws while building one, states nothing.
 	 */
-	public PatientChart inject(PatientChart chart, Patient patient, String question) {
+	public PatientChart inject(PatientChart chart, Patient patient, String question,
+			ChartReadStatus readStatus) {
 		try {
 			if (chart == null || !ChartSearchAiUtils.isDrugReferenceEnabled()) {
 				return chart;
 			}
 			PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
+			// Stated as soon as the context exists and BEFORE the injection runs (issue #247): the
+			// read is what this reports, so a pass that throws while rendering has still read the
+			// chart and must still say so. Above this line there is nothing to report — no context
+			// was built — and the sink's own null is the honest answer there.
+			if (readStatus != null) {
+				readStatus.record(context.chartReadForSafety());
+			}
 			return injectRecords(chart, context, question);
 		}
 		catch (RuntimeException e) {

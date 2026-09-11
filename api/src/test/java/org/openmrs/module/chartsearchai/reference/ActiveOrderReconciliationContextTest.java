@@ -106,7 +106,7 @@ public class ActiveOrderReconciliationContextTest extends BaseModuleContextSensi
 		// supplied has none), the safety layer reads the orders anyway, and the answer was left able
 		// to state "No active medications are recorded." while a chip named one of them.
 		PatientChart result = injector.inject(DrugReferenceTestSupport.oneRecordChart(), patient,
-				MEDICATION_QUESTION);
+				MEDICATION_QUESTION, null);
 
 		Set<String> injected = injectedUuids(result, ChartSearchAiConstants.RESOURCE_TYPE_ACTIVE_DRUG_ORDER);
 		assertTrue(injected.contains(TRIOMUNE_ORDER_UUID) && injected.contains(ASPIRIN_ORDER_UUID)
@@ -139,7 +139,7 @@ public class ActiveOrderReconciliationContextTest extends BaseModuleContextSensi
 		PatientChart chart = DrugReferenceTestSupport.chartOf(
 				records.toArray(new RecordMapping[records.size()]));
 
-		assertSame(chart, injector.inject(chart, patient, MEDICATION_QUESTION),
+		assertSame(chart, injector.inject(chart, patient, MEDICATION_QUESTION, null),
 				"the chart substantiates every active order, so it must be returned untouched");
 	}
 }

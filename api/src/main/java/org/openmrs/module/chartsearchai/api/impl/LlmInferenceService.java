@@ -24,6 +24,7 @@ import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
+import org.openmrs.module.chartsearchai.reference.ChartReadStatus;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceLoad;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
@@ -118,7 +119,15 @@ public class LlmInferenceService implements ChartSearchService {
 		String outcome = "error";
 		try {
 			PatientChart chart = chartBuildingStrategy.buildChart(patient, question);
-			chart = drugReferenceInjector.inject(chart, patient, question);
+			// And whether the chart reads behind the drug-safety layer actually happened (issue
+			// #247). Stated by the INJECTOR's pass and not the validator's: this is the request's
+			// first chart read, it happens whenever a screen could (validate gates on one switch
+			// more), and it is the only one that has happened by the time the ungrounded answer is
+			// handed off — which is the answer the early `done` event is emitted from. A failed read
+			// degrades to an empty set, so without this the response is byte-identical to a healthy
+			// patient's. ChartReadStatus is canonical for what its three answers mean.
+			ChartReadStatus chartRead = new ChartReadStatus();
+			chart = drugReferenceInjector.inject(chart, patient, question, chartRead);
 			// Resolved once, off the chart that was actually assembled, and carried on the answer —
 			// so the audit row the REST layer writes states the mode instead of re-deriving it
 			// (issue #178). After inject() deliberately: that is the chart the LLM sees.
@@ -233,7 +242,7 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
 					pairExtent.stated(), unresolvedDrugClass, unfaithfullyRenderedCitations,
 					misattributedOrderCitations, unstatedFindingSeverities, activeOrderClaims,
-					findingCitationExtent, conditionRuleCoverage);
+					findingCitationExtent, chartRead.stated(), conditionRuleCoverage);
 			outcome = "ok";
 			return answer;
 		}
@@ -518,7 +527,15 @@ public class LlmInferenceService implements ChartSearchService {
 		String outcome = "error";
 		try {
 			PatientChart chart = chartBuildingStrategy.buildChart(patient, question);
-			chart = drugReferenceInjector.inject(chart, patient, question);
+			// And whether the chart reads behind the drug-safety layer actually happened (issue
+			// #247). Stated by the INJECTOR's pass and not the validator's: this is the request's
+			// first chart read, it happens whenever a screen could (validate gates on one switch
+			// more), and it is the only one that has happened by the time the ungrounded answer is
+			// handed off — which is the answer the early `done` event is emitted from. A failed read
+			// degrades to an empty set, so without this the response is byte-identical to a healthy
+			// patient's. ChartReadStatus is canonical for what its three answers mean.
+			ChartReadStatus chartRead = new ChartReadStatus();
+			chart = drugReferenceInjector.inject(chart, patient, question, chartRead);
 			// One resolution for BOTH answers this method produces (issue #178). The early-done path
 			// audits the ungrounded answer and the classic path audits the returned one, so a mode
 			// each of them derived separately is two audit-write sites that can disagree — which is
@@ -606,7 +623,7 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), Collections.<SafetyWarning> emptyList(), searchMode,
 					referenceSlice, null, unresolvedDrugClass, null, null, null, null, null,
-					conditionRuleCoverage));
+					chartRead.stated(), conditionRuleCoverage));
 
 			// After the user-visible handoff, before grounding: the exact comparisons over what the
 			// answer did with the records it cites — the class-code defects a set-membership
@@ -678,7 +695,7 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
 					pairExtent.stated(), unresolvedDrugClass, unfaithfullyRenderedCitations,
 					misattributedOrderCitations, unstatedFindingSeverities, activeOrderClaims,
-					findingCitationExtent, conditionRuleCoverage);
+					findingCitationExtent, chartRead.stated(), conditionRuleCoverage);
 			outcome = "ok";
 			return answer;
 		}

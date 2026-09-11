@@ -89,7 +89,7 @@ public class ChartSearchAiActiveOrderClaimsTest {
 		return new ChartSearchService.ChartAnswer(MODEL_ANSWER,
 				Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
 				Collections.<SafetyWarning> emptyList(), null, null, null, null, null,
-				Collections.<Integer> emptyList(), null, stated, null, null);
+				Collections.<Integer> emptyList(), null, stated, null, null, null);
 	}
 
 	@SuppressWarnings("unchecked")

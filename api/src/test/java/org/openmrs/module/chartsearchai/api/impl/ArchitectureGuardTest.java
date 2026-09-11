@@ -762,6 +762,44 @@ public class ArchitectureGuardTest {
 	}
 
 	/**
+	 * {@code DrugReferenceInjector.inject} has exactly ONE arity, and that is what keeps the
+	 * chart-read verdict reaching the answer (issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/247">#247</a>).
+	 *
+	 * <p>The sink carrying that verdict was added by WIDENING the signature rather than by adding an
+	 * overload beside it, so every stale test double became a compile error instead of a green test
+	 * that stubs nothing. Add a narrower arity back — for a caller that "does not need the sink",
+	 * which is the natural next edit — and the two coexist quietly: production keeps calling the wide
+	 * one, doubles keep overriding whichever they were written against, and the ones that picked the
+	 * narrow one go inert without failing. That is not hypothetical on this codebase;
+	 * {@code DrugSafetyValidator.validate}'s javadoc records it happening, and records that a review
+	 * of the commit that added the overload did not find it.
+	 *
+	 * <p>Structural rather than behavioural because nothing observable separates the two worlds on
+	 * the day the overload is added: the spellings are equal and the suite stays green. What changes
+	 * is only what a LATER edit can do silently.
+	 *
+	 * <p>It counts DECLARED methods of that name, so a private helper called {@code inject} trips it
+	 * too. Deliberate: the rule is that this name is one entry point.
+	 */
+	@Test
+	public void theInjectorExposesExactlyOneInjectArity() throws IOException {
+		Path classes = ModuleSourceRoot.apiRoot().resolve("target/classes");
+		org.junit.jupiter.api.Assertions.assertTrue(java.nio.file.Files.isDirectory(classes),
+				"no " + classes + "; a guard that discovers nothing forbids nothing");
+		Path injector = classes.resolve(
+				"org/openmrs/module/chartsearchai/reference/DrugReferenceInjector.class");
+		org.junit.jupiter.api.Assertions.assertTrue(java.nio.file.Files.exists(injector),
+				"no DrugReferenceInjector class file at " + injector + ", so this guard forbids nothing");
+
+		List<String> arities = declaredMethodDescriptors(injector, "inject");
+		org.junit.jupiter.api.Assertions.assertEquals(1, arities.size(),
+				"DrugReferenceInjector.inject must have exactly one arity, so a test double written "
+						+ "against a stale signature fails to compile rather than going silently inert on "
+						+ "the production path (issue #247). Found: " + arities);
+	}
+
+	/**
 	 * @return the descriptor of every constructor {@code classFile} DECLARES, read from its method
 	 *         table rather than picked out of the constant pool by shape.
 	 *
@@ -774,6 +812,18 @@ public class ArchitectureGuardTest {
 	 *         attribute by its own declared length.
 	 */
 	private static List<String> constructorDescriptors(Path classFile) throws IOException {
+		return declaredMethodDescriptors(classFile, "<init>");
+	}
+
+	/**
+	 * @return the descriptor of every method named {@code methodName} that {@code classFile}
+	 *         DECLARES, read from its method table. The walk {@link #constructorDescriptors} uses and
+	 *         documents, with the name to match as a parameter — a constructor is just the method
+	 *         named {@code <init>}, and the blind spot that javadoc describes belongs to selecting
+	 *         from the constant pool rather than to what is being selected.
+	 */
+	private static List<String> declaredMethodDescriptors(Path classFile, String methodName)
+			throws IOException {
 		java.nio.ByteBuffer in = java.nio.ByteBuffer.wrap(java.nio.file.Files.readAllBytes(classFile));
 		List<String> pool = readConstantPool(in);
 		in.position(in.position() + 6);
@@ -791,7 +841,7 @@ public class ArchitectureGuardTest {
 			String name = pool.get(in.getShort() & 0xFFFF);
 			String descriptor = pool.get(in.getShort() & 0xFFFF);
 			skipAttributes(in);
-			if ("<init>".equals(name)) {
+			if (methodName.equals(name)) {
 				descriptors.add(descriptor);
 			}
 		}

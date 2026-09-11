@@ -390,6 +390,8 @@ public interface ChartSearchService {
 
 		private final FindingCitationExtent findingCitationExtent;
 
+		private final Boolean chartReadForSafety;
+
 		private final DrugReferenceLoad.Coverage conditionRuleCoverage;
 
 		public ChartAnswer(String answer, List<RecordReference> references) {
@@ -452,7 +454,7 @@ public interface ChartSearchService {
 				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations) {
 			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, searchMode,
 					referenceSlice, pairChipExtent, unresolvedDrugClass, unfaithfullyRenderedCitations,
-					null, null, null, null, null);
+					null, null, null, null, null, null);
 		}
 
 		/**
@@ -484,6 +486,7 @@ public interface ChartSearchService {
 				List<Integer> unstatedFindingSeverities,
 				ActiveOrderClaims activeOrderClaims,
 				FindingCitationExtent findingCitationExtent,
+				Boolean chartReadForSafety,
 				DrugReferenceLoad.Coverage conditionRuleCoverage) {
 			this.answer = answer;
 			this.references = java.util.Collections.unmodifiableList(
@@ -523,6 +526,11 @@ public interface ChartSearchService {
 			// own: null is the absence of a measurement and a zeroed statement is a measurement of
 			// none. Immutable, so it is carried rather than copied.
 			this.findingCitationExtent = findingCitationExtent;
+			// Three-valued for the reason the value types above are (issue #247): null is the absence
+			// of a measurement, and FALSE is a measurement — of a chart the module could not read.
+			// Boxed and never unboxed into a primitive here; collapsing it loses the only thing that
+			// separates "nobody looked" from "the reads completed".
+			this.chartReadForSafety = chartReadForSafety;
 			this.conditionRuleCoverage = conditionRuleCoverage;
 		}
 
@@ -909,6 +917,55 @@ public interface ChartSearchService {
 		}
 
 		/**
+		 * Whether every chart read behind this answer's drug-safety layer actually completed (issue
+		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/247">#247</a>).
+		 *
+		 * <p><b>The problem it exists to remove.</b> {@code PatientClinicalContextBuilder} degrades a
+		 * failed allergy, condition or active-order read to an EMPTY set, which is the right fail-safe
+		 * for an additive net and leaves the clinician-facing response identical to a healthy
+		 * patient's: no chips, no findings, and — before this key — nothing anywhere on the wire to
+		 * tell the two apart. The failure needs no bad data and no operator mistake; any permissions
+		 * problem, database error or querystore fault reaches it.
+		 *
+		 * <p><b>What each value asserts.</b> This is the only place that enumeration lives; README
+		 * points here rather than restating it.
+		 * <ul>
+		 * <li>{@code TRUE} — the reads completed. It does NOT say a contraindication was screened,
+		 * that the dataset had a rule to ask ({@link #getConditionRuleCoverage()} is that question),
+		 * or that anything was found. An empty {@code safetyWarnings} beside {@code TRUE} is a
+		 * measurement of none.</li>
+		 * <li>{@code FALSE} — at least one read failed. An empty {@code safetyWarnings} beside it is
+		 * NOT a measurement of none, and must not be rendered as a clear chart.</li>
+		 * <li>{@code null} — no measurement. The drug-reference feature is off, or the pass threw
+		 * before it had a context. Never read {@code null} as either verdict.</li>
+		 * </ul>
+		 *
+		 * <p><b>It is the WHOLE pass and never one side of it.</b>
+		 * {@code PatientClinicalContext.chartReadForSafety()} is the one spelling of that
+		 * conjunction, shared with {@code DrugSafetyValidator.standingChartAlerts}, so the two
+		 * surfaces cannot come to disagree about whether one chart was read. A records-only verdict
+		 * was the first shape and it reads {@code TRUE} on a request whose active-order read failed,
+		 * which is the defect ADR Decision 79 records one surface over.
+		 *
+		 * <p><b>Which pass it is of.</b> The INJECTOR's, which is the request's first chart read and
+		 * happens before the model is called. {@code DrugSafetyValidator.validate} builds a second
+		 * context of its own, so on a transient failure this verdict and the chips beside it can in
+		 * principle answer for different reads; in the case the key exists for — a role missing a
+		 * privilege — both builds fail alike. The injector's is used because it is the one that
+		 * happens whenever a screen could ({@code validate} gates on one switch more) and the only
+		 * one that has happened by the time the ungrounded answer is handed off.
+		 *
+		 * <p>It is not {@code StandingChartAlerts.isScreened()} on {@code /chartalerts}, which is a
+		 * strictly narrower verdict — that one also requires the drug-safety toggles and the pass
+		 * completing — and so keeps its own name.
+		 *
+		 * @return the verdict, or {@code null} where the producer stated none
+		 */
+		public Boolean getChartReadForSafety() {
+			return chartReadForSafety;
+		}
+
+		/**
 		 * What the loaded drug-reference dataset publishes for the hand-authored <b>condition</b>-rule
 		 * arm of the contraindication screen — what the {@code conditionRuleCoverage} key on the
 		 * {@code /search} response and on the {@code done} and {@code grounded} SSE events publishes
@@ -952,9 +1009,10 @@ public interface ChartSearchService {
 		 * them would withhold a knowable fact exactly where the arms are off.
 		 * {@code DrugSafetyValidator.conditionRuleCoverage()} carries that argument, and the refuted
 		 * one a first draft gave for the same rule.</li>
-		 * <li>Whether the patient's condition list was READ. A failed read degrades to an empty set,
-		 * which {@code PatientClinicalContext.contraindicationRecordsRead()} records for the injected
-		 * record's benefit and this key does not carry.</li>
+		 * <li>Whether the patient's condition list was READ. A failed read degrades to an empty set;
+		 * that is {@link #getChartReadForSafety()}'s question since issue #247, and this key still
+		 * does not carry it. The two are read together or not at all — a dataset that publishes a
+		 * condition rule says nothing about a chart nobody could read, and vice versa.</li>
 		 * <li>ENCOUNTER DIAGNOSES. The contraindication screen builds its condition tokens from
 		 * OpenMRS's ACTIVE CONDITIONS alone ({@code PatientClinicalContextBuilder}), so a recorded
 		 * diagnosis reaches no contraindication rule whatever this says. It still reaches the chart the

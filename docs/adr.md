@@ -3019,7 +3019,7 @@ Every figure in the tables above interleaves a different question on a different
 The module already knows the answer authoritatively: `PatientClinicalContextBuilder` reads `getActiveOrders`, and `Order.isActive()` excludes an expired order. The deterministic layer has always been right about cell B — the lapsed drug gets no chip, no interaction or duplicate-therapy screening and no #118 injection — while the prose may still name it. So the fix is to let the model see what the module knows: **mark the chart's `drug_order` records whose orders are not in the active set**, giving the classifier the discriminator it lacks. **This was filed as [#317](https://github.com/openmrs/openmrs-module-chartsearchai/issues/317) and shipped — [Decision 46](#decision-46-a-drug-order-record-says-whether-the-prescription-is-in-force), which is canonical for what was built.** The two obstacles named here are recorded as this entry found them, with what became of each:
 
 - **It cannot live in `DrugReferenceInjector`.** `chartsearchai.drugReference.enabled` defaults to **false** (`config.xml`), so the injector is off on a default install. The mark has to go in the always-on chart-assembly path — `ChartBuildingStrategy.buildChart()` → `QueryStoreChartBuilder.build()` / `PatientChartSerializer` — which today read only querystore and take no `OrderService` dependency. *Followed:* the mark is written in `QueryStoreChartBuilder.toSerializedRecords`, the single funnel all three build paths pass through, and chart assembly now takes that dependency and the `Get Orders` privilege with it.
-- **It has a fail-CLOSED hazard, with existing precedent for the fix.** `PatientClinicalContextBuilder` swallows a failed order read into an EMPTY set — its catch logs at DEBUG and sets no flag, unlike the two contraindication reads beside it — so a naive *"not in the active set ⇒ ended"* would mark **every** drug the patient has as stopped whenever that read fails — a chart nobody could read reported as a chart of stopped prescriptions. `PatientClinicalContext.contraindicationRecordsRead()` exists for exactly this distinction ("a chart the module could not read is not a chart that records nothing") and is the pattern to follow. *Followed:* `SerializedRecord.getOrderActive()` is three-valued with null as the guard, and the mark is a POSITIVE fact — the record's uuid must be one of the patient's own orders — rather than an inference from absence, so a drifted uuid contract cannot make "ended" true of every record. Decision 46 records the null cases and owns their enumeration.
+- **It has a fail-CLOSED hazard, with existing precedent for the fix.** `PatientClinicalContextBuilder` swallows a failed order read into an EMPTY set — its catch logged at DEBUG and set no flag, unlike the two contraindication reads beside it (both since corrected — [Decision 79](#decision-79-the-standing-chart-finding-is-served-by-a-surface-a-client-asks-for-not-by-every-answer) gave it `activeDrugOrdersRead`, and [Decision 91](#decision-91-a-chart-the-module-could-not-read-says-so-in-the-log-and-on-the-answer) raised the catch to WARN) — so a naive *"not in the active set ⇒ ended"* would mark **every** drug the patient has as stopped whenever that read fails — a chart nobody could read reported as a chart of stopped prescriptions. `PatientClinicalContext.contraindicationRecordsRead()` exists for exactly this distinction ("a chart the module could not read is not a chart that records nothing") and is the pattern to follow. *Followed:* `SerializedRecord.getOrderActive()` is three-valued with null as the guard, and the mark is a POSITIVE fact — the record's uuid must be one of the patient's own orders — rather than an inference from absence, so a drifted uuid contract cannot make "ended" true of every record. Decision 46 records the null cases and owns their enumeration.
 
 The other route is upstream: querystore rendering `auto_expire_date` into the drug-order text, at which point `describesEndedOrder` covers auto-expiry for free and `QuerystoreOrderTextMarkerTest.anAutoExpireDateAloneIsNotVisibleInTheRenderedText`'s expectation flips. Either way it is a change to shared infrastructure affecting every query for every patient, and it needs its own plan, its own refutation gate and a full re-run of both regression gates.
 
@@ -4470,7 +4470,7 @@ Decision 60 gave the two PAIRWISE interaction arms a `PairChipExtent` and put it
 - **−** **The two arms disagree about a patient taking nothing.** `addActiveOrderPairInteractions` on a chart with no active orders returns `PairChipExtent.of(0, 0)`; the drug-in-play arm on the same chart states nothing. That is deliberate and it is the asymmetry to know about. The screening arm ran because the clinician asked for a screen, and "no pairs" answers that question directly. The drug-in-play arm is gated on no question shape at all — it runs for any question that merely mentions a drug — so a zero there would answer a question nobody asked, on a chart where there was no population to screen. `PairChipExtentContextTest.aQuestionThatRunsNeitherPairwiseArmStatesNothing` pins the silence for an informational question and `.aDrugInPlayArmWithNoMedicationToScreenAgainstStatesNothing` for a prescribing one.
 - **−** **Answer-independence is at the level of SUBSTANCES, not of rows.** `resolvedRows` is built over `inPlay`, so a row the ANSWER names widens the group this arm rules over — #175's measured shape, where a subset's best rule can be strictly less severe — and can therefore change which rule survives for a question substance, and with it this count. What the restriction buys is that no substance the answer alone named is counted and that a question resolving no drug states nothing; it does not buy that the two validate passes would compute the same number. Only the post-answer pass has a sink, so nothing observable depends on it today.
 - **−** **`reported` is further from the interaction chip count than it was.** Decision 60 already recorded that the drug-in-play arm raises chips this does not count; now that arm also states the extent, and still does not count its class chips or its chips for answer-named drugs. Named in the type's javadoc, in `README` and in the wire helper's, and enforced by nothing.
-- **−** **The gate reads the chart, and a population the reference data cannot resolve is not a population it screened.** `hasActiveMedicationRecords` asks whether the chart records an active drug, not whether any of those drugs is one the knowledge base knows. A patient whose only order is a name the dataset carries no entry for now gets `{"found": 0, "reported": 0}` on a prescribing question, which `README` tells a client to read as a complete screen. That is pre-existing rather than introduced — the screening arm returns `of(0, 0)` on the same chart, measured — but this decision multiplies its reach from screening questions to every question naming a reference drug, so it is recorded here rather than left to be rediscovered. The same shape covers a PARTIAL order read: `PatientClinicalContextBuilder` wraps the whole order loop in one `try`, so a throw leaves the orders collected so far in place and the rest unread. [Decision 79](#decision-79-the-standing-chart-finding-is-served-by-a-surface-a-client-asks-for-not-by-every-answer) added the `PatientClinicalContext.activeDrugOrdersRead()` analogue of `contraindicationRecordsRead()` that this bullet said did not exist — but only the standing surface asks it. The pair-extent arm still cannot tell "no orders" from "the orders could not be read", so the defect this bullet records is unchanged; what has changed is that the flag it needs is now there.
+- **−** **The gate reads the chart, and a population the reference data cannot resolve is not a population it screened.** `hasActiveMedicationRecords` asks whether the chart records an active drug, not whether any of those drugs is one the knowledge base knows. A patient whose only order is a name the dataset carries no entry for now gets `{"found": 0, "reported": 0}` on a prescribing question, which `README` tells a client to read as a complete screen. That is pre-existing rather than introduced — the screening arm returns `of(0, 0)` on the same chart, measured — but this decision multiplies its reach from screening questions to every question naming a reference drug, so it is recorded here rather than left to be rediscovered. The same shape covers a PARTIAL order read: `PatientClinicalContextBuilder` wraps the whole order loop in one `try`, so a throw leaves the orders collected so far in place and the rest unread. [Decision 79](#decision-79-the-standing-chart-finding-is-served-by-a-surface-a-client-asks-for-not-by-every-answer) added the `PatientClinicalContext.activeDrugOrdersRead()` analogue of `contraindicationRecordsRead()` that this bullet said did not exist, and [Decision 91](#decision-91-a-chart-the-module-could-not-read-says-so-in-the-log-and-on-the-answer) made the answer read it too, through `chartReadForSafety()` — so the clause here that said only the standing surface asks it is no longer true. What is unchanged is the defect this bullet records: `interactionPairs` itself still cannot tell "no orders" from "the orders could not be read", and a client has to read `chartReadForSafety` beside it to do so.
 - **−** **A prescribing question is not always this arm's to speak for, and the reader cannot tell from the wire.** The gate is "no pairwise arm stated", and a name the clinician reads as ONE drug can resolve to several reference entries — the shipped KB files `Botulinum toxin type A` beside `Daxibotulinumtoxina`, and every route variant of a substance alike. That opens the question-pair arm, which then owns the field and reports ITS pairs, while the drug-in-play arm goes on raising chips that are in neither number. So a response can carry an above-floor interaction chip beside `found: 0`. It is honest — the zero describes the check that stated it — and it predates this decision, which only makes it reachable on a question shape where the field used to be `null`. Named in `README`, in the type's javadoc and in `docs/ddi-interaction-question-examples.md`, and enforced by nothing.
 - **−** **The arm is not gated on the question's SHAPE, so the statement reaches more than prescribing questions.** It runs for any question that mentions a drug, so *"What is clarithromycin used for?"* on a medicated chart now publishes an extent too — measured `{"found": 1, "reported": 1}` where that chart's order relates. Honest under the contract and deliberate (a shape gate would be the topic-intent gate CLAUDE.md's contraindication bullet records as measured-and-declined), but a client that renders a badge whenever the key is non-null will show one on a large class of ordinary questions. Rendering `0 / 0` at all is the frontend's decision, in `openmrs-esm-chartsearchai`, and neither `README` nor the type's javadoc tells it which way to go.
 - **−** **A third assigner of one local.** Decision 60 records that "published once, from a local both arms assign" is not test-observable, because no reachable path throws between an arm and the return. That is now a local three arms assign. The behavioural guard that does exist — `PairChipExtentContextTest.aPassThatThrewStatesNothingRatherThanACompleteScreen`, whose javadoc records that writing `(0, 0)` inside the fail-safe left api and omod green before it existed — reddens a per-arm sink write. A structural guard over the single `recordPairExtent` call site was considered and declined as redundant with it.
@@ -5920,7 +5920,7 @@ Interaction pairs between two active orders are deliberately outside it. That sc
 
 ### The screen's own state is published
 
-`screened` travels beside `alerts`, because an empty array otherwise carries two unrelated meanings — this chart holds no such finding, and nobody looked. That is [Decision 75](#decision-75-a-contraindication-screen-states-whether-it-had-a-condition-rule-to-ask)'s distinction for the condition-rule arm and [Decision 60](#decision-60-a-bounded-pairwise-interaction-list-states-its-own-bounds-on-the-response)'s for the interaction extent, met a third time on a surface where the whole payload can be empty. **The validator decides it and returns it beside the findings, in one object** (`DrugSafetyValidator.StandingChartAlerts`), so the flag cannot answer for a different pass than the list. The first shape asked a predicate and then asked for the findings, and review found two ways that came apart. A toggle flipped between the two reads is the small one. The large one is that `PatientClinicalContextBuilder` swallows a failed allergy or condition read into an EMPTY set and logs at DEBUG — which core's shipped `log4j2.xml` discards, putting `org.openmrs` at WARN — so a role holding `AI Query Patient Data` without core's `Get Allergies` got `{"screened": true, "alerts": []}` for a patient prescribed a drug she is documented allergic to. That is `reference/CLAUDE.md`'s "a chart the module could not read is not a chart that records nothing", on the one surface whose whole payload can be empty; `PatientClinicalContext.contraindicationRecordsRead()` is the flag it already had, and the seam now reads it.
+`screened` travels beside `alerts`, because an empty array otherwise carries two unrelated meanings — this chart holds no such finding, and nobody looked. That is [Decision 75](#decision-75-a-contraindication-screen-states-whether-it-had-a-condition-rule-to-ask)'s distinction for the condition-rule arm and [Decision 60](#decision-60-a-bounded-pairwise-interaction-list-states-its-own-bounds-on-the-response)'s for the interaction extent, met a third time on a surface where the whole payload can be empty. **The validator decides it and returns it beside the findings, in one object** (`DrugSafetyValidator.StandingChartAlerts`), so the flag cannot answer for a different pass than the list. The first shape asked a predicate and then asked for the findings, and review found two ways that came apart. A toggle flipped between the two reads is the small one. The large one is that `PatientClinicalContextBuilder` swallows a failed allergy or condition read into an EMPTY set and logged it at DEBUG — which core's shipped `log4j2.xml` discards, putting `org.openmrs` at WARN — so a role holding `AI Query Patient Data` without core's `Get Allergies` got `{"screened": true, "alerts": []}` for a patient prescribed a drug she is documented allergic to. (Those catches are WARN since [Decision 91](#decision-91-a-chart-the-module-could-not-read-says-so-in-the-log-and-on-the-answer); the swallowing into an empty set, which is what this argument rests on, is unchanged.) That is `reference/CLAUDE.md`'s "a chart the module could not read is not a chart that records nothing", on the one surface whose whole payload can be empty; `PatientClinicalContext.contraindicationRecordsRead()` is the flag it already had, and the seam now reads it.
 
 **And the same defect was one read further over.** `getActiveOrders` is `@Authorized(GET_ORDERS)` in core and throws exactly as `getAllergies` does, but the builder recorded only the two record reads — so a role without `Get Orders` still got `{"screened": true, "alerts": []}`, on the side of the join this surface actually is. That needed a second stamp, `activeDrugOrdersRead()`, deliberately not a widening of the first: the injector asks the first before stating what a patient's RECORDS do not contain, and her prescriptions are not those records. A pass that threw is not screened either, and neither is a patient the builder was never given — its no-read early return stamped both flags `true` until this, certifying a chart nobody read.
 
@@ -5928,7 +5928,7 @@ Interaction pairs between two active orders are deliberately outside it. That sc
 
 It answers whether this CHART was screened and not what the loaded dataset had a rule to ask WITH. Those are two questions, and the second is stated beside it as `conditionRuleCoverage` — the key [Decision 75](#decision-75-a-contraindication-screen-states-whether-it-had-a-condition-rule-to-ask) put on `/search`, met here for the reason `screened` itself is met: on the shipped DDInter default no hand-authored condition rule exists, so a patient prescribed a drug her recorded condition contraindicates gets `screened: true` beside an empty `alerts` — a measurement of none, taken with nothing to measure it against.
 
-A first draft routed a client to `GET /chartsearchai/drugreferencestatus` for that instead, and review round 2 refuted it: that endpoint gates on core's `Get Global Properties`, a different privilege from the `AI Query Patient Data` this one requires. It happens to sit on `Authenticated` on a stock install — the README's own note on why `origin` is relative says so — and a hardened site can take it away, leaving a chart-alerts client with no channel for the verdict at all. The status endpoint still answers the WIDER question, every arm and `arms.handAuthoredRules.coverage` beside the condition leg, and is still where a client goes for that. The key is written through `ChartSearchAiRestController.putConditionRuleCoverage`, the controller's one spelling of it, so the two surfaces cannot name one verdict two ways; it is ungated for Decision 75's own reason — the verdict is knowable whether or not a screen ran, and gating it withholds it exactly where the arms are off. What `screened: false` does not say is WHICH of its causes applies — that endpoint's own `enabled` key covers the master switch; a chart whose records could not be read is logged at WARN by the seam that decides it, naming the core privileges to check, because the builder's own catches log at DEBUG and a stock install discards those; and the two drug-safety toggles are published nowhere.
+A first draft routed a client to `GET /chartsearchai/drugreferencestatus` for that instead, and review round 2 refuted it: that endpoint gates on core's `Get Global Properties`, a different privilege from the `AI Query Patient Data` this one requires. It happens to sit on `Authenticated` on a stock install — the README's own note on why `origin` is relative says so — and a hardened site can take it away, leaving a chart-alerts client with no channel for the verdict at all. The status endpoint still answers the WIDER question, every arm and `arms.handAuthoredRules.coverage` beside the condition leg, and is still where a client goes for that. The key is written through `ChartSearchAiRestController.putConditionRuleCoverage`, the controller's one spelling of it, so the two surfaces cannot name one verdict two ways; it is ungated for Decision 75's own reason — the verdict is knowable whether or not a screen ran, and gating it withholds it exactly where the arms are off. What `screened: false` does not say is WHICH of its causes applies — that endpoint's own `enabled` key covers the master switch; a chart whose records could not be read is logged at WARN by the seam that decides it, naming the core privileges to check — this clause went on to say that seam was the ONLY such signal, because the builder's own catches logged at DEBUG and a stock install discards those, and [Decision 91](#decision-91-a-chart-the-module-could-not-read-says-so-in-the-log-and-on-the-answer) made them WARN too; and the two drug-safety toggles are published nowhere.
 
 ### The gate is one expression, and the published verdict narrows it
 
@@ -6839,3 +6839,106 @@ prevent repeating.
 - **Retiring `SafetyFindingCitationExtentCheck`, the repair and `SafetyFindingSeverityFidelityCheck`
   now that prose no longer enumerates.** Not available on this evidence: the corpus still shows four
   cells short, so the completeness key is still measuring a live duty rather than a retired one.
+
+## Decision 91: A chart the module could not read says so, in the log and on the answer
+
+**Status: Accepted** (September 2026) — implemented, no global property, always on.
+
+### Context
+
+`PatientClinicalContextBuilder` reads three things off a patient for the drug-safety layer: her
+allergies, her conditions and her active drug orders. Each read sits in its own `try` and each
+degrades to an EMPTY set on failure. That fail-safe is right — the layer is additive and must never
+break the answer path — and it is not what this decision is about.
+
+What it is about is that the failure was **indistinguishable from a healthy chart**. The two
+observable consequences of a failed read are that the derived token set is empty and that a stamp
+(`contraindicationRecordsRead`, `activeDrugOrdersRead`) goes false. On the `/search` path, before
+this decision, nothing published either one:
+
+- the operator channel was `log.debug`, and core's shipped `log4j2.xml` puts `org.openmrs` at WARN,
+  so a default install emitted **nothing at all**;
+- the client channel did not exist. `safetyWarnings` was empty, `interactionPairs` stated a screen
+  of none, `conditionRuleCoverage` answered about the dataset. Every one of those is true and
+  together they read as a clean chart.
+
+Issue [#247](https://github.com/openmrs/openmrs-module-chartsearchai/issues/247) measured it: read
+OK with an allergy recorded gave 1 chip and 1 finding; read OK with nothing recorded gave 0 and 0;
+**read FAILED gave 0 and 0**, and no mention anywhere that the chart was unread. It needs no bad
+data and no operator mistake — any permissions problem, database error or querystore fault reaches
+it, and the commonest is a role granted `AI Query Patient Data` without one of core's chart-read
+privileges.
+
+[Decision 79](#decision-79-the-standing-chart-finding-is-served-by-a-surface-a-client-asks-for-not-by-every-answer)
+had already met this on `GET /chartsearchai/chartalerts` and solved it there, with a WARN at the
+seam and the `screened` key. The answer path had neither.
+
+### Decision
+
+**Both channels, for the same reason the loader rule gives**: *silence is the absence of a finding,
+never a muted one.*
+
+1. **All three catches log at WARN**, naming the core privilege to check. Not two: the published
+   verdict below is the whole pass, so leaving the order catch silent would make the answer path's
+   log channel narrower than the standing surface's for the identical failure. Age and weight stay
+   at DEBUG — they feed the dose arm, which
+   `SafetyFindingSeverityStrengthTest.theTypeThatStatesNeitherClauseCannotReachTheRendererBeforeThereIsAnAnswer`
+   pins as unreachable from the injector.
+
+2. **The answer carries `chartReadForSafety`**, a three-valued `Boolean`:
+   `TRUE` the reads completed, `FALSE` at least one failed, `null` no measurement.
+   `ChartAnswer.getChartReadForSafety()` is canonical for what each asserts and is the only place
+   that enumeration lives.
+
+3. **The verdict is the WHOLE pass**, `PatientClinicalContext.chartReadForSafety()` — both stamps,
+   one spelling, shared with `standingChartAlerts` so the two surfaces cannot disagree about
+   whether one chart was read.
+
+4. **It is stated by the INJECTOR's pass**, through a caller-owned `ChartReadStatus` sink.
+
+### Alternatives considered and rejected
+
+- **A records-only key**, covering `contraindicationRecordsRead` alone. This was the first shape and
+  the refutation gate refused it against three citations. It reads `TRUE` on a request whose
+  active-order read failed, beside an empty chip list produced by interaction arms that read no
+  orders — which is precisely the defect Decision 79 records one surface over, where a role without
+  `Get Orders` was handed `{"screened": true, "alerts": []}`. `StandingChartAlerts.isScreened()`'s
+  javadoc had already recorded the partial verdict as considered and declined: *"the alternative is
+  a partial verdict a client would have to be taught to read."* Naming the key for the records does
+  not rescue it, because a wire consumer given one key cannot ask both, which
+  `reference/CLAUDE.md` requires of a reader joining the two sides.
+
+- **Stating it from `DrugSafetyValidator.validate`'s pass** rather than the injector's. `validate`
+  gates on one switch more, so its read is a strict subset of the injector's; and it runs AFTER the
+  ungrounded answer is constructed, so the early `done` — which fires whether or not async grounding
+  is enabled, and is what a streaming user sees — would have carried `null`.
+
+- **Reusing the `screened` name.** `StandingChartAlerts.isScreened()` is a strictly narrower verdict:
+  it also requires the drug-safety toggles and the pass completing. One verdict, one spelling, so a
+  different question takes a different name.
+
+- **Adding a four-argument `inject` overload beside the three-argument one.** Seventeen test doubles
+  override that method. An overload leaves every stale one compiling and silently inert on the
+  production path, which `DrugSafetyValidator.validate`'s javadoc records as having already happened
+  here — *"the rest passed while stubbing nothing, and two of them were still doing so after a review
+  of the commit that added the overload"*. The signature was widened in place instead, turning all
+  seventeen into compile errors, and
+  `ArchitectureGuardTest.theInjectorExposesExactlyOneInjectArity` keeps it that way: nothing
+  observable separates the two worlds on the day an overload is added, so the guard is structural.
+
+### Consequences
+
+- **−** **The verdict and the chips beside it can answer for different reads.** `validate` builds a
+  second `PatientClinicalContext`, so on a *transient* failure the key and the chip list describe
+  different passes. In the case the key exists for — a missing privilege — both builds fail alike.
+  Recorded rather than closed; closing it means threading one context through both passes, which is
+  a larger change than this defect warrants.
+- **−** **The WARN repeats twice per `/search`**, because `inject` and `validate` each build a
+  context. Accepted on the terms the neighbouring nameless-order WARN already states: the only dedup
+  available is a JVM-lifetime set of patient keys, which is unbounded and would answer for whoever
+  asked first.
+- **−** **`TRUE` is not a certificate.** It says the reads happened, not that anything was screened
+  or that the dataset had a rule to ask. A client rendering it as "chart checked" is the failure the
+  key exists to remove, one level over. Stated in the accessor's javadoc and in `README`.
+- **+** The three-valued shape keeps "nobody looked" apart from "we looked and the reads completed",
+  which is the distinction every neighbouring key on this payload already draws.

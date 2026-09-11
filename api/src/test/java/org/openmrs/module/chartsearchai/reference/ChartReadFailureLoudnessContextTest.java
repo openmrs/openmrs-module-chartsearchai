@@ -1,0 +1,177 @@
+/**
+ * This Source Code Form is subject to the terms of the Mozilla Public License,
+ * v. 2.0. If a copy of the MPL was not distributed with this file, You can
+ * obtain one at http://mozilla.org/MPL/2.0/. OpenMRS is also distributed under
+ * the terms of the Healthcare Disclaimer located at http://openmrs.org/license.
+ *
+ * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
+ * graphic logo is a trademark of OpenMRS Inc.
+ */
+package org.openmrs.module.chartsearchai.reference;
+
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import org.apache.logging.log4j.Level;
+import org.junit.jupiter.api.Test;
+import org.openmrs.Patient;
+import org.openmrs.api.context.Context;
+import org.openmrs.api.context.UserContext;
+import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.LogCapture;
+import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
+import org.openmrs.util.PrivilegeConstants;
+
+/**
+ * A chart read the module could not perform is reported where a stock install can see it (issue
+ * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/247">#247</a> item 1).
+ *
+ * <p>{@code PatientClinicalContextBuilder} degrades each failed read to an empty set. That is the
+ * right fail-safe for the answer path and it is not what this class is about: what it is about is
+ * that the failure was logged at DEBUG, which core's shipped {@code log4j2.xml} discards by putting
+ * {@code org.openmrs} at WARN — so on a default install nothing was emitted at all, and an operator
+ * looking for the reason a safety net reported nothing found an empty log.
+ *
+ * <p><b>The assertion is the LEVEL and never the message text.</b> {@link LogCapture}'s own class
+ * javadoc gives the reason and gives it about issue #149, which is the shape this ticket invokes: a
+ * test asserting on wording would let a re-wording silently drop the guard, and the return value
+ * cannot pin it either, because an empty token set is the correct fail-safe in BOTH the
+ * healthy-but-empty and the unreadable case.
+ *
+ * <p><b>Three cases and not one.</b> The three assignments are three lines in three {@code try}
+ * blocks, so a case for the allergy read alone stays green when either of the others is reverted —
+ * the reason {@code StandingChartAlertsToggleContextTest} states for its own pair of stamp cases.
+ *
+ * <p><b>The capture is scoped to the BUILDER's own logger, not to the package.</b> These are
+ * POSITIVE assertions, and for a positive the package's reach is a liability rather than a
+ * protection: {@code DrugReferenceValidity}, {@code DrugReferenceService}'s inert-load line,
+ * {@code JsonDrugReferenceSource}, {@code DrugReferenceInjector}'s reconciliation line and the
+ * builder's OWN nameless-order WARN all log under {@code …chartsearchai.reference}, and any of them
+ * firing inside the window would make these three pass while the line under test stayed at DEBUG.
+ * {@link #aChartTheModuleCanReadIsNotReportedAsAFailedRead} is the negative, and it carries its own
+ * liveness witness rather than relying on that reach.
+ *
+ * <p>The read is failed the way production fails it, not by throwing from a stub: core annotates
+ * each of the three service calls the builder makes with an {@code @Authorized} privilege, so a user
+ * context refusing exactly one reproduces the role each of these defects is about — a site that
+ * grants {@code AI Query Patient Data} without one of core's chart-read privileges. The technique is
+ * {@code StandingChartAlertsToggleContextTest}'s, where it already drives all three stamps.
+ */
+public class ChartReadFailureLoudnessContextTest extends BaseModuleContextSensitiveTest {
+
+	/**
+	 * The logger these cases capture. Named once: {@link #aChartTheModuleCanReadIsNotReportedAsAFailedRead}
+	 * is a negative over the same name, so a name that matches nothing reddens the three positives
+	 * rather than leaving the negative to pass vacuously.
+	 */
+	private static final String BUILDER_LOGGER = PatientClinicalContextBuilder.class.getName();
+
+	/** An answer and a question that put a drug in play, so the pass under test is one that would
+	 *  screen rather than one that returns before reading anything. */
+	private static final String QUESTION = "Can I give him ibuprofen?";
+
+	private static final String ANSWER = "Ibuprofen can be given.";
+
+	private void configure(String property, String value) {
+		Context.getAdministrationService().setGlobalProperty(property, value);
+	}
+
+	/**
+	 * The two switches above the seam. Written explicitly because
+	 * {@code ChartSearchAiConstants.DEFAULT_DRUG_REFERENCE_ENABLED} is {@code false}: left to the
+	 * default, {@code validate} returns before building a context at all and every case here would be
+	 * measuring the switch instead of the log.
+	 */
+	private void enableTheScreen() {
+		configure(ChartSearchAiConstants.GP_DRUG_REFERENCE_ENABLED, "true");
+		configure(ChartSearchAiConstants.GP_DRUG_SAFETY_VALIDATE_ANSWERS, "true");
+	}
+
+	/**
+	 * Drives the real production entry — the arity {@code LlmInferenceService} calls, which builds the
+	 * clinical context itself — with {@code privilege} refused, and answers whether the builder said
+	 * anything a stock install would print.
+	 *
+	 * @param privilege the one privilege to refuse, or {@code null} to hold every one
+	 */
+	private boolean builderReportedAFailureAudibly(String privilege) {
+		enableTheScreen();
+		Patient patient = Context.getPatientService().getPatient(7);
+		assertNotNull(patient, "precondition: the standard test patient must exist");
+		DrugSafetyValidator validator =
+				DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService());
+
+		UserContext prior = Context.getUserContext();
+		if (privilege != null) {
+			Context.setUserContext(new UserContext(null) {
+
+				@Override
+				public boolean hasPrivilege(String held) {
+					return !privilege.equals(held);
+				}
+			});
+		}
+		try (LogCapture capture = LogCapture.on(BUILDER_LOGGER)) {
+			validator.validate(ANSWER, QUESTION, patient, null, null);
+			return capture.hasEventAtOrAbove(Level.WARN);
+		}
+		finally {
+			Context.setUserContext(prior);
+		}
+	}
+
+	/**
+	 * The allergy catch. Without this line the contraindication screen evaluates against "this patient
+	 * has no allergies", which is indistinguishable from a patient who genuinely has none — and on a
+	 * stock install there is nothing in the log to tell them apart.
+	 */
+	@Test
+	public void aRoleThatCannotReadAllergiesIsReportedWhereAStockInstallWouldSeeIt() {
+		assertTrue(builderReportedAFailureAudibly(PrivilegeConstants.GET_ALLERGIES),
+				"a failed allergy read must be reported at WARN or above: core's shipped log4j2.xml "
+						+ "puts org.openmrs at WARN, so a DEBUG line is emitted by no default install "
+						+ "and the safety layer goes blind with nothing to say so (issue #247)");
+	}
+
+	/** The condition catch, which is a second line in a second try block. */
+	@Test
+	public void aRoleThatCannotReadConditionsIsReportedWhereAStockInstallWouldSeeIt() {
+		assertTrue(builderReportedAFailureAudibly(PrivilegeConstants.GET_CONDITIONS),
+				"a failed condition read must be reported at WARN or above, for the reason the allergy "
+						+ "read beside it must be");
+	}
+
+	/**
+	 * The active-order catch. It is here because the verdict this issue publishes is the WHOLE pass —
+	 * {@code PatientClinicalContext.chartReadForSafety()} — so the order read decides that key exactly
+	 * as the two record reads do, and leaving one of three silent would make the answer path's log
+	 * channel narrower than the standing surface's for the identical failure.
+	 */
+	@Test
+	public void aRoleThatCannotReadOrdersIsReportedWhereAStockInstallWouldSeeIt() {
+		assertTrue(builderReportedAFailureAudibly(PrivilegeConstants.GET_ORDERS),
+				"a failed active-order read must be reported at WARN or above: it blinds the "
+						+ "interaction arms the same way, and it is one of the two stamps the "
+						+ "published verdict is made of");
+	}
+
+	/**
+	 * The discriminator, and it carries its own liveness witness.
+	 *
+	 * <p>A negative on a class logger that stays silent in the healthy case is the vacuity
+	 * {@link LogCapture} exists to prevent — a capture attached to a name nothing logs under would
+	 * pass it without observing anything. So this case asserts BOTH directions through the one helper:
+	 * the healthy read is silent, and the same arrangement with one privilege refused is not. The
+	 * second half is what proves the capture was live.
+	 */
+	@Test
+	public void aChartTheModuleCanReadIsNotReportedAsAFailedRead() {
+		assertFalse(builderReportedAFailureAudibly(null),
+				"a chart the module read successfully must produce no WARN from the builder — without "
+						+ "this the three cases above pass on any WARN the path happens to emit");
+		assertTrue(builderReportedAFailureAudibly(PrivilegeConstants.GET_ALLERGIES),
+				"the liveness witness for the negative above: the same capture, over the same logger, "
+						+ "must see the line when the read really fails");
+	}
+}

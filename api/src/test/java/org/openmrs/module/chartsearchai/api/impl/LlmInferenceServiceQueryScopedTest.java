@@ -25,6 +25,7 @@ import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
+import org.openmrs.module.chartsearchai.reference.ChartReadStatus;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
 import org.openmrs.module.chartsearchai.reference.PairChipExtent;
@@ -70,7 +71,8 @@ public class LlmInferenceServiceQueryScopedTest {
 		service.setDrugReferenceInjector(new DrugReferenceInjector() {
 
 			@Override
-			public PatientChart inject(PatientChart chart, Patient patient, String question) {
+			public PatientChart inject(PatientChart chart, Patient patient, String question,
+					ChartReadStatus readStatus) {
 				return chart;
 			}
 		});

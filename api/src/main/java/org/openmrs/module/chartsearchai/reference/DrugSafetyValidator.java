@@ -298,9 +298,10 @@ public class DrugSafetyValidator {
 	 * asking for the findings, and that could answer for a different pass than the one it published:
 	 * a toggle flipped between the two reads, and — the case that made this a defect rather than a
 	 * race — a chart whose allergy or condition read FAILED. {@code PatientClinicalContextBuilder}
-	 * swallows such a failure into an EMPTY set and logs at DEBUG, which core's shipped log level
-	 * discards, so the surface reported {@code screened: true} beside an empty array for a patient
-	 * nobody had looked at. That is
+	 * swallows such a failure into an EMPTY set and, until issue #247 raised those catches to WARN,
+	 * logged it at DEBUG, which core's shipped log level discards — so the surface reported
+	 * {@code screened: true} beside an empty array for a patient nobody had looked at, and nothing
+	 * anywhere said why. That is
 	 * {@code api/src/main/java/…/reference/CLAUDE.md}'s "a chart the module could not read is not a
 	 * chart that records nothing", on the one surface whose WHOLE payload can be empty.
 	 *
@@ -350,9 +351,12 @@ public class DrugSafetyValidator {
 		 *         be taught to read. It does not say WHICH of the reasons applies, and
 		 *         the channels differ: {@code GET /chartsearchai/drugreferencestatus} publishes the
 		 *         master switch; a chart whose records could not be READ is logged at WARN by the seam
-		 *         that decides this, which is the only signal for that case, since the builder's own
-		 *         catches log at DEBUG and a stock install discards those; and the two
-		 *         {@code drugSafety} toggles are published nowhere.
+		 *         that decides this AND, since issue #247, by the builder's own catches, which were
+		 *         DEBUG when this paragraph was written and claimed this seam as the only signal; and
+		 *         the two {@code drugSafety} toggles are published nowhere. On the ANSWER path that
+		 *         same issue publishes the verdict as {@code ChartAnswer.getChartReadForSafety()},
+		 *         which is a different and wider question from this one — it asks only whether the
+		 *         reads happened, not whether a screen ran.
 		 */
 		public boolean isScreened() {
 			return screened;
@@ -457,12 +461,14 @@ public class DrugSafetyValidator {
 			// the handler, which resolves the patient first; the public entry is not its only caller.
 			return StandingChartAlerts.notScreened();
 		}
-		if (!context.contraindicationRecordsRead() || !context.activeDrugOrdersRead()) {
-			// WARN, and the only signal an operator gets for this state. The builder's own catches log
-			// at DEBUG, which core's shipped log4j2.xml discards by putting org.openmrs at WARN — right
-			// for the answer path, where a missing record only narrows a chip, and wrong here, where it
-			// is the whole payload. A configuration fault an operator can fix, which this package's
-			// loudness rule says is loud wherever the data came from.
+		if (!context.chartReadForSafety()) {
+			// WARN, and it says what this SURFACE does about the state rather than that the state
+			// happened: since issue #247 the builder's own catches are loud too, so an operator sees
+			// the failing read named where it is read and its consequence named here. The two are not
+			// redundant and neither subsumes the other — the builder's line carries the exception and
+			// fires wherever a context is built, this one says the payload beside it is not a clean
+			// chart. A configuration fault an operator can fix, which this package's loudness rule
+			// says is loud wherever the data came from.
 			//
 			// It names EVERY side that failed, not the first: a two-branch form said only "allergy or
 			// condition records" where BOTH reads had failed, so an operator granted those two would

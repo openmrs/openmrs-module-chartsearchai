@@ -95,7 +95,7 @@ public class ChartSearchAiFindingCitationsTest {
 				Collections.<ChartSearchService.RecordReference> emptyList(), 0, 0, 0,
 				Collections.<SafetyWarning> emptyList(), null, null, null, null,
 				Collections.<Integer> emptyList(), Collections.<Integer> emptyList(),
-				Collections.<Integer> emptyList(), null, stated, null);
+				Collections.<Integer> emptyList(), null, stated, null, null);
 	}
 
 	@SuppressWarnings("unchecked")

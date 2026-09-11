@@ -226,7 +226,7 @@ public class DrugSafetyWeightContextTest extends BaseModuleContextSensitiveTest 
 		DrugReferenceInjector brokenInjector = DrugReferenceTestSupport.injector(broken);
 		org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart chart =
 				DrugReferenceTestSupport.oneRecordChart();
-		assertTrue(brokenInjector.inject(chart, patient, "is ibuprofen safe?") == chart,
+		assertTrue(brokenInjector.inject(chart, patient, "is ibuprofen safe?", null) == chart,
 				"a throwing dataset source must return the chart unchanged, not break the query");
 	}
 

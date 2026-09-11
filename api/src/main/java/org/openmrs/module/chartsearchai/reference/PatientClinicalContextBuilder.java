@@ -195,7 +195,10 @@ final class PatientClinicalContextBuilder {
 			}
 		}
 		catch (RuntimeException e) {
-			log.debug("Could not read active orders for drug-reference context", e);
+			log.warn("Could not read this patient's active drug orders; the drug-safety layer is "
+					+ "screening as though there were none. This chart is reported as NOT read rather "
+					+ "than as clear. Check that the querying role holds core's Get Orders privilege.",
+				e);
 			activeDrugOrdersRead = false;
 		}
 
@@ -234,7 +237,10 @@ final class PatientClinicalContextBuilder {
 			}
 		}
 		catch (RuntimeException e) {
-			log.debug("Could not read allergies for drug-reference context", e);
+			log.warn("Could not read this patient's allergies; the contraindication screen is "
+					+ "evaluating as though there were none. This chart is reported as NOT read rather "
+					+ "than as clear. Check that the querying role holds core's Get Allergies "
+					+ "privilege.", e);
 			contraindicationRecordsRead = false;
 		}
 
@@ -251,7 +257,10 @@ final class PatientClinicalContextBuilder {
 			}
 		}
 		catch (RuntimeException e) {
-			log.debug("Could not read conditions for drug-reference context", e);
+			log.warn("Could not read this patient's conditions; the contraindication screen is "
+					+ "evaluating as though there were none. This chart is reported as NOT read rather "
+					+ "than as clear. Check that the querying role holds core's Get Conditions "
+					+ "privilege.", e);
 			contraindicationRecordsRead = false;
 		}
 

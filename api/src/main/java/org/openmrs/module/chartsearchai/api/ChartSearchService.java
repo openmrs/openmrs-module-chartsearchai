@@ -924,12 +924,13 @@ public interface ChartSearchService {
 		 * <p><b>Those three reads and no others, which is narrower than it sounds.</b> Two other
 		 * failures leave this verdict {@code TRUE}, both deliberately, and both still at DEBUG:
 		 * <ul>
-		 * <li>AGE and WEIGHT. Weight feeds only the dose arm, which cannot reach the renderer. Age
-		 * has a second consumer — {@code DrugReferenceInjector}'s {@code render} asks
-		 * {@code DrugReference.bandForAge}, which answers null for a null age, so a failed age read
-		 * silently drops the dosing lines from the injected record. That is a real and unstamped
-		 * gap; it is outside this key because the key is built from the two stamps and age carries
-		 * none.</li>
+		 * <li>AGE and WEIGHT, each with a real and unstamped gap of its own. A failed AGE read makes
+		 * {@code DrugReference.bandForAge} answer null, which drops the dosing lines from the
+		 * injected record. A failed WEIGHT read silences the per-kg leg of
+		 * {@code DrugSafetyValidator.addOverdose}, so a band whose only ceiling is per-kg — the
+		 * shipped {@code sourceFormat=json} dataset has one — raises no overdose chip at all. Both
+		 * are outside this key because the key is built from the two stamps and neither of these
+		 * carries one; both still log at DEBUG.</li>
 		 * <li>The per-order sub-reads INSIDE the active-order loop — an order's concept uuid, its
 		 * concept names, its ATC codes. Each has its own catch and leaves
 		 * {@code activeDrugOrdersRead} true, so an order read partly is not a read that failed.</li>

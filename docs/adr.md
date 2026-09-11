@@ -6883,11 +6883,10 @@ never a muted one.*
 1. **All three catches log at WARN**, naming the core privilege to check. Not two: the published
    verdict below is the whole pass, so leaving the order catch silent would make the answer path's
    log channel narrower than the standing surface's for the identical failure. Age and weight stay
-   at DEBUG, for reasons that are NOT the same. Weight feeds only the dose arm, which
-   `SafetyFindingSeverityStrengthTest.theTypeThatStatesNeitherClauseCannotReachTheRendererBeforeThereIsAnAnswer`
-   pins as unreachable from the injector. Age has a second consumer and a real residue —
-   `ChartAnswer.getChartReadForSafety()` records it — and is outside the verdict because it carries
-   no stamp, not because nothing reads it.
+   at DEBUG, and not because nothing reads them — each has a real residue, which
+   `ChartAnswer.getChartReadForSafety()` records. They are outside the verdict because the verdict
+   is built from the two stamps and neither of these carries one. Adding stamps for them is a
+   further change and is not made here.
 
 2. **The answer carries `chartReadForSafety`**, a three-valued `Boolean`:
    `TRUE` all three of those reads completed, `FALSE` at least one did not, `null` no measurement.

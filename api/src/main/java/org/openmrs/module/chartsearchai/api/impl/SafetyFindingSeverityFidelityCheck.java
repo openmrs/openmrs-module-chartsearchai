@@ -20,6 +20,7 @@ import java.util.Set;
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
+import org.openmrs.module.chartsearchai.api.ChartSearchService.UnstatedFindingSeverity;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.RecordMapping;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -123,9 +124,11 @@ import org.slf4j.LoggerFactory;
  *       answer, never where.</li>
  * </ul>
  *
- * <p><b>It reports and it publishes.</b> The WARN is the maintainer's channel;
- * {@code ChartAnswer.getUnstatedFindingSeverities()} is the clinician's, through the
- * {@code unstatedFindingSeverities} response key, and it exists for the reason ADR Decision 74 gave
+ * <p><b>It reports and it publishes, and both carry the same pair.</b> The WARN is the maintainer's
+ * channel; {@code ChartAnswer.getUnstatedFindingSeverities()} is the clinician's, through the
+ * {@code unstatedFindingSeverities} response key — each entry the citation AND the rating since
+ * issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/387">#387</a>,
+ * which is what the WARN had carried all along. It exists for the reason ADR Decision 74 gave
  * for publishing the first of these answers: when the response was measured, nothing observable on
  * it distinguished a degraded rendering from a faithful one. Stated that way rather than as "every
  * observable field read as a clean answer's would", which is no longer true of that response — the
@@ -162,28 +165,38 @@ final class SafetyFindingSeverityFidelityCheck {
 	 *            here re-derives a rating; the write site is pinned by
 	 *            {@code ArchitectureGuardTest.theProvenanceCarryingMappingConstructorHasOneCaller}
 	 * @param mappings the chart's records, cited or not — the carrier of each cited record's rating
-	 * @return the offending citation indexes in CITATION order — {@code cited}'s own order, taken
-	 *         rather than re-derived so that "which records were cited, and in what order" has one
-	 *         answer, and pinned by
+	 * @return one {@link UnstatedFindingSeverity} per offending citation, each pairing the citation
+	 *         with the rating that record states and the answer does not (issue #387), in CITATION
+	 *         order — {@code cited}'s own order, taken rather than re-derived so that "which records
+	 *         were cited, and in what order" has one answer, and pinned by
 	 *         {@code SafetyFindingSeverityFidelityTest.theStatementIsInTHEANSWERSCitationOrderAndNotSortedByIndex}
 	 *         rather than left indistinguishable from ascending index order. Empty when the check
 	 *         ran and found none, and null only when the check itself failed.
 	 *
-	 *         <p>The set the walk accumulates into de-duplicates, and that is belt and braces rather
-	 *         than load-bearing: {@code LlmInferenceService.extractCitedReferences} already collects
-	 *         indexes into a {@code LinkedHashSet} and emits one reference per index, so
-	 *         {@code cited} cannot carry a repeat today. Said so the guard does not look better
-	 *         defended than it is — a review pass swapped the set for a list that always adds and the
-	 *         whole build stayed green. What the set IS load-bearing for is the order above.
+	 *         <p><b>The pairing is made here and nowhere else.</b> The rating is the one
+	 *         {@code ratings} already holds — the record's own {@code findingSeverity} — so a
+	 *         consumer never re-derives it, and the published statement and the {@code WARN} below
+	 *         cannot come apart. Before #387 this returned the offending INDEXES alone, the rating
+	 *         reaching only the log, which left a client unable to rebuild the pairing from anything
+	 *         else on the response; {@code ChartSearchService.UnstatedFindingSeverity} carries why.
+	 *
+	 *         <p>The set the walk de-duplicates on is belt and braces rather than load-bearing:
+	 *         {@code LlmInferenceService.extractCitedReferences} already collects indexes into a
+	 *         {@code LinkedHashSet} and emits one reference per index, so {@code cited} cannot carry
+	 *         a repeat today. Said so the guard does not look better defended than it is — a review
+	 *         pass swapped the set for a list that always adds and the whole build stayed green. It
+	 *         no longer carries the ORDER, which is now the order entries are appended in; what it
+	 *         still decides is that one citation yields at most one entry, which is what lets a
+	 *         consumer treat {@code citation} as a key.
 	 */
-	static List<Integer> reportUnstatedFindingSeverities(Patient patient, String answer,
-			List<RecordReference> cited, List<RecordMapping> mappings) {
+	static List<UnstatedFindingSeverity> reportUnstatedFindingSeverities(Patient patient,
+			String answer, List<RecordReference> cited, List<RecordMapping> mappings) {
 		Integer patientId = null;
 		try {
 			// Inside the guard, not above it: reading a detached patient proxy is the one line here
 			// that could throw, and the promise this catch makes is structural or it is nothing.
 			patientId = patient == null ? null : patient.getPatientId();
-			List<Integer> offending = new ArrayList<Integer>();
+			List<UnstatedFindingSeverity> offending = new ArrayList<UnstatedFindingSeverity>();
 			if (cited == null || cited.isEmpty() || mappings == null
 					|| ChartSearchAiUtils.isBlank(answer)) {
 				// The blank arm is REACHABLE rather than defensive; the class javadoc's conservatism
@@ -220,7 +233,6 @@ final class SafetyFindingSeverityFidelityCheck {
 			// gave two keys for one rating and paid two walks of the answer for the same question.
 			// `statesWord` is case-insensitive, so that was never a wrong answer, only a wrong bound.
 			Map<String, Boolean> stated = new HashMap<String, Boolean>();
-			List<String> reasons = new ArrayList<String>();
 			Set<Integer> seen = new LinkedHashSet<Integer>();
 			for (RecordReference citation : cited) {
 				String rating = ratings.get(Integer.valueOf(citation.getIndex()));
@@ -240,19 +252,27 @@ final class SafetyFindingSeverityFidelityCheck {
 					continue;
 				}
 				if (seen.add(Integer.valueOf(citation.getIndex()))) {
-					reasons.add("[" + citation.getIndex() + "] " + rating);
+					// The pairing is made HERE, the one place holding both halves, and never by a
+					// consumer — issue #387. The rating handed on is the one `ratings` carries, which
+					// is the record's own `findingSeverity`; nothing re-derives it and nothing reads
+					// a chip.
+					offending.add(new UnstatedFindingSeverity(citation.getIndex(), rating));
 				}
 			}
-			offending.addAll(seen);
 			if (!offending.isEmpty()) {
-				// The rating travels inside the reason strings rather than as a bare index list, so
-				// each citation reads beside the word that went missing: a maintainer triaging this
-				// needs to know whether a Major rating was dropped or a Minor one. Neither the answer
-				// nor any record text is logged — they carry patient data, and the citation with the
-				// patient identifies the claim. The rating is the module's own closed vocabulary and
-				// says nothing about this patient.
+				// Each citation reads beside the word that went missing: a maintainer triaging this
+				// needs to know whether a Major rating was dropped or a Minor one. The WARN is the
+				// PUBLISHED list itself, so the log and the wire cannot disagree about WHICH pairs
+				// they state — one list, not two collections appended in step, which is what this
+				// looked like until #387. Their FORMATS are separate and deliberately so: the log
+				// takes each entry's `toString` (as `DrugReferenceInjector.chartOrderClause` takes
+				// `ChartOrderBridge`'s) while the wire's two key names are literals in the
+				// controller, which is where a documented key belongs.
+				// Neither the answer nor any record text is logged — they carry patient data, and the
+				// citation with the patient identifies the claim. The rating is the module's own
+				// closed vocabulary and says nothing about this patient.
 				log.warn("Answer for patient={} states no rating for cited finding(s) {}. The answer "
-						+ "prose is left unchanged (issue #337).", patientId, reasons);
+						+ "prose is left unchanged (issue #337).", patientId, offending);
 			}
 			return offending;
 		}

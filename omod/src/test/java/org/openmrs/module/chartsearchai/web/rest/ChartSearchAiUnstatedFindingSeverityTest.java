@@ -17,6 +17,7 @@ import java.io.ByteArrayOutputStream;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Consumer;
 
@@ -26,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
 import org.openmrs.User;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
+import org.openmrs.module.chartsearchai.api.ChartSearchService.UnstatedFindingSeverity;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -46,12 +48,21 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * #354 answered for the drug-class note, #336 for the interaction extent and #377 for a
  * misattributed citation, and this key is the same remedy.
  *
- * <p>What the value MEANS — why it is the citation and not a word of either text, why an empty list
- * is not a certificate, and which residues the check cannot see — is pinned one layer down by
- * {@code SafetyFindingSeverityFidelityTest} and is canonical at
- * {@code ChartAnswer.getUnstatedFindingSeverities()}. Here the subject is the wire: that the key
- * reaches every surface, that {@code null} and empty survive as themselves, and that it marshals for
- * an XML client, which is the one shape a list-valued key is already known to break (issue #347).
+ * <p>Each entry carries the RATING beside the citation since issue
+ * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/387">#387</a>. Before it
+ * the key was a bare index list, and a client told which citations were missing a rating could not
+ * learn which rating: the chips hold every rating and no citation index, and {@code (type, drug)}
+ * identifies no one finding — all five on the reproduction being
+ * {@code (interaction, Clarithromycin)}. That pairing is what this file's assertions are now about.
+ *
+ * <p>What the value MEANS — why it is the citation and the rating and not a word of either text, why
+ * an empty list is not a certificate, and which residues the check cannot see — is pinned one layer
+ * down by {@code SafetyFindingSeverityFidelityTest} and is canonical at
+ * {@code ChartSearchService.UnstatedFindingSeverity}. Here the subject is the wire: that the key
+ * reaches every surface, that its two fields are spelled {@code citation} and {@code rating} — the
+ * second deliberately NOT {@code severity}, which is a chip's raw field and a different value — that
+ * {@code null} and empty survive as themselves, and that it marshals for an XML client, which is the
+ * one shape a list-valued key is already known to break (issue #347).
  */
 public class ChartSearchAiUnstatedFindingSeverityTest {
 
@@ -74,13 +85,16 @@ public class ChartSearchAiUnstatedFindingSeverityTest {
 
 	private final RestControllerContext openmrsContext = new RestControllerContext();
 
-	/** What the module states per case: the two dropped ratings by default, and reset per case. */
-	private List<Integer> stated;
+	/** What the module states per case: the two dropped ratings by default, and reset per case.
+	 *  The two ratings DIFFER (issue #387) — with one repeated, a serializer writing the first
+	 *  entry's rating onto every entry would stay green here. */
+	private List<UnstatedFindingSeverity> stated;
 
 	@BeforeEach
 	public void setUp() {
-		stated = Collections.unmodifiableList(
-				Arrays.asList(Integer.valueOf(350), Integer.valueOf(351)));
+		stated = Collections.unmodifiableList(Arrays.asList(
+				new UnstatedFindingSeverity(350, "Major"),
+				new UnstatedFindingSeverity(351, "Moderate")));
 		controller = new ChartSearchAiRestController();
 		controller.setAuditLogService(new StubAuditLogService());
 		controller.setChartSearchService(new UnstatedSeverityAnswerStubService());
@@ -129,8 +143,12 @@ public class ChartSearchAiUnstatedFindingSeverityTest {
 		assertTrue(payload.containsKey("unstatedFindingSeverities"),
 				"the blocking /search response must state which cited findings it found the answer "
 						+ "stated no rating for: " + payload);
-		assertEquals(Arrays.asList(Integer.valueOf(350), Integer.valueOf(351)),
-				payload.get("unstatedFindingSeverities"));
+		assertEquals(Arrays.asList(entry(350, "Major"), entry(351, "Moderate")),
+				payload.get("unstatedFindingSeverities"),
+				"each entry pairs the citation with the rating that finding's record states and the "
+						+ "answer does not — before issue #387 the wire carried the bare indexes and "
+						+ "a client could not recover which rating belonged to which citation: "
+						+ payload);
 		// What made the defect invisible: the chips are a parallel list, so a client rendering them
 		// beside this prose sees correct ratings and a degraded sentence and nothing relating the two.
 		assertEquals(0, ((List<?>) payload.get("safetyWarnings")).size(),
@@ -168,7 +186,12 @@ public class ChartSearchAiUnstatedFindingSeverityTest {
 		assertTrue(done.has("unstatedFindingSeverities"),
 				"the done event carried no unstatedFindingSeverities key");
 		assertEquals(2, done.get("unstatedFindingSeverities").size());
-		assertEquals(350, done.get("unstatedFindingSeverities").get(0).asInt());
+		assertEquals(350, done.get("unstatedFindingSeverities").get(0).get("citation").asInt());
+		assertEquals("Major",
+				done.get("unstatedFindingSeverities").get(0).get("rating").asText());
+		assertEquals("Moderate",
+				done.get("unstatedFindingSeverities").get(1).get("rating").asText(),
+				"and the SECOND entry carries its own rating, not the first one's");
 	}
 
 	/**
@@ -194,7 +217,10 @@ public class ChartSearchAiUnstatedFindingSeverityTest {
 		JsonNode grounded = eventData("grounded");
 		assertEquals(2, grounded.get("unstatedFindingSeverities").size(),
 				"the trailing event is where the measurement lands");
-		assertEquals(350, grounded.get("unstatedFindingSeverities").get(0).asInt());
+		assertEquals(350, grounded.get("unstatedFindingSeverities").get(0).get("citation").asInt());
+		assertEquals("Major",
+				grounded.get("unstatedFindingSeverities").get(0).get("rating").asText(),
+				"and it carries the rating, which is the half issue #387 added");
 	}
 
 	/**
@@ -229,6 +255,16 @@ public class ChartSearchAiUnstatedFindingSeverityTest {
 				"the unstatedFindingSeverities key must be written in exactly one place, beside the "
 						+ "chips and the module's other statements (issue #337). Found " + keys
 						+ " writes of it.");
+	}
+
+	/** The wire shape of one entry, spelled out as a map rather than compared through the value
+	 *  type — the subject here is what a JSON client receives, so the KEYS are part of the claim and
+	 *  a renamed one must redden. */
+	private static Map<String, Object> entry(int citation, String rating) {
+		Map<String, Object> expected = new LinkedHashMap<String, Object>();
+		expected.put("citation", Integer.valueOf(citation));
+		expected.put("rating", rating);
+		return expected;
 	}
 
 	/** An answer that states its findings without their ratings, on both the classic and the async

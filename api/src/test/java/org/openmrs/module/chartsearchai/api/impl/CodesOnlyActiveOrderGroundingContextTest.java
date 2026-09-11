@@ -111,10 +111,18 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 	 *  question-driven injection arm. */
 	private static final String QUESTION = "What medications is this patient currently taking?";
 
-	/** The medication claim the stub model makes about the record, without its citation marker. The
-	 *  judge's inputs are asserted against this and against {@link #CODES_ONLY_RECORD}, so a
-	 *  regression that handed Tier-2 the wrong premise or picked the wrong claim unit cannot pass. */
-	private static final String CLAIM = "The patient is taking naproxen 500mg twice daily";
+	/**
+	 * The medication claim the stub model makes about the record, without its citation marker. The
+	 * judge's premise is asserted against {@link #CODES_ONLY_RECORD} and its statement against this,
+	 * so a regression that handed Tier-2 a truncated premise cannot pass.
+	 *
+	 * <p>It names a drug the record's own codes do NOT denote — metformin is {@code A10BA02}, the
+	 * codes are {@code M01AE} — so the claim is one the record could not entail even if a reader
+	 * resolved the codes. That keeps the arrangement honest about what it is: a medication claim
+	 * aimed at a record naming no drug. An earlier version named the drug {@code M01AE02} actually
+	 * is, which contradicted the two javadocs above that decline to assert what these codes denote.
+	 */
+	private static final String CLAIM = "The patient is taking metformin 500mg twice daily";
 
 	/** Reads the injected record's own number out of the numbered chart the provider is handed, so a
 	 *  change to how many records the injector appends cannot quietly turn this into an arrangement

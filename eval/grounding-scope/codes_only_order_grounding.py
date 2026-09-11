@@ -71,7 +71,16 @@ PATIENT = os.environ.get("PATIENT")
 ORDER_UUID = os.environ.get("ORDER_UUID")
 FLOOR_GP = "chartsearchai.grounding.minCosine"
 
-QUESTION = "What medications is this patient currently taking?"
+# The regime grid holds this fixed, and it must be a question that gets the model to SAY
+# something about the record: on a twin-free arrangement an ordinary medication question leaves
+# the record uncited, so a grid built on one compares four cells that published no verdict at
+# all. This is the question on which a published `grounded=false` was first observed.
+REGIME_QUESTION = ("Does the patient have any active drug order whose drug the chart does"
+                   " not name?")
+
+# Run beside the grid, because what the module is FOR is that an ordinary medication question
+# cannot deny a prescription the chart holds. On the run in ADR Decision 38 it still can.
+MEDICATION_QUESTION = "What medications is this patient currently taking?"
 
 REGIMES = [("entailment-on  floor-0.40", True, "0.40"),
            ("entailment-on  floor-0.82", True, "0.82"),
@@ -92,13 +101,19 @@ REGIMES = [("entailment-on  floor-0.40", True, "0.40"),
 # they measure whether the injected record closes issue #118's divergence, and on the run
 # recorded in ADR Decision 38 they show it does not.
 PROBES = [
-    ("unnamed-order",
-     "Does the patient have any active drug order whose drug the chart does not name?"),
+    ("medication", MEDICATION_QUESTION),
     ("name-each-order", "List each active drug order and name its drug."),
     ("full-med-list", "Give the patient's complete medication list, naming every drug."),
     ("how-many", "How many active drug orders does this patient have?"),
     ("safety", "Is it safe to start her on clarithromycin?"),
 ]
+
+# Set SUBSTANCE_PROBE to a question naming what THIS arrangement's order actually is — e.g. for
+# an order carrying P01BD51, "Is the patient taking any antimalarial medication?". It is not
+# hardcoded because an earlier run carried over probes naming a previous arrangement's drug and
+# those cells could not have elicited anything. It is the probe that showed the answer DENYING a
+# prescription the chart holds a record for, which is the sharper of the two findings on #294.
+SUBSTANCE_PROBE = os.environ.get("SUBSTANCE_PROBE")
 
 
 def set_regime(entailment, floor):
@@ -181,12 +196,22 @@ def main():
     try:
         if which in ("regimes", "all"):
             for label, entailment, floor in REGIMES:
-                cell("regime " + label, QUESTION, entailment, floor)
+                cell("regime " + label, REGIME_QUESTION, entailment, floor)
         if which in ("probes", "all"):
             for tag, question in PROBES:
                 cell("probe " + tag, question, True, "0.40")
+            if SUBSTANCE_PROBE:
+                cell("probe substance", SUBSTANCE_PROBE, True, "0.40")
+            else:
+                print("# SUBSTANCE_PROBE unset: the arrangement-specific probe was NOT run,"
+                      " so this run says nothing about whether the answer denies the drug",
+                      flush=True)
     finally:
         for name, value in baseline:
+            if value is None:
+                # The row exists with no value; writing str(None) would set the literal "None".
+                print("# NOT restoring %s: it had no value to restore" % name, flush=True)
+                continue
             gsab.set_gp(name, value)
         print("# restored: %s" % baseline, flush=True)
 

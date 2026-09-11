@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.web.rest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -68,7 +69,8 @@ public class ChartSearchAiUncorroboratedChartMatchTest {
 	private static final String UNCORROBORATED_DETAIL =
 			"Naltrexone is contraindicated by an active condition: acute hepatitis or liver failure";
 
-	private static final String CORROBORATED_DETAIL =
+	/** Chip 1's sentence, whose rule the chart DOES corroborate. */
+	private static final String UNHEDGED_DETAIL =
 			"Ibuprofen is contraindicated by the recorded condition Peptic ulcer disease.";
 
 	private ChartSearchAiRestController controller;
@@ -93,15 +95,26 @@ public class ChartSearchAiUncorroboratedChartMatchTest {
 	}
 
 	/**
-	 * Two contraindication chips whose sentences are equally categorical and whose provenance answers
-	 * differ — the arrangement the key exists for. The uncorroborated one is built by the
-	 * curated-rule arm's own factory; the other by the public constructor, which answers false the way
-	 * the allergen arm's sentences do.
+	 * Three contraindication chips whose sentences are equally categorical and whose provenance
+	 * answers differ — the arrangement the key exists for. Chip 0 is built by the curated-rule arm's
+	 * own factory; chips 1 and 2 by the public constructor, which answers false the way the allergen
+	 * arm's sentences do.
+	 *
+	 * <p><b>Chip 2 carries chip 0's sentence verbatim, and that is what makes the value assertions
+	 * below discriminate anything.</b> Without it every published field except this key separates the
+	 * two answers — chip 0's detail is the only one naming an active condition — so a serializer
+	 * re-deriving the value from {@code detail} agrees with the accessor on every chip and passes.
+	 * Measured on this change's own polish round: with the pinned put commented out and a
+	 * {@code detail}-sniff written beside it, the whole omod suite stayed green. Chips 0 and 2 are now
+	 * byte-identical in {@code type}, {@code drug}, {@code detail}, {@code severity} and
+	 * {@code chartOrderBridges}, so no function of any other published field can agree with the
+	 * accessor on both, and the re-derivation reddens on BEHAVIOUR rather than on a source scan.
 	 */
 	private static List<SafetyWarning> chips() {
 		return Arrays.asList(
 			SafetyWarningFixtures.uncorroboratedContraindication("Naltrexone", UNCORROBORATED_DETAIL),
-			new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, "Ibuprofen", CORROBORATED_DETAIL));
+			new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, "Ibuprofen", UNHEDGED_DETAIL),
+			new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, "Naltrexone", UNCORROBORATED_DETAIL));
 	}
 
 	/**
@@ -119,7 +132,7 @@ public class ChartSearchAiUncorroboratedChartMatchTest {
 			new User(3), false);
 		JsonNode chips = SseEvents.dataOfType(out, "done", MAPPER).get("safetyWarnings");
 		assertNotNull(chips, "the done event carried no safetyWarnings key");
-		assertEquals(2, chips.size(), "precondition: this arrangement raises two chips, was: " + chips);
+		assertEquals(3, chips.size(), "precondition: this arrangement raises three chips, was: " + chips);
 		return chips;
 	}
 
@@ -134,11 +147,8 @@ public class ChartSearchAiUncorroboratedChartMatchTest {
 	 * which is also why the assertion is made of BOTH: a key that read true for every contraindication
 	 * chip would satisfy a one-sided reading of this case while saying nothing.
 	 *
-	 * <p>It does not assert that {@code detail} changed, because it did not: the sentence is measured
-	 * prose that {@code DrugSafetyChipLabelTest} and issue #108 constrain, and
-	 * {@code DrugReferenceInjector.renderFinding} copies it verbatim into a citable
-	 * {@code safety_finding} that appends its own provenance clause off this very flag — so hedging the
-	 * sentence would state the hedge twice. ADR Decision 92.
+	 * <p>It does not assert that {@code detail} changed, because it did not — ADR Decision 92 for why
+	 * the sentence was not hedged instead.
 	 */
 	@Test
 	public void theChipStatesWhetherItsChartMatchIsCorroborated() throws Exception {
@@ -156,43 +166,83 @@ public class ChartSearchAiUncorroboratedChartMatchTest {
 		assertTrue(published.asBoolean(),
 			"the module knows nothing corroborates this match; the chip must say so: " + uncorroborated);
 
-		JsonNode corroborated = chips.get(1);
-		assertEquals(CORROBORATED_DETAIL, corroborated.get("detail").asText(),
-			"precondition: chip 1 is the corroborated one");
-		assertNotNull(corroborated.get("restsOnAnUncorroboratedChartMatch"),
-			"the key is present on every chip, not only on the ones that answer true: " + corroborated);
-		assertEquals(false, corroborated.get("restsOnAnUncorroboratedChartMatch").asBoolean(),
-			"a chip with nothing to hedge must not be hedged: " + corroborated);
+		JsonNode unhedged = chips.get(1);
+		assertEquals(UNHEDGED_DETAIL, unhedged.get("detail").asText(),
+			"precondition: chip 1 is the one whose rule the chart corroborates");
+		assertNotNull(unhedged.get("restsOnAnUncorroboratedChartMatch"),
+			"the key is present on every chip, not only on the ones that answer true: " + unhedged);
+		assertFalse(unhedged.get("restsOnAnUncorroboratedChartMatch").asBoolean(),
+			"a chip with nothing to hedge must not be hedged: " + unhedged);
+
+		// The pair that makes the two assertions above discriminate: chip 2 is chip 0's sentence
+		// verbatim and answers false, so nothing but this key separates them. A value re-derived from
+		// any other published field reddens HERE, which is what stops the source pin below from being
+		// the only thing standing between a maintainer and a detail-sniff.
+		JsonNode twin = chips.get(2);
+		assertEquals(uncorroborated.get("detail").asText(), twin.get("detail").asText(),
+			"precondition: chip 2 carries chip 0's sentence verbatim");
+		assertEquals(uncorroborated.get("drug").asText(), twin.get("drug").asText(),
+			"precondition: and its drug");
+		assertFalse(twin.get("restsOnAnUncorroboratedChartMatch").asBoolean(),
+			"two chips with one sentence must still publish their own provenance answers, or the value "
+					+ "is being read off something other than the chip: " + twin);
 	}
 
 	/**
-	 * The chip's provenance answer is published by READING THE ACCESSOR, in the one serializer.
+	 * The chip's provenance answer is published by READING THE ACCESSOR, once, in the one serializer.
 	 *
 	 * <p>Scoped to {@code serializeSafetyWarnings}' own body and not to the file, for the reason
 	 * {@code ChartSearchAiInteractionPairExtentTest} gives of its own scoping: asked of the whole
 	 * source, a put anywhere in the controller would satisfy it, including one on a payload this
 	 * chip's array is not part of.
 	 *
-	 * <p><b>It asserts the accessor is READ, which is the half the reflective guard cannot see.</b>
-	 * That guard compares the published value against the accessor on the fixture's chips, so it is
-	 * satisfied by any expression that happens to agree with them — a re-derivation from
-	 * {@code getSeverity()}, or a constant matching a fixture that carries one value. Issue #340's
-	 * defect was a value computed and then dropped; the shape this pin adds is a value RECOMPUTED at
-	 * the serializer, which is the two-resolutions-that-agree shape issue #151 records, and it fails
-	 * silently in one direction.
+	 * <p><b>Counted rather than matched as a statement, and over comment-stripped source</b> — the
+	 * idiom {@code ChartSearchAiChartOrderBridgeTest} uses for the sibling key, and both halves of the
+	 * shape were paid for on this change's own polish round. Matching a whitespace-exact spelling of
+	 * the whole {@code map.put(..)} reddened when the accessor read was hoisted into a local, which
+	 * changes nothing this guard is about; and matching raw source passed when the real put was
+	 * COMMENTED OUT with a {@code detail}-sniff written beside it. What it asks now is that exactly one
+	 * live statement names the key and exactly one names the accessor, with its receiver so a javadoc
+	 * {@code @link} cannot count as a read.
+	 *
+	 * <p><b>It is not what stops a re-derivation, and must not be relied on as such.</b> That is
+	 * {@link #theChipStatesWhetherItsChartMatchIsCorroborated}'s identical-detail chip pair, which
+	 * makes any value computed from another published field disagree with the accessor on behaviour.
+	 * This case adds the thing no value comparison can see: that the published value came from the
+	 * accessor rather than from something that happens to agree with it on this fixture — the
+	 * two-resolutions-that-agree shape issue #151 records.
 	 */
-	@org.junit.jupiter.api.Test
+	@Test
 	public void theSerializerPublishesTheChipsOwnProvenanceAnswer() throws Exception {
-		String body = ChartSearchAiStreamingTest.bodyOf(ChartSearchAiStreamingTest.controllerSource(),
-			"private List<Map<String, Object>> serializeSafetyWarnings(");
+		String body = liveCode(ChartSearchAiStreamingTest.bodyOf(
+			ChartSearchAiStreamingTest.controllerSource(),
+			"private List<Map<String, Object>> serializeSafetyWarnings("));
 
-		assertTrue(body.contains("map.put(\"restsOnAnUncorroboratedChartMatch\",\n"
-				+ "\t\t\t\twarning.restsOnAnUncorroboratedChartMatch());")
-				|| body.contains("map.put(\"restsOnAnUncorroboratedChartMatch\", "
-						+ "warning.restsOnAnUncorroboratedChartMatch());"),
-			"serializeSafetyWarnings must publish the chip's own provenance answer, read off "
-					+ "SafetyWarning.restsOnAnUncorroboratedChartMatch() rather than re-derived — "
-					+ "issue #374. Body was: " + body);
+		int keys = ChartSearchAiStreamingTest.occurrences(body, "\"restsOnAnUncorroboratedChartMatch\"");
+		assertEquals(1, keys,
+			"the key must be written in exactly one live statement inside the one method that builds a "
+					+ "chip's wire map (issue #374). Found " + keys + " in: " + body);
+		int reads = ChartSearchAiStreamingTest.occurrences(body,
+			"warning.restsOnAnUncorroboratedChartMatch()");
+		assertEquals(1, reads,
+			"and it must be read straight off the chip, once — a second reader, or none, is a site "
+					+ "re-deriving the provenance answer instead of publishing it. Found " + reads
+					+ " in: " + body);
+	}
+
+	/**
+	 * @return {@code source} with its {@code //} line comments removed, so a guard over it cannot be
+	 *         satisfied by a commented-out copy of the statement it looks for. Block comments are not
+	 *         stripped: none of the bodies these guards read carries one, and a stripper that handled
+	 *         them would have to track string literals to stay correct.
+	 */
+	private static String liveCode(String source) {
+		StringBuilder out = new StringBuilder(source.length());
+		for (String line : source.split("\n", -1)) {
+			int at = line.indexOf("//");
+			out.append(at < 0 ? line : line.substring(0, at)).append('\n');
+		}
+		return out.toString();
 	}
 
 	/** Returns the two fixture chips on every path the controller can take. */

@@ -154,12 +154,9 @@ public class SafetyWarning {
 	 * also keeps {@link #TYPE_CONTRAINDICATION} out of the call site, which is where a chip arm would
 	 * otherwise repeat it.
 	 *
-	 * <p>Package-private, and since issue #374 that is no longer "matching the accessor": the
-	 * accessor is PUBLIC, this flag being published as each chip's
-	 * {@code restsOnAnUncorroboratedChartMatch} wire key. The symmetry rule the class states of its
-	 * other facts — a caller may set only what it may read back — is one-directional and is satisfied
-	 * here; what keeps the WRITE package-private is that a provenance answer is a measurement this
-	 * module made, so an outside caller must not be able to assert one. The one
+	 * <p>Package-private, and since issue #374 that is no longer "matching the accessor", which is
+	 * PUBLIC — see {@link #restsOnAnUncorroboratedChartMatch()} for why a public read over a
+	 * package-private write is what this flag wants. The one
 	 * caller is {@code DrugSafetyValidator.addContraindications} — the curated-rule arm, the only arm
 	 * whose warning is derived from a rule matched against the chart at all. The allergen arm's own
 	 * three sentences go through {@link #recordedAllergenContraindication} instead, which hardcodes

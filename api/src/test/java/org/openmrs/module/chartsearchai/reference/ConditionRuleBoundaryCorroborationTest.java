@@ -400,7 +400,7 @@ public class ConditionRuleBoundaryCorroborationTest {
 						+ "and its finding carry: " + hedged.getDetail());
 
 		SafetyWarning stated = DrugReferenceTestSupport.onlyOfType(
-				DrugReferenceTestSupport.validator(fixtureService()).validate("",
+				DrugReferenceTestSupport.validator(service).validate("",
 						"Can I give her naltrexone?",
 						DrugReferenceTestSupport.ctx(60, null, null, null, null,
 								DrugReferenceTestSupport.set("Chronic liver disease"))),

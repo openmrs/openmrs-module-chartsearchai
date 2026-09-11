@@ -28,16 +28,9 @@ import java.util.Collections;
  * the real factory with no production change at all. A split package across two artifacts is legal on
  * a plain classpath, which is what surefire gives these tests.
  *
- * <p><b>The point is that the chip is one PRODUCTION built.</b> Two alternatives were available and
- * both are weaker. A new public factory taking the flag would add production API with no production
- * caller, and {@code SafetyWarning}'s factory javadocs require a shape justification for every
- * construction path; making {@code contraindication} itself public is separately unavailable, since it
- * also sets {@code aboutACurrentMedication} and {@code chartRecords}, whose accessors stay
- * package-private, so that WOULD breach the symmetry rule. An anonymous subclass overriding the
- * accessor is legal and the reflective guard would dispatch to it, but it exercises neither the field
- * nor any constructor — so a later change to the private constructor that dropped the flag would leave
- * that guard green, which is the class of defect issue #340 exists to catch. ADR Decision 92 records
- * the comparison.
+ * <p><b>The point is that the chip is one PRODUCTION built.</b> Two alternatives were available — a
+ * new public factory taking the flag, and an anonymous subclass overriding the accessor — and both are
+ * weaker. ADR Decision 92 records the comparison and is canonical for it.
  *
  * <p>Deliberately NOT a general-purpose chip builder: it exposes the one shape a wire guard needs, so
  * it cannot become a second way to assemble the chips {@code DrugSafetyValidator} assembles.

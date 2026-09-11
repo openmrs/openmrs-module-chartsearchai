@@ -125,15 +125,21 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 	 *       without touching an element, so a serializer that RESHAPED the bridges — into maps, or
 	 *       into a rendered sentence — passed it. Appended rather than inserted, because the cases
 	 *       above index this list positionally.</li>
-	 *   <li>8 — the one chip answering TRUE to
+	 *   <li>8 and 9 — a PAIR carrying one sentence and differing only in
 	 *       {@code SafetyWarning.restsOnAnUncorroboratedChartMatch()}, appended for
-	 *       {@link #everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire} on issue #374 for the
-	 *       reason chip 7 was appended for #347's key: with every chip answering false, a serializer
-	 *       publishing a hardcoded false agrees with all of them and that guard cannot see it. Built by
-	 *       the curated-rule arm's own package-private factory, through
-	 *       {@code SafetyWarningFixtures}.</li>
+	 *       {@link #everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire} on issue #374. Chip 8
+	 *       is the reason chip 7 was appended for #347's key — with every chip answering false, a
+	 *       hardcoded false agrees with all of them and that guard cannot see it. Chip 9 is the reason
+	 *       that is not enough: a value re-derived from another published field also agrees with every
+	 *       chip, until two chips share every other field. Built by the curated-rule arm's own
+	 *       package-private factory through {@code SafetyWarningFixtures}, and by the public
+	 *       constructor, respectively.</li>
 	 * </ul>
 	 */
+	/** Chips 8 and 9 share this sentence and differ only in their provenance answer. */
+	private static final String UNCORROBORATED_CONTRAINDICATION =
+			"Naltrexone is contraindicated by an active condition: acute hepatitis or liver failure";
+
 	private static List<SafetyWarning> fixtureWarnings() {
 		return Arrays.asList(
 				new SafetyWarning(SafetyWarning.TYPE_INTERACTION, "Lidocaine",
@@ -180,18 +186,17 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 								new SafetyWarning.ChartOrderBridge("Ibuprofen", "Advil 400mg"),
 								new SafetyWarning.ChartOrderBridge("Acetylsalicylic acid (aspirin)",
 										"Aspirin 81mg"))),
-				// The one chip here that answers TRUE to restsOnAnUncorroboratedChartMatch(), which is
-				// what gives the accessor guard below teeth on that key: the other eight answer false,
-				// so a serializer publishing a hardcoded false agrees with every one of them. That is
-				// #347's own blind spot, recorded in ADR Decision 70, arriving on the key issue #374
-				// adds — mutate the put to `false` and read this class's failure. Built by the
-				// curated-rule arm's OWN factory through SafetyWarningFixtures, since this package
-				// cannot reach a package-private factory; that class's javadoc carries why it is not a
-				// widening of production API. Appended rather than inserted, because the cases above
-				// index this list positionally.
+				// Mutate the put to `false` and read this class's failure. SafetyWarningFixtures' own
+				// javadoc carries why reaching the package-private factory from here is not a widening
+				// of production API.
 				SafetyWarningFixtures.uncorroboratedContraindication("Naltrexone",
-						"Naltrexone is contraindicated by an active condition: acute hepatitis or "
-								+ "liver failure"));
+						UNCORROBORATED_CONTRAINDICATION),
+				// Chip 8's sentence VERBATIM, answering false. Without it every other published field
+				// separates the two answers, so a value re-derived from `detail` agrees with the
+				// accessor on all nine chips and the comparison below passes — measured on this
+				// change's polish round, with the real put commented out and a sniff beside it.
+				new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, "Naltrexone",
+						UNCORROBORATED_CONTRAINDICATION));
 	}
 
 	private ChartSearchAiRestController controller;
@@ -389,10 +394,9 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 	 * unchanged"), and what it states elsewhere is a different rule — setter/accessor symmetry, "a
 	 * caller may set only what it may read back", which is why {@code carriesUnratedRelationship()} and
 	 * {@code reconciledPartnerNoteName(..)} are package-private beside package-private factories.
-	 * {@code restsOnAnUncorroboratedChartMatch()} stood in that list until issue #374 published it, and
-	 * it is the case that rule is one-directional: its accessor is public and its two factories are
-	 * not, so a caller still sets only what it may read back while reading more than it may set. This
-	 * change removes the counterexample, and
+	 * {@code restsOnAnUncorroboratedChartMatch()} stood in that list until issue #374 published it —
+	 * see that accessor for why a public read over a package-private write does not breach the rule.
+	 * This change removes the counterexample, and
 	 * this case is what keeps the next one from being added silently: a value the module computes,
 	 * orders chips by, and then drops at serialization is exactly the shape of the defect #340
 	 * reports, and it survived from #207 to #340 without anything failing.

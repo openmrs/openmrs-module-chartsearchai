@@ -2839,13 +2839,16 @@ public class DrugSafetyValidator {
 	 *         {@code ConditionRuleBoundaryCorroborationTest.aPaddedTokenIsPutToTheSameStringItsWitnessFilterTrimmed}
 	 *         holds both halves.
 	 *
-	 *         <p><b>Prompt-facing only, and that is the LIMIT of issue #309's fix rather than merely its
-	 *         scope.</b> The chip arm's own answer is unmoved, so on the ticket's reproduction the
-	 *         injected record and the {@code safety_finding} hedge while the {@code safetyWarnings} chip
-	 *         still states the contraindication of the chart, unqualified — a surface with no third
-	 *         section to hedge into. Do not close it by tightening
-	 *         {@link PatientClinicalContext#hasConditionToken}, which is fail-open; ADR Decision 73's
-	 *         trade-offs carry the case and what a remedy would have to be.
+	 *         <p><b>Prompt-facing as issue #309 shipped it, and that was the LIMIT of its fix rather
+	 *         than merely its scope.</b> The chip arm's own answer was unmoved, so on the ticket's
+	 *         reproduction the injected record and the {@code safety_finding} hedged while the
+	 *         {@code safetyWarnings} chip stated the contraindication of the chart, unqualified. Issue
+	 *         #374 closed the module's half of that: the chip publishes this same answer as
+	 *         {@code restsOnAnUncorroboratedChartMatch}, so the surface no longer WITHHOLDS it — while
+	 *         the chip's SENTENCE is unchanged, so a client that does not render the key still shows the
+	 *         categorical. Do not close the rest by tightening
+	 *         {@link PatientClinicalContext#hasConditionToken}, which is fail-open; ADR Decisions 73 and
+	 *         92 carry the case and what a remedy would have to be.
 	 *
 	 *         <p>False for a null context, which is "nothing known" rather than "nothing recorded", and
 	 *         false is the safe direction here exactly as it is for {@link #aMatchedRecordNamesTheEntry}:

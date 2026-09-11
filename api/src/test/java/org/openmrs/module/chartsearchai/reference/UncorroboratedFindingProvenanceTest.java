@@ -36,10 +36,13 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * {@link #theFindingStillStatesTheStrongestCallItStatedBefore} is that invariant, and it is the case
  * to read first if a future change wants the strength to move.
  *
- * <p>Prompt-facing only, exactly as issue #283 scoped its own clauses: the chip's detail, the chip's
- * rank and the {@code safetyWarnings} wire shape are untouched, so issues #146 and #223 — which twice
- * refused to GATE this chip on corroboration — are not reopened. The chip is still raised; it now
- * says how it was matched when it reaches the model.
+ * <p>Prompt-facing as issue #308 shipped it, exactly as issue #283 scoped its own clauses: the chip's
+ * detail and the chip's rank are untouched, so issues #146 and #223 — which twice refused to GATE this
+ * chip on corroboration — are not reopened. The chip is still raised; it says how it was matched when
+ * it reaches the model. The {@code safetyWarnings} WIRE shape is no longer untouched — issue #374
+ * publishes this same answer as the chip's own {@code restsOnAnUncorroboratedChartMatch} key, and
+ * never inside the detail; {@link #theChipTheClinicianSeesIsTheStringItWas} is where that line is
+ * drawn.
  *
  * <p>Every case here drives the real {@code DrugReferenceInjector.injectRecords} wired to the real
  * {@code DrugSafetyValidator} over a fixture parsed by the real production parser, and reads the
@@ -183,7 +186,8 @@ public class UncorroboratedFindingProvenanceTest {
 		// does not reopen issues #146 and #223, which twice refused to gate this chip on corroboration.
 		// The chip is still raised, its rank is what it was, and its DETAIL — the string that reaches
 		// the clinician — carries none of this. The `safetyWarnings` wire does carry the ANSWER since
-		// #374, as the chip's own restsOnAnUncorroboratedChartMatch key, and never inside this string. Asserted directly rather
+		// #374, as the chip's own restsOnAnUncorroboratedChartMatch key, and never inside this
+		// string. Asserted directly rather
 		// than left to the suite: every other case here reads the injected record, so a change that put
 		// the clause on the warning's detail instead of on the rendered line would satisfy all of them.
 		DrugReferenceService service = DrugReferenceTestSupport

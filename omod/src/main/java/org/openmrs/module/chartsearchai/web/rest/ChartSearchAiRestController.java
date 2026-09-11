@@ -1426,8 +1426,12 @@ public class ChartSearchAiRestController {
 			// ChartSearchAiChartOrderBridgeTest.theWholePayloadStillMarshalsForAnXmlClient pins it.
 			map.put("chartOrderBridges",
 				new ArrayList<SafetyWarning.ChartOrderBridge>(warning.chartOrderBridges()));
-			// Issue #374. Needs no copy and raises none of the hazard above: a primitive boolean is a
-			// JDK type, which is what the bridges are not.
+			// Issue #374. Needs no copy: the value is an immutable autoboxed Boolean, so there is
+			// nothing for a caller to mutate, and XStream has a converter for it (verified by
+			// marshalling a payload carrying it). "It is a JDK type" is NOT the criterion and was
+			// written here once — both wrappers the paragraph above names are JDK types, and the
+			// non-JDK ChartOrderBridge marshals fine; what XStream refuses is java.util.Collections'
+			// immutable collection wrappers specifically.
 			map.put("restsOnAnUncorroboratedChartMatch", warning.restsOnAnUncorroboratedChartMatch());
 			out.add(map);
 		}

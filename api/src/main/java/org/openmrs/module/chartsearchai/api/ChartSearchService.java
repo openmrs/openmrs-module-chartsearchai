@@ -380,17 +380,16 @@ public interface ChartSearchService {
 	 *
 	 * <p><b>{@link #getRating()} is NOT the value a {@code safetyWarnings} chip publishes as its
 	 * {@code severity}, and the two must not be joined — which is why this field is not called
-	 * {@code severity}.</b> They differ in FORM and in EXTENT, and neither difference is a corner
-	 * case. In form: this is what {@code DrugSafetyValidator.severityRank} RECOGNISED, which
-	 * {@code statableRating} hands on TRIMMED, where a chip publishes the operator's raw field — so
-	 * a dataset writing {@code "  Major  "} reaches this key as {@code "Major"} and that chip as the
-	 * padded string (ADR Decision 78). In extent: {@code statableRating} declines {@code unknown} and
-	 * {@code ratingThisRecordStates} requires the record to state the word, so a finding a chip rates
-	 * {@code Unknown} has no entry here at all — which the shipped knowledge base makes ordinary
-	 * rather than rare. And the two are decided by different passes over different populations, a
-	 * rating written into the record pre-answer by {@code DrugReferenceInjector.injectRecords} and a
-	 * chip post-answer by {@code DrugSafetyValidator.validate}, so neither list is a view of the
-	 * other in either direction.
+	 * {@code severity}.</b> Three mechanisms separate them, stated as mechanisms because every
+	 * attempt to summarise how far apart they come out was refuted by measurement. This value is
+	 * {@code DrugSafetyValidator.statableRating}'s output: the spelling {@code severityRank}
+	 * RECOGNISED, handed on TRIMMED, where a chip publishes {@code SafetyWarning.getSeverity()} raw
+	 * (ADR Decision 78). {@code statableRating} declines {@code unknown} and
+	 * {@code ratingThisRecordStates} requires the record to state the word, so findings a chip rates
+	 * have no entry here at all. And the two are written by different passes — a rating into the
+	 * record pre-answer by {@code DrugReferenceInjector.injectRecords}, a chip post-answer by
+	 * {@code DrugSafetyValidator.validate}. Nothing on the response pairs a chip with a citation in
+	 * any case, so there is no join to make.
 	 *
 	 * <p><b>What it asserts.</b> That the answer cited this record and that this rating's word
 	 * appears nowhere in the answer. Never WHERE the rating should have been, never that the

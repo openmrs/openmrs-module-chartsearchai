@@ -406,16 +406,21 @@ public class InjectedContraindicationClauseTest {
 						DrugReferenceTestSupport.set("Respiratory depression")),
 				"Levoketoconazole");
 
+		// The premise first, and measured rather than asserted in prose, because it is the half that makes
+		// containment DANGEROUS rather than merely lossy: the shorter clause is the one this chart
+		// RECORDS, and it sits in a different section from the join that contains it. Loosen the
+		// de-duplication and this is what fails — the list drops it, inClauseOrder then drops it from
+		// this section, and the record silently stops stating a reading it had established. Read through
+		// sectionAfter rather than sectionItems so an absent section reads as the retraction it is and
+		// not as a stale precondition.
+		assertEquals("opioid reaction",
+				DrugReferenceTestSupport.sectionAfter(record, DrugReferenceInjector.RECORDED_READING_LEAD),
+				"the shorter clause is the RECORDED one; losing it retracts a chart reading, was: "
+						+ record);
+
 		assertEquals(Arrays.asList("opioid reaction — other reaction", "opioid reaction"),
 				clausesIn(record),
 				"a clause another key merely CONTAINS is still its own clause, was: " + record);
-		// The second half of the argument above, measured rather than asserted in prose: the shorter
-		// clause is the one this chart RECORDS, and it sits in a different section from the join that
-		// contains it. A containment rule drops it from the list, inClauseOrder then drops it from this
-		// section, and the record silently stops stating a reading it had established.
-		assertEquals(Arrays.asList("opioid reaction"),
-				sectionItems(record, DrugReferenceInjector.RECORDED_READING_LEAD),
-				"and it is the RECORDED one, so dropping it retracts a chart reading, was: " + record);
 	}
 
 	/** Issue #310's own fixture, rendered through the real injector wired to the real validator: one

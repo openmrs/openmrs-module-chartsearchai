@@ -226,6 +226,7 @@ public class ChartSearchAiUtils {
 		return ChartSearchAiConstants.RESOURCE_TYPE_DRUG_REFERENCE.equals(resourceType)
 				|| ChartSearchAiConstants.RESOURCE_TYPE_SAFETY_FINDING.equals(resourceType)
 				|| ChartSearchAiConstants.RESOURCE_TYPE_DRUG_CLASS_NOTE.equals(resourceType)
+				|| ChartSearchAiConstants.RESOURCE_TYPE_INTERACTION_SCREEN_NOTE.equals(resourceType)
 						? ChartSearchAiConstants.REFERENCE_GROUP_REFERENCE
 						: ChartSearchAiConstants.REFERENCE_GROUP_CHART;
 	}

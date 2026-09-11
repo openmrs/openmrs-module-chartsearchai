@@ -90,6 +90,7 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 82: A drug the chart contraindicates by name leads with that finding, and keeps the class one behind it](#decision-82-a-drug-the-chart-contraindicates-by-name-leads-with-that-finding-and-keeps-the-class-one-behind-it)
 - [Decision 83: How many screened findings the prompt carried, and how many the answer cited, is stated on the response](#decision-83-how-many-screened-findings-the-prompt-carried-and-how-many-the-answer-cited-is-stated-on-the-response)
 - [Decision 84: Where the one-line-per-finding clause sits is what decides whether a safety answer states every finding it was given](#decision-84-where-the-one-line-per-finding-clause-sits-is-what-decides-whether-a-safety-answer-states-every-finding-it-was-given)
+- [Decision 85: An answer short of the findings its prompt carried is repaired by asking again, not by another wording](#decision-85-an-answer-short-of-the-findings-its-prompt-carried-is-repaired-by-asking-again-not-by-another-wording)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -5689,6 +5690,78 @@ Two things about that rule are decisions rather than details, and each has a cas
 
 **A FIRST RESULT, from a single-cell manual A/B rather than the drift-metric probe, and it is against the rendering** ([Decision 81](#decision-81-an-answer-that-names-the-patients-active-orders-and-cites-none-of-them-says-so)). The probe this section asks for is still owed: what was run is one patient and one question with the flag flipped, and neither of its reports carries a cell, a directness figure, a meanF1 or a drift count. The section below stands as written — it is what was true when this decision landed, and the terms it sets are the terms the probe was judged by. It is no longer the state of the question: the issue's maintainer ran it on `main` at `4dd1fea4` and reports that with the flag on the answer stops citing drug orders altogether, reintroduces [#347](https://github.com/openmrs/openmrs-module-chartsearchai/issues/347)'s naming defect in the prose, and paraphrases the mechanism text into a `CYP450` identifier no cited record states. **The default therefore stays `false` on evidence rather than on its absence**, which is the outcome the last paragraph of this section prescribes; Decision 81 carries the run, the costs it names, and the reason it cannot be reconciled with [Decision 78](#decision-78-a-safety-findings-rating-has-to-survive-into-the-answer-that-states-it)'s reading of the same flip.
 
+### THE OWED PROBE, RUN (2026-09-10). The default still stays `false`, now on a corpus
+
+Ran on [Decision 84](#decision-84-where-the-one-line-per-finding-clause-sits-is-what-decides-whether-a-safety-answer-states-every-finding-it-was-given)'s
+own fourteen cells so the result is comparable with that ledger and Decision 85's:
+`capture_probe_safety.sh` with `PROBE_PATIENTS=sarah:dc8560c9-…`, Decision 84's fourteen drugs and
+`CAPTURE_PHRASING='should i give {drug}?'`, on the 3.7.1 standalone, `sourceFormat=ddinter` (2283
+entries), `chartMode=fullChart`, local Gemma E4B. Both arms held every other property at its shipped
+default, including `chartsearchai.drugSafety.repairFindingEnumeration=false`, whose continuation
+cites findings and would otherwise confound the citation columns. The gate and its threshold were
+fixed before the treatment arm ran.
+
+**The positive control, because a null result needs one.** `input_tokens` off the audit row grew on
+**12 of 14** cells (+6 to +12) and by **0** on both ABSTAIN cells, which carry no finding to attribute
+— so the numbers reached exactly the twelve prompts that could carry them. Mean input tokens
+12,548 → 12,556 and mean output 371 → 397. The baseline's 12,548 reproduces this decision's
+neighbouring ledger figure exactly.
+
+**What moved, all of it read off published keys rather than derived.** `activeOrderClaims`:
+`stated` 75 → 79, `uncited` **75 → 67**. Chart-group citations in `references`: **0 → 12**.
+`misattributedOrderCitations`: **0 → 0**. So the mechanism works and what it produced was legitimate:
+every chart citation the flag bought passes Decision 76's "can this be the order the sentence names"
+test.
+
+**Where it worked it worked completely, and it worked on two cells of twelve.** Digoxin and
+Furosemide each went from 6 claims all uncited to 6 claims all cited. The Digoxin cell, verbatim:
+
+> **off:** No — Digoxin should not be given: Digoxin interacts with active order Methylprednisolone
+> **[349]**, a Moderate problem. …
+>
+> **on:** No — Digoxin should not be given: Digoxin interacts with active order Methylprednisolone
+> **[17]**, Moderate **[349]**. …
+
+`[17]` is her Methylprednisolone `drug_order` record and `[349]` the finding — the join stated rather
+than re-derived, which is exactly what this decision proposed. The other ten cells' answers ignored
+the numbers, and the token delta above proves the numbers were in all twelve prompts. **So the open
+question is UPTAKE and not correctness**, which is a different question from the one this decision
+set out to answer and points at the wording/position family Decision 84 explored rather than at the
+data.
+
+**Why the default does not move.** The gate was: `uncited` falls by ≥25% relative, no rise in
+`misattributedOrderCitations`, `findingCitations.cited` falls on no cell, verdict-led holds,
+abstention holds, scorer exit no worse. It failed two of the six.
+
+| gate item | off | on | |
+| --- | --- | --- | --- |
+| `activeOrderClaims.uncited` | 75 | 67 (−10.7%) | **fails ≥25%** |
+| `findingCitations.cited`, per cell | — | fell on 5 cells | **fails** |
+| cells whose prose stated every finding | 6 of 12 | 5 of 12 | worse |
+| cells that stated fewer | 6 | 7 | worse |
+| `misattributedOrderCitations` | 0 | 0 | holds |
+| verdict-led | 12 | 12 | holds |
+| abstention held | 2 of 2 | 2 of 2 | holds |
+| named a severity no chip carries | 0 | 0 | holds |
+| `score_probe_safety.py` exit | 3 | 3 | no worse |
+
+Completeness moved in both directions and net down — down on Amiodarone (5→4), Atenolol (7→6),
+Ciprofloxacin (8→7), Furosemide (7→6) and Metformin (7→6), up on Amlodipine (6→7), Aspirin (7→8),
+Digoxin (5→6) and Nifedipine (6→7). That is the cost the prediction in this section's last paragraph
+named for this render layer: *"the last data-adding change in this same render layer worked, did not
+help, and was reverted on that standard"*. This one worked, helped on two cells of twelve, and cost a
+cell of completeness.
+
+**One recorded observation is corrected by this run.** Decision 81's single-cell report — that with
+the flag on "the answer stops citing drug orders altogether" — does not hold on this corpus at
+`ed36f487`: there were no drug-order citations to stop, the baseline having **zero** across all
+fourteen cells, and the flag created twelve. That run was a different build and a different question
+and is left as recorded; what is no longer open is whether the flag suppresses chart citations
+corpus-wide. It does not.
+
+**What a future attempt owes.** Not another flip of this flag — this is its measurement. Uptake is
+the variable, and the two cells that took the numbers up are the reproduction to work from.
+
 **Whether the number makes the answer cite better is not measured here, and this decision does not claim it.** The ticket states the precondition — *"this needs a measurement before implementing"*, on the beat-or-match standard `eval/drift-metric/README.md` enforces — and it was not run: the probe needs a live inference engine, and none was available in the environment this change was made in. What IS measured is deterministic and is what the tests pin: the number printed is the number of the chart record that order is, across the substantiated, injected, drifted-uuid and ambiguous arrangements.
 
 **That gap is what `chartsearchai.drugSafety.citeOrderRecords` is for**, and it is why nothing above ships to an install that has not asked for it. A review round put the alternative plainly: the change asks a maintainer to merge measured costs against an unmeasured benefit. The flag turns that into a flip — run the probe with it on and off against the same binary, and if the answer does not beat-or-match, set the default and leave the deterministic resolution, the fidelity fix and the cases that pin them in place. Every cost in the section above is stated of the rendering, so every one of them is dormant while the flag is off; what remains on a stock install is the marker STRIPPING in `ReferenceProseFidelityCheck`, which is correct on a chart whose order displays carry brackets of their own and was already reachable before this decision.
@@ -6237,3 +6310,532 @@ it looks like across a standalone restart, and what the cell counts in its table
 - **Ordering the findings so the weakest is last.** `DrugSafetyValidator.FINDING_STRENGTH_DESCENDING` already does that, and the reproducer's seven findings are all Moderate.
 - **A general format rule outside the safety paragraph**, extending the prompt's existing *"Use numbered lines or simple newlines to structure lists."* Lower risk to the safety paragraph and higher blast radius: it would reshape every multi-record answer, including #214's 19 absent-data cases and every drift cell, none of which is measurable on this host — the `rc2` cohort `score_directness.py`'s Tier-B gold names does not exist on this standalone (verified: 404 on its patient uuids).
 - **A per-index list of the findings an answer never stated**, on the wire. Decision 83 refused it and its reasons stand; nothing here needs it, the scorer's WARN naming the uncited indexes being what a maintainer reads.
+
+
+## Decision 85: An answer short of the findings its prompt carried is repaired by asking again, not by another wording
+
+**Status: Accepted** (September 2026) — implemented, issue [#398](https://github.com/openmrs/openmrs-module-chartsearchai/issues/398).
+
+### Context
+
+[Decision 83](#decision-83-how-many-screened-findings-the-prompt-carried-and-how-many-the-answer-cited-is-stated-on-the-response) made the shortfall measurable as `findingCitations` and refused to close it, on the grounds that the only lever was prompt wording and that this area has a measured history of regressing under added instruction. Its rejected-alternatives section said what would make a remedy attemptable: *"whoever takes it later has a gate to take it against, which is what this key is."* [Decision 84](#decision-84-where-the-one-line-per-finding-clause-sits-is-what-decides-whether-a-safety-answer-states-every-finding-it-was-given) then took the one prompt lever that worked — position, not wording — and recorded its own result as **"an improvement and not a fix"**: six of twelve corpus cells still stated one finding fewer than the prompt carried.
+
+That residue is not cosmetic. The prose is what the answer IS; a clinician reading six enumerated hazards where the screen raised seven reads a complete list. The chips do not fix it — `safetyWarnings` is an independent list nothing reconciles against the answer, which is exactly what [Decision 61](#decision-61-prose-the-answer-reproduces-from-a-cited-reference-record-must-be-reproduced-faithfully)'s family and this one keep having to say.
+
+**Wording is closed and deliberately so.** Decision 84's ledger is five arms over one corpus; `LlmProviderUserMessageTest.theAppendedClauseIsExactlyTheseBytes` pins the winning clause as a literal precisely so completeness cannot be bought by rewording it, and every prompt-shaped alternative left — an ordinal in the record, compacting the slice, reordering it, a general format rule — is refused there with a reason of its own. What none of them refuses is asking a second time.
+
+### The decision
+
+**An answer whose citation resolution admitted fewer findings than the prompt carried is asked a second question naming only the records it left out, and that continuation is appended.** `chartsearchai.drugSafety.repairFindingEnumeration`, shipping OFF.
+
+**It APPENDS and never replaces, and the reason is `searchStreaming`.** That path hands the answer to the caller token by token, so by the time the shortfall is knowable the user has already watched the short answer being written. Replacing it is available on `search` and on that path alone, and two answer paths that differ in what they do with a repair is the divergence this package's rules warn about throughout. A continuation is the one shape both can carry — and on the streaming path it goes through the SAME `tokenConsumer`, so a user watching the answer sees the continuation arrive rather than finding it only in the returned object.
+
+**It may only ADD.** The continuation is kept only where the answer's own resolution admits at least one finding uncited before it (`Collections.disjoint` against the owed list), so a follow-up carrying no marker leaves the response byte for byte as it was. That bounds the direction: an appended continuation can raise `findingCitations.cited` and cannot lower it.
+
+**The lead is never re-decided.** The continuation goes after the original answer, whose opening is what `score_directness.classify` reads — the property Decision 84 measured an arm LOSING while it gained completeness, and the one this pass must not trade.
+
+**It runs before every check and before grounding**, on both paths. Each of the five checks judges the answer the method is about to publish, so a repair after any of them would leave that key describing prose the caller never receives; `findingCitations` in particular is then measured over the repaired answer, which is what makes the gate honest.
+
+**One walk, shared.** `SafetyFindingCitationExtentCheck.uncitedFindingIndexes` is the walk `measureFindingCitations`' WARN already did, extracted and named so the log line and the second prompt cannot come to be about different populations — the two-resolutions-that-agree shape [#151](https://github.com/openmrs/openmrs-module-chartsearchai/issues/151) forbids. `citedFindingIndexes` is likewise shared, so the count and its complement cannot disagree about what "cited" means.
+
+### Measured, on Decision 84's own corpus
+
+RefApp 3.7.1 standalone on `:8081`, `chartMode=fullChart`, `sourceFormat=ddinter` (2283 entries), the same patient `dc8560c9-…` and the same fourteen drugs through `capture_probe_safety.sh`'s #299 overrides, both arms on ONE build with only the global property between them, scored by `eval/drift-metric/score_probe_safety.py`:
+
+| cell | repair off | repair on |
+|---|---|---|
+| prose stated every finding | 6 of 12 | **12 of 12** |
+| stated fewer (the defect) | 6 | **0** |
+| verdict-led | 12 of 12 | 12 of 12 |
+| cited finding's rating dropped | 0 | 0 |
+| abstention held (2 controls) | 2 | 2 |
+| scorer exit | 3 | **0** |
+
+The off arm reproduces Decision 84's shipped-arm figure exactly, which is what says the two arms are of the arrangement that decision measured. **Neither column Decision 84 records a regression in moved.**
+
+**What it costs, on the same fourteen cells and joined to the audit rows by `questionId` = `auditLogId`:** mean response time **15.1s → 24.9s** and mean input tokens **12,548 → 19,785**. The repair re-sends the whole chart, so a firing cell roughly doubles its prompt; six of fourteen fired. On a CPU-bound local engine that is the whole of the trade, and it is why the property ships off and an install decides. `llmMs` carries the second inference on both paths, so the timing line does not under-report the one thing this feature adds.
+
+### Rejected alternatives
+
+- **Another prompt wording.** Closed by Decision 84 with a five-arm ledger and a literal-pinned clause; re-proposing it needs new evidence, which this change is not.
+- **Writing the omitted findings into the answer deterministically.** The module holds their exact text, so this costs no inference at all — and it is refused: this module never writes clinical prose into an answer. `safetyWarnings` is the surface that carries deterministic text, and README's own description of the safety layer is that *"it never rewrites or blocks the answer; the clinician decides."* An appended module sentence would also be compared against its own source record by `ReferenceProseFidelityCheck` and counted by `ActiveOrderCitationFidelityCheck`, making two checks report on prose the model never wrote.
+- **Re-asking with the whole question and replacing the answer.** Available on `search` only, for the streaming reason above, and it puts the verdict lead back in play on every repair.
+- **Narrowing the repair prompt to the omitted records alone**, rather than re-sending the chart. It is the obvious cost fix and it is NOT refused — it is unbuilt and unmeasured. It needs an `LlmProvider` entry point that composes a user message from a record subset, and the risk it carries is that a model answering without the chart cites indexes it can no longer see. Whoever takes it has this decision's cost row as the baseline to beat.
+- **Repairing more than once.** One follow-up per answer. A loop trades an unbounded number of inferences for a defect that is short by exactly one in every measured cell.
+
+
+## Decision 86: A relationship resting on shared classification alone is a caution, not a reason to withhold
+
+**Status: Accepted** (September 2026) — implemented, issue [#400](https://github.com/openmrs/openmrs-module-chartsearchai/issues/400).
+
+### Context
+
+`DrugSafetyValidator.ratingLicensesWithholding` splits a finding's strength on its rating, and treats
+an UNRATED finding as withholding. Its javadoc has always said that unrated covers two different
+things which "withhold for two different reasons": a CURATED rule is unrated because an implementation
+authored it deliberately — `severityPriority` sorts it above `major` for exactly that reason — while
+an ATC-subgroup or cross-reactivity JOIN is unrated because the reference data states the
+relationship without rating it and nobody authored it at all. Of the second it said: *"it withholds
+here because that is the behaviour it already had, and softening a relationship no dataset rates
+would be a change nothing has measured … the second is the weaker claim, and a later decision to
+grade those joins should be made on its own evidence."*
+
+This is that evidence.
+
+### What was measured
+
+RefApp 3.7.1 standalone on `:8081`, `sourceFormat=ddinter` (2283 entries), `chartMode=fullChart`,
+`chartsearchai.drugSafety.validateAnswers=true`, local Gemma E4B. Patient `1530b813-…` on three
+active orders — Lamivudine 150mg, Nevirapine 200mg, Stavudine 30mg. Asked *"Can stavudine and
+lamivudine be given together?"*, `POST /chartsearchai/search` answered:
+
+> No — Stavudine and Lamivudine should not be given together: they are in the same ATC class (J05AF)
+> — possible duplicate therapy [9] and [10].
+
+Both chips carried `severity: null`, `interactionPairs` reported `{"found": 0, "reported": 0}` and
+`findingCitations` `{"carried": 2, "cited": 2}`. So nothing rated the relationship and no rule
+related the pair: the refusal rests on ATC co-membership alone, and the answer faithfully relayed
+the `STRENGTH_WITHHOLD` clause the injected finding carried.
+
+J05AF is ATC's nucleoside/nucleotide reverse-transcriptase inhibitor subgroup. Two NRTIs are the
+backbone of antiretroviral therapy — same-subgroup co-prescription is the design of the regimen
+rather than an error in it. The same mechanism reaches every therapeutic area whose standard of care
+is combination therapy from one class.
+
+### The decision
+
+`DrugSafetyValidator.licensesWithholding` answers **false** for a finding whose only evidence is
+shared classification, ahead of both of its existing legs, so such a finding renders
+`STRENGTH_CAUTION` and the prompt's caution branch opens by stating that the drug can be given and
+names the caution.
+
+**The flag is set by the arm, never read off the detail.** `SafetyWarning.classOnlyInteraction` is
+the one construction site — `addInteractionWarnings`' `classOnly` loop — and
+`SafetyWarning.restsOnSharedClassificationAlone()` the one reader. A detail scan would be wrong in a
+reachable way: the FOLDED chip prints the identical *"same ATC class (…)"* sentence beside a rated
+rule, and it must go on stating the stronger of its two claims (`FoldedFindingStrengthTest`).
+A FACTORY rather than a flag on the public constructor, following `recordedAllergenContraindication`:
+every other field of this shape is false or empty by construction, and a caller must not be able to
+set the flag on a chip that carries a rule.
+
+**What it grades is the module's own evidence, and never the drugs.** This module encodes no clinical
+domain knowledge, so it cannot know which classes are co-prescribed on purpose; an exempt-class list
+would be exactly that knowledge, would be wrong at the edges of whatever list was written, and is not
+what changed here. What changed is that a relationship nobody authored, inferred from co-membership,
+now makes the weakest claim this layer makes.
+
+**It moves STRENGTH and nothing else.** The chip's sentence, its `null` severity, its exemption from
+the severity floor, its position after the rule chips, and `PairChipExtent`'s count of it are all
+unchanged. Neither pairwise arm has a class leg, so neither is reached.
+
+### Scope
+
+Interaction findings only. A CONTRAINDICATION states a withholding-class clause whatever rates it —
+#283 scoped the clause to interaction findings once and that was measured wrong — and a recorded
+allergy plus shared classification is a different claim from duplicate therapy: it rests on a record
+of this patient as well as on the classification.
+`ClassOnlyFindingStrengthTest.aClassDerivedContraindicationStillLicensesWithholding` pins that it did
+not move, and `.aRatedRuleInTheSameArrangementStillLicensesWithholding` that the rated rules did not.
+
+### Rejected alternatives
+
+- **A list of classes whose members are co-prescribed on purpose** (J05A, J04A, L01 …). This is
+  clinical domain knowledge, which this module does not encode and has no way to keep current; it
+  would be wrong at the edge of whatever list was written, and it answers a question about the drugs
+  where the defect is a question about the evidence.
+- **Softening `ratingLicensesWithholding`'s unrated leg instead.** It would take the curated arm with
+  it — a rule a deployment authored deliberately would become a caution, silencing the one arm it
+  added on purpose. `SafetyFindingSeverityStrengthTest.anUnratedCuratedRuleIsNotSoftenedToACaution`
+  reddens on it.
+- **Suppressing the class-only chip entirely.** It states a real relationship the reference data
+  carries, and a clinician reviewing a regimen may want it; the defect was its STRENGTH, not its
+  existence. Suppressing it would also silently change `interactionPairs`.
+- **Rating the joins in the data.** DDInter rates rows, not classifications, and inventing a rating
+  for a relationship the source does not rate is the module asserting something no dataset says.
+
+
+## Decision 87: A screen that related nothing says so in the prompt, instead of reaching the model as an empty slice
+
+**Status: Accepted** (September 2026) — implemented, issue [#401](https://github.com/openmrs/openmrs-module-chartsearchai/issues/401).
+
+### What was measured
+
+RefApp 3.7.1 standalone on `:8081`, `sourceFormat=ddinter`, `chartMode=fullChart`, local Gemma E4B.
+Patient `1530b813-…` on three antiretrovirals — Lamivudine 150mg, Nevirapine 200mg, Stavudine 30mg.
+Asked *"Are any of this patient's current medications interacting with each other?"*:
+
+> The records do not address drug interactions.
+
+Zero chips, `interactionPairs` `{"found": 0, "reported": 0}`, `findingCitations` `{"carried": 0,
+"cited": 0}`, and the audit row's `reference_slice_chars` **0**, in 4 seconds. The screening arm ran,
+related no pair above the severity floor, and — having no class leg — left the injector with nothing
+to write, so the model was handed an empty reference slice and described it. It described it as a
+fact about the CHART.
+
+That description is false on this very chart: asked *"Can stavudine and lamivudine be given
+together?"*, the same patient's response relates them — *"same ATC class (J05AF) — possible
+duplicate therapy"* — through the drug-in-play arm's class leg, which the screening question stands
+down. So one arm's silence was rendered as a denial that the module's own other arm contradicts.
+
+### The decision
+
+When the interaction screen ran over a pair of this patient's own medications and related none of
+them, `DrugReferenceInjector` injects a citable `interaction_screen_note` record stating what the
+screen did. **Never render silence as denial** is this subsystem's standing rule; this is that rule
+at the level of an ARM rather than of a record.
+
+### The lead was the deciding variable, and the note's first proposition after it
+
+Two things about the note's SHAPE were measured on the rig, one variable at a time, three runs each,
+over the reproduction question above.
+
+**1. The count must not come first.** The first build stated it first — *"2 of this patient's active
+medications were checked against each other, and the reference data relates none of them…"* — and the
+answer came back **"Yes — the reference data relates none of the patient's active medications at or
+above the configured severity level [7]"**. The prompt asks for an explicit verdict on a yes/no
+question, and the first thing the record offered was a NUMBER rather than a polarity. So the note now
+opens with its finding as a complete sentence and the count follows. `SCREEN_NOTE_FINDING_LEAD` is a
+constant pinned as a literal, because the ORDER of the two propositions is the property and a reword
+putting the count back in front would leave every other assertion green.
+
+**2. The PREFIX decided the verdict, and this is the one that mattered.** With the finding stated
+first the answer was still **"Yes — no interactions were found among this patient's active
+medications [7]"**, 3 of 3. The note wore `REFERENCE_PREFIX`, and the system prompt's record-type
+rule says a record beginning *"Drug reference"* is clinical reference data and **not this patient's**
+— while this note's subject is her own medications. Switching the lead to `FINDING_PREFIX`, whose
+rule says such records ARE about this patient, gave **"No — no interactions were found among this
+patient's active medications [7]"**, 3 of 3. Same note, same question, same build; the lead alone
+decided whether the verdict contradicted the clause behind it.
+
+That is a PROMPT-facing choice and nothing more: the record's TYPE is what every consumer keys on,
+`ChartSearchAiUtils.safetyFindingMappings` selects the finding population by type, and this note joins
+none of it — `findingCitations` read `{"carried": 0, "cited": 0}` on the verified run. The lead is
+pinned by `InteractionScreenSilenceNoteTest.theNoteWearsTheFindingLeadBecauseItsSubjectIsThisPatient`.
+
+**A general lesson, and the reason both arms are recorded rather than only the winner:** the two
+record leads are not decoration, they are the two halves of a rule the system prompt states about
+provenance, and a module-authored record that speaks about the patient while wearing the lead for
+material that is not about the patient asks the model to hold both at once. It resolved that by
+hedging the verdict.
+
+**Its wording is bounded the way `renderDrugClassNote`'s is.** Every clause is a claim about the
+SCREEN and none about the patient: how many of her active medications were checked against each
+other, that the reference data relates none of them at or above the configured severity level, and
+that relationships resting only on shared drug class are not part of the check. The note names no
+drug — it is citable evidence with nothing to navigate to, and a drug name in a record stating a
+negative is how a reader comes to read the negative as being about that drug.
+
+**The classification caveat is load-bearing, not a hedge.** Neither pairwise arm has a class leg, so
+a screen relating "nothing" has not examined shared-classification relationships at all — and the
+reproduction above is exactly a case where that route does relate the pair. Without the caveat the
+note licenses "no interactions", which this module contradicts on the same chart.
+
+**The count goes through `DrugReference.substanceGroupKey`, never over rows.** This was caught by the
+test rather than reasoned about: the knowledge base files one substance as several presentation rows,
+so a row count reported **3** medications checked on a two-medication chart, and one prescription of a
+two-row substance would have looked like a pair with nothing to compare. That is the "N of something"
+defect Decisions 43 and 56 exist for, reached here through a COUNT a clinician reads inside citable
+evidence.
+
+**Its own resource type**, not `drug_class_note`: that type is what `ChartSearchAiUtils.unresolvedDrugClass`
+reads to publish the `unresolvedDrugClass` response key, and a second meaning on it would make that key
+state a drug class for a question that named none. Reference-group and medication-order admissions are
+recorded in `ChartSearchAiReferenceGroupTest` and `MedicationOrderRecordTypeTest`, whose sweeps fail the
+build on a resource type nobody decided.
+
+**No new wire key.** `PairChipExtent` already states this arm's own count on the response, and
+`{"found": 0, "reported": 0}` already means an arm ran and related nothing. What was missing was the
+PROMPT half, and only that.
+
+### The gate, and the residue it leaves
+
+Four conjuncts: the question asks to be screened and resolved no drug of its own (the composite the
+screening arm itself stands on — the emptiness read off the resolution the injector already holds, the
+cue from `QueryScopeRouter`, the one place question intent is classified); the reference data resolved
+at least two distinct substances among her active orders, so there was a pair to screen; the orders
+were READ, because a chart the module could not read is not a chart that relates nothing; and the
+injection has nothing else to put in the prompt.
+
+**That last conjunct is narrower than the note's own claim, deliberately.** The note is true of any
+screen that related nothing, but with a finding, a monograph or a class note in the slice the model has
+material to describe and cannot fall into describing an empty one. So a screen that related nothing
+beside, say, a contraindication finding states no note. That is a stated residue rather than an
+oversight, and `InteractionScreenSilenceNoteTest.aScreenThatRelatedAPairStatesNoNote` pins the
+neighbouring half of it.
+
+### Rejected alternatives
+
+- **Giving the screening arm a class leg.** It would answer the reproduction better — the pair really
+  is duplicate-class therapy — but it moves what `PairChipExtent` counts, which
+  [Decisions 60](#decision-60-how-bounded-a-reported-interaction-list-is-is-stated-on-the-response), 65,
+  69 and 71 all rest on ("neither pairwise arm has a class leg"), and it would raise a class chip for
+  every same-class pair on a polypharmacy chart — an unmeasured chip-volume change on the arm whose cap
+  exists because it is quadratic. It is the larger option and it is not refused, only unbuilt: whoever
+  takes it owns the extent semantics and a chip-count measurement.
+- **A wire key of its own.** `interactionPairs` already carries this arm's count, and a second
+  statement of one fact is what this subsystem keeps having to un-say.
+- **Wording the note as "no interactions were found".** It is the claim the module cannot support, for
+  the reason the caveat exists.
+- **Letting the prompt handle it instead** — a system-prompt clause about empty reference slices.
+  Decision 84's ledger closed the prompt-wording lever for this area, and an instruction added ahead of
+  the records is the arm it measured regressing.
+
+
+## Decision 88: A proposal-vocabulary answer about a drug the patient already takes is a real defect, and a one-arm fix for it is refused
+
+**Status: REJECTED** (September 2026) — the defect is real and recorded here; the change attempted for
+it was reverted unshipped.
+
+### The observation
+
+RefApp 3.7.1 standalone on `:8081`, `chartMode=fullChart`, local Gemma E4B. Patient `dc8560c9-…` on
+eight active drug orders, one of which is *Prednisone Co 5mg*. Asked *"Is it safe to add prednisone
+for her?"*:
+
+> No — Prednisone should not be added: … This finding is a reason to withhold [353].
+
+All nine findings carried the PROPOSAL vocabulary about a drug on her own medication list. *"Should
+not be added"* reads as though the drug is not being taken, which her chart contradicts. That is a
+genuine defect and this entry exists so it is not mistaken for intended behaviour.
+
+### Why the obvious fix was reverted
+
+The attempt made the drug-in-play arm's three interaction sites ask whether their SUBJECT is one of
+the patient's own active-order entries, instead of answering false unconditionally. It worked — the
+interaction findings began stating *"a reason to change a medication this patient is already
+taking"*, verified live, with a proposed drug (warfarin, which she is not on) unchanged. It was still
+reverted, for three reasons that compound:
+
+- **It made one of three sites disagree with the other two.** The drug-in-play arm's own
+  CONTRAINDICATION sites hardcode the referent false a few lines away, and the order-driven arm sets
+  `currentMedication = !inPlaySubstances.contains(ref.substanceGroupKey())` — deliberately false for
+  a drug in play. So the same response would state one referent for prednisone's interaction findings
+  and the other for its contraindication findings. The instruction file's rule for this axis is
+  "**Both arms or neither, both classes or neither**".
+- **It re-proposed a position the code already rejected in writing.** The comment at those
+  contraindication sites is explicit: *"FALSE at both, and not because the drug cannot also be a
+  current medication — it often is. The question or the answer PROPOSED it, so what this finding
+  licenses is a decision about that proposal (issue #348)."* That is
+  [Decision 72](#decision-72-a-screening-answer-states-a-call-about-the-medications-she-is-on-instead-of-refusing-one-of-them)'s
+  reading, and a live answer is new evidence about the SYMPTOM without being new evidence about that
+  reading.
+- **The lead did not move anyway.** The response's opening call is decided by its strongest finding,
+  which here is a withholding CONTRAINDICATION still carrying the proposal vocabulary — so the
+  misleading sentence a clinician actually reads, *"No — Prednisone should not be added"*, survived
+  the change that was supposed to fix it.
+
+### What a real fix has to be
+
+Not a call site. It is a reversal of the proposal rule at every site that reads it — both drug-in-play
+arms and the order-driven arm's in-play carve-out — which changes the vocabulary of every safety
+answer about a drug the patient is already on. Decision 72's own A/B ran three arms and refuted one,
+so this owes the same: the fourteen-cell corpus of
+[Decision 84](#decision-84-where-the-one-line-per-finding-clause-sits-is-what-decides-whether-a-safety-answer-states-every-finding-it-was-given),
+read on the verdict lead and on the caution/withhold classes together, with the prednisone cell above
+as the reproduction. Whoever takes it should also decide what the honest answer to *"can I add X"*
+about a charted X is — the finding a clinician needs there is arguably duplicate therapy rather than
+either vocabulary, and neither existing clause says it.
+
+
+## Decision 89: A question asking to STOP or to WORRY about a medication is an interaction screen, and the trigger no longer requires the word "interact"
+
+**Status: Accepted** (September 2026) — implemented, issue #402 + 1 (unfiled at the time of writing;
+see the note on numbering at the end of this decision).
+
+### The observation
+
+Sixteen DDI questions over eight verified patients on the `:8081` 3.7.1 standalone, 2026-09-10, the
+shipped DDInter knowledge base. **In no case did a chip contradict the chart** — `interactionPairs`,
+`findingCitations` and the chips were right every time — and six of the sixteen answers were still
+ones a clinician should not read. Two of those six were not the model's doing at all: the
+deterministic screen never ran.
+
+| patient | question | result |
+|---|---|---|
+| Michael Turner (Zolvimix + Klarizom) | *"Are any of his current medications interacting with each other?"* | **Major** Simvastatin/Clarithromycin reported |
+| Michael Turner | *"Should I stop any of the medications he is on?"* | nothing, 0 chips |
+| Kenneth Hernandez (Salicylic acid + Enalapril) | *"Are any of his current medications interacting with each other?"* | Moderate NSAID/ACE reported |
+| Kenneth Hernandez | *"Anything I should worry about in his current medications?"* | nothing, 0 chips |
+
+Same patient, same chart, same request path. A Major interaction was invisible to the most natural
+way a clinician asks to have therapy reviewed, because `QueryScopeRouter.isInteractionScreening`
+required an `interact*` word to be present. Its javadoc admitted only the smaller cost — *"a bare
+'any interactions?' does not trigger"* — and not this one.
+
+### The decision
+
+**The trigger's first conjunct becomes a disjunction.** `QueryScopeRouter.isInteractionScreening`
+still requires the router's own `Intent.MEDICATIONS` classification; what it asks alongside is now
+`asksForADrugSafetyReading` — an `interact*` word (`INTERACTION_CUES`) **or** a safety-or-change cue
+(`MEDICATION_SAFETY_CUES`: safe, unsafe, safety, danger(ous), harmful, risk(s|y), worry, worried,
+worrying, concern(s|ed|ing), problem(s|atic), wrong, stop(ped|ping), discontinue(d), deprescribe(d),
+change(d|s), adjust(ed|ment|ments)).
+
+**This is NOT "screen every medication-domain question", and the distinction is the whole decision.**
+That widening is [Decision 79](#decision-79-the-standing-chart-finding-is-served-by-a-surface-a-client-asks-for-not-by-every-answer)'s
+refusal and `DrugSafetyValidator.SubjectMatter`'s rules forbid re-opening it: this module answers
+questions and has no subscription or acknowledgement path, so an unconditional finding is an alert
+with none of an alerting system's machinery. What separates the two is that an ENUMERATION request
+carries none of these cues. `DrugSafetyInteractionScreeningTest`'s two eager-firing guards —
+*"What medications is the patient taking?"* and *"Show me an interactive list of her medications."* —
+stay green as written, and **no existing test changed**: the fix adds cases rather than editing any.
+
+**Why a second cue family rather than dropping the cue requirement.** Dropping it passes both
+measured cells and reddens both guards, which is the trade this area is least allowed to make. A
+question asking what to worry about in the current medications, or whether to stop one, IS a question
+about their safety — so a chip it raises is still tied to what was asked, which is the property the
+guards protect.
+
+### Measured
+
+Both cells reproduced as failing tests through the real validator over the real shipped data before
+the change (`DrugSafetyInteractionScreeningTest.aQuestionAskingWhatToWORRYAboutTheCurrentMedicationsIsScreened`,
+`.aQuestionAskingWhetherToSTOPAMedicationIsScreened`, both `[]`). After it, on the rig with the module
+rebuilt and restarted:
+
+| question | before | after |
+|---|---|---|
+| *"Should I stop any of the medications he is on?"* | 0 chips | **Major reported** |
+| *"Anything I should worry about in his current medications?"* | 0 chips | **Moderate reported** |
+| *"What medications is the patient taking?"* | 0 chips | 0 chips |
+| *"Show me an interactive list of her medications."* | 0 chips | 0 chips |
+| *"What are her vitals?"* | 0 chips | 0 chips |
+| *"Are any of his current medications interacting?"* | Major | Major |
+
+### What this does not close, and what now tracks it
+
+A vocabulary is never finished, and one measured phrasing at a time is how the defect above reached a
+clinician. `DrugSafetyScreeningPhrasingCorpusTest` is the standing gate: 28 questions to the real
+validator against one fixed chart holding a real Major pair — 16 that must be screened, 6 that must
+screen nothing, and **6 recorded GAPS**, each a clinician phrasing that names the drugs by something
+other than the six literal words `MEDICATIONS_CUES` matches and therefore screens nothing today:
+
+> *"Is his current regimen safe?"* · *"Anything risky about her treatment?"* ·
+> *"Is she on anything that should not be combined?"* · *"Any red flags in what he is taking?"* ·
+> *"Is this combination safe for her?"* · *"What is she taking that could harm her?"*
+
+They are held as an INVERTED assertion, not deleted and not disabled, so they cost nothing while the
+defect stands and go red the moment the vocabulary is widened.
+
+**Closing them is deliberately not taken here.** The fix is to widen `MEDICATIONS_CUES`, and that
+vocabulary is SHARED — `QueryScopeRouter.asksAboutMedications` reads the same classification as one of
+`DrugSafetyValidator.SubjectMatter`'s three widenings, so a word added for this gate also widens which
+contraindication chips a question raises, which is the direction Decision 79's over-reach came from.
+It wants its own measurement over BOTH surfaces.
+
+### Rejected alternatives
+
+- **Drop the `interact*` requirement entirely.** Passes both measured cells and reddens both
+  eager-firing guards; screens *"What medications is the patient taking?"*. Refused above.
+- **A second drug vocabulary for this gate alone.** The reason `isInteractionScreening` reuses
+  `Intent.MEDICATIONS` is that "medication-domain question" keeps one definition; a second list is
+  two definitions that drift. The safety cues added here are a different axis — what is being ASKED
+  about the drugs — not a second way of recognising that drugs are the subject.
+- **Widening `MEDICATIONS_CUES` in this change.** Unmeasured on the contraindication surface it also
+  feeds. Recorded as the gaps above instead.
+
+### A note on the issue numbers in this branch
+
+At the time of writing the repository's highest issue or pull-request number is **#399**, while
+commits already on this branch cite **#400**, **#401** and **#402** across `docs/adr.md`,
+`api/src/main/java/org/openmrs/module/chartsearchai/reference/CLAUDE.md` and eight other files. Those
+issues are not filed. Whoever opens the pull request for this branch has to file them and correct
+every reference GitHub does not happen to number as the branch guessed — this decision included.
+
+
+## Decision 90: The safety prose summarises the findings the client already renders, and states each one's severity while doing it
+
+**Status: Accepted** (September 2026) — implemented, `chartsearchai.drugSafety.findingsRenderedByClient`,
+shipping **ON**.
+
+### Context
+
+[Decision 84](#decision-84-where-the-one-line-per-finding-clause-sits-is-what-decides-whether-a-safety-answer-states-every-finding-it-was-given)
+asks the model to put every safety finding on a line of its own, and
+[Decision 85](#decision-85-an-answer-short-of-the-findings-its-prompt-carried-is-repaired-by-asking-again-not-by-another-wording)
+adds a second inference when it does not. Both treat the answer's prose as the carrier of the finding
+list. It is not the only carrier: every finding is published in `safetyWarnings` with its severity and
+its `chartOrderBridges`, and the reference client renders **all of them in full**, in a *Safety
+checks* section beside the answer (`ai-response-panel.component.tsx` in
+`openmrs-esm-chartsearchai`). So the enumeration asks a 4B-class local model to restate a list the
+clinician is already being shown correctly.
+
+### The decision
+
+**The clause asks for a summary that still carries both of the prose's own duties.** The exact bytes:
+
+> ` The clinician is shown every finding in full beside your answer, so summarise rather than list them, citing each finding you rely on and stating its severity.`
+
+`LlmProvider.FindingProse` is an enum and not a second boolean, because "enumerate them" and "do not
+enumerate them" are opposite asks in the same measured position and one message must not carry both.
+The mode is resolved inside `LlmProvider.findingProse` rather than threaded through `search` /
+`searchStreaming`, which are the seam the suite's test doubles override — a parameter there would be
+supplied by production and dropped by every double. Decision 84's gate is untouched:
+`LlmInferenceService.severalFindingsAboutOneDrug` still decides WHETHER a clause is appended, this
+decides only WHICH.
+
+**It suppresses `chartsearchai.drugSafety.repairFindingEnumeration`, and says so.** Prose not asked to
+enumerate is short of the findings by design, so the repair would spend a second inference re-adding
+what this removes. Since this ships ON, that override reaches a property an operator had to go out of
+their way to enable, so `LlmInferenceService.resolveFindingEnumerationRepair` logs a WARN naming both
+properties rather than declining silently.
+
+### Measured, on Decision 84's own fourteen-cell corpus
+
+Patient `dc8560c9-…`, `chartMode=fullChart`, `sourceFormat=ddinter`, `maxPairChips=10`, the repair
+false in every arm so the clause is the only variable, scored by
+`eval/drift-metric/score_probe_safety.py`. The engine is deterministic on this rig — a repeated cell
+returned byte-identical — so these deltas are signal and not run variance.
+
+| cell | previous default | first wording | **shipped** |
+|---|---|---|---|
+| verdict-led (of 12 ANSWER cells) | 12 | 12 | **12** |
+| abstention held (of 2 controls) | 2 | 2 | **2** |
+| verdicts the records do not license | 0 | 0 | **0** |
+| named a severity no chip carries | 0 | 0 | **0** |
+| prose stated EVERY finding carried | 5 | 7 | **8** of 12 |
+| prose stated fewer (the defect) | 7 | 5 | **4** of 12 |
+| dropped a CITED finding's rating | 0 | **7** | **0** of 14 |
+| Amiodarone cell, findings cited | 4/5 | **0/5** | **5/5** |
+
+**The first wording is why the shipped clause names both duties.** It asked only for an overall
+judgement and its main reason. It improved completeness and paid for it in the currency
+`score_probe_safety.py` exists to protect — seven of fourteen cells citing a finding whose rating the
+answer never stated — and left the Amiodarone answer citing none of its five findings at all: clean
+prose, four drug names, nothing to click and nothing for grounding to verify. Asking for the citation
+and the severity removed both losses without giving back the completeness.
+
+**Confirmed through the shipped path**, which is what licenses the default rather than the property:
+the global-property row was purged and recreated from `config.xml`'s new default, and all fourteen
+cells came back **byte-identical** to the arm measured through the property.
+
+### What it does not reach
+
+The scorer still exits **3**: four cells remain short of the findings their prompt carried and the
+gate wants none. That is also true of the arm this replaces, at seven. The only arm measured to reach
+exit 0 is Decision 85's repair, which buys it with a second inference and with the continuation this
+session traced the *"Record [353]: … this patent is already taking"* dump to.
+
+### One correction this decision exists to carry
+
+An earlier reading of the same session credited THIS clause with removing that dump. It did not, and
+could not: the screening cell it was measured on fails `severalFindingsAboutOneDrug` (its findings
+name Ibuprofen **and** Celecoxib, two subjects), so no clause is appended there in either arm and both
+arms sent byte-identical prompts. Held with the prompt constant, the dump is Decision 85's repair
+alone — repair off, 669 characters and clean, `cited` 10 of 20; repair on, 3291 characters and the
+dump, `cited` 20 of 20. A stock install does not produce it. The first reading took a two-variable arm
+for a one-variable one, which is the error this table's "repair false in every arm" row exists to
+prevent repeating.
+
+### Rejected alternatives
+
+- **Deterministic finding text written into the answer.** Still refused, and Decision 85's reason
+  stands: this module does not write clinical prose into an answer. The argument that the module's
+  prose "already reaches the clinician corrupted" is weak and rests on a non-default install — without
+  the repair it does not reach the answer at all.
+- **Leaving it an operator flip.** It is a strict improvement over the shipped arm on every scored
+  dimension, at one inference rather than two; an install that has to discover that is an install that
+  does not get it.
+- **Retiring `SafetyFindingCitationExtentCheck`, the repair and `SafetyFindingSeverityFidelityCheck`
+  now that prose no longer enumerates.** Not available on this evidence: the corpus still shows four
+  cells short, so the completeness key is still measuring a live duty rather than a retired one.

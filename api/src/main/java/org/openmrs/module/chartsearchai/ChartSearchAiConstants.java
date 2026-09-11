@@ -549,6 +549,40 @@ public class ChartSearchAiConstants {
 
 	public static final boolean DEFAULT_DRUG_SAFETY_CITE_ORDER_RECORDS = false;
 
+	/**
+	 * Whether an answer that cited fewer safety findings than the prompt carried is repaired by
+	 * asking the model again for the ones it left out — issue #398. Ships OFF: ADR Decision 84
+	 * measured this area regressing under added instruction, and a second inference is a cost no
+	 * install should pay unmeasured. {@code ChartAnswer.getFindingCitationExtent()} is the gate to
+	 * measure it against.
+	 */
+	public static final String GP_DRUG_SAFETY_REPAIR_FINDING_ENUMERATION =
+			"chartsearchai.drugSafety.repairFindingEnumeration";
+
+	public static final boolean DEFAULT_DRUG_SAFETY_REPAIR_FINDING_ENUMERATION = false;
+
+	/**
+	 * Whether the answer's prose is asked to SUMMARISE the safety findings rather than enumerate
+	 * them, on the grounds that the client already renders every finding in full — issue #403.
+	 *
+	 * <p>Ships ON since the fourteen-cell measurement: over ADR Decision 84's own corpus this arm
+	 * stated every carried finding on 8 of 12 cells against the previous default's 5, dropped a
+	 * cited finding's rating on none, and left verdict-led, the abstention controls and licensing
+	 * untouched — a strict improvement at one inference instead of two. It does NOT reach the
+	 * scorer's exit 0, which wants no cell short at all; the arm that does is
+	 * {@link #GP_DRUG_SAFETY_REPAIR_FINDING_ENUMERATION}, and turning that on now requires turning
+	 * THIS off.
+	 * {@code ChartAnswer.getFindingCitationExtent()} stops being the gate when it is on: prose that
+	 * is not asked to enumerate is short of the findings BY DESIGN, so
+	 * {@link #GP_DRUG_SAFETY_REPAIR_FINDING_ENUMERATION} is suppressed rather than left to fight it.
+	 * What to measure instead is whether the verdict still leads and whether the chips still carry
+	 * every finding — the second being deterministic and therefore not at risk.
+	 */
+	public static final String GP_DRUG_SAFETY_FINDINGS_RENDERED_BY_CLIENT =
+			"chartsearchai.drugSafety.findingsRenderedByClient";
+
+	public static final boolean DEFAULT_DRUG_SAFETY_FINDINGS_RENDERED_BY_CLIENT = true;
+
 	/** Minimum source-assigned severity ({@code unknown} &lt; {@code minor} &lt; {@code moderate} &lt;
 	 *  {@code major}) a rule-based interaction must carry to raise a warning chip. Rules without a
 	 *  severity (e.g. the curated seed's hand-authored rules) are always shown, as are class-based and
@@ -704,6 +738,31 @@ public class ChartSearchAiConstants {
 	 * record-type sentence covers it without a clause of its own.
 	 */
 	public static final String RESOURCE_TYPE_DRUG_CLASS_NOTE = "drug_class_note";
+
+	/**
+	 * A record stating that the interaction SCREEN ran over the patient's own active medications and
+	 * related none of them (issue #401).
+	 *
+	 * <p>Module-supplied prose, GROUPED like {@link #RESOURCE_TYPE_DRUG_CLASS_NOTE} — it names no drug
+	 * and points at no record of this patient — and standing for no reference ENTRY, so counting it into
+	 * {@code DrugReferenceInjector.referenceCharacters} would inflate issue #163's per-entry figure.
+	 *
+	 * <p><b>But it wears the SAFETY-FINDING lead rather than that note's, and the difference is
+	 * measured.</b> Its subject is this patient's own medications, while the prompt's record-type rule
+	 * tells the model that a record beginning {@code "Drug reference"} is reference data and NOT this
+	 * patient's. Under that lead the answer prefixed an inverted verdict; under
+	 * {@code DrugReferenceInjector.FINDING_PREFIX}, whose rule says such records ARE about this patient,
+	 * the same note produced the right one. ADR Decision 87 carries both arms. The lead is a
+	 * PROMPT-facing choice and this type is what every other consumer keys on, so nothing downstream
+	 * reads it as a finding: {@code ChartSearchAiUtils.safetyFindingMappings} selects the finding
+	 * population by TYPE.
+	 *
+	 * <p>Its own type rather than {@code drug_class_note} because that type is what
+	 * {@code ChartSearchAiUtils.unresolvedDrugClass} reads to publish the response's
+	 * {@code unresolvedDrugClass} key: a second meaning on it would make that key state a drug class
+	 * for a question that named none.
+	 */
+	public static final String RESOURCE_TYPE_INTERACTION_SCREEN_NOTE = "interaction_screen_note";
 
 	/**
 	 * Wire value of a serialized reference's {@code group}: a record retrieved from THIS

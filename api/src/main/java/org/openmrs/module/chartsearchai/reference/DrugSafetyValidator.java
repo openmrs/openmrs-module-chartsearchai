@@ -1239,6 +1239,17 @@ public class DrugSafetyValidator {
 	 * nothing.
 	 */
 	static boolean licensesWithholding(SafetyWarning finding) {
+		// FIRST, and it can only ever lower the answer (issue #400). A finding whose only evidence is
+		// that two drugs share a classification is the weakest claim this layer makes: nobody authored
+		// it, and the data it comes from says two drugs sit in one subgroup rather than anything about
+		// giving them together. Both legs below would answer true for it — the rating leg because
+		// unrated, and never the fold leg, which needs a rule this shape has none of — so the guard is
+		// what separates "nobody rated this" from "an implementation authored this". See
+		// SafetyWarning.restsOnSharedClassificationAlone for the answer it refused on the standalone,
+		// and ratingLicensesWithholding's javadoc for the split this takes the second half of.
+		if (finding.restsOnSharedClassificationAlone()) {
+			return false;
+		}
 		return ratingLicensesWithholding(finding.getSeverity()) || finding.carriesUnratedRelationship();
 	}
 
@@ -3469,7 +3480,13 @@ public class DrugSafetyValidator {
 			// No rating, and not an omission: a shared-ATC-subgroup or cross-reactivity join is a
 			// relationship the reference data states without severity, which is why these chips are never
 			// floor-filtered either. See SafetyWarning.getSeverity on why null is the correct value.
-			warnings.add(new SafetyWarning(SafetyWarning.TYPE_INTERACTION, ref.displayLabel(), detail));
+			//
+			// Through the FACTORY, which is what marks the finding as resting on shared classification
+			// alone (issue #400): unrated here means "nobody authored this" rather than "an implementation
+			// authored it deliberately", and licensesWithholding grades the two differently. The public
+			// constructor this used to call cannot say which of the two it is, and read as the second it
+			// refused a standard two-NRTI regimen — see SafetyWarning.restsOnSharedClassificationAlone.
+			warnings.add(SafetyWarning.classOnlyInteraction(ref.displayLabel(), detail));
 		}
 		return ruleChips.size();
 	}

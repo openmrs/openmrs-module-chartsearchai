@@ -125,27 +125,80 @@ public final class QueryScopeRouter {
 	private static final Pattern INTERACTION_CUES = cues("interact(?:s|ed|ing|ion|ions)?");
 
 	/**
+	 * The SECOND way a question asks for an interaction screen: it asks after the SAFETY of the
+	 * medications the patient is already on, or after CHANGING them, without using the word
+	 * "interact" at all. Word-boundary anchored via {@link #cues} like every other family here.
+	 *
+	 * <p>Measured live on the :8081 3.7.1 standalone on 2026-09-10, over sixteen DDI questions on
+	 * eight patients: with {@link #isInteractionScreening} requiring an {@code interact*} word,
+	 * <em>"Should I stop any of the medications he is on?"</em> screened NOTHING on a patient whose
+	 * <em>"Are any of his current medications interacting with each other?"</em> reported a
+	 * <b>Major</b> pair — same patient, same chart, same request path. A clinician asking the most
+	 * natural review question was the one who saw no hazard.
+	 *
+	 * <p><b>Why this does not re-open #143's over-reach.</b> The bar is not "mentions medications" —
+	 * that is the widening `DrugSafetyValidator.SubjectMatter`'s rules forbid, and it would put
+	 * interaction chips on <em>"What medications is the patient taking?"</em>. Every member here
+	 * asks about a medication's SAFETY or about STOPPING or CHANGING one, so a chip it
+	 * raises is still tied to what was asked. An ENUMERATION request carries none of them, which is
+	 * what keeps {@code DrugSafetyInteractionScreeningTest}'s two eager-firing guards green — and
+	 * those guards, not this list, are what a new member has to be measured against.
+	 *
+	 * <p>Deliberately NOT here: "review" unqualified (a "records review" is not a drug question) and
+	 * bare "check". Both carry everyday non-medication senses in a chart question, which is the
+	 * reason {@link #INTERACTION_CUES} gives for excluding "conflict" and "interfere".
+	 */
+	private static final Pattern MEDICATION_SAFETY_CUES = cues(
+			"safe", "unsafe", "safety", "danger(?:ous)?", "harmful", "risk(?:s|y)?",
+			"worry", "worried", "worrying", "concern(?:s|ed|ing)?",
+			"problem(?:s|atic)?", "wrong",
+			"stop(?:ped|ping)?", "discontinue(?:d)?", "deprescribe(?:d)?",
+			"change(?:d|s)?", "adjust(?:ed|ment|ments)?");
+
+	/**
 	 * True when the question asks to be SCREENED for drug interactions — "are there any drug
 	 * interactions with her current medications?", "do any of her meds interact?" — as opposed to
 	 * merely mentioning medications. Consumed by {@code DrugSafetyValidator}, which has no way to
 	 * anchor such a question on a named drug and instead screens the patient's own active orders
 	 * against each other (issue #113).
 	 *
-	 * <p>Two cues must BOTH hold: an {@code interact*} word, and the router's own
-	 * {@link Intent#MEDICATIONS} classification. Reusing that classification rather than writing a
-	 * second drug vocabulary is the point — "medication-domain question" keeps one definition — and
-	 * it is what makes the trigger conservative: a question about how a patient interacts with their
-	 * care team carries no medication cue and screens nothing. The accepted cost is that a bare
-	 * "any interactions?" does not trigger; in practice a clinician names what might interact
-	 * ("drug", "meds", "medications", "prescriptions"), all of which the MEDICATIONS cues cover.
+	 * <p>Two things must BOTH hold: the question asks for a reading of the drugs themselves
+	 * ({@link #asksForADrugSafetyReading} — an {@code interact*} word, OR a safety-or-change cue),
+	 * and the router's own {@link Intent#MEDICATIONS} classification. Reusing that classification
+	 * rather than writing a second drug vocabulary is the point — "medication-domain question" keeps
+	 * one definition — and it is what makes the trigger conservative: a question about how a patient
+	 * interacts with their care team carries no medication cue and screens nothing. The accepted cost
+	 * is that a bare "any interactions?" does not trigger; in practice a clinician names what might
+	 * interact ("drug", "meds", "medications", "prescriptions"), all of which the MEDICATIONS cues
+	 * cover.
+	 *
+	 * <p><b>The second cue family is not a loosening of the first.</b> Until 2026-09-10 an
+	 * {@code interact*} word was NECESSARY, and a live sixteen-question measurement found that a
+	 * <b>Major</b> pair reported for "are any of his current medications interacting?" was invisible
+	 * to "should I stop any of the medications he is on?" on the same chart. What licenses a screen
+	 * is a question about the drugs' SAFETY or about CHANGING them, of which naming an interaction is
+	 * one case; {@link #MEDICATION_SAFETY_CUES} carries the rest, and why an ENUMERATION request is
+	 * still not one of them.
 	 *
 	 * <p>Note this is a cue predicate, NOT an {@link Intent}: interaction screening changes what the
 	 * safety layer checks, not which record types a slice must contain, so — like
 	 * {@link #isTemporal} — it deliberately stays out of the enumeration-scope mapping.
 	 */
 	public static boolean isInteractionScreening(String question) {
-		return question != null && INTERACTION_CUES.matcher(question).find()
+		return question != null && asksForADrugSafetyReading(question)
 				&& matchedIntents(question).contains(Intent.MEDICATIONS);
+	}
+
+	/**
+	 * Whether the question asks for a reading of the drugs themselves — either naming an
+	 * interaction ({@link #INTERACTION_CUES}) or asking after their safety or a change to them
+	 * ({@link #MEDICATION_SAFETY_CUES}). The disjunction is what {@link #isInteractionScreening}
+	 * conjoins with the MEDICATIONS intent, and it is a separate method so each family can be
+	 * mutated on its own: neuter either alternative and read which cases redden.
+	 */
+	private static boolean asksForADrugSafetyReading(String question) {
+		return INTERACTION_CUES.matcher(question).find()
+				|| MEDICATION_SAFETY_CUES.matcher(question).find();
 	}
 
 	/**

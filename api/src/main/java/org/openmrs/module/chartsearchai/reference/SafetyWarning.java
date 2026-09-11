@@ -95,6 +95,9 @@ public class SafetyWarning {
 	/** @see #isAboutACurrentMedication() */
 	private final boolean aboutACurrentMedication;
 
+	/** @see #restsOnSharedClassificationAlone() */
+	private final boolean restsOnSharedClassificationAlone;
+
 	/**
 	 * The chart records this finding fired on — see {@link #chartRecords()} (issue #305), which is
 	 * where what empty covers is said. Never null.
@@ -201,6 +204,25 @@ public class SafetyWarning {
 				Collections.<ChartOrderBridge> emptyList(), aboutACurrentMedication, chartRecords);
 	}
 
+	/**
+	 * A CLASS-ONLY interaction chip's warning: two of the patient's co-prescribed drugs share an ATC
+	 * subgroup or a curated cross-reactivity group, and no rule of any kind relates them (issue #400).
+	 * The one construction site is {@code DrugSafetyValidator.addInteractionWarnings}' {@code classOnly}
+	 * loop — see {@link #restsOnSharedClassificationAlone()} for what the flag it sets decides.
+	 *
+	 * <p><b>A FACTORY rather than a flag on the public three-argument constructor</b>, for the reason
+	 * {@link #recordedAllergenContraindication} gives of its own: every other field of this shape is
+	 * false or empty BY CONSTRUCTION — there is no rule to reconcile a partner name against, no rating,
+	 * no folded relationship, no chart record the join fired on — and naming the shape here keeps them
+	 * that way rather than offering a caller a set of flags it can never legitimately combine. In
+	 * particular a caller must not be able to set this flag on a chip that DOES carry a rule: that is
+	 * the folded chip, whose strength {@code FoldedFindingStrengthTest} pins to the stronger claim.
+	 */
+	static SafetyWarning classOnlyInteraction(String drug, String detail) {
+		return new SafetyWarning(TYPE_INTERACTION, drug, detail, null, false, false, null, null,
+				Collections.<ChartOrderBridge> emptyList(), false, null, true);
+	}
+
 	private SafetyWarning(String type, String drug, String detail, String severity,
 			boolean unratedRelationship, boolean uncorroboratedChartMatch,
 			DrugReference.Interaction reconciledRule, String reconciledNoteName,
@@ -214,6 +236,16 @@ public class SafetyWarning {
 			DrugReference.Interaction reconciledRule, String reconciledNoteName,
 			List<ChartOrderBridge> chartOrderBridges, boolean aboutACurrentMedication,
 			Collection<String> chartRecords) {
+		this(type, drug, detail, severity, unratedRelationship, uncorroboratedChartMatch, reconciledRule,
+				reconciledNoteName, chartOrderBridges, aboutACurrentMedication, chartRecords, false);
+	}
+
+	private SafetyWarning(String type, String drug, String detail, String severity,
+			boolean unratedRelationship, boolean uncorroboratedChartMatch,
+			DrugReference.Interaction reconciledRule, String reconciledNoteName,
+			List<ChartOrderBridge> chartOrderBridges, boolean aboutACurrentMedication,
+			Collection<String> chartRecords, boolean restsOnSharedClassificationAlone) {
+		this.restsOnSharedClassificationAlone = restsOnSharedClassificationAlone;
 		// Copied and wrapped for the reason chartOrderBridges is, one field along. Never null, so no
 		// reader branches on absence — chartRecords()'s javadoc is the one place that says what empty
 		// covers.
@@ -495,6 +527,44 @@ public class SafetyWarning {
 	 */
 	boolean carriesUnratedRelationship() {
 		return unratedRelationship;
+	}
+
+	/**
+	 * Whether this finding's ONLY evidence is that two drugs share a classification — issue #400. True
+	 * for a chip the class arm raised with no rule of any kind behind it, and false for everything
+	 * else, including the FOLDED chip that carries a class relationship BESIDE a rated rule
+	 * ({@link #carriesUnratedRelationship()}), which still states the stronger of its two claims.
+	 *
+	 * <p><b>Set by the arm, never read off the detail</b>, which is the rule
+	 * {@link #isAboutACurrentMedication()} follows for the same kind of provenance fact. The sentence
+	 * a class-only chip renders is not a reliable witness of it: the same "same ATC class (…)" wording
+	 * is the second sentence of a folded chip, so a detail scan would answer true for a finding that
+	 * carries a rated rule.
+	 *
+	 * <p><b>What it decides is STRENGTH, and only strength.</b>
+	 * {@code DrugSafetyValidator.licensesWithholding} answers false for such a finding, so
+	 * {@code DrugReferenceInjector.renderFinding} appends the caution clause and the prompt's caution
+	 * branch opens by stating that the drug can be given. Nothing else moves: the chip's sentence, its
+	 * {@code null} severity, the floor it is exempt from, its position after the rule chips and the
+	 * pair ledger's count of it are all as they were.
+	 *
+	 * <p><b>Why the claim is graded down.</b> An unrated finding covers two different things and they
+	 * are not equally strong — {@code DrugSafetyValidator.ratingLicensesWithholding}'s javadoc
+	 * separates them and reserved this change for its own evidence. A CURATED rule is unrated because
+	 * an implementation authored it deliberately. A shared-classification JOIN is unrated because
+	 * nobody authored it at all: the reference data states that two drugs sit in one subgroup and says
+	 * nothing about giving them together. Read as a reason to withhold, that refused a standard
+	 * two-NRTI antiretroviral regimen on the 3.7.1 standalone — <i>"No — Stavudine and Lamivudine
+	 * should not be given together: they are in the same ATC class (J05AF) — possible duplicate
+	 * therapy"</i> — because same-class co-prescription is the design of that regimen rather than an
+	 * error in it. The module encodes no clinical knowledge and cannot know which classes those are,
+	 * so what it grades is its own evidence and never the drugs. → ADR Decision 86;
+	 * {@code ClassOnlyFindingStrengthTest}.
+	 *
+	 * <p>Not serialized; the wire shape is unchanged.
+	 */
+	boolean restsOnSharedClassificationAlone() {
+		return restsOnSharedClassificationAlone;
 	}
 
 	/**

@@ -60,6 +60,11 @@ public class MedicationOrderRecordTypeTest {
 		recorded.put("RESOURCE_TYPE_SAFETY_FINDING", Boolean.FALSE);
 		recorded.put("RESOURCE_TYPE_ACTIVE_DRUG_ORDER", Boolean.TRUE);
 		recorded.put("RESOURCE_TYPE_DRUG_CLASS_NOTE", Boolean.FALSE);
+		// Issue #401. The screen note names no drug at all, so it can be no patient's prescription —
+		// false for the same reason the class note beside it is, and the allow-list's refusal is the
+		// wanted behaviour here: an answer citing this note inside an "interacts with active order"
+		// sentence has offered a record that cannot be that order, which is what #377 reports.
+		recorded.put("RESOURCE_TYPE_INTERACTION_SCREEN_NOTE", Boolean.FALSE);
 		return recorded;
 	}
 

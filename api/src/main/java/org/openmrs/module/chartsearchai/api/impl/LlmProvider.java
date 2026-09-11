@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
+import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer;
 import org.slf4j.Logger;
@@ -416,7 +417,7 @@ public class LlmProvider {
 			boolean enumerateFindings) {
 		String systemPrompt = getSystemPrompt();
 		String userMessage = buildUserMessage(numberedRecords, focusIndices, question,
-				enumerateFindings);
+				findingProse(enumerateFindings));
 		int timeoutSeconds = getTimeoutSeconds();
 
 		LlmEngine.InferenceResult result = getActiveEngine().infer(
@@ -465,7 +466,7 @@ public class LlmProvider {
 
 		String systemPrompt = getSystemPrompt();
 		String userMessage = buildUserMessage(numberedRecords, focusIndices, question,
-				enumerateFindings);
+				findingProse(enumerateFindings));
 		// The KV seed must be the question-independent prefix so it matches the warmup key exactly.
 		String cacheSeed = cacheScope == null ? null : buildUserMessage(numberedRecords, "");
 		int timeoutSeconds = getTimeoutSeconds();
@@ -984,6 +985,34 @@ public class LlmProvider {
 	 */
 	static String buildUserMessage(String numberedRecords, List<Integer> focusIndices,
 			String question, boolean enumerateFindings) {
+		return buildUserMessage(numberedRecords, focusIndices, question,
+				enumerateFindings ? FindingProse.ENUMERATED : FindingProse.UNPROMPTED);
+	}
+
+	/**
+	 * Which prose, if any, the message asks for ABOUT the safety findings it carries. Three states
+	 * and not two booleans, so "enumerate them" and "do not enumerate them" cannot both be asked.
+	 *
+	 * <p>{@link #UNPROMPTED} is the shape every message had before issue #397 and the one every
+	 * message without several findings about one drug still has: the clause is absent and the model
+	 * writes whatever the system prompt's safety branches lead it to.
+	 */
+	enum FindingProse {
+		/** No clause. The pre-#397 shape, and the shape of every message the gate does not fire on. */
+		UNPROMPTED,
+		/** ADR Decision 84's measured clause: one line per finding, each with its own severity. */
+		ENUMERATED,
+		/**
+		 * Issue #403: the findings are NOT to be listed, because the client renders every one of
+		 * them in full beside the answer, and a small model asked to restate a list it can see
+		 * transcribes it — measured 2026-09-10, an answer reproducing the injected records' own
+		 * scaffolding down to "Record [353]:" and corrupting "patient" into "patent".
+		 */
+		SUMMARISED
+	}
+
+	static String buildUserMessage(String numberedRecords, List<Integer> focusIndices,
+			String question, FindingProse findingProse) {
 		StringBuilder sb = new StringBuilder();
 		sb.append("Patient records (most recent first):\n").append(normalizeRecords(numberedRecords));
 		if (focusIndices != null && !focusIndices.isEmpty()) {
@@ -1074,9 +1103,19 @@ public class LlmProvider {
 		// The guard is defence against a FUTURE widening of the seed path, which cannot then carry
 		// the clause without reddening warmupShouldNotCarryTheFindingEnumerationClause or
 		// theClauseMustNotBreakTheWarmupPrefixForAQuestionOfAnyLength. Mutate it and read those two.
-		if (enumerateFindings && question != null && !question.trim().isEmpty()) {
-			sb.append(" Where more than one finding names it, put every one of them on a line of "
-					+ "its own, each with the severity that finding states.");
+		//
+		// THE SUMMARISED BRANCH IS ISSUE #403 AND SHARES EVERY ONE OF THOSE CONSTRAINTS: same
+		// position, same separator, same blank-question guard, its own pinned bytes. It is the
+		// OPPOSITE ask, so the two are one enum and never two flags — a message asking for both
+		// would be the contradiction FindingProse exists to make unrepresentable.
+		if (question != null && !question.trim().isEmpty()) {
+			if (findingProse == FindingProse.ENUMERATED) {
+				sb.append(" Where more than one finding names it, put every one of them on a line of "
+						+ "its own, each with the severity that finding states.");
+			} else if (findingProse == FindingProse.SUMMARISED) {
+				sb.append(" The clinician is shown every finding in full beside your answer, so summarise "
+						+ "rather than list them, citing each finding you rely on and stating its severity.");
+			}
 		}
 		return sb.toString();
 	}
@@ -1137,6 +1176,32 @@ public class LlmProvider {
 			this.cachedTokens = cachedTokens;
 		}
 
+		/**
+		 * This response continued by {@code continuation} — issue #398's repair pass, whose second
+		 * completion is appended to the first rather than replacing it.
+		 *
+		 * <p><b>It lives here because construction of an {@code LlmResponse} does.</b> Building one
+		 * in {@code LlmInferenceService} instead also put the descriptor
+		 * {@code (Ljava/lang/String;Ljava/util/List;III)V} into that class's constant pool, which is
+		 * a {@code ChartAnswer} constructor's descriptor too — and
+		 * {@code ArchitectureGuardTest.everyAnswerThisModuleBuildsCarriesTheConditionRuleCoverage}
+		 * matches those by STRING, deliberately owning no bytecode parser, so it read the call as a
+		 * coverage-less answer. The guard is right to stay strict; this is the call site moving to
+		 * where it belonged anyway.
+		 *
+		 * <p>Token counts are SUMMED and not replaced: two completions were bought, and the audit
+		 * row is where an operator reads what this pass costs.
+		 *
+		 * @param continuation the second completion, whose answer is appended after this one's
+		 * @param citations the merged citation array, composed by the caller that knows both
+		 * @return the continued response
+		 */
+		LlmResponse continuedWith(LlmResponse continuation, List<Integer> citations) {
+			return new LlmResponse(answer + " " + continuation.getAnswer().trim(), citations,
+					inputTokens + continuation.inputTokens, outputTokens + continuation.outputTokens,
+					cachedTokens + continuation.cachedTokens);
+		}
+
 		String getAnswer() {
 			return answer;
 		}
@@ -1189,6 +1254,31 @@ public class LlmProvider {
 			return value.trim();
 		}
 		return DEFAULT_SYSTEM_PROMPT;
+	}
+
+	/**
+	 * Which finding prose this install asks for, given whether the #397 gate fired.
+	 *
+	 * <p>Resolved HERE and not in {@code LlmInferenceService} for the reason {@code search}'s own
+	 * {@code @param enumerateFindings} gives about arities: those two methods are the seam the
+	 * suite's test doubles override, so a mode threaded through them as a new parameter would be
+	 * supplied by production and dropped by every double. The gate stays where it was —
+	 * {@code LlmInferenceService.severalFindingsAboutOneDrug} is still canonical for WHETHER a
+	 * clause is appended, and this decides only WHICH.
+	 *
+	 * <p>{@link ChartSearchAiConstants#GP_DRUG_SAFETY_FINDINGS_RENDERED_BY_CLIENT} ships false, so a
+	 * stock install resolves exactly the two states that existed before issue #403 and its messages
+	 * are byte-identical.
+	 */
+	protected FindingProse findingProse(boolean enumerateFindings) {
+		if (!enumerateFindings) {
+			return FindingProse.UNPROMPTED;
+		}
+		return ChartSearchAiUtils.getBooleanGlobalProperty(
+				ChartSearchAiConstants.GP_DRUG_SAFETY_FINDINGS_RENDERED_BY_CLIENT,
+				ChartSearchAiConstants.DEFAULT_DRUG_SAFETY_FINDINGS_RENDERED_BY_CLIENT)
+						? FindingProse.SUMMARISED
+						: FindingProse.ENUMERATED;
 	}
 
 	protected int getTimeoutSeconds() {

@@ -3613,8 +3613,9 @@ public class DrugReferenceInjector {
 			// to infer the rest. So each clause is named on the side it is actually on — which is also why
 			// issue #269 gave the uncorroborated clauses a section rather than dropping them out of the
 			// reading. The three sections are disjoint and cover every clause the module can evaluate AND
-			// get an answer about; a clause it cannot evaluate at all (an unrecognised rule type, a rule
-			// with no token) is listed and claimed by none of them.
+			// get an answer about; a clause NO evaluable rule renders (an unrecognised rule type, a rule
+			// with no token) is listed and claimed by none of them. Per CLAUSE since issue #310 — where an
+			// evaluable rule renders the same string, that string is claimed; see ContraindicationSections.
 			appendSection(sb, RECORDED_READING_LEAD, contraindications.recorded);
 			appendSection(sb, NOT_RECORDED_READING_LEAD, contraindications.notRecorded);
 			// Third and last of the reading's sections, after the two that make a claim: it makes none —
@@ -4025,9 +4026,21 @@ public class DrugReferenceInjector {
 	 *  never computed. Otherwise they are subsets of {@code clauses} in clause order and pairwise
 	 *  disjoint — the order held by {@link #inClauseOrder} since issue #310, rather than by a repeat
 	 *  standing in the list where the per-key walk would otherwise have reached the two out of turn —
-	 *  and together they are every clause but ONE shape: a rule
-	 *  {@link DrugSafetyValidator#evaluatesAgainstTheChart} rejects is in the LIST and in no section,
-	 *  because the record may not say a patient does not have something nobody checked. Issue #269 did
+	 *  and together they are every clause but ONE shape: a clause NO evaluable rule renders is in the
+	 *  LIST and in no section, because the record may not say a patient does not have something nobody
+	 *  checked.
+	 *
+	 *  <p><b>That exception is about the CLAUSE and not about the RULE, and the difference is a
+	 *  residue.</b> Where a rule {@link DrugSafetyValidator#evaluatesAgainstTheChart} rejects renders a
+	 *  string an evaluable rule renders too, the string takes the evaluable rule's section — so the
+	 *  denial can cover words one of their authoring rules was never put to the chart. That is issue
+	 *  #208 item 2's own shape and it is PRE-EXISTING rather than issue #310's: it arrives with issue
+	 *  #308, which resolves these sections over clause TEXT, and the same fixture renders the same
+	 *  denial at {@code 28dbed9d}. What #310 removed is only the second, unclaimed copy that used to
+	 *  stand in the LIST beside it. Closing it means subtracting the unevaluable keys' strings from the
+	 *  denial, which is a change to what the record CLAIMS and wants its own issue.
+	 *
+	 *  <p>Issue #269 did
 	 *  not change WHAT is excluded — the clause it moved was in the recorded section, which was the
 	 *  defect — and gave it a section of its own: {@code uncorroborated}, a clause the chart matched
 	 *  that {@link #corroborated} could not support, which is neither a claim nor a denial. */
@@ -4083,25 +4096,28 @@ public class DrugReferenceInjector {
 	 *         clauses and stays two, with the shared words read twice. Reading the containment rule
 	 *         across keys would be wrong twice over. It drops a genuinely distinct clause wherever one
 	 *         operator note is a substring of another — {@code bleeding} inside {@code active
-	 *         gastrointestinal bleeding} — which is a clinical instruction this record is the only place
-	 *         the prompt carries. And the string it would drop can be in a DIFFERENT section from the
-	 *         one containing it, so dropping it leaves a section stating a clause the list does not
-	 *         carry, breaking the invariant {@code ContraindicationSections} rests on. The
-	 *         {@code contains} check {@link DrugSafetyValidator#contraindicationClauses} makes is safe
-	 *         for the opposite reason: it is WITHIN one key, where the two rows report one rule.
+	 *         gastrointestinal bleeding} — dropping an instruction this record is the only place the
+	 *         prompt carries. And where those two strings are in DIFFERENT sections, the shorter one is
+	 *         not merely dropped from the LIST: {@link #inClauseOrder} then filters it out of its
+	 *         SECTION as well, so a chart reading the module had established stops being stated at all,
+	 *         silently. Measured: with a containment rule over {@code clauses}, an entry whose
+	 *         {@code bleeding} clause is RECORDED and whose {@code active gastrointestinal bleeding}
+	 *         clause is not loses its whole recorded section. The {@code contains} check
+	 *         {@link DrugSafetyValidator#contraindicationClauses} makes is safe for the opposite reason:
+	 *         it is WITHIN one key, where the two rows report one rule.
 	 *
 	 *         <p><b>What it does to the count beside the chips.</b> This entry's clause count can now be
 	 *         LOWER than the number of contraindication chips it raises — two matched rules of different
-	 *         keys carrying one note are two chips and one clause. That is what the ticket asks for and
-	 *         not issue #190 item 1 reversed: that defect is the record claiming MORE than the
-	 *         deterministic layer found, and the two surfaces do not count the same population in any
-	 *         case, which {@code InjectedContraindicationClauseTest}'s class javadoc is canonical for.
+	 *         keys carrying one note are two chips and one clause. {@code
+	 *         InjectedContraindicationClauseTest}'s class javadoc is canonical for why that is not issue
+	 *         #190 item 1 reversed.
 	 *
 	 *         <p>Both halves of issue #310 are pinned in that class —
 	 *         {@code twoRulesOfOneEntrySharingANoteRenderThatClauseOnce} and
 	 *         {@code aClauseTwoKeysRenderIsListedOnceWithAnotherClauseBetweenThem} for the list,
-	 *         {@code aReadingSectionIsListedInTheDeduplicatedClausesOwnOrder} for the order the
-	 *         de-duplication would otherwise have broken. Mutate either half and read the failures.
+	 *         {@code aReadingSectionIsListedInTheDeduplicatedClausesOwnOrder} for the RECORDED section's
+	 *         order and {@code theDenialAndTheHedgeAreListedInTheClausesOwnOrderToo} for the other two,
+	 *         which no other case reaches. Mutate each and read the failures.
 	 *
 	 *         <p><b>Curated-source-only</b>, by construction rather than by measurement: neither
 	 *         {@code ddinter} nor {@code atc} publishes contraindications at all, so only an
@@ -4117,7 +4133,7 @@ public class DrugReferenceInjector {
 	 *         {@code DrugReferenceTestSupport.shippedEntries()} on 2026-09-11 found no entry in either
 	 *         whose keys render a duplicate clause: the bundled curated seed publishes 10
 	 *         contraindication rules over its 4 entries, and the bundled DDI knowledge base publishes
-	 *         none at all over its 2283. So no shipped rendering moves for this either — but that is a
+	 *         none at all over its 2283 entries. So no shipped rendering moves for this either — but that is a
 	 *         fact about the DATA on that date, not a property of the code, and an operator file is
 	 *         exactly what it does not cover.
 	 *
@@ -4293,18 +4309,18 @@ public class DrugReferenceInjector {
 	 *         construction rather than by the accident of a duplicate standing in the list (issue
 	 *         #310).
 	 *
-	 *         <p>A SELECTION and never a source of strings: it can only drop, so a section it returns
-	 *         carries nothing the list does not, whatever order either arrived in. That is what keeps
-	 *         it safe to apply after the cross-key precedence has already resolved which section owns
-	 *         each string — it re-orders that answer and cannot revisit it.
+	 *         <p><b>Its safety is a PRECONDITION and not a property of the loop: {@code clauses} must
+	 *         be the whole set of rendered strings.</b> An order-preserving intersection keeps only
+	 *         what both sides carry, so narrowing that set does not merely re-order a section — it
+	 *         empties it, silently, of every string the narrowing removed. Today nothing can: the
+	 *         sections are built from {@code byRule.values()} and {@code clauses} is exactly the
+	 *         distinct members of it. A de-duplication that dropped a string from the LIST would break
+	 *         that, which is the mechanism the "Not containment" paragraph of
+	 *         {@link #contraindicationSections} measures.
 	 */
 	private static Set<String> inClauseOrder(Collection<String> clauses, Set<String> section) {
-		Set<String> ordered = new LinkedHashSet<String>();
-		for (String clause : clauses) {
-			if (section.contains(clause)) {
-				ordered.add(clause);
-			}
-		}
+		Set<String> ordered = new LinkedHashSet<String>(clauses);
+		ordered.retainAll(section);
 		return ordered;
 	}
 

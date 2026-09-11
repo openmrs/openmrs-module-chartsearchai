@@ -1673,6 +1673,20 @@ public final class DrugReferenceTestSupport {
 		return record.substring(start + lead.length(), end);
 	}
 
+	/** The items one rendered SECTION lists, split on the {@code "; "} every section of a
+	 *  {@code drug_reference} record separates its items with ({@code DrugReferenceInjector
+	 *  .appendSection}). Here rather than in a test file so that "the items of a section" has ONE
+	 *  spelling: the separator is production's, and a case that hand-rolled the split would report a
+	 *  change to it without naming it. The precondition is part of the contract — a case about a
+	 *  section's CONTENTS must fail loudly on a record that carries no such section, rather than
+	 *  silently comparing against nothing. */
+	static List<String> sectionItems(String record, String lead) {
+		String section = sectionAfter(record, lead);
+		assertNotNull(section,
+				"precondition: the record must carry the section " + lead + ", was: " + record);
+		return new ArrayList<String>(Arrays.asList(section.split("; ")));
+	}
+
 	/** A one-record chart to inject into; the injected reference must append as record [2]. */
 	static PatientChart oneRecordChart() {
 		return chartOf(new RecordMapping(1, ChartSearchAiConstants.RESOURCE_TYPE_OBS,

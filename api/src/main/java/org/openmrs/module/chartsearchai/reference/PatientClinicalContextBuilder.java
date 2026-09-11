@@ -298,6 +298,13 @@ final class PatientClinicalContextBuilder {
 	 * all — keeps its trace, because there the trace IS the diagnosis. Deliberately not a throttle:
 	 * {@code DrugSafetyValidator.standingChartAlerts} records why one would hide the line a
 	 * diagnosis needs.
+	 *
+	 * <p><b>So {@code privilege} must be the one gating the caller's OWN read</b>, and that is
+	 * pinned rather than left to the copy-paste: each of the three calls sits in a case of
+	 * {@code ChartReadFailureLoudnessContextTest} that refuses exactly that privilege and asserts
+	 * the resulting line names it. Swap one call's constant for a neighbour's and read the failure
+	 * — the level assertions cannot see it, and on the trace-dropped cause the message is all an
+	 * operator gets.
 	 */
 	private static void warnUnreadable(String records, String consequence, String privilege,
 			RuntimeException e) {

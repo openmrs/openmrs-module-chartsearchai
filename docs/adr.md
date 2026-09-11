@@ -6880,7 +6880,14 @@ seam and the `screened` key. The answer path had neither.
 **Both channels, for the same reason the loader rule gives**: *silence is the absence of a finding,
 never a muted one.*
 
-1. **All three catches log at WARN**, naming the core privilege to check. Not two: the published
+1. **All three catches log at WARN**, each naming the core privilege gating ITS OWN read. The
+   pairing is pinned and not left to the copy-paste: `ChartReadFailureLoudnessContextTest` refuses
+   exactly one privilege per case and asserts the resulting line names that one. It has to be,
+   because `warnUnreadable` drops the stack trace for an `APIAuthenticationException` on the
+   grounds that the message already names the privilege to grant — so for the commonest cause the
+   message IS the diagnosis, and a catch paired with a neighbour's constant sends an operator to
+   grant a privilege the blind arm never calls. Swap one and read the failure; a level assertion
+   alone cannot see it. Not two catches: the published
    verdict below is the whole pass, so leaving the order catch silent would make the answer path's
    log channel narrower than the standing surface's for the identical failure. Age and weight stay
    at DEBUG, and not because nothing reads them — each has a real residue, which
@@ -6922,14 +6929,22 @@ never a muted one.*
   it also requires the drug-safety toggles and the pass completing. One verdict, one spelling, so a
   different question takes a different name.
 
-- **Adding a four-argument `inject` overload beside the three-argument one.** Seventeen test doubles
-  overrode that method when this was written (measured 2026-09-11 by widening the signature and
-  reading the compiler's errors; the number moves with the test tree and is recorded as what the
-  choice cost, not as a standing fact). An overload leaves every stale one compiling and silently inert on the
-  production path, which `DrugSafetyValidator.validate`'s javadoc records as having already happened
+- **Adding a four-argument `inject` overload beside the three-argument one.** Widening the
+  signature in place cost seventeen compiler errors, and the UNIT of that figure is what the
+  argument turns on, so it is split here rather than quoted whole: **fourteen** were test doubles
+  OVERRIDING the method, each `@Override`-annotated, and three were plain three-argument call
+  sites. Only the fourteen are evidence for this choice — an overload leaves an override compiling
+  and silently inert on the production path, while it leaves a call site compiling and CORRECT on
+  the narrower arity. (The seventeen is the compiler's own count on 2026-09-11, from widening the
+  signature; the split is read off this change's diff — fourteen removed
+  `public PatientChart inject(PatientChart chart, Patient patient, String question)` declarations
+  against three migrated call sites. Both numbers move with the test tree, and a later re-measure
+  will differ from seventeen because this change added a call site of its own: re-measure the same
+  way rather than differencing these.) Silent inertness is
+  what `DrugSafetyValidator.validate`'s javadoc records as having already happened
   here — *"the rest passed while stubbing nothing, and two of them were still doing so after a review
-  of the commit that added the overload"*. The signature was widened in place instead, turning every
-  stale one into a compile error, and
+  of the commit that added the overload"*. Widening turned each of the fourteen into a compile error
+  rather than a green test stubbing nothing, and
   `ArchitectureGuardTest.theInjectorExposesExactlyOneInjectArity` keeps it that way: nothing
   observable separates the two worlds on the day an overload is added, so the guard is structural.
 

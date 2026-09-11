@@ -40,11 +40,23 @@ import org.openmrs.util.PrivilegeConstants;
  * {@code org.openmrs} at WARN — so on a default install nothing was emitted at all, and an operator
  * looking for the reason a safety net reported nothing found an empty log.
  *
- * <p><b>The assertion is the LEVEL and never the message text.</b> {@link LogCapture}'s own class
- * javadoc gives the reason and gives it about issue #149, which is the shape this ticket invokes: a
- * test asserting on wording would let a re-wording silently drop the guard, and the return value
- * cannot pin it either, because an empty token set is the correct fail-safe in BOTH the
- * healthy-but-empty and the unreadable case.
+ * <p><b>The LEVEL is the assertion; the one thing asserted about the TEXT is which privilege it
+ * names.</b> {@link LogCapture}'s own class javadoc gives the reason for the first half and gives it
+ * about issue #149, which is the shape this ticket invokes: a test asserting on wording INSTEAD of
+ * the level would let a re-wording silently drop the guard, and the return value cannot pin it
+ * either, because an empty token set is the correct fail-safe in BOTH the healthy-but-empty and the
+ * unreadable case.
+ *
+ * <p>The second half is not that trade — it is an added conjunct, so the level assertion loses
+ * nothing — and it is what the deliberate trace-drop rests on. {@code warnUnreadable} omits the
+ * stack trace for an {@code APIAuthenticationException} BECAUSE the message already names the
+ * privilege to grant — a justification {@code LogCapture.hasThrowableAt} repeats, and a claim
+ * {@code README.md} makes to operators in its own words ("the failure is logged at WARN, naming
+ * the core privilege to check"). So for the cause these cases call the commonest, that message is
+ * the only diagnosis the module emits and an operator acts on it alone. The three calls are
+ * near-identical copy-paste, and a catch paired with a neighbour's {@code PrivilegeConstant} sends
+ * that operator to grant a privilege the blind arm does not use. Mutate one call's constant and
+ * read the failure; under a level assertion alone it ships green.
  *
  * <p><b>Three cases and not one.</b> The three assignments are three lines in three {@code try}
  * blocks, so a case for the allergy read alone stays green when either of the others is reverted —
@@ -105,6 +117,11 @@ public class ChartReadFailureLoudnessContextTest extends BaseModuleContextSensit
 	 * clinical context itself — with {@code privilege} refused, and answers whether the builder said
 	 * anything a stock install would print.
 	 *
+	 * <p>It ANSWERS rather than asserts because its caller needs both directions from it: the
+	 * discriminator below asks it for a healthy chart and for a failing one.
+	 * {@link #assertTheFailedReadIsAudibleAndNamesItsOwnPrivilege} is the positives' entry, which
+	 * asks a second question of the same pass and so cannot reduce to a boolean.
+	 *
 	 * @param privilege the one privilege to refuse, or {@code null} to hold every one
 	 */
 	private boolean builderReportedAFailureAudibly(String privilege) {
@@ -123,13 +140,57 @@ public class ChartReadFailureLoudnessContextTest extends BaseModuleContextSensit
 	}
 
 	/**
+	 * One pass with {@code privilege} refused, asserting BOTH things that one line has to do: be
+	 * audible on a stock install, and name the privilege gating ITS OWN read.
+	 *
+	 * <p>Nothing here spells a catch-to-privilege mapping the production code could be compared
+	 * against: the privilege asserted IS the one refused, and the refusal is what made this read
+	 * fail, so a line naming a neighbour's constant cannot satisfy it. {@code records} scopes the
+	 * conjunct to the line about THIS read rather than to any WARN in the window — it is the
+	 * builder's own logger and its nameless-order line lives there too — and a re-wording of that
+	 * noun reddens this case rather than quietly satisfying it.
+	 *
+	 * <p>Both assertions read one capture over one pass, so they cannot describe different builds.
+	 *
+	 * @param privilege the one privilege to refuse: core's {@code @Authorized} on the service call
+	 *            this read makes, which is what fails the read the way production fails it
+	 * @param records how the line names the records it could not read
+	 * @param whyAudible why this read in particular has to be heard
+	 */
+	private void assertTheFailedReadIsAudibleAndNamesItsOwnPrivilege(String privilege, String records,
+			String whyAudible) {
+		enableTheScreen();
+		Patient patient = Context.getPatientService().getPatient(7);
+		assertNotNull(patient, "precondition: the standard test patient must exist");
+		DrugSafetyValidator validator =
+				DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService());
+
+		DrugReferenceTestSupport.refusingPrivilege(privilege, () -> {
+			try (LogCapture capture = LogCapture.on(BUILDER_LOGGER)) {
+				validator.validate(ANSWER, QUESTION, patient, null, null);
+				assertTrue(capture.hasEventAtOrAbove(Level.WARN), whyAudible);
+				assertTrue(capture.hasMessageAt(Level.WARN, records, privilege),
+						"the line reporting the unreadable " + records + " must name " + privilege
+								+ ", the privilege whose refusal made that read fail. The trace is "
+								+ "dropped for this cause precisely because the message names the "
+								+ "privilege to grant, so a copy-paste slip naming a neighbour's "
+								+ "constant sends an operator to grant a privilege this arm does not "
+								+ "use, with nothing else to go on (issue #247). Captured: "
+								+ capture.describeAll());
+			}
+			return null;
+		});
+	}
+
+	/**
 	 * The allergy catch. Without this line the contraindication screen evaluates against "this patient
 	 * has no allergies", which is indistinguishable from a patient who genuinely has none — and on a
 	 * stock install there is nothing in the log to tell them apart.
 	 */
 	@Test
 	public void aRoleThatCannotReadAllergiesIsReportedWhereAStockInstallWouldSeeIt() {
-		assertTrue(builderReportedAFailureAudibly(PrivilegeConstants.GET_ALLERGIES),
+		assertTheFailedReadIsAudibleAndNamesItsOwnPrivilege(PrivilegeConstants.GET_ALLERGIES,
+				"allergies",
 				"a failed allergy read must be reported at WARN or above: core's shipped log4j2.xml "
 						+ "puts org.openmrs at WARN, so a DEBUG line is emitted by no default install "
 						+ "and the safety layer goes blind with nothing to say so (issue #247)");
@@ -138,7 +199,8 @@ public class ChartReadFailureLoudnessContextTest extends BaseModuleContextSensit
 	/** The condition catch, which is a second line in a second try block. */
 	@Test
 	public void aRoleThatCannotReadConditionsIsReportedWhereAStockInstallWouldSeeIt() {
-		assertTrue(builderReportedAFailureAudibly(PrivilegeConstants.GET_CONDITIONS),
+		assertTheFailedReadIsAudibleAndNamesItsOwnPrivilege(PrivilegeConstants.GET_CONDITIONS,
+				"conditions",
 				"a failed condition read must be reported at WARN or above, for the reason the allergy "
 						+ "read beside it must be");
 	}
@@ -151,7 +213,8 @@ public class ChartReadFailureLoudnessContextTest extends BaseModuleContextSensit
 	 */
 	@Test
 	public void aRoleThatCannotReadOrdersIsReportedWhereAStockInstallWouldSeeIt() {
-		assertTrue(builderReportedAFailureAudibly(PrivilegeConstants.GET_ORDERS),
+		assertTheFailedReadIsAudibleAndNamesItsOwnPrivilege(PrivilegeConstants.GET_ORDERS,
+				"active drug orders",
 				"a failed active-order read must be reported at WARN or above: it blinds the "
 						+ "interaction arms the same way, and it is one of the two stamps the "
 						+ "published verdict is made of");

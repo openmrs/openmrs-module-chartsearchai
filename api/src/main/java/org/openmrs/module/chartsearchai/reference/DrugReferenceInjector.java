@@ -471,11 +471,14 @@ public class DrugReferenceInjector {
 	 * this repo has already measured what the alternative does: {@code DrugSafetyValidator.validate}
 	 * kept its narrower arity when the pair-extent sink arrived, and the test doubles overriding it
 	 * went silently inert on the production path — "the rest passed while stubbing nothing, and two
-	 * of them were still doing so after a review of the commit that added the overload". Seventeen
-	 * doubles overrode this method when the sink was added (measured 2026-09-11 from the compiler's
-	 * errors; the number moves with the test tree and is what the choice cost, not a standing fact).
-	 * Widening in place turned every stale one into a compile error instead of a green test that
-	 * stubs nothing.
+	 * of them were still doing so after a review of the commit that added the overload". Fourteen
+	 * doubles OVERRODE this method when the sink was added, and widening in place turned each into
+	 * a compile error instead of a green test that stubs nothing. Say doubles and not compiler
+	 * errors: the widening raised seventeen of those, and the other three were plain
+	 * three-argument call sites, which an overload would have left compiling and CORRECT — so they
+	 * are not evidence for this choice. (Seventeen is the compiler's own count on 2026-09-11; the
+	 * split is read off this change's diff. Both move with the test tree — this change added a
+	 * call site of its own — and are what the choice cost, not standing facts.)
 	 *
 	 * @param readStatus a caller-supplied one-slot accumulator the pass states its chart-read
 	 *        verdict into, or {@code null} from a caller that does not publish it.

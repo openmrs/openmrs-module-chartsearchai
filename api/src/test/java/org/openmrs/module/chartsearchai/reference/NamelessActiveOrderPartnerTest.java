@@ -60,6 +60,10 @@ public class NamelessActiveOrderPartnerTest extends BaseModuleContextSensitiveTe
 	/** Concept 88 (ASPIRIN) — the concept behind patient 7's single active drug order, order 111. */
 	private static final int ORDERED_CONCEPT = 88;
 
+	/** Patient 7's single active drug order, whose drug is "ASPIRIN" and whose concept is
+	 *  {@link #ORDERED_CONCEPT}. */
+	private static final int ORDER = 111;
+
 	/** Two codes in ONE ATC subgroup, neither carried by the curated seed, so both are unnameable and
 	 *  both share subgroup {@code M01AE} with the seed's ibuprofen entry ({@code M01AE01}). */
 	private static final String NAPROXEN_ATC = "M01AE02";
@@ -92,24 +96,13 @@ public class NamelessActiveOrderPartnerTest extends BaseModuleContextSensitiveTe
 	}
 
 	/**
-	 * Makes order 111 unnameable: its drug reference is cleared, the free text a clinician would have
-	 * typed for a non-coded order is cleared, and every name of its concept is voided — which is exactly
-	 * the state {@code addDrugName} finds nothing in, since those three are every source it reads.
-	 *
-	 * <p>The {@code drug_non_coded} clear is not redundant even though the standard test dataset leaves
-	 * that column null on order 111: since issue #293 that column is a name source, so leaving it to the
-	 * dataset would make this arrangement CONTINGENT on data this file does not control — a later
-	 * dataset carrying free text there would retire the whole arrangement silently, the same way this
-	 * file's own javadoc records the concept-name synonym fallback nearly doing.
+	 * Makes order 111 unnameable, through the shared helper. Why all three name sources must be
+	 * cleared rather than only the concept's names, and why it has to be done by SQL after the ATC
+	 * mapping, is {@link DrugReferenceTestSupport#makeOrderNameless}'s own javadoc — one home, since
+	 * issue #294's grounding measurement builds the same arrangement from another package.
 	 */
 	private void makeTheOrderNameless() {
-		Context.getAdministrationService().executeSQL("update drug_order set drug_inventory_id = null,"
-				+ " drug_non_coded = null where order_id = 111", false);
-		Context.getAdministrationService()
-				.executeSQL("update concept_name set voided = 1 where concept_id = " + ORDERED_CONCEPT,
-					false);
-		Context.flushSession();
-		Context.clearSession();
+		DrugReferenceTestSupport.makeOrderNameless(ORDER, ORDERED_CONCEPT);
 	}
 
 	private static List<String> atcClassChipDetails(List<SafetyWarning> warnings) {

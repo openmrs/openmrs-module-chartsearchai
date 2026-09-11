@@ -1401,7 +1401,7 @@ public final class DrugReferenceTestSupport {
 	 * included, and the arrangement encodes which concept-reference-source names the builder
 	 * recognises — so a change to that predicate must not have to be found in two test files.
 	 */
-	static void mapConceptToAtc(int conceptId, String... codes) {
+	public static void mapConceptToAtc(int conceptId, String... codes) {
 		ConceptSource whoAtc = new ConceptSource();
 		whoAtc.setName("WHOATC");
 		whoAtc.setDescription("WHO ATC classification (test)");
@@ -1418,6 +1418,40 @@ public final class DrugReferenceTestSupport {
 		}
 		Context.getConceptService().saveConcept(concept);
 		Context.flushSession();
+	}
+
+	/**
+	 * Makes {@code orderId} unnameable, the only way the platform allows: its drug reference is
+	 * cleared, the non-coded free text a clinician would have typed is cleared, and every name of
+	 * {@code conceptId} is voided. Those three ARE every source {@code addDrugName} reads, so the
+	 * builder finds nothing in any of them and routes the order through
+	 * {@code PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly} — display its own codes
+	 * labelled as codes, and an EMPTY names set, which is what makes this order class uuid-only for
+	 * the issue #118 reconciliation.
+	 *
+	 * <p>The {@code drug_non_coded} clear is not redundant even where the dataset leaves that column
+	 * null: since issue #293 it is a name source, so leaving it to the dataset would make the
+	 * arrangement CONTINGENT on data the caller does not control.
+	 *
+	 * <p><b>By SQL, and after the fact, because no such concept can be SAVED.</b>
+	 * {@code ConceptValidator} rejects a concept with no fully specified name and
+	 * {@code Concept.addName} coerces the first name added to {@code FULLY_SPECIFIED}. So call
+	 * {@link #mapConceptToAtc} FIRST, through the real {@code ConceptService} while the concept still
+	 * validates, and only then call this. Every non-voided name must go, including synonyms in any
+	 * locale: {@code Concept.getName()} falls back to any of them before it returns null.
+	 *
+	 * <p>Here rather than in each file for the reason this class exists: it was private to
+	 * {@code NamelessActiveOrderPartnerTest}, and issue #294's grounding measurement needs the same
+	 * arrangement from another package. The three columns are the builder's name-source contract, so
+	 * a fourth source added later must not have to be found in two test files.
+	 */
+	public static void makeOrderNameless(int orderId, int conceptId) {
+		Context.getAdministrationService().executeSQL("update drug_order set drug_inventory_id = null,"
+				+ " drug_non_coded = null where order_id = " + orderId, false);
+		Context.getAdministrationService()
+				.executeSQL("update concept_name set voided = 1 where concept_id = " + conceptId, false);
+		Context.flushSession();
+		Context.clearSession();
 	}
 
 	/**

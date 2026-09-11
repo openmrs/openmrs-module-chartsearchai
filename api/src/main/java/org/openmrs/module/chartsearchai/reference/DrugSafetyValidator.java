@@ -3139,8 +3139,8 @@ public class DrugSafetyValidator {
 	 *         {@code DrugReferenceInjector.contraindicationSections}. Both must partition the entry's
 	 *         rules by this same KEY, or the model is told the drug has two contraindications where the
 	 *         deterministic layer found one (issue #190 item 1). What the rendered LIST then does with
-	 *         those keys is issue #310 — it collapses them by clause TEXT, so its item count is not the
-	 *         chip count; see that method's {@code @return}. A second copy of the KEY is how the two
+	 *         those keys is issue #310 — it collapses them by clause TEXT, so its item count need not be
+	 *         the chip count; see that method's {@code @return}. A second copy of the KEY is how the two
 	 *         came apart when issue #146 moved it: two allergy rules under two aliases of one drug were
 	 *         one chip and two clauses, silently.
 	 */

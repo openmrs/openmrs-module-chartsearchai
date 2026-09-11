@@ -356,6 +356,129 @@ public interface ChartSearchService {
 	}
 
 	/**
+	 * One cited safety finding whose RATING the answer states nowhere, and what that rating is —
+	 * issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/387">#387</a>.
+	 * This type is CANONICAL for what its two values do and do not assert;
+	 * {@code ChartAnswer.getUnstatedFindingSeverities()} points at it rather than restating it, and
+	 * README states the same contract for a client author.
+	 *
+	 * <p><b>Why the rating travels with the citation rather than beside it.</b> Until #387 the key
+	 * published the citation alone, and the rating — which
+	 * {@code SafetyFindingSeverityFidelityCheck} holds in the same map it decides from — was
+	 * dropped on the way out. A client could not recover it: the {@code safetyWarnings} chips carry
+	 * every rating but no citation index, and {@code (type, drug)} does not identify one, five
+	 * findings of one screen being {@code (interaction, Clarithromycin)} alike on the issue's own
+	 * reproduction. So the pairing is made once, where both halves are already in scope, and never
+	 * by a consumer.
+	 *
+	 * <p><b>This is not the chips reconciled against the answer, and must not be read as that.</b>
+	 * The value is {@code PatientChartSerializer.RecordMapping.getFindingSeverity()} — the rating
+	 * that travels structurally beside the record the model was given, written at the write site by
+	 * {@code DrugReferenceInjector.ratingThisRecordStates} and canonical there. Nothing here reads a
+	 * chip, no chip gains a citation index, and the chips remain the independent list nothing
+	 * reconciles against the answer.
+	 *
+	 * <p><b>{@link #getRating()} is NOT the value a {@code safetyWarnings} chip publishes as its
+	 * {@code severity}, and the two must not be joined — which is why this field is not called
+	 * {@code severity}.</b> Three mechanisms separate them, stated as mechanisms because every
+	 * attempt to summarise how far apart they come out was refuted by measurement. This value is
+	 * {@code DrugSafetyValidator.statableRating}'s output: the spelling {@code severityRank}
+	 * RECOGNISED, handed on TRIMMED, where a chip publishes {@code SafetyWarning.getSeverity()} raw
+	 * (ADR Decision 78). {@code statableRating} declines {@code unknown} and
+	 * {@code ratingThisRecordStates} requires the record to state the word, so findings a chip rates
+	 * have no entry here at all. And the two are written by different passes — a rating into the
+	 * record pre-answer by {@code DrugReferenceInjector.injectRecords}, a chip post-answer by
+	 * {@code DrugSafetyValidator.validate}. Nothing on the response pairs a chip with a citation in
+	 * any case, so there is no join to make.
+	 *
+	 * <p><b>What it asserts.</b> That the answer cited this record and that this rating's word
+	 * appears nowhere in the answer. Never WHERE the rating should have been, never that the
+	 * sentence citing it is wrong in any other way, and never that the finding was mis-stated — the
+	 * check asks of the whole answer, so an answer stating the rating in some other sentence is
+	 * silent here by design. {@code SafetyFindingSeverityFidelityCheck} is canonical for the unit
+	 * and for the residues.
+	 *
+	 * <p><b>It is shaped on {@code SafetyWarning.ChartOrderBridge}</b>, this module's other two-field
+	 * value type PUBLISHED as a list, rather than on the scalar-pair statements beside it: the
+	 * {@code rating} is required rather than null-tolerated, as the constructor below states, and
+	 * {@link #toString()} is the one spelling of the pair, which the producing check's {@code WARN}
+	 * takes rather than re-building. Value equality is what a list of these needs and what those
+	 * scalar pairs have no use for. It does not fall under the rule keeping {@code SafetyWarning}
+	 * itself without an {@code equals} — chips are kept apart so nothing downstream can collapse two
+	 * the module meant to keep, and here the producing check already makes the citation unique across
+	 * the list, so equality can collapse nothing.
+	 */
+	final class UnstatedFindingSeverity {
+
+		private final int citation;
+
+		private final String rating;
+
+		/**
+		 * {@code rating} is required: {@link #equals} and {@link #hashCode} dereference it, as
+		 * {@code SafetyWarning.ChartOrderBridge} says of its own two, and a caller building one by
+		 * hand owes the same. {@link #toString} does NOT — it concatenates, so a null would print as
+		 * {@code [350] null} rather than throwing, and since the producing check logs these that is
+		 * the one place a hand-built null would surface quietly. The production path cannot pass one:
+		 * {@code SafetyFindingSeverityFidelityCheck} skips a citation whose record carries no rating
+		 * before it reaches here.
+		 */
+		public UnstatedFindingSeverity(int citation, String rating) {
+			this.citation = citation;
+			this.rating = rating;
+		}
+
+		/**
+		 * @return the citation index of the safety finding — the number the answer printed in
+		 *         brackets, and the {@code index} of the matching entry in the response's
+		 *         {@code references} array, which is how a client joins the two
+		 */
+		public int getCitation() {
+			return citation;
+		}
+
+		/**
+		 * @return the rating that finding's own record states and the answer does not, in the form
+		 *         the module recognised it in. Never null on an entry this key publishes, and never
+		 *         a chip's raw {@code severity} — the class javadoc above is canonical for both.
+		 */
+		public String getRating() {
+			return rating;
+		}
+
+		@Override
+		public boolean equals(Object other) {
+			if (this == other) {
+				return true;
+			}
+			if (!(other instanceof UnstatedFindingSeverity)) {
+				return false;
+			}
+			UnstatedFindingSeverity that = (UnstatedFindingSeverity) other;
+			return citation == that.citation && rating.equals(that.rating);
+		}
+
+		@Override
+		public int hashCode() {
+			return 31 * citation + rating.hashCode();
+		}
+
+		/**
+		 * The one spelling of the pair, taken by {@code SafetyFindingSeverityFidelityCheck}'s
+		 * {@code WARN} rather than re-built there — the arrangement
+		 * {@code DrugReferenceInjector.chartOrderClause} already uses for
+		 * {@code SafetyWarning.ChartOrderBridge}, so the pair a debug dump prints and the pair a
+		 * maintainer reads in the log cannot differ. Pinned by
+		 * {@code SafetyFindingSeverityFidelityTest.theStatementCarriesEachFindingsOwnRatingBesideItsCitation},
+		 * which asserts this text in the captured log; mutate it and read the failures.
+		 */
+		@Override
+		public String toString() {
+			return "[" + citation + "] " + rating;
+		}
+	}
+
+	/**
 	 * An answer to a chart search question with source citations.
 	 */
 	class ChartAnswer {
@@ -384,7 +507,7 @@ public interface ChartSearchService {
 
 		private final List<Integer> misattributedOrderCitations;
 
-		private final List<Integer> unstatedFindingSeverities;
+		private final List<UnstatedFindingSeverity> unstatedFindingSeverities;
 
 		private final ActiveOrderClaims activeOrderClaims;
 
@@ -483,7 +606,7 @@ public interface ChartSearchService {
 				ChartSearchAiUtils.ReferenceSlice referenceSlice, PairChipExtent pairChipExtent,
 				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations,
 				List<Integer> misattributedOrderCitations,
-				List<Integer> unstatedFindingSeverities,
+				List<UnstatedFindingSeverity> unstatedFindingSeverities,
 				ActiveOrderClaims activeOrderClaims,
 				FindingCitationExtent findingCitationExtent,
 				Boolean chartReadForSafety,
@@ -516,7 +639,7 @@ public interface ChartSearchService {
 			// none, and normalising either into the other loses the difference the accessors state.
 			this.unstatedFindingSeverities = unstatedFindingSeverities == null ? null
 					: java.util.Collections.unmodifiableList(
-							new java.util.ArrayList<Integer>(unstatedFindingSeverities));
+							new java.util.ArrayList<UnstatedFindingSeverity>(unstatedFindingSeverities));
 			// A value type rather than a normalised pair of ints, under the same rule as the three
 			// lists above (issue #379): null is the absence of a measurement and a zeroed statement
 			// is a measurement of none, so neither is normalised into the other. It is immutable, so
@@ -870,9 +993,12 @@ public interface ChartSearchService {
 		}
 
 		/**
-		 * The citations of safety findings whose RATING this answer states nowhere —
+		 * The citations of safety findings whose RATING this answer states nowhere, each carrying
+		 * the rating that went missing —
 		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/337">issue #337</a>,
-		 * round three. {@code SafetyFindingSeverityFidelityCheck} reports them, and this is the same
+		 * round three, and
+		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/387">#387</a> for
+		 * the rating. {@code SafetyFindingSeverityFidelityCheck} reports them, and this is the same
 		 * remedy as its two siblings for the third face of one failure: a deterministic safety string
 		 * reaching the clinician weaker than the module wrote it.
 		 *
@@ -885,8 +1011,11 @@ public interface ChartSearchService {
 		 * that check reports a SUBSTITUTION inside a long reproduction and this answer reproduced
 		 * nothing.
 		 *
-		 * <p><b>The CITATION and never a word of either text</b>, for the reason both siblings state.
-		 * One index is one entry.
+		 * <p><b>The citation and the RATING, and never a word of either text</b>. The two siblings
+		 * publish a bare index because each has one datum to publish; this key carries two. One
+		 * citation is one entry, and {@link UnstatedFindingSeverity} is canonical for what an entry
+		 * asserts, why the two travel together, and how its {@code rating} differs from the
+		 * {@code severity} a chip publishes — a difference its spelling is chosen to keep visible.
 		 *
 		 * <p><b>It is not a grounding verdict and not a claim that the finding is wrong.</b> The
 		 * finding behind such a sentence is deterministic and was, on the reported answer, correct;
@@ -906,13 +1035,13 @@ public interface ChartSearchService {
 		 * reachable cause is the async-grounding path's early {@code done}, built before the check
 		 * runs; on a cache hit the ORIGINAL request's list is replayed with the rest of the answer.
 		 *
-		 * @return the distinct citation indexes in CITATION order — the order
-		 *         {@code LlmInferenceService.extractCitedReferences} resolved them, which is the
-		 *         order the answer states them in wherever the model anchored them inline and did
-		 *         not also supply a structured array in some other order. Null where none was
+		 * @return one entry per offending citation, the citations distinct and in CITATION order —
+		 *         the order {@code LlmInferenceService.extractCitedReferences} resolved them, which
+		 *         is the order the answer states them in wherever the model anchored them inline and
+		 *         did not also supply a structured array in some other order. Null where none was
 		 *         stated.
 		 */
-		public List<Integer> getUnstatedFindingSeverities() {
+		public List<UnstatedFindingSeverity> getUnstatedFindingSeverities() {
 			return unstatedFindingSeverities;
 		}
 

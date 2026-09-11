@@ -212,7 +212,7 @@ public class LlmInferenceService implements ChartSearchService {
 			// And the fourth (issue #337 round three): the cited safety findings whose RATING the
 			// answer states nowhere. Carried rather than re-derived for the reason its neighbours
 			// are — the chart, which is where the rating travels, is gone by REST time.
-			List<Integer> unstatedFindingSeverities =
+			List<ChartSearchService.UnstatedFindingSeverity> unstatedFindingSeverities =
 					SafetyFindingSeverityFidelityCheck.reportUnstatedFindingSeverities(patient,
 							response.getAnswer(), cited, chart.getMappings());
 			// And the fifth (issue #395): the base the four above had none for. Each of them judges a
@@ -655,7 +655,7 @@ public class LlmInferenceService implements ChartSearchService {
 					activeOrderReport == null ? null : activeOrderReport.getClaims();
 			// The fourth, carried the same way and stating null on the early `done` for the same
 			// reason (issue #337 round three): the check runs here, after the user-visible handoff.
-			List<Integer> unstatedFindingSeverities =
+			List<ChartSearchService.UnstatedFindingSeverity> unstatedFindingSeverities =
 					SafetyFindingSeverityFidelityCheck.reportUnstatedFindingSeverities(patient,
 							response.getAnswer(), cited, chart.getMappings());
 			// The fifth, carried the same way and stating null on the early `done` for the same

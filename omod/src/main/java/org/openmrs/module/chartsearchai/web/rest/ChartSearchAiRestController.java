@@ -48,6 +48,7 @@ import org.openmrs.module.chartsearchai.api.ChartSearchService.ActiveOrderClaims
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.FindingCitationExtent;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
+import org.openmrs.module.chartsearchai.api.ChartSearchService.UnstatedFindingSeverity;
 import org.openmrs.module.chartsearchai.api.AuditLogService;
 import org.openmrs.module.chartsearchai.api.PatientAccessCheck;
 import org.openmrs.module.chartsearchai.api.impl.PrewarmBootstrapService;
@@ -1509,10 +1510,14 @@ public class ChartSearchAiRestController {
 	 *
 	 * <p>{@code unstatedFindingSeverities} is that remedy a third time, back on the issue the first
 	 * one came from (<a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/337">issue
-	 * #337</a>, round three): the citations of safety findings whose RATING the answer states nowhere. It
+	 * #337</a>, round three): the citations of safety findings whose RATING the answer states nowhere,
+	 * each carrying that rating since
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/387">#387</a>. It
 	 * reaches this method rather than {@code putSafetyChips} for the reason its two neighbours do —
 	 * it is a statement about the ANSWER, not a chip — and it is emphatically not a restatement of
 	 * the chips' own {@code severity}, which is what the answer was supposed to carry and did not.
+	 * Nor does carrying the rating make it one: the value is the RECORD's, it differs from the chip's
+	 * in form and in extent, and {@link #serializeUnstatedFindingSeverities} carries why.
 	 *
 	 * <p>{@code chartReadForSafety} is the remedy for the failure one layer UNDER all of these
 	 * (<a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/247">#247</a>): not a
@@ -1574,14 +1579,68 @@ public class ChartSearchAiRestController {
 		List<Integer> misattributed = answer.getMisattributedOrderCitations();
 		target.put("misattributedOrderCitations",
 			misattributed == null ? null : new ArrayList<Integer>(misattributed));
-		List<Integer> unstatedSeverities = answer.getUnstatedFindingSeverities();
 		target.put("unstatedFindingSeverities",
-			unstatedSeverities == null ? null : new ArrayList<Integer>(unstatedSeverities));
+			serializeUnstatedFindingSeverities(answer.getUnstatedFindingSeverities()));
 		target.put("activeOrderClaims", serializeActiveOrderClaims(answer.getActiveOrderClaims()));
 		target.put("findingCitations",
 				serializeFindingCitationExtent(answer.getFindingCitationExtent()));
 		target.put("chartReadForSafety", answer.getChartReadForSafety());
 		putConditionRuleCoverage(target, answer.getConditionRuleCoverage());
+	}
+
+	/**
+	 * The wire shape of {@code unstatedFindingSeverities}: one object per offending citation,
+	 * {@code citation} the index the answer printed in brackets and {@code rating} the rating that
+	 * finding's own record states and the answer does not — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/387">#387</a>.
+	 * {@code null} for an answer whose check stated no measurement and an empty list for one that ran
+	 * and named none, the distinction {@link #putModuleStatements} preserves for every key in this
+	 * family. {@code ChartSearchService.UnstatedFindingSeverity} is canonical for what each entry
+	 * does and does not assert.
+	 *
+	 * <p>Why the two travel in one object rather than on two keys, why this is not the chips
+	 * reconciled against the answer, and how this value differs from a chip's are the value type's own
+	 * javadoc and ADR Decision 78's amendment; neither is restated here.
+	 *
+	 * <p><b>The field is {@code rating} and not {@code severity}, deliberately.</b> This subsystem
+	 * spells the concept "rating" throughout — {@code statableRating},
+	 * {@code ratingThisRecordStates} — and {@code severity} is the operator's own raw field name,
+	 * which a chip publishes and this does not: the two differ in form and in extent, as the value
+	 * type's javadoc sets out. Spelling them apart makes that structural rather than a caveat a
+	 * client has to read, and it costs nothing here because #387 is already changing this key's
+	 * shape, so no consumer ever saw a {@code severity} on it.
+	 *
+	 * <p>The word is already on this module's wire once, as the user's feedback {@code rating} on
+	 * {@code /feedback} and on an {@code /auditlog} row. That is a different concept on different
+	 * endpoints and never in the same object as this one, so the two do not collide; it is named here
+	 * so the reuse reads as noticed rather than as an accident.
+	 *
+	 * <p><b>The entry is spelled out as a map rather than handed to the mapper</b>, which is the one
+	 * place this differs from {@code SafetyWarning.ChartOrderBridge}, the module's other list-published
+	 * two-field type: that one is serialized by the mapper off its getter names, which is why its
+	 * javadoc fixes those names as issue #347's contract. Here the KEYS are the contract README states,
+	 * so they are written as literals and pinned as literals by
+	 * {@code ChartSearchAiUnstatedFindingSeverityTest.theSearchResponseNamesTheFindingsWhoseRatingTheAnswerDropped},
+	 * which compares the raw map — and by THAT case alone, measured: handing the value objects to the
+	 * mapper instead reddens it and nothing else, the SSE cases passing because Jackson renders the
+	 * getters to byte-identical JSON. So renaming an accessor cannot silently move a documented key,
+	 * but only while that one assertion stands. An {@code ArrayList} of {@code LinkedHashMap} is also the shape
+	 * {@link #serializeSafetyWarnings} publishes, which keeps #347's other half satisfied: the
+	 * marshaller refuses {@code Collections}' immutable wrappers, and the accessor hands one out.
+	 */
+	private List<Map<String, Object>> serializeUnstatedFindingSeverities(
+			List<UnstatedFindingSeverity> unstated) {
+		if (unstated == null) {
+			return null;
+		}
+		List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
+		for (UnstatedFindingSeverity entry : unstated) {
+			Map<String, Object> map = new LinkedHashMap<String, Object>();
+			map.put("citation", entry.getCitation());
+			map.put("rating", entry.getRating());
+			out.add(map);
+		}
+		return out;
 	}
 
 	/**

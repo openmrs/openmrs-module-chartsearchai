@@ -301,12 +301,26 @@ final class PatientClinicalContextBuilder {
 	/**
 	 * Reports a chart read the module could not perform, at WARN, where a stock install will see it
 	 * (issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/247">#247</a>).
-	 * Shared by every read this builder degrades to an empty value so their wording, their level and
-	 * the rule below cannot drift apart. Every one of them, and not only the three the published
-	 * verdict is built from: a stamp decides whether a failure reaches
+	 * Shared by every catch in {@link #build} that degrades a read to an empty value, so their
+	 * wording, their level and the rule below cannot drift apart. Every one of those, and not only
+	 * the three the published verdict is built from: a stamp decides whether a failure reaches
 	 * {@code ChartSearchService.ChartAnswer.getChartReadForSafety()}, and has never been what
 	 * decides whether an operator is told. Age and weight carry no stamp and each has a residue of
 	 * its own, recorded at their catches.
+	 *
+	 * <p><b>The per-concept reads those catches enclose are deliberately NOT shared with this and
+	 * stay at {@code log.debug}</b> — {@link #conceptUuid}, {@link #addConceptName},
+	 * {@link #addConceptNames} and {@link #addAtcCodes}. Each reads a lazy association off a
+	 * {@code Concept} the enclosing service call has already returned, so it is an entity property
+	 * read and not a service call: core's {@code AuthorizationAdvice} advises the service layer and
+	 * never sees it, no {@code @Authorized} privilege gates it, and the sentence this method exists
+	 * to write — the privileges to grant — would have nothing to name. What reaches those catches is
+	 * a store fault or an association that cannot be initialised, not the missing-privilege cause.
+	 * Their residue is one record's worth of one read — the tokens, names or uuid of the single
+	 * allergy, condition or order being walked — where a catch here abandons the whole read, the
+	 * records not yet walked included. Raising them is a change to how loud a HEALTHY install is per
+	 * record, which issue #247 measured nothing about; {@link #conceptUuid}'s own javadoc carries
+	 * what its failure costs.
 	 *
 	 * <p><b>The stack trace is kept for every cause but the expected one.</b> An
 	 * {@code APIAuthenticationException} is a role missing one of {@code privileges} and nothing

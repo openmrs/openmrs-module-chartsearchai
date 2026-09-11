@@ -91,6 +91,12 @@ This document captures the architectural decisions made for the Chart Search AI 
 - [Decision 83: How many screened findings the prompt carried, and how many the answer cited, is stated on the response](#decision-83-how-many-screened-findings-the-prompt-carried-and-how-many-the-answer-cited-is-stated-on-the-response)
 - [Decision 84: Where the one-line-per-finding clause sits is what decides whether a safety answer states every finding it was given](#decision-84-where-the-one-line-per-finding-clause-sits-is-what-decides-whether-a-safety-answer-states-every-finding-it-was-given)
 - [Decision 85: An answer short of the findings its prompt carried is repaired by asking again, not by another wording](#decision-85-an-answer-short-of-the-findings-its-prompt-carried-is-repaired-by-asking-again-not-by-another-wording)
+- [Decision 86: A relationship resting on shared classification alone is a caution, not a reason to withhold](#decision-86-a-relationship-resting-on-shared-classification-alone-is-a-caution-not-a-reason-to-withhold)
+- [Decision 87: A screen that related nothing says so in the prompt, instead of reaching the model as an empty slice](#decision-87-a-screen-that-related-nothing-says-so-in-the-prompt-instead-of-reaching-the-model-as-an-empty-slice)
+- [Decision 88: A proposal-vocabulary answer about a drug the patient already takes is a real defect, and a one-arm fix for it is refused](#decision-88-a-proposal-vocabulary-answer-about-a-drug-the-patient-already-takes-is-a-real-defect-and-a-one-arm-fix-for-it-is-refused)
+- [Decision 89: A question asking to STOP or to WORRY about a medication is an interaction screen, and the trigger no longer requires the word "interact"](#decision-89-a-question-asking-to-stop-or-to-worry-about-a-medication-is-an-interaction-screen-and-the-trigger-no-longer-requires-the-word-interact)
+- [Decision 90: The safety prose summarises the findings the client already renders, and states each one's severity while doing it](#decision-90-the-safety-prose-summarises-the-findings-the-client-already-renders-and-states-each-ones-severity-while-doing-it)
+- [Decision 91: A chart the module could not read says so, in the log and on the answer](#decision-91-a-chart-the-module-could-not-read-says-so-in-the-log-and-on-the-answer)
 - [Known limitations](#known-limitations)
 - [Planned future work](#planned-future-work)
 - [Appendix A: Measurements whose only home was CLAUDE.md](#appendix-a-measurements-whose-only-home-was-claudemd)
@@ -6910,7 +6916,11 @@ never a muted one.*
    arm never calls. Swap one and read the failure; a level assertion alone cannot see it. Not two
    catches: the published verdict below is the whole pass, so leaving the order catch silent would
    make the answer path's log channel narrower than the standing surface's for the identical
-   failure.
+   failure. The scope is `build`'s own catches, and the per-concept sub-reads their
+   `try` blocks enclose stay at DEBUG: `PatientClinicalContextBuilder.warnUnreadable`'s javadoc
+   is the one home for why, the short of it being that a lazy-association read on an
+   already-returned `Concept` passes no `@Authorized` gate, so the sentence this rule is written
+   to produce would have no privilege to name.
 
    **Age and weight are loud too, and the stamp question is a different question.** They are
    outside the verdict because the verdict is built from the two stamps and neither of these

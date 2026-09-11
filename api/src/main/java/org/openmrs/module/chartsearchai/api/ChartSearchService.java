@@ -1062,9 +1062,13 @@ public interface ChartSearchService {
 		 * carries one. That scopes the KEY and never the log: both go through the same
 		 * {@code warnUnreadable} the three stamped reads do, so a failure of either is audible on a
 		 * stock install (the age line names no privilege, its read making no service call).</li>
-		 * <li>The per-order sub-reads INSIDE the active-order loop — an order's concept uuid, its
-		 * concept names, its ATC codes. Each has its own catch and leaves
-		 * {@code activeDrugOrdersRead} true, so an order read partly is not a read that failed.</li>
+		 * <li>The per-concept sub-reads INSIDE those three loops — an order's concept uuid, its
+		 * concept names and its ATC codes, and the coded name of one recorded allergy or condition.
+		 * Each has its own catch and leaves its loop's stamp true, so a record read partly is not a
+		 * read that failed. They stay at DEBUG as well as outside the verdict, which is a separate
+		 * decision with its own home: {@code PatientClinicalContextBuilder.warnUnreadable}'s javadoc
+		 * says why, the short of it being that no {@code @Authorized} privilege gates a
+		 * lazy-association read, so such a line would have no privilege to name.</li>
 		 * </ul>
 		 * ADR Decision 91 records the scoping.
 		 *

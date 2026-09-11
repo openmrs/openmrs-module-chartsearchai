@@ -5652,7 +5652,7 @@ The default is the flag's whole point and was not chosen for caution: default TR
 
 **It is resolved AFTER the reconciliation has appended its own records**, which is a correctness requirement and not an ordering preference: an order the chart carried no `drug_order` record for is injected as an `active_drug_order` record carrying that order's uuid, and that injected record is the one an attribution to it must cite. `InteractionFindingChartOrderBridgeTest.anOrderTheChartHadNoRecordForIsCitedByTheOneInjectedForIt` reddens if the resolution moves earlier.
 
-**One RULE, read two ways — not two rules that agree.** The order→record walk moved into `DrugReferenceInjector.DrugOrderRecords`, whose `numbersFor` answers with the numbers of every record that IS the order (the uuid match alone where there is one, else every live drug-order record naming it). `unrepresentedActiveOrders` now reads that as `.isEmpty()`, so *substantiated* is defined AS the walk answering. Each caller builds its own index, over the mapping list it asks about; what is shared is the rule, and a second rule would have been the shape [#151](https://github.com/openmrs/openmrs-module-chartsearchai/issues/151) forbids.
+**One RULE, read two ways — not two rules that agree.** The order→record walk moved into `DrugReferenceInjector.DrugOrderRecords`, whose `numbersFor` answers with the numbers of every record that IS the order (the uuid match alone where there is one, else every live drug-order record naming it). `unrepresentedActiveOrders` now reads that as `.isEmpty()`, so *substantiated* is defined AS the walk answering. Each caller indexes the mapping list it asks about, over the mapping list it asks about; what is shared is the rule, and a second rule would have been the shape [#151](https://github.com/openmrs/openmrs-module-chartsearchai/issues/151) forbids.
 
 They are not the same RULE, and the difference runs both ways — do not read "one walk" as "one answer". `citableNumberFor` refuses more than the boolean (the paragraph after next), and the reconciliation's own record is a legitimate citation, so an order it ruled UNSUBSTANTIATED is cited by the `active_drug_order` record injected for it (`.anOrderTheChartHadNoRecordForIsCitedByTheOneInjectedForIt`). The walk carries no `isCompleteFor` gate: that gate answers *is an ABSENCE meaningful*, which is the reconciliation's question, and a query-scoped chart can perfectly well carry the drug-order record an order is — refusing to cite a record sitting in the prompt is the cost, and the population it falls on is the scoped charts that do not declare the drug-order type complete.
 
@@ -5768,6 +5768,8 @@ corpus-wide. It does not.
 **What a future attempt owes.** Not another flip of this flag — this is its measurement. Uptake is
 the variable, and the two cells that took the numbers up are the reproduction to work from.
 
+**Two dated sections follow, and then this section's ORIGINAL body.** That body is what was true when this decision landed — it says the probe *"was not run"* and that flipping the flag is how it gets run, and both are superseded by the two runs recorded here. It is kept because the terms it sets are the terms those runs were judged by.
+
 ### The flip re-run on a later head, and the coverage hypothesis refuted (2026-09-11)
 
 Run again by the issue-#379 session at `main` @ `6ff1a60e` — six commits past the run above, so the
@@ -5801,7 +5803,7 @@ display fails to name the substance — predicts that the cells ignoring the num
 poorly-covered ones. Coverage per cell, as published `chartOrderBridges` entries over published
 `interaction` chips (the twelve cells raising any; Lithium and Paracetamol raise none), is 2/5, 2/6,
 3/7 × 5, 4/8 × 5 — **no cell is fully covered and the spread is narrow**, while the one cell that
-took the numbers is at 2/5, the joint lowest, and all five best-covered cells took none. So coverage
+took the numbers is at 2/5, among the worst covered either way (lowest by attribution count, second lowest by the ratio, behind 2/6), and all five best-covered cells took none. So coverage
 does not predict uptake here, and widening the clause to every attribution — the first rejected
 alternative below, and the thing the issue's own Honest Limits calls its second question — is not
 what this points at. Uptake stands as the variable.
@@ -6057,7 +6059,7 @@ Grounding asks whether the claim the MODEL attached to a citation is supported b
 
 ### The refusals, and why each is stricter than #118's
 
-`DrugOrderRecords.recordsByResourceUuid` is the index, shared rather than walked a second time — one rule, per the record-numbering rule in the drug-safety instructions. What is NOT shared is the READING, and the distinction is Decision 77's. `numbersFor` is #118's fail-open substantiation boolean, where a uuid two records carry costs nothing and answering with one of them is right. Citing is an affirmative claim about WHICH record, so `numberOfRecord` refuses a uuid the chart carries more than one record for. **The index keeps every record under a uuid rather than the last, and that is #379's second round rather than this decision's**: while it collapsed, a count it had already discarded had to be maintained beside it in a `contestedUuids` set, and only one of the two affirmative readers consulted that set — the residue recorded below, now closed.
+`DrugOrderRecords.recordsByResourceUuid` is the index, shared rather than walked a second time — one rule, per the record-numbering rule in the drug-safety instructions. What is NOT shared is the READING, and the distinction is Decision 77's. `numbersFor` is #118's fail-open substantiation boolean, where a uuid two records carry costs nothing and answering with one of them is right. Citing is an affirmative claim about WHICH record, so `numberOfRecord` refuses a uuid the chart carries more than one record for. **The index keeps every record under a uuid rather than the last, and that is #379's second round rather than this decision's** — while it collapsed, only one of the two affirmative readers consulted the count kept beside it, which is the residue recorded below, now closed. `DrugOrderRecords.recordsByResourceUuid`'s own javadoc carries the mechanism.
 
 - **A uuid this chart carries no record for** attaches nothing. Ordinary rather than a corner case: a query-scoped slice need not carry the patient's allergies at all, so on that mode the answer renders exactly as it did before this decision.
 - **A uuid two records carry** attaches nothing, per the paragraph above.

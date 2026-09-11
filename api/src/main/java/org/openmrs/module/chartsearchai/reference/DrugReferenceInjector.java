@@ -953,10 +953,10 @@ public class DrugReferenceInjector {
 		 *  over more than once, because a map read for a count it has already collapsed cannot answer
 		 *  one. Two of this class's three readings are affirmative claims about WHICH record, and both
 		 *  need that count; keeping the numbers is what lets each reading ask for itself rather than
-		 *  one of them consulting a set the other maintains. The three readings are
-		 *  {@link #numberByUuid} (issue #118, fail-open), {@link #numberOfRecord} (issue #305) and
-		 *  {@link #citableNumberFor}'s uuid leg (issue #379) — mutate any of them and read the
-		 *  failures. */
+		 *  one of them consulting a set the other maintains. The readings are {@link #numberByUuid}
+		 *  (issue #118, fail-open — presence, its value undiscriminated, as its own javadoc records),
+		 *  {@link #numberOfRecord} (issue #305, exactly one) and {@link #citableNumberFor}'s uuid leg
+		 *  (issue #379), which asks the second. Mutate any of them and read the failures. */
 		private final Map<String, List<Integer>> recordsByResourceUuid =
 				new LinkedHashMap<String, List<Integer>>();
 
@@ -1069,16 +1069,24 @@ public class DrugReferenceInjector {
 			return named;
 		}
 
-		/** @return the number of the LAST record carrying {@code order}'s own uuid, or null where this
-		 *          chart carries none. The EXACT leg of {@link #numbersFor}, fail-open with it: a
-		 *          second record under one uuid costs that question nothing, so this answers with one
-		 *          of them rather than refusing. It is also the boolean
-		 *          {@link #recordsSeveralOrdersName} asks — <em>does this chart hold a record of this
-		 *          order at all</em> — for which either record answers.
+		/** @return a number of a record carrying {@code order}'s own uuid, or null where this chart
+		 *          carries none. The EXACT leg of {@link #numbersFor} and fail-open with it: a second
+		 *          record under one uuid costs that question nothing, so this ANSWERS rather than
+		 *          refusing, which is the whole of what separates it from {@link #numberOfRecord}.
+		 *          {@link #recordsSeveralOrdersName} and {@link #citableNumberFor} ask it as a
+		 *          boolean — <em>does this chart hold a record of this order at all</em>.
 		 *
-		 *          <p><b>Not the reading a CITATION takes</b>: {@link #numberOfRecord} is, and
-		 *          {@link #citableNumberFor} asks that one. Answering the last of two is what this
-		 *          method is for and what that one refuses. */
+		 *          <p><b>WHICH number it answers with is not discriminated by any case</b>, and that
+		 *          is stated so the last-wins reading does not look load-bearing: every caller reads
+		 *          presence, {@code numbersFor}'s list reaching only an {@code isEmpty()}. Measured by
+		 *          returning a constant here, which leaves the whole api suite green. What IS
+		 *          load-bearing is that it answers at all — narrow it to {@link #numberOfRecord}'s
+		 *          reading and an order two records carry becomes UNREPRESENTED, so issue #118 WARNs
+		 *          and injects a duplicate record for a prescription the chart already holds twice.
+		 *          {@code ActiveOrderReconciliationTest
+		 *          .anActiveOrderTwoOfTheChartsRecordsCarryTheUuidOfIsStillNotInjected} is that case,
+		 *          and its records deliberately do not NAME the drug — with the name there the #118
+		 *          name leg answers too and the narrowing is invisible. */
 		private Integer numberByUuid(PatientClinicalContext.ActiveDrugOrder order) {
 			List<Integer> carrying = recordsCarrying(order);
 			return carrying.isEmpty() ? null : carrying.get(carrying.size() - 1);
@@ -1087,7 +1095,12 @@ public class DrugReferenceInjector {
 		/** @return the numbers of every record carrying {@code order}'s own uuid, EMPTY where it has
 		 *          none or has no uuid — the one lookup {@link #numberByUuid} and
 		 *          {@link #recordsOfActiveOrders} share, so the two cannot come to disagree about
-		 *          which records an order IS. The READING of that list is each caller's own. */
+		 *          which records an order IS. The READING of that list is each caller's own.
+		 *
+		 *          <p>The stored list itself, not a copy or an unmodifiable view: both callers only
+		 *          read it, and wrapping would put an allocation per ORDER on a path that runs on
+		 *          every request whatever {@code chartsearchai.drugSafety.citeOrderRecords} says.
+		 *          A caller that needs to keep or modify it owes the copy. */
 		private List<Integer> recordsCarrying(PatientClinicalContext.ActiveDrugOrder order) {
 			List<Integer> carrying = order.getUuid() == null ? null
 					: recordsByResourceUuid.get(order.getUuid());

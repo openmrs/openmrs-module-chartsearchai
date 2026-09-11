@@ -135,6 +135,25 @@ public class InteractionFindingChartOrderBridgeTest extends BaseModuleContextSen
 					DrugReferenceTestSupport.set("J01FA09"))));
 	}
 
+	/**
+	 * Two brand-named orders whose displays name neither substance, so BOTH sides of the
+	 * Acetylsalicylic acid x Warfarin pair are bridged and the clause carries two items — which is
+	 * what lets the cases below read a refusal on one item against a number kept on the other.
+	 * Only the CHART varies between them.
+	 */
+	private static PatientClinicalContext twoBrandNamedOrders() {
+		return DrugReferenceTestSupport.ctx(60, null,
+			DrugReferenceTestSupport.set("Aspibrand", "Coagubrand"),
+			DrugReferenceTestSupport.set("N02BA01", "B01AA03"), null, null,
+			Arrays.asList(
+				DrugReferenceTestSupport.activeOrder("order-aspibrand", "Aspibrand",
+					DrugReferenceTestSupport.set("Aspibrand"),
+					DrugReferenceTestSupport.set("N02BA01")),
+				DrugReferenceTestSupport.activeOrder("order-coagubrand", "Coagubrand",
+					DrugReferenceTestSupport.set("Coagubrand"),
+					DrugReferenceTestSupport.set("B01AA03"))));
+	}
+
 	private static PatientChart chartNaming(String... orderUuidAndText) {
 		RecordMapping[] records = new RecordMapping[orderUuidAndText.length / 2];
 		for (int n = 0; n < records.length; n++) {
@@ -973,9 +992,14 @@ public class InteractionFindingChartOrderBridgeTest extends BaseModuleContextSen
 	 * uuid only the second was struck and the first stayed available — to be cited by a neighbour it
 	 * merely NAMES, as the prescription it is not.
 	 *
-	 * <p>Here record [1] carries the Aspibrand order's uuid while its text names the Coagubrand
+	 * <p>Here record [2] carries the Aspibrand order's uuid while its text names the Coagubrand
 	 * order's drug, so the Coagubrand order reaches it by issue #118's name leg alone. Its own uuid
 	 * record is absent, so without the strike that record is its only candidate and it cites it.
+	 *
+	 * <p><b>THREE records carry that uuid and the named one is the MIDDLE.</b> With two, the strike
+	 * can be narrowed back to a single-element pick and stay green whenever the pick happens to land
+	 * on the named record — measured: at two records with the named one first, striking the FIRST
+	 * instead of all of them reddens nothing. No single-element pick survives this arrangement.
 	 *
 	 * <p><b>Both items move, and they move for different reasons</b> — the Aspibrand item by the
 	 * uuid-leg refusal the case above pins, the Coagubrand item by this one. They are separable by
@@ -987,23 +1011,15 @@ public class InteractionFindingChartOrderBridgeTest extends BaseModuleContextSen
 			throws Exception {
 		String finding = onlyFinding(
 			DrugReferenceTestSupport.chartOf(
-				DrugReferenceTestSupport.drugOrderRecord(1, "order-aspibrand", "Coagubrand"),
-				DrugReferenceTestSupport.drugOrderRecord(2, "order-aspibrand", "Aspibrand")),
-			DrugReferenceTestSupport.ctx(60, null,
-				DrugReferenceTestSupport.set("Aspibrand", "Coagubrand"),
-				DrugReferenceTestSupport.set("N02BA01", "B01AA03"), null, null,
-				Arrays.asList(
-					DrugReferenceTestSupport.activeOrder("order-aspibrand", "Aspibrand",
-						DrugReferenceTestSupport.set("Aspibrand"),
-						DrugReferenceTestSupport.set("N02BA01")),
-					DrugReferenceTestSupport.activeOrder("order-coagubrand", "Coagubrand",
-						DrugReferenceTestSupport.set("Coagubrand"),
-						DrugReferenceTestSupport.set("B01AA03")))),
+				DrugReferenceTestSupport.drugOrderRecord(1, "order-aspibrand", "Aspibrand"),
+				DrugReferenceTestSupport.drugOrderRecord(2, "order-aspibrand", "Coagubrand"),
+				DrugReferenceTestSupport.drugOrderRecord(3, "order-aspibrand", "Aspibrand")),
+			twoBrandNamedOrders(),
 			SCREENING_QUESTION);
 
 		assertEquals("Warfarin from Coagubrand; Acetylsalicylic acid (aspirin) from Aspibrand.",
 			bridgeOf(finding),
-			"record [1] is one of the two records the Aspibrand order is, so the Coagubrand order "
+			"record [2] is one of the records the Aspibrand order is, so the Coagubrand order "
 					+ "cannot be cited as it either (issue #379), was: " + finding);
 	}
 
@@ -1033,21 +1049,45 @@ public class InteractionFindingChartOrderBridgeTest extends BaseModuleContextSen
 				DrugReferenceTestSupport.drugOrderRecord(2, "order-aspibrand", "Aspibrand"),
 				DrugReferenceTestSupport.drugOrderRecord(3, "stale-index-uuid", "Aspibrand 81mg"),
 				DrugReferenceTestSupport.drugOrderRecord(4, "order-coagubrand", "Coagubrand")),
-			DrugReferenceTestSupport.ctx(60, null,
-				DrugReferenceTestSupport.set("Aspibrand", "Coagubrand"),
-				DrugReferenceTestSupport.set("N02BA01", "B01AA03"), null, null,
-				Arrays.asList(
-					DrugReferenceTestSupport.activeOrder("order-aspibrand", "Aspibrand",
-						DrugReferenceTestSupport.set("Aspibrand"),
-						DrugReferenceTestSupport.set("N02BA01")),
-					DrugReferenceTestSupport.activeOrder("order-coagubrand", "Coagubrand",
-						DrugReferenceTestSupport.set("Coagubrand"),
-						DrugReferenceTestSupport.set("B01AA03")))),
+			twoBrandNamedOrders(),
 			SCREENING_QUESTION);
 
 		assertEquals("Warfarin from Coagubrand [4]; Acetylsalicylic acid (aspirin) from Aspibrand.",
 			bridgeOf(finding),
 			"the chart says this order IS one of two records, so a third record that merely names "
 					+ "it is not the one to cite (issue #379), was: " + finding);
+	}
+
+	/**
+	 * Issue #379: an order whose uuid two records carry still does not CONTEST a record another
+	 * order names, so the neighbour keeps its number.
+	 *
+	 * <p>{@code recordsSeveralOrdersName} skips an order the chart holds a uuid record of, on the
+	 * ground that such an order IS one of its own records and so is not a rival claimant to any
+	 * other. The veto does not change that: it stops the order citing anything, which is a different
+	 * question from whether it takes numbers away from its neighbours. Asking the SKIP the citation's
+	 * question instead — skip only where exactly one record carries the uuid — makes the Aspibrand
+	 * order a claimant on record [3], which the Coagubrand order also names, so that record goes
+	 * contested and the neighbour loses a number that was never in question.
+	 *
+	 * <p>Record [3] names BOTH drugs, which is what lets one mutation reach it; it is no active
+	 * order's own, so the strike does not remove it first.
+	 */
+	@Test
+	public void anOrderWhoseUuidTwoRecordsCarryStillContestsNothingItsNeighbourNames()
+			throws Exception {
+		String finding = onlyFinding(
+			DrugReferenceTestSupport.chartOf(
+				DrugReferenceTestSupport.drugOrderRecord(1, "order-aspibrand", "Aspibrand"),
+				DrugReferenceTestSupport.drugOrderRecord(2, "order-aspibrand", "Aspibrand"),
+				DrugReferenceTestSupport.drugOrderRecord(3, "stale-index-uuid",
+					"Coagubrand Aspibrand combination")),
+			twoBrandNamedOrders(),
+			SCREENING_QUESTION);
+
+		assertEquals("Warfarin from Coagubrand [3]; Acetylsalicylic acid (aspirin) from Aspibrand.",
+			bridgeOf(finding),
+			"the Aspibrand order is one of its own uuid records, so it is no rival claimant on the "
+					+ "record its neighbour names (issue #379), was: " + finding);
 	}
 }

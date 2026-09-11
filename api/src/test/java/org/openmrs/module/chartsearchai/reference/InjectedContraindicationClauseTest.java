@@ -10,6 +10,7 @@
 package org.openmrs.module.chartsearchai.reference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -45,6 +46,13 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * clinical prose that this record is the only place the model ever sees. So the clause count follows
  * the chip while both notes survive inside the one clause.
  *
+ * <p><b>Issue #310 — and the other collapse unit, one along again.</b> The three cases at the end of
+ * this file are about two rules on DIFFERENT keys rendering one string, which the per-key map listed
+ * twice. They are not a second reading of the paragraph above: #190 item 1 is one RULE counted twice
+ * and is fixed by the KEY, while this is one STRING listed twice and is fixed by the string. Their
+ * direction on the count is the opposite one too — after #310 this record can list FEWER clauses than
+ * the entry raises chips, which the paragraph above is what to read before calling that a regression.
+ *
  * <p>Runs the REAL production path: the real {@link JsonDrugReferenceSource} parser over a fixture,
  * the real {@code injectRecords} and the real {@code validate}, GP reads on their no-context defaults.
  */
@@ -59,6 +67,11 @@ public class InjectedContraindicationClauseTest {
 	 *  {@code SelfNamedAllergyRuleFoldTest.aClassLevelRuleAuthoredTwiceIsStillOneChip}. */
 	private static final String DUPLICATE_RULE_FIXTURE =
 			"chartsearchai-test/drug-reference-duplicate-rule-tokens.json";
+
+	/** Issue #310's own: one entry whose first and third rules carry ONE note while the second carries
+	 *  another, so the clause a de-duplication drops is not adjacent to the one it keeps. */
+	private static final String CROSS_KEY_CLAUSE_ORDER =
+			"chartsearchai-test/drug-reference-cross-key-clause-order.json";
 
 	private static final String QUESTION = "Is ibuprofen safe for her?";
 
@@ -80,7 +93,13 @@ public class InjectedContraindicationClauseTest {
 	 * a model reads is the count the rendered string states.
 	 */
 	private static List<String> contraindicationClauses(RecordMapping record) {
-		String text = record.getText();
+		return clausesIn(record.getText());
+	}
+
+	/** As {@link #contraindicationClauses}, over a record located by the drug it names rather than by
+	 *  position — {@code DrugReferenceTestSupport.referenceTextNaming}, which is what a case over a
+	 *  fixture carrying several entries has to use. */
+	private static List<String> clausesIn(String text) {
 		int start = text.indexOf(" Contraindicated with: ");
 		assertTrue(start >= 0,
 				"precondition: the record must render a contraindication clause: " + text);
@@ -203,5 +222,181 @@ public class InjectedContraindicationClauseTest {
 		assertEquals(1, clauses.size(), "and one clause beside it, was: " + clauses);
 		assertEquals("documented nurofen allergy — avoid the other brand too", clauses.get(0),
 				"joined, so the note the chip drops still reaches the prompt, was: " + clauses);
+	}
+
+	/** The items one reading SECTION lists, split on the rendering's own {@code "; "} — read where a
+	 *  model reads them, through the shared locator, so a case about ORDER compares the rendered
+	 *  order and not one recomputed here. */
+	private static List<String> sectionItems(String record, String lead) {
+		String section = DrugReferenceTestSupport.sectionAfter(record, lead);
+		assertNotNull(section, "precondition: the record must carry the section " + lead + ", was: "
+				+ record);
+		return new ArrayList<String>(Arrays.asList(section.split("; ")));
+	}
+
+	/** How many collapsed keys {@code ref}'s rules land on — the very partition the clause list is
+	 *  rendered per, asked of production so a precondition cannot assert a key space the renderer does
+	 *  not use. */
+	private static int distinctKeys(DrugReference ref) {
+		List<Object> keys = new ArrayList<Object>();
+		for (DrugReference.Contraindication rule : ref.getContraindications()) {
+			Object key = DrugSafetyValidator.contraindicationFinding(ref, rule);
+			if (!keys.contains(key)) {
+				keys.add(key);
+			}
+		}
+		return keys.size();
+	}
+
+	@Test
+	public void twoRulesOfOneEntrySharingANoteRenderThatClauseOnce() throws Exception {
+		// Issue #310, and the ticket's own shape. Codeine files an `allergy` rule on `codeine` and a
+		// `condition` rule on `respiratory depression`, both carrying the note `opioid reaction` — which
+		// DrugReferenceInjector.contraindicationSections' own section comment calls a natural way to
+		// author "recorded either way". contraindicationFinding keys them apart (the self-named allergy rule on the SUBSTANCE since
+		// issue #146, the condition rule on its own (type, token)), so the per-key map renders the string
+		// twice and the list read "opioid reaction; opioid reaction": two rules, ONE clinical fact, and a
+		// model reading citable evidence told the drug has two contraindications where the deterministic
+		// layer found one. That is issue #190 item 1's harm one collapse unit along.
+		//
+		// The de-duplication that already existed is the em-dash join inside contraindicationClauses,
+		// which is scoped to one key by construction and cannot see across keys. What this pins is the
+		// CROSS-KEY half, over the very string identity the three reading sections have resolved over
+		// since issue #308.
+		DrugReferenceService service = DrugReferenceTestSupport.serviceWith(DrugReferenceTestSupport
+				.fixtureEntries(InjectedContraindicationCorroborationTest.BORROWED_ALIAS));
+		String question = "Is it safe to give her codeine?";
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null, null, null,
+				DrugReferenceTestSupport.set("Dihydrocodeine"), null);
+
+		DrugReference codeine = service.lookupByToken("codeine");
+		assertEquals(2, codeine.getContraindications().size(),
+				"precondition: the fixture must carry both rules");
+		assertEquals(2, distinctKeys(codeine),
+				"precondition: and they must land on DIFFERENT collapsed keys, or this case is the "
+						+ "within-key join issue #190 item 1 already handles");
+
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service)
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context, question);
+		String record = DrugReferenceTestSupport.referenceTextNaming(chart, "Codeine");
+		assertNotNull(record, "no Codeine reference record was injected: "
+				+ DrugReferenceTestSupport.referenceTexts(chart));
+
+		assertEquals(Arrays.asList("opioid reaction"), clausesIn(record),
+				"two rules carrying one note are ONE clause in the rendered list, was: " + record);
+	}
+
+	@Test
+	public void aClauseTwoKeysRenderIsListedOnceWithAnotherClauseBetweenThem() throws Exception {
+		// The same de-duplication where the two keys are not adjacent, which is what separates dropping a
+		// repeat from dropping a NEIGHBOUR: Pethidine renders "avoid …" (condition, unrecorded), then
+		// "documented respiratory risk" (condition, recorded), then "avoid …" again (self-named allergy,
+		// recorded). Only the first and third collapse, and the clause between them keeps its own slot.
+		String record = pethidineRecord();
+
+		assertEquals(Arrays.asList("avoid in opioid-sensitive states", "documented respiratory risk"),
+				clausesIn(record),
+				"the repeat collapses onto its first slot and the clause between survives, was: "
+						+ record);
+	}
+
+	@Test
+	public void aReadingSectionIsListedInTheDeduplicatedClausesOwnOrder() throws Exception {
+		// The half de-duplicating the list alone would BREAK, and the reason contraindicationSections
+		// re-emits its sections rather than taking the order the per-key walk produced.
+		//
+		// A section is walked per KEY, so a string enters it at the position of the first key IN THAT
+		// SECTION; the list is walked over every key, so a string sits at the position of its first key
+		// ANYWHERE. Here "avoid …" is rendered by key 1 (the denial) and key 3 (the assertion), and the
+		// cross-key precedence gives it to the assertion — so the recorded section reached
+		// "documented respiratory risk" (key 2) first while the list leads with "avoid …" (key 1).
+		//
+		// While the list still carried the repeat that was invisible: the section was a subsequence of
+		// "avoid …; documented …; avoid …". De-duplicated it is not, and the walk's own comment says why
+		// that matters — a section listed out of the list's order is one a reader cannot line up against
+		// it. So this asserts the rendered ORDER, not membership.
+		String record = pethidineRecord();
+		List<String> clauses = clausesIn(record);
+		List<String> recorded = sectionItems(record, DrugReferenceInjector.RECORDED_READING_LEAD);
+
+		assertEquals(clauses, recorded,
+				"every clause here is recorded, so the section IS the list — in the list's own order, "
+						+ "was: " + record);
+		assertEquals(Arrays.asList("avoid in opioid-sensitive states", "documented respiratory risk"),
+				recorded, "and that order is first-occurrence order across the keys, was: " + record);
+	}
+
+	@Test
+	public void theDenialAndTheHedgeAreListedInTheClausesOwnOrderToo() throws Exception {
+		// The same anomaly in the two sections the case above cannot reach, and each arrives by its own
+		// route — which is why all three sections are re-emitted and not just the one that outranks the
+		// others.
+		//
+		// A string reaches the DENIAL late when an earlier key rendering it was UNEVALUABLE: such a rule
+		// is in the LIST and in no section at all, so it takes the list slot while the denial's own walk
+		// reaches the string only at the later key. Tapentadol's rule 1 is typed `diagnosis`, which is
+		// neither chart list this module reads, and rule 3 repeats its note with rule 2's between them.
+		//
+		// A string reaches the HEDGE late when an earlier key rendering it was a DENIAL, since the hedge
+		// outranks the denial in the precedence above. Rule 4 denies `dose reduction required`, rule 6
+		// matches it through `renal` inside the recorded `Malignant tumor of adrenal gland` — containment
+		// without a word boundary, so it hedges rather than records — and rule 5 sits between them.
+		//
+		// Without this case neither of those two re-orderings is discriminated by anything — drop either
+		// call and read the failures.
+		String record = tapentadolRecord();
+
+		assertEquals(Arrays.asList("monitor for respiratory depression", "avoid in hepatic impairment"),
+				sectionItems(record, DrugReferenceInjector.NOT_RECORDED_READING_LEAD),
+				"the denial follows the clause list, not the order its own keys were walked in, was: "
+						+ record);
+		assertEquals(Arrays.asList("dose reduction required", "documented tapentadol reaction"),
+				sectionItems(record, DrugReferenceInjector.UNCORROBORATED_READING_LEAD),
+				"and so does the hedge, was: " + record);
+		// The list itself is the order both were re-emitted into, and the rule typed `diagnosis` is in it
+		// while being in no section — the ONE shape the three sections do not cover between them.
+		assertEquals(Arrays.asList("monitor for respiratory depression", "avoid in hepatic impairment",
+				"dose reduction required", "documented tapentadol reaction"), clausesIn(record),
+				"was: " + record);
+	}
+
+	/** As {@link #pethidineRecord}, for the entry carrying the other two sections' anomaly. */
+	private static String tapentadolRecord() throws Exception {
+		DrugReferenceService service = DrugReferenceTestSupport
+				.serviceWith(DrugReferenceTestSupport.fixtureEntries(CROSS_KEY_CLAUSE_ORDER));
+		String question = "Is it safe to give her tapentadol?";
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null, null, null,
+				DrugReferenceTestSupport.set("Tapentazoline"),
+				DrugReferenceTestSupport.set("Malignant tumor of adrenal gland"));
+
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service)
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context, question);
+		String record = DrugReferenceTestSupport.referenceTextNaming(chart, "Tapentadol");
+		assertNotNull(record, "no Tapentadol reference record was injected: "
+				+ DrugReferenceTestSupport.referenceTexts(chart));
+		return record;
+	}
+
+	/** Issue #310's own fixture, rendered through the real injector wired to the real validator: one
+	 *  entry, three rules, three collapsed keys, and one clause string rendered by the first and third
+	 *  of them. */
+	private static String pethidineRecord() throws Exception {
+		DrugReferenceService service = DrugReferenceTestSupport
+				.serviceWith(DrugReferenceTestSupport.fixtureEntries(CROSS_KEY_CLAUSE_ORDER));
+		String question = "Is it safe to give her pethidine?";
+		PatientClinicalContext context = DrugReferenceTestSupport.ctx(60, null, null, null,
+				DrugReferenceTestSupport.set("Pethidine"),
+				DrugReferenceTestSupport.set("Respiratory depression"));
+
+		DrugReference pethidine = service.lookupByToken("pethidine");
+		assertEquals(3, distinctKeys(pethidine),
+				"precondition: the fixture's three rules must land on three collapsed keys");
+
+		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service)
+				.injectRecords(DrugReferenceTestSupport.oneRecordChart(), context, question);
+		String record = DrugReferenceTestSupport.referenceTextNaming(chart, "Pethidine");
+		assertNotNull(record, "no Pethidine reference record was injected: "
+				+ DrugReferenceTestSupport.referenceTexts(chart));
+		return record;
 	}
 }

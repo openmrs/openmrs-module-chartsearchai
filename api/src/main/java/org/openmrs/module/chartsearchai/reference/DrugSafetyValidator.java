@@ -3192,6 +3192,13 @@ public class DrugSafetyValidator {
 	 *         condition rule may carry one note, which is a natural way to author "recorded either
 	 *         way" — and a record cannot both state a string as this chart's reading and hedge it. A
 	 *         finding beside it cannot either, which is why these have to be the same strings.
+	 *
+	 *         <p><b>These values are not distinct, and one clause per key is not what the record
+	 *         prints.</b> Since issue #310 {@code contraindicationSections} de-duplicates them over the
+	 *         same string identity before rendering the list, for the reason the paragraph above gives
+	 *         about the sections. So do not make this map's values distinct to serve that: the walk
+	 *         resolves which SECTION owns a string by asking each key in turn, and a key dropped here
+	 *         would take its vote with it.
 	 */
 	static Map<Object, String> contraindicationClauses(DrugReference ref) {
 		Map<Object, String> byKey = new LinkedHashMap<Object, String>();

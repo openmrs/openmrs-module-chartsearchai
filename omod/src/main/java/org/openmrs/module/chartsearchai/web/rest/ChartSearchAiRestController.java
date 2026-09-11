@@ -1414,6 +1414,9 @@ public class ChartSearchAiRestController {
 			// ChartSearchAiChartOrderBridgeTest.theWholePayloadStillMarshalsForAnXmlClient pins it.
 			map.put("chartOrderBridges",
 				new ArrayList<SafetyWarning.ChartOrderBridge>(warning.chartOrderBridges()));
+			// Issue #374. Needs no copy and raises none of the hazard above: a primitive boolean is a
+			// JDK type, which is what the bridges are not.
+			map.put("restsOnAnUncorroboratedChartMatch", warning.restsOnAnUncorroboratedChartMatch());
 			out.add(map);
 		}
 		return out;

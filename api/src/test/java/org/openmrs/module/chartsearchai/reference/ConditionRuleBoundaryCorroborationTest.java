@@ -52,9 +52,10 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * {@link DrugReference#containsWord}, the PROSE rule, because that is the shape
  * {@code PatientClinicalContext.containsToken}'s own javadoc describes the condition haystack by ("a
  * condition in the clinician's own wording"). No matching behaviour moves: {@code hasConditionToken} is
- * byte-identical, and no chip's wire shape, detail, rank or severity moves — the {@code SafetyWarning}'s
+ * byte-identical, and no chip's detail, rank or severity moves — the {@code SafetyWarning}'s
  * own {@code uncorroboratedChartMatch} flag does flip for a condition rule, which is what the injected
- * finding reads.
+ * finding reads, and since issue #374 what the chip publishes as
+ * {@code restsOnAnUncorroboratedChartMatch} too.
  *
  * <p><b>What the measurement decided</b> (issue #309, over the OpenMRS 3.7.1 reference-application demo
  * dictionary; the figures and both corpora are recorded on
@@ -73,18 +74,19 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * {@link #aShippedSeedConditionTokenIsStillStatedAsRecorded} is one worked case of it, not a guard
  * over the corpus, which this repo does not carry and which still escapes.
  *
- * <p><b>Prompt-facing only</b>, exactly as issues #269 and #308 scoped themselves: this is
- * {@code corroboratedByTheChart}, which both injected channels ask and which no chip reads. The chip's
- * own demotion ({@code contraindicationRank}, issue #223) is allergy-typed and stays so.
+ * <p><b>Prompt-facing as issue #309 shipped it</b>, exactly as issues #269 and #308 scoped themselves:
+ * this is {@code corroboratedByTheChart}, which both injected channels ask. The chip's own demotion
+ * ({@code contraindicationRank}, issue #223) is allergy-typed and stays so.
  *
- * <p><b>Which is the LIMIT of this change and not only its scope, so no case here may be read as
- * saying the defect is closed.</b> On the very arrangement
+ * <p><b>Which was the LIMIT of #309 and not only its scope.</b> On the very arrangement
  * {@link #aConditionTokenNestingInsideARecordedConditionIsNotStatedAsTheChartsOwnReading} drives, the
- * clinician-facing chip still says "Naltrexone is contraindicated by an active condition: acute
+ * clinician-facing chip said "Naltrexone is contraindicated by an active condition: acute
  * hepatitis or liver failure", unqualified, of a chart recording a caesarean delivery — the model
- * reads a hedge and the clinician does not. Wherever a comment here says the chip survives, that is
- * reassurance for the cases this rule OVER-hedges and is the false claim on the hazard case. ADR
- * Decision 73's trade-offs carry it; tightening the match is NOT the remedy (fail-open).
+ * read a hedge and the clinician did not. Issue #374 closed the module's half of that by publishing
+ * the chip's own answer, which {@link #theChipCarriesTheSameProvenanceAnswerTheRecordDoes} pins here;
+ * the SENTENCE is still the categorical one, so wherever a comment here says the chip survives, that
+ * is reassurance for the cases this rule OVER-hedges and remains the false claim on the hazard case.
+ * ADR Decisions 73 and 92; tightening the match is NOT the remedy (fail-open).
  *
  * <p><b>The residue, deliberately given up.</b> A prefix or suffix compound that is clinically the same
  * finding is hedged: {@code Lymphedema} and {@code Angioedema} for a rule on {@code edema}, pinned by
@@ -278,7 +280,8 @@ public class ConditionRuleBoundaryCorroborationTest {
 		// that the section asserts nothing and denies nothing: the contraindication is still listed and
 		// the chip still fires, so the safety net is intact and only the attribution weakens. That
 		// reading holds HERE, where the rule over-hedges a real record; it does not hold on the hazard
-		// case, where the same surviving chip is the false claim — see this class's javadoc.
+		// case, where the same surviving chip's SENTENCE is the false claim — see this class's javadoc,
+		// and #374 for the answer the chip publishes beside it.
 		String hedged = recordFrom(DrugReferenceTestSupport.curatedService(),
 				"Can I give her ibuprofen?", "GI bleeding");
 		assertEquals(UNCORROBORATED, clauseSection(hedged, "active gastrointestinal bleeding"),
@@ -367,5 +370,43 @@ public class ConditionRuleBoundaryCorroborationTest {
 		assertEquals(NOT_RECORDED, clauseSection(record, "acute hepatitis or liver failure"),
 				"a rule the chart never matched is not recorded and not hedged — it is stated as not "
 						+ "recorded: " + record);
+	}
+
+	/**
+	 * The CHIP carries the same answer the two records do — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/374">#374</a>.
+	 *
+	 * <p>Issue #309 was prompt-facing, and the chip beside those records asserted the contraindication
+	 * with nothing qualifying it; #374 publishes the chip's own answer as the
+	 * {@code restsOnAnUncorroboratedChartMatch} wire key. What is pinned here is the api half — that
+	 * the flag the serializer reads is the one this arrangement actually raises — since the chip's
+	 * {@code detail} is deliberately unchanged and nothing in this class read the chip at all.
+	 *
+	 * <p>Both directions, because the true half alone would stay green under a regression hedging every
+	 * condition chip — the same complement {@link #theFindingChannelStatesTheSameAnswerAsTheRecord}
+	 * carries for the finding channel, and the arrangements are that case's, so the two channels can be
+	 * read against each other.
+	 */
+	@Test
+	public void theChipCarriesTheSameProvenanceAnswerTheRecordDoes() throws IOException {
+		DrugReferenceService service = fixtureService();
+		SafetyWarning hedged = DrugReferenceTestSupport.onlyOfType(
+				DrugReferenceTestSupport.validator(service).validate("", "Can I give her naltrexone?",
+						DrugReferenceTestSupport.ctx(60, null, null, null, null,
+								DrugReferenceTestSupport.set("Status Post Cesarean Delivery"))),
+				SafetyWarning.TYPE_CONTRAINDICATION);
+		assertTrue(hedged.restsOnAnUncorroboratedChartMatch(),
+				"the chip of a condition rule matched only mid-word must carry the answer its record "
+						+ "and its finding carry: " + hedged.getDetail());
+
+		SafetyWarning stated = DrugReferenceTestSupport.onlyOfType(
+				DrugReferenceTestSupport.validator(fixtureService()).validate("",
+						"Can I give her naltrexone?",
+						DrugReferenceTestSupport.ctx(60, null, null, null, null,
+								DrugReferenceTestSupport.set("Chronic liver disease"))),
+				SafetyWarning.TYPE_CONTRAINDICATION);
+		assertFalse(stated.restsOnAnUncorroboratedChartMatch(),
+				"a condition the chart records as a whole word corroborates the match, and its chip "
+						+ "must not be hedged: " + stated.getDetail());
 	}
 }

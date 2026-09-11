@@ -154,7 +154,12 @@ public class SafetyWarning {
 	 * also keeps {@link #TYPE_CONTRAINDICATION} out of the call site, which is where a chip arm would
 	 * otherwise repeat it.
 	 *
-	 * <p>Package-private, matching the accessor: a caller may set only what it may read back. The one
+	 * <p>Package-private, and since issue #374 that is no longer "matching the accessor": the
+	 * accessor is PUBLIC, this flag being published as each chip's
+	 * {@code restsOnAnUncorroboratedChartMatch} wire key. The symmetry rule the class states of its
+	 * other facts — a caller may set only what it may read back — is one-directional and is satisfied
+	 * here; what keeps the WRITE package-private is that a provenance answer is a measurement this
+	 * module made, so an outside caller must not be able to assert one. The one
 	 * caller is {@code DrugSafetyValidator.addContraindications} — the curated-rule arm, the only arm
 	 * whose warning is derived from a rule matched against the chart at all. The allergen arm's own
 	 * three sentences go through {@link #recordedAllergenContraindication} instead, which hardcodes
@@ -189,7 +194,9 @@ public class SafetyWarning {
 	 * fourth argument on {@link #contraindication} would have offered that arm a flag it can never
 	 * legitimately set.
 	 *
-	 * <p>Package-private, matching the accessor: a caller may set only what it may read back. Its one
+	 * <p>Package-private, for {@link #contraindication}'s reason rather than for accessor symmetry:
+	 * since issue #374 the flag it hardcodes false is published, so what a public factory here would
+	 * offer is a caller asserting a provenance answer the module never made. Its one
 	 * caller is {@code DrugSafetyValidator.addAllergyContraindications}, which is reached from BOTH
 	 * the drug-in-play loop (false — the drug was proposed) and
 	 * {@code addActiveOrderContraindications} (true — the subject is an active order).
@@ -618,15 +625,28 @@ public class SafetyWarning {
 	 * <p><b>So this is no longer scoped as the chip's own demotion is, and the divergence is
 	 * deliberate</b>: {@code DrugSafetyValidator.contraindicationRank} stays allergy-typed, because
 	 * issue #223 scoped it to the fold whose premise is that a self-named rule reports the allergen
-	 * arm's fact — a premise a condition rule has no part in. The record and the finding say the
-	 * condition answer; no chip does. Stated here because this accessor is where a reader would come to
-	 * learn the two scopes had parted. Not serialized; the wire shape is unchanged, and the chip's
-	 * detail is the same string it was — <b>which on the hazard case leaves the chip stating the
-	 * contraindication of the chart while the two records beside it hedge</b>, so read the divergence
-	 * as issue #309's remaining defect and not only as its scope. ADR Decision 73's trade-offs carry
+	 * arm's fact — a premise a condition rule has no part in. Stated here because this accessor is
+	 * where a reader would come to learn the two scopes had parted. ADR Decision 73's trade-offs carry
 	 * the reproduction and why tightening the match is not the remedy.
+	 *
+	 * <p><b>Published VERBATIM since issue #374, as each chip's {@code restsOnAnUncorroboratedChartMatch}
+	 * wire key — so this accessor's name IS the key</b>, the rule {@link #chartOrderBridges()} carries
+	 * for its own. Public for that reason and no other: the wire-facing shape is public, and since #374
+	 * this fact is part of it. The SETTER is not — the two factories that write it stay
+	 * package-private, since a provenance answer is a measurement this module made and not a value an
+	 * outside caller may assert — and the class's setter/accessor symmetry rule is one-directional, so
+	 * a public read over a package-private write does not breach it.
+	 *
+	 * <p><b>What the published {@code false} does NOT say is that the chart corroborates the finding</b>,
+	 * and three separate readings of it are live: the two folds above, and every chip that answers by
+	 * construction (each interaction, class-only and overdose chip, and the allergen arm's own three
+	 * sentences, which have no rule to have matched). {@code README.md} carries that for a client.
+	 * Before #374 this read "not serialized; the wire shape is unchanged", and the hazard case was the
+	 * chip asserting the contraindication while the two records beside it hedged — the chip now states
+	 * this answer, while its {@code detail} is still the string it was, so a client that does not render
+	 * the key still shows the categorical. ADR Decision 92.
 	 */
-	boolean restsOnAnUncorroboratedChartMatch() {
+	public boolean restsOnAnUncorroboratedChartMatch() {
 		return uncorroboratedChartMatch;
 	}
 

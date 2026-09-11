@@ -32,6 +32,7 @@ import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.reference.SafetyWarning;
+import org.openmrs.module.chartsearchai.reference.SafetyWarningFixtures;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
@@ -124,6 +125,13 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 	 *       without touching an element, so a serializer that RESHAPED the bridges — into maps, or
 	 *       into a rendered sentence — passed it. Appended rather than inserted, because the cases
 	 *       above index this list positionally.</li>
+	 *   <li>8 — the one chip answering TRUE to
+	 *       {@code SafetyWarning.restsOnAnUncorroboratedChartMatch()}, appended for
+	 *       {@link #everyPublicZeroArgumentAccessorOfAWarningNamesAKeyOnTheWire} on issue #374 for the
+	 *       reason chip 7 was appended for #347's key: with every chip answering false, a serializer
+	 *       publishing a hardcoded false agrees with all of them and that guard cannot see it. Built by
+	 *       the curated-rule arm's own package-private factory, through
+	 *       {@code SafetyWarningFixtures}.</li>
 	 * </ul>
 	 */
 	private static List<SafetyWarning> fixtureWarnings() {
@@ -171,7 +179,19 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 						Arrays.asList(
 								new SafetyWarning.ChartOrderBridge("Ibuprofen", "Advil 400mg"),
 								new SafetyWarning.ChartOrderBridge("Acetylsalicylic acid (aspirin)",
-										"Aspirin 81mg"))));
+										"Aspirin 81mg"))),
+				// The one chip here that answers TRUE to restsOnAnUncorroboratedChartMatch(), which is
+				// what gives the accessor guard below teeth on that key: the other eight answer false,
+				// so a serializer publishing a hardcoded false agrees with every one of them. That is
+				// #347's own blind spot, recorded in ADR Decision 70, arriving on the key issue #374
+				// adds — mutate the put to `false` and read this class's failure. Built by the
+				// curated-rule arm's OWN factory through SafetyWarningFixtures, since this package
+				// cannot reach a package-private factory; that class's javadoc carries why it is not a
+				// widening of production API. Appended rather than inserted, because the cases above
+				// index this list positionally.
+				SafetyWarningFixtures.uncorroboratedContraindication("Naltrexone",
+						"Naltrexone is contraindicated by an active condition: acute hepatitis or "
+								+ "liver failure"));
 	}
 
 	private ChartSearchAiRestController controller;
@@ -367,9 +387,12 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 	 * already stated.</b> Until this change {@code SafetyWarning} documented the opposite for this
 	 * very field ({@code getSeverity()}: "Not serialized onto the REST response; the wire shape is
 	 * unchanged"), and what it states elsewhere is a different rule — setter/accessor symmetry, "a
-	 * caller may set only what it may read back", which is why {@code carriesUnratedRelationship()},
-	 * {@code restsOnAnUncorroboratedChartMatch()} and {@code reconciledPartnerNoteName(..)} are
-	 * package-private beside package-private factories. This change removes the counterexample, and
+	 * caller may set only what it may read back", which is why {@code carriesUnratedRelationship()} and
+	 * {@code reconciledPartnerNoteName(..)} are package-private beside package-private factories.
+	 * {@code restsOnAnUncorroboratedChartMatch()} stood in that list until issue #374 published it, and
+	 * it is the case that rule is one-directional: its accessor is public and its two factories are
+	 * not, so a caller still sets only what it may read back while reading more than it may set. This
+	 * change removes the counterexample, and
 	 * this case is what keeps the next one from being added silently: a value the module computes,
 	 * orders chips by, and then drops at serialization is exactly the shape of the defect #340
 	 * reports, and it survived from #207 to #340 without anything failing.

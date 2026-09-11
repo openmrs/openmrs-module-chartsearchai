@@ -756,16 +756,19 @@ public class PatientClinicalContext {
 	 * {@code .aClinicallyRightCompoundIsHedgedToo}.
 	 *
 	 * <p><b>That the chip survives is a residue as well as a mitigation, and it must not be cited as
-	 * only the second.</b> On the HAZARD case the surviving chip is the false claim: for a patient
-	 * whose one recorded condition is {@code Status Post Cesarean Delivery}, the injected record and
-	 * the {@code safety_finding} now hedge, and the clinician-facing chip still reads
+	 * only the second.</b> On the HAZARD case the surviving chip's SENTENCE is the false claim: for a
+	 * patient whose one recorded condition is {@code Status Post Cesarean Delivery}, the injected record
+	 * and the {@code safety_finding} hedge, and the chip still reads
 	 * "… is contraindicated by an active condition: acute hepatitis or liver failure" — an unqualified
-	 * assertion about the chart, on the one surface with no third section to hedge into. Measured
-	 * 2026-09-03 by driving {@code DrugSafetyValidator.validate} over
+	 * assertion about the chart. Measured 2026-09-03 by driving
+	 * {@code DrugSafetyValidator.validate} over
 	 * {@code chartsearchai-test/drug-reference-condition-token-nesting.json}. #309 fixed the
-	 * model-facing half only; the chip half is untracked, and tightening this match is NOT its remedy
-	 * (it is fail-open — see the boundary rule's free-text cost above). ADR Decision 73 carries it as
-	 * a trade-off.
+	 * model-facing half only, and issue #374 closed the module's remaining half: the chip publishes its
+	 * own provenance answer as {@code restsOnAnUncorroboratedChartMatch}, so the surface is no longer
+	 * one "with no third section to hedge into" and no longer WITHHOLDS the answer — while the sentence
+	 * is unchanged, so a client that does not render the key still shows the categorical. Tightening
+	 * this match was never the remedy and still is not (it is fail-open — see the boundary rule's
+	 * free-text cost above). ADR Decisions 73 and 92.
 	 *
 	 * <p>That the corpora cannot reach free text is a property of the source: that database's
 	 * {@code condition_non_coded} column holds ONE placeholder string across all 853 rows, so a

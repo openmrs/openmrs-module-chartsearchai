@@ -465,6 +465,27 @@ public class SafetyFindingSeverityFidelityTest {
 							+ "read off what production injected rather than off a word this file "
 							+ "chose. Ratings were: " + ratedFindings + "; captured: "
 							+ capture.describeAll());
+			// And again through the ACCESSORS, which is not belt and braces. The comparison above
+			// goes through UnstatedFindingSeverity.equals, so it pins the rating only for as long as
+			// that method reads the rating: weakening equals to compare the citation alone leaves
+			// every assertion in this file green, measured. Reading the field back is what makes the
+			// severity pinned by this file rather than by that method.
+			for (UnstatedFindingSeverity published : answer.getUnstatedFindingSeverities()) {
+				assertEquals(ratedFindings.get(Integer.valueOf(published.getCitation())),
+						published.getSeverity(),
+						"the entry for citation [" + published.getCitation() + "] states the rating "
+								+ "its own record carries");
+				// And the WARN carries the same pair. The two are built from one `rating` local, and
+				// the check's own javadoc says they cannot disagree — which was an unpinned claim
+				// until here: every other case in this file asserts the citation in the log and none
+				// of them asserts the rating beside it, so dropping the rating from the reason
+				// string left the whole build green.
+				assertTrue(warnStating(capture,
+						"[" + published.getCitation() + "] " + published.getSeverity()),
+						"the maintainer's channel states the rating beside the citation too, or a "
+								+ "reader triaging this cannot tell a dropped Major from a dropped "
+								+ "Minor. Captured: " + capture.describeAll());
+			}
 		}
 	}
 

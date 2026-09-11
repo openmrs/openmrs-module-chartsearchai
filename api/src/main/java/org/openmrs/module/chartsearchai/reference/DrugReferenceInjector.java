@@ -944,15 +944,21 @@ public class DrugReferenceInjector {
 	 */
 	private static final class DrugOrderRecords {
 
-		/** Resource uuid to the number of the record carrying it — the LAST, where a chart somehow
-		 *  carried two. Type-agnostic: a resource uuid is globally unique, so a record carrying this
-		 *  order's uuid IS this order however it is typed. */
-		private final Map<String, Integer> byResourceUuid = new LinkedHashMap<String, Integer>();
-
-		/** The resource uuids {@link #byResourceUuid} was handed more than once — what
-		 *  {@link #numberOfRecord} refuses, and the only thing that can tell a uuid ONE record carries
-		 *  apart from one the last-wins map above has quietly collapsed. */
-		private final Set<String> contestedUuids = new HashSet<String>();
+		/** Resource uuid to the numbers of EVERY record carrying it, in the order the mapping list
+		 *  holds them. Type-agnostic: a resource uuid is globally unique, so a record carrying this
+		 *  order's uuid IS this order however it is typed.
+		 *
+		 *  <p><b>Uncollapsed, since issue #379's second round.</b> It was one number per uuid — the
+		 *  last, where a chart carried two — with a companion set of the uuids that had been handed
+		 *  over more than once, because a map read for a count it has already collapsed cannot answer
+		 *  one. Two of this class's three readings are affirmative claims about WHICH record, and both
+		 *  need that count; keeping the numbers is what lets each reading ask for itself rather than
+		 *  one of them consulting a set the other maintains. The three readings are
+		 *  {@link #numberByUuid} (issue #118, fail-open), {@link #numberOfRecord} (issue #305) and
+		 *  {@link #citableNumberFor}'s uuid leg (issue #379) — mutate any of them and read the
+		 *  failures. */
+		private final Map<String, List<Integer>> recordsByResourceUuid =
+				new LinkedHashMap<String, List<Integer>>();
 
 		/** Record number to lowercased text, for the records that may substantiate a LIVE order — one
 		 *  ENTRY per admitted record, NOT one concatenated buffer. A record boundary is a real
@@ -970,15 +976,16 @@ public class DrugReferenceInjector {
 			for (RecordMapping mapping : mappings == null
 					? Collections.<RecordMapping>emptyList() : mappings) {
 				if (mapping.getResourceUuid() != null) {
-					// Unconditional: a later record under one uuid replaces an earlier one. A first-wins
-					// guard here discriminates no test, measured by mutation. Three successive attempts
-					// to write down which records share this key were each measured false, so none is
-					// written here: instrument the constructor and read the types it admits.
-					Integer already = byResourceUuid.put(mapping.getResourceUuid(),
-							Integer.valueOf(mapping.getIndex()));
-					if (already != null) {
-						contestedUuids.add(mapping.getResourceUuid());
+					// Every record is kept, in mapping-list order, so the readings below can each decide
+					// what a second one means. Three successive attempts to write down which records
+					// share this key were each measured false, so none is written here: instrument the
+					// constructor and read the types it admits.
+					List<Integer> carrying = recordsByResourceUuid.get(mapping.getResourceUuid());
+					if (carrying == null) {
+						carrying = new ArrayList<Integer>(1);
+						recordsByResourceUuid.put(mapping.getResourceUuid(), carrying);
 					}
+					carrying.add(Integer.valueOf(mapping.getIndex()));
 				}
 				if (QUERYSTORE_DRUG_ORDER_TYPE.equals(mapping.getResourceType())
 						&& mapping.getText() != null) {
@@ -1014,29 +1021,27 @@ public class DrugReferenceInjector {
 		 *         this chart carries none — or carries MORE than one, which it refuses rather than
 		 *         answering with the last (issue #305).
 		 *
-		 *         <p>A second reader of {@link #byResourceUuid}, which that field's javadoc already
-		 *         licenses: a resource uuid is globally unique, so a record carrying one IS that
-		 *         resource however it is typed. Sharing the index rather than walking the mappings
-		 *         again is the one-RULE constraint the record-numbering bullet in this package's
-		 *         {@code CLAUDE.md} states; what is NOT shared is the READING —
-		 *         {@link #numbersFor} is issue #118's fail-open substantiation boolean, so last-wins
-		 *         costs it nothing, and citing is an affirmative claim about WHICH record. <b>ADR
-		 *         Decision 80 is canonical for that argument</b> and carries the residue below; what
-		 *         it does not carry is the mechanical reason {@link #contestedUuids} exists, which is
-		 *         that the map cannot be read for a count it has already collapsed.
+		 *         <p>A second reader of {@link #recordsByResourceUuid}, which that field's javadoc
+		 *         already licenses: a resource uuid is globally unique, so a record carrying one IS
+		 *         that resource however it is typed. Sharing the index rather than walking the
+		 *         mappings again is the one-RULE constraint the record-numbering bullet in this
+		 *         package's {@code CLAUDE.md} states; what is NOT shared is the READING —
+		 *         {@link #numbersFor} is issue #118's fail-open substantiation boolean, so the last
+		 *         record costs it nothing, and citing is an affirmative claim about WHICH record.
+		 *         <b>ADR Decision 80 is canonical for that argument.</b>
 		 *
-		 *         <p><b>A third reader, and it does not follow the split.</b>
-		 *         {@link #citableNumberFor} is issue #379's order-record citation — as affirmative as
-		 *         this one — and its uuid leg goes through {@link #numberByUuid}, which does not
-		 *         consult {@link #contestedUuids}. So on a chart carrying two records under one order
-		 *         uuid, #379 cites the last one indexed and #305 cites neither. Not resolved here:
-		 *         that rendering ships behind {@code chartsearchai.drugSafety.citeOrderRecords} and is
-		 *         OFF, and narrowing its leg is a change to Decision 77's gated decision without its
-		 *         measurement. Stated so whoever flips that flag knows what is owed.
+		 *         <p><b>The third reader now follows the split, and did not until issue #379's second
+		 *         round.</b> {@link #citableNumberFor} is issue #379's order-record citation — as
+		 *         affirmative as this one — and its uuid leg read {@link #numberByUuid}, the fail-open
+		 *         one, so on a chart carrying two records under one order uuid it cited the last
+		 *         indexed while this one cited neither. Decision 80 recorded that as owed against
+		 *         Decision 77's measurement; the measurement has been run and the leg now asks this
+		 *         method. The two affirmative claims are one reading again.
 		 */
 		private Integer numberOfRecord(String resourceUuid) {
-			return resourceUuid == null || contestedUuids.contains(resourceUuid) ? null
-					: byResourceUuid.get(resourceUuid);
+			List<Integer> carrying = resourceUuid == null ? null
+					: recordsByResourceUuid.get(resourceUuid);
+			return carrying == null || carrying.size() != 1 ? null : carrying.get(0);
 		}
 
 		/**
@@ -1064,11 +1069,50 @@ public class DrugReferenceInjector {
 			return named;
 		}
 
-		/** @return the number of the record carrying {@code order}'s own uuid, or null. The EXACT leg
-		 *          of {@link #numbersFor}, named so {@link #orderRecordNumbers} can ask which records
-		 *          are already some order's own without re-deriving the lookup. */
+		/** @return the number of the LAST record carrying {@code order}'s own uuid, or null where this
+		 *          chart carries none. The EXACT leg of {@link #numbersFor}, fail-open with it: a
+		 *          second record under one uuid costs that question nothing, so this answers with one
+		 *          of them rather than refusing. It is also the boolean
+		 *          {@link #recordsSeveralOrdersName} asks — <em>does this chart hold a record of this
+		 *          order at all</em> — for which either record answers.
+		 *
+		 *          <p><b>Not the reading a CITATION takes</b>: {@link #numberOfRecord} is, and
+		 *          {@link #citableNumberFor} asks that one. Answering the last of two is what this
+		 *          method is for and what that one refuses. */
 		private Integer numberByUuid(PatientClinicalContext.ActiveDrugOrder order) {
-			return order.getUuid() == null ? null : byResourceUuid.get(order.getUuid());
+			List<Integer> carrying = recordsCarrying(order);
+			return carrying.isEmpty() ? null : carrying.get(carrying.size() - 1);
+		}
+
+		/** @return the numbers of every record carrying {@code order}'s own uuid, EMPTY where it has
+		 *          none or has no uuid — the one lookup {@link #numberByUuid} and
+		 *          {@link #recordsOfActiveOrders} share, so the two cannot come to disagree about
+		 *          which records an order IS. The READING of that list is each caller's own. */
+		private List<Integer> recordsCarrying(PatientClinicalContext.ActiveDrugOrder order) {
+			List<Integer> carrying = order.getUuid() == null ? null
+					: recordsByResourceUuid.get(order.getUuid());
+			return carrying == null ? Collections.<Integer> emptyList() : carrying;
+		}
+
+		/**
+		 * @return the numbers of EVERY record carrying any of {@code orders}' own uuids — the records
+		 *         that ARE one of this patient's active prescriptions, and so are not citable as any
+		 *         other (issue #379).
+		 *
+		 *         <p><b>Every record and not one per order.</b> Asked through {@link #numberByUuid} it
+		 *         answered one number per order, so where two records carried one uuid the other stayed
+		 *         in every neighbouring order's candidate set — free to be cited, by an order that
+		 *         merely NAMES it, as the prescription it is not. That defeats the rule
+		 *         {@code .aRecordAnotherOrderIsCannotBeCitedForThisOne} pins, on the same collapse
+		 *         {@link #numberOfRecord} refuses for issue #305.
+		 */
+		private Set<Integer> recordsOfActiveOrders(
+				List<PatientClinicalContext.ActiveDrugOrder> orders) {
+			Set<Integer> claimed = new HashSet<Integer>();
+			for (PatientClinicalContext.ActiveDrugOrder order : orders) {
+				claimed.addAll(recordsCarrying(order));
+			}
+			return claimed;
 		}
 
 		/**
@@ -1099,18 +1143,35 @@ public class DrugReferenceInjector {
 		 *         document for an order this patient no longer has is not in that set, so the name leg
 		 *         can still reach it; that is #118's fail-open leg and no test states the cell.
 		 *
-		 *         <p>The uuid leg is untouched by either: a record carrying this order's uuid IS this
-		 *         order, so it cannot be claimed by anyone else and no count of who NAMES it can
-		 *         unseat it.
+		 *         <p>Neither exclusion reaches the uuid leg, and both are about rival ORDERS: a record
+		 *         carrying this order's uuid IS this order, so it cannot be claimed by anyone else and
+		 *         no count of who NAMES it can unseat it.
 		 *
-		 * @param claimedByUuid the numbers of the records some active order carries the uuid OF
+		 *         <p><b>Rival RECORDS are a third refusal and the leg's own</b> (issue #379's second
+		 *         round, the residue ADR Decision 80 recorded as owed against Decision 77's
+		 *         measurement). Two records of this chart carrying one order's uuid are both that
+		 *         order, and the sentence above says nothing about WHICH — so the leg asks
+		 *         {@link #numberOfRecord}, issue #305's reading of the same index, and the two
+		 *         affirmative claims this class makes are one reading.
+		 *
+		 *         <p><b>It VETOES rather than falling through to the name leg.</b>
+		 *         {@link #numbersFor} already states the reason of this index — <em>a sibling record
+		 *         that merely NAMES the same drug is not a second answer to the same question</em> —
+		 *         so demoting would union the two legs at exactly the moment the module knows least.
+		 *         {@code .anOrderWhoseUuidTwoRecordsCarryDoesNotFallBackToARecordThatMerelyNamesIt} is
+		 *         the case that separates the two shapes.
+		 *
+		 * @param claimedByUuid the numbers of the records some active order carries the uuid OF, from
+		 *        {@link #recordsOfActiveOrders} — all of them, never one per order
 		 * @param contested the numbers no name-leg answer may be, from {@link #recordsSeveralOrdersName}
 		 */
 		private Integer citableNumberFor(PatientClinicalContext.ActiveDrugOrder order,
 				Set<Integer> claimedByUuid, Set<Integer> contested) {
-			Integer exact = numberByUuid(order);
-			if (exact != null) {
-				return exact;
+			if (numberByUuid(order) != null) {
+				// This chart holds a record of this order, so the order is one of those records and
+				// nothing else. numberOfRecord answers where exactly one carries the uuid and refuses
+				// where more do; either way the name leg below is not a second answer to it.
+				return numberOfRecord(order.getUuid());
 			}
 			Integer only = null;
 			for (Map.Entry<Integer, String> record : liveDrugOrderTexts.entrySet()) {
@@ -1138,7 +1199,8 @@ public class DrugReferenceInjector {
 		 *         is that cell.
 		 *
 		 *         <p><b>Only the orders the uuid leg could not answer for contest anything.</b> An order
-		 *         the chart carries the uuid record of IS that record, so it is not a rival claimant to
+		 *         the chart carries a uuid record of IS that record — or, where two carry its uuid, is
+		 *         one of those two and still none of the others — so it is not a rival claimant to
 		 *         any other — counting its name matches too would refuse a number that is not in
 		 *         question, and {@code .anOrderTheChartRecordsUnderAnotherUuidIsCitedByTheRecordThatNamesIt}
 		 *         is the shape that would lose one.
@@ -1289,13 +1351,10 @@ public class DrugReferenceInjector {
 		// Never accumulated as the citing walk goes: an order asked BEFORE the one whose uuid record it
 		// would be struck by is then judged against an incomplete set and cites that record, which
 		// .aDisplayWhoseOtherOrderCanCiteNothingStatesNoNumberWhicheverComesFirst reddens on.
-		Set<Integer> claimedByUuid = new HashSet<Integer>();
-		for (PatientClinicalContext.ActiveDrugOrder order : orders) {
-			Integer exact = records.numberByUuid(order);
-			if (exact != null) {
-				claimedByUuid.add(exact);
-			}
-		}
+		//
+		// EVERY record under an order's uuid and not one per order: recordsOfActiveOrders carries what
+		// asking numberByUuid per order missed.
+		Set<Integer> claimedByUuid = records.recordsOfActiveOrders(orders);
 		// One record cannot be two prescriptions, asked of every record an order could BE and not of the
 		// ones orders came back with — see recordsSeveralOrdersName, which carries what the second
 		// reading missed.

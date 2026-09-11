@@ -932,4 +932,122 @@ public class InteractionFindingChartOrderBridgeTest extends BaseModuleContextSen
 			"a record the scoped chart carries is still citable, and an order it carries none for "
 					+ "states no number (issue #379), was: " + finding);
 	}
+
+	/**
+	 * Issue #379, the refusal ADR Decision 80 recorded as owed: a record uuid TWO of this chart's
+	 * records carry is cited as neither of them.
+	 *
+	 * <p>Every other ambiguity this class pins is between rival ORDERS — two prescriptions reaching
+	 * one record. This one is between rival RECORDS, and the uuid leg was written without it:
+	 * {@code "a record carrying this order's uuid IS this order, so it cannot be claimed by anyone
+	 * else"} is true and does not say WHICH of two such records the order is. The index behind it is
+	 * last-wins, so the leg answered with whichever record was indexed second and the clause told the
+	 * model that one IS the prescription. Issue #305's provenance already refuses the same shape on
+	 * the same index ({@code FindingChartRecordProvenanceContextTest
+	 * .aUuidTwoRecordsOfThisChartBothCarryNamesNeither}); citing an order is the same kind of
+	 * affirmative claim, so it takes the same reading.
+	 *
+	 * <p>Klarizom keeps its number, so the refusal is per ITEM and does not silence the clause.
+	 */
+	@Test
+	public void aRecordUuidTwoOfThisChartsRecordsCarryIsCitedByNeither() throws Exception {
+		String finding = onlyFinding(
+			DrugReferenceTestSupport.chartOf(
+				DrugReferenceTestSupport.drugOrderRecord(1, "order-zolvimix", "Zolvimix"),
+				DrugReferenceTestSupport.drugOrderRecord(2, "order-zolvimix", "Zolvimix"),
+				DrugReferenceTestSupport.drugOrderRecord(3, "order-klarizom", "Klarizom")),
+			ticketChart(), SCREENING_QUESTION);
+
+		assertEquals("Simvastatin from Zolvimix; Clarithromycin from Klarizom [3].", bridgeOf(finding),
+			"two records carry this order's uuid, so the module cannot say which of them the "
+					+ "prescription is and states neither (issue #379), was: " + finding);
+	}
+
+	/**
+	 * Issue #379, the same collapse seen from a NEIGHBOUR: a record carrying one order's uuid is not
+	 * citable as a different order, and that must hold for both records where two carry it.
+	 *
+	 * <p>{@code .aRecordAnotherOrderIsCannotBeCitedForThisOne} is this rule at one record apiece, and
+	 * it works by striking every record some active order carries the uuid OF out of the other orders'
+	 * candidates. That strike was collected one number per ORDER, so where two records carried one
+	 * uuid only the second was struck and the first stayed available — to be cited by a neighbour it
+	 * merely NAMES, as the prescription it is not.
+	 *
+	 * <p>Here record [1] carries the Aspibrand order's uuid while its text names the Coagubrand
+	 * order's drug, so the Coagubrand order reaches it by issue #118's name leg alone. Its own uuid
+	 * record is absent, so without the strike that record is its only candidate and it cites it.
+	 *
+	 * <p><b>Both items move, and they move for different reasons</b> — the Aspibrand item by the
+	 * uuid-leg refusal the case above pins, the Coagubrand item by this one. They are separable by
+	 * mutation and not by this arrangement: restore the strike to one number per order and this case
+	 * alone reddens, while the case above stays green.
+	 */
+	@Test
+	public void aRecordOneOrdersUuidIsCannotBeCitedByANeighbourWhereTwoRecordsCarryThatUuid()
+			throws Exception {
+		String finding = onlyFinding(
+			DrugReferenceTestSupport.chartOf(
+				DrugReferenceTestSupport.drugOrderRecord(1, "order-aspibrand", "Coagubrand"),
+				DrugReferenceTestSupport.drugOrderRecord(2, "order-aspibrand", "Aspibrand")),
+			DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set("Aspibrand", "Coagubrand"),
+				DrugReferenceTestSupport.set("N02BA01", "B01AA03"), null, null,
+				Arrays.asList(
+					DrugReferenceTestSupport.activeOrder("order-aspibrand", "Aspibrand",
+						DrugReferenceTestSupport.set("Aspibrand"),
+						DrugReferenceTestSupport.set("N02BA01")),
+					DrugReferenceTestSupport.activeOrder("order-coagubrand", "Coagubrand",
+						DrugReferenceTestSupport.set("Coagubrand"),
+						DrugReferenceTestSupport.set("B01AA03")))),
+			SCREENING_QUESTION);
+
+		assertEquals("Warfarin from Coagubrand; Acetylsalicylic acid (aspirin) from Aspibrand.",
+			bridgeOf(finding),
+			"record [1] is one of the two records the Aspibrand order is, so the Coagubrand order "
+					+ "cannot be cited as it either (issue #379), was: " + finding);
+	}
+
+	/**
+	 * Issue #379: an order whose uuid two records carry states no number at all, rather than falling
+	 * back to a record that merely NAMES it.
+	 *
+	 * <p>The uuid leg VETOES here; it does not demote to issue #118's name leg. That is the reading
+	 * {@code numbersFor} already states of this index — <em>"a sibling record that merely NAMES the
+	 * same drug is not a second answer to the same question"</em> — and a fall-back would union the
+	 * two legs the moment the uuid leg could not name one record, which is exactly when the module
+	 * knows least. Record [3] is live, names the Aspibrand order and is no active order's own, so it
+	 * is the candidate a fall-back would cite.
+	 *
+	 * <p><b>Its red today is not independent of {@code
+	 * .aRecordUuidTwoOfThisChartsRecordsCarryIsCitedByNeither}'s</b>: before the fix both fail on the
+	 * uuid leg answering with the last record indexed. What this case discriminates is the shape of
+	 * the fix — make the leg fall through to the name walk instead of vetoing and this one alone
+	 * reddens, citing [3].
+	 */
+	@Test
+	public void anOrderWhoseUuidTwoRecordsCarryDoesNotFallBackToARecordThatMerelyNamesIt()
+			throws Exception {
+		String finding = onlyFinding(
+			DrugReferenceTestSupport.chartOf(
+				DrugReferenceTestSupport.drugOrderRecord(1, "order-aspibrand", "Aspibrand"),
+				DrugReferenceTestSupport.drugOrderRecord(2, "order-aspibrand", "Aspibrand"),
+				DrugReferenceTestSupport.drugOrderRecord(3, "stale-index-uuid", "Aspibrand 81mg"),
+				DrugReferenceTestSupport.drugOrderRecord(4, "order-coagubrand", "Coagubrand")),
+			DrugReferenceTestSupport.ctx(60, null,
+				DrugReferenceTestSupport.set("Aspibrand", "Coagubrand"),
+				DrugReferenceTestSupport.set("N02BA01", "B01AA03"), null, null,
+				Arrays.asList(
+					DrugReferenceTestSupport.activeOrder("order-aspibrand", "Aspibrand",
+						DrugReferenceTestSupport.set("Aspibrand"),
+						DrugReferenceTestSupport.set("N02BA01")),
+					DrugReferenceTestSupport.activeOrder("order-coagubrand", "Coagubrand",
+						DrugReferenceTestSupport.set("Coagubrand"),
+						DrugReferenceTestSupport.set("B01AA03")))),
+			SCREENING_QUESTION);
+
+		assertEquals("Warfarin from Coagubrand [4]; Acetylsalicylic acid (aspirin) from Aspibrand.",
+			bridgeOf(finding),
+			"the chart says this order IS one of two records, so a third record that merely names "
+					+ "it is not the one to cite (issue #379), was: " + finding);
+	}
 }

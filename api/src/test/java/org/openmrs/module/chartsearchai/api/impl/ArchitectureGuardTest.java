@@ -779,20 +779,23 @@ public class ArchitectureGuardTest {
 	 * the day the overload is added: the spellings are equal and the suite stays green. What changes
 	 * is only what a LATER edit can do silently.
 	 *
-	 * <p>It counts DECLARED methods of that name, so a private helper called {@code inject} trips it
-	 * too. Deliberate: the rule is that this name is one entry point.
+	 * <p>Reflection rather than the class-file walk beside it, which is the idiom this tree already
+	 * uses for "what does this class declare" and needs no descriptors. It counts DECLARED methods
+	 * of that name, so a private helper called {@code inject} trips it too. Deliberate: the rule is
+	 * that this name is one entry point.
 	 */
 	@Test
-	public void theInjectorExposesExactlyOneInjectArity() throws IOException {
-		Path classes = ModuleSourceRoot.apiRoot().resolve("target/classes");
-		org.junit.jupiter.api.Assertions.assertTrue(java.nio.file.Files.isDirectory(classes),
-				"no " + classes + "; a guard that discovers nothing forbids nothing");
-		Path injector = classes.resolve(
-				"org/openmrs/module/chartsearchai/reference/DrugReferenceInjector.class");
-		org.junit.jupiter.api.Assertions.assertTrue(java.nio.file.Files.exists(injector),
-				"no DrugReferenceInjector class file at " + injector + ", so this guard forbids nothing");
-
-		List<String> arities = declaredMethodDescriptors(injector, "inject");
+	public void theInjectorExposesExactlyOneInjectArity() {
+		List<String> arities = new ArrayList<>();
+		for (java.lang.reflect.Method method : org.openmrs.module.chartsearchai.reference
+				.DrugReferenceInjector.class.getDeclaredMethods()) {
+			if ("inject".equals(method.getName())) {
+				arities.add(java.util.Arrays.toString(method.getParameterTypes()));
+			}
+		}
+		org.junit.jupiter.api.Assertions.assertFalse(arities.isEmpty(),
+				"no method named inject was found on DrugReferenceInjector at all, so this guard "
+						+ "just passed by discovering nothing");
 		org.junit.jupiter.api.Assertions.assertEquals(1, arities.size(),
 				"DrugReferenceInjector.inject must have exactly one arity, so a test double written "
 						+ "against a stale signature fails to compile rather than going silently inert on "
@@ -812,18 +815,6 @@ public class ArchitectureGuardTest {
 	 *         attribute by its own declared length.
 	 */
 	private static List<String> constructorDescriptors(Path classFile) throws IOException {
-		return declaredMethodDescriptors(classFile, "<init>");
-	}
-
-	/**
-	 * @return the descriptor of every method named {@code methodName} that {@code classFile}
-	 *         DECLARES, read from its method table. The walk {@link #constructorDescriptors} uses and
-	 *         documents, with the name to match as a parameter — a constructor is just the method
-	 *         named {@code <init>}, and the blind spot that javadoc describes belongs to selecting
-	 *         from the constant pool rather than to what is being selected.
-	 */
-	private static List<String> declaredMethodDescriptors(Path classFile, String methodName)
-			throws IOException {
 		java.nio.ByteBuffer in = java.nio.ByteBuffer.wrap(java.nio.file.Files.readAllBytes(classFile));
 		List<String> pool = readConstantPool(in);
 		in.position(in.position() + 6);
@@ -841,7 +832,7 @@ public class ArchitectureGuardTest {
 			String name = pool.get(in.getShort() & 0xFFFF);
 			String descriptor = pool.get(in.getShort() & 0xFFFF);
 			skipAttributes(in);
-			if (methodName.equals(name)) {
+			if ("<init>".equals(name)) {
 				descriptors.add(descriptor);
 			}
 		}

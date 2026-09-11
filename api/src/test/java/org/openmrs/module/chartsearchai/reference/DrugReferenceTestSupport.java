@@ -42,6 +42,7 @@ import org.openmrs.ConceptReferenceTerm;
 import org.openmrs.ConceptSource;
 import org.openmrs.DrugOrder;
 import org.openmrs.api.context.Context;
+import org.openmrs.api.context.UserContext;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
@@ -1565,6 +1566,65 @@ public final class DrugReferenceTestSupport {
 					+ (dash < 0 ? detail : detail.substring(0, dash)));
 		}
 		return leads;
+	}
+
+	/**
+	 * Runs {@code body} with exactly one privilege refused and every other one held, restoring the
+	 * prior {@code UserContext} whatever happens.
+	 *
+	 * <p><b>The one home for this arrangement</b>, shared by every case that needs a chart read to
+	 * fail the way production fails it. Core annotates every service call
+	 * {@link PatientClinicalContextBuilder} makes with an {@code @Authorized} privilege
+	 * ({@code getActiveOrders}/{@code Get Orders}, {@code getAllergies}/{@code Get Allergies},
+	 * {@code getActiveConditions}/{@code Get Conditions}, and the weight read's
+	 * {@code getConceptByUuid}/{@code Get Concepts} and
+	 * {@code getObservationsByPersonAndConcept}/{@code Get Observations}), so refusing one and
+	 * granting the rest reproduces the role these defects are about — a site that grants
+	 * {@code AI Query Patient Data} without one of core's chart-read privileges. No stub throws; the
+	 * real service call does. The builder's AGE read is outside this: it makes no service call, so a
+	 * case needing it to fail fails it at the {@code Patient} instead.
+	 *
+	 * <p>Shared rather than copied because the drift that matters is not cosmetic: a copy that loses
+	 * the {@code finally} leaks a crippled {@code UserContext} into every later test in the same
+	 * context-sensitive JVM, and the symptom surfaces somewhere else entirely.
+	 *
+	 * @param privilege the one privilege to refuse, or {@code null} to hold every one — which is how
+	 *            a case gets its healthy-chart control through the identical path
+	 * @param body what to run; its value is returned
+	 */
+	public static <T> T refusingPrivilege(String privilege, java.util.function.Supplier<T> body) {
+		if (privilege == null) {
+			return body.get();
+		}
+		return withUserContext(new UserContext(null) {
+
+			@Override
+			public boolean hasPrivilege(String held) {
+				return !privilege.equals(held);
+			}
+		}, body);
+	}
+
+	/**
+	 * Runs {@code body} under {@code swapped}, restoring the prior {@code UserContext} whatever
+	 * happens.
+	 *
+	 * <p>The swap core {@link #refusingPrivilege} is built on, exposed because refusing a privilege
+	 * is not the only way to fail a chart read the way production fails it: a context whose
+	 * privilege check THROWS sends a non-authorization exception out of the same real service call,
+	 * which is how issue #247's stack-trace rule gets its second branch. Sharing the restore is the
+	 * whole point — a copy that loses the {@code finally} leaks a crippled context into every later
+	 * test in the same JVM, and the symptom surfaces somewhere else entirely.
+	 */
+	public static <T> T withUserContext(UserContext swapped, java.util.function.Supplier<T> body) {
+		UserContext prior = Context.getUserContext();
+		Context.setUserContext(swapped);
+		try {
+			return body.get();
+		}
+		finally {
+			Context.setUserContext(prior);
+		}
 	}
 
 	/**

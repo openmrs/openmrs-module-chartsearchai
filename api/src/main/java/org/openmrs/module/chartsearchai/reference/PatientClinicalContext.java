@@ -226,11 +226,39 @@ public class PatientClinicalContext {
 	 *         {@code @Authorized(GET_ORDERS)} in core, so a role granted this module's own
 	 *         privilege without that one reads nothing and looks exactly like a patient on no
 	 *         medication. {@code DrugSafetyValidator.standingChartAlerts} is the reader that
-	 *         cannot survive that confusion, an unscreenable chart being its WHOLE payload; the
-	 *         answer path deliberately does not ask, an unread order there only narrowing a chip.
+	 *         cannot survive that confusion, an unscreenable chart being its WHOLE payload. Since
+	 *         issue #247 the answer path asks it too, through {@link #chartReadForSafety()}.
 	 */
 	boolean activeDrugOrdersRead() {
 		return activeDrugOrdersRead;
+	}
+
+	/**
+	 * @return whether both stamped reads this context was built from completed —
+	 *         {@link #contraindicationRecordsRead()} AND {@link #activeDrugOrdersRead()}. Not every
+	 *         read the builder makes: age and weight are unstamped and outside this verdict.
+	 *
+	 *         <p><b>The whole pass, never one side of it</b> (issue
+	 *         <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/247">#247</a>).
+	 *         The two stamps exist because their readers differ — the injector asks the first before
+	 *         stating what this patient's RECORDS do not contain — but a reader publishing a single
+	 *         verdict must ask both, and a records-only verdict reads {@code true} on a request where
+	 *         the order read failed and the interaction arms are blind. That is the shape ADR
+	 *         Decision 79 records one surface over, where a role without {@code Get Orders} was
+	 *         handed {@code screened: true} beside an empty alert list.
+	 *
+	 *         <p><b>This is the one spelling of that conjunction.</b>
+	 *         {@code DrugSafetyValidator.standingChartAlerts} gates on it and
+	 *         {@code DrugReferenceInjector} states it on the answer, so the two surfaces cannot come
+	 *         to disagree about whether one chart was read. What does NOT go through it is the
+	 *         standing surface's operator MESSAGE, which enumerates the sides separately on purpose:
+	 *         naming which read failed is a different question from whether any did.
+	 *
+	 *         <p>It is not {@code StandingChartAlerts.isScreened()}; that comparison has one home,
+	 *         {@code ChartSearchService.ChartAnswer.getChartReadForSafety()}.
+	 */
+	boolean chartReadForSafety() {
+		return contraindicationRecordsRead && activeDrugOrdersRead;
 	}
 
 	/** Pre-weight constructor, retained for test convenience (production uses the weight-carrying

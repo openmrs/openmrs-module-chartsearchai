@@ -57,7 +57,8 @@ public class LlmInferenceServiceAsyncGroundingTest {
 			@Override
 			public org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart inject(
 					org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart chart,
-					org.openmrs.Patient patient, String question) {
+					org.openmrs.Patient patient, String question,
+					org.openmrs.module.chartsearchai.reference.ChartReadStatus readStatus) {
 				return chart;
 			}
 		});

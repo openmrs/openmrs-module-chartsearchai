@@ -27,9 +27,11 @@ import org.openmrs.DrugOrder;
 import org.openmrs.Obs;
 import org.openmrs.Order;
 import org.openmrs.Patient;
+import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
+import org.openmrs.util.PrivilegeConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -73,19 +75,35 @@ final class PatientClinicalContextBuilder {
 				conditionTokens, activeOrders, null, false, false);
 		}
 
+		// Loud for the reason the three stamped reads below are loud, and NOT because it feeds the
+		// published verdict — it does not, carrying no stamp of its own (issue #247). The residue is
+		// its own: a failed age read leaves DrugReference.bandForAge with nothing to band on, so the
+		// injected record simply omits the age-banded dosing lines and reads like an entry that has
+		// none. Named privileges: none, deliberately. This is the one read here that makes no service
+		// call — Patient.getAge() computes from the birthdate already on the loaded person — so there
+		// is no @Authorized gate to send an operator to, and warnUnreadable states nothing it cannot
+		// support rather than borrowing a neighbour's constant.
 		try {
 			age = patient.getAge();
 		}
 		catch (RuntimeException e) {
-			log.debug("Could not read patient age for drug-reference context", e);
+			warnUnreadable("age", "the injected reference record states no age-banded dosing for this "
+					+ "patient", e);
 		}
 
-		// Most recent (fresh) weight in kg -> weight-aware per-dose overdose check.
+		// Most recent (fresh) weight in kg -> weight-aware per-dose overdose check. Loud on the same
+		// terms, and its residue is the sharper of the two: a failed weight read silences the per-kg
+		// leg of DrugSafetyValidator.addOverdose, so a band whose ONLY ceiling is per-kg raises no
+		// overdose chip at all — the shipped sourceFormat=json dataset carries such a band. Two
+		// privileges, because the read makes two service calls: the weight concept is fetched by uuid
+		// and its observations are then queried.
 		try {
 			weightKg = latestWeightKg(patient);
 		}
 		catch (RuntimeException e) {
-			log.debug("Could not read patient weight for drug-reference context", e);
+			warnUnreadable("weight", "the per-kg leg of the overdose check is silent, so a dosing band "
+					+ "whose only ceiling is per-kg raises no chip at all", e, PrivilegeConstants.GET_OBS,
+					PrivilegeConstants.GET_CONCEPTS);
 		}
 
 		// Active drug orders -> names + ATC codes (for interaction checks and order-driven injection),
@@ -195,7 +213,8 @@ final class PatientClinicalContextBuilder {
 			}
 		}
 		catch (RuntimeException e) {
-			log.debug("Could not read active orders for drug-reference context", e);
+			warnUnreadable("active drug orders", "the drug-safety layer is screening as though there "
+					+ "were none", e, PrivilegeConstants.GET_ORDERS);
 			activeDrugOrdersRead = false;
 		}
 
@@ -234,7 +253,8 @@ final class PatientClinicalContextBuilder {
 			}
 		}
 		catch (RuntimeException e) {
-			log.debug("Could not read allergies for drug-reference context", e);
+			warnUnreadable("allergies", "the contraindication screen is evaluating as though there "
+					+ "were none", e, PrivilegeConstants.GET_ALLERGIES);
 			contraindicationRecordsRead = false;
 		}
 
@@ -251,7 +271,8 @@ final class PatientClinicalContextBuilder {
 			}
 		}
 		catch (RuntimeException e) {
-			log.debug("Could not read conditions for drug-reference context", e);
+			warnUnreadable("conditions", "the contraindication screen is evaluating as though there "
+					+ "were none", e, PrivilegeConstants.GET_CONDITIONS);
 			contraindicationRecordsRead = false;
 		}
 
@@ -275,6 +296,81 @@ final class PatientClinicalContextBuilder {
 			}
 		}
 		return latest;
+	}
+
+	/**
+	 * Reports a chart read the module could not perform, at WARN, where a stock install will see it
+	 * (issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/247">#247</a>).
+	 * Shared by every catch in {@link #build} that degrades a read to an empty value, so their
+	 * wording, their level and the rule below cannot drift apart. Every one of those, and not only
+	 * the three the published verdict is built from: a stamp decides whether a failure reaches
+	 * {@code ChartSearchService.ChartAnswer.getChartReadForSafety()}, and has never been what
+	 * decides whether an operator is told. Age and weight carry no stamp and each has a residue of
+	 * its own, recorded at their catches.
+	 *
+	 * <p><b>The per-concept reads those catches enclose are deliberately NOT shared with this and
+	 * stay at {@code log.debug}</b> — {@link #conceptUuid}, {@link #addConceptName},
+	 * {@link #addConceptNames} and {@link #addAtcCodes}. Each reads a lazy association off a
+	 * {@code Concept} the enclosing service call has already returned, so it is an entity property
+	 * read and not a service call: core's {@code AuthorizationAdvice} advises the service layer and
+	 * never sees it, no {@code @Authorized} privilege gates it, and the sentence this method exists
+	 * to write — the privileges to grant — would have nothing to name. What reaches those catches is
+	 * a store fault or an association that cannot be initialised, not the missing-privilege cause.
+	 * Their residue is one record's worth of one read — the tokens, names or uuid of the single
+	 * allergy, condition or order being walked — where a catch here abandons the whole read, the
+	 * records not yet walked included. Raising them is a change to how loud a HEALTHY install is per
+	 * record, which issue #247 measured nothing about; {@link #conceptUuid}'s own javadoc carries
+	 * what its failure costs.
+	 *
+	 * <p><b>The stack trace is kept for every cause but the expected one.</b> An
+	 * {@code APIAuthenticationException} is a role missing one of {@code privileges} and nothing
+	 * else; the message already names the privileges to grant, the top frame of its trace is only
+	 * core's own {@code AuthorizationAdvice}, and the condition persists until someone acts on it —
+	 * so on {@code GET /chartsearchai/chartalerts}, which {@code README.md} documents as applying no
+	 * rate limit, the trace would repeat for the life of the misconfiguration and say nothing new.
+	 * Every other {@code RuntimeException} — a fault in the store underneath the service call, most
+	 * of all — keeps its trace, because there the trace IS the diagnosis. Deliberately not a
+	 * throttle: {@code DrugSafetyValidator.standingChartAlerts} records why one would hide the line
+	 * a diagnosis needs.
+	 *
+	 * <p><b>The drop is conditional on there BEING a privilege to name</b>, which is why it is not
+	 * written as a bare {@code instanceof}. A read that names none — the age read, which makes no
+	 * service call — would otherwise answer an authorization failure with neither a privilege nor a
+	 * trace, which is a line carrying no diagnosis at all. The justification for dropping the trace
+	 * is the naming; where there is no naming there is no justification.
+	 *
+	 * <p><b>So {@code privileges} must be the ones gating the caller's OWN read</b> — all of them,
+	 * since a read making two service calls can fail on either — and that is pinned rather than left
+	 * to the copy-paste: each call sits in a case of {@code ChartReadFailureLoudnessContextTest} that
+	 * refuses exactly one of its privileges and asserts the resulting line names that one. Swap one
+	 * call's constant for a neighbour's and read the failure — the level assertions cannot see it,
+	 * and on the trace-dropped cause the message is all an operator gets.
+	 *
+	 * @param privileges the core privileges gating this read, in the order the sentence should name
+	 *        them; empty where the read makes no privilege-gated call, which suppresses that
+	 *        sentence rather than printing an empty or borrowed one
+	 */
+	private static void warnUnreadable(String records, String consequence, RuntimeException e,
+			String... privileges) {
+		// What the CALLER does about it is deliberately not stated here: the published verdict comes
+		// from the injector's context, validate builds a second one that reaches no wire key, and a
+		// caller may pass no sink at all. The read and its consequence for the screen are what this
+		// line can honestly assert.
+		StringBuilder message = new StringBuilder("Could not read this patient's ").append(records)
+				.append("; ").append(consequence).append(".");
+		if (privileges.length > 0) {
+			message.append(" Check that the querying role holds core's ");
+			for (int i = 0; i < privileges.length; i++) {
+				message.append(i == 0 ? "" : i == privileges.length - 1 ? " and " : ", ")
+						.append(privileges[i]);
+			}
+			message.append(privileges.length == 1 ? " privilege." : " privileges.");
+		}
+		if (privileges.length > 0 && e instanceof APIAuthenticationException) {
+			log.warn(message.toString());
+		} else {
+			log.warn(message.toString(), e);
+		}
 	}
 
 	/**
@@ -459,7 +555,9 @@ final class PatientClinicalContextBuilder {
 	 *         order whose concept cannot be loaded throws HERE. The loop's own {@code catch} is outside
 	 *         the {@code for}, so an unguarded read would abandon the whole active-order list at the
 	 *         first such order — every later order dropped, the flattened name and code sets left
-	 *         half-built, and nothing but a {@code log.debug} to say so. That is worse than the state
+	 *         half-built. Since issue #247 the loop's own catch is not silent about that — it WARNs
+	 *         naming Get Orders and stamps the whole pass unread — but losing every later order is
+	 *         still worse than the state
 	 *         before this leg existed, where the same failure cost that one order its ATC codes and
 	 *         left the order itself on the list. A missing uuid costs exactly the bridged-concept leg
 	 *         for one order, which is the degradation the rest of this loop is built for.

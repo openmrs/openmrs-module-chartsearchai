@@ -762,6 +762,47 @@ public class ArchitectureGuardTest {
 	}
 
 	/**
+	 * {@code DrugReferenceInjector.inject} has exactly ONE arity, and that is what keeps the
+	 * chart-read verdict reaching the answer (issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/247">#247</a>).
+	 *
+	 * <p>The sink carrying that verdict was added by WIDENING the signature rather than by adding an
+	 * overload beside it, so every stale test double became a compile error instead of a green test
+	 * that stubs nothing. Add a narrower arity back — for a caller that "does not need the sink",
+	 * which is the natural next edit — and the two coexist quietly: production keeps calling the wide
+	 * one, doubles keep overriding whichever they were written against, and the ones that picked the
+	 * narrow one go inert without failing. That is not hypothetical on this codebase;
+	 * {@code DrugSafetyValidator.validate}'s javadoc records it happening, and records that a review
+	 * of the commit that added the overload did not find it.
+	 *
+	 * <p>Structural rather than behavioural because nothing observable separates the two worlds on
+	 * the day the overload is added: the spellings are equal and the suite stays green. What changes
+	 * is only what a LATER edit can do silently.
+	 *
+	 * <p>Reflection rather than the class-file walk beside it, which is the idiom this tree already
+	 * uses for "what does this class declare" and needs no descriptors. It counts DECLARED methods
+	 * of that name, so a private helper called {@code inject} trips it too. Deliberate: the rule is
+	 * that this name is one entry point.
+	 */
+	@Test
+	public void theInjectorExposesExactlyOneInjectArity() {
+		List<String> arities = new ArrayList<>();
+		for (java.lang.reflect.Method method : org.openmrs.module.chartsearchai.reference
+				.DrugReferenceInjector.class.getDeclaredMethods()) {
+			if ("inject".equals(method.getName())) {
+				arities.add(java.util.Arrays.toString(method.getParameterTypes()));
+			}
+		}
+		org.junit.jupiter.api.Assertions.assertFalse(arities.isEmpty(),
+				"no method named inject was found on DrugReferenceInjector at all, so this guard "
+						+ "just passed by discovering nothing");
+		org.junit.jupiter.api.Assertions.assertEquals(1, arities.size(),
+				"DrugReferenceInjector.inject must have exactly one arity, so a test double written "
+						+ "against a stale signature fails to compile rather than going silently inert on "
+						+ "the production path (issue #247). Found: " + arities);
+	}
+
+	/**
 	 * @return the descriptor of every constructor {@code classFile} DECLARES, read from its method
 	 *         table rather than picked out of the constant pool by shape.
 	 *

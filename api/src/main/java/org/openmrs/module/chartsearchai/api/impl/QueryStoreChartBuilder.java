@@ -745,9 +745,10 @@ class QueryStoreChartBuilder {
 	 * anywhere says the module has stopped answering a question it normally answers.
 	 * {@link #readingOf} logs its own per-order failure at WARN resting on that same argument; what
 	 * is particular to THIS one is its scope, which is a whole chart's marks rather than one record's.
-	 * {@code PatientClinicalContextBuilder}'s own active-order catch logs at DEBUG and sets no flag
-	 * at all; that is the shape issue #317 names as the hazard, and it is deliberately not copied
-	 * here.
+	 * {@code PatientClinicalContextBuilder}'s own active-order catch was the shape issue #317 names
+	 * as the hazard — DEBUG, and no flag at all — and it is deliberately not copied here. It is no
+	 * longer that shape: issue #280 gave it {@code activeDrugOrdersRead} and issue #247 raised it to
+	 * WARN, so the two now agree and the contrast this paragraph drew is historical.
 	 */
 	private OrderCurrency readOrderCurrency(Patient patient, List<QueryDocument> docs) {
 		if (patient == null || !carriesADrugOrderRecord(docs)) {

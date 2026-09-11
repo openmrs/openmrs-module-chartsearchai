@@ -464,13 +464,55 @@ public class DrugReferenceInjector {
 	 * chart unchanged when the feature is off or nothing matches. Fails safe: the
 	 * injection is an additive enrichment, so any unexpected error degrades to the
 	 * unmodified chart rather than failing the query.
+	 *
+	 * <p><b>There is deliberately no three-argument overload beside this one</b> (issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/247">#247</a>). The
+	 * sink was added by widening this signature in place rather than by adding an arity, because
+	 * this repo has already measured what the alternative does: {@code DrugSafetyValidator.validate}
+	 * kept its narrower arity when the pair-extent sink arrived, and the test doubles overriding it
+	 * went silently inert on the production path — "the rest passed while stubbing nothing, and two
+	 * of them were still doing so after a review of the commit that added the overload". Widening
+	 * in place turned every double overriding this method into a compile error instead of a green
+	 * test that stubs nothing.
+	 *
+	 * <p><b>No tally of them is published — not here, not in the ADR — and the omission is the
+	 * correction.</b> Two counts were published and both were wrong, each by the same derivation:
+	 * grepping the change's diff for removed {@code public PatientChart inject(PatientChart, Patient,
+	 * String)} declarations. That literal cannot see a double written with the fully-qualified
+	 * return and parameter types, so it files those under CALL SITES — the side of the split the
+	 * argument rests on being NOT evidence. What the decision turns on is the UNIT and not the
+	 * size: a double OVERRIDING this method is evidence, because an overload would leave it
+	 * compiling and silently inert on the production path; a plain three-argument CALL SITE is
+	 * not, because an overload would leave it compiling and correct. Both populations move with
+	 * the test tree in any case. To measure either, restore the test tree to its pre-widening
+	 * state against the widened signature and compile — javac reports each double as "does not
+	 * override or implement a method from a supertype" and each call site as "cannot be applied to
+	 * given types". Never by grep.
+	 *
+	 * @param readStatus a caller-supplied one-slot accumulator the pass states its chart-read
+	 *        verdict into, or {@code null} from a caller that does not publish it.
+	 *        {@link ChartReadStatus} is the mechanism;
+	 *        {@code ChartSearchService.ChartAnswer.getChartReadForSafety()} is canonical for what
+	 *        each of its three answers means.
+	 *        It is the caller's per-call object and never a field: this bean is a Spring singleton
+	 *        (issue #172). Recorded as soon as the context exists and BEFORE the injection runs, so
+	 *        a pass that throws while rendering still reports the read that did happen; a pass that
+	 *        returns before building a context, or throws while building one, states nothing.
 	 */
-	public PatientChart inject(PatientChart chart, Patient patient, String question) {
+	public PatientChart inject(PatientChart chart, Patient patient, String question,
+			ChartReadStatus readStatus) {
 		try {
 			if (chart == null || !ChartSearchAiUtils.isDrugReferenceEnabled()) {
 				return chart;
 			}
 			PatientClinicalContext context = PatientClinicalContextBuilder.build(patient);
+			// Stated as soon as the context exists and BEFORE the injection runs (issue #247): the
+			// read is what this reports, so a pass that throws while rendering has still read the
+			// chart and must still say so. Above this line there is nothing to report — no context
+			// was built — and the sink's own null is the honest answer there.
+			if (readStatus != null) {
+				readStatus.record(context.chartReadForSafety());
+			}
 			return injectRecords(chart, context, question);
 		}
 		catch (RuntimeException e) {

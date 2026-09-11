@@ -239,12 +239,35 @@ public final class LogCapture implements AutoCloseable {
 		return false;
 	}
 
-	/** @return every captured event rendered as {@code LEVEL message}, for assertion failure text. */
+	/**
+	 * @return whether any captured event at exactly {@code level} carries a throwable.
+	 *
+	 *         <p>For a rule about the stack TRACE rather than the message or the level — issue #247
+	 *         drops the trace from the one cause that repeats forever (a role missing an
+	 *         {@code @Authorized} privilege, whose message already names the privilege) and keeps it
+	 *         for every other, where the trace is the diagnosis. The level assertions beside this
+	 *         one cannot see that difference: both branches log at WARN.
+	 */
+	public boolean hasThrowableAt(Level level) {
+		synchronized (events) {
+			for (LogEvent event : events) {
+				if (level.equals(event.getLevel()) && event.getThrown() != null) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	/** @return every captured event rendered as {@code LEVEL message [thrown]}, for assertion
+	 *          failure text. The throwable's TYPE is included because a rule about whether a trace
+	 *          is attached (issue #247) is otherwise invisible in a failure message. */
 	public List<String> describeAll() {
 		List<String> out = new ArrayList<String>();
 		synchronized (events) {
 			for (LogEvent event : events) {
-				out.add(event.getLevel() + " " + event.getMessage().getFormattedMessage());
+				out.add(event.getLevel() + " " + event.getMessage().getFormattedMessage()
+						+ (event.getThrown() == null ? "" : " [thrown " + event.getThrown().getClass().getName() + "]"));
 			}
 		}
 		return out;

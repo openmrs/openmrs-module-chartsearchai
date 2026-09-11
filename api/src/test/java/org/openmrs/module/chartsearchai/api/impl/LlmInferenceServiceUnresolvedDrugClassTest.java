@@ -25,6 +25,7 @@ import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
+import org.openmrs.module.chartsearchai.reference.ChartReadStatus;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
@@ -73,7 +74,8 @@ public class LlmInferenceServiceUnresolvedDrugClassTest {
 		service.setDrugReferenceInjector(new DrugReferenceInjector() {
 
 			@Override
-			public PatientChart inject(PatientChart chart, Patient patient, String question) {
+			public PatientChart inject(PatientChart chart, Patient patient, String question,
+					ChartReadStatus readStatus) {
 				return injected;
 			}
 		});

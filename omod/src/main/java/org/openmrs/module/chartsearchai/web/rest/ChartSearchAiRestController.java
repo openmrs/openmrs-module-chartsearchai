@@ -1519,6 +1519,19 @@ public class ChartSearchAiRestController {
 	 * Nor does carrying the rating make it one: the value is the RECORD's, it differs from the chip's
 	 * in form and in extent, and {@link #serializeUnstatedFindingSeverities} carries why.
 	 *
+	 * <p>{@code chartReadForSafety} is the remedy for the failure one layer UNDER all of these
+	 * (<a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/247">#247</a>): not a
+	 * statement the answer got something wrong, but a statement that the chart the whole safety
+	 * layer reasons over could not be READ. A failed allergy, condition or active-order read
+	 * degrades that context to an empty — or, where the read threw part-way, a partial — set, so
+	 * every key above it reports honestly about whatever survived, and the counts a client renders
+	 * are the ones a healthy chart produces. Carried raw — a bare three-valued Boolean,
+	 * like {@code unresolvedDrugClass} and for the same reason, it being one datum — and needing no
+	 * null guard, a Boolean being immutable. {@code ChartAnswer.getChartReadForSafety()} is
+	 * canonical for what each of the three values does and does not assert, in particular that it
+	 * says nothing about whether anything was SCREENED, and for how it differs from
+	 * {@code chartAlerts}' own {@code screened}.
+	 *
 	 * <p>{@code conditionRuleCoverage} is the same remedy again, from the issue beside it
 	 * (<a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/378">#378</a>): what
 	 * the loaded dataset publishes for the hand-authored CONDITION-rule arm, so a client can tell a
@@ -1571,6 +1584,7 @@ public class ChartSearchAiRestController {
 		target.put("activeOrderClaims", serializeActiveOrderClaims(answer.getActiveOrderClaims()));
 		target.put("findingCitations",
 				serializeFindingCitationExtent(answer.getFindingCitationExtent()));
+		target.put("chartReadForSafety", answer.getChartReadForSafety());
 		putConditionRuleCoverage(target, answer.getConditionRuleCoverage());
 	}
 

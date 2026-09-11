@@ -24,6 +24,7 @@ import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.api.ChartSearchService;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
+import org.openmrs.module.chartsearchai.reference.ChartReadStatus;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceLoad;
 import org.openmrs.module.chartsearchai.reference.DrugSafetyValidator;
@@ -118,7 +119,11 @@ public class LlmInferenceService implements ChartSearchService {
 		String outcome = "error";
 		try {
 			PatientChart chart = chartBuildingStrategy.buildChart(patient, question);
-			chart = drugReferenceInjector.inject(chart, patient, question);
+			// Whether this layer's two stamped chart reads happened (issue #247). Declared here
+			// because the injector's pass is what states it; ChartAnswer.getChartReadForSafety() is
+			// canonical for the three answers and for why that pass rather than validate's.
+			ChartReadStatus chartRead = new ChartReadStatus();
+			chart = drugReferenceInjector.inject(chart, patient, question, chartRead);
 			// Resolved once, off the chart that was actually assembled, and carried on the answer —
 			// so the audit row the REST layer writes states the mode instead of re-deriving it
 			// (issue #178). After inject() deliberately: that is the chart the LLM sees.
@@ -233,7 +238,7 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
 					pairExtent.stated(), unresolvedDrugClass, unfaithfullyRenderedCitations,
 					misattributedOrderCitations, unstatedFindingSeverities, activeOrderClaims,
-					findingCitationExtent, conditionRuleCoverage);
+					findingCitationExtent, chartRead.stated(), conditionRuleCoverage);
 			outcome = "ok";
 			return answer;
 		}
@@ -518,7 +523,11 @@ public class LlmInferenceService implements ChartSearchService {
 		String outcome = "error";
 		try {
 			PatientChart chart = chartBuildingStrategy.buildChart(patient, question);
-			chart = drugReferenceInjector.inject(chart, patient, question);
+			// Whether this layer's two stamped chart reads happened (issue #247). Declared here
+			// because the injector's pass is what states it; ChartAnswer.getChartReadForSafety() is
+			// canonical for the three answers and for why that pass rather than validate's.
+			ChartReadStatus chartRead = new ChartReadStatus();
+			chart = drugReferenceInjector.inject(chart, patient, question, chartRead);
 			// One resolution for BOTH answers this method produces (issue #178). The early-done path
 			// audits the ungrounded answer and the classic path audits the returned one, so a mode
 			// each of them derived separately is two audit-write sites that can disagree — which is
@@ -606,7 +615,7 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getInputTokens(), response.getOutputTokens(),
 					response.getCachedTokens(), Collections.<SafetyWarning> emptyList(), searchMode,
 					referenceSlice, null, unresolvedDrugClass, null, null, null, null, null,
-					conditionRuleCoverage));
+					chartRead.stated(), conditionRuleCoverage));
 
 			// After the user-visible handoff, before grounding: the exact comparisons over what the
 			// answer did with the records it cites — the class-code defects a set-membership
@@ -678,7 +687,7 @@ public class LlmInferenceService implements ChartSearchService {
 					response.getCachedTokens(), safetyWarnings, searchMode, referenceSlice,
 					pairExtent.stated(), unresolvedDrugClass, unfaithfullyRenderedCitations,
 					misattributedOrderCitations, unstatedFindingSeverities, activeOrderClaims,
-					findingCitationExtent, conditionRuleCoverage);
+					findingCitationExtent, chartRead.stated(), conditionRuleCoverage);
 			outcome = "ok";
 			return answer;
 		}

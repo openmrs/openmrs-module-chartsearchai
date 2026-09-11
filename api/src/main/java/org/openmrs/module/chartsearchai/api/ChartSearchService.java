@@ -513,6 +513,8 @@ public interface ChartSearchService {
 
 		private final FindingCitationExtent findingCitationExtent;
 
+		private final Boolean chartReadForSafety;
+
 		private final DrugReferenceLoad.Coverage conditionRuleCoverage;
 
 		public ChartAnswer(String answer, List<RecordReference> references) {
@@ -575,7 +577,7 @@ public interface ChartSearchService {
 				String unresolvedDrugClass, List<Integer> unfaithfullyRenderedCitations) {
 			this(answer, references, inputTokens, outputTokens, cachedTokens, safetyWarnings, searchMode,
 					referenceSlice, pairChipExtent, unresolvedDrugClass, unfaithfullyRenderedCitations,
-					null, null, null, null, null);
+					null, null, null, null, null, null);
 		}
 
 		/**
@@ -607,6 +609,7 @@ public interface ChartSearchService {
 				List<UnstatedFindingSeverity> unstatedFindingSeverities,
 				ActiveOrderClaims activeOrderClaims,
 				FindingCitationExtent findingCitationExtent,
+				Boolean chartReadForSafety,
 				DrugReferenceLoad.Coverage conditionRuleCoverage) {
 			this.answer = answer;
 			this.references = java.util.Collections.unmodifiableList(
@@ -646,6 +649,11 @@ public interface ChartSearchService {
 			// own: null is the absence of a measurement and a zeroed statement is a measurement of
 			// none. Immutable, so it is carried rather than copied.
 			this.findingCitationExtent = findingCitationExtent;
+			// Three-valued for the reason the value types above are (issue #247): null is the absence
+			// of a measurement, and FALSE is a measurement — of a chart the module could not read.
+			// Boxed and never unboxed into a primitive here; collapsing it loses the only thing that
+			// separates "nobody looked" from "the reads completed".
+			this.chartReadForSafety = chartReadForSafety;
 			this.conditionRuleCoverage = conditionRuleCoverage;
 		}
 
@@ -1038,6 +1046,96 @@ public interface ChartSearchService {
 		}
 
 		/**
+		 * Whether the three chart reads the drug-safety screen rests on — this patient's allergies,
+		 * her conditions and her active drug orders — all completed behind this answer (issue
+		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/247">#247</a>).
+		 *
+		 * <p><b>Those three reads and no others, which is narrower than it sounds.</b> Two other
+		 * failures leave this verdict {@code TRUE}, both deliberately:
+		 * <ul>
+		 * <li>AGE and WEIGHT, each with a real and unstamped gap of its own. A failed AGE read makes
+		 * {@code DrugReference.bandForAge} answer null, which drops the dosing lines from the
+		 * injected record. A failed WEIGHT read silences the per-kg leg of
+		 * {@code DrugSafetyValidator.addOverdose}, so a band whose only ceiling is per-kg — the
+		 * shipped {@code sourceFormat=json} dataset has one — raises no overdose chip at all. Both
+		 * are outside this key because the key is built from the two stamps and neither of these
+		 * carries one. That scopes the KEY and never the log: both go through the same
+		 * {@code warnUnreadable} the three stamped reads do, so a failure of either is audible on a
+		 * stock install (the age line names no privilege, its read making no service call).</li>
+		 * <li>The per-concept sub-reads INSIDE those three loops — an order's concept uuid, its
+		 * concept names and its ATC codes, and the coded name of one recorded allergy or condition.
+		 * Each has its own catch and leaves its loop's stamp true, so a record read partly is not a
+		 * read that failed. They stay at DEBUG as well as outside the verdict, which is a separate
+		 * decision with its own home: {@code PatientClinicalContextBuilder.warnUnreadable}'s javadoc
+		 * says why, the short of it being that no {@code @Authorized} privilege gates a
+		 * lazy-association read, so such a line would have no privilege to name.</li>
+		 * </ul>
+		 * ADR Decision 91 records the scoping.
+		 *
+		 * <p><b>The problem it exists to remove.</b> {@code PatientClinicalContextBuilder} degrades a
+		 * failed allergy, condition or active-order read to an empty — or, where the read threw
+		 * part-way through, a PARTIAL — set, which is the right fail-safe
+		 * for an additive net and leaves the clinician-facing response identical to a healthy
+		 * patient's: no chips, no findings, and — before this key — nothing anywhere on the wire to
+		 * tell the two apart. The failure needs no bad data and no operator mistake: these reads go
+		 * through core's service layer, each behind an {@code @Authorized} privilege, so a role
+		 * granted this module's own privilege without {@code Get Allergies}, {@code Get Conditions}
+		 * or {@code Get Orders} reaches it, and so does a database error underneath them.
+		 *
+		 * <p><b>What each value asserts.</b> This javadoc is the one home for that list, and
+		 * {@code README.md}'s client-facing paragraph is the second — the second because it is the
+		 * only one a frontend author reads.
+		 * <ul>
+		 * <li>{@code TRUE} — the reads completed. It does NOT say a contraindication was screened,
+		 * that the dataset had a rule to ask ({@link #getConditionRuleCoverage()} is that question),
+		 * or that anything was found. An empty {@code safetyWarnings} beside {@code TRUE} is a
+		 * measurement of none <b>on a payload whose warnings are final</b> — not on the early
+		 * {@code done} of an async-grounding stream, which carries an empty list by construction
+		 * because {@code validate} has not run. This key is already FINAL on that event — like
+		 * {@code unresolvedDrugClass} and {@code conditionRuleCoverage}, and unlike the answer checks
+		 * beside it, which are deferred to the later {@code grounded} event — because the read it
+		 * reports happens before the model is called. <b>Final is not non-null</b>: the shipped
+		 * default has {@code chartsearchai.drugReference.enabled} off, so the pass returns before it
+		 * has a context and this key reads {@code null} on the early {@code done} and on the final
+		 * payload alike. A client must not treat {@code null} there as a protocol violation.</li>
+		 * <li>{@code FALSE} — at least one of the three did not complete. An empty
+		 * {@code safetyWarnings} beside it is NOT a measurement of none and must not be rendered as
+		 * a clear chart — and a NON-empty one beside it is not complete either, because a read that
+		 * threw part-way leaves what it had already collected in place. "Did not complete" rather
+		 * than "failed" because a null patient stamps both flags false having attempted
+		 * nothing.</li>
+		 * <li>{@code null} — no measurement. The drug-reference feature is off, or the pass threw
+		 * before it had a context. Never read {@code null} as either verdict.</li>
+		 * </ul>
+		 *
+		 * <p><b>It is the WHOLE pass and never one side of it.</b>
+		 * {@code PatientClinicalContext.chartReadForSafety()} is the one spelling of that
+		 * conjunction, shared with {@code DrugSafetyValidator.standingChartAlerts}, so the two
+		 * surfaces cannot come to disagree about whether one chart was read. A records-only verdict
+		 * was the first shape and it reads {@code TRUE} on a request whose active-order read failed,
+		 * which is the defect ADR Decision 79 records one surface over.
+		 *
+		 * <p><b>Which pass it is of.</b> The INJECTOR's, which is the drug-safety layer's first chart
+		 * read and happens before the model is called. (Chart assembly queries this patient's orders
+		 * earlier still; that read is not this layer's and is not stamped.) {@code DrugSafetyValidator.validate} builds a second
+		 * context of its own, so on a transient failure this verdict and the chips beside it can in
+		 * principle answer for different reads; in the case the key exists for — a role missing a
+		 * privilege — both builds fail alike. The injector's is used because it is the one that
+		 * happens whenever a screen could ({@code validate} gates on one switch more) and the only
+		 * one that has happened by the time the ungrounded answer is handed off.
+		 *
+		 * <p>It is not {@code StandingChartAlerts.isScreened()} on {@code /chartalerts}, which is a
+		 * strictly narrower verdict — that one also requires the drug-safety toggles and the pass
+		 * completing — and so keeps its own name. This paragraph is that comparison's one home in
+		 * production; the neighbours point here.
+		 *
+		 * @return the verdict, or {@code null} where the producer stated none
+		 */
+		public Boolean getChartReadForSafety() {
+			return chartReadForSafety;
+		}
+
+		/**
 		 * What the loaded drug-reference dataset publishes for the hand-authored <b>condition</b>-rule
 		 * arm of the contraindication screen — what the {@code conditionRuleCoverage} key on the
 		 * {@code /search} response and on the {@code done} and {@code grounded} SSE events publishes
@@ -1081,9 +1179,10 @@ public interface ChartSearchService {
 		 * them would withhold a knowable fact exactly where the arms are off.
 		 * {@code DrugSafetyValidator.conditionRuleCoverage()} carries that argument, and the refuted
 		 * one a first draft gave for the same rule.</li>
-		 * <li>Whether the patient's condition list was READ. A failed read degrades to an empty set,
-		 * which {@code PatientClinicalContext.contraindicationRecordsRead()} records for the injected
-		 * record's benefit and this key does not carry.</li>
+		 * <li>Whether the patient's condition list was READ. A failed read degrades to an empty set;
+		 * that is {@link #getChartReadForSafety()}'s question since issue #247, and this key still
+		 * does not carry it. The two are read together or not at all — a dataset that publishes a
+		 * condition rule says nothing about a chart nobody could read, and vice versa.</li>
 		 * <li>ENCOUNTER DIAGNOSES. The contraindication screen builds its condition tokens from
 		 * OpenMRS's ACTIVE CONDITIONS alone ({@code PatientClinicalContextBuilder}), so a recorded
 		 * diagnosis reaches no contraindication rule whatever this says. It still reaches the chart the

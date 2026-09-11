@@ -1675,11 +1675,18 @@ public final class DrugReferenceTestSupport {
 
 	/** The items one rendered SECTION lists, split on the {@code "; "} every section of a
 	 *  {@code drug_reference} record separates its items with ({@code DrugReferenceInjector
-	 *  .appendSection}). Here rather than in a test file so that "the items of a section" has ONE
-	 *  spelling: the separator is production's, and a case that hand-rolled the split would report a
-	 *  change to it without naming it. The precondition is part of the contract — a case about a
-	 *  section's CONTENTS must fail loudly on a record that carries no such section, rather than
-	 *  silently comparing against nothing. */
+	 *  .appendSection}). The precondition is part of the contract — a case about a section's CONTENTS
+	 *  must fail loudly on a record that carries no such section, rather than silently comparing
+	 *  against nothing.
+	 *
+	 *  <p>It does NOT own every split on that separator in this package, and the survivors are not
+	 *  oversights: {@code ConditionRuleBoundaryCorroborationTest.clauseSection} needs {@code
+	 *  sectionAfter}'s null, which is its answer for a clause carried only by the trailing rule list;
+	 *  {@code InjectedContraindicationPatientReadingTest} splits a string its own {@code
+	 *  recordedReading} has already asserted an ORDERING of, which this carries no half of; and {@code
+	 *  InjectedContraindicationClauseTest.clausesIn} is a different LOCATOR, bounding on {@code
+	 *  " Interactions:"} rather than on the first full stop. Routing any of them through this would
+	 *  drop a precondition, not share one. */
 	static List<String> sectionItems(String record, String lead) {
 		String section = sectionAfter(record, lead);
 		assertNotNull(section,

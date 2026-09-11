@@ -3614,8 +3614,9 @@ public class DrugReferenceInjector {
 			// issue #269 gave the uncorroborated clauses a section rather than dropping them out of the
 			// reading. The three sections are disjoint and cover every clause the module can evaluate AND
 			// get an answer about; a clause NO evaluable rule renders (an unrecognised rule type, a rule
-			// with no token) is listed and claimed by none of them. Per CLAUSE since issue #310 — where an
-			// evaluable rule renders the same string, that string is claimed; see ContraindicationSections.
+			// with no token) is listed and claimed by none of them. Per CLAUSE and not per rule — where an
+			// evaluable rule renders the same string, that string is claimed; see ContraindicationSections,
+			// which carries why that is pre-existing rather than issue #310's.
 			appendSection(sb, RECORDED_READING_LEAD, contraindications.recorded);
 			appendSection(sb, NOT_RECORDED_READING_LEAD, contraindications.notRecorded);
 			// Third and last of the reading's sections, after the two that make a claim: it makes none —
@@ -4015,7 +4016,8 @@ public class DrugReferenceInjector {
 		}
 	}
 
-	/** The contraindication half of a rendered record: every rule the entry publishes, and that list
+	/** The contraindication half of a rendered record: every distinct clause the entry's rules render
+	 *  (issue #310), and that list
 	 *  split by what the patient's own chart records. One value rather than four calls because all four
 	 *  are computed in ONE walk of the rules — the reading's sections are selections FROM the clauses,
 	 *  keyed on the same collapsed rule, so recomputing any of them beside the others is how a record
@@ -4035,9 +4037,12 @@ public class DrugReferenceInjector {
 	 *  string an evaluable rule renders too, the string takes the evaluable rule's section — so the
 	 *  denial can cover words one of their authoring rules was never put to the chart. That is issue
 	 *  #208 item 2's own shape and it is PRE-EXISTING rather than issue #310's: it arrives with issue
-	 *  #308, which resolves these sections over clause TEXT, and the same fixture renders the same
-	 *  denial at {@code 28dbed9d}. What #310 removed is only the second, unclaimed copy that used to
-	 *  stand in the LIST beside it. Closing it means subtracting the unevaluable keys' strings from the
+	 *  #308, which resolves these sections over clause TEXT. Tapentadol in {@code
+	 *  drug-reference-cross-key-clause-order.json} — whose rules 1 and 3 render one string, the first of
+	 *  them typed {@code diagnosis} — has that string in its denial at {@code 28dbed9d} as well, so the
+	 *  MEMBERSHIP is unchanged and only the second, unclaimed copy that used to stand in the LIST is
+	 *  gone. {@code InjectedContraindicationClauseTest.theDenialAndTheHedgeAreListedInTheClausesOwnOrderToo}
+	 *  renders it. Closing it means subtracting the unevaluable keys' strings from the
 	 *  denial, which is a change to what the record CLAIMS and wants its own issue.
 	 *
 	 *  <p>Issue #269 did

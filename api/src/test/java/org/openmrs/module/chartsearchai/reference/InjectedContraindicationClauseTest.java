@@ -32,7 +32,7 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * many contraindications the entry has.
  *
  * <p>The two surfaces do not count the same POPULATION and are not being made to: the record renders
- * every rule the entry publishes (a record is reference material about the drug) while the chip renders
+ * every clause the entry's rules render (a record is reference material about the drug) while the chip renders
  * the subset the patient's own chart matches. What they must agree on is the collapse UNIT, which is
  * what one rule authored twice exposes.
  *
@@ -153,7 +153,7 @@ public class InjectedContraindicationClauseTest {
 		assertEquals(1, contraindicationClauses(record).size(),
 				"one rule authored twice is ONE clause, as it is one chip, was: " + record.getText());
 		// Equal here because this entry's only rule is one the patient matches. The two surfaces do NOT
-		// count the same population in general — the record renders every rule the entry publishes while
+		// count the same population in general — the record renders every clause the entry's rules render while
 		// the chip renders the subset the chart matches — so what #190 item 1 is about is the collapse
 		// UNIT, which is now the same on both sides.
 		assertEquals(chips.size(), contraindicationClauses(record).size(),
@@ -236,9 +236,13 @@ public class InjectedContraindicationClauseTest {
 		return DrugReferenceTestSupport.sectionItems(record, lead);
 	}
 
-	/** How many collapsed keys {@code ref}'s rules land on — the very partition the clause list is
-	 *  rendered per, asked of production so a precondition cannot assert a key space the renderer does
-	 *  not use. */
+	/** How many collapsed keys {@code ref}'s rules land on — {@link DrugSafetyValidator#contraindicationFinding}'s
+	 *  own partition, asked of production so a precondition cannot assert a key space the renderer does
+	 *  not use.
+	 *
+	 *  <p>Since issue #310 this is NOT the rendered clause count, and the gap is what the cases below
+	 *  use it to establish: the keys apart, the clauses together. Read an assertion here as a statement
+	 *  about the rendered list and the arrangement stops being the one the case needs. */
 	private static int distinctKeys(DrugReference ref) {
 		Set<Object> keys = new LinkedHashSet<Object>();
 		for (DrugReference.Contraindication rule : ref.getContraindications()) {
@@ -405,6 +409,13 @@ public class InjectedContraindicationClauseTest {
 		assertEquals(Arrays.asList("opioid reaction — other reaction", "opioid reaction"),
 				clausesIn(record),
 				"a clause another key merely CONTAINS is still its own clause, was: " + record);
+		// The second half of the argument above, measured rather than asserted in prose: the shorter
+		// clause is the one this chart RECORDS, and it sits in a different section from the join that
+		// contains it. A containment rule drops it from the list, inClauseOrder then drops it from this
+		// section, and the record silently stops stating a reading it had established.
+		assertEquals(Arrays.asList("opioid reaction"),
+				sectionItems(record, DrugReferenceInjector.RECORDED_READING_LEAD),
+				"and it is the RECORDED one, so dropping it retracts a chart reading, was: " + record);
 	}
 
 	/** Issue #310's own fixture, rendered through the real injector wired to the real validator: one

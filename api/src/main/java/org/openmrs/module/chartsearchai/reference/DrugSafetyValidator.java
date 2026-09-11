@@ -2866,7 +2866,7 @@ public class DrugSafetyValidator {
 	 *         <p>ONE definition, called by the chip arm above and by
 	 *         {@code DrugReferenceInjector.contraindicationSections}, which renders the injected
 	 *         record's patient-specific reading of the contraindication list (issue #208 item 2). The
-	 *         record lists every rule the entry publishes, because a drug's contraindications are the
+	 *         record lists every clause the entry's rules render, because a drug's contraindications are the
 	 *         drug's; what it must not do is leave a model unable to tell which of them this patient
 	 *         has, since the record is injected as CITABLE evidence and a model reports what it can
 	 *         see. Shared rather than restated for exactly the reason

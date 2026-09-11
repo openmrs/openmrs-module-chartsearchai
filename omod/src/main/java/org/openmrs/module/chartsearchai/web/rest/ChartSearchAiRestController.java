@@ -1594,6 +1594,11 @@ public class ChartSearchAiRestController {
 	 * equality would be right almost always and wrong exactly in the tail. Spelling them differently
 	 * makes that difference structural instead of a caveat a client has to read.
 	 *
+	 * <p>The word is already on this module's wire once, as the user's feedback {@code rating} on
+	 * {@code /feedback} and on an {@code /auditlog} row. That is a different concept on different
+	 * endpoints and never in the same object as this one, so the two do not collide; it is named here
+	 * so the reuse reads as noticed rather than as an accident.
+	 *
 	 * <p><b>The entry is spelled out as a map rather than handed to the mapper</b>, which is the one
 	 * place this differs from {@code SafetyWarning.ChartOrderBridge}, the module's other list-published
 	 * two-field type: that one is serialized by the mapper off its getter names, which is why its

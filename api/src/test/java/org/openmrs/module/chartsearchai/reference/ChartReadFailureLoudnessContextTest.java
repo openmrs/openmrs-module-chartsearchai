@@ -9,8 +9,10 @@
  */
 package org.openmrs.module.chartsearchai.reference;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.apache.logging.log4j.Level;
@@ -20,12 +22,17 @@ import org.openmrs.api.context.Context;
 import org.openmrs.api.context.UserContext;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.LogCapture;
+import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 import org.openmrs.util.PrivilegeConstants;
 
 /**
- * A chart read the module could not perform is reported where a stock install can see it (issue
+ * A chart read the module could not perform is reported where a stock install can see it, and the
+ * verdict survives a pass that fails after the read (issue
  * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/247">#247</a> item 1).
+ *
+ * <p>The last of those belongs here rather than beside the other published-verdict cases because
+ * the seam it needs — a {@code DrugReferenceService} whose source throws — is package-private.
  *
  * <p>{@code PatientClinicalContextBuilder} degrades each failed read to an empty set. That is the
  * right fail-safe for the answer path and it is not what this class is about: what it is about is
@@ -46,11 +53,16 @@ import org.openmrs.util.PrivilegeConstants;
  * <p><b>The capture is scoped to the BUILDER's own logger, not to the package.</b> These are
  * POSITIVE assertions, and for a positive the package's reach is a liability rather than a
  * protection: {@code DrugReferenceValidity}, {@code DrugReferenceService}'s inert-load line,
- * {@code JsonDrugReferenceSource}, {@code DrugReferenceInjector}'s reconciliation line and the
- * builder's OWN nameless-order WARN all log under {@code …chartsearchai.reference}, and any of them
- * firing inside the window would make these three pass while the line under test stayed at DEBUG.
- * {@link #aChartTheModuleCanReadIsNotReportedAsAFailedRead} is the negative, and it carries its own
- * liveness witness rather than relying on that reach.
+ * {@code JsonDrugReferenceSource} and {@code DrugReferenceInjector}'s reconciliation line all log
+ * under {@code …chartsearchai.reference}, and any of them firing inside the window would make these
+ * pass while the line under test stayed at DEBUG.
+ *
+ * <p><b>What that scoping does NOT exclude is the builder's own nameless-order WARN</b>
+ * ({@code PatientClinicalContextBuilder}, the active-order loop), which logs under the very logger
+ * these cases capture. It does not fire for this fixture — the negative case is what shows that —
+ * but it is the residue, and a fixture whose orders lost their names would make these positives
+ * pass vacuously. {@link #aChartTheModuleCanReadIsNotReportedAsAFailedRead} carries its own
+ * liveness witness rather than relying on the package's reach.
  *
  * <p>The read is failed the way production fails it, not by throwing from a stub: core annotates
  * each of the three service calls the builder makes with an {@code @Authorized} privilege, so a user
@@ -173,5 +185,113 @@ public class ChartReadFailureLoudnessContextTest extends BaseModuleContextSensit
 		assertTrue(builderReportedAFailureAudibly(PrivilegeConstants.GET_ALLERGIES),
 				"the liveness witness for the negative above: the same capture, over the same logger, "
 						+ "must see the line when the read really fails");
+	}
+
+	/**
+	 * The recurring cause logs no stack trace; every other cause keeps one.
+	 *
+	 * <p>An {@code APIAuthenticationException} is a role missing a privilege the message already
+	 * names, and the condition persists until an operator acts on it — so on the unrate-limited
+	 * {@code /chartalerts} poll its trace would repeat forever and add nothing. A database fault
+	 * underneath the same call is the opposite: there the trace IS the diagnosis.
+	 *
+	 * <p>The level assertions above cannot see this difference — both branches log at WARN — which
+	 * is why it needs a case of its own. The non-authorization cause is driven through the real
+	 * service call by a user context whose privilege check itself throws, so the exception reaches
+	 * the builder's catch from inside {@code getAllergies} exactly as a failing datasource would.
+	 */
+	@Test
+	public void theRepeatingAuthorizationCauseLogsNoTraceWhileEveryOtherCauseKeepsOne() {
+		enableTheScreen();
+		Patient patient = Context.getPatientService().getPatient(7);
+		DrugSafetyValidator validator =
+				DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService());
+
+		UserContext prior = Context.getUserContext();
+		try {
+			Context.setUserContext(new UserContext(null) {
+
+				@Override
+				public boolean hasPrivilege(String held) {
+					return !PrivilegeConstants.GET_ALLERGIES.equals(held);
+				}
+			});
+			try (LogCapture capture = LogCapture.on(BUILDER_LOGGER)) {
+				validator.validate(ANSWER, QUESTION, patient, null, null);
+				assertTrue(capture.hasEventAtOrAbove(Level.WARN),
+						"precondition: the missing privilege must still be reported at WARN");
+				assertFalse(capture.hasThrowableAt(Level.WARN),
+						"a missing privilege is fully described by the message, which names the "
+								+ "privilege to grant; attaching core's authorization trace to a line "
+								+ "that repeats on every poll of an unrate-limited endpoint adds no "
+								+ "diagnosis (issue #247). Captured: " + capture.describeAll());
+			}
+
+			Context.setUserContext(new UserContext(null) {
+
+				@Override
+				public boolean hasPrivilege(String held) {
+					if (PrivilegeConstants.GET_ALLERGIES.equals(held)) {
+						throw new IllegalStateException("the store underneath is unreachable");
+					}
+					return true;
+				}
+			});
+			try (LogCapture capture = LogCapture.on(BUILDER_LOGGER)) {
+				validator.validate(ANSWER, QUESTION, patient, null, null);
+				assertTrue(capture.hasThrowableAt(Level.WARN),
+						"a cause that is NOT a missing privilege keeps its stack trace — there the "
+								+ "trace is the whole diagnosis, and dropping it would make this "
+								+ "failure as silent as the DEBUG line issue #247 replaced");
+			}
+		}
+		finally {
+			Context.setUserContext(prior);
+		}
+	}
+
+	/**
+	 * A pass that fails AFTER reading the chart still states what it read.
+	 *
+	 * <p>{@code DrugReferenceInjector.inject} records the verdict as soon as the context exists and
+	 * before {@code injectRecords} runs, and its javadoc asserts exactly this property. Nothing
+	 * pinned it: moving the record below {@code injectRecords} leaves the whole build green, and
+	 * silently turns {@code FALSE} into {@code null} in the one arrangement that matters — an
+	 * unreadable chart on a pass that then throws, which is what the surrounding
+	 * {@code catch (RuntimeException)} exists for. {@code null} there would say "nobody measured"
+	 * about a read that demonstrably failed.
+	 */
+	@Test
+	public void aPassThatThrowsAfterReadingTheChartStillStatesWhatItRead() {
+		enableTheScreen();
+		Patient patient = Context.getPatientService().getPatient(7);
+		DrugReferenceService throwing = new DrugReferenceService();
+		throwing.setSource(() -> {
+			throw new IllegalStateException("boom, after the chart was read");
+		});
+		DrugReferenceInjector injector = DrugReferenceTestSupport.injector(throwing);
+		PatientChart chart = DrugReferenceTestSupport.oneRecordChart();
+
+		UserContext prior = Context.getUserContext();
+		Context.setUserContext(new UserContext(null) {
+
+			@Override
+			public boolean hasPrivilege(String held) {
+				return !PrivilegeConstants.GET_ALLERGIES.equals(held);
+			}
+		});
+		try {
+			ChartReadStatus status = new ChartReadStatus();
+			assertSame(chart, injector.inject(chart, patient, QUESTION, status),
+					"precondition: the injection must have failed and degraded to the chart it was "
+							+ "given, or this case is not exercising the throwing path at all");
+			assertEquals(Boolean.FALSE, status.stated(),
+					"the read happened and failed before the rendering threw, so the pass must still "
+							+ "report the chart as unread — null here would state no measurement "
+							+ "about a failure the module observed");
+		}
+		finally {
+			Context.setUserContext(prior);
+		}
 	}
 }

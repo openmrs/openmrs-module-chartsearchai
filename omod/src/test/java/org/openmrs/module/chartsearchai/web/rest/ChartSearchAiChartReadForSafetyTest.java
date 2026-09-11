@@ -122,7 +122,7 @@ public class ChartSearchAiChartReadForSafetyTest {
 	 * read it" produced identical responses.
 	 */
 	@Test
-	public void aReadChartAnAnUnreadOneAndNoStatementAreThreeDifferentAnswers() {
+	public void aReadChartAnUnreadOneAndNoStatementAreThreeDifferentAnswers() {
 		stated = Boolean.TRUE;
 		assertEquals(Boolean.TRUE, searchPayload().get("chartReadForSafety"));
 
@@ -198,10 +198,9 @@ public class ChartSearchAiChartReadForSafetyTest {
 	 * surfaces are covered behaviourally by the cases above; a further surface would need its own.
 	 *
 	 * <p>It is deliberately NOT written onto {@code GET /chartsearchai/chartalerts}, which carries no
-	 * answer and states the same question its own way, through
-	 * {@code StandingChartAlerts.isScreened()} — a strictly narrower verdict that also requires the
-	 * drug-safety toggles and the pass completing. Two verdicts, two names, neither derived from the
-	 * other.
+	 * answer and states its own narrower verdict through {@code StandingChartAlerts.isScreened()};
+	 * {@code ChartAnswer.getChartReadForSafety()} is where that comparison lives. Two verdicts, two
+	 * names, neither derived from the other.
 	 */
 	@Test
 	public void theKeyIsWrittenInExactlyOnePlace() throws Exception {

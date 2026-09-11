@@ -119,13 +119,10 @@ public class LlmInferenceService implements ChartSearchService {
 		String outcome = "error";
 		try {
 			PatientChart chart = chartBuildingStrategy.buildChart(patient, question);
-			// And whether the two stamped chart reads behind the drug-safety layer happened (issue
-			// #247). Stated by the INJECTOR's pass and not the validator's: this is the request's
-			// first chart read, it happens whenever a screen could (validate gates on one switch
-			// more), and it is the only one that has happened by the time the ungrounded answer is
-			// handed off — which is the answer the early `done` event is emitted from. A failed read
-			// degrades to an empty set, so without this the response is byte-identical to a healthy
-			// patient's. ChartReadStatus is canonical for what its three answers mean.
+			// And whether the drug-safety layer's two stamped chart reads happened (issue #247).
+			// ChartAnswer.getChartReadForSafety() is canonical for what the three answers mean and
+			// for why it is the INJECTOR's pass that states it; a second copy of that argument here
+			// is how the two come apart.
 			ChartReadStatus chartRead = new ChartReadStatus();
 			chart = drugReferenceInjector.inject(chart, patient, question, chartRead);
 			// Resolved once, off the chart that was actually assembled, and carried on the answer —
@@ -527,13 +524,10 @@ public class LlmInferenceService implements ChartSearchService {
 		String outcome = "error";
 		try {
 			PatientChart chart = chartBuildingStrategy.buildChart(patient, question);
-			// And whether the two stamped chart reads behind the drug-safety layer happened (issue
-			// #247). Stated by the INJECTOR's pass and not the validator's: this is the request's
-			// first chart read, it happens whenever a screen could (validate gates on one switch
-			// more), and it is the only one that has happened by the time the ungrounded answer is
-			// handed off — which is the answer the early `done` event is emitted from. A failed read
-			// degrades to an empty set, so without this the response is byte-identical to a healthy
-			// patient's. ChartReadStatus is canonical for what its three answers mean.
+			// And whether the drug-safety layer's two stamped chart reads happened (issue #247).
+			// ChartAnswer.getChartReadForSafety() is canonical for what the three answers mean and
+			// for why it is the INJECTOR's pass that states it; a second copy of that argument here
+			// is how the two come apart.
 			ChartReadStatus chartRead = new ChartReadStatus();
 			chart = drugReferenceInjector.inject(chart, patient, question, chartRead);
 			// One resolution for BOTH answers this method produces (issue #178). The early-done path

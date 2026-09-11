@@ -27,9 +27,11 @@ import org.openmrs.DrugOrder;
 import org.openmrs.Obs;
 import org.openmrs.Order;
 import org.openmrs.Patient;
+import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.context.Context;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
+import org.openmrs.util.PrivilegeConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -195,10 +197,8 @@ final class PatientClinicalContextBuilder {
 			}
 		}
 		catch (RuntimeException e) {
-			log.warn("Could not read this patient's active drug orders; the drug-safety layer is "
-					+ "screening as though there were none. This chart is reported as NOT read rather "
-					+ "than as clear. Check that the querying role holds core's Get Orders privilege.",
-				e);
+			warnUnreadable("active drug orders", "the drug-safety layer is screening as though there "
+					+ "were none", PrivilegeConstants.GET_ORDERS, e);
 			activeDrugOrdersRead = false;
 		}
 
@@ -237,10 +237,8 @@ final class PatientClinicalContextBuilder {
 			}
 		}
 		catch (RuntimeException e) {
-			log.warn("Could not read this patient's allergies; the contraindication screen is "
-					+ "evaluating as though there were none. This chart is reported as NOT read rather "
-					+ "than as clear. Check that the querying role holds core's Get Allergies "
-					+ "privilege.", e);
+			warnUnreadable("allergies", "the contraindication screen is evaluating as though there "
+					+ "were none", PrivilegeConstants.GET_ALLERGIES, e);
 			contraindicationRecordsRead = false;
 		}
 
@@ -257,10 +255,8 @@ final class PatientClinicalContextBuilder {
 			}
 		}
 		catch (RuntimeException e) {
-			log.warn("Could not read this patient's conditions; the contraindication screen is "
-					+ "evaluating as though there were none. This chart is reported as NOT read rather "
-					+ "than as clear. Check that the querying role holds core's Get Conditions "
-					+ "privilege.", e);
+			warnUnreadable("conditions", "the contraindication screen is evaluating as though there "
+					+ "were none", PrivilegeConstants.GET_CONDITIONS, e);
 			contraindicationRecordsRead = false;
 		}
 
@@ -284,6 +280,35 @@ final class PatientClinicalContextBuilder {
 			}
 		}
 		return latest;
+	}
+
+	/**
+	 * Reports a chart read the module could not perform, at WARN, where a stock install will see it
+	 * (issue <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/247">#247</a>).
+	 * Shared by the three stamped reads so their wording, their level and the rule below cannot
+	 * drift apart.
+	 *
+	 * <p><b>The stack trace is kept for every cause but the expected one.</b> An
+	 * {@code APIAuthenticationException} is a role missing {@code privilege} and nothing else; the
+	 * message already names the privilege to grant, the top frame of its trace is only core's own
+	 * {@code AuthorizationAdvice}, and the condition persists until someone acts on it — so on
+	 * {@code GET /chartsearchai/chartalerts}, which {@code README.md} documents as applying no rate
+	 * limit, the trace would repeat for the life of the misconfiguration and say nothing new. Every
+	 * other {@code RuntimeException} — a fault in the store underneath the service call, most of
+	 * all — keeps its trace, because there the trace IS the diagnosis. Deliberately not a throttle:
+	 * {@code DrugSafetyValidator.standingChartAlerts} records why one would hide the line a
+	 * diagnosis needs.
+	 */
+	private static void warnUnreadable(String records, String consequence, String privilege,
+			RuntimeException e) {
+		String message = "Could not read this patient's " + records + "; " + consequence
+				+ ". This chart is reported as NOT read rather than as clear. Check that the querying "
+				+ "role holds core's " + privilege + " privilege.";
+		if (e instanceof APIAuthenticationException) {
+			log.warn(message);
+		} else {
+			log.warn(message, e);
+		}
 	}
 
 	/**

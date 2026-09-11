@@ -1518,13 +1518,13 @@ public class ChartSearchAiRestController {
 	 * (<a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/247">#247</a>): not a
 	 * statement the answer got something wrong, but a statement that the chart the whole safety
 	 * layer reasons over could not be READ. A failed allergy, condition or active-order read
-	 * degrades to an empty set, so every key above it reports honestly about nothing and the
-	 * response is byte-identical to a healthy patient's. Carried raw — a bare three-valued Boolean,
+	 * degrades to an empty clinical context, so every key above it reports honestly about nothing
+	 * and the counts a client renders are the ones a healthy chart produces. Carried raw — a bare three-valued Boolean,
 	 * like {@code unresolvedDrugClass} and for the same reason, it being one datum — and needing no
 	 * null guard, a Boolean being immutable. {@code ChartAnswer.getChartReadForSafety()} is
 	 * canonical for what each of the three values does and does not assert, in particular that it
-	 * says nothing about whether anything was SCREENED. It is not {@code chartAlerts}'
-	 * {@code screened}, which is a strictly narrower verdict on a surface that carries no answer.
+	 * says nothing about whether anything was SCREENED, and for how it differs from
+	 * {@code chartAlerts}' own {@code screened}.
 	 *
 	 * <p>{@code conditionRuleCoverage} is the same remedy again, from the issue beside it
 	 * (<a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/378">#378</a>): what

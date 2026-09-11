@@ -472,8 +472,10 @@ public class DrugReferenceInjector {
 	 * kept its narrower arity when the pair-extent sink arrived, and the test doubles overriding it
 	 * went silently inert on the production path — "the rest passed while stubbing nothing, and two
 	 * of them were still doing so after a review of the commit that added the overload". Seventeen
-	 * doubles override this method. Widening in place turned every stale one into a compile error
-	 * instead of a green test that stubs nothing.
+	 * doubles overrode this method when the sink was added (measured 2026-09-11 from the compiler's
+	 * errors; the number moves with the test tree and is what the choice cost, not a standing fact).
+	 * Widening in place turned every stale one into a compile error instead of a green test that
+	 * stubs nothing.
 	 *
 	 * @param readStatus a caller-supplied one-slot accumulator the pass states its chart-read
 	 *        verdict into, or {@code null} from a caller that does not publish it. See

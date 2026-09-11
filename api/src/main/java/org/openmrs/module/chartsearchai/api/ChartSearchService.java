@@ -921,9 +921,20 @@ public interface ChartSearchService {
 		 * her conditions and her active drug orders — all completed behind this answer (issue
 		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/247">#247</a>).
 		 *
-		 * <p>Those three and not every read the builder makes: it also reads age and weight, which
-		 * feed the dose arm and are deliberately outside this verdict — that arm cannot reach the
-		 * renderer, and their catches stay at DEBUG. ADR Decision 91 records the scoping.
+		 * <p><b>Those three reads and no others, which is narrower than it sounds.</b> Two other
+		 * failures leave this verdict {@code TRUE}, both deliberately, and both still at DEBUG:
+		 * <ul>
+		 * <li>AGE and WEIGHT. Weight feeds only the dose arm, which cannot reach the renderer. Age
+		 * has a second consumer — {@code DrugReferenceInjector}'s {@code render} asks
+		 * {@code DrugReference.bandForAge}, which answers null for a null age, so a failed age read
+		 * silently drops the dosing lines from the injected record. That is a real and unstamped
+		 * gap; it is outside this key because the key is built from the two stamps and age carries
+		 * none.</li>
+		 * <li>The per-order sub-reads INSIDE the active-order loop — an order's concept uuid, its
+		 * concept names, its ATC codes. Each has its own catch and leaves
+		 * {@code activeDrugOrdersRead} true, so an order read partly is not a read that failed.</li>
+		 * </ul>
+		 * ADR Decision 91 records the scoping.
 		 *
 		 * <p><b>The problem it exists to remove.</b> {@code PatientClinicalContextBuilder} degrades a
 		 * failed allergy, condition or active-order read to an EMPTY set, which is the right fail-safe
@@ -934,15 +945,21 @@ public interface ChartSearchService {
 		 * granted this module's own privilege without {@code Get Allergies}, {@code Get Conditions}
 		 * or {@code Get Orders} reaches it, and so does a database error underneath them.
 		 *
-		 * <p><b>What each value asserts.</b> This is the only place that enumeration lives; README
-		 * points here rather than restating it.
+		 * <p><b>What each value asserts.</b> This javadoc is the one home for that list, and
+		 * {@code README.md}'s client-facing paragraph is the second — the second because it is the
+		 * only one a frontend author reads.
 		 * <ul>
 		 * <li>{@code TRUE} — the reads completed. It does NOT say a contraindication was screened,
 		 * that the dataset had a rule to ask ({@link #getConditionRuleCoverage()} is that question),
 		 * or that anything was found. An empty {@code safetyWarnings} beside {@code TRUE} is a
-		 * measurement of none.</li>
-		 * <li>{@code FALSE} — at least one read failed. An empty {@code safetyWarnings} beside it is
-		 * NOT a measurement of none, and must not be rendered as a clear chart.</li>
+		 * measurement of none <b>on a payload whose warnings are final</b> — not on the early
+		 * {@code done} of an async-grounding stream, which carries an empty list by construction
+		 * because {@code validate} has not run. This key is non-null there, unlike its neighbours,
+		 * because it is genuinely known that early.</li>
+		 * <li>{@code FALSE} — at least one of the three did not complete. An empty
+		 * {@code safetyWarnings} beside it is NOT a measurement of none, and must not be rendered
+		 * as a clear chart. "Did not complete" rather than "failed" because a null patient stamps
+		 * both flags false having attempted nothing.</li>
 		 * <li>{@code null} — no measurement. The drug-reference feature is off, or the pass threw
 		 * before it had a context. Never read {@code null} as either verdict.</li>
 		 * </ul>
@@ -964,7 +981,8 @@ public interface ChartSearchService {
 		 *
 		 * <p>It is not {@code StandingChartAlerts.isScreened()} on {@code /chartalerts}, which is a
 		 * strictly narrower verdict — that one also requires the drug-safety toggles and the pass
-		 * completing — and so keeps its own name.
+		 * completing — and so keeps its own name. This paragraph is that comparison's one home in
+		 * production; the neighbours point here.
 		 *
 		 * @return the verdict, or {@code null} where the producer stated none
 		 */

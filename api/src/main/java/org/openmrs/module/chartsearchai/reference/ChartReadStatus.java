@@ -17,14 +17,14 @@ package org.openmrs.module.chartsearchai.reference;
  * <p><b>Why a sink rather than a return value or an accessor.</b>
  * {@link DrugReferenceInjector#inject} already returns the enriched chart, and the verdict is not a
  * property of that chart — an unreadable chart and a chart with nothing to find produce the same
- * one. The thing that knows is {@link PatientClinicalContext}, which is package-private here along
- * with its stamps and its builder, so a caller outside this package cannot ask. Building a second
- * context to ask would be the two-resolutions-that-agree shape issue #151 records as failing
- * silently and in one direction, and it would double the chart reads on every request.
+ * one. The thing that knows is {@link PatientClinicalContext}, whose stamps and whose builder are
+ * package-private, so a caller outside this package cannot ask. Building a second context to ask
+ * would be the two-resolutions-that-agree shape issue #151 records as failing silently and in one
+ * direction, and it would double the chart reads on every request.
  *
- * <p>Caller-supplied and never a field on the injector: that bean is a Spring singleton, so a field
- * would be one slot shared by every concurrent request (issue #172). A pass with no sink records
- * nothing and costs nothing.
+ * <p>The same one-slot accumulator idiom as {@link PairChipExtent.Sink}, for the reasons its
+ * javadoc gives — caller-owned, never a field on a Spring singleton (issue #172), and free to a
+ * pass that supplies none.
  *
  * <p><b>What the three answers MEAN is not enumerated here.</b> It is one enumeration with one
  * home, {@code ChartSearchService.ChartAnswer.getChartReadForSafety()}, which is where a consumer

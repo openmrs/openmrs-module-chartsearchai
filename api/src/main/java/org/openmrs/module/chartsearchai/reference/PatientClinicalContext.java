@@ -254,8 +254,8 @@ public class PatientClinicalContext {
 	 *         standing surface's operator MESSAGE, which enumerates the sides separately on purpose:
 	 *         naming which read failed is a different question from whether any did.
 	 *
-	 *         <p>It is not {@code StandingChartAlerts.isScreened()}, which is strictly narrower — that
-	 *         verdict also requires the toggles and the pass completing.
+	 *         <p>It is not {@code StandingChartAlerts.isScreened()}; that comparison has one home,
+	 *         {@code ChartSearchService.ChartAnswer.getChartReadForSafety()}.
 	 */
 	boolean chartReadForSafety() {
 		return contraindicationRecordsRead && activeDrugOrdersRead;

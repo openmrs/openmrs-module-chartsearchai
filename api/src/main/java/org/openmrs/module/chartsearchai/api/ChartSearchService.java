@@ -379,17 +379,18 @@ public interface ChartSearchService {
 	 * reconciles against the answer.
 	 *
 	 * <p><b>{@link #getRating()} is NOT the value a {@code safetyWarnings} chip publishes as its
-	 * {@code severity}, and the two must not be joined on string equality — which is why this field
-	 * is not called {@code severity}.</b> It is the form {@code DrugSafetyValidator.severityRank}
-	 * RECOGNISED — {@code statableRating} hands the dataset's own spelling on TRIMMED, where a chip
-	 * publishes the operator's raw field, so a dataset writing {@code "  Major  "} reaches this key
-	 * as {@code "Major"} and that same chip as the padded string (ADR Decision 78). The two are also
-	 * decided by different passes over different populations — a rating is written into the record
-	 * pre-answer by {@code DrugReferenceInjector.injectRecords}, a chip post-answer by
-	 * {@code DrugSafetyValidator.validate} — so neither list is a view of the other in either
-	 * direction. What this key's own vocabulary excludes is stated positively: {@code statableRating}
-	 * declines {@code unknown}, and {@code ratingThisRecordStates} requires the record to state the
-	 * word, so a published entry carries neither.
+	 * {@code severity}, and the two must not be joined — which is why this field is not called
+	 * {@code severity}.</b> They differ in FORM and in EXTENT, and neither difference is a corner
+	 * case. In form: this is what {@code DrugSafetyValidator.severityRank} RECOGNISED, which
+	 * {@code statableRating} hands on TRIMMED, where a chip publishes the operator's raw field — so
+	 * a dataset writing {@code "  Major  "} reaches this key as {@code "Major"} and that chip as the
+	 * padded string (ADR Decision 78). In extent: {@code statableRating} declines {@code unknown} and
+	 * {@code ratingThisRecordStates} requires the record to state the word, so a finding a chip rates
+	 * {@code Unknown} has no entry here at all — which the shipped knowledge base makes ordinary
+	 * rather than rare. And the two are decided by different passes over different populations, a
+	 * rating written into the record pre-answer by {@code DrugReferenceInjector.injectRecords} and a
+	 * chip post-answer by {@code DrugSafetyValidator.validate}, so neither list is a view of the
+	 * other in either direction.
 	 *
 	 * <p><b>What it asserts.</b> That the answer cited this record and that this rating's word
 	 * appears nowhere in the answer. Never WHERE the rating should have been, never that the
@@ -1006,7 +1007,8 @@ public interface ChartSearchService {
 		 * <p><b>The citation and the RATING, and never a word of either text</b>. The two siblings
 		 * publish a bare index because each has one datum to publish; this key carries two. One
 		 * citation is one entry, and {@link UnstatedFindingSeverity} is canonical for what an entry
-		 * asserts, why the two travel together and how its {@code severity} differs from a chip's.
+		 * asserts, why the two travel together, and how its {@code rating} differs from the
+		 * {@code severity} a chip publishes — a difference its spelling is chosen to keep visible.
 		 *
 		 * <p><b>It is not a grounding verdict and not a claim that the finding is wrong.</b> The
 		 * finding behind such a sentence is deterministic and was, on the reported answer, correct;

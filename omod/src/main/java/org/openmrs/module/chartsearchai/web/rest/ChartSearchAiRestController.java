@@ -1588,11 +1588,13 @@ public class ChartSearchAiRestController {
 	 * reconciled against the answer, and how this value differs from a chip's are the value type's own
 	 * javadoc and ADR Decision 78's amendment; neither is restated here.
 	 *
-	 * <p><b>The field is {@code rating} and not {@code severity}, deliberately.</b> A chip publishes
-	 * the operator's raw field under that second name while this is the trimmed form the module
-	 * recognised, so the two agree on every dataset but a padded one — a client joining them on string
-	 * equality would be right almost always and wrong exactly in the tail. Spelling them differently
-	 * makes that difference structural instead of a caveat a client has to read.
+	 * <p><b>The field is {@code rating} and not {@code severity}, deliberately.</b> This subsystem
+	 * spells the concept "rating" throughout — {@code statableRating},
+	 * {@code ratingThisRecordStates} — and {@code severity} is the operator's own raw field name,
+	 * which a chip publishes and this does not: the two differ in form and in extent, as the value
+	 * type's javadoc sets out. Spelling them apart makes that structural rather than a caveat a
+	 * client has to read, and it costs nothing here because #387 is already changing this key's
+	 * shape, so no consumer ever saw a {@code severity} on it.
 	 *
 	 * <p>The word is already on this module's wire once, as the user's feedback {@code rating} on
 	 * {@code /feedback} and on an {@code /auditlog} row. That is a different concept on different

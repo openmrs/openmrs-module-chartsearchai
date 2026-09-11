@@ -1758,13 +1758,17 @@ def selftest():
                    "a non-list rating body must not be counted as a dropped rating"))
     shapes.append((unstated_ratings(_cell({"carried": 7, "cited": 7}, [349])) == [349],
                    "unstated_ratings must read a well-formed list"))
-    # BOTH wire shapes of the key, because captures carry both and this scorer is the reason no
-    # compatibility shim was written for issue #387. Before it the key was a bare index array;
-    # since #387 each entry is an object carrying the rating beside the citation. Every reader here
-    # takes the value's PRESENCE and its LENGTH and never an element, so a capture of either shape
-    # scores the same — that is the property the decision leans on, and it was unpinned until here:
-    # a future reader that indexed an element would still pass every other row in this selftest
-    # while silently mis-scoring every capture taken before the rename.
+    # BOTH wire shapes of the key, because captures carry both: before issue #387 it was a bare
+    # index array, and since #387 each entry is an object carrying the rating beside the citation.
+    # Every reader here takes the value's PRESENCE and its LENGTH and never an element, so a capture
+    # of either shape scores the same — which is why the committed fixtures are left in the shape
+    # they were taken in rather than rewritten.
+    #
+    # The direction these rows hold is the one the OLD fixtures cannot: a reader narrowed to the
+    # pre-#387 shape — `isinstance(e, int)` per element, say — passes every other row here and every
+    # fixture arm, because every committed capture predates the rename. Measured. The opposite
+    # narrowing needs no guard, an element-indexing reader raising loudly on the old-shape fixture
+    # the moment the arms are scored.
     objects = [{"citation": 349, "rating": "Major"}, {"citation": 350, "rating": "Moderate"}]
     shapes.append((unstated_ratings(_cell({"carried": 7, "cited": 7}, objects)) == objects,
                    "unstated_ratings must read the post-#387 object shape too"))

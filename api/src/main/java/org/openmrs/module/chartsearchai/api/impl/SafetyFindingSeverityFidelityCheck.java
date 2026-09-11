@@ -268,9 +268,9 @@ final class SafetyFindingSeverityFidelityCheck {
 				// takes each entry's `toString` (as `DrugReferenceInjector.chartOrderClause` takes
 				// `ChartOrderBridge`'s) while the wire's two key names are literals in the
 				// controller, which is where a documented key belongs.
-				// Neither the answer nor any record text is logged — they carry patient data, and the citation with the
-				// patient identifies the claim. The rating is the module's own closed vocabulary and
-				// says nothing about this patient.
+				// Neither the answer nor any record text is logged — they carry patient data, and the
+				// citation with the patient identifies the claim. The rating is the module's own
+				// closed vocabulary and says nothing about this patient.
 				log.warn("Answer for patient={} states no rating for cited finding(s) {}. The answer "
 						+ "prose is left unchanged (issue #337).", patientId, offending);
 			}

@@ -3655,8 +3655,10 @@ public class DrugReferenceInjector {
 			// to infer the rest. So each clause is named on the side it is actually on — which is also why
 			// issue #269 gave the uncorroborated clauses a section rather than dropping them out of the
 			// reading. The three sections are disjoint and cover every clause the module can evaluate AND
-			// get an answer about; a clause it cannot evaluate at all (an unrecognised rule type, a rule
-			// with no token) is listed and claimed by none of them.
+			// get an answer about; a clause NO evaluable rule renders (an unrecognised rule type, a rule
+			// with no token) is listed and claimed by none of them. Per CLAUSE and not per rule — where an
+			// evaluable rule renders the same string, that string is claimed; see ContraindicationSections,
+			// which carries why that is pre-existing rather than issue #310's.
 			appendSection(sb, RECORDED_READING_LEAD, contraindications.recorded);
 			appendSection(sb, NOT_RECORDED_READING_LEAD, contraindications.notRecorded);
 			// Third and last of the reading's sections, after the two that make a claim: it makes none —
@@ -4056,7 +4058,8 @@ public class DrugReferenceInjector {
 		}
 	}
 
-	/** The contraindication half of a rendered record: every rule the entry publishes, and that list
+	/** The contraindication half of a rendered record: every distinct clause the entry's rules render
+	 *  (issue #310), and that list
 	 *  split by what the patient's own chart records. One value rather than four calls because all four
 	 *  are computed in ONE walk of the rules — the reading's sections are selections FROM the clauses,
 	 *  keyed on the same collapsed rule, so recomputing any of them beside the others is how a record
@@ -4065,9 +4068,26 @@ public class DrugReferenceInjector {
 	 *  <p>All three reading sections are empty where the injection may state no reading at all
 	 *  ({@link #statesTheChartsContraindicationReading}), so no consumer can read a partition that was
 	 *  never computed. Otherwise they are subsets of {@code clauses} in clause order and pairwise
-	 *  disjoint, and together they are every clause but ONE shape: a rule
-	 *  {@link DrugSafetyValidator#evaluatesAgainstTheChart} rejects is in the LIST and in no section,
-	 *  because the record may not say a patient does not have something nobody checked. Issue #269 did
+	 *  disjoint — the order held by {@link #inClauseOrder} since issue #310, rather than by a repeat
+	 *  standing in the list where the per-key walk would otherwise have reached the two out of turn —
+	 *  and together they are every clause but ONE shape: a clause NO evaluable rule renders is in the
+	 *  LIST and in no section, because the record may not say a patient does not have something nobody
+	 *  checked.
+	 *
+	 *  <p><b>That exception is about the CLAUSE and not about the RULE, and the difference is a
+	 *  residue.</b> Where a rule {@link DrugSafetyValidator#evaluatesAgainstTheChart} rejects renders a
+	 *  string an evaluable rule renders too, the string takes the evaluable rule's section — so the
+	 *  denial can cover words one of their authoring rules was never put to the chart. That is issue
+	 *  #208 item 2's own shape and it is PRE-EXISTING rather than issue #310's: it arrives with issue
+	 *  #308, which resolves these sections over clause TEXT. Tapentadol in {@code
+	 *  drug-reference-cross-key-clause-order.json} — whose rules 1 and 3 render one string, the first of
+	 *  them typed {@code diagnosis} — has that string in its denial at {@code 28dbed9d} as well, so the
+	 *  MEMBERSHIP is unchanged and only the second, unclaimed copy that used to stand in the LIST is
+	 *  gone. {@code InjectedContraindicationClauseTest.theDenialAndTheHedgeAreListedInTheClausesOwnOrderToo}
+	 *  renders it. Closing it means subtracting the unevaluable keys' strings from the
+	 *  denial, which is a change to what the record CLAIMS and wants its own issue.
+	 *
+	 *  <p>Issue #269 did
 	 *  not change WHAT is excluded — the clause it moved was in the recorded section, which was the
 	 *  defect — and gave it a section of its own: {@code uncorroborated}, a clause the chart matched
 	 *  that {@link #corroborated} could not support, which is neither a claim nor a denial. */
@@ -4091,19 +4111,67 @@ public class DrugReferenceInjector {
 	}
 
 	/**
-	 * @return one clause per contraindication RULE, keyed by the very method the chip ledger keys on —
-	 *         {@link DrugSafetyValidator#contraindicationFinding}, which is the {@code (type, token)}
-	 *         pair normalized, except for an ALLERGY rule naming the entry it is filed on, which is
-	 *         keyed on the SUBSTANCE (issue #146). Each clause carries the distinct notes its rows
-	 *         authored, in dataset order.
+	 * @return one clause per distinct rendered STRING over the contraindication keys of {@code ref} —
+	 *         the keys being {@link DrugSafetyValidator#contraindicationFinding}'s, the very method the
+	 *         chip ledger keys on, which is the {@code (type, token)} pair normalized except for an
+	 *         ALLERGY rule naming the entry it is filed on, which is keyed on the SUBSTANCE (issue
+	 *         #146). Each clause carries the distinct notes its rows authored, in dataset order; two
+	 *         KEYS rendering one string are one clause, which is issue #310 below.
 	 *
 	 *         <p><b>Issue #190 item 1.</b> This rendered one clause per ROW while
 	 *         {@code DrugSafetyValidator.ContraindicationChips} raised one chip per rule, so an entry
 	 *         filing one rule twice put two clauses in the record beside one chip and the model was told
 	 *         the drug has two contraindications where the deterministic layer had found one. Keyed on
-	 *         the rule the CHIP compares, not on the rendered text, so the two counts cannot drift —
+	 *         the rule the CHIP compares, so neither side can partition the entry's rules differently —
 	 *         which is why the exception issue #146 added on that side had to be added here too, and why
-	 *         a future change to that key belongs in both places or in neither.
+	 *         a future change to that key belongs in both places or in neither. What the LIST then does
+	 *         with those keys is the issue #310 paragraph below, and it is where the two COUNTS come
+	 *         apart.
+	 *
+	 *         <p><b>Issue #310 — one clause per rendered STRING, and not per key.</b> The keys are per
+	 *         RULE, and two rules of one entry can land on different keys carrying one note: an allergy
+	 *         rule and a condition rule may both be authored with it, which is a natural way to say
+	 *         "recorded either way" and is the shape the walk's own section comment names. The list then
+	 *         read {@code opioid reaction; opioid reaction} — a model told in citable evidence that the
+	 *         drug has two contraindications where the operator authored one clinical fact, which is
+	 *         issue #190 item 1's harm one collapse unit along. The identity is exact equality of the
+	 *         rendered clause, the same one the three sections below have resolved over since issue
+	 *         #308, so what this record treats as one statement it treats as one statement in both
+	 *         places.
+	 *
+	 *         <p><b>Not containment, and what that leaves standing.</b> A key whose clause CONTAINS
+	 *         another key's still renders both: where a key folds two rules its clause is the em-dash
+	 *         JOIN, so {@code opioid reaction} beside {@code opioid reaction — other reaction} is two
+	 *         clauses and stays two, with the shared words read twice. Reading the containment rule
+	 *         across keys would be wrong twice over. It drops a genuinely distinct clause wherever one
+	 *         operator note is a substring of another — {@code bleeding} inside {@code active
+	 *         gastrointestinal bleeding} — dropping an instruction this record is the only place the
+	 *         prompt carries. And where those two strings are in DIFFERENT sections, the shorter one is
+	 *         not merely dropped from the LIST: {@link #inClauseOrder} then filters it out of its
+	 *         SECTION as well, so a chart reading the module had established stops being stated at all,
+	 *         silently. The witness is Levoketoconazole in {@code
+	 *         drug-reference-collapsed-key-joined-clause.json}, whose {@code opioid reaction} clause is
+	 *         RECORDED while the joined clause containing it is the hedge: put a containment rule over
+	 *         {@code clauses} and its recorded section is gone. {@code
+	 *         InjectedContraindicationClauseTest.aClauseAnotherKeyMerelyCONTAINSIsStillItsOwnClause}
+	 *         asserts that section FIRST for this reason. The {@code contains} check
+	 *         {@link DrugSafetyValidator#contraindicationClauses} makes is safe for the opposite reason:
+	 *         it is WITHIN one key, where the two rows report one rule.
+	 *
+	 *         <p><b>What it does to the count beside the chips.</b> This entry's clause count can now be
+	 *         LOWER than the number of contraindication chips it raises — two matched rules of different
+	 *         keys carrying one note are two chips and one clause. {@code
+	 *         InjectedContraindicationClauseTest}'s class javadoc is canonical for why that is not issue
+	 *         #190 item 1 reversed.
+	 *
+	 *         <p>Both halves of issue #310 are pinned in that class —
+	 *         {@code twoRulesOfOneEntrySharingANoteRenderThatClauseOnce} and
+	 *         {@code aClauseTwoKeysRenderIsListedOnceWithAnotherClauseBetweenThem} for the list,
+	 *         {@code aReadingSectionIsListedInTheDeduplicatedClausesOwnOrder} for the RECORDED section's
+	 *         order and {@code theDenialAndTheHedgeAreListedInTheClausesOwnOrderToo} for the other two.
+	 *         {@code clausesDifferingOnlyInCaseOrSpacingAreEachTheirOwnClause} and {@code
+	 *         aClauseAnotherKeyMerelyCONTAINSIsStillItsOwnClause} hold the IDENTITY that de-duplication
+	 *         uses. Mutate each and read the failures.
 	 *
 	 *         <p><b>Curated-source-only</b>, by construction rather than by measurement: neither
 	 *         {@code ddinter} nor {@code atc} publishes contraindications at all, so only an
@@ -4111,6 +4179,17 @@ public class DrugReferenceInjector {
 	 *         ibuprofen rows are four distinct keys: since issue #146 the self-named allergy one is the
 	 *         substance and the other three are their own {@code (type, token)}), so no shipped
 	 *         rendering moves. {@code InjectedContraindicationClauseTest} pins both halves.
+	 *
+	 *         <p>Issue #310's condition is WIDER — one note on two KEYS, rather than one rule authored
+	 *         twice — so it needed its own measurement rather than the paragraph above. Driving
+	 *         {@link DrugSafetyValidator#contraindicationClauses} over
+	 *         {@code DrugReferenceTestSupport.curatedService().getAll()} and over
+	 *         {@code DrugReferenceTestSupport.shippedEntries()} on 2026-09-11 found no entry in either
+	 *         whose keys render a duplicate clause: the bundled curated seed publishes 10
+	 *         contraindication rules over its 4 entries, and the bundled DDI knowledge base publishes
+	 *         none at all over its 2283 entries. So no shipped rendering moves for this either — but that is a
+	 *         fact about the DATA on that date, not a property of the code, and an operator file is
+	 *         exactly what it does not cover.
 	 *
 	 *         <p><b>Joined, not dropped</b>, and that is the deliberate difference from issue #174 site 2:
 	 *         that collapse could discard a repeated row because the repeats were near-identical, while
@@ -4168,6 +4247,13 @@ public class DrugReferenceInjector {
 		// sections below are resolved over, which DrugSafetyValidator.addContraindications reads to ask
 		// this walk's own cross-key precedence question of the same strings.
 		Map<Object, String> byRule = DrugSafetyValidator.contraindicationClauses(ref);
+		// The rendered LIST, over the same string identity the three sections below resolve over — which
+		// is the second of the two stages, and the one the list was left out of until issue #310. The map
+		// is per KEY, and two keys of one entry may render one string, so "; ".join(byRule.values()) read
+		// "opioid reaction; opioid reaction" for the "recorded either way" shape the walk below names. A
+		// LinkedHashMap into a LinkedHashSet, so the survivor keeps the earlier key's slot and the list
+		// stays in clause order.
+		Set<String> clauses = new LinkedHashSet<String>(byRule.values());
 		Set<Object> recordedRules = new HashSet<Object>();
 		Set<Object> uncorroboratedRules = new HashSet<Object>();
 		Set<Object> unevaluableRules = new HashSet<Object>();
@@ -4219,7 +4305,10 @@ public class DrugReferenceInjector {
 		// Walked in CLAUSE order, not in the order the matches were found: a rule authored twice can be
 		// matched by its second spelling while its clause sits at the first's position, and a reading
 		// that listed those out of order would be a section a reader cannot line up against the list. One
-		// loop for all three, so they follow the clauses rather than agreeing with them.
+		// loop for all three, so they follow the clauses rather than agreeing with them. Since issue #310
+		// that is finished by inClauseOrder below rather than by this loop alone: one loop still decides
+		// MEMBERSHIP per key, but a key's position in a SECTION is not its position in the list once the
+		// list de-duplicates across keys.
 		//
 		// SETS of clause TEXT, and the weaker claim yields: two rules of different keys may render the
 		// same string — an allergy rule and a condition rule may carry one note, which is a natural way to
@@ -4252,8 +4341,41 @@ public class DrugReferenceInjector {
 			uncorroborated.removeAll(recorded);
 			notRecorded.removeAll(recorded);
 			notRecorded.removeAll(uncorroborated);
+			// Re-emitted in the LIST's order rather than kept in the one the per-key walk produced, and
+			// that is issue #310's other half rather than a tidy-up. A section is walked per key, so a
+			// string enters it at the position of the first key IN THAT SECTION, while the list is walked
+			// over every key, so a string sits at the position of its first key ANYWHERE. Those differ
+			// exactly when a string two keys render is claimed by the LATER of them — the precedence
+			// above — with another string between. While the list still carried the repeat that was
+			// invisible: the section was a subsequence of the repeated list either way. De-duplicating
+			// the list alone would have left a section a reader cannot line up against it, which is the
+			// very thing the clause-order comment above exists to prevent.
+			recorded = inClauseOrder(clauses, recorded);
+			notRecorded = inClauseOrder(clauses, notRecorded);
+			uncorroborated = inClauseOrder(clauses, uncorroborated);
 		}
-		return new ContraindicationSections(byRule.values(), recorded, notRecorded, uncorroborated);
+		return new ContraindicationSections(clauses, recorded, notRecorded, uncorroborated);
+	}
+
+	/**
+	 * @return the members of {@code section} in {@code clauses}' own order — the projection that makes
+	 *         {@code ContraindicationSections}' "subsets of {@code clauses} in clause order" hold by
+	 *         construction rather than by the accident of a duplicate standing in the list (issue
+	 *         #310).
+	 *
+	 *         <p><b>Its safety is a PRECONDITION and not a property of the loop: {@code clauses} must
+	 *         be the whole set of rendered strings.</b> An order-preserving intersection keeps only
+	 *         what both sides carry, so narrowing that set does not merely re-order a section — it
+	 *         empties it, silently, of every string the narrowing removed. Today nothing can: the
+	 *         sections are built from {@code byRule.values()} and {@code clauses} is exactly the
+	 *         distinct members of it. A de-duplication that dropped a string from the LIST would break
+	 *         that, which is the mechanism the "Not containment" paragraph of
+	 *         {@link #contraindicationSections} measures.
+	 */
+	private static Set<String> inClauseOrder(Collection<String> clauses, Set<String> section) {
+		Set<String> ordered = new LinkedHashSet<String>(clauses);
+		ordered.retainAll(section);
+		return ordered;
 	}
 
 	/**

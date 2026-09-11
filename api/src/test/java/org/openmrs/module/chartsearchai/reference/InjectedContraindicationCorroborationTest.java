@@ -87,8 +87,14 @@ public class InjectedContraindicationCorroborationTest {
 	private static final String MID_WORD_TOKEN =
 			"chartsearchai-test/drug-reference-mid-word-allergy-token.json";
 
-	/** Issue #269's own: an entry CALLED {@code Ketoconazole} beside one that merely aliases it. */
-	private static final String BORROWED_ALIAS =
+	/** Issue #269's own: an entry CALLED {@code Ketoconazole} beside one that merely aliases it.
+	 *
+	 *  <p>Package-visible because its Codeine entry is also issue #310's own shape — two rules of one
+	 *  entry on two collapsed keys carrying ONE note — which
+	 *  {@code InjectedContraindicationClauseTest.twoRulesOfOneEntrySharingANoteRenderThatClauseOnce}
+	 *  asserts about the rendered clause LIST while the cases here assert about the reading SECTIONS.
+	 *  Shared rather than re-authored, so the two questions are asked of one arrangement. */
+	static final String BORROWED_ALIAS =
 			"chartsearchai-test/drug-reference-borrowed-alias-corroboration.json";
 
 	/** All three read off production, so no case here can pass against a lead no record carries — which
@@ -392,12 +398,13 @@ public class InjectedContraindicationCorroborationTest {
 		// not answer for those words. The denial yields, because of the two it is the only one that can
 		// be false of the string.
 		//
-		// The LIST that follows reads "opioid reaction; opioid reaction" — two rules of two keys carrying
-		// one note, which byRule renders twice: its keys are per rule and nothing de-dups across them
-		// (the em-dash join and its contains() check are both WITHIN a key). Pre-existing — issue #190
-		// item 1 collapses per rule and these are two rules, and the same fixture renders the same
-		// doubling on origin/main — and this fixture is simply the first thing to author the shape; the
-		// sections are what this case is about.
+		// The LIST that follows read "opioid reaction; opioid reaction" until issue #310 — two rules of
+		// two keys carrying one note, which byRule renders twice because its keys are per rule (the
+		// em-dash join and its contains() check are both WITHIN a key). It is now de-duplicated over
+		// clause TEXT, the identity these sections already resolved over; the sections are what this
+		// case is about, and the list is
+		// InjectedContraindicationClauseTest.twoRulesOfOneEntrySharingANoteRenderThatClauseOnce's, over
+		// this very fixture.
 		String record = record(fixtureService(BORROWED_ALIAS), "Codeine",
 				"Is it safe to give her codeine?", DrugReferenceTestSupport.ctx(60, null, null, null,
 						DrugReferenceTestSupport.set("Dihydrocodeine"), null));

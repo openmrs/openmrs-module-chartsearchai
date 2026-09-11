@@ -1733,6 +1733,24 @@ public final class DrugReferenceTestSupport {
 		return record.substring(start + lead.length(), end);
 	}
 
+	/** The items one rendered SECTION lists, split on the {@code "; "} every section of a
+	 *  {@code drug_reference} record separates its items with ({@code DrugReferenceInjector
+	 *  .appendSection}). The precondition is part of the contract — a case about a section's CONTENTS
+	 *  must fail loudly on a record that carries no such section, rather than silently comparing
+	 *  against nothing.
+	 *
+	 *  <p>It is not the only reader of a rendered section here, and it should not become one. A case
+	 *  that needs {@code sectionAfter}'s NULL must not be routed through this — whether the null is its
+	 *  ANSWER (a clause carried only by the trailing rule list) or the thing it is asserting ABOUT, so
+	 *  that a section which has silently disappeared reads as that rather than as a stale
+	 *  precondition. */
+	static List<String> sectionItems(String record, String lead) {
+		String section = sectionAfter(record, lead);
+		assertNotNull(section,
+				"precondition: the record must carry the section " + lead + ", was: " + record);
+		return new ArrayList<String>(Arrays.asList(section.split("; ")));
+	}
+
 	/** A one-record chart to inject into; the injected reference must append as record [2]. */
 	static PatientChart oneRecordChart() {
 		return chartOf(new RecordMapping(1, ChartSearchAiConstants.RESOURCE_TYPE_OBS,

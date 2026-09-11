@@ -2873,7 +2873,7 @@ public class DrugSafetyValidator {
 	 *         <p>ONE definition, called by the chip arm above and by
 	 *         {@code DrugReferenceInjector.contraindicationSections}, which renders the injected
 	 *         record's patient-specific reading of the contraindication list (issue #208 item 2). The
-	 *         record lists every rule the entry publishes, because a drug's contraindications are the
+	 *         record lists every clause the entry's rules render, because a drug's contraindications are the
 	 *         drug's; what it must not do is leave a model unable to tell which of them this patient
 	 *         has, since the record is injected as CITABLE evidence and a model reports what it can
 	 *         see. Shared rather than restated for exactly the reason
@@ -3143,10 +3143,12 @@ public class DrugSafetyValidator {
 	 *         — see {@link ContraindicationChips}, where both are justified.
 	 *
 	 *         <p>ONE definition, called by the chip ledger here and by
-	 *         {@code DrugReferenceInjector.contraindicationSections}, which renders one clause per rule
-	 *         and must count the same unit or the model is told the drug has two contraindications where
-	 *         the deterministic layer found one (issue #190 item 1). A second copy is how those two came
-	 *         apart when issue #146 moved this key: two allergy rules under two aliases of one drug were
+	 *         {@code DrugReferenceInjector.contraindicationSections}. Both must partition the entry's
+	 *         rules by this same KEY, or the model is told the drug has two contraindications where the
+	 *         deterministic layer found one (issue #190 item 1). What the rendered LIST then does with
+	 *         those keys is issue #310 — it collapses them by clause TEXT, so its item count need not be
+	 *         the chip count; see that method's {@code @return}. A second copy of the KEY is how the two
+	 *         came apart when issue #146 moved it: two allergy rules under two aliases of one drug were
 	 *         one chip and two clauses, silently.
 	 */
 	static Object contraindicationFinding(DrugReference ref, DrugReference.Contraindication c) {
@@ -3199,6 +3201,13 @@ public class DrugSafetyValidator {
 	 *         condition rule may carry one note, which is a natural way to author "recorded either
 	 *         way" — and a record cannot both state a string as this chart's reading and hedge it. A
 	 *         finding beside it cannot either, which is why these have to be the same strings.
+	 *
+	 *         <p><b>These values are not distinct, and one clause per key is not what the record
+	 *         prints.</b> Since issue #310 {@code contraindicationSections} de-duplicates them over the
+	 *         same string identity before rendering the list, for the reason the paragraph above gives
+	 *         about the sections. So do not make this map's values distinct to serve that: the walk
+	 *         resolves which SECTION owns a string by asking each key in turn, and a key dropped here
+	 *         would take its vote with it.
 	 */
 	static Map<Object, String> contraindicationClauses(DrugReference ref) {
 		Map<Object, String> byKey = new LinkedHashMap<Object, String>();

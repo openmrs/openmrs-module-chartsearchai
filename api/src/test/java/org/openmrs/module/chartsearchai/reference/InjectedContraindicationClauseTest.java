@@ -261,8 +261,8 @@ public class InjectedContraindicationClauseTest {
 	/** The rendered {@code drug_reference} record for {@code drug}, through the real injector wired to
 	 *  the real validator over {@code service} — the CALLER's service, never one built here, so a case
 	 *  asserting a precondition through it asserts that of the very instance the record is rendered
-	 *  from. Every case below that reads a record goes through this, so none of them can differ in how
-	 *  the record was produced. */
+	 *  from. The issue #310 cases render through this; the cases above it predate it and reach the
+	 *  injector directly. */
 	private static String recordFor(DrugReferenceService service, String question,
 			PatientClinicalContext context, String drug) {
 		PatientChart chart = DrugReferenceTestSupport.injectorWithSafety(service)

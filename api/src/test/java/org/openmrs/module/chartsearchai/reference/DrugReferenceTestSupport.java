@@ -1679,13 +1679,11 @@ public final class DrugReferenceTestSupport {
 	 *  must fail loudly on a record that carries no such section, rather than silently comparing
 	 *  against nothing.
 	 *
-	 *  <p>It is not the only reader of a rendered section here, and the others are not oversights: {@code ConditionRuleBoundaryCorroborationTest.clauseSection} needs {@code
-	 *  sectionAfter}'s null, which is its answer for a clause carried only by the trailing rule list;
-	 *  {@code InjectedContraindicationPatientReadingTest} splits a string its own {@code
-	 *  recordedReading} has already asserted an ORDERING of, which this carries no half of; and {@code
-	 *  InjectedContraindicationClauseTest.clausesIn} is a different LOCATOR, bounding on {@code
-	 *  " Interactions:"} rather than on the first full stop. Each would LOSE something routed through
-	 *  this — an answer, an assertion, or a boundary. */
+	 *  <p>It is not the only reader of a rendered section here, and it should not become one. A case
+	 *  that needs {@code sectionAfter}'s NULL must not be routed through this — whether the null is its
+	 *  ANSWER (a clause carried only by the trailing rule list) or the thing it is asserting ABOUT, so
+	 *  that a section which has silently disappeared reads as that rather than as a stale
+	 *  precondition. */
 	static List<String> sectionItems(String record, String lead) {
 		String section = sectionAfter(record, lead);
 		assertNotNull(section,

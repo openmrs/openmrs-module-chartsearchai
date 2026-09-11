@@ -357,8 +357,7 @@ public class InjectedContraindicationClauseTest {
 		// matches it through `renal` inside the recorded `Malignant tumor of adrenal gland` — containment
 		// without a word boundary, so it hedges rather than records — and rule 5 sits between them.
 		//
-		// Without this case neither of those two re-orderings is discriminated by anything — drop either
-		// call and read the failures.
+		// Drop either of those two calls and read the failures.
 		String record = tapentadolRecord();
 
 		assertEquals(Arrays.asList("monitor for respiratory depression", "avoid in hepatic impairment"),
@@ -423,12 +422,9 @@ public class InjectedContraindicationClauseTest {
 		// CONDITION rule of another key carries "opioid reaction" alone. One string contains the other and
 		// both are listed — the residue contraindicationSections' "Not containment" paragraph names.
 		//
-		// Pinning it is not endorsing a repeat. The two strings carry different clinical content ("other
+		// Pinning it is not endorsing a repeat: the two strings carry different clinical content ("other
 		// reaction" appears only in the join), so collapsing them drops an operator instruction this
-		// record is the only place the prompt carries — and, because they sit in different SECTIONS here,
-		// inClauseOrder would then filter the dropped one out of its section too, silently retracting a
-		// chart reading the module had established. Loosen the de-duplication to containment and read
-		// this failure.
+		// record is the only place the prompt carries.
 		String record = recordFor(fixtureService(COLLAPSED_KEY_JOINED_CLAUSE),
 				"Is it safe to give her levoketoconazole?",
 				DrugReferenceTestSupport.ctx(60, null, null, null,

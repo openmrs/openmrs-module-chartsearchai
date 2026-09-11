@@ -4080,9 +4080,11 @@ public class DrugReferenceInjector {
 	 *         {@code DrugSafetyValidator.ContraindicationChips} raised one chip per rule, so an entry
 	 *         filing one rule twice put two clauses in the record beside one chip and the model was told
 	 *         the drug has two contraindications where the deterministic layer had found one. Keyed on
-	 *         the rule the CHIP compares, not on the rendered text, so the two counts cannot drift —
+	 *         the rule the CHIP compares, so neither side can partition the entry's rules differently —
 	 *         which is why the exception issue #146 added on that side had to be added here too, and why
-	 *         a future change to that key belongs in both places or in neither.
+	 *         a future change to that key belongs in both places or in neither. What the LIST then does
+	 *         with those keys is the issue #310 paragraph below, and it is where the two COUNTS come
+	 *         apart.
 	 *
 	 *         <p><b>Issue #310 — one clause per rendered STRING, and not per key.</b> The keys are per
 	 *         RULE, and two rules of one entry can land on different keys carrying one note: an allergy

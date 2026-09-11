@@ -469,10 +469,11 @@ public class SafetyFindingSeverityFidelityTest {
 							+ "chose. Ratings were: " + ratedFindings + "; captured: "
 							+ capture.describeAll());
 			// And again through the ACCESSORS, which is not belt and braces. The comparison above
-			// goes through UnstatedFindingSeverity.equals, so it pins the rating only for as long as
-			// that method reads the rating: weakening equals to compare the citation alone leaves
-			// every assertion in this file green, measured. Reading the field back is what makes the
-			// severity pinned by this file rather than by that method.
+			// goes through UnstatedFindingSeverity.equals, so on its own it pins the rating only for
+			// as long as that method reads the rating — measured, before the two assertions below
+			// existed, weakening equals to compare the citation alone left every assertion in this
+			// file green. Reading the field back is what makes the severity pinned by this file
+			// rather than by that method; the equality assertions further down then pin the method.
 			for (UnstatedFindingSeverity published : answer.getUnstatedFindingSeverities()) {
 				assertEquals(ratedFindings.get(Integer.valueOf(published.getCitation())),
 						published.getSeverity(),

@@ -398,8 +398,8 @@ public interface ChartSearchService {
 	 * and for the residues.
 	 *
 	 * <p><b>It is shaped on {@code SafetyWarning.ChartOrderBridge}</b>, this module's other two-field
-	 * value type PUBLISHED as a list, rather than on the scalar-pair statements beside it: both
-	 * arguments are required and {@link #equals} and {@link #hashCode} dereference them, and
+	 * value type PUBLISHED as a list, rather than on the scalar-pair statements beside it: the
+	 * {@code severity} is required rather than null-tolerated, as the constructor below states, and
 	 * {@link #toString()} is the one spelling of the pair, which the producing check's {@code WARN}
 	 * takes rather than re-building. Value equality is what a list of these needs and what those
 	 * scalar pairs have no use for. It does not fall under the rule keeping {@code SafetyWarning}

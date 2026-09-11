@@ -1573,12 +1573,16 @@ public final class DrugReferenceTestSupport {
 	 * prior {@code UserContext} whatever happens.
 	 *
 	 * <p><b>The one home for this arrangement</b>, shared by every case that needs a chart read to
-	 * fail the way production fails it. Core annotates each of the three service calls
+	 * fail the way production fails it. Core annotates every service call
 	 * {@link PatientClinicalContextBuilder} makes with an {@code @Authorized} privilege
 	 * ({@code getActiveOrders}/{@code Get Orders}, {@code getAllergies}/{@code Get Allergies},
-	 * {@code getActiveConditions}/{@code Get Conditions}), so refusing one and granting the rest
-	 * reproduces the role these defects are about — a site that grants {@code AI Query Patient Data}
-	 * without one of core's chart-read privileges. No stub throws; the real service call does.
+	 * {@code getActiveConditions}/{@code Get Conditions}, and the weight read's
+	 * {@code getConceptByUuid}/{@code Get Concepts} and
+	 * {@code getObservationsByPersonAndConcept}/{@code Get Observations}), so refusing one and
+	 * granting the rest reproduces the role these defects are about — a site that grants
+	 * {@code AI Query Patient Data} without one of core's chart-read privileges. No stub throws; the
+	 * real service call does. The builder's AGE read is outside this: it makes no service call, so a
+	 * case needing it to fail fails it at the {@code Patient} instead.
 	 *
 	 * <p>Shared rather than copied because the drift that matters is not cosmetic: a copy that loses
 	 * the {@code finally} leaks a crippled {@code UserContext} into every later test in the same

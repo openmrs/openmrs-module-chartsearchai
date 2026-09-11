@@ -6900,20 +6900,32 @@ seam and the `screened` key. The answer path had neither.
 **Both channels, for the same reason the loader rule gives**: *silence is the absence of a finding,
 never a muted one.*
 
-1. **All three catches log at WARN**, each naming the core privilege gating ITS OWN read. The
-   pairing is pinned and not left to the copy-paste: `ChartReadFailureLoudnessContextTest` refuses
-   exactly one privilege per case and asserts the resulting line names that one. It has to be,
-   because `warnUnreadable` drops the stack trace for an `APIAuthenticationException` on the
-   grounds that the message already names the privilege to grant — so for the commonest cause the
-   message IS the diagnosis, and a catch paired with a neighbour's constant sends an operator to
-   grant a privilege the blind arm never calls. Swap one and read the failure; a level assertion
-   alone cannot see it. Not two catches: the published
-   verdict below is the whole pass, so leaving the order catch silent would make the answer path's
-   log channel narrower than the standing surface's for the identical failure. Age and weight stay
-   at DEBUG, and not because nothing reads them — each has a real residue, which
-   `ChartAnswer.getChartReadForSafety()` records. They are outside the verdict because the verdict
-   is built from the two stamps and neither of these carries one. Adding stamps for them is a
-   further change and is not made here.
+1. **Every catch in `PatientClinicalContextBuilder.build` that degrades a read to an empty value
+   logs at WARN**, each naming the core privileges gating ITS OWN read. The pairing is pinned and
+   not left to the copy-paste: `ChartReadFailureLoudnessContextTest` refuses exactly one privilege
+   per case and asserts the resulting line names that one. It has to be, because `warnUnreadable`
+   drops the stack trace for an `APIAuthenticationException` on the grounds that the message
+   already names the privilege to grant — so for the commonest cause the message IS the diagnosis,
+   and a catch paired with a neighbour's constant sends an operator to grant a privilege the blind
+   arm never calls. Swap one and read the failure; a level assertion alone cannot see it. Not two
+   catches: the published verdict below is the whole pass, so leaving the order catch silent would
+   make the answer path's log channel narrower than the standing surface's for the identical
+   failure.
+
+   **Age and weight are loud too, and the stamp question is a different question.** They are
+   outside the verdict because the verdict is built from the two stamps and neither of these
+   carries one — adding stamps for them is a further change and is not made here — but that scopes
+   the KEY, and an earlier draft of this decision offered it as the reason for the LEVEL as well,
+   which it never was. Each has a real residue: a failed age read leaves `DrugReference.bandForAge`
+   nothing to band on, so the injected record omits its dosing lines; a failed weight read silences
+   the per-kg leg of `DrugSafetyValidator.addOverdose`, and the shipped `sourceFormat=json` dataset
+   carries a band whose only ceiling is per-kg, which then raises no overdose chip at all. Both
+   residues are the #149 shape this decision exists to remove, two lines from the three it removed
+   it at, and neither needs a stamp to be reported. The age line names no privilege, deliberately:
+   `Patient.getAge()` makes no service call, so there is no `@Authorized` gate to send an operator
+   to, and naming a neighbour's would be the very copy-paste slip the pairing rule above forbids —
+   which is also why the trace-drop is conditional on a privilege having been named rather than on
+   the exception type alone. The weight line names two, because that read makes two service calls.
 
 2. **The answer carries `chartReadForSafety`**, a three-valued `Boolean`:
    `TRUE` all three of those reads completed, `FALSE` at least one did not, `null` no measurement.
@@ -6950,23 +6962,27 @@ never a muted one.*
   different question takes a different name.
 
 - **Adding a four-argument `inject` overload beside the three-argument one.** Widening the
-  signature in place cost seventeen compiler errors, and the UNIT of that figure is what the
-  argument turns on, so it is split here rather than quoted whole: **fourteen** were test doubles
-  OVERRIDING the method, each `@Override`-annotated, and three were plain three-argument call
-  sites. Only the fourteen are evidence for this choice — an overload leaves an override compiling
-  and silently inert on the production path, while it leaves a call site compiling and CORRECT on
-  the narrower arity. (The seventeen is the compiler's own count on 2026-09-11, from widening the
-  signature; the split is read off this change's diff — fourteen removed
-  `public PatientChart inject(PatientChart chart, Patient patient, String question)` declarations
-  against three migrated call sites. Both numbers move with the test tree, and a later re-measure
-  will differ from seventeen because this change added a call site of its own: re-measure the same
-  way rather than differencing these.) Silent inertness is
-  what `DrugSafetyValidator.validate`'s javadoc records as having already happened
-  here — *"the rest passed while stubbing nothing, and two of them were still doing so after a review
-  of the commit that added the overload"*. Widening turned each of the fourteen into a compile error
-  rather than a green test stubbing nothing, and
-  `ArchitectureGuardTest.theInjectorExposesExactlyOneInjectArity` keeps it that way: nothing
-  observable separates the two worlds on the day an overload is added, so the guard is structural.
+  signature in place turned every test double OVERRIDING the method into a compile error. That is
+  the whole of the argument, and it is an argument about the UNIT rather than about a size: a
+  double overriding this method is evidence, because an overload leaves it compiling and silently
+  inert on the production path; a plain three-argument CALL SITE is not, because an overload leaves
+  it compiling and CORRECT on the narrower arity. Silent inertness is what
+  `DrugSafetyValidator.validate`'s javadoc records as having already happened here — *"the rest
+  passed while stubbing nothing, and two of them were still doing so after a review of the commit
+  that added the overload"*. `ArchitectureGuardTest.theInjectorExposesExactlyOneInjectArity` keeps
+  it that way: nothing observable separates the two worlds on the day an overload is added, so the
+  guard is structural.
+
+  **No count of either population is recorded, and that omission is a correction rather than an
+  oversight.** Two were recorded here and both were wrong, each derived by grepping this change's
+  diff for removed `public PatientChart inject(PatientChart chart, Patient patient, String question)`
+  declarations. That literal cannot see a double written with the fully-qualified return and
+  parameter types, so it files those under call sites — the side the argument rests on being *not*
+  evidence, which both understates the doubles and asserts the safe outcome of sites carrying the
+  dangerous one. The populations also move with the test tree. Whoever needs a figure measures it
+  rather than reading one here: restore the test tree to its pre-widening state against the widened
+  signature and compile, taking each *"does not override or implement a method from a supertype"*
+  as a double and each *"cannot be applied to given types"* as a call site. Never by grep.
 
 ### Consequences
 

@@ -471,14 +471,23 @@ public class DrugReferenceInjector {
 	 * this repo has already measured what the alternative does: {@code DrugSafetyValidator.validate}
 	 * kept its narrower arity when the pair-extent sink arrived, and the test doubles overriding it
 	 * went silently inert on the production path — "the rest passed while stubbing nothing, and two
-	 * of them were still doing so after a review of the commit that added the overload". Fourteen
-	 * doubles OVERRODE this method when the sink was added, and widening in place turned each into
-	 * a compile error instead of a green test that stubs nothing. Say doubles and not compiler
-	 * errors: the widening raised seventeen of those, and the other three were plain
-	 * three-argument call sites, which an overload would have left compiling and CORRECT — so they
-	 * are not evidence for this choice. (Seventeen is the compiler's own count on 2026-09-11; the
-	 * split is read off this change's diff. Both move with the test tree — this change added a
-	 * call site of its own — and are what the choice cost, not standing facts.)
+	 * of them were still doing so after a review of the commit that added the overload". Widening
+	 * in place turned every double overriding this method into a compile error instead of a green
+	 * test that stubs nothing.
+	 *
+	 * <p><b>No tally of them is published — not here, not in the ADR — and the omission is the
+	 * correction.</b> Two counts were published and both were wrong, each by the same derivation:
+	 * grepping the change's diff for removed {@code public PatientChart inject(PatientChart, Patient,
+	 * String)} declarations. That literal cannot see a double written with the fully-qualified
+	 * return and parameter types, so it files those under CALL SITES — the side of the split the
+	 * argument rests on being NOT evidence. What the decision turns on is the UNIT and not the
+	 * size: a double OVERRIDING this method is evidence, because an overload would leave it
+	 * compiling and silently inert on the production path; a plain three-argument CALL SITE is
+	 * not, because an overload would leave it compiling and correct. Both populations move with
+	 * the test tree in any case. To measure either, restore the test tree to its pre-widening
+	 * state against the widened signature and compile — javac reports each double as "does not
+	 * override or implement a method from a supertype" and each call site as "cannot be applied to
+	 * given types". Never by grep.
 	 *
 	 * @param readStatus a caller-supplied one-slot accumulator the pass states its chart-read
 	 *        verdict into, or {@code null} from a caller that does not publish it.

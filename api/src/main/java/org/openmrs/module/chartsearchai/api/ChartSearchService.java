@@ -1051,7 +1051,7 @@ public interface ChartSearchService {
 		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/247">#247</a>).
 		 *
 		 * <p><b>Those three reads and no others, which is narrower than it sounds.</b> Two other
-		 * failures leave this verdict {@code TRUE}, both deliberately, and both still at DEBUG:
+		 * failures leave this verdict {@code TRUE}, both deliberately:
 		 * <ul>
 		 * <li>AGE and WEIGHT, each with a real and unstamped gap of its own. A failed AGE read makes
 		 * {@code DrugReference.bandForAge} answer null, which drops the dosing lines from the
@@ -1059,7 +1059,9 @@ public interface ChartSearchService {
 		 * {@code DrugSafetyValidator.addOverdose}, so a band whose only ceiling is per-kg — the
 		 * shipped {@code sourceFormat=json} dataset has one — raises no overdose chip at all. Both
 		 * are outside this key because the key is built from the two stamps and neither of these
-		 * carries one; both still log at DEBUG.</li>
+		 * carries one. That scopes the KEY and never the log: both go through the same
+		 * {@code warnUnreadable} the three stamped reads do, so a failure of either is audible on a
+		 * stock install (the age line names no privilege, its read making no service call).</li>
 		 * <li>The per-order sub-reads INSIDE the active-order loop — an order's concept uuid, its
 		 * concept names, its ATC codes. Each has its own catch and leaves
 		 * {@code activeDrugOrdersRead} true, so an order read partly is not a read that failed.</li>
@@ -1085,9 +1087,13 @@ public interface ChartSearchService {
 		 * or that anything was found. An empty {@code safetyWarnings} beside {@code TRUE} is a
 		 * measurement of none <b>on a payload whose warnings are final</b> — not on the early
 		 * {@code done} of an async-grounding stream, which carries an empty list by construction
-		 * because {@code validate} has not run. This key IS non-null on that event — like
+		 * because {@code validate} has not run. This key is already FINAL on that event — like
 		 * {@code unresolvedDrugClass} and {@code conditionRuleCoverage}, and unlike the answer checks
-		 * beside it — because it is genuinely known that early.</li>
+		 * beside it, which are deferred to the later {@code grounded} event — because the read it
+		 * reports happens before the model is called. <b>Final is not non-null</b>: the shipped
+		 * default has {@code chartsearchai.drugReference.enabled} off, so the pass returns before it
+		 * has a context and this key reads {@code null} on the early {@code done} and on the final
+		 * payload alike. A client must not treat {@code null} there as a protocol violation.</li>
 		 * <li>{@code FALSE} — at least one of the three did not complete. An empty
 		 * {@code safetyWarnings} beside it is NOT a measurement of none and must not be rendered as
 		 * a clear chart — and a NON-empty one beside it is not complete either, because a read that

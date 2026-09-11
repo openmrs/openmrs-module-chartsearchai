@@ -42,6 +42,7 @@ import org.openmrs.ConceptReferenceTerm;
 import org.openmrs.ConceptSource;
 import org.openmrs.DrugOrder;
 import org.openmrs.api.context.Context;
+import org.openmrs.api.context.UserContext;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.ChartSearchAiUtils;
 import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.PatientChart;
@@ -1565,6 +1566,45 @@ public final class DrugReferenceTestSupport {
 					+ (dash < 0 ? detail : detail.substring(0, dash)));
 		}
 		return leads;
+	}
+
+	/**
+	 * Runs {@code body} with exactly one privilege refused and every other one held, restoring the
+	 * prior {@code UserContext} whatever happens.
+	 *
+	 * <p><b>The one home for this arrangement</b>, shared by every case that needs a chart read to
+	 * fail the way production fails it. Core annotates each of the three service calls
+	 * {@link PatientClinicalContextBuilder} makes with an {@code @Authorized} privilege
+	 * ({@code getActiveOrders}/{@code Get Orders}, {@code getAllergies}/{@code Get Allergies},
+	 * {@code getActiveConditions}/{@code Get Conditions}), so refusing one and granting the rest
+	 * reproduces the role these defects are about — a site that grants {@code AI Query Patient Data}
+	 * without one of core's chart-read privileges. No stub throws; the real service call does.
+	 *
+	 * <p>Shared rather than copied because the drift that matters is not cosmetic: a copy that loses
+	 * the {@code finally} leaks a crippled {@code UserContext} into every later test in the same
+	 * context-sensitive JVM, and the symptom surfaces somewhere else entirely.
+	 *
+	 * @param privilege the one privilege to refuse, or {@code null} to hold every one — which is how
+	 *            a case gets its healthy-chart control through the identical path
+	 * @param body what to run; its value is returned
+	 */
+	public static <T> T refusingPrivilege(String privilege, java.util.function.Supplier<T> body) {
+		UserContext prior = Context.getUserContext();
+		if (privilege != null) {
+			Context.setUserContext(new UserContext(null) {
+
+				@Override
+				public boolean hasPrivilege(String held) {
+					return !privilege.equals(held);
+				}
+			});
+		}
+		try {
+			return body.get();
+		}
+		finally {
+			Context.setUserContext(prior);
+		}
 	}
 
 	/**

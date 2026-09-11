@@ -23,7 +23,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
-import org.openmrs.api.context.UserContext;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
@@ -81,22 +80,11 @@ public class LlmInferenceServiceChartReadForSafetyContextTest extends BaseModule
 		return service;
 	}
 
-	/** Runs {@code body} with {@code privilege} refused and every other one held. */
+	/** Runs {@code body} with {@code privilege} refused and every other one held —
+	 *  {@code DrugReferenceTestSupport.refusingPrivilege} is the one home for that arrangement and
+	 *  says why it is shared rather than copied. */
 	private <T> T refusing(String privilege, java.util.function.Supplier<T> body) {
-		UserContext prior = Context.getUserContext();
-		Context.setUserContext(new UserContext(null) {
-
-			@Override
-			public boolean hasPrivilege(String held) {
-				return !privilege.equals(held);
-			}
-		});
-		try {
-			return body.get();
-		}
-		finally {
-			Context.setUserContext(prior);
-		}
+		return DrugReferenceTestSupport.refusingPrivilege(privilege, body);
 	}
 
 	/**

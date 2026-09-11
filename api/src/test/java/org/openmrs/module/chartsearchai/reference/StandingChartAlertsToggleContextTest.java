@@ -19,7 +19,6 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.openmrs.Patient;
 import org.openmrs.api.context.Context;
-import org.openmrs.api.context.UserContext;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
 import org.openmrs.util.PrivilegeConstants;
@@ -190,22 +189,12 @@ public class StandingChartAlertsToggleContextTest extends BaseModuleContextSensi
 				"precondition: with every privilege held this chart screens, or the refusal below is "
 						+ "observing something other than the missing privilege");
 
-		UserContext prior = Context.getUserContext();
-		Context.setUserContext(new UserContext(null) {
-
-			@Override
-			public boolean hasPrivilege(String held) {
-				return !privilege.equals(held);
-			}
-		});
-		try {
+		DrugReferenceTestSupport.refusingPrivilege(privilege, () -> {
 			assertFalse(validator.standingChartAlerts(patient).isScreened(),
 					"a role that cannot read this patient's " + records + " must get a chart the builder "
 							+ "marks unread, not one reported clean");
-		}
-		finally {
-			Context.setUserContext(prior);
-		}
+			return null;
+		});
 	}
 
 	/**

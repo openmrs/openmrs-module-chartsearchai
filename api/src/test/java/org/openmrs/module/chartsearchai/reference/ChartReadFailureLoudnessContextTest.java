@@ -114,23 +114,12 @@ public class ChartReadFailureLoudnessContextTest extends BaseModuleContextSensit
 		DrugSafetyValidator validator =
 				DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService());
 
-		UserContext prior = Context.getUserContext();
-		if (privilege != null) {
-			Context.setUserContext(new UserContext(null) {
-
-				@Override
-				public boolean hasPrivilege(String held) {
-					return !privilege.equals(held);
-				}
-			});
-		}
-		try (LogCapture capture = LogCapture.on(BUILDER_LOGGER)) {
-			validator.validate(ANSWER, QUESTION, patient, null, null);
-			return capture.hasEventAtOrAbove(Level.WARN);
-		}
-		finally {
-			Context.setUserContext(prior);
-		}
+		return DrugReferenceTestSupport.refusingPrivilege(privilege, () -> {
+			try (LogCapture capture = LogCapture.on(BUILDER_LOGGER)) {
+				validator.validate(ANSWER, QUESTION, patient, null, null);
+				return capture.hasEventAtOrAbove(Level.WARN);
+			}
+		});
 	}
 
 	/**
@@ -207,15 +196,7 @@ public class ChartReadFailureLoudnessContextTest extends BaseModuleContextSensit
 		DrugSafetyValidator validator =
 				DrugReferenceTestSupport.validator(DrugReferenceTestSupport.curatedService());
 
-		UserContext prior = Context.getUserContext();
-		try {
-			Context.setUserContext(new UserContext(null) {
-
-				@Override
-				public boolean hasPrivilege(String held) {
-					return !PrivilegeConstants.GET_ALLERGIES.equals(held);
-				}
-			});
+		DrugReferenceTestSupport.refusingPrivilege(PrivilegeConstants.GET_ALLERGIES, () -> {
 			try (LogCapture capture = LogCapture.on(BUILDER_LOGGER)) {
 				validator.validate(ANSWER, QUESTION, patient, null, null);
 				assertTrue(capture.hasEventAtOrAbove(Level.WARN),
@@ -226,24 +207,31 @@ public class ChartReadFailureLoudnessContextTest extends BaseModuleContextSensit
 								+ "that repeats on every poll of an unrate-limited endpoint adds no "
 								+ "diagnosis (issue #247). Captured: " + capture.describeAll());
 			}
+			return null;
+		});
 
-			Context.setUserContext(new UserContext(null) {
+		// The other branch needs a cause that is NOT an authorization refusal, reaching the builder's
+		// catch from inside the same real service call. A user context whose privilege check itself
+		// throws does that: the exception travels out of getAllergies exactly as a fault in the store
+		// underneath it would, and is not an APIAuthenticationException.
+		UserContext prior = Context.getUserContext();
+		Context.setUserContext(new UserContext(null) {
 
-				@Override
-				public boolean hasPrivilege(String held) {
-					if (PrivilegeConstants.GET_ALLERGIES.equals(held)) {
-						throw new IllegalStateException("the store underneath is unreachable");
-					}
-					return true;
+			@Override
+			public boolean hasPrivilege(String held) {
+				if (PrivilegeConstants.GET_ALLERGIES.equals(held)) {
+					throw new IllegalStateException("the store underneath is unreachable");
 				}
-			});
-			try (LogCapture capture = LogCapture.on(BUILDER_LOGGER)) {
-				validator.validate(ANSWER, QUESTION, patient, null, null);
-				assertTrue(capture.hasThrowableAt(Level.WARN),
-						"a cause that is NOT a missing privilege keeps its stack trace — there the "
-								+ "trace is the whole diagnosis, and dropping it would make this "
-								+ "failure as silent as the DEBUG line issue #247 replaced");
+				return true;
 			}
+		});
+		try (LogCapture capture = LogCapture.on(BUILDER_LOGGER)) {
+			validator.validate(ANSWER, QUESTION, patient, null, null);
+			assertTrue(capture.hasThrowableAt(Level.WARN),
+					"a cause that is NOT a missing privilege keeps its stack trace — there the trace "
+							+ "is the whole diagnosis, and dropping it would make this failure as "
+							+ "silent as the DEBUG line issue #247 replaced. Captured: "
+							+ capture.describeAll());
 		}
 		finally {
 			Context.setUserContext(prior);
@@ -272,26 +260,17 @@ public class ChartReadFailureLoudnessContextTest extends BaseModuleContextSensit
 		DrugReferenceInjector injector = DrugReferenceTestSupport.injector(throwing);
 		PatientChart chart = DrugReferenceTestSupport.oneRecordChart();
 
-		UserContext prior = Context.getUserContext();
-		Context.setUserContext(new UserContext(null) {
-
-			@Override
-			public boolean hasPrivilege(String held) {
-				return !PrivilegeConstants.GET_ALLERGIES.equals(held);
-			}
-		});
-		try {
-			ChartReadStatus status = new ChartReadStatus();
+		ChartReadStatus status = new ChartReadStatus();
+		DrugReferenceTestSupport.refusingPrivilege(PrivilegeConstants.GET_ALLERGIES, () -> {
 			assertSame(chart, injector.inject(chart, patient, QUESTION, status),
 					"precondition: the injection must have failed and degraded to the chart it was "
 							+ "given, or this case is not exercising the throwing path at all");
-			assertEquals(Boolean.FALSE, status.stated(),
-					"the read happened and failed before the rendering threw, so the pass must still "
-							+ "report the chart as unread — null here would state no measurement "
-							+ "about a failure the module observed");
-		}
-		finally {
-			Context.setUserContext(prior);
-		}
+			return null;
+		});
+
+		assertEquals(Boolean.FALSE, status.stated(),
+				"the read happened and failed before the rendering threw, so the pass must still "
+						+ "report the chart as unread — null here would state no measurement about a "
+						+ "failure the module observed");
 	}
 }

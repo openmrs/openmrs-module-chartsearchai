@@ -193,8 +193,9 @@ public class ChartSearchAiSafetyWarningSeverityWireTest {
 						UNCORROBORATED_CONTRAINDICATION),
 				// Chip 8's sentence VERBATIM, answering false. Without it every other published field
 				// separates the two answers, so a value re-derived from `detail` agrees with the
-				// accessor on all nine chips and the comparison below passes — measured on this
-				// change's polish round, with the real put commented out and a sniff beside it.
+				// accessor on every chip in the list and the comparison below passes — measured on
+				// this change's polish round, with the real put commented out and a sniff beside it.
+				// Delete this chip, re-apply that mutation and read the green build.
 				new SafetyWarning(SafetyWarning.TYPE_CONTRAINDICATION, "Naltrexone",
 						UNCORROBORATED_CONTRAINDICATION));
 	}

@@ -86,7 +86,7 @@ public class ChartSearchAiUncorroboratedChartMatchTest {
 	public void setUp() {
 		controller = new ChartSearchAiRestController();
 		controller.setAuditLogService(new StubAuditLogService());
-		controller.setChartSearchService(new ThreeContraindicationStubService());
+		controller.setChartSearchService(new ContraindicationChipStubService());
 		controller.setPatientAccessCheck((user, patient) -> true);
 		out = new ByteArrayOutputStream();
 		openmrsContext.install();
@@ -259,8 +259,8 @@ public class ChartSearchAiUncorroboratedChartMatchTest {
 		return out.toString();
 	}
 
-	/** Returns the three fixture chips on every path the controller can take. */
-	private static class ThreeContraindicationStubService implements ChartSearchService {
+	/** Returns this class's fixture chips on every path the controller can take. */
+	private static class ContraindicationChipStubService implements ChartSearchService {
 
 		private ChartAnswer answer() {
 			return new ChartAnswer("Naltrexone is contraindicated [1].",

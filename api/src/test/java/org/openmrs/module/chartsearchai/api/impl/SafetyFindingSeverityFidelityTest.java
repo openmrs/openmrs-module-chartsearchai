@@ -30,6 +30,7 @@ import org.openmrs.Patient;
 import org.openmrs.module.chartsearchai.ChartSearchAiConstants;
 import org.openmrs.module.chartsearchai.LogCapture;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
+import org.openmrs.module.chartsearchai.api.ChartSearchService.UnstatedFindingSeverity;
 import org.openmrs.module.chartsearchai.api.impl.LlmProvider.LlmResponse;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceInjector;
 import org.openmrs.module.chartsearchai.reference.DrugReferenceTestSupport;
@@ -60,6 +61,14 @@ import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
  * excerpt rates Clarithromycin's partners across all four classes, so one arrangement here yields
  * Major, Moderate and Minor findings together — asserted in {@link #setUp()}, never assumed — and
  * {@link #anAnswerStatingOneRatingAndNotTheOthersReportsOnlyTheOthers} is what that buys.
+ *
+ * <p><b>Every case asserts the RATING as well as the citation, since issue
+ * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/387">#387</a>.</b> The key
+ * published a bare index list until then, and the mixed arrangement above is what makes the pairing
+ * checkable at all: {@link #statementsFor} builds the expectation from the ratings the real injector
+ * wrote, so a carrier that published one constant rating, a pairing shifted by one, or a severity
+ * read off a chip rather than off the record each redden. On a single-rating arrangement all three
+ * of those mutants stay green, which is the second thing the spread buys.
  *
  * <p>Everything here runs the real {@link LlmInferenceService#search}/{@code searchStreaming}
  * orchestration over a chart the real {@link PatientChartSerializer} rendered and the real
@@ -133,10 +142,10 @@ public class SafetyFindingSeverityFidelityTest {
 					"every finding whose rating the answer dropped must be reported in one line, "
 							+ "carrying the patient so a maintainer reading a log with concurrent "
 							+ "requests in it can reconstruct it. Captured: " + capture.describeAll());
-			assertEquals(new ArrayList<Integer>(ratedFindings.keySet()),
+			assertEquals(statementsFor(ratedFindings.keySet()),
 					answer.getUnstatedFindingSeverities(),
-					"and the same citations must reach the wire — the citation and never a word of "
-							+ "either text");
+					"and the same citations must reach the wire, each carrying its finding's own "
+							+ "rating — the citation and the rating, never a word of either text");
 		}
 	}
 
@@ -150,8 +159,10 @@ public class SafetyFindingSeverityFidelityTest {
 				+ enumerationCiting(ratedFindings.keySet())));
 		try (LogCapture capture = LogCapture.on(CHECK)) {
 			ChartAnswer answer = service.search(patient(), QUESTION);
-			assertEquals(indexesRatedOtherThan("Major"), answer.getUnstatedFindingSeverities(),
-					"exactly the findings whose OWN rating the answer never states are reported. "
+			assertEquals(statementsFor(indexesRatedOtherThan("Major")),
+					answer.getUnstatedFindingSeverities(),
+					"exactly the findings whose OWN rating the answer never states are reported, "
+							+ "each carrying that rating. "
 							+ "Ratings were: " + ratedFindings + "; captured: " + capture.describeAll());
 			for (Integer major : indexesRated("Major")) {
 				assertFalse(warnStating(capture, "[" + major + "]"),
@@ -214,7 +225,8 @@ public class SafetyFindingSeverityFidelityTest {
 				+ enumerationCiting(indexesRated("Major"))));
 		try (LogCapture capture = LogCapture.on(CHECK)) {
 			ChartAnswer answer = service.search(patient(), QUESTION);
-			assertEquals(indexesRated("Major"), answer.getUnstatedFindingSeverities(),
+			assertEquals(statementsFor(indexesRated("Major")),
+					answer.getUnstatedFindingSeverities(),
 					"\"majority\" is not the word \"Major\". Captured: " + capture.describeAll());
 		}
 	}
@@ -232,7 +244,7 @@ public class SafetyFindingSeverityFidelityTest {
 				+ enumerationCiting(moderate)));
 		try (LogCapture capture = LogCapture.on(CHECK)) {
 			ChartAnswer answer = service.search(patient(), QUESTION);
-			assertEquals(moderate, answer.getUnstatedFindingSeverities(),
+			assertEquals(statementsFor(moderate), answer.getUnstatedFindingSeverities(),
 					"\"immoderate\" is not the word \"Moderate\". Captured: " + capture.describeAll());
 		}
 	}
@@ -255,7 +267,7 @@ public class SafetyFindingSeverityFidelityTest {
 				+ "revision Major2024. " + enumerationCiting(major)));
 		try (LogCapture capture = LogCapture.on(CHECK)) {
 			ChartAnswer answer = service.search(patient(), QUESTION);
-			assertEquals(major, answer.getUnstatedFindingSeverities(),
+			assertEquals(statementsFor(major), answer.getUnstatedFindingSeverities(),
 					"a rating with a digit glued to either end of it is not the word. Captured: "
 							+ capture.describeAll());
 		}
@@ -291,7 +303,7 @@ public class SafetyFindingSeverityFidelityTest {
 		service.setLlmProvider(answering(enumerationCiting(descending)));
 		try (LogCapture capture = LogCapture.on(CHECK)) {
 			ChartAnswer answer = service.search(patient(), QUESTION);
-			assertEquals(descending, answer.getUnstatedFindingSeverities(),
+			assertEquals(statementsFor(descending), answer.getUnstatedFindingSeverities(),
 					"the order is the order the answer cites them in, not ascending index order. "
 							+ "Captured: " + capture.describeAll());
 		}
@@ -308,7 +320,8 @@ public class SafetyFindingSeverityFidelityTest {
 				+ order + "] [" + finding + "]."));
 		try (LogCapture capture = LogCapture.on(CHECK)) {
 			ChartAnswer answer = service.search(patient(), QUESTION);
-			assertEquals(Collections.singletonList(finding), answer.getUnstatedFindingSeverities(),
+			assertEquals(statementsFor(Collections.singletonList(finding)),
+					answer.getUnstatedFindingSeverities(),
 					"the finding is reported and the chart record beside it is not. Captured: "
 							+ capture.describeAll());
 		}
@@ -349,7 +362,8 @@ public class SafetyFindingSeverityFidelityTest {
 			ChartAnswer answer = service.searchStreaming(patient(), QUESTION, token -> { });
 			assertTrue(warnStating(capture, "[" + finding + "]"),
 					"the streaming path must run the same check. Captured: " + capture.describeAll());
-			assertEquals(Collections.singletonList(finding), answer.getUnstatedFindingSeverities(),
+			assertEquals(statementsFor(Collections.singletonList(finding)),
+					answer.getUnstatedFindingSeverities(),
 					"and the answer this method RETURNS must carry the measurement");
 		}
 	}
@@ -365,7 +379,8 @@ public class SafetyFindingSeverityFidelityTest {
 		// at handoff is what makes moving the check above the handoff redden this case.
 		Integer finding = indexesRated("Major").get(0);
 		service.setLlmProvider(answering(enumerationCiting(Collections.singletonList(finding))));
-		final List<List<Integer>> early = new ArrayList<List<Integer>>();
+		final List<List<UnstatedFindingSeverity>> early =
+				new ArrayList<List<UnstatedFindingSeverity>>();
 		final List<List<String>> loggedByHandoff = new ArrayList<List<String>>();
 
 		try (LogCapture capture = LogCapture.on(CHECK)) {
@@ -388,7 +403,8 @@ public class SafetyFindingSeverityFidelityTest {
 					"and the check must not have RUN by then — moving it ahead of the handoff puts a "
 							+ "comparison in front of the event a user sees. Captured at handoff: "
 							+ loggedByHandoff.get(0));
-			assertEquals(Collections.singletonList(finding), answer.getUnstatedFindingSeverities(),
+			assertEquals(statementsFor(Collections.singletonList(finding)),
+					answer.getUnstatedFindingSeverities(),
 					"and the answer this method RETURNS carries it");
 		}
 	}
@@ -427,6 +443,31 @@ public class SafetyFindingSeverityFidelityTest {
 		}
 	}
 
+	@Test
+	public void theStatementCarriesEachFindingsOwnRatingBesideItsCitation() {
+		// Issue #387. Before it, this key published the citation alone and the rating was dropped on
+		// the way out, although the check holds the `citation -> rating` map it decides FROM. A
+		// client could not rebuild the pairing: the chips carry every rating and no citation index,
+		// and on the issue's own reproduction all five findings were (interaction, Clarithromycin),
+		// so (type, drug) identified none of them.
+		//
+		// This case rests on the MIXED arrangement setUp() asserts, and that is what makes it a
+		// discriminator rather than a shape check: the ratings really do differ between findings, so
+		// a carrier writing one constant rating, a pairing shifted by one, or a severity read off a
+		// chip instead of the record all redden. On a single-rating arrangement every one of those
+		// mutants stays green.
+		service.setLlmProvider(answering(enumerationCiting(ratedFindings.keySet())));
+		try (LogCapture capture = LogCapture.on(CHECK)) {
+			ChartAnswer answer = service.search(patient(), QUESTION);
+			assertEquals(statementsFor(ratedFindings.keySet()),
+					answer.getUnstatedFindingSeverities(),
+					"each published entry must carry the rating of the finding its citation names, "
+							+ "read off what production injected rather than off a word this file "
+							+ "chose. Ratings were: " + ratedFindings + "; captured: "
+							+ capture.describeAll());
+		}
+	}
+
 	/** An answer that names each cited record in one flat clause with no rating anywhere — the
 	 *  ticket's own shape, and the one the round-two check cannot see because it reproduces nothing
 	 *  of the records it cites. */
@@ -457,6 +498,18 @@ public class SafetyFindingSeverityFidelityTest {
 			if (!rating.equals(finding.getValue())) {
 				out.add(finding.getKey());
 			}
+		}
+		return out;
+	}
+
+	/** The statement production must publish for {@code indexes}: each citation paired with the
+	 *  rating the REAL injector wrote onto that record, in the order given. Read off
+	 *  {@code ratedFindings}, which {@link #setUp()} builds from what the pipeline produced — never
+	 *  from a rating this file chose, or the assertion would pin the test's own opinion. */
+	private List<UnstatedFindingSeverity> statementsFor(Iterable<Integer> indexes) {
+		List<UnstatedFindingSeverity> out = new ArrayList<UnstatedFindingSeverity>();
+		for (Integer index : indexes) {
+			out.add(new UnstatedFindingSeverity(index.intValue(), ratedFindings.get(index)));
 		}
 		return out;
 	}

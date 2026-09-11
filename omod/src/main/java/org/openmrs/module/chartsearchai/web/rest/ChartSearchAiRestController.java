@@ -48,6 +48,7 @@ import org.openmrs.module.chartsearchai.api.ChartSearchService.ActiveOrderClaims
 import org.openmrs.module.chartsearchai.api.ChartSearchService.ChartAnswer;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.FindingCitationExtent;
 import org.openmrs.module.chartsearchai.api.ChartSearchService.RecordReference;
+import org.openmrs.module.chartsearchai.api.ChartSearchService.UnstatedFindingSeverity;
 import org.openmrs.module.chartsearchai.api.AuditLogService;
 import org.openmrs.module.chartsearchai.api.PatientAccessCheck;
 import org.openmrs.module.chartsearchai.api.impl.PrewarmBootstrapService;
@@ -1509,10 +1510,14 @@ public class ChartSearchAiRestController {
 	 *
 	 * <p>{@code unstatedFindingSeverities} is that remedy a third time, back on the issue the first
 	 * one came from (<a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/337">issue
-	 * #337</a>, round three): the citations of safety findings whose RATING the answer states nowhere. It
+	 * #337</a>, round three): the citations of safety findings whose RATING the answer states nowhere,
+	 * each carrying that rating since
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/387">#387</a>. It
 	 * reaches this method rather than {@code putSafetyChips} for the reason its two neighbours do —
 	 * it is a statement about the ANSWER, not a chip — and it is emphatically not a restatement of
 	 * the chips' own {@code severity}, which is what the answer was supposed to carry and did not.
+	 * Nor does carrying the rating make it one: the value is the RECORD's, it differs from the chip's
+	 * in form and in extent, and {@link #serializeUnstatedFindingSeverities} carries why.
 	 *
 	 * <p>{@code conditionRuleCoverage} is the same remedy again, from the issue beside it
 	 * (<a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/378">#378</a>): what
@@ -1561,13 +1566,54 @@ public class ChartSearchAiRestController {
 		List<Integer> misattributed = answer.getMisattributedOrderCitations();
 		target.put("misattributedOrderCitations",
 			misattributed == null ? null : new ArrayList<Integer>(misattributed));
-		List<Integer> unstatedSeverities = answer.getUnstatedFindingSeverities();
 		target.put("unstatedFindingSeverities",
-			unstatedSeverities == null ? null : new ArrayList<Integer>(unstatedSeverities));
+			serializeUnstatedFindingSeverities(answer.getUnstatedFindingSeverities()));
 		target.put("activeOrderClaims", serializeActiveOrderClaims(answer.getActiveOrderClaims()));
 		target.put("findingCitations",
 				serializeFindingCitationExtent(answer.getFindingCitationExtent()));
 		putConditionRuleCoverage(target, answer.getConditionRuleCoverage());
+	}
+
+	/**
+	 * The wire shape of {@code unstatedFindingSeverities}: one object per offending citation,
+	 * {@code citation} the index the answer printed in brackets and {@code severity} the rating that
+	 * finding's own record states and the answer does not — issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/387">#387</a>.
+	 * {@code null} for an answer whose check stated no measurement and an empty list for one that ran
+	 * and named none, the distinction {@link #putModuleStatements} preserves for every key in this
+	 * family. {@code ChartSearchService.UnstatedFindingSeverity} is canonical for what each entry
+	 * does and does not assert.
+	 *
+	 * <p><b>Why the two travel in one object rather than on two keys.</b> Before #387 this key was a
+	 * bare index list and the rating was dropped on the way out, although the check holds both in the
+	 * map it decides from. A client could not rebuild the pairing: the {@code safetyWarnings} chips
+	 * carry every rating and no citation index, and {@code (type, drug)} identifies no one finding.
+	 * A sibling map keyed by index would have closed the same gap and was declined — it is two keys
+	 * that must agree, and a consumer reading this one would still be doing a join.
+	 *
+	 * <p><b>It is emphatically not the chips reconciled against the answer.</b> The value is the
+	 * rating that travels structurally beside the record the model read, and no chip is read here or
+	 * gains a citation index. It is also not the chip's own {@code severity} value, differing from it
+	 * in form and in extent — the value type's javadoc carries both differences and a client must not
+	 * join the two on string equality.
+	 *
+	 * <p>An {@code ArrayList} of {@code LinkedHashMap}, the shape {@link #serializeSafetyWarnings}
+	 * already publishes, which is what keeps issue #347's XStream rule satisfied: the marshaller
+	 * refuses {@code Collections}' immutable wrappers, and the accessor hands one out.
+	 */
+	private List<Map<String, Object>> serializeUnstatedFindingSeverities(
+			List<UnstatedFindingSeverity> unstated) {
+		if (unstated == null) {
+			return null;
+		}
+		List<Map<String, Object>> out = new ArrayList<Map<String, Object>>();
+		for (UnstatedFindingSeverity entry : unstated) {
+			Map<String, Object> map = new LinkedHashMap<String, Object>();
+			map.put("citation", entry.getCitation());
+			map.put("severity", entry.getSeverity());
+			out.add(map);
+		}
+		return out;
 	}
 
 	/**

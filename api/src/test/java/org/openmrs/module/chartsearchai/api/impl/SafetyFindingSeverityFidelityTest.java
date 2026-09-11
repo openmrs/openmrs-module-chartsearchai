@@ -11,6 +11,7 @@ package org.openmrs.module.chartsearchai.api.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
@@ -487,6 +488,29 @@ public class SafetyFindingSeverityFidelityTest {
 						"the maintainer's channel states the rating beside the citation too, or a "
 								+ "reader triaging this cannot tell a dropped Major from a dropped "
 								+ "Minor. Captured: " + capture.describeAll());
+				// And the value equality this type defines is observed HERE and nowhere else:
+				// measured, `equals` returning true unconditionally left the whole build green, so
+				// the type carried published API that nothing exercised. Asked of the entry
+				// PRODUCTION published rather than of a pair built here, so it stays a statement
+				// about the real answer. Both fields have to matter — a consumer keying on these,
+				// which is what defining equality invites, would otherwise collapse a Major entry
+				// and a Moderate one for the same citation.
+				assertEquals(
+						new UnstatedFindingSeverity(published.getCitation(), published.getSeverity()),
+						published, "an entry with the same citation and rating IS this one");
+				assertEquals(
+						new UnstatedFindingSeverity(published.getCitation(), published.getSeverity())
+								.hashCode(),
+						published.hashCode(), "and equal entries agree on hashCode, as the contract "
+								+ "between the two requires");
+				assertNotEquals(
+						new UnstatedFindingSeverity(published.getCitation(),
+								published.getSeverity() + "x"),
+						published, "an entry differing only in its RATING is not this one");
+				assertNotEquals(
+						new UnstatedFindingSeverity(published.getCitation() + 1,
+								published.getSeverity()),
+						published, "nor is one differing only in its CITATION");
 			}
 		}
 	}

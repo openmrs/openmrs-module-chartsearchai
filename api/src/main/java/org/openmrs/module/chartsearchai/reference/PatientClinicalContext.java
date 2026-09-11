@@ -234,8 +234,9 @@ public class PatientClinicalContext {
 	}
 
 	/**
-	 * @return whether EVERY chart read this context was built from completed — both
-	 *         {@link #contraindicationRecordsRead()} and {@link #activeDrugOrdersRead()}.
+	 * @return whether both stamped reads this context was built from completed —
+	 *         {@link #contraindicationRecordsRead()} AND {@link #activeDrugOrdersRead()}. Not every
+	 *         read the builder makes: age and weight are unstamped and outside this verdict.
 	 *
 	 *         <p><b>The whole pass, never one side of it</b> (issue
 	 *         <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/247">#247</a>).

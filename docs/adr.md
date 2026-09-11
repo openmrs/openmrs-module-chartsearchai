@@ -6865,9 +6865,10 @@ this decision, nothing published either one:
 Issue [#247](https://github.com/openmrs/openmrs-module-chartsearchai/issues/247) measured it: read
 OK with an allergy recorded gave 1 chip and 1 finding; read OK with nothing recorded gave 0 and 0;
 **read FAILED gave 0 and 0**, and no mention anywhere that the chart was unread. It needs no bad
-data and no operator mistake — any permissions problem, database error or querystore fault reaches
-it, and the commonest is a role granted `AI Query Patient Data` without one of core's chart-read
-privileges.
+data and no operator mistake. The three reads go through core's service layer, each behind an
+`@Authorized` privilege, so a role granted `AI Query Patient Data` without `Get Allergies`,
+`Get Conditions` or `Get Orders` reaches it — that is the commonest cause and the one the tests
+drive — and so does a database error underneath them.
 
 [Decision 79](#decision-79-the-standing-chart-finding-is-served-by-a-surface-a-client-asks-for-not-by-every-answer)
 had already met this on `GET /chartsearchai/chartalerts` and solved it there, with a WARN at the
@@ -6886,7 +6887,8 @@ never a muted one.*
    pins as unreachable from the injector.
 
 2. **The answer carries `chartReadForSafety`**, a three-valued `Boolean`:
-   `TRUE` the reads completed, `FALSE` at least one failed, `null` no measurement.
+   `TRUE` all three stamped reads completed, `FALSE` at least one failed, `null` no measurement.
+   Age and weight are outside it — see the scoping in point 1.
    `ChartAnswer.getChartReadForSafety()` is canonical for what each asserts and is the only place
    that enumeration lives.
 
@@ -6918,11 +6920,13 @@ never a muted one.*
   different question takes a different name.
 
 - **Adding a four-argument `inject` overload beside the three-argument one.** Seventeen test doubles
-  override that method. An overload leaves every stale one compiling and silently inert on the
+  overrode that method when this was written (measured 2026-09-11 by widening the signature and
+  reading the compiler's errors; the number moves with the test tree and is recorded as what the
+  choice cost, not as a standing fact). An overload leaves every stale one compiling and silently inert on the
   production path, which `DrugSafetyValidator.validate`'s javadoc records as having already happened
   here — *"the rest passed while stubbing nothing, and two of them were still doing so after a review
-  of the commit that added the overload"*. The signature was widened in place instead, turning all
-  seventeen into compile errors, and
+  of the commit that added the overload"*. The signature was widened in place instead, turning every
+  stale one into a compile error, and
   `ArchitectureGuardTest.theInjectorExposesExactlyOneInjectArity` keeps it that way: nothing
   observable separates the two worlds on the day an overload is added, so the guard is structural.
 

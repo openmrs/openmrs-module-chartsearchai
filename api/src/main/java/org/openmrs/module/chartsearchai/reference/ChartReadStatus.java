@@ -10,8 +10,8 @@
 package org.openmrs.module.chartsearchai.reference;
 
 /**
- * A one-slot accumulator a caller supplies to hear whether the chart reads behind a drug-reference
- * pass actually happened (issue
+ * A one-slot accumulator a caller supplies to hear whether the two STAMPED chart reads behind a
+ * drug-reference pass happened — the contraindication records and the active orders (issue
  * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/247">#247</a>).
  *
  * <p><b>Why a sink rather than a return value or an accessor.</b>
@@ -26,29 +26,19 @@ package org.openmrs.module.chartsearchai.reference;
  * would be one slot shared by every concurrent request (issue #172). A pass with no sink records
  * nothing and costs nothing.
  *
- * <p><b>What {@link #stated()} means, and this is the one place it is said.</b>
- * <ul>
- * <li>{@code TRUE} — every chart read that pass made completed. It does NOT say a contraindication
- * was screened, that the loaded dataset had a rule to ask ({@code conditionRuleCoverage} is that
- * question), or that any finding was raised.</li>
- * <li>{@code FALSE} — at least one read failed, so the emptiness of anything derived from the chart
- * is uninterpretable rather than a measurement. An empty chip list beside this is not a clear
- * chart.</li>
- * <li>{@code null} — no measurement: the pass did not run (the feature is off, or there was no
- * chart), or it threw before the context was built. Never read {@code null} as either verdict.</li>
- * </ul>
- *
- * <p>The verdict written here is {@link PatientClinicalContext#chartReadForSafety()} — the WHOLE
- * pass, both stamps. A records-only verdict was the first shape and it reads {@code true} on a
- * request whose active-order read failed, which is the defect ADR Decision 79 records one surface
- * over.
+ * <p><b>What the three answers MEAN is not enumerated here.</b> It is one enumeration with one
+ * home, {@code ChartSearchService.ChartAnswer.getChartReadForSafety()}, which is where a consumer
+ * meets this value and where README sends one; a second copy beside the producer is how the two
+ * come to disagree. What belongs here is only what this class DOES: it carries
+ * {@link PatientClinicalContext#chartReadForSafety()} — the WHOLE pass, both stamps — unset until
+ * a pass records one.
  */
 public final class ChartReadStatus {
 
 	private Boolean stated;
 
 	/**
-	 * States whether the pass's chart reads completed. Production has exactly one writer,
+	 * States whether both stamped reads completed. Production has exactly one writer,
 	 * {@link DrugReferenceInjector#inject}; a second producer anywhere would be issue #151's shape.
 	 *
 	 * @param read {@link PatientClinicalContext#chartReadForSafety()} for the context the pass built
@@ -58,9 +48,9 @@ public final class ChartReadStatus {
 	}
 
 	/**
-	 * @return the verdict, or {@code null} where the pass stated none — the class javadoc above
-	 *         enumerates what each of the three answers does and does not assert, and is the only
-	 *         place that enumeration lives
+	 * @return the verdict, or {@code null} where the pass stated none.
+	 *         {@code ChartSearchService.ChartAnswer.getChartReadForSafety()} is canonical for what
+	 *         each of the three answers does and does not assert
 	 */
 	public Boolean stated() {
 		return stated;

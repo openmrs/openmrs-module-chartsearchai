@@ -119,7 +119,7 @@ public class LlmInferenceService implements ChartSearchService {
 		String outcome = "error";
 		try {
 			PatientChart chart = chartBuildingStrategy.buildChart(patient, question);
-			// And whether the chart reads behind the drug-safety layer actually happened (issue
+			// And whether the two stamped chart reads behind the drug-safety layer happened (issue
 			// #247). Stated by the INJECTOR's pass and not the validator's: this is the request's
 			// first chart read, it happens whenever a screen could (validate gates on one switch
 			// more), and it is the only one that has happened by the time the ungrounded answer is
@@ -527,7 +527,7 @@ public class LlmInferenceService implements ChartSearchService {
 		String outcome = "error";
 		try {
 			PatientChart chart = chartBuildingStrategy.buildChart(patient, question);
-			// And whether the chart reads behind the drug-safety layer actually happened (issue
+			// And whether the two stamped chart reads behind the drug-safety layer happened (issue
 			// #247). Stated by the INJECTOR's pass and not the validator's: this is the request's
 			// first chart read, it happens whenever a screen could (validate gates on one switch
 			// more), and it is the only one that has happened by the time the ungrounded answer is

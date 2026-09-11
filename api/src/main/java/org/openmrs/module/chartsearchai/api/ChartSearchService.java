@@ -917,15 +917,22 @@ public interface ChartSearchService {
 		}
 
 		/**
-		 * Whether every chart read behind this answer's drug-safety layer actually completed (issue
+		 * Whether the three chart reads the drug-safety screen rests on — this patient's allergies,
+		 * her conditions and her active drug orders — all completed behind this answer (issue
 		 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/247">#247</a>).
+		 *
+		 * <p>Those three and not every read the builder makes: it also reads age and weight, which
+		 * feed the dose arm and are deliberately outside this verdict — that arm cannot reach the
+		 * renderer, and their catches stay at DEBUG. ADR Decision 91 records the scoping.
 		 *
 		 * <p><b>The problem it exists to remove.</b> {@code PatientClinicalContextBuilder} degrades a
 		 * failed allergy, condition or active-order read to an EMPTY set, which is the right fail-safe
 		 * for an additive net and leaves the clinician-facing response identical to a healthy
 		 * patient's: no chips, no findings, and — before this key — nothing anywhere on the wire to
-		 * tell the two apart. The failure needs no bad data and no operator mistake; any permissions
-		 * problem, database error or querystore fault reaches it.
+		 * tell the two apart. The failure needs no bad data and no operator mistake: these reads go
+		 * through core's service layer, each behind an {@code @Authorized} privilege, so a role
+		 * granted this module's own privilege without {@code Get Allergies}, {@code Get Conditions}
+		 * or {@code Get Orders} reaches it, and so does a database error underneath them.
 		 *
 		 * <p><b>What each value asserts.</b> This is the only place that enumeration lives; README
 		 * points here rather than restating it.

@@ -63,10 +63,11 @@ import org.openmrs.module.chartsearchai.serializer.SerializedRecord;
  * Major, Moderate and Minor findings together — asserted in {@link #setUp()}, never assumed — and
  * {@link #anAnswerStatingOneRatingAndNotTheOthersReportsOnlyTheOthers} is what that buys.
  *
- * <p><b>Every case asserts the RATING as well as the citation, since issue
- * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/387">#387</a>.</b> The key
- * published a bare index list until then, and the mixed arrangement above is what makes the pairing
- * checkable at all: {@link #statementsFor} builds the expectation from the ratings the real injector
+ * <p><b>Every case that names a published entry names its RATING too, since issue
+ * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/387">#387</a></b> — the
+ * cases whose claim is an EMPTY statement or none still assert just that. The key published a bare
+ * index list until then, and the mixed arrangement above is what makes the pairing checkable at
+ * all: {@link #statementsFor} builds the expectation from the ratings the real injector
  * wrote, not from a word this file chose. Mutate the pairing and read the failures — a constant
  * rating and a pairing shifted by one each redden cases here, and on a single-rating arrangement
  * neither could. What this file does NOT hold is which SOURCE the carrier read the rating from: the
@@ -476,16 +477,14 @@ public class SafetyFindingSeverityFidelityTest {
 			// rather than by that method; the equality assertions further down then pin the method.
 			for (UnstatedFindingSeverity published : answer.getUnstatedFindingSeverities()) {
 				assertEquals(ratedFindings.get(Integer.valueOf(published.getCitation())),
-						published.getSeverity(),
+						published.getRating(),
 						"the entry for citation [" + published.getCitation() + "] states the rating "
 								+ "its own record carries");
-				// And the WARN carries the same pair. The two are built from one `rating` local, and
-				// the check's own javadoc says they cannot disagree — which was an unpinned claim
-				// until here: every other case in this file asserts the citation in the log and none
-				// of them asserts the rating beside it, so dropping the rating from the reason
-				// string left the whole build green.
+				// And the WARN carries the same pair, which was unpinned until here: no other case in
+				// this file asserts a rating in the log, so a check that logged the citation alone
+				// left the whole build green — measured, by logging just the citation.
 				assertTrue(warnStating(capture,
-						"[" + published.getCitation() + "] " + published.getSeverity()),
+						"[" + published.getCitation() + "] " + published.getRating()),
 						"the maintainer's channel states the rating beside the citation too, or a "
 								+ "reader triaging this cannot tell a dropped Major from a dropped "
 								+ "Minor. Captured: " + capture.describeAll());
@@ -497,20 +496,20 @@ public class SafetyFindingSeverityFidelityTest {
 				// which is what defining equality invites, would otherwise collapse a Major entry
 				// and a Moderate one for the same citation.
 				assertEquals(
-						new UnstatedFindingSeverity(published.getCitation(), published.getSeverity()),
+						new UnstatedFindingSeverity(published.getCitation(), published.getRating()),
 						published, "an entry with the same citation and rating IS this one");
 				assertEquals(
-						new UnstatedFindingSeverity(published.getCitation(), published.getSeverity())
+						new UnstatedFindingSeverity(published.getCitation(), published.getRating())
 								.hashCode(),
 						published.hashCode(), "and equal entries agree on hashCode, as the contract "
 								+ "between the two requires");
 				assertNotEquals(
 						new UnstatedFindingSeverity(published.getCitation(),
-								published.getSeverity() + "x"),
+								published.getRating() + "x"),
 						published, "an entry differing only in its RATING is not this one");
 				assertNotEquals(
 						new UnstatedFindingSeverity(published.getCitation() + 1,
-								published.getSeverity()),
+								published.getRating()),
 						published, "nor is one differing only in its CITATION");
 			}
 		}

@@ -1576,7 +1576,7 @@ public class ChartSearchAiRestController {
 
 	/**
 	 * The wire shape of {@code unstatedFindingSeverities}: one object per offending citation,
-	 * {@code citation} the index the answer printed in brackets and {@code severity} the rating that
+	 * {@code citation} the index the answer printed in brackets and {@code rating} the rating that
 	 * finding's own record states and the answer does not — issue
 	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/387">#387</a>.
 	 * {@code null} for an answer whose check stated no measurement and an empty list for one that ran
@@ -1585,8 +1585,14 @@ public class ChartSearchAiRestController {
 	 * does and does not assert.
 	 *
 	 * <p>Why the two travel in one object rather than on two keys, why this is not the chips
-	 * reconciled against the answer, and how its {@code severity} differs from a chip's are the value
-	 * type's own javadoc and ADR Decision 78's amendment; neither is restated here.
+	 * reconciled against the answer, and how this value differs from a chip's are the value type's own
+	 * javadoc and ADR Decision 78's amendment; neither is restated here.
+	 *
+	 * <p><b>The field is {@code rating} and not {@code severity}, deliberately.</b> A chip publishes
+	 * the operator's raw field under that second name while this is the trimmed form the module
+	 * recognised, so the two agree on every dataset but a padded one — a client joining them on string
+	 * equality would be right almost always and wrong exactly in the tail. Spelling them differently
+	 * makes that difference structural instead of a caveat a client has to read.
 	 *
 	 * <p><b>The entry is spelled out as a map rather than handed to the mapper</b>, which is the one
 	 * place this differs from {@code SafetyWarning.ChartOrderBridge}, the module's other list-published
@@ -1610,7 +1616,7 @@ public class ChartSearchAiRestController {
 		for (UnstatedFindingSeverity entry : unstated) {
 			Map<String, Object> map = new LinkedHashMap<String, Object>();
 			map.put("citation", entry.getCitation());
-			map.put("severity", entry.getSeverity());
+			map.put("rating", entry.getRating());
 			out.add(map);
 		}
 		return out;

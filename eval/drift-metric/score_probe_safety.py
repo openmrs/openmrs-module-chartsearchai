@@ -1758,6 +1758,21 @@ def selftest():
                    "a non-list rating body must not be counted as a dropped rating"))
     shapes.append((unstated_ratings(_cell({"carried": 7, "cited": 7}, [349])) == [349],
                    "unstated_ratings must read a well-formed list"))
+    # BOTH wire shapes of the key, because captures carry both and this scorer is the reason no
+    # compatibility shim was written for issue #387. Before it the key was a bare index array;
+    # since #387 each entry is an object carrying the rating beside the citation. Every reader here
+    # takes the value's PRESENCE and its LENGTH and never an element, so a capture of either shape
+    # scores the same — that is the property the decision leans on, and it was unpinned until here:
+    # a future reader that indexed an element would still pass every other row in this selftest
+    # while silently mis-scoring every capture taken before the rename.
+    objects = [{"citation": 349, "rating": "Major"}, {"citation": 350, "rating": "Moderate"}]
+    shapes.append((unstated_ratings(_cell({"carried": 7, "cited": 7}, objects)) == objects,
+                   "unstated_ratings must read the post-#387 object shape too"))
+    shapes.append((len(unstated_ratings(_cell({"carried": 7, "cited": 7}, objects))) == 2
+                   and ratings_dropped(_cell({"carried": 7, "cited": 7}, objects))
+                   and has_rating_measurement(_cell({"carried": 7, "cited": 7}, objects)),
+                   "and every reader must score it as two dropped ratings, as it would the "
+                   "equivalent index array"))
     # The population is scoped by the MEASUREMENT and never by `label` — an ABSTAIN-labelled cell
     # that dropped a hazard is still a dropped hazard (fixtures/probe-safety/finding-no-chip/ is
     # that label). No committed capture can show it, since every cell carrying the key labels

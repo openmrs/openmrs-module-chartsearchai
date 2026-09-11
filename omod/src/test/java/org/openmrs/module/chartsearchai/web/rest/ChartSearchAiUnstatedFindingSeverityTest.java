@@ -59,7 +59,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * an empty list is not a certificate, and which residues the check cannot see — is pinned one layer
  * down by {@code SafetyFindingSeverityFidelityTest} and is canonical at
  * {@code ChartSearchService.UnstatedFindingSeverity}. Here the subject is the wire: that the key
- * reaches every surface, that its two fields are spelled {@code citation} and {@code severity}, that
+ * reaches every surface, that its two fields are spelled {@code citation} and {@code rating} — the
+ * second deliberately NOT {@code severity}, which is a chip's raw field and a different value — that
  * {@code null} and empty survive as themselves, and that it marshals for an XML client, which is the
  * one shape a list-valued key is already known to break (issue #347).
  */
@@ -86,7 +87,7 @@ public class ChartSearchAiUnstatedFindingSeverityTest {
 
 	/** What the module states per case: the two dropped ratings by default, and reset per case.
 	 *  The two ratings DIFFER (issue #387) — with one repeated, a serializer writing the first
-	 *  entry's severity onto every entry would stay green here. */
+	 *  entry's rating onto every entry would stay green here. */
 	private List<UnstatedFindingSeverity> stated;
 
 	@BeforeEach
@@ -187,9 +188,9 @@ public class ChartSearchAiUnstatedFindingSeverityTest {
 		assertEquals(2, done.get("unstatedFindingSeverities").size());
 		assertEquals(350, done.get("unstatedFindingSeverities").get(0).get("citation").asInt());
 		assertEquals("Major",
-				done.get("unstatedFindingSeverities").get(0).get("severity").asText());
+				done.get("unstatedFindingSeverities").get(0).get("rating").asText());
 		assertEquals("Moderate",
-				done.get("unstatedFindingSeverities").get(1).get("severity").asText(),
+				done.get("unstatedFindingSeverities").get(1).get("rating").asText(),
 				"and the SECOND entry carries its own rating, not the first one's");
 	}
 
@@ -218,7 +219,7 @@ public class ChartSearchAiUnstatedFindingSeverityTest {
 				"the trailing event is where the measurement lands");
 		assertEquals(350, grounded.get("unstatedFindingSeverities").get(0).get("citation").asInt());
 		assertEquals("Major",
-				grounded.get("unstatedFindingSeverities").get(0).get("severity").asText(),
+				grounded.get("unstatedFindingSeverities").get(0).get("rating").asText(),
 				"and it carries the rating, which is the half issue #387 added");
 	}
 
@@ -259,10 +260,10 @@ public class ChartSearchAiUnstatedFindingSeverityTest {
 	/** The wire shape of one entry, spelled out as a map rather than compared through the value
 	 *  type — the subject here is what a JSON client receives, so the KEYS are part of the claim and
 	 *  a renamed one must redden. */
-	private static Map<String, Object> entry(int citation, String severity) {
+	private static Map<String, Object> entry(int citation, String rating) {
 		Map<String, Object> expected = new LinkedHashMap<String, Object>();
 		expected.put("citation", Integer.valueOf(citation));
-		expected.put("severity", severity);
+		expected.put("rating", rating);
 		return expected;
 	}
 

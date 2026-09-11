@@ -378,8 +378,9 @@ public interface ChartSearchService {
 	 * chip, no chip gains a citation index, and the chips remain the independent list nothing
 	 * reconciles against the answer.
 	 *
-	 * <p><b>{@link #getSeverity()} is NOT the value the chip beside it publishes, and a client must
-	 * not join the two on string equality.</b> It is the form {@code DrugSafetyValidator.severityRank}
+	 * <p><b>{@link #getRating()} is NOT the value a {@code safetyWarnings} chip publishes as its
+	 * {@code severity}, and the two must not be joined on string equality — which is why this field
+	 * is not called {@code severity}.</b> It is the form {@code DrugSafetyValidator.severityRank}
 	 * RECOGNISED — {@code statableRating} hands the dataset's own spelling on TRIMMED, where a chip
 	 * publishes the operator's raw field, so a dataset writing {@code "  Major  "} reaches this key
 	 * as {@code "Major"} and that same chip as the padded string (ADR Decision 78). The two are also
@@ -399,7 +400,7 @@ public interface ChartSearchService {
 	 *
 	 * <p><b>It is shaped on {@code SafetyWarning.ChartOrderBridge}</b>, this module's other two-field
 	 * value type PUBLISHED as a list, rather than on the scalar-pair statements beside it: the
-	 * {@code severity} is required rather than null-tolerated, as the constructor below states, and
+	 * {@code rating} is required rather than null-tolerated, as the constructor below states, and
 	 * {@link #toString()} is the one spelling of the pair, which the producing check's {@code WARN}
 	 * takes rather than re-building. Value equality is what a list of these needs and what those
 	 * scalar pairs have no use for. It does not fall under the rule keeping {@code SafetyWarning}
@@ -411,10 +412,10 @@ public interface ChartSearchService {
 
 		private final int citation;
 
-		private final String severity;
+		private final String rating;
 
 		/**
-		 * {@code severity} is required: {@link #equals} and {@link #hashCode} dereference it, as
+		 * {@code rating} is required: {@link #equals} and {@link #hashCode} dereference it, as
 		 * {@code SafetyWarning.ChartOrderBridge} says of its own two, and a caller building one by
 		 * hand owes the same. {@link #toString} does NOT — it concatenates, so a null would print as
 		 * {@code [350] null} rather than throwing, and since the producing check logs these that is
@@ -422,9 +423,9 @@ public interface ChartSearchService {
 		 * {@code SafetyFindingSeverityFidelityCheck} skips a citation whose record carries no rating
 		 * before it reaches here.
 		 */
-		public UnstatedFindingSeverity(int citation, String severity) {
+		public UnstatedFindingSeverity(int citation, String rating) {
 			this.citation = citation;
-			this.severity = severity;
+			this.rating = rating;
 		}
 
 		/**
@@ -439,10 +440,10 @@ public interface ChartSearchService {
 		/**
 		 * @return the rating that finding's own record states and the answer does not, in the form
 		 *         the module recognised it in. Never null on an entry this key publishes, and never
-		 *         the chip's raw field — the class javadoc above is canonical for both.
+		 *         a chip's raw {@code severity} — the class javadoc above is canonical for both.
 		 */
-		public String getSeverity() {
-			return severity;
+		public String getRating() {
+			return rating;
 		}
 
 		@Override
@@ -454,12 +455,12 @@ public interface ChartSearchService {
 				return false;
 			}
 			UnstatedFindingSeverity that = (UnstatedFindingSeverity) other;
-			return citation == that.citation && severity.equals(that.severity);
+			return citation == that.citation && rating.equals(that.rating);
 		}
 
 		@Override
 		public int hashCode() {
-			return 31 * citation + severity.hashCode();
+			return 31 * citation + rating.hashCode();
 		}
 
 		/**
@@ -473,7 +474,7 @@ public interface ChartSearchService {
 		 */
 		@Override
 		public String toString() {
-			return "[" + citation + "] " + severity;
+			return "[" + citation + "] " + rating;
 		}
 	}
 

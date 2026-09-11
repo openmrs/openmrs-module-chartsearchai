@@ -262,14 +262,13 @@ final class SafetyFindingSeverityFidelityCheck {
 			if (!offending.isEmpty()) {
 				// Each citation reads beside the word that went missing: a maintainer triaging this
 				// needs to know whether a Major rating was dropped or a Minor one. The WARN is the
-				// PUBLISHED list itself, rendered through each entry's `toString` — so the log and
-				// the wire cannot disagree in content or in format, structurally rather than by two
-				// collections being appended in step. Building a parallel list of strings here is
-				// what this looked like until #387, and it is the same shape as the defect that
-				// issue fixed one layer up: a spelling of one statement kept in two places.
-				// `DrugReferenceInjector.chartOrderClause` takes `ChartOrderBridge.toString()` the
-				// same way. Neither the answer
-				// nor any record text is logged — they carry patient data, and the citation with the
+				// PUBLISHED list itself, so the log and the wire cannot disagree about WHICH pairs
+				// they state — one list, not two collections appended in step, which is what this
+				// looked like until #387. Their FORMATS are separate and deliberately so: the log
+				// takes each entry's `toString` (as `DrugReferenceInjector.chartOrderClause` takes
+				// `ChartOrderBridge`'s) while the wire's two key names are literals in the
+				// controller, which is where a documented key belongs.
+				// Neither the answer nor any record text is logged — they carry patient data, and the citation with the
 				// patient identifies the claim. The rating is the module's own closed vocabulary and
 				// says nothing about this patient.
 				log.warn("Answer for patient={} states no rating for cited finding(s) {}. The answer "

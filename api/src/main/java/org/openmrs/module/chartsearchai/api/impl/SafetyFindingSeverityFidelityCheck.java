@@ -256,17 +256,25 @@ final class SafetyFindingSeverityFidelityCheck {
 					// The pairing is made HERE, the one place holding both halves, and never by a
 					// consumer — issue #387. The rating handed on is the one `ratings` carries, which
 					// is the record's own `findingSeverity`; nothing re-derives it and nothing reads
-					// a chip. The log line below pairs them too, and has since #337: what changed is
-					// that the published answer now does as well.
-					offending.add(new UnstatedFindingSeverity(citation.getIndex(), rating));
-					reasons.add("[" + citation.getIndex() + "] " + rating);
+					// a chip.
+					//
+					// The WARN takes the entry's own `toString` rather than re-spelling the pair, so
+					// the log and the wire cannot differ in FORMAT either — the arrangement
+					// `DrugReferenceInjector.chartOrderClause` already uses for
+					// `SafetyWarning.ChartOrderBridge`, and for the reason that type's javadoc gives.
+					// Building the string here as well was two spellings of one format, which is what
+					// #337's log and this key had until #387.
+					UnstatedFindingSeverity entry =
+							new UnstatedFindingSeverity(citation.getIndex(), rating);
+					offending.add(entry);
+					reasons.add(entry.toString());
 				}
 			}
 			if (!offending.isEmpty()) {
 				// Each citation reads beside the word that went missing: a maintainer triaging this
 				// needs to know whether a Major rating was dropped or a Minor one. The published
-				// statement carries the same pair since #387, and these strings are built from the
-				// same `rating` local, so the log and the wire cannot disagree. Neither the answer
+				// statement carries the same pair since #387, spelled by the entry itself, so the log
+				// and the wire cannot disagree in content or in format. Neither the answer
 				// nor any record text is logged — they carry patient data, and the citation with the
 				// patient identifies the claim. The rating is the module's own closed vocabulary and
 				// says nothing about this patient.

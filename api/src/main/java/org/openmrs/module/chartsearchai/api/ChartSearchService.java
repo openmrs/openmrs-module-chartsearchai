@@ -378,15 +378,17 @@ public interface ChartSearchService {
 	 * chip, no chip gains a citation index, and the chips remain the independent list nothing
 	 * reconciles against the answer.
 	 *
-	 * <p><b>{@link #getSeverity()} is NOT the value the chip beside it publishes</b>, and the
-	 * difference runs in two directions. It is the form {@code DrugSafetyValidator.severityRank}
+	 * <p><b>{@link #getSeverity()} is NOT the value the chip beside it publishes, and a client must
+	 * not join the two on string equality.</b> It is the form {@code DrugSafetyValidator.severityRank}
 	 * RECOGNISED — {@code statableRating} hands the dataset's own spelling on TRIMMED, where a chip
 	 * publishes the operator's raw field, so a dataset writing {@code "  Major  "} reaches this key
-	 * as {@code "Major"} and that same chip as the padded string (ADR Decision 78). And its extent
-	 * is a strict subset of the chips': {@code statableRating} declines {@code unknown}, and
-	 * {@code ratingThisRecordStates} further requires the record itself to state the word, so a
-	 * finding reaching this key is never rated {@code unknown} and never carries a null rating. A
-	 * client must not join the two on string equality.
+	 * as {@code "Major"} and that same chip as the padded string (ADR Decision 78). The two are also
+	 * decided by different passes over different populations — a rating is written into the record
+	 * pre-answer by {@code DrugReferenceInjector.injectRecords}, a chip post-answer by
+	 * {@code DrugSafetyValidator.validate} — so neither list is a view of the other in either
+	 * direction. What this key's own vocabulary excludes is stated positively: {@code statableRating}
+	 * declines {@code unknown}, and {@code ratingThisRecordStates} requires the record to state the
+	 * word, so a published entry carries neither.
 	 *
 	 * <p><b>What it asserts.</b> That the answer cited this record and that this rating's word
 	 * appears nowhere in the answer. Never WHERE the rating should have been, never that the
@@ -395,13 +397,15 @@ public interface ChartSearchService {
 	 * silent here by design. {@code SafetyFindingSeverityFidelityCheck} is canonical for the unit
 	 * and for the residues.
 	 *
-	 * <p><b>It defines value equality, and the neighbouring types deliberately do not.</b>
-	 * {@code ActiveOrderClaims} and {@code FindingCitationExtent} are each compared through their
-	 * getters and never appear inside a list; this one is published AS a list, where identity
-	 * comparison would make every assertion about the list meaningless. That is also why it does not
-	 * fall under the rule keeping {@code SafetyWarning} without an {@code equals} — chips are kept
-	 * apart so nothing downstream can collapse two the module meant to keep, and here the producing
-	 * check already makes the citation unique across the list, so equality can collapse nothing.
+	 * <p><b>It is shaped on {@code SafetyWarning.ChartOrderBridge}</b>, this module's other two-field
+	 * value type PUBLISHED as a list, rather than on the scalar-pair statements beside it: both
+	 * arguments are required and {@link #equals} and {@link #hashCode} dereference them, and
+	 * {@link #toString()} is the one spelling of the pair, which the producing check's {@code WARN}
+	 * takes rather than re-building. Value equality is what a list of these needs and what those
+	 * scalar pairs have no use for. It does not fall under the rule keeping {@code SafetyWarning}
+	 * itself without an {@code equals} — chips are kept apart so nothing downstream can collapse two
+	 * the module meant to keep, and here the producing check already makes the citation unique across
+	 * the list, so equality can collapse nothing.
 	 */
 	final class UnstatedFindingSeverity {
 
@@ -409,6 +413,13 @@ public interface ChartSearchService {
 
 		private final String severity;
 
+		/**
+		 * {@code severity} is required: {@link #equals}, {@link #hashCode} and {@link #toString}
+		 * dereference it, as {@code SafetyWarning.ChartOrderBridge} says of its own two, and a
+		 * caller building one by hand owes the same. The production path cannot pass null —
+		 * {@code SafetyFindingSeverityFidelityCheck} skips a citation whose record carries no rating
+		 * before it reaches here.
+		 */
 		public UnstatedFindingSeverity(int citation, String severity) {
 			this.citation = citation;
 			this.severity = severity;
@@ -441,15 +452,23 @@ public interface ChartSearchService {
 				return false;
 			}
 			UnstatedFindingSeverity that = (UnstatedFindingSeverity) other;
-			return citation == that.citation
-					&& (severity == null ? that.severity == null : severity.equals(that.severity));
+			return citation == that.citation && severity.equals(that.severity);
 		}
 
 		@Override
 		public int hashCode() {
-			return citation * 31 + (severity == null ? 0 : severity.hashCode());
+			return 31 * citation + severity.hashCode();
 		}
 
+		/**
+		 * The one spelling of the pair, taken by {@code SafetyFindingSeverityFidelityCheck}'s
+		 * {@code WARN} rather than re-built there — the arrangement
+		 * {@code DrugReferenceInjector.chartOrderClause} already uses for
+		 * {@code SafetyWarning.ChartOrderBridge}, so the pair a debug dump prints and the pair a
+		 * maintainer reads in the log cannot differ. Pinned by
+		 * {@code SafetyFindingSeverityFidelityTest.theStatementCarriesEachFindingsOwnRatingBesideItsCitation},
+		 * which asserts this text in the captured log; mutate it and read the failures.
+		 */
 		@Override
 		public String toString() {
 			return "[" + citation + "] " + severity;
@@ -982,14 +1001,9 @@ public interface ChartSearchService {
 		 * nothing.
 		 *
 		 * <p><b>The citation and the RATING, and never a word of either text</b>. The two siblings
-		 * publish a bare index because each has one datum to publish; this key carries two, and it
-		 * carries them together because they cannot be joined anywhere else — the chips hold every
-		 * rating and no citation index, and {@code (type, drug)} identifies no one finding (#387).
-		 * The rating is safe to publish where the answer's and the record's words are not: it is the
-		 * module's own closed vocabulary and says nothing about the patient. One citation is one
-		 * entry. {@code UnstatedFindingSeverity} is canonical for what each entry asserts — in
-		 * particular that its {@code severity} is the RECORD's own rating rather than the chip's
-		 * value, which differs from it in form and in extent.
+		 * publish a bare index because each has one datum to publish; this key carries two. One
+		 * citation is one entry, and {@link UnstatedFindingSeverity} is canonical for what an entry
+		 * asserts, why the two travel together and how its {@code severity} differs from a chip's.
 		 *
 		 * <p><b>It is not a grounding verdict and not a claim that the finding is wrong.</b> The
 		 * finding behind such a sentence is deterministic and was, on the reported answer, correct;

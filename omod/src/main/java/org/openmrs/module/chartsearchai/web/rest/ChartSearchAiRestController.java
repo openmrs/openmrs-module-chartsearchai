@@ -1584,22 +1584,19 @@ public class ChartSearchAiRestController {
 	 * family. {@code ChartSearchService.UnstatedFindingSeverity} is canonical for what each entry
 	 * does and does not assert.
 	 *
-	 * <p><b>Why the two travel in one object rather than on two keys.</b> Before #387 this key was a
-	 * bare index list and the rating was dropped on the way out, although the check holds both in the
-	 * map it decides from. A client could not rebuild the pairing: the {@code safetyWarnings} chips
-	 * carry every rating and no citation index, and {@code (type, drug)} identifies no one finding.
-	 * A sibling map keyed by index would have closed the same gap and was declined — it is two keys
-	 * that must agree, and a consumer reading this one would still be doing a join.
+	 * <p>Why the two travel in one object rather than on two keys, why this is not the chips
+	 * reconciled against the answer, and how its {@code severity} differs from a chip's are the value
+	 * type's own javadoc and ADR Decision 78's amendment; neither is restated here.
 	 *
-	 * <p><b>It is emphatically not the chips reconciled against the answer.</b> The value is the
-	 * rating that travels structurally beside the record the model read, and no chip is read here or
-	 * gains a citation index. It is also not the chip's own {@code severity} value, differing from it
-	 * in form and in extent — the value type's javadoc carries both differences and a client must not
-	 * join the two on string equality.
-	 *
-	 * <p>An {@code ArrayList} of {@code LinkedHashMap}, the shape {@link #serializeSafetyWarnings}
-	 * already publishes, which is what keeps issue #347's XStream rule satisfied: the marshaller
-	 * refuses {@code Collections}' immutable wrappers, and the accessor hands one out.
+	 * <p><b>The entry is spelled out as a map rather than handed to the mapper</b>, which is the one
+	 * place this differs from {@code SafetyWarning.ChartOrderBridge}, the module's other list-published
+	 * two-field type: that one is serialized by the mapper off its getter names, which is why its
+	 * javadoc fixes those names as issue #347's contract. Here the KEYS are the contract README states,
+	 * so they are written as literals and pinned as literals by
+	 * {@code ChartSearchAiUnstatedFindingSeverityTest}, and renaming an accessor cannot move a
+	 * documented key. An {@code ArrayList} of {@code LinkedHashMap} is also the shape
+	 * {@link #serializeSafetyWarnings} publishes, which keeps #347's other half satisfied: the
+	 * marshaller refuses {@code Collections}' immutable wrappers, and the accessor hands one out.
 	 */
 	private List<Map<String, Object>> serializeUnstatedFindingSeverities(
 			List<UnstatedFindingSeverity> unstated) {

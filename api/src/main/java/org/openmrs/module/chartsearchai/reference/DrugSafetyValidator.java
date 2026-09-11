@@ -3136,10 +3136,12 @@ public class DrugSafetyValidator {
 	 *         — see {@link ContraindicationChips}, where both are justified.
 	 *
 	 *         <p>ONE definition, called by the chip ledger here and by
-	 *         {@code DrugReferenceInjector.contraindicationSections}, which renders one clause per distinct rendered STRING over these keys since issue #310 (see that method's {@code @return})
-	 *         and must count the same unit or the model is told the drug has two contraindications where
-	 *         the deterministic layer found one (issue #190 item 1). A second copy is how those two came
-	 *         apart when issue #146 moved this key: two allergy rules under two aliases of one drug were
+	 *         {@code DrugReferenceInjector.contraindicationSections}. Both must partition the entry's
+	 *         rules by this same KEY, or the model is told the drug has two contraindications where the
+	 *         deterministic layer found one (issue #190 item 1). What the rendered LIST then does with
+	 *         those keys is issue #310 — it collapses them by clause TEXT, so its item count is not the
+	 *         chip count; see that method's {@code @return}. A second copy of the KEY is how the two
+	 *         came apart when issue #146 moved it: two allergy rules under two aliases of one drug were
 	 *         one chip and two clauses, silently.
 	 */
 	static Object contraindicationFinding(DrugReference ref, DrugReference.Contraindication c) {

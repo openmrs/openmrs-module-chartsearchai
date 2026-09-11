@@ -820,9 +820,14 @@ public class SafetyWarning {
 	 * this paragraph was written — rather than any summary of it here.
 	 *
 	 * <p><b>Prompt-facing only.</b> Nothing on the wire moves and the chip's own detail is untouched,
-	 * so {@code DrugSafetyValidator.StatedInteractionChips} deliberately does NOT key on it, for the
-	 * reason stated at {@link #chartOrderBridges()}: that key decides which chips are emitted, so
-	 * keying on a prompt-only fact would let it decide wire content. Leaving it out costs nothing
+	 * so {@code DrugSafetyValidator.StatedInteractionChips} deliberately does NOT key on it — for the
+	 * reason stated at {@link #chartOrderBridges()}, which is NOT that this is unpublished: that key
+	 * decides which chips are EMITTED and, through {@code ChartSearchAiUtils.resourceKey}, whether two
+	 * injected findings share one resource uuid, so a fact like this must not be able to change which
+	 * chips exist, whether or not a client can read it. The published-versus-prompt-facing reading of
+	 * it was falsified by issue #347 and again by #374, and the key's own membership contradicts it in
+	 * both directions — {@code carriesUnratedRelationship()} is in the key and unpublished, while
+	 * {@link #restsOnAnUncorroboratedChartMatch()} is in it and published. Leaving it out costs nothing
 	 * observable, and that is worth saying rather than leaving to be re-derived: the flag is constant
 	 * within an arm, and where the two interaction arms can both run in one pass — the POST-answer
 	 * pass, where a drug the ANSWER named is in play beside a screening question —

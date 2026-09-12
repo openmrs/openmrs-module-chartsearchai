@@ -9,21 +9,26 @@ record's real embedding clears `chartsearchai.grounding.minCosine`, and whether 
 model makes a medication claim about a record that names no drug, are both properties of
 systems this repo does not implement.
 
-It reuses `grounding_scope_ab.py`'s `get_gp`/`set_gp`/`req`. It does NOT use that module's
-`search`, and the reason is worth stating because the obvious reading is that it should:
-`search` returns verdicts keyed by citation INDEX, and this measurement has to find one
-record by `resourceUuid` — the index is whatever the injector happened to number it. So the
-body is read here, and `verdict_of` below applies that reader's tagging rules verbatim:
-`attached` for `attachedByTheModule`, `withheld` for `group == "reference"`, never None for
-either, which is the misreading the root CLAUDE.md's capture-scorer rule exists for (#305).
-If you change the tagging there, change it here; a second SPELLING of those rules is the
-cost of needing the uuid, and it is the only thing duplicated.
+It reuses `grounding_scope_ab.py`'s `get_gp`/`set_gp`/`req` and its `verdict_tag`. It does
+NOT use that module's `search`, and the reason is worth stating because the obvious reading
+is that it should: `search` returns verdicts keyed by citation INDEX, and this measurement
+has to find one record by `resourceUuid` — the index is whatever the injector happened to
+number it. So the body is read here, but the TAGGING is not respelled — every citation below
+goes through `verdict_tag`, so the rules that make `attachedByTheModule` (#305) and a
+`reference` group (#201) read as something other than "unverified" are edited in one place,
+and a rename of either wire key reaches this file with them.
 
-## The arrangement has to be built, and the natural count is zero
+## The arrangement has to be built, and none was found on the database used
 
 Measured on the RefApp 3.7.1 pool database: 53 active drug orders across 30 patients, of
-which 0 were codes-only. Such an order needs BOTH halves, and neither occurs naturally
-there:
+which 0 were codes-only. **Read that zero with what produced it**: a SQL sweep over those
+columns and the ATC map, which RE-EXPRESSES `addDrugName`'s predicate rather than calling it,
+and `Concept.getName()` can return null for a concept that still has name rows — so the sweep
+can only UNDERCOUNT, the direction that turns a real instance into a reported zero. It is
+therefore weak in the direction of the claim it would support, and production's own instrument
+(the builder's per-order "has no readable name" WARN over a sweep of patients) would settle it
+and was not run. ADR Decision 38's owed-measurement section carries this with the rest of the
+run. Such an order needs BOTH halves, and neither was found to occur naturally there:
 
   * nameless in all three sources `addDrugName` reads — no coded drug, no `drug_non_coded`
     free text, and no unvoided name on its concept — AND carrying at least one ATC code,
@@ -134,21 +139,6 @@ def set_regime(entailment, floor):
             raise AssertionError("regime did not take: %s is %r, wanted %r" % (name, got, value))
 
 
-def verdict_of(reference):
-    """What the wire published for one citation, tagged the way `grounding_scope_ab.search` tags it.
-
-    A STRING for the two cases that are not verdicts, never None: a module-attached citation
-    (#305) and a reference-group one (#201) both carry `grounded: null` for reasons that are
-    not "unverified", and printing None for them is what lets a tally be quoted over citations
-    it is structurally blind to.
-    """
-    if reference.get("attachedByTheModule"):
-        return "attached"
-    if reference.get("group") == "reference":
-        return "withheld"
-    return reference.get("grounded")
-
-
 def cell(label, question, entailment, floor):
     set_regime(entailment, floor)
     started = time.time()
@@ -163,14 +153,14 @@ def cell(label, question, entailment, floor):
         "secs": round(time.time() - started, 1),
         "question": question,
         "answer": (body.get("answer") or "").strip(),
-        "verdicts": {str(r.get("index")): verdict_of(r) for r in references},
+        "verdicts": {str(r.get("index")): gsab.verdict_tag(r) for r in references},
         # "NOT CITED" is a RESULT and not a gap: an uncited record got no verdict, which is a
         # different measurement from a verdict that came back true. Keep them distinguishable.
         "codes_only_record": ([
             {"index": r.get("index"), "resourceType": r.get("resourceType"),
              "group": r.get("group"), "grounded": r.get("grounded"),
              "attachedByTheModule": r.get("attachedByTheModule"),
-             "verdict": verdict_of(r)} for r in ours]
+             "verdict": gsab.verdict_tag(r)} for r in ours]
             or "NOT CITED"),
     }
     print(json.dumps(out, indent=2), flush=True)

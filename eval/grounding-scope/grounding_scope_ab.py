@@ -71,9 +71,10 @@ and "unlikely" is not "cannot". Do not quote a tally here over a change to the
 Only the MODEL's own CHART-group citations are measurable here. A reference-group
 citation publishes no verdict at all (issue #201), so its cells read `withheld`;
 and since issue #305 a chart-group citation the MODULE attached carries none
-either, so its cells read `attached` (both tags are set in `search`, which says
-why neither may be printed as None). A scoping flip on either cannot be seen from
-the wire, so the gate below is a statement about the model's own chart citations.
+either, so its cells read `attached` (both tags are set in `verdict_tag`,
+whose docstring says why neither may be printed as None). A scoping flip on
+either cannot be seen from the wire, so the gate below is a statement about
+the model's own chart citations.
 
 The GP is saved before and restored after. Answers are grounding-independent,
 so a differing answer between modes signals LLM nondeterminism (reported).
@@ -135,35 +136,47 @@ def set_gp(name, value):
         req("/systemsetting/" + uuid, {"value": str(value)}, "POST")
 
 
+def verdict_tag(reference):
+    """What the wire published for ONE citation, or a STRING for the two cases that are not verdicts.
+
+    Both callers in this directory tag through it — this module's `search`, and
+    `codes_only_order_grounding.py`, which reads the body itself but does not respell these
+    rules — so a rename of either wire key below lands in one place.
+
+    A reference-group citation's `grounded` is always null on the wire, whatever the pass
+    concluded (issue #201), so a clause-scope flip on one is NOT observable from here. Those
+    cells are tagged `withheld` rather than printed as None, which would read as "unverified"
+    and let a caller's gate be quoted over citations it is structurally blind to. The tallies in
+    `run` are unaffected because `withheld` is a STRING: the True/False classes cannot match it,
+    and the #302 null-side classes test `is None`. Do not change the tag to None — the null->False
+    class would then start counting withheld reference citations as #302 regressions. ("every class
+    needs a True on one side" was the old reason and it is no longer true: null->False needs none.)
+
+    `attached` is a third tag for the same reason: since issue #305 a chart-group citation the
+    MODULE attached carries grounded=null because there is no claim of the model's to check, and
+    printing that as None reads as "unverified" — the distinction that whole issue turns on. A
+    STRING again, so the True/False classes cannot match it and the #302 null-side classes, which
+    test `is None`, cannot either; every counted class tests `is True` or `is False` on at least one
+    side, so no tally moves. Do not tag it None.
+
+    It deliberately does NOT share drift-metric's `model_cited` predicate, which is the one home
+    of the rule for the scorers that EXCLUDE such a citation. This directory tags rather than
+    excludes — the cell still has to appear in the per-cell table a human reads — so a shared
+    exclusion would obscure exactly what this tag is for. Different directory, no import path.
+    """
+    if reference.get("attachedByTheModule"):
+        return "attached"
+    if reference.get("group") == "reference":
+        return "withheld"
+    return reference.get("grounded")
+
+
 def search(patient, question):
-    # A reference-group citation's `grounded` is always null on the wire, whatever the pass
-    # concluded (issue #201), so a clause-scope flip on one is NOT observable from here. Those
-    # cells are tagged `withheld` rather than printed as None, which would read as "unverified"
-    # and let this harness's gate be quoted over citations it is structurally blind to.
-    # The tallies below are unaffected because `withheld` is a STRING: the True/False classes cannot
-    # match it, and the #302 null-side classes test `is None`. Do not change the tag to None — the
-    # null->False class would then start counting withheld reference citations as #302 regressions.
-    # ("every class needs a True on one side" was the old reason and it is no longer true: null->False
-    # needs none.)
     d = req("/chartsearchai/search", {"patient": patient, "question": question}, "POST")
     verdicts = {}
     for r in (d.get("references") or []):
-        # A third tag, for the same reason `withheld` is one: since issue #305 a chart-group citation
-        # the MODULE attached carries grounded=null because there is no claim of the model's to check,
-        # and printing that as None reads as "unverified" — the distinction that whole issue turns on.
-        # A STRING again, so the True/False classes cannot match it and the #302 null-side classes,
-        # which test `is None`, cannot either; every counted class tests `is True` or `is False` on
-        # at least one side, so no tally moves. Do not tag it None.
-        #
-        # It deliberately does NOT share drift-metric's `model_cited` predicate, which is the one home
-        # of the rule for the scorers that EXCLUDE such a citation. This harness tags rather than
-        # excludes — the cell still has to appear in the per-cell table a human reads — so a shared
-        # exclusion would obscure exactly what this tag is for. Different directory, no import path.
-        if r.get("attachedByTheModule"):
-            verdicts[r.get("index")] = "attached"
-            continue
-        withheld = r.get("group") == "reference"
-        verdicts[r.get("index")] = "withheld" if withheld else r.get("grounded")
+        # `verdict_tag`'s docstring carries why neither of its two tags may be None.
+        verdicts[r.get("index")] = verdict_tag(r)
     return (d.get("answer", "") or "").strip(), verdicts
 
 

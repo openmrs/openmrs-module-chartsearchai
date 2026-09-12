@@ -1038,6 +1038,8 @@ public class DrugReferenceInjector {
 		 *         Decision 77's measurement; the measurement has been run and the leg now asks this
 		 *         method. The two affirmative claims are one reading again.
 		 */
+		// The null guard is defensive and discriminates nothing — the map is null-safe on get and the
+		// constructor stores no null key — as its two siblings on this index also are.
 		private Integer numberOfRecord(String resourceUuid) {
 			List<Integer> carrying = resourceUuid == null ? null
 					: recordsByResourceUuid.get(resourceUuid);
@@ -1111,13 +1113,15 @@ public class DrugReferenceInjector {
 		 *          paragraph below.
 		 *
 		 *          <p><b>{@link #numbersFor} hands this list OUT of the class</b>, on its uuid leg,
-		 *          where its name leg returns a fresh one. So a consumer that sorted or removed from
+		 *          where its name leg returns a fresh one. So a consumer that REMOVED FROM or ADDED TO
 		 *          that result would mutate the index in place and flip {@link #numberOfRecord}'s
-		 *          reading, turning both affirmative refusals into a confident citation. Nothing in
-		 *          the suite would catch it: no case reads that list's CONTENTS — replacing the uuid
-		 *          leg with the singleton it returned before issue #379's second round leaves the
-		 *          whole build green. Its one consumer asks {@code isEmpty()}; a second that needs
-		 *          more owes the copy. */
+		 *          reading, turning both affirmative refusals into a confident citation. Reordering it
+		 *          is a different matter and is unobservable: every read of a list from here asks
+		 *          {@code isEmpty()} or unions it, and {@link #numberOfRecord} indexes it only at size
+		 *          one — measured by reversing the stored order, which leaves the whole build green.
+		 *          Nothing would catch a SIZE change either: replacing the uuid leg with the singleton
+		 *          it returned before issue #379's second round is green too. Its one consumer asks
+		 *          {@code isEmpty()}; a second that needs more owes the copy. */
 		private List<Integer> recordsCarrying(PatientClinicalContext.ActiveDrugOrder order) {
 			List<Integer> carrying = order.getUuid() == null ? null
 					: recordsByResourceUuid.get(order.getUuid());

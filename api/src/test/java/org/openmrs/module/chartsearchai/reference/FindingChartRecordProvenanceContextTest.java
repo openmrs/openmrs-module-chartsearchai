@@ -357,8 +357,11 @@ public class FindingChartRecordProvenanceContextTest extends BaseModuleContextSe
 	/**
 	 * The second refusal, and the one ADR Decision 77 is the precedent for: citing is an affirmative
 	 * claim about WHICH record, so a uuid two records of this chart both carry names neither. The uuid
-	 * index the injector reads is LAST-wins by construction — a fail-open reading that is right for
-	 * issue #118's substantiation boolean and wrong here, which is why the citing reading refuses.
+	 * index the injector reads keeps every record under a uuid, and each reading of it decides what a
+	 * second one means: issue #118's substantiation leg answers with them (fail-open — its caller asks
+	 * only whether there is one at all), and this one refuses, which is what the assertion below
+	 * states. It was a LAST-wins index until issue #379's second round, when the order-record citation
+	 * turned out to be reading the fail-open leg for an affirmative claim.
 	 */
 	@Test
 	public void aUuidTwoRecordsOfThisChartBothCarryNamesNeither() {

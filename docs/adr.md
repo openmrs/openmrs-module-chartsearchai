@@ -5652,7 +5652,7 @@ The default is the flag's whole point and was not chosen for caution: default TR
 
 **It is resolved AFTER the reconciliation has appended its own records**, which is a correctness requirement and not an ordering preference: an order the chart carried no `drug_order` record for is injected as an `active_drug_order` record carrying that order's uuid, and that injected record is the one an attribution to it must cite. `InteractionFindingChartOrderBridgeTest.anOrderTheChartHadNoRecordForIsCitedByTheOneInjectedForIt` reddens if the resolution moves earlier.
 
-**One RULE, read two ways — not two rules that agree.** The order→record walk moved into `DrugReferenceInjector.DrugOrderRecords`, whose `numbersFor` answers with the numbers of every record that IS the order (the uuid match alone where there is one, else every live drug-order record naming it). `unrepresentedActiveOrders` now reads that as `.isEmpty()`, so *substantiated* is defined AS the walk answering. Each caller indexes the mapping list it asks about, over the mapping list it asks about; what is shared is the rule, and a second rule would have been the shape [#151](https://github.com/openmrs/openmrs-module-chartsearchai/issues/151) forbids.
+**One RULE, read two ways — not two rules that agree.** The order→record walk moved into `DrugReferenceInjector.DrugOrderRecords`, whose `numbersFor` answers with the numbers of every record that IS the order (the uuid match alone where there is one, else every live drug-order record naming it). `unrepresentedActiveOrders` now reads that as `.isEmpty()`, so *substantiated* is defined AS the walk answering. Each caller builds its own instance, over the mapping list it asks about; what is shared is the rule, and a second rule would have been the shape [#151](https://github.com/openmrs/openmrs-module-chartsearchai/issues/151) forbids.
 
 They are not the same RULE, and the difference runs both ways — do not read "one walk" as "one answer". `citableNumberFor` refuses more than the boolean (the paragraph after next), and the reconciliation's own record is a legitimate citation, so an order it ruled UNSUBSTANTIATED is cited by the `active_drug_order` record injected for it (`.anOrderTheChartHadNoRecordForIsCitedByTheOneInjectedForIt`). The walk carries no `isCompleteFor` gate: that gate answers *is an ABSENCE meaningful*, which is the reconciliation's question, and a query-scoped chart can perfectly well carry the drug-order record an order is — refusing to cite a record sitting in the prompt is the cost, and the population it falls on is the scoped charts that do not declare the drug-order type complete.
 
@@ -5768,12 +5768,14 @@ corpus-wide. It does not.
 **What a future attempt owes.** Not another flip of this flag — this is its measurement. Uptake is
 the variable, and the two cells that took the numbers up are the reproduction to work from.
 
-**Two dated sections follow, and then this section's ORIGINAL body.** That body is what was true when this decision landed — it says the probe *"was not run"* and that flipping the flag is how it gets run, and both are superseded by the two runs recorded here. It is kept because the terms it sets are the terms those runs were judged by.
+**One more dated section follows, and then this section's ORIGINAL body.** That body is what was true when this decision landed — it says the probe *"was not run"* and that flipping the flag is how it gets run, and both are superseded by the two runs recorded here. It is kept because the terms it sets are the terms those runs were judged by.
 
-### The flip re-run on a later head, and the coverage hypothesis refuted (2026-09-11)
+### The flip re-run on a later head, and the coverage hypothesis unsupported (2026-09-11)
 
-Run again by the issue-#379 session at `main` @ `6ff1a60e` — six commits past the run above, so the
-figures are NOT comparable with it cell for cell and are recorded as their own arm. Same rig: the
+Run again by the issue-#379 session at `main` @ `6ff1a60e`. The run above was taken on `ed36f487`,
+a branch head whose work reached main as `28dbed9d`, three commits behind this one (`git rev-list
+--count 28dbed9d..6ff1a60e`) — so the figures are NOT comparable with it cell for cell and are
+recorded as their own arm. Same rig: the
 3.7.1 standalone on `:8081` with an omod this session built from that head, `capture_probe_safety.sh`
 over this decision's own fourteen cells (`PROBE_PATIENTS=sarah:dc8560c9-…`, Decision 84's fourteen
 drugs, `CAPTURE_PHRASING='should i give {drug}?'`), bundled DDInter KB (`entryCount` 2283),
@@ -5793,20 +5795,41 @@ numbers reached every prompt that could carry one. Mean input tokens 12,549 → 
 `uncited` 16 → 12 — so every claim in that phrasing went uncited in BOTH arms, the answers on this
 head mostly naming an order without the phrase the check anchors on. `references` in `group=chart`:
 1 → 5. `misattributedOrderCitations`: 0 → 0. `findingCitations` 82/86 → 81/86, and cells whose prose
-stated every finding 8 of 12 → 7 of 12. **The default does not move on this head either**, and the
-shape is the one above: it worked on one cell, was ignored on the rest, and cost a cell of
-completeness.
+stated every finding 8 of 12 → 7 of 12. **The default does not move on this head either** — but not for arm 1's reason, and the difference
+is worth stating rather than eliding. `uncited` 16 → 12 is −25.0%, which MEETS the ≥25% item arm 1
+failed; it falls because `stated` falls with it, every claim being uncited in both arms. What still
+fails is completeness, `findingCitations` 82/86 → 81/86 and cells stating every finding 8 of 12 →
+7 of 12. So the qualitative shape is arm 1's — it worked on one cell, was ignored on the rest, and
+cost a cell of completeness — while the gate item that failed is a different one.
 
-**And it refutes a hypothesis worth recording, because it is the obvious next one.** *Coverage* —
+**And it leaves a hypothesis worth recording UNSUPPORTED, because it is the obvious next one.** *Coverage* —
 that the numbers reach too few attributions, the bridge clause being emitted only where the order's
 display fails to name the substance — predicts that the cells ignoring the numbers are the
 poorly-covered ones. Coverage per cell, as published `chartOrderBridges` entries over published
 `interaction` chips (the twelve cells raising any; Lithium and Paracetamol raise none), is 2/5, 2/6,
 3/7 × 5, 4/8 × 5 — **no cell is fully covered and the spread is narrow**, while the one cell that
-took the numbers is at 2/5, among the worst covered either way (lowest by attribution count, second lowest by the ratio, behind 2/6), and all five best-covered cells took none. So coverage
+took the numbers — **Amiodarone**, which is the cell to work from — is at 2/5, among the worst covered either way (joint lowest by attribution count, second lowest by the ratio, behind 2/6), and all five best-covered cells took none. So coverage
 does not predict uptake here, and widening the clause to every attribution — the first rejected
 alternative below, and the thing the issue's own Honest Limits calls its second question — is not
 what this points at. Uptake stands as the variable.
+
+**How much that rests on, said rather than left to be assumed.** ONE uptake event on this arm, so
+this is not a refutation. What makes it worth recording is that the arm above points the same way
+on its own figures: its two worked cells, Digoxin and Furosemide, carry 2 and 3 attributions, both
+in the low-coverage groups. Three uptake events across two arms, all of them low-coverage cells,
+and none of the best-covered cells has ever taken a number. That is the evidence against coverage;
+it is suggestive and it is not a measurement of the hypothesis, which would need an arm in which
+coverage is the thing varied.
+
+**One figure moved between the arms that this section does not explain.** `activeOrderClaims.stated`
+is 16 here against the 09-10 arm's 75, on the same patient, corpus and phrasing three commits
+earlier. The claim base is what shrank, not the citation rate: every stated claim is uncited in
+both arms of THIS run. `ActiveOrderCitationFidelityCheck` anchors on `DrugSafetyValidator
+.ACTIVE_ORDER_INTERACTION_PHRASE`, and the answers on this head mostly name an order without
+writing that phrase — so the check sees fewer claims rather than better ones. Recorded as
+unexplained rather than attributed: nothing here measures which of the three intervening commits
+moved it, and a reader comparing the two arms' `stated` or `uncited` totals directly is comparing
+two different populations.
 
 **Whether the number makes the answer cite better is not measured here, and this decision does not claim it.** The ticket states the precondition — *"this needs a measurement before implementing"*, on the beat-or-match standard `eval/drift-metric/README.md` enforces — and it was not run: the probe needs a live inference engine, and none was available in the environment this change was made in. What IS measured is deterministic and is what the tests pin: the number printed is the number of the chart record that order is, across the substantiated, injected, drifted-uuid and ambiguous arrangements.
 

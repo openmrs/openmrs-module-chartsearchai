@@ -952,11 +952,15 @@ public class DrugReferenceInjector {
 		 *  last, where a chart carried two — with a companion set of the uuids that had been handed
 		 *  over more than once, because a map read for a count it has already collapsed cannot answer
 		 *  one. Two of this class's three readings are affirmative claims about WHICH record, and both
-		 *  need that count; keeping the numbers is what lets each reading ask for itself rather than
-		 *  one of them consulting a set the other maintains. The readings are {@link #numberByUuid}
-		 *  (issue #118, fail-open — presence, its value undiscriminated, as its own javadoc records),
-		 *  {@link #numberOfRecord} (issue #305, exactly one) and {@link #citableNumberFor}'s uuid leg
-		 *  (issue #379), which asks the second. Mutate any of them and read the failures. */
+		 *  need that count — but a count is all THEY need, and a set of contested uuids beside a
+		 *  last-wins map supplied it. <b>The reading that forces the list is
+		 *  {@link #recordsOfActiveOrders}</b>, which has to name every record under an order's uuid
+		 *  so none of them is left citable as a NEIGHBOUR, and no count can answer that. Said exactly
+		 *  because the veto reads naturally as the reason and is not: it composes with the old
+		 *  representation unchanged. The readings are {@link #numberByUuid} (issue #118, fail-open —
+		 *  presence, its value undiscriminated, as its own javadoc records), {@link #numberOfRecord}
+		 *  (issue #305, exactly one), {@link #isOneOfItsOwnRecords} (the shared boolean) and
+		 *  {@link #recordsOfActiveOrders}. Mutate any of them and read the failures. */
 		private final Map<String, List<Integer>> recordsByResourceUuid =
 				new LinkedHashMap<String, List<Integer>>();
 
@@ -1053,7 +1057,9 @@ public class DrugReferenceInjector {
 		 *         indexes a {@code drug_order} document under its {@code Order} uuid, so a uuid match
 		 *         is the exact answer and a sibling record that merely NAMES the same drug is not a
 		 *         second answer to the same question. The name leg is the drifted-uuid insurance issue
-		 *         #118 added, and is the only leg that can return more than one.
+		 *         #118 added, and is the only leg that can return more than one — the uuid leg answers
+		 *         with ONE number even where several records carry the uuid, which costs this question
+		 *         nothing because its only caller reads {@code isEmpty()}.
 		 */
 		private List<Integer> numbersFor(PatientClinicalContext.ActiveDrugOrder order) {
 			Integer exact = numberByUuid(order);
@@ -1092,14 +1098,31 @@ public class DrugReferenceInjector {
 			return carrying.isEmpty() ? null : carrying.get(carrying.size() - 1);
 		}
 
+		/** @return whether this chart holds a record that IS {@code order} — one of its own uuid
+		 *          records, however many carry that uuid.
+		 *
+		 *          <p><b>ONE predicate, asked at two sites that must agree.</b>
+		 *          {@link #citableNumberFor} takes its uuid leg exactly where this is true, and
+		 *          {@link #recordsSeveralOrdersName} skips contesting exactly where it is true. They
+		 *          are not two questions that happen to coincide: narrow one alone and an order is
+		 *          left out of the contest set and then takes the NAME leg, so one record is cited as
+		 *          two different prescriptions in one clause — measured, and the claim
+		 *          {@code .oneRecordTwoPrescriptionsWouldBothCiteIsCitedByNeither} exists to refuse.
+		 *          Spelled once so that cannot be done to one of them. */
+		private boolean isOneOfItsOwnRecords(PatientClinicalContext.ActiveDrugOrder order) {
+			return !recordsCarrying(order).isEmpty();
+		}
+
 		/** @return the numbers of every record carrying {@code order}'s own uuid, EMPTY where it has
-		 *          none or has no uuid — the one lookup {@link #numberByUuid} and
-		 *          {@link #recordsOfActiveOrders} share, so the two cannot come to disagree about
-		 *          which records an order IS. The READING of that list is each caller's own.
+		 *          none or has no uuid — the one lookup {@link #numberByUuid},
+		 *          {@link #isOneOfItsOwnRecords} and {@link #recordsOfActiveOrders} share, so they
+		 *          cannot come to disagree about which records an order IS. The READING of that list
+		 *          is each caller's own.
 		 *
 		 *          <p>The stored list itself, not a copy or an unmodifiable view: both callers only
-		 *          read it, and wrapping would put an allocation per ORDER on a path that runs on
-		 *          every request whatever {@code chartsearchai.drugSafety.citeOrderRecords} says.
+		 *          read it, and wrapping would put an allocation per ORDER on a path reached whatever
+		 *          {@code chartsearchai.drugSafety.citeOrderRecords} says — the issue #118
+		 *          reconciliation, which has gates of its own but not that one.
 		 *          A caller that needs to keep or modify it owes the copy. */
 		private List<Integer> recordsCarrying(PatientClinicalContext.ActiveDrugOrder order) {
 			List<Integer> carrying = order.getUuid() == null ? null
@@ -1180,10 +1203,11 @@ public class DrugReferenceInjector {
 		 */
 		private Integer citableNumberFor(PatientClinicalContext.ActiveDrugOrder order,
 				Set<Integer> claimedByUuid, Set<Integer> contested) {
-			if (numberByUuid(order) != null) {
+			if (isOneOfItsOwnRecords(order)) {
 				// This chart holds a record of this order, so the order is one of those records and
 				// nothing else. numberOfRecord answers where exactly one carries the uuid and refuses
-				// where more do; either way the name leg below is not a second answer to it.
+				// where more do; either way the name leg below is not a second answer to it. The same
+				// predicate decides recordsSeveralOrdersName's skip, and must — its javadoc says why.
 				return numberOfRecord(order.getUuid());
 			}
 			Integer only = null;
@@ -1229,7 +1253,7 @@ public class DrugReferenceInjector {
 			Set<Integer> named = new HashSet<Integer>();
 			Set<Integer> contested = new HashSet<Integer>();
 			for (PatientClinicalContext.ActiveDrugOrder order : orders) {
-				if (numberByUuid(order) != null) {
+				if (isOneOfItsOwnRecords(order)) {
 					continue;
 				}
 				for (Map.Entry<Integer, String> record : liveDrugOrderTexts.entrySet()) {

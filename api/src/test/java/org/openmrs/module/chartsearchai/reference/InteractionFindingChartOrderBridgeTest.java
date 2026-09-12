@@ -956,8 +956,9 @@ public class InteractionFindingChartOrderBridgeTest extends BaseModuleContextSen
 	 * Issue #379, the refusal ADR Decision 80 recorded as owed: a record uuid TWO of this chart's
 	 * records carry is cited as neither of them.
 	 *
-	 * <p>Every other ambiguity this class pins is between rival ORDERS — two prescriptions reaching
-	 * one record. This one is between rival RECORDS, and the uuid leg was written without it:
+	 * <p>The ambiguities this class pinned before this issue's second round are all between rival
+	 * ORDERS — two prescriptions reaching one record. This one and the two cases after it are between
+	 * rival RECORDS, and the uuid leg was written without that case:
 	 * {@code "a record carrying this order's uuid IS this order, so it cannot be claimed by anyone
 	 * else"} is true and does not say WHICH of two such records the order is. The index behind it is
 	 * last-wins, so the leg answered with whichever record was indexed second and the clause told the
@@ -1037,8 +1038,10 @@ public class InteractionFindingChartOrderBridgeTest extends BaseModuleContextSen
 	 * <p><b>Its red today is not independent of {@code
 	 * .aRecordUuidTwoOfThisChartsRecordsCarryIsCitedByNeither}'s</b>: before the fix both fail on the
 	 * uuid leg answering with the last record indexed. What this case discriminates is the shape of
-	 * the fix — make the leg fall through to the name walk instead of vetoing and this one alone
-	 * reddens, citing [3].
+	 * the fix — make the leg fall through to the name walk instead of vetoing and it reddens, citing
+	 * [3]. It is not alone there: {@code
+	 * .anOrderWhoseUuidTwoRecordsCarryStillContestsNothingItsNeighbourNames} reddens on the same
+	 * mutation and with the worse symptom, one record cited as two prescriptions in one clause.
 	 */
 	@Test
 	public void anOrderWhoseUuidTwoRecordsCarryDoesNotFallBackToARecordThatMerelyNamesIt()
@@ -1065,7 +1068,9 @@ public class InteractionFindingChartOrderBridgeTest extends BaseModuleContextSen
 	 * <p>{@code recordsSeveralOrdersName} skips an order the chart holds a uuid record of, on the
 	 * ground that such an order IS one of its own records and so is not a rival claimant to any
 	 * other. The veto does not change that: it stops the order citing anything, which is a different
-	 * question from whether it takes numbers away from its neighbours. Asking the SKIP the citation's
+	 * OUTCOME. The two rest on ONE predicate, {@code isOneOfItsOwnRecords}, and must — an order
+	 * skipped from contesting but not taking the uuid leg goes on to take the NAME leg, which is how
+	 * one record comes to be cited as two prescriptions in one clause. Asking the SKIP the citation's
 	 * question instead — skip only where exactly one record carries the uuid — makes the Aspibrand
 	 * order a claimant on record [3], which the Coagubrand order also names, so that record goes
 	 * contested and the neighbour loses a number that was never in question.

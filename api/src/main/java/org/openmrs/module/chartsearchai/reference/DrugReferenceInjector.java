@@ -1104,10 +1104,11 @@ public class DrugReferenceInjector {
 		 *          cannot come to disagree about which records an order IS. The READING of that list
 		 *          is each caller's own.
 		 *
-		 *          <p><b>The stored list itself, not a copy or an unmodifiable view</b>, and every
-		 *          caller reads it without keeping it. Wrapping would put an allocation per ORDER on a
-		 *          path reached whatever {@code chartsearchai.drugSafety.citeOrderRecords} says — the
-		 *          issue #118 reconciliation, which has gates of its own but not that one.
+		 *          <p><b>The stored list itself, not a copy or an unmodifiable view.</b> Wrapping would
+		 *          put an allocation per ORDER on a path reached whatever
+		 *          {@code chartsearchai.drugSafety.citeOrderRecords} says — the issue #118
+		 *          reconciliation, which has gates of its own but not that one. What that costs is the
+		 *          paragraph below.
 		 *
 		 *          <p><b>{@link #numbersFor} hands this list OUT of the class</b>, on its uuid leg,
 		 *          where its name leg returns a fresh one. So a consumer that sorted or removed from
@@ -1408,11 +1409,11 @@ public class DrugReferenceInjector {
 				ambiguous.add(display);
 				continue;
 			}
-			// The `already.equals` half is a guard against a shape the order read cannot produce — two
-			// active orders resolving to ONE number — and it is dead in both directions: dropping that
-			// conjunct leaves the build green here and at this branch's merge base alike, so it is
-			// pre-existing rather than made dead by the uncollapsing. Its NEGATION is live; mutate the
-			// two halves apart.
+			// The `already.equals` half discriminates nothing: dropping that conjunct alone leaves the
+			// api suite green at this head AND at this branch's merge base, so it is pre-existing
+			// rather than made dead by the uncollapsing. Why no two orders reach one number is this
+			// method's own paragraph on recordsSeveralOrdersName, not restated here. Its NEGATION is
+			// live; mutate the two halves apart.
 			//
 			// Two prescriptions that SPELL one display are one item in the clause, so where they are
 			// different records that item can state neither number — the display is all the model has to

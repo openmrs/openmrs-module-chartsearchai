@@ -52,8 +52,9 @@ Usage:
 
 The regime grid is `entailment.enabled` on/off x `minCosine` 0.40 (shipped) and 0.82 (the
 value this module's own global-property text advises for e5), one question held fixed. The
-probes are questions written to force drug-name attribution, which is the shape #294's text
-describes; they are the half that tests whether the model ever makes such a claim.
+probes are ordinary questions a clinician would ask — what the patient is on, how many orders
+there are, whether a drug is safe to add. They are the half that tests whether the injected
+record reaches the answer at all.
 """
 import importlib.util
 import json
@@ -95,11 +96,10 @@ REGIMES = [("entailment-on  floor-0.40", True, "0.40"),
 # than it read. If you add a drug-specific probe, name the substance THIS arrangement's order
 # actually carries.
 #
-# `unnamed-order` is the one that matters and the one to keep first: it is the probe that made
-# the model describe the record AS an order whose drug is unnamed, and it is the cell on which a
-# published `grounded=false` was first observed. The exhaustive-list probes are the control —
-# they measure whether the injected record closes issue #118's divergence, and on the run
-# recorded in ADR Decision 38 they show it does not.
+# The question that elicits the antecedent is NOT in this list — it is REGIME_QUESTION above,
+# because the regime grid is what needs it held fixed. These are the control: they measure
+# whether the injected record closes issue #118's divergence for an ordinary question, and on the
+# run recorded in ADR Decision 38 they show it does not.
 PROBES = [
     ("medication", MEDICATION_QUESTION),
     ("name-each-order", "List each active drug order and name its drug."),

@@ -228,6 +228,33 @@ public class ChartSearchAiStreamingTest {
 	}
 
 	/**
+	 * @return the source text of the method whose declaration starts with {@code declaration}, from
+	 *         its opening brace to the closing brace in the first column of a member — so an
+	 *         assertion can be scoped to one method's OWN body rather than to the whole file.
+	 *
+	 *         <p>Fails naming the declaration when it is absent, so a rename cannot leave a guard
+	 *         asserting about an empty string and passing. The closing delimiter is {@code "\n\t}"},
+	 *         which finds the end of a one-tab-indented member: every caller so far scans a method of
+	 *         the controller class itself, and a nested class's method would need a different one.
+	 *
+	 *         <p>Package-visible, and here rather than in the class that first wrote it, for
+	 *         {@link #occurrences}' reason one step on: it lived as a private helper of
+	 *         {@code ChartSearchAiInteractionPairExtentTest} until issue #374 needed the same scoping
+	 *         for {@code serializeSafetyWarnings}, and the repair a private helper invites is a second
+	 *         copy. {@code XmlPayloads} and {@code SseEvents} both carry that lesson in their own
+	 *         javadoc, each having been grown twice before it was shared.
+	 */
+	static String bodyOf(String source, String declaration) {
+		int at = source.indexOf(declaration);
+		assertTrue(at >= 0, "no method declared \"" + declaration + "\" — the guard would otherwise "
+				+ "assert about an empty body and pass");
+		int open = source.indexOf('{', at);
+		int close = source.indexOf("\n\t}", open);
+		assertTrue(open >= 0 && close > open, "could not delimit the body of \"" + declaration + "\"");
+		return source.substring(open, close);
+	}
+
+	/**
 	 * @return how many times {@code regex} matches — the counterpart of {@link #occurrences} for a
 	 *         needle that must tolerate the whitespace Java allows.
 	 *

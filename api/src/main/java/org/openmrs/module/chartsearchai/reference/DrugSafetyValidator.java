@@ -2839,13 +2839,15 @@ public class DrugSafetyValidator {
 	 *         {@code ConditionRuleBoundaryCorroborationTest.aPaddedTokenIsPutToTheSameStringItsWitnessFilterTrimmed}
 	 *         holds both halves.
 	 *
-	 *         <p><b>Prompt-facing only, and that is the LIMIT of issue #309's fix rather than merely its
-	 *         scope.</b> The chip arm's own answer is unmoved, so on the ticket's reproduction the
-	 *         injected record and the {@code safety_finding} hedge while the {@code safetyWarnings} chip
-	 *         still states the contraindication of the chart, unqualified — a surface with no third
-	 *         section to hedge into. Do not close it by tightening
-	 *         {@link PatientClinicalContext#hasConditionToken}, which is fail-open; ADR Decision 73's
-	 *         trade-offs carry the case and what a remedy would have to be.
+	 *         <p><b>Prompt-facing as issue #309 shipped it, and that was the LIMIT of its fix rather
+	 *         than merely its scope.</b> The chip arm's own answer was unmoved, so on the ticket's
+	 *         reproduction the injected record and the {@code safety_finding} hedged while the
+	 *         {@code safetyWarnings} chip stated the contraindication of the chart, unqualified. Issue
+	 *         #374 publishes this same answer as the chip's own
+	 *         {@code restsOnAnUncorroboratedChartMatch}, so the surface no longer WITHHOLDS it. Do not
+	 *         close the rest by tightening
+	 *         {@link PatientClinicalContext#hasConditionToken}, which is fail-open; ADR Decisions 73 and
+	 *         92 carry the case and what a remedy would have to be.
 	 *
 	 *         <p>False for a null context, which is "nothing known" rather than "nothing recorded", and
 	 *         false is the safe direction here exactly as it is for {@link #aMatchedRecordNamesTheEntry}:
@@ -4100,7 +4102,7 @@ public class DrugSafetyValidator {
 	 * says why it must not key on rendered text: two arms word one finding differently, so text
 	 * equality UNDER-recognises a repeat. This one is the other direction and needs no identity at all
 	 * — two chips whose every KEYED field is equal state the same relationship in the same words.
-	 * Keyed and not published, since issue #347: {@code chartOrderBridges} reaches the wire and is
+	 * Keyed and published are different sets, since issue #347: {@code chartOrderBridges} reaches the wire and is
 	 * deliberately NOT in this key (see {@code CLAUDE.md}), so a collapsed twin can carry different
 	 * bridges. What the collapse claims is that the SENTENCE repeats, which is what a reader reads.
 	 * Both ledgers run: this one cannot recognise a repeat the arms word differently, and that one

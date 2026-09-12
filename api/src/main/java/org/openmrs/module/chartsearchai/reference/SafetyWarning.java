@@ -110,6 +110,17 @@ public class SafetyWarning {
 		this(type, drug, detail, null);
 	}
 
+	/**
+	 * As the constructor above, with the dataset's rating.
+	 *
+	 * <p>{@link #restsOnAnUncorroboratedChartMatch()} is false here BY CONSTRUCTION rather than as a
+	 * default, and since issue #374 that false is a published value: a chip assembled through a public
+	 * constructor has no curated rule to have matched against the chart, so it is one of the
+	 * populations that accessor and {@code README.md} enumerate as answering false without having been
+	 * asked. Only {@link #contraindication} may set it, and it is the arm that raised the finding which
+	 * decides it — never whoever assembles a chip. The same argument the 5-argument constructor below
+	 * makes of {@link #isAboutACurrentMedication()}.
+	 */
 	public SafetyWarning(String type, String drug, String detail, String severity) {
 		this(type, drug, detail, severity, false, false, null, null,
 				Collections.<ChartOrderBridge> emptyList(), false);
@@ -154,7 +165,9 @@ public class SafetyWarning {
 	 * also keeps {@link #TYPE_CONTRAINDICATION} out of the call site, which is where a chip arm would
 	 * otherwise repeat it.
 	 *
-	 * <p>Package-private, matching the accessor: a caller may set only what it may read back. The one
+	 * <p>Package-private, and since issue #374 that is no longer "matching the accessor", which is
+	 * PUBLIC — see {@link #restsOnAnUncorroboratedChartMatch()} for why a public read over a
+	 * package-private write is what this flag wants. The one
 	 * caller is {@code DrugSafetyValidator.addContraindications} — the curated-rule arm, the only arm
 	 * whose warning is derived from a rule matched against the chart at all. The allergen arm's own
 	 * three sentences go through {@link #recordedAllergenContraindication} instead, which hardcodes
@@ -189,7 +202,9 @@ public class SafetyWarning {
 	 * fourth argument on {@link #contraindication} would have offered that arm a flag it can never
 	 * legitimately set.
 	 *
-	 * <p>Package-private, matching the accessor: a caller may set only what it may read back. Its one
+	 * <p>Package-private, for {@link #contraindication}'s reason rather than for accessor symmetry: the
+	 * flag it hardcodes false is published, so what a public factory here would offer is a caller
+	 * asserting a provenance answer the module never made. Its one
 	 * caller is {@code DrugSafetyValidator.addAllergyContraindications}, which is reached from BOTH
 	 * the drug-in-play loop (false — the drug was proposed) and
 	 * {@code addActiveOrderContraindications} (true — the subject is an active order).
@@ -618,15 +633,37 @@ public class SafetyWarning {
 	 * <p><b>So this is no longer scoped as the chip's own demotion is, and the divergence is
 	 * deliberate</b>: {@code DrugSafetyValidator.contraindicationRank} stays allergy-typed, because
 	 * issue #223 scoped it to the fold whose premise is that a self-named rule reports the allergen
-	 * arm's fact — a premise a condition rule has no part in. The record and the finding say the
-	 * condition answer; no chip does. Stated here because this accessor is where a reader would come to
-	 * learn the two scopes had parted. Not serialized; the wire shape is unchanged, and the chip's
-	 * detail is the same string it was — <b>which on the hazard case leaves the chip stating the
-	 * contraindication of the chart while the two records beside it hedge</b>, so read the divergence
-	 * as issue #309's remaining defect and not only as its scope. ADR Decision 73's trade-offs carry
+	 * arm's fact — a premise a condition rule has no part in. Stated here because this accessor is
+	 * where a reader would come to learn the two scopes had parted. ADR Decision 73's trade-offs carry
 	 * the reproduction and why tightening the match is not the remedy.
+	 *
+	 * <p><b>Published VERBATIM since issue #374, as each chip's {@code restsOnAnUncorroboratedChartMatch}
+	 * wire key — so this accessor's name IS the key</b>, the rule {@link #chartOrderBridges()} carries
+	 * for its own. Public for that reason and no other: the wire-facing shape is public, and since #374
+	 * this fact is part of it. The SETTER is not: {@link #contraindication} is the only caller that may
+	 * set it, and it stays package-private, since a provenance answer is a measurement this module made
+	 * and not a value an outside caller may assert. The class's setter/accessor symmetry rule is
+	 * one-directional, so a public read over a package-private write does not breach it.
+	 *
+	 * <p><b>What the published {@code false} does NOT say is that the chart corroborates the finding.</b>
+	 * This is the ONE home of what it covers, and no count of those readings is published — it was, and
+	 * the count went stale inside two cycles. A {@code false} arises from: either fold above; a chip
+	 * that answers by construction, never having had a rule to match (each interaction, class-only and
+	 * overdose chip, and the allergen arm's own three sentences); and — the reading easiest to miss,
+	 * because it is a curated contraindication chip like the corroborated one —
+	 * {@code DrugSafetyValidator.corroboratedByTheChart} answering true UNCONDITIONALLY for a curated
+	 * allergy rule that is not self-named, so a CLASS-token rule's chip publishes false without the
+	 * chart having been asked. That last is reachable on the module's own bundled seed, whose
+	 * class-token rules are {@code nsaid}, {@code penicillin} and {@code aminoglycoside} — one
+	 * {@code sourceFormat=json} flip away, and not only on an operator's file. No ranking of these
+	 * readings against each other is offered: nothing has measured one. {@code README.md} carries this
+	 * for a client.
+	 * Before #374 this read "not serialized; the wire shape is unchanged", and the hazard case was the
+	 * chip asserting the contraindication while the two records beside it hedged — the chip now states
+	 * this answer, while its {@code detail} is still the string it was, so a client that does not render
+	 * the key still shows the categorical. ADR Decision 92.
 	 */
-	boolean restsOnAnUncorroboratedChartMatch() {
+	public boolean restsOnAnUncorroboratedChartMatch() {
 		return uncorroboratedChartMatch;
 	}
 
@@ -803,9 +840,16 @@ public class SafetyWarning {
 	 * this paragraph was written — rather than any summary of it here.
 	 *
 	 * <p><b>Prompt-facing only.</b> Nothing on the wire moves and the chip's own detail is untouched,
-	 * so {@code DrugSafetyValidator.StatedInteractionChips} deliberately does NOT key on it, for the
-	 * reason stated at {@link #chartOrderBridges()}: that key decides which chips are emitted, so
-	 * keying on a prompt-only fact would let it decide wire content. Leaving it out costs nothing
+	 * so {@code DrugSafetyValidator.StatedInteractionChips} deliberately does NOT key on it — for the
+	 * reason stated at {@link #chartOrderBridges()}, which is NOT that this is unpublished: that key
+	 * decides which chips are EMITTED and, through {@code ChartSearchAiUtils.resourceKey}, whether two
+	 * injected findings share one resource uuid, so a fact like this must not be able to change which
+	 * chips exist, whether or not a client can read it. The published-versus-prompt-facing reading of
+	 * it was falsified by issue #347 and again by #374, and the key's own membership contradicts it in
+	 * both directions — {@code carriesUnratedRelationship()} is in the key and unpublished, while
+	 * {@link #restsOnAnUncorroboratedChartMatch()} is in it and published. That membership says what the
+	 * key is NOT sorted by and nothing about this ledger's behaviour: every chip it sees comes from
+	 * {@link #interaction}, which hardcodes that flag false, so the term is constant there. Leaving it out costs nothing
 	 * observable, and that is worth saying rather than leaving to be re-derived: the flag is constant
 	 * within an arm, and where the two interaction arms can both run in one pass — the POST-answer
 	 * pass, where a drug the ANSWER named is in play beside a screening question —

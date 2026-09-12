@@ -957,10 +957,10 @@ public class DrugReferenceInjector {
 		 *  {@link #recordsOfActiveOrders}</b>, which has to name every record under an order's uuid
 		 *  so none of them is left citable as a NEIGHBOUR, and no count can answer that. Said exactly
 		 *  because the veto reads naturally as the reason and is not: it composes with the old
-		 *  representation unchanged. The readings are {@link #numberByUuid} (issue #118, fail-open —
-		 *  presence, its value undiscriminated, as its own javadoc records), {@link #numberOfRecord}
-		 *  (issue #305, exactly one), {@link #isOneOfItsOwnRecords} (the shared boolean) and
-		 *  {@link #recordsOfActiveOrders}. Mutate any of them and read the failures. */
+		 *  representation unchanged. The readings are {@link #numbersFor}'s uuid leg (issue #118,
+		 *  fail-open), {@link #numberOfRecord} (issue #305, exactly one),
+		 *  {@link #isOneOfItsOwnRecords} (the shared boolean) and {@link #recordsOfActiveOrders}.
+		 *  Mutate any of them and read the failures. */
 		private final Map<String, List<Integer>> recordsByResourceUuid =
 				new LinkedHashMap<String, List<Integer>>();
 
@@ -1036,7 +1036,7 @@ public class DrugReferenceInjector {
 		 *
 		 *         <p><b>The third reader now follows the split, and did not until issue #379's second
 		 *         round.</b> {@link #citableNumberFor} is issue #379's order-record citation — as
-		 *         affirmative as this one — and its uuid leg read {@link #numberByUuid}, the fail-open
+		 *         affirmative as this one — and its uuid leg read {@link #numbersFor}'s, the fail-open
 		 *         one, so on a chart carrying two records under one order uuid it cited the last
 		 *         indexed while this one cited neither. Decision 80 recorded that as owed against
 		 *         Decision 77's measurement; the measurement has been run and the leg now asks this
@@ -1057,14 +1057,22 @@ public class DrugReferenceInjector {
 		 *         indexes a {@code drug_order} document under its {@code Order} uuid, so a uuid match
 		 *         is the exact answer and a sibling record that merely NAMES the same drug is not a
 		 *         second answer to the same question. The name leg is the drifted-uuid insurance issue
-		 *         #118 added, and is the only leg that can return more than one — the uuid leg answers
-		 *         with ONE number even where several records carry the uuid, which costs this question
-		 *         nothing because its only caller reads {@code isEmpty()}.
+		 *         #118 added.
+		 *
+		 *         <p><b>Fail-open, and that is what separates it from {@link #numberOfRecord}.</b> A
+		 *         second record under one uuid costs this question nothing, so the uuid leg ANSWERS
+		 *         rather than refusing — with every such record, its only caller reading
+		 *         {@code isEmpty()}. Narrow it to that method's reading and an order two records carry
+		 *         becomes UNREPRESENTED, so issue #118 WARNs and injects a duplicate record for a
+		 *         prescription the chart already holds twice; {@code ActiveOrderReconciliationTest
+		 *         .anActiveOrderTwoOfTheChartsRecordsCarryTheUuidOfIsStillNotInjected} is that case,
+		 *         and its records deliberately do not NAME the drug — with the name there the name leg
+		 *         answers too and the narrowing is invisible.
 		 */
 		private List<Integer> numbersFor(PatientClinicalContext.ActiveDrugOrder order) {
-			Integer exact = numberByUuid(order);
-			if (exact != null) {
-				return Collections.singletonList(exact);
+			List<Integer> own = recordsCarrying(order);
+			if (!own.isEmpty()) {
+				return own;
 			}
 			List<Integer> named = new ArrayList<Integer>();
 			for (Map.Entry<Integer, String> record : liveDrugOrderTexts.entrySet()) {
@@ -1073,29 +1081,6 @@ public class DrugReferenceInjector {
 				}
 			}
 			return named;
-		}
-
-		/** @return a number of a record carrying {@code order}'s own uuid, or null where this chart
-		 *          carries none. The EXACT leg of {@link #numbersFor} and fail-open with it: a second
-		 *          record under one uuid costs that question nothing, so this ANSWERS rather than
-		 *          refusing, which is the whole of what separates it from {@link #numberOfRecord}.
-		 *          {@link #recordsSeveralOrdersName} and {@link #citableNumberFor} ask it as a
-		 *          boolean — <em>does this chart hold a record of this order at all</em>.
-		 *
-		 *          <p><b>WHICH number it answers with is not discriminated by any case</b>, and that
-		 *          is stated so the last-wins reading does not look load-bearing: every caller reads
-		 *          presence, {@code numbersFor}'s list reaching only an {@code isEmpty()}. Measured by
-		 *          returning a constant here, which leaves the whole api suite green. What IS
-		 *          load-bearing is that it answers at all — narrow it to {@link #numberOfRecord}'s
-		 *          reading and an order two records carry becomes UNREPRESENTED, so issue #118 WARNs
-		 *          and injects a duplicate record for a prescription the chart already holds twice.
-		 *          {@code ActiveOrderReconciliationTest
-		 *          .anActiveOrderTwoOfTheChartsRecordsCarryTheUuidOfIsStillNotInjected} is that case,
-		 *          and its records deliberately do not NAME the drug — with the name there the #118
-		 *          name leg answers too and the narrowing is invisible. */
-		private Integer numberByUuid(PatientClinicalContext.ActiveDrugOrder order) {
-			List<Integer> carrying = recordsCarrying(order);
-			return carrying.isEmpty() ? null : carrying.get(carrying.size() - 1);
 		}
 
 		/** @return whether this chart holds a record that IS {@code order} — one of its own uuid
@@ -1114,7 +1099,7 @@ public class DrugReferenceInjector {
 		}
 
 		/** @return the numbers of every record carrying {@code order}'s own uuid, EMPTY where it has
-		 *          none or has no uuid — the one lookup {@link #numberByUuid},
+		 *          none or has no uuid — the one lookup {@link #numbersFor},
 		 *          {@link #isOneOfItsOwnRecords} and {@link #recordsOfActiveOrders} share, so they
 		 *          cannot come to disagree about which records an order IS. The READING of that list
 		 *          is each caller's own.
@@ -1135,8 +1120,8 @@ public class DrugReferenceInjector {
 		 *         that ARE one of this patient's active prescriptions, and so are not citable as any
 		 *         other (issue #379).
 		 *
-		 *         <p><b>Every record and not one per order.</b> Asked through {@link #numberByUuid} it
-		 *         answered one number per order, so where two records carried one uuid the other stayed
+		 *         <p><b>Every record and not one per order.</b> Asked one number per order, it left
+		 *         the OTHER record, where two carried one uuid, still
 		 *         in every neighbouring order's candidate set — free to be cited, by an order that
 		 *         merely NAMES it, as the prescription it is not. That defeats the rule
 		 *         {@code .aRecordAnotherOrderIsCannotBeCitedForThisOne} pins, on the same collapse
@@ -1391,7 +1376,7 @@ public class DrugReferenceInjector {
 		// .aDisplayWhoseOtherOrderCanCiteNothingStatesNoNumberWhicheverComesFirst reddens on.
 		//
 		// EVERY record under an order's uuid and not one per order: recordsOfActiveOrders carries what
-		// asking numberByUuid per order missed.
+		// asking for one number per order missed.
 		Set<Integer> claimedByUuid = records.recordsOfActiveOrders(orders);
 		// One record cannot be two prescriptions, asked of every record an order could BE and not of the
 		// ones orders came back with — see recordsSeveralOrdersName, which carries what the second

@@ -230,24 +230,48 @@ public class ChartSearchAiUncorroboratedChartMatchTest {
 	}
 
 	/**
-	 * @return {@code source} with its {@code //} line comments removed, so a guard over it cannot be
-	 *         satisfied by a commented-out copy of the statement it looks for.
+	 * @return {@code source} with its comments removed — {@code //} to end of line, and {@code /*} to
+	 *         its close — so a guard over it cannot be satisfied by a commented-out copy of the
+	 *         statement it looks for.
 	 *
-	 *         <p>Two residues, named rather than claimed away. A BLOCK comment is not stripped, and a
-	 *         {@code //} inside a STRING LITERAL truncates its line — so a literal carrying one could
-	 *         hide a later statement on the same line from the counts above. Neither arises in the body
-	 *         this reads today, and handling either properly means tracking literals, which is a
-	 *         parser. No count of that body's literals is published here, deliberately. Both can only REMOVE text, so a
-	 *         statement they hide reads as absent — which reddens where there was one and passes where
-	 *         a second put was the one hidden. So the counts bound this method's spellings, not every
-	 *         way text can be hidden from them; what stops a re-derivation is the chip pair in
+	 *         <p><b>Both comment forms are stripped, and the block form is the one that matters.</b>
+	 *         Stripping only {@code //} leaves a block-commented {@code map.put(..)} in the "live" text
+	 *         to be COUNTED, so the guard passes on a dead statement — fail-open, and the exact defect
+	 *         stripping {@code //} exists to close. A round of this change's own review found that
+	 *         hole, in a paragraph that had claimed the residues could only fail closed.
+	 *
+	 *         <p>One residue is left and is named rather than claimed away: a comment opener inside a
+	 *         STRING LITERAL starts a strip that the literal did not. Handling that needs literal
+	 *         tracking, which is a parser. It can only REMOVE text, so it can only make a count too
+	 *         LOW — and the counts above are equalities, so a count of one that should be two reads as
+	 *         a divergence rather than as agreement. What bounds this method altogether is that it
+	 *         guards SPELLING; what stops a re-derivation is the chip pair in
 	 *         {@link #theChipStatesWhetherItsChartMatchIsCorroborated}, which reads values.
 	 */
 	private static String liveCode(String source) {
 		StringBuilder out = new StringBuilder(source.length());
+		boolean inBlock = false;
 		for (String line : source.split("\n", -1)) {
-			int at = line.indexOf("//");
-			out.append(at < 0 ? line : line.substring(0, at)).append('\n');
+			StringBuilder kept = new StringBuilder(line.length());
+			for (int i = 0; i < line.length(); i++) {
+				if (inBlock) {
+					if (line.startsWith("*/", i)) {
+						inBlock = false;
+						i++;
+					}
+					continue;
+				}
+				if (line.startsWith("//", i)) {
+					break;
+				}
+				if (line.startsWith("/*", i)) {
+					inBlock = true;
+					i++;
+					continue;
+				}
+				kept.append(line.charAt(i));
+			}
+			out.append(kept).append('\n');
 		}
 		return out.toString();
 	}

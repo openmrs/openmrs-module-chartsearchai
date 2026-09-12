@@ -645,10 +645,17 @@ public class SafetyWarning {
 	 * and not a value an outside caller may assert. The class's setter/accessor symmetry rule is
 	 * one-directional, so a public read over a package-private write does not breach it.
 	 *
-	 * <p><b>What the published {@code false} does NOT say is that the chart corroborates the finding</b>,
-	 * and three separate readings of it are live: the two folds above, and every chip that answers by
-	 * construction (each interaction, class-only and overdose chip, and the allergen arm's own three
-	 * sentences, which have no rule to have matched). {@code README.md} carries that for a client.
+	 * <p><b>What the published {@code false} does NOT say is that the chart corroborates the finding.</b>
+	 * This is the ONE home of what it covers, and no count of those readings is published — it was, and
+	 * the count went stale inside two cycles. A {@code false} arises from: either fold above; a chip
+	 * that answers by construction, never having had a rule to match (each interaction, class-only and
+	 * overdose chip, and the allergen arm's own three sentences); and — the reading easiest to miss,
+	 * because it is a curated contraindication chip like the corroborated one —
+	 * {@code DrugSafetyValidator.corroboratedByTheChart} answering true UNCONDITIONALLY for a curated
+	 * allergy rule that is not self-named, so a CLASS-token rule's chip publishes false without the
+	 * chart having been asked. That last is the shipped seed's own {@code nsaid} and {@code penicillin}
+	 * rules, so it is the most reachable of them, not a corner. {@code README.md} carries this for a
+	 * client.
 	 * Before #374 this read "not serialized; the wire shape is unchanged", and the hazard case was the
 	 * chip asserting the contraindication while the two records beside it hedged — the chip now states
 	 * this answer, while its {@code detail} is still the string it was, so a client that does not render

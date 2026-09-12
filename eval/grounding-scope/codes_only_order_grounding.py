@@ -88,18 +88,16 @@ REGIMES = [("entailment-on  floor-0.40", True, "0.40"),
            ("tier1-only     floor-0.40", False, "0.40"),
            ("tier1-only     floor-0.82", False, "0.82")]
 
-# Questions that get the model to SAY something about the codes-only record, which is the
-# antecedent #294's exposure needs. Kept SUBSTANCE-NEUTRAL on purpose: an earlier run carried
-# over two probes naming the drug of a previous arrangement's order ("which antiretrovirals…",
-# "is the patient taking lamivudine?") after the arrangement moved to a different concept, so
-# those cells could not have elicited the antecedent and the run's "cited in none" was weaker
-# than it read. If you add a drug-specific probe, name the substance THIS arrangement's order
-# actually carries.
+# The CONTROL, not the exposure. None of these elicits #294's antecedent — the question that does
+# is REGIME_QUESTION above, where the grid needs it held fixed. What these measure is the thing
+# the injected record exists for: that an ordinary clinical question cannot deny a prescription
+# the chart holds. On the run recorded in ADR Decision 38 they show it still can.
 #
-# The question that elicits the antecedent is NOT in this list — it is REGIME_QUESTION above,
-# because the regime grid is what needs it held fixed. These are the control: they measure
-# whether the injected record closes issue #118's divergence for an ordinary question, and on the
-# run recorded in ADR Decision 38 they show it does not.
+# Kept SUBSTANCE-NEUTRAL on purpose. An earlier run carried over two probes naming the drug of a
+# PREVIOUS arrangement's order ("which antiretrovirals…", "is the patient taking lamivudine?")
+# after the arrangement had moved to a different concept, so those cells could not have elicited
+# anything and that run's "cited in none" was weaker than it read. A drug-specific probe belongs
+# in SUBSTANCE_PROBE below, naming what THIS arrangement's order actually carries.
 PROBES = [
     ("medication", MEDICATION_QUESTION),
     ("name-each-order", "List each active drug order and name its drug."),

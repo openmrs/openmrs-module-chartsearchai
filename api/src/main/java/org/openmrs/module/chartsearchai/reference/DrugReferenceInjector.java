@@ -1325,11 +1325,12 @@ public class DrugReferenceInjector {
 	 * file reserves to {@code DrugSafetyValidator.chartOrderBridges}: no bridge is re-derived here and
 	 * no silence test is re-asked.
 	 *
-	 * <p><b>THREE ways the answer is no, and the third has two halves.</b> One order the
-	 * drifted-uuid name leg matched in two records at once, and one record two orders NAME — both
-	 * {@link DrugOrderRecords#citableNumberFor}, which is where every rule about a RECORD's claimant
-	 * now sits; and, here, one DISPLAY two orders do not resolve ALIKE by, which is a rule about the
-	 * clause ITEM rather than about a record. Alike is not "to different records": the two orders may
+	 * <p><b>The ways the answer is no, named rather than counted — the count went stale the moment
+	 * issue #379's second round added one.</b> One order the drifted-uuid name leg matched in two
+	 * records at once; one record two orders NAME; one order whose uuid TWO of the chart's records
+	 * carry — all three {@link DrugOrderRecords#citableNumberFor}, which is where every rule about a
+	 * RECORD's claimant now sits; and, here, one DISPLAY two orders do not resolve ALIKE by, which is
+	 * a rule about the clause ITEM rather than about a record. Alike is not "to different records": the two orders may
 	 * resolve to different records ({@code .twoOrdersOfTheSameDisplayAreNamedOnce}), or one may resolve
 	 * while the other resolves to NOTHING
 	 * ({@code .aDisplayWhoseOtherOrderCanCiteNothingStatesNoNumberWhicheverComesFirst}), and the
@@ -1338,7 +1339,7 @@ public class DrugReferenceInjector {
 	 * In each case the module cannot say which record a model should read, and naming one would put a
 	 * citation it cannot stand behind into a citable record stating a clinical call — so it names
 	 * none, per ITEM: an unambiguous neighbour in the same clause keeps its number. An order the chart
-	 * holds no record for is not a fourth case; it simply has no candidate.
+	 * holds no record for is not one of them; it simply has no candidate.
 	 *
 	 * <p><b>And each half has to be read where striking the DISPLAY differs from striking the map
 	 * ENTRY</b> — which is what {@code ambiguous} buys, and what nothing discriminated until review

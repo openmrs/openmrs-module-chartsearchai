@@ -937,7 +937,7 @@ public class InteractionFindingChartOrderBridgeTest extends BaseModuleContextSen
 	 * declares no resource type complete, so {@code unrepresentedActiveOrders} stands down and injects
 	 * nothing for the Zolvimix order. Both halves are the point: Klarizom keeps its number even though
 	 * the reconciliation did not run, which is what reddens if the completeness gate is copied onto the
-	 * numbering; and Zolvimix has no candidate at all, which is not a fourth ambiguity rule.
+	 * numbering; and Zolvimix has no candidate at all, which is not an ambiguity rule of its own.
 	 */
 	@Test
 	public void aQueryScopedSliceStillNumbersTheRecordsItDoesCarry() throws Exception {

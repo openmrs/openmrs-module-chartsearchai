@@ -242,11 +242,13 @@ public class ChartSearchAiUncorroboratedChartMatchTest {
 	 *
 	 *         <p>One residue is left and is named rather than claimed away: a comment opener inside a
 	 *         STRING LITERAL starts a strip that the literal did not. Handling that needs literal
-	 *         tracking, which is a parser. It can only REMOVE text, so it can only make a count too
-	 *         LOW — and the counts above are equalities, so a count of one that should be two reads as
-	 *         a divergence rather than as agreement. What bounds this method altogether is that it
-	 *         guards SPELLING; what stops a re-derivation is the chip pair in
-	 *         {@link #theChipStatesWhetherItsChartMatchIsCorroborated}, which reads values.
+	 *         tracking, which is a parser. <b>It fails OPEN, and saying otherwise is how this paragraph
+	 *         has already been wrong once.</b> Removing text can hide a SECOND live {@code map.put} on
+	 *         the same line, leaving the count at the 1 these assertions expect — so the guard passes
+	 *         while two statements write the key and the surviving one re-derives the value. What
+	 *         bounds that is not this method: it is the identical-detail chip pair in
+	 *         {@link #theChipStatesWhetherItsChartMatchIsCorroborated}, which such a re-derivation would
+	 *         still have to satisfy on VALUES. This method guards spelling, and only spelling.
 	 */
 	private static String liveCode(String source) {
 		StringBuilder out = new StringBuilder(source.length());

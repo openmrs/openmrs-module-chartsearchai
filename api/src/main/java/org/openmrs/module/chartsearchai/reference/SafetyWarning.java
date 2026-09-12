@@ -653,9 +653,11 @@ public class SafetyWarning {
 	 * because it is a curated contraindication chip like the corroborated one —
 	 * {@code DrugSafetyValidator.corroboratedByTheChart} answering true UNCONDITIONALLY for a curated
 	 * allergy rule that is not self-named, so a CLASS-token rule's chip publishes false without the
-	 * chart having been asked. That last is the shipped seed's own {@code nsaid} and {@code penicillin}
-	 * rules, so it is the most reachable of them, not a corner. {@code README.md} carries this for a
-	 * client.
+	 * chart having been asked. That last is reachable on the module's own bundled seed, whose
+	 * class-token rules are {@code nsaid}, {@code penicillin} and {@code aminoglycoside} — one
+	 * {@code sourceFormat=json} flip away, and not only on an operator's file. No ranking of these
+	 * readings against each other is offered: nothing has measured one. {@code README.md} carries this
+	 * for a client.
 	 * Before #374 this read "not serialized; the wire shape is unchanged", and the hazard case was the
 	 * chip asserting the contraindication while the two records beside it hedged — the chip now states
 	 * this answer, while its {@code detail} is still the string it was, so a client that does not render

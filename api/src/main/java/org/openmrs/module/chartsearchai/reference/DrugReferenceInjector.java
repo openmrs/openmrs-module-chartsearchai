@@ -1328,7 +1328,7 @@ public class DrugReferenceInjector {
 	 * <p><b>The ways the answer is no, named rather than counted — the count went stale the moment
 	 * issue #379's second round added one.</b> One order the drifted-uuid name leg matched in two
 	 * records at once; one record two orders NAME; one order whose uuid TWO of the chart's records
-	 * carry — all three {@link DrugOrderRecords#citableNumberFor}, which is where every rule about a
+	 * carry — each of them {@link DrugOrderRecords#citableNumberFor}, which is where every rule about a
 	 * RECORD's claimant now sits; and, here, one DISPLAY two orders do not resolve ALIKE by, which is
 	 * a rule about the clause ITEM rather than about a record. Alike is not "to different records": the two orders may
 	 * resolve to different records ({@code .twoOrdersOfTheSameDisplayAreNamedOnce}), or one may resolve

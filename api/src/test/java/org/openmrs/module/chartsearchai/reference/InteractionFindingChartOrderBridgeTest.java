@@ -956,9 +956,8 @@ public class InteractionFindingChartOrderBridgeTest extends BaseModuleContextSen
 	 * Issue #379, the refusal ADR Decision 80 recorded as owed: a record uuid TWO of this chart's
 	 * records carry is cited as neither of them.
 	 *
-	 * <p>The ambiguities this class pinned before this issue's second round are all between rival
-	 * ORDERS — two prescriptions reaching one record. This one and the two cases after it are between
-	 * rival RECORDS, and the uuid leg was written without that case:
+	 * <p>This ambiguity is between rival RECORDS — two of the chart's records carrying one order's
+	 * uuid — and the uuid leg was written without it:
 	 * {@code "a record carrying this order's uuid IS this order, so it cannot be claimed by anyone
 	 * else"} is true and does not say WHICH of two such records the order is. The index behind it is
 	 * last-wins, so the leg answered with whichever record was indexed second and the clause told the

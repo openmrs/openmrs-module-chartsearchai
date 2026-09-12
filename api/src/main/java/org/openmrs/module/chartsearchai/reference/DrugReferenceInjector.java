@@ -951,16 +951,12 @@ public class DrugReferenceInjector {
 		 *  <p><b>Uncollapsed, since issue #379's second round.</b> It was one number per uuid — the
 		 *  last, where a chart carried two — with a companion set of the uuids that had been handed
 		 *  over more than once, because a map read for a count it has already collapsed cannot answer
-		 *  one. Two of this class's three readings are affirmative claims about WHICH record, and both
-		 *  need that count — but a count is all THEY need, and a set of contested uuids beside a
-		 *  last-wins map supplied it. <b>The reading that forces the list is
-		 *  {@link #recordsOfActiveOrders}</b>, which has to name every record under an order's uuid
-		 *  so none of them is left citable as a NEIGHBOUR, and no count can answer that. Said exactly
-		 *  because the veto reads naturally as the reason and is not: it composes with the old
-		 *  representation unchanged. The readings are {@link #numbersFor}'s uuid leg (issue #118,
-		 *  fail-open), {@link #numberOfRecord} (issue #305, exactly one),
-		 *  {@link #isOneOfItsOwnRecords} (the shared boolean) and {@link #recordsOfActiveOrders}.
-		 *  Mutate any of them and read the failures. */
+		 *  one. <b>The reading that forces the list rather than that count is
+		 *  {@link #recordsOfActiveOrders}</b>, which has to name every record under an order's uuid so
+		 *  none of them is left citable as a NEIGHBOUR. Said exactly, because the citation's own veto
+		 *  reads naturally as the reason and is not: {@link #numberOfRecord} asks whether exactly one
+		 *  record carries the uuid, which the contested set answered, so the veto composes with the
+		 *  old representation unchanged. Mutate each reading of this field and read the failures. */
 		private final Map<String, List<Integer>> recordsByResourceUuid =
 				new LinkedHashMap<String, List<Integer>>();
 
@@ -1091,9 +1087,13 @@ public class DrugReferenceInjector {
 		 *          {@link #recordsSeveralOrdersName} skips contesting exactly where it is true. They
 		 *          are not two questions that happen to coincide: narrow one alone and an order is
 		 *          left out of the contest set and then takes the NAME leg, so one record is cited as
-		 *          two different prescriptions in one clause — measured, and the claim
-		 *          {@code .oneRecordTwoPrescriptionsWouldBothCiteIsCitedByNeither} exists to refuse.
-		 *          Spelled once so that cannot be done to one of them. */
+		 *          two different prescriptions in one clause — the rendered symptom
+		 *          {@code .oneRecordTwoPrescriptionsWouldBothCiteIsCitedByNeither} is named for,
+		 *          though that case does not reach this arrangement and stays green. Narrow either
+		 *          site alone and {@code .anOrderWhoseUuidTwoRecordsCarryStillContestsNothingItsNeighbourNames}
+		 *          reddens; narrowing the citation side reddens
+		 *          {@code .anOrderWhoseUuidTwoRecordsCarryDoesNotFallBackToARecordThatMerelyNamesIt}
+		 *          with it. Spelled once so neither can be narrowed on its own. */
 		private boolean isOneOfItsOwnRecords(PatientClinicalContext.ActiveDrugOrder order) {
 			return !recordsCarrying(order).isEmpty();
 		}
@@ -1104,11 +1104,19 @@ public class DrugReferenceInjector {
 		 *          cannot come to disagree about which records an order IS. The READING of that list
 		 *          is each caller's own.
 		 *
-		 *          <p>The stored list itself, not a copy or an unmodifiable view: both callers only
-		 *          read it, and wrapping would put an allocation per ORDER on a path reached whatever
-		 *          {@code chartsearchai.drugSafety.citeOrderRecords} says — the issue #118
-		 *          reconciliation, which has gates of its own but not that one.
-		 *          A caller that needs to keep or modify it owes the copy. */
+		 *          <p><b>The stored list itself, not a copy or an unmodifiable view</b>, and every
+		 *          caller reads it without keeping it. Wrapping would put an allocation per ORDER on a
+		 *          path reached whatever {@code chartsearchai.drugSafety.citeOrderRecords} says — the
+		 *          issue #118 reconciliation, which has gates of its own but not that one.
+		 *
+		 *          <p><b>{@link #numbersFor} hands this list OUT of the class</b>, on its uuid leg,
+		 *          where its name leg returns a fresh one. So a consumer that sorted or removed from
+		 *          that result would mutate the index in place and flip {@link #numberOfRecord}'s
+		 *          reading, turning both affirmative refusals into a confident citation. Nothing in
+		 *          the suite would catch it: no case reads that list's CONTENTS — replacing the uuid
+		 *          leg with the singleton it returned before issue #379's second round leaves the
+		 *          whole build green. Its one consumer asks {@code isEmpty()}; a second that needs
+		 *          more owes the copy. */
 		private List<Integer> recordsCarrying(PatientClinicalContext.ActiveDrugOrder order) {
 			List<Integer> carrying = order.getUuid() == null ? null
 					: recordsByResourceUuid.get(order.getUuid());
@@ -1124,8 +1132,10 @@ public class DrugReferenceInjector {
 		 *         the OTHER record, where two carried one uuid, still
 		 *         in every neighbouring order's candidate set — free to be cited, by an order that
 		 *         merely NAMES it, as the prescription it is not. That defeats the rule
-		 *         {@code .aRecordAnotherOrderIsCannotBeCitedForThisOne} pins, on the same collapse
-		 *         {@link #numberOfRecord} refuses for issue #305.
+		 *         {@code .aRecordAnotherOrderIsCannotBeCitedForThisOne} pins at one record apiece,
+		 *         on the same collapse {@link #numberOfRecord} refuses for issue #305; the case that
+		 *         reddens for either single-element pick is
+		 *         {@code .aRecordOneOrdersUuidIsCannotBeCitedByANeighbourWhereTwoRecordsCarryThatUuid}.
 		 */
 		private Set<Integer> recordsOfActiveOrders(
 				List<PatientClinicalContext.ActiveDrugOrder> orders) {
@@ -1398,6 +1408,12 @@ public class DrugReferenceInjector {
 				ambiguous.add(display);
 				continue;
 			}
+			// The `already.equals` half is a guard against a shape the order read cannot produce — two
+			// active orders resolving to ONE number — and it is dead in both directions: dropping that
+			// conjunct leaves the build green here and at this branch's merge base alike, so it is
+			// pre-existing rather than made dead by the uncollapsing. Its NEGATION is live; mutate the
+			// two halves apart.
+			//
 			// Two prescriptions that SPELL one display are one item in the clause, so where they are
 			// different records that item can state neither number — the display is all the model has to
 			// look the item up by. Not the same rule as the record-side refusal above: this one is about

@@ -1429,6 +1429,12 @@ public final class DrugReferenceTestSupport {
 	 * labelled as codes, and an EMPTY names set, which is what makes this order class uuid-only for
 	 * the issue #118 reconciliation.
 	 *
+	 * <p><b>The ATC codes are a precondition of that routing and not only of the save order.</b> The
+	 * code-only rung in {@code PatientClinicalContextBuilder} is reached only where the order carries
+	 * at least one normalized code; with none, a nameless order is dropped from the active-order list
+	 * altogether, so this helper on its own produces no order rather than a codes-only one. Call
+	 * {@link #mapConceptToAtc} first for that reason as well as for the one below.
+	 *
 	 * <p>The {@code drug_non_coded} clear is not redundant even where the dataset leaves that column
 	 * null: since issue #293 it is a name source, so leaving it to the dataset would make the
 	 * arrangement CONTINGENT on data the caller does not control.

@@ -16,7 +16,10 @@ has to find one record by `resourceUuid` — the index is whatever the injector 
 number it. So the body is read here, but the TAGGING is not respelled — every citation below
 goes through `verdict_tag`, so the rules that make `attachedByTheModule` (#305) and a
 `reference` group (#201) read as something other than "unverified" are edited in one place,
-and a rename of either wire key reaches this file with them.
+and a rename of either wire key reaches this file with them. That holds only while this file
+spells none of those keys itself, which is why `cell` dumps the TAG for the record it is
+looking for and not the raw fields the tag is computed from — the comment there says what
+a raw read would print instead.
 
 ## The arrangement has to be built, and none was found on the database used
 
@@ -156,10 +159,14 @@ def cell(label, question, entailment, floor):
         "verdicts": {str(r.get("index")): gsab.verdict_tag(r) for r in references},
         # "NOT CITED" is a RESULT and not a gap: an uncited record got no verdict, which is a
         # different measurement from a verdict that came back true. Keep them distinguishable.
+        # The keys the tagging rules read — `group` (#201), `grounded`, and `attachedByTheModule`
+        # (#305) — are deliberately NOT dumped raw beside the tag. Read raw here, a renamed key
+        # prints null and this dump reads as "not module-attached, no verdict" rather than as a
+        # broken key, with the tag the only line that moved. The tag carries what the measurement
+        # needs anyway: `attached` and `withheld` are the two non-verdicts, so a true/false/null
+        # tag is already a chart-group citation the model made itself.
         "codes_only_record": ([
             {"index": r.get("index"), "resourceType": r.get("resourceType"),
-             "group": r.get("group"), "grounded": r.get("grounded"),
-             "attachedByTheModule": r.get("attachedByTheModule"),
              "verdict": gsab.verdict_tag(r)} for r in ours]
             or "NOT CITED"),
     }

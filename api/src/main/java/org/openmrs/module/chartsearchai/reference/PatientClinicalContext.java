@@ -763,11 +763,8 @@ public class PatientClinicalContext {
 	 * assertion about the chart. Measured 2026-09-03 by driving
 	 * {@code DrugSafetyValidator.validate} over
 	 * {@code chartsearchai-test/drug-reference-condition-token-nesting.json}. #309 fixed the
-	 * model-facing half only, and issue #374 closed the module's remaining half: the chip publishes its
-	 * own provenance answer as {@code restsOnAnUncorroboratedChartMatch}, so the surface no longer
-	 * WITHHOLDS the answer — it states it on a key of its own, while still having no section to hedge
-	 * into, the sentence being unchanged, so a client that does not render the key still shows the
-	 * categorical. Tightening
+	 * model-facing half only, and issue #374 publishes the chip's own answer as
+	 * {@code restsOnAnUncorroboratedChartMatch}, so the surface no longer WITHHOLDS it. Tightening
 	 * this match was never the remedy and still is not (it is fail-open — see the boundary rule's
 	 * free-text cost above). ADR Decisions 73 and 92.
 	 *

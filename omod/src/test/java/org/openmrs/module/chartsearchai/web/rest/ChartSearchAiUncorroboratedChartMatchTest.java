@@ -58,11 +58,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * set off a live {@code /search} chip rather than listing it — a hand-written list here is the thing
  * that case's javadoc forbids. And that the payload still marshals for an XML client is
  * {@code ChartSearchAiChartOrderBridgeTest.theWholePayloadStillMarshalsForAnXmlClient} through the
- * shared {@code XmlPayloads.assertMarshals}; this key adds no new hazard there, an autoboxed
- * {@code Boolean} not being one of {@code java.util.Collections}' immutable collection WRAPPERS, which
- * is what {@code XStreamMarshaller} refuses. "It is a JDK type" is NOT that criterion — both wrappers
- * issue #347 broke on are JDK types — and {@code ChartSearchAiRestController.serializeSafetyWarnings}
- * is canonical for it.
+ * shared {@code XmlPayloads.assertMarshals}; this key adds no new hazard there, and
+ * {@code ChartSearchAiRestController.serializeSafetyWarnings} is canonical for why.
  */
 public class ChartSearchAiUncorroboratedChartMatchTest {
 
@@ -201,13 +198,11 @@ public class ChartSearchAiUncorroboratedChartMatchTest {
 	 * chip's array is not part of.
 	 *
 	 * <p><b>Counted rather than matched as a statement, and over comment-stripped source</b> — the
-	 * idiom {@code ChartSearchAiChartOrderBridgeTest} uses for the sibling key, and both halves of the
-	 * shape were paid for on this change's own polish round. Matching a whitespace-exact spelling of
-	 * the whole {@code map.put(..)} reddened when the accessor read was hoisted into a local, which
-	 * changes nothing this guard is about; and matching raw source passed when the real put was
-	 * COMMENTED OUT with a {@code detail}-sniff written beside it. What it asks now is that exactly one
+	 * idiom {@code ChartSearchAiChartOrderBridgeTest} uses for the sibling key. It asks that exactly one
 	 * live statement names the key and exactly one names the accessor, with its receiver so a javadoc
-	 * {@code @link} cannot count as a read.
+	 * {@code @link} cannot count as a read. Do not tighten it to a whitespace-exact match of the whole
+	 * {@code map.put(..)}: that reddens when the accessor read is hoisted into a local, which changes
+	 * nothing this guard is about.
 	 *
 	 * <p><b>It is not what stops a re-derivation, and must not be relied on as such.</b> That is
 	 * {@link #theChipStatesWhetherItsChartMatchIsCorroborated}'s identical-detail chip pair, which
@@ -242,9 +237,7 @@ public class ChartSearchAiUncorroboratedChartMatchTest {
 	 *         {@code //} inside a STRING LITERAL truncates its line — so a literal carrying one could
 	 *         hide a later statement on the same line from the counts above. Neither arises in the body
 	 *         this reads today, and handling either properly means tracking literals, which is a
-	 *         parser. No count of that body's literals is published here: one was, and it disagreed with
-	 *         its own companion claim, because quote pairs over RAW source include text inside the
-	 *         comment lines this method strips. Both can only REMOVE text, so a
+	 *         parser. No count of that body's literals is published here, deliberately. Both can only REMOVE text, so a
 	 *         statement they hide reads as absent — which reddens where there was one and passes where
 	 *         a second put was the one hidden. So the counts bound this method's spellings, not every
 	 *         way text can be hidden from them; what stops a re-derivation is the chip pair in

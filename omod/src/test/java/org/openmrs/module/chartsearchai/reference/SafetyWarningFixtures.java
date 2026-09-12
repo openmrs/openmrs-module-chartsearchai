@@ -16,17 +16,11 @@ import java.util.Collections;
  * an omod test that cannot reach one from {@code org.openmrs.module.chartsearchai.web.rest}.
  *
  * <p><b>Why it exists, and why it is not a widening of production API.</b> The chip-serialization
- * guards live in {@code web.rest}, and the facts a chip carries beyond its four public constructor
- * arguments are set only by {@code SafetyWarning}'s package-private factories — "a caller may set
- * only what it may read back", which that class states of each of them. Issue
- * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/347">#347</a> met exactly
- * this and answered it by making a constructor PUBLIC, recording the necessity in its javadoc ("the
- * test that pins their serialization lives in {@code web.rest} and cannot reach {@code interaction(..)}
- * below"). Issue #374 needs the same thing for
- * {@code SafetyWarning.restsOnAnUncorroboratedChartMatch()} and does not repeat that answer: this
- * class is declared in {@code SafetyWarning}'s OWN package under {@code omod/src/test}, so it reaches
- * the real factory with no production change at all. A split package across two artifacts is legal on
- * a plain classpath, which is what surefire gives these tests.
+ * guards live in {@code web.rest}, and the flag this shape carries is set only by
+ * {@code SafetyWarning}'s package-private {@code contraindication} factory. This class is declared in
+ * {@code SafetyWarning}'s OWN package under {@code omod/src/test}, so it reaches that factory with no
+ * production change at all — a split package across two artifacts being legal on a plain classpath,
+ * which is what surefire gives these tests.
  *
  * <p><b>The point is that the chip is one PRODUCTION built.</b> Two alternatives were available — a
  * new public factory taking the flag, and an anonymous subclass overriding the accessor — and both are

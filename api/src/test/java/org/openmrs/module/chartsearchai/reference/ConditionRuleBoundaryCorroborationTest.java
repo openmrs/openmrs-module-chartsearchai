@@ -82,11 +82,11 @@ import org.openmrs.module.chartsearchai.serializer.PatientChartSerializer.Record
  * {@link #aConditionTokenNestingInsideARecordedConditionIsNotStatedAsTheChartsOwnReading} drives, the
  * clinician-facing chip said "Naltrexone is contraindicated by an active condition: acute
  * hepatitis or liver failure", unqualified, of a chart recording a caesarean delivery — the model
- * read a hedge and the clinician did not. Issue #374 closed the module's half of that by publishing
- * the chip's own answer, which {@link #theChipCarriesTheSameProvenanceAnswerTheRecordDoes} pins here;
- * the SENTENCE is still the categorical one, so wherever a comment here says the chip survives, that
- * is reassurance for the cases this rule OVER-hedges and remains the false claim on the hazard case.
- * ADR Decisions 73 and 92; tightening the match is NOT the remedy (fail-open).
+ * read a hedge and the clinician did not. Issue #374 publishes the chip's own answer, which
+ * {@link #theChipCarriesTheSameProvenanceAnswerTheRecordDoes} pins here; the SENTENCE is still the
+ * categorical one, so wherever a comment here says the chip survives, that is reassurance for the
+ * cases this rule OVER-hedges and remains the false claim on the hazard case. ADR Decisions 73 and
+ * 92; tightening the match is NOT the remedy (fail-open).
  *
  * <p><b>The residue, deliberately given up.</b> A prefix or suffix compound that is clinically the same
  * finding is hedged: {@code Lymphedema} and {@code Angioedema} for a rule on {@code edema}, pinned by

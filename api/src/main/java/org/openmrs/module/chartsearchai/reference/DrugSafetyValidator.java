@@ -2843,10 +2843,9 @@ public class DrugSafetyValidator {
 	 *         than merely its scope.</b> The chip arm's own answer was unmoved, so on the ticket's
 	 *         reproduction the injected record and the {@code safety_finding} hedged while the
 	 *         {@code safetyWarnings} chip stated the contraindication of the chart, unqualified. Issue
-	 *         #374 closed the module's half of that: the chip publishes this same answer as
-	 *         {@code restsOnAnUncorroboratedChartMatch}, so the surface no longer WITHHOLDS it — while
-	 *         the chip's SENTENCE is unchanged, so a client that does not render the key still shows the
-	 *         categorical. Do not close the rest by tightening
+	 *         #374 publishes this same answer as the chip's own
+	 *         {@code restsOnAnUncorroboratedChartMatch}, so the surface no longer WITHHOLDS it. Do not
+	 *         close the rest by tightening
 	 *         {@link PatientClinicalContext#hasConditionToken}, which is fail-open; ADR Decisions 73 and
 	 *         92 carry the case and what a remedy would have to be.
 	 *

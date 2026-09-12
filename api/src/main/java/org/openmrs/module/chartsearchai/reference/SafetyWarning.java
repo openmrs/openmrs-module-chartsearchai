@@ -202,9 +202,9 @@ public class SafetyWarning {
 	 * fourth argument on {@link #contraindication} would have offered that arm a flag it can never
 	 * legitimately set.
 	 *
-	 * <p>Package-private, for {@link #contraindication}'s reason rather than for accessor symmetry:
-	 * since issue #374 the flag it hardcodes false is published, so what a public factory here would
-	 * offer is a caller asserting a provenance answer the module never made. Its one
+	 * <p>Package-private, for {@link #contraindication}'s reason rather than for accessor symmetry: the
+	 * flag it hardcodes false is published, so what a public factory here would offer is a caller
+	 * asserting a provenance answer the module never made. Its one
 	 * caller is {@code DrugSafetyValidator.addAllergyContraindications}, which is reached from BOTH
 	 * the drug-in-play loop (false — the drug was proposed) and
 	 * {@code addActiveOrderContraindications} (true — the subject is an active order).
@@ -640,10 +640,10 @@ public class SafetyWarning {
 	 * <p><b>Published VERBATIM since issue #374, as each chip's {@code restsOnAnUncorroboratedChartMatch}
 	 * wire key — so this accessor's name IS the key</b>, the rule {@link #chartOrderBridges()} carries
 	 * for its own. Public for that reason and no other: the wire-facing shape is public, and since #374
-	 * this fact is part of it. The SETTER is not — the two factories that write it stay
-	 * package-private, since a provenance answer is a measurement this module made and not a value an
-	 * outside caller may assert — and the class's setter/accessor symmetry rule is one-directional, so
-	 * a public read over a package-private write does not breach it.
+	 * this fact is part of it. The SETTER is not: {@link #contraindication} is the only caller that may
+	 * set it, and it stays package-private, since a provenance answer is a measurement this module made
+	 * and not a value an outside caller may assert. The class's setter/accessor symmetry rule is
+	 * one-directional, so a public read over a package-private write does not breach it.
 	 *
 	 * <p><b>What the published {@code false} does NOT say is that the chart corroborates the finding</b>,
 	 * and three separate readings of it are live: the two folds above, and every chip that answers by

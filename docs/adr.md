@@ -5783,7 +5783,7 @@ drugs, `CAPTURE_PHRASING='should i give {drug}?'`), bundled DDInter KB (`entryCo
 that one build with only `chartsearchai.drugSafety.citeOrderRecords` between them, read back from
 `GET /systemsetting` before each arm. Audit rows `11073`–`11086` (off) and `11088`–`11101` (on).
 
-**The positive control reproduces the one above.** `input_tokens` grew on **12 of 14** cells, by +6 to
+**The positive control reproduces the 2026-09-10 arm's.** `input_tokens` grew on **12 of 14** cells, by +6 to
 +12, and by **0** on both ABSTAIN cells. The per-cell delta is three tokens per numbered attribution
 and tracks each cell's published `chartOrderBridges` count exactly — Amiodarone and Digoxin 2
 attributions and +6, Amlodipine, Atenolol, Furosemide, Metformin and Nifedipine 3 and +9, the

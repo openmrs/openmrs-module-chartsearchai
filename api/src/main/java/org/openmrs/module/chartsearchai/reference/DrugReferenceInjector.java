@@ -1109,8 +1109,8 @@ public class DrugReferenceInjector {
 		 *          <p><b>The stored list itself, not a copy or an unmodifiable view.</b> Wrapping would
 		 *          put an allocation per ORDER on a path reached whatever
 		 *          {@code chartsearchai.drugSafety.citeOrderRecords} says — the issue #118
-		 *          reconciliation, which has gates of its own but not that one. What that costs is the
-		 *          paragraph below.
+		 *          reconciliation, which has gates of its own but not that one. What it costs is that
+		 *          {@link #numbersFor} can hand the list onward, stated next.
 		 *
 		 *          <p><b>{@link #numbersFor} hands this list OUT of the class</b>, on its uuid leg,
 		 *          where its name leg returns a fresh one. So a consumer that REMOVED FROM or ADDED TO

@@ -1002,9 +1002,10 @@ public class InteractionFindingChartOrderBridgeTest extends BaseModuleContextSen
 	 * instead of all of them reddens nothing. No single-element pick survives this arrangement.
 	 *
 	 * <p><b>Both items move, and they move for different reasons</b> — the Aspibrand item by the
-	 * uuid-leg refusal the case above pins, the Coagubrand item by this one. They are separable by
+	 * uuid-leg refusal {@code .aRecordUuidTwoOfThisChartsRecordsCarryIsCitedByNeither} pins, the
+	 * Coagubrand item by this one. They are separable by
 	 * mutation and not by this arrangement: restore the strike to one number per order and this case
-	 * alone reddens, while the case above stays green.
+	 * alone reddens, while that one stays green.
 	 */
 	@Test
 	public void aRecordOneOrdersUuidIsCannotBeCitedByANeighbourWhereTwoRecordsCarryThatUuid()

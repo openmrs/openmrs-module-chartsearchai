@@ -959,9 +959,9 @@ public class InteractionFindingChartOrderBridgeTest extends BaseModuleContextSen
 	 * <p>This ambiguity is between rival RECORDS — two of the chart's records carrying one order's
 	 * uuid — and the uuid leg was written without it:
 	 * {@code "a record carrying this order's uuid IS this order, so it cannot be claimed by anyone
-	 * else"} is true and does not say WHICH of two such records the order is. The index behind it is
-	 * last-wins, so the leg answered with whichever record was indexed second and the clause told the
-	 * model that one IS the prescription. Issue #305's provenance already refuses the same shape on
+	 * else"} is true and does not say WHICH of two such records the order is. The index behind it was
+	 * last-wins until this round, so the leg answered with whichever record was indexed second and the
+	 * clause told the model that one IS the prescription. Issue #305's provenance already refuses the same shape on
 	 * the same index ({@code FindingChartRecordProvenanceContextTest
 	 * .aUuidTwoRecordsOfThisChartBothCarryNamesNeither}); citing an order is the same kind of
 	 * affirmative claim, so it takes the same reading.

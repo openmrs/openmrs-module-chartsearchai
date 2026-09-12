@@ -43,22 +43,23 @@ import org.openmrs.test.jupiter.BaseModuleContextSensitiveTest;
  * change. Patient 7's single active drug order (order 111, drug "ASPIRIN", concept 88) is the
  * arrangement, made nameless the only way the platform allows.
  *
- * <p><b>Why the names are voided by SQL and the ATC map is not.</b> {@code Concept.getName()} returns
- * null only for a concept none of whose non-voided names is a preferred name, a fully specified name or
- * a synonym. No count is given: the builder's own comment declines to enumerate the shapes, and a
- * SHORT-typed name is one this file's earlier "two shapes" wording missed. No such concept can be
- * SAVED: {@code ConceptValidator} rejects a concept with no fully specified name, and
- * {@code Concept.addName} coerces the first name added to {@code FULLY_SPECIFIED}, so the index-term
- * route cannot even be built. The order is therefore made nameless after the fact. The ATC mapping is
- * applied FIRST, through the real {@code ConceptService}, while the concept still has its name and
- * validation passes; only then are the names voided. Concept 88 carries TWO names — the FSN "ASPIRIN"
- * and the synonym "ASA" — and both must go, because {@code getName()} falls back to any synonym in any
- * locale before it returns null.
+ * <p><b>Why the names are voided by SQL and the ATC map is not</b> is
+ * {@link DrugReferenceTestSupport#makeOrderNameless}'s own javadoc, which owns that argument now that
+ * two packages build this arrangement. What belongs to this file rather than to the helper:
+ * {@code Concept.getName()} returns null only for a concept none of whose non-voided names is a
+ * preferred name, a fully specified name or a synonym — no count is given, because the builder's own
+ * comment declines to enumerate the shapes and a SHORT-typed name is one this file's earlier "two
+ * shapes" wording missed — and concept 88 carries TWO names, the FSN "ASPIRIN" and the synonym "ASA",
+ * both of which the helper's void must therefore reach.
  */
 public class NamelessActiveOrderPartnerTest extends BaseModuleContextSensitiveTest {
 
 	/** Concept 88 (ASPIRIN) — the concept behind patient 7's single active drug order, order 111. */
 	private static final int ORDERED_CONCEPT = 88;
+
+	/** Patient 7's single active drug order, whose drug is "ASPIRIN" and whose concept is
+	 *  {@link #ORDERED_CONCEPT}. */
+	private static final int ORDER = 111;
 
 	/** Two codes in ONE ATC subgroup, neither carried by the curated seed, so both are unnameable and
 	 *  both share subgroup {@code M01AE} with the seed's ibuprofen entry ({@code M01AE01}). */
@@ -92,24 +93,13 @@ public class NamelessActiveOrderPartnerTest extends BaseModuleContextSensitiveTe
 	}
 
 	/**
-	 * Makes order 111 unnameable: its drug reference is cleared, the free text a clinician would have
-	 * typed for a non-coded order is cleared, and every name of its concept is voided — which is exactly
-	 * the state {@code addDrugName} finds nothing in, since those three are every source it reads.
-	 *
-	 * <p>The {@code drug_non_coded} clear is not redundant even though the standard test dataset leaves
-	 * that column null on order 111: since issue #293 that column is a name source, so leaving it to the
-	 * dataset would make this arrangement CONTINGENT on data this file does not control — a later
-	 * dataset carrying free text there would retire the whole arrangement silently, the same way this
-	 * file's own javadoc records the concept-name synonym fallback nearly doing.
+	 * Makes order 111 unnameable, through the shared helper. Why all three name sources must be
+	 * cleared rather than only the concept's names, and why it has to be done by SQL after the ATC
+	 * mapping, is {@link DrugReferenceTestSupport#makeOrderNameless}'s own javadoc — one home, since
+	 * issue #294's grounding measurement builds the same arrangement from another package.
 	 */
 	private void makeTheOrderNameless() {
-		Context.getAdministrationService().executeSQL("update drug_order set drug_inventory_id = null,"
-				+ " drug_non_coded = null where order_id = 111", false);
-		Context.getAdministrationService()
-				.executeSQL("update concept_name set voided = 1 where concept_id = " + ORDERED_CONCEPT,
-					false);
-		Context.flushSession();
-		Context.clearSession();
+		DrugReferenceTestSupport.makeOrderNameless(ORDER, ORDERED_CONCEPT);
 	}
 
 	private static List<String> atcClassChipDetails(List<SafetyWarning> warnings) {
@@ -338,8 +328,16 @@ public class NamelessActiveOrderPartnerTest extends BaseModuleContextSensitiveTe
 	 * cannot entail a medication claim, so a citation of this record can be graded and published
 	 * {@code grounded=false} — reaching a client as "Unsupported". That is a new exposure, and it is
 	 * accepted here only because the alternative is the order being invisible: the module denying a
-	 * prescription the chart records is worse than substantiating it with a code. Issue #290 carries it
-	 * forward.
+	 * prescription the chart records is worse than substantiating it with a code. Issue #294 carries it
+	 * forward from #290.
+	 *
+	 * <p><b>#294's measurement has since been run, and the sentence above is confirmed rather than
+	 * qualified.</b> A codes-only record's citation published {@code grounded=false} on a real query —
+	 * asked whether the patient has an active order whose drug the chart does not name, the model says
+	 * so, cites the record, and the judge refuses it. Gated on entailment: Tier-1 cosine accepts the
+	 * same citation at both the shipped and the advised floor. ADR Decision 38's owed-measurement
+	 * section carries the arrangement and the regime split;
+	 * {@code CodesOnlyActiveOrderGroundingContextTest} is the composed-path half.
 	 */
 	@Test
 	public void theCodeOnlyDisplayIsWhatReachesTheChartAsACitableRecord() {

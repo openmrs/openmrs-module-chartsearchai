@@ -1097,6 +1097,10 @@ public class CitationGroundingVerifierTest {
 		// Demoting it would strip the faithfulness check from the very record injected to stop the
 		// answer contradicting the safety chips (#118) — silently, since a demoted verdict is null,
 		// not an error. Exactly inverts drugReference_highCosinePassRendersUnverifiedNotVerified.
+		//
+		// "One drug name" is the ordinary shape only: a codes-only display asserts none, and what
+		// that does to this rule is issue #294 — see ChartSearchAiUtils.isGroundingDemoteOnly's
+		// javadoc and CodesOnlyActiveOrderGroundingContextTest.
 		String record = realActiveOrderRecordText("order-uuid-7", "Simvastatin Co 20mg");
 		String sentence = "The patient has an active order for Simvastatin Co 20mg [7].";
 		embeddings.register(sentence, AXIS_A);

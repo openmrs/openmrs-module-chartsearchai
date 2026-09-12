@@ -87,15 +87,23 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 	private static final int ORDER = 111;
 
 	/**
-	 * Two codes in one ATC subgroup that the curated seed carries neither of. That — unnameable by the
-	 * loaded reference data, so nothing can supply a name the display would fall back to — is the
-	 * property this arrangement needs, and it is the only thing claimed about them. They are named for
-	 * the property rather than for a substance on purpose: which drug each code denotes is irrelevant
-	 * here and asserting it would be an unverified claim.
+	 * The two ATC codes mapped onto the ordered concept. What the arrangement needs of them is that
+	 * the order carries at least one normalized code — the code-only rung's own precondition, which
+	 * {@link DrugReferenceTestSupport#makeOrderNameless} documents beside the other condition, that
+	 * none of {@code addDrugName}'s three sources yields a readable name. Together those route the
+	 * order through {@code PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly}, whose display
+	 * {@code PatientClinicalContextBuilder.codeOnlyDisplay} builds out of these codes themselves and
+	 * {@code DrugReferenceInjector.renderActiveOrder} wraps. Neither of those two reads the loaded
+	 * reference data, so the display {@link #CODES_ONLY_RECORD} pins does not depend on whether that
+	 * data could name a code; what it does depend on is these two values, which is why it spells
+	 * them.
+	 *
+	 * <p>Which drug each code denotes is irrelevant here and asserting it would be an unverified
+	 * claim, so nothing below names a substance for them.
 	 */
-	private static final String UNNAMEABLE_ATC = "M01AE02";
+	private static final String ORDER_ATC = "M01AE02";
 
-	private static final String UNNAMEABLE_ATC_SIBLING = "M01AE04";
+	private static final String ORDER_ATC_SIBLING = "M01AE04";
 
 	/**
 	 * The exact record the arrangement must produce — the precondition the whole issue rests on, so it
@@ -143,8 +151,7 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 		// Order matters and is not incidental: the ATC map goes on through the real ConceptService
 		// while the concept still validates, and only then are its names voided. makeOrderNameless
 		// carries why.
-		DrugReferenceTestSupport.mapConceptToAtc(ORDERED_CONCEPT, UNNAMEABLE_ATC,
-			UNNAMEABLE_ATC_SIBLING);
+		DrugReferenceTestSupport.mapConceptToAtc(ORDERED_CONCEPT, ORDER_ATC, ORDER_ATC_SIBLING);
 		DrugReferenceTestSupport.makeOrderNameless(ORDER, ORDERED_CONCEPT);
 	}
 
@@ -220,9 +227,11 @@ public class CodesOnlyActiveOrderGroundingContextTest extends BaseModuleContextS
 	/**
 	 * The other direction: the same arrangement with the judge accepting publishes {@code true}, so
 	 * the composed path is not hardwired to either verdict and the exposure above is a property of
-	 * what the pass CONCLUDES rather than of the record's type. Live, both verdicts occur for such a
-	 * record and the regime decides which: the judge refuses it where the cosine accepts it, at both
-	 * the shipped and the advised floor. ADR Decision 38's owed-measurement section has the split.
+	 * what the pass CONCLUDES rather than of the record's type. What a LIVE run publishes for such a
+	 * record, and under which regime, is ADR Decision 38's owed-measurement section — read it there
+	 * rather than inferring it from here. Nothing it records was measured on this case's claim shape,
+	 * a medication claim naming a drug the record does not name, and it says so of its own regime
+	 * table.
 	 *
 	 * <p>Worth pinning beside its sibling because the deliberate non-extension of the demote-only
 	 * carve-out to this type means a pass VERIFIES here rather than rendering unverified — ADR

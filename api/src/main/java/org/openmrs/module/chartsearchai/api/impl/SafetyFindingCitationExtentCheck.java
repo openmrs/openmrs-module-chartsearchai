@@ -63,7 +63,7 @@ import org.slf4j.LoggerFactory;
  *   <li>CITED — the subset of those the answer ANCHORED: what
  *       {@link LlmInferenceService#extractCitedReferences} admitted, narrowed to the indexes a
  *       marker in the prose carries. {@link #citedFindingIndexes} is canonical for what each of
- *       the three tests contributes and for what a blank answer means there; ADR Decision 93 is
+ *       the three tests contributes and for what a blank answer means there; ADR Decision 94 is
  *       canonical for what that supersedes in Decision 83. A citation the MODULE attached (issue
  *       #305) is not one the
  *       answer made and is not counted; that filter is belt and braces on today's path, where only
@@ -93,7 +93,7 @@ import org.slf4j.LoggerFactory;
  *   <li>it narrows nothing but its own count. The reference list a client receives stays
  *       {@code extractCitedReferences}' union, so an answer whose array named a finding its prose
  *       did not publishes that finding as a reference beside a {@code cited} that excludes it —
- *       divergence by design, and ADR Decision 93 carries why the union is not narrowed with it;</li>
+ *       divergence by design, and ADR Decision 94 carries why the union is not narrowed with it;</li>
  *   <li>it never rewrites the answer, and it names no word of the answer or of any record — both
  *       carry patient data, the discipline {@link ClassCodeFidelityCheck} states. A citation index
  *       is the module's own bookkeeping.</li>
@@ -108,7 +108,7 @@ import org.slf4j.LoggerFactory;
  *       counts as cited. Both are why this publishes a base and not an accusation;</li>
  *   <li>a marker the shared decode step cannot read, which
  *       {@code LlmAnswerExtractor.normalizeSlashCitations} leaves intact on purpose. A finding
- *       anchored only there is counted uncited; ADR Decision 93 is canonical for the mechanism and
+ *       anchored only there is counted uncited; ADR Decision 94 is canonical for the mechanism and
  *       for why the count is conservative in that direction by mandate;</li>
  *   <li>whether an uncited finding MATTERED. The injector renders findings the screen raised, and
  *       not every one of them bears on the question the way the reported seventh did.</li>

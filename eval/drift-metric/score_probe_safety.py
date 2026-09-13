@@ -816,7 +816,7 @@ def findings_incompletely_stated(cell):
     as cited when the model's structured `citations` array named it, whether or not any `[N]` marker
     in the answer did; it now counts the markers, intersected with the same resolution. The A/B
     refusal below will NOT catch such a pair, both arms publishing the key, and a capture carries no
-    build marker to test — so this note is the whole of the guard. ADR Decision 93 is the one ledger
+    build marker to test — so this note is the whole of the guard. ADR Decision 94 is the one ledger
     of which recorded figures it invalidates, and of which way a re-measurement can be expected to
     move (for the repair arm, neither: that change also refused a blank original).
 

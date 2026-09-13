@@ -290,21 +290,81 @@ public final class DrugReferenceTestSupport {
 	/**
 	 * The real rendered text of the active-order record the REAL injector injects for an active
 	 * order the chart cannot substantiate (issue #118) — the real reconciliation → render chain,
-	 * not a hand-assembled imitation of the format. The second cross-package accessor, for the
-	 * grounding tests: how this record text embeds against an answer sentence is exactly what
-	 * decides whether treating it as ordinary chart evidence is right, so a test asserting that
-	 * must read the text production actually produces.
+	 * not a hand-assembled imitation of the format.
+	 *
+	 * <p>The TEXT and not the mapping, which is the narrower shape and now the rarer need: the cases
+	 * that grade such a record take {@link #injectedNamedActiveOrderMapping} instead, since issue
+	 * #294 put per-record answers on the mapping that a text cannot carry. What is left for this is a
+	 * caller that must choose the record's INDEX itself — one composing it with another record built
+	 * separately — and so builds the mapping by hand around a real rendered text. Its call site says
+	 * why it cannot take the mapping whole.
 	 */
 	public static String injectedActiveOrderText(String orderUuid, String display) {
-		PatientChart chart = injector(ddinterService()).injectRecords(oneRecordChart(),
-				ctx(60, null, null, null, null, null,
-						Collections.singletonList(activeOrder(orderUuid, display))),
-				"what are the patient's active medications?");
-		return chart.getMappings().stream()
+		return injectedNamedActiveOrderMapping(orderUuid, display).getText();
+	}
+
+	/**
+	 * The real active-order {@link RecordMapping} the REAL injector produces for an order the chart
+	 * cannot substantiate (issue #118) — the whole mapping rather than only its text, so a caller can
+	 * read the per-record answers the injector stamps on it as well as the prose it rendered.
+	 *
+	 * <p>{@link #injectedActiveOrderText} is the older, narrower reading of this same call and now
+	 * delegates to it. A test that needs a mapping must come through here rather than hand-building
+	 * one: the stamps are what decides how such a citation is graded (issue #294), so a hand-built
+	 * mapping would assert the very answer under test.
+	 */
+	static RecordMapping injectedActiveOrderMapping(PatientClinicalContext.ActiveDrugOrder order) {
+		return injectedActiveOrderChart(order, "what are the patient's active medications?")
+				.getMappings().stream()
 				.filter(m -> ChartSearchAiConstants.RESOURCE_TYPE_ACTIVE_DRUG_ORDER.equals(m.getResourceType()))
-				.map(RecordMapping::getText).findFirst()
+				.findFirst()
 				.orElseThrow(() -> new IllegalStateException(
-						"no active-order record was injected for order: " + display));
+						"no active-order record was injected for order: " + order.getDisplay()));
+	}
+
+	/**
+	 * The WHOLE chart the real injector produces for {@code order} and {@code question} — the one
+	 * arrangement behind every active-order accessor here, so they cannot drift apart, which is the
+	 * reason {@link #injectedDdinterChart} exists on the other family.
+	 *
+	 * <p>A caller wanting the other records of that injection — the reference entries and findings the
+	 * question raises — takes this rather than rebuilding the wiring, which is how the context and the
+	 * injector come to differ between a helper and the case that uses it.
+	 */
+	static PatientChart injectedActiveOrderChart(PatientClinicalContext.ActiveDrugOrder order,
+			String question) {
+		return injector(ddinterService()).injectRecords(oneRecordChart(),
+				ctx(60, null, null, null, null, null, Collections.singletonList(order)), question);
+	}
+
+	/**
+	 * The real injected active-order mapping for an order the module could read NO name for — the
+	 * code-only stand-in of issue #290, whose record names its codes and no drug. Built through
+	 * {@code PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly} and the real render chain, so a
+	 * test outside this package gets the arrangement production produces rather than an imitation of
+	 * its display string.
+	 *
+	 * <p>The display is BUILT by {@code PatientClinicalContextBuilder.codeOnlyDisplay}, the one place
+	 * production makes it, rather than spelled here — a literal would keep passing if that label or
+	 * separator moved, against a string production never emits. So a caller supplies the codes and
+	 * nothing else.
+	 *
+	 * @param orderUuid the {@code Order} uuid the reconciliation carries
+	 * @param atcCodes the codes the display is built from
+	 */
+	public static RecordMapping injectedCodesOnlyActiveOrderMapping(String orderUuid,
+			Set<String> atcCodes) {
+		return injectedActiveOrderMapping(PatientClinicalContext.ActiveDrugOrder.namedByCodesOnly(
+				orderUuid, PatientClinicalContextBuilder.codeOnlyDisplay(atcCodes), atcCodes));
+	}
+
+	/**
+	 * The real injected active-order mapping for an order the module CAN name — the ordinary shape,
+	 * and the counterpart of {@link #injectedCodesOnlyActiveOrderMapping} for a case asserting that
+	 * the codes-only rule reaches only the record it is about.
+	 */
+	public static RecordMapping injectedNamedActiveOrderMapping(String orderUuid, String display) {
+		return injectedActiveOrderMapping(activeOrder(orderUuid, display));
 	}
 
 	/**
@@ -313,7 +373,9 @@ public final class DrugReferenceTestSupport {
 	 * DDInter excerpt through {@code DrugSafetyValidator.validate} and
 	 * {@code injectRecords}/{@code renderFinding}, with the real validator behind the real injector
 	 * (through the same {@code set*} seams the other helpers here use, in place of production's
-	 * autowiring). The third cross-package accessor, for the grounding tests.
+	 * autowiring). Another of the
+	 * cross-package accessors, for the grounding tests. They are deliberately not numbered: an
+	 * ordinal here rots the next time one is added beside them.
 	 *
 	 * <p>Returns the {@link RecordMapping} rather than only its text because a grounding test needs
 	 * the resource type and the citation index too, and because the argument for treating this record

@@ -309,7 +309,7 @@ public interface ChartSearchService {
 	 * prose to anchor anything, is still counted by the resolution alone. A finding cited twice
 	 * counts once. A citation the MODULE attached (issue #305) is one the answer did not make, and is
 	 * not counted. {@code SafetyFindingCitationExtentCheck.citedFindingIndexes} is canonical for the
-	 * reading; ADR Decision 93 for what it supersedes.
+	 * reading; ADR Decision 94 for what it supersedes.
 	 *
 	 * <p><b>It is NOT the number of {@code safety_finding} entries in {@code references}</b>, which
 	 * stays that resolution's own union and can therefore be larger — the two answer different
@@ -1312,9 +1312,17 @@ public interface ChartSearchService {
 		 * the distinction the next paragraph draws. A withholding the VERIFIER
 		 * itself applies leaves no verdict here to read at all: a compound claim
 		 * unit under entailment (issue #302); the judge's negative on a composite
-		 * claim (issue #284, whose count is logged once per answer instead); and a
+		 * claim (issue #284, whose count is logged once per answer instead); a
 		 * citation the MODULE attached rather than the model emitting it (issue
-		 * #305), in either mode. A
+		 * #305), in either mode; and a citation of a record that NAMES NO DRUG
+		 * though it is about one — the code-only active-order stand-in of issue
+		 * #290 — also in either mode (issue #294).
+		 * <b>This list is a reader's convenience, not the register.</b> Three of the four are
+		 * arrangements of {@code CitationGroundingVerifier}'s own {@code Disposition}, canonical for
+		 * those and where a maintainer inside the module reads them; the composite withholding of
+		 * issue #284 is NOT one of them — it is applied where the verdict is assembled. ADR Decision
+		 * 11's {@code grounded} paragraph enumerates all of them, for a reader outside the module who
+		 * cannot see that constant at all. A
 		 * {@code null} verdict must be rendered as "unverified", never as
 		 * "verified".
 		 *

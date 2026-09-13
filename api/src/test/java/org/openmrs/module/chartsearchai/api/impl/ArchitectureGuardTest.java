@@ -48,9 +48,20 @@ public class ArchitectureGuardTest {
 	private static final String CHART_ANSWER_TYPE =
 			"org/openmrs/module/chartsearchai/api/ChartSearchService$ChartAnswer";
 
-	/** The descriptor tail that tells RecordMapping's provenance-carrying constructor from every
-	 *  shorter one: it is the only one whose LAST parameter is a list (issue #305). */
+	/** The descriptor tail that tells RecordMapping's provenance-carrying constructor from every OTHER
+	 *  one: it is the only one whose LAST parameter is a list (issue #305). Read it as exactly that —
+	 *  NOT as "the widest", which it stopped being when issue #294 added a rung below it
+	 *  ({@link #ORDER_NAMING_TAIL}), and NOT as "the only one that takes a provenance list", which it
+	 *  also stopped being: the widest takes one too, in front of its own trailing stamp, and is
+	 *  guarded by the sibling case rather than by this one. */
 	private static final String DERIVED_FROM_TAIL = "Ljava/util/List;)V";
+
+	/** The descriptor tail that tells RecordMapping's widest constructor — the only one taking the
+	 *  order-naming stamp of issue #294 — from every other one. TWO types, not one: the
+	 *  order-currency rung ends in the same {@code Boolean}, so a single-type tail cannot tell them
+	 *  apart, and the provenance list in front of it is what makes this pair unique. Verified against
+	 *  {@code javap -s}: the only other {@code Boolean}-tailed descriptor ends {@code ILjava/lang/Boolean;)V}. */
+	private static final String ORDER_NAMING_TAIL = "Ljava/util/List;Ljava/lang/Boolean;)V";
 
 	/** The descriptor fragment that tells the widest constructor from every shorter one. */
 	private static final String COVERAGE_TYPE =
@@ -103,11 +114,9 @@ public class ArchitectureGuardTest {
 	 * The constructor that can carry a provenance list is invoked from exactly one class in THIS
 	 * module, which is all this walk can see (issue #305).
 	 *
-	 * <p><b>The api module is the scope, and it is not the whole of production.</b> The walk reads
-	 * {@code api/target/classes}; {@code ModuleSourceRoot} exposes {@code apiRoot()} and no omod root,
-	 * and api's test phase runs before omod is built in any case. So a construction in omod — where
-	 * {@code RecordMapping}'s widest constructor is public and reachable — would leave {@code callers}
-	 * equal to the expected singleton and this case green. The omod builds no mappings today.
+	 * <p><b>The api module is the scope, and it is not the whole of production</b> — said once, on
+	 * {@link #assertSoleInjectorCallerOfMappingConstructor}, which is where the walk lives. The omod
+	 * builds no mappings today.
 	 *
 	 * <p>Judgements elsewhere rest on this and none of them could see it — how many is not a count
 	 * kept here, since each states its own dependence where it is written. The residue
@@ -140,19 +149,45 @@ public class ArchitectureGuardTest {
 	 * out of the picture.
 	 *
 	 * <p><b>What it cannot answer, and what does — both halves measured.</b> The pool says which
-	 * CLASS invokes the wide constructor, not which of that class's four mapping constructions passes
+	 * CLASS invokes the wide constructor, not which of that class's five mapping constructions passes
 	 * a non-empty list. A second caller reddens THIS case; giving the injector's own
 	 * {@code drug_reference} construction a one-element derivation leaves it green and reddens
 	 * {@code FindingChartRecordProvenanceContextTest.aChartRecordNamesNoProvenanceOfItsOwn} instead,
 	 * over a real arrangement that injects such a record. The two halves are different kinds of
 	 * question on purpose; neither alone is the property those three judgements need.
 	 *
-	 * <p>Every canary here fails on an empty discovery, because a guard that finds nothing forbids
-	 * nothing: the classes directory, the mapping's own class file, more than one constructor arity,
-	 * exactly one that takes a list, and at least one caller.
+	 * <p>The canaries that stop this forbidding nothing are enumerated once, on
+	 * {@link #assertSoleInjectorCallerOfMappingConstructor}, which holds them. A copy of that list
+	 * stood here until the two cases were unified.
 	 */
 	@Test
 	public void theProvenanceCarryingMappingConstructorHasOneCaller() throws IOException {
+		assertSoleInjectorCallerOfMappingConstructor(DERIVED_FROM_TAIL, "a provenance list", false,
+				"See this test's javadoc for the checks that break silently otherwise.");
+	}
+
+	/**
+	 * The shared body of both constructor cases in this file: exactly one {@code RecordMapping} constructor matches
+	 * {@code tail}, and only {@code DrugReferenceInjector} invokes it.
+	 *
+	 * <p>One method rather than two copies because the two differ in a selector, the wording, and one
+	 * flag — {@code widest}, which is not decoration: it turns the prefix canary below ON for the case
+	 * whose subject IS the widest constructor and off for the other, so a third case added by copying
+	 * either call site must decide it rather than inherit it — and the copy drifted the first time it
+	 * was made, losing the several-arities canary
+	 * below within a single commit, while its javadoc still claimed every canary fails on an empty
+	 * discovery.
+	 *
+	 * <p>Every canary here fails on an empty discovery, because a guard that finds nothing forbids
+	 * nothing: the classes directory, the mapping's own class file, more than one constructor arity,
+	 * exactly one matching {@code tail}, and the caller set being the one expected rather than empty.
+	 *
+	 * <p><b>Its reach is the API module's classes, which is the whole of what this walk reads.</b> An
+	 * omod-side caller is invisible to it, as it is to the {@code groundedForWire} guard that states
+	 * the same limit for its own scope.
+	 */
+	private static void assertSoleInjectorCallerOfMappingConstructor(String tail, String what,
+			boolean widest, String consequence) throws IOException {
 		Path classes = ModuleSourceRoot.apiRoot().resolve("target/classes");
 		assertTrue(Files.isDirectory(classes),
 				"no " + classes + "; a guard that discovers nothing forbids nothing");
@@ -164,18 +199,39 @@ public class ArchitectureGuardTest {
 		List<String> constructors = constructorDescriptors(mapping);
 		assertTrue(constructors.size() > 1,
 				"expected RecordMapping to publish several constructor arities and found "
-						+ constructors.size() + "; with one there is no narrower one for a caller with no "
-						+ "provenance to use and this guard is vacuous");
+						+ constructors.size() + "; with one there is no narrower one for a caller that "
+						+ "carries none of this to use, and this guard is vacuous");
 		List<String> carrying = new ArrayList<>();
 		for (String descriptor : constructors) {
-			if (descriptor.endsWith(DERIVED_FROM_TAIL)) {
+			if (descriptor.endsWith(tail)) {
 				carrying.add(descriptor);
 			}
 		}
 		assertEquals(1, carrying.size(),
-				"exactly one RecordMapping constructor may take a provenance list — it is the widest, "
-						+ "and every shorter one defaults it to empty. Found " + carrying.size() + ": "
-						+ carrying);
+				"exactly one RecordMapping constructor may END in " + what + ", which is how this case "
+						+ "tells it from the others. Found " + carrying.size() + ": " + carrying);
+		// A tail selects by the LAST parameter, so a rung added BELOW the widest keeps its own tail,
+		// matches NEITHER selector, and is guarded by nothing — both cases stay green while a second
+		// class writes through the new widest. Measured, on a mutation adding a 12th parameter plus a
+		// second writer. The caller asserting `widest` is the one whose subject is the widest
+		// constructor, and this is what makes a new rung redden rather than silently disarm it. It is
+		// deliberately NOT asserted for the provenance case, whose subject stopped being the widest
+		// when issue #294 added a rung below it and is identified by its own tail regardless.
+		if (widest) {
+			String guarded = parameters(carrying.get(0));
+			for (String descriptor : constructors) {
+				// Every other rung must be a PREFIX of the guarded one, which says two things at once
+				// and exactly: the guarded constructor is the widest, and the ladder is still a prefix
+				// chain of it. A length comparison would say the first only approximately — a NARROWER
+				// rung taking longer type names is lexically longer, and would fire this with a message
+				// about a rung "added below" that was not.
+				assertTrue(guarded.startsWith(parameters(descriptor)),
+						"the constructor this case guards must still be the WIDEST and every other rung "
+								+ "a prefix of it, or a rung has been added that no selector reaches and "
+								+ "nothing forbids a second writer of. Guarded: " + carrying.get(0)
+								+ "; not a prefix of it: " + descriptor);
+			}
+		}
 
 		List<String> callers = new ArrayList<>();
 		try (java.util.stream.Stream<Path> tree = Files.walk(classes)) {
@@ -188,12 +244,55 @@ public class ArchitectureGuardTest {
 		}
 		assertEquals(java.util.Collections.singletonList(
 				"org/openmrs/module/chartsearchai/reference/DrugReferenceInjector.class"), callers,
-				"the constructor that carries a provenance list may be invoked from DrugReferenceInjector "
-						+ "and nowhere else in this module's classes, which is what this walk reads — see "
-						+ "this test's javadoc for the checks that break silently otherwise. Callers "
-						+ "found: " + callers);
+				"the constructor that carries " + what + " may be invoked from DrugReferenceInjector and "
+						+ "nowhere else in the API module's classes, which is what this walk reads. "
+						+ consequence + " Callers found: " + callers);
 	}
 
+	/**
+	 * The stamp that says whether an injected active-order record NAMES its order's drug is written in
+	 * exactly ONE place (issue #294): only {@code DrugReferenceInjector} may invoke the RecordMapping
+	 * constructor that takes it.
+	 *
+	 * <p><b>Why a guard and not a comment.</b> The stamp's {@code FALSE} withholds a grounding verdict,
+	 * so a second writer does not break anything visibly — it silently stops a class of chart citation
+	 * being verified at all, which is the fail-open direction and the inverse of the issue #201 rule.
+	 * The stamp is also the one answer the grounding pass cannot sanity-check, having no order to ask:
+	 * it takes the mapping's word for it. Nothing behavioural can see a second writer, because a
+	 * second writer would be adding an arrangement rather than changing one.
+	 *
+	 * <p>Modelled on {@link #theProvenanceCarryingMappingConstructorHasOneCaller} and asking the same
+	 * kind of question of the constant pool, for the reasons that case's javadoc gives about the
+	 * source-text form it replaced. It differs in its selector, {@link #ORDER_NAMING_TAIL} — whose
+	 * javadoc says why this constructor needs a two-type tail where the provenance one needs a
+	 * single-type one, and is canonical for it — and in passing {@code widest}, which the sibling does
+	 * not, because the provenance constructor stopped being the widest when issue #294 added a rung
+	 * below it.
+	 *
+	 * <p>What it cannot answer: the pool says which CLASS invokes that constructor, not WHAT it
+	 * passes. The injector could stamp a record that is not an active order and this stays green.
+	 * An earlier draft of this sentence named
+	 * {@code CitationGroundingVerifierTest.aNamedActiveOrderRecordIsStillGradedThroughTheRealInjector}
+	 * as the cover for that, and a review MEASURED it false — stamping {@code FALSE} on every
+	 * injected {@code drug_reference} mapping left the whole build green, that case included, because
+	 * it reads only the {@code active_drug_order} mapping. The cover is
+	 * {@code DrugReferenceInjectorTest.onlyTheActiveOrderRecordCarriesTheOrderNamingStamp}, which
+	 * reads the OTHER records of a real injection and states why the hole was worth closing rather
+	 * than documenting.
+	 */
+	@Test
+	public void theOrderNamingStampIsWrittenInOnePlace() throws IOException {
+		assertSoleInjectorCallerOfMappingConstructor(ORDER_NAMING_TAIL,
+				"the order-naming stamp of issue #294", true,
+				"A second writer would withhold grounding verdicts for chart citations silently — "
+						+ "see this test's javadoc.");
+	}
+
+	/** The parameter section of a method descriptor — everything between the parentheses — so two
+	 *  rungs of a constructor ladder can be compared as prefixes without parsing types. */
+	private static String parameters(String descriptor) {
+		return descriptor.substring(descriptor.indexOf('(') + 1, descriptor.lastIndexOf(')'));
+	}
 
 	/**
 	 * No file outside ChartSearchAiConstants should call getEmbeddingPrefix().

@@ -113,8 +113,11 @@ public class ChartSearchAiUtils {
 	 * {@link #SENTENCE_TERMINATORS}: {@code CitationGroundingVerifier} cuts a text into the units it
 	 * grades on it, and it is strict because a splitter that cut at every dot would halve a sentence
 	 * at {@code Q12H.} or at an abbreviation. {@link #mayEndASentence} is the other question over the
-	 * same set — could a sentence have ended in this GAP — and is deliberately weaker; read its
-	 * javadoc before reaching for either, because they are not interchangeable in either direction.
+	 * same set — could a sentence have ended in this GAP — and is deliberately weaker, except where
+	 * its caller asks it to read a run of three or more dots as a marked cut (issue #337's fourth
+	 * round). This pattern splits on such a run, so on that one gap the two can answer OPPOSITELY
+	 * rather than one merely admitting more. Read its javadoc before reaching for either; they are
+	 * not interchangeable in either direction.
 	 *
 	 * <p>Two spellings of one terminator set is the shape issue #260 records the cost of: the two
 	 * disagreed in both directions and both silently. So a consumer takes one of these two entry
@@ -128,13 +131,19 @@ public class ChartSearchAiUtils {
 			"(?<=[" + Pattern.quote(SENTENCE_TERMINATORS) + "])\\s+|[\\r\\n]+");
 
 	/**
-	 * @return whether a sentence COULD have ended inside {@code between} — the text separating two
-	 *         adjacent words — which is a deliberately weaker question than
-	 *         {@link #SENTENCE_BOUNDARY} asks. Any terminator anywhere in the gap answers yes, and
-	 *         so does a line break; nothing has to follow the terminator. <b>One arrangement of one
-	 *         member answers no</b>: a run of {@link #MIN_ELISION_DOTS} or more {@link #ELISION_DOT}s
-	 *         is a cut the writer MARKED, and is stepped over rather than read as an ending — see the
-	 *         paragraph below.
+	 * @param between the text separating two adjacent words
+	 * @param aMarkedCutEndsIt whether a run of {@link #MIN_ELISION_DOTS} or more
+	 *            {@link #ELISION_DOT}s in that gap ends a sentence. TRUE is the reading this method
+	 *            had before issue #337's fourth round and is what a caller wants of text it did not
+	 *            write; FALSE reads such a run as a cut the WRITER marked, which is what a caller
+	 *            wants of text whose cuts it is judging. Not a default and not a preference — the
+	 *            two callers of {@code ReferenceProseFidelityCheck.wordsWithoutMarkers} pass
+	 *            opposite values for the answer and for a record, and the paragraphs below say what
+	 *            each buys.
+	 * @return whether a sentence COULD have ended inside {@code between}, which is a deliberately
+	 *         weaker question than {@link #SENTENCE_BOUNDARY} asks. Any terminator anywhere in the
+	 *         gap answers yes, and so does a line break; nothing has to follow the terminator. Under
+	 *         {@code aMarkedCutEndsIt == false} a dots run is stepped over instead.
 	 *
 	 *         <p><b>Weaker on purpose, and the weakness is the correctness.</b> Its caller
 	 *         ({@code ReferenceProseFidelityCheck}) uses the answer only to STAY SILENT, so a gap
@@ -151,12 +160,21 @@ public class ChartSearchAiUtils {
 	 *         fourth round a cut the answer marked {@code ...} silenced the caller while the same cut
 	 *         marked {@code …}, an em dash or {@code […]} was reported — which elisions that check saw
 	 *         was decided by the glyph the model chose. Reading the run as a marked cut moves one gap
-	 *         shape from silence to a report, and that is the ONE way this predicate can now cause one.
+	 *         shape from silence to a report, and that is the ONE way this predicate can cause one.
 	 *         It is not a new KIND of report: measured through the real {@code LlmInferenceService}
 	 *         before the change, every other spelling of a cut already reported both a resumption and
 	 *         a fresh sentence after it. The rule steps OVER the run rather than answering for the
 	 *         whole gap, so a line break or a second terminator beside the cut still ends the
-	 *         sentence. Asking
+	 *         sentence.
+	 *
+	 *         <p><b>And it is spent on ONE operand, which is why the reading is a parameter.</b>
+	 *         Applied to a record as well, a dots run in the SOURCE reads as a cut the answer never
+	 *         made — and {@code DrugSafetyValidator.endSentence} leaves a detail that already ends in
+	 *         a terminator alone, so a note ending in an ellipsis is followed straight by the module's
+	 *         strength clause with no record sentence break at the seam. Measured: an answer
+	 *         reproducing such a note faithfully and carrying on was reported, where the same pair
+	 *         with a full stop in place of the ellipsis was silent. Appending a terminator cannot
+	 *         repair that, a fourth dot being a run too. Asking
 	 *         {@code SENTENCE_BOUNDARY} instead spends that direction everywhere rather than at one
 	 *         marked cut, and was measured rather than argued: it
 	 *         requires the terminator to be followed IMMEDIATELY by whitespace, so a quotation the
@@ -170,13 +188,13 @@ public class ChartSearchAiUtils {
 	 *         apart for the reason issue #260 records — one rule, one terminator set, one named entry
 	 *         point per question, never a second regex at a call site.
 	 */
-	public static boolean mayEndASentence(String between) {
+	public static boolean mayEndASentence(String between, boolean aMarkedCutEndsIt) {
 		if (between == null) {
 			return false;
 		}
 		for (int at = 0; at < between.length(); at++) {
 			char c = between.charAt(at);
-			if (c == ELISION_DOT) {
+			if (c == ELISION_DOT && !aMarkedCutEndsIt) {
 				int past = at;
 				while (past < between.length() && between.charAt(past) == ELISION_DOT) {
 					past++;

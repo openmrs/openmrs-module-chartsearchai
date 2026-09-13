@@ -169,6 +169,14 @@ import org.slf4j.LoggerFactory;
  * spelling of a cut. {@code ReferenceProseFidelityTest.aCutTheAnswerMarkedIsReportedWhicheverGlyphItMarkedItWith}
  * holds the three spellings together; the residues are ADR Decision 95's.
  *
+ * <p><b>It is asked of the ANSWER and never of a record</b>, which is the {@code boolean}
+ * {@link #wordsWithoutMarkers} takes: a dots run in a record is the knowledge base's own prose rather
+ * than a cut the answer made, and reading it as one withdraws the record-sentence exit at the very
+ * seam where the appended strength clause meets a note that already ends in an ellipsis — a false
+ * report on a faithful answer. Measured, and pinned by
+ * {@code ReferenceProseFidelityTest.aMarkedCutInTheRECORDSOwnProseIsNotReadAsOneTheAnswerMade}; the
+ * two arguments are discriminated by one case each, so flip either and read the failure.
+ *
  * <p><b>What the WARN carries, and what it deliberately does not.</b> The patient, the cited
  * record's index, how many words were reproduced, and the word offset in the record at which the
  * reproduction stopped agreeing. <b>No prose from either side.</b> A first draft logged a window of
@@ -284,12 +292,15 @@ final class ReferenceProseFidelityCheck {
 						+ "reference record", patientId);
 				return Collections.emptyList();
 			}
-			Words answerWords = wordsWithoutMarkers(answer);
+			// FALSE for the answer: a cut the ANSWER marked is what this check exists to see.
+			Words answerWords = wordsWithoutMarkers(answer, false);
 			Reproductions found = new Reproductions();
 			if (answerWords.size() >= MIN_REPRODUCED_WORDS) {
 				for (RecordMapping mapping : reference) {
-					examine(answerWords, wordsWithoutMarkers(mapping.getText()), mapping.getIndex(),
-						found);
+					// TRUE for a record: a dots run in the SOURCE is not a cut the answer made, and
+					// reading it as one costs the record-sentence exit — see Words.of.
+					examine(answerWords, wordsWithoutMarkers(mapping.getText(), true),
+						mapping.getIndex(), found);
 				}
 			}
 			if (!found.any()) {
@@ -415,9 +426,9 @@ final class ReferenceProseFidelityCheck {
 	 * welded token is a false substitution report. Do not consolidate the two on the empty-string
 	 * form.
 	 */
-	private static Words wordsWithoutMarkers(String text) {
+	private static Words wordsWithoutMarkers(String text, boolean aMarkedCutEndsASentence) {
 		return Words.of(text == null ? "" : ChartSearchAiUtils.INLINE_CITATION.matcher(text)
-				.replaceAll(" "));
+				.replaceAll(" "), aMarkedCutEndsASentence);
 	}
 
 	/**
@@ -540,7 +551,9 @@ final class ReferenceProseFidelityCheck {
 	 * <p>The bit is read by {@link ChartSearchAiUtils#mayEndASentence}, the deliberately WEAK question
 	 * over the terminator set {@link ChartSearchAiUtils#SENTENCE_BOUNDARY} splits
 	 * {@link CitationGroundingVerifier}'s units on: any terminator anywhere in the gap answers yes,
-	 * save a run of dots spelling an elision, which since #337's fourth round it steps over.
+	 * save, for the ANSWER operand only, a run of dots spelling an elision, which since #337's fourth
+	 * round it steps over; {@code aMarkedCutEndsASentence} is that choice, and the class javadoc says
+	 * why a record answers it the other way.
 	 * Both of this check's uses of the bit are silencing, so the weaker reading suppresses a report
 	 * everywhere except at that one marked cut — and the stronger one was measured to cause a false
 	 * one, on a quotation the model closed with {@code ."} before starting its own next sentence. It
@@ -557,7 +570,7 @@ final class ReferenceProseFidelityCheck {
 			this.startsSentence = startsSentence;
 		}
 
-		private static Words of(String text) {
+		private static Words of(String text, boolean aMarkedCutEndsASentence) {
 			List<String> words = new ArrayList<String>();
 			List<Boolean> boundaries = new ArrayList<Boolean>();
 			int at = 0;
@@ -575,8 +588,8 @@ final class ReferenceProseFidelityCheck {
 				words.add(text.substring(start, at).toLowerCase());
 				// The gap since the previous word — for the first word, the text before it, which no
 				// caller reads: the two conditions above ask this of a word that follows one.
-				boundaries.add(Boolean.valueOf(
-						ChartSearchAiUtils.mayEndASentence(text.substring(gapFrom, start))));
+				boundaries.add(Boolean.valueOf(ChartSearchAiUtils.mayEndASentence(
+						text.substring(gapFrom, start), aMarkedCutEndsASentence)));
 				gapFrom = at;
 			}
 			return new Words(words, boundaries);

@@ -621,6 +621,40 @@ public class ReferenceProseFidelityTest {
 	}
 
 	@Test
+	public void aMarkedCutInTheRECORDSOwnProseIsNotReadAsOneTheAnswerMade() {
+		// The carve-out is asked of the ANSWER operand and never of a record, and this is the case
+		// that costs. A dots run in the SOURCE is the knowledge base's own prose, not a cut the
+		// answer made, so reading it as one takes the record-sentence exit away exactly where the
+		// module appends its strength clause: endSentence leaves a detail that already ends in a
+		// terminator alone, so a detail ending in an ellipsis is followed straight by the clause.
+		//
+		// Measured with the carve-out applied to both operands: BOTH rows below reported, while the
+		// control — the same record and answer with a full stop where the ellipsis is — stayed
+		// silent. That is a false report on an answer that reproduced the record faithfully, which
+		// is the crying-wolf failure this check must not have. Flip the record operand's argument in
+		// reportUnfaithfulReferenceProse to false and both rows redden again.
+		//
+		// Assembled rather than injected: the bundled excerpt carries no note ending in an ellipsis,
+		// which is also why this shape needs an operator dataset to arise in production.
+		String detail = "Coadministration of local anesthetics with other oxidizing agents that can "
+				+ "also induce methemoglobinemia such as antimalarials...";
+		assertTrue(detail.endsWith("..."), "the premise: the record's own prose ends in a marked cut, "
+				+ "which is what endSentence leaves alone — so the clause below follows the cut "
+				+ "directly and the seam IS the gap this case is about");
+		for (String tail : new String[] { " and monitoring is advised", " Monitor closely" }) {
+			TestableService probe = newService(referenceRecordStating(
+					detail + DrugReferenceInjector.STRENGTH_WITHHOLD));
+			probe.setLlmProvider(answering(detail + tail + " [1]."));
+			try (LogCapture capture = LogCapture.on(CHECK)) {
+				probe.search(patient(), QUESTION);
+				assertFalse(capture.hasEventAtOrAbove(Level.WARN),
+						"an answer that reproduced the record's own marked cut stated nothing the "
+								+ "record does not. Captured: " + capture.describeAll());
+			}
+		}
+	}
+
+	@Test
 	public void aTwoDotGapIsATerminatorAndNotACutTheAnswerMarked() {
 		// The run length from below. Three dots is the established spelling of an elision; two is a
 		// typo, and reading it as a marked cut would spend the check's precision on a slip. Silence

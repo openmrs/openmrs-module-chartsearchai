@@ -210,6 +210,27 @@ final class SafetyFindingCitationExtentCheck {
 		return uncitedOf(findings, citedFindingIndexes(answer, cited, indexesOf(findings)));
 	}
 
+	/**
+	 * The carried findings {@code answer} cited, off a chart's own mappings — the composed reading,
+	 * for a caller holding an answer and a chart rather than the walk. Issue
+	 * <a href="https://github.com/openmrs/openmrs-module-chartsearchai/issues/409">#409</a>.
+	 *
+	 * <p>Its one production caller is {@code LlmInferenceService.withRepairedFindingEnumeration},
+	 * which asks it of a CONTINUATION: whether that second answer anchors any of the findings the
+	 * first left out. That question and the extent's must have one answer or the repair keeps a
+	 * continuation the published count cannot see, which is the seam #409 opened between them — so
+	 * the reading lives here, in the private helper both reach, and is never spelled at the caller.
+	 *
+	 * <p>It walks the mappings a second time rather than sharing {@link #uncitedFindingIndexes}'
+	 * walk, and that is deliberate: the two are asked of DIFFERENT answers on the same request, so
+	 * there is no walk to share.
+	 */
+	static Set<Integer> citedFindingIndexes(String answer, List<RecordReference> cited,
+			List<RecordMapping> mappings) {
+		return citedFindingIndexes(answer, cited,
+				indexesOf(ChartSearchAiUtils.safetyFindingMappings(mappings)));
+	}
+
 	/** The projection both readers share: the walk's own findings, less the ones cited. The
 	 *  {@code contains} guard keeps the list in step with the count, which is a set — defensive only,
 	 *  the injector's numbering being unique per chart. */

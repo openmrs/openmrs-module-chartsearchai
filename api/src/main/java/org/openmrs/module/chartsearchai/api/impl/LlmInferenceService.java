@@ -761,11 +761,13 @@ public class LlmInferenceService implements ChartSearchService {
 	/**
 	 * The repaired answer, or {@code original} where the repair bought nothing — issue #398.
 	 *
-	 * <p><b>It may only ADD.</b> The continuation is kept only where the answer's own citation
-	 * resolution admits at least one finding that was uncited before it, so a model answering the
-	 * follow-up with prose carrying no marker leaves the response byte for byte as it was. That is
-	 * the direction this pass is allowed to move the two published keys it touches: an appended
-	 * continuation can raise {@code findingCitations.cited} and cannot lower it.
+	 * <p><b>It may only ADD, and only what the count can see.</b> The continuation is kept only where
+	 * its own prose anchors at least one finding that was uncited before it —
+	 * {@link SafetyFindingCitationExtentCheck#citedFindingIndexes}, the reading the published count
+	 * uses, so the two cannot come to disagree (issue #409). A follow-up carrying no marker, or
+	 * naming the owed records only in its structured array, leaves the response byte for byte as it
+	 * was. That is the direction this pass is allowed to move the two published keys it touches: an
+	 * appended continuation can raise {@code findingCitations.cited} and cannot lower it.
 	 *
 	 * <p><b>The lead is not re-decided.</b> The continuation goes AFTER the original answer, whose
 	 * opening is what {@code score_directness.classify} reads — the property ADR Decision 84
@@ -776,11 +778,14 @@ public class LlmInferenceService implements ChartSearchService {
 		if (continuation == null || ChartSearchAiUtils.isBlank(continuation.getAnswer())) {
 			return original;
 		}
-		Set<Integer> nowCited = new LinkedHashSet<Integer>();
-		for (RecordReference reference : extractCitedReferences(continuation.getAnswer(),
-				continuation.getCitations(), mappings)) {
-			nowCited.add(Integer.valueOf(reference.getIndex()));
-		}
+		// The SAME reading the published count uses, reached through the check's own helper rather
+		// than spelled here (issue #409): a continuation whose structured array names an owed finding
+		// its prose anchors nowhere raises nothing the extent can see, so keeping it would append
+		// text to the caller's answer and leave the shortfall standing.
+		Set<Integer> nowCited = SafetyFindingCitationExtentCheck.citedFindingIndexes(
+				continuation.getAnswer(), extractCitedReferences(continuation.getAnswer(),
+						continuation.getCitations(), mappings),
+				mappings);
 		if (Collections.disjoint(nowCited, uncited)) {
 			log.debug("Finding-enumeration repair discarded: the continuation cites none of {}",
 					uncited);

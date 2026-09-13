@@ -714,7 +714,9 @@ abstention (0.93 → 0.67–0.81, drift 2–3.5×); the shipped wording is restr
 
 Since [#395](https://github.com/openmrs/openmrs-module-chartsearchai/issues/395) every `/search`
 response states `findingCitations` — how many injected safety findings the prompt carried against how
-many the answer cited. `score_probe_safety.py` now reads it as a **completeness cell**, beside a
+many the answer anchored a citation marker for (that reading, rather than the model's structured
+`citations` array, since [#409](https://github.com/openmrs/openmrs-module-chartsearchai/issues/409);
+a capture taken before it is not comparable on this cell). `score_probe_safety.py` now reads it as a **completeness cell**, beside a
 **rating cell** over `unstatedFindingSeverities`. Two keys because they trade: an arm can state every
 finding by dropping every rating, and the completeness cell alone scores that a clean win.
 

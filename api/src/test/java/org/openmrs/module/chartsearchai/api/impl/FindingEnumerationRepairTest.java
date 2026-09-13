@@ -219,6 +219,32 @@ public class FindingEnumerationRepairTest {
 	}
 
 	@Test
+	public void aContinuationWhoseArrayAloneNamesTheOwedFindingIsDiscardedToo() {
+		// The seam between the two mechanisms. Since issue #409 a finding counts as cited where the
+		// PROSE anchors it, so a continuation that anchors only a finding already stated — while its
+		// structured array names the owed one — buys nothing the extent can see. Keeping it would
+		// append text to the caller's answer and leave the shortfall standing, which is the one thing
+		// "it may only ADD" is supposed to rule out. The keep-gate must read what the count reads.
+		List<Integer> allButLast = findings.subList(0, findings.size() - 1);
+		Integer dropped = findings.get(findings.size() - 1);
+		Integer alreadyStated = findings.get(0);
+		String original = enumerationCiting(allButLast);
+		StubProvider provider = new StubProvider(
+				Arrays.asList(Collections.<Integer> emptyList(), Collections.singletonList(dropped)),
+				original, "That interaction [" + alreadyStated + "] is the reason.");
+		TestableService service = newService(chart, provider, true);
+
+		ChartAnswer answer = service.search(patient(), QUESTION);
+
+		assertEquals(2, provider.calls(), "the premise: the repair did run");
+		assertEquals(original, answer.getAnswer(),
+				"a continuation whose prose anchors no owed finding must be discarded whole, however "
+						+ "its structured array lists them. Answer: " + answer.getAnswer());
+		assertEquals(findings.size() - 1, answer.getFindingCitationExtent().getCited(),
+				"and the extent must report the shortfall that still stands");
+	}
+
+	@Test
 	public void withTheRepairOffTheAnswerAndItsExtentAreExactlyWhatTheyWereBefore() {
 		// The gate. This is the shipped default and it is the whole of ADR Decision 84's measured
 		// behaviour, so this case is what says the repair is an addition to that arrangement rather
